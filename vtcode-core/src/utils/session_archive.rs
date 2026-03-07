@@ -560,6 +560,11 @@ impl SessionArchive {
         Ok(Self::from_path(path, metadata, Utc::now()))
     }
 
+    /// Reopen an existing archive file so follow-up runs can overwrite the snapshot in place.
+    pub fn resume_from_listing(listing: &SessionListing, metadata: SessionArchiveMetadata) -> Self {
+        Self::from_path(listing.path.clone(), metadata, listing.snapshot.started_at)
+    }
+
     pub fn finalize(
         &self,
         transcript: Vec<String>,
@@ -1542,6 +1547,56 @@ mod tests {
             snapshot.metadata.debug_log_path,
             Some("/tmp/debug-session.log".to_string())
         );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn resume_from_listing_reuses_existing_archive_path() -> Result<()> {
+        let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
+        let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
+
+        let session_id = reserve_session_archive_identifier("ResumeWorkspace", None).await?;
+        let metadata = SessionArchiveMetadata::new(
+            "ResumeWorkspace",
+            "/tmp/resume-workspace",
+            "model-a",
+            "provider-a",
+            "light",
+            "medium",
+        );
+        let archive = SessionArchive::new_with_identifier(metadata.clone(), session_id.clone())
+            .await
+            .context("failed to create initial archive")?;
+        let original_path = archive.finalize(
+            vec!["user: first".to_string()],
+            1,
+            vec!["read_file".to_string()],
+            vec![SessionMessage::new(MessageRole::User, "first")],
+        )?;
+
+        let listing = find_session_by_identifier(&session_id)
+            .await?
+            .context("expected archived session listing")?;
+        let resumed = SessionArchive::resume_from_listing(&listing, metadata);
+        let resumed_path = resumed.finalize(
+            vec!["user: second".to_string()],
+            2,
+            vec!["read_file".to_string()],
+            vec![
+                SessionMessage::new(MessageRole::User, "first"),
+                SessionMessage::new(MessageRole::Assistant, "second"),
+            ],
+        )?;
+
+        assert_eq!(resumed_path, original_path);
+        let stored = fs::read_to_string(&resumed_path).with_context(|| {
+            format!("failed to read stored session: {}", resumed_path.display())
+        })?;
+        let snapshot: SessionSnapshot =
+            serde_json::from_str(&stored).context("failed to deserialize stored snapshot")?;
+        assert_eq!(snapshot.total_messages, 2);
+        assert_eq!(snapshot.messages.len(), 2);
 
         Ok(())
     }

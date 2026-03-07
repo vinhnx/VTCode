@@ -69,9 +69,8 @@ pub async fn handle_exec_command(
     core_cfg: vtcode_core::config::types::AgentConfig,
     cfg: &VTCodeConfig,
     options: ExecCommandOptions,
-    prompt: Option<String>,
 ) -> Result<()> {
-    exec::handle_exec_command(&core_cfg, cfg, options, prompt).await
+    exec::handle_exec_command(&core_cfg, cfg, options).await
 }
 
 pub async fn handle_schema_command(command: vtcode_core::cli::args::SchemaCommands) -> Result<()> {
