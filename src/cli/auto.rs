@@ -6,7 +6,8 @@ use vtcode_core::config::VTCodeConfig;
 use vtcode_core::config::WorkspaceTrustLevel;
 use vtcode_core::config::models::ModelId;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
-use vtcode_core::core::agent::runner::{AgentRunner, ContextItem, RunnerSettings, Task};
+use vtcode_core::core::agent::runner::{AgentRunner, RunnerSettings};
+use vtcode_core::core::agent::task::{ContextItem, Task};
 use vtcode_core::core::agent::types::AgentType;
 use vtcode_core::utils::colors::style;
 

@@ -806,3 +806,51 @@ CODEX plus
 main account
 kiweuro
 writedownapp
+
+---
+
+Then the advice tightens further. On M4, mold doesn't apply — use `lld` or just leave the default linker (Apple's `ld` is already fast on arm64).
+
+**Actual high-impact changes for M4:**
+
+```toml
+# .cargo/config.toml
+[target.aarch64-apple-darwin]
+rustflags = ["-C", "link-arg=-fuse-ld=/usr/bin/ld"]  # already optimal, skip lld
+
+[build]
+jobs = 14  # M4 Pro has 14 cores (adjust if base M4: use 10)
+```
+
+```bash
+# sccache with local disk — biggest win for incremental CI/dev cycles
+brew install sccache
+echo 'export RUSTC_WRAPPER=sccache' >> ~/.zshrc
+echo 'export SCCACHE_CACHE_SIZE="20G"' >> ~/.zshrc
+```
+
+```toml
+# Cargo.toml — dev profile tuned for fast iteration
+[profile.dev]
+opt-level = 0
+debug = 1          # not 2 — halves debug info size, still usable in lldb
+split-debuginfo = "unpacked"  # macOS default, but explicit = faster linking
+```
+
+```toml
+[profile.release]
+lto = "thin"       # thin LTO is ~3x faster than fat, negligible perf loss
+codegen-units = 4  # M4 parallelizes this well; pure 1 is overkill for CLI
+```
+
+**Check where time actually goes first:**
+
+```bash
+cargo build --timings 2>&1
+open cargo-timing.html
+```
+
+That HTML report will immediately show which crates dominate — usually `tree-sitter` bindings or a heavy proc-macro. Fix the actual bottleneck, not a guess.
+
+**Skip entirely:** `cargo-hakari` is useful but only pays off when you have frequent feature-flag churn across the workspace. Check if you actually have that problem first.
+https://claude.ai/chat/50384f82-6e37-4564-bb40-ddc6433912c9

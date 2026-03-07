@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
+use hashbrown::HashMap;
 use serde::Deserialize;
 use serde_json::Value;
-use hashbrown::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;

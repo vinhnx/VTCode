@@ -1,19 +1,28 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
-use vtcode_core::config::loader::VTCodeConfig;
+use vtcode_core::cli::args::{Cli, Commands, SkillsRefSubcommand, SkillsSubcommand};
+use vtcode_core::mcp::cli::handle_mcp_command;
+
+use vtcode::startup::StartupContext;
 
 mod acp;
+mod auto;
+mod config;
+mod create_project;
+mod init;
+mod init_project;
+mod man;
+mod sessions;
 mod skills_index;
+mod snapshots;
+mod trajectory;
 
 /// Skills command options
 #[derive(Debug)]
 pub struct SkillsCommandOptions {
     pub workspace: PathBuf,
 }
-
-// Re-export the core CLI functions we need
-pub use vtcode_core::mcp::cli::handle_mcp_command;
 
 pub mod analyze;
 pub mod benchmark;
@@ -24,34 +33,362 @@ pub mod skills;
 pub mod skills_ref;
 pub mod update;
 
-pub use vtcode_core::cli::args::AskCommandOptions;
+use vtcode_core::cli::args::AskCommandOptions;
 
-pub use benchmark::BenchmarkCommandOptions;
-pub use exec::ExecCommandOptions;
-pub use review::ReviewCommandOptions;
+mod revert;
 
-mod sessions;
-mod snapshots;
+use self::acp::handle_acp_command;
 
-// Re-export the handle_acp_command from acp module
-pub use self::acp::handle_acp_command;
-
-// For the other functions, we'll use proper implementations that match the expected signatures
-
-pub async fn handle_ask_single_command(
-    core_cfg: vtcode_core::config::types::AgentConfig,
-    prompt: Option<String>,
-    _options: AskCommandOptions,
-) -> Result<()> {
-    let prompt_vec = if let Some(p) = prompt {
-        vec![p]
-    } else {
-        vec![]
-    };
-    vtcode_core::commands::ask::handle_ask_command(core_cfg, prompt_vec, _options).await
+#[derive(Debug, Clone)]
+enum ResolvedCliAction {
+    Ask {
+        prompt: Option<String>,
+        options: AskCommandOptions,
+    },
+    FullAuto {
+        prompt: String,
+    },
+    Resume {
+        mode: vtcode::startup::SessionResumeMode,
+    },
+    Command(Commands),
+    Chat,
 }
 
-pub async fn handle_chat_command(
+pub async fn dispatch(
+    args: &Cli,
+    startup: &StartupContext,
+    print_mode: Option<String>,
+    potential_prompt: Option<String>,
+) -> Result<()> {
+    let cfg = &startup.config;
+    let core_cfg = &startup.agent_config;
+
+    if args.ide
+        && args.command.is_none()
+        && let Some(ide_target) = crate::main_helpers::detect_available_ide()?
+    {
+        handle_acp_command(core_cfg, cfg, ide_target).await?;
+        return Ok(());
+    }
+
+    match resolve_action(args, startup, print_mode, potential_prompt)? {
+        ResolvedCliAction::Ask { prompt, options } => {
+            handle_ask_single_command(core_cfg.clone(), prompt, options).await?;
+        }
+        ResolvedCliAction::FullAuto { prompt } => {
+            auto::handle_auto_task_command(core_cfg, cfg, &prompt).await?;
+        }
+        ResolvedCliAction::Resume { mode } => {
+            handle_resume_session_command(
+                core_cfg,
+                mode,
+                startup.custom_session_id.clone(),
+                startup.skip_confirmations,
+            )
+            .await?;
+        }
+        ResolvedCliAction::Command(command) => {
+            dispatch_command(args, startup, command).await?;
+        }
+        ResolvedCliAction::Chat => {
+            handle_chat_command(
+                core_cfg.clone(),
+                startup.skip_confirmations,
+                startup.full_auto_requested,
+                startup.plan_mode_requested,
+            )
+            .await?;
+        }
+    }
+
+    Ok(())
+}
+
+fn resolve_action(
+    args: &Cli,
+    startup: &StartupContext,
+    print_mode: Option<String>,
+    potential_prompt: Option<String>,
+) -> Result<ResolvedCliAction> {
+    if let Some(print_value) = print_mode {
+        return Ok(ResolvedCliAction::Ask {
+            prompt: Some(crate::main_helpers::build_print_prompt(print_value)?),
+            options: ask_options(args, None, startup.skip_confirmations),
+        });
+    }
+
+    if let Some(prompt) = potential_prompt {
+        return Ok(ResolvedCliAction::Ask {
+            prompt: Some(prompt),
+            options: ask_options(args, None, startup.skip_confirmations),
+        });
+    }
+
+    if let Some(prompt) = startup.automation_prompt.clone() {
+        return Ok(ResolvedCliAction::FullAuto { prompt });
+    }
+
+    if let Some(mode) = startup.session_resume.clone() {
+        return Ok(ResolvedCliAction::Resume { mode });
+    }
+
+    Ok(match args.command.clone() {
+        Some(command) => ResolvedCliAction::Command(command),
+        None => ResolvedCliAction::Chat,
+    })
+}
+
+async fn dispatch_command(args: &Cli, startup: &StartupContext, command: Commands) -> Result<()> {
+    let cfg = &startup.config;
+    let core_cfg = &startup.agent_config;
+    let skip_confirmations = startup.skip_confirmations;
+    let full_auto_requested = startup.full_auto_requested;
+
+    match command {
+        Commands::AgentClientProtocol { target } => {
+            handle_acp_command(core_cfg, cfg, target).await?;
+        }
+        Commands::ToolPolicy { command } => {
+            vtcode_core::cli::tool_policy_commands::handle_tool_policy_command(command).await?;
+        }
+        Commands::Mcp { command } => {
+            handle_mcp_command(command).await?;
+        }
+        Commands::A2a { command } => {
+            vtcode_core::cli::a2a::execute_a2a_command(command).await?;
+        }
+        Commands::Models { command } => {
+            vtcode_core::cli::models_commands::handle_models_command(args, &command).await?;
+        }
+        Commands::Chat | Commands::ChatVerbose => {
+            handle_chat_command(
+                core_cfg.clone(),
+                skip_confirmations,
+                full_auto_requested,
+                startup.plan_mode_requested,
+            )
+            .await?;
+        }
+        Commands::Ask {
+            prompt,
+            output_format,
+        } => {
+            handle_ask_single_command(
+                core_cfg.clone(),
+                prompt,
+                ask_options(args, output_format, skip_confirmations),
+            )
+            .await?;
+        }
+        Commands::Exec {
+            json,
+            dry_run,
+            events,
+            last_message_file,
+            command,
+            prompt,
+        } => {
+            let command = exec::resolve_exec_command(command, prompt)?;
+            let options = exec::ExecCommandOptions {
+                json,
+                dry_run,
+                events_path: events,
+                last_message_file,
+                command,
+            };
+            exec::handle_exec_command(core_cfg, cfg, options).await?;
+        }
+        Commands::Review(review) => {
+            let files = review
+                .files
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>();
+            let spec = vtcode_core::review::build_review_spec(
+                review.last_diff,
+                review.target.clone(),
+                files,
+                review.style.clone(),
+            )?;
+            let options = review::ReviewCommandOptions {
+                json: review.json,
+                events_path: review.events.clone(),
+                last_message_file: review.last_message_file.clone(),
+                spec,
+            };
+            review::handle_review_command(core_cfg, cfg, options).await?;
+        }
+        Commands::Schema { command } => {
+            schema::handle_schema_command(command).await?;
+        }
+        Commands::Analyze { analysis_type } => {
+            let analysis_type = match analysis_type.as_str() {
+                "full" => analyze::AnalysisType::Full,
+                "structure" => analyze::AnalysisType::Structure,
+                "security" => analyze::AnalysisType::Security,
+                "performance" => analyze::AnalysisType::Performance,
+                "dependencies" => analyze::AnalysisType::Dependencies,
+                "complexity" => analyze::AnalysisType::Complexity,
+                _ => analyze::AnalysisType::Full,
+            };
+            handle_analyze_command(core_cfg.clone(), analysis_type).await?;
+        }
+        Commands::Trajectory { file, top } => {
+            trajectory::handle_trajectory_command(core_cfg, file, top).await?;
+        }
+        Commands::CreateProject { name, features } => {
+            create_project::handle_create_project_command(core_cfg, &name, &features).await?;
+        }
+        Commands::Revert { turn, partial } => {
+            revert::handle_revert_command(core_cfg, turn, partial).await?;
+        }
+        Commands::Snapshots => {
+            snapshots::handle_snapshots_command(core_cfg).await?;
+        }
+        Commands::CleanupSnapshots { max } => {
+            snapshots::handle_cleanup_snapshots_command(core_cfg, Some(max)).await?;
+        }
+        Commands::Init => {
+            init::handle_init_command(&startup.workspace, false, false).await?;
+        }
+        Commands::Config { output, global } => {
+            config::handle_config_command(output.as_deref(), global).await?;
+        }
+        Commands::InitProject {
+            name,
+            force,
+            migrate,
+        } => {
+            init_project::handle_init_project_command(name, force, migrate).await?;
+        }
+        Commands::Benchmark {
+            task_file,
+            task,
+            output,
+            max_tasks,
+        } => {
+            let options = benchmark::BenchmarkCommandOptions {
+                task_file,
+                inline_task: task,
+                output,
+                max_tasks,
+            };
+            benchmark::handle_benchmark_command(core_cfg, cfg, options, full_auto_requested)
+                .await?;
+        }
+        Commands::Man { command, output } => {
+            man::handle_man_command(command, output).await?;
+        }
+        Commands::ListSkills {} => {
+            let skills_options = skills_options(startup);
+            skills::handle_skills_list(&skills_options).await?;
+        }
+        Commands::Skills(skills_cmd) => {
+            let skills_options = skills_options(startup);
+
+            match skills_cmd {
+                SkillsSubcommand::List { .. } => {
+                    skills::handle_skills_list(&skills_options).await?;
+                }
+                SkillsSubcommand::Load { name, path } => {
+                    if let Some(path_val) = path {
+                        skills::handle_skills_load(&skills_options, &name, Some(path_val)).await?;
+                    }
+                }
+                SkillsSubcommand::Info { name } => {
+                    skills::handle_skills_info(&skills_options, &name).await?;
+                }
+                SkillsSubcommand::Create { path, .. } => {
+                    skills::handle_skills_create(&path).await?;
+                }
+                SkillsSubcommand::Validate { path, strict } => {
+                    skills::handle_skills_validate(&path, strict).await?;
+                }
+                SkillsSubcommand::CheckCompatibility => {
+                    skills::handle_skills_validate_all(&skills_options).await?;
+                }
+                SkillsSubcommand::Config => {
+                    skills::handle_skills_config(&skills_options).await?;
+                }
+                SkillsSubcommand::RegenerateIndex => {
+                    skills_index::handle_skills_regenerate_index(&skills_options).await?;
+                }
+                SkillsSubcommand::Unload { .. } => {
+                    println!("Skill unload not yet implemented");
+                }
+                SkillsSubcommand::SkillsRef(skills_ref_cmd) => match skills_ref_cmd {
+                    SkillsRefSubcommand::Validate { path } => {
+                        skills_ref::handle_skills_ref_validate(&path).await?;
+                    }
+                    SkillsRefSubcommand::ToPrompt { paths } => {
+                        skills_ref::handle_skills_ref_to_prompt(&paths).await?;
+                    }
+                    SkillsRefSubcommand::List { path } => {
+                        skills_ref::handle_skills_ref_list(path.as_deref()).await?;
+                    }
+                },
+            }
+        }
+        Commands::AnthropicApi { port, host } => {
+            handle_anthropic_api_command(core_cfg.clone(), port, host).await?;
+        }
+        Commands::Update {
+            check,
+            force,
+            list,
+            limit,
+            pin,
+            unpin,
+            channel,
+            show_config,
+        } => {
+            let options = update::UpdateCommandOptions {
+                check_only: check,
+                force,
+                list,
+                limit,
+                pin,
+                unpin,
+                channel,
+                show_config,
+            };
+            update::handle_update_command(options).await?;
+        }
+    }
+
+    Ok(())
+}
+
+fn ask_options(
+    args: &Cli,
+    output_format: Option<vtcode_core::cli::args::AskOutputFormat>,
+    skip_confirmations: bool,
+) -> AskCommandOptions {
+    AskCommandOptions {
+        output_format,
+        allowed_tools: args.allowed_tools.clone(),
+        disallowed_tools: args.disallowed_tools.clone(),
+        skip_confirmations,
+    }
+}
+
+fn skills_options(startup: &StartupContext) -> SkillsCommandOptions {
+    SkillsCommandOptions {
+        workspace: startup.workspace.clone(),
+    }
+}
+
+async fn handle_ask_single_command(
+    core_cfg: vtcode_core::config::types::AgentConfig,
+    prompt: Option<String>,
+    options: AskCommandOptions,
+) -> Result<()> {
+    let prompt_vec = prompt.into_iter().collect::<Vec<_>>();
+    vtcode_core::commands::ask::handle_ask_command(core_cfg, prompt_vec, options).await
+}
+
+async fn handle_chat_command(
     core_cfg: vtcode_core::config::types::AgentConfig,
     skip_confirmations: bool,
     full_auto_requested: bool,
@@ -67,31 +404,10 @@ pub async fn handle_chat_command(
     .await
 }
 
-pub async fn handle_exec_command(
-    core_cfg: vtcode_core::config::types::AgentConfig,
-    cfg: &VTCodeConfig,
-    options: ExecCommandOptions,
-) -> Result<()> {
-    exec::handle_exec_command(&core_cfg, cfg, options).await
-}
-
-pub async fn handle_schema_command(command: vtcode_core::cli::args::SchemaCommands) -> Result<()> {
-    schema::handle_schema_command(command).await
-}
-
-pub async fn handle_review_command(
-    core_cfg: vtcode_core::config::types::AgentConfig,
-    cfg: &VTCodeConfig,
-    options: ReviewCommandOptions,
-) -> Result<()> {
-    review::handle_review_command(&core_cfg, cfg, options).await
-}
-
-pub async fn handle_analyze_command(
+async fn handle_analyze_command(
     core_cfg: vtcode_core::config::types::AgentConfig,
     analysis_type: analyze::AnalysisType,
 ) -> Result<()> {
-    // Convert AnalysisType to string for the actual handler
     let depth = match analysis_type {
         analyze::AnalysisType::Full
         | analyze::AnalysisType::Structure
@@ -101,94 +417,15 @@ pub async fn handle_analyze_command(
         | analyze::AnalysisType::Dependencies => "standard",
     };
 
-    // Use "text" as default format
-    let format = "text";
-
     vtcode_core::commands::analyze::handle_analyze_command(
         core_cfg,
         depth.to_string(),
-        format.to_string(),
+        "text".to_string(),
     )
     .await
 }
 
-pub async fn handle_trajectory_logs_command(
-    _core_cfg: vtcode_core::config::types::AgentConfig,
-    _file: Option<PathBuf>,
-    _top: Option<usize>,
-) -> Result<()> {
-    Err(anyhow::anyhow!(
-        "Trajectory logs command not implemented in this stub"
-    ))
-}
-
-pub async fn handle_create_project_command(
-    _core_cfg: vtcode_core::config::types::AgentConfig,
-    _name: &str,
-    _features: &[String],
-) -> Result<()> {
-    Err(anyhow::anyhow!(
-        "Create project command not implemented in this stub"
-    ))
-}
-
-pub async fn handle_revert_command(
-    _core_cfg: vtcode_core::config::types::AgentConfig,
-    _turn: usize,
-    _partial: Option<String>,
-) -> Result<()> {
-    Err(anyhow::anyhow!(
-        "Revert command not implemented in this stub"
-    ))
-}
-
-pub async fn handle_snapshots_command(
-    core_cfg: vtcode_core::config::types::AgentConfig,
-) -> Result<()> {
-    snapshots::handle_snapshots_command(&core_cfg).await
-}
-
-pub async fn handle_cleanup_snapshots_command(
-    core_cfg: vtcode_core::config::types::AgentConfig,
-    max_snapshots: Option<usize>,
-) -> Result<()> {
-    snapshots::handle_cleanup_snapshots_command(&core_cfg, max_snapshots).await
-}
-
-pub async fn handle_init_command(_workspace: &PathBuf, _force: bool, _migrate: bool) -> Result<()> {
-    Err(anyhow::anyhow!("Init command not implemented in this stub"))
-}
-
-pub async fn handle_config_command(_output: Option<PathBuf>, _global: bool) -> Result<()> {
-    Err(anyhow::anyhow!(
-        "Config command not implemented in this stub"
-    ))
-}
-
-pub async fn handle_init_project_command(
-    _name: Option<String>,
-    _force: bool,
-    _migrate: bool,
-) -> Result<()> {
-    Err(anyhow::anyhow!(
-        "Init project command not implemented in this stub"
-    ))
-}
-
-pub async fn handle_benchmark_command(
-    core_cfg: vtcode_core::config::types::AgentConfig,
-    cfg: &VTCodeConfig,
-    options: BenchmarkCommandOptions,
-    full_auto_requested: bool,
-) -> Result<()> {
-    benchmark::handle_benchmark_command(&core_cfg, cfg, options, full_auto_requested).await
-}
-
-pub async fn handle_man_command(_command: Option<String>, _output: Option<PathBuf>) -> Result<()> {
-    Err(anyhow::anyhow!("Man command not implemented in this stub"))
-}
-
-pub async fn handle_resume_session_command(
+async fn handle_resume_session_command(
     core_cfg: &vtcode_core::config::types::AgentConfig,
     mode: vtcode::startup::SessionResumeMode,
     custom_session_id: Option<String>,
@@ -198,69 +435,7 @@ pub async fn handle_resume_session_command(
         .await
 }
 
-pub async fn handle_skills_list(skills_options: &SkillsCommandOptions) -> Result<()> {
-    // Import and delegate to the actual implementation in the skills module
-    use crate::cli::skills::handle_skills_list as actual_handler;
-    actual_handler(skills_options).await
-}
-
-pub async fn handle_skills_load(
-    skills_options: &SkillsCommandOptions,
-    name: &str,
-    path: PathBuf,
-) -> Result<()> {
-    // Import and delegate to the actual implementation in the skills module
-    use crate::cli::skills::handle_skills_load as actual_handler;
-    actual_handler(skills_options, name, Some(path)).await
-}
-
-pub async fn handle_skills_info(skills_options: &SkillsCommandOptions, name: &str) -> Result<()> {
-    // Import and delegate to the actual implementation in the skills module
-    use crate::cli::skills::handle_skills_info as actual_handler;
-    actual_handler(skills_options, name).await
-}
-
-pub async fn handle_skills_create(path: &Path) -> Result<()> {
-    // Import and delegate to the actual implementation in the skills module
-    use crate::cli::skills::handle_skills_create as actual_handler;
-    actual_handler(path).await
-}
-
-pub async fn handle_skills_validate(path: &Path, strict: bool) -> Result<()> {
-    // Import and delegate to the actual implementation in the skills module
-    use crate::cli::skills::handle_skills_validate as actual_handler;
-    actual_handler(path, strict).await
-}
-
-pub async fn handle_skills_validate_all(skills_options: &SkillsCommandOptions) -> Result<()> {
-    // Import and delegate to the actual implementation in the skills module
-    use crate::cli::skills::handle_skills_validate_all as actual_handler;
-    actual_handler(skills_options).await
-}
-
-pub async fn handle_skills_config(skills_options: &SkillsCommandOptions) -> Result<()> {
-    // Import and delegate to the actual implementation in the skills module
-    use crate::cli::skills::handle_skills_config as actual_handler;
-    actual_handler(skills_options).await
-}
-
-pub async fn handle_skills_regenerate_index(skills_options: &SkillsCommandOptions) -> Result<()> {
-    // Import and delegate to the actual implementation in the skills module
-    use crate::cli::skills::handle_skills_regenerate_index as actual_handler;
-    actual_handler(skills_options).await
-}
-
-pub async fn handle_auto_task_command(
-    _core_cfg: &vtcode_core::config::types::AgentConfig,
-    _cfg: &VTCodeConfig,
-    _prompt: &str,
-) -> Result<()> {
-    Err(anyhow::anyhow!(
-        "Auto task command not implemented in this stub"
-    ))
-}
-
-pub fn set_workspace_env(workspace: &PathBuf) {
+pub fn set_workspace_env(workspace: &Path) {
     unsafe {
         std::env::set_var("VTCODE_WORKSPACE", workspace);
     }
@@ -269,7 +444,7 @@ pub fn set_workspace_env(workspace: &PathBuf) {
 pub fn set_additional_dirs_env(additional_dirs: &[PathBuf]) {
     let dirs_str = additional_dirs
         .iter()
-        .map(|p| p.to_string_lossy().to_string())
+        .map(|path| path.to_string_lossy().to_string())
         .collect::<Vec<_>>()
         .join(":");
     unsafe {
@@ -278,7 +453,7 @@ pub fn set_additional_dirs_env(additional_dirs: &[PathBuf]) {
 }
 
 #[cfg(feature = "anthropic-api")]
-pub async fn handle_anthropic_api_command(
+async fn handle_anthropic_api_command(
     core_cfg: vtcode_core::config::types::AgentConfig,
     port: u16,
     host: String,
@@ -286,7 +461,6 @@ pub async fn handle_anthropic_api_command(
     use std::net::SocketAddr;
     use vtcode_core::anthropic_api::server::{AnthropicApiServerState, create_router};
 
-    // Create the LLM provider based on the configuration
     let provider = vtcode_core::llm::factory::create_provider_for_model(
         &core_cfg.model,
         core_cfg.api_key.clone(),
@@ -294,23 +468,18 @@ pub async fn handle_anthropic_api_command(
     )
     .map_err(|e| anyhow::anyhow!("Failed to create LLM provider: {}", e))?;
 
-    // Create server state with the provider
     let state =
         AnthropicApiServerState::new(std::sync::Arc::from(provider), core_cfg.model.clone());
-
-    // Create the router
     let app = create_router(state);
 
-    // Bind to the specified address
     let addr = format!("{}:{}", host, port)
         .parse::<SocketAddr>()
-        .map_err(|e| anyhow::anyhow!("Invalid address {}: {}", format!("{}:{}", host, port), e))?;
+        .map_err(|e| anyhow::anyhow!("Invalid address {}:{}: {}", host, port, e))?;
 
     println!("Anthropic API server starting on http://{}", addr);
     println!("Compatible with Anthropic Messages API at /v1/messages");
     println!("Press Ctrl+C to stop the server");
 
-    // Run the server with graceful shutdown
     ::axum::serve(
         tokio::net::TcpListener::bind(addr)
             .await
@@ -324,7 +493,7 @@ pub async fn handle_anthropic_api_command(
 }
 
 #[cfg(not(feature = "anthropic-api"))]
-pub async fn handle_anthropic_api_command(
+async fn handle_anthropic_api_command(
     _core_cfg: vtcode_core::config::types::AgentConfig,
     _port: u16,
     _host: String,
@@ -336,11 +505,15 @@ pub async fn handle_anthropic_api_command(
 
 #[cfg(test)]
 mod tests {
-    use super::handle_resume_session_command;
+    use super::{ResolvedCliAction, handle_resume_session_command, resolve_action};
+    use clap::Parser;
     use std::collections::BTreeMap;
+    use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
-    use vtcode::startup::SessionResumeMode;
+    use vtcode::startup::{SessionResumeMode, StartupContext};
+    use vtcode_core::cli::args::{Cli, Commands};
     use vtcode_core::config::core::PromptCachingConfig;
+    use vtcode_core::config::loader::VTCodeConfig;
     use vtcode_core::config::models::Provider;
     use vtcode_core::config::types::{
         AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel,
@@ -373,6 +546,126 @@ mod tests {
             max_conversation_turns: 1000,
             model_behavior: None,
         }
+    }
+
+    fn parse_cli(args: &[&str]) -> Cli {
+        Cli::parse_from(args)
+    }
+
+    fn startup_context() -> StartupContext {
+        StartupContext {
+            workspace: PathBuf::from("."),
+            additional_dirs: Vec::new(),
+            config: VTCodeConfig::default(),
+            agent_config: runtime_config(),
+            skip_confirmations: false,
+            full_auto_requested: false,
+            automation_prompt: None,
+            session_resume: None,
+            custom_session_id: None,
+            plan_mode_requested: false,
+        }
+    }
+
+    #[test]
+    fn resolve_action_prefers_print_mode() {
+        let args = parse_cli(&["vtcode", "chat"]);
+        let mut startup = startup_context();
+        startup.automation_prompt = Some("auto prompt".to_string());
+        startup.session_resume = Some(SessionResumeMode::Latest);
+
+        let action = resolve_action(
+            &args,
+            &startup,
+            Some("summarize this".to_string()),
+            Some("workspace prompt".to_string()),
+        )
+        .expect("print mode should resolve");
+
+        match action {
+            ResolvedCliAction::Ask { prompt, .. } => {
+                assert_eq!(
+                    prompt,
+                    Some(
+                        crate::main_helpers::build_print_prompt("summarize this".to_string())
+                            .expect("print prompt")
+                    )
+                );
+            }
+            other => panic!("expected ask action, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_action_prefers_workspace_prompt_over_auto_and_resume() {
+        let args = parse_cli(&["vtcode", "chat"]);
+        let mut startup = startup_context();
+        startup.automation_prompt = Some("auto prompt".to_string());
+        startup.session_resume = Some(SessionResumeMode::Latest);
+
+        let action = resolve_action(&args, &startup, None, Some("workspace prompt".to_string()))
+            .expect("workspace prompt should resolve");
+
+        match action {
+            ResolvedCliAction::Ask { prompt, .. } => {
+                assert_eq!(prompt.as_deref(), Some("workspace prompt"));
+            }
+            other => panic!("expected ask action, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_action_prefers_auto_over_resume_and_command() {
+        let args = parse_cli(&["vtcode", "chat"]);
+        let mut startup = startup_context();
+        startup.automation_prompt = Some("auto prompt".to_string());
+        startup.session_resume = Some(SessionResumeMode::Latest);
+
+        let action = resolve_action(&args, &startup, None, None).expect("auto should resolve");
+
+        match action {
+            ResolvedCliAction::FullAuto { prompt } => assert_eq!(prompt, "auto prompt"),
+            other => panic!("expected full-auto action, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_action_prefers_resume_over_command() {
+        let args = parse_cli(&["vtcode", "chat"]);
+        let mut startup = startup_context();
+        startup.session_resume = Some(SessionResumeMode::Specific("session-123".to_string()));
+
+        let action = resolve_action(&args, &startup, None, None).expect("resume should resolve");
+
+        match action {
+            ResolvedCliAction::Resume {
+                mode: SessionResumeMode::Specific(session_id),
+            } => assert_eq!(session_id, "session-123"),
+            other => panic!("expected specific resume action, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_action_returns_command_when_explicit_subcommand_exists() {
+        let args = parse_cli(&["vtcode", "chat"]);
+        let startup = startup_context();
+
+        let action = resolve_action(&args, &startup, None, None).expect("command should resolve");
+
+        match action {
+            ResolvedCliAction::Command(Commands::Chat) => {}
+            other => panic!("expected chat command action, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_action_returns_chat_when_no_special_mode_or_command_exists() {
+        let args = parse_cli(&["vtcode"]);
+        let startup = startup_context();
+
+        let action = resolve_action(&args, &startup, None, None).expect("chat should resolve");
+
+        assert!(matches!(action, ResolvedCliAction::Chat));
     }
 
     #[tokio::test]

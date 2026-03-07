@@ -21,7 +21,7 @@ use vtcode_core::utils::validation::validate_non_empty;
 use crate::agent::agents::apply_runtime_overrides;
 use crate::workspace_trust::workspace_trust_level;
 
-use super::ExecCommandOptions;
+use super::super::exec::ExecCommandOptions;
 
 #[derive(Debug, Clone)]
 pub enum ExecCommandKind {

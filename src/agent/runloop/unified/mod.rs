@@ -52,8 +52,5 @@ pub(crate) mod reasoning;
 // Optimization and safety modules
 pub mod tool_call_safety;
 
-// Golden path integration for unified tool execution
-pub(crate) mod golden_path;
-
 pub(crate) use intent_extractor::extract_action_from_messages;
 pub(crate) use session_runtime::UnifiedSessionRuntime;

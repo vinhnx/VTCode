@@ -1,8 +1,8 @@
 use anyhow::Result;
 use futures::stream::{FuturesUnordered, StreamExt};
 use std::sync::Arc;
-use vtcode_core::config::constants::tools;
 use vtcode_core::llm::provider as uni;
+use vtcode_core::tools::tool_intent;
 
 use crate::agent::runloop::unified::progress::ProgressReporter;
 use crate::agent::runloop::unified::tool_pipeline::run_tool_call_with_args;
@@ -20,19 +20,8 @@ pub(crate) struct ParsedToolCall<'a> {
 }
 
 fn can_parallelize_batch_tool_call(prepared: &PreparedToolCall) -> bool {
-    if matches!(
-        prepared.canonical_name.as_str(),
-        tools::ENTER_PLAN_MODE
-            | tools::EXIT_PLAN_MODE
-            | tools::REQUEST_USER_INPUT
-            | tools::RUN_PTY_CMD
-            | tools::UNIFIED_EXEC
-            | tools::SEND_PTY_INPUT
-            | "shell"
-    ) {
-        return false;
-    }
     prepared.readonly_classification
+        && tool_intent::is_parallel_safe_call(&prepared.canonical_name, &prepared.effective_args)
 }
 
 #[allow(dead_code)]

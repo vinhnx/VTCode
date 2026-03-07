@@ -175,7 +175,6 @@ pub mod adaptive_rate_limiter;
 pub mod async_middleware;
 pub mod async_pipeline;
 pub mod circuit_breaker;
-pub mod golden_path_orchestrator;
 pub mod health;
 pub mod improvement_algorithms;
 pub mod improvements_config;
@@ -185,12 +184,9 @@ pub mod improvements_registry_ext;
 pub mod middleware; // Deprecated - prefer async_middleware
 pub mod optimized_registry;
 pub mod output_spooler;
-pub mod parallel_executor;
-pub mod parallel_tool_batch;
 pub mod pattern_engine;
 pub mod request_response;
 pub mod unified_error;
-pub mod unified_executor;
 
 /// Internal helper IDs for apply_patch and tracker constructors.
 pub const CREATE_APPLY_PATCH_FREEFORM_TOOL_ID: &str = "create_apply_patch_freeform_tool";
@@ -234,7 +230,8 @@ pub use result_metadata::{
     EnhancedToolResult, ResultCompleteness, ResultMetadata, ResultScorer, ScorerRegistry,
 };
 pub use safety_gateway::{
-    SafetyCheckResult, SafetyDecision, SafetyError, SafetyGateway, SafetyGatewayConfig, SafetyStats,
+    SafetyCheckResult, SafetyContext, SafetyDecision, SafetyError, SafetyGateway,
+    SafetyGatewayConfig, SafetyStats, SafetyTrustLevel,
 };
 pub use search_metrics::{SearchMetric, SearchMetrics, SearchMetricsStats};
 pub use shell_snapshot::{
@@ -281,22 +278,6 @@ pub use middleware::{
 };
 pub use pattern_engine::{DetectedPattern, ExecutionEvent, ExecutionSummary, PatternEngine};
 
-// Golden Path Enforcement - Unified Executor
-pub use unified_executor::{
-    ApprovalState, ExecutionContextBuilder, PolicyConfig,
-    ToolExecutionContext as UnifiedExecutionContext, ToolRegistryAdapter, TrustLevel,
-    UnifiedExecutionResult, UnifiedToolExecutor,
-};
-
-// Parallel tool batch execution
-pub use parallel_tool_batch::{ParallelToolBatch, QueuedToolCall};
-
-// Golden Path Orchestrator - Consolidated execution entry point
-pub use golden_path_orchestrator::{
-    ExecutionBuilder, GoldenPathConfig, GoldenPathResult, execute_batch_golden_path,
-    execute_golden_path, execute_golden_path_simple,
-};
-
 // Re-export function declarations for external use
 pub use registry::build_function_declarations;
 pub use registry::build_function_declarations_cached;
@@ -324,7 +305,6 @@ pub use handlers::{
     ExecCommandInput,
     ExecCommandSource,
     ExecEnv,
-    ExecExpiration,
     ExecToolCallOutput,
     FileChange,
     FileChangeKind,
@@ -332,11 +312,9 @@ pub use handlers::{
     FreeformToolFormat,
     JsonSchema as ToolJsonSchema,
     McpToolResult,
-    OutputText,
     ParsedCommand,
     ResponsesApiTool,
     SandboxAttempt,
-    SandboxConfig,
     SandboxManager,
     SandboxMode,
     SandboxPermissions,
@@ -348,7 +326,6 @@ pub use handlers::{
     SharedTurnDiffTracker,
     ShellEnvironmentPolicy,
     ShellToolCallParams,
-    StdoutStream,
     ToolCallError,
     ToolCtx,
     ToolEmitter,
