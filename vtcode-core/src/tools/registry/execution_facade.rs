@@ -177,6 +177,12 @@ impl ToolRegistry {
         self.execute_tool_ref(name, &args).await
     }
 
+    /// Execute a model-originated tool call through the public routing assembly.
+    pub async fn execute_public_tool_ref(&self, name: &str, args: &Value) -> Result<Value> {
+        self.execute_public_tool_ref_internal(name, args, false)
+            .await
+    }
+
     /// Reference-taking version of execute_tool to avoid cloning by callers
     /// that already have access to an existing `Value`.
     pub async fn execute_tool_ref(&self, name: &str, args: &Value) -> Result<Value> {
@@ -189,6 +195,30 @@ impl ToolRegistry {
     /// where validation already happened in the runloop.
     pub async fn execute_tool_ref_prevalidated(&self, name: &str, args: &Value) -> Result<Value> {
         self.execute_tool_ref_internal(name, args, true).await
+    }
+
+    /// Prevalidated model-originated execution that still routes through the public assembly.
+    pub async fn execute_public_tool_ref_prevalidated(
+        &self,
+        name: &str,
+        args: &Value,
+    ) -> Result<Value> {
+        self.execute_public_tool_ref_internal(name, args, true)
+            .await
+    }
+
+    async fn execute_public_tool_ref_internal(
+        &self,
+        name: &str,
+        args: &Value,
+        prevalidated: bool,
+    ) -> Result<Value> {
+        let routed_name = self
+            .resolve_public_tool_name(name)
+            .await
+            .map_err(|error| anyhow!(error.to_string()))?;
+        self.execute_tool_ref_internal(routed_name.as_str(), args, prevalidated)
+            .await
     }
 
     async fn execute_tool_ref_internal(
@@ -354,7 +384,8 @@ impl ToolRegistry {
         let readonly_classification = if prevalidated {
             #[cfg(debug_assertions)]
             {
-                if let Err(err) = self.preflight_validate_call(&tool_name, args)
+                if let Err(err) =
+                    execution_kernel::preflight_validate_resolved_call(self, &tool_name, args)
                     && !agent_execution::is_plan_mode_denial(&err.to_string())
                 {
                     debug_assert!(
@@ -366,7 +397,7 @@ impl ToolRegistry {
             }
             !crate::tools::tool_intent::classify_tool_intent(&tool_name, args).mutating
         } else {
-            match self.preflight_validate_call(&tool_name, args) {
+            match execution_kernel::preflight_validate_resolved_call(self, &tool_name, args) {
                 Ok(outcome) => outcome.readonly_classification,
                 Err(err) => {
                     let err_msg = err.to_string();

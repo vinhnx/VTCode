@@ -148,14 +148,17 @@ mod e2e_tests {
 
         // List directory (should cache result)
         let list_args = json!({
-            "path": subdir.to_string_lossy()
+            "action": "list",
+            "path": "subdir"
         });
 
-        let result1 = registry.execute_tool_ref("list_files", &list_args).await;
+        let result1 = registry
+            .execute_tool_ref("unified_search", &list_args)
+            .await;
         assert!(result1.is_ok(), "First list should succeed");
 
         // Second list should use cache
-        let result2 = registry.execute_tool("list_files", list_args).await;
+        let result2 = registry.execute_tool("unified_search", list_args).await;
         assert!(result2.is_ok(), "Second list should succeed");
 
         // Results should be identical

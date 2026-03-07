@@ -45,8 +45,9 @@ state from a single source of truth.
 3.  Register the tool. For built-in tooling update
     `ToolRegistry::builtin_tool_registrations`. For runtime additions invoke
     `ToolRegistry::register_tool` from your initialisation code.
-4.  Provide a `FunctionDeclaration` entry (typically in
-    `build_function_declarations`) to document the schema exposed to LLMs.
+4.  Verify the tool appears through the session catalog projections
+    (`model_tools`, `schema_entries`, `acp_tools`, or `public_tool_names`) rather
+    than adding a second declaration path.
 5.  Add tests that cover both registration (`available_tools`/`has_tool`) and
     execution via `ToolRegistry::execute_tool`.
 
@@ -54,9 +55,9 @@ state from a single source of truth.
 
 The `get_errors` tool is a built-in diagnostic tool that aggregates recent errors
 from session archives and returns concise suggestions and recent error samples.
-Register it as a builtin with `tools::GET_ERRORS` and add a `FunctionDeclaration`
-so LLMs can discover it. When used, agents should prefer `get_errors` output to
-guide self-diagnostic and self-fix logic.
+Register it as a builtin with `tools::GET_ERRORS` so the catalog can surface it
+through the shared projections. When used, agents should prefer `get_errors`
+output to guide self-diagnostic and self-fix logic.
 
 ## Safety guidelines
 

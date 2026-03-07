@@ -18,25 +18,8 @@ pub(crate) async fn read_system_prompt(
     session_addendum: Option<&str>,
     available_tools: &[String],
 ) -> String {
-    // Build PromptContext with available information (workspace, current directory, tools)
-    let mut prompt_context = PromptContext {
-        workspace: Some(workspace.to_path_buf()),
-        skip_standard_instructions: false,
-        ..Default::default()
-    };
-
-    // Set current working directory
-    if let Ok(cwd) = std::env::current_dir() {
-        prompt_context.set_current_directory(cwd);
-    }
-
-    // Populate available tools so dynamic tool-aware guidelines match runtime capabilities.
-    for tool in available_tools {
-        prompt_context.add_tool(tool.clone());
-    }
-    if !prompt_context.available_tools.is_empty() {
-        prompt_context.infer_capability_level();
-    }
+    let prompt_context =
+        PromptContext::from_workspace_tools(workspace, available_tools.iter().cloned());
 
     // Load configuration
     let vt_cfg = ConfigManager::load_from_workspace(workspace)

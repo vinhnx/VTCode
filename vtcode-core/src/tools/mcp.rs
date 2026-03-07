@@ -74,38 +74,42 @@ pub fn build_mcp_registration(
     server_hint: Option<String>,
 ) -> ToolRegistration {
     let primary_name = format!("mcp::{}::{}", provider, tool.name);
-    // Leak to obtain &'static str for ToolRegistration; number of MCP tools is bounded by provider output.
-    let primary_static: &'static str = Box::leak(primary_name.into_boxed_str());
 
     let description = tool.description.as_str();
-    let desc_with_hint = match server_hint {
+    let desc_with_hint = match server_hint.as_deref() {
         Some(hint) => format!("{description}\nHint: {hint}"),
         None => description.to_string(),
     };
-    let description_static: &'static str = Box::leak(desc_with_hint.clone().into_boxed_str());
 
     let aliases = vec![model_visible_mcp_tool_name(provider, &tool.name)];
 
     let proxy = McpProxyTool {
         client,
         remote_name: tool.name.clone(),
-        name: primary_static,
-        description: description_static,
         input_schema: tool.input_schema.clone(),
     };
 
-    ToolRegistration::from_tool_instance(primary_static, CapabilityLevel::Basic, proxy)
+    let mut metadata = crate::tools::registry::ToolMetadata::default()
+        .with_description(desc_with_hint)
         .with_parameter_schema(tool.input_schema.clone())
         .with_permission(ToolPolicy::Prompt)
-        .with_aliases(aliases)
-        .with_server_hint(desc_with_hint)
+        .with_aliases(aliases);
+    if let Some(hint) = server_hint {
+        metadata = metadata.with_server_hint(hint);
+    }
+
+    ToolRegistration::from_tool_with_metadata(
+        primary_name,
+        CapabilityLevel::Basic,
+        Arc::new(proxy),
+        metadata,
+    )
+    .with_llm_visibility(false)
 }
 
 struct McpProxyTool {
     client: Arc<McpClient>,
     remote_name: String,
-    name: &'static str,
-    description: &'static str,
     input_schema: Value,
 }
 
@@ -116,11 +120,11 @@ impl Tool for McpProxyTool {
     }
 
     fn name(&self) -> &'static str {
-        self.name
+        "mcp_proxy"
     }
 
     fn description(&self) -> &'static str {
-        self.description
+        "MCP tool proxy"
     }
 
     fn parameter_schema(&self) -> Option<Value> {

@@ -410,29 +410,29 @@ impl LoopDetector {
         match tool_name {
             LEGACY_LIST_FILES => Some(
                 "Instead of listing files repeatedly:\n\
-                 • Use grep_file to search for specific patterns\n\
+                 • Use unified_search with action='grep' to search for specific patterns\n\
                  • Target specific subdirectories (e.g., 'src/', 'tests/')\n\
-                 • Use read_file if you know the exact file path"
+                 • Use unified_file with action='read' if you know the exact file path"
                     .to_string(),
             ),
             LEGACY_GREP_FILE => Some(
                 "Instead of grepping repeatedly:\n\
                  • Refine your search pattern to be more specific\n\
-                 • Use read_file to examine specific files\n\
-                 • Consider using execute_code for complex filtering"
+                 • Use unified_file with action='read' to examine specific files\n\
+                 • Consider using unified_exec with action='code' for complex filtering"
                     .to_string(),
             ),
             tools::READ_FILE => Some(
                 "Instead of reading files repeatedly:\n\
-                 • Use grep_file to find specific content first\n\
-                 • Read specific line ranges with read_range parameter\n\
+                 • Use unified_search with action='grep' to find specific content first\n\
+                 • Read specific line ranges with unified_file offset/limit parameters\n\
                  • Consider if you already have the information needed"
                     .to_string(),
             ),
             LEGACY_SEARCH_TOOLS => Some(
                 "Instead of searching tools repeatedly:\n\
                  • Review the tools you've already discovered\n\
-                 • Use execute_code to call tools directly\n\
+                 • Use unified_search with action='tools' to inspect available tools\n\
                  • Check if you need a different approach to the task"
                     .to_string(),
             ),
@@ -525,23 +525,23 @@ impl LoopDetector {
     fn suggest_alternative_for_tool(tool_name: &str) -> String {
         match base_tool_name(tool_name) {
             LEGACY_LIST_FILES => "Instead of listing repeatedly:\n\
-                 • Use grep_file to search for specific patterns\n\
+                 • Use unified_search with action='grep' to search for specific patterns\n\
                  • Target specific subdirectories (e.g., 'src/', 'tests/')\n\
-                 • Use read_file if you know the exact file path"
+                 • Use unified_file with action='read' if you know the exact file path"
                 .to_string(),
             LEGACY_GREP_FILE => "Instead of grepping repeatedly:\n\
                  • Refine your search pattern to be more specific\n\
-                 • Use read_file to examine specific files\n\
-                 • Consider using execute_code for complex filtering"
+                 • Use unified_file with action='read' to examine specific files\n\
+                 • Consider using unified_exec with action='code' for complex filtering"
                 .to_string(),
             tools::READ_FILE => "Instead of reading files repeatedly:\n\
-                 • Use grep_file to find specific content first\n\
-                 • Read specific line ranges with read_range parameter\n\
+                 • Use unified_search with action='grep' to find specific content first\n\
+                 • Read specific line ranges with unified_file offset/limit parameters\n\
                  • Consider if you already have the information needed"
                 .to_string(),
             LEGACY_SEARCH_TOOLS => "Instead of searching tools repeatedly:\n\
                  • Review the tools you've already discovered\n\
-                 • Use execute_code to call tools directly\n\
+                 • Use unified_search with action='tools' to inspect available tools\n\
                  • Check if you need a different approach to the task"
                 .to_string(),
             _ => "Shift focus to ROOT CAUSE analysis rather than patching symptoms. Re-evaluate planning assumptions specifically regarding environmental constraints. Consider:\n\
@@ -811,7 +811,7 @@ mod tests {
 
         assert!(suggestion.is_some());
         let msg = suggestion.unwrap();
-        assert!(msg.contains(LEGACY_GREP_FILE));
+        assert!(msg.contains("unified_search"));
         assert!(msg.contains("subdirectories"));
     }
 
@@ -822,7 +822,7 @@ mod tests {
 
         assert!(suggestion.is_some());
         let msg = suggestion.unwrap();
-        assert!(msg.contains(tools::READ_FILE));
+        assert!(msg.contains("unified_file"));
         assert!(msg.contains("pattern"));
     }
 

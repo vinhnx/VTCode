@@ -639,10 +639,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: For CLI Output, For TUI Widgets, Unified Theme, Color Reference, Common Patterns
   - **User Questions**: "What can you tell me about Styling Quick Start Guide?", "How does For CLI Output work?", "How does For TUI Widgets work?"
 
-- **File**: `docs/project/TODO.md`
-  - **Content**: TODO.md
-  - **User Questions**: "What can you tell me about TODO.md?"
-
 - **File**: `docs/harness/TECH_DEBT_TRACKER.md`
   - **Content**: Tech Debt Tracker
   - **Topics**: Priority Levels, Status Values, Debt Items, How to Add a New Item, How to Resolve an Item
@@ -692,6 +688,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Content**: VT Code Environment Setup and PATH Visibility Guide
   - **Topics**: Overview, How VT Code Manages Environment Variables, Command Execution Paths, Verifying Your Environment Setup, Configuring Allowed Commands
   - **User Questions**: "What can you tell me about VT Code Environment Setup and PATH Visibility Guide?", "How does Overview work?", "How does How VT Code Manages Environment Variables work?"
+
+- **File**: `docs/project/TODO.md`
+  - **Content**: VT Code Follow-up Refactor: Routing, ACP, and Skills
+  - **Topics**: Summary, Implementation Changes, Public API / Type Changes, Test Plan, Assumptions and Defaults
+  - **User Questions**: "What can you tell me about VT Code Follow-up Refactor: Routing, ACP, and Skills?", "How does Summary work?", "How does Implementation Changes work?"
 
 - **File**: `docs/styling/RATATUI_FAQ_INTEGRATION.md`
   - **Content**: VT Code Integration of Ratatui FAQ Best Practices

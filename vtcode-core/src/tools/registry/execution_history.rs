@@ -147,8 +147,8 @@ impl ToolExecutionRecord {
 
     #[inline]
     pub fn with_retry_after(mut self, retry_after: Option<Duration>) -> Self {
-        self.retry_after_ms = retry_after
-            .map(|duration| duration.as_millis().min(u128::from(u64::MAX)) as u64);
+        self.retry_after_ms =
+            retry_after.map(|duration| duration.as_millis().min(u128::from(u64::MAX)) as u64);
         self
     }
 

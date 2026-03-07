@@ -1,4 +1,3 @@
-use super::mcp_tools::build_mcp_tool_definitions;
 use super::skill_setup::{discover_skills, register_skill_tools};
 use super::types::{
     SessionMetadataContext, SessionState, ToolExecutionContext,
@@ -18,7 +17,6 @@ use crate::workspace_trust;
 use anyhow::{Context, Result};
 use hashbrown::HashMap;
 use std::path::PathBuf;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration as StdDuration;
 use tokio::sync::RwLock;
@@ -37,7 +35,7 @@ use vtcode_core::llm::{
 
 use vtcode::updater::Updater;
 use vtcode_core::models::ModelId;
-use vtcode_core::tools::build_function_declarations_cached;
+use vtcode_core::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
 use vtcode_core::tools::{ApprovalRecorder, SearchMetrics, ToolRegistry, ToolResultCache};
 use vtcode_core::{apply_global_notification_config_from_vtcode, init_global_notification_manager};
 use vtcode_tui::InlineHeaderHighlight;
@@ -101,29 +99,10 @@ pub(crate) async fn initialize_session(
     let provider_client = create_provider_client(config, vt_cfg)?;
     let mut full_auto_allowlist = None;
 
-    let tool_definitions =
-        build_tool_definitions(config, tool_documentation_mode, async_mcp_manager.as_ref()).await;
-    let tools = Arc::new(RwLock::new(tool_definitions));
-
     let skill_setup = discover_skills(config, resume).await;
     let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
     let mut conversation_history = build_conversation_history_from_resume(resume).await;
     recover_history_from_crash(&mut conversation_history);
-
-    let trajectory = build_trajectory_logger(&config.workspace, vt_cfg);
-    let available_tools = {
-        let tool_defs = tools.read().await;
-        tool_defs
-            .iter()
-            .map(|def| def.function_name().to_string())
-            .collect::<Vec<_>>()
-    };
-    let base_system_prompt = read_system_prompt(
-        &config.workspace,
-        session_bootstrap.prompt_addendum.as_deref(),
-        &available_tools,
-    )
-    .await;
     let mcp_panel_state = if let Some(cfg) = vt_cfg {
         mcp_events::McpPanelState::new(cfg.mcp.ui.max_events, cfg.mcp.enabled)
     } else {
@@ -133,10 +112,10 @@ pub(crate) async fn initialize_session(
     let mut tool_registry = ToolRegistry::new(config.workspace.clone()).await;
     tool_registry.initialize_async().await?;
     if let Some(cfg) = vt_cfg {
-        tool_registry.apply_commands_config(&cfg.commands);
-        tool_registry.apply_sandbox_config(&cfg.sandbox);
-        tool_registry.apply_timeout_policy(&cfg.timeouts);
-        if let Err(err) = tool_registry.apply_config_policies(&cfg.tools).await {
+        if let Err(err) = tool_registry
+            .apply_session_runtime_config(&cfg.commands, &cfg.sandbox, &cfg.timeouts, &cfg.tools)
+            .await
+        {
             warn!("Failed to apply tool policies from config: {}", err);
         }
         maybe_attach_mcp_client(&mut tool_registry, cfg, async_mcp_manager.as_ref()).await;
@@ -161,7 +140,51 @@ pub(crate) async fn initialize_session(
             .context("Failed to determine workspace trust level for tool policy")?,
     };
     apply_workspace_trust_prompt_policy(&mut tool_registry, full_auto, workspace_trust_level).await;
-    register_skill_tools(&mut tool_registry, &tools, &skill_setup).await?;
+    let tool_catalog = Arc::new(ToolCatalogState::new());
+    tool_catalog.bump_version();
+
+    let tools = Arc::new(RwLock::new(
+        tool_registry
+            .model_tools(SessionToolsConfig::full_public(
+                SessionSurface::Interactive,
+                vtcode_core::config::types::CapabilityLevel::CodeSearch,
+                tool_documentation_mode,
+                ToolModelCapabilities::for_model_name(&config.model),
+            ))
+            .await,
+    ));
+    register_skill_tools(
+        &mut tool_registry,
+        &tools,
+        &tool_catalog,
+        config,
+        tool_documentation_mode,
+        &skill_setup,
+    )
+    .await?;
+    refresh_tool_snapshot(
+        &tool_registry,
+        &tools,
+        &tool_catalog,
+        config,
+        tool_documentation_mode,
+    )
+    .await;
+
+    let trajectory = build_trajectory_logger(&config.workspace, vt_cfg);
+    let available_tools = {
+        let tool_defs = tools.read().await;
+        tool_defs
+            .iter()
+            .map(|def| def.function_name().to_string())
+            .collect::<Vec<_>>()
+    };
+    let base_system_prompt = read_system_prompt(
+        &config.workspace,
+        session_bootstrap.prompt_addendum.as_deref(),
+        &available_tools,
+    )
+    .await;
 
     let tool_result_cache = Arc::new(RwLock::new(ToolResultCache::new(128)));
     let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
@@ -171,9 +194,6 @@ pub(crate) async fn initialize_session(
         .map(|home| PathBuf::from(home).join(".vtcode").join("cache"))
         .unwrap_or_else(|| PathBuf::from(".vtcode/cache"));
     let approval_recorder = Arc::new(ApprovalRecorder::new(cache_dir));
-    let tool_catalog = Arc::new(ToolCatalogState::new());
-    tool_catalog.bump_version();
-
     if let Some(cfg) = vt_cfg
         && cfg.context.dynamic.enabled
         && let Err(err) = vtcode_core::context::initialize_dynamic_context(
@@ -185,10 +205,12 @@ pub(crate) async fn initialize_session(
         warn!("Failed to initialize dynamic context directories: {}", err);
     }
 
-    let circuit_breaker = Arc::new(vtcode_core::tools::circuit_breaker::CircuitBreaker::with_metrics(
-        vtcode_config_circuit_breaker_to_core(vt_cfg, config),
-        tool_registry.metrics_collector(),
-    ));
+    let circuit_breaker = Arc::new(
+        vtcode_core::tools::circuit_breaker::CircuitBreaker::with_metrics(
+            vtcode_config_circuit_breaker_to_core(vt_cfg, config),
+            tool_registry.metrics_collector(),
+        ),
+    );
     tool_registry.set_shared_circuit_breaker(circuit_breaker.clone());
 
     Ok(SessionState {
@@ -355,49 +377,23 @@ fn create_provider_client(
     .context("Failed to initialize provider client")
 }
 
-async fn build_tool_definitions(
+pub(crate) async fn refresh_tool_snapshot(
+    tool_registry: &ToolRegistry,
+    tools: &Arc<RwLock<Vec<uni::ToolDefinition>>>,
+    tool_catalog: &ToolCatalogState,
     config: &CoreAgentConfig,
     tool_documentation_mode: vtcode_core::config::ToolDocumentationMode,
-    async_mcp_manager: Option<&Arc<AsyncMcpManager>>,
-) -> Vec<uni::ToolDefinition> {
-    let base_declarations = build_function_declarations_cached(tool_documentation_mode);
-    let mut tool_definitions: Vec<uni::ToolDefinition> = base_declarations
-        .iter()
-        .map(|decl| {
-            uni::ToolDefinition::function(
-                decl.name.clone(),
-                decl.description.clone(),
-                vtcode_core::llm::providers::gemini::sanitize_function_parameters(
-                    decl.parameters.clone(),
-                ),
-            )
-        })
-        .collect();
-
-    if let Ok(model_id) = ModelId::from_str(&config.model)
-        && model_id.supports_shell_tool()
-    {
-        tool_definitions.push(uni::ToolDefinition::apply_patch(
-            "Apply VT Code patches to modify files. IMPORTANT: Use VT Code format (*** Begin Patch, *** Update File: path, @@ context, -/+ lines, *** End Patch), NOT unified diff (---/+++) format. The tool creates, updates, or deletes file content.".to_string(),
-        ));
-    }
-
-    if let Some(manager) = async_mcp_manager {
-        let status = manager.get_status().await;
-        if let McpInitStatus::Ready { client } = &status {
-            match client.list_tools().await {
-                Ok(mcp_tools) => {
-                    info!("Found {} MCP tools", mcp_tools.len());
-                    tool_definitions.extend(build_mcp_tool_definitions(&mcp_tools));
-                }
-                Err(err) => warn!("Failed to discover MCP tools from async manager: {err}"),
-            }
-        } else {
-            debug!("MCP client not ready yet, tools will be available later via dynamic update");
-        }
-    }
-
-    vtcode_core::prompts::sort_tool_definitions(tool_definitions)
+) {
+    let next = tool_registry
+        .model_tools(SessionToolsConfig::full_public(
+            SessionSurface::Interactive,
+            vtcode_core::config::types::CapabilityLevel::CodeSearch,
+            tool_documentation_mode,
+            ToolModelCapabilities::for_model_name(&config.model),
+        ))
+        .await;
+    *tools.write().await = next;
+    tool_catalog.bump_version();
 }
 
 async fn maybe_attach_mcp_client(

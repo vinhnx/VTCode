@@ -13,8 +13,8 @@ use std::sync::Arc;
 use async_trait::async_trait;
 
 use super::tool_handler::{
-    ToolCallError, ToolHandler, ToolInvocation, ToolOutput, ToolPayload, ToolSession, ToolSpec,
-    TurnContext,
+    ConfiguredToolSpec, ToolCallError, ToolHandler, ToolInvocation, ToolKind, ToolOutput,
+    ToolPayload, ToolSession, ToolSpec, TurnContext,
 };
 
 /// A parsed tool call ready for dispatch.
@@ -28,27 +28,14 @@ pub struct ToolCall {
     pub payload: ToolPayload,
 }
 
-/// Configured tool specification with parallel execution support.
-#[derive(Clone, Debug)]
-pub struct ConfiguredToolSpec {
-    /// The tool specification.
-    pub spec: ToolSpec,
-    /// Whether this tool can be executed in parallel with others.
-    pub supports_parallel_tool_calls: bool,
+struct DispatchEntry {
+    canonical_name: String,
+    handler: Arc<dyn ToolHandler>,
 }
 
-impl ConfiguredToolSpec {
-    pub fn new(spec: ToolSpec, supports_parallel_tool_calls: bool) -> Self {
-        Self {
-            spec,
-            supports_parallel_tool_calls,
-        }
-    }
-}
-
-/// Tool registry holding handler mappings.
-pub struct ToolRegistry {
-    handlers: HashMap<String, Arc<dyn ToolHandler>>,
+/// Dispatch registry holding handler mappings.
+pub struct DispatchRegistry {
+    handlers: HashMap<String, DispatchEntry>,
 }
 
 fn normalize_router_tool_name(tool_name: &str) -> Option<String> {
@@ -81,7 +68,7 @@ fn normalize_router_tool_name(tool_name: &str) -> Option<String> {
 
 fn suggest_similar_tool_names(
     requested_tool_name: &str,
-    handlers: &HashMap<String, Arc<dyn ToolHandler>>,
+    handlers: &HashMap<String, DispatchEntry>,
 ) -> Vec<String> {
     let requested_lower = requested_tool_name.to_ascii_lowercase();
     let normalized = normalize_router_tool_name(requested_tool_name).unwrap_or_default();
@@ -101,65 +88,88 @@ fn suggest_similar_tool_names(
         .collect()
 }
 
-impl ToolRegistry {
+impl DispatchRegistry {
     pub fn new(handlers: HashMap<String, Arc<dyn ToolHandler>>) -> Self {
+        let handlers = handlers
+            .into_iter()
+            .map(|(name, handler)| {
+                (
+                    name.clone(),
+                    DispatchEntry {
+                        canonical_name: name,
+                        handler,
+                    },
+                )
+            })
+            .collect();
         Self { handlers }
     }
 
     pub fn handler(&self, name: &str) -> Option<Arc<dyn ToolHandler>> {
-        self.handlers.get(name).cloned()
+        self.handlers.get(name).map(|entry| entry.handler.clone())
+    }
+
+    pub fn resolve_tool_name(&self, requested_name: &str) -> Result<&str, ToolCallError> {
+        self.resolve_entry(requested_name)
+            .map(|entry| entry.canonical_name.as_str())
     }
 
     /// Dispatch a tool invocation to the appropriate handler.
     pub async fn dispatch(&self, invocation: ToolInvocation) -> Result<ToolOutput, ToolCallError> {
-        let tool_name = &invocation.tool_name;
-
-        let normalized_name = normalize_router_tool_name(tool_name);
-        let handler = self.handler(tool_name).or_else(|| {
-            normalized_name
-                .as_deref()
-                .and_then(|candidate| self.handler(candidate))
-        });
-        let handler = handler.ok_or_else(|| {
-            let suggested = suggest_similar_tool_names(tool_name, &self.handlers);
-            let normalized_hint = normalized_name
-                .as_deref()
-                .filter(|candidate| *candidate != tool_name)
-                .map(|candidate| format!(" Normalized as '{candidate}'."))
-                .unwrap_or_default();
-            let suggestion_hint = if suggested.is_empty() {
-                String::new()
-            } else {
-                format!(" Did you mean: {}?", suggested.join(", "))
-            };
-            ToolCallError::respond(format!(
-                "Unknown tool: {tool_name}.{normalized_hint}{suggestion_hint}"
-            ))
-        })?;
+        let entry = self.resolve_entry(&invocation.tool_name)?;
+        let handler = &entry.handler;
 
         if !handler.matches_kind(&invocation.payload) {
             return Err(ToolCallError::respond(format!(
-                "Tool {tool_name} invoked with incompatible payload type"
+                "Tool {} invoked with incompatible payload type",
+                invocation.tool_name
             )));
         }
 
         handler.handle(invocation).await
     }
+
+    fn resolve_entry(&self, requested_name: &str) -> Result<&DispatchEntry, ToolCallError> {
+        let normalized_name = normalize_router_tool_name(requested_name);
+        self.handlers
+            .get(requested_name)
+            .or_else(|| {
+                normalized_name
+                    .as_deref()
+                    .and_then(|candidate| self.handlers.get(candidate))
+            })
+            .ok_or_else(|| {
+                let suggested = suggest_similar_tool_names(requested_name, &self.handlers);
+                let normalized_hint = normalized_name
+                    .as_deref()
+                    .filter(|candidate| *candidate != requested_name)
+                    .map(|candidate| format!(" Normalized as '{candidate}'."))
+                    .unwrap_or_default();
+                let suggestion_hint = if suggested.is_empty() {
+                    String::new()
+                } else {
+                    format!(" Did you mean: {}?", suggested.join(", "))
+                };
+                ToolCallError::respond(format!(
+                    "Unknown tool: {requested_name}.{normalized_hint}{suggestion_hint}"
+                ))
+            })
+    }
 }
 
-/// Builder for constructing ToolRegistry with specs.
-pub struct ToolRegistryBuilder {
-    handlers: HashMap<String, Arc<dyn ToolHandler>>,
+/// Builder for constructing a dispatch registry with specs.
+pub struct DispatchRegistryBuilder {
+    handlers: HashMap<String, DispatchEntry>,
     specs: Vec<ConfiguredToolSpec>,
 }
 
-impl Default for ToolRegistryBuilder {
+impl Default for DispatchRegistryBuilder {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl ToolRegistryBuilder {
+impl DispatchRegistryBuilder {
     pub fn new() -> Self {
         Self {
             handlers: HashMap::new(),
@@ -190,24 +200,47 @@ impl ToolRegistryBuilder {
         handler: Arc<dyn ToolHandler>,
     ) -> &mut Self {
         let name = name.into();
+        self.register_route(name.clone(), name, handler)
+    }
+
+    /// Register a handler for a routed tool name.
+    pub fn register_route(
+        &mut self,
+        name: impl Into<String>,
+        canonical_name: impl Into<String>,
+        handler: Arc<dyn ToolHandler>,
+    ) -> &mut Self {
+        let name = name.into();
+        let canonical_name = canonical_name.into();
         if self.handlers.contains_key(&name) {
             tracing::warn!("Overwriting handler for tool {name}");
         }
-        self.handlers.insert(name, handler);
+        self.handlers.insert(
+            name,
+            DispatchEntry {
+                canonical_name: canonical_name.clone(),
+                handler: Arc::new(RouteAliasHandler {
+                    canonical_name,
+                    inner: handler,
+                }),
+            },
+        );
         self
     }
 
     /// Register multiple tool name aliases for the same handler.
     pub fn register_aliases(&mut self, names: &[&str], handler: Arc<dyn ToolHandler>) -> &mut Self {
         for name in names {
-            self.handlers.insert((*name).to_string(), handler.clone());
+            self.register_handler((*name).to_string(), handler.clone());
         }
         self
     }
 
     /// Build the registry and return specs.
-    pub fn build(self) -> (Vec<ConfiguredToolSpec>, ToolRegistry) {
-        let registry = ToolRegistry::new(self.handlers);
+    pub fn build(self) -> (Vec<ConfiguredToolSpec>, DispatchRegistry) {
+        let registry = DispatchRegistry {
+            handlers: self.handlers,
+        };
         (self.specs, registry)
     }
 }
@@ -219,13 +252,13 @@ impl ToolRegistryBuilder {
 /// 2. Dispatches calls to registered handlers
 /// 3. Manages tool specifications for the LLM
 pub struct ToolRouter {
-    registry: ToolRegistry,
+    registry: DispatchRegistry,
     specs: Vec<ConfiguredToolSpec>,
 }
 
 impl ToolRouter {
     /// Create a router from a builder.
-    pub fn from_builder(builder: ToolRegistryBuilder) -> Self {
+    pub fn from_builder(builder: DispatchRegistryBuilder) -> Self {
         let (specs, registry) = builder.build();
         Self { registry, specs }
     }
@@ -246,6 +279,11 @@ impl ToolRouter {
             .iter()
             .filter(|c| c.supports_parallel_tool_calls)
             .any(|c| c.spec.name() == tool_name)
+    }
+
+    /// Resolve a requested tool name to the canonical routed name.
+    pub fn resolve_tool_name(&self, tool_name: &str) -> Result<&str, ToolCallError> {
+        self.registry.resolve_tool_name(tool_name)
     }
 
     /// Build a ToolCall from a function call response.
@@ -303,6 +341,31 @@ impl ToolRouter {
     /// Create a failure response for a tool call.
     pub fn failure_response(_call_id: String, error: ToolCallError) -> ToolOutput {
         ToolOutput::error(error.to_string())
+    }
+}
+
+struct RouteAliasHandler {
+    canonical_name: String,
+    inner: Arc<dyn ToolHandler>,
+}
+
+#[async_trait]
+impl ToolHandler for RouteAliasHandler {
+    fn kind(&self) -> ToolKind {
+        self.inner.kind()
+    }
+
+    fn matches_kind(&self, payload: &ToolPayload) -> bool {
+        self.inner.matches_kind(payload)
+    }
+
+    async fn is_mutating(&self, invocation: &ToolInvocation) -> bool {
+        self.inner.is_mutating(invocation).await
+    }
+
+    async fn handle(&self, mut invocation: ToolInvocation) -> Result<ToolOutput, ToolCallError> {
+        invocation.tool_name = self.canonical_name.clone();
+        self.inner.handle(invocation).await
     }
 }
 
@@ -380,7 +443,7 @@ mod tests {
             strict: false,
         });
 
-        let mut builder = ToolRegistryBuilder::new();
+        let mut builder = DispatchRegistryBuilder::new();
         builder
             .push_spec_with_parallel_support(spec, true)
             .register_handler("test_tool", handler);
@@ -406,7 +469,7 @@ mod tests {
             strict: false,
         });
 
-        let mut builder = ToolRegistryBuilder::new();
+        let mut builder = DispatchRegistryBuilder::new();
         builder
             .push_spec_with_parallel_support(spec, true)
             .register_handler("parallel_tool", handler);
@@ -434,7 +497,10 @@ mod tests {
         let mut handlers = HashMap::new();
         handlers.insert(
             "run_pty_cmd".to_string(),
-            Arc::new(MockHandler) as Arc<dyn ToolHandler>,
+            DispatchEntry {
+                canonical_name: "run_pty_cmd".to_string(),
+                handler: Arc::new(MockHandler) as Arc<dyn ToolHandler>,
+            },
         );
 
         let suggestions = suggest_similar_tool_names("Exec code", &handlers);

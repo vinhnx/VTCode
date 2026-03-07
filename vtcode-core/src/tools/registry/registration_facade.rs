@@ -18,6 +18,21 @@ impl ToolRegistry {
         if let Ok(mut cache) = self.cached_available_tools.write() {
             *cache = None;
         }
+        self.rebuild_tool_assembly().await;
+        self.sync_policy_catalog().await;
         Ok(())
+    }
+
+    /// Unregister a tool from the registry.
+    pub async fn unregister_tool(&self, name: &str) -> Result<bool> {
+        let removed = self.inventory.remove_tool(name)?.is_some();
+        if removed {
+            if let Ok(mut cache) = self.cached_available_tools.write() {
+                *cache = None;
+            }
+            self.rebuild_tool_assembly().await;
+            self.sync_policy_catalog().await;
+        }
+        Ok(removed)
     }
 }

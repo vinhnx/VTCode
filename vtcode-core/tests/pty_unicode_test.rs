@@ -164,11 +164,12 @@ echo "  Accents: café naïve résumé"
 echo "  Mixed: English 中文 العربية русский"
 "#;
 
-    // Write test script
-    let test_script = "/tmp/test_unicode.sh";
-    std::fs::write(test_script, test_content).expect("Failed to write test script");
+    // Keep the script inside the workspace so the default sandbox can read it.
+    let temp_dir = tempfile::tempdir_in(".").expect("Failed to create workspace temp dir");
+    let test_script = temp_dir.path().join("test_unicode.sh");
+    std::fs::write(&test_script, test_content).expect("Failed to write test script");
     std::fs::set_permissions(
-        test_script,
+        &test_script,
         std::os::unix::fs::PermissionsExt::from_mode(0o755),
     )
     .expect("Failed to set permissions");
@@ -176,17 +177,22 @@ echo "  Mixed: English 中文 العربية русский"
     // Run the script and capture output
     let result = registry
         .execute_tool(
-            "run_pty_cmd",
+            "unified_exec",
             serde_json::json!({
+                "action": "run",
                 "command": "bash",
-                "args": [test_script]
+                "args": [test_script.to_string_lossy().to_string()]
             }),
         )
         .await;
 
     match result {
         Ok(response) => {
-            let output = response["output"].as_str().unwrap_or_default();
+            let output = response
+                .get("output")
+                .or_else(|| response.get("stdout"))
+                .and_then(|value| value.as_str())
+                .unwrap_or_default();
             println!("Command output:");
             println!("{}", output);
 
@@ -211,9 +217,5 @@ echo "  Mixed: English 中文 العربية русский"
             // Don't fail the test, just report the issue
         }
     }
-
-    // Cleanup
-    let _ = std::fs::remove_file(test_script);
-
     println!("Unicode rendering test completed.");
 }

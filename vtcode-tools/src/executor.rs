@@ -121,7 +121,8 @@ impl CachedToolExecutor {
 
         // Before hooks
         if let Err(err) = self.middleware.before_execute(&req).await {
-            self.record_error(tool_name, start.elapsed(), &req, &err).await;
+            self.record_error(tool_name, start.elapsed(), &req, &err)
+                .await;
             return Err(err);
         }
 
@@ -141,7 +142,8 @@ impl CachedToolExecutor {
                 cache_hit: Some(true),
             };
             if let Err(err) = self.middleware.after_execute(&req, &res).await {
-                self.record_error(tool_name, start.elapsed(), &req, &err).await;
+                self.record_error(tool_name, start.elapsed(), &req, &err)
+                    .await;
                 return Err(err);
             }
 
@@ -169,17 +171,22 @@ impl CachedToolExecutor {
             Ok(result) => match result {
                 Ok(result) => result,
                 Err(err) => {
-                    self.record_error(tool_name, start.elapsed(), &req, &err).await;
+                    self.record_error(tool_name, start.elapsed(), &req, &err)
+                        .await;
                     return Err(err);
                 }
             },
             Err(_) => {
                 let err = UnifiedToolError::new(
                     UnifiedErrorKind::Timeout,
-                    format!("Tool '{}' timed out after {} seconds", tool_name, timeout_secs),
+                    format!(
+                        "Tool '{}' timed out after {} seconds",
+                        tool_name, timeout_secs
+                    ),
                 )
                 .with_tool_name(tool_name);
-                self.record_error(tool_name, start.elapsed(), &req, &err).await;
+                self.record_error(tool_name, start.elapsed(), &req, &err)
+                    .await;
                 return Err(err);
             }
         };
@@ -210,7 +217,8 @@ impl CachedToolExecutor {
 
         // After hooks
         if let Err(err) = self.middleware.after_execute(&req, &res).await {
-            self.record_error(tool_name, start.elapsed(), &req, &err).await;
+            self.record_error(tool_name, start.elapsed(), &req, &err)
+                .await;
             return Err(err);
         }
 

@@ -512,7 +512,10 @@ mod tests {
         let diagnostics = breaker.get_diagnostics("shell");
         assert_eq!(diagnostics.denied_requests, 1);
         assert!(diagnostics.last_denied_at.is_some());
-        assert_eq!(diagnostics.last_error_category, Some(ErrorCategory::ExecutionError));
+        assert_eq!(
+            diagnostics.last_error_category,
+            Some(ErrorCategory::ExecutionError)
+        );
     }
 
     #[test]

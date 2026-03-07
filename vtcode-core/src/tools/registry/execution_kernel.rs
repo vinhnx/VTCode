@@ -35,6 +35,15 @@ fn is_missing_arg_value(args: &Value, key: &str) -> bool {
     }
 }
 
+fn is_missing_apply_patch_payload(args: &Value) -> bool {
+    if args.is_string() {
+        return false;
+    }
+
+    let has_object_payload = |key: &str| args.get(key).is_some_and(|value| !value.is_null());
+    !(has_object_payload("patch") || has_object_payload("input"))
+}
+
 fn is_missing_required_arg(tool_name: &str, args: &Value, key: &str) -> bool {
     if tool_name == tool_names::EDIT_FILE {
         return match key {
@@ -46,6 +55,9 @@ fn is_missing_required_arg(tool_name: &str, args: &Value, key: &str) -> bool {
             }
             _ => is_missing_arg_value(args, key),
         };
+    }
+    if tool_name == tool_names::APPLY_PATCH && key == "patch" {
+        return is_missing_apply_patch_payload(args);
     }
     is_missing_arg_value(args, key)
 }
@@ -121,74 +133,6 @@ fn enforce_unified_file_payload_limit(
     ));
 }
 
-fn strip_wrapping_quotes(value: &str) -> &str {
-    value
-        .trim()
-        .trim_matches('"')
-        .trim_matches('\'')
-        .trim_matches('`')
-}
-
-fn strip_tool_namespace_prefix(value: &str) -> &str {
-    for prefix in [
-        "functions.",
-        "function.",
-        "tools.",
-        "tool.",
-        "assistant.",
-        "recipient_name.",
-    ] {
-        if let Some(stripped) = value.strip_prefix(prefix) {
-            return stripped;
-        }
-    }
-    value
-}
-
-fn push_candidate(candidates: &mut Vec<String>, value: &str) {
-    let trimmed = strip_wrapping_quotes(value);
-    if trimmed.is_empty() {
-        return;
-    }
-    if !candidates.iter().any(|existing| existing == trimmed) {
-        candidates.push(trimmed.to_string());
-    }
-
-    let stripped = strip_tool_namespace_prefix(trimmed);
-    if stripped != trimmed && !candidates.iter().any(|existing| existing == stripped) {
-        candidates.push(stripped.to_string());
-    }
-
-    let underscored = stripped
-        .trim()
-        .to_ascii_lowercase()
-        .replace([' ', '-'], "_");
-    if !underscored.is_empty() && !candidates.iter().any(|existing| existing == &underscored) {
-        candidates.push(underscored);
-    }
-}
-
-fn tool_name_candidates(name: &str) -> Vec<String> {
-    let mut candidates = Vec::new();
-    let raw = strip_wrapping_quotes(name);
-    if raw.is_empty() {
-        return candidates;
-    }
-
-    push_candidate(&mut candidates, raw);
-
-    if let Some((lhs, rhs)) = raw.split_once("<|channel|>") {
-        push_candidate(&mut candidates, rhs);
-        push_candidate(&mut candidates, lhs);
-    }
-
-    if let Some((_, suffix)) = raw.rsplit_once(':') {
-        push_candidate(&mut candidates, suffix);
-    }
-
-    candidates
-}
-
 fn schema_validation_args<'a>(
     normalized_tool_name: &str,
     args: &'a Value,
@@ -209,21 +153,22 @@ pub(super) fn preflight_validate_call(
     name: &str,
     args: &Value,
 ) -> Result<ToolPreflightOutcome> {
-    let candidates = tool_name_candidates(name);
-    let normalized_tool_name = candidates
-        .iter()
-        .find_map(|candidate| {
-            registry
-                .inventory
-                .registration_for(candidate)
-                .map(|registration| registration.name().to_string())
-        })
-        .ok_or_else(|| anyhow!("Unknown tool: {}", canonical_tool_name(name)))?;
+    let normalized_tool_name = registry
+        .resolve_public_tool_name_sync(name)
+        .map_err(|_| anyhow!("Unknown tool: {}", canonical_tool_name(name)))?;
 
-    let required = required_args_for_tool(&normalized_tool_name);
+    preflight_validate_resolved_call(registry, &normalized_tool_name, args)
+}
+
+pub(super) fn preflight_validate_resolved_call(
+    registry: &ToolRegistry,
+    normalized_tool_name: &str,
+    args: &Value,
+) -> Result<ToolPreflightOutcome> {
+    let required = required_args_for_tool(normalized_tool_name);
     let mut failures = Vec::new();
     for key in required {
-        if is_missing_required_arg(&normalized_tool_name, args, key) {
+        if is_missing_required_arg(normalized_tool_name, args, key) {
             failures.push(format!("Missing required argument: {}", key));
         }
     }
@@ -244,7 +189,7 @@ pub(super) fn preflight_validate_call(
         failures.push(format!("Command security check failed: {}", err));
     }
     enforce_unified_file_payload_limit(
-        &normalized_tool_name,
+        normalized_tool_name,
         args,
         configured_unified_file_max_payload_bytes(),
         &mut failures,
@@ -258,8 +203,16 @@ pub(super) fn preflight_validate_call(
         ));
     }
 
-    let validation_args = schema_validation_args(&normalized_tool_name, args);
-    if let Some(registration) = registry.inventory.registration_for(&normalized_tool_name)
+    let validation_args = schema_validation_args(normalized_tool_name, args);
+    if normalized_tool_name == tool_names::UNIFIED_SEARCH
+        && crate::tools::tool_intent::unified_search_action(validation_args.as_ref()).is_none()
+    {
+        return Err(anyhow!(
+            "Invalid arguments for tool '{}': missing action; provide `action` or inferable search arguments",
+            normalized_tool_name
+        ));
+    }
+    if let Some(registration) = registry.inventory.registration_for(normalized_tool_name)
         && let Some(schema) = registration.parameter_schema()
         && let Err(errors) = jsonschema::validate(schema, validation_args.as_ref())
     {
@@ -270,25 +223,25 @@ pub(super) fn preflight_validate_call(
         ));
     }
 
-    let intent = crate::tools::tool_intent::classify_tool_intent(&normalized_tool_name, args);
+    let intent = crate::tools::tool_intent::classify_tool_intent(normalized_tool_name, args);
     let readonly_classification = !intent.mutating;
-    if registry.is_plan_mode() && !registry.is_plan_mode_allowed(&normalized_tool_name, args) {
-        let msg = agent_execution::plan_mode_denial_message(&normalized_tool_name);
+    if registry.is_plan_mode() && !registry.is_plan_mode_allowed(normalized_tool_name, args) {
+        let msg = agent_execution::plan_mode_denial_message(normalized_tool_name);
         return Err(anyhow!(msg).context(agent_execution::PLAN_MODE_DENIED_CONTEXT));
     }
 
     Ok(ToolPreflightOutcome {
-        normalized_tool_name,
+        normalized_tool_name: normalized_tool_name.to_string(),
         readonly_classification,
     })
 }
 
 #[cfg(test)]
 mod tests {
+    use super::super::catalog_facade::public_tool_name_candidates;
     use super::{
         configured_unified_file_max_payload_bytes, enforce_unified_file_payload_limit,
         is_missing_required_arg, parse_unified_file_max_payload_bytes, schema_validation_args,
-        tool_name_candidates,
     };
     use crate::config::constants::tools as tool_names;
     use serde_json::json;
@@ -395,14 +348,32 @@ mod tests {
     }
 
     #[test]
+    fn apply_patch_required_arg_accepts_input_alias() {
+        assert!(!is_missing_required_arg(
+            tool_names::APPLY_PATCH,
+            &json!({"input": ""}),
+            "patch"
+        ));
+    }
+
+    #[test]
+    fn apply_patch_required_arg_accepts_raw_string_payload() {
+        assert!(!is_missing_required_arg(
+            tool_names::APPLY_PATCH,
+            &json!(""),
+            "patch"
+        ));
+    }
+
+    #[test]
     fn tool_name_candidates_extract_channel_suffix_alias() {
-        let candidates = tool_name_candidates("assistant<|channel|>apply_patch");
+        let candidates = public_tool_name_candidates("assistant<|channel|>apply_patch");
         assert!(candidates.iter().any(|c| c == "apply_patch"));
     }
 
     #[test]
     fn tool_name_candidates_normalize_humanized_name() {
-        let candidates = tool_name_candidates("Read file");
+        let candidates = public_tool_name_candidates("Read file");
         assert!(candidates.iter().any(|c| c == "read_file"));
     }
 

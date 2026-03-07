@@ -1,10 +1,13 @@
 use anyhow::{Context, Result};
 use serde::Serialize;
 use std::collections::HashSet;
+use std::env;
 use std::time::{SystemTime, UNIX_EPOCH};
 use vtcode_core::cli::args::{SchemaCommands, SchemaMode, SchemaOutputFormat};
 use vtcode_core::config::ToolDocumentationMode;
-use vtcode_core::tools::build_function_declarations_with_mode;
+use vtcode_core::config::types::CapabilityLevel;
+use vtcode_core::tools::ToolRegistry;
+use vtcode_core::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 struct ToolSchemaEntry {
@@ -27,18 +30,31 @@ pub async fn handle_schema_command(command: SchemaCommands) -> Result<()> {
             mode,
             format,
             names,
-        } => emit_tools_schema(mode, format, &names),
+        } => emit_tools_schema(mode, format, &names).await,
     }
 }
 
-fn emit_tools_schema(mode: SchemaMode, format: SchemaOutputFormat, names: &[String]) -> Result<()> {
+async fn emit_tools_schema(
+    mode: SchemaMode,
+    format: SchemaOutputFormat,
+    names: &[String],
+) -> Result<()> {
     let tool_mode = to_tool_documentation_mode(mode);
-    let mut tools: Vec<ToolSchemaEntry> = build_function_declarations_with_mode(tool_mode)
+    let workspace = env::current_dir().context("failed to resolve current working directory")?;
+    let registry = ToolRegistry::new(workspace).await;
+    let mut tools: Vec<ToolSchemaEntry> = registry
+        .schema_entries(SessionToolsConfig::full_public(
+            SessionSurface::Interactive,
+            CapabilityLevel::CodeSearch,
+            tool_mode,
+            ToolModelCapabilities::default(),
+        ))
+        .await
         .into_iter()
-        .map(|decl| ToolSchemaEntry {
-            name: decl.name,
-            description: decl.description,
-            parameters: decl.parameters,
+        .map(|entry| ToolSchemaEntry {
+            name: entry.name,
+            description: entry.description,
+            parameters: entry.parameters,
         })
         .collect();
 
@@ -130,13 +146,13 @@ mod tests {
     fn filter_tools_keeps_all_when_names_empty() {
         let tools = vec![
             ToolSchemaEntry {
-                name: "read_file".to_string(),
-                description: "Read a file".to_string(),
+                name: "unified_file".to_string(),
+                description: "File operations".to_string(),
                 parameters: serde_json::json!({}),
             },
             ToolSchemaEntry {
-                name: "write_file".to_string(),
-                description: "Write a file".to_string(),
+                name: "unified_exec".to_string(),
+                description: "Command execution".to_string(),
                 parameters: serde_json::json!({}),
             },
         ];
@@ -149,19 +165,19 @@ mod tests {
     fn filter_tools_selects_exact_name_matches() {
         let tools = vec![
             ToolSchemaEntry {
-                name: "read_file".to_string(),
-                description: "Read a file".to_string(),
+                name: "unified_file".to_string(),
+                description: "File operations".to_string(),
                 parameters: serde_json::json!({}),
             },
             ToolSchemaEntry {
-                name: "write_file".to_string(),
-                description: "Write a file".to_string(),
+                name: "unified_exec".to_string(),
+                description: "Command execution".to_string(),
                 parameters: serde_json::json!({}),
             },
         ];
 
-        let filtered = filter_tools_by_name(tools, &[String::from("read_file")]);
+        let filtered = filter_tools_by_name(tools, &[String::from("unified_file")]);
         assert_eq!(filtered.len(), 1);
-        assert_eq!(filtered[0].name, "read_file");
+        assert_eq!(filtered[0].name, "unified_file");
     }
 }

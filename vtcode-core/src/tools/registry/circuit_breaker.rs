@@ -4,8 +4,8 @@
 //! cascading failures when MCP providers become unavailable.
 
 use crate::metrics::MetricsCollector;
-use std::sync::atomic::{AtomicU8, AtomicU32, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU8, AtomicU32, Ordering};
 use std::time::{Duration, SystemTime};
 use vtcode_commons::ErrorCategory;
 
@@ -130,11 +130,7 @@ impl McpCircuitBreaker {
 
     /// Create a new persistence-enabled circuit breaker
     pub fn with_persistence(path: PathBuf) -> Self {
-        let breaker = Self::build(
-            CircuitBreakerConfig::default(),
-            Some(path.clone()),
-            None,
-        );
+        let breaker = Self::build(CircuitBreakerConfig::default(), Some(path.clone()), None);
 
         // Try to load state
         if let Ok(data) = fs::read_to_string(&path)

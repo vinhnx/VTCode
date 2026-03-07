@@ -28,17 +28,38 @@ impl AgentRunner {
             let Some(func) = call.function.as_ref() else {
                 continue;
             };
-            let name = func.name.clone();
+            let requested_name = func.name.clone();
             let args = match call.parsed_arguments() {
                 Ok(args) => args,
                 Err(err) => {
-                    let error_msg = format!("Invalid arguments for tool '{}': {}", name, err);
-                    error!(agent = %agent_prefix, tool = %name, error = %err, "Invalid tool arguments");
-                    session_state.push_tool_error(call.id.clone(), &name, error_msg, is_gemini);
+                    let error_msg =
+                        format!("Invalid arguments for tool '{}': {}", requested_name, err);
+                    error!(agent = %agent_prefix, tool = %requested_name, error = %err, "Invalid tool arguments");
+                    session_state.push_tool_error(
+                        call.id.clone(),
+                        &requested_name,
+                        error_msg,
+                        is_gemini,
+                    );
                     continue;
                 }
             };
-            let args = self.normalize_tool_args(&name, &args, session_state);
+            let args = self.normalize_tool_args(&requested_name, &args, session_state);
+            let name = match self.validate_and_normalize_tool_name(&requested_name, &args) {
+                Ok(name) => name,
+                Err(err) => {
+                    let error_msg =
+                        format!("Invalid arguments for tool '{}': {}", requested_name, err);
+                    error!(agent = %agent_prefix, tool = %requested_name, error = %err, "Tool admission failed");
+                    session_state.push_tool_error(
+                        call.id.clone(),
+                        &requested_name,
+                        error_msg,
+                        is_gemini,
+                    );
+                    continue;
+                }
+            };
             if self.check_for_loop(&name, &args, session_state) {
                 return Ok(());
             }
@@ -69,12 +90,11 @@ impl AgentRunner {
                 continue;
             }
 
-            let tool_registry = self.tool_registry.clone();
+            let runner = self;
             let args_clone = args.clone();
             futures.push(async move {
-                let registry = tool_registry;
-                let result = registry
-                    .execute_tool_ref(&name, &args_clone)
+                let result = runner
+                    .execute_tool_internal(&name, &args_clone)
                     .await
                     .map_err(|e| anyhow!("Tool '{}' failed: {}", name, e));
                 (name, call_id, args_clone, result)
@@ -182,20 +202,41 @@ impl AgentRunner {
                 }
             }
 
-            let name = match call.function.as_ref() {
+            let requested_name = match call.function.as_ref() {
                 Some(func) => func.name.clone(),
                 None => continue,
             };
             let args = match call.parsed_arguments() {
                 Ok(args) => args,
                 Err(err) => {
-                    let error_msg = format!("Invalid arguments for tool '{}': {}", name, err);
-                    error!(agent = %agent_prefix, tool = %name, error = %err, "Invalid tool arguments");
-                    session_state.push_tool_error(call.id.clone(), &name, error_msg, is_gemini);
+                    let error_msg =
+                        format!("Invalid arguments for tool '{}': {}", requested_name, err);
+                    error!(agent = %agent_prefix, tool = %requested_name, error = %err, "Invalid tool arguments");
+                    session_state.push_tool_error(
+                        call.id.clone(),
+                        &requested_name,
+                        error_msg,
+                        is_gemini,
+                    );
                     continue;
                 }
             };
-            let args = self.normalize_tool_args(&name, &args, session_state);
+            let args = self.normalize_tool_args(&requested_name, &args, session_state);
+            let name = match self.validate_and_normalize_tool_name(&requested_name, &args) {
+                Ok(name) => name,
+                Err(err) => {
+                    let error_msg =
+                        format!("Invalid arguments for tool '{}': {}", requested_name, err);
+                    error!(agent = %agent_prefix, tool = %requested_name, error = %err, "Tool admission failed");
+                    session_state.push_tool_error(
+                        call.id.clone(),
+                        &requested_name,
+                        error_msg,
+                        is_gemini,
+                    );
+                    continue;
+                }
+            };
 
             if self.check_for_loop(&name, &args, session_state) {
                 break;

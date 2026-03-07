@@ -19,11 +19,17 @@ impl ToolRegistry {
             .await;
 
         // Seed default permissions from tool metadata when policy manager is present
-        let registrations = self.inventory.registration_metadata();
+        let policy_seeds = {
+            let assembly = self
+                .tool_assembly
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            assembly.policy_seeds().to_vec()
+        };
         let mut policy_gateway = self.policy_gateway.write().await;
         if let Ok(policy) = policy_gateway.policy_manager_mut() {
             let mut seeded = 0usize;
-            for (name, metadata) in registrations {
+            for (name, metadata) in policy_seeds {
                 if let Some(default_policy) = metadata.default_permission() {
                     let current = policy.get_policy(&name);
                     if matches!(current, ToolPolicy::Prompt) {
@@ -54,7 +60,7 @@ impl ToolRegistry {
             }
 
             if seeded > 0 {
-                tracing::debug!(seeded, "Seeded default tool policies from registrations");
+                tracing::debug!(seeded, "Seeded default tool policies from tool assembly");
             }
         }
     }

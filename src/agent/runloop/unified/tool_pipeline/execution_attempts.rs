@@ -304,9 +304,11 @@ async fn run_single_tool_attempt(
             progress_reporter.set_progress(40).await;
 
             let result = if prevalidated {
-                registry.execute_tool_ref_prevalidated(name, args).await
+                registry
+                    .execute_public_tool_ref_prevalidated(name, args)
+                    .await
             } else {
-                registry.execute_tool_ref(name, args).await
+                registry.execute_public_tool_ref(name, args).await
             };
 
             progress_reporter

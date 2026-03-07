@@ -63,6 +63,7 @@ pub(crate) async fn handle_input_commands(
                         context_manager: ctx.context_manager,
                         session_stats: ctx.session_stats,
                         tools: ctx.tools,
+                        tool_catalog: ctx.tool_catalog,
                         async_mcp_manager: ctx.async_mcp_manager.as_ref(),
                         mcp_panel_state: ctx.mcp_panel_state,
                         linked_directories: ctx.linked_directories,

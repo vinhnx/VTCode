@@ -8,6 +8,39 @@ use tokio::time::Duration;
 use tracing::info;
 
 impl AgentRunner {
+    async fn resolve_executable_tool_name(&self, tool_name: &str) -> Option<String> {
+        let requested_name = if tool_name == "shell" {
+            tools::RUN_PTY_CMD
+        } else {
+            tool_name
+        };
+        let canonical_name = self
+            .tool_registry
+            .resolve_public_tool_name(requested_name)
+            .await
+            .ok()?;
+
+        self.is_tool_exposed(&canonical_name)
+            .await
+            .then_some(canonical_name)
+    }
+
+    pub(super) fn validate_and_normalize_tool_name(
+        &self,
+        tool_name: &str,
+        args: &Value,
+    ) -> Result<String> {
+        let requested_name = if tool_name == "shell" {
+            tools::RUN_PTY_CMD
+        } else {
+            tool_name
+        };
+
+        self.tool_registry
+            .preflight_validate_call(requested_name, args)
+            .map(|outcome| outcome.normalized_tool_name)
+    }
+
     /// Check if a tool is allowed for this agent
     pub(super) async fn is_tool_allowed(&self, tool_name: &str) -> bool {
         let policy = self.tool_registry.get_tool_policy(tool_name).await;
@@ -31,20 +64,7 @@ impl AgentRunner {
     /// Validate if a tool name is safe, registered, and allowed by policy
     #[inline]
     pub(super) async fn is_valid_tool(&self, tool_name: &str) -> bool {
-        // Normalize legacy alias for shell commands
-        let canonical = if tool_name == "shell" {
-            tools::RUN_PTY_CMD
-        } else {
-            tool_name
-        };
-
-        // Ensure the tool exists in the registry (including MCP tools)
-        if !self.tool_registry.has_tool(canonical).await {
-            return false;
-        }
-
-        // Enforce policy gate: Allow and Prompt are executable, Deny blocks
-        self.is_tool_exposed(canonical).await
+        self.resolve_executable_tool_name(tool_name).await.is_some()
     }
 
     /// Execute a tool by name with given arguments.
@@ -52,11 +72,17 @@ impl AgentRunner {
     /// validation, prefer `execute_tool_internal`.
     #[allow(dead_code)]
     pub(super) async fn execute_tool(&self, tool_name: &str, args: &Value) -> Result<Value> {
+        let canonical_name = self.validate_and_normalize_tool_name(tool_name, args)?;
+
         // Fail fast if tool is denied or missing to avoid tight retry loops
-        if !self.is_valid_tool(tool_name).await {
-            return Err(anyhow!("{}: {}", ERR_TOOL_DENIED, tool_name));
+        if self
+            .resolve_executable_tool_name(&canonical_name)
+            .await
+            .is_none()
+        {
+            return Err(anyhow!("{}: {}", ERR_TOOL_DENIED, canonical_name));
         }
-        self.execute_tool_internal(tool_name, args).await
+        self.execute_tool_internal(&canonical_name, args).await
     }
 
     /// Internal tool execution, skipping validation.
@@ -66,6 +92,11 @@ impl AgentRunner {
         tool_name: &str,
         args: &Value,
     ) -> Result<Value> {
+        let resolved_tool_name = if tool_name == "shell" {
+            tools::RUN_PTY_CMD
+        } else {
+            tool_name
+        };
         let extract_command_text = |args: &Value| {
             if let Some(cmd_val) = args.get("command") {
                 if let Some(arr) = cmd_val.as_array() {
@@ -81,8 +112,8 @@ impl AgentRunner {
             }
         };
 
-        let shell_command = match tool_name {
-            n if n == tools::RUN_PTY_CMD || n == "shell" => Some(extract_command_text(args)),
+        let shell_command = match resolved_tool_name {
+            n if n == tools::RUN_PTY_CMD => Some(extract_command_text(args)),
             n if n == tools::UNIFIED_EXEC => {
                 let action = args
                     .get("action")
@@ -128,7 +159,7 @@ impl AgentRunner {
                 &deny_glob_patterns,
             )?;
 
-            info!(target = "policy", agent = ?self.agent_type, tool = tool_name, cmd = %cmd_text, "shell_policy_checked");
+            info!(target = "policy", agent = ?self.agent_type, tool = resolved_tool_name, cmd = %cmd_text, "shell_policy_checked");
         }
 
         // Use pre-computed retry delays to avoid repeated Duration construction
@@ -140,7 +171,10 @@ impl AgentRunner {
         // Execute tool with adaptive retry
         let mut last_error: Option<anyhow::Error> = None;
         for (attempt, delay_ms) in RETRY_DELAYS_MS.iter().enumerate() {
-            match registry.execute_tool_ref(tool_name, args).await {
+            match registry
+                .execute_public_tool_ref(resolved_tool_name, args)
+                .await
+            {
                 Ok(result) => return Ok(result),
                 Err(e) => {
                     let should_retry = should_retry_tool_error(&e);
@@ -155,7 +189,7 @@ impl AgentRunner {
         }
         Err(anyhow!(
             "Tool '{}' failed after retries: {}",
-            tool_name,
+            resolved_tool_name,
             last_error
                 .map(|e| e.to_string())
                 .unwrap_or_else(|| "unknown error".to_string())

@@ -1,11 +1,15 @@
 use super::{AgentRunner, RunnerSettings};
 use crate::config::VTCodeConfig;
+use crate::config::constants::tools;
 use crate::config::models::ModelId;
+use crate::config::types::CapabilityLevel;
 use crate::core::agent::state::TaskRunState;
 use crate::core::agent::state::record_turn_duration;
 use crate::core::agent::task::TaskOutcome;
 use crate::core::agent::types::AgentType;
 use crate::core::threads::ThreadBootstrap;
+use crate::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
+use serde_json::json;
 use std::fs;
 use tempfile::TempDir;
 
@@ -124,10 +128,86 @@ async fn full_auto_allowlist_hides_tools_from_exposure() {
     .await
     .expect("runner");
 
-    runner.enable_full_auto(&["read_file".to_string()]).await;
+    runner
+        .enable_full_auto(&[tools::UNIFIED_FILE.to_string()])
+        .await;
 
-    assert!(runner.is_tool_exposed("read_file").await);
-    assert!(!runner.is_tool_exposed("run_pty_cmd").await);
+    assert!(runner.is_tool_exposed(tools::UNIFIED_FILE).await);
+    assert!(!runner.is_tool_exposed(tools::UNIFIED_EXEC).await);
+}
+
+#[tokio::test]
+async fn runner_uses_public_tool_resolution_for_validation() {
+    let temp = TempDir::new().expect("tempdir");
+    let runner = AgentRunner::new_with_thread_bootstrap_and_config(
+        AgentType::Single,
+        ModelId::default(),
+        "test-key".to_string(),
+        temp.path().to_path_buf(),
+        "thread-tool-validation".to_string(),
+        RunnerSettings {
+            reasoning_effort: None,
+            verbosity: None,
+        },
+        None,
+        ThreadBootstrap::new(None),
+        VTCodeConfig::default(),
+    )
+    .await
+    .expect("runner");
+
+    assert!(runner.is_valid_tool(tools::READ_FILE).await);
+    assert!(runner.is_valid_tool("Exec code").await);
+    assert!(!runner.is_valid_tool("exec_code").await);
+}
+
+#[tokio::test]
+async fn build_universal_tools_matches_registry_agent_runner_snapshot() {
+    let temp = TempDir::new().expect("tempdir");
+    let runner = AgentRunner::new_with_thread_bootstrap_and_config(
+        AgentType::Single,
+        ModelId::default(),
+        "test-key".to_string(),
+        temp.path().to_path_buf(),
+        "thread-tool-snapshot".to_string(),
+        RunnerSettings {
+            reasoning_effort: None,
+            verbosity: None,
+        },
+        None,
+        ThreadBootstrap::new(None),
+        VTCodeConfig::default(),
+    )
+    .await
+    .expect("runner");
+
+    let registry_tools = runner
+        .tool_registry
+        .model_tools(SessionToolsConfig {
+            surface: SessionSurface::AgentRunner,
+            capability_level: CapabilityLevel::CodeSearch,
+            documentation_mode: runner.config().agent.tool_documentation_mode,
+            plan_mode: runner.tool_registry.is_plan_mode(),
+            request_user_input_enabled: false,
+            model_capabilities: ToolModelCapabilities::for_model_name(&runner.model),
+        })
+        .await;
+    let mut expected = Vec::new();
+    for tool in registry_tools {
+        if runner.is_tool_exposed(tool.function_name()).await {
+            expected.push(tool.function_name().to_string());
+        }
+    }
+
+    let actual = runner
+        .build_universal_tools()
+        .await
+        .expect("universal tools")
+        .into_iter()
+        .map(|tool| tool.function_name().to_string())
+        .collect::<Vec<_>>();
+
+    assert_eq!(actual, expected);
 }
 
 #[tokio::test]
@@ -184,15 +264,15 @@ async fn review_tool_allowlist_excludes_mutating_and_plan_only_tools() {
 
     let allowlist = runner
         .review_tool_allowlist(&[
-            "read_file".to_string(),
-            "run_pty_cmd".to_string(),
+            tools::UNIFIED_FILE.to_string(),
+            tools::UNIFIED_EXEC.to_string(),
             "task_tracker".to_string(),
             "plan_task_tracker".to_string(),
             "enter_plan_mode".to_string(),
         ])
         .await;
 
-    assert_eq!(allowlist, vec!["read_file".to_string()]);
+    assert_eq!(allowlist, vec![tools::UNIFIED_FILE.to_string()]);
 }
 
 #[tokio::test]
@@ -216,18 +296,41 @@ async fn review_tool_allowlist_expands_wildcard_read_only() {
     .expect("runner");
 
     let allowlist = runner
-        .review_tool_allowlist(&[crate::config::constants::tools::WILDCARD_ALL.to_string()])
+        .review_tool_allowlist(&[tools::WILDCARD_ALL.to_string()])
         .await;
 
-    assert!(!allowlist.is_empty());
-    assert!(
-        allowlist
-            .iter()
-            .all(|tool| !runner.tool_registry.is_mutating_tool(tool))
-    );
-    assert!(
-        !allowlist
-            .iter()
-            .any(|tool| tool == crate::config::constants::tools::RUN_PTY_CMD)
-    );
+    assert!(allowlist.contains(&tools::UNIFIED_FILE.to_string()));
+    assert!(allowlist.contains(&tools::UNIFIED_SEARCH.to_string()));
+    assert!(!allowlist.iter().any(|tool| tool == tools::UNIFIED_EXEC));
+}
+
+#[tokio::test]
+async fn validate_and_normalize_tool_name_matches_public_registry_resolution() {
+    let temp = TempDir::new().expect("tempdir");
+    let runner = AgentRunner::new_with_thread_bootstrap_and_config(
+        AgentType::Single,
+        ModelId::default(),
+        "test-key".to_string(),
+        temp.path().to_path_buf(),
+        "thread-tool-normalization".to_string(),
+        RunnerSettings {
+            reasoning_effort: None,
+            verbosity: None,
+        },
+        None,
+        ThreadBootstrap::new(None),
+        VTCodeConfig::default(),
+    )
+    .await
+    .expect("runner");
+
+    let normalized = runner
+        .validate_and_normalize_tool_name("Exec code", &json!({"command": "echo vtcode"}))
+        .expect("humanized exec label should resolve");
+    assert_eq!(normalized, tools::UNIFIED_EXEC);
+
+    let err = runner
+        .validate_and_normalize_tool_name("exec_code", &json!({"command": "echo vtcode"}))
+        .expect_err("removed alias should stay rejected");
+    assert!(err.to_string().contains("Unknown tool"));
 }

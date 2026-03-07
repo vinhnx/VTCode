@@ -169,7 +169,7 @@ Shortcuts:
 
             let discovery_result = loader.discover_all_skills().await?;
             let mut skills = discovery_result.skills;
-            let _cli_tools = discovery_result.tools;
+            let mut cli_tools = discovery_result.tools;
             // Apply query filter if provided
             if let Some(q) = query {
                 let q_lower = q.to_lowercase();
@@ -178,9 +178,13 @@ Shortcuts:
                     manifest.name.to_lowercase().contains(&q_lower)
                         || manifest.description.to_lowercase().contains(&q_lower)
                 });
+                cli_tools.retain(|tool| {
+                    tool.name.to_lowercase().contains(&q_lower)
+                        || tool.description.to_lowercase().contains(&q_lower)
+                });
             }
 
-            if skills.is_empty() {
+            if skills.is_empty() && cli_tools.is_empty() {
                 return Ok(SkillCommandOutcome::Handled {
                     message: "No matching skills found.".to_string(),
                 });
@@ -193,6 +197,12 @@ Shortcuts:
                     "  • {} - {}\n",
                     manifest.name, manifest.description
                 ));
+            }
+            if !cli_tools.is_empty() {
+                output.push_str("\nSystem Utilities:\n");
+                for tool in &cli_tools {
+                    output.push_str(&format!("  • {} - {}\n", tool.name, tool.description));
+                }
             }
             output.push_str(
                 "\nUse `/skills --info <name>` for details, `/skills --load <name>` to load",

@@ -1,21 +1,35 @@
 use super::AgentRunner;
+use crate::config::types::CapabilityLevel;
 use crate::llm::provider::{LLMRequest, ToolDefinition};
+use crate::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
 use anyhow::{Result, anyhow};
 use hashbrown::HashSet;
 
 impl AgentRunner {
+    pub(super) async fn build_exposed_tool_definitions(&self) -> Result<Vec<ToolDefinition>> {
+        let config = SessionToolsConfig {
+            surface: SessionSurface::AgentRunner,
+            capability_level: CapabilityLevel::CodeSearch,
+            documentation_mode: self.config().agent.tool_documentation_mode,
+            plan_mode: self.tool_registry.is_plan_mode(),
+            request_user_input_enabled: false,
+            model_capabilities: ToolModelCapabilities::for_model_name(&self.model),
+        };
+
+        let definitions = self.tool_registry.model_tools(config).await;
+        let mut exposed = Vec::with_capacity(definitions.len());
+        for tool in definitions {
+            if self.is_tool_exposed(tool.function_name()).await {
+                exposed.push(tool);
+            }
+        }
+
+        Ok(exposed)
+    }
+
     /// Build universal ToolDefinitions for the current agent.
-    pub(super) async fn build_universal_tools(&mut self) -> Result<Vec<ToolDefinition>> {
-        let gemini_tools = self.build_agent_tools().await?;
-
-        // Convert Gemini tools to universal ToolDefinition format
-        let tools: Vec<ToolDefinition> = gemini_tools
-            .into_iter()
-            .flat_map(|tool| tool.function_declarations)
-            .map(|decl| ToolDefinition::function(decl.name, decl.description, decl.parameters))
-            .collect();
-
-        Ok(crate::prompts::sort_tool_definitions(tools))
+    pub(super) async fn build_universal_tools(&self) -> Result<Vec<ToolDefinition>> {
+        self.build_exposed_tool_definitions().await
     }
 
     /// Validate LLM request before sending to provider.

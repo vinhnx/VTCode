@@ -19,8 +19,12 @@ impl AgentRunner {
     ) -> VtCodeResult<TaskResults> {
         use tokio::time::{Duration, sleep};
 
-        let policy =
-            RetryPolicy::from_retries(max_retries, Duration::from_secs(2), Duration::from_secs(30), 2.0);
+        let policy = RetryPolicy::from_retries(
+            max_retries,
+            Duration::from_secs(2),
+            Duration::from_secs(30),
+            2.0,
+        );
         let metrics = self.tool_registry.metrics_collector();
         let mut last_error: Option<VtCodeError> = None;
 
@@ -54,8 +58,8 @@ impl AgentRunner {
                 Err(err) => {
                     let typed_error = VtCodeError::from(err);
                     let decision = policy.decision_for_vtcode_error(&typed_error, attempt, None);
-                    let exhausted_retryable_error = typed_error.category.is_retryable()
-                        && attempt + 1 == policy.max_attempts;
+                    let exhausted_retryable_error =
+                        typed_error.category.is_retryable() && attempt + 1 == policy.max_attempts;
                     last_error = Some(typed_error);
 
                     warn!(

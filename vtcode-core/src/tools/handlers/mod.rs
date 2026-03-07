@@ -10,7 +10,7 @@
 //! - [`tool_orchestrator`]: Approval → sandbox → attempt → retry orchestration
 //! - [`orchestrator`]: Legacy sandbox management (for backwards compatibility)
 //! - [`events`]: Event emission for tool lifecycle (begin, success, failure)
-//! - [`router`]: Tool routing and dispatch (ToolRouter, ToolRegistry, ToolRegistryBuilder)
+//! - [`router`]: Tool routing and dispatch (ToolRouter, DispatchRegistry, DispatchRegistryBuilder)
 //! - [`adapter`]: Bidirectional adapters between ToolHandler and Tool trait
 //! - [`turn_diff_tracker`]: Aggregates file diffs across patches in a turn
 //! - [`intercept_apply_patch`]: Shell command interception for apply_patch
@@ -60,6 +60,7 @@ pub mod list_dir_handler;
 pub mod plan_mode;
 pub mod plan_task_tracker;
 pub mod read_file;
+pub mod session_tool_catalog;
 pub mod shell_handler;
 pub mod task_tracker;
 pub mod task_tracking;
@@ -109,6 +110,10 @@ pub use turn_diff_tracker::{
 };
 
 // Shell handler
+pub use session_tool_catalog::{
+    CatalogToolKind, SessionSurface, SessionToolCatalog, SessionToolsConfig, ToolCatalogEntry,
+    ToolCatalogSource, ToolModelCapabilities, ToolSchemaEntry,
+};
 pub use shell_handler::{ShellHandler, create_shell_tool};
 
 // Plan mode tools
@@ -119,6 +124,9 @@ pub use plan_task_tracker::PlanTaskTrackerTool;
 pub use task_tracker::TaskTrackerTool;
 
 // Core tool handler types
+pub use router::{
+    DispatchRegistry, DispatchRegistryBuilder, ToolCall, ToolRouter, ToolRouterProvider,
+};
 pub use tool_handler::{
     AdditionalProperties, ApprovalPolicy, ConfiguredToolSpec, Constrained, ContentItem,
     DiffTracker, FreeformTool, FreeformToolFormat, JsonSchema, McpToolResult, PatchApplyBeginEvent,

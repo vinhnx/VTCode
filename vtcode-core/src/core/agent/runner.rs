@@ -24,12 +24,12 @@ use crate::core::agent::types::AgentType;
 use crate::core::context_optimizer::ContextOptimizer;
 use crate::core::loop_detector::LoopDetector;
 use crate::exec::events::ThreadEvent;
-use crate::gemini::Tool;
 use crate::llm::factory::create_provider_for_model;
 use crate::llm::provider as uni_provider;
 use crate::llm::{AnyClient, make_client};
+use crate::prompts::PromptContext;
 use crate::prompts::system::compose_system_instruction_text;
-use crate::tools::{ToolRegistry, build_function_declarations_cached};
+use crate::tools::ToolRegistry;
 
 use anyhow::{Result, anyhow};
 use parking_lot::Mutex;
@@ -234,13 +234,6 @@ impl AgentRunner {
             }
         };
         let session_config = Arc::new(session_config);
-        let system_prompt = compose_system_instruction_text(
-            workspace.as_path(),
-            Some(session_config.effective()),
-            None,
-        )
-        .await;
-
         let max_repeated_tool_calls = session_config
             .effective()
             .tools
@@ -249,12 +242,14 @@ impl AgentRunner {
         let tool_registry = ToolRegistry::new(workspace.clone()).await;
         tool_registry.set_harness_session(session_id.clone());
         tool_registry.set_agent_type(agent_type.to_string());
-        tool_registry.apply_timeout_policy(&session_config.effective().timeouts);
         tool_registry.initialize_async().await?;
-        tool_registry.apply_commands_config(&session_config.effective().commands);
-        tool_registry.apply_sandbox_config(&session_config.effective().sandbox);
         if let Err(err) = tool_registry
-            .apply_config_policies(&session_config.effective().tools)
+            .apply_session_runtime_config(
+                &session_config.effective().commands,
+                &session_config.effective().sandbox,
+                &session_config.effective().timeouts,
+                &session_config.effective().tools,
+            )
             .await
         {
             warn!("Failed to apply tool policies from config: {}", err);
@@ -274,6 +269,28 @@ impl AgentRunner {
         {
             warn!("Failed to initialize dynamic context directories: {}", err);
         }
+        let available_tools = tool_registry
+            .model_tools(crate::tools::handlers::SessionToolsConfig {
+                surface: crate::tools::handlers::SessionSurface::AgentRunner,
+                capability_level: crate::config::types::CapabilityLevel::CodeSearch,
+                documentation_mode: session_config.effective().agent.tool_documentation_mode,
+                plan_mode: tool_registry.is_plan_mode(),
+                request_user_input_enabled: false,
+                model_capabilities: crate::tools::handlers::ToolModelCapabilities::for_model_name(
+                    model.as_str(),
+                ),
+            })
+            .await
+            .into_iter()
+            .map(|tool| tool.function_name().to_string())
+            .collect::<Vec<_>>();
+        let prompt_context = PromptContext::from_workspace_tools(&workspace, available_tools);
+        let system_prompt = compose_system_instruction_text(
+            workspace.as_path(),
+            Some(session_config.effective()),
+            Some(&prompt_context),
+        )
+        .await;
         let loop_detector = LoopDetector::with_max_repeated_calls(max_repeated_tool_calls);
         let bootstrap_messages = bootstrap.messages.clone();
         let mut bootstrap = bootstrap;
@@ -386,14 +403,18 @@ impl AgentRunner {
         review_candidates
             .iter()
             .filter(|tool_name| {
+                let canonical = crate::tools::names::canonical_tool_name(tool_name);
+                let canonical = canonical.as_ref();
+
                 !matches!(
-                    crate::tools::names::canonical_tool_name(tool_name).as_ref(),
+                    canonical,
                     tools::REQUEST_USER_INPUT
                         | tools::TASK_TRACKER
                         | tools::PLAN_TASK_TRACKER
                         | tools::ENTER_PLAN_MODE
                         | tools::EXIT_PLAN_MODE
-                ) && !self.tool_registry.is_mutating_tool(tool_name)
+                ) && (canonical == tools::UNIFIED_FILE
+                    || !self.tool_registry.is_mutating_tool(tool_name))
             })
             .cloned()
             .collect()
@@ -401,31 +422,5 @@ impl AgentRunner {
 
     pub(crate) fn features(&self) -> FeatureSet {
         self.session_config.features().clone()
-    }
-
-    /// Build available tools for this agent type
-    async fn build_agent_tools(&self) -> Result<Vec<Tool>> {
-        use crate::llm::providers::gemini::sanitize_function_parameters;
-
-        let declarations =
-            build_function_declarations_cached(self.config().agent.tool_documentation_mode);
-
-        // Filter tools based on agent type and permissions
-        let mut allowed_tools = Vec::with_capacity(declarations.len());
-        for decl in declarations.iter() {
-            if !self.is_tool_exposed(&decl.name).await {
-                continue;
-            }
-
-            allowed_tools.push(Tool {
-                function_declarations: vec![crate::gemini::FunctionDeclaration {
-                    name: decl.name.clone(),
-                    description: decl.description.clone(),
-                    parameters: sanitize_function_parameters(decl.parameters.clone()),
-                }],
-            });
-        }
-
-        Ok(allowed_tools)
     }
 }

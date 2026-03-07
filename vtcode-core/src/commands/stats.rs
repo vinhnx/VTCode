@@ -1,8 +1,9 @@
 //! Stats command implementation - show session statistics and performance metrics
 
+use crate::config::types::CapabilityLevel;
 use crate::config::types::{AgentConfig, OutputFormat, PerformanceMetrics};
 use crate::core::agent::core::Agent;
-use crate::tools::build_function_declarations;
+use crate::tools::handlers::SessionSurface;
 use crate::utils::colors::style;
 use anyhow::Result;
 
@@ -22,17 +23,26 @@ pub async fn handle_stats_command(
     println!("{}", style("Session Statistics").cyan().bold());
 
     let metrics = agent.performance_metrics();
+    let tool_names = agent
+        .tool_registry()
+        .public_tool_names(SessionSurface::Interactive, CapabilityLevel::CodeSearch)
+        .await;
 
     match output_format {
-        OutputFormat::Text => display_text_stats(agent.config(), &metrics, detailed),
-        OutputFormat::Json => display_json_stats(agent.config(), &metrics),
-        OutputFormat::Html => display_html_stats(agent.config(), &metrics),
+        OutputFormat::Text => display_text_stats(agent.config(), &metrics, detailed, &tool_names),
+        OutputFormat::Json => display_json_stats(agent.config(), &metrics, &tool_names),
+        OutputFormat::Html => display_html_stats(agent.config(), &metrics, &tool_names),
     }
 
     Ok(metrics)
 }
 
-fn display_text_stats(config: &AgentConfig, metrics: &PerformanceMetrics, detailed: bool) {
+fn display_text_stats(
+    config: &AgentConfig,
+    metrics: &PerformanceMetrics,
+    detailed: bool,
+    tool_names: &[String],
+) {
     println!("{} Configuration:", style("[CONFIG]").dim());
     println!("  Model: {}", style(&config.model).cyan());
     println!("  Workspace: {}", style(config.workspace.display()).cyan());
@@ -46,13 +56,13 @@ fn display_text_stats(config: &AgentConfig, metrics: &PerformanceMetrics, detail
     );
 
     println!("\n{} Tool Information:", style("").dim());
-    let tool_count = build_function_declarations().len();
+    let tool_count = tool_names.len();
     println!("  Available Tools: {}", style(tool_count).cyan());
 
     if detailed {
         println!("  Tools:");
-        for tool in build_function_declarations() {
-            println!("    • {}", style(&tool.name).cyan());
+        for tool_name in tool_names {
+            println!("    • {}", style(tool_name).cyan());
         }
     }
 
@@ -102,7 +112,7 @@ fn display_text_stats(config: &AgentConfig, metrics: &PerformanceMetrics, detail
     }
 }
 
-fn display_json_stats(config: &AgentConfig, metrics: &PerformanceMetrics) {
+fn display_json_stats(config: &AgentConfig, metrics: &PerformanceMetrics, tool_names: &[String]) {
     let stats = serde_json::json!({
         "configuration": {
             "model": config.model,
@@ -110,8 +120,8 @@ fn display_json_stats(config: &AgentConfig, metrics: &PerformanceMetrics) {
             "verbose": config.verbose
         },
         "tools": {
-            "count": build_function_declarations().len(),
-            "available": build_function_declarations().iter().map(|t| &t.name).collect::<Vec<_>>()
+            "count": tool_names.len(),
+            "available": tool_names
         },
         "performance": {
             "session_duration_seconds": metrics.session_duration_seconds,
@@ -134,7 +144,7 @@ fn display_json_stats(config: &AgentConfig, metrics: &PerformanceMetrics) {
     println!("{}", rendered);
 }
 
-fn display_html_stats(config: &AgentConfig, metrics: &PerformanceMetrics) {
+fn display_html_stats(config: &AgentConfig, metrics: &PerformanceMetrics, tool_names: &[String]) {
     println!("<!DOCTYPE html>");
     println!("<html><head><title>vtcode Statistics</title></head><body>");
     println!("<h1>vtcode Session Statistics</h1>");
@@ -159,11 +169,11 @@ fn display_html_stats(config: &AgentConfig, metrics: &PerformanceMetrics) {
     println!("<h2>Tool Information</h2>");
     println!(
         "<p><strong>Available Tools:</strong> {}</p>",
-        build_function_declarations().len()
+        tool_names.len()
     );
     println!("<ul>");
-    for tool in build_function_declarations() {
-        println!("<li>{}</li>", tool.name);
+    for tool_name in tool_names {
+        println!("<li>{}</li>", tool_name);
     }
     println!("</ul>");
 

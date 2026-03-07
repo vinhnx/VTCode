@@ -1,4 +1,5 @@
 use crate::config::types::CapabilityLevel;
+use std::path::Path;
 use std::path::PathBuf;
 
 /// Context information for prompt generation
@@ -93,5 +94,50 @@ impl PromptContext {
     /// Set current working directory
     pub fn set_current_directory(&mut self, dir: PathBuf) {
         self.current_directory = Some(dir);
+    }
+
+    /// Build prompt context from a workspace and the tool names exposed to the model.
+    pub fn from_workspace_tools(
+        workspace: impl AsRef<Path>,
+        available_tools: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
+        let mut context = Self {
+            workspace: Some(workspace.as_ref().to_path_buf()),
+            skip_standard_instructions: false,
+            ..Default::default()
+        };
+
+        if let Ok(cwd) = std::env::current_dir() {
+            context.set_current_directory(cwd);
+        }
+
+        for tool in available_tools {
+            context.add_tool(tool.into());
+        }
+
+        if !context.available_tools.is_empty() {
+            context.infer_capability_level();
+        }
+
+        context
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PromptContext;
+    use std::path::PathBuf;
+
+    #[test]
+    fn from_workspace_tools_populates_workspace_and_tools() {
+        let context = PromptContext::from_workspace_tools(
+            PathBuf::from("/tmp/vtcode"),
+            ["unified_search", "unified_exec"],
+        );
+
+        assert_eq!(context.workspace, Some(PathBuf::from("/tmp/vtcode")));
+        assert_eq!(context.available_tools.len(), 2);
+        assert!(context.capability_level.is_some());
+        assert!(context.current_directory.is_some());
     }
 }

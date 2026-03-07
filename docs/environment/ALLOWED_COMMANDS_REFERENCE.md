@@ -322,10 +322,9 @@ Control whether tools require confirmation:
 
 ```toml
 [tools.policies]
-run_pty_cmd = "allow"      # Execute without confirmation
-apply_patch = "prompt"           # Ask before applying
-write_file = "allow"
-edit_file = "allow"
+unified_exec = "allow"     # Execute without confirmation
+apply_patch = "prompt"     # Ask before applying
+unified_search = "allow"
 ```
 
 ## Testing Command Availability

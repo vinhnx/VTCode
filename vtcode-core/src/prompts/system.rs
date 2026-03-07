@@ -48,8 +48,8 @@ use tracing::warn;
 const UNIFIED_TOOL_GUIDANCE: &str = r#"**Search & exploration**:
 - Prefer `unified_search` (action='grep') and `rg` over repeated reads/`grep`
 - Read a file once; avoid duplicate `read` calls
-- For spooled output (>8KB), use `spool_path` with `read_file`/`grep_file`; advance offsets, don't repeat identical chunk args
-- If chunk reads stall, switch to targeted `grep_file`/`unified_search` and summarize
+- For spooled output (>8KB), use `spool_path` with `unified_file` (action='read') or `unified_search` (action='grep'); advance offsets, don't repeat identical chunk args
+- If chunk reads stall, switch to targeted `unified_search` and summarize
 
 **Code modification**:
 - `unified_file` (action='edit') for surgical changes; action='write' for new or full replacements
@@ -59,7 +59,7 @@ const UNIFIED_TOOL_GUIDANCE: &str = r#"**Search & exploration**:
 - **Never**: `git commit`, `git push`, or branch creation unless explicitly requested
 
 **Command execution**:
-- `unified_exec` for all shell commands (PTY/interactive/long-running). `run_pty_cmd` is an alias.
+- `unified_exec` for all shell commands (PTY/interactive/long-running).
 - Prefer `rg` over `grep` for pattern matching
 - Stay in WORKSPACE_DIR; confirm destructive ops (rm, force-push)
 - After command output, acknowledge result briefly and suggest next steps
@@ -333,7 +333,7 @@ const DEFAULT_LIGHTWEIGHT_PROMPT: &str = r#"VT Code - efficient coding agent.
 
 - Act and verify. Direct tone. No emoji — use plain Unicode symbols (✓, ✗, →, •).
 - Scoped: unified_search (≤5), unified_file (max_tokens).
-- Use `unified_exec` for shell/PTY commands (`run_pty_cmd` alias).
+- Use `unified_exec` for shell/PTY commands.
 - Tools hidden by default. `list_skills --search <term>` to find them.
 - Keep investigation and implementation explicit in a single thread; summarize findings before edits.
 - Keep code consistent with nearby patterns; prefer KISS and DRY.
@@ -625,7 +625,7 @@ pub async fn compose_system_instruction_text(
             instruction.push_str(
                 "Large outputs and context are written to files for on-demand retrieval:\n\n",
             );
-            instruction.push_str("- `.vtcode/context/tool_outputs/` - Large tool outputs (use `read_file` or `grep_file` to explore)\n");
+            instruction.push_str("- `.vtcode/context/tool_outputs/` - Large tool outputs (use `unified_file` read mode or `unified_search` grep mode to explore)\n");
             instruction
                 .push_str("- `.vtcode/history/` - Conversation history during summarization\n");
             instruction.push_str("- `.vtcode/mcp/tools/` - MCP tool descriptions and schemas\n");
@@ -1205,8 +1205,7 @@ mod tests {
         config.agent.system_prompt_mode = SystemPromptMode::Default;
 
         let mut ctx = PromptContext::default();
-        ctx.add_tool("read_file".to_string());
-        ctx.add_tool("grep_file".to_string());
+        ctx.add_tool("unified_search".to_string());
         ctx.capability_level = Some(CapabilityLevel::FileReading);
 
         let result =
@@ -1228,15 +1227,15 @@ mod tests {
 
         let mut ctx = PromptContext::default();
         ctx.add_tool("unified_exec".to_string());
-        ctx.add_tool("grep_file".to_string());
-        ctx.add_tool("list_files".to_string());
+        ctx.add_tool("unified_search".to_string());
+        ctx.add_tool("unified_file".to_string());
 
         let result =
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;
 
         assert!(
-            result.contains("grep_file") || result.contains("list_files"),
-            "Should suggest grep/list as preferred tools"
+            result.contains("unified_search") || result.contains("unified_file"),
+            "Should suggest canonical search/file tools"
         );
     }
 

@@ -427,6 +427,7 @@ deny_regex = [
     'docker\s+run\s+.*--privileged',
     'kubectl\s+(delete|drain|uncordon)',
 ]
+approval_prefixes = []
 
 [permissions]
 enabled = true
@@ -797,6 +798,11 @@ transport = "sse"
 name = "vtcode-mcp-server"
 version = "0.81.3"
 exposed_tools = []
+
+[mcp.requirements]
+enforce = false
+allowed_stdio_commands = []
+allowed_http_endpoints = []
 
 [mcp.allowlist]
 enforce = false

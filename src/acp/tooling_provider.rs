@@ -17,8 +17,6 @@ pub trait ToolRegistryProvider {
 
     fn lookup(&self, function_name: &str) -> Option<ToolDescriptor>;
 
-    fn local_definition(&self, tool_name: &str) -> Option<ToolDefinition>;
-
     fn has_local_tools(&self) -> bool;
 }
 
@@ -46,10 +44,6 @@ impl ToolRegistryProvider for AcpToolRegistry {
 
     fn lookup(&self, function_name: &str) -> Option<ToolDescriptor> {
         AcpToolRegistry::lookup(self, function_name)
-    }
-
-    fn local_definition(&self, tool_name: &str) -> Option<ToolDefinition> {
-        AcpToolRegistry::local_definition(self, tool_name)
     }
 
     fn has_local_tools(&self) -> bool {
@@ -84,10 +78,6 @@ where
 
     fn lookup(&self, function_name: &str) -> Option<ToolDescriptor> {
         <T as ToolRegistryProvider>::lookup(&**self, function_name)
-    }
-
-    fn local_definition(&self, tool_name: &str) -> Option<ToolDefinition> {
-        <T as ToolRegistryProvider>::local_definition(&**self, tool_name)
     }
 
     fn has_local_tools(&self) -> bool {

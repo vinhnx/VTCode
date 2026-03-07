@@ -2,19 +2,23 @@ use std::path::PathBuf;
 
 use crate::config::constants::tools;
 use crate::config::types::CapabilityLevel;
+use crate::tool_policy::ToolPolicy;
+use crate::tools::handlers::session_tool_catalog::{
+    apply_patch_parameters, unified_exec_parameters, unified_file_parameters,
+    unified_search_parameters,
+};
 use crate::tools::handlers::{
     EnterPlanModeTool, ExitPlanModeTool, PlanModeState, PlanTaskTrackerTool, TaskTrackerTool,
 };
 use crate::tools::request_user_input::RequestUserInputTool;
 
-use super::progressive_docs::{build_minimal_declarations, minimal_tool_signatures};
 use super::registration::ToolRegistration;
 use super::{ToolInventory, ToolRegistry};
 
 /// Register all builtin tools into the inventory using the shared plan mode state.
 pub(super) fn register_builtin_tools(inventory: &ToolInventory, plan_mode_state: &PlanModeState) {
     for registration in builtin_tool_registrations(Some(plan_mode_state)) {
-        let tool_name = registration.name();
+        let tool_name = registration.name().to_string();
         if let Err(err) = inventory.register_tool(registration) {
             tracing::warn!(tool = %tool_name, %err, "Failed to register builtin tool");
         }
@@ -30,9 +34,7 @@ pub(super) fn builtin_tool_registrations(
         .cloned()
         .unwrap_or_else(|| PlanModeState::new(PathBuf::new()));
 
-    let sigs = minimal_tool_signatures();
-
-    let mut registrations = vec![
+    vec![
         // ============================================================
         // HUMAN-IN-THE-LOOP (HITL)
         // ============================================================
@@ -107,6 +109,11 @@ pub(super) fn builtin_tool_registrations(
             false,
             ToolRegistry::unified_search_executor,
         )
+        .with_description(
+            "Unified discovery tool: grep, list, tool discovery, errors, agent status, web fetch, and skills.",
+        )
+        .with_parameter_schema(unified_search_parameters())
+        .with_permission(ToolPolicy::Allow)
         .with_aliases([
             tools::GREP_FILE,
             tools::LIST_FILES,
@@ -127,6 +134,10 @@ pub(super) fn builtin_tool_registrations(
             true,
             ToolRegistry::unified_exec_executor,
         )
+        .with_description(
+            "Run commands and manage PTY sessions. Use continue for one-call send+read, or inspect for one-call output preview/filtering from session or spool file.",
+        )
+        .with_parameter_schema(unified_exec_parameters())
         .with_aliases([
             tools::RUN_PTY_CMD,
             tools::EXECUTE_CODE,
@@ -155,12 +166,15 @@ pub(super) fn builtin_tool_registrations(
             false,
             ToolRegistry::unified_file_executor,
         )
+        .with_description(
+            "Unified file ops: read, write, edit, patch, delete, move, copy. For edit, `old_str` must match exactly. For patch, use VT Code patch format (`*** Begin Patch`), not unified diff.",
+        )
+        .with_parameter_schema(unified_file_parameters())
         .with_aliases([
             tools::READ_FILE,
             tools::WRITE_FILE,
             tools::DELETE_FILE,
             tools::EDIT_FILE,
-            tools::APPLY_PATCH,
             tools::CREATE_FILE,
             tools::MOVE_FILE,
             tools::COPY_FILE,
@@ -248,6 +262,11 @@ pub(super) fn builtin_tool_registrations(
             false,
             ToolRegistry::apply_patch_executor,
         )
+        .with_description(
+            "Apply patches to files. IMPORTANT: Use VT Code patch format (*** Begin Patch, *** Update File: path, @@ hunks with -/+ lines, *** End Patch), NOT standard unified diff (---/+++ format).",
+        )
+        .with_parameter_schema(apply_patch_parameters())
+        .with_permission(ToolPolicy::Prompt)
         .with_llm_visibility(false),
         // ============================================================
         // SKILL MANAGEMENT TOOLS (3 tools)
@@ -261,20 +280,5 @@ pub(super) fn builtin_tool_registrations(
         // - list_skills
         // - load_skill
         // - load_skill_resource
-    ];
-
-    // Apply descriptions and schemas from signatures where available
-    let decls = build_minimal_declarations(&sigs);
-    for reg in &mut registrations {
-        if let Some(sig) = sigs.get(reg.name())
-            && let Some(decl) = decls.iter().find(|d| d.name == reg.name())
-        {
-            *reg = reg
-                .clone()
-                .with_description(sig.brief)
-                .with_parameter_schema(decl.parameters.clone());
-        }
-    }
-
-    registrations
+    ]
 }

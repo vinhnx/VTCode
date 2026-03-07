@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tracing::info;
 
-use super::registration::{ToolMetadata, ToolRegistration};
+use super::registration::ToolRegistration;
 use crate::exec::skill_manager::SkillManager;
 use crate::tools::command::CommandTool;
 use crate::tools::file_ops::FileOpsTool;
@@ -202,6 +202,41 @@ impl ToolInventory {
         Ok(())
     }
 
+    pub fn remove_tool(&self, name: &str) -> anyhow::Result<Option<ToolRegistration>> {
+        let name_lower = name.to_ascii_lowercase();
+        let removed = {
+            let mut tools = self
+                .tools
+                .write()
+                .map_err(|e| anyhow::anyhow!("tool registry write lock poisoned: {e}"))?;
+            tools.remove(&name_lower)
+        };
+
+        let Some(removed) = removed else {
+            return Ok(None);
+        };
+
+        {
+            let mut state = self
+                .state
+                .write()
+                .map_err(|e| anyhow::anyhow!("inventory state write lock poisoned: {e}"))?;
+            state
+                .sorted_names
+                .retain(|registered| registered != &name_lower);
+            state.aliases.retain(|_, target| target != &name_lower);
+            state.frequently_used.remove(&name_lower);
+        }
+
+        if let Ok(mut metrics) = self.alias_metrics.lock() {
+            metrics
+                .usage
+                .retain(|_, (canonical, _)| canonical != &name_lower);
+        }
+
+        Ok(Some(removed.registration.clone()))
+    }
+
     /// Register case-insensitive aliases for a tool and track metrics
     fn register_aliases(&self, canonical_name_lower: &str, aliases: &[String]) {
         let Ok(mut state) = self.state.write() else {
@@ -372,15 +407,15 @@ impl ToolInventory {
             .unwrap_or_default()
     }
 
-    /// Snapshot registration metadata for policy/catalog synchronization
-    pub fn registration_metadata(&self) -> Vec<(String, ToolMetadata)> {
+    pub fn registrations_snapshot(&self) -> Vec<ToolRegistration> {
         self.tools
             .read()
             .ok()
-            .map(|t| {
-                t.iter()
-                    .map(|(name, entry)| (name.clone(), entry.registration.metadata().clone()))
-                    .collect()
+            .map(|tools| {
+                tools
+                    .values()
+                    .map(|entry| entry.registration.clone())
+                    .collect::<Vec<_>>()
             })
             .unwrap_or_default()
     }

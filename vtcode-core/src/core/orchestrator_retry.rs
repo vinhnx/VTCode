@@ -278,8 +278,8 @@ pub fn is_retryable_error(error: &anyhow::Error) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use anyhow::anyhow;
     use crate::error::{ErrorCode, VtCodeError};
+    use anyhow::anyhow;
     use serde_json::json;
     use std::sync::{Arc, Mutex};
 

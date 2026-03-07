@@ -282,12 +282,6 @@ pub use middleware::{
 };
 pub use pattern_engine::{DetectedPattern, ExecutionEvent, ExecutionSummary, PatternEngine};
 
-// Re-export function declarations for external use
-pub use registry::build_function_declarations;
-pub use registry::build_function_declarations_cached;
-pub use registry::build_function_declarations_for_level;
-pub use registry::build_function_declarations_with_mode;
-
 // Codex-compatible handler architecture exports
 pub use handlers::{
     // Apply patch handler

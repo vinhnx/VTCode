@@ -1,26 +1,21 @@
 use crate::acp::permissions::{AcpPermissionPrompter, DefaultPermissionPrompter};
 use crate::acp::tooling::AcpToolRegistry;
 use agent_client_protocol as acp;
-use hashbrown::{HashMap, HashSet};
+use hashbrown::HashMap;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::Arc;
 use tokio::sync::{Mutex, mpsc};
 use tracing::warn;
 use vtcode_core::config::ToolDocumentationMode;
-use vtcode_core::config::constants::tools;
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, CapabilityLevel};
 use vtcode_core::config::{AgentClientProtocolZedConfig, CommandsConfig, ToolsConfig};
 use vtcode_core::core::threads::ThreadManager;
-use vtcode_core::llm::provider::ToolDefinition;
 use vtcode_core::tools::file_ops::FileOpsTool;
 use vtcode_core::tools::grep_file::GrepSearchManager;
-use vtcode_core::tools::registry::{
-    ToolRegistry as CoreToolRegistry, build_function_declarations_cached,
-    build_function_declarations_for_level,
-};
+use vtcode_core::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
+use vtcode_core::tools::registry::ToolRegistry as CoreToolRegistry;
 
-use super::constants::TOOLS_EXCLUDED_FROM_ACP;
 use super::types::{NotificationEnvelope, SessionHandle};
 
 mod handlers;
@@ -72,52 +67,20 @@ impl ZedAgent {
         let list_files_enabled = file_ops_tool.is_some();
 
         let core_tool_registry = CoreToolRegistry::new(config.workspace.clone()).await;
-        core_tool_registry.apply_commands_config(&commands_config);
         if let Err(error) = core_tool_registry
-            .apply_config_policies(&tools_config)
+            .apply_tool_runtime_config(&commands_config, &tools_config)
             .await
         {
             warn!(%error, "Failed to apply tools configuration to ACP tool registry");
         }
-        let available_local_tools: HashSet<String> = core_tool_registry
-            .available_tools()
-            .await
-            .into_iter()
-            .collect();
-        let decls = build_function_declarations_for_level(CapabilityLevel::CodeSearch);
-        let mut local_definitions = Vec::with_capacity(decls.len());
-
-        for decl in decls {
-            if decl.name != tools::READ_FILE
-                && decl.name != "list_files"
-                && !TOOLS_EXCLUDED_FROM_ACP.contains(&decl.name.as_str())
-                && available_local_tools.contains(decl.name.as_str())
-            {
-                local_definitions.push(ToolDefinition::function(
-                    decl.name.clone(),
-                    decl.description.clone(),
-                    decl.parameters.clone(),
-                ));
-            }
-        }
-
-        if available_local_tools.contains(tools::RUN_PTY_CMD)
-            && let Some(run_decl) =
-                build_function_declarations_cached(ToolDocumentationMode::default())
-                    .iter()
-                    .find(|decl| decl.name == tools::RUN_PTY_CMD)
-        {
-            let already_registered = local_definitions
-                .iter()
-                .any(|definition| definition.function_name() == tools::RUN_PTY_CMD);
-            if !already_registered {
-                local_definitions.push(ToolDefinition::function(
-                    run_decl.name.clone(),
-                    run_decl.description.clone(),
-                    run_decl.parameters.clone(),
-                ));
-            }
-        }
+        let local_definitions = core_tool_registry
+            .model_tools(SessionToolsConfig::full_public(
+                SessionSurface::Acp,
+                CapabilityLevel::CodeSearch,
+                ToolDocumentationMode::default(),
+                ToolModelCapabilities::default(),
+            ))
+            .await;
         let acp_tool_registry = Rc::new(AcpToolRegistry::new(
             workspace_root.as_path(),
             read_file_enabled,

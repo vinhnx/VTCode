@@ -50,8 +50,8 @@ impl RetryPolicy {
 
     pub fn delay_for_attempt(&self, attempt_index: u32) -> Duration {
         let multiplier = self.multiplier.powi(attempt_index as i32);
-        let base_delay =
-            Duration::from_secs_f64(self.initial_delay.as_secs_f64() * multiplier).min(self.max_delay);
+        let base_delay = Duration::from_secs_f64(self.initial_delay.as_secs_f64() * multiplier)
+            .min(self.max_delay);
 
         if self.jitter <= 0.0 {
             return base_delay;

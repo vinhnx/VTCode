@@ -1,5 +1,3 @@
-use vtcode_core::config::constants::tools;
-
 pub(crate) const SESSION_PREFIX: &str = "vtcode-zed-session";
 pub(crate) const RESOURCE_FALLBACK_LABEL: &str = "Resource";
 pub(crate) const RESOURCE_FAILURE_LABEL: &str = "Resource unavailable";
@@ -35,13 +33,3 @@ pub(crate) const WORKSPACE_TRUST_ALREADY_SATISFIED_LOG: &str =
     "ACP workspace trust level already satisfied";
 pub(crate) const WORKSPACE_TRUST_DOWNGRADE_SKIPPED_LOG: &str =
     "ACP workspace trust downgrade skipped because workspace is fully trusted";
-
-/// Tools that are not exposed via ACP because the protocol has native support for these features.
-///
-/// - Plan mode tools: ACP has built-in session modes (ask/architect/code) - see https://agentclientprotocol.com/protocol/session-modes.md
-/// - HITL tools: ACP has native permission request mechanism
-pub(crate) const TOOLS_EXCLUDED_FROM_ACP: &[&str] = &[
-    tools::ENTER_PLAN_MODE,
-    tools::EXIT_PLAN_MODE,
-    tools::REQUEST_USER_INPUT,
-];

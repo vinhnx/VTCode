@@ -201,11 +201,11 @@ async fn read_only_modes_hide_local_tools() {
         vec!["list_files".to_string(), "switch_mode".to_string()]
     );
     assert_eq!(architect_names, ask_names);
-    assert!(
-        code_names
-            .iter()
-            .any(|name| !architect_names.iter().any(|allowed| allowed == name))
-    );
+    assert!(code_names.contains(&"switch_mode".to_string()));
+    assert!(code_names.contains(&"list_files".to_string()));
+    assert!(code_names.contains(&"unified_search".to_string()));
+    assert!(code_names.contains(&"unified_file".to_string()));
+    assert!(code_names.contains(&"unified_exec".to_string()));
 }
 
 #[tokio::test]

@@ -15,6 +15,7 @@ use crate::core::agent::steering::SteeringMessage;
 use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
 use crate::gemini::Part;
 use crate::llm::provider::{LLMRequest, Message, ToolCall};
+use crate::prompts::PromptContext;
 use crate::prompts::system::compose_system_instruction_text;
 use crate::utils::colors::style;
 use anyhow::Result;
@@ -74,13 +75,22 @@ impl AgentRunner {
 
             let run_started_at = std::time::Instant::now();
             let is_simple_task = Self::is_simple_task(task, contexts);
+            let tools = Arc::new(self.build_universal_tools().await?);
 
             let system_prompt = if is_simple_task {
                 // One-time clone for simple tasks to override prompt mode (not per-turn)
                 let mut config = self.config().clone();
                 config.agent.system_prompt_mode = SystemPromptMode::Minimal;
-                compose_system_instruction_text(self._workspace.as_path(), Some(&config), None)
-                    .await
+                let prompt_context = PromptContext::from_workspace_tools(
+                    self._workspace.as_path(),
+                    tools.iter().map(|tool| tool.function_name().to_string()),
+                );
+                compose_system_instruction_text(
+                    self._workspace.as_path(),
+                    Some(&config),
+                    Some(&prompt_context),
+                )
+                .await
             } else {
                 self.system_prompt.clone()
             };
@@ -90,9 +100,6 @@ impl AgentRunner {
                 Arc::new(compose_system_instruction(&system_prompt, task, contexts));
             let mut conversation = conversation_from_messages(&self.bootstrap_messages);
             conversation.extend(build_conversation(task, contexts));
-
-            // Build available tools for this agent
-            let tools = Arc::new(self.build_universal_tools().await?);
 
             // Maintain a mirrored conversation history for providers that expect
             // OpenAI/Anthropic style message roles.

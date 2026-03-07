@@ -46,13 +46,13 @@ impl ToolRegistry {
         // Get canonical tool name for summarizer lookup
         // Resolve alias through registration lookup first
         let tool_name = if let Some(registration) = self.inventory.registration_for(name) {
-            registration.name()
+            registration.name().to_string()
         } else {
-            name // Fallback to original name if not found
+            name.to_string() // Fallback to original name if not found
         };
 
         // Check if we have a summarizer for this tool
-        match tool_name {
+        match tool_name.as_str() {
             tools::UNIFIED_SEARCH => {
                 match tool_intent::unified_search_action(&args).unwrap_or("grep") {
                     "grep" => {
@@ -67,7 +67,11 @@ impl ToolRegistry {
                                     savings_pct = %summarizer.estimate_savings(&ui_content, &llm_content).2,
                                     "Applied grep summarization"
                                 );
-                                Ok(SplitToolResult::new(tool_name, llm_content, ui_content))
+                                Ok(SplitToolResult::new(
+                                    tool_name.as_str(),
+                                    llm_content,
+                                    ui_content,
+                                ))
                             }
                             Err(e) => {
                                 warn!(
@@ -76,7 +80,7 @@ impl ToolRegistry {
                                     error = %e,
                                     "Failed to summarize grep output, using simple result"
                                 );
-                                Ok(SplitToolResult::simple(tool_name, ui_content))
+                                Ok(SplitToolResult::simple(tool_name.as_str(), ui_content))
                             }
                         }
                     }
@@ -92,7 +96,11 @@ impl ToolRegistry {
                                     savings_pct = %summarizer.estimate_savings(&ui_content, &llm_content).2,
                                     "Applied list summarization"
                                 );
-                                Ok(SplitToolResult::new(tool_name, llm_content, ui_content))
+                                Ok(SplitToolResult::new(
+                                    tool_name.as_str(),
+                                    llm_content,
+                                    ui_content,
+                                ))
                             }
                             Err(e) => {
                                 warn!(
@@ -101,11 +109,11 @@ impl ToolRegistry {
                                     error = %e,
                                     "Failed to summarize list output, using simple result"
                                 );
-                                Ok(SplitToolResult::simple(tool_name, ui_content))
+                                Ok(SplitToolResult::simple(tool_name.as_str(), ui_content))
                             }
                         }
                     }
-                    _ => Ok(SplitToolResult::simple(tool_name, ui_content)),
+                    _ => Ok(SplitToolResult::simple(tool_name.as_str(), ui_content)),
                 }
             }
             tools::UNIFIED_FILE => {
@@ -138,7 +146,11 @@ impl ToolRegistry {
                                     savings_pct = %summarizer.estimate_savings(&ui_content, &llm_content).2,
                                     "Applied unified_file read summarization"
                                 );
-                                Ok(SplitToolResult::new(tool_name, llm_content, ui_content))
+                                Ok(SplitToolResult::new(
+                                    tool_name.as_str(),
+                                    llm_content,
+                                    ui_content,
+                                ))
                             }
                             Err(e) => {
                                 warn!(
@@ -147,7 +159,7 @@ impl ToolRegistry {
                                     error = %e,
                                     "Failed to summarize unified_file read output, using simple result"
                                 );
-                                Ok(SplitToolResult::simple(tool_name, ui_content))
+                                Ok(SplitToolResult::simple(tool_name.as_str(), ui_content))
                             }
                         }
                     }
@@ -163,7 +175,11 @@ impl ToolRegistry {
                                     savings_pct = %summarizer.estimate_savings(&ui_content, &llm_content).2,
                                     "Applied unified_file mutation summarization"
                                 );
-                                Ok(SplitToolResult::new(tool_name, llm_content, ui_content))
+                                Ok(SplitToolResult::new(
+                                    tool_name.as_str(),
+                                    llm_content,
+                                    ui_content,
+                                ))
                             }
                             Err(e) => {
                                 warn!(
@@ -172,11 +188,11 @@ impl ToolRegistry {
                                     error = %e,
                                     "Failed to summarize unified_file mutation output, using simple result"
                                 );
-                                Ok(SplitToolResult::simple(tool_name, ui_content))
+                                Ok(SplitToolResult::simple(tool_name.as_str(), ui_content))
                             }
                         }
                     }
-                    _ => Ok(SplitToolResult::simple(tool_name, ui_content)),
+                    _ => Ok(SplitToolResult::simple(tool_name.as_str(), ui_content)),
                 }
             }
             tools::UNIFIED_EXEC => match tool_intent::unified_exec_action(&args).unwrap_or("run") {
@@ -193,7 +209,11 @@ impl ToolRegistry {
                                 savings_pct = %summarizer.estimate_savings(&ui_content, &llm_content).2,
                                 "Applied unified_exec summarization"
                             );
-                            Ok(SplitToolResult::new(tool_name, llm_content, ui_content))
+                            Ok(SplitToolResult::new(
+                                tool_name.as_str(),
+                                llm_content,
+                                ui_content,
+                            ))
                         }
                         Err(e) => {
                             warn!(
@@ -202,11 +222,11 @@ impl ToolRegistry {
                                 error = %e,
                                 "Failed to summarize unified_exec output, using simple result"
                             );
-                            Ok(SplitToolResult::simple(tool_name, ui_content))
+                            Ok(SplitToolResult::simple(tool_name.as_str(), ui_content))
                         }
                     }
                 }
-                _ => Ok(SplitToolResult::simple(tool_name, ui_content)),
+                _ => Ok(SplitToolResult::simple(tool_name.as_str(), ui_content)),
             },
             tools::READ_FILE => {
                 // Apply read file summarization
@@ -222,7 +242,11 @@ impl ToolRegistry {
                             savings_pct = %summarizer.estimate_savings(&ui_content, &llm_content).2,
                             "Applied read file summarization"
                         );
-                        Ok(SplitToolResult::new(tool_name, llm_content, ui_content))
+                        Ok(SplitToolResult::new(
+                            tool_name.as_str(),
+                            llm_content,
+                            ui_content,
+                        ))
                     }
                     Err(e) => {
                         warn!(
@@ -230,7 +254,7 @@ impl ToolRegistry {
                             error = %e,
                             "Failed to summarize read output, using simple result"
                         );
-                        Ok(SplitToolResult::simple(tool_name, ui_content))
+                        Ok(SplitToolResult::simple(tool_name.as_str(), ui_content))
                     }
                 }
             }
@@ -248,7 +272,11 @@ impl ToolRegistry {
                             savings_pct = %summarizer.estimate_savings(&ui_content, &llm_content).2,
                             "Applied bash summarization"
                         );
-                        Ok(SplitToolResult::new(tool_name, llm_content, ui_content))
+                        Ok(SplitToolResult::new(
+                            tool_name.as_str(),
+                            llm_content,
+                            ui_content,
+                        ))
                     }
                     Err(e) => {
                         warn!(
@@ -256,7 +284,7 @@ impl ToolRegistry {
                             error = %e,
                             "Failed to summarize bash output, using simple result"
                         );
-                        Ok(SplitToolResult::simple(tool_name, ui_content))
+                        Ok(SplitToolResult::simple(tool_name.as_str(), ui_content))
                     }
                 }
             }
@@ -266,27 +294,31 @@ impl ToolRegistry {
                 match summarizer.summarize(&ui_content, None) {
                     Ok(llm_content) => {
                         debug!(
-                            tool = tool_name,
+                            tool = tool_name.as_str(),
                             ui_tokens = %summarizer.estimate_savings(&ui_content, &llm_content).1,
                             llm_tokens = %summarizer.estimate_savings(&ui_content, &llm_content).0,
                             savings_pct = %summarizer.estimate_savings(&ui_content, &llm_content).2,
                             "Applied edit summarization"
                         );
-                        Ok(SplitToolResult::new(tool_name, llm_content, ui_content))
+                        Ok(SplitToolResult::new(
+                            tool_name.as_str(),
+                            llm_content,
+                            ui_content,
+                        ))
                     }
                     Err(e) => {
                         warn!(
-                            tool = tool_name,
+                            tool = tool_name.as_str(),
                             error = %e,
                             "Failed to summarize edit output, using simple result"
                         );
-                        Ok(SplitToolResult::simple(tool_name, ui_content))
+                        Ok(SplitToolResult::simple(tool_name.as_str(), ui_content))
                     }
                 }
             }
             _ => {
                 // No summarizer registered, use same content for both channels
-                Ok(SplitToolResult::simple(tool_name, ui_content))
+                Ok(SplitToolResult::simple(tool_name.as_str(), ui_content))
             }
         }
     }

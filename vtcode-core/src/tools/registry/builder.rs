@@ -14,6 +14,7 @@ use crate::tools::handlers::PlanModeState;
 use crate::tools::output_spooler::ToolOutputSpooler;
 
 use super::ToolRegistry;
+use super::assembly::ToolAssembly;
 use super::builtins::register_builtin_tools;
 use super::circuit_breaker;
 use super::execution_history::ToolExecutionHistory;
@@ -112,8 +113,10 @@ impl ToolRegistry {
 
             plan_read_only_mode: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             plan_mode_state,
+            tool_assembly: Arc::new(RwLock::new(ToolAssembly::empty())),
         };
 
+        registry.rebuild_tool_assembly().await;
         registry.sync_policy_catalog().await;
         registry.initialize_resiliency_trackers();
         registry

@@ -1,6 +1,6 @@
 //! MCP client integration for ToolRegistry.
 
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -167,11 +167,33 @@ impl ToolRegistry {
                     return Ok(());
                 }
             };
+            let existing_tools: Vec<String> = {
+                let index = self.mcp_tool_index.read().await;
+                index
+                    .iter()
+                    .flat_map(|(provider, names)| {
+                        names
+                            .iter()
+                            .map(move |name| format!("mcp::{}::{}", provider, name))
+                    })
+                    .collect()
+            };
+            for canonical_name in existing_tools {
+                if let Err(err) = self.inventory.remove_tool(&canonical_name) {
+                    warn!(
+                        tool = %canonical_name,
+                        error = %err,
+                        "failed to remove stale MCP proxy tool"
+                    );
+                }
+            }
+
             let mut provider_map: FxHashMap<String, Vec<String>> = FxHashMap::default();
+            let mut seen_tools = FxHashSet::default();
 
             for tool in &tools {
                 let canonical_name = format!("mcp::{}::{}", tool.provider, tool.name);
-                if !self.inventory.has_tool(&canonical_name) {
+                if seen_tools.insert(canonical_name.clone()) {
                     let registration =
                         build_mcp_registration(Arc::clone(&mcp_client), &tool.provider, tool, None);
 
@@ -226,6 +248,10 @@ impl ToolRegistry {
                 mcp_client.update_allowlist(allowlist);
             }
 
+            if let Ok(mut cache) = self.cached_available_tools.write() {
+                *cache = None;
+            }
+            self.rebuild_tool_assembly().await;
             self.sync_policy_catalog().await;
             // MP-3: Record success in circuit breaker
             self.mcp_circuit_breaker.record_success();

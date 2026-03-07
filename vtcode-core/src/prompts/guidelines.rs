@@ -40,8 +40,15 @@ pub fn generate_tool_guidelines(
     let has_search = available_tools.iter().any(|t| t == TOOL_UNIFIED_SEARCH);
     let has_apply_patch = available_tools.iter().any(|t| t == TOOL_APPLY_PATCH);
 
+    let read_only_mode = capability_level.is_some_and(|level| {
+        matches!(
+            level,
+            CapabilityLevel::Basic | CapabilityLevel::FileListing | CapabilityLevel::FileReading
+        )
+    }) || (!has_bash && !has_file);
+
     // Read-only mode detection
-    if !has_bash && !has_file {
+    if read_only_mode {
         guidelines.push(
             "**READ-ONLY MODE**: You cannot modify files or execute commands. \
              Focus on analysis, planning, and providing recommendations."
@@ -93,7 +100,7 @@ pub fn generate_tool_guidelines(
             guidelines.push(
                 "**Diff vs Patch**: `git diff` (via `unified_exec`) is READ-ONLY to VIEW changes. \
                  Use `unified_file` with action='patch' for WRITING patch changes. \
-                 Do not send patch text to `read_file`/`unified_file` read mode."
+                 Do not send patch text to `unified_file` read mode."
                     .to_string(),
             );
         }

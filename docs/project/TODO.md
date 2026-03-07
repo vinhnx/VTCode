@@ -2333,3 +2333,70 @@ don't stop the agent. remove this logic and let the agent decide when to stop or
 ===
 
 update each config in vtcode.toml with a human readable # heading describing the config settings item. and update /config item to use that heading as well.
+
+
+---
+
+# VT Code Follow-up Refactor: Routing, ACP, and Skills
+
+## Summary
+- Finish the manifest-driven refactor by making one private public-tool resolution path drive execution, preflight, and policy.
+- Simplify ACP so it owns only ACP-native tools and treats shared VT Code local tools as pass-through definitions.
+- Remove the empty dormant-skill startup scaffold, but keep the public skill tool workflow (`list_skills`, `load_skill`, `load_skill_resource`) stable and backed by real on-demand discovery.
+
+## Implementation Changes
+- Replace `ToolAssembly`’s routing-only `ToolRouter` with a lightweight private public-routing structure built from the session catalog.
+  - Store canonical-name resolution data and policy-seed metadata in the assembly.
+  - Move public-name normalization/candidate logic into one shared registry helper.
+  - Route `execute_public_tool_ref*`, `preflight_validate_call`, `evaluate_tool_policy`, and `persist_mcp_tool_policy` through that same resolver.
+  - Keep internal `execute_tool_ref` inventory-based for hidden/internal tools only.
+
+- Keep ACP hybrid, but remove its remaining second local-tool catalog.
+  - `AcpToolRegistry` continues to own only `read_file`, `list_files`, and `switch_mode`.
+  - Shared local VT Code tools remain the `Vec<ToolDefinition>` produced by core `model_tools(SessionSurface::Acp)`.
+  - `definitions_for` preserves core-provided local-tool ordering.
+  - `lookup` becomes “ACP-native tool map, otherwise local-definition membership”; no extra local index or local remapping state.
+
+- Unify skill activation around the real loader path and delete the fake dormant startup path.
+  - `discover_skills` / `SkillSetupState` stop carrying `library_skills_map`, `dormant_tool_defs`, and `discovered_skill_adapters`.
+  - `ListSkillsTool` uses lightweight discovery on demand and marks active vs inactive from `active_skills_map`.
+  - `LoadSkillTool` uses the real loader on demand, registers the activated skill tool into `ToolRegistry`, updates `active_skills_map`, and refreshes the live model-tool snapshot.
+  - `LoadSkillResourceTool` reads from `active_skills_map`, so the documented `load_skill` -> `load_skill_resource` flow actually works.
+  - Add one shared core helper for traditional-skill tool registration so both `LoadSkillTool` and `/skills load` use identical metadata/schema/permission logic and the slash path drops its remaining `Box::leak`.
+
+- Preserve the current user-facing surface unless it is dead.
+  - Keep `list_skills`, `load_skill`, and `load_skill_resource` public and documented.
+  - Keep startup lazy: no eager skill parsing during session initialization.
+  - Keep the current “do not auto-restore loaded skills from archived sessions” behavior in this pass.
+
+## Public API / Type Changes
+- `vtcode_core::tools::registry::ToolRegistry` public methods stay stable.
+- `vtcode_core::tools::skills::{ListSkillsTool, LoadSkillTool, LoadSkillResourceTool}` constructors change to take loader-backed/session-active inputs instead of dormant/library maps.
+- Add one small shared public core helper for building a traditional skill tool registration from a loaded `Skill`, so both the `vtcode` crate and `vtcode-core` tool path use the same registration logic.
+- No user-facing tool names, ACP-native tool names, or `vtcode.toml` keys change.
+
+## Test Plan
+- Canonical routing parity:
+  - `execute_public_tool_ref`, `preflight_validate_call`, and policy evaluation resolve the same canonical tool for public names, aliases, humanized labels, and MCP names.
+  - Legacy/internal aliases remain hidden from public catalogs and schemas.
+
+- ACP behavior:
+  - ACP local tool set stays exactly `unified_search`, `unified_file`, `unified_exec`.
+  - ACP-native tools still render and route correctly, and shared local tools still execute through `execute_public_tool_ref`.
+
+- Skills:
+  - `list_skills` returns real discovered skills without requiring slash-only preactivation.
+  - `load_skill` and `/skills load` register the same tool definition/metadata and update active skill state consistently.
+  - `load_skill_resource` succeeds after `load_skill` and fails cleanly before activation.
+  - No skill activation path requires `Box::leak`.
+
+- Full validation:
+  - `cargo check`
+  - `cargo clippy --workspace --all-targets -- -D warnings`
+  - `cargo nextest run`
+
+## Assumptions and Defaults
+- Chosen scope: routing + ACP + skills.
+- Chosen skill direction: remove the dormant startup scaffold, not the public skill tools.
+- Default design choice: use a simple private public-routing map in the assembly instead of keeping a full handler router there just for alias resolution.
+- Default compatibility choice: preserve the documented skill-tool workflow and current non-restoring startup behavior.

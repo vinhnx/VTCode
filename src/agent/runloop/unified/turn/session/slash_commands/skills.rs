@@ -1,16 +1,15 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use vtcode_core::config::types::CapabilityLevel;
 use vtcode_core::llm::provider as uni;
-use vtcode_core::skills::executor::SkillToolAdapter;
 use vtcode_core::skills::loader::EnhancedSkillLoader;
-use vtcode_core::tools::ToolRegistration;
+use vtcode_core::tools::handlers::ToolModelCapabilities;
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_tui::{
     InlineListItem, InlineListSearchConfig, InlineListSelection, WizardModalMode, WizardStep,
 };
 
+use crate::agent::runloop::unified::tool_catalog::tool_catalog_change_notifier;
 use crate::agent::runloop::unified::turn::utils::{
     enforce_history_limits, truncate_message_content,
 };
@@ -83,35 +82,30 @@ async fn apply_skill_command_outcome(
             Ok(SlashCommandControl::Continue)
         }
         SkillCommandOutcome::LoadSkill { skill, message } => {
-            let skill_name = skill.name().to_string();
-
-            let adapter = SkillToolAdapter::new(skill.clone());
-            let adapter_arc = Arc::new(adapter);
-
-            let name_static: &'static str = Box::leak(Box::new(skill_name.clone()));
-            let registration =
-                ToolRegistration::from_tool(name_static, CapabilityLevel::Bash, adapter_arc);
-
-            if let Err(e) = ctx.tool_registry.register_tool(registration).await {
+            if let Err(e) = skill_runtime(ctx)
+                .activate_skill(ctx.loaded_skills, skill)
+                .await
+            {
                 ctx.renderer.line(
                     MessageStyle::Error,
-                    &format!("Failed to register skill as tool: {}", e),
+                    &format!("Failed to activate skill: {}", e),
                 )?;
                 return Ok(SlashCommandControl::Continue);
             }
-
-            ctx.loaded_skills
-                .write()
-                .await
-                .insert(skill_name.clone(), skill.clone());
 
             ctx.renderer.line(MessageStyle::Info, &message)?;
             Ok(SlashCommandControl::Continue)
         }
         SkillCommandOutcome::UnloadSkill { name } => {
-            ctx.loaded_skills.write().await.remove(&name);
-            ctx.renderer
-                .line(MessageStyle::Info, &format!("Unloaded skill: {}", name))?;
+            let removed = skill_runtime(ctx)
+                .deactivate_skill(ctx.loaded_skills, &name)
+                .await?;
+            let message = if removed {
+                format!("Unloaded skill: {}", name)
+            } else {
+                format!("Skill was not active: {}", name)
+            };
+            ctx.renderer.line(MessageStyle::Info, &message)?;
             Ok(SlashCommandControl::Continue)
         }
         SkillCommandOutcome::UseSkill { skill, input } => {
@@ -159,6 +153,25 @@ async fn apply_skill_command_outcome(
             Ok(SlashCommandControl::Continue)
         }
     }
+}
+
+fn skill_runtime(
+    ctx: &SlashCommandContext<'_>,
+) -> vtcode_core::tools::skills::SkillToolSessionRuntime {
+    let tool_documentation_mode = ctx
+        .vt_cfg
+        .as_ref()
+        .as_ref()
+        .map(|cfg| cfg.agent.tool_documentation_mode)
+        .unwrap_or_default();
+
+    vtcode_core::tools::skills::SkillToolSessionRuntime::new(
+        Arc::new(ctx.tool_registry.clone()),
+        Some(Arc::clone(ctx.tools)),
+        tool_documentation_mode,
+        ToolModelCapabilities::for_model_name(&ctx.config.model),
+        Some(tool_catalog_change_notifier(ctx.tool_catalog)),
+    )
 }
 
 async fn execute_skill_action(
@@ -457,6 +470,16 @@ async fn discover_interactive_skills(
             }
         })
         .collect();
+    entries.extend(
+        discovered
+            .tools
+            .into_iter()
+            .map(|tool| InteractiveSkillEntry {
+                name: tool.name,
+                description: tool.description,
+                loaded: false,
+            }),
+    );
 
     entries.sort_by(|left, right| left.name.cmp(&right.name));
     Ok(entries)

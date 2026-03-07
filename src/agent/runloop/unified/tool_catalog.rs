@@ -4,7 +4,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::RwLock;
 use vtcode_core::core::agent::features::FeatureSet;
 use vtcode_core::llm::provider as uni;
-use vtcode_core::prompts::sort_tool_definitions;
 
 /// Shared versioned tool-catalog state.
 ///
@@ -63,10 +62,8 @@ impl ToolCatalogState {
             let defs_guard = tools.read().await;
             if defs_guard.is_empty() {
                 None
-            } else if defs_guard.len() == 1 {
-                Some(Arc::new(vec![defs_guard[0].clone()]))
             } else {
-                Some(Arc::new(sort_tool_definitions(defs_guard.clone())))
+                Some(Arc::new(defs_guard.clone()))
             }
         };
 
@@ -133,6 +130,15 @@ impl ToolCatalogState {
     }
 }
 
+pub(crate) fn tool_catalog_change_notifier(
+    tool_catalog: &Arc<ToolCatalogState>,
+) -> Arc<dyn Fn() + Send + Sync> {
+    let tool_catalog = Arc::clone(tool_catalog);
+    Arc::new(move || {
+        tool_catalog.bump_version();
+    })
+}
+
 pub(crate) fn should_expose_tool_in_mode(
     tool: &uni::ToolDefinition,
     plan_mode: bool,
@@ -179,6 +185,16 @@ mod tests {
 
     fn function_tool(name: &str) -> uni::ToolDefinition {
         uni::ToolDefinition::function(name.to_string(), name.to_string(), json!({}))
+    }
+
+    #[test]
+    fn change_notifier_bumps_version() {
+        let tool_catalog = Arc::new(ToolCatalogState::new());
+        let notifier = tool_catalog_change_notifier(&tool_catalog);
+
+        assert_eq!(tool_catalog.current_version(), 0);
+        notifier();
+        assert_eq!(tool_catalog.current_version(), 1);
     }
 
     #[test]

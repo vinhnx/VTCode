@@ -51,15 +51,11 @@ pub use vtcode_core::tools::{UnifiedErrorKind, UnifiedToolError};
 pub mod registry {
     //! Registry exports shared across tool categories.
     pub use vtcode_core::tools::registry::{
-        self, ToolPermissionDecision, ToolRegistration, ToolRegistry, build_function_declarations,
-        build_function_declarations_for_level, build_function_declarations_with_mode,
+        self, ToolPermissionDecision, ToolRegistration, ToolRegistry,
     };
 }
 
-pub use registry::{
-    ToolPermissionDecision, ToolRegistration, ToolRegistry, build_function_declarations,
-    build_function_declarations_for_level, build_function_declarations_with_mode,
-};
+pub use registry::{ToolPermissionDecision, ToolRegistration, ToolRegistry};
 
 pub mod traits {
     pub use vtcode_core::tools::traits::{Tool, ToolExecutor};

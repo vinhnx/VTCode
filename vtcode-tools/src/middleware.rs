@@ -71,7 +71,11 @@ impl MiddlewareChain {
     }
 
     /// Execute after hooks.
-    pub async fn after_execute(&self, req: &ToolRequest, res: &ToolResponse) -> MiddlewareResult<()> {
+    pub async fn after_execute(
+        &self,
+        req: &ToolRequest,
+        res: &ToolResponse,
+    ) -> MiddlewareResult<()> {
         // Run in reverse order.
         for mw in self.middlewares.iter().rev() {
             mw.after_execute(req, res).await?;
@@ -80,7 +84,11 @@ impl MiddlewareChain {
     }
 
     /// Execute error hooks.
-    pub async fn on_error(&self, req: &ToolRequest, err: &UnifiedToolError) -> MiddlewareResult<()> {
+    pub async fn on_error(
+        &self,
+        req: &ToolRequest,
+        err: &UnifiedToolError,
+    ) -> MiddlewareResult<()> {
         for mw in self.middlewares.iter().rev() {
             let _ = mw.on_error(req, err).await;
         }

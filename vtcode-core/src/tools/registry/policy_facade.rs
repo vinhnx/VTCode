@@ -125,11 +125,13 @@ impl ToolRegistry {
             return self.evaluate_mcp_tool_policy(name, tool_name).await;
         }
 
-        if let Some(registration) = self.inventory.registration_for(name)
-            && let Some((_, tool_name)) = parse_mcp_policy_target(registration.name())
+        let resolved_public_tool = self.resolve_public_tool_entry(name);
+
+        if let Some((registration_name, _)) = &resolved_public_tool
+            && let Some((_, tool_name)) = parse_mcp_policy_target(registration_name)
         {
             return self
-                .evaluate_mcp_tool_policy(registration.name(), tool_name)
+                .evaluate_mcp_tool_policy(registration_name, tool_name)
                 .await;
         }
 
@@ -139,8 +141,7 @@ impl ToolRegistry {
         {
             let gateway = self.policy_gateway.read().await;
             if !gateway.has_policy_manager()
-                && let Some(registration) = self.inventory.registration_for(normalized)
-                && let Some(permission) = registration.default_permission()
+                && let Some((_, permission)) = resolved_public_tool
             {
                 return Ok(match permission {
                     ToolPolicy::Allow => ToolPermissionDecision::Allow,
@@ -243,9 +244,8 @@ impl ToolRegistry {
             (provider, tool_name.to_string())
         } else if let Some((provider, tool_name)) = parse_mcp_policy_target(name) {
             (provider.to_string(), tool_name.to_string())
-        } else if let Some(registration) = self.inventory.registration_for(name) {
-            let canonical = registration.name();
-            let Some((provider, tool_name)) = parse_mcp_policy_target(canonical) else {
+        } else if let Some((canonical, _)) = self.resolve_public_tool_entry(name) {
+            let Some((provider, tool_name)) = parse_mcp_policy_target(&canonical) else {
                 return Ok(());
             };
             (provider.to_string(), tool_name.to_string())

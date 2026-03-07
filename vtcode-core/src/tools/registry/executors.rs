@@ -8,7 +8,7 @@ use crate::sandboxing::{
 };
 use crate::tools::continuation::{NEXT_CONTINUE_PROMPT, PtyContinuationArgs};
 use crate::tools::file_tracker::FileTracker;
-use crate::tools::registry::declarations::{
+use crate::tools::registry::unified_actions::{
     UnifiedExecAction, UnifiedFileAction, UnifiedSearchAction,
 };
 use crate::tools::shell::resolve_fallback_shell;

@@ -2,8 +2,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use vtcode_core::llm::provider::{LLMError, LLMErrorMetadata};
 use vtcode_core::RetryPolicy;
+use vtcode_core::llm::provider::{LLMError, LLMErrorMetadata};
 use vtcode_tools::{
     CachedToolExecutor, Middleware, MiddlewareResult, ToolRequest, UnifiedErrorKind,
     UnifiedToolError,

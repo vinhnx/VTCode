@@ -2,6 +2,8 @@ use anyhow::Result;
 use std::sync::Arc;
 use std::time::Instant;
 
+use vtcode_core::config::ToolDocumentationMode;
+use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
@@ -32,6 +34,8 @@ pub(crate) async fn handle_mcp_updates(
     tool_registry: &mut vtcode_core::tools::registry::ToolRegistry,
     tools: &Arc<tokio::sync::RwLock<Vec<uni::ToolDefinition>>>,
     tool_catalog: &ToolCatalogState,
+    config: &CoreAgentConfig,
+    tool_documentation_mode: ToolDocumentationMode,
     renderer: &mut AnsiRenderer,
     mcp_catalog_initialized: &mut bool,
     last_mcp_refresh: &mut Instant,
@@ -53,6 +57,8 @@ pub(crate) async fn handle_mcp_updates(
                                     tool_registry,
                                     tools,
                                     tool_catalog,
+                                    config,
+                                    tool_documentation_mode,
                                     mcp_tools,
                                     last_known_mcp_tools,
                                 )
@@ -109,6 +115,8 @@ pub(crate) async fn handle_mcp_updates(
                             tool_registry,
                             tools,
                             tool_catalog,
+                            config,
+                            tool_documentation_mode,
                             last_known_mcp_tools,
                         )
                         .await?;

@@ -2,6 +2,9 @@
 
 use serde_json::Value;
 
+use crate::config::ToolDocumentationMode;
+use crate::config::types::CapabilityLevel;
+use crate::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
 use crate::tools::names::canonical_tool_name;
 
 use super::ToolRegistry;
@@ -92,12 +95,9 @@ impl ToolRegistry {
             return tools.clone();
         }
 
-        // HP-7: Inventory tools are already sorted, just convert to Vec
-        let mut tools = self.inventory.available_tools().to_vec();
-        tools.extend(self.inventory.registered_aliases());
-
-        tools.sort_unstable();
-        tools.dedup();
+        let tools = self
+            .public_tool_names(SessionSurface::Interactive, CapabilityLevel::CodeSearch)
+            .await;
 
         // Update cache with try_write to avoid blocking
         if let Ok(mut cache) = self.cached_available_tools.try_write() {
@@ -121,6 +121,25 @@ impl ToolRegistry {
                 schema.clone()
             }
         };
+
+        if let Some(entry) = self
+            .schema_for_public_name(
+                tool_name,
+                SessionToolsConfig::full_public(
+                    SessionSurface::Interactive,
+                    CapabilityLevel::CodeSearch,
+                    ToolDocumentationMode::Full,
+                    ToolModelCapabilities::default(),
+                ),
+            )
+            .await
+        {
+            return Some(wrap_schema(
+                entry.name.as_str(),
+                entry.description.as_str(),
+                &entry.parameters,
+            ));
+        }
 
         // Resolve tool (handles built-ins, MCP proxies, and aliases)
         if let Some(registration) = self.inventory.get_registration(tool_name)

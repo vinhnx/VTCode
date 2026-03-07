@@ -305,6 +305,11 @@ pub(super) async fn run_interaction_loop_impl(
                 ctx.tool_registry,
                 ctx.tools,
                 ctx.tool_catalog,
+                ctx.config,
+                ctx.vt_cfg
+                    .as_ref()
+                    .map(|cfg| cfg.agent.tool_documentation_mode)
+                    .unwrap_or_default(),
                 ctx.renderer,
                 state.mcp_catalog_initialized,
                 state.last_mcp_refresh,

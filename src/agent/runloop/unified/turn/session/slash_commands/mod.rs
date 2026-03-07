@@ -25,6 +25,7 @@ use crate::agent::runloop::unified::async_mcp_manager::AsyncMcpManager;
 use crate::agent::runloop::unified::context_manager::ContextManager;
 use crate::agent::runloop::unified::palettes::ActivePalette;
 use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
+use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
 use crate::agent::runloop::unified::workspace_links::LinkedDirectory;
 use crate::agent::runloop::welcome::SessionBootstrap;
 use crate::hooks::lifecycle::{LifecycleHookEngine, SessionEndReason};
@@ -55,6 +56,7 @@ pub struct SlashCommandContext<'a> {
     pub context_manager: &'a mut ContextManager,
     pub session_stats: &'a mut SessionStats,
     pub tools: &'a Arc<RwLock<Vec<uni::ToolDefinition>>>,
+    pub tool_catalog: &'a Arc<ToolCatalogState>,
     pub async_mcp_manager: Option<&'a Arc<AsyncMcpManager>>,
     pub mcp_panel_state: &'a mut mcp_events::McpPanelState,
     pub linked_directories: &'a mut Vec<LinkedDirectory>,

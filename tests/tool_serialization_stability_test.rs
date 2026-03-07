@@ -65,81 +65,63 @@ fn snapshot_current_tool_schemas() -> Result<BTreeMap<String, Value>> {
         if schemas.is_empty() {
             // Add default schemas as fallback
             schemas.insert(
-                "read_file".to_string(),
+                "unified_file".to_string(),
                 json!({
-                    "name": "read_file",
-                    "description": "Read the contents of a file from the workspace",
+                    "name": "unified_file",
+                    "description": "Unified file operations",
                     "parameters": {
                         "type": "object",
                         "properties": {
+                            "action": {
+                                "type": "string",
+                                "description": "File action"
+                            },
                             "path": {
                                 "type": "string",
                                 "description": "Path to the file to read"
                             },
-                            "max_bytes": {
-                                "type": "integer",
-                                "description": "Maximum bytes to read"
-                            }
                         },
-                        "required": ["path"]
+                        "required": ["action"]
                     }
                 }),
             );
 
             schemas.insert(
-                "write_file".to_string(),
+                "unified_exec".to_string(),
                 json!({
-                    "name": "write_file",
-                    "description": "Write content to a file",
+                    "name": "unified_exec",
+                    "description": "Unified execution and PTY operations",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "path": {
+                            "action": {
                                 "type": "string",
-                                "description": "Path to the file"
+                                "description": "Execution action"
                             },
-                            "content": {
+                            "command": {
                                 "type": "string",
-                                "description": "Content to write"
-                            },
-                            "mode": {
-                                "type": "string",
-                                "enum": ["overwrite", "append", "skip_if_exists"],
-                                "description": "Write mode"
+                                "description": "Command to run"
                             }
                         },
-                        "required": ["path", "content"]
+                        "required": ["action"]
                     }
                 }),
             );
 
             schemas.insert(
-                "grep_file".to_string(),
+                "unified_search".to_string(),
                 json!({
-                    "name": "grep_file",
-                    "description": "Search for patterns in files using ripgrep",
+                    "name": "unified_search",
+                    "description": "Unified discovery and search",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "pattern": {
+                            "action": {
                                 "type": "string",
-                                "description": "Search pattern"
+                                "description": "Search action"
                             },
-                            "path": {
-                                "type": "string",
-                                "description": "Path to search in"
-                            },
-                            "max_results": {
-                                "type": "integer",
-                                "description": "Maximum results to return"
-                            },
-                            "response_format": {
-                                "type": "string",
-                                "enum": ["concise", "detailed"],
-                                "description": "Output format"
-                            }
                         },
-                        "required": ["pattern"]
+                        "required": ["action"]
                     }
                 }),
             );
@@ -233,9 +215,9 @@ mod tests {
     fn test_snapshot_generation() {
         let schemas = snapshot_current_tool_schemas().unwrap();
         assert!(!schemas.is_empty());
-        assert!(schemas.contains_key("read_file"));
-        assert!(schemas.contains_key("write_file"));
-        assert!(schemas.contains_key("grep_file"));
+        assert!(schemas.contains_key("unified_file"));
+        assert!(schemas.contains_key("unified_exec"));
+        assert!(schemas.contains_key("unified_search"));
     }
 
     #[test]

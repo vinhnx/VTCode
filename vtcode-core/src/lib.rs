@@ -230,7 +230,6 @@ pub use error::{
     ErrorCategory as VtCodeErrorCategory, ErrorCode as VtCodeErrorCode, Result as VtCodeResult,
     VtCodeError,
 };
-pub use retry::{RetryDecision, RetryPolicy};
 pub use exec::events::{
     AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, EVENT_SCHEMA_VERSION,
     ErrorItem, FileChangeItem, FileUpdateChange, ItemCompletedEvent, ItemStartedEvent,
@@ -265,6 +264,7 @@ pub use orchestrator::{
 pub use prompts::{
     generate_lightweight_instruction, generate_specialized_instruction, generate_system_instruction,
 };
+pub use retry::{RetryDecision, RetryPolicy};
 pub use security::{IntegrityTag, PayloadEnvelope, ZeroTrustContext};
 pub use telemetry::{TelemetryEvent, TelemetryPipeline};
 pub use zsh_exec_bridge::maybe_run_zsh_exec_wrapper_mode;
@@ -296,10 +296,7 @@ pub use sandboxing::{
 
 pub use tools::grep_file::GrepSearchManager;
 pub use tools::{AsyncToolPipeline, AsyncToolRequest, ExecutionPriority, OptimizedToolRegistry};
-pub use tools::{
-    ToolRegistration, ToolRegistry, build_function_declarations,
-    build_function_declarations_for_level, build_function_declarations_with_mode,
-};
+pub use tools::{ToolRegistration, ToolRegistry};
 
 /// Macro for consistent error context formatting to reduce code duplication
 /// Replaces repetitive `.with_context(|| format!("Failed to {} {}", operation, path.display()))?` patterns

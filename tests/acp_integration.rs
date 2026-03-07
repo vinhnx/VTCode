@@ -176,13 +176,6 @@ impl ToolRegistryProvider for FakeRegistry {
         self.descriptors.get(function_name).copied()
     }
 
-    fn local_definition(
-        &self,
-        _tool_name: &str,
-    ) -> Option<vtcode_core::llm::provider::ToolDefinition> {
-        None
-    }
-
     fn has_local_tools(&self) -> bool {
         false
     }

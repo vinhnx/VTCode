@@ -1,14 +1,15 @@
 //! Tool registry and function declarations
 
 mod approval_recorder;
+mod assembly;
 mod availability_facade;
 mod builder;
 mod builtins;
 mod cache;
+mod catalog_facade;
 mod circuit_breaker;
 mod commands_facade;
 mod config_helpers;
-mod declarations;
 mod dual_output;
 mod error;
 mod execution_facade;
@@ -35,7 +36,6 @@ mod plan_mode_facade;
 mod policy;
 mod policy_facade;
 mod progress_facade;
-mod progressive_docs;
 mod pty;
 mod pty_facade;
 mod registration;
@@ -43,6 +43,7 @@ mod registration_facade;
 mod resiliency;
 mod resiliency_facade;
 mod risk_scorer;
+mod runtime_config_facade;
 mod sandbox_facade;
 mod shell_policy;
 mod shell_policy_facade;
@@ -52,27 +53,20 @@ mod timeout;
 mod timeout_category;
 mod timeout_facade;
 mod tool_executor_impl;
+mod unified_actions;
 mod utils;
 
 use std::borrow::Cow;
 
 pub use approval_recorder::ApprovalRecorder;
-pub use declarations::{
-    build_function_declarations, build_function_declarations_cached,
-    build_function_declarations_for_level, build_function_declarations_with_mode,
-};
 pub use error::{ToolErrorType, ToolExecutionError, classify_error};
 pub use execution_history::{HarnessContextSnapshot, ToolExecutionHistory, ToolExecutionRecord};
 pub use execution_kernel::ToolPreflightOutcome;
 pub use harness::HarnessContext;
 pub use justification::{ApprovalPattern, JustificationManager, ToolJustification};
 pub use justification_extractor::JustificationExtractor;
-pub use progressive_docs::{
-    ToolDocumentationMode, ToolSignature, build_minimal_declarations,
-    build_progressive_declarations, estimate_tokens, minimal_tool_signatures,
-};
 pub use pty::{PtySessionGuard, PtySessionManager};
-pub use registration::{ToolExecutorFn, ToolHandler, ToolRegistration};
+pub use registration::{ToolExecutorFn, ToolHandler, ToolMetadata, ToolRegistration};
 pub use resiliency::{ResiliencyContext, ToolFailureTracker};
 pub use risk_scorer::{RiskLevel, ToolRiskContext, ToolRiskScorer, ToolSource, WorkspaceTrust};
 pub use shell_policy::ShellPolicyChecker;
@@ -81,6 +75,7 @@ pub use timeout::{
     AdaptiveTimeoutTuning, ToolLatencyStats, ToolTimeoutCategory, ToolTimeoutPolicy,
 };
 
+use assembly::ToolAssembly;
 use inventory::ToolInventory;
 use policy::ToolPolicyGateway;
 use utils::normalize_tool_output;
@@ -163,6 +158,8 @@ pub struct ToolRegistry {
 
     /// Shared Plan Mode state (plan file tracking, active flag) for enter/exit tools
     plan_mode_state: PlanModeState,
+    /// Canonical manifest-driven tool assembly used by routing, catalog projections, and policy sync.
+    tool_assembly: Arc<RwLock<ToolAssembly>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -176,7 +173,10 @@ pub enum ToolPermissionDecision {
 mod tests {
     use super::*;
     use crate::config::TimeoutsConfig;
+    use crate::config::ToolDocumentationMode as ConfigToolDocumentationMode;
     use crate::constants::tools;
+    use crate::tool_policy::ToolPolicyConfig;
+    use crate::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
     use crate::tools::registry::mcp_helpers::normalize_mcp_tool_identifier;
     use anyhow::Result;
     use async_trait::async_trait;
@@ -245,8 +245,10 @@ mod tests {
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
         let available = registry.available_tools().await;
 
-        assert!(available.contains(&tools::READ_FILE.to_string()));
-        assert!(available.contains(&tools::RUN_PTY_CMD.to_string()));
+        assert!(available.contains(&tools::UNIFIED_FILE.to_string()));
+        assert!(available.contains(&tools::UNIFIED_EXEC.to_string()));
+        assert!(!available.contains(&tools::READ_FILE.to_string()));
+        assert!(!available.contains(&tools::RUN_PTY_CMD.to_string()));
         Ok(())
     }
 
@@ -263,16 +265,148 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn public_tool_projections_stay_in_sync() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        let config = SessionToolsConfig::full_public(
+            SessionSurface::Interactive,
+            CapabilityLevel::CodeSearch,
+            ConfigToolDocumentationMode::Full,
+            ToolModelCapabilities::default(),
+        );
+
+        let names = registry
+            .public_tool_names(SessionSurface::Interactive, CapabilityLevel::CodeSearch)
+            .await;
+        let schema_names = registry
+            .schema_entries(config)
+            .await
+            .into_iter()
+            .map(|entry| entry.name)
+            .collect::<Vec<_>>();
+        let declaration_names = registry
+            .function_declarations(config)
+            .await
+            .into_iter()
+            .map(|entry| entry.name)
+            .collect::<Vec<_>>();
+        let mut model_tool_names = registry
+            .model_tools(config)
+            .await
+            .into_iter()
+            .map(|tool| tool.function_name().to_string())
+            .collect::<Vec<_>>();
+
+        model_tool_names.sort();
+
+        assert_eq!(schema_names, names);
+        assert_eq!(declaration_names, names);
+        assert_eq!(model_tool_names, names);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn public_routing_keeps_aliases_private_and_rebuilds_on_dynamic_updates() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        registry.allow_all_tools().await?;
+
+        let test_file = temp_dir.path().join("alias-read.txt");
+        std::fs::write(&test_file, "via alias\n")?;
+
+        let public_names = registry
+            .public_tool_names(SessionSurface::Interactive, CapabilityLevel::CodeSearch)
+            .await;
+        assert!(!public_names.contains(&tools::READ_FILE.to_string()));
+
+        let read_result = registry
+            .execute_public_tool_ref(
+                tools::READ_FILE,
+                &json!({"path": test_file.to_string_lossy().to_string()}),
+            )
+            .await?;
+        assert_eq!(read_result["success"].as_bool(), Some(true));
+        assert_eq!(read_result["content"].as_str(), Some("via alias"));
+
+        registry
+            .register_tool(
+                ToolRegistration::from_tool_instance(
+                    CUSTOM_TOOL_NAME,
+                    CapabilityLevel::CodeSearch,
+                    CustomEchoTool,
+                )
+                .with_description("Custom echo tool for testing")
+                .with_parameter_schema(json!({
+                    "type": "object",
+                    "properties": {
+                        "input": {"type": "string"}
+                    }
+                }))
+                .with_aliases(["custom_tool_alias"]),
+            )
+            .await?;
+
+        let public_names = registry
+            .public_tool_names(SessionSurface::Interactive, CapabilityLevel::CodeSearch)
+            .await;
+        assert!(public_names.contains(&CUSTOM_TOOL_NAME.to_string()));
+        assert!(!public_names.contains(&"custom_tool_alias".to_string()));
+
+        let schema_names = registry
+            .schema_entries(SessionToolsConfig::full_public(
+                SessionSurface::Interactive,
+                CapabilityLevel::CodeSearch,
+                ConfigToolDocumentationMode::Full,
+                ToolModelCapabilities::default(),
+            ))
+            .await
+            .into_iter()
+            .map(|entry| entry.name)
+            .collect::<Vec<_>>();
+        assert!(schema_names.contains(&CUSTOM_TOOL_NAME.to_string()));
+        assert!(!schema_names.contains(&"custom_tool_alias".to_string()));
+
+        let dynamic_result = registry
+            .execute_public_tool_ref("custom_tool_alias", &json!({"input": "value"}))
+            .await?;
+        assert_eq!(dynamic_result["success"].as_bool(), Some(true));
+
+        registry.unregister_tool(CUSTOM_TOOL_NAME).await?;
+
+        let public_names = registry
+            .public_tool_names(SessionSurface::Interactive, CapabilityLevel::CodeSearch)
+            .await;
+        assert!(!public_names.contains(&CUSTOM_TOOL_NAME.to_string()));
+
+        let err = registry
+            .execute_public_tool_ref("custom_tool_alias", &json!({"input": "value"}))
+            .await
+            .expect_err("alias should be removed with the registration");
+        assert!(err.to_string().contains("Unknown tool"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn allows_registering_custom_tools() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
         registry
-            .register_tool(ToolRegistration::from_tool_instance(
-                CUSTOM_TOOL_NAME,
-                CapabilityLevel::CodeSearch,
-                CustomEchoTool,
-            ))
+            .register_tool(
+                ToolRegistration::from_tool_instance(
+                    CUSTOM_TOOL_NAME,
+                    CapabilityLevel::CodeSearch,
+                    CustomEchoTool,
+                )
+                .with_parameter_schema(json!({
+                    "type": "object",
+                    "properties": {
+                        "input": {"type": "string"}
+                    }
+                })),
+            )
             .await?;
 
         registry.allow_all_tools().await.ok();
@@ -284,6 +418,45 @@ mod tests {
             .execute_tool(CUSTOM_TOOL_NAME, json!({"input": "value"}))
             .await?;
         assert!(response["success"].as_bool().unwrap_or(false));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn dynamic_tool_registration_keeps_policy_catalog_in_sync() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let policy_path = temp_dir.path().join("tool-policy.json");
+        let policy_manager =
+            crate::tool_policy::ToolPolicyManager::new_with_config_path(&policy_path).await?;
+        let registry =
+            ToolRegistry::new_with_custom_policy(temp_dir.path().to_path_buf(), policy_manager)
+                .await;
+
+        registry
+            .register_tool(ToolRegistration::from_tool_instance(
+                CUSTOM_TOOL_NAME,
+                CapabilityLevel::CodeSearch,
+                CustomEchoTool,
+            ))
+            .await?;
+
+        let config: ToolPolicyConfig =
+            serde_json::from_str(&std::fs::read_to_string(&policy_path)?)?;
+        assert!(
+            config
+                .available_tools
+                .contains(&CUSTOM_TOOL_NAME.to_string())
+        );
+
+        registry.unregister_tool(CUSTOM_TOOL_NAME).await?;
+
+        let config: ToolPolicyConfig =
+            serde_json::from_str(&std::fs::read_to_string(&policy_path)?)?;
+        assert!(
+            !config
+                .available_tools
+                .contains(&CUSTOM_TOOL_NAME.to_string())
+        );
+
         Ok(())
     }
 
@@ -389,6 +562,22 @@ mod tests {
             "Exec code",
             &json!({
                 "command": "echo vtcode"
+            }),
+        )?;
+        assert_eq!(outcome.normalized_tool_name, tools::UNIFIED_EXEC);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn preflight_normalizes_execute_code_alias_to_unified_exec() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+        let outcome = registry.preflight_validate_call(
+            tools::EXECUTE_CODE,
+            &json!({
+                "code": "print('vtcode')"
             }),
         )?;
         assert_eq!(outcome.normalized_tool_name, tools::UNIFIED_EXEC);
@@ -505,6 +694,26 @@ mod tests {
         assert_eq!(response.get("success").and_then(Value::as_bool), Some(true));
 
         let file_contents = std::fs::read_to_string(temp_dir.path().join("patched_via_alias.txt"))?;
+        assert_eq!(file_contents, "patched\n");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn apply_patch_accepts_input_payload() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        registry.allow_all_tools().await?;
+
+        let patch =
+            "*** Begin Patch\n*** Add File: patched_via_input.txt\n+patched\n*** End Patch\n";
+        let response = registry
+            .execute_tool(tools::APPLY_PATCH, json!({ "input": patch }))
+            .await?;
+
+        assert_eq!(response.get("success").and_then(Value::as_bool), Some(true));
+
+        let file_contents = std::fs::read_to_string(temp_dir.path().join("patched_via_input.txt"))?;
         assert_eq!(file_contents, "patched\n");
 
         Ok(())

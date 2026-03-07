@@ -208,10 +208,9 @@ deny_regex = [
 
 ```toml
 [tools.policies]
-run_pty_cmd = "allow"      # Execute without confirmation
-apply_patch = "prompt"           # Ask before applying patches
-write_file = "allow"             # Allow file writes
-edit_file = "allow"              # Allow file edits
+unified_exec = "allow"     # Execute without confirmation
+apply_patch = "prompt"     # Ask before applying patches
+unified_search = "allow"   # Allow discovery/search without confirmation
 ```
 
 ## Troubleshooting

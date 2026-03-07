@@ -134,7 +134,7 @@ impl fmt::Debug for ToolHandler {
 
 #[derive(Debug, Clone)]
 pub struct ToolRegistration {
-    name: &'static str,
+    name: Arc<str>,
     capability: CapabilityLevel,
     uses_pty: bool,
     expose_in_llm: bool,
@@ -146,13 +146,13 @@ pub struct ToolRegistration {
 
 impl ToolRegistration {
     pub fn new(
-        name: &'static str,
+        name: impl Into<Arc<str>>,
         capability: CapabilityLevel,
         uses_pty: bool,
         executor: ToolExecutorFn,
     ) -> Self {
         Self {
-            name,
+            name: name.into(),
             capability,
             uses_pty,
             expose_in_llm: true,
@@ -163,7 +163,11 @@ impl ToolRegistration {
         }
     }
 
-    pub fn from_tool(name: &'static str, capability: CapabilityLevel, tool: Arc<dyn Tool>) -> Self {
+    pub fn from_tool(
+        name: impl Into<Arc<str>>,
+        capability: CapabilityLevel,
+        tool: Arc<dyn Tool>,
+    ) -> Self {
         let mut metadata = ToolMetadata::default().with_description(tool.description());
         if let Some(schema) = tool.parameter_schema() {
             metadata = metadata.with_parameter_schema(schema);
@@ -185,8 +189,17 @@ impl ToolRegistration {
             metadata = metadata.with_denylist(patterns.iter().copied());
         }
 
+        Self::from_tool_with_metadata(name, capability, tool, metadata)
+    }
+
+    pub fn from_tool_with_metadata(
+        name: impl Into<Arc<str>>,
+        capability: CapabilityLevel,
+        tool: Arc<dyn Tool>,
+        metadata: ToolMetadata,
+    ) -> Self {
         Self {
-            name,
+            name: name.into(),
             capability,
             uses_pty: false,
             expose_in_llm: true,
@@ -197,7 +210,11 @@ impl ToolRegistration {
         }
     }
 
-    pub fn from_tool_instance<T>(name: &'static str, capability: CapabilityLevel, tool: T) -> Self
+    pub fn from_tool_instance<T>(
+        name: impl Into<Arc<str>>,
+        capability: CapabilityLevel,
+        tool: T,
+    ) -> Self
     where
         T: Tool + 'static,
     {
@@ -224,8 +241,8 @@ impl ToolRegistration {
         self
     }
 
-    pub fn name(&self) -> &'static str {
-        self.name
+    pub fn name(&self) -> &str {
+        self.name.as_ref()
     }
 
     pub fn capability(&self) -> CapabilityLevel {

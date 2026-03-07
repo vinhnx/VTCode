@@ -114,7 +114,7 @@ struct ToolRegistryEntry {
 
 pub struct AcpToolRegistry {
     entries: Vec<ToolRegistryEntry>,
-    local_definitions: HashMap<String, ToolDefinition>,
+    local_definitions: Vec<ToolDefinition>,
     mapping: HashMap<String, ToolDescriptor>,
 }
 
@@ -128,7 +128,6 @@ impl AcpToolRegistry {
     ) -> Self {
         let mut entries = Vec::with_capacity(5); // Pre-allocate for typical tool count (ReadFile, ListFiles + locals)
         let mut mapping = HashMap::with_capacity(10); // Pre-allocate for mapping entries
-        let mut local_map = HashMap::with_capacity(local_definitions.len()); // Pre-allocate for local definitions
 
         if read_file_enabled {
             let workspace_display = workspace_root.display().to_string();
@@ -333,19 +332,11 @@ impl AcpToolRegistry {
             definition: switch_mode,
         });
 
-        for definition in local_definitions {
-            mapping.insert(
-                definition.function_name().to_string(),
-                ToolDescriptor::Local,
-            );
-            local_map.insert(definition.function_name().to_string(), definition);
-        }
-
         entries.sort_unstable_by_key(|entry| entry.tool.sort_key());
 
         Self {
             entries,
-            local_definitions: local_map,
+            local_definitions,
             mapping,
         }
     }
@@ -367,9 +358,7 @@ impl AcpToolRegistry {
         }
 
         if include_local {
-            let mut local: Vec<_> = self.local_definitions.values().cloned().collect();
-            local.sort_unstable_by(|left, right| left.function_name().cmp(right.function_name()));
-            definitions.extend(local);
+            definitions.extend(self.local_definitions.iter().cloned());
         }
 
         definitions
@@ -447,11 +436,12 @@ impl AcpToolRegistry {
     }
 
     pub fn lookup(&self, function_name: &str) -> Option<ToolDescriptor> {
-        self.mapping.get(function_name).copied()
-    }
-
-    pub fn local_definition(&self, tool_name: &str) -> Option<ToolDefinition> {
-        self.local_definitions.get(tool_name).cloned()
+        self.mapping.get(function_name).copied().or_else(|| {
+            self.local_definitions
+                .iter()
+                .any(|definition| definition.function_name() == function_name)
+                .then_some(ToolDescriptor::Local)
+        })
     }
 
     pub fn has_local_tools(&self) -> bool {

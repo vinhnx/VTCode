@@ -219,14 +219,16 @@ pub async fn execute_skill_with_sub_llm(
                             .unwrap_or_else(|_| serde_json::json!({}));
 
                         // Execute tool via registry
-                        let tool_result =
-                            match tool_registry.execute_tool_ref(tool_name, &tool_args).await {
-                                Ok(result) => result.to_string(),
-                                Err(e) => {
-                                    warn!("Tool '{}' failed: {}", tool_name, e);
-                                    format!("Error executing {}: {}", tool_name, e)
-                                }
-                            };
+                        let tool_result = match tool_registry
+                            .execute_public_tool_ref(tool_name, &tool_args)
+                            .await
+                        {
+                            Ok(result) => result.to_string(),
+                            Err(e) => {
+                                warn!("Tool '{}' failed: {}", tool_name, e);
+                                format!("Error executing {}: {}", tool_name, e)
+                            }
+                        };
 
                         // Add tool result to conversation
                         messages.push(Message::tool_response(tool_call.id.clone(), tool_result));

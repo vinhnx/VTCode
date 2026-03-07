@@ -274,8 +274,12 @@ impl From<reqwest::Error> for VtCodeError {
 impl From<anyhow::Error> for VtCodeError {
     fn from(err: anyhow::Error) -> Self {
         let category = vtcode_commons::classify_anyhow_error(&err);
-        VtCodeError::new(category, ErrorCode::from_category(category), err.to_string())
-            .with_context(format!("{err:#}"))
+        VtCodeError::new(
+            category,
+            ErrorCode::from_category(category),
+            err.to_string(),
+        )
+        .with_context(format!("{err:#}"))
     }
 }
 
@@ -470,9 +474,8 @@ mod tests {
 
     #[test]
     fn test_error_with_retry_after() {
-        let err = VtCodeError::network(ErrorCode::RateLimited, "rate limit").with_retry_after(
-            std::time::Duration::from_secs(2),
-        );
+        let err = VtCodeError::network(ErrorCode::RateLimited, "rate limit")
+            .with_retry_after(std::time::Duration::from_secs(2));
         assert_eq!(err.retry_after(), Some(std::time::Duration::from_secs(2)));
     }
 
@@ -493,7 +496,10 @@ mod tests {
         let converted = VtCodeError::from(err);
         assert_eq!(converted.category, ErrorCategory::RateLimit);
         assert_eq!(converted.code, ErrorCode::RateLimited);
-        assert_eq!(converted.retry_after(), Some(std::time::Duration::from_secs(3)));
+        assert_eq!(
+            converted.retry_after(),
+            Some(std::time::Duration::from_secs(3))
+        );
     }
 
     #[test]
@@ -529,10 +535,12 @@ mod tests {
         let converted = VtCodeError::from(err);
         assert_eq!(converted.category, ErrorCategory::Network);
         assert_eq!(converted.code, ErrorCode::ConnectionFailed);
-        assert!(converted
-            .context
-            .as_deref()
-            .is_some_and(|ctx| ctx.contains("tool=read_file")));
+        assert!(
+            converted
+                .context
+                .as_deref()
+                .is_some_and(|ctx| ctx.contains("tool=read_file"))
+        );
     }
 
     #[test]
@@ -547,9 +555,11 @@ mod tests {
         let converted = VtCodeError::from(err);
         assert_eq!(converted.category, ErrorCategory::Timeout);
         assert_eq!(converted.code, ErrorCode::Timeout);
-        assert!(converted
-            .context
-            .as_deref()
-            .is_some_and(|ctx| ctx.contains("original_error=timed out waiting for process")));
+        assert!(
+            converted
+                .context
+                .as_deref()
+                .is_some_and(|ctx| ctx.contains("original_error=timed out waiting for process"))
+        );
     }
 }
