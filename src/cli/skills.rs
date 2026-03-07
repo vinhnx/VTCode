@@ -10,7 +10,6 @@ use vtcode_core::skills::loader::EnhancedSkillLoader;
 use vtcode_core::skills::manifest::generate_skill_template;
 use vtcode_core::utils::file_utils::{ensure_dir_exists_sync, write_file_with_context_sync};
 
-pub use super::skills_index::handle_skills_regenerate_index;
 use crate::cli::SkillsCommandOptions;
 
 /// Generate a comprehensive validation report

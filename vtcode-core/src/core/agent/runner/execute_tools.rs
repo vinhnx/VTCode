@@ -2,6 +2,7 @@ use super::AgentRunner;
 use crate::core::agent::events::ExecEventRecorder;
 use crate::core::agent::session::AgentSessionState;
 use crate::llm::provider::ToolCall;
+use crate::tools::tool_intent;
 use anyhow::Result;
 
 impl AgentRunner {
@@ -16,9 +17,10 @@ impl AgentRunner {
         let can_parallelize = tool_calls.len() > 1
             && tool_calls.iter().all(|call| {
                 call.function.as_ref().is_some_and(|func| {
-                    crate::tools::parallel_tool_batch::ParallelToolBatch::is_parallel_safe(
-                        &func.name,
-                    )
+                    call.parsed_arguments()
+                        .ok()
+                        .as_ref()
+                        .is_some_and(|args| tool_intent::is_parallel_safe_call(&func.name, args))
                 })
             });
 

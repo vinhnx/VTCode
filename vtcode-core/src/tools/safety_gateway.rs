@@ -28,8 +28,41 @@ use crate::tools::registry::{
     RiskLevel, ToolRiskContext, ToolRiskScorer, ToolSource, WorkspaceTrust,
 };
 use crate::tools::tool_intent::classify_tool_intent;
-use crate::tools::unified_executor::ToolExecutionContext;
 use vtcode_config::core::DotfileProtectionConfig;
+
+/// Trust level used by the safety gateway for approval bypass decisions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SafetyTrustLevel {
+    Untrusted,
+    #[default]
+    Standard,
+    Elevated,
+    Full,
+}
+
+impl SafetyTrustLevel {
+    #[inline]
+    pub const fn can_bypass_approval(self) -> bool {
+        matches!(self, Self::Elevated | Self::Full)
+    }
+}
+
+/// Minimal execution context required for safety decisions.
+#[derive(Debug, Clone)]
+pub struct SafetyContext {
+    pub session_id: String,
+    pub trust_level: SafetyTrustLevel,
+}
+
+impl SafetyContext {
+    #[must_use]
+    pub fn new(session_id: impl Into<String>) -> Self {
+        Self {
+            session_id: session_id.into(),
+            trust_level: SafetyTrustLevel::default(),
+        }
+    }
+}
 
 /// Safety decision for a tool invocation
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -330,7 +363,7 @@ impl SafetyGateway {
     /// Returns a SafetyDecision indicating whether execution can proceed.
     pub async fn check_safety(
         &self,
-        ctx: &ToolExecutionContext,
+        ctx: &SafetyContext,
         tool_name: &str,
         args: &Value,
     ) -> SafetyDecision {
@@ -340,7 +373,7 @@ impl SafetyGateway {
     /// Check safety with explicit invocation ID for correlation
     pub async fn check_safety_with_id(
         &self,
-        ctx: &ToolExecutionContext,
+        ctx: &SafetyContext,
         tool_name: &str,
         args: &Value,
         invocation_id: Option<ToolInvocationId>,
@@ -374,7 +407,7 @@ impl SafetyGateway {
     /// execution under a single lock acquisition.
     pub async fn check_and_record(
         &self,
-        ctx: &ToolExecutionContext,
+        ctx: &SafetyContext,
         tool_name: &str,
         args: &Value,
     ) -> SafetyCheckResult {
@@ -385,7 +418,7 @@ impl SafetyGateway {
     /// Check safety with correlation ID and atomically reserve a rate-limit slot.
     pub async fn check_and_record_with_id(
         &self,
-        ctx: &ToolExecutionContext,
+        ctx: &SafetyContext,
         tool_name: &str,
         args: &Value,
         invocation_id: Option<ToolInvocationId>,
@@ -439,7 +472,7 @@ impl SafetyGateway {
 
     async fn evaluate_non_rate_decision(
         &self,
-        ctx: &ToolExecutionContext,
+        ctx: &SafetyContext,
         tool_name: &str,
         args: &Value,
         inv_id: &str,
@@ -868,10 +901,9 @@ pub struct SafetyStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tools::unified_executor::TrustLevel;
 
-    fn make_ctx() -> ToolExecutionContext {
-        ToolExecutionContext::new("test-session")
+    fn make_ctx() -> SafetyContext {
+        SafetyContext::new("test-session")
     }
 
     #[tokio::test]
@@ -941,7 +973,7 @@ mod tests {
     async fn test_trust_level_bypass() {
         let gateway = SafetyGateway::new();
         let mut ctx = make_ctx();
-        ctx.trust_level = TrustLevel::Full;
+        ctx.trust_level = SafetyTrustLevel::Full;
 
         let decision = gateway
             .check_safety(

@@ -543,9 +543,6 @@ pub enum Commands {
         command: ModelCommands,
     },
 
-    /// Security and safety management
-    Security,
-
     /// Generate or display man pages
     Man {
         /// Command name to generate man page for (optional)
@@ -553,12 +550,6 @@ pub enum Commands {
         /// Output file path to save man page
         #[arg(short, long)]
         output: Option<PathBuf>,
-    },
-
-    /// Display token budget information
-    Tokens {
-        #[command(subcommand)]
-        command: TokenCommands,
     },
 
     /// Manage Agent Skills
@@ -608,19 +599,6 @@ pub enum Commands {
         #[arg(long, default_value = "127.0.0.1")]
         host: String,
     },
-}
-
-/// Token-related subcommands
-#[derive(Subcommand, Debug, Clone)]
-pub enum TokenCommands {
-    /// Show current token budget status and usage
-    Status,
-
-    /// Show recent token usage history
-    History,
-
-    /// Show summary of token usage patterns
-    Summary,
 }
 
 /// Supported Agent Client Protocol clients

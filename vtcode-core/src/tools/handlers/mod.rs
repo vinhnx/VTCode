@@ -66,11 +66,6 @@ pub mod task_tracking;
 
 // Re-export main types for convenience
 
-// Adapter layer
-pub use adapter::{
-    DefaultToolSession, HandlerToToolAdapter, ToolToHandlerAdapter, create_cwd_session,
-};
-
 // Apply patch handler
 pub use apply_patch_handler::{
     ApplyPatchHandler, ApplyPatchRequest as ApplyPatchHandlerRequest, ApplyPatchRuntime,
@@ -95,18 +90,6 @@ pub use intercept_apply_patch::{
 // List directory handler
 pub use list_dir_handler::{DirEntry, ListDirArgs, ListDirHandler, create_list_dir_tool};
 
-// Legacy Orchestrator (for backwards compatibility)
-pub use orchestrator::{
-    Approvable as LegacyApprovable, CommandSpec as LegacyCommandSpec, ExecEnv as LegacyExecEnv,
-    ExecExpiration, ExecToolCallOutput as LegacyExecToolCallOutput, OutputText,
-    SandboxAttempt as LegacySandboxAttempt, SandboxConfig, SandboxManager as LegacySandboxManager,
-    SandboxMode as LegacySandboxMode, SandboxPolicy as LegacySandboxPolicy,
-    SandboxTransformError as LegacySandboxTransformError, Sandboxable as LegacySandboxable,
-    SandboxablePreference as LegacySandboxablePreference, StdoutStream, ToolCtx as LegacyToolCtx,
-    ToolError as LegacyToolError, ToolOrchestrator as LegacyToolOrchestrator,
-    ToolRuntime as LegacyToolRuntime,
-};
-
 // New Sandboxing module (Codex-compatible)
 pub use sandboxing::{
     Approvable, ApprovalCtx, ApprovalStore, AskForApproval, BoxFuture, CommandSpec,
@@ -123,12 +106,6 @@ pub use tool_orchestrator::ToolOrchestrator;
 pub use turn_diff_tracker::{
     ChangeAttribution, FileChange, FileChangeKind, SharedTurnDiffTracker, TurnDiffTracker,
     new_shared_tracker,
-};
-
-// Router
-pub use router::{
-    ConfiguredToolSpec as RouterConfiguredToolSpec, ToolCall, ToolRegistry, ToolRegistryBuilder,
-    ToolRouter, ToolRouterProvider,
 };
 
 // Shell handler

@@ -1,7 +1,5 @@
-use crate::cli::handle_chat_command;
 use anyhow::{Context, Result};
 use std::collections::BTreeMap;
-use std::fs;
 use std::path::Path;
 use vtcode_core::config::core::PromptCachingConfig;
 use vtcode_core::config::loader::VTCodeConfig;
@@ -12,9 +10,9 @@ use vtcode_core::config::types::{
 use vtcode_core::core::agent::snapshots::{
     DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
 };
-use vtcode_core::utils::file_utils::ensure_dir_exists;
 use vtcode_core::ui::theme::DEFAULT_THEME_ID;
 use vtcode_core::utils::colors::style;
+use vtcode_core::utils::file_utils::ensure_dir_exists;
 
 /// Handle the init command
 pub async fn handle_init_command(workspace: &Path, force: bool, run: bool) -> Result<()> {
@@ -54,7 +52,7 @@ pub async fn handle_init_command(workspace: &Path, force: bool, run: bool) -> Re
             max_conversation_turns: 50,
             model_behavior: None,
         };
-        handle_chat_command(&config, false, false, false, None)
+        crate::agent::agents::run_single_agent_loop(&config, false, false, false, None)
             .await
             .with_context(|| "failed to start chat session")?;
     }

@@ -8,8 +8,8 @@ use hashbrown::HashSet;
 use serde_json::{Map, Value};
 use thiserror::Error;
 use vtcode_core::tools::{
-    RiskLevel, SafetyDecision, SafetyError as GatewaySafetyError, SafetyGateway,
-    SafetyGatewayConfig, ToolInvocationId, UnifiedExecutionContext, WorkspaceTrust,
+    RiskLevel, SafetyContext, SafetyDecision, SafetyError as GatewaySafetyError, SafetyGateway,
+    SafetyGatewayConfig, ToolInvocationId, WorkspaceTrust,
 };
 
 /// Safety violation errors
@@ -42,7 +42,7 @@ pub struct ToolCallSafetyValidator {
     /// Shared safety gateway for canonical checks
     safety_gateway: SafetyGateway,
     /// Validator-scoped execution context
-    gateway_ctx: UnifiedExecutionContext,
+    gateway_ctx: SafetyContext,
 }
 
 impl ToolCallSafetyValidator {
@@ -86,7 +86,7 @@ impl ToolCallSafetyValidator {
             rate_limit_per_second,
             rate_limit_per_minute,
             safety_gateway: SafetyGateway::with_config(gateway_config),
-            gateway_ctx: UnifiedExecutionContext::new("runloop-safety-validator"),
+            gateway_ctx: SafetyContext::new("runloop-safety-validator"),
         }
     }
 

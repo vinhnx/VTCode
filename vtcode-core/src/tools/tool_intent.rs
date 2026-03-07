@@ -11,6 +11,30 @@ pub struct ToolIntent {
     pub retry_safe: bool,
 }
 
+pub fn is_parallel_safe_call(tool_name: &str, args: &Value) -> bool {
+    let canonical = canonical_tool_name(tool_name);
+    let tool = canonical.as_ref();
+    let intent = classify_tool_intent(tool, args);
+    if intent.mutating {
+        return false;
+    }
+
+    !matches!(
+        tool,
+        tools::ENTER_PLAN_MODE
+            | tools::EXIT_PLAN_MODE
+            | tools::REQUEST_USER_INPUT
+            | tools::RUN_PTY_CMD
+            | tools::UNIFIED_EXEC
+            | tools::SEND_PTY_INPUT
+            | tools::READ_PTY_SESSION
+            | tools::LIST_PTY_SESSIONS
+            | tools::CLOSE_PTY_SESSION
+            | tools::CREATE_PTY_SESSION
+            | "shell"
+    )
+}
+
 pub fn classify_tool_intent(tool_name: &str, args: &Value) -> ToolIntent {
     let canonical = canonical_tool_name(tool_name);
     let tool = canonical.as_ref();
@@ -311,7 +335,10 @@ pub fn normalize_unified_search_args(args: &Value) -> Value {
 
 #[cfg(test)]
 mod tests {
-    use super::{classify_tool_intent, normalize_unified_search_args, unified_file_action};
+    use super::{
+        classify_tool_intent, is_parallel_safe_call, normalize_unified_search_args,
+        unified_file_action,
+    };
     use crate::config::constants::tools;
     use serde_json::json;
 
@@ -380,6 +407,23 @@ mod tests {
         assert!(intent.mutating);
         assert!(intent.destructive);
         assert!(!intent.retry_safe);
+    }
+
+    #[test]
+    fn parallel_safe_calls_reject_control_and_exec_paths() {
+        assert!(is_parallel_safe_call(
+            tools::READ_FILE,
+            &json!({"path": "README.md"})
+        ));
+        assert!(!is_parallel_safe_call(tools::LIST_PTY_SESSIONS, &json!({})));
+        assert!(!is_parallel_safe_call(
+            tools::REQUEST_USER_INPUT,
+            &json!({"questions": []})
+        ));
+        assert!(!is_parallel_safe_call(
+            tools::UNIFIED_EXEC,
+            &json!({"action": "inspect", "session_id": "run-1"})
+        ));
     }
 
     #[test]
