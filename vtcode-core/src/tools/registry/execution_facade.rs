@@ -165,6 +165,44 @@ impl Drop for ToolReentrancyGuard {
 }
 
 impl ToolRegistry {
+    async fn public_tool_catalog_for_error(
+        &self,
+        requested_name: &str,
+    ) -> (Vec<String>, Vec<String>) {
+        let mut tool_names = self.available_tools().await;
+        tool_names.sort_unstable();
+        tool_names.dedup();
+
+        let requested_candidates =
+            super::catalog_facade::public_tool_name_candidates(requested_name);
+        let mut similar_tools = Vec::new();
+
+        if let Ok(resolved) = self.resolve_public_tool_name_sync(requested_name)
+            && tool_names.iter().any(|tool| tool == &resolved)
+        {
+            similar_tools.push(resolved);
+        }
+
+        for tool in &tool_names {
+            if similar_tools.len() >= 3 {
+                break;
+            }
+
+            if similar_tools.iter().any(|candidate| candidate == tool) {
+                continue;
+            }
+
+            if requested_candidates
+                .iter()
+                .any(|candidate| fuzzy_match(candidate, tool))
+            {
+                similar_tools.push(tool.clone());
+            }
+        }
+
+        (tool_names, similar_tools)
+    }
+
     pub fn preflight_validate_call(
         &self,
         name: &str,
@@ -834,16 +872,7 @@ impl ToolRegistry {
                 return Ok(error.to_json_value());
             }
 
-            let available_tools = self.inventory.available_tools();
-            let mut all_tool_names = available_tools.to_vec();
-            all_tool_names.extend(self.inventory.registered_aliases());
-            all_tool_names.sort_unstable();
-            let similar_tools: Vec<String> = all_tool_names
-                .iter()
-                .filter(|tool| fuzzy_match(name, tool))
-                .take(3)
-                .cloned()
-                .collect();
+            let (all_tool_names, similar_tools) = self.public_tool_catalog_for_error(name).await;
             let suggestion = if !similar_tools.is_empty() {
                 format!(" Did you mean: {}?", similar_tools.join(", "))
             } else {
@@ -1033,10 +1062,8 @@ impl ToolRegistry {
             } else {
                 // This should theoretically never happen since we checked tool_exists above
                 // Generate helpful error message with available tools
-                let available_tools = self.inventory.available_tools();
-                let mut tool_names = available_tools.to_vec();
-                tool_names.extend(self.inventory.registered_aliases());
-                tool_names.sort_unstable();
+                let (tool_names, similar_tools) =
+                    self.public_tool_catalog_for_error(&requested_name).await;
                 let available_tool_list = tool_names.join(", ");
 
                 let error_msg = if tool_name != requested_name {
@@ -1048,14 +1075,6 @@ impl ToolRegistry {
                         requested_name, tool_name, available_tool_list
                     )
                 } else {
-                    // Find similar tools using fuzzy matching
-                    let similar_tools: Vec<String> = tool_names
-                        .iter()
-                        .filter(|tool| fuzzy_match(&requested_name, tool))
-                        .take(3) // Limit to 3 suggestions
-                        .cloned()
-                        .collect();
-
                     let suggestion = if !similar_tools.is_empty() {
                         format!(" Did you mean: {}?", similar_tools.join(", "))
                     } else {

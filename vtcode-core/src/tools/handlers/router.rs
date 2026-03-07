@@ -1,11 +1,13 @@
-//! Tool routing and dispatch system (from Codex).
+//! Compatibility router for Codex-style handler dispatch.
 //!
 //! The ToolRouter provides the critical dispatch layer that:
 //! - Builds tool calls from LLM response items
 //! - Routes tool calls to appropriate handlers
 //! - Manages tool registry with specs
 //!
-//! This module bridges LLM outputs to tool execution.
+//! This module bridges handler-oriented LLM outputs to tool execution.
+//! The canonical public tool resolver is the registry assembly in
+//! `crate::tools::registry`; keep name normalization here compatibility-scoped.
 
 use hashbrown::HashMap;
 use std::sync::Arc;

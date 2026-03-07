@@ -9,6 +9,7 @@
 //! This provides consistent safety decisions across all tool execution paths.
 
 use hashbrown::HashSet;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -22,6 +23,7 @@ use crate::config::constants::tools;
 use crate::dotfile_protection::{
     AccessContext, AccessType, DotfileGuardian, ProtectionDecision, get_global_guardian,
 };
+use crate::tools::apply_patch::{Patch, PatchOperation, decode_apply_patch_input};
 use crate::tools::command_policy::CommandPolicyEvaluator;
 use crate::tools::invocation::ToolInvocationId;
 use crate::tools::registry::{
@@ -200,10 +202,6 @@ struct RateLimiterState {
 pub struct SafetyGateway {
     /// Configuration
     config: SafetyGatewayConfig,
-    /// Set of destructive tools that require confirmation
-    destructive_tools: HashSet<&'static str>,
-    /// Set of mutating tools (blocked in plan mode)
-    mutating_tools: HashSet<&'static str>,
     /// Command policy evaluator (optional, for shell commands)
     command_policy: Option<CommandPolicyEvaluator>,
     /// Rate limiter state
@@ -214,6 +212,208 @@ pub struct SafetyGateway {
     dotfile_guardian: Option<Arc<DotfileGuardian>>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct FileAccessTarget {
+    path: PathBuf,
+    access_type: AccessType,
+}
+
+fn primary_path_arg(args: &Value) -> Option<&str> {
+    args.get("path")
+        .and_then(|value| value.as_str())
+        .or_else(|| args.get("file_path").and_then(|value| value.as_str()))
+        .or_else(|| args.get("filepath").and_then(|value| value.as_str()))
+        .or_else(|| args.get("target_path").and_then(|value| value.as_str()))
+}
+
+fn destination_path_arg(args: &Value) -> Option<&str> {
+    args.get("destination").and_then(|value| value.as_str())
+}
+
+fn push_file_access_target(
+    targets: &mut Vec<FileAccessTarget>,
+    path: &str,
+    access_type: AccessType,
+) {
+    if path.trim().is_empty() {
+        return;
+    }
+
+    let path = PathBuf::from(path);
+    if targets
+        .iter()
+        .any(|existing| existing.path == path && existing.access_type == access_type)
+    {
+        return;
+    }
+
+    targets.push(FileAccessTarget { path, access_type });
+}
+
+fn command_text_for_tool(tool_name: &str, args: &Value) -> Option<String> {
+    match tool_name {
+        "shell" | tools::RUN_PTY_CMD => crate::tools::command_args::command_text(args)
+            .ok()
+            .flatten(),
+        tools::SEND_PTY_INPUT => {
+            crate::tools::command_args::interactive_input_text(args).map(str::to_owned)
+        }
+        tools::UNIFIED_EXEC => match crate::tools::tool_intent::unified_exec_action(args) {
+            Some(action) if action.eq_ignore_ascii_case("run") => {
+                crate::tools::command_args::command_text(args)
+                    .ok()
+                    .flatten()
+            }
+            Some(action)
+                if action.eq_ignore_ascii_case("write")
+                    || action.eq_ignore_ascii_case("continue") =>
+            {
+                crate::tools::command_args::interactive_input_text(args).map(str::to_owned)
+            }
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+fn patch_file_access_targets(args: &Value) -> Vec<FileAccessTarget> {
+    let Ok(Some(patch_input)) = decode_apply_patch_input(args) else {
+        return Vec::new();
+    };
+    let Ok(patch) = Patch::parse(&patch_input.text) else {
+        return Vec::new();
+    };
+
+    let mut targets = Vec::new();
+    for operation in patch.operations() {
+        match operation {
+            PatchOperation::AddFile { path, .. } => {
+                push_file_access_target(&mut targets, path, AccessType::Write);
+            }
+            PatchOperation::DeleteFile { path } => {
+                push_file_access_target(&mut targets, path, AccessType::Delete);
+            }
+            PatchOperation::UpdateFile { path, new_path, .. } => {
+                push_file_access_target(&mut targets, path, AccessType::Modify);
+                if let Some(destination) =
+                    new_path.as_deref().filter(|candidate| *candidate != path)
+                {
+                    push_file_access_target(&mut targets, destination, AccessType::Write);
+                }
+            }
+        }
+    }
+
+    targets
+}
+
+fn file_access_targets(tool_name: &str, args: &Value) -> Vec<FileAccessTarget> {
+    let mut targets = Vec::new();
+
+    match tool_name {
+        tools::WRITE_FILE | tools::CREATE_FILE => {
+            if let Some(path) = primary_path_arg(args) {
+                push_file_access_target(&mut targets, path, AccessType::Write);
+            }
+        }
+        tools::EDIT_FILE | "search_replace" => {
+            if let Some(path) = primary_path_arg(args) {
+                push_file_access_target(&mut targets, path, AccessType::Modify);
+            }
+        }
+        tools::DELETE_FILE => {
+            if let Some(path) = primary_path_arg(args) {
+                push_file_access_target(&mut targets, path, AccessType::Delete);
+            }
+        }
+        tools::MOVE_FILE => {
+            if let Some(path) = primary_path_arg(args) {
+                push_file_access_target(&mut targets, path, AccessType::Modify);
+            }
+            if let Some(path) = destination_path_arg(args) {
+                push_file_access_target(&mut targets, path, AccessType::Write);
+            }
+        }
+        tools::COPY_FILE => {
+            if let Some(path) = destination_path_arg(args) {
+                push_file_access_target(&mut targets, path, AccessType::Write);
+            }
+        }
+        tools::APPLY_PATCH => {
+            targets.extend(patch_file_access_targets(args));
+        }
+        tools::UNIFIED_FILE => match crate::tools::tool_intent::unified_file_action(args) {
+            Some(action) if action.eq_ignore_ascii_case("write") => {
+                if let Some(path) = primary_path_arg(args) {
+                    push_file_access_target(&mut targets, path, AccessType::Write);
+                }
+            }
+            Some(action) if action.eq_ignore_ascii_case("edit") => {
+                if let Some(path) = primary_path_arg(args) {
+                    push_file_access_target(&mut targets, path, AccessType::Modify);
+                }
+            }
+            Some(action) if action.eq_ignore_ascii_case("delete") => {
+                if let Some(path) = primary_path_arg(args) {
+                    push_file_access_target(&mut targets, path, AccessType::Delete);
+                }
+            }
+            Some(action) if action.eq_ignore_ascii_case("move") => {
+                if let Some(path) = primary_path_arg(args) {
+                    push_file_access_target(&mut targets, path, AccessType::Modify);
+                }
+                if let Some(path) = destination_path_arg(args) {
+                    push_file_access_target(&mut targets, path, AccessType::Write);
+                }
+            }
+            Some(action) if action.eq_ignore_ascii_case("copy") => {
+                if let Some(path) = destination_path_arg(args) {
+                    push_file_access_target(&mut targets, path, AccessType::Write);
+                }
+            }
+            Some(action) if action.eq_ignore_ascii_case("patch") => {
+                targets.extend(patch_file_access_targets(args));
+            }
+            _ => {}
+        },
+        _ => {}
+    }
+
+    targets
+}
+
+fn proposed_changes_preview(args: &Value) -> String {
+    const PREVIEW_LIMIT: usize = 500;
+
+    let preview_text = |label: &str, text: &str| {
+        let preview_len = text.len().min(PREVIEW_LIMIT);
+        format!(
+            "{label} ({} bytes):\n{}{}",
+            text.len(),
+            &text[..preview_len],
+            if text.len() > preview_len { "..." } else { "" }
+        )
+    };
+
+    if let Some(content) = args.get("content").and_then(|value| value.as_str()) {
+        return preview_text("Content", content);
+    }
+
+    if let Some(old_str) = args.get("old_str").and_then(|value| value.as_str()) {
+        let new_str = args
+            .get("new_str")
+            .and_then(|value| value.as_str())
+            .unwrap_or("");
+        return format!("Replace:\n  '{}'\nWith:\n  '{}'", old_str, new_str);
+    }
+
+    if let Ok(Some(patch_input)) = decode_apply_patch_input(args) {
+        return preview_text("Patch", &patch_input.text);
+    }
+
+    "No details provided".to_string()
+}
+
 impl SafetyGateway {
     /// Create a new safety gateway with default configuration
     pub fn new() -> Self {
@@ -222,29 +422,8 @@ impl SafetyGateway {
 
     /// Create a new safety gateway with custom configuration
     pub fn with_config(config: SafetyGatewayConfig) -> Self {
-        let mut destructive = HashSet::new();
-        destructive.insert("delete_file");
-        destructive.insert("edit_file");
-        destructive.insert("write_file");
-        destructive.insert("shell");
-        destructive.insert("apply_patch");
-        destructive.insert("run_pty_cmd");
-
-        let mut mutating = HashSet::new();
-        mutating.insert("delete_file");
-        mutating.insert("edit_file");
-        mutating.insert("write_file");
-        mutating.insert("create_file");
-        mutating.insert("shell");
-        mutating.insert("apply_patch");
-        mutating.insert("run_pty_cmd");
-        mutating.insert("send_pty_input");
-        mutating.insert("create_pty_session");
-
         Self {
             config,
-            destructive_tools: destructive,
-            mutating_tools: mutating,
             command_policy: None,
             rate_state: Arc::new(Mutex::new(RateLimiterState::default())),
             preapproved: Arc::new(Mutex::new(HashSet::new())),
@@ -342,20 +521,20 @@ impl SafetyGateway {
 
     /// Check if a tool is destructive
     pub fn is_destructive(&self, tool_name: &str) -> bool {
-        self.destructive_tools.contains(tool_name)
+        classify_tool_intent(tool_name, &Value::Object(Default::default())).destructive
     }
 
     /// Check if a tool is mutating
     pub fn is_mutating(&self, tool_name: &str) -> bool {
-        self.mutating_tools.contains(tool_name)
+        classify_tool_intent(tool_name, &Value::Object(Default::default())).mutating
     }
 
     fn is_destructive_call(&self, tool_name: &str, args: &Value) -> bool {
-        self.is_destructive(tool_name) || classify_tool_intent(tool_name, args).destructive
+        classify_tool_intent(tool_name, args).destructive
     }
 
     fn is_mutating_call(&self, tool_name: &str, args: &Value) -> bool {
-        self.is_mutating(tool_name) || classify_tool_intent(tool_name, args).mutating
+        classify_tool_intent(tool_name, args).mutating
     }
 
     /// Main entry point: check safety for a tool invocation
@@ -503,9 +682,8 @@ impl SafetyGateway {
         }
 
         if let Some(ref policy) = self.command_policy
-            && (tool_name == "shell" || tool_name == "run_pty_cmd")
-            && let Some(command) = args.get("command").and_then(|v| v.as_str())
-            && !policy.allows_text(command)
+            && let Some(command) = command_text_for_tool(tool_name, args)
+            && !policy.allows_text(&command)
         {
             let reason = format!("Command '{}' blocked by policy", command);
             tracing::info!(
@@ -668,122 +846,84 @@ impl SafetyGateway {
             None => get_global_guardian()?,
         };
 
-        // Only check file-modifying operations (both unified and legacy tool names)
-        if !matches!(
-            tool_name,
-            "write_file"
-                | "edit_file"
-                | "create_file"
-                | "delete_file"
-                | "apply_patch"
-                | "unified_file"
-                | "search_replace"
-        ) {
+        let file_targets = file_access_targets(tool_name, args);
+        if file_targets.is_empty() {
             return None;
         }
 
-        // For unified_file, only check mutating actions.
-        if tool_name == "unified_file" && !self.is_mutating_call(tool_name, args) {
-            return None;
-        }
+        let proposed_changes = proposed_changes_preview(args);
 
-        // Extract file path from arguments
-        let path_str = args.get("path").and_then(|v| v.as_str())?;
-        let path = std::path::Path::new(path_str);
+        for target in file_targets {
+            if !guardian.is_protected(Path::new(&target.path)) {
+                continue;
+            }
 
-        // Check if this is a protected dotfile
-        if !guardian.is_protected(path) {
-            return None;
-        }
+            let context =
+                AccessContext::new(&target.path, target.access_type, tool_name, session_id)
+                    .with_proposed_changes(&proposed_changes);
 
-        // Determine access type
-        let access_type = match tool_name {
-            "write_file" | "create_file" => AccessType::Write,
-            "edit_file" | "apply_patch" => AccessType::Modify,
-            "delete_file" => AccessType::Delete,
-            _ => AccessType::Modify,
-        };
-
-        // Build proposed changes description
-        let proposed_changes = if let Some(content) = args.get("content").and_then(|v| v.as_str()) {
-            let preview_len = content.len().min(500);
-            format!(
-                "Content ({} bytes):\n{}{}",
-                content.len(),
-                &content[..preview_len],
-                if content.len() > preview_len {
-                    "..."
-                } else {
-                    ""
+            match guardian.request_access(&context).await {
+                Ok(ProtectionDecision::Allowed) => continue,
+                Ok(ProtectionDecision::RequiresConfirmation(req)) => {
+                    return Some(SafetyDecision::NeedsApproval(format!(
+                        "DOTFILE PROTECTION\n\n\
+                        File: {}\n\
+                        Operation: {}\n\
+                        Reason: {}\n\n\
+                        Proposed changes:\n{}\n\n\
+                        {}",
+                        req.file_path,
+                        req.access_type,
+                        req.protection_reason,
+                        req.proposed_changes,
+                        req.warning
+                    )));
                 }
-            )
-        } else if let Some(old_str) = args.get("old_str").and_then(|v| v.as_str()) {
-            let new_str = args.get("new_str").and_then(|v| v.as_str()).unwrap_or("");
-            format!("Replace:\n  '{}'\nWith:\n  '{}'", old_str, new_str)
-        } else {
-            "No details provided".to_string()
-        };
-
-        // Create access context
-        let context = AccessContext::new(path, access_type, tool_name, session_id)
-            .with_proposed_changes(&proposed_changes);
-
-        // Request access from the guardian
-        match guardian.request_access(&context).await {
-            Ok(ProtectionDecision::Allowed) => None,
-            Ok(ProtectionDecision::RequiresConfirmation(req)) => {
-                Some(SafetyDecision::NeedsApproval(format!(
-                    "DOTFILE PROTECTION\n\n\
-                    File: {}\n\
-                    Operation: {}\n\
-                    Reason: {}\n\n\
-                    Proposed changes:\n{}\n\n\
-                    {}",
-                    req.file_path,
-                    req.access_type,
-                    req.protection_reason,
-                    req.proposed_changes,
-                    req.warning
-                )))
-            }
-            Ok(ProtectionDecision::RequiresSecondaryAuth(req)) => {
-                Some(SafetyDecision::NeedsApproval(format!(
-                    "DOTFILE SECONDARY AUTHENTICATION REQUIRED\n\n\
-                    File: {} (whitelisted)\n\
-                    Operation: {}\n\
-                    Reason: {}\n\n\
-                    This file is on the whitelist but requires secondary authentication.\n\n\
-                    Proposed changes:\n{}\n\n\
-                    {}",
-                    req.file_path,
-                    req.access_type,
-                    req.protection_reason,
-                    req.proposed_changes,
-                    req.warning
-                )))
-            }
-            Ok(ProtectionDecision::Blocked(violation)) => Some(SafetyDecision::Deny(format!(
-                "DOTFILE MODIFICATION BLOCKED\n\n\
-                    File: {}\n\
-                    Reason: {}\n\n\
-                    Suggestion: {}",
-                violation.file_path, violation.reason, violation.suggestion
-            ))),
-            Ok(ProtectionDecision::Denied(violation)) => Some(SafetyDecision::Deny(format!(
-                "DOTFILE ACCESS DENIED\n\n\
-                    File: {}\n\
-                    Reason: {}\n\n\
-                    Suggestion: {}",
-                violation.file_path, violation.reason, violation.suggestion
-            ))),
-            Err(e) => {
-                tracing::error!("Dotfile protection check failed: {}", e);
-                Some(SafetyDecision::Deny(format!(
-                    "Dotfile protection check failed: {}",
-                    e
-                )))
+                Ok(ProtectionDecision::RequiresSecondaryAuth(req)) => {
+                    return Some(SafetyDecision::NeedsApproval(format!(
+                        "DOTFILE SECONDARY AUTHENTICATION REQUIRED\n\n\
+                        File: {} (whitelisted)\n\
+                        Operation: {}\n\
+                        Reason: {}\n\n\
+                        This file is on the whitelist but requires secondary authentication.\n\n\
+                        Proposed changes:\n{}\n\n\
+                        {}",
+                        req.file_path,
+                        req.access_type,
+                        req.protection_reason,
+                        req.proposed_changes,
+                        req.warning
+                    )));
+                }
+                Ok(ProtectionDecision::Blocked(violation)) => {
+                    return Some(SafetyDecision::Deny(format!(
+                        "DOTFILE MODIFICATION BLOCKED\n\n\
+                            File: {}\n\
+                            Reason: {}\n\n\
+                            Suggestion: {}",
+                        violation.file_path, violation.reason, violation.suggestion
+                    )));
+                }
+                Ok(ProtectionDecision::Denied(violation)) => {
+                    return Some(SafetyDecision::Deny(format!(
+                        "DOTFILE ACCESS DENIED\n\n\
+                            File: {}\n\
+                            Reason: {}\n\n\
+                            Suggestion: {}",
+                        violation.file_path, violation.reason, violation.suggestion
+                    )));
+                }
+                Err(e) => {
+                    tracing::error!("Dotfile protection check failed: {}", e);
+                    return Some(SafetyDecision::Deny(format!(
+                        "Dotfile protection check failed: {}",
+                        e
+                    )));
+                }
             }
         }
+
+        None
     }
 
     /// Get the dotfile guardian (if configured)
@@ -831,7 +971,7 @@ impl SafetyGateway {
         }
 
         // Extract command args for shell tools
-        if let Some(command) = args.get("command").and_then(|v| v.as_str()) {
+        if let Some(command) = command_text_for_tool(tool_name, args) {
             ctx = ctx.with_args(command.split_whitespace().map(String::from).collect());
         }
 
@@ -854,12 +994,16 @@ impl SafetyGateway {
             parts.push("This tool may modify or delete files.".to_string());
         }
 
-        if let Some(command) = args.get("command").and_then(|v| v.as_str()) {
+        if let Some(command) = command_text_for_tool(tool_name, args) {
             parts.push(format!("Command: {}", command));
         }
 
-        if let Some(path) = args.get("path").and_then(|v| v.as_str()) {
-            parts.push(format!("Path: {}", path));
+        let file_targets = file_access_targets(tool_name, args);
+        if let Some(target) = file_targets.first() {
+            parts.push(format!("Path: {}", target.path.display()));
+            if file_targets.len() > 1 {
+                parts.push(format!("Additional targets: {}", file_targets.len() - 1));
+            }
         }
 
         parts.join("\n")
@@ -901,6 +1045,7 @@ pub struct SafetyStats {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vtcode_config::core::DotfileProtectionConfig;
 
     fn make_ctx() -> SafetyContext {
         SafetyContext::new("test-session")
@@ -1051,6 +1196,139 @@ mod tests {
             .await;
 
         assert!(decision.is_denied());
+    }
+
+    #[tokio::test]
+    async fn test_unified_exec_command_policy_enforcement_with_indexed_args() {
+        let mut commands_config = CommandsConfig::default();
+        commands_config.deny_list.push("rm".to_string());
+
+        let gateway = SafetyGateway::new().with_commands_config(&commands_config);
+        let ctx = make_ctx();
+
+        let decision = gateway
+            .check_safety(
+                &ctx,
+                tools::UNIFIED_EXEC,
+                &serde_json::json!({
+                    "command.0": "rm",
+                    "command.1": "-rf",
+                    "command.2": "/"
+                }),
+            )
+            .await;
+
+        assert!(decision.is_denied());
+    }
+
+    #[tokio::test]
+    async fn test_unified_exec_continue_command_policy_enforcement_with_input() {
+        let mut commands_config = CommandsConfig::default();
+        commands_config.deny_list.push("rm".to_string());
+
+        let gateway = SafetyGateway::new().with_commands_config(&commands_config);
+        let ctx = make_ctx();
+
+        let decision = gateway
+            .check_safety(
+                &ctx,
+                tools::UNIFIED_EXEC,
+                &serde_json::json!({
+                    "action": "continue",
+                    "session_id": "run-123",
+                    "input": "rm -rf /\n"
+                }),
+            )
+            .await;
+
+        assert!(decision.is_denied());
+    }
+
+    #[tokio::test]
+    async fn test_send_pty_input_command_policy_enforcement_with_input() {
+        let mut commands_config = CommandsConfig::default();
+        commands_config.deny_list.push("rm".to_string());
+
+        let gateway = SafetyGateway::new().with_commands_config(&commands_config);
+        let ctx = make_ctx();
+
+        let decision = gateway
+            .check_safety(
+                &ctx,
+                tools::SEND_PTY_INPUT,
+                &serde_json::json!({
+                    "session_id": "run-123",
+                    "input": "rm -rf /\n"
+                }),
+            )
+            .await;
+
+        assert!(decision.is_denied());
+    }
+
+    #[tokio::test]
+    async fn test_apply_patch_dotfile_protection_requires_approval() {
+        let guardian = Arc::new(
+            DotfileGuardian::new(DotfileProtectionConfig {
+                audit_logging_enabled: false,
+                create_backups: false,
+                ..Default::default()
+            })
+            .await
+            .expect("guardian should initialize"),
+        );
+        let gateway = SafetyGateway::new().with_dotfile_guardian(guardian);
+        let ctx = make_ctx();
+
+        let decision = gateway
+            .check_safety(
+                &ctx,
+                tools::APPLY_PATCH,
+                &serde_json::json!({
+                    "input": "*** Begin Patch\n*** Update File: .gitignore\n@@\n-old\n+new\n*** End Patch\n"
+                }),
+            )
+            .await;
+
+        assert!(decision.needs_approval());
+        assert!(
+            decision
+                .reason()
+                .is_some_and(|reason| reason.contains(".gitignore"))
+        );
+    }
+
+    #[tokio::test]
+    async fn test_unified_file_patch_dotfile_protection_requires_approval() {
+        let guardian = Arc::new(
+            DotfileGuardian::new(DotfileProtectionConfig {
+                audit_logging_enabled: false,
+                create_backups: false,
+                ..Default::default()
+            })
+            .await
+            .expect("guardian should initialize"),
+        );
+        let gateway = SafetyGateway::new().with_dotfile_guardian(guardian);
+        let ctx = make_ctx();
+
+        let decision = gateway
+            .check_safety(
+                &ctx,
+                tools::UNIFIED_FILE,
+                &serde_json::json!({
+                    "action": "patch",
+                    "patch": "*** Begin Patch\n*** Update File: .gitignore\n@@\n-old\n+new\n*** End Patch\n"
+                }),
+            )
+            .await;
+
+        assert!(decision.needs_approval());
+        assert!(
+            decision
+                .reason()
+                .is_some_and(|reason| reason.contains(".gitignore"))
+        );
     }
 
     #[tokio::test]

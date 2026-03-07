@@ -127,6 +127,7 @@ pub mod request_user_input;
 pub mod autonomous_executor;
 pub mod cache;
 pub mod command;
+pub mod command_args;
 pub mod command_cache;
 pub mod command_policy;
 pub mod command_resolver;

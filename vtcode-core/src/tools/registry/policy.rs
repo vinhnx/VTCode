@@ -8,21 +8,10 @@ use crate::config::constants::tools;
 use crate::config::mcp::McpAllowListConfig;
 use crate::tool_policy::{ToolExecutionDecision, ToolPolicy, ToolPolicyManager};
 use crate::tools::names::canonical_tool_name;
+use crate::tools::tool_intent::unified_file_action;
 
 use super::ToolPermissionDecision;
 use super::risk_scorer::{RiskLevel, ToolRiskContext, ToolRiskScorer, ToolSource, WorkspaceTrust};
-
-const ALWAYS_PROMPT_IN_SAFE_MODE: &[&str] = &[
-    tools::RUN_PTY_CMD,
-    tools::SEND_PTY_INPUT,
-    tools::CREATE_PTY_SESSION,
-    tools::WRITE_FILE,
-    tools::EDIT_FILE,
-    tools::CREATE_FILE,
-    tools::DELETE_FILE,
-    tools::APPLY_PATCH,
-    tools::UNIFIED_EXEC,
-];
 
 #[derive(Clone, Default)]
 pub(super) struct ToolPolicyGateway {
@@ -63,12 +52,8 @@ impl ToolPolicyGateway {
         self.enforce_safe_mode_prompts = enabled;
     }
 
-    fn requires_safe_mode_prompt(&self, tool_name: &str) -> bool {
-        if !self.enforce_safe_mode_prompts {
-            return false;
-        }
-        let canonical = canonical_tool_name(tool_name);
-        ALWAYS_PROMPT_IN_SAFE_MODE.contains(&canonical.as_ref())
+    fn requires_safe_mode_prompt(&self, safe_mode_prompt: bool) -> bool {
+        self.enforce_safe_mode_prompts && safe_mode_prompt
     }
 
     pub fn has_policy_manager(&self) -> bool {
@@ -91,6 +76,10 @@ impl ToolPolicyGateway {
         let mut args = args.clone();
         let canonical = canonical_tool_name(name);
         let normalized = canonical.as_ref();
+        let unified_file_read = normalized == tools::UNIFIED_FILE
+            && unified_file_action(&args)
+                .map(|action| action.eq_ignore_ascii_case("read"))
+                .unwrap_or(false);
 
         if let Some(constraints) = self
             .tool_policy
@@ -153,7 +142,7 @@ impl ToolPolicyGateway {
                         }
                     }
                 }
-                n if n == tools::READ_FILE => {
+                n if n == tools::READ_FILE || unified_file_read => {
                     if let Some(cap) = constraints.max_bytes_per_read {
                         let requested = obj
                             .get("max_bytes")
@@ -282,13 +271,18 @@ impl ToolPolicyGateway {
         self.full_auto_allowlist.is_some()
     }
 
-    pub async fn evaluate_tool_policy(&mut self, name: &str) -> Result<ToolPermissionDecision> {
+    pub async fn evaluate_tool_policy(
+        &mut self,
+        name: &str,
+        safe_mode_prompt: bool,
+        default_permission: ToolPolicy,
+    ) -> Result<ToolPermissionDecision> {
         let canonical = canonical_tool_name(name);
         let normalized = canonical.as_ref();
 
         // In safe mode (tools_policy), high-risk tools always require a prompt
         // regardless of persisted policy
-        if self.requires_safe_mode_prompt(normalized) {
+        if self.requires_safe_mode_prompt(safe_mode_prompt) {
             tracing::debug!(
                 "Tool '{}' requires prompt in safe mode (tools_policy)",
                 normalized
@@ -343,8 +337,14 @@ impl ToolPolicyGateway {
                 }
             }
         } else {
-            self.preapproved_tools.insert(normalized.to_string());
-            Ok(ToolPermissionDecision::Allow)
+            Ok(match default_permission {
+                ToolPolicy::Allow => {
+                    self.preapproved_tools.insert(normalized.to_string());
+                    ToolPermissionDecision::Allow
+                }
+                ToolPolicy::Deny => ToolPermissionDecision::Deny,
+                ToolPolicy::Prompt => ToolPermissionDecision::Prompt,
+            })
         }
     }
 

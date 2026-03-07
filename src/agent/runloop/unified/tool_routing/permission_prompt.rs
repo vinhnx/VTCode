@@ -22,18 +22,22 @@ fn shell_run_args<'a>(tool_name: &str, tool_args: Option<&'a Value>) -> Option<&
     match tool_name {
         "run_pty_cmd" | "shell" => Some(args),
         "unified_exec" | "exec_pty_cmd" | "exec" => {
-            let action = args
-                .get("action")
-                .and_then(|v| v.as_str())
-                .or_else(|| args.get("command").map(|_| "run"));
-            (action == Some("run")).then_some(args)
+            vtcode_core::tools::tool_intent::unified_exec_action(args)
+                .is_some_and(|action| action.eq_ignore_ascii_case("run"))
+                .then_some(args)
         }
         _ => None,
     }
 }
 
+fn normalized_shell_command_value(args: &Value) -> Option<Value> {
+    vtcode_core::tools::command_args::normalized_command_value(args)
+        .ok()
+        .flatten()
+}
+
 fn extract_shell_command_text_from_run_args(args: &Value) -> Option<String> {
-    let command_value = args.get("command").or_else(|| args.get("raw_command"))?;
+    let command_value = normalized_shell_command_value(args)?;
 
     if let Some(arr) = command_value.as_array() {
         let parts = arr
@@ -51,9 +55,9 @@ fn extract_shell_command_text_from_run_args(args: &Value) -> Option<String> {
 }
 
 fn extract_shell_command_words_from_run_args(args: &Value) -> Option<Vec<String>> {
-    let command_value = args.get("command").or_else(|| args.get("raw_command"))?;
+    let command_value = normalized_shell_command_value(args)?;
     let mut parts = match command_value {
-        Value::String(command) => shell_words::split(command).ok()?,
+        Value::String(command) => shell_words::split(&command).ok()?,
         Value::Array(values) => values
             .iter()
             .map(|value| value.as_str().map(ToOwned::to_owned))
@@ -114,7 +118,7 @@ fn shell_run_uses_nested_shell(command_words: &[String]) -> bool {
 }
 
 fn shell_command_supports_persistent_approval(args: &Value, command_words: &[String]) -> bool {
-    let Some(command_value) = args.get("command").or_else(|| args.get("raw_command")) else {
+    let Some(command_value) = normalized_shell_command_value(args) else {
         return false;
     };
 
@@ -590,6 +594,25 @@ mod tests {
         let args = json!({
             "action": "run",
             "command": "cargo check"
+        });
+        let command = extract_shell_command_text("unified_exec", Some(&args));
+        assert_eq!(command.as_deref(), Some("cargo check"));
+    }
+
+    #[test]
+    fn unified_exec_extracts_cmd_alias_when_action_is_inferred() {
+        let args = json!({
+            "cmd": "cargo check"
+        });
+        let command = extract_shell_command_text("unified_exec", Some(&args));
+        assert_eq!(command.as_deref(), Some("cargo check"));
+    }
+
+    #[test]
+    fn unified_exec_extracts_indexed_command_parts_when_action_is_inferred() {
+        let args = json!({
+            "command.0": "cargo",
+            "command.1": "check"
         });
         let command = extract_shell_command_text("unified_exec", Some(&args));
         assert_eq!(command.as_deref(), Some("cargo check"));

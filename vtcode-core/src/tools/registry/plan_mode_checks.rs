@@ -2,49 +2,32 @@
 
 use serde_json::Value;
 
-use crate::utils::path::normalize_ascii_identifier;
-
 use super::ToolRegistry;
 
 impl ToolRegistry {
-    fn normalize_tool_key(name: &str) -> String {
-        normalize_ascii_identifier(name)
-    }
-
     /// Check if a tool is mutating (modifies files or environment).
     ///
     /// Returns true if the tool is mutating or unknown (conservative default).
     pub fn is_mutating_tool(&self, name: &str) -> bool {
-        use crate::config::constants::tools as tool_names;
-        use crate::tools::names::canonical_tool_name;
+        let resolved_name = self
+            .resolve_public_tool_name_sync(name)
+            .ok()
+            .unwrap_or_else(|| name.to_string());
 
-        let canonical = canonical_tool_name(name);
-        let normalized = canonical.as_ref();
-        let normalized_key = Self::normalize_tool_key(normalized);
+        if let Some(reg) = self.inventory.get_registration(&resolved_name) {
+            if let Some(behavior) = reg.metadata().behavior() {
+                return !matches!(
+                    behavior.mutation_model,
+                    crate::tools::tool_intent::ToolMutationModel::ReadOnly
+                );
+            }
 
-        // Check if it's a known read-only tool
-        let read_only_tools = [
-            tool_names::READ_FILE,
-            tool_names::UNIFIED_SEARCH,
-            tool_names::ENTER_PLAN_MODE,
-            tool_names::EXIT_PLAN_MODE,
-            tool_names::REQUEST_USER_INPUT,
-            tool_names::LIST_SKILLS,
-            tool_names::LOAD_SKILL,
-            tool_names::LOAD_SKILL_RESOURCE,
-            "get_errors",
-            "think",
-        ];
-
-        if read_only_tools
-            .iter()
-            .any(|tool| Self::normalize_tool_key(tool) == normalized_key)
-        {
-            return false;
+            if let super::ToolHandler::TraitObject(tool) = reg.handler() {
+                return tool.is_mutating();
+            }
         }
 
-        // Check trait-based tools
-        if let Some(reg) = self.inventory.get_registration(normalized)
+        if let Some(reg) = self.inventory.get_registration(name)
             && let super::ToolHandler::TraitObject(tool) = reg.handler()
         {
             return tool.is_mutating();

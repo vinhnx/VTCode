@@ -11,6 +11,7 @@ use crate::tools::handlers::{
     EnterPlanModeTool, ExitPlanModeTool, PlanModeState, PlanTaskTrackerTool, TaskTrackerTool,
 };
 use crate::tools::request_user_input::RequestUserInputTool;
+use crate::tools::tool_intent::builtin_tool_behavior;
 
 use super::registration::ToolRegistration;
 use super::{ToolInventory, ToolRegistry};
@@ -281,4 +282,15 @@ pub(super) fn builtin_tool_registrations(
         // - load_skill
         // - load_skill_resource
     ]
+    .into_iter()
+    .map(with_builtin_behavior)
+    .collect()
+}
+
+fn with_builtin_behavior(registration: ToolRegistration) -> ToolRegistration {
+    if let Some(behavior) = builtin_tool_behavior(registration.name()) {
+        registration.with_behavior(behavior)
+    } else {
+        registration
+    }
 }

@@ -133,19 +133,27 @@ fn enforce_unified_file_payload_limit(
     ));
 }
 
-fn schema_validation_args<'a>(
+fn preflight_validation_args<'a>(
     normalized_tool_name: &str,
     args: &'a Value,
-) -> std::borrow::Cow<'a, Value> {
-    if normalized_tool_name != tool_names::UNIFIED_SEARCH {
-        return std::borrow::Cow::Borrowed(args);
+) -> Result<std::borrow::Cow<'a, Value>> {
+    if matches!(
+        normalized_tool_name,
+        tool_names::RUN_PTY_CMD | tool_names::UNIFIED_EXEC | "shell"
+    ) && let Some(normalized) = crate::tools::command_args::normalize_indexed_command_args(args)
+        .map_err(|error| anyhow!(error))?
+    {
+        return Ok(std::borrow::Cow::Owned(normalized));
     }
 
-    let normalized = crate::tools::tool_intent::normalize_unified_search_args(args);
-    if normalized == *args {
-        return std::borrow::Cow::Borrowed(args);
+    if normalized_tool_name == tool_names::UNIFIED_SEARCH {
+        let normalized = crate::tools::tool_intent::normalize_unified_search_args(args);
+        if normalized != *args {
+            return Ok(std::borrow::Cow::Owned(normalized));
+        }
     }
-    std::borrow::Cow::Owned(normalized)
+
+    Ok(std::borrow::Cow::Borrowed(args))
 }
 
 pub(super) fn preflight_validate_call(
@@ -165,15 +173,19 @@ pub(super) fn preflight_validate_resolved_call(
     normalized_tool_name: &str,
     args: &Value,
 ) -> Result<ToolPreflightOutcome> {
+    let validation_args = preflight_validation_args(normalized_tool_name, args)?;
     let required = required_args_for_tool(normalized_tool_name);
     let mut failures = Vec::new();
     for key in required {
-        if is_missing_required_arg(normalized_tool_name, args, key) {
+        if is_missing_required_arg(normalized_tool_name, validation_args.as_ref(), key) {
             failures.push(format!("Missing required argument: {}", key));
         }
     }
 
-    if let Some(path) = args.get("path").and_then(|v| v.as_str())
+    if let Some(path) = validation_args
+        .as_ref()
+        .get("path")
+        .and_then(|v| v.as_str())
         && let Err(err) = paths::validate_path_safety(path)
     {
         failures.push(format!("Path security check failed: {}", err));
@@ -183,14 +195,17 @@ pub(super) fn preflight_validate_resolved_call(
         || normalized_tool_name == tool_names::UNIFIED_EXEC
         || normalized_tool_name == "shell";
     if should_validate_command
-        && let Some(command) = args.get("command").and_then(|v| v.as_str())
+        && let Some(command) = validation_args
+            .as_ref()
+            .get("command")
+            .and_then(|v| v.as_str())
         && let Err(err) = commands::validate_command_safety(command)
     {
         failures.push(format!("Command security check failed: {}", err));
     }
     enforce_unified_file_payload_limit(
         normalized_tool_name,
-        args,
+        validation_args.as_ref(),
         configured_unified_file_max_payload_bytes(),
         &mut failures,
     );
@@ -203,7 +218,6 @@ pub(super) fn preflight_validate_resolved_call(
         ));
     }
 
-    let validation_args = schema_validation_args(normalized_tool_name, args);
     if normalized_tool_name == tool_names::UNIFIED_SEARCH
         && crate::tools::tool_intent::unified_search_action(validation_args.as_ref()).is_none()
     {
@@ -241,9 +255,11 @@ mod tests {
     use super::super::catalog_facade::public_tool_name_candidates;
     use super::{
         configured_unified_file_max_payload_bytes, enforce_unified_file_payload_limit,
-        is_missing_required_arg, parse_unified_file_max_payload_bytes, schema_validation_args,
+        is_missing_required_arg, parse_unified_file_max_payload_bytes, preflight_validation_args,
     };
     use crate::config::constants::tools as tool_names;
+    use crate::tools::command_args::parse_indexed_command_parts;
+    use anyhow::Result;
     use serde_json::json;
 
     #[test]
@@ -366,6 +382,79 @@ mod tests {
     }
 
     #[test]
+    fn run_pty_cmd_required_arg_accepts_zero_based_indexed_command() -> Result<()> {
+        let input = json!({
+            "command.0": "ls",
+            "command.1": "-a"
+        });
+        let args = preflight_validation_args(tool_names::RUN_PTY_CMD, &input)?;
+
+        assert!(!is_missing_required_arg(
+            tool_names::RUN_PTY_CMD,
+            args.as_ref(),
+            "command"
+        ));
+        assert_eq!(
+            args.get("command").and_then(|value| value.as_str()),
+            Some("ls -a")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn run_pty_cmd_required_arg_accepts_one_based_indexed_command() -> Result<()> {
+        let input = json!({
+            "command.1": "ls",
+            "command.2": "-a"
+        });
+        let args = preflight_validation_args(tool_names::RUN_PTY_CMD, &input)?;
+
+        assert!(!is_missing_required_arg(
+            tool_names::RUN_PTY_CMD,
+            args.as_ref(),
+            "command"
+        ));
+        assert_eq!(
+            args.get("command").and_then(|value| value.as_str()),
+            Some("ls -a")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn indexed_command_parts_require_zero_or_one_based_sequences() {
+        assert_eq!(
+            parse_indexed_command_parts(
+                json!({
+                    "command.0": "ls",
+                    "command.1": "-a"
+                })
+                .as_object()
+                .expect("object"),
+            )
+            .expect("valid indexed args"),
+            Some(vec!["ls".to_string(), "-a".to_string()])
+        );
+        assert_eq!(
+            parse_indexed_command_parts(
+                json!({
+                    "command.1": "ls",
+                    "command.2": "-a"
+                })
+                .as_object()
+                .expect("object"),
+            )
+            .expect("valid indexed args"),
+            Some(vec!["ls".to_string(), "-a".to_string()])
+        );
+        assert_eq!(
+            parse_indexed_command_parts(json!({"command.2": "ls"}).as_object().expect("object"))
+                .expect("valid indexed args"),
+            None
+        );
+    }
+
+    #[test]
     fn tool_name_candidates_extract_channel_suffix_alias() {
         let candidates = public_tool_name_candidates("assistant<|channel|>apply_patch");
         assert!(candidates.iter().any(|c| c == "apply_patch"));
@@ -378,37 +467,39 @@ mod tests {
     }
 
     #[test]
-    fn unified_search_schema_args_infers_action_from_pattern() {
+    fn unified_search_schema_args_infers_action_from_pattern() -> Result<()> {
         let args = json!({
             "pattern": "LLMStreamEvent::",
             "path": "."
         });
 
-        let normalized = schema_validation_args(tool_names::UNIFIED_SEARCH, &args);
+        let normalized = preflight_validation_args(tool_names::UNIFIED_SEARCH, &args)?;
         assert_eq!(
             normalized.get("action").and_then(|v| v.as_str()),
             Some("grep")
         );
+        Ok(())
     }
 
     #[test]
-    fn unified_search_schema_args_preserves_non_inferable_payload() {
+    fn unified_search_schema_args_preserves_non_inferable_payload() -> Result<()> {
         let args = json!({
             "max_results": 10
         });
 
-        let normalized = schema_validation_args(tool_names::UNIFIED_SEARCH, &args);
+        let normalized = preflight_validation_args(tool_names::UNIFIED_SEARCH, &args)?;
         assert!(normalized.get("action").is_none());
+        Ok(())
     }
 
     #[test]
-    fn unified_search_schema_args_normalizes_case_variants() {
+    fn unified_search_schema_args_normalizes_case_variants() -> Result<()> {
         let args = json!({
             "Pattern": "ReasoningStage",
             "Path": "."
         });
 
-        let normalized = schema_validation_args(tool_names::UNIFIED_SEARCH, &args);
+        let normalized = preflight_validation_args(tool_names::UNIFIED_SEARCH, &args)?;
         assert_eq!(
             normalized.get("pattern").and_then(|v| v.as_str()),
             Some("ReasoningStage")
@@ -418,5 +509,6 @@ mod tests {
             normalized.get("action").and_then(|v| v.as_str()),
             Some("grep")
         );
+        Ok(())
     }
 }

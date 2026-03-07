@@ -15,6 +15,8 @@ contains the following metadata:
 -   `uses_pty`: whether the tool consumes a PTY session.
 -   `expose_in_llm`: opt-in flag for including the tool in generated function
     declarations.
+-   `behavior`: small built-in execution metadata for tool surface kind,
+    mutability classification, parallel-call support, and safe-mode prompting.
 -   `handler`: either a registry executor function (for built-in tools) or an
     `Arc<dyn Tool>` instance.
 
@@ -22,6 +24,19 @@ contains the following metadata:
 internal index as well as the policy manager. Built-in registrations live in
 `ToolRegistry::builtin_tool_registrations`, so the registry can initialise its
 state from a single source of truth.
+
+The canonical public surface is `unified_search`, `unified_exec`,
+`unified_file`, `request_user_input`, and `apply_patch`. Legacy names such as
+`read_file`, `write_file`, `edit_file`, `grep_file`, and PTY helper names remain
+compatibility aliases or internal registrations; do not add a second public
+declaration path for them.
+
+Future migration note: the main legacy cleanup candidates are the file aliases
+(`read_file`, `write_file`, `edit_file`, `grep_file`) and PTY-oriented helper
+names (`run_pty_cmd`, `send_pty_input`, `read_pty_session`,
+`list_pty_sessions`, `close_pty_session`, `execute_code`). Keep them working as
+compatibility routes for now, but treat the unified trio plus `apply_patch` as
+the long-term surface to preserve.
 
 ## Adding a new tool
 
@@ -47,7 +62,7 @@ state from a single source of truth.
     `ToolRegistry::register_tool` from your initialisation code.
 4.  Verify the tool appears through the session catalog projections
     (`model_tools`, `schema_entries`, `acp_tools`, or `public_tool_names`) rather
-    than adding a second declaration path.
+    than adding a second declaration path or sidecar router mapping.
 5.  Add tests that cover both registration (`available_tools`/`has_tool`) and
     execution via `ToolRegistry::execute_tool`.
 
@@ -61,9 +76,12 @@ output to guide self-diagnostic and self-fix logic.
 
 ## Safety guidelines
 
--   Prefer `edit_file`/`write_file` for high-impact assets. Reach for
-    `apply_patch` only when you have reviewed the diff locally or staged a
-    backup—failed patches can leave partially rewritten files.
+-   Prefer the canonical public tools in prompts and docs:
+    `unified_search`, `unified_exec`, `unified_file`, `request_user_input`, and
+    `apply_patch`.
+-   For file edits, prefer `unified_file` for read/write/edit flows and reserve
+    `apply_patch` for patch payloads that benefit from first-class patch
+    handling.
 -   Tune the `[timeouts]` table in `vtcode.toml` when integrating long-running
     tooling. VT Code raises an inline warning once execution crosses the
     `warning_threshold_percent` so you can cancel runaway commands before they

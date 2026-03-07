@@ -37,29 +37,26 @@ The execution policy is designed to allow engineers typical software development
 
 ## Tool Policies
 
+Canonical public tool names are `unified_search`, `unified_exec`,
+`unified_file`, `request_user_input`, and `apply_patch`. Legacy names such as
+`read_file`, `write_file`, `edit_file`, `grep_file`, and PTY helpers are still
+accepted in config as compatibility aliases, but new docs and policy examples
+should prefer the canonical public names.
+
 | Tool | Policy | Notes |
 |------|--------|-------|
-| `list_files` | Allow | File discovery |
-| `read_file` | Allow | File reading |
-| `write_file` | Allow | New file creation |
-| `edit_file` | Allow | Surgical edits |
-| `create_file` | Allow | File creation |
-| `grep_file` | Allow | Pattern search |
-| `task_tracker` | Allow | TODO planning |
-| `create_pty_session` | Allow | Terminal session |
-| `read_pty_session` | Allow | Read terminal |
-| `run_command` | **Prompt** | Terminal execution (safeguarded) |
-| `send_pty_input` | **Prompt** | Send to terminal |
+| `unified_search` | Allow | Public discovery/search surface |
+| `unified_file` | Prompt | Public file surface; action-level safety still applies |
+| `unified_exec` | **Prompt** | Public shell and PTY surface |
+| `request_user_input` | Allow | Interactive clarification surface |
 | `apply_patch` | **Prompt** | Complex diffs |
-| `delete_file` | **Prompt** | File deletion |
-| `web_fetch` | **Prompt** | External fetch |
 
 ## Key Safety Features
 
 1. **Workspace Boundary**: All file operations are confined to `WORKSPACE_DIR`; cannot escape or touch system files
 2. **Command Whitelisting**: Only specific commands are allowed; unknown commands are blocked
 3. **Argument Validation**: Common flags are validated (e.g., git force-push is blocked)
-4. **Confirmation Required**: Destructive operations (delete_file, apply_patch) still require user confirmation
+4. **Confirmation Required**: Destructive operations still require user confirmation
 5. **Two-Layer Control**: 
    - Tool-level: Which tools can be used
    - Command-level: Which specific commands and flags are permitted
@@ -106,8 +103,8 @@ Override examples in `vtcode.toml`:
 ```toml
 [tools.policies]
 apply_patch = "allow"  # Allow patches without prompt
-delete_file = "allow"  # Allow file deletion
-run_command = "allow"  # Allow all commands (less safe)
+unified_file = "allow" # Allow unified file actions without prompt
+unified_exec = "allow" # Allow shell/PTY actions without prompt
 ```
 
 Override command allow-list:

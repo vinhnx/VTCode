@@ -1,6 +1,8 @@
 //! Tool policy evaluation helpers attached to ToolRegistry.
 
 use anyhow::Result;
+use hashbrown::HashSet;
+use indexmap::IndexMap;
 
 use crate::config::ToolsConfig;
 use crate::tool_policy::{ToolPolicy, ToolPolicyManager};
@@ -19,13 +21,78 @@ fn parse_mcp_policy_target(name: &str) -> Option<(&str, &str)> {
     }
 }
 
+fn more_restrictive_policy(
+    left: vtcode_config::ToolPolicy,
+    right: vtcode_config::ToolPolicy,
+) -> vtcode_config::ToolPolicy {
+    match (left, right) {
+        (vtcode_config::ToolPolicy::Deny, _) | (_, vtcode_config::ToolPolicy::Deny) => {
+            vtcode_config::ToolPolicy::Deny
+        }
+        (vtcode_config::ToolPolicy::Prompt, _) | (_, vtcode_config::ToolPolicy::Prompt) => {
+            vtcode_config::ToolPolicy::Prompt
+        }
+        _ => vtcode_config::ToolPolicy::Allow,
+    }
+}
+
 impl ToolRegistry {
+    fn resolve_runtime_policy_name(&self, name: &str) -> String {
+        if is_legacy_mcp_tool_name(name) || parse_mcp_policy_target(name).is_some() {
+            return name.to_string();
+        }
+
+        if let Ok(resolved) = self.resolve_public_tool_name_sync(name) {
+            return resolved;
+        }
+
+        match name {
+            "list_dir" | "list_directory" => {
+                crate::config::constants::tools::UNIFIED_SEARCH.to_string()
+            }
+            _ => canonical_tool_name(name).into_owned(),
+        }
+    }
+
+    fn normalize_tools_config_policies(&self, tools_config: &ToolsConfig) -> ToolsConfig {
+        let mut normalized = tools_config.clone();
+        let mut explicit_canonical_names: HashSet<String> = HashSet::default();
+
+        for name in tools_config.policies.keys() {
+            let canonical = self.resolve_runtime_policy_name(name);
+            if canonical == *name {
+                explicit_canonical_names.insert(canonical);
+            }
+        }
+
+        let mut policies = IndexMap::new();
+        for (name, policy) in &tools_config.policies {
+            let canonical = self.resolve_runtime_policy_name(name);
+            if canonical != *name && explicit_canonical_names.contains(&canonical) {
+                continue;
+            }
+            let merged = policies
+                .get(&canonical)
+                .cloned()
+                .map(|existing| more_restrictive_policy(existing, *policy))
+                .unwrap_or(*policy);
+            policies.insert(canonical, merged);
+        }
+
+        normalized.policies = policies;
+        normalized
+    }
+
     pub async fn enable_full_auto_mode(&self, allowed_tools: &[String]) {
+        let normalized_allowed_tools: Vec<String> = allowed_tools
+            .iter()
+            .map(|tool| self.resolve_runtime_policy_name(tool))
+            .collect();
         let available = self.available_tools().await;
         self.policy_gateway
             .write()
             .await
-            .enable_full_auto_mode(allowed_tools, &available);
+            .enable_full_auto_mode(&normalized_allowed_tools, &available);
     }
 
     pub async fn disable_full_auto_mode(&self) {
@@ -50,7 +117,7 @@ impl ToolRegistry {
         self.policy_gateway
             .read()
             .await
-            .is_allowed_in_full_auto(tool_name)
+            .is_allowed_in_full_auto(&self.resolve_runtime_policy_name(tool_name))
     }
 
     pub async fn set_policy_manager(&self, manager: ToolPolicyManager) {
@@ -63,11 +130,16 @@ impl ToolRegistry {
 
     pub async fn set_tool_policy(&self, tool_name: &str, policy: ToolPolicy) -> Result<()> {
         let mut gateway = self.policy_gateway.write().await;
-        gateway.set_tool_policy(tool_name, policy).await
+        gateway
+            .set_tool_policy(&self.resolve_runtime_policy_name(tool_name), policy)
+            .await
     }
 
     pub async fn get_tool_policy(&self, tool_name: &str) -> ToolPolicy {
-        self.policy_gateway.read().await.get_tool_policy(tool_name)
+        self.policy_gateway
+            .read()
+            .await
+            .get_tool_policy(&self.resolve_runtime_policy_name(tool_name))
     }
 
     pub async fn reset_tool_policies(&self) -> Result<()> {
@@ -91,16 +163,25 @@ impl ToolRegistry {
     }
 
     pub async fn apply_config_policies(&self, tools_config: &ToolsConfig) -> Result<()> {
+        let normalized_tools_config = self.normalize_tools_config_policies(tools_config);
         let mut policy_gateway = self.policy_gateway.write().await;
         if let Ok(policy_manager) = policy_gateway.policy_manager_mut() {
-            policy_manager.apply_tools_config(tools_config).await?;
+            policy_manager
+                .apply_tools_config(&normalized_tools_config)
+                .await?;
         }
 
         let detect_window = super::DEFAULT_LOOP_DETECT_WINDOW
-            .max(tools_config.max_repeated_tool_calls.saturating_mul(2))
+            .max(
+                normalized_tools_config
+                    .max_repeated_tool_calls
+                    .saturating_mul(2),
+            )
             .max(1);
-        self.execution_history
-            .set_loop_detection_limits(detect_window, tools_config.max_repeated_tool_calls);
+        self.execution_history.set_loop_detection_limits(
+            detect_window,
+            normalized_tools_config.max_repeated_tool_calls,
+        );
         self.execution_history
             .set_rate_limit_per_minute(super::config_helpers::tool_rate_limit_from_env());
 
@@ -125,6 +206,7 @@ impl ToolRegistry {
             return self.evaluate_mcp_tool_policy(name, tool_name).await;
         }
 
+        let resolved_name = self.resolve_runtime_policy_name(name);
         let resolved_public_tool = self.resolve_public_tool_entry(name);
 
         if let Some((registration_name, _)) = &resolved_public_tool
@@ -135,15 +217,33 @@ impl ToolRegistry {
                 .await;
         }
 
-        let canonical = canonical_tool_name(name);
-        let normalized = canonical.as_ref();
+        let (default_permission, safe_mode_prompt) = self
+            .inventory
+            .get_registration(&resolved_name)
+            .map(|registration| {
+                (
+                    registration
+                        .metadata()
+                        .default_permission()
+                        .unwrap_or(ToolPolicy::Prompt),
+                    registration
+                        .metadata()
+                        .behavior()
+                        .map(|behavior| behavior.safe_mode_prompt)
+                        .unwrap_or(false),
+                )
+            })
+            .or_else(|| {
+                resolved_public_tool
+                    .as_ref()
+                    .map(|(_, permission)| (permission.clone(), false))
+            })
+            .unwrap_or((ToolPolicy::Prompt, false));
 
         {
             let gateway = self.policy_gateway.read().await;
-            if !gateway.has_policy_manager()
-                && let Some((_, permission)) = resolved_public_tool
-            {
-                return Ok(match permission {
+            if !gateway.has_policy_manager() {
+                return Ok(match default_permission {
                     ToolPolicy::Allow => ToolPermissionDecision::Allow,
                     ToolPolicy::Deny => ToolPermissionDecision::Deny,
                     ToolPolicy::Prompt => ToolPermissionDecision::Prompt,
@@ -154,7 +254,7 @@ impl ToolRegistry {
         self.policy_gateway
             .write()
             .await
-            .evaluate_tool_policy(normalized)
+            .evaluate_tool_policy(&resolved_name, safe_mode_prompt, default_permission)
             .await
     }
 
@@ -212,22 +312,23 @@ impl ToolRegistry {
     /// any tool to avoid re-prompting in the CLI layer. In CLI mode we keep the legacy
     /// allowlist restriction.
     pub async fn mark_tool_preapproved(&self, name: &str) {
+        let normalized_name = self.resolve_runtime_policy_name(name);
         let mut gateway = self.policy_gateway.write().await;
         // Allow all when TUI mode is active (approval already captured by modal)
         if std::env::var("VTCODE_TUI_MODE").is_ok() {
-            gateway.preapprove(name);
-            tracing::debug!(tool = %name, "Preapproved tool in TUI mode");
+            gateway.preapprove(&normalized_name);
+            tracing::debug!(tool = %normalized_name, "Preapproved tool in TUI mode");
             return;
         }
 
         // Legacy CLI allowlist of tools that can be preapproved
         const PREAPPROVABLE_TOOLS: &[&str] = &["debug_agent", "analyze_agent"];
 
-        if PREAPPROVABLE_TOOLS.contains(&name) {
-            gateway.preapprove(name);
+        if PREAPPROVABLE_TOOLS.contains(&normalized_name.as_str()) {
+            gateway.preapprove(&normalized_name);
         } else {
             tracing::warn!(
-                tool = %name,
+                tool = %normalized_name,
                 "Attempted to preapprove non-whitelisted tool. Use permission pipeline instead."
             );
         }

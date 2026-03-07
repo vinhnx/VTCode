@@ -16,8 +16,6 @@ use crate::tools::tool_intent;
 use crate::tools::traits::Tool;
 use crate::tools::types::VTCodePtySession;
 use crate::zsh_exec_bridge::ZshExecBridgeSession;
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD as BASE64;
 use regex::Regex;
 
 use anyhow::{Context, Result, anyhow};
@@ -74,16 +72,13 @@ fn shell_run_payload<'a>(
     tool_name: &str,
     tool_args: Option<&'a Value>,
 ) -> Option<&'a serde_json::Map<String, Value>> {
-    let args = tool_args?.as_object()?;
+    let args_value = tool_args?;
+    let args = args_value.as_object()?;
     match tool_name {
         "run_pty_cmd" | "shell" => Some(args),
-        "unified_exec" | "exec_pty_cmd" | "exec" => {
-            let action = args
-                .get("action")
-                .and_then(Value::as_str)
-                .or_else(|| args.get("command").map(|_| "run"));
-            (action == Some("run")).then_some(args)
-        }
+        "unified_exec" | "exec_pty_cmd" | "exec" => tool_intent::unified_exec_action(args_value)
+            .is_some_and(|action| action.eq_ignore_ascii_case("run"))
+            .then_some(args),
         _ => None,
     }
 }
@@ -854,12 +849,6 @@ fn summarized_arg_keys(args: &Value) -> String {
     }
 }
 
-fn patch_source_from_args(args: &Value) -> Option<&str> {
-    args.as_str()
-        .or_else(|| args.get("input").and_then(|v| v.as_str()))
-        .or_else(|| args.get("patch").and_then(|v| v.as_str()))
-}
-
 fn serialized_payload_size_bytes(args: &Value) -> usize {
     serde_json::to_vec(args)
         .map(|bytes| bytes.len())
@@ -1109,7 +1098,10 @@ impl ToolRegistry {
         tool_name: &str,
         tool_args: Option<&Value>,
     ) -> Result<Option<String>> {
-        let Some(payload) = shell_run_payload(tool_name, tool_args) else {
+        let resolved_tool_name = self
+            .resolve_public_tool_name_sync(tool_name)
+            .unwrap_or_else(|_| tool_name.to_string());
+        let Some(payload) = shell_run_payload(&resolved_tool_name, tool_args) else {
             return Ok(None);
         };
 
@@ -1467,20 +1459,11 @@ impl ToolRegistry {
     }
 
     pub(super) async fn execute_apply_patch(&self, args: Value) -> Result<Value> {
-        let patch_source =
-            patch_source_from_args(&args).ok_or_else(|| anyhow!("Missing patch input"))?;
-        let patch_input_bytes = patch_source.len();
-        let patch_base64 = patch_source.starts_with("base64:");
-
-        let patch_content = if patch_base64 {
-            let b64 = &patch_source[7..];
-            let decoded = BASE64
-                .decode(b64)
-                .with_context(|| "Failed to decode base64 patch")?;
-            String::from_utf8(decoded).with_context(|| "Decoded patch is not valid UTF-8")?
-        } else {
-            patch_source.to_string()
-        };
+        let patch_input = crate::tools::apply_patch::decode_apply_patch_input(&args)?
+            .ok_or_else(|| anyhow!("Missing patch input"))?;
+        let patch_input_bytes = patch_input.source_bytes;
+        let patch_base64 = patch_input.was_base64;
+        let patch_content = patch_input.text;
 
         let mut patch_args = args.clone();
         patch_args["input"] = json!(patch_content);
@@ -1506,9 +1489,10 @@ impl ToolRegistry {
 
     fn log_unified_file_payload_diagnostics(&self, action: &str, args: &Value) {
         let context = self.harness_context_snapshot();
-        let (patch_source_bytes, patch_base64) = patch_source_from_args(args)
-            .map(|source| (source.len(), source.starts_with("base64:")))
-            .unwrap_or((0, false));
+        let (patch_source_bytes, patch_base64) =
+            crate::tools::apply_patch::patch_source_from_args(args)
+                .map(|source| (source.len(), source.starts_with("base64:")))
+                .unwrap_or((0, false));
 
         tracing::debug!(
             tool = "unified_file",
@@ -2225,10 +2209,10 @@ impl ToolRegistry {
     }
 
     async fn execute_apply_patch_internal(&self, args: Value) -> Result<Value> {
-        let patch_source = patch_source_from_args(&args)
+        let patch_input = crate::tools::apply_patch::decode_apply_patch_input(&args)?
             .ok_or_else(|| anyhow!("Missing patch input (use 'input' or 'patch' parameter)"))?;
 
-        let patch = crate::tools::editing::Patch::parse(patch_source)?;
+        let patch = crate::tools::editing::Patch::parse(&patch_input.text)?;
         let results = patch.apply(&self.workspace_root_owned()).await?;
 
         Ok(json!({
@@ -2346,31 +2330,12 @@ fn parse_command_parts(
                 .collect::<Result<Vec<_>>>()?;
             (parts, None)
         }
-        _ => {
-            // Try indexed arguments (command.0, command.1, etc.)
-            let mut indexed_parts = Vec::new();
-            let mut index = 0;
-            while let Some(value) = payload.get(&format!("command.{}", index)) {
-                if let Some(part) = value.as_str() {
-                    indexed_parts.push(part.to_string());
-                }
-                index += 1;
-            }
-            // Also try 1-based indexing
-            if indexed_parts.is_empty() {
-                index = 1;
-                while let Some(value) = payload.get(&format!("command.{}", index)) {
-                    if let Some(part) = value.as_str() {
-                        indexed_parts.push(part.to_string());
-                    }
-                    index += 1;
-                }
-            }
-            if indexed_parts.is_empty() {
-                return Err(anyhow!("{}", missing_error));
-            }
-            (indexed_parts, None)
-        }
+        _ => match crate::tools::command_args::parse_indexed_command_parts(payload)
+            .map_err(|error| anyhow!(error))?
+        {
+            Some(indexed_parts) => (indexed_parts, None),
+            None => return Err(anyhow!("{}", missing_error)),
+        },
     };
 
     if let Some(args_value) = payload.get("args")
@@ -2844,7 +2809,7 @@ mod unified_action_error_tests {
         build_head_tail_preview, clamp_inspect_lines, clamp_max_matches,
         extract_run_session_id_from_read_file_error, extract_run_session_id_from_tool_output_path,
         filter_lines, missing_unified_exec_action_error, missing_unified_search_action_error,
-        patch_source_from_args, summarized_arg_keys,
+        summarized_arg_keys,
     };
     use serde_json::json;
 
@@ -2875,16 +2840,6 @@ mod unified_action_error_tests {
         let text = err.to_string();
         assert!(text.contains("Missing unified_search action"));
         assert!(text.contains("unexpected"));
-    }
-
-    #[test]
-    fn patch_source_accepts_raw_string_and_object_fields() {
-        assert_eq!(
-            patch_source_from_args(&json!("*** Begin Patch\n*** End Patch\n")),
-            Some("*** Begin Patch\n*** End Patch\n")
-        );
-        assert_eq!(patch_source_from_args(&json!({"input": "x"})), Some("x"));
-        assert_eq!(patch_source_from_args(&json!({"patch": "y"})), Some("y"));
     }
 
     #[test]

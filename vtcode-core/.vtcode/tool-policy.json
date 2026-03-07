@@ -12,7 +12,6 @@
     "unified_search"
   ],
   "policies": {
-    "unified_search": "allow",
     "apply_patch": "allow",
     "enter_plan_mode": "allow",
     "exit_plan_mode": "allow",
@@ -20,7 +19,9 @@
     "request_user_input": "allow",
     "task_tracker": "allow",
     "unified_exec": "allow",
-    "unified_file": "allow"
+    "unified_file": "allow",
+    "unified_search": "allow",
+    "read_pty_session": "allow"
   },
   "constraints": {},
   "mcp": {

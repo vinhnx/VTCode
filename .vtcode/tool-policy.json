@@ -26,17 +26,7 @@
     "task_tracker": "allow",
     "list_skills": "allow",
     "load_skill_resource": "allow",
-    "load_skill": "allow",
-    "plan_mode": "prompt",
-    "enter_plan": "prompt",
-    "start_planning": "prompt",
-    "plan_on": "prompt",
-    "plan_start": "prompt",
-    "switch_to_plan_mode": "prompt",
-    "switch_plan_mode": "prompt",
-    "mode_plan": "prompt",
-    "planner_mode": "prompt",
-    "/plan": "prompt"
+    "load_skill": "allow"
   },
   "constraints": {},
   "mcp": {
