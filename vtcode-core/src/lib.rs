@@ -140,6 +140,7 @@ pub mod context; // Vibe coding support: entity resolution, workspace state, con
 pub mod core;
 pub mod diagnostics;
 pub mod dotfile_protection; // Comprehensive dotfile protection system
+pub mod error; // Structured error handling
 pub mod exec;
 pub mod exec_policy; // Codex-style execution policy management
 /// Backward-compatible alias: command-level validation now lives in `exec_policy::command_validation`.
@@ -223,6 +224,10 @@ pub use dotfile_protection::{
     AuditOutcome as DotfileAuditOutcome, BackupManager as DotfileBackupManager, DotfileBackup,
     DotfileGuardian, ProtectionDecision, ProtectionViolation, get_global_guardian,
     init_global_guardian, is_protected_dotfile,
+};
+pub use error::{
+    ErrorCategory as VtCodeErrorCategory, ErrorCode as VtCodeErrorCode, Result as VtCodeResult,
+    VtCodeError,
 };
 pub use exec::events::{
     AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, EVENT_SCHEMA_VERSION,
