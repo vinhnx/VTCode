@@ -3,8 +3,11 @@
 //! Implements a three-state circuit breaker (Closed, Open, HalfOpen) to prevent
 //! cascading failures when MCP providers become unavailable.
 
+use crate::metrics::MetricsCollector;
 use std::sync::atomic::{AtomicU8, AtomicU32, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
+use vtcode_commons::ErrorCategory;
 
 /// Circuit breaker states
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,10 +53,13 @@ pub struct McpCircuitBreaker {
     half_open_successes: AtomicU32,
     /// Last failure timestamp (seconds since UNIX_EPOCH)
     last_failure_time: parking_lot::Mutex<Option<SystemTime>>,
+    /// Count of requests denied while the breaker is open
+    blocked_requests: AtomicU32,
     /// Configuration
     config: CircuitBreakerConfig,
     /// Optional path for persisting state
     persistence_path: Option<PathBuf>,
+    metrics: Option<Arc<MetricsCollector>>,
 }
 
 /// Circuit breaker configuration
@@ -87,28 +93,48 @@ impl McpCircuitBreaker {
         Self::with_config(CircuitBreakerConfig::default())
     }
 
+    /// Create a new circuit breaker with default configuration and metrics hooks.
+    pub fn with_metrics(metrics: Arc<MetricsCollector>) -> Self {
+        Self::with_config_and_metrics(CircuitBreakerConfig::default(), metrics)
+    }
+
     /// Create a new circuit breaker with custom configuration
     pub fn with_config(config: CircuitBreakerConfig) -> Self {
+        Self::build(config, None, None)
+    }
+
+    /// Create a new circuit breaker with custom configuration and metrics hooks.
+    pub fn with_config_and_metrics(
+        config: CircuitBreakerConfig,
+        metrics: Arc<MetricsCollector>,
+    ) -> Self {
+        Self::build(config, None, Some(metrics))
+    }
+
+    fn build(
+        config: CircuitBreakerConfig,
+        persistence_path: Option<PathBuf>,
+        metrics: Option<Arc<MetricsCollector>>,
+    ) -> Self {
         Self {
             state: AtomicU8::new(CircuitState::Closed as u8),
             consecutive_failures: AtomicU32::new(0),
             half_open_successes: AtomicU32::new(0),
             last_failure_time: parking_lot::Mutex::new(None),
+            blocked_requests: AtomicU32::new(0),
             config,
-            persistence_path: None,
+            persistence_path,
+            metrics,
         }
     }
 
     /// Create a new persistence-enabled circuit breaker
     pub fn with_persistence(path: PathBuf) -> Self {
-        let breaker = Self {
-            state: AtomicU8::new(CircuitState::Closed as u8),
-            consecutive_failures: AtomicU32::new(0),
-            half_open_successes: AtomicU32::new(0),
-            last_failure_time: parking_lot::Mutex::new(None),
-            config: CircuitBreakerConfig::default(),
-            persistence_path: Some(path.clone()),
-        };
+        let breaker = Self::build(
+            CircuitBreakerConfig::default(),
+            Some(path.clone()),
+            None,
+        );
 
         // Try to load state
         if let Ok(data) = fs::read_to_string(&path)
@@ -133,6 +159,27 @@ impl McpCircuitBreaker {
             }
         }
         breaker
+    }
+
+    #[inline]
+    fn record_half_open_metric(&self) {
+        if let Some(metrics) = &self.metrics {
+            metrics.record_half_open();
+        }
+    }
+
+    #[inline]
+    fn record_breaker_denial_metric(&self) {
+        if let Some(metrics) = &self.metrics {
+            metrics.record_breaker_denial();
+        }
+    }
+
+    #[inline]
+    fn record_circuit_open_metric(&self) {
+        if let Some(metrics) = &self.metrics {
+            metrics.record_circuit_open();
+        }
     }
 
     /// Persist current state to disk if path is configured
@@ -193,9 +240,12 @@ impl McpCircuitBreaker {
                     self.state
                         .store(CircuitState::HalfOpen as u8, Ordering::Release);
                     self.half_open_successes.store(0, Ordering::Relaxed);
+                    self.record_half_open_metric();
                     self.persist();
                     true
                 } else {
+                    self.blocked_requests.fetch_add(1, Ordering::Relaxed);
+                    self.record_breaker_denial_metric();
                     false
                 }
             }
@@ -241,6 +291,15 @@ impl McpCircuitBreaker {
 
     /// Record a failed operation
     pub fn record_failure(&self) {
+        self.record_failure_category(ErrorCategory::ExecutionError);
+    }
+
+    /// Record a failed operation with its canonical error category.
+    pub fn record_failure_category(&self, category: ErrorCategory) {
+        if !category.should_trip_circuit_breaker() {
+            return;
+        }
+
         let state = self.state();
         *self.last_failure_time.lock() = Some(SystemTime::now());
 
@@ -251,6 +310,7 @@ impl McpCircuitBreaker {
                     // Too many failures, open the circuit
                     self.state
                         .store(CircuitState::Open as u8, Ordering::Release);
+                    self.record_circuit_open_metric();
                 }
             }
             CircuitState::HalfOpen => {
@@ -259,6 +319,7 @@ impl McpCircuitBreaker {
                     .store(CircuitState::Open as u8, Ordering::Release);
                 self.consecutive_failures.fetch_add(1, Ordering::AcqRel);
                 self.half_open_successes.store(0, Ordering::Relaxed);
+                self.record_circuit_open_metric();
             }
             CircuitState::Open => {
                 // Already open, just increment failure count
@@ -286,12 +347,26 @@ impl McpCircuitBreaker {
 
     /// Get diagnostic information
     pub fn diagnostics(&self) -> CircuitBreakerDiagnostics {
+        let retry_after = if self.state() == CircuitState::Open {
+            (*self.last_failure_time.lock()).and_then(|failure_time| {
+                failure_time
+                    .elapsed()
+                    .ok()
+                    .and_then(|elapsed| self.calculate_timeout().checked_sub(elapsed))
+            })
+        } else {
+            None
+        };
+
         CircuitBreakerDiagnostics {
             state: self.state(),
             consecutive_failures: self.consecutive_failures.load(Ordering::Relaxed),
             half_open_successes: self.half_open_successes.load(Ordering::Relaxed),
             last_failure_time: *self.last_failure_time.lock(),
             current_timeout: self.calculate_timeout(),
+            retry_after,
+            blocked_requests: self.blocked_requests.load(Ordering::Relaxed),
+            is_blocking: self.state() == CircuitState::Open,
         }
     }
 
@@ -302,6 +377,7 @@ impl McpCircuitBreaker {
             .store(CircuitState::Closed as u8, Ordering::Release);
         self.consecutive_failures.store(0, Ordering::Relaxed);
         self.half_open_successes.store(0, Ordering::Relaxed);
+        self.blocked_requests.store(0, Ordering::Relaxed);
         *self.last_failure_time.lock() = None;
         self.persist();
     }
@@ -323,11 +399,15 @@ pub struct CircuitBreakerDiagnostics {
     pub half_open_successes: u32,
     pub last_failure_time: Option<SystemTime>,
     pub current_timeout: Duration,
+    pub retry_after: Option<Duration>,
+    pub blocked_requests: u32,
+    pub is_blocking: bool,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::metrics::MetricsCollector;
     use std::thread;
 
     #[test]
@@ -355,6 +435,7 @@ mod tests {
         breaker.record_failure(); // 3 - should open
         assert_eq!(breaker.state(), CircuitState::Open);
         assert!(!breaker.allow_request()); // Should block requests
+        assert!(breaker.diagnostics().blocked_requests > 0);
     }
 
     #[test]
@@ -448,5 +529,40 @@ mod tests {
         let diag = breaker.diagnostics();
         // After 5 failures (3 above threshold), timeout should be base * 2^3 = 80s, capped at 60s
         assert_eq!(diag.current_timeout, Duration::from_secs(60));
+    }
+
+    #[test]
+    fn authentication_failure_does_not_trip_breaker() {
+        let breaker = McpCircuitBreaker::new();
+        breaker.record_failure_category(ErrorCategory::Authentication);
+
+        assert_eq!(breaker.state(), CircuitState::Closed);
+        assert_eq!(breaker.diagnostics().consecutive_failures, 0);
+    }
+
+    #[test]
+    fn reliability_metrics_capture_open_half_open_and_denials() {
+        let metrics = Arc::new(MetricsCollector::new());
+        let breaker = McpCircuitBreaker::with_config_and_metrics(
+            CircuitBreakerConfig {
+                failure_threshold: 1,
+                base_timeout: Duration::from_millis(10),
+                ..Default::default()
+            },
+            metrics.clone(),
+        );
+
+        breaker.record_failure_category(ErrorCategory::ExecutionError);
+        assert_eq!(breaker.state(), CircuitState::Open);
+        assert!(!breaker.allow_request());
+
+        thread::sleep(Duration::from_millis(20));
+        assert!(breaker.allow_request());
+        assert_eq!(breaker.state(), CircuitState::HalfOpen);
+
+        let execution = metrics.get_execution_metrics();
+        assert_eq!(execution.circuit_open_events, 1);
+        assert_eq!(execution.breaker_denials, 1);
+        assert_eq!(execution.half_open_events, 1);
     }
 }

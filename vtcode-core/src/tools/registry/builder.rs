@@ -71,6 +71,7 @@ impl ToolRegistry {
         };
 
         let optimization_config = vtcode_config::OptimizationConfig::default();
+        let metrics = Arc::new(crate::metrics::MetricsCollector::new());
         let hot_cache_size =
             std::num::NonZeroUsize::new(optimization_config.tool_registry.hot_cache_size)
                 .unwrap_or(std::num::NonZeroUsize::MIN);
@@ -86,11 +87,14 @@ impl ToolRegistry {
             execution_history: ToolExecutionHistory::new(100),
             harness_context: HarnessContext::default(),
             resiliency: Arc::new(Mutex::new(ResiliencyContext::default())),
-            mcp_circuit_breaker: Arc::new(circuit_breaker::McpCircuitBreaker::new()),
+            mcp_circuit_breaker: Arc::new(circuit_breaker::McpCircuitBreaker::with_metrics(
+                metrics.clone(),
+            )),
             shared_circuit_breaker: Arc::new(RwLock::new(None)),
             initialized: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             tool_call_counter: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             pty_poll_counter: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            metrics,
             shell_policy: Arc::new(RwLock::new(ShellPolicyChecker::new())),
             runtime_sandbox_config: Arc::new(RwLock::new(
                 super::sandbox_facade::runtime_sandbox_config_default(),

@@ -81,12 +81,7 @@
     "unified_file",
     "unified_search",
     "write file",
-    "write_file",
-    "cargo_check",
-    "cargo_test",
-    "git_status",
-    "git_diff",
-    "git_log"
+    "write_file"
   ],
   "policies": {
     "apply_patch": "allow",
@@ -169,12 +164,7 @@
     "switch_to_edit_mode": "prompt",
     "switch_to_plan_mode": "prompt",
     "grep_file": "allow",
-    "list_files": "allow",
-    "cargo_check": "allow",
-    "cargo_test": "allow",
-    "git_status": "allow",
-    "git_diff": "allow",
-    "git_log": "allow"
+    "list_files": "allow"
   },
   "constraints": {},
   "mcp": {

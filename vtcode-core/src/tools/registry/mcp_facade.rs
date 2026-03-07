@@ -7,6 +7,7 @@ use std::time::Duration;
 use anyhow::{Result, anyhow};
 use serde_json::Value;
 use tracing::{debug, warn};
+use vtcode_commons::{ErrorCategory, classify_anyhow_error};
 
 use crate::mcp::{McpClient, McpToolExecutor, McpToolInfo};
 use crate::tools::mcp::build_mcp_registration;
@@ -150,12 +151,19 @@ impl ToolRegistry {
             let tools = match tools {
                 Some(list) => list,
                 None => {
+                    let error_for_log = last_err
+                        .as_ref()
+                        .map(|error| error.to_string())
+                        .unwrap_or_else(|| "unknown MCP error".to_string());
                     warn!(
-                        error = %last_err.unwrap_or_else(|| anyhow!("unknown MCP error")),
+                        error = %error_for_log,
                         "Failed to refresh MCP tools after retries; keeping existing cache"
                     );
-                    // MP-3: Record failure in circuit breaker
-                    self.mcp_circuit_breaker.record_failure();
+                    let category = last_err
+                        .as_ref()
+                        .map(classify_anyhow_error)
+                        .unwrap_or(ErrorCategory::ExecutionError);
+                    self.mcp_circuit_breaker.record_failure_category(category);
                     return Ok(());
                 }
             };

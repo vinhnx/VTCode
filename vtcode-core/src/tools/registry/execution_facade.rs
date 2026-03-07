@@ -9,6 +9,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime};
 use tokio::task::Id as TokioTaskId;
 use tracing::{debug, trace, warn};
+use vtcode_commons::ErrorCategory;
 
 use crate::core::memory_pool::SizeRecommendation;
 use crate::mcp::McpToolExecutor;
@@ -413,21 +414,32 @@ impl ToolRegistry {
         if let Some(breaker) = shared_circuit_breaker.as_ref()
             && !breaker.allow_request_for_tool(&tool_name)
         {
+            let diagnostics = breaker.get_diagnostics(&tool_name);
+            let retry_after = diagnostics
+                .remaining_backoff
+                .map(|backoff| format!(" retry_after={}s.", backoff.as_secs()))
+                .unwrap_or_default();
             let error_msg = format!(
-                "Tool '{}' is temporarily disabled due to high failure rate (Circuit Breaker OPEN).",
-                display_name
+                "Tool '{}' is temporarily disabled due to high failure rate (Circuit Breaker OPEN).{}",
+                display_name, retry_after
             );
-            record_failure(
-                tool_name_owned.clone(),
-                false,
-                None,
-                args_for_recording.clone(),
-                error_msg.clone(),
-                None,
-                None,
-                None,
-                None,
-                true,
+            self.execution_history.add_record(
+                ToolExecutionRecord::failure(
+                    tool_name_owned.clone(),
+                    requested_name.clone(),
+                    false,
+                    None,
+                    args_for_recording.clone(),
+                    error_msg.clone(),
+                    context_snapshot.clone(),
+                    None,
+                    None,
+                    None,
+                    None,
+                    true,
+                )
+                .with_circuit_breaker_state(format!("{:?}", diagnostics.status))
+                .with_retry_after(diagnostics.remaining_backoff),
             );
             return Err(anyhow!(error_msg).context("tool denied by circuit breaker"));
         }
@@ -857,17 +869,23 @@ impl ToolRegistry {
                 payload = %payload,
                 "Skipping MCP tool execution due to circuit breaker"
             );
-            record_failure(
-                tool_name_owned,
-                is_mcp_tool,
-                mcp_provider.clone(),
-                args_for_recording,
-                format!("MCP circuit breaker {:?}; execution skipped", diag.state),
-                timeout_category_label.clone(),
-                base_timeout_ms,
-                adaptive_timeout_ms,
-                None,
-                false,
+            self.execution_history.add_record(
+                ToolExecutionRecord::failure(
+                    tool_name_owned,
+                    requested_name.clone(),
+                    is_mcp_tool,
+                    mcp_provider.clone(),
+                    args_for_recording,
+                    format!("MCP circuit breaker {:?}; execution skipped", diag.state),
+                    context_snapshot.clone(),
+                    timeout_category_label.clone(),
+                    base_timeout_ms,
+                    adaptive_timeout_ms,
+                    None,
+                    false,
+                )
+                .with_circuit_breaker_state(format!("{:?}", diag.state))
+                .with_retry_after(diag.retry_after),
             );
             return Ok(payload);
         }
@@ -1062,7 +1080,10 @@ impl ToolRegistry {
                         }
                     });
                     if let Some(breaker) = shared_circuit_breaker.as_ref() {
-                        breaker.record_failure_for_tool(&tool_name_owned, false);
+                        breaker.record_failure_category_for_tool(
+                            &tool_name_owned,
+                            ErrorCategory::Timeout,
+                        );
                     }
                     record_failure(
                         tool_name_owned,
@@ -1140,8 +1161,10 @@ impl ToolRegistry {
             Err(err) => {
                 let error_type = super::classify_error(&err);
                 if let Some(breaker) = shared_circuit_breaker.as_ref() {
-                    let is_argument_error = matches!(error_type, ToolErrorType::InvalidParameters);
-                    breaker.record_failure_for_tool(&tool_name_owned, is_argument_error);
+                    breaker.record_failure_category_for_tool(
+                        &tool_name_owned,
+                        ErrorCategory::from(error_type),
+                    );
                 }
                 let error = ToolExecutionError::with_original_error(
                     tool_name_owned.clone(),

@@ -4,8 +4,11 @@
 //! including retry mechanisms with exponential backoff and fallback strategies.
 
 use crate::config::models::ModelId;
-use anyhow::{Result, anyhow};
+use crate::error::{ErrorCode, Result as VtCodeResult, VtCodeError};
+use crate::retry::RetryPolicy;
 use serde::{Deserialize, Serialize};
+use std::future::Future;
+use std::result::Result as StdResult;
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
 use tracing::{info, warn};
@@ -85,28 +88,30 @@ impl RetryManager {
     }
 
     /// Execute an operation with retry and fallback logic
-    pub async fn execute_with_retry<F, Fut, T>(
+    pub async fn execute_with_retry<F, Fut, T, E>(
         &mut self,
         operation_name: &str,
         primary_model: &ModelId,
         fallback_model: Option<&ModelId>,
         operation: F,
-    ) -> Result<T>
+    ) -> VtCodeResult<T>
     where
         F: Fn(ModelId) -> Fut,
-        Fut: Future<Output = Result<T>>,
+        Fut: Future<Output = StdResult<T, E>>,
+        E: Into<VtCodeError>,
         T: Clone,
     {
         let start_time = Instant::now();
-        let mut delay_secs = self.config.initial_delay_secs;
+        let policy = self.policy();
+        let mut last_error: Option<VtCodeError> = None;
 
         // Try with primary model first
-        for attempt in 0..=self.config.max_retries {
+        for attempt in 0..policy.max_attempts {
             self.stats.total_attempts += 1;
 
             info!(
                 attempt = attempt + 1,
-                max_attempts = self.config.max_retries + 1,
+                max_attempts = policy.max_attempts,
                 operation = operation_name,
                 model = ?primary_model,
                 "retry attempt starting"
@@ -126,43 +131,53 @@ impl RetryManager {
                     return Ok(result);
                 }
                 Err(err) => {
+                    let err: VtCodeError = err.into();
+                    let decision = policy.decision_for_vtcode_error(&err, attempt, None);
+                    last_error = Some(err);
+
                     warn!(
                         attempt = attempt + 1,
-                        max_attempts = self.config.max_retries + 1,
+                        max_attempts = policy.max_attempts,
                         operation = operation_name,
                         model = ?primary_model,
-                        error = %err,
+                        error = %last_error.as_ref().expect("retry error should exist"),
+                        category = ?decision.category,
                         "operation attempt failed"
                     );
 
-                    // Check if this error should be retried
-                    if !is_retryable_error(&err) {
-                        warn!(operation = operation_name, error = %err, "non-retryable error");
+                    if !decision.retryable {
+                        if attempt + 1 == policy.max_attempts
+                            && last_error
+                                .as_ref()
+                                .is_some_and(|error| error.category.is_retryable())
+                        {
+                            self.stats.failed_retries += 1;
+                        }
+                        let err = last_error.expect("non-retryable error should exist");
+                        warn!(
+                            operation = operation_name,
+                            error = %err,
+                            category = ?decision.category,
+                            "non-retryable error"
+                        );
                         return Err(err);
                     }
 
-                    // If this is not the last attempt, wait before retrying
-                    if attempt < self.config.max_retries {
-                        let backoff_duration = Duration::from_secs(delay_secs);
-                        self.stats.total_backoff_time += backoff_duration;
-
-                        info!(
-                            delay_secs,
-                            next_attempt = attempt + 2,
-                            operation = operation_name,
-                            "backing off before retry"
-                        );
-
-                        sleep(backoff_duration).await;
-
-                        // Apply exponential backoff with cap
-                        delay_secs = std::cmp::min(
-                            (delay_secs as f64 * self.config.backoff_multiplier) as u64,
-                            self.config.max_delay_secs,
-                        );
-                    } else {
+                    let backoff_duration = decision.delay.expect("retryable decisions need delay");
+                    self.stats.total_backoff_time += backoff_duration;
+                    if attempt + 2 == policy.max_attempts {
                         self.stats.failed_retries += 1;
                     }
+
+                    info!(
+                        delay_ms = backoff_duration.as_millis() as u64,
+                        next_attempt = attempt + 2,
+                        operation = operation_name,
+                        category = ?decision.category,
+                        "backing off before retry"
+                    );
+
+                    sleep(backoff_duration).await;
                 }
             }
         }
@@ -171,7 +186,7 @@ impl RetryManager {
         if let Some(fallback) = fallback_model {
             warn!(
                 operation = operation_name,
-                attempts = self.config.max_retries + 1,
+                attempts = policy.max_attempts,
                 primary_model = ?primary_model,
                 fallback_model = ?fallback,
                 "primary model failed; attempting fallback"
@@ -184,10 +199,14 @@ impl RetryManager {
                     return Ok(result);
                 }
                 Err(err) => {
+                    let err: VtCodeError = err.into();
+                    last_error = Some(err.with_context(format!(
+                        "fallback model '{fallback}' failed for operation '{operation_name}'"
+                    )));
                     warn!(
                         operation = operation_name,
                         model = ?fallback,
-                        error = %err,
+                        error = %last_error.as_ref().expect("fallback error should exist"),
                         "fallback model failed"
                     );
                 }
@@ -197,20 +216,34 @@ impl RetryManager {
         let total_time = start_time.elapsed();
         warn!(
             operation = operation_name,
-            attempts = self.config.max_retries + 1,
+            attempts = policy.max_attempts,
             total_time = %humantime::format_duration(total_time),
             primary_model = ?primary_model,
             fallback_model = ?fallback_model,
             "operation failed after retries"
         );
 
-        Err(anyhow!(
-            "Operation '{}' failed after {} attempts with model {} and fallback {:?}",
-            operation_name,
-            self.config.max_retries + 1,
-            primary_model,
-            fallback_model
-        ))
+        Err(last_error.unwrap_or_else(|| {
+            VtCodeError::execution(
+                ErrorCode::ToolExecutionFailed,
+                format!(
+                    "operation '{operation_name}' failed after {} attempts",
+                    policy.max_attempts
+                ),
+            )
+            .with_context(format!(
+                "primary model: {primary_model}, fallback model: {fallback_model:?}"
+            ))
+        }))
+    }
+
+    fn policy(&self) -> RetryPolicy {
+        RetryPolicy::from_retries(
+            self.config.max_retries,
+            Duration::from_secs(self.config.initial_delay_secs),
+            Duration::from_secs(self.config.max_delay_secs),
+            self.config.backoff_multiplier,
+        )
     }
 }
 
@@ -235,36 +268,18 @@ pub fn is_empty_response(response: &serde_json::Value) -> bool {
 }
 
 /// Detect if an error indicates a temporary failure that should be retried.
-/// Uses case-insensitive matching to avoid string allocation.
+/// Uses the shared VT Code retry policy for typed and fallback classification.
 pub fn is_retryable_error(error: &anyhow::Error) -> bool {
-    let error_msg = error.to_string();
-
-    // Helper for case-insensitive contains
-    let contains_ci = |pattern: &str| {
-        error_msg
-            .as_bytes()
-            .windows(pattern.len())
-            .any(|window| window.eq_ignore_ascii_case(pattern.as_bytes()))
-    };
-
-    // Common temporary error patterns (exclude quota errors which are account limits, not transient)
-    (contains_ci("timeout")
-        || contains_ci("rate limit")
-        || contains_ci("429")
-        || contains_ci("503")
-        || contains_ci("502")
-        || contains_ci("500")
-        || contains_ci("connection")
-        || contains_ci("network")
-        || contains_ci("temporary")
-        || contains_ci("overloaded"))
-        && !contains_ci("quota")
-        && !contains_ci("insufficient")
+    RetryPolicy::default()
+        .decision_for_anyhow(error, 0, None)
+        .retryable
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::anyhow;
+    use crate::error::{ErrorCode, VtCodeError};
     use serde_json::json;
     use std::sync::{Arc, Mutex};
 
@@ -356,9 +371,12 @@ mod tests {
                         let mut count = attempt_count.lock().unwrap();
                         *count += 1;
                         if *count < 2 {
-                            Err(anyhow!("Temporary failure"))
+                            Err(VtCodeError::network(
+                                ErrorCode::ConnectionFailed,
+                                "temporary failure",
+                            ))
                         } else {
-                            Ok::<String, anyhow::Error>("success".to_owned())
+                            Ok::<String, VtCodeError>("success".to_owned())
                         }
                     }
                 },

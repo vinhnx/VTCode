@@ -144,6 +144,8 @@ pub struct ToolRegistry {
     pub(crate) tool_call_counter: Arc<std::sync::atomic::AtomicU64>,
     /// Total PTY poll iterations (for monitoring CPU usage)
     pub(crate) pty_poll_counter: Arc<std::sync::atomic::AtomicU64>,
+    /// Shared metrics collector for reliability and execution observability
+    metrics: Arc<crate::metrics::MetricsCollector>,
 
     // PERFORMANCE OPTIMIZATIONS - Actually integrated into the real registry
     /// Memory pool for reducing allocations in hot paths

@@ -3,7 +3,7 @@
 //! Drop-in replacement for tool execution with full observability.
 
 use crate::cache::LruCache;
-use crate::middleware::{MiddlewareChain, ToolRequest, ToolResponse};
+use crate::middleware::{MiddlewareChain, MiddlewareResult, ToolRequest, ToolResponse};
 use crate::patterns::{PatternDetector, ToolEvent};
 use serde_json::Value;
 use std::collections::hash_map::DefaultHasher;
@@ -14,6 +14,7 @@ use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio::time::timeout;
 use vtcode_core::config::constants::execution;
+use vtcode_core::tools::{UnifiedErrorKind, UnifiedToolError};
 
 static REQUEST_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -86,7 +87,7 @@ impl CachedToolExecutor {
     }
 
     /// Execute a tool with full caching and observability.
-    pub async fn execute(&self, tool_name: &str, args: Value) -> anyhow::Result<Value> {
+    pub async fn execute(&self, tool_name: &str, args: Value) -> MiddlewareResult<Value> {
         // Delegate to the shared-version and convert to an owned Value
         let r = self.execute_shared_owned(tool_name, args).await?;
         Ok((*r).clone())
@@ -99,7 +100,7 @@ impl CachedToolExecutor {
         &self,
         tool_name: &str,
         args: Arc<Value>,
-    ) -> anyhow::Result<Arc<Value>> {
+    ) -> MiddlewareResult<Arc<Value>> {
         let start = std::time::Instant::now();
         let cache_key = make_cache_key(tool_name, &args);
 
@@ -119,7 +120,10 @@ impl CachedToolExecutor {
         };
 
         // Before hooks
-        self.middleware.before_execute(&req).await?;
+        if let Err(err) = self.middleware.before_execute(&req).await {
+            self.record_error(tool_name, start.elapsed(), &req, &err).await;
+            return Err(err);
+        }
 
         // Check cache
         if let Some(result) = self.cache.get(&cache_key).await {
@@ -136,7 +140,10 @@ impl CachedToolExecutor {
                 duration_ms: Some(duration_ms),
                 cache_hit: Some(true),
             };
-            self.middleware.after_execute(&req, &res).await?;
+            if let Err(err) = self.middleware.after_execute(&req, &res).await {
+                self.record_error(tool_name, start.elapsed(), &req, &err).await;
+                return Err(err);
+            }
 
             // Record pattern
             self.record_pattern(tool_name, true, duration_ms).await;
@@ -159,13 +166,21 @@ impl CachedToolExecutor {
         )
         .await
         {
-            Ok(result) => result?,
+            Ok(result) => match result {
+                Ok(result) => result,
+                Err(err) => {
+                    self.record_error(tool_name, start.elapsed(), &req, &err).await;
+                    return Err(err);
+                }
+            },
             Err(_) => {
-                return Err(anyhow::anyhow!(
-                    "Tool '{}' timed out after {} seconds",
-                    tool_name,
-                    timeout_secs
-                ));
+                let err = UnifiedToolError::new(
+                    UnifiedErrorKind::Timeout,
+                    format!("Tool '{}' timed out after {} seconds", tool_name, timeout_secs),
+                )
+                .with_tool_name(tool_name);
+                self.record_error(tool_name, start.elapsed(), &req, &err).await;
+                return Err(err);
             }
         };
 
@@ -194,7 +209,10 @@ impl CachedToolExecutor {
         };
 
         // After hooks
-        self.middleware.after_execute(&req, &res).await?;
+        if let Err(err) = self.middleware.after_execute(&req, &res).await {
+            self.record_error(tool_name, start.elapsed(), &req, &err).await;
+            return Err(err);
+        }
 
         // Record pattern
         self.record_pattern(tool_name, true, duration_ms).await;
@@ -207,7 +225,7 @@ impl CachedToolExecutor {
         &self,
         tool_name: &str,
         args: Value,
-    ) -> anyhow::Result<Arc<Value>> {
+    ) -> MiddlewareResult<Arc<Value>> {
         let arg = Arc::new(args);
         self.execute_shared(tool_name, arg).await
     }
@@ -217,10 +235,28 @@ impl CachedToolExecutor {
         &self,
         _tool_name: &str,
         _args: &Value,
-    ) -> anyhow::Result<Value> {
+    ) -> MiddlewareResult<Value> {
         // Default: return placeholder result
         // In real usage, this would call ToolRegistry
         Ok(serde_json::json!({"status": "ok"}))
+    }
+
+    async fn record_error(
+        &self,
+        tool_name: &str,
+        elapsed: Duration,
+        req: &ToolRequest,
+        err: &UnifiedToolError,
+    ) {
+        {
+            let mut stats = self.stats.write().await;
+            stats.failed_calls += 1;
+            stats.avg_duration_ms = (stats.avg_duration_ms + elapsed.as_millis() as u64) / 2;
+        }
+
+        let _ = self.middleware.on_error(req, err).await;
+        self.record_pattern(tool_name, false, elapsed.as_millis() as u64)
+            .await;
     }
 
     /// Record event in pattern detector
@@ -333,7 +369,22 @@ impl Default for CachedToolExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::middleware::LoggingMiddleware;
+    use crate::middleware::{LoggingMiddleware, MetricsMiddleware, MiddlewareResult};
+    use async_trait::async_trait;
+    use std::sync::Arc;
+    use vtcode_core::tools::{UnifiedErrorKind, UnifiedToolError};
+
+    struct FailingMiddleware;
+
+    #[async_trait]
+    impl crate::middleware::Middleware for FailingMiddleware {
+        async fn before_execute(&self, _req: &ToolRequest) -> MiddlewareResult<()> {
+            Err(UnifiedToolError::new(
+                UnifiedErrorKind::ExecutionFailed,
+                "middleware rejected request",
+            ))
+        }
+    }
 
     #[tokio::test]
     async fn test_executor_basic() -> anyhow::Result<()> {
@@ -434,5 +485,23 @@ mod tests {
         assert_eq!(cache_stats.hits + cache_stats.misses, 0);
 
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_executor_reports_typed_error_to_middleware_metrics() {
+        let metrics = MetricsMiddleware::new();
+        let executor = CachedToolExecutor::new()
+            .with_middleware(metrics.clone())
+            .with_middleware(Arc::new(FailingMiddleware));
+
+        let err = executor.execute("test", serde_json::json!({})).await;
+        assert!(err.is_err());
+
+        let stats = executor.stats().await;
+        assert_eq!(stats.failed_calls, 1);
+
+        let snapshot = metrics.snapshot().await;
+        assert_eq!(snapshot.total_calls, 1);
+        assert_eq!(snapshot.failed_calls, 1);
     }
 }

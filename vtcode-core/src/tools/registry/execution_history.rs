@@ -57,6 +57,9 @@ pub struct ToolExecutionRecord {
     pub adaptive_timeout_ms: Option<u64>,
     pub effective_timeout_ms: Option<u64>,
     pub circuit_breaker: bool,
+    pub attempt: u32,
+    pub retry_after_ms: Option<u64>,
+    pub circuit_breaker_state: Option<String>,
 }
 
 impl ToolExecutionRecord {
@@ -92,6 +95,9 @@ impl ToolExecutionRecord {
             adaptive_timeout_ms,
             effective_timeout_ms,
             circuit_breaker,
+            attempt: 1,
+            retry_after_ms: None,
+            circuit_breaker_state: None,
         }
     }
 
@@ -127,7 +133,29 @@ impl ToolExecutionRecord {
             adaptive_timeout_ms,
             effective_timeout_ms,
             circuit_breaker,
+            attempt: 1,
+            retry_after_ms: None,
+            circuit_breaker_state: None,
         }
+    }
+
+    #[inline]
+    pub fn with_attempt(mut self, attempt: u32) -> Self {
+        self.attempt = attempt.max(1);
+        self
+    }
+
+    #[inline]
+    pub fn with_retry_after(mut self, retry_after: Option<Duration>) -> Self {
+        self.retry_after_ms = retry_after
+            .map(|duration| duration.as_millis().min(u128::from(u64::MAX)) as u64);
+        self
+    }
+
+    #[inline]
+    pub fn with_circuit_breaker_state(mut self, state: impl Into<String>) -> Self {
+        self.circuit_breaker_state = Some(state.into());
+        self
     }
 }
 

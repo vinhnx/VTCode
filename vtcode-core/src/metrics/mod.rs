@@ -124,6 +124,48 @@ impl MetricsCollector {
         }
     }
 
+    /// Record a retry attempt for execution-related workflows.
+    pub fn record_retry_attempt(&self) {
+        if let Ok(mut metrics) = self.execution.lock() {
+            metrics.record_retry_attempt();
+        }
+    }
+
+    /// Record a successful retry that eventually recovered.
+    pub fn record_retry_success(&self) {
+        if let Ok(mut metrics) = self.execution.lock() {
+            metrics.record_retry_success();
+        }
+    }
+
+    /// Record an execution that exhausted all retry attempts.
+    pub fn record_retry_exhausted(&self) {
+        if let Ok(mut metrics) = self.execution.lock() {
+            metrics.record_retry_exhausted();
+        }
+    }
+
+    /// Record that a circuit breaker entered the open state.
+    pub fn record_circuit_open(&self) {
+        if let Ok(mut metrics) = self.execution.lock() {
+            metrics.record_circuit_open();
+        }
+    }
+
+    /// Record that a circuit breaker transitioned to half-open.
+    pub fn record_half_open(&self) {
+        if let Ok(mut metrics) = self.execution.lock() {
+            metrics.record_half_open();
+        }
+    }
+
+    /// Record a denied request caused by an open circuit breaker.
+    pub fn record_breaker_denial(&self) {
+        if let Ok(mut metrics) = self.execution.lock() {
+            metrics.record_breaker_denial();
+        }
+    }
+
     /// Record result size for filtering calculation
     pub fn record_result_size(&self, size_bytes: usize) {
         if let Ok(mut metrics) = self.execution.lock() {
@@ -324,6 +366,54 @@ impl MetricsCollector {
             execution.avg_duration_ms()
         );
 
+        let _ = write!(
+            output,
+            "# HELP vtcode_retry_attempts_total Total retry attempts\n\
+             # TYPE vtcode_retry_attempts_total counter\n\
+             vtcode_retry_attempts_total {}\n\n",
+            execution.retry_attempts
+        );
+
+        let _ = write!(
+            output,
+            "# HELP vtcode_retry_successes_total Total retries that later succeeded\n\
+             # TYPE vtcode_retry_successes_total counter\n\
+             vtcode_retry_successes_total {}\n\n",
+            execution.retry_successes
+        );
+
+        let _ = write!(
+            output,
+            "# HELP vtcode_retry_exhausted_total Total operations that exhausted retries\n\
+             # TYPE vtcode_retry_exhausted_total counter\n\
+             vtcode_retry_exhausted_total {}\n\n",
+            execution.retry_exhausted
+        );
+
+        let _ = write!(
+            output,
+            "# HELP vtcode_circuit_open_total Total circuit breaker open transitions\n\
+             # TYPE vtcode_circuit_open_total counter\n\
+             vtcode_circuit_open_total {}\n\n",
+            execution.circuit_open_events
+        );
+
+        let _ = write!(
+            output,
+            "# HELP vtcode_circuit_half_open_total Total circuit breaker half-open transitions\n\
+             # TYPE vtcode_circuit_half_open_total counter\n\
+             vtcode_circuit_half_open_total {}\n\n",
+            execution.half_open_events
+        );
+
+        let _ = write!(
+            output,
+            "# HELP vtcode_circuit_breaker_denials_total Total circuit breaker denials\n\
+             # TYPE vtcode_circuit_breaker_denials_total counter\n\
+             vtcode_circuit_breaker_denials_total {}\n\n",
+            execution.breaker_denials
+        );
+
         // Filtering metrics
         let _ = write!(
             output,
@@ -431,6 +521,23 @@ mod tests {
     }
 
     #[test]
+    fn test_reliability_metrics_recording() {
+        let collector = MetricsCollector::new();
+        collector.record_retry_attempt();
+        collector.record_retry_success();
+        collector.record_circuit_open();
+        collector.record_half_open();
+        collector.record_breaker_denial();
+
+        let metrics = collector.get_execution_metrics();
+        assert_eq!(metrics.retry_attempts, 1);
+        assert_eq!(metrics.retry_successes, 1);
+        assert_eq!(metrics.circuit_open_events, 1);
+        assert_eq!(metrics.half_open_events, 1);
+        assert_eq!(metrics.breaker_denials, 1);
+    }
+
+    #[test]
     fn test_prometheus_export() {
         let collector = MetricsCollector::new();
         collector.record_execution_complete("python3".to_owned(), 500, 40);
@@ -438,6 +545,7 @@ mod tests {
         let prometheus = collector.export_prometheus();
         assert!(prometheus.contains("vtcode_execution_total"));
         assert!(prometheus.contains("vtcode_execution_duration_ms"));
+        assert!(prometheus.contains("vtcode_retry_attempts_total"));
     }
 
     #[test]

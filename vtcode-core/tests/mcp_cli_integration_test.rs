@@ -8,7 +8,7 @@ async fn mcp_login_reports_not_supported() {
     .await
     .expect_err("login should currently be unsupported");
 
-    assert!(err.to_string().contains("not yet supported"));
+    assert!(err.to_string().contains("not implemented"));
 }
 
 #[tokio::test]
@@ -19,5 +19,5 @@ async fn mcp_logout_reports_not_supported() {
     .await
     .expect_err("logout should currently be unsupported");
 
-    assert!(err.to_string().contains("not yet supported"));
+    assert!(err.to_string().contains("not implemented"));
 }

@@ -3,6 +3,11 @@
 use super::ToolRegistry;
 
 impl ToolRegistry {
+    /// Return the shared metrics collector for this registry instance.
+    pub fn metrics_collector(&self) -> std::sync::Arc<crate::metrics::MetricsCollector> {
+        self.metrics.clone()
+    }
+
     /// Get total tool calls made in current session (for observability).
     pub fn tool_call_count(&self) -> u64 {
         self.tool_call_counter

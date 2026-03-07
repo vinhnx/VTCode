@@ -4,22 +4,7 @@ use serde_json::{Value, json};
 use std::borrow::Cow;
 use vtcode_commons::ErrorCategory;
 
-use crate::config::constants::tools as tool_names;
-
-/// Check if a tool is a command/PTY tool that spawns external processes.
-/// These tools should not have their timeouts retried, as the underlying
-/// process may still be running and cause resource conflicts.
-fn is_command_tool(tool_name: &str) -> bool {
-    matches!(
-        tool_name,
-        n if n == tool_names::RUN_PTY_CMD
-            || n == tool_names::UNIFIED_EXEC
-            || n == tool_names::CREATE_PTY_SESSION
-            || n == tool_names::SEND_PTY_INPUT
-            || n == "shell"
-            || n == "bash"
-    )
-}
+use crate::retry::is_command_tool;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolExecutionError {

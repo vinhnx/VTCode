@@ -131,6 +131,9 @@ impl OptimizedToolRegistry {
             adaptive_timeout_ms: None,
             effective_timeout_ms: Some(execution_time.as_millis() as u64),
             circuit_breaker: false,
+            attempt: 1,
+            retry_after_ms: None,
+            circuit_breaker_state: None,
         };
 
         self.execution_stats.write().push(record);

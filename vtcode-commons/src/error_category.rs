@@ -102,6 +102,19 @@ impl ErrorCategory {
         )
     }
 
+    /// Whether this category should count toward circuit breaker transitions.
+    #[inline]
+    pub const fn should_trip_circuit_breaker(&self) -> bool {
+        matches!(
+            self,
+            ErrorCategory::Network
+                | ErrorCategory::Timeout
+                | ErrorCategory::RateLimit
+                | ErrorCategory::ServiceUnavailable
+                | ErrorCategory::ExecutionError
+        )
+    }
+
     /// Whether this error is an LLM argument mistake (should not count toward
     /// circuit breaker thresholds).
     #[inline]
@@ -508,10 +521,18 @@ impl From<&crate::llm::LLMError> for ErrorCategory {
     fn from(err: &crate::llm::LLMError) -> Self {
         match err {
             crate::llm::LLMError::Authentication { .. } => ErrorCategory::Authentication,
-            crate::llm::LLMError::RateLimit { .. } => ErrorCategory::RateLimit,
+            crate::llm::LLMError::RateLimit { metadata } => {
+                classify_llm_metadata(metadata.as_deref(), ErrorCategory::RateLimit)
+            }
             crate::llm::LLMError::InvalidRequest { .. } => ErrorCategory::InvalidParameters,
             crate::llm::LLMError::Network { .. } => ErrorCategory::Network,
             crate::llm::LLMError::Provider { message, metadata } => {
+                let metadata_category =
+                    classify_llm_metadata(metadata.as_deref(), ErrorCategory::ExecutionError);
+                if metadata_category != ErrorCategory::ExecutionError {
+                    return metadata_category;
+                }
+
                 // Check metadata status code first for precise classification
                 if let Some(meta) = metadata
                     && let Some(status) = meta.status
@@ -531,6 +552,36 @@ impl From<&crate::llm::LLMError> for ErrorCategory {
                 classify_error_message(message)
             }
         }
+    }
+}
+
+fn classify_llm_metadata(
+    metadata: Option<&crate::llm::LLMErrorMetadata>,
+    fallback: ErrorCategory,
+) -> ErrorCategory {
+    let Some(metadata) = metadata else {
+        return fallback;
+    };
+
+    let mut hint = String::new();
+    if let Some(code) = &metadata.code {
+        hint.push_str(code);
+        hint.push(' ');
+    }
+    if let Some(message) = &metadata.message {
+        hint.push_str(message);
+        hint.push(' ');
+    }
+    if let Some(status) = metadata.status {
+        use std::fmt::Write;
+        let _ = write!(&mut hint, "{status}");
+    }
+
+    let classified = classify_error_message(&hint);
+    if classified == ErrorCategory::ExecutionError {
+        fallback
+    } else {
+        classified
     }
 }
 
@@ -730,6 +781,23 @@ mod tests {
     fn llm_error_rate_limit_converts() {
         let err = crate::llm::LLMError::RateLimit { metadata: None };
         assert_eq!(ErrorCategory::from(&err), ErrorCategory::RateLimit);
+    }
+
+    #[test]
+    fn llm_error_quota_exhaustion_converts() {
+        let err = crate::llm::LLMError::RateLimit {
+            metadata: Some(crate::llm::LLMErrorMetadata::new(
+                "openai",
+                Some(429),
+                Some("insufficient_quota".to_string()),
+                None,
+                None,
+                None,
+                Some("quota exceeded".to_string()),
+            )),
+        };
+
+        assert_eq!(ErrorCategory::from(&err), ErrorCategory::ResourceExhausted);
     }
 
     #[test]
