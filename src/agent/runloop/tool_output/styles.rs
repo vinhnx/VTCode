@@ -5,6 +5,7 @@ use vtcode_commons::diff_paths::{
     is_diff_addition_line, is_diff_deletion_line, is_diff_header_line,
 };
 use vtcode_core::config::constants::tools;
+use vtcode_core::tools::tool_intent;
 use vtcode_core::utils::diff_styles::{DiffColorLevel, DiffTheme, diff_add_bg, diff_del_bg};
 use vtcode_core::utils::style_helpers::bold_color;
 
@@ -169,18 +170,13 @@ pub(crate) fn select_line_style(
         return git.remove;
     }
 
-    if let Some(
-        tools::UNIFIED_EXEC
-        | tools::RUN_PTY_CMD
-        | tools::EXECUTE_CODE
-        | "exec_pty_cmd"
-        | "exec"
-        | "shell"
-        | tools::WRITE_FILE
-        | tools::EDIT_FILE
-        | tools::APPLY_PATCH,
-    ) = tool_name
-        && let Some(style) = ls.style_for_line(trimmed)
+    if tool_name.is_some_and(|name| {
+        tool_intent::canonical_unified_exec_tool_name(name).is_some()
+            || matches!(
+                name,
+                tools::WRITE_FILE | tools::EDIT_FILE | tools::APPLY_PATCH
+            )
+    }) && let Some(style) = ls.style_for_line(trimmed)
     {
         return Some(style);
     }

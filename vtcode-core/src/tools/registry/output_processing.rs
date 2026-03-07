@@ -7,16 +7,7 @@ use super::ToolRegistry;
 const PTY_FORCE_SPOOL_MIN_BYTES: usize = 12_000;
 
 fn is_pty_output_tool(tool_name: &str) -> bool {
-    matches!(
-        tool_name,
-        "run_pty_cmd"
-            | "read_pty_session"
-            | "send_pty_input"
-            | "unified_exec"
-            | "shell"
-            | "bash"
-            | "execute_code"
-    )
+    crate::tools::tool_intent::canonical_unified_exec_tool_name(tool_name).is_some()
 }
 
 fn output_field_bytes(value: &Value) -> usize {

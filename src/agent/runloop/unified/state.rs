@@ -3,7 +3,6 @@ use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
-use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::core::agent::error_recovery::ErrorRecoveryState;
 use vtcode_core::tools::ApprovalRecorder;
 use vtcode_tui::EditingMode;

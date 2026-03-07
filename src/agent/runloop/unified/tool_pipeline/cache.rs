@@ -3,6 +3,7 @@ use std::path::Path;
 use serde_json::Value;
 use vtcode_core::config::constants::tools;
 use vtcode_core::tools::result_cache::ToolCacheKey;
+use vtcode_core::tools::tool_intent;
 
 /// Determine if a tool is cacheable based on tool type and arguments.
 pub(super) fn is_tool_cacheable(tool_name: &str, args: &Value) -> bool {
@@ -81,31 +82,24 @@ fn extract_git_diff_cache_target(tool_name: &str, args: &Value) -> Option<String
 }
 
 pub(super) fn stream_command_parts(tool_name: &str, args: &Value) -> Option<Vec<String>> {
-    match tool_name {
-        tools::RUN_PTY_CMD | "shell" => {
-            let command_value = args.get("command").or_else(|| args.get("raw_command"))?;
-            collect_command_parts(command_value, args)
-        }
-        tools::UNIFIED_EXEC | "exec_pty_cmd" | "exec" => {
-            let action = args.get("action").and_then(Value::as_str).unwrap_or("run");
-            if action != "run" {
-                return None;
-            }
-            let command_value = args
-                .get("command")
-                .or_else(|| args.get("cmd"))
-                .or_else(|| args.get("raw_command"))?;
-            collect_command_parts(command_value, args)
-        }
-        _ => None,
+    if !tool_intent::is_command_run_tool_call(tool_name, args) {
+        return None;
     }
+
+    let command_value = args
+        .get("command")
+        .or_else(|| args.get("cmd"))
+        .or_else(|| args.get("raw_command"))?;
+    collect_command_parts(command_value, args)
 }
 
 fn command_parts_for_cache(tool_name: &str, args: &Value) -> Option<Vec<String>> {
     match tool_name {
         // Keep cache behavior strict for run_pty/shell: only "command" is accepted
         // (no raw_command fallback) to avoid broadening cacheability semantics.
-        tools::RUN_PTY_CMD | "shell" => collect_command_parts(args.get("command")?, args),
+        tools::RUN_PTY_CMD | tools::SHELL | "bash" => {
+            collect_command_parts(args.get("command")?, args)
+        }
         _ => stream_command_parts(tool_name, args),
     }
 }

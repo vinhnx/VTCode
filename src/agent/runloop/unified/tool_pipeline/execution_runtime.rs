@@ -7,6 +7,7 @@ use vtcode_core::config::constants::tools;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::tools::registry::{ToolProgressCallback, ToolRegistry};
 use vtcode_core::tools::result_cache::{ToolCacheKey, ToolResultCache};
+use vtcode_core::tools::tool_intent;
 
 use crate::agent::runloop::tool_output::resolve_stdout_tail_limit;
 use crate::agent::runloop::unified::inline_events::harness::{
@@ -261,15 +262,7 @@ fn should_cache_success_output(name: &str, output: &Value, command_success: bool
 }
 
 fn is_command_tool(name: &str) -> bool {
-    matches!(
-        name,
-        tools::RUN_PTY_CMD
-            | "shell"
-            | tools::UNIFIED_EXEC
-            | "exec_pty_cmd"
-            | "exec"
-            | tools::SEND_PTY_INPUT
-    )
+    tool_intent::canonical_unified_exec_tool_name(name).is_some()
 }
 
 fn extract_pty_stream_command(tool_name: &str, args: &Value) -> Option<String> {

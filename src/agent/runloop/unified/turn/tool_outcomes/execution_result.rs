@@ -1074,8 +1074,7 @@ mod tests {
 
     #[test]
     fn fallback_from_error_extracts_unified_exec_poll() {
-        let error =
-            "Tool failed. Use read_pty_session with session_id=\"run-ab12\" instead of read_file.";
+        let error = "Tool failed. Use unified_exec with action=\"poll\" and session_id=\"run-ab12\" instead of read_file.";
         let fallback = fallback_from_error(tool_names::UNIFIED_FILE, error);
         assert_eq!(
             fallback,

@@ -442,10 +442,15 @@ impl ResponseBuilder {
             }),
 
             ThreadItemDetails::ToolInvocation(invocation) => {
+                let tool_name = crate::tools::tool_intent::canonical_unified_exec_tool_name(
+                    &invocation.tool_name,
+                )
+                .unwrap_or(invocation.tool_name.as_str())
+                .to_string();
                 OutputItem::FunctionCall(FunctionCallItem {
                     id: item.id.clone(),
                     status,
-                    name: invocation.tool_name.clone(),
+                    name: tool_name,
                     arguments: invocation.arguments.clone().unwrap_or(json!({})),
                     call_id: Some(item.id.clone()),
                 })
@@ -861,7 +866,7 @@ mod tests {
 
         match &builder.response().output[0] {
             OutputItem::FunctionCall(call) => {
-                assert_eq!(call.name, "exec_command");
+                assert_eq!(call.name, "unified_exec");
                 assert_eq!(call.arguments["command"][0], "git");
                 assert_eq!(call.arguments["yield_time_ms"], 1000);
             }
