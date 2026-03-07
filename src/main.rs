@@ -97,6 +97,7 @@ async fn configure_debug_session_routing(
             Some(Commands::ChatVerbose) => "chat-verbose",
             Some(Commands::Ask { .. }) => "ask",
             Some(Commands::Exec { .. }) => "exec",
+            Some(Commands::Review(_)) => "review",
             Some(Commands::Schema { .. }) => "schema",
             Some(Commands::Benchmark { .. }) => "benchmark",
             Some(Commands::Analyze { .. }) => "analyze",
@@ -427,6 +428,26 @@ async fn run() -> Result<()> {
                 command,
             };
             cli::handle_exec_command(core_cfg.clone(), cfg, options).await?;
+        }
+        Some(Commands::Review(review)) => {
+            let files = review
+                .files
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>();
+            let spec = vtcode_core::review::build_review_spec(
+                review.last_diff,
+                review.target.clone(),
+                files,
+                review.style.clone(),
+            )?;
+            let options = cli::ReviewCommandOptions {
+                json: review.json,
+                events_path: review.events.clone(),
+                last_message_file: review.last_message_file.clone(),
+                spec,
+            };
+            cli::handle_review_command(core_cfg.clone(), cfg, options).await?;
         }
         Some(Commands::Schema { command }) => {
             cli::handle_schema_command(command.clone()).await?;

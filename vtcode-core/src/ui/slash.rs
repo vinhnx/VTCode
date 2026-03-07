@@ -56,6 +56,10 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             description: "Perform comprehensive codebase analysis and generate reports (usage: /analyze [full|security|performance])",
         },
         SlashCommandInfo {
+            name: "review",
+            description: "Review the current diff or selected files (usage: /review [--last-diff|--target <expr>|--file <path>|files...] [--style <style>])",
+        },
+        SlashCommandInfo {
             name: "files",
             description: "Browse and select files from workspace (usage: /files [filter])",
         },
@@ -279,5 +283,11 @@ mod tests {
     fn prefix_matches_include_history_command() {
         let names = names_for("his");
         assert_eq!(names, vec!["history"]);
+    }
+
+    #[test]
+    fn prefix_matches_include_review_command() {
+        let names = names_for("rev");
+        assert_eq!(names, vec!["review"]);
     }
 }

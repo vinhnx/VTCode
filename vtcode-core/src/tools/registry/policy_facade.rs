@@ -46,6 +46,13 @@ impl ToolRegistry {
             .current_full_auto_allowlist()
     }
 
+    pub async fn is_allowed_in_full_auto(&self, tool_name: &str) -> bool {
+        self.policy_gateway
+            .read()
+            .await
+            .is_allowed_in_full_auto(tool_name)
+    }
+
     pub async fn set_policy_manager(&self, manager: ToolPolicyManager) {
         self.policy_gateway
             .write()

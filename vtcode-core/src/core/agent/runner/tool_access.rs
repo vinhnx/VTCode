@@ -19,6 +19,10 @@ impl AgentRunner {
 
     /// Check if a tool is exposed to the active runtime after feature gating.
     pub(super) async fn is_tool_exposed(&self, tool_name: &str) -> bool {
+        if !self.tool_registry.is_allowed_in_full_auto(tool_name).await {
+            return false;
+        }
+
         self.features()
             .allows_tool_name(tool_name, self.tool_registry.is_plan_mode(), false)
             && self.is_tool_allowed(tool_name).await

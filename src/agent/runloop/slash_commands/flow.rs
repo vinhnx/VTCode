@@ -1,12 +1,14 @@
 use anyhow::Result;
 use chrono::Local;
 use std::time::Duration;
+use vtcode_core::review::build_review_prompt;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive;
 
 use crate::agent::runloop::unified::palettes::format_duration_label;
 
 use super::SlashCommandOutcome;
+use super::parsing::parse_review_spec;
 
 pub(super) async fn handle_resume_command(
     args: &str,
@@ -84,6 +86,25 @@ pub(super) async fn handle_resume_command(
         }
     }
     Ok(SlashCommandOutcome::Handled)
+}
+
+pub(super) fn handle_review_command(
+    args: &str,
+    renderer: &mut AnsiRenderer,
+) -> Result<SlashCommandOutcome> {
+    match parse_review_spec(args) {
+        Ok(spec) => Ok(SlashCommandOutcome::SubmitPrompt {
+            prompt: build_review_prompt(&spec),
+        }),
+        Err(err) => {
+            renderer.line(MessageStyle::Error, &err)?;
+            renderer.line(
+                MessageStyle::Info,
+                "Usage: /review [--last-diff] [--target <expr>] [--style <style>] [--file <path> | files...]",
+            )?;
+            Ok(SlashCommandOutcome::Handled)
+        }
+    }
 }
 
 pub(super) fn handle_rewind_command(

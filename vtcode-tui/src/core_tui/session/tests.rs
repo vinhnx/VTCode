@@ -59,6 +59,7 @@ fn session_with_slash_palette_commands() -> Session {
         None,
         vec![
             SlashCommandItem::new("new", "Start a new session"),
+            SlashCommandItem::new("review", "Review current diff"),
             SlashCommandItem::new("doctor", "Run diagnostics"),
             SlashCommandItem::new("command", "Run a terminal command"),
             SlashCommandItem::new("files", "Browse files"),
@@ -529,6 +530,24 @@ fn slash_palette_enter_submits_immediate_command() {
 
     let submit = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(matches!(submit, Some(InlineEvent::Submit(value)) if value.trim() == "/new"));
+}
+
+#[test]
+fn slash_palette_enter_submits_review_immediately() {
+    let mut session = session_with_slash_palette_commands();
+
+    for key in [
+        KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('v'), KeyModifiers::NONE),
+    ] {
+        let event = session.process_key(key);
+        assert!(event.is_none());
+    }
+
+    let submit = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(matches!(submit, Some(InlineEvent::Submit(value)) if value.trim() == "/review"));
 }
 
 #[test]

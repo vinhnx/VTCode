@@ -161,6 +161,7 @@ pub mod orchestrator;
 pub mod plugins;
 pub mod project_doc;
 pub mod prompts;
+pub mod review;
 pub mod safety;
 pub mod sandboxing; // Codex-style sandbox policy and execution environment
 pub mod security;

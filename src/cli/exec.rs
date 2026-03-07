@@ -26,6 +26,9 @@ const EXEC_TASK_ID: &str = "exec-task";
 const EXEC_TASK_TITLE: &str = "Exec Task";
 const EXEC_TASK_INSTRUCTIONS: &str = "You are running vtcode in non-interactive exec mode. Complete the task autonomously using the configured full-auto tool allowlist. Do not request additional user input, confirmations, or allowances—operate solely with the provided information and available tools. Provide a concise summary of the outcome when finished.";
 const EXEC_TASK_INSTRUCTIONS_DRY_RUN: &str = "You are running vtcode in non-interactive exec dry-run mode. Plan and validate the approach in read-only mode without mutating files, running mutating commands, or requesting additional user input. If the task requires mutations, explain what would be changed and why.";
+const REVIEW_TASK_ID: &str = "review-task";
+const REVIEW_TASK_TITLE: &str = "Review Task";
+const REVIEW_TASK_INSTRUCTIONS: &str = "You are running vtcode in non-interactive review mode. Review the requested target in read-only mode. Do not modify files, do not run mutating commands, and do not request user input. Return findings first, ordered by severity, with concrete file and line references when possible. If there are no findings, state that explicitly.";
 
 struct ExecEventProcessor<WStdout, WEvents, WStderr> {
     json: bool,
@@ -262,6 +265,27 @@ fn task_instructions(dry_run: bool) -> &'static str {
     }
 }
 
+struct TaskSpec {
+    id: &'static str,
+    title: &'static str,
+    instructions: &'static str,
+}
+
+fn task_spec(command: &ExecCommandKind, dry_run: bool) -> TaskSpec {
+    match command {
+        ExecCommandKind::Review { .. } => TaskSpec {
+            id: REVIEW_TASK_ID,
+            title: REVIEW_TASK_TITLE,
+            instructions: REVIEW_TASK_INSTRUCTIONS,
+        },
+        _ => TaskSpec {
+            id: EXEC_TASK_ID,
+            title: EXEC_TASK_TITLE,
+            instructions: task_instructions(dry_run),
+        },
+    }
+}
+
 fn serialize_event_line(event: &ThreadEvent) -> Result<String> {
     let mut line =
         serde_json::to_string(event).context("Failed to serialize exec event to JSON")?;
@@ -441,10 +465,11 @@ async fn handle_exec_command_impl(
         archive,
         thread_bootstrap,
     } = prepared;
+    let task_spec = task_spec(&options.command, options.dry_run);
 
     let automation_cfg = &run_vt_cfg.automation.full_auto;
 
-    let mut runner = AgentRunner::new_with_thread_bootstrap(
+    let mut runner = AgentRunner::new_with_thread_bootstrap_and_config(
         AgentType::Single,
         model_id,
         run_config.api_key.clone(),
@@ -456,10 +481,19 @@ async fn handle_exec_command_impl(
         },
         None,
         thread_bootstrap,
+        run_vt_cfg.clone(),
     )
     .await?;
 
-    runner.enable_full_auto(&automation_cfg.allowed_tools).await;
+    let allowed_tools = match &options.command {
+        ExecCommandKind::Review { .. } => {
+            runner
+                .review_tool_allowlist(&automation_cfg.allowed_tools)
+                .await
+        }
+        _ => automation_cfg.allowed_tools.clone(),
+    };
+    runner.enable_full_auto(&allowed_tools).await;
     if options.dry_run {
         runner.enable_plan_mode();
     }
@@ -488,10 +522,10 @@ async fn handle_exec_command_impl(
 
     // OPTIMIZATION: Avoid unnecessary allocations for static strings
     let task = Task {
-        id: EXEC_TASK_ID.into(),
-        title: EXEC_TASK_TITLE.into(),
+        id: task_spec.id.into(),
+        title: task_spec.title.into(),
         description: prompt.trim().to_string(),
-        instructions: Some(task_instructions(options.dry_run).into()),
+        instructions: Some(task_spec.instructions.into()),
     };
 
     let max_retries = run_vt_cfg.agent.max_task_retries;
@@ -539,8 +573,8 @@ async fn handle_exec_command_impl(
 #[cfg(test)]
 mod tests {
     use super::{
-        ExecEventProcessor, human_event_line, render_final_tail, serialize_event_line,
-        task_instructions,
+        ExecCommandKind, ExecEventProcessor, REVIEW_TASK_ID, human_event_line, render_final_tail,
+        serialize_event_line, task_instructions, task_spec,
     };
     use vtcode_core::core::agent::task::{TaskOutcome, TaskResults};
     use vtcode_core::exec::events::{
@@ -562,6 +596,16 @@ mod tests {
     fn normal_exec_instructions_do_not_use_dry_run_wording() {
         let instructions = task_instructions(false);
         assert!(!instructions.contains("dry-run mode"));
+    }
+
+    #[test]
+    fn review_commands_use_review_instructions() {
+        let spec = vtcode_core::review::build_review_spec(false, None, Vec::new(), None)
+            .expect("review spec");
+        let task = task_spec(&ExecCommandKind::Review { spec }, false);
+
+        assert_eq!(task.id, REVIEW_TASK_ID);
+        assert!(task.instructions.contains("read-only mode"));
     }
 
     #[test]

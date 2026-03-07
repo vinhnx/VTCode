@@ -13,7 +13,7 @@ mod parsing;
 mod rendering;
 use flow::{
     handle_auth_command, handle_login_command, handle_logout_command, handle_mode_command,
-    handle_plan_command, handle_resume_command, handle_rewind_command,
+    handle_plan_command, handle_resume_command, handle_review_command, handle_rewind_command,
 };
 use management::{handle_add_dir_command, handle_mcp_command};
 use parsing::{parse_session_log_export_format, split_command_and_args};
@@ -220,6 +220,7 @@ pub async fn handle_slash_command(
             }
             Ok(SlashCommandOutcome::InitializeWorkspace { force })
         }
+        "review" => handle_review_command(args, renderer),
         "generate-agent-file" => {
             let mut overwrite = false;
             for flag in args.split_whitespace() {

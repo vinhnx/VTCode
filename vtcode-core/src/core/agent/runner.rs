@@ -1,6 +1,7 @@
 //! Agent runner for executing individual agent instances
 
 use crate::config::VTCodeConfig;
+use crate::config::constants::tools;
 use crate::config::models::ModelId;
 use crate::config::types::{ReasoningEffortLevel, VerbosityLevel};
 use crate::core::agent::events::EventSink;
@@ -159,6 +160,57 @@ impl AgentRunner {
         steering_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
         bootstrap: ThreadBootstrap,
     ) -> Result<Self> {
+        Self::new_with_thread_bootstrap_internal(
+            agent_type,
+            model,
+            api_key,
+            workspace,
+            session_id,
+            settings,
+            steering_receiver,
+            bootstrap,
+            None,
+        )
+        .await
+    }
+
+    /// Create an agent runner with a prebuilt thread bootstrap and preloaded config.
+    pub async fn new_with_thread_bootstrap_and_config(
+        agent_type: AgentType,
+        model: ModelId,
+        api_key: String,
+        workspace: PathBuf,
+        session_id: String,
+        settings: RunnerSettings,
+        steering_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
+        bootstrap: ThreadBootstrap,
+        vt_cfg: VTCodeConfig,
+    ) -> Result<Self> {
+        Self::new_with_thread_bootstrap_internal(
+            agent_type,
+            model,
+            api_key,
+            workspace,
+            session_id,
+            settings,
+            steering_receiver,
+            bootstrap,
+            Some(vt_cfg),
+        )
+        .await
+    }
+
+    async fn new_with_thread_bootstrap_internal(
+        agent_type: AgentType,
+        model: ModelId,
+        api_key: String,
+        workspace: PathBuf,
+        session_id: String,
+        settings: RunnerSettings,
+        steering_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
+        bootstrap: ThreadBootstrap,
+        vt_cfg: Option<VTCodeConfig>,
+    ) -> Result<Self> {
         // Create client based on model
         let client: AnyClient = make_client(api_key.clone(), model)?;
 
@@ -168,11 +220,17 @@ impl AgentRunner {
                 .map_err(|e| anyhow!("Failed to create provider client: {}", e))?;
 
         // Load configuration once to seed system prompt and runtime policies
-        let session_config = match ResolvedSessionConfig::load_from_workspace(&workspace) {
-            Ok(session_config) => session_config,
-            Err(err) => {
-                warn!("Failed to load vtcode configuration for system prompt composition: {err:#}");
-                ResolvedSessionConfig::from_config(VTCodeConfig::default())
+        let session_config = if let Some(vt_cfg) = vt_cfg {
+            ResolvedSessionConfig::from_config(vt_cfg)
+        } else {
+            match ResolvedSessionConfig::load_from_workspace(&workspace) {
+                Ok(session_config) => session_config,
+                Err(err) => {
+                    warn!(
+                        "Failed to load vtcode configuration for system prompt composition: {err:#}"
+                    );
+                    ResolvedSessionConfig::from_config(VTCodeConfig::default())
+                }
             }
         };
         let session_config = Arc::new(session_config);
@@ -312,6 +370,33 @@ impl AgentRunner {
         self.tool_registry
             .enable_full_auto_mode(allowed_tools)
             .await;
+    }
+
+    /// Restrict an allow-list to tools suitable for strict review-only runs.
+    pub async fn review_tool_allowlist(&self, allowed_tools: &[String]) -> Vec<String> {
+        let review_candidates = if allowed_tools
+            .iter()
+            .any(|tool| tool.trim() == tools::WILDCARD_ALL)
+        {
+            self.tool_registry.available_tools().await
+        } else {
+            allowed_tools.to_vec()
+        };
+
+        review_candidates
+            .iter()
+            .filter(|tool_name| {
+                !matches!(
+                    crate::tools::names::canonical_tool_name(tool_name).as_ref(),
+                    tools::REQUEST_USER_INPUT
+                        | tools::TASK_TRACKER
+                        | tools::PLAN_TASK_TRACKER
+                        | tools::ENTER_PLAN_MODE
+                        | tools::EXIT_PLAN_MODE
+                ) && !self.tool_registry.is_mutating_tool(tool_name)
+            })
+            .cloned()
+            .collect()
     }
 
     pub(crate) fn features(&self) -> FeatureSet {

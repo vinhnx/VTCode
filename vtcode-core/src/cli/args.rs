@@ -328,6 +328,37 @@ pub struct ExecResumeArgs {
     pub prompt: Option<String>,
 }
 
+/// Arguments for `vtcode review`.
+#[derive(Args, Debug, Clone)]
+pub struct ReviewArgs {
+    /// Emit structured JSON events to stdout (one per line)
+    #[arg(long)]
+    pub json: bool,
+    /// Optional path to write the JSONL transcript
+    #[arg(long, value_name = "PATH", value_hint = ValueHint::FilePath)]
+    pub events: Option<PathBuf>,
+    /// Write the last agent message to this file
+    #[arg(long, value_name = "PATH", value_hint = ValueHint::FilePath)]
+    pub last_message_file: Option<PathBuf>,
+    /// Review the last committed diff instead of the current diff
+    #[arg(long, conflicts_with_all = ["target", "files"])]
+    pub last_diff: bool,
+    /// Review a custom git target expression
+    #[arg(long, value_name = "TARGET", conflicts_with = "files")]
+    pub target: Option<String>,
+    /// Optional review style or focus area
+    #[arg(long, value_name = "STYLE")]
+    pub style: Option<String>,
+    /// Review specific files instead of a diff target (repeatable)
+    #[arg(
+        long = "file",
+        value_name = "FILE",
+        value_hint = ValueHint::FilePath,
+        conflicts_with_all = ["last_diff", "target"]
+    )]
+    pub files: Vec<PathBuf>,
+}
+
 /// Available commands
 #[derive(Subcommand, Debug, Clone)]
 pub enum Commands {
@@ -372,6 +403,12 @@ pub enum Commands {
         #[arg(value_name = "PROMPT")]
         prompt: Option<String>,
     },
+
+    /// Headless code review for the current diff, selected files, or a custom git target
+    #[command(
+        long_about = "Run a non-interactive code review.\n\nExamples:\n  vtcode review\n  vtcode review --last-diff\n  vtcode review --target HEAD~1..HEAD\n  vtcode review --file src/main.rs --file vtcode-core/src/lib.rs\n  vtcode review --style security"
+    )]
+    Review(ReviewArgs),
 
     /// Runtime schema introspection for built-in tools
     Schema {
@@ -790,6 +827,7 @@ pub struct LoggingConfig {
 mod exec_command_tests {
     use super::{Cli, Commands, ExecSubcommand};
     use clap::Parser;
+    use std::path::PathBuf;
 
     #[test]
     fn exec_shorthand_preserves_prompt() {
@@ -853,6 +891,57 @@ mod exec_command_tests {
         assert!(resume.last);
         assert!(resume.session_or_prompt.is_none());
         assert!(resume.prompt.is_none());
+    }
+
+    #[test]
+    fn review_defaults_to_current_diff() {
+        let cli = Cli::parse_from(["vtcode", "review"]);
+        let Some(Commands::Review(review)) = cli.command else {
+            panic!("expected review command");
+        };
+
+        assert!(!review.last_diff);
+        assert!(review.target.is_none());
+        assert!(review.files.is_empty());
+        assert!(review.style.is_none());
+    }
+
+    #[test]
+    fn review_parses_target_and_style_flags() {
+        let cli = Cli::parse_from([
+            "vtcode",
+            "review",
+            "--target",
+            "HEAD~1..HEAD",
+            "--style",
+            "security",
+        ]);
+        let Some(Commands::Review(review)) = cli.command else {
+            panic!("expected review command");
+        };
+
+        assert_eq!(review.target.as_deref(), Some("HEAD~1..HEAD"));
+        assert_eq!(review.style.as_deref(), Some("security"));
+        assert!(!review.last_diff);
+    }
+
+    #[test]
+    fn review_parses_files() {
+        let cli = Cli::parse_from([
+            "vtcode",
+            "review",
+            "--file",
+            "src/main.rs",
+            "--file",
+            "src/lib.rs",
+        ]);
+        let Some(Commands::Review(review)) = cli.command else {
+            panic!("expected review command");
+        };
+
+        assert_eq!(review.files.len(), 2);
+        assert_eq!(review.files[0], PathBuf::from("src/main.rs"));
+        assert_eq!(review.files[1], PathBuf::from("src/lib.rs"));
     }
 }
 

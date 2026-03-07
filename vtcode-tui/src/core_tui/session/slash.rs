@@ -453,6 +453,7 @@ fn should_submit_immediately_from_palette(session: &Session) -> bool {
             | "/mcp"
             | "/skills"
             | "/new"
+            | "/review"
             | "/git"
             | "/docs"
             | "/copy"
@@ -523,6 +524,9 @@ mod tests {
         assert!(should_submit_immediately_from_palette(&session));
 
         session.set_input("/skills".to_string());
+        assert!(should_submit_immediately_from_palette(&session));
+
+        session.set_input("/review".to_string());
         assert!(should_submit_immediately_from_palette(&session));
     }
 

@@ -10,6 +10,7 @@ use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::config::models::ModelId;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::threads::{ThreadBootstrap, build_thread_archive_metadata};
+use vtcode_core::review::{ReviewSpec, build_review_prompt};
 use vtcode_core::utils::session_archive::{
     SessionArchive, SessionListing, find_session_by_identifier, list_recent_sessions,
     reserve_session_archive_identifier,
@@ -17,6 +18,7 @@ use vtcode_core::utils::session_archive::{
 use vtcode_core::utils::tty::TtyExt;
 use vtcode_core::utils::validation::validate_non_empty;
 
+use crate::agent::agents::apply_runtime_overrides;
 use crate::workspace_trust::workspace_trust_level;
 
 use super::ExecCommandOptions;
@@ -30,6 +32,9 @@ pub enum ExecCommandKind {
         prompt_arg: Option<String>,
         session_id: Option<String>,
         last: bool,
+    },
+    Review {
+        spec: ReviewSpec,
     },
 }
 
@@ -82,12 +87,15 @@ pub(super) async fn prepare_exec_run(
 ) -> Result<ExecPreparedRun> {
     validate_resume_prompt_requirement(&options.command, io::stdin().is_tty_ext())?;
 
-    let (prompt_arg, resume_listing) = match &options.command {
-        ExecCommandKind::Run { prompt_arg } => (prompt_arg.clone(), None),
+    let (prompt, resume_listing) = match &options.command {
+        ExecCommandKind::Run { prompt_arg } => {
+            (resolve_prompt(prompt_arg.clone(), config.quiet)?, None)
+        }
         ExecCommandKind::Resume { prompt_arg, .. } => (
-            prompt_arg.clone(),
+            resolve_prompt(prompt_arg.clone(), config.quiet)?,
             Some(resolve_resume_listing(options).await?),
         ),
+        ExecCommandKind::Review { spec } => (build_review_prompt(spec), None),
     };
 
     let mut run_config = config.clone();
@@ -98,8 +106,8 @@ pub(super) async fn prepare_exec_run(
     };
     run_config.workspace = run_workspace.clone();
 
-    let run_vt_cfg = load_exec_vt_config(vt_cfg, &run_workspace, &config.workspace).await?;
-    let prompt = resolve_prompt(prompt_arg, run_config.quiet)?;
+    let mut run_vt_cfg = load_exec_vt_config(vt_cfg, &run_workspace, &config.workspace).await?;
+    apply_runtime_overrides(Some(&mut run_vt_cfg), &run_config);
 
     let trust_level = workspace_trust_level(&run_config.workspace)
         .await
@@ -298,6 +306,7 @@ async fn resolve_resume_listing(options: &ExecCommandOptions) -> Result<SessionL
 mod tests {
     use super::{ExecCommandKind, resolve_exec_command, validate_resume_prompt_requirement};
     use vtcode_core::cli::args::{ExecResumeArgs, ExecSubcommand};
+    use vtcode_core::review::{ReviewTarget, build_review_spec};
 
     #[test]
     fn resolve_resume_last_uses_first_positional_as_prompt() {
@@ -352,5 +361,17 @@ mod tests {
             err.to_string()
                 .contains("Exec resume requires a follow-up prompt")
         );
+    }
+
+    #[test]
+    fn review_command_does_not_require_resume_prompt() {
+        let spec = build_review_spec(false, None, Vec::new(), None).expect("review spec");
+        let result = validate_resume_prompt_requirement(
+            &ExecCommandKind::Review { spec: spec.clone() },
+            true,
+        );
+
+        assert!(result.is_ok());
+        assert!(matches!(spec.target, ReviewTarget::CurrentDiff));
     }
 }
