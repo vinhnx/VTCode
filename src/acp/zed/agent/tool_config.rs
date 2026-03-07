@@ -119,6 +119,19 @@ impl ZedAgent {
     }
 
     pub(crate) fn parse_terminal_command(args: &Value) -> Result<Vec<String>, String> {
+        fn validate_command_parts(
+            parts: Vec<String>,
+            empty_message: &str,
+        ) -> Result<Vec<String>, String> {
+            if parts.is_empty() {
+                return Err(empty_message.to_string());
+            }
+            if parts[0].trim().is_empty() {
+                return Err("command executable cannot be empty".to_string());
+            }
+            Ok(parts)
+        }
+
         if let Some(array) = args.get("command").and_then(Value::as_array) {
             let mut parts = Vec::with_capacity(array.len());
             for value in array {
@@ -127,65 +140,21 @@ impl ZedAgent {
                 };
                 parts.push(segment.to_string());
             }
-            if parts.is_empty() {
-                return Err("command array cannot be empty".to_string());
-            }
-            // Validate that the executable (first element) is non-empty
-            if parts[0].trim().is_empty() {
-                return Err("command executable cannot be empty".to_string());
-            }
-            return Ok(parts);
+            return validate_command_parts(parts, "command array cannot be empty");
         }
 
         if let Some(command_str) = args.get("command").and_then(Value::as_str) {
             let segments = split(command_str)
                 .map_err(|error| format!("failed to parse command string: {error}"))?;
-            if segments.is_empty() {
-                return Err("command string cannot be empty".to_string());
-            }
-            // Validate that the executable (first element) is non-empty
-            if segments[0].trim().is_empty() {
-                return Err("command executable cannot be empty".to_string());
-            }
-            return Ok(segments);
+            return validate_command_parts(segments, "command string cannot be empty");
         }
 
         // Support dotted `command.N` arguments commonly produced by some tool call formats
-        if let Value::Object(map) = args {
-            let mut items: Vec<(usize, String)> = Vec::with_capacity(10); // Pre-allocate for typical command parts
-            for (key, value) in map.iter() {
-                if let Some(index_str) = key.strip_prefix("command.")
-                    && let Ok(index) = index_str.parse::<usize>()
-                {
-                    let Some(segment) = value.as_str() else {
-                        return Err("command array must contain only strings".to_string());
-                    };
-                    items.push((index, segment.to_string()));
-                }
-            }
-            if !items.is_empty() {
-                // Sort by index and normalize 1-based indexing to 0-based if needed
-                items.sort_unstable_by_key(|(idx, _)| *idx);
-                let min_index = items.first().map(|(idx, _)| *idx).unwrap_or(0);
-                let max_index = items.last().map(|(idx, _)| *idx).unwrap_or(0);
-                let mut parts = vec![String::new(); max_index + 1 - min_index];
-                for (idx, seg) in items.into_iter() {
-                    let position = if min_index == 1 { idx - 1 } else { idx };
-                    if position >= parts.len() {
-                        // Resize if needed (shouldn't be necessary but be defensive)
-                        parts.resize(position + 1, String::new());
-                    }
-                    parts[position] = seg;
-                }
-                // Validate non-empty and executable at index 0
-                if parts.is_empty() {
-                    return Err("command array cannot be empty".to_string());
-                }
-                if parts[0].trim().is_empty() {
-                    return Err("command executable cannot be empty".to_string());
-                }
-                return Ok(parts);
-            }
+        if let Some(map) = args.as_object()
+            && let Some(parts) = vtcode_core::tools::command_args::parse_indexed_command_parts(map)
+                .map_err(str::to_string)?
+        {
+            return validate_command_parts(parts, "command array cannot be empty");
         }
 
         Err(

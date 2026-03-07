@@ -9,6 +9,11 @@
 use crate::command_safety::shell_string_might_be_dangerous;
 use crate::config::constants::tools;
 use crate::core::loop_detector::LoopDetector;
+use crate::tools::apply_patch::decode_apply_patch_input;
+use crate::tools::command_args::{command_text, interactive_input_text};
+use crate::tools::tool_intent::{
+    classify_tool_intent, unified_exec_action, unified_file_action, unified_search_action,
+};
 use anyhow::{Context, Result};
 use hashbrown::{HashMap, HashSet};
 use serde_json::Value;
@@ -18,14 +23,6 @@ use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 use tracing::warn;
 
-/// Tools that are always safe to execute autonomously
-const SAFE_AUTONOMOUS_TOOLS: &[&str] = &[
-    tools::UNIFIED_SEARCH,
-    tools::READ_FILE,
-    tools::LIST_PTY_SESSIONS,
-    tools::READ_PTY_SESSION,
-];
-
 /// Tools that require verification before execution
 const VERIFICATION_REQUIRED_TOOLS: &[&str] = &[
     tools::WRITE_FILE,
@@ -34,9 +31,6 @@ const VERIFICATION_REQUIRED_TOOLS: &[&str] = &[
     tools::RUN_PTY_CMD,
     tools::CREATE_PTY_SESSION,
 ];
-
-/// Tools that are destructive and need explicit confirmation
-const DESTRUCTIVE_TOOLS: &[&str] = &[tools::APPLY_PATCH];
 
 /// Autonomous execution policy for a tool
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -72,9 +66,7 @@ use crate::utils::path::{normalize_path, resolve_workspace_path};
 
 /// Autonomous tool executor with safety checks
 pub struct AutonomousExecutor {
-    safe_tools: HashSet<String>,
     verification_tools: HashSet<String>,
-    destructive_tools: HashSet<String>,
     loop_detector: Arc<RwLock<LoopDetector>>,
     execution_stats: Arc<RwLock<HashMap<String, ToolStats>>>,
     workspace_dir: Option<PathBuf>,
@@ -91,15 +83,10 @@ impl AutonomousExecutor {
 
     pub fn with_loop_detector(loop_detector: Arc<RwLock<LoopDetector>>) -> Self {
         Self {
-            safe_tools: SAFE_AUTONOMOUS_TOOLS
-                .iter()
-                .map(|s| s.to_string())
-                .collect(),
             verification_tools: VERIFICATION_REQUIRED_TOOLS
                 .iter()
                 .map(|s| s.to_string())
                 .collect(),
-            destructive_tools: DESTRUCTIVE_TOOLS.iter().map(|s| s.to_string()).collect(),
             loop_detector,
             execution_stats: Arc::new(RwLock::new(HashMap::new())),
             workspace_dir: std::env::var("WORKSPACE_DIR")
@@ -144,22 +131,18 @@ impl AutonomousExecutor {
 
     /// Determine execution policy for a tool
     pub fn get_policy(&self, tool_name: &str, args: &Value) -> AutonomousPolicy {
-        // Check for destructive patterns in arguments
         if self.is_destructive_operation(tool_name, args) {
             return AutonomousPolicy::RequireConfirmation;
         }
 
-        // Safe tools execute immediately
-        if self.safe_tools.contains(tool_name) {
+        if !classify_tool_intent(tool_name, args).mutating {
             return AutonomousPolicy::AutoExecute;
         }
 
-        // Verification tools show preview first
-        if self.verification_tools.contains(tool_name) {
+        if self.requires_preview(tool_name, args) {
             return AutonomousPolicy::VerifyThenExecute;
         }
 
-        // Unknown tools require confirmation
         AutonomousPolicy::RequireConfirmation
     }
 
@@ -228,28 +211,34 @@ impl AutonomousExecutor {
 
     /// Check if operation is destructive based on tool and arguments
     fn is_destructive_operation(&self, tool_name: &str, args: &Value) -> bool {
-        // Explicitly destructive tools
-        if self.destructive_tools.contains(tool_name) {
-            return true;
+        match tool_name {
+            tools::APPLY_PATCH | tools::DELETE_FILE => true,
+            tools::UNIFIED_FILE => matches!(
+                unified_file_action(args),
+                Some(action)
+                    if action.eq_ignore_ascii_case("patch")
+                        || action.eq_ignore_ascii_case("delete")
+            ),
+            "shell" | tools::RUN_PTY_CMD => command_text(args)
+                .ok()
+                .flatten()
+                .is_some_and(|cmd| self.is_destructive_command(&cmd)),
+            tools::UNIFIED_EXEC => match unified_exec_action(args) {
+                Some(action) if action.eq_ignore_ascii_case("run") => command_text(args)
+                    .ok()
+                    .flatten()
+                    .is_some_and(|cmd| self.is_destructive_command(&cmd)),
+                Some(action)
+                    if action.eq_ignore_ascii_case("write")
+                        || action.eq_ignore_ascii_case("continue") =>
+                {
+                    interactive_input_text(args)
+                        .is_some_and(|input| self.is_destructive_command(input))
+                }
+                _ => false,
+            },
+            _ => false,
         }
-
-        // Check for destructive shell commands
-        if (tool_name == "shell" || tool_name == tools::RUN_PTY_CMD)
-            && let Some(cmd) = args.get("command").and_then(|v| v.as_str())
-        {
-            return self.is_destructive_command(cmd);
-        }
-        if tool_name == tools::UNIFIED_EXEC
-            && matches!(
-                args.get("action").and_then(|v| v.as_str()),
-                Some("run" | "continue")
-            )
-            && let Some(cmd) = args.get("command").and_then(|v| v.as_str())
-        {
-            return self.is_destructive_command(cmd);
-        }
-
-        false
     }
 
     /// Check if shell command is destructive
@@ -288,14 +277,54 @@ impl AutonomousExecutor {
 
     /// Validate tool arguments for safety
     pub fn validate_args(&self, tool_name: &str, args: &Value) -> Result<()> {
-        if tool_name == tools::WRITE_FILE || tool_name == tools::EDIT_FILE {
-            self.validate_file_path(args.get("path"))?;
-        } else if tool_name == "shell" || tool_name == tools::RUN_PTY_CMD {
-            self.validate_command(args.get("command"))?;
-        } else if tool_name == tools::UNIFIED_SEARCH
-            && args.get("action").and_then(|v| v.as_str()) == Some("list")
-        {
-            self.validate_list_files_args(args)?;
+        match tool_name {
+            tools::WRITE_FILE | tools::EDIT_FILE => self.validate_file_path(args.get("path"))?,
+            "shell" | tools::RUN_PTY_CMD => {
+                self.validate_command_text(
+                    &command_text(args)
+                        .map_err(anyhow::Error::msg)?
+                        .context("Missing or invalid 'command' argument")?,
+                )?;
+            }
+            tools::UNIFIED_EXEC => match unified_exec_action(args) {
+                Some(action) if action.eq_ignore_ascii_case("run") => {
+                    self.validate_command_text(
+                        &command_text(args)
+                            .map_err(anyhow::Error::msg)?
+                            .context("Missing or invalid 'command' argument")?,
+                    )?;
+                }
+                Some(action)
+                    if action.eq_ignore_ascii_case("write")
+                        || action.eq_ignore_ascii_case("continue") =>
+                {
+                    if let Some(input) = interactive_input_text(args) {
+                        self.validate_command_text(input)?;
+                    }
+                }
+                _ => {}
+            },
+            tools::UNIFIED_FILE => match unified_file_action(args) {
+                Some(action)
+                    if action.eq_ignore_ascii_case("write")
+                        || action.eq_ignore_ascii_case("edit")
+                        || action.eq_ignore_ascii_case("delete") =>
+                {
+                    self.validate_file_path(args.get("path"))?;
+                }
+                Some(action)
+                    if action.eq_ignore_ascii_case("move")
+                        || action.eq_ignore_ascii_case("copy") =>
+                {
+                    self.validate_file_path(args.get("path"))?;
+                    self.validate_file_path(args.get("destination"))?;
+                }
+                _ => {}
+            },
+            tools::UNIFIED_SEARCH if unified_search_action(args) == Some("list") => {
+                self.validate_list_files_args(args)?;
+            }
+            _ => {}
         }
         Ok(())
     }
@@ -364,15 +393,11 @@ impl AutonomousExecutor {
     }
 
     /// Validate shell command for safety
-    fn validate_command(&self, cmd: Option<&Value>) -> Result<()> {
-        let cmd_str = cmd
-            .and_then(|v| v.as_str())
-            .context("Missing or invalid 'command' argument")?;
-
-        if self.is_destructive_command(cmd_str) {
+    fn validate_command_text(&self, cmd: &str) -> Result<()> {
+        if self.is_destructive_command(cmd) {
             anyhow::bail!(
                 "Destructive command requires explicit confirmation: {}",
-                cmd_str
+                cmd
             );
         }
 
@@ -401,7 +426,9 @@ impl AutonomousExecutor {
 
     /// Generate dry-run preview for verification
     pub fn generate_preview(&self, tool_name: &str, args: &Value) -> String {
-        if tool_name == tools::WRITE_FILE {
+        if tool_name == tools::WRITE_FILE
+            || (tool_name == tools::UNIFIED_FILE && unified_file_action(args) == Some("write"))
+        {
             let path = args
                 .get("path")
                 .and_then(|v| v.as_str())
@@ -425,7 +452,9 @@ impl AutonomousExecutor {
                 "Will write {} lines ({} KB) to: {}\nPreview:{}",
                 lines, size_kb, path, preview
             )
-        } else if tool_name == tools::EDIT_FILE {
+        } else if tool_name == tools::EDIT_FILE
+            || (tool_name == tools::UNIFIED_FILE && unified_file_action(args) == Some("edit"))
+        {
             let path = args
                 .get("path")
                 .and_then(|v| v.as_str())
@@ -439,12 +468,15 @@ impl AutonomousExecutor {
                 old_str.lines().take(3).collect::<Vec<_>>().join("\n  "),
                 new_str.lines().take(3).collect::<Vec<_>>().join("\n  ")
             )
-        } else if tool_name == "shell" || tool_name == tools::RUN_PTY_CMD {
-            let cmd = args
-                .get("command")
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown");
-            let is_destructive = self.is_destructive_command(cmd);
+        } else if tool_name == "shell"
+            || tool_name == tools::RUN_PTY_CMD
+            || (tool_name == tools::UNIFIED_EXEC && unified_exec_action(args) == Some("run"))
+        {
+            let cmd = command_text(args)
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| "unknown".to_string());
+            let is_destructive = self.is_destructive_command(&cmd);
 
             let warning = if is_destructive {
                 "\n[WARN] WARNING: This command is potentially destructive!"
@@ -453,12 +485,35 @@ impl AutonomousExecutor {
             };
 
             format!("Will execute: {}{}", cmd, warning)
-        } else if tool_name == tools::APPLY_PATCH {
-            let patch = args.get("patch").and_then(|v| v.as_str()).unwrap_or("");
+        } else if tool_name == tools::APPLY_PATCH
+            || (tool_name == tools::UNIFIED_FILE && unified_file_action(args) == Some("patch"))
+        {
+            let patch = decode_apply_patch_input(args)
+                .ok()
+                .flatten()
+                .map(|patch| patch.text)
+                .unwrap_or_default();
             let lines = patch.lines().count();
             format!("Will apply patch with {} lines of changes", lines)
         } else {
             format!("Will execute: {} with args: {:?}", tool_name, args)
+        }
+    }
+
+    fn requires_preview(&self, tool_name: &str, args: &Value) -> bool {
+        if self.verification_tools.contains(tool_name) {
+            return true;
+        }
+
+        match tool_name {
+            tools::UNIFIED_FILE => matches!(
+                unified_file_action(args),
+                Some("write" | "edit" | "move" | "copy")
+            ),
+            tools::UNIFIED_EXEC => {
+                matches!(unified_exec_action(args), Some("run" | "code" | "close"))
+            }
+            _ => false,
         }
     }
 
@@ -585,13 +640,37 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn test_safe_tools_auto_execute() {
+    fn test_readonly_tools_auto_execute() {
         let executor = AutonomousExecutor::new();
 
-        for tool in SAFE_AUTONOMOUS_TOOLS {
-            let policy = executor.get_policy(tool, &json!({}));
-            assert_eq!(policy, AutonomousPolicy::AutoExecute);
-        }
+        assert_eq!(
+            executor.get_policy(
+                tools::UNIFIED_SEARCH,
+                &json!({"action": "list", "path": "src"})
+            ),
+            AutonomousPolicy::AutoExecute
+        );
+        assert_eq!(
+            executor.get_policy(
+                tools::UNIFIED_FILE,
+                &json!({"action": "read", "path": "README.md"})
+            ),
+            AutonomousPolicy::AutoExecute
+        );
+        assert_eq!(
+            executor.get_policy(
+                tools::UNIFIED_EXEC,
+                &json!({"action": "poll", "session_id": "run-1"})
+            ),
+            AutonomousPolicy::AutoExecute
+        );
+        assert_eq!(
+            executor.get_policy(
+                tools::UNIFIED_EXEC,
+                &json!({"action": "continue", "session_id": "run-1"})
+            ),
+            AutonomousPolicy::AutoExecute
+        );
     }
 
     #[test]
@@ -652,6 +731,37 @@ mod tests {
             let policy = executor.get_policy(tool, &json!({}));
             assert_eq!(policy, AutonomousPolicy::VerifyThenExecute);
         }
+    }
+
+    #[test]
+    fn test_unified_tools_use_action_specific_policies() {
+        let executor = AutonomousExecutor::new();
+
+        assert_eq!(
+            executor.get_policy(
+                tools::UNIFIED_FILE,
+                &json!({"action": "write", "path": "foo.txt", "content": "hello"})
+            ),
+            AutonomousPolicy::VerifyThenExecute
+        );
+        assert_eq!(
+            executor.get_policy(
+                tools::UNIFIED_FILE,
+                &json!({"action": "patch", "input": "*** Begin Patch\n*** End Patch"})
+            ),
+            AutonomousPolicy::RequireConfirmation
+        );
+        assert_eq!(
+            executor.get_policy(tools::UNIFIED_EXEC, &json!({"cmd": "echo hi"})),
+            AutonomousPolicy::VerifyThenExecute
+        );
+        assert_eq!(
+            executor.get_policy(
+                tools::UNIFIED_EXEC,
+                &json!({"action": "write", "session_id": "run-1", "input": "rm -rf /tmp/test"})
+            ),
+            AutonomousPolicy::RequireConfirmation
+        );
     }
 
     #[test]
@@ -751,6 +861,36 @@ mod tests {
     }
 
     #[test]
+    fn test_unified_exec_validation_uses_command_aliases() {
+        let executor = AutonomousExecutor::new();
+
+        let err = executor
+            .validate_args(tools::UNIFIED_EXEC, &json!({"cmd": "rm -rf /tmp/test"}))
+            .expect_err("destructive command should fail");
+
+        assert!(err.to_string().contains("requires explicit confirmation"));
+    }
+
+    #[test]
+    fn test_unified_file_validation_checks_destinations() {
+        let mut executor = AutonomousExecutor::new();
+        executor.set_workspace_dir(PathBuf::from("/workspace"));
+
+        let err = executor
+            .validate_args(
+                tools::UNIFIED_FILE,
+                &json!({
+                    "action": "move",
+                    "path": "src/main.rs",
+                    "destination": "/etc/passwd"
+                }),
+            )
+            .expect_err("destination outside workspace should fail");
+
+        assert!(err.to_string().contains("workspace boundary"));
+    }
+
+    #[test]
     fn test_enhanced_destructive_patterns() {
         let executor = AutonomousExecutor::new();
 
@@ -795,6 +935,20 @@ mod tests {
         let preview = executor.generate_preview("shell", &args);
         assert!(preview.contains("WARNING"));
         assert!(preview.contains("destructive"));
+
+        let preview = executor.generate_preview(
+            tools::UNIFIED_EXEC,
+            &json!({"command.0": "git", "command.1": "status"}),
+        );
+        assert!(preview.contains("git status"));
+
+        let preview = executor.generate_preview(
+            tools::UNIFIED_FILE,
+            &json!({
+                "input": "*** Begin Patch\n*** Add File: note.txt\n+hello\n*** End Patch"
+            }),
+        );
+        assert!(preview.contains("apply patch"));
     }
 
     #[test]

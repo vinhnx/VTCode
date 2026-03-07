@@ -1,7 +1,11 @@
-//! Tool handlers module (Codex-compatible architecture)
+//! Tool handlers module (Codex-compatible compatibility layer)
 //!
 //! This module implements the handler pattern from OpenAI's Codex project,
-//! providing a modular and composable approach to tool execution.
+//! providing compatibility helpers around tool execution.
+//!
+//! The authoritative public tool surface, name resolution, and catalog assembly
+//! live in `crate::tools::registry`. Keep router/adapter changes here scoped to
+//! compatibility and handler composition, not public registry policy.
 //!
 //! ## Key Components
 //!

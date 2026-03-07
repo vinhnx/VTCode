@@ -258,50 +258,19 @@ impl ToolInventory {
     }
 
     pub fn registration_for(&self, name: &str) -> Option<ToolRegistration> {
-        // Check if name exists directly or resolve via case-insensitive alias
-        // IMPORTANT: Prefer alias resolution over direct registration when the direct
-        // registration is not LLM-visible. This allows LLMs to call internal tool names
-        // (like "read_file") and have them routed to their visible parent (like "unified_file").
+        // Check if name exists directly or resolve via case-insensitive alias.
+        // Public tool routing happens earlier in the registry assembly; the inventory
+        // stays a simple direct/alias lookup for canonical internal execution.
         let name_lower = name.to_ascii_lowercase();
 
         let resolved_name = {
             let tools = self.tools.read().ok()?;
             let state = self.state.read().ok()?;
 
-            // First check if there's an alias mapping for this name
-            // This takes priority when the direct tool is not LLM-visible
-            let alias_target = state.aliases.get(&name_lower).cloned();
-
             if let Some(entry) = tools.get(&name_lower) {
-                // Direct tool exists - check if it's LLM-visible
-                if entry.registration.expose_in_llm() {
-                    // LLM-visible tool: use direct registration
-                    name_lower.clone()
-                } else if let Some(ref aliased) = alias_target {
-                    // Not LLM-visible but has an alias: prefer the alias target
-                    // This routes "read_file" → "unified_file" when called by LLM
-                    if let Ok(mut metrics) = self.alias_metrics.lock()
-                        && let Some((canonical, count)) = metrics.usage.get_mut(&name_lower)
-                    {
-                        *count += 1;
-                        let count_val = *count;
-                        let canonical_val = canonical.clone();
-                        drop(metrics);
-                        info!(
-                            alias = %name,
-                            canonical = %canonical_val,
-                            count = count_val,
-                            "Internal tool routed via alias to LLM-visible parent"
-                        );
-                    }
-                    aliased.clone()
-                } else {
-                    // Not LLM-visible and no alias: use direct registration
-                    // (for internal tool-to-tool calls)
-                    name_lower.clone()
-                }
-            } else if let Some(aliased) = alias_target {
-                // No direct registration but alias exists
+                let _ = entry;
+                name_lower.clone()
+            } else if let Some(aliased) = state.aliases.get(&name_lower).cloned() {
                 if let Ok(mut metrics) = self.alias_metrics.lock()
                     && let Some((canonical, count)) = metrics.usage.get_mut(&name_lower)
                 {
@@ -374,22 +343,6 @@ impl ToolInventory {
                 .read()
                 .ok()
                 .is_some_and(|s| s.aliases.contains_key(&name_lower))
-    }
-
-    pub fn available_tools(&self) -> Vec<String> {
-        self.state
-            .read()
-            .ok()
-            .map(|s| s.sorted_names.clone())
-            .unwrap_or_default()
-    }
-
-    pub fn registered_aliases(&self) -> Vec<String> {
-        self.state
-            .read()
-            .ok()
-            .map(|s| s.aliases.keys().cloned().collect())
-            .unwrap_or_default()
     }
 
     /// Get all registered aliases with their canonical targets
@@ -509,7 +462,7 @@ mod tests {
     }
 
     #[test]
-    fn test_alias_preferred_over_hidden_direct_tool() {
+    fn test_hidden_direct_tool_takes_precedence_over_alias_parent() {
         let inventory = make_test_inventory();
 
         // Register a visible "parent" tool with an alias
@@ -520,13 +473,12 @@ mod tests {
         let internal = make_hidden_registration("read_file");
         inventory.register_tool(internal).unwrap();
 
-        // When we look up "read_file", it should resolve to "unified_file"
-        // because the direct "read_file" registration is not LLM-visible
+        // Direct registration should still win for internal execution even when hidden.
         let registration = inventory.registration_for("read_file").unwrap();
         assert_eq!(
             registration.name(),
-            "unified_file",
-            "Hidden tool should be routed through its visible alias parent"
+            "read_file",
+            "Direct hidden registration should remain addressable for internal callers"
         );
     }
 
@@ -570,7 +522,7 @@ mod tests {
     }
 
     #[test]
-    fn test_alias_metrics_tracked_for_hidden_tool_routing() {
+    fn test_direct_hidden_lookup_does_not_increment_alias_metrics() {
         let inventory = make_test_inventory();
 
         // Register a visible tool with an alias
@@ -590,7 +542,7 @@ mod tests {
         );
         let initial_count = initial_entry.unwrap().1;
 
-        // Look up via the hidden tool name twice
+        // Direct lookups should not consume the alias path anymore.
         inventory.registration_for("read_file");
         inventory.registration_for("read_file");
 
@@ -601,9 +553,8 @@ mod tests {
         let (canonical, count) = usage_entry.unwrap();
         assert_eq!(canonical, "unified_file");
         assert_eq!(
-            *count,
-            initial_count + 2,
-            "Usage count should have increased by 2"
+            *count, initial_count,
+            "Direct hidden registration lookups should not increment alias usage"
         );
     }
 

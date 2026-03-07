@@ -12,38 +12,19 @@ use crate::tools::mcp::legacy_mcp_tool_name;
 
 impl ToolRegistry {
     fn resolve_fallback_seed_tool(&self, failed_tool: &str) -> String {
-        if let Some(registration) = self.inventory.registration_for(failed_tool) {
-            return registration.name().to_string();
+        if let Ok(resolved) = self.resolve_public_tool_name_sync(failed_tool) {
+            return resolved;
         }
 
         let lower = failed_tool.trim().to_ascii_lowercase();
         match lower.as_str() {
-            // Legacy/provider-emitted execution aliases
-            "exec_code" | "exec code" | "run code" | "run command" | "run command (pty)"
-            | "container.exec" | "bash" => "unified_exec".to_string(),
-            // Harmony namespace variants
-            "repo_browser.list_files"
-            | "list files"
-            | "search text"
-            | "list tools"
-            | "list errors"
-            | "show agent info"
-            | "fetch" => "unified_search".to_string(),
-            "repo_browser.read_file"
-            | "repo_browser.write_file"
-            | "read file"
-            | "write file"
-            | "edit file"
-            | "apply patch"
-            | "delete file"
-            | "move file"
-            | "copy file"
-            | "file operation" => "unified_file".to_string(),
+            "exec_code" => "unified_exec".to_string(),
+            "list_dir" | "list_directory" => "unified_search".to_string(),
             _ => {
                 if let Some((_, suffix)) = lower.rsplit_once('.')
-                    && let Some(registration) = self.inventory.registration_for(suffix)
+                    && let Ok(resolved) = self.resolve_public_tool_name_sync(suffix)
                 {
-                    return registration.name().to_string();
+                    return resolved;
                 }
                 lower
             }
@@ -62,15 +43,9 @@ impl ToolRegistry {
         }
 
         let candidates: &[&str] = match seed.as_str() {
-            "read_file" => &["list_files", "grep_file", "unified_search"],
-            "list_files" => &["read_file", "grep_file", "unified_search"],
-            "grep_file" => &["read_file", "unified_search"],
-            "run_pty_cmd" | "shell" | "unified_exec" => {
-                &["unified_exec", "unified_search", "grep_file"]
-            }
-            "write_file" | "edit_file" | "apply_patch" | "unified_file" => {
-                &["read_file", "grep_file", "unified_search"]
-            }
+            "unified_search" => &["unified_file"],
+            "unified_exec" => &["unified_search"],
+            "unified_file" | "apply_patch" => &["unified_search"],
             // Task trackers require action-specific arguments; generic fallback names
             // create low-signal retries.
             "task_tracker" | "plan_task_tracker" => &[],
@@ -163,6 +138,10 @@ impl ToolRegistry {
     /// # Returns
     /// `bool` indicating whether the tool exists (including aliases)
     pub async fn has_tool(&self, name: &str) -> bool {
+        if self.resolve_public_tool_name_sync(name).is_ok() {
+            return true;
+        }
+
         // First check the main tool registry
         if self.inventory.has_tool(name) {
             return true;

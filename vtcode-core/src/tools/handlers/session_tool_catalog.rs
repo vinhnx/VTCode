@@ -6,7 +6,8 @@ use crate::gemini::FunctionDeclaration;
 use crate::llm::provider::ToolDefinition;
 use crate::tool_policy::ToolPolicy;
 use crate::tools::mcp::MCP_QUALIFIED_TOOL_PREFIX;
-use crate::tools::registry::ToolRegistration;
+use crate::tools::registry::{ToolHandler as RegistryToolHandler, ToolRegistration};
+use crate::tools::tool_intent::ToolSurfaceKind;
 use serde::Serialize;
 use serde_json::{Value, json};
 
@@ -217,10 +218,11 @@ impl ToolCatalogEntry {
             .cloned()
             .unwrap_or_else(default_parameter_schema);
         let default_permission = metadata.default_permission().unwrap_or(ToolPolicy::Prompt);
-        let supports_parallel_tool_calls = supports_parallel_tool_calls(registration.name());
+        let supports_parallel_tool_calls = registration_supports_parallel_tool_calls(registration);
         let aliases = metadata.aliases().to_vec();
+        let kind = registration_catalog_kind(registration);
 
-        if registration.name() == tools::APPLY_PATCH {
+        if matches!(kind, CatalogToolKind::ApplyPatch) {
             let public_name = tools::APPLY_PATCH.to_string();
             return Some(Self::new(
                 public_name,
@@ -232,7 +234,7 @@ impl ToolCatalogEntry {
                 default_permission,
                 supports_parallel_tool_calls,
                 ToolCatalogSource::Builtin,
-                CatalogToolKind::ApplyPatch,
+                kind,
             ));
         }
 
@@ -252,7 +254,7 @@ impl ToolCatalogEntry {
                 default_permission,
                 supports_parallel_tool_calls,
                 ToolCatalogSource::Mcp,
-                CatalogToolKind::Function,
+                kind,
             ));
         }
 
@@ -270,7 +272,7 @@ impl ToolCatalogEntry {
             default_permission,
             supports_parallel_tool_calls,
             ToolCatalogSource::Builtin,
-            CatalogToolKind::Function,
+            kind,
         ))
     }
 
@@ -339,8 +341,26 @@ fn surface_allows_tool(surface: SessionSurface, tool_name: &str) -> bool {
     }
 }
 
-fn supports_parallel_tool_calls(tool_name: &str) -> bool {
-    matches!(tool_name, tools::UNIFIED_SEARCH | tools::LIST_SKILLS)
+fn registration_catalog_kind(registration: &ToolRegistration) -> CatalogToolKind {
+    registration
+        .metadata()
+        .behavior()
+        .map(|behavior| match behavior.surface_kind {
+            ToolSurfaceKind::Function => CatalogToolKind::Function,
+            ToolSurfaceKind::ApplyPatch => CatalogToolKind::ApplyPatch,
+        })
+        .unwrap_or(CatalogToolKind::Function)
+}
+
+fn registration_supports_parallel_tool_calls(registration: &ToolRegistration) -> bool {
+    if let Some(behavior) = registration.metadata().behavior() {
+        return behavior.supports_parallel_calls;
+    }
+
+    match registration.handler() {
+        RegistryToolHandler::TraitObject(tool) => tool.is_parallel_safe(),
+        RegistryToolHandler::RegistryFn(_) => false,
+    }
 }
 
 pub(crate) fn unified_exec_parameters() -> Value {
@@ -633,6 +653,7 @@ fn json_schema_from_value(value: &Value) -> JsonSchema {
 mod tests {
     use super::*;
     use crate::tools::registry::ToolRegistration;
+    use crate::tools::tool_intent::{ToolBehavior, ToolMutationModel};
     use serde_json::json;
 
     fn registration(name: &'static str) -> ToolRegistration {
@@ -684,7 +705,12 @@ mod tests {
         let registration = registration(tools::APPLY_PATCH)
             .with_llm_visibility(false)
             .with_description("Apply patch")
-            .with_parameter_schema(apply_patch_parameters());
+            .with_parameter_schema(apply_patch_parameters())
+            .with_behavior(ToolBehavior::apply_patch(
+                ToolMutationModel::Mutating,
+                false,
+                true,
+            ));
 
         let catalog = SessionToolCatalog::rebuild_from_registrations(vec![registration]);
         let tools = catalog.model_tools(SessionToolsConfig::full_public(
@@ -698,5 +724,45 @@ mod tests {
 
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0].tool_type, "apply_patch");
+    }
+
+    #[test]
+    fn apply_patch_falls_back_to_function_tool_when_unsupported() {
+        let registration = registration(tools::APPLY_PATCH)
+            .with_llm_visibility(false)
+            .with_description("Apply patch")
+            .with_parameter_schema(apply_patch_parameters())
+            .with_behavior(ToolBehavior::apply_patch(
+                ToolMutationModel::Mutating,
+                false,
+                true,
+            ));
+
+        let catalog = SessionToolCatalog::rebuild_from_registrations(vec![registration]);
+        let tools = catalog.model_tools(SessionToolsConfig::full_public(
+            SessionSurface::Interactive,
+            CapabilityLevel::CodeSearch,
+            ToolDocumentationMode::Full,
+            ToolModelCapabilities::default(),
+        ));
+
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].tool_type, "function");
+    }
+
+    #[test]
+    fn parallel_support_comes_from_behavior_metadata() {
+        let registration = registration("parallel_catalog_tool")
+            .with_description("parallel-safe test tool")
+            .with_parameter_schema(json!({"type":"object"}))
+            .with_behavior(ToolBehavior::function(
+                ToolMutationModel::ReadOnly,
+                true,
+                false,
+            ));
+
+        let catalog = SessionToolCatalog::rebuild_from_registrations(vec![registration]);
+        assert_eq!(catalog.entries().len(), 1);
+        assert!(catalog.entries()[0].supports_parallel_tool_calls);
     }
 }

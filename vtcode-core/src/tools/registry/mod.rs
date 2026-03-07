@@ -174,7 +174,10 @@ mod tests {
     use super::*;
     use crate::config::TimeoutsConfig;
     use crate::config::ToolDocumentationMode as ConfigToolDocumentationMode;
+    use crate::config::ToolPolicy as ConfigToolPolicy;
+    use crate::config::ToolsConfig;
     use crate::constants::tools;
+    use crate::tool_policy::ToolPolicy;
     use crate::tool_policy::ToolPolicyConfig;
     use crate::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
     use crate::tools::registry::mcp_helpers::normalize_mcp_tool_identifier;
@@ -675,6 +678,112 @@ mod tests {
 
         let fallback = registry.suggest_fallback_tool("not_a_real_tool").await;
         assert!(fallback.is_none());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn execute_public_repo_browser_alias_routes_through_public_assembly() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        std::fs::write(temp_dir.path().join("public-route.txt"), "public route\n")?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        registry.allow_all_tools().await?;
+
+        let response = registry
+            .execute_public_tool_ref(
+                "repo_browser.read_file",
+                &json!({"path": "public-route.txt"}),
+            )
+            .await?;
+
+        assert_eq!(response["path"].as_str(), Some("public-route.txt"));
+        assert!(
+            response["content"]
+                .as_str()
+                .is_some_and(|content| content.contains("public route"))
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn set_tool_policy_normalizes_public_aliases() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let policy_path = temp_dir.path().join("tool-policy.json");
+        let policy_manager =
+            crate::tool_policy::ToolPolicyManager::new_with_config_path(&policy_path).await?;
+        let registry =
+            ToolRegistry::new_with_custom_policy(temp_dir.path().to_path_buf(), policy_manager)
+                .await;
+
+        registry
+            .set_tool_policy("Exec code", ToolPolicy::Deny)
+            .await?;
+
+        assert_eq!(
+            registry.get_tool_policy("Exec code").await,
+            ToolPolicy::Deny
+        );
+        assert_eq!(
+            registry.get_tool_policy(tools::UNIFIED_EXEC).await,
+            ToolPolicy::Deny
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn apply_config_policies_prefers_explicit_canonical_public_names() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let policy_path = temp_dir.path().join("tool-policy.json");
+        let policy_manager =
+            crate::tool_policy::ToolPolicyManager::new_with_config_path(&policy_path).await?;
+        let registry =
+            ToolRegistry::new_with_custom_policy(temp_dir.path().to_path_buf(), policy_manager)
+                .await;
+
+        let mut config = ToolsConfig::default();
+        config.policies.clear();
+        config
+            .policies
+            .insert(tools::UNIFIED_FILE.to_string(), ConfigToolPolicy::Allow);
+        config
+            .policies
+            .insert(tools::READ_FILE.to_string(), ConfigToolPolicy::Deny);
+
+        registry.apply_config_policies(&config).await?;
+
+        assert_eq!(
+            registry.get_tool_policy(tools::UNIFIED_FILE).await,
+            ToolPolicy::Allow
+        );
+        assert_eq!(
+            registry.get_tool_policy(tools::READ_FILE).await,
+            ToolPolicy::Allow
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn safe_mode_prompt_uses_behavior_metadata() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        registry.allow_all_tools().await?;
+        registry.set_enforce_safe_mode_prompts(true).await;
+
+        assert_eq!(
+            registry.evaluate_tool_policy(tools::UNIFIED_SEARCH).await?,
+            ToolPermissionDecision::Allow
+        );
+        assert_eq!(
+            registry.evaluate_tool_policy(tools::UNIFIED_EXEC).await?,
+            ToolPermissionDecision::Prompt
+        );
+        assert_eq!(
+            registry.evaluate_tool_policy(tools::APPLY_PATCH).await?,
+            ToolPermissionDecision::Prompt
+        );
 
         Ok(())
     }

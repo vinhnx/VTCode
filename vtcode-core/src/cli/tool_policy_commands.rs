@@ -1,6 +1,7 @@
 //! CLI commands for managing tool policies
 
 use crate::tool_policy::{ToolPolicy, ToolPolicyManager};
+use crate::tools::ToolRegistry;
 use crate::utils::colors::style;
 use anyhow::Result;
 use clap::Subcommand;
@@ -42,26 +43,43 @@ pub async fn handle_tool_policy_command(command: ToolPolicyCommands) -> Result<(
             policy_manager.print_status();
         }
         ToolPolicyCommands::Allow { tool } => {
-            policy_manager.set_policy(&tool, ToolPolicy::Allow).await?;
+            let normalized_tool = normalize_cli_tool_name(&tool).await;
+            policy_manager
+                .set_policy(&normalized_tool, ToolPolicy::Allow)
+                .await?;
             println!(
                 "{}",
-                style(format!("✓ Tool '{}' is now allowed", tool)).green()
+                style(format!(
+                    "✓ Tool '{}' is now allowed",
+                    display_tool_name(&tool, &normalized_tool)
+                ))
+                .green()
             );
         }
         ToolPolicyCommands::Deny { tool } => {
-            policy_manager.set_policy(&tool, ToolPolicy::Deny).await?;
+            let normalized_tool = normalize_cli_tool_name(&tool).await;
+            policy_manager
+                .set_policy(&normalized_tool, ToolPolicy::Deny)
+                .await?;
             println!(
                 "{}",
-                style(format!("✗ Tool '{}' is now denied", tool)).red()
+                style(format!(
+                    "✗ Tool '{}' is now denied",
+                    display_tool_name(&tool, &normalized_tool)
+                ))
+                .red()
             );
         }
         ToolPolicyCommands::Prompt { tool } => {
-            policy_manager.set_policy(&tool, ToolPolicy::Prompt).await?;
+            let normalized_tool = normalize_cli_tool_name(&tool).await;
+            policy_manager
+                .set_policy(&normalized_tool, ToolPolicy::Prompt)
+                .await?;
             println!(
                 "{}",
                 style(format!(
                     "? Tool '{}' will now prompt for confirmation",
-                    tool
+                    display_tool_name(&tool, &normalized_tool)
                 ))
                 .cyan()
             );
@@ -84,6 +102,25 @@ pub async fn handle_tool_policy_command(command: ToolPolicyCommands) -> Result<(
     }
 
     Ok(())
+}
+
+async fn normalize_cli_tool_name(tool: &str) -> String {
+    let Ok(workspace_root) = std::env::current_dir() else {
+        return tool.to_string();
+    };
+
+    let registry = ToolRegistry::new(workspace_root).await;
+    registry
+        .resolve_public_tool_name_sync(tool)
+        .unwrap_or_else(|_| tool.to_string())
+}
+
+fn display_tool_name(requested_tool: &str, normalized_tool: &str) -> String {
+    if requested_tool == normalized_tool {
+        requested_tool.to_string()
+    } else {
+        format!("{requested_tool} -> {normalized_tool}")
+    }
 }
 
 /// Print tool policy help

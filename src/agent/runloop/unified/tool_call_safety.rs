@@ -4,7 +4,6 @@
 //! checks to `vtcode_core::tools::SafetyGateway` for single-source consistency.
 
 use anyhow::anyhow;
-use hashbrown::HashSet;
 use serde_json::{Map, Value};
 use thiserror::Error;
 use vtcode_core::tools::{
@@ -31,8 +30,6 @@ pub enum SafetyError {
 
 /// Safety validation rules for tool calls
 pub struct ToolCallSafetyValidator {
-    /// Destructive tools that require explicit confirmation
-    destructive_tools: HashSet<&'static str>,
     /// Total tool limit per session
     max_per_session: usize,
     /// Call rate limit (max calls per second)
@@ -47,13 +44,6 @@ pub struct ToolCallSafetyValidator {
 
 impl ToolCallSafetyValidator {
     pub fn new() -> Self {
-        let mut destructive = HashSet::new();
-        destructive.insert("delete_file");
-        destructive.insert("edit_file");
-        destructive.insert("write_file");
-        destructive.insert("shell");
-        destructive.insert("apply_patch");
-
         let rate_limit_per_second = std::env::var("VTCODE_TOOL_RATE_LIMIT_PER_SECOND")
             .ok()
             .and_then(|v| v.parse::<usize>().ok())
@@ -81,7 +71,6 @@ impl ToolCallSafetyValidator {
         };
 
         Self {
-            destructive_tools: destructive,
             max_per_session,
             rate_limit_per_second,
             rate_limit_per_minute,
@@ -183,28 +172,47 @@ impl ToolCallSafetyValidator {
     #[allow(dead_code)]
     pub fn is_destructive(&self, tool_name: &str) -> bool {
         let normalized = tool_name.trim().to_ascii_lowercase();
-
-        // Alias-only read operations can be misclassified without action args.
-        // Keep these explicitly non-destructive for simple name checks.
-        if matches!(
+        vtcode_core::tools::tool_intent::classify_tool_intent(
             normalized.as_str(),
-            "read_file" | "grep_file" | "list_files"
-        ) {
-            return false;
-        }
-
-        self.destructive_tools.contains(normalized.as_str())
-            || vtcode_core::tools::tool_intent::classify_tool_intent(
-                normalized.as_str(),
-                &Value::Object(Map::new()),
-            )
-            .destructive
+            &Value::Object(Map::new()),
+        )
+        .destructive
     }
 
     /// Get list of destructive tools
     #[allow(dead_code)]
     pub fn destructive_tools(&self) -> Vec<&'static str> {
-        self.destructive_tools.iter().copied().collect()
+        [
+            vtcode_core::config::constants::tools::UNIFIED_SEARCH,
+            vtcode_core::config::constants::tools::UNIFIED_EXEC,
+            vtcode_core::config::constants::tools::UNIFIED_FILE,
+            vtcode_core::config::constants::tools::REQUEST_USER_INPUT,
+            vtcode_core::config::constants::tools::APPLY_PATCH,
+            vtcode_core::config::constants::tools::READ_FILE,
+            vtcode_core::config::constants::tools::WRITE_FILE,
+            vtcode_core::config::constants::tools::EDIT_FILE,
+            vtcode_core::config::constants::tools::DELETE_FILE,
+            vtcode_core::config::constants::tools::CREATE_FILE,
+            vtcode_core::config::constants::tools::GREP_FILE,
+            vtcode_core::config::constants::tools::LIST_FILES,
+            vtcode_core::config::constants::tools::RUN_PTY_CMD,
+            vtcode_core::config::constants::tools::SEND_PTY_INPUT,
+            vtcode_core::config::constants::tools::CREATE_PTY_SESSION,
+            vtcode_core::config::constants::tools::READ_PTY_SESSION,
+            vtcode_core::config::constants::tools::LIST_PTY_SESSIONS,
+            vtcode_core::config::constants::tools::CLOSE_PTY_SESSION,
+            vtcode_core::config::constants::tools::EXECUTE_CODE,
+            "shell",
+        ]
+        .into_iter()
+        .filter(|tool_name| {
+            vtcode_core::tools::tool_intent::classify_tool_intent(
+                tool_name,
+                &Value::Object(Map::new()),
+            )
+            .destructive
+        })
+        .collect()
     }
 
     /// Reset rate limit tracking

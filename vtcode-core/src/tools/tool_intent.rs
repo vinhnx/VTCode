@@ -3,6 +3,71 @@ use serde_json::Value;
 use crate::config::constants::tools;
 use crate::tools::names::canonical_tool_name;
 
+pub type ToolIntentClassifier = fn(&Value) -> ToolIntent;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolSurfaceKind {
+    Function,
+    ApplyPatch,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ToolMutationModel {
+    ReadOnly,
+    Mutating,
+    ByArgs(ToolIntentClassifier),
+}
+
+impl ToolMutationModel {
+    pub fn classify(self, args: &Value) -> ToolIntent {
+        match self {
+            Self::ReadOnly => ToolIntent::read_only(),
+            Self::Mutating => ToolIntent::mutating(),
+            Self::ByArgs(classifier) => classifier(args),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ToolBehavior {
+    pub surface_kind: ToolSurfaceKind,
+    pub mutation_model: ToolMutationModel,
+    pub supports_parallel_calls: bool,
+    pub safe_mode_prompt: bool,
+}
+
+impl ToolBehavior {
+    pub const fn function(
+        mutation_model: ToolMutationModel,
+        supports_parallel_calls: bool,
+        safe_mode_prompt: bool,
+    ) -> Self {
+        Self {
+            surface_kind: ToolSurfaceKind::Function,
+            mutation_model,
+            supports_parallel_calls,
+            safe_mode_prompt,
+        }
+    }
+
+    pub const fn apply_patch(
+        mutation_model: ToolMutationModel,
+        supports_parallel_calls: bool,
+        safe_mode_prompt: bool,
+    ) -> Self {
+        Self {
+            surface_kind: ToolSurfaceKind::ApplyPatch,
+            mutation_model,
+            supports_parallel_calls,
+            safe_mode_prompt,
+        }
+    }
+
+    pub fn classify(self, args: &Value) -> ToolIntent {
+        self.mutation_model.classify(args)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ToolIntent {
     pub mutating: bool,
@@ -11,103 +76,144 @@ pub struct ToolIntent {
     pub retry_safe: bool,
 }
 
-pub fn is_parallel_safe_call(tool_name: &str, args: &Value) -> bool {
-    let canonical = canonical_tool_name(tool_name);
-    let tool = canonical.as_ref();
-    let intent = classify_tool_intent(tool, args);
-    if intent.mutating {
-        return false;
+impl ToolIntent {
+    pub const fn read_only() -> Self {
+        Self {
+            mutating: false,
+            destructive: false,
+            readonly_unified_action: false,
+            retry_safe: true,
+        }
     }
 
-    !matches!(
-        tool,
-        tools::ENTER_PLAN_MODE
-            | tools::EXIT_PLAN_MODE
-            | tools::REQUEST_USER_INPUT
-            | tools::RUN_PTY_CMD
-            | tools::UNIFIED_EXEC
-            | tools::SEND_PTY_INPUT
-            | tools::READ_PTY_SESSION
-            | tools::LIST_PTY_SESSIONS
-            | tools::CLOSE_PTY_SESSION
-            | tools::CREATE_PTY_SESSION
-            | "shell"
-    )
+    pub const fn read_only_unified_action() -> Self {
+        Self {
+            mutating: false,
+            destructive: false,
+            readonly_unified_action: true,
+            retry_safe: true,
+        }
+    }
+
+    pub const fn mutating() -> Self {
+        Self {
+            mutating: true,
+            destructive: true,
+            readonly_unified_action: false,
+            retry_safe: false,
+        }
+    }
+}
+
+pub fn builtin_tool_behavior(tool_name: &str) -> Option<ToolBehavior> {
+    let canonical = canonical_tool_name(tool_name);
+    builtin_tool_behavior_canonical(canonical.as_ref())
+}
+
+fn builtin_tool_behavior_canonical(tool: &str) -> Option<ToolBehavior> {
+    match tool {
+        tools::UNIFIED_SEARCH => Some(ToolBehavior::function(
+            ToolMutationModel::ReadOnly,
+            true,
+            false,
+        )),
+        tools::UNIFIED_EXEC => Some(ToolBehavior::function(
+            ToolMutationModel::ByArgs(unified_exec_intent),
+            false,
+            true,
+        )),
+        tools::UNIFIED_FILE => Some(ToolBehavior::function(
+            ToolMutationModel::ByArgs(unified_file_intent),
+            false,
+            false,
+        )),
+        tools::APPLY_PATCH => Some(ToolBehavior::apply_patch(
+            ToolMutationModel::Mutating,
+            false,
+            true,
+        )),
+        tools::REQUEST_USER_INPUT
+        | tools::ENTER_PLAN_MODE
+        | tools::EXIT_PLAN_MODE
+        | tools::LIST_SKILLS
+        | tools::LOAD_SKILL
+        | tools::LOAD_SKILL_RESOURCE
+        | tools::TASK_TRACKER
+        | tools::PLAN_TASK_TRACKER
+        | tools::GET_ERRORS
+        | tools::SEARCH_TOOLS
+        | tools::THINK => Some(ToolBehavior::function(
+            ToolMutationModel::ReadOnly,
+            false,
+            false,
+        )),
+        tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES => Some(ToolBehavior::function(
+            ToolMutationModel::ReadOnly,
+            true,
+            false,
+        )),
+        tools::WRITE_FILE | tools::EDIT_FILE | tools::DELETE_FILE | tools::CREATE_FILE => Some(
+            ToolBehavior::function(ToolMutationModel::Mutating, false, true),
+        ),
+        tools::RUN_PTY_CMD
+        | tools::SEND_PTY_INPUT
+        | tools::CREATE_PTY_SESSION
+        | tools::READ_PTY_SESSION
+        | tools::LIST_PTY_SESSIONS
+        | tools::CLOSE_PTY_SESSION
+        | tools::EXECUTE_CODE
+        | "shell" => Some(ToolBehavior::function(
+            ToolMutationModel::Mutating,
+            false,
+            true,
+        )),
+        _ => None,
+    }
+}
+
+pub fn is_parallel_safe_call(tool_name: &str, args: &Value) -> bool {
+    let canonical = canonical_tool_name(tool_name);
+    if let Some(behavior) = builtin_tool_behavior_canonical(canonical.as_ref()) {
+        return behavior.supports_parallel_calls && !behavior.classify(args).mutating;
+    }
+
+    !classify_tool_intent(canonical.as_ref(), args).mutating
 }
 
 pub fn classify_tool_intent(tool_name: &str, args: &Value) -> ToolIntent {
     let canonical = canonical_tool_name(tool_name);
-    let tool = canonical.as_ref();
-    let has_exec_input = unified_exec_has_input(args);
+    builtin_tool_behavior_canonical(canonical.as_ref())
+        .map(|behavior| behavior.classify(args))
+        .unwrap_or_else(ToolIntent::mutating)
+}
 
-    let readonly_unified_action = match tool {
-        tools::UNIFIED_FILE => unified_file_action(args)
-            .map(|action| action.eq_ignore_ascii_case("read"))
-            .unwrap_or(false),
-        tools::UNIFIED_EXEC => unified_exec_action(args)
-            .map(|action| {
-                action.eq_ignore_ascii_case("poll")
-                    || action.eq_ignore_ascii_case("list")
-                    || action.eq_ignore_ascii_case("inspect")
-                    || (action.eq_ignore_ascii_case("continue") && !has_exec_input)
-            })
-            .unwrap_or(false),
-        tools::UNIFIED_SEARCH => true,
-        _ => false,
-    };
+fn unified_file_intent(args: &Value) -> ToolIntent {
+    let readonly_unified_action = unified_file_action(args)
+        .map(|action| action.eq_ignore_ascii_case("read"))
+        .unwrap_or(false);
 
-    let mutating = if readonly_unified_action {
-        false
+    if readonly_unified_action {
+        ToolIntent::read_only_unified_action()
     } else {
-        match tool {
-            tools::READ_FILE
-            | tools::GREP_FILE
-            | tools::LIST_FILES
-            | tools::UNIFIED_SEARCH
-            | tools::ENTER_PLAN_MODE
-            | tools::EXIT_PLAN_MODE
-            | tools::REQUEST_USER_INPUT
-            | tools::LIST_SKILLS
-            | tools::LOAD_SKILL
-            | tools::LOAD_SKILL_RESOURCE
-            | tools::TASK_TRACKER
-            | tools::PLAN_TASK_TRACKER
-            | tools::GET_ERRORS
-            | tools::SEARCH_TOOLS
-            | tools::THINK => false,
-            tools::UNIFIED_FILE | tools::UNIFIED_EXEC => true,
-            _ => true,
-        }
-    };
+        ToolIntent::mutating()
+    }
+}
 
-    let destructive = match tool {
-        tools::DELETE_FILE
-        | tools::WRITE_FILE
-        | tools::EDIT_FILE
-        | tools::APPLY_PATCH
-        | tools::RUN_PTY_CMD
-        | tools::SEND_PTY_INPUT
-        | tools::CREATE_PTY_SESSION
-        | tools::EXECUTE_CODE => true,
-        tools::UNIFIED_FILE => !readonly_unified_action,
-        tools::UNIFIED_EXEC => unified_exec_action(args)
-            .map(|action| {
-                action.eq_ignore_ascii_case("run")
-                    || action.eq_ignore_ascii_case("write")
-                    || (action.eq_ignore_ascii_case("continue") && has_exec_input)
-                    || action.eq_ignore_ascii_case("code")
-            })
-            .unwrap_or(mutating),
-        _ => mutating,
-    };
+fn unified_exec_intent(args: &Value) -> ToolIntent {
+    let has_exec_input = unified_exec_has_input(args);
+    let readonly_unified_action = unified_exec_action(args)
+        .map(|action| {
+            action.eq_ignore_ascii_case("poll")
+                || action.eq_ignore_ascii_case("list")
+                || action.eq_ignore_ascii_case("inspect")
+                || (action.eq_ignore_ascii_case("continue") && !has_exec_input)
+        })
+        .unwrap_or(false);
 
-    let retry_safe = !mutating || readonly_unified_action;
-
-    ToolIntent {
-        mutating,
-        destructive,
-        readonly_unified_action,
-        retry_safe,
+    if readonly_unified_action {
+        ToolIntent::read_only_unified_action()
+    } else {
+        ToolIntent::mutating()
     }
 }
 
@@ -157,9 +263,7 @@ pub fn unified_exec_action(args: &Value) -> Option<&str> {
         if args.get("command").is_some()
             || args.get("cmd").is_some()
             || args.get("raw_command").is_some()
-            // Check for indexed command arguments (command.0, command.1, etc.)
-            || args.get("command.0").is_some()
-            || args.get("command.1").is_some()
+            || crate::tools::command_args::has_indexed_command_parts(args)
         {
             Some("run")
         } else if args.get("code").is_some() {

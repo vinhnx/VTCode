@@ -1,6 +1,7 @@
 use super::ToolRegistry;
 use crate::config::types::CapabilityLevel;
 use crate::tool_policy::ToolPolicy;
+use crate::tools::tool_intent::ToolBehavior;
 use crate::tools::traits::Tool;
 use futures::future::BoxFuture;
 use serde_json::Value;
@@ -23,6 +24,7 @@ pub struct ToolMetadata {
     denylist: Vec<String>,
     aliases: Vec<String>,
     server_hint: Option<String>,
+    behavior: Option<ToolBehavior>,
 }
 
 impl ToolMetadata {
@@ -76,6 +78,11 @@ impl ToolMetadata {
         self
     }
 
+    pub fn with_behavior(mut self, behavior: ToolBehavior) -> Self {
+        self.behavior = Some(behavior);
+        self
+    }
+
     pub fn description(&self) -> Option<&str> {
         self.description.as_deref()
     }
@@ -114,6 +121,10 @@ impl ToolMetadata {
 
     pub fn server_hint(&self) -> Option<&str> {
         self.server_hint.as_deref()
+    }
+
+    pub fn behavior(&self) -> Option<ToolBehavior> {
+        self.behavior
     }
 }
 
@@ -345,6 +356,11 @@ impl ToolRegistration {
 
     pub fn with_server_hint(mut self, hint: impl Into<String>) -> Self {
         self.metadata = self.metadata.clone().with_server_hint(hint);
+        self
+    }
+
+    pub fn with_behavior(mut self, behavior: ToolBehavior) -> Self {
+        self.metadata = self.metadata.clone().with_behavior(behavior);
         self
     }
 }

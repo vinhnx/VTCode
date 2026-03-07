@@ -407,9 +407,21 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         return Ok(ToolPermissionFlow::Denied);
     }
 
+    let normalized_tool_name = tool_args
+        .and_then(|args| {
+            tool_registry
+                .preflight_validate_call(tool_name, args)
+                .ok()
+                .map(|outcome| outcome.normalized_tool_name)
+        })
+        .unwrap_or_else(|| tool_name.to_string());
+
     let persisted_shell_approval =
-        extract_shell_approval_command_prefix_words(tool_name, tool_args)
-            .zip(extract_shell_approval_scope_signature(tool_name, tool_args))
+        extract_shell_approval_command_prefix_words(&normalized_tool_name, tool_args)
+            .zip(extract_shell_approval_scope_signature(
+                &normalized_tool_name,
+                tool_args,
+            ))
             .filter(|(command_words, scope_signature)| {
                 shell_command_has_persisted_approval_prefix(
                     tool_registry,
@@ -419,7 +431,7 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
             });
 
     let mut shell_approval_reason = tool_registry
-        .shell_run_approval_reason(tool_name, tool_args)
+        .shell_run_approval_reason(&normalized_tool_name, tool_args)
         .await?;
     if persisted_shell_approval.is_some() {
         shell_approval_reason = None;
