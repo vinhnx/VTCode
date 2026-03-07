@@ -1,14 +1,14 @@
 use crate::exec::events::ThreadEvent;
 use crate::llm::provider::Message;
 use crate::utils::session_archive::{
-    SessionArchiveMetadata, SessionListing, find_session_by_identifier,
-    reserve_session_archive_identifier,
+    SessionArchive, SessionArchiveMetadata, SessionListing, find_session_by_identifier,
+    list_recent_sessions, reserve_session_archive_identifier, session_listing_matches_workspace,
 };
 use anyhow::{Result, anyhow};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -107,6 +107,27 @@ impl ThreadBootstrap {
         self.loaded_skills = loaded_skills;
         self
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SessionQueryScope {
+    CurrentWorkspace(PathBuf),
+    All,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ArchivedSessionIntent {
+    ResumeInPlace,
+    ForkNewArchive { custom_suffix: Option<String> },
+}
+
+#[derive(Debug, Clone)]
+pub struct PreparedArchivedSession {
+    pub source: SessionListing,
+    pub workspace: PathBuf,
+    pub bootstrap: ThreadBootstrap,
+    pub thread_id: String,
+    pub archive: SessionArchive,
 }
 
 #[derive(Default)]
@@ -325,6 +346,58 @@ impl ThreadManager {
     }
 }
 
+pub async fn list_recent_sessions_in_scope(
+    limit: usize,
+    scope: &SessionQueryScope,
+) -> Result<Vec<SessionListing>> {
+    let mut listings = list_recent_sessions(limit.saturating_mul(4).max(limit)).await?;
+    if let SessionQueryScope::CurrentWorkspace(workspace) = scope {
+        listings.retain(|listing| session_listing_matches_workspace(listing, workspace));
+    }
+    listings.truncate(limit);
+    Ok(listings)
+}
+
+pub async fn prepare_archived_session(
+    source: SessionListing,
+    workspace: PathBuf,
+    metadata: SessionArchiveMetadata,
+    intent: ArchivedSessionIntent,
+    reserved_identifier: Option<String>,
+) -> Result<PreparedArchivedSession> {
+    let mut bootstrap = ThreadBootstrap::from_listing(source.clone());
+    bootstrap.metadata = Some(metadata.clone());
+
+    let thread_id = match &intent {
+        ArchivedSessionIntent::ResumeInPlace => source.identifier(),
+        ArchivedSessionIntent::ForkNewArchive { custom_suffix } => {
+            if let Some(identifier) = reserved_identifier {
+                identifier
+            } else {
+                reserve_session_archive_identifier(&metadata.workspace_label, custom_suffix.clone())
+                    .await?
+            }
+        }
+    };
+
+    let archive = match intent {
+        ArchivedSessionIntent::ResumeInPlace => {
+            SessionArchive::resume_from_listing(&source, metadata)
+        }
+        ArchivedSessionIntent::ForkNewArchive { .. } => {
+            SessionArchive::new_with_identifier(metadata, thread_id.clone()).await?
+        }
+    };
+
+    Ok(PreparedArchivedSession {
+        source,
+        workspace,
+        bootstrap,
+        thread_id,
+        archive,
+    })
+}
+
 pub fn messages_from_session_listing(listing: &SessionListing) -> Vec<Message> {
     if let Some(progress) = &listing.snapshot.progress
         && !progress.recent_messages.is_empty()
@@ -378,6 +451,16 @@ pub fn build_thread_archive_metadata(
 mod tests {
     use super::*;
     use crate::exec::events::{ThreadEvent, ThreadStartedEvent};
+    use crate::llm::provider::MessageRole;
+    use crate::utils::session_archive::{
+        SessionArchiveMetadata, SessionMessage, SessionProgress, SessionSnapshot,
+        clear_sessions_dir_override_for_tests, override_sessions_dir_for_tests,
+    };
+    use chrono::Utc;
+    use std::sync::{LazyLock, Mutex};
+    use tempfile::TempDir;
+
+    static SESSION_DIR_TEST_GUARD: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
     #[test]
     fn event_store_evicts_old_records() {
@@ -436,5 +519,195 @@ mod tests {
         assert!(err.to_string().contains("in-flight turn"));
         handle.finish_turn();
         handle.begin_turn().expect("turn after finish");
+    }
+
+    #[test]
+    fn list_recent_sessions_in_scope_filters_by_workspace() {
+        let _guard = SESSION_DIR_TEST_GUARD
+            .lock()
+            .expect("session dir test guard");
+        let tmp = TempDir::new().expect("temp dir");
+        override_sessions_dir_for_tests(tmp.path());
+
+        let listing = SessionListing {
+            path: tmp.path().join("session-alpha.json"),
+            snapshot: SessionSnapshot {
+                metadata: SessionArchiveMetadata::new(
+                    "ws",
+                    tmp.path().join("workspace").display().to_string(),
+                    "model",
+                    "provider",
+                    "theme",
+                    "medium",
+                ),
+                started_at: Utc::now(),
+                ended_at: Utc::now(),
+                total_messages: 1,
+                distinct_tools: Vec::new(),
+                transcript: Vec::new(),
+                messages: vec![SessionMessage::new(MessageRole::User, "hello")],
+                progress: None,
+                error_logs: Vec::new(),
+            },
+        };
+        std::fs::write(
+            &listing.path,
+            serde_json::to_string(&listing.snapshot).expect("serialize snapshot"),
+        )
+        .expect("write listing");
+
+        let runtime = tokio::runtime::Runtime::new().expect("runtime");
+        let filtered = runtime
+            .block_on(list_recent_sessions_in_scope(
+                5,
+                &SessionQueryScope::CurrentWorkspace(tmp.path().join("workspace")),
+            ))
+            .expect("filter by workspace");
+        let all = runtime
+            .block_on(list_recent_sessions_in_scope(5, &SessionQueryScope::All))
+            .expect("list all");
+
+        clear_sessions_dir_override_for_tests();
+
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(all.len(), 1);
+    }
+
+    #[test]
+    fn prepare_archived_session_resume_reuses_source_identifier_and_archive() {
+        let _guard = SESSION_DIR_TEST_GUARD
+            .lock()
+            .expect("session dir test guard");
+        let tmp = TempDir::new().expect("temp dir");
+        override_sessions_dir_for_tests(tmp.path());
+
+        let listing = SessionListing {
+            path: tmp.path().join("session-source.json"),
+            snapshot: SessionSnapshot {
+                metadata: SessionArchiveMetadata::new(
+                    "ws",
+                    tmp.path().join("workspace").display().to_string(),
+                    "old-model",
+                    "old-provider",
+                    "old-theme",
+                    "medium",
+                ),
+                started_at: Utc::now(),
+                ended_at: Utc::now(),
+                total_messages: 2,
+                distinct_tools: vec!["tool_a".to_string()],
+                transcript: Vec::new(),
+                messages: vec![SessionMessage::new(MessageRole::User, "hello")],
+                progress: Some(SessionProgress {
+                    turn_number: 1,
+                    recent_messages: vec![SessionMessage::new(MessageRole::Assistant, "recent")],
+                    tool_summaries: Vec::new(),
+                    token_usage: None,
+                    max_context_tokens: None,
+                    loaded_skills: vec!["skill_a".to_string()],
+                }),
+                error_logs: Vec::new(),
+            },
+        };
+
+        let runtime = tokio::runtime::Runtime::new().expect("runtime");
+        let prepared = runtime
+            .block_on(prepare_archived_session(
+                listing.clone(),
+                tmp.path().join("workspace"),
+                SessionArchiveMetadata::new(
+                    "ws",
+                    tmp.path().join("workspace").display().to_string(),
+                    "new-model",
+                    "new-provider",
+                    "new-theme",
+                    "high",
+                ),
+                ArchivedSessionIntent::ResumeInPlace,
+                Some("should-not-be-used".to_string()),
+            ))
+            .expect("prepare resume");
+
+        clear_sessions_dir_override_for_tests();
+
+        assert_eq!(prepared.thread_id, listing.identifier());
+        assert_eq!(prepared.archive.path(), listing.path.as_path());
+        assert_eq!(prepared.bootstrap.messages[0].content.as_text(), "recent");
+        assert_eq!(
+            prepared.bootstrap.loaded_skills,
+            vec!["skill_a".to_string()]
+        );
+        assert_eq!(
+            prepared
+                .bootstrap
+                .metadata
+                .as_ref()
+                .expect("metadata")
+                .model,
+            "new-model"
+        );
+    }
+
+    #[test]
+    fn prepare_archived_session_fork_uses_new_identifier_and_preserves_history() {
+        let _guard = SESSION_DIR_TEST_GUARD
+            .lock()
+            .expect("session dir test guard");
+        let tmp = TempDir::new().expect("temp dir");
+        override_sessions_dir_for_tests(tmp.path());
+
+        let listing = SessionListing {
+            path: tmp.path().join("session-source.json"),
+            snapshot: SessionSnapshot {
+                metadata: SessionArchiveMetadata::new(
+                    "ws",
+                    tmp.path().join("workspace").display().to_string(),
+                    "model",
+                    "provider",
+                    "theme",
+                    "medium",
+                ),
+                started_at: Utc::now(),
+                ended_at: Utc::now(),
+                total_messages: 1,
+                distinct_tools: Vec::new(),
+                transcript: Vec::new(),
+                messages: vec![SessionMessage::new(MessageRole::User, "hello")],
+                progress: None,
+                error_logs: Vec::new(),
+            },
+        };
+
+        let runtime = tokio::runtime::Runtime::new().expect("runtime");
+        let prepared = runtime
+            .block_on(prepare_archived_session(
+                listing.clone(),
+                tmp.path().join("workspace"),
+                SessionArchiveMetadata::new(
+                    "ws",
+                    tmp.path().join("workspace").display().to_string(),
+                    "model",
+                    "provider",
+                    "theme",
+                    "medium",
+                ),
+                ArchivedSessionIntent::ForkNewArchive {
+                    custom_suffix: Some("branch".to_string()),
+                },
+                Some("session-forked".to_string()),
+            ))
+            .expect("prepare fork");
+
+        clear_sessions_dir_override_for_tests();
+
+        assert_eq!(prepared.thread_id, "session-forked");
+        assert_ne!(prepared.archive.path(), listing.path.as_path());
+        assert!(
+            prepared
+                .archive
+                .path()
+                .ends_with(Path::new("session-forked.json"))
+        );
+        assert_eq!(prepared.bootstrap.messages[0].content.as_text(), "hello");
     }
 }

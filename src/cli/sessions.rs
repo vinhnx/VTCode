@@ -3,10 +3,13 @@ use chrono::Local;
 use dialoguer::{Select, theme::ColorfulTheme};
 use std::path::PathBuf;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+use vtcode_core::core::threads::{
+    ArchivedSessionIntent, SessionQueryScope, list_recent_sessions_in_scope,
+};
 use vtcode_core::utils::colors::style;
-use vtcode_core::utils::session_archive::{SessionListing, list_recent_sessions};
+use vtcode_core::utils::session_archive::{SessionListing, session_workspace_path};
 
-use crate::agent::agents::ResumeSession;
+use crate::agent::agents::{ResumeSession, SessionContinuation};
 use vtcode::startup::SessionResumeMode;
 
 const INTERACTIVE_SESSION_LIMIT: usize = 10;
@@ -14,32 +17,50 @@ const INTERACTIVE_SESSION_LIMIT: usize = 10;
 pub async fn handle_resume_session_command(
     config: &CoreAgentConfig,
     mode: SessionResumeMode,
+    show_all: bool,
     custom_session_id: Option<String>,
     skip_confirmations: bool,
 ) -> Result<()> {
+    let interactive_intent = match &mode {
+        SessionResumeMode::Fork(_) => ArchivedSessionIntent::ForkNewArchive {
+            custom_suffix: custom_session_id.clone(),
+        },
+        _ if custom_session_id.is_some() => ArchivedSessionIntent::ForkNewArchive {
+            custom_suffix: custom_session_id.clone(),
+        },
+        _ => ArchivedSessionIntent::ResumeInPlace,
+    };
+    let scope = if show_all {
+        SessionQueryScope::All
+    } else {
+        SessionQueryScope::CurrentWorkspace(config.workspace.clone())
+    };
+
     let resume = match mode {
-        SessionResumeMode::Latest => select_latest_session(false).await?,
-        SessionResumeMode::Specific(identifier) => {
-            Some(load_specific_session(&identifier, false).await?)
+        SessionResumeMode::Latest => {
+            select_latest_session(&scope, interactive_intent.clone()).await?
         }
-        SessionResumeMode::Interactive => select_session_interactively(false).await?,
+        SessionResumeMode::Specific(identifier) => {
+            Some(load_specific_session(&identifier, interactive_intent.clone()).await?)
+        }
+        SessionResumeMode::Interactive => {
+            select_session_interactively(&scope, interactive_intent.clone()).await?
+        }
         SessionResumeMode::Fork(identifier) => {
             if identifier == "__latest__" {
-                select_latest_session(true).await?
+                select_latest_session(&scope, interactive_intent.clone()).await?
             } else {
-                Some(load_specific_session(&identifier, true).await?)
+                Some(load_specific_session(&identifier, interactive_intent.clone()).await?)
             }
         }
     };
 
-    let Some(mut resume) = resume else {
+    let Some(resume) = resume else {
         println!("{}", style("No session selected. Exiting.").red());
         return Ok(());
     };
 
-    // If custom_session_id is provided, mark as fork
-    if let Some(suffix) = custom_session_id {
-        resume = fork_session(resume, suffix);
+    if resume.is_fork() {
         print_fork_summary(&resume);
     } else {
         print_resume_summary(&resume);
@@ -48,26 +69,35 @@ pub async fn handle_resume_session_command(
     run_single_agent_loop(config, skip_confirmations, resume).await
 }
 
-async fn select_latest_session(is_fork: bool) -> Result<Option<ResumeSession>> {
-    let mut listings = list_recent_sessions(1)
+async fn select_latest_session(
+    scope: &SessionQueryScope,
+    intent: ArchivedSessionIntent,
+) -> Result<Option<SessionContinuation>> {
+    let mut listings = list_recent_sessions_in_scope(1, scope)
         .await
         .context("failed to load recent sessions")?;
     if let Some(listing) = listings.pop() {
-        Ok(Some(convert_listing(&listing, is_fork)))
+        Ok(Some(convert_listing(&listing, intent)))
     } else {
         println!("{}", style("No archived sessions were found.").red());
         Ok(None)
     }
 }
 
-async fn load_specific_session(identifier: &str, is_fork: bool) -> Result<ResumeSession> {
-    crate::agent::agents::load_resume_session(identifier, is_fork)
+async fn load_specific_session(
+    identifier: &str,
+    intent: ArchivedSessionIntent,
+) -> Result<SessionContinuation> {
+    crate::agent::agents::load_resume_session(identifier, intent)
         .await?
         .ok_or_else(|| anyhow!("No session with identifier '{}' was found.", identifier))
 }
 
-async fn select_session_interactively(is_fork: bool) -> Result<Option<ResumeSession>> {
-    let listings = list_recent_sessions(INTERACTIVE_SESSION_LIMIT)
+async fn select_session_interactively(
+    scope: &SessionQueryScope,
+    intent: ArchivedSessionIntent,
+) -> Result<Option<SessionContinuation>> {
+    let listings = list_recent_sessions_in_scope(INTERACTIVE_SESSION_LIMIT, scope)
         .await
         .context("failed to load recent sessions")?;
     if listings.is_empty() {
@@ -80,7 +110,7 @@ async fn select_session_interactively(is_fork: bool) -> Result<Option<ResumeSess
         options.push(format_listing(listing));
     }
 
-    let prompt_text = if is_fork {
+    let prompt_text = if matches!(intent, ArchivedSessionIntent::ForkNewArchive { .. }) {
         "Select a session to fork"
     } else {
         "Select a session to resume"
@@ -97,11 +127,11 @@ async fn select_session_interactively(is_fork: bool) -> Result<Option<ResumeSess
         return Ok(None);
     };
 
-    Ok(Some(convert_listing(&listings[index], is_fork)))
+    Ok(Some(convert_listing(&listings[index], intent)))
 }
 
-fn convert_listing(listing: &SessionListing, is_fork: bool) -> ResumeSession {
-    ResumeSession::from_listing(listing, is_fork)
+fn convert_listing(listing: &SessionListing, intent: ArchivedSessionIntent) -> ResumeSession {
+    ResumeSession::from_listing(listing, intent)
 }
 
 fn format_listing(listing: &SessionListing) -> String {
@@ -125,7 +155,7 @@ fn format_listing(listing: &SessionListing) -> String {
 
 fn print_resume_summary(resume: &ResumeSession) {
     let ended = resume
-        .snapshot
+        .snapshot()
         .ended_at
         .with_timezone(&Local)
         .format("%Y-%m-%d %H:%M");
@@ -133,7 +163,7 @@ fn print_resume_summary(resume: &ResumeSession) {
         "{}",
         style(format!(
             "Resuming session {} ({} messages, ended {})",
-            resume.identifier,
+            resume.identifier(),
             resume.message_count(),
             ended
         ))
@@ -141,20 +171,13 @@ fn print_resume_summary(resume: &ResumeSession) {
     );
     println!(
         "{}",
-        style(format!("Archive: {}", resume.path.display())).green()
+        style(format!("Archive: {}", resume.path().display())).green()
     );
-}
-
-fn fork_session(mut original: ResumeSession, custom_suffix: String) -> ResumeSession {
-    // Update identifier to reflect fork
-    original.identifier = format!("forked-{}", custom_suffix);
-    original.is_fork = true;
-    original
 }
 
 fn print_fork_summary(resume: &ResumeSession) {
     let ended = resume
-        .snapshot
+        .snapshot()
         .ended_at
         .with_timezone(&Local)
         .format("%Y-%m-%d %H:%M");
@@ -169,7 +192,7 @@ fn print_fork_summary(resume: &ResumeSession) {
     );
     println!(
         "{}",
-        style(format!("Original archive: {}", resume.path.display())).green()
+        style(format!("Original archive: {}", resume.path().display())).green()
     );
     println!("{}", style("Starting independent forked session").green());
 }
@@ -180,7 +203,11 @@ async fn run_single_agent_loop(
     resume: ResumeSession,
 ) -> Result<()> {
     let mut resume_config = config.clone();
-    match parse_archived_workspace(&resume) {
+    match resolve_resume_workspace(&resume, config)? {
+        ParsedWorkspace::Cancelled => {
+            println!("{}", style("No session selected. Exiting.").red());
+            return Ok(());
+        }
         ParsedWorkspace::Missing => {
             println!(
                 "{}",
@@ -188,30 +215,7 @@ async fn run_single_agent_loop(
                     .red()
             );
         }
-        ParsedWorkspace::Provided { path, exists } => {
-            if path != config.workspace {
-                println!(
-                    "{}",
-                    style(format!(
-                        "Archived workspace {} differs from the current CLI workspace {}. Switching to archived location.",
-                        path.display(),
-                        config.workspace.display()
-                    ))
-                    .red()
-                );
-            }
-
-            if !exists {
-                println!(
-                    "{}",
-                    style(format!(
-                        "Archived workspace {} could not be found on disk. Tools will operate relative to the archived path.",
-                        path.display()
-                    ))
-                    .red()
-                );
-            }
-
+        ParsedWorkspace::Provided { path } => {
             resume_config.workspace = path;
         }
     }
@@ -227,22 +231,54 @@ async fn run_single_agent_loop(
 }
 
 enum ParsedWorkspace {
+    Cancelled,
     Missing,
-    Provided { path: PathBuf, exists: bool },
+    Provided { path: PathBuf },
 }
 
-fn parse_archived_workspace(resume: &ResumeSession) -> ParsedWorkspace {
-    let raw_path = resume.snapshot.metadata.workspace_path.trim();
-    if raw_path.is_empty() {
-        return ParsedWorkspace::Missing;
+fn resolve_resume_workspace(
+    resume: &ResumeSession,
+    config: &CoreAgentConfig,
+) -> Result<ParsedWorkspace> {
+    let Some(archived_path) = session_workspace_path(resume.listing()) else {
+        return Ok(ParsedWorkspace::Missing);
+    };
+
+    if !archived_path.exists() {
+        return Err(anyhow!(
+            "Archived workspace '{}' could not be found on disk.",
+            archived_path.display()
+        ));
     }
 
-    let archived_path = PathBuf::from(raw_path);
-    let exists = archived_path.exists();
-    ParsedWorkspace::Provided {
-        path: archived_path,
-        exists,
+    if archived_path == config.workspace {
+        return Ok(ParsedWorkspace::Provided {
+            path: archived_path,
+        });
     }
+
+    let action = if resume.is_fork() { "fork" } else { "resume" };
+    let options = vec![
+        format!("Use archived workspace ({})", archived_path.display()),
+        format!("Use current workspace ({})", config.workspace.display()),
+        "Cancel".to_string(),
+    ];
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt(format!(
+            "Session workspace differs from the current workspace. Choose the workspace to use for this {action}."
+        ))
+        .items(&options)
+        .default(0)
+        .interact()
+        .context("failed to resolve workspace for resume or fork")?;
+
+    let path = match selection {
+        0 => archived_path,
+        1 => config.workspace.clone(),
+        _ => return Ok(ParsedWorkspace::Cancelled),
+    };
+
+    Ok(ParsedWorkspace::Provided { path })
 }
 
 #[cfg(test)]
@@ -283,9 +319,9 @@ mod tests {
             snapshot,
         };
 
-        let resume = convert_listing(&listing, false);
-        assert_eq!(resume.history.len(), 1);
-        assert_eq!(resume.history[0].content.as_text(), "progress");
-        assert!(!resume.is_fork); // Verify is_fork is false for non-forked sessions
+        let resume = convert_listing(&listing, ArchivedSessionIntent::ResumeInPlace);
+        assert_eq!(resume.history().len(), 1);
+        assert_eq!(resume.history()[0].content.as_text(), "progress");
+        assert!(!resume.is_fork());
     }
 }

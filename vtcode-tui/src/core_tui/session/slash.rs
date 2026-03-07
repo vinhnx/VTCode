@@ -459,6 +459,8 @@ fn should_submit_immediately_from_palette(session: &Session) -> bool {
             | "/copy"
             | "/help"
             | "/clear"
+            | "/resume"
+            | "/fork"
             | "/history"
             | "/exit"
     )
@@ -527,6 +529,12 @@ mod tests {
         assert!(should_submit_immediately_from_palette(&session));
 
         session.set_input("/review".to_string());
+        assert!(should_submit_immediately_from_palette(&session));
+
+        session.set_input("/resume".to_string());
+        assert!(should_submit_immediately_from_palette(&session));
+
+        session.set_input("/fork".to_string());
         assert!(should_submit_immediately_from_palette(&session));
     }
 

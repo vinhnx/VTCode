@@ -9,11 +9,13 @@ use vtcode_core::config::WorkspaceTrustLevel;
 use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::config::models::ModelId;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
-use vtcode_core::core::threads::{ThreadBootstrap, build_thread_archive_metadata};
+use vtcode_core::core::threads::{
+    ArchivedSessionIntent, SessionQueryScope, ThreadBootstrap, build_thread_archive_metadata,
+    list_recent_sessions_in_scope, prepare_archived_session,
+};
 use vtcode_core::review::{ReviewSpec, build_review_prompt};
 use vtcode_core::utils::session_archive::{
-    SessionArchive, SessionListing, find_session_by_identifier, list_recent_sessions,
-    reserve_session_archive_identifier,
+    SessionArchive, SessionListing, find_session_by_identifier, reserve_session_archive_identifier,
 };
 use vtcode_core::utils::tty::TtyExt;
 use vtcode_core::utils::validation::validate_non_empty;
@@ -32,6 +34,7 @@ pub enum ExecCommandKind {
         prompt_arg: Option<String>,
         session_id: Option<String>,
         last: bool,
+        all: bool,
     },
     Review {
         spec: ReviewSpec,
@@ -70,6 +73,7 @@ fn resolve_resume_command(resume: ExecResumeArgs) -> Result<ExecCommandKind> {
             prompt_arg: resume.session_or_prompt,
             session_id: None,
             last: true,
+            all: resume.all,
         });
     }
 
@@ -77,6 +81,7 @@ fn resolve_resume_command(resume: ExecResumeArgs) -> Result<ExecCommandKind> {
         prompt_arg: resume.prompt,
         session_id: resume.session_or_prompt,
         last: false,
+        all: resume.all,
     })
 }
 
@@ -93,7 +98,7 @@ pub(super) async fn prepare_exec_run(
         }
         ExecCommandKind::Resume { prompt_arg, .. } => (
             resolve_prompt(prompt_arg.clone(), config.quiet)?,
-            Some(resolve_resume_listing(options).await?),
+            Some(resolve_resume_listing(options, config).await?),
         ),
         ExecCommandKind::Review { spec } => (build_review_prompt(spec), None),
     };
@@ -145,11 +150,16 @@ pub(super) async fn prepare_exec_run(
         build_exec_archive_metadata(run_workspace.as_path(), &model_id, &run_vt_cfg, &run_config);
 
     let (session_id, archive, thread_bootstrap) = if let Some(listing) = resume_listing {
-        let session_id = listing.identifier();
-        let archive = SessionArchive::resume_from_listing(&listing, metadata.clone());
-        let mut bootstrap = ThreadBootstrap::from_listing(listing);
-        bootstrap.metadata = Some(metadata);
-        (session_id, archive, bootstrap)
+        let prepared = prepare_archived_session(
+            listing,
+            run_workspace.clone(),
+            metadata.clone(),
+            ArchivedSessionIntent::ResumeInPlace,
+            None,
+        )
+        .await
+        .context("Failed to prepare archived exec session")?;
+        (prepared.thread_id, prepared.archive, prepared.bootstrap)
     } else {
         let workspace_label = exec_workspace_label(run_workspace.as_path());
         let session_id = reserve_session_archive_identifier(&workspace_label, None)
@@ -276,16 +286,27 @@ async fn load_exec_vt_config(
     Ok(manager.config().clone())
 }
 
-async fn resolve_resume_listing(options: &ExecCommandOptions) -> Result<SessionListing> {
+async fn resolve_resume_listing(
+    options: &ExecCommandOptions,
+    config: &CoreAgentConfig,
+) -> Result<SessionListing> {
     let ExecCommandKind::Resume {
-        session_id, last, ..
+        session_id,
+        last,
+        all,
+        ..
     } = &options.command
     else {
         bail!("Internal error: resume listing requested for non-resume exec command");
     };
 
     if *last {
-        return list_recent_sessions(1)
+        let scope = if *all {
+            SessionQueryScope::All
+        } else {
+            SessionQueryScope::CurrentWorkspace(config.workspace.clone())
+        };
+        return list_recent_sessions_in_scope(1, &scope)
             .await?
             .into_iter()
             .next()
@@ -313,6 +334,7 @@ mod tests {
         let command = resolve_exec_command(
             Some(ExecSubcommand::Resume(ExecResumeArgs {
                 last: true,
+                all: false,
                 session_or_prompt: Some("continue".to_string()),
                 prompt: None,
             })),
@@ -326,6 +348,7 @@ mod tests {
                 last: true,
                 session_id: None,
                 prompt_arg: Some(ref prompt),
+                all: _,
             } if prompt == "continue"
         ));
     }
@@ -335,6 +358,7 @@ mod tests {
         let err = resolve_exec_command(
             Some(ExecSubcommand::Resume(ExecResumeArgs {
                 last: true,
+                all: false,
                 session_or_prompt: Some("continue".to_string()),
                 prompt: Some("extra".to_string()),
             })),
@@ -352,6 +376,7 @@ mod tests {
                 prompt_arg: None,
                 session_id: Some("session-1".to_string()),
                 last: false,
+                all: false,
             },
             true,
         )

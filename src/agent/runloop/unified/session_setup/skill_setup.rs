@@ -33,7 +33,7 @@ pub(crate) async fn discover_skills(
     );
 
     if let Some(resume_session) = resume
-        && !resume_session.loaded_skills.is_empty()
+        && !resume_session.loaded_skills().is_empty()
     {
         warn!(
             "Skipping loaded skill restore during startup; use /skills load to reactivate session skills"

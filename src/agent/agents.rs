@@ -4,47 +4,85 @@ use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, ModelSelectionSource};
 use vtcode_core::core::interfaces::{SessionRuntime, SessionRuntimeParams};
 use vtcode_core::core::threads::{
-    loaded_skills_from_session_listing, messages_from_session_listing,
+    ArchivedSessionIntent, loaded_skills_from_session_listing, messages_from_session_listing,
 };
 use vtcode_core::llm::provider::Message as ProviderMessage;
 use vtcode_core::utils::session_archive::{SessionListing, SessionSnapshot};
 
 #[derive(Clone, Debug)]
-pub struct ResumeSession {
-    pub identifier: String,
-    pub snapshot: SessionSnapshot,
-    pub history: Vec<ProviderMessage>,
-    pub loaded_skills: Vec<String>,
-    pub path: PathBuf,
-    pub is_fork: bool,
+pub struct SessionContinuation {
+    listing: SessionListing,
+    history: Vec<ProviderMessage>,
+    loaded_skills: Vec<String>,
+    intent: ArchivedSessionIntent,
 }
 
-impl ResumeSession {
+impl SessionContinuation {
+    pub fn listing(&self) -> &SessionListing {
+        &self.listing
+    }
+
+    pub fn identifier(&self) -> String {
+        self.listing.identifier()
+    }
+
+    pub fn snapshot(&self) -> &SessionSnapshot {
+        &self.listing.snapshot
+    }
+
+    pub fn path(&self) -> &PathBuf {
+        &self.listing.path
+    }
+
+    pub fn is_fork(&self) -> bool {
+        matches!(self.intent, ArchivedSessionIntent::ForkNewArchive { .. })
+    }
+
+    pub fn intent(&self) -> &ArchivedSessionIntent {
+        &self.intent
+    }
+
+    pub fn custom_suffix(&self) -> Option<&str> {
+        match &self.intent {
+            ArchivedSessionIntent::ForkNewArchive { custom_suffix } => custom_suffix.as_deref(),
+            ArchivedSessionIntent::ResumeInPlace => None,
+        }
+    }
+
+    pub fn history(&self) -> &[ProviderMessage] {
+        &self.history
+    }
+
+    pub fn loaded_skills(&self) -> &[String] {
+        &self.loaded_skills
+    }
+
     pub fn message_count(&self) -> usize {
         self.history.len()
     }
 
-    pub fn from_listing(listing: &SessionListing, is_fork: bool) -> Self {
+    pub fn from_listing(listing: &SessionListing, intent: ArchivedSessionIntent) -> Self {
         Self {
-            identifier: listing.identifier(),
-            snapshot: listing.snapshot.clone(),
+            listing: listing.clone(),
             history: messages_from_session_listing(listing),
             loaded_skills: loaded_skills_from_session_listing(listing),
-            path: listing.path.clone(),
-            is_fork,
+            intent,
         }
     }
 }
 
-pub async fn load_resume_session(identifier: &str, is_fork: bool) -> Result<Option<ResumeSession>> {
-    let manager = vtcode_core::core::threads::ThreadManager::new();
-    let Some(handle) = manager.resume_thread(identifier).await? else {
+pub type ResumeSession = SessionContinuation;
+
+pub async fn load_resume_session(
+    identifier: &str,
+    intent: ArchivedSessionIntent,
+) -> Result<Option<SessionContinuation>> {
+    let Some(listing) =
+        vtcode_core::utils::session_archive::find_session_by_identifier(identifier).await?
+    else {
         return Ok(None);
     };
-    let Some(listing) = handle.archive_listing() else {
-        return Ok(None);
-    };
-    Ok(Some(ResumeSession::from_listing(&listing, is_fork)))
+    Ok(Some(SessionContinuation::from_listing(&listing, intent)))
 }
 
 pub async fn run_single_agent_loop(
@@ -52,7 +90,7 @@ pub async fn run_single_agent_loop(
     skip_confirmations: bool,
     full_auto: bool,
     plan_mode: bool,
-    resume: Option<ResumeSession>,
+    resume: Option<SessionContinuation>,
 ) -> Result<()> {
     // Cache the workspace path to avoid repeated current_dir calls
     let workspace_path = &config.workspace;

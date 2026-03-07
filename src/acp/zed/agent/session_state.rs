@@ -8,6 +8,7 @@ use std::sync::Arc;
 use vtcode_core::core::interfaces::SessionMode;
 use vtcode_core::core::threads::{ThreadBootstrap, build_thread_archive_metadata};
 use vtcode_core::llm::provider::{FinishReason, Message};
+use vtcode_core::utils::session_archive::find_session_by_identifier;
 
 use super::super::constants::SESSION_PREFIX;
 use super::super::helpers::{session_mode_id, session_mode_prompt};
@@ -117,11 +118,13 @@ impl ZedAgent {
         session_id: &acp::SessionId,
         identifier: &str,
     ) -> anyhow::Result<SessionHandle> {
-        let thread = self
-            .thread_manager
-            .resume_thread(identifier)
+        let listing = find_session_by_identifier(identifier)
             .await?
             .ok_or_else(|| anyhow::anyhow!("unknown archived session '{identifier}'"))?;
+        let thread = self.thread_manager.start_thread_with_identifier(
+            listing.identifier(),
+            ThreadBootstrap::from_listing(listing),
+        );
         let handle = self.build_session_handle(session_id.clone(), thread);
         self.sessions
             .borrow_mut()

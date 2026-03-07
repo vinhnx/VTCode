@@ -4,6 +4,7 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::Path;
 use vtcode_core::config::loader::VTCodeConfig;
+use vtcode_core::core::threads::ArchivedSessionIntent;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::MessageStyle;
@@ -190,6 +191,45 @@ fn sync_mcp_approval_policy_for_context(ctx: &InteractionLoopContext<'_>) {
     sync_mcp_approval_policy(ctx.async_mcp_manager.as_deref(), ctx.vt_cfg.as_ref());
 }
 
+async fn try_resume_archived_session(
+    renderer: &mut vtcode_core::utils::ansi::AnsiRenderer,
+    session_id: &str,
+    intent: ArchivedSessionIntent,
+    loading_message: &str,
+    success_message: &str,
+) -> Result<Option<InteractionOutcome>> {
+    renderer.line(
+        MessageStyle::Info,
+        &format!("{loading_message}: {session_id}"),
+    )?;
+
+    match crate::agent::agents::load_resume_session(session_id, intent).await {
+        Ok(Some(resume)) => {
+            renderer.line(
+                MessageStyle::Info,
+                &format!("{success_message}: {session_id}"),
+            )?;
+            Ok(Some(InteractionOutcome::Resume {
+                resume_session: Box::new(resume),
+            }))
+        }
+        Ok(None) => {
+            renderer.line(
+                MessageStyle::Error,
+                &format!("Session not found: {}", session_id),
+            )?;
+            Ok(None)
+        }
+        Err(err) => {
+            renderer.line(
+                MessageStyle::Error,
+                &format!("Failed to load session: {}", err),
+            )?;
+            Ok(None)
+        }
+    }
+}
+
 pub(super) async fn run_interaction_loop_impl(
     ctx: &mut InteractionLoopContext<'_>,
     state: &mut InteractionState<'_>,
@@ -321,36 +361,34 @@ pub(super) async fn run_interaction_loop_impl(
                 continue;
             }
             InlineLoopAction::ResumeSession(session_id) => {
-                ctx.renderer.line(
-                    MessageStyle::Info,
-                    &format!("Loading session: {}", session_id),
-                )?;
-
-                match crate::agent::agents::load_resume_session(&session_id, false).await {
-                    Ok(Some(resume)) => {
-                        ctx.renderer.line(
-                            MessageStyle::Info,
-                            &format!("Restarting with session: {}", session_id),
-                        )?;
-                        return Ok(InteractionOutcome::Resume {
-                            resume_session: Box::new(resume),
-                        });
-                    }
-                    Ok(None) => {
-                        ctx.renderer.line(
-                            MessageStyle::Error,
-                            &format!("Session not found: {}", session_id),
-                        )?;
-                        continue;
-                    }
-                    Err(err) => {
-                        ctx.renderer.line(
-                            MessageStyle::Error,
-                            &format!("Failed to load session: {}", err),
-                        )?;
-                        continue;
-                    }
+                if let Some(outcome) = try_resume_archived_session(
+                    ctx.renderer,
+                    &session_id,
+                    ArchivedSessionIntent::ResumeInPlace,
+                    "Loading session",
+                    "Restarting with session",
+                )
+                .await?
+                {
+                    return Ok(outcome);
                 }
+                continue;
+            }
+            InlineLoopAction::ForkSession(session_id) => {
+                if let Some(outcome) = try_resume_archived_session(
+                    ctx.renderer,
+                    &session_id,
+                    ArchivedSessionIntent::ForkNewArchive {
+                        custom_suffix: None,
+                    },
+                    "Loading session for fork",
+                    "Restarting from fork source",
+                )
+                .await?
+                {
+                    return Ok(outcome);
+                }
+                continue;
             }
             InlineLoopAction::DiffApproved | InlineLoopAction::DiffRejected => {
                 continue;

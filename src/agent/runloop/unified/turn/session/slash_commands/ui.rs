@@ -1,10 +1,11 @@
 use anyhow::Result;
+use vtcode_core::core::threads::{SessionQueryScope, list_recent_sessions_in_scope};
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::MessageStyle;
-use vtcode_core::utils::session_archive;
 use vtcode_tui::{InlineListSelection, OverlaySubmission};
 
 use crate::agent::runloop::model_picker::{ModelPickerStart, ModelPickerState};
+use crate::agent::runloop::slash_commands::SessionPaletteMode;
 use crate::agent::runloop::tui_compat::inline_theme_from_core_styles;
 use crate::agent::runloop::unified::display::persist_theme_preference;
 use crate::agent::runloop::unified::model_selection::finalize_model_selection;
@@ -91,17 +92,34 @@ pub async fn handle_start_theme_palette(
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_start_resume_palette(
+pub async fn handle_start_session_palette(
     mut ctx: SlashCommandContext<'_>,
+    mode: SessionPaletteMode,
     limit: usize,
+    show_all: bool,
 ) -> Result<SlashCommandControl> {
-    if !ensure_selection_ui_available(&mut ctx, "browsing sessions")? {
+    let activity = match mode {
+        SessionPaletteMode::Resume => "browsing sessions",
+        SessionPaletteMode::Fork => "selecting a session to fork",
+    };
+    if !ensure_selection_ui_available(&mut ctx, activity)? {
         return Ok(SlashCommandControl::Continue);
     }
-    match session_archive::list_recent_sessions(limit).await {
+    let scope = if show_all {
+        SessionQueryScope::All
+    } else {
+        SessionQueryScope::CurrentWorkspace(ctx.config.workspace.clone())
+    };
+
+    match list_recent_sessions_in_scope(limit, &scope).await {
         Ok(listings) => {
-            if show_sessions_palette(ctx.renderer, &listings, limit)? {
-                *ctx.palette_state = Some(ActivePalette::Sessions { listings, limit });
+            if show_sessions_palette(ctx.renderer, mode, &listings, limit, show_all)? {
+                *ctx.palette_state = Some(ActivePalette::Sessions {
+                    mode,
+                    listings,
+                    limit,
+                    show_all,
+                });
             }
         }
         Err(err) => {

@@ -409,10 +409,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 ### Other
 
-- **File**: `docs/project/TODO.md`
-  - **Content**: .cargo/config.toml
-  - **User Questions**: "What can you tell me about .cargo/config.toml?"
-
 - **File**: `docs/a2a/INDEX.md`
   - **Content**: A2A Protocol Implementation - Documentation Index
   - **Topics**: Quick Links, Document Guide, Implementation Status at a Glance, Key Files in Implementation, Documentation Map
@@ -642,6 +638,10 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Content**: Styling Quick Start Guide
   - **Topics**: For CLI Output, For TUI Widgets, Unified Theme, Color Reference, Common Patterns
   - **User Questions**: "What can you tell me about Styling Quick Start Guide?", "How does For CLI Output work?", "How does For TUI Widgets work?"
+
+- **File**: `docs/project/TODO.md`
+  - **Content**: TODO.md
+  - **User Questions**: "What can you tell me about TODO.md?"
 
 - **File**: `docs/harness/TECH_DEBT_TRACKER.md`
   - **Content**: Tech Debt Tracker

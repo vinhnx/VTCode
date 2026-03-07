@@ -85,9 +85,11 @@ pub async fn handle_outcome(
         SlashCommandOutcome::StartThemePalette { mode } => {
             handlers::handle_start_theme_palette(ctx, mode).await
         }
-        SlashCommandOutcome::StartResumePalette { limit } => {
-            handlers::handle_start_resume_palette(ctx, limit).await
-        }
+        SlashCommandOutcome::StartSessionPalette {
+            mode,
+            limit,
+            show_all,
+        } => handlers::handle_start_session_palette(ctx, mode, limit, show_all).await,
         SlashCommandOutcome::StartHistoryPicker => handlers::handle_start_history_picker(ctx).await,
         SlashCommandOutcome::StartFileBrowser { initial_filter } => {
             handlers::handle_start_file_browser(ctx, initial_filter).await

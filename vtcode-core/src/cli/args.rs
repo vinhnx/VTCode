@@ -215,6 +215,10 @@ pub struct Cli {
     )]
     pub fork_session: Option<String>,
 
+    /// Show archived sessions from every workspace when resuming or forking
+    #[arg(long, global = true)]
+    pub all: bool,
+
     /// Custom suffix for session identifier (alphanumeric, dash, underscore only, max 64 chars)
     #[arg(long = "session-id", global = true, value_name = "CUSTOM_SUFFIX")]
     pub session_id: Option<String>,
@@ -320,6 +324,9 @@ pub struct ExecResumeArgs {
     /// Resume the most recent archived exec session
     #[arg(long)]
     pub last: bool,
+    /// Search archived exec sessions across every workspace
+    #[arg(long)]
+    pub all: bool,
     /// Archived session identifier to resume, or the prompt when `--last` is used
     #[arg(value_name = "SESSION_ID_OR_PROMPT", required_unless_present = "last")]
     pub session_or_prompt: Option<String>,
@@ -856,6 +863,22 @@ mod exec_command_tests {
     }
 
     #[test]
+    fn exec_resume_parses_all_flag() {
+        let cli = Cli::parse_from(["vtcode", "exec", "resume", "--last", "--all", "continue"]);
+        let Some(Commands::Exec {
+            command: Some(ExecSubcommand::Resume(resume)),
+            ..
+        }) = cli.command
+        else {
+            panic!("expected exec resume command");
+        };
+
+        assert!(resume.last);
+        assert!(resume.all);
+        assert_eq!(resume.session_or_prompt.as_deref(), Some("continue"));
+    }
+
+    #[test]
     fn exec_resume_allows_last_without_positional_for_stdin_prompt() {
         let cli = Cli::parse_from(["vtcode", "exec", "resume", "--last"]);
         let Some(Commands::Exec {
@@ -869,6 +892,17 @@ mod exec_command_tests {
         assert!(resume.last);
         assert!(resume.session_or_prompt.is_none());
         assert!(resume.prompt.is_none());
+    }
+
+    #[test]
+    fn global_resume_and_continue_parse_all_flag() {
+        let resume_cli = Cli::parse_from(["vtcode", "--resume", "session-123", "--all"]);
+        assert_eq!(resume_cli.resume_session.as_deref(), Some("session-123"));
+        assert!(resume_cli.all);
+
+        let continue_cli = Cli::parse_from(["vtcode", "--continue", "--all"]);
+        assert!(continue_cli.continue_latest);
+        assert!(continue_cli.all);
     }
 
     #[test]
@@ -973,6 +1007,7 @@ impl Default for Cli {
             resume_session: None,
             continue_latest: false,
             fork_session: None,
+            all: false,
             session_id: None,
             debug: false,
             enable_skills: false,                // Skills disabled by default

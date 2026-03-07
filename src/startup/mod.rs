@@ -15,7 +15,7 @@ use helpers::{
     provider_label, resolve_config_path, resolve_workspace_path, validate_additional_directories,
     validate_full_auto_configuration, validate_session_id_suffix, validate_startup_configuration,
 };
-use vtcode_core::cli::args::Cli;
+use vtcode_core::cli::args::{Cli, Commands, ExecSubcommand};
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::constants::defaults;
 use vtcode_core::config::loader::{ConfigBuilder, VTCodeConfig};
@@ -35,6 +35,7 @@ pub struct StartupContext {
     pub full_auto_requested: bool,
     pub automation_prompt: Option<String>,
     pub session_resume: Option<SessionResumeMode>,
+    pub resume_show_all: bool,
     pub custom_session_id: Option<String>,
     pub plan_mode_requested: bool,
 }
@@ -146,40 +147,8 @@ impl StartupContext {
         // Validate configuration against models database
         validate_startup_configuration(&config, &workspace, args.quiet)?;
 
-        // Validate custom session ID if provided
-        let custom_session_id = args.session_id.clone();
-        if let Some(ref suffix) = custom_session_id {
-            validate_session_id_suffix(suffix)?;
-        }
-
-        // Parse session resume mode and handle fork logic
-        let session_resume = if let Some(fork_id) = args.fork_session.as_ref() {
-            // --fork-session takes precedence
-            Some(SessionResumeMode::Fork(fork_id.clone()))
-        } else if let Some(value) = args.resume_session.as_ref() {
-            if value == "__interactive__" {
-                // --resume with interactive mode
-                Some(SessionResumeMode::Interactive)
-            } else {
-                // --resume with specific ID
-                if custom_session_id.is_some() {
-                    // --resume + --session-id becomes fork
-                    Some(SessionResumeMode::Fork(value.clone()))
-                } else {
-                    Some(SessionResumeMode::Specific(value.clone()))
-                }
-            }
-        } else if args.continue_latest {
-            // --continue (resume latest)
-            if custom_session_id.is_some() {
-                // --continue + --session-id becomes fork from latest
-                Some(SessionResumeMode::Fork("__latest__".to_string()))
-            } else {
-                Some(SessionResumeMode::Latest)
-            }
-        } else {
-            None
-        };
+        let (custom_session_id, session_resume) = resolve_session_resume(args)?;
+        validate_resume_all_usage(args, session_resume.as_ref())?;
 
         if session_resume.is_some() && args.command.is_some() {
             bail!(
@@ -333,10 +302,57 @@ impl StartupContext {
             full_auto_requested,
             automation_prompt,
             session_resume,
+            resume_show_all: args.all,
             custom_session_id,
             plan_mode_requested,
         })
     }
+}
+
+fn resolve_session_resume(args: &Cli) -> Result<(Option<String>, Option<SessionResumeMode>)> {
+    let custom_session_id = args.session_id.clone();
+    if let Some(ref suffix) = custom_session_id {
+        validate_session_id_suffix(suffix)?;
+    }
+
+    let session_resume = if let Some(fork_id) = args.fork_session.as_ref() {
+        Some(SessionResumeMode::Fork(fork_id.clone()))
+    } else if let Some(value) = args.resume_session.as_ref() {
+        if value == "__interactive__" {
+            Some(SessionResumeMode::Interactive)
+        } else if custom_session_id.is_some() {
+            Some(SessionResumeMode::Fork(value.clone()))
+        } else {
+            Some(SessionResumeMode::Specific(value.clone()))
+        }
+    } else if args.continue_latest {
+        if custom_session_id.is_some() {
+            Some(SessionResumeMode::Fork("__latest__".to_string()))
+        } else {
+            Some(SessionResumeMode::Latest)
+        }
+    } else {
+        None
+    };
+
+    Ok((custom_session_id, session_resume))
+}
+
+fn validate_resume_all_usage(args: &Cli, session_resume: Option<&SessionResumeMode>) -> Result<()> {
+    if args.all
+        && session_resume.is_none()
+        && !matches!(
+            args.command,
+            Some(Commands::Exec {
+                command: Some(ExecSubcommand::Resume(_)),
+                ..
+            })
+        )
+    {
+        bail!("--all can only be used with resume, continue, fork-session, or exec resume");
+    }
+
+    Ok(())
 }
 
 fn resolve_provider(
@@ -403,6 +419,8 @@ pub fn check_prompt_cache_retention_compat(
 #[cfg(test)]
 mod validation_tests {
     use super::*;
+    use clap::Parser;
+    use vtcode_core::cli::args::Cli;
 
     #[test]
     fn retention_warning_for_non_responses_model() {
@@ -455,5 +473,63 @@ mod validation_tests {
             ModelSelectionSource::CliOverride,
         );
         assert_eq!(provider, "minimax");
+    }
+
+    #[test]
+    fn resolve_session_resume_treats_resume_with_session_suffix_as_fork() {
+        let args = Cli::parse_from([
+            "vtcode",
+            "--resume",
+            "session-123",
+            "--session-id",
+            "fork-copy",
+        ]);
+
+        let (custom_session_id, session_resume) =
+            resolve_session_resume(&args).expect("session resume should resolve");
+
+        assert_eq!(custom_session_id.as_deref(), Some("fork-copy"));
+        assert!(matches!(
+            session_resume,
+            Some(SessionResumeMode::Fork(ref id)) if id == "session-123"
+        ));
+    }
+
+    #[test]
+    fn resolve_session_resume_treats_continue_with_session_suffix_as_latest_fork() {
+        let args = Cli::parse_from(["vtcode", "--continue", "--session-id", "fork-copy"]);
+
+        let (custom_session_id, session_resume) =
+            resolve_session_resume(&args).expect("continue should resolve");
+
+        assert_eq!(custom_session_id.as_deref(), Some("fork-copy"));
+        assert!(matches!(
+            session_resume,
+            Some(SessionResumeMode::Fork(ref id)) if id == "__latest__"
+        ));
+    }
+
+    #[test]
+    fn validate_resume_all_usage_accepts_resume_and_continue_modes() {
+        for args in [
+            Cli::parse_from(["vtcode", "--resume", "session-123", "--all"]),
+            Cli::parse_from(["vtcode", "--continue", "--all"]),
+        ] {
+            let (_, session_resume) =
+                resolve_session_resume(&args).expect("session resume should resolve");
+            assert!(validate_resume_all_usage(&args, session_resume.as_ref()).is_ok());
+        }
+    }
+
+    #[test]
+    fn validate_resume_all_usage_rejects_unscoped_all_flag() {
+        let args = Cli::parse_from(["vtcode", "--all"]);
+        let (_, session_resume) = resolve_session_resume(&args).expect("session resume");
+        let err = validate_resume_all_usage(&args, session_resume.as_ref())
+            .expect_err("all flag should be rejected");
+
+        assert!(err.to_string().contains(
+            "--all can only be used with resume, continue, fork-session, or exec resume"
+        ));
     }
 }

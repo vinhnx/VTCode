@@ -82,6 +82,16 @@ fn clear_test_env_override(key: &str) {
     test_env_overrides::clear(key);
 }
 
+#[cfg(test)]
+pub(crate) fn override_sessions_dir_for_tests(path: &Path) {
+    set_test_env_override_path(SESSION_DIR_ENV, path);
+}
+
+#[cfg(test)]
+pub(crate) fn clear_sessions_dir_override_for_tests() {
+    clear_test_env_override(SESSION_DIR_ENV);
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SessionArchiveMetadata {
     pub workspace_label: String,
@@ -315,6 +325,35 @@ impl SessionListing {
             })
         })
     }
+}
+
+fn normalize_workspace_for_match(path: &Path) -> PathBuf {
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join(path)
+    };
+
+    crate::utils::path::normalize_path(&absolute)
+}
+
+pub fn session_workspace_path(listing: &SessionListing) -> Option<PathBuf> {
+    let raw = listing.snapshot.metadata.workspace_path.trim();
+    if raw.is_empty() {
+        None
+    } else {
+        Some(PathBuf::from(raw))
+    }
+}
+
+pub fn session_listing_matches_workspace(listing: &SessionListing, workspace: &Path) -> bool {
+    let Some(session_workspace) = session_workspace_path(listing) else {
+        return false;
+    };
+
+    normalize_workspace_for_match(&session_workspace) == normalize_workspace_for_match(workspace)
 }
 
 fn generate_unique_archive_path(
@@ -718,31 +757,57 @@ impl SessionArchive {
         source_snapshot: &SessionSnapshot,
         custom_suffix: Option<String>,
     ) -> Result<Self> {
-        let sessions_dir = resolve_sessions_dir().await?;
-        apply_session_retention_best_effort(&sessions_dir);
-        let started_at = Utc::now();
+        create_fork_archive(source_snapshot, custom_suffix, None).await
+    }
+}
 
-        // Preserve workspace metadata from source
-        let forked_metadata = SessionArchiveMetadata {
-            workspace_label: source_snapshot.metadata.workspace_label.clone(),
-            workspace_path: source_snapshot.metadata.workspace_path.clone(),
-            model: source_snapshot.metadata.model.clone(),
-            provider: source_snapshot.metadata.provider.clone(),
-            theme: source_snapshot.metadata.theme.clone(),
-            reasoning_effort: source_snapshot.metadata.reasoning_effort.clone(),
-            debug_log_path: source_snapshot.metadata.debug_log_path.clone(),
-            loaded_skills: source_snapshot.metadata.loaded_skills.clone(),
-        };
+async fn create_fork_archive(
+    source_snapshot: &SessionSnapshot,
+    custom_suffix: Option<String>,
+    explicit_identifier: Option<String>,
+) -> Result<SessionArchive> {
+    let sessions_dir = resolve_sessions_dir().await?;
+    apply_session_retention_best_effort(&sessions_dir);
+    let started_at = Utc::now();
 
-        let path = generate_unique_archive_path(
+    let forked_metadata = SessionArchiveMetadata {
+        workspace_label: source_snapshot.metadata.workspace_label.clone(),
+        workspace_path: source_snapshot.metadata.workspace_path.clone(),
+        model: source_snapshot.metadata.model.clone(),
+        provider: source_snapshot.metadata.provider.clone(),
+        theme: source_snapshot.metadata.theme.clone(),
+        reasoning_effort: source_snapshot.metadata.reasoning_effort.clone(),
+        debug_log_path: source_snapshot.metadata.debug_log_path.clone(),
+        loaded_skills: source_snapshot.metadata.loaded_skills.clone(),
+    };
+
+    let path = if let Some(session_identifier) = explicit_identifier {
+        if !is_valid_session_identifier(&session_identifier) {
+            return Err(anyhow::anyhow!(
+                "Invalid session identifier '{}': only ASCII letters, digits, '-' and '_' are allowed",
+                session_identifier
+            ));
+        }
+
+        let candidate =
+            sessions_dir.join(format!("{}.{}", session_identifier, SESSION_FILE_EXTENSION));
+        if candidate.exists() {
+            return Err(anyhow::anyhow!(
+                "Session archive identifier '{}' already exists",
+                session_identifier
+            ));
+        }
+        candidate
+    } else {
+        generate_unique_archive_path(
             &sessions_dir,
             &forked_metadata,
             started_at,
             custom_suffix.as_deref(),
-        );
+        )
+    };
 
-        Ok(Self::from_path(path, forked_metadata, started_at))
-    }
+    Ok(SessionArchive::from_path(path, forked_metadata, started_at))
 }
 
 pub async fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListing>> {

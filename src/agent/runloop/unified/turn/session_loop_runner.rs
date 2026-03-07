@@ -16,6 +16,80 @@ const PLAN_APPROVED_EXECUTION_DIRECTIVE: &str = "Plan was approved. Start implem
 const PLAN_APPROVED_EXECUTION_INPUT: &str = "Implement the approved plan now.";
 const MAX_PLAN_SEED_BYTES: usize = 16_000;
 
+async fn create_session_archive(
+    metadata: vtcode_core::utils::session_archive::SessionArchiveMetadata,
+    reserved_archive_id: Option<String>,
+) -> Result<vtcode_core::utils::session_archive::SessionArchive> {
+    if let Some(identifier) = reserved_archive_id {
+        return vtcode_core::utils::session_archive::SessionArchive::new_with_identifier(
+            metadata, identifier,
+        )
+        .await;
+    }
+
+    vtcode_core::utils::session_archive::SessionArchive::new(metadata, None).await
+}
+
+fn workspace_archive_label(workspace: &std::path::Path) -> String {
+    workspace
+        .file_name()
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "workspace".to_string())
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum NextRuntimeArchiveId {
+    Existing(String),
+    Reserve {
+        workspace_label: String,
+        custom_suffix: Option<String>,
+    },
+}
+
+fn next_runtime_archive_id_request(
+    workspace: &std::path::Path,
+    resume: Option<&ResumeSession>,
+) -> NextRuntimeArchiveId {
+    if let Some(resume) = resume {
+        if !resume.is_fork() {
+            return NextRuntimeArchiveId::Existing(resume.identifier());
+        }
+
+        return NextRuntimeArchiveId::Reserve {
+            workspace_label: workspace_archive_label(workspace),
+            custom_suffix: resume.custom_suffix().map(str::to_owned),
+        };
+    }
+
+    NextRuntimeArchiveId::Reserve {
+        workspace_label: workspace_archive_label(workspace),
+        custom_suffix: None,
+    }
+}
+
+async fn refresh_runtime_debug_context_for_next_session(
+    workspace: &std::path::Path,
+    resume: Option<&ResumeSession>,
+) -> Result<()> {
+    let session_id = match next_runtime_archive_id_request(workspace, resume) {
+        NextRuntimeArchiveId::Existing(identifier) => identifier,
+        NextRuntimeArchiveId::Reserve {
+            workspace_label,
+            custom_suffix,
+        } => {
+            vtcode_core::utils::session_archive::reserve_session_archive_identifier(
+                &workspace_label,
+                custom_suffix,
+            )
+            .await?
+        }
+    };
+
+    crate::main_helpers::configure_runtime_debug_context(session_id.clone(), Some(session_id));
+    Ok(())
+}
+
 fn resolve_effective_turn_timeout_secs(
     configured_turn_timeout_secs: u64,
     max_tool_wall_clock_secs: u64,
@@ -362,48 +436,61 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         let resume_request = resume_state.take();
         let resume_ref = resume_request.as_ref();
         let thread_manager = vtcode_core::core::threads::ThreadManager::new();
-        let thread_bootstrap = if let Some(resume) = resume_ref {
-            vtcode_core::core::threads::ThreadBootstrap::new(Some(resume.snapshot.metadata.clone()))
-                .with_messages(resume.history.clone())
-                .with_loaded_skills(resume.loaded_skills.clone())
+        let archive_metadata = vtcode_core::core::threads::build_thread_archive_metadata(
+            &config.workspace,
+            &config.model,
+            &config.provider,
+            &config.theme,
+            config.reasoning_effort.as_str(),
+        )
+        .with_debug_log_path(
+            crate::main_helpers::runtime_debug_log_path()
+                .map(|path| path.to_string_lossy().to_string()),
+        );
+        let reserved_archive_id = crate::main_helpers::runtime_archive_session_id();
+        let prepared_resume = if let Some(resume) = resume_ref {
+            Some(
+                vtcode_core::core::threads::prepare_archived_session(
+                    resume.listing().clone(),
+                    config.workspace.clone(),
+                    archive_metadata.clone(),
+                    resume.intent().clone(),
+                    if resume.is_fork() {
+                        reserved_archive_id.clone()
+                    } else {
+                        None
+                    },
+                )
+                .await?,
+            )
         } else {
-            vtcode_core::core::threads::ThreadBootstrap::new(None)
+            None
         };
-        let preferred_thread_id = if let Some(resume) = resume_ref {
-            if resume.is_fork {
-                crate::main_helpers::runtime_archive_session_id()
-            } else {
-                Some(resume.identifier.clone())
-            }
+        let (thread_handle, session_archive) = if let Some(prepared) = prepared_resume {
+            (
+                thread_manager
+                    .start_thread_with_identifier(prepared.thread_id.clone(), prepared.bootstrap),
+                Some(prepared.archive),
+            )
         } else {
-            crate::main_helpers::runtime_archive_session_id()
-        };
-        let custom_fork_suffix = resume_ref.and_then(|resume| {
-            if resume.is_fork {
-                resume
-                    .identifier
-                    .strip_prefix("forked-")
-                    .map(|value| value.to_string())
+            let thread_id = if let Some(identifier) = reserved_archive_id.clone() {
+                identifier
             } else {
-                None
-            }
-        });
-        let thread_handle = if let Some(identifier) = preferred_thread_id {
-            thread_manager.start_thread_with_identifier(identifier, thread_bootstrap)
-        } else {
-            let workspace_label = config
-                .workspace
-                .file_name()
-                .and_then(|value| value.to_str())
-                .map(|value| value.to_string())
-                .unwrap_or_else(|| "workspace".to_string());
-            thread_manager
-                .start_thread(&workspace_label, custom_fork_suffix, thread_bootstrap)
+                vtcode_core::utils::session_archive::reserve_session_archive_identifier(
+                    &workspace_archive_label(&config.workspace),
+                    None,
+                )
                 .await?
+            };
+            let bootstrap =
+                vtcode_core::core::threads::ThreadBootstrap::new(Some(archive_metadata.clone()));
+            let archive =
+                create_session_archive(archive_metadata.clone(), Some(thread_id.clone())).await?;
+            (
+                thread_manager.start_thread_with_identifier(thread_id, bootstrap),
+                Some(archive),
+            )
         };
-        let session_id = SessionId::from_string(thread_handle.thread_id().to_string());
-        let _session_created_at = Utc::now();
-        let _session_state_path = session_path(Path::new(&config.workspace), &session_id);
         let _session_trigger = if resume_ref.is_some() {
             SessionStartTrigger::Resume
         } else {
@@ -450,6 +537,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             vt_cfg.as_ref(),
             &mut session_state,
             resume_ref,
+            session_archive,
             full_auto,
             _skip_confirmations,
         )
@@ -981,7 +1069,12 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 None
             }
         };
-        if resume_state.is_some() {
+        if let Some(next_resume) = resume_state.as_ref() {
+            refresh_runtime_debug_context_for_next_session(
+                config.workspace.as_path(),
+                Some(next_resume),
+            )
+            .await?;
             continue;
         }
         if matches!(session_end_reason, SessionEndReason::NewSession) {
@@ -991,6 +1084,8 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 tracing::debug!("Configuration reloaded due to file changes");
             }
 
+            refresh_runtime_debug_context_for_next_session(config.workspace.as_path(), None)
+                .await?;
             resume_state = None;
             _consecutive_idle_cycles = 0;
             continue;
@@ -1086,9 +1181,44 @@ pub(super) async fn run_single_agent_loop_unified_impl(
 #[cfg(test)]
 mod tests {
     use super::{
-        TurnPhase, build_partial_timeout_messages, effective_max_tool_calls_for_turn,
-        resolve_effective_turn_timeout_secs,
+        NextRuntimeArchiveId, TurnPhase, build_partial_timeout_messages,
+        effective_max_tool_calls_for_turn, next_runtime_archive_id_request,
+        resolve_effective_turn_timeout_secs, workspace_archive_label,
     };
+    use crate::agent::agents::ResumeSession;
+    use chrono::Utc;
+    use std::path::{Path, PathBuf};
+    use vtcode_core::core::threads::ArchivedSessionIntent;
+    use vtcode_core::llm::provider::MessageRole;
+    use vtcode_core::utils::session_archive::{
+        SessionArchiveMetadata, SessionListing, SessionMessage, SessionSnapshot,
+    };
+
+    fn resume_session(intent: ArchivedSessionIntent) -> ResumeSession {
+        let listing = SessionListing {
+            path: PathBuf::from("/tmp/session-source.json"),
+            snapshot: SessionSnapshot {
+                metadata: SessionArchiveMetadata::new(
+                    "workspace",
+                    "/tmp/workspace",
+                    "model",
+                    "provider",
+                    "theme",
+                    "medium",
+                ),
+                started_at: Utc::now(),
+                ended_at: Utc::now(),
+                total_messages: 1,
+                distinct_tools: Vec::new(),
+                transcript: Vec::new(),
+                messages: vec![SessionMessage::new(MessageRole::User, "hello")],
+                progress: None,
+                error_logs: Vec::new(),
+            },
+        };
+
+        ResumeSession::from_listing(&listing, intent)
+    }
 
     #[test]
     fn turn_timeout_respects_tool_wall_clock_budget() {
@@ -1144,5 +1274,42 @@ mod tests {
             build_partial_timeout_messages(660, TurnPhase::Requesting, 0, 0, true, false);
         assert!(!timeout_message.contains("Autonomous recovery"));
         assert!(!timeout_error_message.contains("Autonomous recovery"));
+    }
+
+    #[test]
+    fn workspace_archive_label_uses_directory_name() {
+        assert_eq!(workspace_archive_label(Path::new("/tmp/demo")), "demo");
+    }
+
+    #[test]
+    fn next_runtime_archive_id_request_reuses_existing_id_for_resume() {
+        let resume = resume_session(ArchivedSessionIntent::ResumeInPlace);
+
+        assert_eq!(
+            next_runtime_archive_id_request(Path::new("/tmp/workspace"), Some(&resume)),
+            NextRuntimeArchiveId::Existing("session-source".to_string())
+        );
+    }
+
+    #[test]
+    fn next_runtime_archive_id_request_reserves_for_fork_and_new_session() {
+        let resume = resume_session(ArchivedSessionIntent::ForkNewArchive {
+            custom_suffix: Some("branch".to_string()),
+        });
+
+        assert_eq!(
+            next_runtime_archive_id_request(Path::new("/tmp/workspace"), Some(&resume)),
+            NextRuntimeArchiveId::Reserve {
+                workspace_label: "workspace".to_string(),
+                custom_suffix: Some("branch".to_string()),
+            }
+        );
+        assert_eq!(
+            next_runtime_archive_id_request(Path::new("/tmp/workspace"), None),
+            NextRuntimeArchiveId::Reserve {
+                workspace_label: "workspace".to_string(),
+                custom_suffix: None,
+            }
+        );
     }
 }

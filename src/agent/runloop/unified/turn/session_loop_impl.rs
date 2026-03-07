@@ -2,7 +2,6 @@ use anyhow::Result;
 use std::collections::VecDeque;
 use std::io::Write;
 
-use std::path::Path;
 use std::time::Instant;
 use tokio_util::sync::CancellationToken;
 
@@ -27,7 +26,7 @@ use crate::agent::runloop::unified::inline_events::harness::{
 use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, TurnId, TurnRunId};
 use chrono::Utc;
 use vtcode_core::exec::events::{ThreadEvent, ThreadStartedEvent};
-use vtcode_core::session::{SessionId, session_path};
+use vtcode_core::session::SessionId;
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_core::utils::session_archive::{SessionMessage, SessionProgressArgs};
 

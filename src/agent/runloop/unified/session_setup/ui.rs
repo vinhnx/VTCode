@@ -13,7 +13,6 @@ use crate::agent::runloop::unified::turn::workspace::load_workspace_files;
 use crate::agent::runloop::unified::{context_manager, palettes, state};
 use crate::hooks::lifecycle::{LifecycleHookEngine, SessionEndReason, SessionStartTrigger};
 use crate::ide_context::IdeContextBridge;
-use crate::main_helpers::{runtime_archive_session_id, runtime_debug_log_path};
 use anyhow::{Context, Result};
 use chrono::Local;
 use hashbrown::HashMap;
@@ -28,7 +27,7 @@ use vtcode_core::notifications::set_global_terminal_focused;
 use vtcode_core::ui::slash::SLASH_COMMANDS;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_core::utils::session_archive::{SessionArchive, SessionArchiveMetadata};
+use vtcode_core::utils::session_archive::SessionArchive;
 use vtcode_core::utils::transcript;
 use vtcode_tui::{
     FocusChangeCallback, InlineEvent, InlineEventCallback, SessionOptions,
@@ -40,6 +39,7 @@ pub(crate) async fn initialize_session_ui(
     vt_cfg: Option<&VTCodeConfig>,
     session_state: &mut SessionState,
     resume_state: Option<&ResumeSession>,
+    session_archive: Option<SessionArchive>,
     full_auto: bool,
     skip_confirmations: bool,
 ) -> Result<SessionUISetup> {
@@ -170,13 +170,6 @@ pub(crate) async fn initialize_session_ui(
     transcript::clear();
     render_resume_state_if_present(&mut renderer, resume_state, supports_reasoning)?;
 
-    let workspace_label = config
-        .workspace
-        .file_name()
-        .and_then(|component| component.to_str())
-        .map(|value| value.to_string())
-        .unwrap_or_else(|| "workspace".to_string());
-    let workspace_path = config.workspace.to_string_lossy().into_owned();
     let provider_label = if config.provider.trim().is_empty() {
         session_state.provider_client.name().to_string()
     } else {
@@ -198,15 +191,6 @@ pub(crate) async fn initialize_session_ui(
                 None
             }
         };
-
-    let (session_archive, session_archive_error) = setup_session_archive(
-        resume_state,
-        workspace_label,
-        workspace_path,
-        config,
-        provider_label,
-    )
-    .await;
 
     if let (Some(hooks), Some(archive)) = (&lifecycle_hooks, session_archive.as_ref()) {
         hooks
@@ -296,14 +280,6 @@ pub(crate) async fn initialize_session_ui(
     .await?;
     handle.set_header_context(header_context);
 
-    if let Some(message) = session_archive_error {
-        renderer.line(
-            MessageStyle::Info,
-            &format!("Session archiving disabled: {}", message),
-        )?;
-        renderer.line_if_not_empty(MessageStyle::Output)?;
-    }
-
     let next_checkpoint_turn = checkpoint_manager
         .as_ref()
         .and_then(|manager| manager.next_turn_number().ok())
@@ -338,11 +314,11 @@ fn render_resume_state_if_present(
     };
 
     let ended_local = session
-        .snapshot
+        .snapshot()
         .ended_at
         .with_timezone(&Local)
         .format("%Y-%m-%d %H:%M");
-    let action = if session.is_fork {
+    let action = if session.is_fork() {
         "Forking"
     } else {
         "Resuming"
@@ -352,29 +328,29 @@ fn render_resume_state_if_present(
         &format!(
             "{} session {} · ended {} · {} messages",
             action,
-            session.identifier,
+            session.identifier(),
             ended_local,
             session.message_count()
         ),
     )?;
     renderer.line(
         MessageStyle::Info,
-        &format!("Previous archive: {}", session.path.display()),
+        &format!("Previous archive: {}", session.path().display()),
     )?;
-    if session.is_fork {
+    if session.is_fork() {
         renderer.line(MessageStyle::Info, "Starting independent forked session")?;
     }
 
-    if !session.history.is_empty() {
+    if !session.history().is_empty() {
         renderer.line(MessageStyle::Info, "Conversation history:")?;
-        let lines = build_structured_resume_lines(&session.history, supports_reasoning);
+        let lines = build_structured_resume_lines(session.history(), supports_reasoning);
         render_resume_lines(renderer, &lines)?;
-    } else if !session.snapshot.transcript.is_empty() {
+    } else if !session.snapshot().transcript.is_empty() {
         renderer.line(
             MessageStyle::Info,
             "Conversation history (legacy transcript):",
         )?;
-        let lines = build_legacy_resume_lines(&session.snapshot.transcript);
+        let lines = build_legacy_resume_lines(&session.snapshot().transcript);
         render_resume_lines(renderer, &lines)?;
     }
     renderer.line_if_not_empty(MessageStyle::Output)?;
@@ -629,118 +605,6 @@ fn infer_legacy_line_style(line: &str) -> MessageStyle {
         return MessageStyle::ToolOutput;
     }
     MessageStyle::Info
-}
-
-async fn setup_session_archive(
-    resume_state: Option<&ResumeSession>,
-    workspace_label: String,
-    workspace_path: String,
-    config: &CoreAgentConfig,
-    provider_label: String,
-) -> (Option<SessionArchive>, Option<String>) {
-    let reserved_archive_id = runtime_archive_session_id();
-    let debug_log_path = runtime_debug_log_path().map(|path| path.to_string_lossy().to_string());
-
-    let mut session_archive_error: Option<String> = None;
-    let session_archive = if let Some(resume) = resume_state {
-        if resume.is_fork {
-            let custom_id = resume
-                .identifier
-                .strip_prefix("forked-")
-                .map(|s| s.to_string());
-            let archive_metadata = SessionArchiveMetadata::new(
-                resume.snapshot.metadata.workspace_label.clone(),
-                resume.snapshot.metadata.workspace_path.clone(),
-                resume.snapshot.metadata.model.clone(),
-                resume.snapshot.metadata.provider.clone(),
-                resume.snapshot.metadata.theme.clone(),
-                resume.snapshot.metadata.reasoning_effort.clone(),
-            )
-            .with_loaded_skills(resume.loaded_skills.clone())
-            .with_debug_log_path(debug_log_path.clone());
-            match create_archive_with_optional_identifier(
-                archive_metadata,
-                custom_id,
-                reserved_archive_id.as_deref(),
-            )
-            .await
-            {
-                Ok(archive) => Some(archive),
-                Err(err) => {
-                    session_archive_error = Some(err.to_string());
-                    None
-                }
-            }
-        } else {
-            let archive_metadata = SessionArchiveMetadata::new(
-                workspace_label,
-                workspace_path,
-                config.model.clone(),
-                provider_label,
-                config.theme.clone(),
-                config.reasoning_effort.as_str().to_string(),
-            )
-            .with_debug_log_path(debug_log_path.clone());
-            match create_archive_with_optional_identifier(
-                archive_metadata,
-                None,
-                reserved_archive_id.as_deref(),
-            )
-            .await
-            {
-                Ok(archive) => Some(archive),
-                Err(err) => {
-                    session_archive_error = Some(err.to_string());
-                    None
-                }
-            }
-        }
-    } else {
-        let archive_metadata = SessionArchiveMetadata::new(
-            workspace_label,
-            workspace_path,
-            config.model.clone(),
-            provider_label,
-            config.theme.clone(),
-            config.reasoning_effort.as_str().to_string(),
-        )
-        .with_debug_log_path(debug_log_path);
-        match create_archive_with_optional_identifier(
-            archive_metadata,
-            None,
-            reserved_archive_id.as_deref(),
-        )
-        .await
-        {
-            Ok(archive) => Some(archive),
-            Err(err) => {
-                session_archive_error = Some(err.to_string());
-                None
-            }
-        }
-    };
-
-    (session_archive, session_archive_error)
-}
-
-async fn create_archive_with_optional_identifier(
-    metadata: SessionArchiveMetadata,
-    custom_suffix: Option<String>,
-    reserved_archive_id: Option<&str>,
-) -> Result<SessionArchive> {
-    if let Some(reserved_id) = reserved_archive_id {
-        match SessionArchive::new_with_identifier(metadata.clone(), reserved_id.to_string()).await {
-            Ok(archive) => return Ok(archive),
-            Err(err) => {
-                warn!(
-                    "failed to use reserved archive id '{}': {}; falling back to generated id",
-                    reserved_id, err
-                );
-            }
-        }
-    }
-
-    SessionArchive::new(metadata, custom_suffix).await
 }
 
 #[cfg(test)]

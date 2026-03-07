@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use anyhow::Result;
 use serde_json::Value;
 use vtcode_core::ui::theme;
@@ -12,8 +14,9 @@ mod parsing;
 #[path = "slash_commands/rendering.rs"]
 mod rendering;
 use flow::{
-    handle_auth_command, handle_login_command, handle_logout_command, handle_mode_command,
-    handle_plan_command, handle_resume_command, handle_review_command, handle_rewind_command,
+    handle_auth_command, handle_fork_command, handle_login_command, handle_logout_command,
+    handle_mode_command, handle_plan_command, handle_resume_command, handle_review_command,
+    handle_rewind_command,
 };
 use management::{handle_add_dir_command, handle_mcp_command};
 use parsing::{parse_session_log_export_format, split_command_and_args};
@@ -22,6 +25,12 @@ use rendering::{render_generate_agent_file_usage, render_help, render_theme_list
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ThemePaletteMode {
     Select,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SessionPaletteMode {
+    Resume,
+    Fork,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -54,8 +63,10 @@ pub enum SlashCommandOutcome {
     StartThemePalette {
         mode: ThemePaletteMode,
     },
-    StartResumePalette {
+    StartSessionPalette {
+        mode: SessionPaletteMode,
         limit: usize,
+        show_all: bool,
     },
     StartHistoryPicker,
     StartFileBrowser {
@@ -149,6 +160,7 @@ pub enum WorkspaceDirectoryCommand {
 pub async fn handle_slash_command(
     input: &str,
     renderer: &mut AnsiRenderer,
+    workspace: &Path,
 ) -> Result<SlashCommandOutcome> {
     let trimmed = input.trim();
     if trimmed.is_empty() {
@@ -347,7 +359,8 @@ pub async fn handle_slash_command(
                 Ok(SlashCommandOutcome::Handled)
             }
         },
-        "resume" => handle_resume_command(args, renderer).await,
+        "resume" => handle_resume_command(args, renderer, workspace).await,
+        "fork" => handle_fork_command(args, renderer, workspace).await,
         "history" => {
             if !args.is_empty() {
                 renderer.line(MessageStyle::Error, "Usage: /history")?;

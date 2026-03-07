@@ -41,7 +41,9 @@ pub(crate) async fn handle_input_commands(
         }
         input if input.starts_with('/') && !is_absolute_image_path_input(input) => {
             if let Some(command_input) = input.strip_prefix('/') {
-                let outcome = process_slash_command(command_input, ctx.renderer).await?;
+                let outcome =
+                    process_slash_command(command_input, ctx.renderer, &ctx.config.workspace)
+                        .await?;
 
                 let command_result = slash_commands::handle_outcome(
                     outcome,

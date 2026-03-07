@@ -9,6 +9,7 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_tui::{InlineHandle, InlineListSelection};
 
 use crate::agent::runloop::model_picker::{ModelPickerProgress, ModelPickerState};
+use crate::agent::runloop::slash_commands::SessionPaletteMode;
 use crate::agent::runloop::unified::model_selection::finalize_model_selection;
 use crate::agent::runloop::unified::palettes::{
     ActivePalette, handle_palette_cancel, handle_palette_preview, handle_palette_selection,
@@ -131,13 +132,27 @@ impl<'a> PaletteCoordinator<'a> {
         full_auto: bool,
     ) -> Result<InlineLoopAction> {
         if let Some(active) = self.state.take() {
-            // Check if this is a session selection - if so, return the ResumeSession action
-            if let InlineListSelection::Session(session_id) = &selection {
-                renderer.line(
-                    MessageStyle::Info,
-                    &format!("Resuming session: {}", session_id),
-                )?;
-                return Ok(InlineLoopAction::ResumeSession(session_id.clone()));
+            if let (
+                ActivePalette::Sessions { mode, .. },
+                InlineListSelection::Session(session_id),
+            ) = (&active, &selection)
+            {
+                match mode {
+                    SessionPaletteMode::Resume => {
+                        renderer.line(
+                            MessageStyle::Info,
+                            &format!("Resuming session: {}", session_id),
+                        )?;
+                        return Ok(InlineLoopAction::ResumeSession(session_id.clone()));
+                    }
+                    SessionPaletteMode::Fork => {
+                        renderer.line(
+                            MessageStyle::Info,
+                            &format!("Forking session: {}", session_id),
+                        )?;
+                        return Ok(InlineLoopAction::ForkSession(session_id.clone()));
+                    }
+                }
             }
 
             let restore = handle_palette_selection(

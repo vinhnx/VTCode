@@ -83,6 +83,7 @@ pub async fn dispatch(
             handle_resume_session_command(
                 core_cfg,
                 mode,
+                startup.resume_show_all,
                 startup.custom_session_id.clone(),
                 startup.skip_confirmations,
             )
@@ -428,11 +429,18 @@ async fn handle_analyze_command(
 async fn handle_resume_session_command(
     core_cfg: &vtcode_core::config::types::AgentConfig,
     mode: vtcode::startup::SessionResumeMode,
+    show_all: bool,
     custom_session_id: Option<String>,
     skip_confirmations: bool,
 ) -> Result<()> {
-    sessions::handle_resume_session_command(core_cfg, mode, custom_session_id, skip_confirmations)
-        .await
+    sessions::handle_resume_session_command(
+        core_cfg,
+        mode,
+        show_all,
+        custom_session_id,
+        skip_confirmations,
+    )
+    .await
 }
 
 pub fn set_workspace_env(workspace: &Path) {
@@ -562,6 +570,7 @@ mod tests {
             full_auto_requested: false,
             automation_prompt: None,
             session_resume: None,
+            resume_show_all: false,
             custom_session_id: None,
             plan_mode_requested: false,
         }
@@ -677,9 +686,14 @@ mod tests {
             .as_nanos();
         let fake_id = format!("nonexistent-session-{unique_suffix}");
 
-        let result =
-            handle_resume_session_command(&cfg, SessionResumeMode::Specific(fake_id), None, true)
-                .await;
+        let result = handle_resume_session_command(
+            &cfg,
+            SessionResumeMode::Specific(fake_id),
+            false,
+            None,
+            true,
+        )
+        .await;
 
         let err = result.expect_err("expected missing session error");
         assert!(

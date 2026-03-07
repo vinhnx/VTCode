@@ -11,7 +11,7 @@ use vtcode_tui::{
     InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection, convert_style,
 };
 
-use crate::agent::runloop::slash_commands::ThemePaletteMode;
+use crate::agent::runloop::slash_commands::{SessionPaletteMode, ThemePaletteMode};
 use crate::agent::runloop::tui_compat::{inline_theme_from_core_styles, to_tui_appearance};
 use crate::agent::runloop::ui::build_inline_header_context;
 use crate::agent::runloop::unified::settings_interactive::{
@@ -27,9 +27,11 @@ const THEME_SELECT_HINT: &str =
     "↑/↓ choose • Enter apply • Esc cancel • Type to filter by name or id";
 const THEME_SEARCH_LABEL: &str = "Search themes";
 const THEME_SEARCH_PLACEHOLDER: &str = "Type theme name or id";
-const SESSIONS_PALETTE_TITLE: &str = "Archived sessions";
+const SESSION_FORK_PALETTE_TITLE: &str = "Fork session";
+const SESSION_RESUME_PALETTE_TITLE: &str = "Resume session";
 const SESSIONS_HINT_PRIMARY: &str = "Use ↑/↓ to browse sessions.";
-const SESSIONS_HINT_SECONDARY: &str = "Enter to resume session • Esc to close.";
+const SESSIONS_FORK_HINT_SECONDARY: &str = "Enter to fork session • Esc to close.";
+const SESSIONS_RESUME_HINT_SECONDARY: &str = "Enter to resume session • Esc to close.";
 const SESSIONS_LATEST_BADGE: &str = "Latest";
 
 #[derive(Clone)]
@@ -39,8 +41,10 @@ pub(crate) enum ActivePalette {
         original_theme_id: String,
     },
     Sessions {
+        mode: SessionPaletteMode,
         listings: Vec<SessionListing>,
         limit: usize,
+        show_all: bool,
     },
     Settings {
         state: Box<SettingsPaletteState>,
@@ -111,8 +115,10 @@ fn theme_search_value(theme_id: &str, theme_label: &str) -> String {
 
 pub(crate) fn show_sessions_palette(
     renderer: &mut AnsiRenderer,
+    mode: SessionPaletteMode,
     listings: &[SessionListing],
     limit: usize,
+    show_all: bool,
 ) -> Result<bool> {
     if listings.is_empty() {
         renderer.line(MessageStyle::Info, "No archived sessions found.")?;
@@ -153,15 +159,34 @@ pub(crate) fn show_sessions_palette(
         });
     }
 
+    let scope_label = if show_all {
+        "across all workspaces"
+    } else {
+        "in the current workspace"
+    };
+    let hint_secondary = match mode {
+        SessionPaletteMode::Resume => SESSIONS_RESUME_HINT_SECONDARY,
+        SessionPaletteMode::Fork => SESSIONS_FORK_HINT_SECONDARY,
+    };
+    let title = match mode {
+        SessionPaletteMode::Resume => SESSION_RESUME_PALETTE_TITLE,
+        SessionPaletteMode::Fork => SESSION_FORK_PALETTE_TITLE,
+    };
+
     let lines = vec![
-        format!("Showing {} of {} archived sessions", listings.len(), limit),
+        format!(
+            "Showing {} of {} archived sessions {}",
+            listings.len(),
+            limit,
+            scope_label
+        ),
         SESSIONS_HINT_PRIMARY.to_string(),
-        SESSIONS_HINT_SECONDARY.to_string(),
+        hint_secondary.to_string(),
     ];
     let selected = listings
         .first()
         .map(|listing| InlineListSelection::Session(listing.identifier()));
-    renderer.show_list_modal(SESSIONS_PALETTE_TITLE, lines, items, selected, None);
+    renderer.show_list_modal(title, lines, items, selected, None);
     Ok(true)
 }
 
@@ -272,9 +297,19 @@ pub(crate) async fn handle_palette_selection(
                 original_theme_id,
             })),
         },
-        ActivePalette::Sessions { listings, limit } => {
-            if show_sessions_palette(renderer, &listings, limit)? {
-                Ok(Some(ActivePalette::Sessions { listings, limit }))
+        ActivePalette::Sessions {
+            mode,
+            listings,
+            limit,
+            show_all,
+        } => {
+            if show_sessions_palette(renderer, mode, &listings, limit, show_all)? {
+                Ok(Some(ActivePalette::Sessions {
+                    mode,
+                    listings,
+                    limit,
+                    show_all,
+                }))
             } else {
                 Ok(None)
             }

@@ -54,7 +54,7 @@ pub use share_log::handle_share_log;
 pub use skills::handle_manage_skills;
 pub use ui::{
     handle_start_file_browser, handle_start_history_picker, handle_start_model_selection,
-    handle_start_resume_palette, handle_start_theme_palette, handle_theme_changed,
+    handle_start_session_palette, handle_start_theme_palette, handle_theme_changed,
 };
 pub use update::handle_update;
 pub use workspace::{

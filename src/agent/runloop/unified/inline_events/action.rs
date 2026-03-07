@@ -5,6 +5,7 @@ pub(crate) enum InlineLoopAction {
     Submit(String),
     Exit(SessionEndReason),
     ResumeSession(String), // Session identifier to resume
+    ForkSession(String),   // Session identifier to fork
     /// Plan approved (Claude Code style HITL) - transition from Plan to Edit mode
     PlanApproved {
         /// If true, auto-accept file edits without prompting

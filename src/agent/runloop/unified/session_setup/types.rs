@@ -101,6 +101,6 @@ pub(crate) async fn build_conversation_history_from_resume(
     resume: Option<&ResumeSession>,
 ) -> Vec<uni::Message> {
     resume
-        .map(|session| session.history.clone())
+        .map(|session| session.history().to_vec())
         .unwrap_or_default()
 }
