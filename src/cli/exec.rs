@@ -1,14 +1,12 @@
+mod prep;
+
 use anyhow::{Context, Result, bail};
 use std::fmt::Write as _;
 use std::fs::File;
-use std::io::{self, BufWriter, Read, Write};
+use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 use std::sync::{Arc, Mutex, MutexGuard};
-use vtcode_core::cli::input_hardening::validate_agent_safe_text;
 use vtcode_core::config::VTCodeConfig;
-use vtcode_core::config::WorkspaceTrustLevel;
-use vtcode_core::config::models::ModelId;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::runner::{AgentRunner, RunnerSettings};
 use vtcode_core::core::agent::task::{ContextItem, Task, TaskResults};
@@ -18,12 +16,12 @@ use vtcode_core::exec::events::{
 };
 use vtcode_core::utils::colors::style;
 use vtcode_core::utils::file_utils::write_file_with_context;
-use vtcode_core::utils::tty::TtyExt;
-use vtcode_core::utils::validation::validate_non_empty;
+use vtcode_core::utils::session_archive::SessionMessage;
 
-use crate::workspace_trust::workspace_trust_level;
+pub use prep::ExecCommandKind;
+use prep::prepare_exec_run;
+pub(crate) use prep::resolve_exec_command;
 
-const EXEC_SESSION_PREFIX: &str = "exec-task";
 const EXEC_TASK_ID: &str = "exec-task";
 const EXEC_TASK_TITLE: &str = "Exec Task";
 const EXEC_TASK_INSTRUCTIONS: &str = "You are running vtcode in non-interactive exec mode. Complete the task autonomously using the configured full-auto tool allowlist. Do not request additional user input, confirmations, or allowances—operate solely with the provided information and available tools. Provide a concise summary of the outcome when finished.";
@@ -253,6 +251,7 @@ pub struct ExecCommandOptions {
     pub dry_run: bool,
     pub events_path: Option<PathBuf>,
     pub last_message_file: Option<PathBuf>,
+    pub command: ExecCommandKind,
 }
 
 fn task_instructions(dry_run: bool) -> &'static str {
@@ -261,33 +260,6 @@ fn task_instructions(dry_run: bool) -> &'static str {
     } else {
         EXEC_TASK_INSTRUCTIONS
     }
-}
-
-fn resolve_prompt(prompt_arg: Option<String>, quiet: bool) -> Result<String> {
-    let prompt = match prompt_arg {
-        Some(p) if p != "-" => p,
-        maybe_dash => {
-            let force_stdin = matches!(maybe_dash.as_deref(), Some("-"));
-            if io::stdin().is_tty_ext() && !force_stdin {
-                bail!(
-                    "No prompt provided. Pass a prompt argument, pipe input, or use '-' to read from stdin."
-                );
-            }
-            if !force_stdin && !quiet {
-                eprintln!("Reading prompt from stdin...");
-            }
-            // OPTIMIZATION: Pre-allocate buffer with reasonable capacity
-            let mut buffer = String::with_capacity(1024);
-            io::stdin()
-                .read_to_string(&mut buffer)
-                .context("Failed to read prompt from stdin")?;
-            validate_non_empty(&buffer, "Prompt via stdin")?;
-            buffer
-        }
-    };
-
-    validate_agent_safe_text("prompt", &prompt)?;
-    Ok(prompt)
 }
 
 fn serialize_event_line(event: &ThreadEvent) -> Result<String> {
@@ -425,14 +397,28 @@ fn lock_or_recover<T>(mutex: &Arc<Mutex<T>>) -> MutexGuard<'_, T> {
     }
 }
 
+fn exec_archive_transcript(messages: &[vtcode_core::llm::provider::Message]) -> Vec<String> {
+    messages
+        .iter()
+        .filter_map(|message| {
+            let text = message.content.as_text();
+            let trimmed = text.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(format!("{}: {}", message.role, trimmed.replace('\n', " ")))
+            }
+        })
+        .collect()
+}
+
 pub async fn handle_exec_command(
     config: &CoreAgentConfig,
     vt_cfg: &VTCodeConfig,
     options: ExecCommandOptions,
-    prompt_arg: Option<String>,
 ) -> Result<()> {
     tokio::select! {
-        res = handle_exec_command_impl(config, vt_cfg, options, prompt_arg) => res,
+        res = handle_exec_command_impl(config, vt_cfg, options) => res,
         _ = tokio::signal::ctrl_c() => {
             eprintln!("{}", style("\nCancelled by user.").red());
             bail!("Operation cancelled");
@@ -444,60 +430,32 @@ async fn handle_exec_command_impl(
     config: &CoreAgentConfig,
     vt_cfg: &VTCodeConfig,
     options: ExecCommandOptions,
-    prompt_arg: Option<String>,
 ) -> Result<()> {
-    let prompt = resolve_prompt(prompt_arg, config.quiet)?;
+    let prepared = prepare_exec_run(config, vt_cfg, &options).await?;
+    let prep::ExecPreparedRun {
+        config: run_config,
+        vt_cfg: run_vt_cfg,
+        model_id,
+        prompt,
+        session_id,
+        archive,
+        thread_bootstrap,
+    } = prepared;
 
-    let trust_level = workspace_trust_level(&config.workspace)
-        .await
-        .context("Failed to determine workspace trust level")?;
+    let automation_cfg = &run_vt_cfg.automation.full_auto;
 
-    match trust_level {
-        Some(WorkspaceTrustLevel::FullAuto) => {}
-        Some(level) => {
-            bail!(
-                "Workspace trust level '{level}' does not permit exec runs. Upgrade trust to full auto."
-            );
-        }
-        None => {
-            bail!(
-                "Workspace is not trusted. Start vtcode interactively once and mark it as full auto before using exec."
-            );
-        }
-    }
-
-    let automation_cfg = &vt_cfg.automation.full_auto;
-    if !automation_cfg.enabled {
-        bail!(
-            "Automation is disabled in configuration. Enable [automation.full_auto] to continue."
-        );
-    }
-
-    let model_id = ModelId::from_str(&config.model).with_context(|| {
-        format!(
-            "Model '{}' is not recognized for exec command. Update vtcode.toml to a supported identifier.",
-            config.model
-        )
-    })?;
-
-    // OPTIMIZATION: Use context instead of map_err with anyhow!
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .context("Failed to derive session identifier timestamp")?
-        .as_secs();
-    let session_id = format!("{EXEC_SESSION_PREFIX}-{timestamp}");
-
-    let mut runner = AgentRunner::new(
+    let mut runner = AgentRunner::new_with_thread_bootstrap(
         AgentType::Single,
         model_id,
-        config.api_key.clone(),
-        config.workspace.clone(),
+        run_config.api_key.clone(),
+        run_config.workspace.clone(),
         session_id,
         RunnerSettings {
-            reasoning_effort: Some(config.reasoning_effort),
+            reasoning_effort: Some(run_config.reasoning_effort),
             verbosity: None,
         },
         None,
+        thread_bootstrap,
     )
     .await?;
 
@@ -513,14 +471,14 @@ async fn handle_exec_command_impl(
         io::Stderr,
     >::new(
         options.json,
-        !options.json && !config.quiet,
+        !options.json && !run_config.quiet,
         options.json.then(io::stdout),
         options
             .events_path
             .as_ref()
             .map(|path| open_events_writer(path.as_path()))
             .transpose()?,
-        (!options.json && !config.quiet).then(io::stderr),
+        (!options.json && !run_config.quiet).then(io::stderr),
     )));
     let event_processor = Arc::clone(&processor);
     runner.set_event_handler(move |event| {
@@ -536,7 +494,7 @@ async fn handle_exec_command_impl(
         instructions: Some(task_instructions(options.dry_run).into()),
     };
 
-    let max_retries = vt_cfg.agent.max_task_retries;
+    let max_retries = run_vt_cfg.agent.max_task_retries;
     let result = runner
         .execute_task_with_retry(&task, &[] as &[ContextItem], max_retries)
         .await
@@ -557,6 +515,18 @@ async fn handle_exec_command_impl(
             processor.warn_empty_last_message(path);
         }
     }
+
+    let session_messages = runner.session_messages();
+    let session_archive_messages: Vec<SessionMessage> =
+        session_messages.iter().map(SessionMessage::from).collect();
+    archive
+        .finalize(
+            exec_archive_transcript(&session_messages),
+            session_archive_messages.len(),
+            result.executed_commands.clone(),
+            session_archive_messages,
+        )
+        .context("Failed to save exec session archive")?;
 
     let mut processor = lock_or_recover(&processor);
     processor

@@ -415,15 +415,18 @@ async fn run() -> Result<()> {
             dry_run,
             events,
             last_message_file,
+            command,
             prompt,
         }) => {
+            let command = cli::exec::resolve_exec_command(command.clone(), prompt.clone())?;
             let options = cli::ExecCommandOptions {
                 json: *json,
                 dry_run: *dry_run,
                 events_path: events.clone(),
                 last_message_file: last_message_file.clone(),
+                command,
             };
-            cli::handle_exec_command(core_cfg.clone(), cfg, options, prompt.clone()).await?;
+            cli::handle_exec_command(core_cfg.clone(), cfg, options).await?;
         }
         Some(Commands::Schema { command }) => {
             cli::handle_schema_command(command.clone()).await?;

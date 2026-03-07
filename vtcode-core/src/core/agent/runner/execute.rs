@@ -6,6 +6,7 @@ use crate::config::types::{ReasoningEffortLevel, SystemPromptMode, VerbosityLeve
 use crate::core::agent::completion::{check_completion_indicators, check_for_response_loop};
 use crate::core::agent::conversation::{
     build_conversation, build_messages_from_conversation, compose_system_instruction,
+    conversation_from_messages,
 };
 use crate::core::agent::events::ExecEventRecorder;
 use crate::core::agent::session::AgentSessionState;
@@ -87,7 +88,8 @@ impl AgentRunner {
             // Prepare conversation with task context
             let system_instruction =
                 Arc::new(compose_system_instruction(&system_prompt, task, contexts));
-            let conversation = build_conversation(task, contexts);
+            let mut conversation = conversation_from_messages(&self.bootstrap_messages);
+            conversation.extend(build_conversation(task, contexts));
 
             // Build available tools for this agent
             let tools = Arc::new(self.build_universal_tools().await?);
@@ -111,6 +113,7 @@ impl AgentRunner {
             );
             session_state.conversation = conversation;
             session_state.messages = conversation_messages;
+            session_state.last_processed_message_idx = session_state.conversation.len();
 
             let mut controller = AgentSessionController::new(
                 session_state,

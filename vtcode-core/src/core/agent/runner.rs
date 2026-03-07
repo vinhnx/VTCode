@@ -73,6 +73,8 @@ pub struct AgentRunner {
     system_prompt: String,
     /// Session information
     session_id: String,
+    /// Initial archived history used to seed the first task on this runner.
+    bootstrap_messages: Vec<crate::llm::provider::Message>,
     /// Workspace path
     _workspace: PathBuf,
     /// Frozen session-scoped configuration snapshot
@@ -133,6 +135,30 @@ impl AgentRunner {
         settings: RunnerSettings,
         steering_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
     ) -> Result<Self> {
+        Self::new_with_thread_bootstrap(
+            agent_type,
+            model,
+            api_key,
+            workspace,
+            session_id,
+            settings,
+            steering_receiver,
+            ThreadBootstrap::new(None),
+        )
+        .await
+    }
+
+    /// Create an agent runner with a prebuilt thread bootstrap (for resumed sessions).
+    pub async fn new_with_thread_bootstrap(
+        agent_type: AgentType,
+        model: ModelId,
+        api_key: String,
+        workspace: PathBuf,
+        session_id: String,
+        settings: RunnerSettings,
+        steering_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
+        bootstrap: ThreadBootstrap,
+    ) -> Result<Self> {
         // Create client based on model
         let client: AnyClient = make_client(api_key.clone(), model)?;
 
@@ -191,21 +217,22 @@ impl AgentRunner {
             warn!("Failed to initialize dynamic context directories: {}", err);
         }
         let loop_detector = LoopDetector::with_max_repeated_calls(max_repeated_tool_calls);
-        let thread_metadata = build_thread_archive_metadata(
-            workspace.as_path(),
-            model.as_str(),
-            &session_config.effective().agent.provider,
-            &session_config.effective().agent.theme,
-            settings
-                .reasoning_effort
-                .unwrap_or(session_config.effective().agent.reasoning_effort)
-                .as_str(),
-        );
+        let bootstrap_messages = bootstrap.messages.clone();
+        let mut bootstrap = bootstrap;
+        if bootstrap.metadata.is_none() {
+            bootstrap.metadata = Some(build_thread_archive_metadata(
+                workspace.as_path(),
+                model.as_str(),
+                &session_config.effective().agent.provider,
+                &session_config.effective().agent.theme,
+                settings
+                    .reasoning_effort
+                    .unwrap_or(session_config.effective().agent.reasoning_effort)
+                    .as_str(),
+            ));
+        }
         let thread_handle = crate::core::threads::ThreadManager::new()
-            .start_thread_with_identifier(
-                session_id.clone(),
-                ThreadBootstrap::new(Some(thread_metadata)),
-            );
+            .start_thread_with_identifier(session_id.clone(), bootstrap);
         let max_turns = session_config
             .effective()
             .automation
@@ -220,6 +247,7 @@ impl AgentRunner {
             tool_registry,
             system_prompt,
             session_id,
+            bootstrap_messages,
             _workspace: workspace,
             session_config,
             model: model.to_string(),
@@ -253,6 +281,11 @@ impl AgentRunner {
     /// Enable or disable console output for this runner.
     pub fn set_quiet(&mut self, quiet: bool) {
         self.quiet = quiet;
+    }
+
+    /// Snapshot the runner-owned conversation messages for archive persistence.
+    pub fn session_messages(&self) -> Vec<crate::llm::provider::Message> {
+        self.thread_handle.messages()
     }
 
     /// Enable read-only plan mode for the underlying tool registry.

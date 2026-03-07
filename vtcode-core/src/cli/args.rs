@@ -1,7 +1,7 @@
 //! CLI argument parsing and configuration
 
 use crate::config::models::ModelId;
-use clap::{ArgAction, ColorChoice, Parser, Subcommand, ValueEnum, ValueHint};
+use clap::{ArgAction, Args, ColorChoice, Parser, Subcommand, ValueEnum, ValueHint};
 use colorchoice_clap::Color as ColorSelection;
 use std::path::PathBuf;
 
@@ -304,6 +304,30 @@ pub enum SchemaCommands {
     },
 }
 
+/// `exec` subcommands.
+#[derive(Subcommand, Debug, Clone)]
+pub enum ExecSubcommand {
+    /// Resume a previous exec session with a follow-up prompt
+    #[command(
+        long_about = "Resume a previous exec session with a follow-up prompt.\n\nExamples:\n  vtcode exec resume session-123 \"continue from the prior investigation\"\n  vtcode exec resume --last \"continue from the prior investigation\"\n  echo \"continue from stdin\" | vtcode exec resume --last"
+    )]
+    Resume(ExecResumeArgs),
+}
+
+/// Arguments for `vtcode exec resume`.
+#[derive(Args, Debug, Clone)]
+pub struct ExecResumeArgs {
+    /// Resume the most recent archived exec session
+    #[arg(long)]
+    pub last: bool,
+    /// Archived session identifier to resume, or the prompt when `--last` is used
+    #[arg(value_name = "SESSION_ID_OR_PROMPT", required_unless_present = "last")]
+    pub session_or_prompt: Option<String>,
+    /// Follow-up prompt to execute when resuming a specific session. Use `-` to force reading from stdin.
+    #[arg(value_name = "PROMPT")]
+    pub prompt: Option<String>,
+}
+
 /// Available commands
 #[derive(Subcommand, Debug, Clone)]
 pub enum Commands {
@@ -341,6 +365,9 @@ pub enum Commands {
         /// Write the last agent message to this file
         #[arg(long, value_name = "PATH", value_hint = ValueHint::FilePath)]
         last_message_file: Option<PathBuf>,
+        /// Optional exec subcommand
+        #[command(subcommand)]
+        command: Option<ExecSubcommand>,
         /// Prompt to execute. Use `-` to force reading from stdin.
         #[arg(value_name = "PROMPT")]
         prompt: Option<String>,
@@ -757,6 +784,76 @@ pub struct LoggingConfig {
     pub log_directory: Option<String>,
     pub max_log_files: Option<usize>,
     pub max_log_size_mb: Option<usize>,
+}
+
+#[cfg(test)]
+mod exec_command_tests {
+    use super::{Cli, Commands, ExecSubcommand};
+    use clap::Parser;
+
+    #[test]
+    fn exec_shorthand_preserves_prompt() {
+        let cli = Cli::parse_from(["vtcode", "exec", "count files"]);
+        let Some(Commands::Exec {
+            command, prompt, ..
+        }) = cli.command
+        else {
+            panic!("expected exec command");
+        };
+
+        assert!(command.is_none());
+        assert_eq!(prompt.as_deref(), Some("count files"));
+    }
+
+    #[test]
+    fn exec_resume_parses_specific_session_and_prompt() {
+        let cli = Cli::parse_from(["vtcode", "exec", "resume", "session-123", "follow up"]);
+        let Some(Commands::Exec {
+            command: Some(ExecSubcommand::Resume(resume)),
+            prompt,
+            ..
+        }) = cli.command
+        else {
+            panic!("expected exec resume command");
+        };
+
+        assert!(prompt.is_none());
+        assert!(!resume.last);
+        assert_eq!(resume.session_or_prompt.as_deref(), Some("session-123"));
+        assert_eq!(resume.prompt.as_deref(), Some("follow up"));
+    }
+
+    #[test]
+    fn exec_resume_parses_last_flag() {
+        let cli = Cli::parse_from(["vtcode", "exec", "resume", "--last", "continue"]);
+        let Some(Commands::Exec {
+            command: Some(ExecSubcommand::Resume(resume)),
+            ..
+        }) = cli.command
+        else {
+            panic!("expected exec resume command");
+        };
+
+        assert!(resume.last);
+        assert_eq!(resume.session_or_prompt.as_deref(), Some("continue"));
+        assert!(resume.prompt.is_none());
+    }
+
+    #[test]
+    fn exec_resume_allows_last_without_positional_for_stdin_prompt() {
+        let cli = Cli::parse_from(["vtcode", "exec", "resume", "--last"]);
+        let Some(Commands::Exec {
+            command: Some(ExecSubcommand::Resume(resume)),
+            ..
+        }) = cli.command
+        else {
+            panic!("expected exec resume command");
+        };
+
+        assert!(resume.last);
+        assert!(resume.session_or_prompt.is_none());
+        assert!(resume.prompt.is_none());
+    }
 }
 
 /// Performance monitoring configuration

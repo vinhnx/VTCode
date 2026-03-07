@@ -51,5 +51,11 @@ existing parsers without modification.
 
 ## Resuming sessions
 
-Exec runs are resumable via `vtcode exec resume <SESSION_ID>` or `vtcode exec resume --last`. Resumed runs keep their structured
-history, so follow-up commands continue the same thread and honor prior approvals.
+Exec runs are resumable via `vtcode exec resume <SESSION_ID> <PROMPT>` or `vtcode exec resume --last <PROMPT>`.
+
+```bash
+vtcode exec resume --last "continue from the prior investigation and summarize the root cause"
+```
+
+Resume uses the archived workspace recorded in the original exec session. The follow-up prompt starts a new autonomous turn on the
+same archived session identifier, so structured history and the saved session archive stay in sync.
