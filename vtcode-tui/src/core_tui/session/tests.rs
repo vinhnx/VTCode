@@ -1099,9 +1099,7 @@ fn wizard_multistep_submit_keeps_modal_open_until_last_step() {
         "wizard should remain open after intermediate step completion"
     );
     assert_eq!(
-        session
-            .wizard_overlay()
-            .map(|wizard| wizard.current_step),
+        session.wizard_overlay().map(|wizard| wizard.current_step),
         Some(1)
     );
 
@@ -1165,7 +1163,10 @@ fn wizard_search_paste_updates_filter_in_session_handle_event() {
     session.handle_event(CrosstermEvent::Paste("prio".to_string()), &tx, None);
 
     let wizard = session.wizard_overlay().expect("wizard should stay open");
-    assert_eq!(wizard.search.as_ref().map(|search| search.query.as_str()), Some("prio"));
+    assert_eq!(
+        wizard.search.as_ref().map(|search| search.query.as_str()),
+        Some("prio")
+    );
     assert_eq!(wizard.steps[0].list.visible_indices, vec![1]);
 }
 

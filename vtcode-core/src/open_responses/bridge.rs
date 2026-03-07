@@ -84,6 +84,9 @@ impl ResponseBuilder {
             }
 
             ThreadEvent::TurnCompleted(evt) => {
+                if self.response.status.is_terminal() {
+                    return;
+                }
                 self.response.usage = Some(OpenUsage::from_exec_usage(&evt.usage));
                 self.response.status = ResponseStatus::Completed;
                 self.response.complete();
@@ -91,6 +94,9 @@ impl ResponseBuilder {
             }
 
             ThreadEvent::TurnFailed(evt) => {
+                if self.response.status.is_terminal() {
+                    return;
+                }
                 self.response
                     .fail(OpenResponseError::model_error(&evt.message));
                 emitter.response_failed(self.response.clone());
@@ -114,6 +120,9 @@ impl ResponseBuilder {
             }
 
             ThreadEvent::Error(evt) => {
+                if self.response.status.is_terminal() {
+                    return;
+                }
                 self.response
                     .fail(OpenResponseError::server_error(&evt.message));
                 emitter.response_failed(self.response.clone());
@@ -964,5 +973,44 @@ mod tests {
             }
             other => panic!("expected custom output, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn test_failed_response_ignores_late_completion() {
+        let mut builder = ResponseBuilder::new("gpt-5");
+        let mut emitter = VecStreamEmitter::new();
+
+        builder.process_event(
+            &ThreadEvent::ThreadStarted(ThreadStartedEvent {
+                thread_id: "thread_1".to_string(),
+            }),
+            &mut emitter,
+        );
+        builder.process_event(
+            &ThreadEvent::TurnFailed(vtcode_exec_events::TurnFailedEvent {
+                message: "boom".to_string(),
+                usage: None,
+            }),
+            &mut emitter,
+        );
+        builder.process_event(
+            &ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                usage: Usage::default(),
+            }),
+            &mut emitter,
+        );
+
+        assert_eq!(builder.response().status, ResponseStatus::Failed);
+        let events = emitter.into_events();
+        assert!(
+            events
+                .iter()
+                .any(|event| matches!(event, ResponseStreamEvent::ResponseFailed { .. }))
+        );
+        assert!(
+            !events
+                .iter()
+                .any(|event| matches!(event, ResponseStreamEvent::ResponseCompleted { .. }))
+        );
     }
 }

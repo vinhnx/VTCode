@@ -20,6 +20,14 @@ use anyhow::Result;
 use std::sync::Arc;
 use tracing::warn;
 
+fn record_terminal_turn_event(event_recorder: &mut ExecEventRecorder, outcome: &TaskOutcome) {
+    if outcome.is_success() {
+        event_recorder.turn_completed();
+    } else {
+        event_recorder.turn_failed(&outcome.description());
+    }
+}
+
 impl AgentRunner {
     /// Execute a task with this agent
     pub async fn execute_task(
@@ -537,11 +545,7 @@ impl AgentRunner {
                 ));
             }
 
-            if !controller.state.outcome.is_success() {
-                event_recorder.turn_failed(&controller.state.outcome.description());
-            }
-
-            event_recorder.turn_completed();
+            record_terminal_turn_event(&mut event_recorder, &controller.state.outcome);
             let thread_events = event_recorder.into_events();
 
             // Return task results
@@ -552,5 +556,66 @@ impl AgentRunner {
 
         self.tool_registry.set_harness_task(None);
         result
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::record_terminal_turn_event;
+    use crate::core::agent::events::ExecEventRecorder;
+    use crate::core::agent::task::TaskOutcome;
+    use crate::exec::events::ThreadEvent;
+
+    #[test]
+    fn failed_outcome_emits_only_turn_failed() {
+        let mut recorder = ExecEventRecorder::new("thread", None, None);
+        recorder.turn_started();
+
+        record_terminal_turn_event(
+            &mut recorder,
+            &TaskOutcome::Failed {
+                reason: "boom".to_string(),
+            },
+        );
+
+        let events = recorder.into_events();
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| matches!(event, ThreadEvent::TurnFailed(_)))
+                .count(),
+            1
+        );
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| matches!(event, ThreadEvent::TurnCompleted(_)))
+                .count(),
+            0
+        );
+    }
+
+    #[test]
+    fn successful_outcome_emits_only_turn_completed() {
+        let mut recorder = ExecEventRecorder::new("thread", None, None);
+        recorder.turn_started();
+
+        record_terminal_turn_event(&mut recorder, &TaskOutcome::Success);
+
+        let events = recorder.into_events();
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| matches!(event, ThreadEvent::TurnCompleted(_)))
+                .count(),
+            1
+        );
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| matches!(event, ThreadEvent::TurnFailed(_)))
+                .count(),
+            0
+        );
     }
 }
