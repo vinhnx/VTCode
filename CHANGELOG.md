@@ -2,6 +2,26 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.86.12 - 2026-03-07
+
+### Highlights
+#### Bug Fixes
+
+- Preserve v prefix in GitHub release URLs for install script (3f2088be) (@vinhnx)
+- Use exact tag names from GitHub API in install script (b22bd9af) (@vinhnx)
+#### Features
+
+- Add checksum for vtcode-0.86.11-aarch64-apple-darwin.tar.gz (47a2c486) (@vinhnx)
+- Implement feature gating for tools and refactor related components (5f530f6d) 
+### Other Changes
+#### Other
+
+- Refactor session mode handling and update related components (d78397ef) 
+- Update TODO (ae3651f1) 
+- Update TODO (fb5ee65f) 
+- Refactor modal handling to use overlay system and improve session state management (d6171cfc) 
+### Contributors
+@vinhnx
 ## 0.86.11 - 2026-03-06
 
 ### Highlights
