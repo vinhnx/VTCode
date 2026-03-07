@@ -25,7 +25,8 @@ fn test_detect_textual_tool_call_supports_json_payload() {
 fn test_detect_textual_tool_call_parses_function_style_block() {
     let message = "```rust\nrun_pty_cmd(\"ls -a\", workdir=WORKSPACE_DIR, max_tokens=1000)\n```";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
-    assert_eq!(name, "run_pty_cmd");
+    assert_eq!(name, tools::UNIFIED_EXEC);
+    assert_eq!(args["action"], serde_json::json!("run"));
     assert_eq!(args["command"], serde_json::json!(["ls", "-a"]));
     assert_eq!(args["workdir"], serde_json::json!("WORKSPACE_DIR"));
     assert_eq!(args["max_tokens"], serde_json::json!(1000));
@@ -36,7 +37,8 @@ fn test_detect_textual_tool_call_skips_non_tool_function_blocks() {
     let message =
         "```rust\nprintf!(\"hi\");\n```\n```rust\nrun_pty_cmd {\n    command: \"pwd\"\n}\n```";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
-    assert_eq!(name, "run_pty_cmd");
+    assert_eq!(name, tools::UNIFIED_EXEC);
+    assert_eq!(args["action"], serde_json::json!("run"));
     assert_eq!(args["command"], serde_json::json!(["pwd"]));
 }
 
@@ -136,10 +138,11 @@ fn test_detect_textual_tool_call_skips_malformed_deep_candidate() {
 fn test_detect_tagged_tool_call_parses_basic_command() {
     let message = "<tool_call>run_pty_cmd\n<arg_key>command\n<arg_value>ls -a\n</tool_call>";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
-    assert_eq!(name, "run_pty_cmd");
+    assert_eq!(name, tools::UNIFIED_EXEC);
     assert_eq!(
         args,
         serde_json::json!({
+            "action": "run",
             "command": ["ls", "-a"]
         })
     );
@@ -149,10 +152,11 @@ fn test_detect_tagged_tool_call_parses_basic_command() {
 fn test_detect_tagged_tool_call_respects_indexed_arguments() {
     let message = "<tool_call>run_pty_cmd\n<arg_key>command.0\n<arg_value>python\n<arg_key>command.1\n<arg_value>-c\n<arg_key>command.2\n<arg_value>print('hi')\n</tool_call>";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
-    assert_eq!(name, "run_pty_cmd");
+    assert_eq!(name, tools::UNIFIED_EXEC);
     assert_eq!(
         args,
         serde_json::json!({
+            "action": "run",
             "command": ["python", "-c", "print('hi')"]
         })
     );
@@ -162,10 +166,11 @@ fn test_detect_tagged_tool_call_respects_indexed_arguments() {
 fn test_detect_tagged_tool_call_handles_one_based_indexes() {
     let message = "<tool_call>run_pty_cmd\n<arg_key>command.1\n<arg_value>ls\n<arg_key>command.2\n<arg_value>-a\n</tool_call>";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
-    assert_eq!(name, "run_pty_cmd");
+    assert_eq!(name, tools::UNIFIED_EXEC);
     assert_eq!(
         args,
         serde_json::json!({
+            "action": "run",
             "command": ["ls", "-a"]
         })
     );
@@ -175,10 +180,11 @@ fn test_detect_tagged_tool_call_handles_one_based_indexes() {
 fn test_detect_rust_struct_tool_call_parses_command_block() {
     let message = "Here you go:\n```rust\nrun_pty_cmd {\n    command: \"ls -a\",\n    workdir: \"/tmp\",\n    timeout: 5.0\n}\n```";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
-    assert_eq!(name, "run_pty_cmd");
+    assert_eq!(name, tools::UNIFIED_EXEC);
     assert_eq!(
         args,
         serde_json::json!({
+            "action": "run",
             "command": ["ls", "-a"],
             "workdir": "/tmp",
             "timeout": 5.0
@@ -191,10 +197,11 @@ fn test_detect_rust_struct_tool_call_handles_trailing_commas() {
     let message =
         "```rust\nrun_pty_cmd {\n    command: \"git status\",\n    workdir: \".\",\n}\n```";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
-    assert_eq!(name, "run_pty_cmd");
+    assert_eq!(name, tools::UNIFIED_EXEC);
     assert_eq!(
         args,
         serde_json::json!({
+            "action": "run",
             "command": ["git", "status"],
             "workdir": "."
         })
@@ -205,10 +212,11 @@ fn test_detect_rust_struct_tool_call_handles_trailing_commas() {
 fn test_detect_rust_struct_tool_call_handles_semicolons() {
     let message = "```rust\nrun_pty_cmd {\n    command = \"pwd\";\n    workdir = \"/tmp\";\n}\n```";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
-    assert_eq!(name, "run_pty_cmd");
+    assert_eq!(name, tools::UNIFIED_EXEC);
     assert_eq!(
         args,
         serde_json::json!({
+            "action": "run",
             "command": ["pwd"],
             "workdir": "/tmp"
         })
@@ -219,10 +227,11 @@ fn test_detect_rust_struct_tool_call_handles_semicolons() {
 fn test_detect_rust_struct_tool_call_maps_run_alias() {
     let message = "```rust\nrun {\n    command: \"ls\",\n    args: [\"-a\"]\n}\n```";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
-    assert_eq!(name, "run_pty_cmd");
+    assert_eq!(name, "unified_exec");
     assert_eq!(
         args,
         serde_json::json!({
+            "action": "run",
             "command": ["ls"],
             "args": ["-a"]
         })
@@ -233,10 +242,11 @@ fn test_detect_rust_struct_tool_call_maps_run_alias() {
 fn test_detect_textual_function_maps_run_alias() {
     let message = "run(command: \"npm\", args: [\"test\"])";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
-    assert_eq!(name, "run_pty_cmd");
+    assert_eq!(name, "unified_exec");
     assert_eq!(
         args,
         serde_json::json!({
+            "action": "run",
             "command": ["npm"],
             "args": ["test"]
         })
@@ -247,8 +257,14 @@ fn test_detect_textual_function_maps_run_alias() {
 fn test_detect_textual_tool_call_canonicalizes_name_variants() {
     let message = "```rust\nRun Pty Cmd {\n    command = \"pwd\";\n}\n```";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
-    assert_eq!(name, "run_pty_cmd");
-    assert_eq!(args, serde_json::json!({ "command": ["pwd"] }));
+    assert_eq!(name, tools::UNIFIED_EXEC);
+    assert_eq!(
+        args,
+        serde_json::json!({
+            "action": "run",
+            "command": ["pwd"]
+        })
+    );
 }
 
 #[test]
@@ -327,7 +343,7 @@ fn test_parse_harmony_channel_tool_call_with_constrain() {
 fn test_parse_harmony_channel_tool_call_without_constrain() {
     let message = "<|start|>assistant<|channel|>commentary to=container.exec<|message|>{\"cmd\":[\"ls\", \"-la\"]}<|call|>";
     let (name, args) = detect_textual_tool_call(message).expect("should parse harmony format");
-    assert_eq!(name, "run_pty_cmd");
+    assert_eq!(name, "unified_exec");
     assert_eq!(args["command"], serde_json::json!(["ls", "-la"]));
 }
 
@@ -336,7 +352,7 @@ fn test_parse_harmony_channel_tool_call_with_string_cmd() {
     let message =
         "<|start|>assistant<|channel|>commentary to=bash<|message|>{\"cmd\":\"pwd\"}<|call|>";
     let (name, args) = detect_textual_tool_call(message).expect("should parse harmony format");
-    assert_eq!(name, "run_pty_cmd");
+    assert_eq!(name, "unified_exec");
     assert_eq!(args["command"], serde_json::json!(["pwd"]));
 }
 
@@ -479,7 +495,8 @@ fn test_parse_tagged_tool_call_handles_nested_json() {
     let result = parse_tagged::parse_tagged_tool_call(message);
     assert!(result.is_some(), "Should parse nested JSON");
     let (name, args) = result.unwrap();
-    assert_eq!(name, "run_pty_cmd");
+    assert_eq!(name, tools::UNIFIED_EXEC);
+    assert_eq!(args.get("action"), Some(&serde_json::json!("run")));
     assert!(args.get("command").and_then(|v| v.as_array()).is_some());
     assert_eq!(
         args.get("command")

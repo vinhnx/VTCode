@@ -136,10 +136,12 @@ pub(super) fn builtin_tool_registrations(
             ToolRegistry::unified_exec_executor,
         )
         .with_description(
-            "Run commands and manage PTY sessions. Use continue for one-call send+read, or inspect for one-call output preview/filtering from session or spool file.",
+            "Run commands and manage command sessions. Runs are pipe-first by default; set `tty=true` for PTY behavior. Use continue for one-call send+read, or inspect for one-call output preview/filtering from session or spool file.",
         )
         .with_parameter_schema(unified_exec_parameters())
         .with_aliases([
+            tools::EXEC_COMMAND,
+            tools::WRITE_STDIN,
             tools::RUN_PTY_CMD,
             tools::EXECUTE_CODE,
             tools::CREATE_PTY_SESSION,
@@ -152,6 +154,10 @@ pub(super) fn builtin_tool_registrations(
             "exec code",
             "run code",
             "run command",
+            "send command input",
+            "read command session",
+            "list command sessions",
+            "close command session",
             "run command (pty)",
             "send pty input",
             "read pty session",

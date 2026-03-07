@@ -430,7 +430,7 @@ mod tests {
             1,
         );
 
-        state.record_shell_command_run("run_pty_cmd::cargo check".to_string());
+        state.record_shell_command_run("unified_exec::cargo check".to_string());
         state.reset_shell_command_run_streak();
         assert_eq!(state.consecutive_same_shell_command_runs, 0);
         assert!(state.last_shell_command_signature.is_none());

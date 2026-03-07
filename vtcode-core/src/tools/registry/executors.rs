@@ -14,7 +14,7 @@ use crate::tools::registry::unified_actions::{
 use crate::tools::shell::resolve_fallback_shell;
 use crate::tools::tool_intent;
 use crate::tools::traits::Tool;
-use crate::tools::types::VTCodePtySession;
+use crate::tools::types::VTCodeExecSession;
 use crate::zsh_exec_bridge::ZshExecBridgeSession;
 use regex::Regex;
 
@@ -76,19 +76,17 @@ fn shell_run_payload<'a>(
     let args = args_value.as_object()?;
     match tool_name {
         "run_pty_cmd" | "shell" => Some(args),
-        "unified_exec" | "exec_pty_cmd" | "exec" => tool_intent::unified_exec_action(args_value)
-            .is_some_and(|action| action.eq_ignore_ascii_case("run"))
-            .then_some(args),
+        "unified_exec" | "exec_pty_cmd" | "exec" | "exec_command" => {
+            tool_intent::unified_exec_action(args_value)
+                .is_some_and(|action| action.eq_ignore_ascii_case("run"))
+                .then_some(args)
+        }
         _ => None,
     }
 }
 
 fn shell_working_dir_value(payload: &serde_json::Map<String, Value>) -> Option<&str> {
-    payload
-        .get("working_dir")
-        .or_else(|| payload.get("cwd"))
-        .or_else(|| payload.get("workdir"))
-        .and_then(Value::as_str)
+    crate::tools::command_args::working_dir_text_from_payload(payload)
 }
 
 fn build_shell_execution_plan(
@@ -891,8 +889,7 @@ fn is_valid_pty_session_id(session_id: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
-fn build_session_command_display(session: &VTCodePtySession) -> String {
-    let args = &session.args;
+fn build_session_command_display_parts(command: &str, args: &[String]) -> String {
     if let Some(flag_index) = args
         .iter()
         .position(|arg| matches!(arg.as_str(), "-c" | "/C" | "-Command"))
@@ -903,8 +900,8 @@ fn build_session_command_display(session: &VTCodePtySession) -> String {
     }
 
     let mut parts = Vec::with_capacity(1 + args.len());
-    if !session.command.trim().is_empty() {
-        parts.push(session.command.as_str());
+    if !command.trim().is_empty() {
+        parts.push(command);
     }
     for arg in args {
         if !arg.trim().is_empty() {
@@ -919,22 +916,32 @@ fn build_session_command_display(session: &VTCodePtySession) -> String {
     }
 }
 
-fn attach_pty_response_context(
+fn build_exec_session_command_display(session: &VTCodeExecSession) -> String {
+    build_session_command_display_parts(&session.command, &session.args)
+}
+
+fn is_pty_exec_session(session: &VTCodeExecSession) -> bool {
+    session.backend == "pty"
+}
+
+fn attach_exec_response_context(
     response: &mut Value,
-    session_id: &str,
+    session: &VTCodeExecSession,
     command: &str,
-    working_directory: Option<&str>,
-    rows: u16,
-    cols: u16,
     is_exited: bool,
 ) {
-    response["session_id"] = json!(session_id);
+    response["session_id"] = json!(session.id);
     response["command"] = json!(command);
-    if let Some(value) = working_directory {
+    if let Some(value) = session.working_dir.as_deref() {
         response["working_directory"] = json!(value);
     }
-    response["rows"] = json!(rows);
-    response["cols"] = json!(cols);
+    response["backend"] = json!(session.backend);
+    if let Some(rows) = session.rows {
+        response["rows"] = json!(rows);
+    }
+    if let Some(cols) = session.cols {
+        response["cols"] = json!(cols);
+    }
     response["is_exited"] = json!(is_exited);
 }
 
@@ -1141,23 +1148,8 @@ impl ToolRegistry {
     }
 
     pub(super) async fn execute_unified_exec(&self, args: Value) -> Result<Value> {
-        let mut args = args;
-        if let Some(payload) = args.as_object_mut() {
-            if payload.get("command").is_none() {
-                if let Some(cmd) = payload.get("cmd").cloned() {
-                    payload.insert("command".to_string(), cmd);
-                } else if let Some(raw) = payload.get("raw_command").cloned() {
-                    payload.insert("command".to_string(), raw);
-                }
-            }
-            if payload.get("input").is_none() {
-                if let Some(chars) = payload.get("chars").cloned() {
-                    payload.insert("input".to_string(), chars);
-                } else if let Some(text) = payload.get("text").cloned() {
-                    payload.insert("input".to_string(), text);
-                }
-            }
-        }
+        let args = crate::tools::command_args::normalize_shell_args(&args)
+            .map_err(|error| anyhow!(error))?;
 
         let action_str = tool_intent::unified_exec_action(&args)
             .ok_or_else(|| missing_unified_exec_action_error(&args))?;
@@ -1165,7 +1157,7 @@ impl ToolRegistry {
             .with_context(|| format!("Invalid action: {}", action_str))?;
 
         match action {
-            UnifiedExecAction::Run => self.execute_run_pty_cmd(args).await,
+            UnifiedExecAction::Run => self.execute_run_exec_command(args).await,
             UnifiedExecAction::Write => self.execute_send_pty_input(args).await,
             UnifiedExecAction::Poll => self.execute_read_pty_session(args).await,
             UnifiedExecAction::Continue => self.execute_continue_pty_session(args).await,
@@ -1173,6 +1165,15 @@ impl ToolRegistry {
             UnifiedExecAction::List => self.execute_list_pty_sessions().await,
             UnifiedExecAction::Close => self.execute_close_pty_session(args).await,
             UnifiedExecAction::Code => self.execute_code(args).await,
+        }
+    }
+
+    async fn execute_run_exec_command(&self, args: Value) -> Result<Value> {
+        let tty = args.get("tty").and_then(Value::as_bool).unwrap_or(false);
+        if tty {
+            self.execute_run_pty_cmd(args).await
+        } else {
+            self.execute_run_pipe_cmd(args).await
         }
     }
 
@@ -1201,7 +1202,7 @@ impl ToolRegistry {
                                 .to_string();
                             tracing::info!(
                                 session_id = %session_id,
-                                "Auto-recovering unified_file read via read_pty_session"
+                                "Auto-recovering unified_file read via unified_exec poll"
                             );
                             match self.execute_read_pty_session(fallback_args).await {
                                 Ok(mut recovered) => {
@@ -1209,8 +1210,9 @@ impl ToolRegistry {
                                         obj.insert("auto_recovered".to_string(), json!(true));
                                         obj.insert(
                                             "recovery_tool".to_string(),
-                                            json!("read_pty_session"),
+                                            json!("unified_exec"),
                                         );
+                                        obj.insert("recovery_action".to_string(), json!("poll"));
                                         obj.insert(
                                             "recovery_reason".to_string(),
                                             json!("missing_pty_spool_file"),
@@ -1222,7 +1224,7 @@ impl ToolRegistry {
                                     tracing::warn!(
                                         session_id = %session_id,
                                         error = %recovery_err,
-                                        "Failed auto-recovery via read_pty_session"
+                                        "Failed auto-recovery via unified_exec poll"
                                     );
                                 }
                             }
@@ -1778,13 +1780,11 @@ impl ToolRegistry {
             response["matched_count"] = json!(count);
             response["query_truncated"] = json!(query_truncated);
         }
-        attach_pty_response_context(
+        let exec_session = VTCodeExecSession::from(session_metadata);
+        attach_exec_response_context(
             &mut response,
-            &session_id,
+            &exec_session,
             &requested_command_display,
-            session_metadata.working_dir.as_deref(),
-            session_metadata.rows,
-            session_metadata.cols,
             exit_code.is_some(),
         );
 
@@ -1809,20 +1809,206 @@ impl ToolRegistry {
         Ok(response)
     }
 
+    async fn execute_run_pipe_cmd(&self, args: Value) -> Result<Value> {
+        let payload = args
+            .as_object()
+            .ok_or_else(|| anyhow!("unified_exec run requires a JSON object"))?;
+
+        let (mut command, auto_raw_command) = parse_command_parts(
+            payload,
+            "unified_exec run requires a 'command' value",
+            "Command cannot be empty",
+        )?;
+        let requested_command = command.clone();
+        let is_git_diff = is_git_diff_command(&command);
+
+        let shell_program = resolve_shell_preference(
+            payload.get("shell").and_then(|value| value.as_str()),
+            self.pty_config(),
+        );
+        let login_shell = payload
+            .get("login")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(true);
+        let confirm = payload
+            .get("confirm")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+
+        let normalized_shell = normalized_shell_name(&shell_program);
+        let existing_shell = command
+            .first()
+            .map(|existing| normalized_shell_name(existing));
+
+        if existing_shell != Some(normalized_shell.clone()) {
+            let raw_command = payload
+                .get("raw_command")
+                .and_then(|value| value.as_str())
+                .map(|value| value.to_string())
+                .or(auto_raw_command);
+
+            let command_string =
+                build_shell_command_string(raw_command.as_deref(), &command, &shell_program);
+
+            let mut shell_invocation = Vec::with_capacity(4);
+            shell_invocation.push(shell_program.clone());
+
+            if login_shell && !should_use_windows_command_tokenizer(Some(&shell_program)) {
+                shell_invocation.push("-l".to_string());
+            }
+
+            let command_flag = if should_use_windows_command_tokenizer(Some(&shell_program)) {
+                match normalized_shell.as_str() {
+                    "cmd" | "cmd.exe" => "/C".to_string(),
+                    "powershell" | "powershell.exe" | "pwsh" => "-Command".to_string(),
+                    _ => "-c".to_string(),
+                }
+            } else {
+                "-c".to_string()
+            };
+
+            shell_invocation.push(command_flag);
+            shell_invocation.push(command_string);
+            command = shell_invocation;
+        }
+
+        let working_dir_path = self
+            .pty_manager()
+            .resolve_working_dir(shell_working_dir_value(payload))
+            .await?;
+        let (sandbox_permissions, additional_permissions) =
+            parse_requested_sandbox_permissions(payload, &working_dir_path)?;
+
+        let display_command = if should_use_windows_command_tokenizer(Some(&shell_program)) {
+            join_windows_command(&command)
+        } else {
+            shell_words::join(command.iter().map(|part| part.as_str()))
+        };
+        let requested_command_display =
+            if should_use_windows_command_tokenizer(Some(&shell_program)) {
+                join_windows_command(&requested_command)
+            } else {
+                shell_words::join(requested_command.iter().map(|part| part.as_str()))
+            };
+
+        let max_tokens = payload
+            .get("max_tokens")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize)
+            .or_else(|| suggest_max_tokens_for_command(&display_command))
+            .unwrap_or(crate::config::constants::defaults::DEFAULT_PTY_OUTPUT_MAX_TOKENS);
+        let inspect_query = payload
+            .get("query")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        let inspect_literal = payload
+            .get("literal")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let inspect_max_matches =
+            clamp_max_matches(payload.get("max_matches").and_then(Value::as_u64));
+
+        enforce_pty_command_policy(&display_command, confirm)?;
+        let sandbox_config = self.sandbox_config();
+        command = apply_runtime_sandbox_to_command(
+            command,
+            &requested_command,
+            &sandbox_config,
+            self.workspace_root(),
+            &working_dir_path,
+            sandbox_permissions,
+            additional_permissions.as_ref(),
+        )?;
+
+        let yield_duration = payload
+            .get("yield_time_ms")
+            .and_then(|v| v.as_u64())
+            .map(Duration::from_millis)
+            .unwrap_or(Duration::from_secs(10));
+
+        let session_id = generate_session_id("run");
+        let session_env = self.build_pipe_session_env(&shell_program, HashMap::new());
+        let session_metadata = self
+            .pipe_sessions
+            .create_session(session_id.clone(), command, working_dir_path, session_env)
+            .await?;
+
+        let capture = self.wait_for_pipe_yield(&session_id, yield_duration).await;
+        let mut output = filter_pty_output(&strip_ansi(&capture.output));
+        let mut truncated = false;
+        let max_output_len = max_tokens.saturating_mul(4);
+        if max_tokens > 0 && output.len() > max_output_len {
+            output.truncate(max_output_len);
+            output.push_str("\n[Output truncated]");
+            truncated = true;
+        }
+
+        let mut matched_count = None;
+        let mut query_truncated = false;
+        if let Some(query) = inspect_query {
+            let (filtered, count, truncated_matches) =
+                filter_lines(&output, query, inspect_literal, inspect_max_matches)?;
+            output = filtered;
+            matched_count = Some(count);
+            query_truncated = truncated_matches;
+        }
+
+        let wall_time = capture.duration.as_secs_f64();
+        let mut response = json!({
+            "output": output,
+            "wall_time": wall_time,
+        });
+        if let Some(count) = matched_count {
+            response["matched_count"] = json!(count);
+            response["query_truncated"] = json!(query_truncated);
+        }
+
+        attach_exec_response_context(
+            &mut response,
+            &session_metadata,
+            &requested_command_display,
+            capture.exit_code.is_some(),
+        );
+
+        if let Some(code) = capture.exit_code {
+            response["exit_code"] = json!(code);
+        } else {
+            response["process_id"] = json!(session_id);
+        }
+
+        if truncated {
+            response["truncated"] = json!(true);
+        }
+        if truncated || capture.exit_code.is_none() {
+            attach_pty_continuation(&mut response, &session_metadata.id, true);
+        }
+        if is_git_diff {
+            response["no_spool"] = json!(true);
+            response["content_type"] = json!("git_diff");
+        }
+
+        Ok(response)
+    }
+
     async fn execute_send_pty_input(&self, args: Value) -> Result<Value> {
         let payload = args
             .as_object()
-            .ok_or_else(|| anyhow!("send_pty_input requires a JSON object"))?;
+            .ok_or_else(|| anyhow!("command session write requires a JSON object"))?;
 
-        let sid = payload
-            .get("session_id")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow!("session_id is required for 'send_pty_input'"))?;
+        let raw_sid = crate::tools::command_args::session_id_text(&args)
+            .ok_or_else(|| anyhow!("session_id is required for command session write"))?;
+        let sid = raw_sid.trim();
 
-        let input = payload
-            .get("input")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow!("input is required for 'send_pty_input'"))?;
+        if !is_valid_pty_session_id(sid) {
+            return Err(anyhow!(
+                "Invalid session_id for command session write: '{}'. Expected an ASCII token (letters, digits, '-', '_').",
+                raw_sid
+            ));
+        }
+
+        let input = crate::tools::command_args::interactive_input_text(&args)
+            .ok_or_else(|| anyhow!("input is required for command session write"))?;
 
         let yield_time_ms = payload
             .get("yield_time_ms")
@@ -1834,14 +2020,18 @@ impl ToolRegistry {
             .and_then(|v| v.as_u64())
             .map(|v| v as usize)
             .unwrap_or(crate::config::constants::defaults::DEFAULT_PTY_OUTPUT_MAX_TOKENS);
-        let session_metadata = self.pty_manager().snapshot_session(sid)?;
-        let session_command = build_session_command_display(&session_metadata);
+        let session_metadata = self.exec_session_metadata(sid).await?;
+        let session_command = build_exec_session_command_display(&session_metadata);
 
-        self.pty_manager()
-            .send_input_to_session(sid, input.as_bytes(), false)?;
+        self.send_input_to_exec_session(sid, input.as_bytes(), false)
+            .await?;
 
         let capture = self
-            .wait_for_pty_yield(sid, Duration::from_millis(yield_time_ms))
+            .wait_for_exec_yield(
+                sid,
+                Duration::from_millis(yield_time_ms),
+                crate::config::constants::tools::UNIFIED_EXEC,
+            )
             .await;
 
         let mut output = filter_pty_output(&strip_ansi(&capture.output));
@@ -1857,19 +2047,18 @@ impl ToolRegistry {
             "output": output,
             "wall_time": capture.duration.as_secs_f64(),
         });
-        attach_pty_response_context(
+        attach_exec_response_context(
             &mut response,
-            sid,
+            &session_metadata,
             &session_command,
-            session_metadata.working_dir.as_deref(),
-            session_metadata.rows,
-            session_metadata.cols,
             capture.exit_code.is_some(),
         );
 
         if let Some(code) = capture.exit_code {
             response["exit_code"] = json!(code);
-            self.decrement_active_pty_sessions();
+            if is_pty_exec_session(&session_metadata) {
+                self.decrement_active_pty_sessions();
+            }
         }
 
         if truncated {
@@ -1885,22 +2074,20 @@ impl ToolRegistry {
     async fn execute_read_pty_session(&self, args: Value) -> Result<Value> {
         let payload = args
             .as_object()
-            .ok_or_else(|| anyhow!("read_pty_session requires a JSON object"))?;
+            .ok_or_else(|| anyhow!("command session read requires a JSON object"))?;
 
-        let raw_sid = payload
-            .get("session_id")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow!("session_id is required for 'read_pty_session'"))?;
+        let raw_sid = crate::tools::command_args::session_id_text(&args)
+            .ok_or_else(|| anyhow!("session_id is required for command session read"))?;
         let sid = raw_sid.trim();
 
         if !is_valid_pty_session_id(sid) {
             return Err(anyhow!(
-                "Invalid session_id for 'read_pty_session': '{}'. Expected an ASCII token (letters, digits, '-', '_').",
+                "Invalid session_id for command session read: '{}'. Expected an ASCII token (letters, digits, '-', '_').",
                 raw_sid
             ));
         }
-        let session_metadata = self.pty_manager().snapshot_session(sid)?;
-        let session_command = build_session_command_display(&session_metadata);
+        let session_metadata = self.exec_session_metadata(sid).await?;
+        let session_command = build_exec_session_command_display(&session_metadata);
 
         let yield_time_ms = payload
             .get("yield_time_ms")
@@ -1908,7 +2095,11 @@ impl ToolRegistry {
             .unwrap_or(1000);
 
         let capture = self
-            .wait_for_pty_yield(sid, Duration::from_millis(yield_time_ms))
+            .wait_for_exec_yield(
+                sid,
+                Duration::from_millis(yield_time_ms),
+                crate::config::constants::tools::UNIFIED_EXEC,
+            )
             .await;
 
         let output = filter_pty_output(&strip_ansi(&capture.output));
@@ -1917,19 +2108,18 @@ impl ToolRegistry {
             "output": output,
             "wall_time": capture.duration.as_secs_f64(),
         });
-        attach_pty_response_context(
+        attach_exec_response_context(
             &mut response,
-            sid,
+            &session_metadata,
             &session_command,
-            session_metadata.working_dir.as_deref(),
-            session_metadata.rows,
-            session_metadata.cols,
             capture.exit_code.is_some(),
         );
 
         if let Some(code) = capture.exit_code {
             response["exit_code"] = json!(code);
-            self.decrement_active_pty_sessions();
+            if is_pty_exec_session(&session_metadata) {
+                self.decrement_active_pty_sessions();
+            }
         } else {
             attach_pty_continuation(&mut response, sid, false);
         }
@@ -2010,7 +2200,7 @@ impl ToolRegistry {
             let read_result = self
                 .execute_read_pty_session(Value::Object(read_args))
                 .await
-                .context("Failed to inspect PTY session output")?;
+                .context("Failed to inspect command session output")?;
             read_result
                 .get("output")
                 .and_then(Value::as_str)
@@ -2049,28 +2239,28 @@ impl ToolRegistry {
     }
 
     async fn execute_list_pty_sessions(&self) -> Result<Value> {
-        let sessions = self.pty_manager().list_sessions();
+        let sessions = self.list_exec_sessions().await;
         Ok(json!({ "sessions": sessions }))
     }
 
     async fn execute_close_pty_session(&self, args: Value) -> Result<Value> {
-        let payload = args
+        let _payload = args
             .as_object()
-            .ok_or_else(|| anyhow!("close_pty_session requires a JSON object"))?;
+            .ok_or_else(|| anyhow!("command session close requires a JSON object"))?;
 
-        let sid = payload
-            .get("session_id")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow!("session_id is required for 'close_pty_session'"))?;
+        let sid = crate::tools::command_args::session_id_text(&args)
+            .ok_or_else(|| anyhow!("session_id is required for command session close"))?;
 
-        let sid_owned = sid.to_string();
-        let manager = self.pty_manager().clone();
-        tokio::task::spawn_blocking(move || manager.close_session(&sid_owned))
-            .await
-            .map_err(|join_err| anyhow!("close_pty_session task failed to join: {}", join_err))??;
-        self.decrement_active_pty_sessions();
+        let session_metadata = self.close_exec_session(sid).await?;
+        if is_pty_exec_session(&session_metadata) {
+            self.decrement_active_pty_sessions();
+        }
 
-        Ok(json!({ "success": true, "session_id": sid }))
+        Ok(json!({
+            "success": true,
+            "session_id": sid,
+            "backend": session_metadata.backend
+        }))
     }
 
     async fn execute_get_errors(&self, args: Value) -> Result<Value> {
@@ -2117,6 +2307,94 @@ impl ToolRegistry {
         }
 
         Ok(error_report)
+    }
+
+    fn build_pipe_session_env(
+        &self,
+        shell_program: &str,
+        extra_env: HashMap<String, String>,
+    ) -> HashMap<String, String> {
+        let mut env: HashMap<String, String> = std::env::vars().collect();
+        env.insert(
+            "WORKSPACE_DIR".to_string(),
+            self.workspace_root().display().to_string(),
+        );
+        env.insert("PAGER".to_string(), "cat".to_string());
+        env.insert("GIT_PAGER".to_string(), "cat".to_string());
+        env.insert("NO_COLOR".to_string(), "1".to_string());
+        env.insert("CARGO_TERM_COLOR".to_string(), "never".to_string());
+        if !shell_program.trim().is_empty() {
+            env.insert("SHELL".to_string(), shell_program.to_string());
+        }
+        env.extend(extra_env);
+        env
+    }
+
+    async fn exec_session_metadata(&self, session_id: &str) -> Result<VTCodeExecSession> {
+        if self.pipe_sessions.has_session(session_id).await {
+            return self.pipe_sessions.snapshot_session(session_id).await;
+        }
+        self.pty_manager()
+            .snapshot_session(session_id)
+            .map(VTCodeExecSession::from)
+    }
+
+    async fn list_exec_sessions(&self) -> Vec<VTCodeExecSession> {
+        let mut sessions: Vec<VTCodeExecSession> = self
+            .pty_manager()
+            .list_sessions()
+            .into_iter()
+            .map(VTCodeExecSession::from)
+            .collect();
+        sessions.extend(self.pipe_sessions.list_sessions().await);
+        sessions.sort_by(|left, right| left.id.cmp(&right.id));
+        sessions
+    }
+
+    async fn read_exec_session_output(
+        &self,
+        session_id: &str,
+        drain: bool,
+    ) -> Result<Option<String>> {
+        if self.pipe_sessions.has_session(session_id).await {
+            return self
+                .pipe_sessions
+                .read_session_output(session_id, drain)
+                .await;
+        }
+        self.pty_manager().read_session_output(session_id, drain)
+    }
+
+    async fn send_input_to_exec_session(
+        &self,
+        session_id: &str,
+        data: &[u8],
+        append_newline: bool,
+    ) -> Result<usize> {
+        if self.pipe_sessions.has_session(session_id).await {
+            return self
+                .pipe_sessions
+                .send_input_to_session(session_id, data, append_newline)
+                .await;
+        }
+        self.pty_manager()
+            .send_input_to_session(session_id, data, append_newline)
+    }
+
+    async fn exec_session_completed(&self, session_id: &str) -> Result<Option<i32>> {
+        if self.pipe_sessions.has_session(session_id).await {
+            return self.pipe_sessions.is_session_completed(session_id).await;
+        }
+        self.pty_manager().is_session_completed(session_id)
+    }
+
+    async fn close_exec_session(&self, session_id: &str) -> Result<VTCodeExecSession> {
+        if self.pipe_sessions.has_session(session_id).await {
+            return self.pipe_sessions.close_session(session_id).await;
+        }
+        self.pty_manager()
+            .close_session(session_id)
+            .map(VTCodeExecSession::from)
     }
 
     async fn execute_agent_info(&self) -> Result<Value> {
@@ -2221,10 +2499,11 @@ impl ToolRegistry {
         }))
     }
 
-    async fn wait_for_pty_yield(
+    async fn wait_for_exec_yield(
         &self,
         session_id: &str,
         yield_duration: Duration,
+        tool_name: &str,
     ) -> PtyEphemeralCapture {
         let mut output = String::new();
         let start = Instant::now();
@@ -2232,7 +2511,6 @@ impl ToolRegistry {
 
         // Get the progress callback for streaming output to the TUI
         let progress_callback = self.progress_callback();
-        let tool_name = "run_pty_cmd";
 
         // Throttle TUI updates to prevent excessive redraws
         let mut last_ui_update = Instant::now();
@@ -2240,9 +2518,9 @@ impl ToolRegistry {
         let mut pending_lines = String::new();
 
         loop {
-            if let Ok(Some(code)) = self.pty_manager().is_session_completed(session_id) {
+            if let Ok(Some(code)) = self.exec_session_completed(session_id).await {
                 if let Ok(Some(final_output)) =
-                    self.pty_manager().read_session_output(session_id, true)
+                    self.read_exec_session_output(session_id, true).await
                 {
                     output.push_str(&final_output);
 
@@ -2261,7 +2539,7 @@ impl ToolRegistry {
                 };
             }
 
-            if let Ok(Some(new_output)) = self.pty_manager().read_session_output(session_id, true) {
+            if let Ok(Some(new_output)) = self.read_exec_session_output(session_id, true).await {
                 output.push_str(&new_output);
                 pending_lines.push_str(&new_output);
 
@@ -2296,6 +2574,32 @@ impl ToolRegistry {
 
             tokio::time::sleep(poll_interval).await;
         }
+    }
+
+    async fn wait_for_pty_yield(
+        &self,
+        session_id: &str,
+        yield_duration: Duration,
+    ) -> PtyEphemeralCapture {
+        self.wait_for_exec_yield(
+            session_id,
+            yield_duration,
+            crate::config::constants::tools::UNIFIED_EXEC,
+        )
+        .await
+    }
+
+    async fn wait_for_pipe_yield(
+        &self,
+        session_id: &str,
+        yield_duration: Duration,
+    ) -> PtyEphemeralCapture {
+        self.wait_for_exec_yield(
+            session_id,
+            yield_duration,
+            crate::config::constants::tools::UNIFIED_EXEC,
+        )
+        .await
     }
 }
 
@@ -2694,15 +2998,16 @@ mod pty_output_filter_tests {
 #[cfg(test)]
 mod pty_context_tests {
     use super::{
-        attach_pty_continuation, attach_pty_response_context, build_session_command_display,
+        attach_exec_response_context, attach_pty_continuation, build_exec_session_command_display,
     };
-    use crate::tools::types::VTCodePtySession;
+    use crate::tools::types::VTCodeExecSession;
     use serde_json::json;
 
     #[test]
-    fn build_session_command_display_unwraps_shell_c_argument() {
-        let session = VTCodePtySession {
+    fn build_exec_session_command_display_unwraps_shell_c_argument() {
+        let session = VTCodeExecSession {
             id: "run-123".to_string(),
+            backend: "pty".to_string(),
             command: "zsh".to_string(),
             args: vec![
                 "-l".to_string(),
@@ -2710,31 +3015,36 @@ mod pty_context_tests {
                 "cargo check".to_string(),
             ],
             working_dir: Some(".".to_string()),
-            rows: 24,
-            cols: 80,
-            screen_contents: None,
-            scrollback: None,
+            rows: Some(24),
+            cols: Some(80),
         };
 
-        assert_eq!(build_session_command_display(&session), "cargo check");
+        assert_eq!(build_exec_session_command_display(&session), "cargo check");
     }
 
     #[test]
-    fn attach_pty_response_context_sets_expected_keys() {
+    fn attach_exec_response_context_sets_expected_keys() {
         let mut response = json!({ "output": "ok" });
-        attach_pty_response_context(
-            &mut response,
-            "run-123",
-            "cargo check",
-            Some("."),
-            30,
-            120,
-            false,
-        );
+        let session = VTCodeExecSession {
+            id: "run-123".to_string(),
+            backend: "pty".to_string(),
+            command: "zsh".to_string(),
+            args: vec![
+                "-l".to_string(),
+                "-c".to_string(),
+                "cargo check".to_string(),
+            ],
+            working_dir: Some(".".to_string()),
+            rows: Some(30),
+            cols: Some(120),
+        };
+
+        attach_exec_response_context(&mut response, &session, "cargo check", false);
 
         assert_eq!(response["session_id"], "run-123");
         assert_eq!(response["command"], "cargo check");
         assert_eq!(response["working_directory"], ".");
+        assert_eq!(response["backend"], "pty");
         assert_eq!(response["rows"], 30);
         assert_eq!(response["cols"], 120);
         assert_eq!(response["is_exited"], false);
@@ -2860,7 +3170,7 @@ mod unified_action_error_tests {
 
     #[test]
     fn extracts_run_session_id_from_read_file_error() {
-        let error = "Use read_pty_session with session_id=\"run-zz9\" instead of read_file.";
+        let error = "Use unified_exec with session_id=\"run-zz9\" instead of read_file.";
         assert_eq!(
             extract_run_session_id_from_read_file_error(error),
             Some("run-zz9".to_string())

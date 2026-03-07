@@ -438,73 +438,27 @@ fn read_file_limit_value(args: &Value) -> Option<usize> {
         })
 }
 
-fn command_value_to_signature_string(value: &Value) -> Option<String> {
-    if let Some(command) = value.as_str() {
-        let normalized = command.split_whitespace().collect::<Vec<_>>().join(" ");
-        if normalized.is_empty() {
-            None
-        } else {
-            Some(normalized)
-        }
-    } else if let Some(parts) = value.as_array() {
-        let joined = parts
-            .iter()
-            .filter_map(Value::as_str)
-            .map(str::trim)
-            .filter(|part| !part.is_empty())
-            .collect::<Vec<_>>()
-            .join(" ");
-        if joined.is_empty() {
-            None
-        } else {
-            Some(joined)
-        }
-    } else {
-        None
-    }
-}
-
-fn extract_command_args_suffix(args: &Value) -> Option<String> {
-    let arg_values = args.get("args")?.as_array()?;
-    let suffix = arg_values
-        .iter()
-        .filter_map(Value::as_str)
-        .map(str::trim)
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>()
-        .join(" ");
-    if suffix.is_empty() {
-        None
-    } else {
-        Some(suffix)
-    }
-}
-
 fn shell_run_signature(canonical_tool_name: &str, args: &Value) -> Option<String> {
-    let command_value = match canonical_tool_name {
-        tool_names::RUN_PTY_CMD | "shell" => {
-            args.get("command").or_else(|| args.get("raw_command"))
-        }
+    let signature_tool_name = match canonical_tool_name {
+        tool_names::RUN_PTY_CMD | "shell" => tool_names::UNIFIED_EXEC,
         tool_names::UNIFIED_EXEC | "exec_pty_cmd" | "exec" => {
-            if tool_intent::unified_exec_action(args).unwrap_or("run") == "run" {
-                args.get("command")
-                    .or_else(|| args.get("cmd"))
-                    .or_else(|| args.get("raw_command"))
-            } else {
-                None
+            if !tool_intent::unified_exec_action(args)
+                .map(|action| action.eq_ignore_ascii_case("run"))
+                .unwrap_or(false)
+            {
+                return None;
             }
+            tool_names::UNIFIED_EXEC
         }
-        _ => None,
-    }?;
-
-    let command = command_value_to_signature_string(command_value)?;
-    let command_with_args = match extract_command_args_suffix(args) {
-        Some(suffix) => format!("{command} {suffix}"),
-        None => command,
+        _ => return None,
     };
+
+    let command = vtcode_core::tools::command_args::command_text(args)
+        .ok()
+        .flatten()?;
     Some(format!(
-        "{canonical_tool_name}::{}",
-        compact_loop_key_part(&command_with_args, 200)
+        "{signature_tool_name}::{}",
+        compact_loop_key_part(&command, 200)
     ))
 }
 
@@ -2435,7 +2389,7 @@ mod tests {
         let signature = shell_run_signature(tool_names::RUN_PTY_CMD, &args);
         assert_eq!(
             signature,
-            Some("run_pty_cmd::cargo check -p vtcode-core".to_string())
+            Some("unified_exec::cargo check -p vtcode-core".to_string())
         );
     }
 

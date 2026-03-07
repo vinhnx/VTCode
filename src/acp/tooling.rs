@@ -16,7 +16,7 @@ pub const TOOL_READ_FILE_PATH_ARG: &str = "path";
 pub const TOOL_READ_FILE_LINE_ARG: &str = "line";
 pub const TOOL_READ_FILE_LIMIT_ARG: &str = "limit";
 
-pub const TOOL_LIST_FILES_DESCRIPTION: &str = "Explore workspace files in a SUBDIRECTORY (root path is blocked). Requires path like 'src/' or 'vtcode-core/'. For root overview, use shell commands via run_pty_cmd.";
+pub const TOOL_LIST_FILES_DESCRIPTION: &str = "Explore workspace files in a SUBDIRECTORY (root path is blocked). Requires path like 'src/' or 'vtcode-core/'. For root overview, use shell commands via unified_exec.";
 pub const TOOL_LIST_FILES_PATH_ARG: &str = "path";
 pub const TOOL_LIST_FILES_MODE_ARG: &str = "mode";
 pub const TOOL_LIST_FILES_PAGE_ARG: &str = "page";
@@ -41,7 +41,7 @@ pub const TOOL_LIST_FILES_SUMMARY_MAX_ITEMS: usize = 20;
 /// - **ListFiles**: Safe file discovery and pattern matching within workspace
 ///
 /// Tools NOT exposed via ACP (and why):
-/// - Terminal/PTY operations (run_pty_cmd, etc.): Requires sandboxing not available in Zed context
+/// - Command-session operations (unified_exec, etc.): Requires sandboxing not available in Zed context
 /// - Code execution: Potential security risk in editor integration
 /// - Patch application: Complex state management not suitable for ACP
 /// - Write operations: Reserved for local-only agent to prevent unintended edits
@@ -425,7 +425,7 @@ impl AcpToolRegistry {
         match function_name {
             tools::READ_FILE => agent_client_protocol::ToolKind::Read,
             "grep_file" | "list_files" => agent_client_protocol::ToolKind::Search,
-            tools::RUN_PTY_CMD => agent_client_protocol::ToolKind::Execute,
+            tools::RUN_PTY_CMD | tools::UNIFIED_EXEC => agent_client_protocol::ToolKind::Execute,
             tools::WRITE_FILE | tools::CREATE_FILE | tools::EDIT_FILE => {
                 agent_client_protocol::ToolKind::Edit
             }

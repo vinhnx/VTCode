@@ -135,6 +135,7 @@ pub mod continuation;
 pub mod editing;
 pub mod error_context;
 pub mod error_helpers;
+pub mod exec_session;
 pub mod execution_context;
 pub mod execution_tracker;
 pub mod file_ops;

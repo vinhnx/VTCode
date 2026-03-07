@@ -29,7 +29,7 @@ use vtcode::config_watcher::SimpleConfigWatcher;
 
 use super::interaction_loop::{InteractionLoopContext, InteractionOutcome, InteractionState};
 
-const REPEATED_FOLLOW_UP_DIRECTIVE: &str = "User has asked to continue repeatedly. Do not keep exploring silently. In your next assistant response, provide a concrete status update: completed work, current blocker, and the exact next action. If a recent tool error provides a replacement tool (for example read_pty_session), use it directly instead of retrying the same failing call.";
+const REPEATED_FOLLOW_UP_DIRECTIVE: &str = "User has asked to continue repeatedly. Do not keep exploring silently. In your next assistant response, provide a concrete status update: completed work, current blocker, and the exact next action. If a recent tool error provides a replacement tool (for example `unified_exec` with `action=\"poll\"`), use it directly instead of retrying the same failing call.";
 const REPEATED_FOLLOW_UP_STALLED_DIRECTIVE: &str = "Previous turn stalled or aborted and the user asked to continue repeatedly. Recover autonomously without asking for more user prompts: identify the likely root cause from recent errors, execute exactly one adjusted strategy, and then provide either a completion summary or a final blocker review with specific next action. If the last tool error includes fallback_tool/fallback_tool_args, use that fallback first. Do not repeat a failing tool call when the error already provides the next tool to use.";
 const FALLBACK_ARGS_PREVIEW_LIMIT: usize = 240;
 

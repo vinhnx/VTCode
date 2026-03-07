@@ -21,7 +21,7 @@ fn shell_run_args<'a>(tool_name: &str, tool_args: Option<&'a Value>) -> Option<&
     let args = tool_args?;
     match tool_name {
         "run_pty_cmd" | "shell" => Some(args),
-        "unified_exec" | "exec_pty_cmd" | "exec" => {
+        "unified_exec" | "exec_pty_cmd" | "exec" | "exec_command" => {
             vtcode_core::tools::tool_intent::unified_exec_action(args)
                 .is_some_and(|action| action.eq_ignore_ascii_case("run"))
                 .then_some(args)
@@ -31,47 +31,24 @@ fn shell_run_args<'a>(tool_name: &str, tool_args: Option<&'a Value>) -> Option<&
 }
 
 fn normalized_shell_command_value(args: &Value) -> Option<Value> {
-    vtcode_core::tools::command_args::normalized_command_value(args)
+    let normalized = vtcode_core::tools::command_args::normalize_shell_args(args)
+        .ok()
+        .unwrap_or_else(|| args.clone());
+    vtcode_core::tools::command_args::normalized_command_value(&normalized)
         .ok()
         .flatten()
 }
 
 fn extract_shell_command_text_from_run_args(args: &Value) -> Option<String> {
-    let command_value = normalized_shell_command_value(args)?;
-
-    if let Some(arr) = command_value.as_array() {
-        let parts = arr
-            .iter()
-            .filter_map(|value| value.as_str())
-            .collect::<Vec<_>>();
-        if parts.is_empty() {
-            None
-        } else {
-            Some(shell_words::join(parts))
-        }
-    } else {
-        command_value.as_str().map(|value| value.to_owned())
-    }
+    vtcode_core::tools::command_args::command_text(args)
+        .ok()
+        .flatten()
 }
 
 fn extract_shell_command_words_from_run_args(args: &Value) -> Option<Vec<String>> {
-    let command_value = normalized_shell_command_value(args)?;
-    let mut parts = match command_value {
-        Value::String(command) => shell_words::split(&command).ok()?,
-        Value::Array(values) => values
-            .iter()
-            .map(|value| value.as_str().map(ToOwned::to_owned))
-            .collect::<Option<Vec<_>>>()?,
-        _ => return None,
-    };
-
-    if let Some(extra_args) = args.get("args").and_then(Value::as_array) {
-        for value in extra_args {
-            parts.push(value.as_str()?.to_string());
-        }
-    }
-
-    (!parts.is_empty()).then_some(parts)
+    vtcode_core::tools::command_args::command_words(args)
+        .ok()
+        .flatten()
 }
 
 fn render_shell_command_words(parts: &[String]) -> String {

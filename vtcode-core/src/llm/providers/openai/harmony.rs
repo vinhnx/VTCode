@@ -38,8 +38,7 @@ pub(super) fn parse_harmony_tool_name(recipient: &str) -> String {
         "repo_browser.list_files" => "list_files".to_string(),
         "repo_browser.read_file" => "read_file".to_string(),
         "repo_browser.write_file" => "write_file".to_string(),
-        "container.exec" => "run_pty_cmd".to_string(),
-        "bash" => "bash".to_string(),
+        "container.exec" | "bash" => "unified_exec".to_string(),
         "grep" => "grep_file".to_string(),
         _ => {
             // Try to extract the function name after the last dot

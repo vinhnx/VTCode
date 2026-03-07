@@ -757,7 +757,26 @@ async fn test_run_tool_call_unified_exec_git_diff_uses_cache_on_repeat() {
         ToolExecutionStatus::Success { output, .. } => output,
         _ => unreachable!(),
     };
-    assert_eq!(first_output, second_output);
+
+    let mut first_stable = first_output.clone();
+    let mut second_stable = second_output.clone();
+    let first_wall_time = first_stable
+        .get("wall_time")
+        .and_then(|value| value.as_f64())
+        .expect("first output should include wall_time");
+    let second_wall_time = second_stable
+        .get("wall_time")
+        .and_then(|value| value.as_f64())
+        .expect("second output should include wall_time");
+    assert!(first_wall_time >= 0.0);
+    assert!(second_wall_time >= 0.0);
+    first_stable
+        .as_object_mut()
+        .map(|object| object.remove("wall_time"));
+    second_stable
+        .as_object_mut()
+        .map(|object| object.remove("wall_time"));
+    assert_eq!(first_stable, second_stable);
 }
 
 #[tokio::test]

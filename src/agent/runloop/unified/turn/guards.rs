@@ -122,6 +122,13 @@ pub(crate) fn validate_tool_args_security(
         tool_names::EDIT_FILE => &["path", "old_str", "new_str"],
         "list_files" => &["path"],
         "grep_file" => &["pattern", "path"],
+        tool_names::UNIFIED_EXEC
+            if vtcode_core::tools::tool_intent::unified_exec_action(args)
+                .map(|action| action.eq_ignore_ascii_case("run"))
+                .unwrap_or(false) =>
+        {
+            &["command"]
+        }
         tool_names::RUN_PTY_CMD => &["command"],
         tool_names::APPLY_PATCH => &["patch"],
         _ => EMPTY_REQUIRED,
@@ -157,9 +164,15 @@ pub(crate) fn validate_tool_args_security(
     }
 
     // Command safety checks
-    if name == tool_names::RUN_PTY_CMD
-        && let Some(cmd) = args.get("command").and_then(|v| v.as_str())
-        && let Err(e) = commands::validate_command_safety(cmd)
+    if (name == tool_names::RUN_PTY_CMD
+        || (name == tool_names::UNIFIED_EXEC
+            && vtcode_core::tools::tool_intent::unified_exec_action(args)
+                .map(|action| action.eq_ignore_ascii_case("run"))
+                .unwrap_or(false)))
+        && let Some(cmd) = vtcode_core::tools::command_args::command_text(args)
+            .ok()
+            .flatten()
+        && let Err(e) = commands::validate_command_safety(&cmd)
     {
         failures
             .get_or_insert_with(|| Vec::with_capacity(2))
@@ -326,7 +339,7 @@ pub(crate) async fn handle_turn_balancer(
             )
             .unwrap_or(());
         ctx.working_history.push(uni::Message::system(
-            "CRITICAL: Multiple edits were made without verification. Stop editing and run `unified_exec`/`run_pty_cmd` to compile or test before proceeding."
+            "CRITICAL: Multiple edits were made without verification. Stop editing and run `unified_exec` to compile or test before proceeding."
                 .to_string(),
         ));
         repeated_tool_attempts.consecutive_mutations = 0;

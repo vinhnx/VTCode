@@ -1,6 +1,7 @@
 use super::AgentRunner;
 use crate::config::constants::tools;
 use crate::tools::registry::{ToolErrorType, classify_error};
+use crate::tools::{command_args, tool_intent};
 use crate::utils::error_messages::ERR_TOOL_DENIED;
 use anyhow::{Result, anyhow};
 use serde_json::Value;
@@ -10,7 +11,7 @@ use tracing::info;
 impl AgentRunner {
     async fn resolve_executable_tool_name(&self, tool_name: &str) -> Option<String> {
         let requested_name = if tool_name == "shell" {
-            tools::RUN_PTY_CMD
+            tools::UNIFIED_EXEC
         } else {
             tool_name
         };
@@ -31,7 +32,7 @@ impl AgentRunner {
         args: &Value,
     ) -> Result<String> {
         let requested_name = if tool_name == "shell" {
-            tools::RUN_PTY_CMD
+            tools::UNIFIED_EXEC
         } else {
             tool_name
         };
@@ -93,37 +94,18 @@ impl AgentRunner {
         args: &Value,
     ) -> Result<Value> {
         let resolved_tool_name = if tool_name == "shell" {
-            tools::RUN_PTY_CMD
+            tools::UNIFIED_EXEC
         } else {
             tool_name
         };
-        let extract_command_text = |args: &Value| {
-            if let Some(cmd_val) = args.get("command") {
-                if let Some(arr) = cmd_val.as_array() {
-                    arr.iter()
-                        .filter_map(|v| v.as_str())
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                } else {
-                    cmd_val.as_str().unwrap_or("").to_owned()
-                }
-            } else {
-                String::new()
-            }
-        };
-
         let shell_command = match resolved_tool_name {
-            n if n == tools::RUN_PTY_CMD => Some(extract_command_text(args)),
-            n if n == tools::UNIFIED_EXEC => {
-                let action = args
-                    .get("action")
-                    .and_then(|v| v.as_str())
-                    .or_else(|| args.get("command").map(|_| "run"));
-                if action == Some("run") {
-                    Some(extract_command_text(args))
-                } else {
-                    None
-                }
+            n if n == tools::RUN_PTY_CMD => command_args::command_text(args).ok().flatten(),
+            n if n == tools::UNIFIED_EXEC
+                && tool_intent::unified_exec_action(args)
+                    .map(|action| action.eq_ignore_ascii_case("run"))
+                    .unwrap_or(false) =>
+            {
+                command_args::command_text(args).ok().flatten()
             }
             _ => None,
         };

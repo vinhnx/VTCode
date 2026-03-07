@@ -174,7 +174,7 @@ fn parse_function_call_block(block: &str) -> Option<(String, Value)> {
 
     // Validate required parameters based on tool type
     match canonical.as_deref() {
-        Some(tools::RUN_PTY_CMD) => {
+        Some(tools::UNIFIED_EXEC | tools::RUN_PTY_CMD) => {
             if !positional.is_empty() && !object.contains_key("command") {
                 let mut positional_parts = Vec::new();
                 let mut all_strings = true;

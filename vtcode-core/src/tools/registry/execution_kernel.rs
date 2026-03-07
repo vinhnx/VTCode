@@ -140,10 +140,12 @@ fn preflight_validation_args<'a>(
     if matches!(
         normalized_tool_name,
         tool_names::RUN_PTY_CMD | tool_names::UNIFIED_EXEC | "shell"
-    ) && let Some(normalized) = crate::tools::command_args::normalize_indexed_command_args(args)
-        .map_err(|error| anyhow!(error))?
-    {
-        return Ok(std::borrow::Cow::Owned(normalized));
+    ) {
+        let normalized = crate::tools::command_args::normalize_shell_args(args)
+            .map_err(|error| anyhow!(error))?;
+        if normalized != *args {
+            return Ok(std::borrow::Cow::Owned(normalized));
+        }
     }
 
     if normalized_tool_name == tool_names::UNIFIED_SEARCH {

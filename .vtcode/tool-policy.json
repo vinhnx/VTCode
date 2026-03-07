@@ -4,9 +4,6 @@
     "apply_patch",
     "enter_plan_mode",
     "exit_plan_mode",
-    "list_skills",
-    "load_skill",
-    "load_skill_resource",
     "plan_task_tracker",
     "request_user_input",
     "task_tracker",
@@ -23,10 +20,7 @@
     "exit_plan_mode": "allow",
     "request_user_input": "allow",
     "plan_task_tracker": "allow",
-    "task_tracker": "allow",
-    "list_skills": "allow",
-    "load_skill_resource": "allow",
-    "load_skill": "allow"
+    "task_tracker": "allow"
   },
   "constraints": {},
   "mcp": {

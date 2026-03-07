@@ -478,7 +478,7 @@ impl FileOpsTool {
         if let Some(spool_path) = missing_spool_candidate {
             if let Some(session_id) = pty_session_id_from_tool_output_path(&spool_path) {
                 return Err(anyhow!(
-                    "Error: Session output file not found: {}. This looks like a PTY session id. Use read_pty_session with session_id=\"{}\" instead of read_file.",
+                    "Error: Session output file not found: {}. This looks like a command session id. Use unified_exec with session_id=\"{}\" instead of read_file.",
                     self.workspace_relative_display(&spool_path),
                     session_id,
                 ));
@@ -772,7 +772,7 @@ mod read_tests {
     }
 
     #[tokio::test]
-    async fn test_missing_run_session_file_suggests_read_pty_session() {
+    async fn test_missing_run_session_file_suggests_unified_exec() {
         let temp_dir = TempDir::new().unwrap();
         let workspace_root = temp_dir.path().to_path_buf();
         let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
@@ -784,7 +784,7 @@ mod read_tests {
         let err = file_ops.read_file(args).await.unwrap_err().to_string();
 
         assert!(err.contains("Session output file not found"));
-        assert!(err.contains("read_pty_session"));
+        assert!(err.contains("unified_exec"));
         assert!(err.contains("run-123abc"));
     }
 

@@ -59,7 +59,7 @@ const UNIFIED_TOOL_GUIDANCE: &str = r#"**Search & exploration**:
 - **Never**: `git commit`, `git push`, or branch creation unless explicitly requested
 
 **Command execution**:
-- `unified_exec` for all shell commands (PTY/interactive/long-running).
+- `unified_exec` for shell commands; it runs pipe-first by default, and `tty=true` opts into PTY/interactive mode.
 - Prefer `rg` over `grep` for pattern matching
 - Stay in WORKSPACE_DIR; confirm destructive ops (rm, force-push)
 - After command output, acknowledge result briefly and suggest next steps
@@ -333,7 +333,7 @@ const DEFAULT_LIGHTWEIGHT_PROMPT: &str = r#"VT Code - efficient coding agent.
 
 - Act and verify. Direct tone. No emoji — use plain Unicode symbols (✓, ✗, →, •).
 - Scoped: unified_search (≤5), unified_file (max_tokens).
-- Use `unified_exec` for shell/PTY commands.
+- Use `unified_exec` for shell commands; set `tty=true` only when an interactive PTY is required.
 - Tools hidden by default. `list_skills --search <term>` to find them.
 - Keep investigation and implementation explicit in a single thread; summarize findings before edits.
 - Keep code consistent with nearby patterns; prefer KISS and DRY.

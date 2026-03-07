@@ -248,9 +248,9 @@ fn detect_direct_function_alias(text: &str) -> Option<(String, Value)> {
 
                 let raw_args = &text[args_start..end_pos];
                 if let Some(args) = parse_textual_arguments(raw_args)
-                    && let Some(canonical) = canonicalize_tool_name(alias)
+                    && let Some(result) = canonicalize_tool_result(alias.to_string(), args)
                 {
-                    return Some((canonical, args));
+                    return Some(result);
                 }
 
                 search_start = end;

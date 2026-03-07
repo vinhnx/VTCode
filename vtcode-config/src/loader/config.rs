@@ -389,21 +389,11 @@ max_sequential_spool_chunk_reads = 6
 # Specific tool policies - Override default policy for individual tools
 [tools.policies]
 apply_patch = "prompt"            # Apply code patches (requires confirmation)
-close_pty_session = "allow"        # Close PTY sessions (no confirmation needed)
-create_pty_session = "allow"       # Create PTY sessions (no confirmation needed)
-edit_file = "allow"               # Edit files directly (no confirmation needed)
-grep_file = "allow"               # Sole content-search tool (ripgrep-backed)
-list_files = "allow"              # List directory contents (no confirmation needed)
-list_pty_sessions = "allow"       # List PTY sessions (no confirmation needed)
-read_file = "allow"               # Read files (no confirmation needed)
-read_pty_session = "allow"        # Read PTY session output (no no confirmation needed)
-resize_pty_session = "allow"      # Resize PTY sessions (no confirmation needed)
-run_pty_cmd = "prompt"            # Run commands in PTY (requires confirmation)
-exec_command = "prompt"           # Execute command in unified session (requires confirmation)
-write_stdin = "prompt"            # Write to stdin in unified session (requires confirmation)
-
-send_pty_input = "prompt"         # Send input to PTY (requires confirmation)
-write_file = "allow"              # Write files (no confirmation needed)
+request_user_input = "allow"      # Ask focused user questions when the task requires it
+task_tracker = "prompt"           # Create or update explicit task plans
+unified_exec = "prompt"           # Run commands; pipe-first by default, set tty=true for PTY/interactive sessions
+unified_file = "allow"            # Canonical file read/write/edit/move/copy/delete surface
+unified_search = "allow"          # Canonical search/list/intelligence/error surface
 
 # Command security - Define safe and dangerous command patterns
 [commands]

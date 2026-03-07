@@ -128,13 +128,22 @@ fn parse_terminal_command_accepts_valid_string() {
 }
 
 #[test]
+fn parse_terminal_command_accepts_cmd_alias() {
+    let args = json!({ "cmd": "echo test" });
+    let result = ZedAgent::parse_terminal_command(&args);
+    assert!(result.is_ok());
+    let cmd = result.unwrap();
+    assert_eq!(cmd, vec!["echo", "test"]);
+}
+
+#[test]
 fn parse_terminal_command_rejects_missing_command_field() {
     let args = json!({});
     let result = ZedAgent::parse_terminal_command(&args);
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
-        "run_pty_cmd requires a 'command' field (string/array or indexed command.N entries)"
+        "command execution requires a 'command' field (string/array or indexed command.N entries)"
     );
 }
 
@@ -165,6 +174,20 @@ fn parse_terminal_command_rejects_non_string_indexed_argument() {
         result.unwrap_err(),
         "command array must contain only strings"
     );
+}
+
+#[tokio::test]
+async fn resolve_terminal_working_dir_accepts_workdir_alias() {
+    let temp = TempDir::new().unwrap();
+    let agent = build_agent(temp.path()).await;
+    let args = json!({ "workdir": "src" });
+
+    let working_dir = agent
+        .resolve_terminal_working_dir(&args)
+        .expect("workdir alias should resolve")
+        .expect("working directory should be present");
+
+    assert_eq!(working_dir, temp.path().join("src"));
 }
 
 #[tokio::test]

@@ -10,7 +10,7 @@ use std::time::Instant;
 // Separate limits for different operation types to reduce false positives
 const MAX_READONLY_TOOL_CALLS: usize = 10; // read_file, grep_file, list_files
 const MAX_WRITE_TOOL_CALLS: usize = 3; // write_file, edit_file, apply_patch
-const MAX_COMMAND_TOOL_CALLS: usize = 5; // shell, run_pty_cmd
+const MAX_COMMAND_TOOL_CALLS: usize = 5; // shell, unified_exec
 const MAX_OTHER_TOOL_CALLS: usize = 3; // Other tools (default)
 const DETECTION_WINDOW: usize = 10;
 const HARD_LIMIT_MULTIPLIER: usize = 2; // Hard stop at 2x soft limit

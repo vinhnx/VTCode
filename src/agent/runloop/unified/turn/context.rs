@@ -959,7 +959,7 @@ mod tests {
             uni::Message::assistant("I will run cargo clippy now.".to_string()).with_tool_calls(
                 vec![uni::ToolCall::function(
                     "call_1".to_string(),
-                    "run_pty_cmd".to_string(),
+                    "unified_exec".to_string(),
                     "{}".to_string(),
                 )],
             ),

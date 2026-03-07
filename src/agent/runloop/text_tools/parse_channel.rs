@@ -1,4 +1,5 @@
 use serde_json::Value;
+use vtcode_core::config::constants::tools;
 
 pub(super) fn parse_channel_tool_call(text: &str) -> Option<(String, Value)> {
     // Harmony format: <|start|>{header}<|message|>{content}<|end|>
@@ -37,12 +38,12 @@ pub(super) fn parse_channel_tool_call(text: &str) -> Option<(String, Value)> {
                         .unwrap_or("");
                     parse_tool_name_from_reference(tool_ref)
                 } else if header.contains("container.exec") || header.contains("exec") {
-                    "run_pty_cmd"
+                    "unified_exec"
                 } else if header.contains("read") || header.contains("file") {
                     "read_file"
                 } else {
-                    // Default to pty command if it's a commentary channel but no recipient
-                    "run_pty_cmd"
+                    // Default to command execution if it's a commentary channel but no recipient
+                    "unified_exec"
                 };
 
                 // Parse JSON from content
@@ -64,7 +65,7 @@ pub(super) fn parse_tool_name_from_reference(tool_ref: &str) -> &str {
         "repo_browser.list_files" | "list_files" => "list_files",
         "repo_browser.read_file" | "read_file" => "read_file",
         "repo_browser.write_file" | "write_file" => "write_file",
-        "container.exec" | "exec" | "bash" => "run_pty_cmd",
+        "container.exec" | "exec" | "bash" | "exec_command" => tools::UNIFIED_EXEC,
         "grep" => "grep_file",
         _ => {
             // Try to extract the function name after the last dot
@@ -82,13 +83,14 @@ pub(super) fn convert_harmony_args_to_tool_format(
     parsed: Value,
 ) -> Result<Value, String> {
     match tool_name {
-        "run_pty_cmd" | "bash" => {
+        tools::UNIFIED_EXEC | "run_pty_cmd" | "bash" | "exec_command" => {
             let mut result = serde_json::Map::new();
+            result.insert("action".to_string(), serde_json::json!("run"));
 
             // Preserve other parameters from the original parsed object
             if let Some(map) = parsed.as_object() {
                 for (key, value) in map {
-                    if key != "cmd" && key != "command" {
+                    if key != "cmd" && key != "command" && key != "action" {
                         result.insert(key.to_string(), value.clone());
                     }
                 }

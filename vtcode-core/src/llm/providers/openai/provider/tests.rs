@@ -759,7 +759,7 @@ fn test_parse_harmony_tool_name() {
     );
     assert_eq!(
         OpenAIProvider::parse_harmony_tool_name("container.exec"),
-        "run_pty_cmd"
+        "unified_exec"
     );
     assert_eq!(
         OpenAIProvider::parse_harmony_tool_name("unknown.tool"),
@@ -798,7 +798,7 @@ fn test_parse_harmony_tool_call_from_text_container_exec() {
     assert!(result.is_some());
 
     let (tool_name, args) = result.unwrap();
-    assert_eq!(tool_name, "run_pty_cmd");
+    assert_eq!(tool_name, "unified_exec");
     assert_eq!(args["cmd"], serde_json::json!(["ls", "-la"]));
 }
 

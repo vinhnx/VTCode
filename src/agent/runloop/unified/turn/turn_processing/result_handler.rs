@@ -195,7 +195,7 @@ mod tests {
     fn suppresses_result_claims_before_run_tool_output() {
         let tool_calls = vec![uni::ToolCall::function(
             "call_1".to_string(),
-            "run_pty_cmd".to_string(),
+            "unified_exec".to_string(),
             r#"{"command":"cargo clippy"}"#.to_string(),
         )];
         assert!(should_suppress_pre_tool_result_claim(
@@ -208,7 +208,7 @@ mod tests {
     fn keeps_non_result_preamble_for_run_tools() {
         let tool_calls = vec![uni::ToolCall::function(
             "call_1".to_string(),
-            "run_pty_cmd".to_string(),
+            "unified_exec".to_string(),
             r#"{"command":"cargo clippy"}"#.to_string(),
         )];
         assert!(!should_suppress_pre_tool_result_claim(

@@ -145,7 +145,7 @@ pub(crate) fn render_tool_call_summary(
     let summary_highlights = highlight_texts_for_summary(args, &highlights);
     let palette = ColorPalette::default();
     let action_label = tool_action_label(tool_name, args);
-    let is_run_command = action_label == "Run command (PTY)";
+    let is_run_command = action_label == "Run command";
     let details = if is_run_command {
         Vec::new()
     } else {
@@ -336,7 +336,7 @@ fn split_command_and_args(text: &str) -> (&str, &str) {
 
 fn build_tool_summary(action_label: &str, headline: &str) -> String {
     let normalized = headline.trim().trim_start_matches("MCP ").trim();
-    if action_label == "Run command (PTY)" {
+    if action_label == "Run command" {
         if normalized.is_empty() {
             return "Ran command".to_string();
         }
@@ -515,33 +515,45 @@ pub(crate) fn describe_tool_action(tool_name: &str, args: &Value) -> (String, Ha
                         )
                     }),
                 "write" => (
-                    format!("{}Send PTY input", if is_mcp_tool { "MCP " } else { "" }),
+                    format!(
+                        "{}Send command input",
+                        if is_mcp_tool { "MCP " } else { "" }
+                    ),
                     HashSet::new(),
                 ),
                 "poll" => (
-                    format!("{}Read PTY session", if is_mcp_tool { "MCP " } else { "" }),
+                    format!(
+                        "{}Read command session",
+                        if is_mcp_tool { "MCP " } else { "" }
+                    ),
                     HashSet::new(),
                 ),
                 "continue" => (
                     format!(
-                        "{}Continue PTY session",
+                        "{}Continue command session",
                         if is_mcp_tool { "MCP " } else { "" }
                     ),
                     HashSet::new(),
                 ),
                 "inspect" => (
                     format!(
-                        "{}Inspect PTY output",
+                        "{}Inspect command output",
                         if is_mcp_tool { "MCP " } else { "" }
                     ),
                     HashSet::new(),
                 ),
                 "list" => (
-                    format!("{}List PTY sessions", if is_mcp_tool { "MCP " } else { "" }),
+                    format!(
+                        "{}List command sessions",
+                        if is_mcp_tool { "MCP " } else { "" }
+                    ),
                     HashSet::new(),
                 ),
                 "close" => (
-                    format!("{}Close PTY session", if is_mcp_tool { "MCP " } else { "" }),
+                    format!(
+                        "{}Close command session",
+                        if is_mcp_tool { "MCP " } else { "" }
+                    ),
                     HashSet::new(),
                 ),
                 "code" => (
@@ -740,7 +752,7 @@ mod tests {
     #[test]
     fn build_tool_summary_formats_run_command_as_ran() {
         assert_eq!(
-            build_tool_summary("Run command (PTY)", "cargo check -p vtcode"),
+            build_tool_summary("Run command", "cargo check -p vtcode"),
             "Ran cargo check -p vtcode"
         );
     }

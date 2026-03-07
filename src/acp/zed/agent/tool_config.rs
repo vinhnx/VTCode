@@ -4,12 +4,12 @@ use crate::acp::tooling::{SupportedTool, TOOL_READ_FILE_PATH_ARG, TOOL_READ_FILE
 use agent_client_protocol as acp;
 use anyhow::Result;
 use serde_json::Value;
-use shell_words::split;
 use std::path::{Path, PathBuf};
 use tracing::warn;
 use vtcode_core::core::interfaces::SessionMode;
 use vtcode_core::llm::provider::ToolChoice;
 use vtcode_core::llm::provider::ToolDefinition;
+use vtcode_core::tools::command_args;
 use vtcode_core::utils::path::ensure_path_within_workspace;
 
 use super::super::constants::*;
@@ -105,7 +105,7 @@ impl ZedAgent {
                 "pty" => return Ok(RunTerminalMode::Pty),
                 "terminal" | "" => return Ok(RunTerminalMode::Terminal),
                 "streaming" => {
-                    return Err("run_pty_cmd does not support streaming mode".to_string());
+                    return Err("command sessions do not support streaming mode".to_string());
                 }
                 _ => {}
             }
@@ -119,12 +119,9 @@ impl ZedAgent {
     }
 
     pub(crate) fn parse_terminal_command(args: &Value) -> Result<Vec<String>, String> {
-        fn validate_command_parts(
-            parts: Vec<String>,
-            empty_message: &str,
-        ) -> Result<Vec<String>, String> {
+        fn validate_command_parts(parts: Vec<String>) -> Result<Vec<String>, String> {
             if parts.is_empty() {
-                return Err(empty_message.to_string());
+                return Err("command array cannot be empty".to_string());
             }
             if parts[0].trim().is_empty() {
                 return Err("command executable cannot be empty".to_string());
@@ -132,47 +129,20 @@ impl ZedAgent {
             Ok(parts)
         }
 
-        if let Some(array) = args.get("command").and_then(Value::as_array) {
-            let mut parts = Vec::with_capacity(array.len());
-            for value in array {
-                let Some(segment) = value.as_str() else {
-                    return Err("command array must contain only strings".to_string());
-                };
-                parts.push(segment.to_string());
-            }
-            return validate_command_parts(parts, "command array cannot be empty");
-        }
-
-        if let Some(command_str) = args.get("command").and_then(Value::as_str) {
-            let segments = split(command_str)
-                .map_err(|error| format!("failed to parse command string: {error}"))?;
-            return validate_command_parts(segments, "command string cannot be empty");
-        }
-
-        // Support dotted `command.N` arguments commonly produced by some tool call formats
-        if let Some(map) = args.as_object()
-            && let Some(parts) = vtcode_core::tools::command_args::parse_indexed_command_parts(map)
-                .map_err(str::to_string)?
-        {
-            return validate_command_parts(parts, "command array cannot be empty");
-        }
-
-        Err(
-            "run_pty_cmd requires a 'command' field (string/array or indexed command.N entries)"
-                .to_string(),
-        )
+        let parts = command_args::command_words(args)
+            .map_err(str::to_string)?
+            .ok_or_else(|| {
+                "command execution requires a 'command' field (string/array or indexed command.N entries)"
+                    .to_string()
+            })?;
+        validate_command_parts(parts)
     }
 
     pub(super) fn resolve_terminal_working_dir(
         &self,
         args: &Value,
     ) -> Result<Option<PathBuf>, String> {
-        let requested = args
-            .get("working_dir")
-            .or_else(|| args.get("cwd"))
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|value| !value.is_empty());
+        let requested = command_args::working_dir_text(args);
 
         let Some(raw_dir) = requested else {
             return Ok(None);

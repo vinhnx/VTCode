@@ -246,6 +246,34 @@ pub struct VTCodePtySession {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scrollback: Option<String>,
 }
+
+/// Backend-neutral exec session metadata used by `unified_exec`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct VTCodeExecSession {
+    pub id: String,
+    pub backend: String,
+    pub command: String,
+    pub args: Vec<String>,
+    pub working_dir: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rows: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cols: Option<u16>,
+}
+
+impl From<VTCodePtySession> for VTCodeExecSession {
+    fn from(session: VTCodePtySession) -> Self {
+        Self {
+            id: session.id,
+            backend: "pty".to_string(),
+            command: session.command,
+            args: session.args,
+            working_dir: session.working_dir,
+            rows: Some(session.rows),
+            cols: Some(session.cols),
+        }
+    }
+}
 // Default value functions
 fn default_max_items() -> usize {
     20 // Better discovery defaults while still bounded for context efficiency

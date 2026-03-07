@@ -36,6 +36,8 @@ pub const LOAD_SKILL_RESOURCE: &str = "load_skill_resource";
 // ============================================================
 // LEGACY EXECUTION ALIASES (use unified_exec instead)
 // ============================================================
+pub const EXEC_COMMAND: &str = "exec_command";
+pub const WRITE_STDIN: &str = "write_stdin";
 pub const RUN_PTY_CMD: &str = "run_pty_cmd";
 pub const CREATE_PTY_SESSION: &str = "create_pty_session";
 pub const LIST_PTY_SESSIONS: &str = "list_pty_sessions";

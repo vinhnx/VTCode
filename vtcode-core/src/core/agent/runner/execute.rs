@@ -1,6 +1,7 @@
 use super::AgentRunner;
 use super::constants::IDLE_TURN_LIMIT;
-use super::helpers::detect_textual_run_pty_cmd;
+use super::helpers::detect_textual_exec_tool_call;
+use crate::config::constants::tools;
 use crate::config::models::{ModelId, Provider as ModelProvider};
 use crate::config::types::{ReasoningEffortLevel, SystemPromptMode, VerbosityLevel};
 use crate::core::agent::completion::{check_completion_indicators, check_for_response_loop};
@@ -372,11 +373,11 @@ impl AgentRunner {
                 // HP-4: Detect textual commands in empty/near-empty responses if no structured tool calls
                 if effective_tool_calls.is_none()
                     && response.content_text().len() < 150
-                    && let Some(args_value) = detect_textual_run_pty_cmd(response.content_text())
+                    && let Some(args_value) = detect_textual_exec_tool_call(response.content_text())
                 {
                     let tc = ToolCall::function(
                         format!("call_text_{}", turn),
-                        "run_pty_command".to_string(),
+                        tools::UNIFIED_EXEC.to_string(),
                         args_value.to_string(),
                     );
                     effective_tool_calls = Some(vec![tc]);
@@ -429,17 +430,18 @@ impl AgentRunner {
                     .await?;
                 }
 
-                let had_effective_pty_tool_call =
+                let had_effective_shell_tool_call =
                     effective_tool_calls.as_ref().is_some_and(|calls| {
                         calls.iter().any(|tc| {
-                            tc.function.as_ref().map(|f| f.name.as_str()) == Some("run_pty_command")
+                            tc.function.as_ref().map(|f| f.name.as_str())
+                                == Some(tools::UNIFIED_EXEC)
                         })
                     });
                 let had_tool_call = response
                     .tool_calls
                     .as_ref()
                     .is_some_and(|tc| !tc.is_empty())
-                    || had_effective_pty_tool_call;
+                    || had_effective_shell_tool_call;
                 if had_tool_call {
                     let loops = controller.state.register_tool_loop();
                     if loops >= controller.state.constraints.max_tool_loops {

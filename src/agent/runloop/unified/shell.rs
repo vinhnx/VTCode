@@ -23,13 +23,13 @@ const RUN_COMMAND_PREFIX_WRAPPERS: [&str; 9] = [
 /// - "run git status"
 /// - "run cargo build"
 ///
-/// And converts them directly to run_pty_cmd tool calls, bypassing LLM interpretation.
+/// And converts them directly to unified_exec tool calls, bypassing LLM interpretation.
 pub(crate) fn detect_explicit_run_command(input: &str) -> Option<(String, serde_json::Value)> {
     let trimmed = input.trim();
 
     if let Some(command) = detect_show_diff_command(trimmed) {
         return Some((
-            tools::RUN_PTY_CMD.to_string(),
+            tools::UNIFIED_EXEC.to_string(),
             json!({
                 "command": command
             }),
@@ -69,7 +69,7 @@ pub(crate) fn detect_explicit_run_command(input: &str) -> Option<(String, serde_
         "command": normalized_command
     });
 
-    Some((tools::RUN_PTY_CMD.to_string(), args))
+    Some((tools::UNIFIED_EXEC.to_string(), args))
 }
 
 fn detect_show_diff_command(input: &str) -> Option<String> {
@@ -447,7 +447,7 @@ mod tests {
         let result = detect_explicit_run_command("run ls -a");
         assert!(result.is_some());
         let (tool_name, args) = result.unwrap();
-        assert_eq!(tool_name, "run_pty_cmd");
+        assert_eq!(tool_name, "unified_exec");
         assert_eq!(args["command"], "ls -a");
     }
 
@@ -456,7 +456,7 @@ mod tests {
         let result = detect_explicit_run_command("run git status");
         assert!(result.is_some());
         let (tool_name, args) = result.unwrap();
-        assert_eq!(tool_name, "run_pty_cmd");
+        assert_eq!(tool_name, "unified_exec");
         assert_eq!(args["command"], "git status");
     }
 
@@ -465,7 +465,7 @@ mod tests {
         let result = detect_explicit_run_command("run cargo build --release");
         assert!(result.is_some());
         let (tool_name, args) = result.unwrap();
-        assert_eq!(tool_name, "run_pty_cmd");
+        assert_eq!(tool_name, "unified_exec");
         assert_eq!(args["command"], "cargo build --release");
     }
 
@@ -474,7 +474,7 @@ mod tests {
         let result = detect_explicit_run_command("Run npm install");
         assert!(result.is_some());
         let (tool_name, args) = result.unwrap();
-        assert_eq!(tool_name, "run_pty_cmd");
+        assert_eq!(tool_name, "unified_exec");
         assert_eq!(args["command"], "npm install");
     }
 
@@ -513,7 +513,7 @@ mod tests {
         let result = detect_explicit_run_command("show diff src/main.rs");
         assert!(result.is_some());
         let (tool_name, args) = result.expect("direct command expected");
-        assert_eq!(tool_name, "run_pty_cmd");
+        assert_eq!(tool_name, "unified_exec");
         assert_eq!(args["command"], "git diff -- src/main.rs");
     }
 

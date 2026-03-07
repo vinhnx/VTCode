@@ -48,7 +48,7 @@ pub struct AgentConfig {
     /// When enabled, tools return dual-channel output:
     /// - llm_content: Concise summary sent to LLM (token-optimized, 53-95% reduction)
     /// - ui_content: Rich output displayed to user (full details preserved)
-    ///   Applies to: grep_file, list_files, read_file, run_pty_cmd, write_file, edit_file
+    ///   Applies to: unified_search, unified_file, unified_exec
     ///   Default: true (opt-out for compatibility), recommended for production use
     #[serde(default = "default_enable_split_tool_results")]
     pub enable_split_tool_results: bool,

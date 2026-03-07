@@ -11,6 +11,7 @@ use std::sync::Arc;
 use vtcode_core::config::constants::tools;
 use vtcode_core::core::interfaces::SessionMode;
 use vtcode_core::llm::provider::ToolCall as ProviderToolCall;
+use vtcode_core::tools::tool_intent;
 
 use super::super::types::{RunTerminalMode, SessionHandle, ToolCallResult};
 
@@ -186,7 +187,7 @@ impl ZedAgent {
         session_id: &acp::SessionId,
         args: &Value,
     ) -> ToolExecutionReport {
-        if tool_name == tools::RUN_PTY_CMD
+        if should_route_terminal_via_client(tool_name, args)
             && let Some(report) = self
                 .execute_terminal_via_client(tool_name, client, session_id, args)
                 .await
@@ -343,5 +344,15 @@ impl ZedAgent {
             Vec::new(),
             payload,
         ))
+    }
+}
+
+fn should_route_terminal_via_client(tool_name: &str, args: &Value) -> bool {
+    match tool_name {
+        tools::RUN_PTY_CMD => true,
+        tools::UNIFIED_EXEC => tool_intent::unified_exec_action(args)
+            .map(|action| action.eq_ignore_ascii_case("run"))
+            .unwrap_or(false),
+        _ => false,
     }
 }

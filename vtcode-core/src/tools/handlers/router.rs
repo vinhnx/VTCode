@@ -52,7 +52,7 @@ fn normalize_router_tool_name(tool_name: &str) -> Option<String> {
 
     let mapped = match normalized.as_str() {
         "exec_code" | "run_code" | "run_command" | "run_command_pty" | "container.exec"
-        | "bash" => "run_pty_cmd",
+        | "bash" => "unified_exec",
         "search_text" => "grep_file",
         "read_file" => "read_file",
         "write_file" => "write_file",
@@ -486,11 +486,11 @@ mod tests {
     fn test_normalize_router_tool_name_exec_code_label() {
         assert_eq!(
             normalize_router_tool_name("Exec code").as_deref(),
-            Some("run_pty_cmd")
+            Some("unified_exec")
         );
         assert_eq!(
             normalize_router_tool_name("run command (PTY)").as_deref(),
-            Some("run_pty_cmd")
+            Some("unified_exec")
         );
     }
 
@@ -498,14 +498,14 @@ mod tests {
     fn test_suggest_similar_tool_names_uses_normalized_form() {
         let mut handlers = HashMap::new();
         handlers.insert(
-            "run_pty_cmd".to_string(),
+            "unified_exec".to_string(),
             DispatchEntry {
-                canonical_name: "run_pty_cmd".to_string(),
+                canonical_name: "unified_exec".to_string(),
                 handler: Arc::new(MockHandler) as Arc<dyn ToolHandler>,
             },
         );
 
         let suggestions = suggest_similar_tool_names("Exec code", &handlers);
-        assert_eq!(suggestions, vec!["run_pty_cmd".to_string()]);
+        assert_eq!(suggestions, vec!["unified_exec".to_string()]);
     }
 }

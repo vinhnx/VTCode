@@ -78,26 +78,48 @@ pub fn normalized_command_value(args: &Value) -> Result<Option<Value>, &'static 
         .and_then(|normalized| normalized.get("command").cloned()))
 }
 
-pub fn command_text(args: &Value) -> Result<Option<String>, &'static str> {
+pub fn command_words(args: &Value) -> Result<Option<Vec<String>>, &'static str> {
     let Some(command) = normalized_command_value(args)? else {
         return Ok(None);
     };
 
-    match command {
-        Value::String(command) => Ok(Some(command)),
-        Value::Array(parts) => {
-            let parts = parts
-                .iter()
-                .map(|value| value.as_str().ok_or(COMMAND_VALUE_TYPE_ERROR))
-                .collect::<Result<Vec<_>, _>>()?;
-            if parts.is_empty() {
-                Ok(None)
-            } else {
-                Ok(Some(shell_words::join(parts)))
-            }
+    let mut parts = match command {
+        Value::String(command) => {
+            shell_words::split(&command).map_err(|_| COMMAND_VALUE_TYPE_ERROR)?
         }
-        _ => Err(COMMAND_VALUE_TYPE_ERROR),
+        Value::Array(values) => values
+            .iter()
+            .map(|value| {
+                value
+                    .as_str()
+                    .map(ToOwned::to_owned)
+                    .ok_or(COMMAND_VALUE_TYPE_ERROR)
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+        _ => return Err(COMMAND_VALUE_TYPE_ERROR),
+    };
+
+    if let Some(extra_args) = args.get("args").and_then(Value::as_array) {
+        for value in extra_args {
+            let Some(part) = value.as_str() else {
+                return Err(COMMAND_VALUE_TYPE_ERROR);
+            };
+            parts.push(part.to_string());
+        }
     }
+
+    if parts.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(parts))
+    }
+}
+
+pub fn command_text(args: &Value) -> Result<Option<String>, &'static str> {
+    let Some(parts) = command_words(args)? else {
+        return Ok(None);
+    };
+    Ok(Some(shell_words::join(parts.iter().map(String::as_str))))
 }
 
 pub fn interactive_input_text(args: &Value) -> Option<&str> {
@@ -109,11 +131,63 @@ pub fn interactive_input_text(args: &Value) -> Option<&str> {
         .filter(|value| !value.is_empty())
 }
 
+pub fn session_id_text(args: &Value) -> Option<&str> {
+    args.get("session_id")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+}
+
+pub fn working_dir_text_from_payload(payload: &serde_json::Map<String, Value>) -> Option<&str> {
+    payload
+        .get("working_dir")
+        .or_else(|| payload.get("cwd"))
+        .or_else(|| payload.get("workdir"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+}
+
+pub fn working_dir_text(args: &Value) -> Option<&str> {
+    args.as_object().and_then(working_dir_text_from_payload)
+}
+
+pub fn normalize_shell_args(args: &Value) -> Result<Value, &'static str> {
+    let mut normalized = match normalize_indexed_command_args(args)? {
+        Some(value) => value,
+        None => args.clone(),
+    };
+
+    let Some(payload) = normalized.as_object_mut() else {
+        return Ok(normalized);
+    };
+
+    if payload.get("command").is_none() {
+        if let Some(command) = payload.get("cmd").cloned() {
+            payload.insert("command".to_string(), command);
+        } else if let Some(command) = payload.get("raw_command").cloned() {
+            payload.insert("command".to_string(), command);
+        }
+    }
+
+    if payload.get("input").is_none() {
+        if let Some(input) = payload.get("chars").cloned() {
+            payload.insert("input".to_string(), input);
+        } else if let Some(input) = payload.get("text").cloned() {
+            payload.insert("input".to_string(), input);
+        }
+    }
+
+    Ok(normalized)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        command_text, has_indexed_command_parts, interactive_input_text,
-        normalize_indexed_command_args, normalized_command_value, parse_indexed_command_parts,
+        command_text, command_words, has_indexed_command_parts, interactive_input_text,
+        normalize_indexed_command_args, normalize_shell_args, normalized_command_value,
+        parse_indexed_command_parts, session_id_text, working_dir_text,
+        working_dir_text_from_payload,
     };
     use serde_json::{Value, json};
 
@@ -207,10 +281,61 @@ mod tests {
     }
 
     #[test]
+    fn command_words_append_extra_args() {
+        let words = command_words(&json!({
+            "command": "cargo test",
+            "args": ["-p", "vtcode-core"]
+        }))
+        .expect("valid command")
+        .expect("command words");
+
+        assert_eq!(words, vec!["cargo", "test", "-p", "vtcode-core"]);
+    }
+
+    #[test]
     fn interactive_input_text_trims_whitespace() {
         assert_eq!(
             interactive_input_text(&json!({"chars": "  echo hi\n"})),
             Some("echo hi")
+        );
+    }
+
+    #[test]
+    fn session_id_text_trims_whitespace() {
+        assert_eq!(
+            session_id_text(&json!({"session_id": " run-1 "})),
+            Some("run-1")
+        );
+    }
+
+    #[test]
+    fn working_dir_text_accepts_aliases() {
+        assert_eq!(working_dir_text(&json!({"workdir": " src "})), Some("src"));
+        assert_eq!(working_dir_text(&json!({"cwd": "."})), Some("."));
+    }
+
+    #[test]
+    fn working_dir_text_from_payload_accepts_aliases() {
+        let value = json!({"workdir": " src "});
+        let payload = value.as_object().expect("object");
+        assert_eq!(working_dir_text_from_payload(payload), Some("src"));
+    }
+
+    #[test]
+    fn normalize_shell_args_maps_codex_fields() {
+        let normalized = normalize_shell_args(&json!({
+            "cmd": "echo hi",
+            "chars": "status\n"
+        }))
+        .expect("valid shell args");
+
+        assert_eq!(
+            normalized.get("command").and_then(Value::as_str),
+            Some("echo hi")
+        );
+        assert_eq!(
+            normalized.get("input").and_then(Value::as_str),
+            Some("status\n")
         );
     }
 }

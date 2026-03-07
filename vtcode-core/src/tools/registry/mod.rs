@@ -80,6 +80,7 @@ use inventory::ToolInventory;
 use policy::ToolPolicyGateway;
 use utils::normalize_tool_output;
 
+use crate::tools::exec_session::PipeSessionManager;
 use crate::tools::handlers::PlanModeState;
 pub(super) use crate::tools::pty::PtyManager;
 use crate::tools::result::ToolResult as SplitToolResult;
@@ -108,6 +109,7 @@ pub struct ToolRegistry {
     inventory: ToolInventory,
     policy_gateway: Arc<tokio::sync::RwLock<ToolPolicyGateway>>,
     pty_sessions: PtySessionManager,
+    pipe_sessions: PipeSessionManager,
     mcp_client: Arc<RwLock<Option<Arc<McpClient>>>>,
     mcp_tool_index: Arc<tokio::sync::RwLock<FxHashMap<String, Vec<String>>>>,
     mcp_reverse_index: Arc<tokio::sync::RwLock<FxHashMap<String, String>>>,

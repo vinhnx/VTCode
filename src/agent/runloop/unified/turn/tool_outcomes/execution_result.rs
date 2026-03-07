@@ -376,8 +376,11 @@ fn fallback_from_error(tool_name: &str, error_msg: &str) -> Option<(String, serd
     ) && let Some(session_id) = extract_pty_session_id_from_error(error_msg)
     {
         return Some((
-            tool_names::READ_PTY_SESSION.to_string(),
-            serde_json::json!({ "session_id": session_id }),
+            tool_names::UNIFIED_EXEC.to_string(),
+            serde_json::json!({
+                "action": "poll",
+                "session_id": session_id
+            }),
         ));
     }
 
@@ -1070,15 +1073,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn fallback_from_error_extracts_read_pty_session() {
+    fn fallback_from_error_extracts_unified_exec_poll() {
         let error =
             "Tool failed. Use read_pty_session with session_id=\"run-ab12\" instead of read_file.";
         let fallback = fallback_from_error(tool_names::UNIFIED_FILE, error);
         assert_eq!(
             fallback,
             Some((
-                tool_names::READ_PTY_SESSION.to_string(),
-                serde_json::json!({"session_id":"run-ab12"}),
+                tool_names::UNIFIED_EXEC.to_string(),
+                serde_json::json!({"action":"poll","session_id":"run-ab12"}),
             ))
         );
     }
