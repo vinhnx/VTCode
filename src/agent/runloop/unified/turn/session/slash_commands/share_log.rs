@@ -88,6 +88,11 @@ fn render_session_log_markdown(
                     .and_then(|value| value.get("name"))
                     .and_then(|value| value.as_str())
                     .unwrap_or("unknown");
+                let function_name =
+                    vtcode_core::tools::tool_intent::canonical_unified_exec_tool_name(
+                        function_name,
+                    )
+                    .unwrap_or(function_name);
                 markdown.push_str(&format!("- `{}`: `{}`\n", id, function_name));
 
                 if let Some(arguments) = function.and_then(|value| value.get("arguments")) {

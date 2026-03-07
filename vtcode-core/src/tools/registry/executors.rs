@@ -505,7 +505,7 @@ fn apply_runtime_sandbox_to_command(
     };
     if matches!(policy, SandboxPolicy::ExternalSandbox { .. }) {
         return Err(anyhow!(
-            "Sandbox mode 'external' is not supported by local run_pty_cmd execution. \
+            "Sandbox mode 'external' is not supported by local command-session execution. \
              Use `read_only`/`workspace_write` or disable sandbox for this run."
         ));
     }
@@ -1561,11 +1561,11 @@ impl ToolRegistry {
     async fn execute_run_pty_cmd(&self, args: Value) -> Result<Value> {
         let payload = args
             .as_object()
-            .ok_or_else(|| anyhow!("run_pty_cmd requires a JSON object"))?;
+            .ok_or_else(|| anyhow!("command execution requires a JSON object"))?;
 
         let (mut command, auto_raw_command) = parse_command_parts(
             payload,
-            "run_pty_cmd requires a 'command' value",
+            "command execution requires a 'command' value",
             "PTY command cannot be empty",
         )?;
         let requested_command = command.clone();

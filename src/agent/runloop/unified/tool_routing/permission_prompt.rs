@@ -19,15 +19,7 @@ use super::HitlDecision;
 
 fn shell_run_args<'a>(tool_name: &str, tool_args: Option<&'a Value>) -> Option<&'a Value> {
     let args = tool_args?;
-    match tool_name {
-        "run_pty_cmd" | "shell" => Some(args),
-        "unified_exec" | "exec_pty_cmd" | "exec" | "exec_command" => {
-            vtcode_core::tools::tool_intent::unified_exec_action(args)
-                .is_some_and(|action| action.eq_ignore_ascii_case("run"))
-                .then_some(args)
-        }
-        _ => None,
-    }
+    vtcode_core::tools::tool_intent::is_command_run_tool_call(tool_name, args).then_some(args)
 }
 
 fn normalized_shell_command_value(args: &Value) -> Option<Value> {

@@ -96,7 +96,7 @@ pub enum ToolEmitter {
         changes: HashMap<PathBuf, FileChange>,
         auto_approved: bool,
     },
-    /// Unified exec (exec_command/write_stdin)
+    /// Unified command-session execution
     UnifiedExec {
         command: Vec<String>,
         cwd: PathBuf,
@@ -357,7 +357,7 @@ impl ToolEmitter {
         match self {
             Self::Shell { .. } => "shell".to_string(),
             Self::ApplyPatch { .. } => "apply_patch".to_string(),
-            Self::UnifiedExec { .. } => "exec_command".to_string(),
+            Self::UnifiedExec { .. } => "unified_exec".to_string(),
             Self::Generic { tool_name } => tool_name.clone(),
         }
     }
@@ -458,7 +458,7 @@ mod tests {
             ExecCommandSource::Agent,
             None,
         );
-        assert_eq!(exec.tool_name(), "exec_command");
+        assert_eq!(exec.tool_name(), "unified_exec");
 
         let generic = ToolEmitter::generic("custom_tool");
         assert_eq!(generic.tool_name(), "custom_tool");

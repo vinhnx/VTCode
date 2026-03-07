@@ -493,6 +493,8 @@ fn build_structured_resume_lines(
 }
 
 fn format_resume_tool_header(tool_name: &str, tool_call_id: Option<&str>) -> String {
+    let tool_name = vtcode_core::tools::tool_intent::canonical_unified_exec_tool_name(tool_name)
+        .unwrap_or(tool_name);
     match tool_call_id {
         Some(id) if !id.trim().is_empty() && tool_name.trim().eq_ignore_ascii_case("tool") => {
             format!("Tool [tool_call_id: {}]:", id)

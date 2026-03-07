@@ -2,7 +2,6 @@ use crate::agent::runloop::mcp_events::McpPanelState;
 use crate::agent::runloop::unified::state::SessionStats;
 use anyhow::Result;
 use std::path::PathBuf;
-use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::tools::tool_intent;
 use vtcode_core::utils::ansi::AnsiRenderer;
@@ -30,13 +29,7 @@ fn collect_modified_files(modified_files: &[String]) -> Vec<PathBuf> {
 }
 
 fn is_run_pty_tool(name: &str, args_val: &serde_json::Value) -> bool {
-    if matches!(name, tool_names::RUN_PTY_CMD | "shell") {
-        return true;
-    }
-    if name == tool_names::UNIFIED_EXEC {
-        return tool_intent::unified_exec_action(args_val).unwrap_or("run") == "run";
-    }
-    false
+    tool_intent::is_command_run_tool_call(name, args_val)
 }
 
 fn compact_run_completion_line(

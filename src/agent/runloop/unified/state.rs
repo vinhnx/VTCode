@@ -62,12 +62,8 @@ pub(crate) struct SessionStats {
 
 impl SessionStats {
     pub(crate) fn record_tool(&mut self, name: &str) {
-        let normalized_name = match name {
-            n if n == tool_names::UNIFIED_EXEC || n == "shell" || n == "exec_pty_cmd" => {
-                tool_names::RUN_PTY_CMD
-            }
-            _ => name,
-        };
+        let normalized_name =
+            vtcode_core::tools::tool_intent::canonical_unified_exec_tool_name(name).unwrap_or(name);
         self.tools.insert(normalized_name.to_string());
     }
 
@@ -362,8 +358,9 @@ mod tests {
         stats.record_tool(tools::UNIFIED_EXEC);
         stats.record_tool("shell");
         stats.record_tool("exec_pty_cmd");
+        stats.record_tool(tools::EXEC_COMMAND);
 
-        assert_eq!(stats.sorted_tools(), vec![tools::RUN_PTY_CMD.to_string()]);
+        assert_eq!(stats.sorted_tools(), vec![tools::UNIFIED_EXEC.to_string()]);
     }
 
     #[test]

@@ -2,14 +2,14 @@
 //!
 //! Implements Cursor-style dynamic context discovery by writing large tool outputs
 //! to files instead of truncating them. This allows agents to retrieve the full
-//! output via `read_file` or search it with `grep_file` when needed.
+//! output via `unified_file` or search it with `unified_search` when needed.
 //!
 //! ## Design Philosophy
 //!
 //! Instead of truncating large tool responses (which loses data), we:
 //! 1. Write the full output to `.vtcode/context/tool_outputs/{tool}_{timestamp}.txt`
 //! 2. Return a file reference to the agent
-//! 3. Agent can use `read_file` with offset/limit or `grep_file` to explore
+//! 3. Agent can use `unified_file` with offset/limit or `unified_search` to explore
 //!
 //! This is more token-efficient as only necessary data is pulled into context.
 
@@ -35,17 +35,8 @@ const CONDENSE_TAIL_BYTES: usize = 4_000;
 const PTY_PREVIEW_TAIL_BYTES: usize = 2_500;
 const PTY_PREVIEW_MAX_LINES: usize = 40;
 
-fn is_pty_tool_name(tool_name: &str) -> bool {
-    matches!(
-        tool_name,
-        "run_pty_cmd"
-            | "send_pty_input"
-            | "read_pty_session"
-            | "unified_exec"
-            | "bash"
-            | "shell"
-            | "execute_code"
-    )
+fn is_command_session_tool_name(tool_name: &str) -> bool {
+    crate::tools::tool_intent::canonical_unified_exec_tool_name(tool_name).is_some()
 }
 
 fn floor_char_boundary(s: &str, index: usize) -> usize {
@@ -304,15 +295,8 @@ impl ToolOutputSpooler {
                 );
                 serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string())
             }
-        } else if (tool_name == "run_pty_cmd"
-            || tool_name == "send_pty_input"
-            || tool_name == "read_pty_session"
-            || tool_name == "unified_exec"
-            || tool_name == "bash"
-            || tool_name == "shell")
-            && !is_mcp
-        {
-            // For PTY-related tools (including unified_exec which delegates to run_pty_cmd),
+        } else if is_command_session_tool_name(tool_name) && !is_mcp {
+            // For command-session tools, including unified_exec and legacy PTY helpers,
             // extract the actual command output from the "output" field.
             // This ensures the spooled file contains the raw command output, not the JSON wrapper.
             //
@@ -441,7 +425,7 @@ impl ToolOutputSpooler {
         }
 
         let spool_result = self.spool_output(tool_name, &value, is_mcp).await?;
-        let condensed = if is_pty_tool_name(tool_name) {
+        let condensed = if is_command_session_tool_name(tool_name) {
             tail_preview_content(
                 &spool_result.content,
                 PTY_PREVIEW_TAIL_BYTES,
@@ -456,7 +440,7 @@ impl ToolOutputSpooler {
             Value::Object(map) => Value::Object(map),
             _ => json!({}),
         };
-        let is_pty_tool = is_pty_tool_name(tool_name);
+        let is_pty_tool = is_command_session_tool_name(tool_name);
         let use_output_field = is_pty_tool
             || response
                 .get("output")
@@ -841,7 +825,7 @@ mod tests {
         let value = json!({
             "output": output,
             "process_id": "run-abc123",
-            "follow_up_prompt": "Read more with read_pty_session session_id=\"run-abc123\".",
+            "follow_up_prompt": "Read more with unified_exec action=\"poll\" session_id=\"run-abc123\".",
             "truncated": true
         });
 

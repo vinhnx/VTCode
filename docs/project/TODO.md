@@ -2665,12 +2665,3 @@ check and fix @ file mention system and fix for all other cases.
   ]
 }
 ```
-
-===
-
-Future migration note: the main legacy cleanup candidates are the file aliases
-(`read_file`, `write_file`, `edit_file`, `grep_file`) and PTY-oriented helper
-names (`run_pty_cmd`, `send_pty_input`, `read_pty_session`,
-`list_pty_sessions`, `close_pty_session`, `execute_code`). Keep them working as
-compatibility routes for now, but treat the unified trio plus `apply_patch` as
-the long-term surface to preserve.

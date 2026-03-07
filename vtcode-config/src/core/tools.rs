@@ -264,17 +264,7 @@ const DEFAULT_TOOL_POLICIES: &[(&str, ToolPolicy)] = &[
     (tools::DELETE_FILE, ToolPolicy::Prompt),
     (tools::APPLY_PATCH, ToolPolicy::Prompt),
     (tools::SEARCH_REPLACE, ToolPolicy::Prompt),
-    // PTY/Terminal operations
-    (tools::RUN_PTY_CMD, ToolPolicy::Prompt),
-    (tools::CREATE_PTY_SESSION, ToolPolicy::Allow),
-    (tools::READ_PTY_SESSION, ToolPolicy::Allow),
-    (tools::LIST_PTY_SESSIONS, ToolPolicy::Allow),
-    (tools::RESIZE_PTY_SESSION, ToolPolicy::Allow),
-    (tools::SEND_PTY_INPUT, ToolPolicy::Prompt),
-    (tools::CLOSE_PTY_SESSION, ToolPolicy::Allow),
-    // Code execution (requires confirmation)
-    (tools::EXECUTE_CODE, ToolPolicy::Prompt),
-    // Canonical execution interface
+    // Canonical execution interface. Compatibility aliases normalize to this at runtime.
     (tools::UNIFIED_EXEC, ToolPolicy::Prompt),
 ];
 
@@ -288,6 +278,26 @@ mod tests {
         assert!(config.editor.enabled);
         assert!(config.editor.preferred_editor.is_empty());
         assert!(config.editor.suspend_tui);
+    }
+
+    #[test]
+    fn default_tool_policies_only_seed_canonical_exec_surface() {
+        let config = ToolsConfig::default();
+
+        assert_eq!(
+            config.policies.get(tools::UNIFIED_EXEC),
+            Some(&ToolPolicy::Prompt)
+        );
+        for legacy_tool in [
+            tools::RUN_PTY_CMD,
+            tools::READ_PTY_SESSION,
+            tools::LIST_PTY_SESSIONS,
+            tools::SEND_PTY_INPUT,
+            tools::CLOSE_PTY_SESSION,
+            tools::EXECUTE_CODE,
+        ] {
+            assert!(!config.policies.contains_key(legacy_tool));
+        }
     }
 
     #[test]

@@ -187,6 +187,40 @@ pub fn classify_tool_intent(tool_name: &str, args: &Value) -> ToolIntent {
         .unwrap_or_else(ToolIntent::mutating)
 }
 
+pub fn canonical_unified_exec_tool_name(tool_name: &str) -> Option<&'static str> {
+    match tool_name {
+        tools::UNIFIED_EXEC
+        | tools::RUN_PTY_CMD
+        | tools::SEND_PTY_INPUT
+        | tools::READ_PTY_SESSION
+        | tools::LIST_PTY_SESSIONS
+        | tools::CLOSE_PTY_SESSION
+        | tools::EXECUTE_CODE
+        | tools::EXEC_PTY_CMD
+        | tools::EXEC_COMMAND
+        | tools::WRITE_STDIN
+        | tools::SHELL
+        | "bash"
+        | "exec"
+        | "container.exec" => Some(tools::UNIFIED_EXEC),
+        _ => None,
+    }
+}
+
+pub fn is_command_run_tool_call(tool_name: &str, args: &Value) -> bool {
+    match tool_name {
+        tools::RUN_PTY_CMD | tools::SHELL | "bash" => true,
+        tools::UNIFIED_EXEC
+        | tools::EXEC_PTY_CMD
+        | tools::EXEC_COMMAND
+        | "exec"
+        | "container.exec" => unified_exec_action(args)
+            .map(|action| action.eq_ignore_ascii_case("run"))
+            .unwrap_or(false),
+        _ => false,
+    }
+}
+
 fn unified_file_intent(args: &Value) -> ToolIntent {
     let readonly_unified_action = unified_file_action(args)
         .map(|action| action.eq_ignore_ascii_case("read"))
@@ -440,8 +474,8 @@ pub fn normalize_unified_search_args(args: &Value) -> Value {
 #[cfg(test)]
 mod tests {
     use super::{
-        classify_tool_intent, is_parallel_safe_call, normalize_unified_search_args,
-        unified_file_action,
+        canonical_unified_exec_tool_name, classify_tool_intent, is_command_run_tool_call,
+        is_parallel_safe_call, normalize_unified_search_args, unified_file_action,
     };
     use crate::config::constants::tools;
     use serde_json::json;
@@ -643,5 +677,54 @@ mod tests {
         let list_intent = classify_tool_intent(tools::LIST_FILES, &json!({"path": "."}));
         assert!(!list_intent.mutating);
         assert!(!list_intent.destructive);
+    }
+
+    #[test]
+    fn canonical_unified_exec_tool_name_normalizes_exec_aliases() {
+        for alias in [
+            tools::UNIFIED_EXEC,
+            tools::RUN_PTY_CMD,
+            tools::SEND_PTY_INPUT,
+            tools::READ_PTY_SESSION,
+            tools::LIST_PTY_SESSIONS,
+            tools::CLOSE_PTY_SESSION,
+            tools::EXECUTE_CODE,
+            tools::EXEC_PTY_CMD,
+            tools::EXEC_COMMAND,
+            tools::WRITE_STDIN,
+            tools::SHELL,
+            "bash",
+            "exec",
+            "container.exec",
+        ] {
+            assert_eq!(
+                canonical_unified_exec_tool_name(alias),
+                Some(tools::UNIFIED_EXEC)
+            );
+        }
+    }
+
+    #[test]
+    fn is_command_run_tool_call_only_accepts_run_actions() {
+        assert!(is_command_run_tool_call(
+            tools::RUN_PTY_CMD,
+            &json!({"command": "cargo check"})
+        ));
+        assert!(is_command_run_tool_call(
+            tools::UNIFIED_EXEC,
+            &json!({"action": "run", "command": "cargo check"})
+        ));
+        assert!(is_command_run_tool_call(
+            tools::EXEC_COMMAND,
+            &json!({"cmd": "cargo check"})
+        ));
+        assert!(!is_command_run_tool_call(
+            tools::UNIFIED_EXEC,
+            &json!({"action": "poll", "session_id": "run-1"})
+        ));
+        assert!(!is_command_run_tool_call(
+            tools::WRITE_STDIN,
+            &json!({"session_id": "run-1", "chars": "q"})
+        ));
     }
 }

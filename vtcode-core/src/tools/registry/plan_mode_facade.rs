@@ -7,7 +7,8 @@ use super::ToolRegistry;
 impl ToolRegistry {
     /// Enable plan mode (read-only enforcement).
     ///
-    /// When enabled, mutating tools (write_file, apply_patch, run_pty_cmd, etc.)
+    /// When enabled, mutating tools (`unified_file` writes/edits, `apply_patch`,
+    /// `unified_exec` runs, etc.)
     /// are blocked and the agent can only read/analyze the codebase.
     pub fn enable_plan_mode(&self) {
         self.plan_read_only_mode

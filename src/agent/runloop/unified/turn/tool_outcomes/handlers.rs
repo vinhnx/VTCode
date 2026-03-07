@@ -439,25 +439,16 @@ fn read_file_limit_value(args: &Value) -> Option<usize> {
 }
 
 fn shell_run_signature(canonical_tool_name: &str, args: &Value) -> Option<String> {
-    let signature_tool_name = match canonical_tool_name {
-        tool_names::RUN_PTY_CMD | "shell" => tool_names::UNIFIED_EXEC,
-        tool_names::UNIFIED_EXEC | "exec_pty_cmd" | "exec" => {
-            if !tool_intent::unified_exec_action(args)
-                .map(|action| action.eq_ignore_ascii_case("run"))
-                .unwrap_or(false)
-            {
-                return None;
-            }
-            tool_names::UNIFIED_EXEC
-        }
-        _ => return None,
-    };
+    if !tool_intent::is_command_run_tool_call(canonical_tool_name, args) {
+        return None;
+    }
 
     let command = vtcode_core::tools::command_args::command_text(args)
         .ok()
         .flatten()?;
     Some(format!(
-        "{signature_tool_name}::{}",
+        "{}::{}",
+        tool_names::UNIFIED_EXEC,
         compact_loop_key_part(&command, 200)
     ))
 }
