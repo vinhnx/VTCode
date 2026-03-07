@@ -1,45 +1,52 @@
 use crate::config::constants::tools;
+use crate::tools::tool_intent;
 use serde_json::Value;
 
 /// Format tool result for display in the TUI.
 /// Limits verbose output from web_fetch to avoid overwhelming the terminal.
 #[inline]
 pub fn format_tool_result_for_display(tool_name: &str, result: &Value) -> String {
-    match tool_name {
-        tools::UNIFIED_SEARCH => format_unified_search_result_for_display(tool_name, result),
-        tools::RUN_PTY_CMD | tools::UNIFIED_EXEC | "shell" => {
-            // Extract errors + 2 context lines for build output
-            if let Some(obj) = result.as_object()
-                && let Some(stdout) = obj
-                    .get("stdout")
-                    .or_else(|| obj.get("output"))
-                    .and_then(|v| v.as_str())
-                && stdout.len() > 2000
-                && (stdout.contains("error") || stdout.contains("Error"))
-            {
-                let lines: Vec<&str> = stdout.lines().collect();
-                let mut extracted = Vec::new();
-                for (i, line) in lines.iter().enumerate() {
-                    if line.to_lowercase().contains("error") {
-                        let start = i.saturating_sub(2);
-                        let end = (i + 3).min(lines.len());
-                        extracted.extend_from_slice(&lines[start..end]);
-                        extracted.push("...");
-                    }
-                }
-                if !extracted.is_empty() {
-                    let compact = serde_json::json!({
-                        "exit_code": obj.get("exit_code"),
-                        "errors": extracted.join("\n"),
-                        "note": "Showing error lines + context only"
-                    });
-                    return format!("Tool {} result: {}", tool_name, compact);
+    let display_tool_name =
+        tool_intent::canonical_unified_exec_tool_name(tool_name).unwrap_or(tool_name);
+    let is_command_session_tool = display_tool_name == tools::UNIFIED_EXEC;
+
+    if display_tool_name == tools::UNIFIED_SEARCH {
+        return format_unified_search_result_for_display(display_tool_name, result);
+    }
+
+    if is_command_session_tool {
+        // Extract errors + 2 context lines for build output
+        if let Some(obj) = result.as_object()
+            && let Some(stdout) = obj
+                .get("stdout")
+                .or_else(|| obj.get("output"))
+                .and_then(|v| v.as_str())
+            && stdout.len() > 2000
+            && (stdout.contains("error") || stdout.contains("Error"))
+        {
+            let lines: Vec<&str> = stdout.lines().collect();
+            let mut extracted = Vec::new();
+            for (i, line) in lines.iter().enumerate() {
+                if line.to_lowercase().contains("error") {
+                    let start = i.saturating_sub(2);
+                    let end = (i + 3).min(lines.len());
+                    extracted.extend_from_slice(&lines[start..end]);
+                    extracted.push("...");
                 }
             }
-            format!("Tool {} result: {}", tool_name, result)
+            if !extracted.is_empty() {
+                let compact = serde_json::json!({
+                    "exit_code": obj.get("exit_code"),
+                    "errors": extracted.join("\n"),
+                    "note": "Showing error lines + context only"
+                });
+                return format!("Tool {} result: {}", display_tool_name, compact);
+            }
         }
-        _ => format!("Tool {} result: {}", tool_name, result),
+        return format!("Tool {} result: {}", display_tool_name, result);
     }
+
+    format!("Tool {} result: {}", display_tool_name, result)
 }
 
 fn format_unified_search_result_for_display(tool_name: &str, result: &Value) -> String {

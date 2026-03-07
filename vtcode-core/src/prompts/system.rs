@@ -1213,7 +1213,7 @@ mod tests {
 
         assert!(
             result.contains("READ-ONLY MODE"),
-            "Should detect read-only mode when no edit/write/bash tools available"
+            "Should detect read-only mode when no edit/write/exec tools available"
         );
         assert!(
             result.contains("cannot modify files"),

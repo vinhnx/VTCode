@@ -5,6 +5,7 @@
 //! and prioritize high-quality results in context windows.
 
 use crate::config::constants::tools;
+use crate::tools::tool_intent;
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -395,7 +396,7 @@ impl ResultScorer for ShellScorer {
     }
 
     fn tool_name(&self) -> &str {
-        "shell"
+        tools::UNIFIED_EXEC
     }
 }
 
@@ -416,7 +417,7 @@ impl ScorerRegistry {
             Box::new(FindScorer) as Box<dyn ResultScorer>,
         );
         scorers.insert(
-            "shell".to_string(),
+            tools::UNIFIED_EXEC.to_string(),
             Box::new(ShellScorer) as Box<dyn ResultScorer>,
         );
 
@@ -430,7 +431,9 @@ impl ScorerRegistry {
 
     /// Score a tool result
     pub fn score(&self, tool_name: &str, result: &Value) -> ResultMetadata {
-        if let Some(scorer) = self.scorers.get(tool_name) {
+        let canonical_tool_name =
+            tool_intent::canonical_unified_exec_tool_name(tool_name).unwrap_or(tool_name);
+        if let Some(scorer) = self.scorers.get(canonical_tool_name) {
             scorer.score(result)
         } else {
             // Default scoring for unknown tools
@@ -511,5 +514,18 @@ mod tests {
 
         let meta = registry.score("find", &result);
         assert_eq!(meta.result_count, 2);
+    }
+
+    #[test]
+    fn test_command_session_aliases_share_shell_scorer() {
+        let registry = ScorerRegistry::new();
+        let result = json!({"exit_code": 0, "stdout": "line1\nline2"});
+
+        let unified_meta = registry.score(tools::UNIFIED_EXEC, &result);
+        let legacy_meta = registry.score(tools::RUN_PTY_CMD, &result);
+
+        assert_eq!(legacy_meta.result_count, unified_meta.result_count);
+        assert_eq!(legacy_meta.confidence, unified_meta.confidence);
+        assert_eq!(legacy_meta.relevance, unified_meta.relevance);
     }
 }

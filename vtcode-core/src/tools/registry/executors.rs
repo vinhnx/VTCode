@@ -74,15 +74,7 @@ fn shell_run_payload<'a>(
 ) -> Option<&'a serde_json::Map<String, Value>> {
     let args_value = tool_args?;
     let args = args_value.as_object()?;
-    match tool_name {
-        "run_pty_cmd" | "shell" => Some(args),
-        "unified_exec" | "exec_pty_cmd" | "exec" | "exec_command" => {
-            tool_intent::unified_exec_action(args_value)
-                .is_some_and(|action| action.eq_ignore_ascii_case("run"))
-                .then_some(args)
-        }
-        _ => None,
-    }
+    tool_intent::is_command_run_tool_call(tool_name, args_value).then_some(args)
 }
 
 fn shell_working_dir_value(payload: &serde_json::Map<String, Value>) -> Option<&str> {
@@ -1157,21 +1149,21 @@ impl ToolRegistry {
             .with_context(|| format!("Invalid action: {}", action_str))?;
 
         match action {
-            UnifiedExecAction::Run => self.execute_run_exec_command(args).await,
-            UnifiedExecAction::Write => self.execute_send_pty_input(args).await,
-            UnifiedExecAction::Poll => self.execute_read_pty_session(args).await,
-            UnifiedExecAction::Continue => self.execute_continue_pty_session(args).await,
-            UnifiedExecAction::Inspect => self.execute_inspect_pty_output(args).await,
-            UnifiedExecAction::List => self.execute_list_pty_sessions().await,
-            UnifiedExecAction::Close => self.execute_close_pty_session(args).await,
+            UnifiedExecAction::Run => self.execute_command_session_run(args).await,
+            UnifiedExecAction::Write => self.execute_command_session_write(args).await,
+            UnifiedExecAction::Poll => self.execute_command_session_poll(args).await,
+            UnifiedExecAction::Continue => self.execute_command_session_continue(args).await,
+            UnifiedExecAction::Inspect => self.execute_command_session_inspect(args).await,
+            UnifiedExecAction::List => self.execute_command_session_list().await,
+            UnifiedExecAction::Close => self.execute_command_session_close(args).await,
             UnifiedExecAction::Code => self.execute_code(args).await,
         }
     }
 
-    async fn execute_run_exec_command(&self, args: Value) -> Result<Value> {
+    async fn execute_command_session_run(&self, args: Value) -> Result<Value> {
         let tty = args.get("tty").and_then(Value::as_bool).unwrap_or(false);
         if tty {
-            self.execute_run_pty_cmd(args).await
+            self.execute_command_session_run_pty(args).await
         } else {
             self.execute_run_pipe_cmd(args).await
         }
@@ -1204,7 +1196,7 @@ impl ToolRegistry {
                                 session_id = %session_id,
                                 "Auto-recovering unified_file read via unified_exec poll"
                             );
-                            match self.execute_read_pty_session(fallback_args).await {
+                            match self.execute_command_session_poll(fallback_args).await {
                                 Ok(mut recovered) => {
                                     if let Some(obj) = recovered.as_object_mut() {
                                         obj.insert("auto_recovered".to_string(), json!(true));
@@ -1527,23 +1519,23 @@ impl ToolRegistry {
     }
 
     pub(super) fn run_pty_cmd_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_run_pty_cmd(args).await })
+        Box::pin(async move { self.execute_command_session_run_pty(args).await })
     }
 
     pub(super) fn send_pty_input_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_send_pty_input(args).await })
+        Box::pin(async move { self.execute_command_session_write(args).await })
     }
 
     pub(super) fn read_pty_session_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_read_pty_session(args).await })
+        Box::pin(async move { self.execute_command_session_poll(args).await })
     }
 
     pub(super) fn list_pty_sessions_executor(&self, _args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_list_pty_sessions().await })
+        Box::pin(async move { self.execute_command_session_list().await })
     }
 
     pub(super) fn close_pty_session_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_close_pty_session(args).await })
+        Box::pin(async move { self.execute_command_session_close(args).await })
     }
 
     pub(super) fn get_errors_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
@@ -1558,7 +1550,7 @@ impl ToolRegistry {
     // INTERNAL IMPLEMENTATIONS
     // ============================================================
 
-    async fn execute_run_pty_cmd(&self, args: Value) -> Result<Value> {
+    async fn execute_command_session_run_pty(&self, args: Value) -> Result<Value> {
         let payload = args
             .as_object()
             .ok_or_else(|| anyhow!("command execution requires a JSON object"))?;
@@ -1991,7 +1983,7 @@ impl ToolRegistry {
         Ok(response)
     }
 
-    async fn execute_send_pty_input(&self, args: Value) -> Result<Value> {
+    async fn execute_command_session_write(&self, args: Value) -> Result<Value> {
         let payload = args
             .as_object()
             .ok_or_else(|| anyhow!("command session write requires a JSON object"))?;
@@ -2071,7 +2063,7 @@ impl ToolRegistry {
         Ok(response)
     }
 
-    async fn execute_read_pty_session(&self, args: Value) -> Result<Value> {
+    async fn execute_command_session_poll(&self, args: Value) -> Result<Value> {
         let payload = args
             .as_object()
             .ok_or_else(|| anyhow!("command session read requires a JSON object"))?;
@@ -2127,20 +2119,20 @@ impl ToolRegistry {
         Ok(response)
     }
 
-    async fn execute_continue_pty_session(&self, args: Value) -> Result<Value> {
+    async fn execute_command_session_continue(&self, args: Value) -> Result<Value> {
         if args
             .get("input")
             .or_else(|| args.get("chars"))
             .or_else(|| args.get("text"))
             .is_some()
         {
-            self.execute_send_pty_input(args).await
+            self.execute_command_session_write(args).await
         } else {
-            self.execute_read_pty_session(args).await
+            self.execute_command_session_poll(args).await
         }
     }
 
-    async fn execute_inspect_pty_output(&self, args: Value) -> Result<Value> {
+    async fn execute_command_session_inspect(&self, args: Value) -> Result<Value> {
         let payload = args
             .as_object()
             .ok_or_else(|| anyhow!("inspect requires a JSON object"))?;
@@ -2198,7 +2190,7 @@ impl ToolRegistry {
             }
 
             let read_result = self
-                .execute_read_pty_session(Value::Object(read_args))
+                .execute_command_session_poll(Value::Object(read_args))
                 .await
                 .context("Failed to inspect command session output")?;
             read_result
@@ -2238,12 +2230,12 @@ impl ToolRegistry {
         Ok(response)
     }
 
-    async fn execute_list_pty_sessions(&self) -> Result<Value> {
+    async fn execute_command_session_list(&self) -> Result<Value> {
         let sessions = self.list_exec_sessions().await;
         Ok(json!({ "sessions": sessions }))
     }
 
-    async fn execute_close_pty_session(&self, args: Value) -> Result<Value> {
+    async fn execute_command_session_close(&self, args: Value) -> Result<Value> {
         let _payload = args
             .as_object()
             .ok_or_else(|| anyhow!("command session close requires a JSON object"))?;
@@ -2616,6 +2608,21 @@ fn parse_command_parts(
     missing_error: &str,
     empty_error: &str,
 ) -> Result<(Vec<String>, Option<String>)> {
+    let normalized_payload = (!payload.contains_key("command")
+        && (payload.contains_key("cmd")
+            || payload.contains_key("raw_command")
+            || payload.contains_key("command.0")
+            || payload.contains_key("command.1")))
+    .then(|| {
+        crate::tools::command_args::normalize_shell_args(&Value::Object(payload.clone()))
+            .map_err(|error| anyhow!(error))
+    })
+    .transpose()?;
+    let payload = normalized_payload
+        .as_ref()
+        .and_then(Value::as_object)
+        .unwrap_or(payload);
+
     let (mut parts, raw_command) = match payload.get("command") {
         Some(Value::String(command)) => {
             // Preserve the original command string to avoid splitting shell operators
@@ -3215,7 +3222,7 @@ mod unified_action_error_tests {
 mod sandbox_runtime_tests {
     use super::{
         apply_runtime_sandbox_to_command, build_shell_execution_plan,
-        enforce_sandbox_preflight_guards, parse_requested_sandbox_permissions,
+        enforce_sandbox_preflight_guards, parse_command_parts, parse_requested_sandbox_permissions,
         sandbox_policy_from_runtime_config,
     };
     use crate::sandboxing::{
@@ -3438,6 +3445,35 @@ mod sandbox_runtime_tests {
             transformed.iter().any(|arg| arg.contains(&needle)),
             "transformed sandbox command should include additional writable root"
         );
+    }
+
+    #[test]
+    fn parse_command_parts_accepts_cmd_alias() {
+        let payload = json!({
+            "cmd": ["git", "status"],
+            "args": ["--short"]
+        });
+        let payload = payload.as_object().expect("payload object");
+
+        let (parts, raw_command) = parse_command_parts(payload, "missing command", "empty command")
+            .expect("cmd alias should normalize");
+
+        assert_eq!(parts, vec!["git", "status", "--short"]);
+        assert!(raw_command.is_none());
+    }
+
+    #[test]
+    fn parse_command_parts_accepts_raw_command_alias() {
+        let payload = json!({
+            "raw_command": "cargo check -p vtcode-core"
+        });
+        let payload = payload.as_object().expect("payload object");
+
+        let (parts, raw_command) = parse_command_parts(payload, "missing command", "empty command")
+            .expect("raw_command alias should normalize");
+
+        assert_eq!(parts, vec!["cargo", "check", "-p", "vtcode-core"]);
+        assert_eq!(raw_command.as_deref(), Some("cargo check -p vtcode-core"));
     }
 
     #[test]

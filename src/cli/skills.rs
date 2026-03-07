@@ -29,7 +29,7 @@ pub async fn handle_skills_validate_all(options: &SkillsCommandOptions) -> Resul
                     "  2. Skills marked with   work but require following fallback instructions"
                 );
                 println!(
-                    "  3. For incompatible skills, use the suggested Python libraries with execute_code"
+                    "  3. For incompatible skills, use the suggested Python libraries with `unified_exec` (action='code')"
                 );
                 println!("  4. Check 'vtcode skills info <name>' for detailed compatibility info");
             }

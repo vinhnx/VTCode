@@ -12,7 +12,7 @@ use crate::core::loop_detector::LoopDetector;
 use crate::tools::apply_patch::decode_apply_patch_input;
 use crate::tools::command_args::{command_text, interactive_input_text};
 use crate::tools::tool_intent::{
-    classify_tool_intent, unified_exec_action, unified_file_action, unified_search_action,
+    self, classify_tool_intent, unified_exec_action, unified_file_action, unified_search_action,
 };
 use anyhow::{Context, Result};
 use hashbrown::{HashMap, HashSet};
@@ -27,8 +27,7 @@ use tracing::warn;
 const VERIFICATION_REQUIRED_TOOLS: &[&str] = &[
     tools::WRITE_FILE,
     tools::EDIT_FILE,
-    "shell",
-    tools::RUN_PTY_CMD,
+    tools::UNIFIED_EXEC,
     tools::CREATE_PTY_SESSION,
 ];
 
@@ -77,6 +76,22 @@ pub struct AutonomousExecutor {
 }
 
 impl AutonomousExecutor {
+    #[inline]
+    fn canonical_tool_key(tool_name: &str) -> &str {
+        tool_intent::canonical_unified_exec_tool_name(tool_name).unwrap_or(tool_name)
+    }
+
+    #[inline]
+    fn is_command_session_tool(tool_name: &str) -> bool {
+        tool_intent::canonical_unified_exec_tool_name(tool_name).is_some()
+    }
+
+    #[inline]
+    fn is_command_session_run(tool_name: &str, args: &Value) -> bool {
+        tool_intent::is_command_run_tool_call(tool_name, args)
+            || (tool_name == tools::UNIFIED_EXEC && unified_exec_action(args).is_none())
+    }
+
     pub fn new() -> Self {
         Self::with_loop_detector(Arc::new(RwLock::new(LoopDetector::new())))
     }
@@ -149,19 +164,21 @@ impl AutonomousExecutor {
     /// Check if tool should be blocked due to loop detection or circuit breaker
     /// Returns Some(message) if blocked, None if allowed
     pub fn should_block(&self, tool_name: &str, _args: &Value) -> Option<String> {
+        let tool_key = Self::canonical_tool_key(tool_name);
+
         // Check circuit breaker first (fail fast)
-        if !self.circuit_breaker.allow_request_for_tool(tool_name) {
+        if !self.circuit_breaker.allow_request_for_tool(tool_key) {
             return Some(format!(
                 "Tool '{}' blocked by circuit breaker due to repeated failures. \
                  Cooling down before retrying.",
-                tool_name
+                tool_key
             ));
         }
 
-        if self.is_rate_limited(tool_name) {
+        if self.is_rate_limited(tool_key) {
             return Some(format!(
                 "Tool '{}' temporarily blocked: rate limit exceeded ({} calls in {:?}).",
-                tool_name, self.rate_limit_max_calls, self.rate_limit_window
+                tool_key, self.rate_limit_max_calls, self.rate_limit_window
             ));
         }
 
@@ -169,30 +186,27 @@ impl AutonomousExecutor {
         match self.loop_detector.try_read() {
             Ok(detector) => {
                 // Check if hard limit already exceeded
-                if detector.is_hard_limit_exceeded(tool_name) {
+                if detector.is_hard_limit_exceeded(tool_key) {
                     return Some(format!(
                         "Tool '{}' blocked: hard limit exceeded. Agent is stuck in a loop.",
-                        tool_name
+                        tool_key
                     ));
                 }
 
                 // Check call count and provide early warning
-                let count = detector.get_call_count(tool_name);
+                let count = detector.get_call_count(tool_key);
                 if count >= 3
-                    && let Some(suggestion) = detector.suggest_alternative(tool_name)
+                    && let Some(suggestion) = detector.suggest_alternative(tool_key)
                 {
                     return Some(format!(
                         "Tool '{}' called {} times. Consider alternative approach:\n{}",
-                        tool_name, count, suggestion
+                        tool_key, count, suggestion
                     ));
                 }
             }
             Err(_) => {
                 // If we can't get the lock, don't block execution
-                tracing::debug!(
-                    "Could not acquire loop detector read lock for {}",
-                    tool_name
-                );
+                tracing::debug!("Could not acquire loop detector read lock for {}", tool_key);
             }
         }
         None
@@ -201,9 +215,10 @@ impl AutonomousExecutor {
     /// Record tool call in loop detector
     /// Returns warning message if loop detected
     pub fn record_tool_call(&self, tool_name: &str, args: &Value) -> Option<String> {
-        self.record_rate_history(tool_name);
+        let tool_key = Self::canonical_tool_key(tool_name);
+        self.record_rate_history(tool_key);
         if let Ok(mut detector) = self.loop_detector.write() {
-            detector.record_call(tool_name, args)
+            detector.record_call(tool_key, args)
         } else {
             None
         }
@@ -219,15 +234,11 @@ impl AutonomousExecutor {
                     if action.eq_ignore_ascii_case("patch")
                         || action.eq_ignore_ascii_case("delete")
             ),
-            "shell" | tools::RUN_PTY_CMD => command_text(args)
+            _ if Self::is_command_session_run(tool_name, args) => command_text(args)
                 .ok()
                 .flatten()
                 .is_some_and(|cmd| self.is_destructive_command(&cmd)),
-            tools::UNIFIED_EXEC => match unified_exec_action(args) {
-                Some(action) if action.eq_ignore_ascii_case("run") => command_text(args)
-                    .ok()
-                    .flatten()
-                    .is_some_and(|cmd| self.is_destructive_command(&cmd)),
+            _ if Self::is_command_session_tool(tool_name) => match unified_exec_action(args) {
                 Some(action)
                     if action.eq_ignore_ascii_case("write")
                         || action.eq_ignore_ascii_case("continue") =>
@@ -279,21 +290,14 @@ impl AutonomousExecutor {
     pub fn validate_args(&self, tool_name: &str, args: &Value) -> Result<()> {
         match tool_name {
             tools::WRITE_FILE | tools::EDIT_FILE => self.validate_file_path(args.get("path"))?,
-            "shell" | tools::RUN_PTY_CMD => {
+            _ if Self::is_command_session_run(tool_name, args) => {
                 self.validate_command_text(
                     &command_text(args)
                         .map_err(anyhow::Error::msg)?
                         .context("Missing or invalid 'command' argument")?,
                 )?;
             }
-            tools::UNIFIED_EXEC => match unified_exec_action(args) {
-                Some(action) if action.eq_ignore_ascii_case("run") => {
-                    self.validate_command_text(
-                        &command_text(args)
-                            .map_err(anyhow::Error::msg)?
-                            .context("Missing or invalid 'command' argument")?,
-                    )?;
-                }
+            _ if Self::is_command_session_tool(tool_name) => match unified_exec_action(args) {
                 Some(action)
                     if action.eq_ignore_ascii_case("write")
                         || action.eq_ignore_ascii_case("continue") =>
@@ -468,10 +472,7 @@ impl AutonomousExecutor {
                 old_str.lines().take(3).collect::<Vec<_>>().join("\n  "),
                 new_str.lines().take(3).collect::<Vec<_>>().join("\n  ")
             )
-        } else if tool_name == "shell"
-            || tool_name == tools::RUN_PTY_CMD
-            || (tool_name == tools::UNIFIED_EXEC && unified_exec_action(args) == Some("run"))
-        {
+        } else if Self::is_command_session_run(tool_name, args) {
             let cmd = command_text(args)
                 .ok()
                 .flatten()
@@ -501,11 +502,12 @@ impl AutonomousExecutor {
     }
 
     fn requires_preview(&self, tool_name: &str, args: &Value) -> bool {
-        if self.verification_tools.contains(tool_name) {
+        let canonical_tool_name = Self::canonical_tool_key(tool_name);
+        if self.verification_tools.contains(canonical_tool_name) {
             return true;
         }
 
-        match tool_name {
+        match canonical_tool_name {
             tools::UNIFIED_FILE => matches!(
                 unified_file_action(args),
                 Some("write" | "edit" | "move" | "copy")
@@ -519,18 +521,20 @@ impl AutonomousExecutor {
 
     /// Record execution result for statistics tracking and circuit breaker
     pub fn record_execution(&self, tool_name: &str, success: bool) {
+        let tool_key = Self::canonical_tool_key(tool_name);
+
         // Update circuit breaker
         if success {
-            self.circuit_breaker.record_success_for_tool(tool_name);
+            self.circuit_breaker.record_success_for_tool(tool_key);
         } else {
             // Note: We blindly treat all failures as circuit-breaking for now.
             // Ideally, the caller should specify if it's an arg error or system error.
             self.circuit_breaker
-                .record_failure_for_tool(tool_name, false);
+                .record_failure_for_tool(tool_key, false);
         }
 
         if let Ok(mut stats) = self.execution_stats.write() {
-            let entry = stats.entry(tool_name.to_string()).or_default();
+            let entry = stats.entry(tool_key.to_string()).or_default();
             entry.total_attempts += 1;
             if success {
                 entry.successful_executions += 1;
@@ -578,19 +582,22 @@ impl AutonomousExecutor {
     fn record_rate_history(&self, tool_name: &str) {
         let now = Instant::now();
         if let Ok(mut history) = self.rate_history.write() {
-            let entries = history.entry(tool_name.to_string()).or_default();
+            let entries = history
+                .entry(Self::canonical_tool_key(tool_name).to_string())
+                .or_default();
             entries.push_back(now);
             prune_expired_timestamps(entries, now, self.rate_limit_window);
         }
     }
 
     fn is_rate_limited(&self, tool_name: &str) -> bool {
+        let tool_key = Self::canonical_tool_key(tool_name);
         let now = Instant::now();
 
         // First, try with a read lock to check without modifying
         // This is the common fast path when there are no expired entries
         if let Ok(history) = self.rate_history.read() {
-            if let Some(entries) = history.get(tool_name) {
+            if let Some(entries) = history.get(tool_key) {
                 // Quick check: if all entries are within window and at limit, we're rate limited
                 let oldest_within_window = entries
                     .front()
@@ -606,7 +613,7 @@ impl AutonomousExecutor {
 
         // Fall back to write lock only when we need to clean up expired entries
         if let Ok(mut history) = self.rate_history.write() {
-            let entries = history.entry(tool_name.to_string()).or_default();
+            let entries = history.entry(tool_key.to_string()).or_default();
             prune_expired_timestamps(entries, now, self.rate_limit_window);
             return entries.len() >= self.rate_limit_max_calls;
         }
@@ -761,6 +768,20 @@ mod tests {
                 &json!({"action": "write", "session_id": "run-1", "input": "rm -rf /tmp/test"})
             ),
             AutonomousPolicy::RequireConfirmation
+        );
+    }
+
+    #[test]
+    fn test_exec_aliases_use_unified_exec_preview_policy() {
+        let executor = AutonomousExecutor::new();
+
+        assert_eq!(
+            executor.get_policy(tools::EXEC_COMMAND, &json!({"cmd": "echo hi"})),
+            AutonomousPolicy::VerifyThenExecute
+        );
+        assert_eq!(
+            executor.get_policy(tools::RUN_PTY_CMD, &json!({"command": "echo hi"})),
+            AutonomousPolicy::VerifyThenExecute
         );
     }
 

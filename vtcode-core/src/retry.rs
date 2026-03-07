@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use crate::config::constants::tools;
 use crate::error::{ErrorCategory, VtCodeError};
+use crate::tools::tool_intent;
 use crate::tools::unified_error::UnifiedToolError;
 use vtcode_commons::llm::{LLMError, LLMErrorMetadata};
 
@@ -251,15 +252,9 @@ pub fn decision_for_anyhow_error(
 }
 
 pub fn is_command_tool(tool_name: &str) -> bool {
-    matches!(
-        tool_name,
-        n if n == tools::RUN_PTY_CMD
-            || n == tools::UNIFIED_EXEC
-            || n == tools::CREATE_PTY_SESSION
-            || n == tools::SEND_PTY_INPUT
-            || n == "shell"
-            || n == "bash"
-    )
+    tool_name == tools::CREATE_PTY_SESSION
+        || tool_name == tools::SEND_PTY_INPUT
+        || tool_intent::canonical_unified_exec_tool_name(tool_name).is_some()
 }
 
 #[cfg(test)]
@@ -354,6 +349,24 @@ mod tests {
         assert!(decision.retryable);
         assert_eq!(decision.retry_after, Some(Duration::from_secs(9)));
         assert_eq!(decision.delay, Some(Duration::from_secs(9)));
+    }
+
+    #[test]
+    fn canonical_exec_aliases_are_command_tools() {
+        for alias in [
+            tools::RUN_PTY_CMD,
+            tools::EXEC_COMMAND,
+            tools::WRITE_STDIN,
+            tools::UNIFIED_EXEC,
+            "shell",
+            "bash",
+            "container.exec",
+        ] {
+            assert!(
+                is_command_tool(alias),
+                "expected {alias} to be a command tool"
+            );
+        }
     }
 
     #[test]

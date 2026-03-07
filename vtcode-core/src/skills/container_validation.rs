@@ -63,7 +63,6 @@ impl ContainerSkillsValidator {
             ],
             fallback_patterns: vec![
                 "vtcode does not currently support".to_string(),
-                "use execute_code".to_string(),
                 "use unified_exec".to_string(),
                 "openpyxl".to_string(),
                 "reportlab".to_string(),
@@ -98,7 +97,7 @@ impl ContainerSkillsValidator {
                 analysis: "Manifest sets disallow-container=true (VT Code-native only)".to_string(),
                 patterns_found: vec!["disallow-container".to_string()],
                 recommendations: vec![
-                    "Use VT Code-native execution paths (code_execution/bash) instead of Anthropic container skills.".to_string(),
+                    "Use VT Code-native execution paths via `unified_exec` instead of Anthropic container skills.".to_string(),
                 ],
                 should_filter: false,
             };

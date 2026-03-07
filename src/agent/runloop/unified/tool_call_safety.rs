@@ -195,14 +195,7 @@ impl ToolCallSafetyValidator {
             vtcode_core::config::constants::tools::CREATE_FILE,
             vtcode_core::config::constants::tools::GREP_FILE,
             vtcode_core::config::constants::tools::LIST_FILES,
-            vtcode_core::config::constants::tools::RUN_PTY_CMD,
-            vtcode_core::config::constants::tools::SEND_PTY_INPUT,
             vtcode_core::config::constants::tools::CREATE_PTY_SESSION,
-            vtcode_core::config::constants::tools::READ_PTY_SESSION,
-            vtcode_core::config::constants::tools::LIST_PTY_SESSIONS,
-            vtcode_core::config::constants::tools::CLOSE_PTY_SESSION,
-            vtcode_core::config::constants::tools::EXECUTE_CODE,
-            "shell",
         ]
         .into_iter()
         .filter(|tool_name| {

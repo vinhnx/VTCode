@@ -35,7 +35,7 @@ pub fn generate_tool_guidelines(
     let mut guidelines = Vec::new();
 
     // Detect tool availability
-    let has_bash = available_tools.iter().any(|t| t == TOOL_UNIFIED_EXEC);
+    let has_exec = available_tools.iter().any(|t| t == TOOL_UNIFIED_EXEC);
     let has_file = available_tools.iter().any(|t| t == TOOL_UNIFIED_FILE);
     let has_search = available_tools.iter().any(|t| t == TOOL_UNIFIED_SEARCH);
     let has_apply_patch = available_tools.iter().any(|t| t == TOOL_APPLY_PATCH);
@@ -45,7 +45,7 @@ pub fn generate_tool_guidelines(
             level,
             CapabilityLevel::Basic | CapabilityLevel::FileListing | CapabilityLevel::FileReading
         )
-    }) || (!has_bash && !has_file);
+    }) || (!has_exec && !has_file);
 
     // Read-only mode detection
     if read_only_mode {
@@ -57,7 +57,7 @@ pub fn generate_tool_guidelines(
     }
 
     // Tool preference guidelines
-    if has_bash && has_search {
+    if has_exec && has_search {
         guidelines.push(
             "**Tool Selection**: Prefer `unified_search` (action='grep' or 'list') over `unified_exec` \
              for file exploration - they're faster, provide structured output, and \
@@ -66,8 +66,8 @@ pub fn generate_tool_guidelines(
         );
     }
 
-    // Git diff guidance - requires bash to run git commands
-    if has_bash {
+    // Git diff guidance - requires command execution to run git commands
+    if has_exec {
         guidelines.push(
             "**Git Diff Requests**: When user asks to 'show diff', 'git diff', or 'view changes': \
              ALWAYS run `git diff -- <path>` via `unified_exec`. NEVER read file content and fabricate a diff - \
@@ -182,13 +182,13 @@ pub fn generate_tool_guidelines(
 pub fn infer_capability_level(available_tools: &[String]) -> CapabilityLevel {
     let has_search = available_tools.iter().any(|t| t == TOOL_UNIFIED_SEARCH);
     let has_file = available_tools.iter().any(|t| t == TOOL_UNIFIED_FILE);
-    let has_bash = available_tools.iter().any(|t| t == TOOL_UNIFIED_EXEC);
+    let has_exec = available_tools.iter().any(|t| t == TOOL_UNIFIED_EXEC);
 
     if has_search {
         CapabilityLevel::CodeSearch
     } else if has_file {
         CapabilityLevel::Editing
-    } else if has_bash {
+    } else if has_exec {
         CapabilityLevel::Bash
     } else {
         CapabilityLevel::Basic
@@ -205,7 +205,7 @@ mod tests {
         let guidelines = generate_tool_guidelines(&tools, None);
         assert!(
             guidelines.contains("READ-ONLY MODE"),
-            "Should detect read-only mode when edit/write/bash tools unavailable"
+            "Should detect read-only mode when edit/write/exec tools unavailable"
         );
         assert!(
             guidelines.contains("cannot modify files"),
@@ -219,11 +219,11 @@ mod tests {
         let guidelines = generate_tool_guidelines(&tools, None);
         assert!(
             guidelines.contains("Prefer `unified_search`"),
-            "Should suggest using search over bash"
+            "Should suggest using search over unified_exec"
         );
         assert!(
             guidelines.contains("unified_exec"),
-            "Should mention bash as alternative"
+            "Should mention unified_exec as alternative"
         );
     }
 
@@ -391,12 +391,12 @@ mod tests {
             "CodeSearch should have highest precedence"
         );
 
-        // Editing should take precedence over bash
+        // Editing should take precedence over command execution
         let tools = vec!["unified_exec".to_string(), "unified_file".to_string()];
         assert_eq!(
             infer_capability_level(&tools),
             CapabilityLevel::Editing,
-            "Editing should take precedence over Bash"
+            "Editing should take precedence over command execution"
         );
     }
 }

@@ -3,6 +3,7 @@
 //! Detects when the agent is stuck in repetitive patterns and suggests intervention.
 
 use crate::config::constants::{defaults, tools};
+use crate::tools::tool_intent;
 use hashbrown::{HashMap, HashSet};
 use std::collections::VecDeque;
 use std::time::Instant;
@@ -19,9 +20,6 @@ const MAX_SIMILAR_READ_TARGET_VARIANTS: usize = 5;
 const LEGACY_GREP_FILE: &str = "grep_file";
 const LEGACY_LIST_FILES: &str = "list_files";
 const LEGACY_SEARCH_TOOLS: &str = "search_tools";
-const LEGACY_EXEC_PTY_CMD: &str = "exec_pty_cmd";
-const LEGACY_EXEC: &str = "exec";
-const LEGACY_SHELL: &str = "shell";
 
 #[inline]
 fn base_tool_name(tool_name: &str) -> &str {
@@ -29,6 +27,11 @@ fn base_tool_name(tool_name: &str) -> &str {
         .split_once("::")
         .map(|(base, _)| base)
         .unwrap_or(tool_name)
+}
+
+#[inline]
+fn is_command_tool_name(tool_name: &str) -> bool {
+    tool_intent::canonical_unified_exec_tool_name(tool_name).is_some()
 }
 
 /// Normalize tool arguments for consistent loop detection.
@@ -496,12 +499,7 @@ impl LoopDetector {
                 MAX_READONLY_TOOL_CALLS
             }
             tools::WRITE_FILE | tools::EDIT_FILE | "apply_patch" => MAX_WRITE_TOOL_CALLS,
-            tools::RUN_PTY_CMD
-            | tools::EXECUTE_CODE
-            | LEGACY_EXEC_PTY_CMD
-            | LEGACY_EXEC
-            | tools::UNIFIED_EXEC
-            | LEGACY_SHELL => MAX_COMMAND_TOOL_CALLS,
+            _ if is_command_tool_name(base_name) => MAX_COMMAND_TOOL_CALLS,
             _ => MAX_OTHER_TOOL_CALLS,
         }
     }
@@ -509,15 +507,7 @@ impl LoopDetector {
     #[inline]
     fn should_enforce_identical_limit(tool_name: &str) -> bool {
         let base_name = base_tool_name(tool_name);
-        !matches!(
-            base_name,
-            tools::RUN_PTY_CMD
-                | tools::EXECUTE_CODE
-                | LEGACY_EXEC_PTY_CMD
-                | LEGACY_EXEC
-                | tools::UNIFIED_EXEC
-                | LEGACY_SHELL
-        )
+        !is_command_tool_name(base_name)
     }
 
     /// Suggest alternatives for stuck tools (extracted to static method for efficiency)
@@ -659,6 +649,16 @@ mod tests {
         assert!(detector.record_call(tools::RUN_PTY_CMD, &args).is_none());
         assert!(detector.record_call(tools::RUN_PTY_CMD, &args).is_none());
         assert!(detector.record_call(tools::RUN_PTY_CMD, &args).is_none());
+    }
+
+    #[test]
+    fn test_exec_command_alias_skips_identical_hard_stop() {
+        let mut detector = LoopDetector::new();
+        let args = json!({"cmd": "cargo test"});
+
+        assert!(detector.record_call(tools::EXEC_COMMAND, &args).is_none());
+        assert!(detector.record_call(tools::EXEC_COMMAND, &args).is_none());
+        assert!(detector.record_call(tools::EXEC_COMMAND, &args).is_none());
     }
 
     #[test]

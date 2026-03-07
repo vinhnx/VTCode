@@ -9,12 +9,13 @@ use tokio::time::Duration;
 use tracing::info;
 
 impl AgentRunner {
+    #[inline]
+    fn canonical_exec_request_name(tool_name: &str) -> &str {
+        tool_intent::canonical_unified_exec_tool_name(tool_name).unwrap_or(tool_name)
+    }
+
     async fn resolve_executable_tool_name(&self, tool_name: &str) -> Option<String> {
-        let requested_name = if tool_name == "shell" {
-            tools::UNIFIED_EXEC
-        } else {
-            tool_name
-        };
+        let requested_name = Self::canonical_exec_request_name(tool_name);
         let canonical_name = self
             .tool_registry
             .resolve_public_tool_name(requested_name)
@@ -31,11 +32,7 @@ impl AgentRunner {
         tool_name: &str,
         args: &Value,
     ) -> Result<String> {
-        let requested_name = if tool_name == "shell" {
-            tools::UNIFIED_EXEC
-        } else {
-            tool_name
-        };
+        let requested_name = Self::canonical_exec_request_name(tool_name);
 
         self.tool_registry
             .preflight_validate_call(requested_name, args)
@@ -93,21 +90,14 @@ impl AgentRunner {
         tool_name: &str,
         args: &Value,
     ) -> Result<Value> {
-        let resolved_tool_name = if tool_name == "shell" {
-            tools::UNIFIED_EXEC
+        let resolved_tool_name = Self::canonical_exec_request_name(tool_name);
+        let shell_command = if tool_intent::is_command_run_tool_call(tool_name, args)
+            || (resolved_tool_name == tools::UNIFIED_EXEC
+                && tool_intent::unified_exec_action(args).is_none())
+        {
+            command_args::command_text(args).ok().flatten()
         } else {
-            tool_name
-        };
-        let shell_command = match resolved_tool_name {
-            n if n == tools::RUN_PTY_CMD => command_args::command_text(args).ok().flatten(),
-            n if n == tools::UNIFIED_EXEC
-                && tool_intent::unified_exec_action(args)
-                    .map(|action| action.eq_ignore_ascii_case("run"))
-                    .unwrap_or(false) =>
-            {
-                command_args::command_text(args).ok().flatten()
-            }
-            _ => None,
+            None
         };
 
         // Enforce per-agent shell policies for shell-executed commands.

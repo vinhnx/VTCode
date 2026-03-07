@@ -5,6 +5,7 @@
 //! - Semantic context over volume
 
 use crate::config::constants::tools;
+use crate::tools::tool_intent;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -87,7 +88,9 @@ impl ContextOptimizer {
 
     /// Optimize tool result based on tool type and budget
     pub async fn optimize_result(&mut self, tool_name: &str, result: Value) -> Value {
-        let optimized = match tool_name {
+        let canonical_tool_name =
+            tool_intent::canonical_unified_exec_tool_name(tool_name).unwrap_or(tool_name);
+        let optimized = match canonical_tool_name {
             tools::UNIFIED_SEARCH => {
                 if result.get("matches").is_some() {
                     self.optimize_grep_result(result)
@@ -98,14 +101,13 @@ impl ContextOptimizer {
                 }
             }
             tools::READ_FILE => self.optimize_read_file_result(result),
-            tools::RUN_PTY_CMD | tools::UNIFIED_EXEC => self.optimize_command_result(result),
-            "shell" => self.optimize_command_result(result),
+            tools::UNIFIED_EXEC => self.optimize_command_result(result),
             _ => result,
         };
 
         // Estimate tokens (rough: 1 token ≈ 4 chars)
         self.history.push_back(ContextEntry {
-            tool_name: tool_name.to_string(),
+            tool_name: canonical_tool_name.to_string(),
             result: optimized.clone(),
         });
 
