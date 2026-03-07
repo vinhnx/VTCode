@@ -246,7 +246,9 @@ impl Session {
     }
 
     pub(crate) fn modal_state(&self) -> Option<&ModalState> {
-        self.active_overlay.as_ref().and_then(ActiveOverlay::as_modal)
+        self.active_overlay
+            .as_ref()
+            .and_then(ActiveOverlay::as_modal)
     }
 
     pub(crate) fn modal_state_mut(&mut self) -> Option<&mut ModalState> {
@@ -256,7 +258,9 @@ impl Session {
     }
 
     pub(crate) fn wizard_overlay(&self) -> Option<&WizardModalState> {
-        self.active_overlay.as_ref().and_then(ActiveOverlay::as_wizard)
+        self.active_overlay
+            .as_ref()
+            .and_then(ActiveOverlay::as_wizard)
     }
 
     pub(crate) fn wizard_overlay_mut(&mut self) -> Option<&mut WizardModalState> {
@@ -266,7 +270,9 @@ impl Session {
     }
 
     pub(crate) fn diff_preview_state(&self) -> Option<&DiffPreviewState> {
-        self.active_overlay.as_ref().and_then(ActiveOverlay::as_diff)
+        self.active_overlay
+            .as_ref()
+            .and_then(ActiveOverlay::as_diff)
     }
 
     pub(crate) fn diff_preview_state_mut(&mut self) -> Option<&mut DiffPreviewState> {

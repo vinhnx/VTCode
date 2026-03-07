@@ -90,9 +90,7 @@ impl ExecEventRecorder {
         if let Some(handle) = &self.thread_handle {
             handle.record_event(submission_id, turn_id, event.clone());
         }
-        if self.thread_handle.is_none() {
-            self.events.push(event);
-        }
+        self.events.push(event);
     }
 
     fn next_item_id(&mut self) -> String {
@@ -356,10 +354,7 @@ impl ExecEventRecorder {
             };
             self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
         }
-        self.thread_handle
-            .as_ref()
-            .map(ThreadRuntimeHandle::recent_events)
-            .unwrap_or(self.events)
+        self.events
     }
 }
 
@@ -442,5 +437,30 @@ mod tests {
             |record| matches!(record.event, ThreadEvent::TurnCompleted(_))
                 && record.submission_id.is_some()
         ));
+    }
+
+    #[test]
+    fn thread_backed_recorder_keeps_full_event_history_beyond_thread_buffer() {
+        let handle = ThreadManager::with_event_buffer_capacity(2)
+            .start_thread_with_identifier("thread", ThreadBootstrap::new(None));
+        let mut recorder = ExecEventRecorder::new("thread", None, Some(handle.clone()));
+
+        recorder.turn_started();
+        recorder.agent_message("first");
+        recorder.agent_message("second");
+        recorder.turn_completed();
+
+        let full_events = recorder.into_events();
+        let buffered_events = handle.recent_events();
+
+        assert_eq!(buffered_events.len(), 2);
+        assert!(full_events.len() > buffered_events.len());
+        assert_eq!(
+            full_events
+                .iter()
+                .filter(|event| matches!(event, ThreadEvent::ItemCompleted(_)))
+                .count(),
+            2
+        );
     }
 }
