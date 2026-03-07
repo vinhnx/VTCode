@@ -32,7 +32,7 @@ pub use cache::{CacheObserver, CacheStats, EvictionReason, LruCache, NoopObserve
 pub mod middleware;
 pub use middleware::{
     LoggingMiddleware, MetricsMiddleware, MetricsSnapshot, Middleware, MiddlewareChain,
-    NoopMiddleware, ToolRequest, ToolResponse,
+    MiddlewareResult, NoopMiddleware, ToolRequest, ToolResponse,
 };
 
 pub mod patterns;
@@ -46,6 +46,7 @@ pub use optimizer::{Optimization, OptimizationType, WorkflowOptimizer};
 
 pub use vtcode_core::tools::command;
 pub use vtcode_core::tools::names;
+pub use vtcode_core::tools::{UnifiedErrorKind, UnifiedToolError};
 
 pub mod registry {
     //! Registry exports shared across tool categories.

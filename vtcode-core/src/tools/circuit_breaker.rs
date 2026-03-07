@@ -2,6 +2,9 @@ use hashbrown::HashMap;
 use parking_lot::RwLock;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use vtcode_commons::ErrorCategory;
+
+use crate::metrics::MetricsCollector;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CircuitState {
@@ -58,6 +61,9 @@ struct ToolCircuitState {
     current_backoff: Duration, // Current backoff duration for this tool
     circuit_opened_at: Option<Instant>, // When circuit first opened (for diagnostics)
     open_count: u32,           // How many times circuit has opened
+    denied_requests: u32,
+    last_denied_at: Option<Instant>,
+    last_error_category: Option<ErrorCategory>,
 }
 
 impl ToolCircuitState {
@@ -79,7 +85,9 @@ impl ToolCircuitState {
         self.status = CircuitState::Closed;
         self.failure_count = 0;
         self.last_failure_time = None;
+        self.current_backoff = Duration::ZERO;
         self.circuit_opened_at = None;
+        self.last_error_category = None;
     }
 }
 
@@ -93,6 +101,9 @@ pub struct ToolCircuitDiagnostics {
     pub opened_at: Option<Instant>,
     pub open_count: u32,
     pub is_open: bool,
+    pub denied_requests: u32,
+    pub last_denied_at: Option<Instant>,
+    pub last_error_category: Option<ErrorCategory>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -114,13 +125,44 @@ pub struct CircuitBreaker {
     /// Per-tool state tracking with RwLock for better read concurrency
     tool_states: Arc<RwLock<HashMap<String, ToolCircuitState>>>,
     config: CircuitBreakerConfig,
+    metrics: Option<Arc<MetricsCollector>>,
 }
 
 impl CircuitBreaker {
     pub fn new(config: CircuitBreakerConfig) -> Self {
+        Self::build(config, None)
+    }
+
+    pub fn with_metrics(config: CircuitBreakerConfig, metrics: Arc<MetricsCollector>) -> Self {
+        Self::build(config, Some(metrics))
+    }
+
+    fn build(config: CircuitBreakerConfig, metrics: Option<Arc<MetricsCollector>>) -> Self {
         Self {
             tool_states: Arc::new(RwLock::new(HashMap::new())),
             config,
+            metrics,
+        }
+    }
+
+    #[inline]
+    fn record_half_open_metric(&self) {
+        if let Some(metrics) = &self.metrics {
+            metrics.record_half_open();
+        }
+    }
+
+    #[inline]
+    fn record_breaker_denial_metric(&self) {
+        if let Some(metrics) = &self.metrics {
+            metrics.record_breaker_denial();
+        }
+    }
+
+    #[inline]
+    fn record_circuit_open_metric(&self) {
+        if let Some(metrics) = &self.metrics {
+            metrics.record_circuit_open();
         }
     }
 
@@ -131,45 +173,37 @@ impl CircuitBreaker {
     /// 1. Try read lock first (allows concurrent reads)
     /// 2. Only upgrade to write lock if state transition is needed
     pub fn allow_request_for_tool(&self, tool_name: &str) -> bool {
-        // Fast path: try read lock first for Closed/HalfOpen states
         {
             let states = self.tool_states.read();
             if let Some(state) = states.get(tool_name) {
                 match state.status {
                     CircuitState::Closed | CircuitState::HalfOpen => return true,
                     CircuitState::Open => {
-                        // Check if we might need to transition - if not, return early
                         if let Some(last_failure) = state.last_failure_time {
-                            let backoff = if state.current_backoff.as_secs() == 0 {
+                            let backoff = if state.current_backoff == Duration::ZERO {
                                 self.config.reset_timeout
                             } else {
                                 state.current_backoff
                             };
-                            if last_failure.elapsed() < backoff {
-                                return false; // Still in backoff, no transition needed
+                            if last_failure.elapsed() >= backoff {
+                                // Fall through to the write lock so we can transition to HalfOpen.
                             }
-                            // Fall through to write lock for transition
-                        } else {
-                            return false;
                         }
                     }
                 }
             } else {
-                // Tool not in map = Closed state (default)
                 return true;
             }
         }
 
-        // Slow path: need write lock for state transition (Open -> HalfOpen)
         let mut states = self.tool_states.write();
         let state = states.entry(tool_name.to_string()).or_default();
 
-        // Re-check after acquiring write lock (another thread may have transitioned)
         match state.status {
             CircuitState::Closed | CircuitState::HalfOpen => true,
             CircuitState::Open => {
                 if let Some(last_failure) = state.last_failure_time {
-                    let backoff = if state.current_backoff.as_secs() == 0 {
+                    let backoff = if state.current_backoff == Duration::ZERO {
                         self.config.reset_timeout
                     } else {
                         state.current_backoff
@@ -177,9 +211,13 @@ impl CircuitBreaker {
 
                     if last_failure.elapsed() >= backoff {
                         state.transition_to(CircuitState::HalfOpen);
+                        self.record_half_open_metric();
                         return true;
                     }
                 }
+                state.denied_requests = state.denied_requests.saturating_add(1);
+                state.last_denied_at = Some(Instant::now());
+                self.record_breaker_denial_metric();
                 false
             }
         }
@@ -242,19 +280,18 @@ impl CircuitBreaker {
     }
 
     /// Record failure for a specific tool.
-    /// If `is_argument_error` is true, this is an LLM mistake (bad args), not a tool failure,
-    /// and should not count toward the circuit breaker threshold.
+    /// Non-retryable validation, policy, and permission failures are ignored.
     ///
     /// State transitions on failure:
     /// - Closed -> Open (when threshold reached)
     /// - HalfOpen -> Open (probe failed, increase backoff)
     /// - Open -> Open (no change, just update timestamp)
-    pub fn record_failure_for_tool(&self, tool_name: &str, is_argument_error: bool) {
-        // Don't count LLM argument errors toward circuit breaker - these are model mistakes
-        if is_argument_error {
+    pub fn record_failure_category_for_tool(&self, tool_name: &str, category: ErrorCategory) {
+        if !category.should_trip_circuit_breaker() {
             tracing::debug!(
                 tool = %tool_name,
-                "Argument error - not counting toward circuit breaker"
+                category = %category,
+                "Skipping circuit breaker failure accounting for non-circuit-breaking error"
             );
             return;
         }
@@ -262,6 +299,7 @@ impl CircuitBreaker {
         let mut states = self.tool_states.write();
         let state = states.entry(tool_name.to_string()).or_default();
         state.last_failure_time = Some(Instant::now());
+        state.last_error_category = Some(category);
 
         match state.status {
             CircuitState::Closed => {
@@ -271,6 +309,7 @@ impl CircuitBreaker {
                     state.current_backoff = self.config.min_backoff;
                     state.circuit_opened_at = Some(Instant::now());
                     state.open_count += 1;
+                    self.record_circuit_open_metric();
 
                     tracing::warn!(
                         tool = %tool_name,
@@ -291,6 +330,7 @@ impl CircuitBreaker {
                 state.current_backoff = Duration::from_secs_f64(next_backoff)
                     .min(self.config.max_backoff)
                     .max(self.config.min_backoff);
+                self.record_circuit_open_metric();
 
                 tracing::warn!(
                     tool = %tool_name,
@@ -303,6 +343,16 @@ impl CircuitBreaker {
                 // Already open, just update time - backoff stays same until probe attempt
             }
         }
+    }
+
+    /// Legacy helper that preserves the older boolean contract.
+    pub fn record_failure_for_tool(&self, tool_name: &str, is_argument_error: bool) {
+        let category = if is_argument_error {
+            ErrorCategory::InvalidParameters
+        } else {
+            ErrorCategory::ExecutionError
+        };
+        self.record_failure_category_for_tool(tool_name, category);
     }
 
     /// Legacy method - no-op. Use `record_failure_for_tool` instead.
@@ -358,6 +408,9 @@ impl CircuitBreaker {
                 opened_at: None,
                 open_count: 0,
                 is_open: false,
+                denied_requests: 0,
+                last_denied_at: None,
+                last_error_category: None,
             })
     }
 
@@ -388,6 +441,9 @@ impl CircuitBreaker {
                     opened_at: state.circuit_opened_at,
                     open_count: state.open_count,
                     is_open,
+                    denied_requests: state.denied_requests,
+                    last_denied_at: state.last_denied_at,
+                    last_error_category: state.last_error_category,
                 }
             })
             .collect();
@@ -419,5 +475,68 @@ impl CircuitBreaker {
 impl Default for CircuitBreaker {
     fn default() -> Self {
         Self::new(CircuitBreakerConfig::default())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::metrics::MetricsCollector;
+
+    #[test]
+    fn invalid_parameters_do_not_open_circuit() {
+        let breaker = CircuitBreaker::new(CircuitBreakerConfig {
+            failure_threshold: 2,
+            ..Default::default()
+        });
+
+        breaker.record_failure_category_for_tool("read_file", ErrorCategory::InvalidParameters);
+        breaker.record_failure_category_for_tool("read_file", ErrorCategory::InvalidParameters);
+
+        assert_eq!(breaker.state_for_tool("read_file"), CircuitState::Closed);
+        assert_eq!(breaker.get_diagnostics("read_file").failure_count, 0);
+    }
+
+    #[test]
+    fn denied_requests_are_recorded_for_open_circuit() {
+        let breaker = CircuitBreaker::new(CircuitBreakerConfig {
+            failure_threshold: 1,
+            min_backoff: Duration::from_secs(30),
+            ..Default::default()
+        });
+
+        breaker.record_failure_category_for_tool("shell", ErrorCategory::ExecutionError);
+        assert_eq!(breaker.state_for_tool("shell"), CircuitState::Open);
+        assert!(!breaker.allow_request_for_tool("shell"));
+
+        let diagnostics = breaker.get_diagnostics("shell");
+        assert_eq!(diagnostics.denied_requests, 1);
+        assert!(diagnostics.last_denied_at.is_some());
+        assert_eq!(diagnostics.last_error_category, Some(ErrorCategory::ExecutionError));
+    }
+
+    #[test]
+    fn metrics_record_open_half_open_and_denials() {
+        let metrics = Arc::new(MetricsCollector::new());
+        let breaker = CircuitBreaker::with_metrics(
+            CircuitBreakerConfig {
+                failure_threshold: 1,
+                min_backoff: Duration::from_millis(10),
+                max_backoff: Duration::from_secs(1),
+                ..Default::default()
+            },
+            metrics.clone(),
+        );
+
+        breaker.record_failure_category_for_tool("shell", ErrorCategory::ExecutionError);
+        assert!(!breaker.allow_request_for_tool("shell"));
+
+        std::thread::sleep(Duration::from_millis(20));
+        assert!(breaker.allow_request_for_tool("shell"));
+
+        let execution = metrics.get_execution_metrics();
+        assert_eq!(execution.circuit_open_events, 1);
+        assert_eq!(execution.breaker_denials, 1);
+        assert_eq!(execution.half_open_events, 1);
     }
 }

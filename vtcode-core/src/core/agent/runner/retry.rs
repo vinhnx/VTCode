@@ -1,7 +1,8 @@
 use super::AgentRunner;
 use crate::core::agent::task::{ContextItem, Task, TaskResults};
+use crate::error::{ErrorCode, Result as VtCodeResult, VtCodeError};
+use crate::retry::RetryPolicy;
 use crate::utils::colors::style;
-use anyhow::{Result, anyhow};
 use tracing::{info, warn};
 
 impl AgentRunner {
@@ -15,18 +16,18 @@ impl AgentRunner {
         task: &Task,
         contexts: &[ContextItem],
         max_retries: u32,
-    ) -> Result<TaskResults> {
-        use crate::core::orchestrator_retry::is_retryable_error;
+    ) -> VtCodeResult<TaskResults> {
         use tokio::time::{Duration, sleep};
 
-        let mut delay_secs = 2u64;
-        let max_delay_secs = 30u64;
-        let backoff_multiplier = 2.0f64;
+        let policy =
+            RetryPolicy::from_retries(max_retries, Duration::from_secs(2), Duration::from_secs(30), 2.0);
+        let metrics = self.tool_registry.metrics_collector();
+        let mut last_error: Option<VtCodeError> = None;
 
-        for attempt in 0..=max_retries {
+        for attempt in 0..policy.max_attempts {
             info!(
                 attempt = attempt + 1,
-                max_attempts = max_retries + 1,
+                max_attempts = policy.max_attempts,
                 task_id = %task.id,
                 "agent task attempt starting"
             );
@@ -34,6 +35,7 @@ impl AgentRunner {
             match self.execute_task(task, contexts).await {
                 Ok(result) => {
                     if attempt > 0 {
+                        metrics.record_retry_success();
                         // Notify user about successful retry
                         self.runner_println(format_args!(
                             "{} Task succeeded after {} attempt(s)",
@@ -50,72 +52,80 @@ impl AgentRunner {
                     return Ok(result);
                 }
                 Err(err) => {
+                    let typed_error = VtCodeError::from(err);
+                    let decision = policy.decision_for_vtcode_error(&typed_error, attempt, None);
+                    let exhausted_retryable_error = typed_error.category.is_retryable()
+                        && attempt + 1 == policy.max_attempts;
+                    last_error = Some(typed_error);
+
                     warn!(
                         attempt = attempt + 1,
-                        max_attempts = max_retries + 1,
+                        max_attempts = policy.max_attempts,
                         task_id = %task.id,
-                        error = %err,
+                        error = %last_error.as_ref().expect("retry error should exist"),
+                        category = ?decision.category,
                         "agent task attempt failed"
                     );
 
-                    // Check if this error should be retried
-                    if !is_retryable_error(&err) {
-                        warn!(task_id = %task.id, error = %err, "non-retryable error");
+                    if !decision.retryable {
+                        if exhausted_retryable_error {
+                            metrics.record_retry_exhausted();
+                        }
+                        let err = last_error.expect("non-retryable error should exist");
+                        warn!(
+                            task_id = %task.id,
+                            error = %err,
+                            category = ?decision.category,
+                            "non-retryable error"
+                        );
                         return Err(err);
                     }
 
-                    // If this is not the last attempt, wait before retrying
-                    if attempt < max_retries {
-                        let backoff_duration = Duration::from_secs(delay_secs);
+                    let backoff_duration = decision.delay.expect("retryable decisions need delay");
+                    metrics.record_retry_attempt();
 
-                        // Notify user about retry with visible message
-                        self.runner_println(format_args!(
-                            "{} Task failed (attempt {}/{}), retrying in {}s...",
-                            style("[Warning]").red().bold(),
-                            attempt + 1,
-                            max_retries + 1,
-                            delay_secs
-                        ));
+                    // Notify user about retry with visible message
+                    self.runner_println(format_args!(
+                        "{} Task failed (attempt {}/{}), retrying in {}s...",
+                        style("[Warning]").red().bold(),
+                        attempt + 1,
+                        policy.max_attempts,
+                        backoff_duration.as_secs()
+                    ));
 
-                        info!(
-                            delay_secs,
-                            next_attempt = attempt + 2,
-                            task_id = %task.id,
-                            "backing off before retry"
-                        );
+                    info!(
+                        delay_ms = backoff_duration.as_millis() as u64,
+                        next_attempt = attempt + 2,
+                        task_id = %task.id,
+                        category = ?decision.category,
+                        "backing off before retry"
+                    );
 
-                        sleep(backoff_duration).await;
-
-                        // Apply exponential backoff with cap
-                        delay_secs = std::cmp::min(
-                            (delay_secs as f64 * backoff_multiplier) as u64,
-                            max_delay_secs,
-                        );
-                    } else {
-                        // Last attempt failed
-                        warn!(
-                            task_id = %task.id,
-                            attempts = max_retries + 1,
-                            "agent task failed after all retries"
-                        );
-
-                        self.runner_println(format_args!(
-                            "{} Task failed after {} attempts",
-                            style("[Error]").red().bold(),
-                            max_retries + 1
-                        ));
-
-                        return Err(anyhow!(
-                            "Agent task '{}' failed after {} attempts: {}",
-                            task.id,
-                            max_retries + 1,
-                            err
-                        ));
-                    }
+                    sleep(backoff_duration).await;
                 }
             }
         }
 
-        unreachable!("Retry loop should always return within the loop")
+        warn!(
+            task_id = %task.id,
+            attempts = policy.max_attempts,
+            "agent task failed after all retries"
+        );
+
+        self.runner_println(format_args!(
+            "{} Task failed after {} attempts",
+            style("[Error]").red().bold(),
+            policy.max_attempts
+        ));
+
+        Err(last_error.unwrap_or_else(|| {
+            VtCodeError::execution(
+                ErrorCode::ToolExecutionFailed,
+                format!(
+                    "agent task '{}' exhausted the retry loop without an error payload",
+                    task.id
+                ),
+            )
+        }))
     }
 }

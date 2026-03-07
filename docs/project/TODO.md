@@ -2329,3 +2329,7 @@ don't stop the agent. remove this logic and let the agent decide when to stop or
 2026-03-07T05:35:21.957490Z DEBUG tool_execution{tool=unified_search requested=unified_search session_id=session-1772861531385 task_id=}: vtcode_core::tools::registry::execution_facade: close time.busy=3.57ms time.idle=33.1µs
 2026-03-07T05:35:25.950774Z  INFO vtcode_core::notifications: Notification: Agent turn ended: partially completed - Tool-call budget exhausted for this turn (32/32). Start a new turn with "continue" or provide a new instruction to proceed.
 ```
+
+===
+
+update each config in vtcode.toml with a human readable # heading describing the config settings item. and update /config item to use that heading as well.

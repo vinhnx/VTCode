@@ -8,6 +8,7 @@ use crate::gemini::models::{GenerateContentRequest, GenerateContentResponse};
 use crate::gemini::streaming::{
     StreamingError, StreamingMetrics, StreamingProcessor, StreamingResponse,
 };
+use crate::retry::RetryPolicy;
 use anyhow::{Context, Result};
 use reqwest::Client as ReqwestClient;
 use std::time::Instant;
@@ -81,27 +82,24 @@ impl Client {
 
     /// Classify error to determine if it's retryable
     fn classify_error(&self, error: &anyhow::Error) -> StreamingError {
-        let error_str = error.to_string().to_ascii_lowercase();
+        let decision = RetryPolicy::default().decision_for_anyhow(error, 0, None);
+        let message = error.to_string();
 
-        if error_str.contains("timeout")
-            || error_str.contains("connection")
-            || error_str.contains("network")
-        {
-            StreamingError::NetworkError {
-                message: error.to_string(),
-                is_retryable: true,
-            }
-        } else if error_str.contains("rate limit") || error_str.contains("429") {
-            StreamingError::ApiError {
+        match decision.category {
+            vtcode_commons::ErrorCategory::RateLimit => StreamingError::ApiError {
                 status_code: 429,
-                message: "Rate limit exceeded".into(),
-                is_retryable: true,
-            }
-        } else {
-            StreamingError::NetworkError {
-                message: error.to_string(),
-                is_retryable: false,
-            }
+                message,
+                is_retryable: decision.retryable,
+            },
+            vtcode_commons::ErrorCategory::ServiceUnavailable => StreamingError::ApiError {
+                status_code: 503,
+                message,
+                is_retryable: decision.retryable,
+            },
+            _ => StreamingError::NetworkError {
+                message,
+                is_retryable: decision.retryable,
+            },
         }
     }
 

@@ -6,6 +6,13 @@ use crate::llm::provider::{LLMError, LLMErrorMetadata};
 use reqwest::Response;
 use serde_json::Value;
 
+#[derive(Debug, Clone, Default)]
+struct ApiResponseMetadata {
+    request_id: Option<String>,
+    organization_id: Option<String>,
+    retry_after: Option<String>,
+}
+
 /// HTTP status codes for common error types
 pub const STATUS_UNAUTHORIZED: u16 = 401;
 pub const STATUS_FORBIDDEN: u16 = 403;
@@ -36,8 +43,14 @@ pub async fn handle_gemini_http_error(response: Response) -> Result<Response, LL
     }
 
     let status = response.status();
+    let metadata = extract_response_metadata(&response);
     let error_text = response.text().await.unwrap_or_default();
-    Err(parse_api_error("Gemini", status, &error_text))
+    Err(parse_api_error_with_metadata(
+        "Gemini",
+        status,
+        &error_text,
+        metadata,
+    ))
 }
 
 /// Handle HTTP response errors for Anthropic provider
@@ -47,8 +60,14 @@ pub async fn handle_anthropic_http_error(response: Response) -> Result<Response,
     }
 
     let status = response.status();
+    let metadata = extract_response_metadata(&response);
     let error_text = response.text().await.unwrap_or_default();
-    Err(parse_api_error("Anthropic", status, &error_text))
+    Err(parse_api_error_with_metadata(
+        "Anthropic",
+        status,
+        &error_text,
+        metadata,
+    ))
 }
 
 /// Handle HTTP response errors for OpenAI-compatible providers
@@ -62,6 +81,7 @@ pub async fn handle_openai_http_error(
     }
 
     let status = response.status();
+    let metadata = extract_response_metadata(&response);
     let error_text = response.text().await.unwrap_or_default();
 
     // Universal diagnostic logging — helps debug post-tool follow-up failures
@@ -74,7 +94,12 @@ pub async fn handle_openai_http_error(
         provider_name
     );
 
-    Err(parse_api_error(provider_name, status, &error_text))
+    Err(parse_api_error_with_metadata(
+        provider_name,
+        status,
+        &error_text,
+        metadata,
+    ))
 }
 
 /// Check if an error is a rate limit error based on status code and message
@@ -133,6 +158,15 @@ pub fn parse_api_error(
     status: reqwest::StatusCode,
     body: &str,
 ) -> LLMError {
+    parse_api_error_with_metadata(provider_name, status, body, ApiResponseMetadata::default())
+}
+
+fn parse_api_error_with_metadata(
+    provider_name: &'static str,
+    status: reqwest::StatusCode,
+    body: &str,
+    response_metadata: ApiResponseMetadata,
+) -> LLMError {
     // Try to extract a meaningful error message from JSON
     let error_message = if let Ok(json) = serde_json::from_str::<Value>(body) {
         // OpenAI/DeepSeek/ZAI/Anthropic format: {"error": {"message": "..."}}
@@ -176,9 +210,9 @@ pub fn parse_api_error(
                 provider_name,
                 Some(status_code),
                 Some("authentication_error".to_string()),
-                None,
-                None, // organization_id
-                None,
+                response_metadata.request_id.clone(),
+                response_metadata.organization_id.clone(),
+                response_metadata.retry_after.clone(),
                 Some(body.to_string()),
             )),
         },
@@ -187,9 +221,9 @@ pub fn parse_api_error(
                 provider_name,
                 Some(status_code),
                 Some("rate_limit_error".to_string()),
-                None,
-                None, // organization_id
-                None,
+                response_metadata.request_id.clone(),
+                response_metadata.organization_id.clone(),
+                response_metadata.retry_after.clone(),
                 Some(error_message),
             )),
         },
@@ -198,9 +232,9 @@ pub fn parse_api_error(
                 provider_name,
                 Some(status_code),
                 Some("quota_exceeded".to_string()),
-                None,
-                None, // organization_id
-                None,
+                response_metadata.request_id.clone(),
+                response_metadata.organization_id.clone(),
+                response_metadata.retry_after.clone(),
                 Some(error_message),
             )),
         },
@@ -213,9 +247,9 @@ pub fn parse_api_error(
                 provider_name,
                 Some(status_code),
                 Some("invalid_request".to_string()),
-                None,
-                None, // organization_id
-                None,
+                response_metadata.request_id.clone(),
+                response_metadata.organization_id.clone(),
+                response_metadata.retry_after.clone(),
                 Some(body.to_string()),
             )),
         },
@@ -228,13 +262,41 @@ pub fn parse_api_error(
                 provider_name,
                 Some(status_code),
                 None,
-                None,
-                None, // organization_id
-                None,
+                response_metadata.request_id,
+                response_metadata.organization_id,
+                response_metadata.retry_after,
                 Some(body.to_string()),
             )),
         },
     }
+}
+
+fn extract_response_metadata(response: &Response) -> ApiResponseMetadata {
+    ApiResponseMetadata {
+        request_id: extract_header(
+            response,
+            &["request-id", "x-request-id", "openai-request-id"],
+        ),
+        organization_id: extract_header(
+            response,
+            &[
+                "anthropic-organization-id",
+                "openai-organization",
+                "x-organization-id",
+            ],
+        ),
+        retry_after: extract_header(response, &["retry-after"]),
+    }
+}
+
+fn extract_header(response: &Response, names: &[&str]) -> Option<String> {
+    names.iter().find_map(|name| {
+        response
+            .headers()
+            .get(*name)
+            .and_then(|value| value.to_str().ok())
+            .map(ToOwned::to_owned)
+    })
 }
 
 #[cfg(test)]

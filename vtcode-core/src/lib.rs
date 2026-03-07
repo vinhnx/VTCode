@@ -162,6 +162,7 @@ pub mod orchestrator;
 pub mod plugins;
 pub mod project_doc;
 pub mod prompts;
+pub mod retry;
 pub mod review;
 pub mod safety;
 pub mod sandboxing; // Codex-style sandbox policy and execution environment
@@ -229,6 +230,7 @@ pub use error::{
     ErrorCategory as VtCodeErrorCategory, ErrorCode as VtCodeErrorCode, Result as VtCodeResult,
     VtCodeError,
 };
+pub use retry::{RetryDecision, RetryPolicy};
 pub use exec::events::{
     AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, EVENT_SCHEMA_VERSION,
     ErrorItem, FileChangeItem, FileUpdateChange, ItemCompletedEvent, ItemStartedEvent,

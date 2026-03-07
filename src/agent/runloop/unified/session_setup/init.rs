@@ -185,8 +185,9 @@ pub(crate) async fn initialize_session(
         warn!("Failed to initialize dynamic context directories: {}", err);
     }
 
-    let circuit_breaker = Arc::new(vtcode_core::tools::circuit_breaker::CircuitBreaker::new(
+    let circuit_breaker = Arc::new(vtcode_core::tools::circuit_breaker::CircuitBreaker::with_metrics(
         vtcode_config_circuit_breaker_to_core(vt_cfg, config),
+        tool_registry.metrics_collector(),
     ));
     tool_registry.set_shared_circuit_breaker(circuit_breaker.clone());
 

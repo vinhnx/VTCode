@@ -209,6 +209,12 @@ impl UnifiedToolError {
     pub fn is_llm_mistake(&self) -> bool {
         self.kind.is_llm_mistake()
     }
+
+    /// Return the canonical VT Code error category for this tool error.
+    #[inline]
+    pub fn category(&self) -> ErrorCategory {
+        ErrorCategory::from(self.kind)
+    }
 }
 
 /// Classify an anyhow::Error into a UnifiedErrorKind.

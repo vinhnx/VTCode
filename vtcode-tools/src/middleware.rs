@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use std::ops::Add;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use vtcode_core::tools::{ToolCallRequest, ToolCallResponse};
+use vtcode_core::tools::{ToolCallRequest, ToolCallResponse, UnifiedToolError};
 
 /// Request context flowing through middleware.
 pub type ToolRequest = ToolCallRequest;
@@ -15,21 +15,24 @@ pub type ToolRequest = ToolCallRequest;
 /// Response from tool execution.
 pub type ToolResponse = ToolCallResponse;
 
+/// Typed middleware result.
+pub type MiddlewareResult<T> = Result<T, UnifiedToolError>;
+
 /// Middleware trait for intercepting tool execution.
 #[async_trait]
 pub trait Middleware: Send + Sync {
     /// Called before tool execution.
-    async fn before_execute(&self, _req: &ToolRequest) -> anyhow::Result<()> {
+    async fn before_execute(&self, _req: &ToolRequest) -> MiddlewareResult<()> {
         Ok(())
     }
 
     /// Called after successful execution.
-    async fn after_execute(&self, _req: &ToolRequest, _res: &ToolResponse) -> anyhow::Result<()> {
+    async fn after_execute(&self, _req: &ToolRequest, _res: &ToolResponse) -> MiddlewareResult<()> {
         Ok(())
     }
 
     /// Called on execution error.
-    async fn on_error(&self, _req: &ToolRequest, _err: &anyhow::Error) -> anyhow::Result<()> {
+    async fn on_error(&self, _req: &ToolRequest, _err: &UnifiedToolError) -> MiddlewareResult<()> {
         Ok(())
     }
 }
@@ -60,7 +63,7 @@ impl MiddlewareChain {
     }
 
     /// Execute before hooks.
-    pub async fn before_execute(&self, req: &ToolRequest) -> anyhow::Result<()> {
+    pub async fn before_execute(&self, req: &ToolRequest) -> MiddlewareResult<()> {
         for mw in &self.middlewares {
             mw.before_execute(req).await?;
         }
@@ -68,7 +71,7 @@ impl MiddlewareChain {
     }
 
     /// Execute after hooks.
-    pub async fn after_execute(&self, req: &ToolRequest, res: &ToolResponse) -> anyhow::Result<()> {
+    pub async fn after_execute(&self, req: &ToolRequest, res: &ToolResponse) -> MiddlewareResult<()> {
         // Run in reverse order.
         for mw in self.middlewares.iter().rev() {
             mw.after_execute(req, res).await?;
@@ -77,7 +80,7 @@ impl MiddlewareChain {
     }
 
     /// Execute error hooks.
-    pub async fn on_error(&self, req: &ToolRequest, err: &anyhow::Error) -> anyhow::Result<()> {
+    pub async fn on_error(&self, req: &ToolRequest, err: &UnifiedToolError) -> MiddlewareResult<()> {
         for mw in self.middlewares.iter().rev() {
             let _ = mw.on_error(req, err).await;
         }
@@ -112,12 +115,12 @@ impl LoggingMiddleware {
 
 #[async_trait]
 impl Middleware for LoggingMiddleware {
-    async fn before_execute(&self, req: &ToolRequest) -> anyhow::Result<()> {
+    async fn before_execute(&self, req: &ToolRequest) -> MiddlewareResult<()> {
         eprintln!("[{}] Executing: {}", self.name, req.tool_name);
         Ok(())
     }
 
-    async fn after_execute(&self, req: &ToolRequest, res: &ToolResponse) -> anyhow::Result<()> {
+    async fn after_execute(&self, req: &ToolRequest, res: &ToolResponse) -> MiddlewareResult<()> {
         let duration_ms = res.duration_ms.unwrap_or(0);
         let cache_hit = res.cache_hit.unwrap_or(false);
         eprintln!(
@@ -127,7 +130,7 @@ impl Middleware for LoggingMiddleware {
         Ok(())
     }
 
-    async fn on_error(&self, req: &ToolRequest, err: &anyhow::Error) -> anyhow::Result<()> {
+    async fn on_error(&self, req: &ToolRequest, err: &UnifiedToolError) -> MiddlewareResult<()> {
         eprintln!("[{}] Error in {}: {}", self.name, req.tool_name, err);
         Ok(())
     }
@@ -175,12 +178,12 @@ impl MetricsMiddleware {
 
 #[async_trait]
 impl Middleware for MetricsMiddleware {
-    async fn before_execute(&self, _: &ToolRequest) -> anyhow::Result<()> {
+    async fn before_execute(&self, _: &ToolRequest) -> MiddlewareResult<()> {
         self.total_calls.fetch_add(1, Ordering::Relaxed);
         Ok(())
     }
 
-    async fn after_execute(&self, _: &ToolRequest, res: &ToolResponse) -> anyhow::Result<()> {
+    async fn after_execute(&self, _: &ToolRequest, res: &ToolResponse) -> MiddlewareResult<()> {
         self.successful_calls.fetch_add(1, Ordering::Relaxed);
         self.total_duration_ms
             .fetch_add(res.duration_ms.unwrap_or(0), Ordering::Relaxed);
@@ -192,7 +195,7 @@ impl Middleware for MetricsMiddleware {
         Ok(())
     }
 
-    async fn on_error(&self, _: &ToolRequest, _: &anyhow::Error) -> anyhow::Result<()> {
+    async fn on_error(&self, _: &ToolRequest, _: &UnifiedToolError) -> MiddlewareResult<()> {
         self.failed_calls.fetch_add(1, Ordering::Relaxed);
         Ok(())
     }

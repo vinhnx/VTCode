@@ -9,6 +9,12 @@ pub struct ExecutionMetrics {
     pub successful_executions: u64,
     pub failed_executions: u64,
     pub timeouts: u64,
+    pub retry_attempts: u64,
+    pub retry_successes: u64,
+    pub retry_exhausted: u64,
+    pub circuit_open_events: u64,
+    pub half_open_events: u64,
+    pub breaker_denials: u64,
     pub total_duration_ms: u64,
     pub memory_peak_mb: u64,
     pub memory_total_mb: u64,
@@ -32,6 +38,12 @@ impl ExecutionMetrics {
             successful_executions: 0,
             failed_executions: 0,
             timeouts: 0,
+            retry_attempts: 0,
+            retry_successes: 0,
+            retry_exhausted: 0,
+            circuit_open_events: 0,
+            half_open_events: 0,
+            breaker_denials: 0,
             total_duration_ms: 0,
             memory_peak_mb: 0,
             memory_total_mb: 0,
@@ -90,6 +102,30 @@ impl ExecutionMetrics {
     pub fn record_timeout(&mut self, language: String, duration_ms: u64) {
         self.timeouts += 1;
         self.record_failure(language, duration_ms);
+    }
+
+    pub fn record_retry_attempt(&mut self) {
+        self.retry_attempts += 1;
+    }
+
+    pub fn record_retry_success(&mut self) {
+        self.retry_successes += 1;
+    }
+
+    pub fn record_retry_exhausted(&mut self) {
+        self.retry_exhausted += 1;
+    }
+
+    pub fn record_circuit_open(&mut self) {
+        self.circuit_open_events += 1;
+    }
+
+    pub fn record_half_open(&mut self) {
+        self.half_open_events += 1;
+    }
+
+    pub fn record_breaker_denial(&mut self) {
+        self.breaker_denials += 1;
     }
 
     pub fn record_result_size(&mut self, _size_bytes: usize) {
@@ -211,5 +247,24 @@ mod tests {
 
         assert_eq!(metrics.total_executions, 150);
         assert_eq!(metrics.recent_executions.len(), 100);
+    }
+
+    #[test]
+    fn test_retry_and_breaker_counters() {
+        let mut metrics = ExecutionMetrics::new();
+        metrics.record_retry_attempt();
+        metrics.record_retry_attempt();
+        metrics.record_retry_success();
+        metrics.record_retry_exhausted();
+        metrics.record_circuit_open();
+        metrics.record_half_open();
+        metrics.record_breaker_denial();
+
+        assert_eq!(metrics.retry_attempts, 2);
+        assert_eq!(metrics.retry_successes, 1);
+        assert_eq!(metrics.retry_exhausted, 1);
+        assert_eq!(metrics.circuit_open_events, 1);
+        assert_eq!(metrics.half_open_events, 1);
+        assert_eq!(metrics.breaker_denials, 1);
     }
 }
