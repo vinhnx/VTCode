@@ -52,7 +52,14 @@ impl ToolHealthTracker {
     /// Record a tool execution result.
     pub fn record_execution(&self, tool_name: &str, success: bool, latency: Duration) {
         let mut stats_map = self.stats.write();
-        let tool_stats = stats_map.entry(tool_name.to_string()).or_default();
+
+        // Optimized lookup: only clone if inserting a new entry
+        let tool_stats = if let Some(stats) = stats_map.get_mut(tool_name) {
+            stats
+        } else {
+            stats_map.entry(tool_name.to_string()).or_default()
+        };
+
         let latency_ms = latency.as_secs_f64() * 1000.0;
 
         // Update lifetime stats
@@ -156,8 +163,12 @@ impl ToolHealthTracker {
         Some((avg, p95))
     }
     /// Get snapshot of all tool stats
-    pub fn get_all_tool_stats(&self) -> HashMap<String, ToolStats> {
-        self.stats.read().clone()
+    pub fn get_all_tool_stats(&self) -> Vec<(String, ToolStats)> {
+        self.stats
+            .read()
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
     }
 }
 

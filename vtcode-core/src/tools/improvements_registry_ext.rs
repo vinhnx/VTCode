@@ -77,8 +77,8 @@ impl ToolRegistryImprovement {
     /// Record tool execution
     pub fn record_execution(
         &self,
-        tool_name: String,
-        arguments: String,
+        tool_name: &str,
+        arguments: &str,
         success: bool,
         quality_score: f32,
         duration_ms: u64,
@@ -86,15 +86,17 @@ impl ToolRegistryImprovement {
         // Update metrics
         {
             let mut metrics = self.tool_metrics.write();
-            let entry = metrics
-                .entry(tool_name.clone())
-                .or_insert_with(|| ToolMetrics {
-                    name: tool_name.clone(),
+            let entry = if let Some(m) = metrics.get_mut(tool_name) {
+                m
+            } else {
+                metrics.entry(tool_name.to_string()).or_insert_with(|| ToolMetrics {
+                    name: tool_name.to_string(),
                     total_calls: 0,
                     successful_calls: 0,
                     total_duration_ms: 0,
                     avg_quality: 0.0,
-                });
+                })
+            };
 
             entry.total_calls += 1;
             if success {
@@ -113,22 +115,23 @@ impl ToolRegistryImprovement {
             .as_secs();
 
         self.pattern_engine.record(ExecutionEvent {
-            tool_name: tool_name.clone(),
-            arguments,
+            tool_name: tool_name.to_string(),
+            arguments: arguments.to_string(),
             success,
             quality_score,
             duration_ms,
             timestamp: now,
         });
 
-        // Log metric
+        // Log metric - avoid format! if possible, but for key names it's needed
+        let metric_key = format!("{}_success_rate", tool_name);
         self.obs_context.metric(
             "tool_effectiveness",
-            &format!("{}_success_rate", tool_name),
+            &metric_key,
             {
                 let metrics = self.tool_metrics.read();
                 metrics
-                    .get(&tool_name)
+                    .get(tool_name)
                     .map(|m| m.success_rate())
                     .unwrap_or(0.0)
             },
@@ -188,12 +191,12 @@ impl ToolRegistryImprovement {
             .map(|m| {
                 let score = (m.success_rate() * 0.6)
                     + ((1.0 - (m.avg_duration_ms() as f32 / 5000.0).min(1.0)) * 0.4);
-                (m.name.clone(), score)
+                (&m.name, score)
             })
             .collect();
 
         tools.sort_unstable_by(|a, b| b.1.total_cmp(&a.1));
-        tools
+        tools.into_iter().map(|(n, s)| (n.clone(), s)).collect()
     }
 }
 
@@ -208,8 +211,8 @@ mod tests {
         let ext = ToolRegistryImprovement::new(obs);
 
         ext.record_execution(
-            tools::UNIFIED_SEARCH.to_owned(),
-            "pattern".to_owned(),
+            tools::UNIFIED_SEARCH,
+            "pattern",
             true,
             0.8,
             100,
@@ -237,8 +240,8 @@ mod tests {
         let obs = Arc::new(ObservabilityContext::noop());
         let ext = ToolRegistryImprovement::new(obs);
 
-        ext.record_execution("tool1".to_owned(), "arg".to_owned(), true, 0.9, 100);
-        ext.record_execution("tool2".to_owned(), "arg".to_owned(), false, 0.3, 50);
+        ext.record_execution("tool1", "arg", true, 0.9, 100);
+        ext.record_execution("tool2", "arg", false, 0.3, 50);
 
         let ranked = ext.rank_tools();
         assert_eq!(ranked[0].0, "tool1"); // Higher success rate

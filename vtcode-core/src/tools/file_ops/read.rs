@@ -32,19 +32,24 @@ fn is_legacy_read_request(args: &Value, is_image: bool) -> bool {
         return true;
     }
 
-    let legacy_keys = [
-        "offset_bytes",
-        "page_size_bytes",
-        "offset_lines",
-        "page_size_lines",
-        "max_bytes",
-        "max_lines",
-        "chunk_lines",
-        "encoding",
-        "max_tokens",
-    ];
-
-    legacy_keys.iter().any(|key| args.get(*key).is_some())
+    if let Some(obj) = args.as_object() {
+        obj.keys().any(|key| {
+            matches!(
+                key.as_str(),
+                "offset_bytes"
+                    | "page_size_bytes"
+                    | "offset_lines"
+                    | "page_size_lines"
+                    | "max_bytes"
+                    | "max_lines"
+                    | "chunk_lines"
+                    | "encoding"
+                    | "max_tokens"
+            )
+        })
+    } else {
+        false
+    }
 }
 
 fn is_new_read_request(args: &Value) -> bool {
@@ -144,45 +149,18 @@ fn apply_spool_chunk_defaults(handler_args_json: &mut Value, raw_args: &Value) -
 }
 
 fn is_history_jsonl(path: &Path) -> bool {
-    if path.extension().and_then(|ext| ext.to_str()) != Some("jsonl") {
+    // Fast path: avoid component iteration if extension doesn't match
+    if !path.to_string_lossy().ends_with(".jsonl") {
         return false;
     }
 
-    let mut saw_vtcode = false;
-    for component in path.components() {
-        let segment = component.as_os_str().to_string_lossy();
-        if segment == ".vtcode" {
-            saw_vtcode = true;
-            continue;
-        }
-        if saw_vtcode && segment == "history" {
-            return true;
-        }
-    }
-    false
+    let s = path.to_string_lossy();
+    s.contains(".vtcode") && s.contains("/history/")
 }
 
 fn is_tool_output_spool_path(path: &Path) -> bool {
-    let mut saw_vtcode = false;
-    let mut saw_context = false;
-
-    for component in path.components() {
-        let segment = component.as_os_str().to_string_lossy();
-        if segment == ".vtcode" {
-            saw_vtcode = true;
-            saw_context = false;
-            continue;
-        }
-        if saw_vtcode && segment == "context" {
-            saw_context = true;
-            continue;
-        }
-        if saw_vtcode && saw_context && segment == "tool_outputs" {
-            return true;
-        }
-    }
-
-    false
+    let s = path.to_string_lossy();
+    s.contains(".vtcode") && s.contains("/context/tool_outputs/")
 }
 
 fn pty_session_id_from_tool_output_path(path: &Path) -> Option<String> {

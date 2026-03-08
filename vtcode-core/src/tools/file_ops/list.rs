@@ -16,14 +16,6 @@ impl FileOpsTool {
 
         let base = self.workspace_root.join(&input.path);
 
-        // Check if path exists before proceeding
-        if !base.exists() {
-            return Err(anyhow!(
-                "Path '{}' does not exist. Workspace root: {}",
-                input.path,
-                self.workspace_root.display()
-            ));
-        }
 
         if self.should_exclude(&base).await {
             return Err(anyhow!(
@@ -41,7 +33,6 @@ impl FileOpsTool {
         }
 
         // Pre-allocate with reasonable estimate for directory entries
-        // Most directories have 10-50 items, so start with 32 to avoid reallocations
         let mut all_items = Vec::with_capacity(32);
         if base.is_file() {
             let file_name = base
@@ -60,6 +51,10 @@ impl FileOpsTool {
                     self.workspace_root.display()
                 )
             })?;
+
+            // Pre-acquire the gitignore lock to avoid lock-per-entry overhead (KISS/DRY)
+            let gitignore = crate::utils::vtcodegitignore::get_global_vtcode_gitignore().await;
+
             while let Some(entry) = entries
                 .next_entry()
                 .await
@@ -71,7 +66,9 @@ impl FileOpsTool {
                 if !input.include_hidden && name.starts_with('.') {
                     continue;
                 }
-                if self.should_exclude(&path).await {
+
+                // Batch check using shared guard instead of repeated lock acquisition
+                if gitignore.should_exclude(&path) {
                     continue;
                 }
 
@@ -89,7 +86,8 @@ impl FileOpsTool {
                     "type": if is_dir { "directory" } else { "file" }
                 }));
             }
-        } else {
+        }
+ else {
             warn!(
                 path = %input.path,
                 exists = base.exists(),

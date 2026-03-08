@@ -17,15 +17,21 @@ pub use tool::FileOpsTool;
 
 use std::path::Path;
 
-/// Check if a file path represents an image based on its extension.
 pub fn is_image_path(path: &Path) -> bool {
     let Some(extension) = path.extension().and_then(|ext| ext.to_str()) else {
         return false;
     };
 
-    let lowercase = extension.to_ascii_lowercase();
     matches!(
-        lowercase.as_str(),
-        "png" | "jpg" | "jpeg" | "gif" | "bmp" | "webp" | "tiff" | "tif" | "svg"
+        extension,
+        _ if extension.eq_ignore_ascii_case("png")
+            || extension.eq_ignore_ascii_case("jpg")
+            || extension.eq_ignore_ascii_case("jpeg")
+            || extension.eq_ignore_ascii_case("gif")
+            || extension.eq_ignore_ascii_case("bmp")
+            || extension.eq_ignore_ascii_case("webp")
+            || extension.eq_ignore_ascii_case("tiff")
+            || extension.eq_ignore_ascii_case("tif")
+            || extension.eq_ignore_ascii_case("svg")
     )
 }
