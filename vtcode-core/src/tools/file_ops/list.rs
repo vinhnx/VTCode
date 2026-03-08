@@ -16,7 +16,6 @@ impl FileOpsTool {
 
         let base = self.workspace_root.join(&input.path);
 
-
         if self.should_exclude(&base).await {
             return Err(anyhow!(
                 "Path '{}' is excluded by .vtcodegitignore",
@@ -86,8 +85,7 @@ impl FileOpsTool {
                     "type": if is_dir { "directory" } else { "file" }
                 }));
             }
-        }
- else {
+        } else {
             warn!(
                 path = %input.path,
                 exists = base.exists(),

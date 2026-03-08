@@ -224,17 +224,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "anstyle-syntect"
-version = "1.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf08c851f9ce7ba9aab16b149faa07530037174400fc1d8967c8ebeed4fcfb93"
-dependencies = [
- "anstyle",
- "syntect",
- "thiserror 1.0.69",
-]
-
-[[package]]
 name = "anstyle-wincon"
 version = "3.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6577,7 +6566,6 @@ dependencies = [
  "anstyle",
  "anstyle-git",
  "anstyle-ls",
- "anstyle-syntect",
  "anyhow",
  "better-panic",
  "catppuccin",
