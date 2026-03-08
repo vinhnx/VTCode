@@ -107,6 +107,19 @@ run_zen_governance() {
     fi
 }
 
+# Run Miri (detect undefined behavior)
+run_miri() {
+    print_status "Running Miri (detecting Undefined Behavior/aliasing issues)..."
+    print_warning "Miri can be slow as it interprets the code. Running a subset by default."
+    if cargo miri test --locked; then
+        print_success "Miri found no Undefined Behavior!"
+        return 0
+    else
+        print_error "Miri detected issues! Check output for Stacked Borrows/aliasing violations."
+        return 1
+    fi
+}
+
 # Main function
 main() {
     local failed_checks=0
@@ -190,12 +203,16 @@ case "${1:-}" in
         echo "  build   - Build the project"
         echo "  docs    - Generate documentation"
         echo "  zen     - Run Zen governance checks (warn mode)"
+        echo "  miri    - Run Miri to detect Undefined Behavior (slow)"
         echo "  help    - Show this help message"
         echo ""
         echo "If no command is specified, runs all checks."
         ;;
     "zen")
         run_zen_governance
+        ;;
+    "miri")
+        run_miri
         ;;
     *)
         main

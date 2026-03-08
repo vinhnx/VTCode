@@ -117,6 +117,9 @@ cargo bench
 
 # Quality gate
 cargo clippy --workspace --all-targets -- -D warnings && cargo fmt --check && cargo check && cargo nextest run
+
+# Memory Safety (Miri)
+./scripts/check.sh miri  # Run local Miri check to detect Undefined Behavior
 ```
 
 ## Development Notes
