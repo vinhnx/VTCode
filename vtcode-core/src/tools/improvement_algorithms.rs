@@ -92,7 +92,7 @@ fn jaro_similarity(s1: &str, s2: &str) -> f32 {
 /// Time-decay effectiveness score.
 ///
 /// Recent successes are weighted higher. Decay follows:
-/// `score × exp(−λ × age_hours)`, default λ = 0.1 per 24 h.
+/// `score × exp(−λ × age_hours)`, default λ = 0.1 per hour.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimeDecayedScore {
     /// Base score (0.0–1.0).
@@ -214,13 +214,13 @@ pub fn detect_pattern(
 
     // --- Near-loop: same tool, fuzzy args ---
     // Use `.all()` directly — no intermediate Vec<f32> needed.
-    if same_tool {
-        if recent
+    if same_tool
+        && recent.len() >= 3
+        && recent
             .windows(2)
             .all(|w| jaro_winkler_similarity(&w[0].1, &w[1].1) > 0.85)
-        {
-            return PatternState::NearLoop;
-        }
+    {
+        return PatternState::NearLoop;
     }
 
     // --- Convergence: different tools, similar quality ---
@@ -340,6 +340,22 @@ mod tests {
             ("grep".to_string(), "pat3".to_string(), 0.8),
         ];
         assert_eq!(detect_pattern(&history, 10), PatternState::RefinementChain);
+    }
+
+    #[test]
+    fn test_detect_pattern_near_loop_requires_three_entries() {
+        let two_entries = vec![
+            ("grep".to_string(), "pattern-one".to_string(), 0.4),
+            ("grep".to_string(), "pattern-two".to_string(), 0.45),
+        ];
+        assert_eq!(detect_pattern(&two_entries, 10), PatternState::Single);
+
+        let three_entries = vec![
+            ("grep".to_string(), "pattern-one".to_string(), 0.4),
+            ("grep".to_string(), "pattern-two".to_string(), 0.45),
+            ("grep".to_string(), "pattern-three".to_string(), 0.5),
+        ];
+        assert_eq!(detect_pattern(&three_entries, 10), PatternState::NearLoop);
     }
 
     #[test]

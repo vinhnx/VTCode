@@ -186,41 +186,92 @@ impl TaskManager {
         Ok(task.clone())
     }
 
+    fn matches_list_filters(
+        task: &Task,
+        status: Option<&TaskState>,
+        updated_after: Option<&chrono::DateTime<chrono::Utc>>,
+    ) -> bool {
+        if let Some(status) = status
+            && &task.status.state != status
+        {
+            return false;
+        }
+
+        if let Some(updated_after) = updated_after
+            && task.status.timestamp < *updated_after
+        {
+            return false;
+        }
+
+        true
+    }
+
+    fn clone_task_for_listing(
+        task: &Task,
+        include_artifacts: bool,
+        history_length: Option<usize>,
+    ) -> Task {
+        let mut task = task.clone();
+
+        if !include_artifacts {
+            task.artifacts.clear();
+        }
+
+        if let Some(history_length) = history_length
+            && task.history.len() > history_length
+        {
+            let trim_count = task.history.len() - history_length;
+            task.history.drain(..trim_count);
+        }
+
+        task
+    }
+
     /// List tasks with optional filtering
     pub async fn list_tasks(&self, params: ListTasksParams) -> ListTasksResult {
-        let state = self.state.read().await;
+        let updated_after = params
+            .last_updated_after
+            .as_deref()
+            .and_then(|after| chrono::DateTime::parse_from_rfc3339(after).ok())
+            .map(|after| after.to_utc());
 
-        let mut result: Vec<Task> = state
-            .tasks
-            .values()
-            .filter(|task| {
-                if let Some(ref ctx_id) = params.context_id
-                    && task.context_id.as_ref() != Some(ctx_id)
-                {
-                    return false;
-                }
+        let mut matching_tasks: Vec<(String, chrono::DateTime<chrono::Utc>)> = {
+            let state = self.state.read().await;
+            if let Some(context_id) = params.context_id.as_deref() {
+                state
+                    .contexts
+                    .get(context_id)
+                    .into_iter()
+                    .flat_map(|task_ids| task_ids.iter())
+                    .filter_map(|task_id| {
+                        let task = state.tasks.get(task_id)?;
+                        Self::matches_list_filters(
+                            task,
+                            params.status.as_ref(),
+                            updated_after.as_ref(),
+                        )
+                        .then(|| (task_id.clone(), task.status.timestamp))
+                    })
+                    .collect()
+            } else {
+                state
+                    .tasks
+                    .iter()
+                    .filter(|(_, task)| {
+                        Self::matches_list_filters(
+                            task,
+                            params.status.as_ref(),
+                            updated_after.as_ref(),
+                        )
+                    })
+                    .map(|(task_id, task)| (task_id.clone(), task.status.timestamp))
+                    .collect()
+            }
+        };
 
-                if let Some(ref status) = params.status
-                    && &task.status.state != status
-                {
-                    return false;
-                }
+        matching_tasks.sort_by(|a, b| b.1.cmp(&a.1));
 
-                if let Some(ref after) = params.last_updated_after
-                    && let Ok(after_time) = chrono::DateTime::parse_from_rfc3339(after)
-                    && task.status.timestamp < after_time.to_utc()
-                {
-                    return false;
-                }
-
-                true
-            })
-            .cloned()
-            .collect();
-
-        result.sort_by(|a, b| b.status.timestamp.cmp(&a.status.timestamp));
-
-        let total_size = result.len() as u32;
+        let total_size = matching_tasks.len() as u32;
         let page_size = params.page_size.unwrap_or(50).min(100);
         let start_idx = params
             .page_token
@@ -228,33 +279,33 @@ impl TaskManager {
             .and_then(|token| token.parse::<usize>().ok())
             .unwrap_or(0);
 
-        let end_idx = (start_idx + page_size as usize).min(result.len());
-        let next_page_token = if end_idx < result.len() {
+        let end_idx = (start_idx + page_size as usize).min(matching_tasks.len());
+        let next_page_token = if end_idx < matching_tasks.len() {
             Some(end_idx.to_string())
         } else {
             None
         };
 
-        result = result
+        let include_artifacts = params.include_artifacts == Some(true);
+        let history_length = params.history_length.map(|len| len as usize);
+        let page_task_ids: Vec<_> = matching_tasks
             .into_iter()
             .skip(start_idx)
             .take(page_size as usize)
             .collect();
-
-        if params.include_artifacts != Some(true) {
-            for task in &mut result {
-                task.artifacts.clear();
-            }
-        }
-
-        if let Some(history_len) = params.history_length {
-            for task in &mut result {
-                if task.history.len() > history_len as usize {
-                    let start = task.history.len() - history_len as usize;
-                    task.history = task.history[start..].to_vec();
-                }
-            }
-        }
+        let result = if page_task_ids.is_empty() {
+            Vec::new()
+        } else {
+            let state = self.state.read().await;
+            page_task_ids
+                .into_iter()
+                .filter_map(|(task_id, _)| {
+                    state.tasks.get(&task_id).map(|task| {
+                        Self::clone_task_for_listing(task, include_artifacts, history_length)
+                    })
+                })
+                .collect()
+        };
 
         ListTasksResult {
             tasks: result,
@@ -467,6 +518,59 @@ mod tests {
             })
             .await;
         assert_eq!(ctx1_tasks.tasks.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_list_tasks_paginates_and_trims_after_sorting() {
+        let manager = TaskManager::new();
+
+        let older = manager.create_task(Some("ctx-1".to_string())).await;
+        tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+        let newer = manager.create_task(Some("ctx-1".to_string())).await;
+
+        manager
+            .add_artifact(&newer.id, Artifact::text("art-1", "Generated content"))
+            .await
+            .expect("add artifact");
+        manager
+            .add_message(&newer.id, Message::user_text("Hello"))
+            .await
+            .expect("add msg1");
+        manager
+            .add_message(&newer.id, Message::agent_text("Hi there"))
+            .await
+            .expect("add msg2");
+
+        let first_page = manager
+            .list_tasks(ListTasksParams {
+                context_id: Some("ctx-1".to_string()),
+                page_size: Some(1),
+                history_length: Some(1),
+                include_artifacts: Some(false),
+                ..Default::default()
+            })
+            .await;
+
+        assert_eq!(first_page.total_size, Some(2));
+        assert_eq!(first_page.next_page_token.as_deref(), Some("1"));
+        assert_eq!(first_page.tasks.len(), 1);
+        assert_eq!(first_page.tasks[0].id, newer.id);
+        assert!(first_page.tasks[0].artifacts.is_empty());
+        assert_eq!(first_page.tasks[0].history.len(), 1);
+        assert_eq!(first_page.tasks[0].history[0].role, MessageRole::Agent);
+
+        let second_page = manager
+            .list_tasks(ListTasksParams {
+                context_id: Some("ctx-1".to_string()),
+                page_size: Some(1),
+                page_token: Some("1".to_string()),
+                ..Default::default()
+            })
+            .await;
+
+        assert_eq!(second_page.tasks.len(), 1);
+        assert_eq!(second_page.tasks[0].id, older.id);
+        assert!(second_page.next_page_token.is_none());
     }
 
     #[tokio::test]

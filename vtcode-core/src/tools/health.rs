@@ -89,13 +89,11 @@ impl ToolHealthTracker {
             latency_ms,
         });
 
-        if tool_stats.recent_history.len() > self.window_size {
-            if let Some(removed) = tool_stats.recent_history.pop_front() {
-                if !removed.success {
-                    tool_stats.recent_failure_count =
-                        tool_stats.recent_failure_count.saturating_sub(1);
-                }
-            }
+        if tool_stats.recent_history.len() > self.window_size
+            && let Some(removed) = tool_stats.recent_history.pop_front()
+            && !removed.success
+        {
+            tool_stats.recent_failure_count = tool_stats.recent_failure_count.saturating_sub(1);
         }
     }
 
@@ -137,7 +135,6 @@ impl ToolHealthTracker {
         }
         (true, None)
     }
-
 
     /// Get latency stats (avg, p95 estimate)
     pub fn get_latency_stats(&self, tool: &str) -> Option<(f64, f64)> {

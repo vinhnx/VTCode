@@ -234,13 +234,13 @@ fn detect_in_sequence(events: &[&ExecutionEvent]) -> DetectedPattern {
     }
 
     // 3. Near-loop check (same tool, similar args)
-    if same_tool && len >= 3 {
-        if events
+    if same_tool
+        && len >= 3
+        && events
             .windows(2)
             .all(|w| jaro_winkler_similarity(&w[0].arguments, &w[1].arguments) > 0.85)
-        {
-            return DetectedPattern::NearLoop;
-        }
+    {
+        return DetectedPattern::NearLoop;
     }
 
     // 4. Multi-tool analysis (Exploration/Convergence)

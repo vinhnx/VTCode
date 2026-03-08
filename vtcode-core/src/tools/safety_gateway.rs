@@ -287,40 +287,27 @@ fn patch_file_access_targets(args: &Value) -> Vec<FileAccessTarget> {
         return Vec::new();
     };
 
-    // Use HashSet for large patches to avoid O(N^2) (KISS/DRY/Perf)
-    let mut targets_set = HashSet::new();
+    let mut targets = Vec::new();
     for operation in patch.operations() {
         match operation {
             PatchOperation::AddFile { path, .. } => {
-                targets_set.insert(FileAccessTarget {
-                    path: PathBuf::from(path),
-                    access_type: AccessType::Write,
-                });
+                push_file_access_target(&mut targets, path, AccessType::Write);
             }
             PatchOperation::DeleteFile { path } => {
-                targets_set.insert(FileAccessTarget {
-                    path: PathBuf::from(path),
-                    access_type: AccessType::Delete,
-                });
+                push_file_access_target(&mut targets, path, AccessType::Delete);
             }
             PatchOperation::UpdateFile { path, new_path, .. } => {
-                targets_set.insert(FileAccessTarget {
-                    path: PathBuf::from(path),
-                    access_type: AccessType::Modify,
-                });
+                push_file_access_target(&mut targets, path, AccessType::Modify);
                 if let Some(destination) =
                     new_path.as_deref().filter(|candidate| *candidate != path)
                 {
-                    targets_set.insert(FileAccessTarget {
-                        path: PathBuf::from(destination),
-                        access_type: AccessType::Write,
-                    });
+                    push_file_access_target(&mut targets, destination, AccessType::Write);
                 }
             }
         }
     }
 
-    targets_set.into_iter().collect()
+    targets
 }
 
 fn file_access_targets(tool_name: &str, args: &Value) -> Vec<FileAccessTarget> {
@@ -1320,6 +1307,19 @@ mod tests {
                 .reason()
                 .is_some_and(|reason| reason.contains(".gitignore"))
         );
+    }
+
+    #[test]
+    fn test_patch_file_access_targets_preserve_patch_order() {
+        let targets = patch_file_access_targets(&serde_json::json!({
+            "input": "*** Begin Patch\n*** Update File: src/main.rs\n@@\n-old\n+new\n*** Update File: .gitignore\n@@\n-old\n+new\n*** End Patch\n"
+        }));
+
+        assert_eq!(targets.len(), 2);
+        assert_eq!(targets[0].path, PathBuf::from("src/main.rs"));
+        assert_eq!(targets[0].access_type, AccessType::Modify);
+        assert_eq!(targets[1].path, PathBuf::from(".gitignore"));
+        assert_eq!(targets[1].access_type, AccessType::Modify);
     }
 
     #[tokio::test]

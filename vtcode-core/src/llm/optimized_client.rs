@@ -101,9 +101,6 @@ pub struct CachedResponse {
 
 /// Rate limiter for API requests
 pub struct RateLimiter {
-    /// Semaphore for request rate limiting
-    permits: Arc<Semaphore>,
-
     /// Token bucket for burst handling
     token_bucket: Arc<RwLock<TokenBucket>>,
 }
@@ -223,8 +220,9 @@ impl RequestBatcher {
 
         let mut hasher = DefaultHasher::new();
 
-        // Hash model for batching
         request.model.hash(&mut hasher);
+        request.temperature.map(f32::to_bits).hash(&mut hasher);
+        request.max_tokens.hash(&mut hasher);
 
         format!("{:x}", hasher.finish())
     }
@@ -345,12 +343,17 @@ impl Drop for RequestBatcher {
 
 impl RateLimiter {
     pub fn new(requests_per_second: f64, burst_capacity: usize) -> Self {
+        let refill_rate = if requests_per_second.is_finite() && requests_per_second > 0.0 {
+            requests_per_second
+        } else {
+            1.0
+        };
+
         Self {
-            permits: Arc::new(Semaphore::new(burst_capacity)),
             token_bucket: Arc::new(RwLock::new(TokenBucket {
                 tokens: burst_capacity as f64,
                 capacity: burst_capacity as f64,
-                refill_rate: requests_per_second,
+                refill_rate,
                 last_refill: Instant::now(),
             })),
         }
@@ -358,26 +361,25 @@ impl RateLimiter {
 
     /// Acquire a permit for making a request
     pub async fn acquire(&self) -> Result<()> {
-        // Refill token bucket
-        self.refill_tokens().await;
+        loop {
+            let wait_time = {
+                let mut bucket = self.token_bucket.write().await;
+                Self::refill_tokens(&mut bucket);
 
-        // Try to acquire a token
-        let mut bucket = self.token_bucket.write().await;
-        if bucket.tokens >= 1.0 {
-            bucket.tokens -= 1.0;
-            Ok(())
-        } else {
-            drop(bucket);
+                if bucket.tokens >= 1.0 {
+                    bucket.tokens -= 1.0;
+                    return Ok(());
+                }
 
-            // Wait for permit from semaphore
-            let _permit = self.permits.acquire().await?;
-            Ok(())
+                Duration::from_secs_f64((1.0 - bucket.tokens) / bucket.refill_rate)
+            };
+
+            tokio::time::sleep(wait_time).await;
         }
     }
 
     /// Refill token bucket based on elapsed time
-    async fn refill_tokens(&self) {
-        let mut bucket = self.token_bucket.write().await;
+    fn refill_tokens(bucket: &mut TokenBucket) {
         let now = Instant::now();
         let elapsed = now.duration_since(bucket.last_refill).as_secs_f64();
 
@@ -488,6 +490,8 @@ impl OptimizedLLMClient {
 
         let mut hasher = DefaultHasher::new();
         request.model.hash(&mut hasher);
+        request.temperature.map(f32::to_bits).hash(&mut hasher);
+        request.max_tokens.hash(&mut hasher);
 
         for message in &request.messages {
             message.to_string().hash(&mut hasher);
@@ -512,5 +516,58 @@ impl OptimizedLLMClient {
         let mut metrics = self.metrics.read().await.clone();
         metrics.connection_pool_utilization = self.connection_pool.utilization().await;
         metrics
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cache_key_includes_generation_settings() {
+        let client = OptimizedLLMClient::new(1, 16, 10.0, 1);
+        let base_request = OptimizedRequest {
+            model: "model-a".to_string(),
+            messages: vec![serde_json::json!({"role": "user", "content": "hello"})],
+            temperature: Some(0.2),
+            max_tokens: Some(128),
+        };
+        let different_temperature = OptimizedRequest {
+            temperature: Some(0.8),
+            ..base_request.clone()
+        };
+        let different_max_tokens = OptimizedRequest {
+            max_tokens: Some(256),
+            ..base_request.clone()
+        };
+
+        assert_ne!(
+            client.generate_cache_key(&base_request),
+            client.generate_cache_key(&different_temperature)
+        );
+        assert_ne!(
+            client.generate_cache_key(&base_request),
+            client.generate_cache_key(&different_max_tokens)
+        );
+    }
+
+    #[test]
+    fn test_batch_key_includes_generation_settings() {
+        let batcher = RequestBatcher::new(Duration::from_millis(100), 10);
+        let base_request = OptimizedRequest {
+            model: "model-a".to_string(),
+            messages: vec![serde_json::json!({"role": "user", "content": "hello"})],
+            temperature: Some(0.2),
+            max_tokens: Some(128),
+        };
+        let different_request = OptimizedRequest {
+            temperature: Some(0.8),
+            ..base_request.clone()
+        };
+
+        assert_ne!(
+            batcher.generate_batch_key(&base_request),
+            batcher.generate_batch_key(&different_request)
+        );
     }
 }
