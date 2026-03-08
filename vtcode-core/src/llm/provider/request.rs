@@ -18,7 +18,7 @@ pub struct LLMRequest {
     pub stream: bool,
 
     /// Optional structured output JSON schema to request from providers that support it
-    /// For Anthropic this will be sent as `output_format: { type: "json_schema", schema: ... }`
+    /// For Anthropic this will be sent as `output_config.format = { type: "json_schema", schema: ... }`
     pub output_format: Option<Value>,
 
     /// Tool choice configuration based on official API docs
@@ -59,7 +59,7 @@ pub struct LLMRequest {
     /// Optional beta headers for Anthropic (and potentially others)
     pub betas: Option<Vec<String>>,
 
-    /// Optional provider-specific context management configuration (Anthropic compaction).
+    /// Optional provider-specific context management configuration (Anthropic compaction/editing).
     pub context_management: Option<Value>,
 
     /// Optional prefill text for the assistant response (Anthropic prefilling)

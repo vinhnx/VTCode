@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 
 /// Tool search algorithm for Anthropic's advanced-tool-use beta
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -44,6 +44,8 @@ pub struct ToolDefinition {
     /// - Anthropic tool search revisions:
     /// - "tool_search_tool_regex_20251119", "tool_search_tool_bm25_20251119"
     /// - "web_search_20260209" (and other web_search_* revisions)
+    /// - "code_execution_20250825" (and other code_execution_* revisions)
+    /// - "memory_20250818" (and other memory_* revisions)
     #[serde(rename = "type")]
     pub tool_type: String,
 
@@ -51,6 +53,14 @@ pub struct ToolDefinition {
     /// Used for "function", "apply_patch", and "custom" types
     #[serde(skip_serializing_if = "Option::is_none")]
     pub function: Option<FunctionDefinition>,
+
+    /// Restricts which Anthropic callers can invoke this tool programmatically.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allowed_callers: Option<Vec<String>>,
+
+    /// Anthropic tool use examples used to teach complex tool behavior.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_examples: Option<Vec<Value>>,
 
     /// Provider-native web search configuration payload (e.g. Z.AI `web_search` tool).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -166,6 +176,8 @@ impl ToolDefinition {
         Self {
             tool_type: tool_type.into(),
             function: None,
+            allowed_callers: None,
+            input_examples: None,
             web_search: None,
             hosted_tool_config: None,
             shell: None,
@@ -190,6 +202,18 @@ impl ToolDefinition {
     /// Set whether the tool should be considered strict (Anthropic structured tool use)
     pub fn with_strict(mut self, strict: bool) -> Self {
         self.strict = Some(strict);
+        self
+    }
+
+    /// Restrict which Anthropic callers can invoke this tool programmatically.
+    pub fn with_allowed_callers(mut self, allowed_callers: Vec<String>) -> Self {
+        self.allowed_callers = Some(allowed_callers);
+        self
+    }
+
+    /// Attach Anthropic tool use examples for better tool selection and argument shaping.
+    pub fn with_input_examples(mut self, input_examples: Vec<Value>) -> Self {
+        self.input_examples = Some(input_examples);
         self
     }
 
@@ -325,9 +349,11 @@ impl ToolDefinition {
             "tool_search_tool_regex_20251119" | "tool_search_tool_bm25_20251119" => {
                 self.validate_function()
             }
-            other if other.starts_with("web_search_") => Ok(()),
+            other if other.starts_with("web_search_") => self.validate_anthropic_web_search(),
+            other if other.starts_with("code_execution_") => Ok(()),
+            other if other.starts_with("memory_") => Ok(()),
             other => Err(format!(
-                "Unsupported tool type: {}. Supported types: function, apply_patch, shell, custom, grammar, web_search, file_search, mcp, tool_search, tool_search_tool_*, web_search_*",
+                "Unsupported tool type: {}. Supported types: function, apply_patch, shell, custom, grammar, web_search, file_search, mcp, tool_search, tool_search_tool_*, web_search_*, code_execution_*, memory_*",
                 other
             )),
         }
@@ -344,6 +370,16 @@ impl ToolDefinition {
     /// Returns true when the tool is an Anthropic native web search tool revision.
     pub fn is_anthropic_web_search(&self) -> bool {
         self.tool_type.starts_with("web_search_")
+    }
+
+    /// Returns true when the tool is an Anthropic native code execution tool revision.
+    pub fn is_anthropic_code_execution(&self) -> bool {
+        self.tool_type.starts_with("code_execution_")
+    }
+
+    /// Returns true when the tool is an Anthropic native memory tool revision.
+    pub fn is_anthropic_memory_tool(&self) -> bool {
+        self.tool_type.starts_with("memory_")
     }
 
     fn validate_function(&self) -> Result<(), String> {
@@ -423,11 +459,22 @@ impl ToolDefinition {
     }
 
     fn validate_web_search(&self) -> Result<(), String> {
-        if self.web_search.is_some() {
-            Ok(())
-        } else {
-            Err("web_search tool missing web_search configuration".to_owned())
+        self.web_search_config_object(true).map(|_| ())
+    }
+
+    fn validate_anthropic_web_search(&self) -> Result<(), String> {
+        let Some(config) = self.web_search_config_object(false)? else {
+            return Ok(());
+        };
+
+        if config.contains_key("allowed_domains") && config.contains_key("blocked_domains") {
+            return Err(
+                "anthropic web_search tools cannot set both allowed_domains and blocked_domains"
+                    .to_owned(),
+            );
         }
+
+        Ok(())
     }
 
     fn validate_hosted_tool_config(&self) -> Result<(), String> {
@@ -438,6 +485,24 @@ impl ToolDefinition {
                 self.tool_type
             )),
             None => Err(format!("{} tool missing configuration", self.tool_type)),
+        }
+    }
+
+    fn web_search_config_object(
+        &self,
+        required: bool,
+    ) -> Result<Option<&Map<String, Value>>, String> {
+        match self.web_search.as_ref() {
+            Some(Value::Object(config)) => Ok(Some(config)),
+            Some(_) => Err(format!(
+                "{} tool configuration must be a JSON object",
+                self.tool_type
+            )),
+            None if required => Err(format!(
+                "{} tool missing web_search configuration",
+                self.tool_type
+            )),
+            None => Ok(None),
         }
     }
 }

@@ -66,15 +66,10 @@ pub fn supports_structured_output(model: &str, default_model: &str) -> bool {
         model
     };
 
-    [
-        models::anthropic::CLAUDE_SONNET_4_6,
-        models::anthropic::CLAUDE_OPUS_4_6,
-    ]
-    .contains(&requested)
-        || requested == models::anthropic::CLAUDE_HAIKU_4_5
-        || requested == models::anthropic::CLAUDE_HAIKU_4_5_20251001
-        || requested.contains("claude-3-7-sonnet")
-        || requested.contains("claude-3-5-sonnet")
+    requested.contains("claude-sonnet-4-6")
+        || requested.contains("claude-opus-4-6")
+        || requested.contains("claude-sonnet-4-5")
+        || requested.contains("claude-opus-4-5")
         || requested.contains("claude-haiku-4-5")
 }
 

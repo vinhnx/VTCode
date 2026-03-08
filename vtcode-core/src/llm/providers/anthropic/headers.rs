@@ -14,8 +14,7 @@ use super::prompt_cache::requires_extended_ttl_beta;
 pub struct BetaHeaderConfig<'a> {
     pub config: &'a AnthropicConfig,
     pub model: &'a str,
-    pub include_structured: bool,
-    pub include_tool_search: bool,
+    pub include_advanced_tool_use: bool,
     pub request_betas: Option<&'a Vec<String>>,
     pub include_effort: bool,
 }
@@ -59,11 +58,7 @@ pub fn combined_beta_header_value(
         pieces.push(config.config.interleaved_thinking_beta.clone());
     }
 
-    if config.include_structured {
-        pieces.push("structured-outputs-2025-11-13".to_owned());
-    }
-
-    if config.include_tool_search {
+    if config.include_advanced_tool_use {
         pieces.push("advanced-tool-use-2025-11-20".to_owned());
     }
 
