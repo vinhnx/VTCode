@@ -455,7 +455,8 @@ pub(super) async fn run_single_agent_loop_unified_impl(
     let mut config_watcher = SimpleConfigWatcher::new(config.workspace.clone());
     config_watcher.set_check_interval(15);
     config_watcher.set_debounce_duration(500);
-    let live_reload_enabled = live_reload_preserves_session_config(initial_vt_cfg.as_ref(), &config);
+    let live_reload_enabled =
+        live_reload_preserves_session_config(initial_vt_cfg.as_ref(), &config);
     if !live_reload_enabled {
         tracing::debug!(
             "Configuration live reload disabled because startup overrides cannot be reproduced from workspace config"
