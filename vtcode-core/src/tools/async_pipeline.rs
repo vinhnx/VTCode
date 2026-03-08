@@ -200,7 +200,11 @@ impl AsyncToolPipeline {
     pub async fn submit_request(&self, request: ToolRequest) -> Result<String> {
         // Check cache first
         let cache_key = self.generate_cache_key(&request);
-        if let Some(_cached_result) = self.result_cache.read().await.peek(&cache_key) {
+        let cache_hit = {
+            let cache = self.result_cache.read().await;
+            cache.peek(&cache_key).is_some()
+        };
+        if cache_hit {
             self.metrics.write().await.cache_hits += 1;
             return Ok(request.call.id.clone());
         }
