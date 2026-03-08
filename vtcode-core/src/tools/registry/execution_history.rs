@@ -201,7 +201,10 @@ fn read_file_path_from_args(args: &Value) -> Option<&str> {
 }
 
 fn normalize_tool_name_for_match(name: &str) -> String {
-    name.trim().to_ascii_lowercase().replace(' ', "_")
+    let normalized = name.trim().to_ascii_lowercase().replace(' ', "_");
+    tool_intent::canonical_unified_exec_tool_name(&normalized)
+        .unwrap_or(&normalized)
+        .to_string()
 }
 
 fn is_read_file_tool_name(name: &str) -> bool {

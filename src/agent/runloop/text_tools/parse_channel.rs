@@ -1,6 +1,10 @@
 use serde_json::Value;
 use vtcode_core::config::constants::tools;
 
+use crate::agent::runloop::text_tools::canonical::{
+    apply_unified_exec_defaults, unified_exec_defaults_for_name,
+};
+
 pub(super) fn parse_channel_tool_call(text: &str) -> Option<(String, Value)> {
     // Harmony format: <|start|>{header}<|message|>{content}<|end|>
     // We look for a message that is a tool call (ends with <|call|> or has commentary channel)
@@ -82,82 +86,89 @@ pub(super) fn convert_harmony_args_to_tool_format(
     tool_name: &str,
     parsed: Value,
 ) -> Result<Value, String> {
-    match tool_name {
-        tools::UNIFIED_EXEC | "run_pty_cmd" | "bash" | "exec_command" => {
-            let mut result = serde_json::Map::new();
-            result.insert("action".to_string(), serde_json::json!("run"));
+    if let Some(defaults) = unified_exec_defaults_for_name(tool_name) {
+        let mut result = serde_json::Map::new();
+        apply_unified_exec_defaults(&mut result, defaults);
 
-            // Preserve other parameters from the original parsed object
-            if let Some(map) = parsed.as_object() {
-                for (key, value) in map {
-                    if key != "cmd" && key != "command" && key != "action" {
-                        result.insert(key.to_string(), value.clone());
-                    }
+        // Preserve other parameters from the original parsed object
+        if let Some(map) = parsed.as_object() {
+            for (key, value) in map {
+                if key != "cmd" && key != "command" && key != "action" {
+                    result.insert(key.to_string(), value.clone());
                 }
             }
+        }
 
-            // Handle command parameter - try multiple sources
-            if let Some(cmd) = parsed.get("cmd").and_then(|v| v.as_array()) {
-                let command: Vec<String> = cmd
-                    .iter()
-                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                    .collect();
+        if matches!(defaults.action, "list" | "close" | "poll" | "write")
+            && parsed.get("cmd").is_none()
+            && parsed.get("command").is_none()
+        {
+            return Ok(Value::Object(result));
+        }
 
-                // Validate non-empty command and executable
-                if command.is_empty() || command[0].trim().is_empty() {
-                    return Err("command executable cannot be empty".to_string());
+        let command = normalized_harmony_command(&parsed)?
+            .ok_or_else(|| "no 'cmd' or 'command' parameter provided".to_string())?;
+        result.insert("command".to_string(), command);
+        Ok(Value::Object(result))
+    } else {
+        match tool_name {
+            "list_files" => {
+                // Convert harmony list_files format to vtcode format
+                let mut args = serde_json::Map::new();
+
+                if let Some(path) = parsed.get("path") {
+                    args.insert("path".to_string(), path.clone());
                 }
 
-                result.insert("command".to_string(), serde_json::json!(command));
-                Ok(Value::Object(result))
-            } else if let Some(cmd_str) = parsed.get("cmd").and_then(|v| v.as_str()) {
-                // Handle string command from 'cmd' parameter
-                if cmd_str.trim().is_empty() {
-                    return Err("command executable cannot be empty".to_string());
+                if let Some(recursive) = parsed.get("recursive") {
+                    args.insert("recursive".to_string(), recursive.clone());
                 }
 
-                result.insert("command".to_string(), serde_json::json!([cmd_str]));
-                Ok(Value::Object(result))
-            } else if let Some(cmd) = parsed.get("command").and_then(|v| v.as_array()) {
-                // Fallback: handle 'command' array parameter
-                let command: Vec<String> = cmd
-                    .iter()
-                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                    .collect();
+                Ok(Value::Object(args))
+            }
+            _ => Ok(parsed),
+        }
+    }
+}
 
-                if command.is_empty() || command[0].trim().is_empty() {
-                    return Err("command executable cannot be empty".to_string());
-                }
+fn normalized_harmony_command(parsed: &Value) -> Result<Option<Value>, String> {
+    parsed
+        .get("cmd")
+        .or_else(|| parsed.get("command"))
+        .map(normalize_harmony_command_value)
+        .transpose()
+}
 
-                result.insert("command".to_string(), serde_json::json!(command));
-                Ok(Value::Object(result))
-            } else if let Some(cmd_str) = parsed.get("command").and_then(|v| v.as_str()) {
-                // Fallback: handle 'command' string parameter
-                if cmd_str.trim().is_empty() {
-                    return Err("command executable cannot be empty".to_string());
-                }
-
-                result.insert("command".to_string(), serde_json::json!([cmd_str]));
-                Ok(Value::Object(result))
+fn normalize_harmony_command_value(command: &Value) -> Result<Value, String> {
+    match command {
+        Value::String(command) => {
+            if command.trim().is_empty() {
+                Err("command executable cannot be empty".to_string())
             } else {
-                // No command found - return error
-                Err("no 'cmd' or 'command' parameter provided".to_string())
+                Ok(Value::String(command.clone()))
             }
         }
-        "list_files" => {
-            // Convert harmony list_files format to vtcode format
-            let mut args = serde_json::Map::new();
+        Value::Array(values) => {
+            let command = values
+                .iter()
+                .map(|value| {
+                    value
+                        .as_str()
+                        .map(ToOwned::to_owned)
+                        .ok_or_else(|| "command array must contain only strings".to_string())
+                })
+                .collect::<Result<Vec<_>, _>>()?;
 
-            if let Some(path) = parsed.get("path") {
-                args.insert("path".to_string(), path.clone());
+            if command
+                .first()
+                .map(|part| part.trim().is_empty())
+                .unwrap_or(true)
+            {
+                Err("command executable cannot be empty".to_string())
+            } else {
+                Ok(serde_json::json!(command))
             }
-
-            if let Some(recursive) = parsed.get("recursive") {
-                args.insert("recursive".to_string(), recursive.clone());
-            }
-
-            Ok(Value::Object(args))
         }
-        _ => Ok(parsed),
+        _ => Err("command must be a string or array of strings".to_string()),
     }
 }

@@ -15,6 +15,7 @@ use super::scrollback::PtyScrollback;
 /// Maximum time to wait for reader thread to finish (ms)
 const READER_THREAD_TIMEOUT_MS: u64 = 5000;
 
+#[derive(Clone)]
 pub(super) struct CommandEchoState {
     command_bytes: Vec<u8>,
     failure: Vec<usize>,
@@ -298,7 +299,11 @@ impl PtySessionHandle {
             return None;
         }
 
-        let filtered = self.strip_command_echo(text);
+        let filtered = if drain {
+            self.strip_command_echo(text)
+        } else {
+            self.preview_command_echo(text)
+        };
         if filtered.is_empty() {
             None
         } else {
@@ -312,13 +317,29 @@ impl PtySessionHandle {
             return text;
         };
 
-        let (consumed, done) = state.consume_chunk(&text);
+        let (filtered, done) = filter_command_echo(text, state);
         if done {
             *guard = None;
         }
+        filtered
+    }
 
+    fn preview_command_echo(&self, text: String) -> String {
+        let mut preview_state = self.last_input.lock().clone();
+        let Some(state) = preview_state.as_mut() else {
+            return text;
+        };
+
+        filter_command_echo(text, state).0
+    }
+}
+
+fn filter_command_echo(text: String, state: &mut CommandEchoState) -> (String, bool) {
+    let (consumed, done) = state.consume_chunk(&text);
+    (
         text.get(consumed..)
             .map(|tail| tail.to_owned())
-            .unwrap_or_default()
-    }
+            .unwrap_or_default(),
+        done,
+    )
 }

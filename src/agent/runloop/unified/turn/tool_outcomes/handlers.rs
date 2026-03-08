@@ -1611,10 +1611,10 @@ pub(crate) async fn validate_tool_call<'a>(
                 let parts = ctx.parts_mut();
                 parts.tool.tool_registry.clone()
             };
-            if let Err(err) = tool_registry.terminate_all_pty_sessions_async().await {
+            if let Err(err) = tool_registry.terminate_all_exec_sessions_async().await {
                 tracing::warn!(
                     error = %err,
-                    "Failed to terminate all PTY sessions after loop detector block"
+                    "Failed to terminate all exec sessions after loop detector block"
                 );
             }
             {

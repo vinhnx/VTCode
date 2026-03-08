@@ -192,6 +192,7 @@ pub fn canonical_unified_exec_tool_name(tool_name: &str) -> Option<&'static str>
         tools::UNIFIED_EXEC
         | tools::RUN_PTY_CMD
         | tools::SEND_PTY_INPUT
+        | tools::CREATE_PTY_SESSION
         | tools::READ_PTY_SESSION
         | tools::LIST_PTY_SESSIONS
         | tools::CLOSE_PTY_SESSION
@@ -209,7 +210,7 @@ pub fn canonical_unified_exec_tool_name(tool_name: &str) -> Option<&'static str>
 
 pub fn is_command_run_tool_call(tool_name: &str, args: &Value) -> bool {
     match tool_name {
-        tools::RUN_PTY_CMD | tools::SHELL | "bash" => true,
+        tools::RUN_PTY_CMD | tools::CREATE_PTY_SESSION | tools::SHELL | "bash" => true,
         tools::UNIFIED_EXEC
         | tools::EXEC_PTY_CMD
         | tools::EXEC_COMMAND

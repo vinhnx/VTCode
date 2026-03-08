@@ -27,6 +27,7 @@ fn test_detect_textual_tool_call_parses_function_style_block() {
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
     assert_eq!(name, tools::UNIFIED_EXEC);
     assert_eq!(args["action"], serde_json::json!("run"));
+    assert_eq!(args["tty"], serde_json::json!(true));
     assert_eq!(args["command"], serde_json::json!(["ls", "-a"]));
     assert_eq!(args["workdir"], serde_json::json!("WORKSPACE_DIR"));
     assert_eq!(args["max_tokens"], serde_json::json!(1000));
@@ -39,6 +40,7 @@ fn test_detect_textual_tool_call_skips_non_tool_function_blocks() {
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
     assert_eq!(name, tools::UNIFIED_EXEC);
     assert_eq!(args["action"], serde_json::json!("run"));
+    assert_eq!(args["tty"], serde_json::json!(true));
     assert_eq!(args["command"], serde_json::json!(["pwd"]));
 }
 
@@ -143,6 +145,7 @@ fn test_detect_tagged_tool_call_parses_basic_command() {
         args,
         serde_json::json!({
             "action": "run",
+            "tty": true,
             "command": ["ls", "-a"]
         })
     );
@@ -157,6 +160,7 @@ fn test_detect_tagged_tool_call_respects_indexed_arguments() {
         args,
         serde_json::json!({
             "action": "run",
+            "tty": true,
             "command": ["python", "-c", "print('hi')"]
         })
     );
@@ -171,6 +175,7 @@ fn test_detect_tagged_tool_call_handles_one_based_indexes() {
         args,
         serde_json::json!({
             "action": "run",
+            "tty": true,
             "command": ["ls", "-a"]
         })
     );
@@ -185,6 +190,7 @@ fn test_detect_rust_struct_tool_call_parses_command_block() {
         args,
         serde_json::json!({
             "action": "run",
+            "tty": true,
             "command": ["ls", "-a"],
             "workdir": "/tmp",
             "timeout": 5.0
@@ -202,6 +208,7 @@ fn test_detect_rust_struct_tool_call_handles_trailing_commas() {
         args,
         serde_json::json!({
             "action": "run",
+            "tty": true,
             "command": ["git", "status"],
             "workdir": "."
         })
@@ -217,6 +224,7 @@ fn test_detect_rust_struct_tool_call_handles_semicolons() {
         args,
         serde_json::json!({
             "action": "run",
+            "tty": true,
             "command": ["pwd"],
             "workdir": "/tmp"
         })
@@ -262,6 +270,7 @@ fn test_detect_textual_tool_call_canonicalizes_name_variants() {
         args,
         serde_json::json!({
             "action": "run",
+            "tty": true,
             "command": ["pwd"]
         })
     );
@@ -353,7 +362,7 @@ fn test_parse_harmony_channel_tool_call_with_string_cmd() {
         "<|start|>assistant<|channel|>commentary to=bash<|message|>{\"cmd\":\"pwd\"}<|call|>";
     let (name, args) = detect_textual_tool_call(message).expect("should parse harmony format");
     assert_eq!(name, "unified_exec");
-    assert_eq!(args["command"], serde_json::json!(["pwd"]));
+    assert_eq!(args["command"], serde_json::json!("pwd"));
 }
 
 #[test]
@@ -392,6 +401,7 @@ fn test_convert_harmony_args_accepts_valid_command_array() {
     let result = parse_channel::convert_harmony_args_to_tool_format("run_pty_cmd", parsed);
     assert!(result.is_ok());
     let value = result.unwrap();
+    assert_eq!(value["tty"], serde_json::json!(true));
     assert_eq!(value["command"], serde_json::json!(["ls", "-la"]));
 }
 
@@ -401,7 +411,98 @@ fn test_convert_harmony_args_accepts_valid_command_string() {
     let result = parse_channel::convert_harmony_args_to_tool_format("run_pty_cmd", parsed);
     assert!(result.is_ok());
     let value = result.unwrap();
-    assert_eq!(value["command"], serde_json::json!(["echo test"]));
+    assert_eq!(value["tty"], serde_json::json!(true));
+    assert_eq!(value["command"], serde_json::json!("echo test"));
+}
+
+#[test]
+fn test_convert_harmony_args_maps_create_pty_session_to_run_with_tty() {
+    let parsed = serde_json::json!({ "command": "pwd" });
+    let result = parse_channel::convert_harmony_args_to_tool_format("create_pty_session", parsed);
+    assert!(result.is_ok());
+    let value = result.unwrap();
+    assert_eq!(value["action"], serde_json::json!("run"));
+    assert_eq!(value["tty"], serde_json::json!(true));
+    assert_eq!(value["command"], serde_json::json!("pwd"));
+}
+
+#[test]
+fn test_convert_harmony_args_rejects_non_string_command_array_entries() {
+    let parsed = serde_json::json!({ "cmd": ["ls", 1] });
+    let result = parse_channel::convert_harmony_args_to_tool_format("run_pty_cmd", parsed);
+    assert!(result.is_err());
+    assert_eq!(
+        result.unwrap_err(),
+        "command array must contain only strings"
+    );
+}
+
+#[test]
+fn test_convert_harmony_args_maps_read_pty_session_to_poll() {
+    let parsed = serde_json::json!({
+        "session_id": "run-1",
+        "yield_time_ms": 10
+    });
+    let result = parse_channel::convert_harmony_args_to_tool_format("read_pty_session", parsed);
+    assert!(result.is_ok());
+    assert_eq!(
+        result.unwrap(),
+        serde_json::json!({
+            "action": "poll",
+            "session_id": "run-1",
+            "yield_time_ms": 10
+        })
+    );
+}
+
+#[test]
+fn test_convert_harmony_args_maps_send_pty_input_to_write() {
+    let parsed = serde_json::json!({
+        "session_id": "run-1",
+        "chars": "status\n"
+    });
+    let result = parse_channel::convert_harmony_args_to_tool_format("send_pty_input", parsed);
+    assert!(result.is_ok());
+    assert_eq!(
+        result.unwrap(),
+        serde_json::json!({
+            "action": "write",
+            "session_id": "run-1",
+            "chars": "status\n"
+        })
+    );
+}
+
+#[test]
+fn test_convert_harmony_args_maps_list_pty_sessions_to_list() {
+    let parsed = serde_json::json!({
+        "yield_time_ms": 10
+    });
+    let result = parse_channel::convert_harmony_args_to_tool_format("list_pty_sessions", parsed);
+    assert!(result.is_ok());
+    assert_eq!(
+        result.unwrap(),
+        serde_json::json!({
+            "action": "list",
+            "yield_time_ms": 10
+        })
+    );
+}
+
+#[test]
+fn test_convert_harmony_args_maps_close_pty_session_to_close() {
+    let parsed = serde_json::json!({
+        "session_id": "run-1"
+    });
+    let result = parse_channel::convert_harmony_args_to_tool_format("close_pty_session", parsed);
+    assert!(result.is_ok());
+    assert_eq!(
+        result.unwrap(),
+        serde_json::json!({
+            "action": "close",
+            "session_id": "run-1"
+        })
+    );
 }
 
 #[test]
@@ -497,6 +598,7 @@ fn test_parse_tagged_tool_call_handles_nested_json() {
     let (name, args) = result.unwrap();
     assert_eq!(name, tools::UNIFIED_EXEC);
     assert_eq!(args.get("action"), Some(&serde_json::json!("run")));
+    assert_eq!(args.get("tty"), Some(&serde_json::json!(true)));
     assert!(args.get("command").and_then(|v| v.as_array()).is_some());
     assert_eq!(
         args.get("command")
