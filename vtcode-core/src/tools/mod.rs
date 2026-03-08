@@ -264,7 +264,7 @@ pub use async_middleware::{
     AsyncRetryMiddleware, ToolRequest as MiddlewareToolRequest, ToolResult,
 };
 pub use improvement_algorithms::{
-    MLScoreComponents, PatternDetector, PatternState, TimeDecayedScore, jaro_winkler_similarity,
+    MLScoreComponents, PatternState, TimeDecayedScore, detect_pattern, jaro_winkler_similarity,
 };
 pub use improvements_config::{
     CacheConfig, ContextConfig, FallbackConfig, ImprovementsConfig, PatternConfig,

@@ -166,6 +166,7 @@ tokio-tungstenite = { version = "0.28", default-features = false, features = [
     "connect",
     "rustls-tls-webpki-roots",
 ] }
+smallvec = "1.15.1"
 
 [build-dependencies]
 vtcode-config = { path = "../vtcode-config", version = "0.87.1" }

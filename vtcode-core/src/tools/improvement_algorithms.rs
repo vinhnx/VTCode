@@ -1,27 +1,29 @@
-//! Production-grade algorithms for tool improvements
+//! Production-grade algorithms for tool improvements.
 //!
-//! Implements proven algorithms: Jaro-Winkler similarity, time-decay effectiveness,
-//! sophisticated pattern detection, and ML-ready scoring.
+//! Provides: Jaro-Winkler string similarity, time-decay effectiveness scoring,
+//! pattern detection over tool execution history, and ML-ready feature vectors.
 
 use crate::utils::current_timestamp;
 use serde::{Deserialize, Serialize};
+use smallvec::SmallVec;
 
-/// Jaro-Winkler string similarity (0.0-1.0)
+// ── String similarity ─────────────────────────────────────────────────────────
+
+/// Jaro-Winkler string similarity in [0.0, 1.0].
 ///
-/// Preferred over simple Levenshtein for short strings (tool arguments).
-/// Gives higher scores to strings with matching prefix.
+/// Preferred over Levenshtein for short strings (tool arguments) because it
+/// rewards matching prefixes, which is common in tool argument patterns.
 pub fn jaro_winkler_similarity(s1: &str, s2: &str) -> f32 {
     if s1 == s2 {
         return 1.0;
     }
-
     if s1.is_empty() || s2.is_empty() {
         return 0.0;
     }
 
     let jaro = jaro_similarity(s1, s2);
 
-    // Find common prefix (up to 4 chars)
+    // Common prefix length, capped at 4 (standard Winkler constant).
     let prefix_len = s1
         .chars()
         .zip(s2.chars())
@@ -29,16 +31,17 @@ pub fn jaro_winkler_similarity(s1: &str, s2: &str) -> f32 {
         .take(4)
         .count();
 
-    // Boost score with prefix match (p=0.1 is standard)
+    // Winkler boost: p = 0.1 (standard scaling factor).
     jaro + (prefix_len as f32 * 0.1 * (1.0 - jaro))
 }
 
-/// Jaro similarity metric
+/// Jaro similarity in [0.0, 1.0].
 fn jaro_similarity(s1: &str, s2: &str) -> f32 {
-    let s1_chars: Vec<char> = s1.chars().collect();
-    let s2_chars: Vec<char> = s2.chars().collect();
-    let len1 = s1_chars.len();
-    let len2 = s2_chars.len();
+    // Use SmallVec to avoid heap allocation for common short strings.
+    let s1c: SmallVec<[char; 64]> = s1.chars().collect();
+    let s2c: SmallVec<[char; 64]> = s2.chars().collect();
+    let len1 = s1c.len();
+    let len2 = s2c.len();
 
     if len1 == 0 && len2 == 0 {
         return 1.0;
@@ -47,25 +50,22 @@ fn jaro_similarity(s1: &str, s2: &str) -> f32 {
         return 0.0;
     }
 
-    let match_distance = (len1.max(len2) / 2).saturating_sub(1);
+    let window = (len1.max(len2) / 2).saturating_sub(1);
 
-    let mut s1_matches = vec![false; len1];
-    let mut s2_matches = vec![false; len2];
+    let mut s1_matched = SmallVec::<[bool; 64]>::from_elem(false, len1);
+    let mut s2_matched = SmallVec::<[bool; 64]>::from_elem(false, len2);
+    let mut matches = 0usize;
 
-    let mut matches = 0;
-
-    for (i, c1) in s1_chars.iter().enumerate() {
-        let start = i.saturating_sub(match_distance);
-        let end = (i + match_distance + 1).min(len2);
-
-        for j in start..end {
-            if s2_matches[j] || *c1 != s2_chars[j] {
-                continue;
+    for (i, &c1) in s1c.iter().enumerate() {
+        let lo = i.saturating_sub(window);
+        let hi = (i + window + 1).min(len2);
+        for j in lo..hi {
+            if !s2_matched[j] && c1 == s2c[j] {
+                s1_matched[i] = true;
+                s2_matched[j] = true;
+                matches += 1;
+                break;
             }
-            s1_matches[i] = true;
-            s2_matches[j] = true;
-            matches += 1;
-            break;
         }
     }
 
@@ -73,251 +73,231 @@ fn jaro_similarity(s1: &str, s2: &str) -> f32 {
         return 0.0;
     }
 
-    let s1_matched_chars: Vec<char> = s1_chars
-        .iter()
-        .enumerate()
-        .filter_map(|(i, c)| s1_matches[i].then_some(*c))
-        .collect();
-    let s2_matched_chars: Vec<char> = s2_chars
-        .iter()
-        .enumerate()
-        .filter_map(|(i, c)| s2_matches[i].then_some(*c))
-        .collect();
+    // Count transpositions without allocating matched-char buffers:
+    // walk both arrays in order, zip the matched positions, count mismatches.
+    let mut s1_iter = s1c.iter().enumerate().filter(|&(i, _)| s1_matched[i]);
+    let mut s2_iter = s2c.iter().enumerate().filter(|&(i, _)| s2_matched[i]);
+    let mut transpositions = 0usize;
+    loop {
+        match (s1_iter.next(), s2_iter.next()) {
+            (Some((_, a)), Some((_, b))) => {
+                if a != b {
+                    transpositions += 1;
+                }
+            }
+            _ => break,
+        }
+    }
+    transpositions /= 2;
 
-    let transpositions = s1_matched_chars
-        .iter()
-        .zip(s2_matched_chars.iter())
-        .filter(|(a, b)| a != b)
-        .count()
-        / 2;
-
-    (matches as f32 / len1 as f32
-        + matches as f32 / len2 as f32
-        + (matches as f32 - transpositions as f32) / matches as f32)
-        / 3.0
+    let m = matches as f32;
+    (m / len1 as f32 + m / len2 as f32 + (m - transpositions as f32) / m) / 3.0
 }
 
-/// Time-decay effectiveness score
+// ── Time-decay scoring ────────────────────────────────────────────────────────
+
+/// Time-decay effectiveness score.
 ///
-/// Recent successes weighted higher than old ones.
-/// Decay follows exponential model: weight = exp(-lambda * age_hours)
+/// Recent successes are weighted higher. Decay follows:
+/// `score × exp(−λ × age_hours)`, default λ = 0.1 per 24 h.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimeDecayedScore {
-    /// Base score (0.0-1.0)
+    /// Base score (0.0–1.0).
     pub base_score: f32,
-
-    /// Age in seconds
+    /// Age in seconds.
     pub age_seconds: u64,
-
-    /// Decay constant (default 0.1 per 24 hours)
+    /// Decay constant.
     pub decay_lambda: f32,
-
-    /// Decayed score (0.0-1.0)
+    /// Decayed score (0.0–1.0).
     pub decayed_score: f32,
 }
 
 impl TimeDecayedScore {
-    /// Calculate time-decayed score
-    ///
-    /// Formula: score * exp(-lambda * age_hours)
-    /// Default lambda = 0.1 (5% decay per 24 hours)
+    /// Calculate a time-decayed score for `base_score` recorded at `timestamp`.
     pub fn calculate(base_score: f32, timestamp: u64) -> Self {
+        const DEFAULT_LAMBDA: f32 = 0.1;
         let now = current_timestamp();
-
         let age_seconds = now.saturating_sub(timestamp);
         let age_hours = age_seconds as f32 / 3600.0;
-        let decay_lambda = 0.1; // Configurable
-
-        let decay_factor = (-decay_lambda * age_hours).exp();
-        let decayed_score = (base_score * decay_factor).clamp(0.0, 1.0);
+        let decayed_score = (base_score * (-DEFAULT_LAMBDA * age_hours).exp()).clamp(0.0, 1.0);
 
         Self {
             base_score,
             age_seconds,
-            decay_lambda,
+            decay_lambda: DEFAULT_LAMBDA,
             decayed_score,
         }
     }
 
-    /// Custom decay constant
+    /// Return a copy with a custom decay constant applied.
     pub fn with_decay(mut self, lambda: f32) -> Self {
         let age_hours = self.age_seconds as f32 / 3600.0;
-        let decay_factor = (-lambda * age_hours).exp();
-        self.decayed_score = (self.base_score * decay_factor).clamp(0.0, 1.0);
+        self.decayed_score = (self.base_score * (-lambda * age_hours).exp()).clamp(0.0, 1.0);
         self.decay_lambda = lambda;
         self
     }
 }
 
-/// Pattern detection state machine
+// ── Pattern detection ─────────────────────────────────────────────────────────
+
+/// Detected state in a tool-execution sequence.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum PatternState {
-    /// Single execution
+    /// Single execution.
     Single,
-    /// Two identical executions
+    /// Two identical executions.
     Duplicate,
-    /// Multiple identical executions (3+)
+    /// Multiple identical executions (3+).
     Loop,
-    /// Executions with slight variation (fuzzy match)
+    /// Executions with slight variation (fuzzy match).
     NearLoop,
-    /// Sequential improvement (increasing quality)
+    /// Sequential quality improvement.
     RefinementChain,
-    /// Multiple tools converging
+    /// Multiple tools converging to similar quality.
     Convergence,
-    /// Degrading quality
+    /// Quality degrading over iterations.
     Degradation,
 }
 
-/// Sophisticated pattern detector
-pub struct PatternDetector {
+/// Detect a pattern in a history of `(tool, args_hash, quality)` triples.
+///
+/// Only the last `window_size` entries are examined.
+/// Returns [`PatternState::Single`] for an empty or single-entry history.
+///
+/// # Why a free function?
+/// The logic is stateless — `window_size` is the only parameter. A wrapper
+/// struct added no encapsulation and hurt discoverability (KISS).
+pub fn detect_pattern(
+    history: &[(String, String, f32)], // (tool, args_hash, quality)
     window_size: usize,
-}
-
-impl PatternDetector {
-    pub fn new(window_size: usize) -> Self {
-        Self { window_size }
+) -> PatternState {
+    if history.is_empty() {
+        return PatternState::Single;
     }
 
-    /// Detect pattern from sequence of operations
-    ///
-    /// Tracks: tool names, argument similarity, result quality
-    pub fn detect(
-        &self,
-        history: &[(String, String, f32)], // (tool, args_hash, quality)
-    ) -> PatternState {
-        if history.is_empty() {
-            return PatternState::Single;
+    // Work on the most recent `window_size` entries; borrow the slice directly
+    // (no intermediate Vec allocation).
+    let start = history.len().saturating_sub(window_size);
+    let recent = &history[start..];
+
+    if recent.len() < 2 {
+        return PatternState::Single;
+    }
+
+    let first = &recent[0];
+
+    // --- Exact duplicates ---
+    if recent.iter().all(|r| r.0 == first.0 && r.1 == first.1) {
+        return if recent.len() >= 3 {
+            PatternState::Loop
+        } else {
+            PatternState::Duplicate
+        };
+    }
+
+    // --- Single combined scan -------------------------------------------------
+    // Collect qualities + same-tool flag + multi-tool flag in one pass.
+    let mut qualities = SmallVec::<[f32; 32]>::with_capacity(recent.len());
+    let mut same_tool = true;
+    let mut multi_tool = false;
+
+    for r in recent {
+        qualities.push(r.2);
+        if r.0 != first.0 {
+            same_tool = false;
+            multi_tool = true;
         }
+    }
 
-        let start = history.len().saturating_sub(self.window_size);
-        let recent = history.iter().skip(start).collect::<Vec<_>>();
-
-        if recent.len() < 2 {
-            return PatternState::Single;
-        }
-
-        // Check for exact duplicates
-        let first = &recent[0];
-        let all_same = recent.iter().all(|r| r.0 == first.0 && r.1 == first.1);
-
-        if all_same {
-            return if recent.len() >= 3 {
-                PatternState::Loop
-            } else {
-                PatternState::Duplicate
-            };
-        }
-
-        // Check for refinement chain (increasing quality)
-        let qualities: Vec<f32> = recent.iter().map(|r| r.2).collect();
-        let is_improving = qualities.windows(2).all(|w| w[1] > w[0] + 0.05); // Noticeable improvement
-
-        if is_improving && qualities.len() >= 3 {
+    // --- Quality trends (≥3 points) ---
+    if qualities.len() >= 3 {
+        if qualities.windows(2).all(|w| w[1] > w[0] + 0.05) {
             return PatternState::RefinementChain;
         }
-
-        // Check for degradation
-        let is_degrading = qualities.windows(2).all(|w| w[1] < w[0] - 0.05);
-
-        if is_degrading && qualities.len() >= 3 {
+        if qualities.windows(2).all(|w| w[1] < w[0] - 0.05) {
             return PatternState::Degradation;
         }
+    }
 
-        // Check for near-loops (fuzzy argument match)
-        let same_tool = recent.iter().all(|r| r.0 == first.0);
-        if same_tool {
-            let similarities: Vec<f32> = recent
-                .windows(2)
-                .map(|w| jaro_winkler_similarity(&w[0].1, &w[1].1))
-                .collect();
-
-            if similarities.iter().all(|&s| s > 0.85) && similarities.len() >= 2 {
-                return PatternState::NearLoop;
-            }
+    // --- Near-loop: same tool, fuzzy args ---
+    // Use `.all()` directly — no intermediate Vec<f32> needed.
+    if same_tool {
+        if recent
+            .windows(2)
+            .all(|w| jaro_winkler_similarity(&w[0].1, &w[1].1) > 0.85)
+        {
+            return PatternState::NearLoop;
         }
+    }
 
-        // Check for convergence (different tools, similar quality)
-        let different_tools = recent
-            .iter()
-            .map(|r| &r.0)
-            .collect::<hashbrown::HashSet<_>>()
-            .len()
-            > 1;
-        let quality_consistent = {
-            let avg = qualities.iter().sum::<f32>() / qualities.len() as f32;
-            qualities.iter().all(|&q| (q - avg).abs() < 0.1)
-        };
-
-        if different_tools && quality_consistent {
+    // --- Convergence: different tools, similar quality ---
+    if multi_tool {
+        let n = qualities.len() as f32;
+        let avg = qualities.iter().sum::<f32>() / n;
+        if qualities.iter().all(|&q| (q - avg).abs() < 0.1) {
             return PatternState::Convergence;
         }
-
-        PatternState::Single
     }
+
+    PatternState::Single
 }
 
-/// ML-ready scoring components
-/// Can be used for training models on tool effectiveness
+// ── ML scoring ────────────────────────────────────────────────────────────────
+
+/// ML-ready scoring components for tool effectiveness.
+///
+/// Can be used as a feature vector for training models.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MLScoreComponents {
-    /// Success rate (0-1)
+    /// Success rate (0–1).
     pub success_rate: f32,
-
-    /// Average execution time (ms)
+    /// Average execution time (ms).
     pub avg_execution_time: f32,
-
-    /// Result quality (0-1)
+    /// Result quality (0–1).
     pub result_quality: f32,
-
-    /// Failure modes count
+    /// Number of failure modes observed.
     pub failure_count: usize,
-
-    /// Time since last use (hours)
+    /// Time since last use (hours).
     pub age_hours: f32,
-
-    /// Usage frequency (calls per hour)
+    /// Usage frequency (calls per hour).
     pub frequency: f32,
-
-    /// Confidence in measurement (0-1)
+    /// Confidence in measurement (0–1).
     pub confidence: f32,
 }
 
 impl MLScoreComponents {
-    /// Combined ML score (before time decay)
+    /// Combined ML score before time decay.
+    ///
+    /// Weights: success 40% + quality 30% + speed 15% + frequency 15%.
     pub fn raw_score(&self) -> f32 {
-        // Weighted: success(40%) + quality(30%) + speed(15%) + frequency(15%)
         (self.success_rate * 0.40)
             + (self.result_quality * 0.30)
-            + ((10000.0 - self.avg_execution_time).max(0.0) / 10000.0 * 0.15)
+            + ((10_000.0 - self.avg_execution_time).max(0.0) / 10_000.0 * 0.15)
             + (self.frequency.min(1.0) * 0.15)
     }
 
-    /// Apply time decay
-    pub fn with_time_decay(mut self) -> Self {
-        let now = current_timestamp();
-        let _decayed = TimeDecayedScore::calculate(
-            self.raw_score(),
-            now.saturating_sub((self.age_hours * 3600.0) as u64),
-        );
-
-        // Adjust for age (older measurements less confident)
-        self.confidence = (self.confidence * (-self.age_hours / 168.0).exp()).max(0.1); // 1-week half-life
+    /// Apply confidence decay for older measurements (1-week half-life).
+    pub fn with_age_decay(mut self) -> Self {
+        // Older measurements are less reliable; decay confidence over time.
+        self.confidence = (self.confidence * (-self.age_hours / 168.0).exp()).max(0.1);
         self
     }
 
-    /// Format as feature vector for ML
-    pub fn to_feature_vector(&self) -> Vec<f32> {
-        vec![
+    /// Return a 7-element feature vector, normalised for ML consumption.
+    pub fn to_feature_vector(&self) -> [f32; 7] {
+        [
             self.success_rate,
-            self.avg_execution_time / 10000.0, // Normalize
+            self.avg_execution_time / 10_000.0,
             self.result_quality,
-            (self.failure_count as f32).min(10.0) / 10.0, // Cap at 10 failures
-            self.age_hours / 168.0,                       // Normalize to weeks
+            (self.failure_count as f32).min(10.0) / 10.0,
+            self.age_hours / 168.0,
             self.frequency,
             self.confidence,
         ]
     }
 }
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
@@ -325,64 +305,53 @@ mod tests {
 
     #[test]
     fn test_jaro_winkler_exact() {
-        let sim = jaro_winkler_similarity("hello", "hello");
-        assert_eq!(sim, 1.0);
+        assert_eq!(jaro_winkler_similarity("hello", "hello"), 1.0);
     }
 
     #[test]
     fn test_jaro_winkler_partial() {
         let sim = jaro_winkler_similarity("pattern", "pattern_file");
-        assert!(sim > 0.85 && sim < 1.0);
+        assert!(sim > 0.85 && sim < 1.0, "sim={sim}");
     }
 
     #[test]
-    fn test_jaro_winkler_prefix() {
-        let sim1 = jaro_winkler_similarity("test_one", "test_two");
-        let sim2 = jaro_winkler_similarity("one_test", "two_test");
-        // Prefix match should boost sim1
-        assert!(sim1 > sim2);
+    fn test_jaro_winkler_prefix_boost() {
+        let with_prefix = jaro_winkler_similarity("test_one", "test_two");
+        let without = jaro_winkler_similarity("one_test", "two_test");
+        assert!(with_prefix > without, "prefix boost should be applied");
     }
 
     #[test]
-    fn test_time_decay() {
+    fn test_time_decay_ordering() {
         let now = current_timestamp();
-
         let recent = TimeDecayedScore::calculate(0.9, now);
-        let old = TimeDecayedScore::calculate(0.9, now - 7 * 24 * 3600);
-
-        // Old score should be decayed
+        let old = TimeDecayedScore::calculate(0.9, now.saturating_sub(7 * 24 * 3600));
         assert!(old.decayed_score < recent.decayed_score);
     }
 
     #[test]
-    fn test_pattern_loop_detection() {
-        let detector = PatternDetector::new(10);
-
+    fn test_detect_pattern_loop() {
         let history = vec![
             ("grep".to_string(), "pattern1".to_string(), 0.5),
             ("grep".to_string(), "pattern1".to_string(), 0.5),
             ("grep".to_string(), "pattern1".to_string(), 0.5),
         ];
-
-        assert_eq!(detector.detect(&history), PatternState::Loop);
+        assert_eq!(detect_pattern(&history, 10), PatternState::Loop);
     }
 
     #[test]
-    fn test_pattern_refinement() {
-        let detector = PatternDetector::new(10);
-
+    fn test_detect_pattern_refinement() {
         let history = vec![
             ("grep".to_string(), "pat1".to_string(), 0.3),
             ("grep".to_string(), "pat2".to_string(), 0.5),
             ("grep".to_string(), "pat3".to_string(), 0.8),
         ];
-
-        assert_eq!(detector.detect(&history), PatternState::RefinementChain);
+        assert_eq!(detect_pattern(&history, 10), PatternState::RefinementChain);
     }
 
     #[test]
-    fn test_ml_score() {
-        let components = MLScoreComponents {
+    fn test_ml_raw_score() {
+        let c = MLScoreComponents {
             success_rate: 0.9,
             avg_execution_time: 100.0,
             result_quality: 0.85,
@@ -391,11 +360,21 @@ mod tests {
             frequency: 0.5,
             confidence: 0.9,
         };
+        let score = c.raw_score();
+        assert!(score > 0.7 && score < 1.0, "score={score}");
+    }
 
-        let score = components.raw_score();
-        assert!(score > 0.7 && score < 1.0);
-
-        let features = components.to_feature_vector();
-        assert_eq!(features.len(), 7);
+    #[test]
+    fn test_ml_feature_vector_length() {
+        let c = MLScoreComponents {
+            success_rate: 0.9,
+            avg_execution_time: 100.0,
+            result_quality: 0.85,
+            failure_count: 1,
+            age_hours: 2.0,
+            frequency: 0.5,
+            confidence: 0.9,
+        };
+        assert_eq!(c.to_feature_vector().len(), 7);
     }
 }
