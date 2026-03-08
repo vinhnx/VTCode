@@ -70,6 +70,36 @@ fn enforce_tool_capabilities_keeps_tools_for_supported_models() {
 }
 
 #[test]
+fn enforce_tool_capabilities_keeps_apply_patch_for_supported_models() {
+    let provider = OpenRouterProvider::with_model(
+        "test-key".to_string(),
+        models::openrouter::OPENAI_GPT_5.to_string(),
+    );
+    let request = LLMRequest {
+        messages: vec![Message::user("hi".to_string())],
+        tools: Some(std::sync::Arc::new(vec![ToolDefinition::apply_patch(
+            "Apply VT Code patches".to_string(),
+        )])),
+        model: models::openrouter::OPENAI_GPT_5.to_string(),
+        tool_choice: Some(ToolChoice::Any),
+        parallel_tool_calls: Some(true),
+        ..Default::default()
+    };
+
+    match provider.enforce_tool_capabilities(&request) {
+        Cow::Borrowed(borrowed) => {
+            let tools = borrowed
+                .tools
+                .as_ref()
+                .expect("tools should remain enabled");
+            assert_eq!(tools.len(), 1);
+            assert_eq!(tools[0].function_name(), "apply_patch");
+        }
+        Cow::Owned(_) => panic!("apply_patch should remain available for supported models"),
+    }
+}
+
+#[test]
 fn test_parse_stream_payload_chat_chunk() {
     let payload = json!({
         "choices": [{

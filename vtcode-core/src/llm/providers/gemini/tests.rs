@@ -136,6 +136,27 @@ fn convert_from_gemini_response_extracts_tool_calls() {
 }
 
 #[test]
+fn convert_to_gemini_request_keeps_apply_patch_as_function_tool() {
+    let provider = GeminiProvider::new("test-key".to_string());
+    let request = LLMRequest {
+        messages: vec![Message::user("patch this file".to_string())],
+        tools: Some(Arc::new(vec![ToolDefinition::apply_patch(
+            "Apply VT Code patches".to_string(),
+        )])),
+        model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
+        ..Default::default()
+    };
+
+    let gemini_request = provider
+        .convert_to_gemini_request(&request)
+        .expect("conversion should succeed");
+    let tools = gemini_request.tools.expect("tools should be present");
+    assert_eq!(tools.len(), 1);
+    assert_eq!(tools[0].function_declarations.len(), 1);
+    assert_eq!(tools[0].function_declarations[0].name, "apply_patch");
+}
+
+#[test]
 fn sanitize_function_parameters_removes_additional_properties() {
     let parameters = json!({
         "type": "object",

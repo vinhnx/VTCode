@@ -215,6 +215,7 @@ pub fn create_shell_tool() -> super::tool_handler::ToolSpec {
             properties,
             required: Some(vec!["command".to_string()]),
             additional_properties: Some(false.into()),
+            any_of: None,
         },
         strict: false,
     })

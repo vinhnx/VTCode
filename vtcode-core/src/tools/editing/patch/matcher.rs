@@ -59,7 +59,7 @@ impl<'a> PatchContextMatcher<'a> {
         for idx in search_start..=max_start {
             let mut ok = true;
             for (offset, pat) in pattern.iter().enumerate() {
-                if normalise(&self.lines[idx + offset]) != normalise(pat) {
+                if normalise_text(&self.lines[idx + offset]) != normalise_text(pat) {
                     ok = false;
                     break;
                 }
@@ -73,7 +73,28 @@ impl<'a> PatchContextMatcher<'a> {
     }
 }
 
-fn normalise(input: &str) -> String {
+pub(crate) fn seek_segment(
+    lines: &[String],
+    old_segment: &mut Vec<String>,
+    new_segment: &mut Vec<String>,
+    start: usize,
+    eof: bool,
+) -> Option<usize> {
+    let matcher = PatchContextMatcher::new(lines);
+    let mut found = matcher.seek(old_segment, start, eof);
+
+    if found.is_none() && old_segment.last().is_some_and(|line| line.is_empty()) {
+        old_segment.pop();
+        if new_segment.last().is_some_and(|line| line.is_empty()) {
+            new_segment.pop();
+        }
+        found = matcher.seek(old_segment, start, eof);
+    }
+
+    found
+}
+
+pub(crate) fn normalise_text(input: &str) -> String {
     input
         .trim()
         .chars()

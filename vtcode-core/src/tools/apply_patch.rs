@@ -8,8 +8,13 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use serde_json::json;
 
 pub use crate::tools::editing::{Patch, PatchError, PatchHunk, PatchLine, PatchOperation};
+
+pub const SEMANTIC_ANCHOR_GUIDANCE: &str =
+    "Prefer stable semantic @@ anchors such as function, class, method, or impl names.";
+pub const APPLY_PATCH_ALIAS_DESCRIPTION: &str = "Alias for input";
 
 /// Input structure for the apply_patch tool
 #[derive(Debug, Deserialize, Serialize)]
@@ -52,9 +57,43 @@ pub fn decode_apply_patch_input(args: &Value) -> anyhow::Result<Option<DecodedAp
     }))
 }
 
+pub fn with_semantic_anchor_guidance(base: &str) -> String {
+    let trimmed = base.trim_end();
+    if trimmed.contains(SEMANTIC_ANCHOR_GUIDANCE) {
+        trimmed.to_string()
+    } else if trimmed.ends_with('.') {
+        format!("{trimmed} {SEMANTIC_ANCHOR_GUIDANCE}")
+    } else {
+        format!("{trimmed}. {SEMANTIC_ANCHOR_GUIDANCE}")
+    }
+}
+
+pub fn parameter_schema(input_description: &str) -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "input": {
+                "type": "string",
+                "description": with_semantic_anchor_guidance(input_description)
+            },
+            "patch": {
+                "type": "string",
+                "description": APPLY_PATCH_ALIAS_DESCRIPTION
+            }
+        },
+        "anyOf": [
+            {"required": ["input"]},
+            {"required": ["patch"]}
+        ]
+    })
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{decode_apply_patch_input, patch_source_from_args};
+    use super::{
+        APPLY_PATCH_ALIAS_DESCRIPTION, SEMANTIC_ANCHOR_GUIDANCE, decode_apply_patch_input,
+        parameter_schema, patch_source_from_args, with_semantic_anchor_guidance,
+    };
     use serde_json::json;
 
     #[test]
@@ -88,5 +127,31 @@ mod tests {
             .expect_err("invalid base64 should fail");
 
         assert!(error.to_string().contains("Failed to decode base64 patch"));
+    }
+
+    #[test]
+    fn semantic_anchor_guidance_is_appended_once() {
+        let base = "Patch in VT Code format.";
+        let with_guidance = with_semantic_anchor_guidance(base);
+        assert!(with_guidance.contains(SEMANTIC_ANCHOR_GUIDANCE));
+        assert_eq!(
+            with_semantic_anchor_guidance(&with_guidance),
+            with_guidance,
+            "guidance should not be duplicated"
+        );
+    }
+
+    #[test]
+    fn parameter_schema_keeps_alias_and_guidance_consistent() {
+        let schema = parameter_schema("Patch in VT Code format");
+
+        assert_eq!(
+            schema["properties"]["patch"]["description"],
+            APPLY_PATCH_ALIAS_DESCRIPTION
+        );
+        let input_description = schema["properties"]["input"]["description"]
+            .as_str()
+            .expect("input description");
+        assert!(input_description.contains(SEMANTIC_ANCHOR_GUIDANCE));
     }
 }

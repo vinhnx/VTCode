@@ -276,9 +276,9 @@ pub(super) fn builtin_tool_registrations(
             false,
             ToolRegistry::apply_patch_executor,
         )
-        .with_description(
-            "Apply patches to files. IMPORTANT: Use VT Code patch format (*** Begin Patch, *** Update File: path, @@ hunks with -/+ lines, *** End Patch), NOT standard unified diff (---/+++ format).",
-        )
+        .with_description(crate::tools::apply_patch::with_semantic_anchor_guidance(
+            "Apply patches to files. IMPORTANT: Use VT Code patch format (*** Begin Patch, *** Update File: path, @@ hunks with -/+ lines, *** End Patch), NOT standard unified diff (---/+++ format)."
+        ))
         .with_parameter_schema(apply_patch_parameters())
         .with_permission(ToolPolicy::Prompt)
         .with_llm_visibility(false),

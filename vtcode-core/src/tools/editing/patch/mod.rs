@@ -7,8 +7,11 @@ mod error;
 mod matcher;
 mod parser;
 mod path;
+mod semantic;
 
 pub use error::PatchError;
+#[doc(hidden)]
+pub use semantic::{AstGrepBinaryOverrideGuard, set_ast_grep_binary_override_for_tests};
 
 /// Represents a single diff line inside a patch hunk.
 #[derive(Debug, Clone, PartialEq, Eq)]

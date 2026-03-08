@@ -242,23 +242,9 @@ impl ToolDefinition {
         tool.function = Some(FunctionDefinition {
             name: "apply_patch".to_owned(),
             description: sanitized_description,
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "input": {
-                        "type": "string",
-                        "description": "Patch in VT Code format. MUST use *** Begin Patch, *** Update File: path, @@ context, -/+ lines, *** End Patch. Do NOT use unified diff (---/+++) format."
-                    },
-                    "patch": {
-                        "type": "string",
-                        "description": "Alias for input parameter"
-                    }
-                },
-                "anyOf": [
-                    {"required": ["input"]},
-                    {"required": ["patch"]}
-                ]
-            }),
+            parameters: crate::tools::apply_patch::parameter_schema(
+                "Patch in VT Code format. MUST use *** Begin Patch, *** Update File: path, @@ context, -/+ lines, *** End Patch. Do NOT use unified diff (---/+++) format.",
+            ),
         });
         tool
     }

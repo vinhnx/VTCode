@@ -271,6 +271,7 @@ pub fn create_list_dir_tool() -> super::tool_handler::ToolSpec {
             properties,
             required: None,
             additional_properties: Some(false.into()),
+            any_of: None,
         },
         strict: false,
     })

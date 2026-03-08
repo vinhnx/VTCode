@@ -137,18 +137,8 @@ pub fn serialize_tools_for_responses(tools: &[provider::ToolDefinition]) -> Opti
                         Some(json!({
                             "type": "function",
                             "name": "apply_patch",
-                            "description": "Apply VT Code patches. Use format: *** Begin Patch, *** Update File: path, @@ context, -/+ lines, *** End Patch. Do NOT use unified diff (---/+++).",
-                            "parameters": json!({
-                                "type": "object",
-                                "properties": {
-                                    "input": { "type": "string", "description": "Patch in VT Code format" },
-                                    "patch": { "type": "string", "description": "Alias for input" }
-                                },
-                                "anyOf": [
-                                    {"required": ["input"]},
-                                    {"required": ["patch"]}
-                                ]
-                            })
+                            "description": crate::tools::apply_patch::with_semantic_anchor_guidance("Apply VT Code patches. Use format: *** Begin Patch, *** Update File: path, @@ context, -/+ lines, *** End Patch. Do NOT use unified diff (---/+++)"),
+                            "parameters": crate::tools::apply_patch::parameter_schema("Patch in VT Code format")
                         }))
                     }
                 }

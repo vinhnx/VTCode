@@ -1497,14 +1497,7 @@ impl ToolRegistry {
     }
 
     pub(super) async fn execute_apply_patch(&self, args: Value) -> Result<Value> {
-        let patch_input = crate::tools::apply_patch::decode_apply_patch_input(&args)?
-            .ok_or_else(|| anyhow!("Missing patch input"))?;
-        let patch_input_bytes = patch_input.source_bytes;
-        let patch_base64 = patch_input.was_base64;
-        let patch_content = patch_input.text;
-
-        let mut patch_args = args.clone();
-        patch_args["input"] = json!(patch_content);
+        let (patch_args, patch_input_bytes, patch_base64) = self.prepare_apply_patch_args(args)?;
         let context = self.harness_context_snapshot();
         tracing::debug!(
             tool = "unified_file",
@@ -1523,6 +1516,17 @@ impl ToolRegistry {
         );
 
         self.execute_apply_patch_internal(patch_args).await
+    }
+
+    fn prepare_apply_patch_args(&self, args: Value) -> Result<(Value, usize, bool)> {
+        let patch_input = crate::tools::apply_patch::decode_apply_patch_input(&args)?
+            .ok_or_else(|| anyhow!("Missing patch input"))?;
+        let patch_input_bytes = patch_input.source_bytes;
+        let patch_base64 = patch_input.was_base64;
+
+        let mut patch_args = args;
+        patch_args["input"] = json!(patch_input.text);
+        Ok((patch_args, patch_input_bytes, patch_base64))
     }
 
     fn log_unified_file_payload_diagnostics(&self, action: &str, args: &Value) {
@@ -1653,7 +1657,7 @@ impl ToolRegistry {
     }
 
     pub(super) fn apply_patch_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_apply_patch_internal(args).await })
+        Box::pin(async move { self.execute_apply_patch(args).await })
     }
 
     // ============================================================
@@ -1680,7 +1684,7 @@ impl ToolRegistry {
         let login_shell = payload
             .get("login")
             .and_then(|value| value.as_bool())
-            .unwrap_or(true);
+            .unwrap_or(false);
         let confirm = payload
             .get("confirm")
             .and_then(|value| value.as_bool())
@@ -1891,7 +1895,7 @@ impl ToolRegistry {
         let login_shell = payload
             .get("login")
             .and_then(|value| value.as_bool())
-            .unwrap_or(true);
+            .unwrap_or(false);
         let confirm = payload
             .get("confirm")
             .and_then(|value| value.as_bool())

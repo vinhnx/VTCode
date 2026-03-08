@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use super::events::{ToolEmitter, ToolEventCtx};
 use super::sandboxing::{
@@ -41,7 +42,8 @@ pub struct ApplyPatchHandler;
 /// Arguments for apply_patch function call
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ApplyPatchToolArgs {
-    pub input: String,
+    pub input: Option<String>,
+    pub patch: Option<String>,
 }
 
 /// Request for apply_patch runtime
@@ -192,10 +194,15 @@ impl ToolHandler for ApplyPatchHandler {
         // Extract patch input from payload
         let patch_input = match payload {
             ToolPayload::Function { arguments } => {
-                let args: ApplyPatchToolArgs = serde_json::from_str(&arguments).map_err(|e| {
+                let args: Value = serde_json::from_str(&arguments).map_err(|e| {
                     ToolCallError::respond(format!("Failed to parse function arguments: {}", e))
                 })?;
-                args.input
+                crate::tools::apply_patch::decode_apply_patch_input(&args)
+                    .map_err(|e| {
+                        ToolCallError::respond(format!("Failed to decode patch input: {e}"))
+                    })?
+                    .map(|input| input.text)
+                    .ok_or_else(|| ToolCallError::respond("Missing patch input"))?
             }
             ToolPayload::Custom { input } => input,
             _ => {
@@ -334,6 +341,12 @@ pub fn create_apply_patch_json_tool() -> ToolSpec {
             description: Some("The entire contents of the apply_patch command".to_string()),
         },
     );
+    properties.insert(
+        "patch".to_string(),
+        JsonSchema::String {
+            description: Some(crate::tools::apply_patch::APPLY_PATCH_ALIAS_DESCRIPTION.to_string()),
+        },
+    );
 
     ToolSpec::Function(ResponsesApiTool {
         name: "apply_patch".to_string(),
@@ -346,6 +359,7 @@ pub fn create_apply_patch_json_tool() -> ToolSpec {
             properties,
             required: Some(vec!["input".to_string()]),
             additional_properties: Some(false.into()),
+            any_of: None,
         },
     })
 }
@@ -445,7 +459,7 @@ fn map_approval_policy(policy: ApprovalPolicy) -> AskForApproval {
 }
 
 /// Parse a shell command to check if it's an apply_patch invocation
-fn parse_apply_patch_command(command: &[String]) -> (bool, Option<String>) {
+pub(crate) fn parse_apply_patch_command(command: &[String]) -> (bool, Option<String>) {
     const APPLY_PATCH_COMMANDS: &[&str] = &["apply_patch", "applypatch"];
 
     match command {
@@ -486,7 +500,8 @@ Within a hunk each line starts with:
 Important rules:
 - You must include a header with your intended action (Add/Delete/Update)
 - You must prefix new lines with `+` even when creating a new file
-- File references can only be relative, NEVER ABSOLUTE"#;
+- File references can only be relative, NEVER ABSOLUTE
+- Prefer small hunks with stable semantic @@ anchors like function, class, method, or impl names"#;
 
 const APPLY_PATCH_LARK_GRAMMAR: &str = r#"
 patch := "*** Begin Patch" NEWLINE { operation } "*** End Patch"
@@ -546,6 +561,19 @@ mod tests {
     fn test_create_json_tool() {
         let tool = create_apply_patch_json_tool();
         assert_eq!(tool.name(), "apply_patch");
+    }
+
+    #[test]
+    fn test_apply_patch_json_args_support_patch_alias() {
+        let parsed: ApplyPatchToolArgs =
+            serde_json::from_str(r#"{"patch":"*** Begin Patch\n*** End Patch\n"}"#)
+                .expect("json args should parse");
+
+        assert_eq!(parsed.input, None);
+        assert_eq!(
+            parsed.patch.as_deref(),
+            Some("*** Begin Patch\n*** End Patch\n")
+        );
     }
 
     #[test]

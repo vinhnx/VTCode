@@ -32,7 +32,8 @@ impl<'a> UpdateOperation<'a> {
         let source_path = root.join(self.path);
         let (original_lines, had_trailing_newline, line_ending) =
             load_file_lines(&source_path).await?;
-        let replacements = compute_replacements(&original_lines, self.chunks, self.path)?;
+        let replacements =
+            compute_replacements(&source_path, &original_lines, self.chunks, self.path).await?;
         let ensure_trailing_newline =
             had_trailing_newline || self.chunks.iter().any(|chunk| chunk.is_end_of_file());
         let Some(backup) = snapshot_for(&source_path).await? else {

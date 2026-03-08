@@ -441,6 +441,7 @@ mod tests {
                 properties: std::collections::BTreeMap::new(),
                 required: None,
                 additional_properties: None,
+                any_of: None,
             },
             strict: false,
         });
@@ -467,6 +468,7 @@ mod tests {
                 properties: std::collections::BTreeMap::new(),
                 required: None,
                 additional_properties: None,
+                any_of: None,
             },
             strict: false,
         });

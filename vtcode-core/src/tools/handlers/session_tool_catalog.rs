@@ -400,7 +400,7 @@ pub(crate) fn unified_exec_parameters() -> Value {
             "workdir": {"type": "string", "description": "Working directory for new sessions."},
             "cwd": {"type": "string", "description": "Alias for workdir."},
             "shell": {"type": "string", "description": "Shell binary."},
-            "login": {"type": "boolean", "description": "Use login shell.", "default": true},
+            "login": {"type": "boolean", "description": "Use login shell.", "default": false},
             "sandbox_permissions": {
                 "type": "string",
                 "enum": ["use_default", "with_additional_permissions", "require_escalated"],
@@ -500,17 +500,9 @@ pub(crate) fn unified_search_parameters() -> Value {
 }
 
 pub(crate) fn apply_patch_parameters() -> Value {
-    json!({
-        "type": "object",
-        "properties": {
-            "input": {"type": "string", "description": "Patch in VT Code format: *** Begin Patch, *** Update File: path, @@ hunk, -/+ lines, *** End Patch"},
-            "patch": {"type": "string", "description": "Alias for input"}
-        },
-        "anyOf": [
-            {"required": ["input"]},
-            {"required": ["patch"]}
-        ]
-    })
+    crate::tools::apply_patch::parameter_schema(
+        "Patch in VT Code format: *** Begin Patch, *** Update File: path, @@ hunk, -/+ lines, *** End Patch",
+    )
 }
 
 fn default_parameter_schema() -> Value {
@@ -605,11 +597,13 @@ fn json_schema_from_value(value: &Value) -> JsonSchema {
                         }
                         _ => AdditionalProperties::Boolean(true),
                     });
+                let any_of = map.get("anyOf").and_then(Value::as_array).cloned();
 
                 JsonSchema::Object {
                     properties,
                     required,
                     additional_properties,
+                    any_of,
                 }
             }
             Some("array") => JsonSchema::Array {
@@ -785,5 +779,34 @@ mod tests {
         let catalog = SessionToolCatalog::rebuild_from_registrations(vec![registration]);
         assert_eq!(catalog.entries().len(), 1);
         assert!(catalog.entries()[0].supports_parallel_tool_calls);
+    }
+
+    #[test]
+    fn configured_spec_preserves_json_schema_field_names() {
+        let registration = registration("schema_contract_tool")
+            .with_description("schema contract")
+            .with_parameter_schema(json!({
+                "type": "object",
+                "properties": {
+                    "input": {"type": "string"}
+                },
+                "additionalProperties": false,
+                "anyOf": [
+                    {"required": ["input"]},
+                    {"required": ["patch"]}
+                ]
+            }));
+
+        let catalog = SessionToolCatalog::rebuild_from_registrations(vec![registration]);
+        let entry = &catalog.entries()[0];
+        let ToolSpec::Function(tool) = &entry.configured_spec.spec else {
+            panic!("expected function tool spec");
+        };
+
+        let serialized = serde_json::to_value(&tool.parameters).expect("serialize parameters");
+        assert_eq!(serialized["additionalProperties"], Value::Bool(false));
+        assert!(serialized["anyOf"].is_array());
+        assert!(serialized.get("additional_properties").is_none());
+        assert!(serialized.get("any_of").is_none());
     }
 }

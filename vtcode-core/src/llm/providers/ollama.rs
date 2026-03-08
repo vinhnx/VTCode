@@ -1375,6 +1375,24 @@ mod tests {
     }
 
     #[test]
+    fn build_payload_includes_apply_patch_as_normal_tool() {
+        let provider = test_provider();
+        let request = LLMRequest {
+            model: "test-model".to_string(),
+            messages: vec![Message::user("patch this file".to_string())],
+            tools: Some(std::sync::Arc::new(vec![ToolDefinition::apply_patch(
+                "Apply VT Code patches".to_string(),
+            )])),
+            ..Default::default()
+        };
+
+        let payload = provider.build_payload(&request, false).unwrap();
+        let tools = payload.tools.expect("tools should be present");
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].function_name(), "apply_patch");
+    }
+
+    #[test]
     fn response_payload_preserves_reasoning_details() {
         let parsed = OllamaChatResponse {
             message: Some(OllamaResponseMessage {

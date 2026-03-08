@@ -372,6 +372,7 @@ pub fn create_grep_files_tool() -> super::tool_handler::ToolSpec {
             properties,
             required: Some(vec!["pattern".to_string()]),
             additional_properties: Some(false.into()),
+            any_of: None,
         },
         strict: false,
     })

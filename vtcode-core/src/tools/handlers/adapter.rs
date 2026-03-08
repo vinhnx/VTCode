@@ -311,6 +311,7 @@ mod tests {
                 properties: BTreeMap::new(),
                 required: None,
                 additional_properties: None,
+                any_of: None,
             },
             strict: false,
         });

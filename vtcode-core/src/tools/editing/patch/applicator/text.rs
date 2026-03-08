@@ -3,7 +3,8 @@ use std::path::Path;
 use tokio::fs;
 use tokio::io::{AsyncBufReadExt, BufReader};
 
-use super::super::matcher::PatchContextMatcher;
+use super::super::matcher::{PatchContextMatcher, seek_segment};
+use super::super::semantic::{resolve_semantic_match, semantic_anchor_term};
 use super::io::AtomicWriter;
 use super::{PatchChunk, PatchError};
 
@@ -77,7 +78,8 @@ pub(super) async fn load_file_lines(
     Ok((lines, had_trailing_newline, line_ending))
 }
 
-pub(super) fn compute_replacements(
+pub(super) async fn compute_replacements(
+    source_path: &Path,
     original_lines: &[String],
     chunks: &[PatchChunk],
     path: &str,
@@ -87,6 +89,7 @@ pub(super) fn compute_replacements(
     let mut line_index = 0usize;
 
     for chunk in chunks {
+        let mut context_found = true;
         if let Some(hint_line) = chunk.parse_line_number() {
             line_index = hint_line.saturating_sub(1);
         } else if let Some(context) = chunk.change_context() {
@@ -94,16 +97,19 @@ pub(super) fn compute_replacements(
             if let Some(idx) = matcher.seek(&search_pattern, line_index, false) {
                 line_index = idx + 1;
             } else {
-                return Err(PatchError::ContextNotFound {
-                    path: path.to_string(),
-                    context: context.to_string(),
-                });
+                context_found = false;
             }
         }
 
         let (mut old_segment, mut new_segment) = chunk.to_segments();
 
         if !chunk.has_old_lines() {
+            if !context_found && let Some(context) = chunk.change_context() {
+                return Err(PatchError::ContextNotFound {
+                    path: path.to_string(),
+                    context: context.to_string(),
+                });
+            }
             let insertion_idx = if chunk.change_context().is_some() {
                 line_index.min(original_lines.len())
             } else {
@@ -115,20 +121,48 @@ pub(super) fn compute_replacements(
             continue;
         }
 
-        let mut found = matcher.seek(&old_segment, line_index, chunk.is_end_of_file());
+        let mut found = if context_found {
+            seek_segment(
+                original_lines,
+                &mut old_segment,
+                &mut new_segment,
+                line_index,
+                chunk.is_end_of_file(),
+            )
+        } else {
+            None
+        };
 
-        if found.is_none() && old_segment.last().is_some_and(|line| line.is_empty()) {
-            old_segment.pop();
-            if new_segment.last().is_some_and(|line| line.is_empty()) {
-                new_segment.pop();
-            }
-            found = matcher.seek(&old_segment, line_index, chunk.is_end_of_file());
+        if found.is_none()
+            && chunk
+                .change_context()
+                .and_then(semantic_anchor_term)
+                .is_some()
+        {
+            let semantic = resolve_semantic_match(
+                source_path,
+                path,
+                original_lines,
+                chunk,
+                old_segment.clone(),
+                new_segment.clone(),
+            )
+            .await?;
+            found = Some(semantic.start_idx);
+            old_segment = semantic.old_segment;
+            new_segment = semantic.new_segment;
         }
 
         if let Some(start_idx) = found {
             line_index = start_idx + old_segment.len();
             replacements.push((start_idx, old_segment.len(), new_segment));
         } else {
+            if !context_found && let Some(context) = chunk.change_context() {
+                return Err(PatchError::ContextNotFound {
+                    path: path.to_string(),
+                    context: context.to_string(),
+                });
+            }
             let snippet = if old_segment.is_empty() {
                 "<empty>".to_string()
             } else {

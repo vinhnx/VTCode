@@ -1157,9 +1157,10 @@ impl LLMClient for HuggingFaceProvider {
 #[cfg(test)]
 mod tests {
     use super::HuggingFaceProvider;
-    use crate::llm::provider::{LLMRequest, Message};
+    use crate::llm::provider::{LLMRequest, Message, ToolDefinition};
     use crate::llm::providers::common::{is_minimax_m2_model, normalize_reasoning_detail_object};
     use serde_json::json;
+    use std::sync::Arc;
 
     #[test]
     fn minimax_model_detection_handles_variants() {
@@ -1223,5 +1224,28 @@ mod tests {
             normalized_legacy,
             "stepfun-ai/Step-3.5-Flash:featherless-ai".to_string()
         );
+    }
+
+    #[test]
+    fn format_for_chat_completions_keeps_apply_patch_as_function_tool() {
+        let provider = HuggingFaceProvider::with_model(
+            "test-key".to_string(),
+            "Qwen/Qwen3-Coder-480B-A35B-Instruct".to_string(),
+        );
+        let request = LLMRequest {
+            model: "Qwen/Qwen3-Coder-480B-A35B-Instruct".to_string(),
+            messages: vec![Message::user("apply a patch".to_string())],
+            tools: Some(Arc::new(vec![ToolDefinition::apply_patch(
+                "Apply patches".to_string(),
+            )])),
+            ..Default::default()
+        };
+
+        let payload = provider
+            .format_for_chat_completions(&request)
+            .expect("payload should serialize");
+
+        assert_eq!(payload["tools"][0]["type"], "function");
+        assert_eq!(payload["tools"][0]["function"]["name"], "apply_patch");
     }
 }

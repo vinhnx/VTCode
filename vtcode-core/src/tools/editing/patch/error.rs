@@ -40,6 +40,24 @@ pub enum PatchError {
     )]
     SegmentNotFound { path: String, snippet: String },
 
+    #[error(
+        "semantic patch anchor '{anchor}' for '{path}' could not be resolved safely: {reason}\n\nFix: Use a more specific @@ anchor such as a function/class name, or copy exact context lines from read_file."
+    )]
+    SemanticResolutionFailed {
+        path: String,
+        anchor: String,
+        reason: String,
+    },
+
+    #[error(
+        "semantic patch anchor '{anchor}' for '{path}' matched {candidate_count} possible locations. Use a more specific @@ anchor or smaller hunk."
+    )]
+    SemanticAmbiguous {
+        path: String,
+        anchor: String,
+        candidate_count: usize,
+    },
+
     #[error("I/O error while {action} '{path}': {source}")]
     Io {
         action: &'static str,

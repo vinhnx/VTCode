@@ -121,7 +121,7 @@ async fn test_pty_run_returns_live_session_after_yield_window() {
             "run_pty_cmd",
             json!({
                 "mode": "pty",
-                "command": ["bash", "-lc", "sleep 0.2; echo done"],
+                "command": ["bash", "-lc", "sleep 0.75; echo done"],
                 "yield_time_ms": 0,
             }),
         )
@@ -342,7 +342,7 @@ async fn test_inspect_does_not_drain_session_output() {
         .execute_tool(
             "unified_exec",
             json!({
-                "command": "bash -lc 'sleep 0.05; printf \"<alpha>\\n\"; sleep 1'",
+                "command": "bash -lc 'sleep 0.4; printf \"<alpha>\\n\"; sleep 1'",
                 "yield_time_ms": 0,
             }),
         )
@@ -424,7 +424,7 @@ async fn test_exited_sessions_are_pruned_after_final_poll() {
             "run_pty_cmd",
             json!({
                 "mode": "pty",
-                "command": ["bash", "-lc", "sleep 0.1; echo done"],
+                "command": ["bash", "-lc", "sleep 0.4; echo done"],
                 "yield_time_ms": 0,
             }),
         )
@@ -509,7 +509,11 @@ async fn test_unified_exec_write_preserves_whitespace() {
         .expect("write exact bytes");
 
     assert_eq!(write["success"], true);
-    let (tail_output, final_read) = read_session_until_exit(&registry, sid.as_str(), 8, 100).await;
+    let (tail_output, final_read) = if write["is_exited"].as_bool().unwrap_or(false) {
+        (String::new(), write.clone())
+    } else {
+        read_session_until_exit(&registry, sid.as_str(), 8, 100).await
+    };
     assert_eq!(final_read["success"], true);
     let combined_output = format!(
         "{}{}",

@@ -129,6 +129,16 @@ impl ZedAgent {
             Ok(parts)
         }
 
+        match command_args::normalized_command_value(args).map_err(str::to_string)? {
+            Some(Value::String(command)) if command.trim().is_empty() => {
+                return Err("command string cannot be empty".to_string());
+            }
+            Some(Value::Array(values)) if values.is_empty() => {
+                return Err("command array cannot be empty".to_string());
+            }
+            _ => {}
+        }
+
         let parts = command_args::command_words(args)
             .map_err(str::to_string)?
             .ok_or_else(|| {

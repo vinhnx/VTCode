@@ -20,8 +20,7 @@
     "task_tracker": "allow",
     "unified_exec": "allow",
     "unified_file": "allow",
-    "unified_search": "allow",
-    "read_pty_session": "allow"
+    "unified_search": "allow"
   },
   "constraints": {},
   "mcp": {

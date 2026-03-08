@@ -120,3 +120,30 @@ pub(crate) fn build_tool_choice(
 
     final_tool_choice
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::constants::models;
+    use crate::llm::provider::{LLMRequest, Message, ToolDefinition};
+    use std::sync::Arc;
+
+    #[test]
+    fn build_tools_keeps_apply_patch_as_function_tool() {
+        let request = LLMRequest {
+            messages: vec![Message::user("patch this file".to_string())],
+            tools: Some(Arc::new(vec![ToolDefinition::apply_patch(
+                "Apply VT Code patches".to_string(),
+            )])),
+            model: models::anthropic::DEFAULT_MODEL.to_string(),
+            ..Default::default()
+        };
+
+        let tools = build_tools(&request, &None, &mut 0).expect("tools should exist");
+        assert_eq!(tools.len(), 1);
+        assert!(matches!(
+            &tools[0],
+            AnthropicTool::Function(function) if function.name == "apply_patch"
+        ));
+    }
+}

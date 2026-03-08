@@ -462,8 +462,13 @@ pub enum JsonSchema {
         properties: std::collections::BTreeMap<String, JsonSchema>,
         #[serde(skip_serializing_if = "Option::is_none")]
         required: Option<Vec<String>>,
-        #[serde(skip_serializing_if = "Option::is_none")]
+        #[serde(
+            rename = "additionalProperties",
+            skip_serializing_if = "Option::is_none"
+        )]
         additional_properties: Option<AdditionalProperties>,
+        #[serde(rename = "anyOf", skip_serializing_if = "Option::is_none")]
+        any_of: Option<Vec<Value>>,
     },
     String {
         #[serde(skip_serializing_if = "Option::is_none")]

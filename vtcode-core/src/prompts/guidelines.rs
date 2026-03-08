@@ -96,6 +96,12 @@ pub fn generate_tool_guidelines(
                  Never use patch tools when user only wants to view a diff."
                     .to_string(),
             );
+            guidelines.push(
+                "**Patch Anchors**: Keep patches small and prefer stable semantic `@@` headers \
+                 like `@@ fn parse_patch(...)`, `@@ class Foo`, `@@ render()`, or `@@ impl Bar` \
+                 instead of brittle raw line-number style context."
+                    .to_string(),
+            );
         } else {
             guidelines.push(
                 "**Diff vs Patch**: `git diff` (via `unified_exec`) is READ-ONLY to VIEW changes. \
@@ -252,6 +258,20 @@ mod tests {
         assert!(
             guidelines.contains("action='edit'") && guidelines.contains("modifications"),
             "Should explain edit for modifications"
+        );
+    }
+
+    #[test]
+    fn test_apply_patch_anchor_guidance() {
+        let tools = vec!["unified_file".to_string(), "apply_patch".to_string()];
+        let guidelines = generate_tool_guidelines(&tools, None);
+        assert!(
+            guidelines.contains("stable semantic `@@` headers"),
+            "Should mention semantic @@ anchors when apply_patch is available"
+        );
+        assert!(
+            guidelines.contains("fn parse_patch") && guidelines.contains("class Foo"),
+            "Should include concrete anchor examples"
         );
     }
 
