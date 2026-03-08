@@ -8,7 +8,38 @@ mod tests {
     use std::hash::Hasher;
     use std::sync::Arc;
     use std::time::Duration;
-    use vtcode_tools::{cache::LruCache, middleware::*, patterns::PatternDetector};
+    use async_trait::async_trait;
+    use vtcode_tools::{
+        cache::LruCache, middleware::*, patterns::PatternDetector, CachedToolExecutor,
+        UnifiedErrorKind, UnifiedToolError,
+    };
+
+    struct RejectingMiddleware;
+
+    #[async_trait]
+    impl Middleware for RejectingMiddleware {
+        async fn before_execute(&self, _req: &ToolRequest) -> MiddlewareResult<()> {
+            Err(UnifiedToolError::new(
+                UnifiedErrorKind::PermissionDenied,
+                "middleware rejected execution",
+            ))
+        }
+    }
+
+    #[tokio::test]
+    async fn cached_tool_executor_returns_typed_middleware_errors() {
+        let executor = CachedToolExecutor::new().with_middleware(Arc::new(RejectingMiddleware));
+
+        let err = executor
+            .execute("test_tool", serde_json::json!({"arg": 1}))
+            .await
+            .expect_err("middleware rejection should bubble up as typed error");
+
+        assert_eq!(err.kind, UnifiedErrorKind::PermissionDenied);
+
+        let stats = executor.stats().await;
+        assert_eq!(stats.failed_calls, 1);
+    }
 
     #[tokio::test]
     async fn test_cache_effectiveness_with_same_args() -> anyhow::Result<()> {

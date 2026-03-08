@@ -6240,7 +6240,6 @@ dependencies = [
  "vtcode-commons",
  "vtcode-config",
  "vtcode-core",
- "vtcode-tools",
  "vtcode-tui",
  "walkdir",
  "webbrowser",
