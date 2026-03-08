@@ -73,22 +73,15 @@ fn jaro_similarity(s1: &str, s2: &str) -> f32 {
         return 0.0;
     }
 
-    // Count transpositions without allocating matched-char buffers:
-    // walk both arrays in order, zip the matched positions, count mismatches.
-    let mut s1_iter = s1c.iter().enumerate().filter(|&(i, _)| s1_matched[i]);
-    let mut s2_iter = s2c.iter().enumerate().filter(|&(i, _)| s2_matched[i]);
-    let mut transpositions = 0usize;
-    loop {
-        match (s1_iter.next(), s2_iter.next()) {
-            (Some((_, a)), Some((_, b))) => {
-                if a != b {
-                    transpositions += 1;
-                }
-            }
-            _ => break,
-        }
-    }
-    transpositions /= 2;
+    // Count transpositions: walk both arrays in order, zip the matched positions, count mismatches.
+    let transpositions = s1c
+        .iter()
+        .enumerate()
+        .filter(|&(i, _)| s1_matched[i])
+        .zip(s2c.iter().enumerate().filter(|&(i, _)| s2_matched[i]))
+        .filter(|((_, &a), (_, &b))| a != b)
+        .count()
+        / 2;
 
     let m = matches as f32;
     (m / len1 as f32 + m / len2 as f32 + (m - transpositions as f32) / m) / 3.0

@@ -185,56 +185,56 @@ impl PatternEngine {
 ///
 /// `events[0]` is the **newest** event.
 fn detect_in_sequence(events: &[&ExecutionEvent]) -> DetectedPattern {
-    if events.is_empty() {
+    let len = events.len();
+    if len == 0 {
         return DetectedPattern::Single;
     }
 
     let first = events[0];
 
-    // --- Exact repeat check (one short-circuit pass) ---
-    if events
-        .iter()
-        .all(|e| e.tool_name == first.tool_name && e.arguments == first.arguments)
-    {
-        return match events.len() {
-            1 | 2 => DetectedPattern::ExactRepeat,
-            _ => DetectedPattern::Loop,
-        };
-    }
-
-    // --- Single combined scan: qualities + same_tool flag + seen_second_tool ---
+    // --- Single combined scan: exact repeats, qualities, tool variety ---
     //
-    // We need:
-    //   • quality_score for each event  → Vec<f32>  (required for .windows(2))
-    //   • whether all events share the first tool   → bool
-    //   • whether >1 distinct tool exists           → bool (early-exit once true)
-    //
-    // A single `for` loop gathers all three cheaply and keeps the data hot in cache.
-    let mut qualities = SmallVec::<[f32; 32]>::with_capacity(events.len());
+    // We combine all metrics into one traversal to maximize cache locality and
+    // enable LLM/SIMD optimization (fused iteration pattern).
+    let mut qualities = SmallVec::<[f32; 32]>::with_capacity(len);
     let mut same_tool = true;
-    let mut multi_tool = false;
+    let mut same_args = true;
 
     for e in events {
         qualities.push(e.quality_score);
         if e.tool_name != first.tool_name {
             same_tool = false;
-            multi_tool = true; // keep looping to fill `qualities`
+        }
+        if e.arguments != first.arguments {
+            same_args = false;
         }
     }
 
-    // --- Quality trend (needs ≥3 points) ---
-    if qualities.len() >= 3 {
+    // 1. Check for exact repeats/loops first (strictest pattern)
+    if same_tool && same_args {
+        return match len {
+            1 | 2 => DetectedPattern::ExactRepeat,
+            _ => DetectedPattern::Loop,
+        };
+    }
+
+    // 2. Trend analysis (needs ≥3 points)
+    if len >= 3 {
         // events[0] is newest → qualities[0] is the latest score.
-        if qualities.windows(2).all(|w| w[0] > w[1] + 0.05) {
+        // Fusing the window check to optimize trend detection.
+        let is_refinement = qualities.windows(2).all(|w| w[0] > w[1] + 0.05);
+        if is_refinement {
             return DetectedPattern::Refinement;
         }
-        if qualities.windows(2).all(|w| w[0] < w[1] - 0.05) {
+
+        let is_degradation = qualities.windows(2).all(|w| w[0] < w[1] - 0.05);
+        if is_degradation {
             return DetectedPattern::Degradation;
         }
     }
 
-    // --- Near-loop: same tool, fuzzy-similar args ---
-    if same_tool && events.len() >= 3 {
+    // 3. Near-loop check (same tool, similar args)
+    if same_tool && len >= 3 {
         if events
             .windows(2)
             .all(|w| jaro_winkler_similarity(&w[0].arguments, &w[1].arguments) > 0.85)
@@ -243,19 +243,20 @@ fn detect_in_sequence(events: &[&ExecutionEvent]) -> DetectedPattern {
         }
     }
 
-    // --- Convergence / Exploration: multiple tools ---
-    if multi_tool && events.len() >= 3 {
+    // 4. Multi-tool analysis (Exploration/Convergence)
+    if !same_tool && len >= 3 {
         // Single-pass mean + mean-absolute-deviation over qualities.
-        let n = qualities.len() as f32;
+        let n = len as f32;
         let avg = qualities.iter().sum::<f32>() / n;
         let mad = qualities.iter().map(|q| (q - avg).abs()).sum::<f32>() / n;
 
         if mad < 0.15 {
             return DetectedPattern::Convergence;
         }
+        return DetectedPattern::Exploration;
     }
 
-    if multi_tool {
+    if !same_tool {
         return DetectedPattern::Exploration;
     }
 

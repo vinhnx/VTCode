@@ -153,14 +153,20 @@ fn decode_plugin_c_string(
     utf8_error_context: &'static str,
 ) -> Result<String> {
     let raw_ptr = ptr.as_ptr() as *const libc::c_char;
-    // Safety: `raw_ptr` comes from a plugin ABI function and was validated non-null.
+    // SAFETY:
+    // 1. `raw_ptr` is guaranteed to be non-null (validated by `ensure_non_null_c_string_ptr`).
+    // 2. We assume the plugin-returned pointer is a valid nul-terminated C string per the plugin ABI.
+    // 3. The reference created by `CStr::from_ptr` is only used to copy the data into a Rust `String`.
+    //    Since we own the only reference during this brief window and copy-then-release,
+    //    we avoid Undefined Behavior related to mutable aliasing that "Unsafe Rust is not C" warns about.
     let decoded = unsafe { CStr::from_ptr(raw_ptr) }
         .to_str()
         .context(utf8_error_context)
         .map(str::to_owned);
 
     if let Some(free_fn) = free_string_fn {
-        // Safety: pointer came from the plugin ABI and free_fn is loaded from the same library.
+        // SAFETY: The pointer originated from the same plugin instance that provided `free_fn`.
+        // We call it only after we've finished reading the data into our own `String`.
         unsafe { free_fn(raw_ptr) };
     }
 
@@ -176,24 +182,28 @@ impl std::fmt::Debug for NativePlugin {
     }
 }
 
-// Safety: `NativePlugin` is immutable after construction and keeps the backing
-// dynamic library handle alive, so moving across threads is safe.
+// SAFETY: `NativePlugin` is immutable after construction and keeps the backing
+// dynamic library handle alive. Moving across threads is safe because the
+// library cannot be unloaded while this struct exists.
 unsafe impl Send for NativePlugin {}
-// Safety: shared references do not allow mutation and function pointers are immutable.
+// SAFETY: Shared references do not allow mutation and function pointers are
+// immutable. Concurrent access to the plugin functions is safe as they are
+// stateless or handle their own synchronization.
 unsafe impl Sync for NativePlugin {}
 
 impl NativePlugin {
     /// Create a new native plugin from a loaded library
     pub fn new(library: Library, path: PathBuf) -> Result<Self> {
         // Verify ABI version
-        // Safety: symbol name and signature are defined by the plugin ABI.
+        // SAFETY: The symbol name and signature are defined by the plugin ABI.
+        // We trust the library at `lib_path` (already validated as trusted).
         let version_fn: Symbol<PluginVersionFn> = unsafe {
             library
                 .get(b"vtcode_plugin_version\0")
                 .context("Failed to load vtcode_plugin_version symbol")?
         };
 
-        // Safety: function pointer loaded from the validated ABI symbol above.
+        // SAFETY: The function pointer was loaded from a validated ABI symbol.
         let abi_version = unsafe { version_fn() };
         if abi_version != PLUGIN_ABI_VERSION {
             return Err(anyhow!(
@@ -204,7 +214,7 @@ impl NativePlugin {
         }
 
         // Optional cleanup function for plugin-owned strings.
-        // Safety: symbol name and signature are defined by the plugin ABI.
+        // SAFETY: Symbol name and signature follow the plugin ABI.
         let free_string_fn = unsafe {
             library
                 .get::<PluginFreeStringFn>(b"vtcode_plugin_free_string\0")
@@ -213,14 +223,14 @@ impl NativePlugin {
         };
 
         // Load metadata
-        // Safety: symbol name and signature are defined by the plugin ABI.
+        // SAFETY: Symbol name and signature are defined by the plugin ABI.
         let metadata_fn: Symbol<PluginMetadataFn> = unsafe {
             library
                 .get(b"vtcode_plugin_metadata\0")
                 .context("Failed to load vtcode_plugin_metadata symbol")?
         };
 
-        // Safety: function pointer loaded from the validated ABI symbol above.
+        // SAFETY: Function pointer loaded from the validated ABI symbol.
         let metadata_ptr =
             ensure_non_null_c_string_ptr(unsafe { metadata_fn() }, "Plugin metadata function")?;
         let metadata_json = decode_plugin_c_string(
@@ -233,7 +243,7 @@ impl NativePlugin {
             serde_json::from_str(&metadata_json).context("Failed to parse plugin metadata JSON")?;
 
         // Load execute function
-        // Safety: symbol name and signature are defined by the plugin ABI.
+        // SAFETY: Symbol name and signature are defined by the plugin ABI.
         let execute_fn: Symbol<PluginExecuteFn> = unsafe {
             library
                 .get(b"vtcode_plugin_execute\0")
@@ -259,7 +269,10 @@ impl NativePlugin {
         let input_cstr =
             CString::new(input_json).context("Failed to create C string from input JSON")?;
 
-        // Safety: the C string pointer is valid and `execute_fn` obeys plugin ABI.
+        // SAFETY:
+        // 1. The `input_cstr` pointer is valid for the duration of this call.
+        // 2. The `execute_fn` obeys the plugin ABI and expects a nul-terminated string.
+        // 3. We assume the plugin correctly handles its internal state and aliasing.
         let result_ptr = ensure_non_null_c_string_ptr(
             unsafe { (self.execute_fn)(input_cstr.as_ptr()) },
             "Plugin execute function",
@@ -333,18 +346,15 @@ impl PluginLoader {
         // Find the dynamic library file
         let lib_path = self.find_library_file(plugin_path)?;
 
-        // Safety: Loading a dynamic library is inherently unsafe because:
-        // 1. The library code executes with full privileges
-        // 2. We trust the library is from a trusted source
-        // 3. The library could have bugs or malicious intent
+        // SAFETY: Loading a dynamic library is inherently unsafe because:
+        // 1. The library code executes with full privileges.
+        // 2. We trust the library is from a trusted source.
+        // 3. The library could have bugs or malicious intent.
         //
-        // Safety measures:
-        // - Only load from trusted directories
-        // - Verify ABI version compatibility
-        // - Validate metadata format
-        // - Future: support signature verification
-        // Safety: loading a dynamic library is inherently unsafe; path has been
-        // constrained to trusted directories before this point.
+        // Risk Mitigation:
+        // - Only load from trusted directories (validated by `is_in_trusted_dir`).
+        // - Verify ABI version compatibility in `NativePlugin::new`.
+        // - Validate metadata format.
         let library = unsafe { Library::new(&lib_path) }
             .with_context(|| format!("Failed to load dynamic library at {:?}", lib_path))?;
 

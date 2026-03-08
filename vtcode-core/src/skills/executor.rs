@@ -290,12 +290,26 @@ pub async fn execute_skill_with_sub_llm(
 #[derive(Clone)]
 pub struct SkillToolAdapter {
     skill: Skill,
+    /// Cached leaked name to satisfy Tool trait's &'static str requirement
+    name: &'static str,
+    /// Cached leaked description to satisfy Tool trait's &'static str requirement
+    description: &'static str,
 }
 
 impl SkillToolAdapter {
     /// Create a new skill tool adapter
     pub fn new(skill: Skill) -> Self {
-        SkillToolAdapter { skill }
+        // SAFETY: We leak the name and description once to satisfy the Tool trait's
+        // &'static str requirement. These strings live for the duration of the program.
+        // This is better than leaking on every call to name() or description().
+        let name: &'static str = Box::leak(skill.name().to_owned().into_boxed_str());
+        let description: &'static str = Box::leak(skill.description().to_owned().into_boxed_str());
+
+        SkillToolAdapter {
+            skill,
+            name,
+            description,
+        }
     }
 
     /// Get reference to underlying skill
@@ -342,16 +356,11 @@ impl crate::tools::traits::Tool for SkillToolAdapter {
     }
 
     fn name(&self) -> &'static str {
-        // SAFETY: Skill names are validated and stored in heap; this is unsafe
-        // but necessary for Tool trait's &'static str requirement.
-        // In practice, we should refactor Tool trait to use &str
-        let s: Box<str> = self.skill.name().into();
-        Box::leak(s)
+        self.name
     }
 
     fn description(&self) -> &'static str {
-        let s: Box<str> = self.skill.description().into();
-        Box::leak(s)
+        self.description
     }
 
     fn validate_args(&self, args: &Value) -> Result<()> {

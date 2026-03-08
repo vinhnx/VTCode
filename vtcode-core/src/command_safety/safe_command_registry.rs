@@ -40,7 +40,7 @@ pub struct SafeCommandRegistry {
 #[derive(Clone)]
 pub struct CommandRule {
     /// If Some, only these subcommands are allowed
-    safe_subcommands: Option<Vec<String>>,
+    safe_subcommands: Option<rustc_hash::FxHashSet<String>>,
     /// These options make a command unsafe (e.g., "-delete" for find)
     forbidden_options: Vec<String>,
     /// Custom validation function for complex logic
@@ -60,7 +60,12 @@ impl CommandRule {
     /// Creates a rule with allowed subcommands
     pub fn with_allowed_subcommands(subcommands: Vec<&str>) -> Self {
         Self {
-            safe_subcommands: Some(subcommands.into_iter().map(|s| s.to_string()).collect()),
+            safe_subcommands: Some(
+                subcommands
+                    .into_iter()
+                    .map(|s| s.to_string())
+                    .collect::<rustc_hash::FxHashSet<_>>(),
+            ),
             forbidden_options: vec![],
             custom_check: None,
         }
@@ -94,12 +99,12 @@ impl SafeCommandRegistry {
         rules.insert(
             "git".to_string(),
             CommandRule {
-                safe_subcommands: Some(vec![
-                    "status".to_string(),
-                    "log".to_string(),
-                    "diff".to_string(),
-                    "show".to_string(),
-                ]),
+                safe_subcommands: Some(
+                    vec!["status", "log", "diff", "show"]
+                        .into_iter()
+                        .map(|s| s.to_string())
+                        .collect(),
+                ),
                 forbidden_options: vec![],
                 custom_check: Some(Self::check_git),
             },
@@ -109,11 +114,12 @@ impl SafeCommandRegistry {
         rules.insert(
             "cargo".to_string(),
             CommandRule {
-                safe_subcommands: Some(vec![
-                    "check".to_string(),
-                    "build".to_string(),
-                    "clippy".to_string(),
-                ]),
+                safe_subcommands: Some(
+                    vec!["check", "build", "clippy"]
+                        .into_iter()
+                        .map(|s| s.to_string())
+                        .collect(),
+                ),
                 forbidden_options: vec![],
                 custom_check: Some(Self::check_cargo),
             },
@@ -226,15 +232,23 @@ impl SafeCommandRegistry {
         }
 
         // Check forbidden options
-        for forbidden in &rule.forbidden_options {
-            if command
+        if !rule.forbidden_options.is_empty() {
+            // Pre-calculate forbidden prefixes to avoid allocations in the loop
+            let forbidden_with_eq: Vec<String> = rule
+                .forbidden_options
                 .iter()
-                .any(|arg| arg == forbidden || arg.starts_with(&format!("{}=", forbidden)))
-            {
-                return SafetyDecision::Deny(format!(
-                    "Option {} is not allowed for {}",
-                    forbidden, cmd_name
-                ));
+                .map(|opt| format!("{}=", opt))
+                .collect();
+
+            for arg in command {
+                for (i, forbidden) in rule.forbidden_options.iter().enumerate() {
+                    if arg == forbidden || arg.starts_with(&forbidden_with_eq[i]) {
+                        return SafetyDecision::Deny(format!(
+                            "Option {} is not allowed for {}",
+                            forbidden, cmd_name
+                        ));
+                    }
+                }
             }
         }
 
