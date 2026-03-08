@@ -231,10 +231,18 @@ impl RequestBatcher {
     async fn process_batch(requests: Vec<BatchedRequest>) {
         debug!("Processing batch of {} requests", requests.len());
 
-        // For now, process individually (could be optimized for providers that support batching)
+        let mut tasks = tokio::task::JoinSet::new();
         for request in requests {
-            let result = Self::execute_single_request(request.request).await;
-            let _ = request.response_tx.send(result);
+            tasks.spawn(async move {
+                let result = Self::execute_single_request(request.request).await;
+                let _ = request.response_tx.send(result);
+            });
+        }
+
+        while let Some(result) = tasks.join_next().await {
+            if let Err(error) = result {
+                debug!(?error, "batched request task failed");
+            }
         }
     }
 
@@ -418,15 +426,19 @@ impl OptimizedLLMClient {
         let cache_key = self.generate_cache_key(&request);
 
         // Check cache first
-        {
+        let cached_response = {
             let cache = self.response_cache.read().await;
-            if let Some(cached) = cache.peek(&cache_key)
-                && cached.cached_at.elapsed() < cached.ttl
-            {
-                self.metrics.write().await.cache_hits += 1;
-                return Ok(cached.response.clone());
-            }
+            cache
+                .peek(&cache_key)
+                .filter(|cached| cached.cached_at.elapsed() < cached.ttl)
+                .map(|cached| cached.response.clone())
+        };
+        if let Some(response) = cached_response {
+            self.metrics.write().await.cache_hits += 1;
+            return Ok(response);
         }
+
+        self.request_batcher.start_processing().await;
 
         // Acquire rate limit permit
         self.rate_limiter
@@ -569,5 +581,24 @@ mod tests {
             batcher.generate_batch_key(&base_request),
             batcher.generate_batch_key(&different_request)
         );
+    }
+
+    #[tokio::test]
+    async fn test_chat_optimized_starts_batch_processing_automatically() {
+        let client = OptimizedLLMClient::new(1, 16, 10.0, 1);
+        let response = tokio::time::timeout(
+            Duration::from_secs(1),
+            client.chat_optimized(OptimizedRequest {
+                model: "model-a".to_string(),
+                messages: vec![serde_json::json!({"role": "user", "content": "hello"})],
+                temperature: Some(0.2),
+                max_tokens: Some(128),
+            }),
+        )
+        .await
+        .expect("request should complete without explicit start")
+        .expect("request should succeed");
+
+        assert_eq!(response.content, "Batched response");
     }
 }
