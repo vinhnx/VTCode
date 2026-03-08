@@ -162,6 +162,13 @@ When acting under an assumption, state it in one line and proceed.
 - Do NOT ask for permission to read files, run tests, or make edits.
 - When using `request_user_input`, provide focused 1-3 questions with 2-3 mutually exclusive options each and place the recommended option first; users can always add custom notes/free-form responses, so treat options as guidance anchors rather than an exhaustive list.
 
+## GPT-5.4 Execution Contract
+
+- Keep outputs compact and in the requested format. Avoid repetition.
+- If the next step is reversible and low-risk, proceed without asking. Ask only for irreversible, external, sensitive, or outcome-changing choices.
+- Resolve prerequisite lookup first. Use tools when they improve correctness, retry empty or narrow results once, and treat the task as incomplete until each item is covered or blocked.
+- Before finalizing, check correctness, grounding, formatting, and side-effect safety. If context is missing, do not guess. For research or citation-sensitive work, cite only retrieved sources and label conflicts or inference clearly.
+
 **Ambition vs precision**:
 - Existing code: Surgical, respectful changes matching surrounding style.
 - New work: Creative, ambitious implementation.
@@ -306,6 +313,8 @@ const MINIMAL_SYSTEM_PROMPT: &str = r#"You are VT Code, a coding assistant for V
 
 **Decision policy**: Default — act without asking. Proceed with reasonable assumptions. State assumptions in one line and continue. Ask (via `request_user_input`) only when requirements materially change behavior/UX/API or credentials are needed. If `request_user_input` is unavailable, fall back to this prompt's standard decision policy and state assumptions explicitly. When genuinely uncertain, surface the ambiguity early rather than guessing.
 
+**Execution contract**: Keep outputs compact and exactly in the requested format. If the next step is reversible and low-risk, proceed without asking. Use tools persistently when they improve correctness, resolve prerequisites before acting, retry empty or partial lookups once or twice, and verify before finalizing. Treat the task as incomplete until every requested item is covered or marked blocked. If required context is missing, do not guess. For research or citation-sensitive work, base claims only on retrieved or provided evidence and cite only retrieved sources.
+
 **Harness**: `AGENTS.md` is the map. `docs/harness/` has invariants, quality scores, exec plans, tech debt. Check invariants before modifying code. Boy scout rule: leave code better than you found it.
 
 **Validation**: Run tests/checks yourself. Verify at least once per slice and before concluding. Never claim "tested/passed" unless you actually ran the command.
@@ -332,9 +341,14 @@ Stop when done."#;
 const DEFAULT_LIGHTWEIGHT_PROMPT: &str = r#"VT Code - efficient coding agent.
 
 - Act and verify. Direct tone. No emoji — use plain Unicode symbols (✓, ✗, →, •).
+- Keep outputs compact and exactly in the requested format; avoid repeating the user's request.
+- If the next step is reversible and low-risk, proceed without asking. Ask only for irreversible, external, or outcome-changing choices.
 - Scoped: unified_search (≤5), unified_file (max_tokens).
 - Use `unified_exec` for shell commands; set `tty=true` only when an interactive PTY is required.
 - Tools hidden by default. `list_skills --search <term>` to find them.
+- Resolve prerequisites before acting, retry empty or narrow lookups with a different approach, and verify before finalizing.
+- Treat tasks as incomplete until each requested item is covered or marked blocked. If required context is missing, do not guess.
+- For research or citation-sensitive work, ground claims in retrieved or provided evidence and cite only retrieved sources.
 - Keep investigation and implementation explicit in a single thread; summarize findings before edits.
 - Keep code consistent with nearby patterns; prefer KISS and DRY.
 - Prefer explicit, readable, simple code. In ambiguity, refuse to guess.
@@ -374,7 +388,14 @@ Trivial final answers: 1-3 sentences, outcomes first, `path:line` refs. Multi-fi
 - Apply Zen + Hickey defaults: explicit/readable/simple code, avoid temporal coupling, and redesign if hard to explain.
 - Don't fix unrelated bugs, don't refactor beyond request, don't add unrequested scope.
 - When genuinely uncertain, use `request_user_input` rather than guessing; if unavailable, fall back to this prompt's standard decision policy and state assumptions explicitly.
-ƒ
+
+## GPT-5.4 Execution Contract
+
+- Keep outputs compact and in the requested format. Do not omit required evidence or verification.
+- If intent is clear and the next step is reversible and low-risk, proceed without asking. Ask only for irreversible actions, external side effects, sensitive missing data, or choices that materially change the result.
+- Resolve prerequisite lookup before acting. Use tools when they materially improve correctness, retry empty or narrow results with a different strategy, and treat tasks as incomplete until every requested item is covered or blocked with exact missing context.
+- Before finalizing, check correctness, grounding, formatting, and side-effect safety. If required context is missing, do not guess. For research or citation-sensitive work, cite only retrieved sources, label conflicts explicitly, and mark inference as inference.
+
 ## Validation
 
 - Verify at least once per completed slice and before concluding. Never claim "tested/passed" unless you actually ran the command.
@@ -1139,6 +1160,52 @@ mod tests {
             assert!(
                 result.contains("exactly one actionable next-step question"),
                 "{mode_name} prompt should require one actionable next-step question"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_generated_prompts_include_gpt54_execution_contract_language() {
+        let project_root = PathBuf::from(".");
+
+        for (mode_name, mode) in [
+            ("default", SystemPromptMode::Default),
+            ("minimal", SystemPromptMode::Minimal),
+            ("lightweight", SystemPromptMode::Lightweight),
+            ("specialized", SystemPromptMode::Specialized),
+        ] {
+            let mut config = VTCodeConfig::default();
+            config.agent.system_prompt_mode = mode;
+            config.agent.include_temporal_context = false;
+            config.agent.include_working_directory = false;
+            config.agent.instruction_max_bytes = 0;
+
+            let result = compose_system_instruction_text(&project_root, Some(&config), None).await;
+            let normalized = result.to_ascii_lowercase();
+
+            assert!(
+                normalized.contains("compact") && normalized.contains("requested format"),
+                "{mode_name} prompt should enforce compact structured output"
+            );
+            assert!(
+                normalized.contains("reversible and low-risk"),
+                "{mode_name} prompt should include follow-through guidance"
+            );
+            assert!(
+                normalized.contains("before finalizing"),
+                "{mode_name} prompt should include verification guidance"
+            );
+            assert!(
+                normalized.contains("do not guess"),
+                "{mode_name} prompt should gate missing context"
+            );
+            assert!(
+                normalized.contains("cite only retrieved sources"),
+                "{mode_name} prompt should include grounding/citation guidance"
+            );
+            assert!(
+                !result.contains('ƒ'),
+                "{mode_name} prompt should not contain stray prompt characters"
             );
         }
     }

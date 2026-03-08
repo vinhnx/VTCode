@@ -205,6 +205,8 @@ impl AgentSessionController {
             self.state.stats.merge_usage(final_usage.clone());
         }
 
+        aggregated_tool_calls = aggregated_tool_calls.filter(|calls| !calls.is_empty());
+
         // Create and push assistant message
         let mut assistant_msg = crate::llm::provider::Message::assistant(full_text.clone());
         if !full_reasoning.is_empty() {
@@ -212,10 +214,16 @@ impl AgentSessionController {
         }
 
         // Handle tool calls in the response summary
-        let mut tool_calls = None;
-        if let Some(calls) = aggregated_tool_calls.clone() {
-            assistant_msg = assistant_msg.with_tool_calls(calls.clone());
-            tool_calls = Some(calls);
+        match aggregated_tool_calls.as_ref() {
+            Some(calls) => {
+                assistant_msg = assistant_msg
+                    .with_tool_calls(calls.clone())
+                    .with_phase(Some(crate::llm::provider::AssistantPhase::Commentary));
+            }
+            None => {
+                assistant_msg = assistant_msg
+                    .with_phase(Some(crate::llm::provider::AssistantPhase::FinalAnswer));
+            }
         }
 
         self.state.messages.push(assistant_msg.clone());
@@ -250,7 +258,7 @@ impl AgentSessionController {
         } else {
             Some(full_reasoning.clone())
         };
-        response.tool_calls = tool_calls.clone();
+        response.tool_calls = aggregated_tool_calls.clone();
         response.usage = Some(final_usage);
         response.finish_reason = if finish_reason == "tool_calls" {
             crate::llm::provider::FinishReason::ToolCalls
@@ -278,7 +286,9 @@ mod tests {
     use async_trait::async_trait;
     use futures::stream;
 
-    use crate::llm::provider::{LLMError, LLMResponse, LLMStream, LLMStreamEvent};
+    use crate::llm::provider::{
+        AssistantPhase, LLMError, LLMResponse, LLMStream, LLMStreamEvent, ToolCall,
+    };
 
     #[derive(Clone)]
     struct CompletedOnlyStreamProvider {
@@ -415,5 +425,80 @@ mod tests {
         assert_eq!(reasoning.as_deref(), Some("reasoning _suffix_"));
         assert_eq!(resp.content.as_deref(), Some("prefix **suffix**"));
         assert_eq!(resp.reasoning.as_deref(), Some("reasoning _suffix_"));
+    }
+
+    #[tokio::test]
+    async fn run_turn_marks_tool_call_responses_as_commentary() {
+        let response = LLMResponse {
+            content: Some("Checking prerequisites".to_string()),
+            model: "test-model".to_string(),
+            finish_reason: crate::llm::provider::FinishReason::ToolCalls,
+            tool_calls: Some(vec![ToolCall::function(
+                "call_1".to_string(),
+                "unified_search".to_string(),
+                r#"{"action":"grep","pattern":"phase"}"#.to_string(),
+            )]),
+            ..Default::default()
+        };
+        let provider = CompletedOnlyStreamProvider {
+            response: response.clone(),
+        };
+        let state = AgentSessionState::new("session".to_string(), 16, 4, 128_000);
+        let mut controller = AgentSessionController::new(state, None);
+        let mut provider_box: Box<dyn LLMProvider> = Box::new(provider);
+        let request = LLMRequest {
+            model: "test-model".to_string(),
+            ..Default::default()
+        };
+        let mut steering = None;
+
+        let (resp, _, _) = controller
+            .run_turn(&mut provider_box, request, &mut steering, None)
+            .await
+            .expect("run_turn should succeed");
+
+        let last = controller
+            .state
+            .messages
+            .last()
+            .expect("assistant message should be recorded");
+        assert_eq!(last.phase, Some(AssistantPhase::Commentary));
+        assert_eq!(resp.tool_calls.as_ref().map(Vec::len), Some(1));
+    }
+
+    #[tokio::test]
+    async fn run_turn_normalizes_empty_tool_call_lists_to_final_answer() {
+        let response = LLMResponse {
+            content: Some("Done".to_string()),
+            model: "test-model".to_string(),
+            finish_reason: crate::llm::provider::FinishReason::Stop,
+            tool_calls: Some(vec![]),
+            ..Default::default()
+        };
+        let provider = CompletedOnlyStreamProvider {
+            response: response.clone(),
+        };
+        let state = AgentSessionState::new("session".to_string(), 16, 4, 128_000);
+        let mut controller = AgentSessionController::new(state, None);
+        let mut provider_box: Box<dyn LLMProvider> = Box::new(provider);
+        let request = LLMRequest {
+            model: "test-model".to_string(),
+            ..Default::default()
+        };
+        let mut steering = None;
+
+        let (resp, _, _) = controller
+            .run_turn(&mut provider_box, request, &mut steering, None)
+            .await
+            .expect("run_turn should succeed");
+
+        let last = controller
+            .state
+            .messages
+            .last()
+            .expect("assistant message should be recorded");
+        assert_eq!(last.phase, Some(AssistantPhase::FinalAnswer));
+        assert!(last.tool_calls.is_none());
+        assert!(resp.tool_calls.is_none());
     }
 }

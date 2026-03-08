@@ -12,9 +12,12 @@ This index collects provider-specific guides for configuring VT Code with differ
 -   Follow the [Getting Started guide](./user-guide/getting-started.md#configure-your-llm-provider) for API key setup.
 -   See [`vtcode-core/src/config/constants.rs`](../vtcode-core/src/config/constants.rs) for the latest supported models.
 -   GPT-5.2 reference: [Using GPT-5.2](./guides/gpt-5-2.md)
+-   VT Code's default OpenAI profile is `gpt-5.4` with `reasoning_effort = "none"` and `verbosity = "medium"`; raise reasoning only when the task shape justifies the extra latency.
+-   VT Code applies a compact GPT-5.4 prompt contract rather than a verbatim cookbook prompt: compact outputs, low-risk follow-through, dependency-aware tool use, completeness checks, verification, and conditional grounding/citation rules.
 -   File inputs are supported for OpenAI Responses API through `input_file` parts.
 -   Supported file input fields in VT Code message parts: `file_id`, `file_data`, `file_url`, `filename`.
 -   `file_url` is Responses API only; VT Code rejects `file_url` when a request uses Chat Completions.
+-   Native OpenAI Responses requests now preserve assistant phase metadata for replayed assistant history (`commentary` for preambles/progress updates, `final_answer` for completed answers). VT Code does not send this field to Chat Completions or non-native OpenAI-compatible endpoints.
 -   OpenAI Responses hosted tools currently map through `ToolDefinition` for `web_search`, `file_search`, hosted `tool_search`, and remote `mcp`, with hosted config passed through directly on each tool entry.
 -   For large corpora, prefer File Search/Retrieval instead of sending full files inline.
 -   For spreadsheet-heavy analysis, use Hosted Shell workflows instead of large inline sheet prompts.

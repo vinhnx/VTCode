@@ -1,5 +1,5 @@
 use crate::config::constants::defaults;
-use crate::llm::provider::{Message, MessageContent, MessageRole, ToolCall};
+use crate::llm::provider::{AssistantPhase, Message, MessageContent, MessageRole, ToolCall};
 use crate::telemetry::perf::PerfSpan;
 use crate::utils::dot_config::DotManager;
 use crate::utils::error_log_collector::ErrorLogEntry;
@@ -154,25 +154,15 @@ pub struct SessionMessage {
     #[serde(default)]
     pub tool_call_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub phase: Option<AssistantPhase>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub origin_tool: Option<String>,
 }
 
 impl Eq for SessionMessage {}
 
 impl SessionMessage {
-    pub fn new(role: MessageRole, content: impl Into<String>) -> Self {
-        Self {
-            role,
-            content: MessageContent::Text(content.into()),
-            reasoning: None,
-            reasoning_details: None,
-            tool_calls: None,
-            tool_call_id: None,
-            origin_tool: None,
-        }
-    }
-
-    pub fn with_content(role: MessageRole, content: MessageContent) -> Self {
+    fn base(role: MessageRole, content: MessageContent) -> Self {
         Self {
             role,
             content,
@@ -180,8 +170,17 @@ impl SessionMessage {
             reasoning_details: None,
             tool_calls: None,
             tool_call_id: None,
+            phase: None,
             origin_tool: None,
         }
+    }
+
+    pub fn new(role: MessageRole, content: impl Into<String>) -> Self {
+        Self::base(role, MessageContent::Text(content.into()))
+    }
+
+    pub fn with_content(role: MessageRole, content: MessageContent) -> Self {
+        Self::base(role, content)
     }
 
     pub fn with_tool_call_id(
@@ -197,15 +196,9 @@ impl SessionMessage {
         content: MessageContent,
         tool_call_id: Option<String>,
     ) -> Self {
-        Self {
-            role,
-            content,
-            reasoning: None,
-            reasoning_details: None,
-            tool_calls: None,
-            tool_call_id,
-            origin_tool: None,
-        }
+        let mut message = Self::base(role, content);
+        message.tool_call_id = tool_call_id;
+        message
     }
 }
 
@@ -218,6 +211,7 @@ impl From<&Message> for SessionMessage {
             reasoning_details: message.reasoning_details.clone(),
             tool_calls: message.tool_calls.clone(),
             tool_call_id: message.tool_call_id.clone(),
+            phase: message.phase,
             origin_tool: message.origin_tool.clone(),
         }
     }
@@ -232,6 +226,7 @@ impl From<&SessionMessage> for Message {
             reasoning_details: message.reasoning_details.clone(),
             tool_calls: message.tool_calls.clone(),
             tool_call_id: message.tool_call_id.clone(),
+            phase: message.phase,
             origin_tool: message.origin_tool.clone(),
         }
     }
@@ -1276,10 +1271,9 @@ mod tests {
 
     #[test]
     fn session_message_converts_back_and_forth() {
-        let _original = Message::assistant("Test response".to_owned());
         let mut original = Message::assistant("Test response".to_owned());
         original.reasoning = Some("Model thoughts".to_owned());
-        original.reasoning = Some("Model thoughts".to_owned());
+        original.phase = Some(AssistantPhase::FinalAnswer);
         let stored = SessionMessage::from(&original);
         let restored = Message::from(&stored);
 
@@ -1288,6 +1282,8 @@ mod tests {
         assert_eq!(original.reasoning, stored.reasoning);
         assert_eq!(original.reasoning, restored.reasoning);
         assert_eq!(original.tool_call_id, restored.tool_call_id);
+        assert_eq!(original.phase, stored.phase);
+        assert_eq!(original.phase, restored.phase);
     }
 
     #[test]

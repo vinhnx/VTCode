@@ -57,6 +57,27 @@ fn normalize_history_for_request_merges_plain_assistant_text_messages() {
 }
 
 #[test]
+fn normalize_history_for_request_keeps_different_assistant_phases_separate() {
+    let manager = ContextManager::new(
+        "sys".into(),
+        (),
+        Arc::new(RwLock::new(HashMap::new())),
+        None,
+    );
+    let history = vec![
+        uni::Message::assistant("working".to_string())
+            .with_phase(Some(uni::AssistantPhase::Commentary)),
+        uni::Message::assistant("done".to_string())
+            .with_phase(Some(uni::AssistantPhase::FinalAnswer)),
+    ];
+
+    let normalized = manager.normalize_history_for_request(&history);
+    assert_eq!(normalized.len(), 2);
+    assert_eq!(normalized[0].phase, Some(uni::AssistantPhase::Commentary));
+    assert_eq!(normalized[1].phase, Some(uni::AssistantPhase::FinalAnswer));
+}
+
+#[test]
 fn normalize_history_for_request_keeps_tool_sequences_intact() {
     let manager = ContextManager::new(
         "sys".into(),

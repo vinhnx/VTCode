@@ -449,6 +449,7 @@ fn thought_signature_roundtrip_in_request() {
                     thought_signature: Some(test_signature.clone()),
                 }]),
                 tool_call_id: None,
+                phase: None,
                 origin_tool: None,
             },
         ],

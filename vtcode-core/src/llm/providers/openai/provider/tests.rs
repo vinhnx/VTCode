@@ -480,6 +480,117 @@ fn responses_payload_includes_previous_response_and_optional_fields() {
 }
 
 #[test]
+fn responses_payload_includes_assistant_phase_for_native_openai() {
+    let provider = OpenAIProvider::with_model(String::new(), models::openai::GPT_5_4.to_string());
+    let request = provider::LLMRequest {
+        messages: vec![
+            provider::Message::user("Start".to_owned()),
+            provider::Message::assistant("Checking prerequisites".to_owned())
+                .with_phase(Some(provider::AssistantPhase::Commentary)),
+            provider::Message::assistant("Done".to_owned())
+                .with_phase(Some(provider::AssistantPhase::FinalAnswer)),
+        ],
+        model: models::openai::GPT_5_4.to_string(),
+        ..Default::default()
+    };
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+    let input = payload
+        .get("input")
+        .and_then(Value::as_array)
+        .expect("input should exist");
+
+    assert_eq!(
+        input[1].get("phase").and_then(Value::as_str),
+        Some("commentary")
+    );
+    assert_eq!(
+        input[2].get("phase").and_then(Value::as_str),
+        Some("final_answer")
+    );
+}
+
+#[test]
+fn responses_payload_omits_phase_for_non_assistant_items() {
+    let provider = OpenAIProvider::with_model(String::new(), models::openai::GPT_5_4.to_string());
+    let request = provider::LLMRequest {
+        messages: vec![
+            provider::Message::user("Start".to_owned())
+                .with_phase(Some(provider::AssistantPhase::Commentary)),
+            provider::Message::assistant_with_tools(
+                "Looking up data".to_owned(),
+                vec![provider::ToolCall::function(
+                    "call_1".to_string(),
+                    "search_workspace".to_string(),
+                    r#"{"query":"phase"}"#.to_string(),
+                )],
+            )
+            .with_phase(Some(provider::AssistantPhase::Commentary)),
+            provider::Message::tool_response("call_1".to_string(), "{\"ok\":true}".to_string())
+                .with_phase(Some(provider::AssistantPhase::FinalAnswer)),
+        ],
+        model: models::openai::GPT_5_4.to_string(),
+        ..Default::default()
+    };
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+    let input = payload
+        .get("input")
+        .and_then(Value::as_array)
+        .expect("input should exist");
+
+    assert!(
+        input[0].get("phase").is_none(),
+        "user items should omit phase"
+    );
+    assert_eq!(
+        input[1].get("phase").and_then(Value::as_str),
+        Some("commentary")
+    );
+    assert!(
+        input[2].get("phase").is_none(),
+        "tool items should omit phase"
+    );
+}
+
+#[test]
+fn responses_payload_omits_assistant_phase_for_non_native_openai_endpoints() {
+    let provider = OpenAIProvider::from_config(
+        Some("key".to_owned()),
+        Some(models::openai::GPT_5_4.to_string()),
+        Some("https://example.local/v1".to_string()),
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+    let request = provider::LLMRequest {
+        messages: vec![
+            provider::Message::user("Start".to_owned()),
+            provider::Message::assistant("Checking prerequisites".to_owned())
+                .with_phase(Some(provider::AssistantPhase::Commentary)),
+        ],
+        model: models::openai::GPT_5_4.to_string(),
+        ..Default::default()
+    };
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+    let input = payload
+        .get("input")
+        .and_then(Value::as_array)
+        .expect("input should exist");
+
+    assert!(input[1].get("phase").is_none());
+}
+
+#[test]
 fn responses_payload_uses_provider_level_responses_options() {
     let provider = OpenAIProvider::from_config(
         Some("key".to_owned()),
@@ -608,6 +719,31 @@ fn chat_payload_includes_prompt_cache_key_for_native_openai() {
         payload.get("prompt_cache_key").and_then(Value::as_str),
         Some("vtcode:openai:session-abc")
     );
+}
+
+#[test]
+fn chat_payload_omits_assistant_phase_metadata() {
+    let provider =
+        OpenAIProvider::with_model(String::new(), models::openai::DEFAULT_MODEL.to_string());
+    let request = provider::LLMRequest {
+        messages: vec![
+            provider::Message::user("Start".to_owned()),
+            provider::Message::assistant("Working".to_owned())
+                .with_phase(Some(provider::AssistantPhase::Commentary)),
+        ],
+        model: models::openai::DEFAULT_MODEL.to_string(),
+        ..Default::default()
+    };
+
+    let payload = provider
+        .convert_to_openai_format(&request)
+        .expect("conversion should succeed");
+    let messages = payload
+        .get("messages")
+        .and_then(Value::as_array)
+        .expect("messages should exist");
+
+    assert!(messages[1].get("phase").is_none());
 }
 
 #[test]

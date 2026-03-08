@@ -57,7 +57,7 @@ mod tests;
 mod tool;
 
 pub use call::{FunctionCall, ToolCall};
-pub use message::{ContentPart, Message, MessageContent, MessageRole};
+pub use message::{AssistantPhase, ContentPart, Message, MessageContent, MessageRole};
 pub use provider_trait::{
     LLMError, LLMErrorMetadata, LLMProvider, ProviderCapabilities, get_cached_capabilities,
 };

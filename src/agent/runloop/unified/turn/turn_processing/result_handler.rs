@@ -82,16 +82,17 @@ fn record_assistant_tool_calls(
     if appended_assistant_message {
         if let Some(last) = history.last_mut() {
             last.tool_calls = Some(tool_calls.to_vec());
+            last.phase = Some(uni::AssistantPhase::Commentary);
         }
         return;
     }
 
     // Preserve call/output pairing even when the assistant text was merged into
     // a prior message or omitted; OpenAI-compatible providers require tool call IDs.
-    history.push(uni::Message::assistant_with_tools(
-        String::new(),
-        tool_calls.to_vec(),
-    ));
+    history.push(
+        uni::Message::assistant_with_tools(String::new(), tool_calls.to_vec())
+            .with_phase(Some(uni::AssistantPhase::Commentary)),
+    );
 }
 
 /// Dispatch the appropriate response handler based on the processing result.
@@ -117,6 +118,7 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                 reasoning,
                 reasoning_details,
                 params.response_streamed,
+                Some(uni::AssistantPhase::Commentary),
             )?;
             record_assistant_tool_calls(
                 params.ctx.working_history,
@@ -227,6 +229,7 @@ mod tests {
         assert_eq!(history.len(), 2);
         let last = history.last().expect("assistant message");
         assert_eq!(last.role, uni::MessageRole::Assistant);
+        assert_eq!(last.phase, Some(uni::AssistantPhase::Commentary));
         assert_eq!(
             last.tool_calls
                 .as_ref()
@@ -254,6 +257,7 @@ mod tests {
             .expect("synthetic assistant tool call message");
         assert_eq!(last.role, uni::MessageRole::Assistant);
         assert_eq!(last.content.as_text(), "");
+        assert_eq!(last.phase, Some(uni::AssistantPhase::Commentary));
         assert_eq!(
             last.tool_calls
                 .as_ref()

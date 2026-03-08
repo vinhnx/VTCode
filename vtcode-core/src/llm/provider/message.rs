@@ -2,6 +2,33 @@ use super::ToolCall;
 use crate::llm::providers::clean_reasoning_text;
 use serde::{Deserialize, Serialize};
 
+/// Phase metadata for assistant messages in multi-step Responses-style workflows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AssistantPhase {
+    Commentary,
+    FinalAnswer,
+}
+
+impl AssistantPhase {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Commentary => "commentary",
+            Self::FinalAnswer => "final_answer",
+        }
+    }
+
+    #[must_use]
+    pub fn from_wire_str(value: &str) -> Option<Self> {
+        match value {
+            "commentary" => Some(Self::Commentary),
+            "final_answer" => Some(Self::FinalAnswer),
+            _ => None,
+        }
+    }
+}
+
 /// Content type for messages that can include both text and images
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -94,6 +121,9 @@ pub struct Message {
     pub tool_calls: Option<Vec<ToolCall>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
+    /// Optional assistant-only phase metadata used by OpenAI Responses workflows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub phase: Option<AssistantPhase>,
     /// Optional origin tool name for tracking which tool generated this message
     /// Used in tool-aware context retention to preserve results from recently-active tools
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -275,6 +305,10 @@ impl Message {
             count += crate::llm::utils::estimate_token_count(id);
         }
 
+        if let Some(phase) = self.phase {
+            count += crate::llm::utils::estimate_token_count(phase.as_str());
+        }
+
         count
     }
 
@@ -289,6 +323,7 @@ impl Message {
             reasoning_details: None,
             tool_calls: None,
             tool_call_id: None,
+            phase: None,
             origin_tool: None,
         }
     }
@@ -454,6 +489,17 @@ impl Message {
         reasoning_details: Option<Vec<serde_json::Value>>,
     ) -> Self {
         self.reasoning_details = reasoning_details;
+        self
+    }
+
+    /// Attach assistant phase metadata for providers that support it.
+    #[must_use]
+    pub fn with_phase(mut self, phase: Option<AssistantPhase>) -> Self {
+        self.phase = if self.role == MessageRole::Assistant {
+            phase
+        } else {
+            None
+        };
         self
     }
 
@@ -653,7 +699,7 @@ impl MessageRole {
 
 #[cfg(test)]
 mod tests {
-    use super::{ContentPart, MessageContent};
+    use super::{AssistantPhase, ContentPart, Message, MessageContent, MessageRole};
 
     #[test]
     fn message_content_parts_concatenate_without_extra_spaces() {
@@ -667,5 +713,30 @@ mod tests {
         let content = MessageContent::Parts(parts);
 
         assert_eq!(content.as_text().as_ref() as &str, "Andrej Karpathy's");
+    }
+
+    #[test]
+    fn assistant_phase_parses_wire_strings() {
+        assert_eq!(
+            AssistantPhase::from_wire_str("commentary"),
+            Some(AssistantPhase::Commentary)
+        );
+        assert_eq!(
+            AssistantPhase::from_wire_str("final_answer"),
+            Some(AssistantPhase::FinalAnswer)
+        );
+        assert_eq!(AssistantPhase::from_wire_str("other"), None);
+    }
+
+    #[test]
+    fn with_phase_ignores_non_assistant_roles() {
+        let user = Message::user("hello".to_string()).with_phase(Some(AssistantPhase::Commentary));
+        let tool = Message::tool_response("call_1".to_string(), "ok".to_string())
+            .with_phase(Some(AssistantPhase::FinalAnswer));
+
+        assert_eq!(user.role, MessageRole::User);
+        assert!(user.phase.is_none());
+        assert_eq!(tool.role, MessageRole::Tool);
+        assert!(tool.phase.is_none());
     }
 }
