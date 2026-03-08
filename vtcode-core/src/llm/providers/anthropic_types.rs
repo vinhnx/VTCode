@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Map, Value};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AnthropicRequest {
@@ -95,6 +95,21 @@ pub enum AnthropicContentBlock {
         tool_use_id: String,
         content: ToolSearchResultContent,
     },
+    /// Files API upload reference used by Anthropic code execution.
+    #[serde(rename = "container_upload")]
+    ContainerUpload { file_id: String },
+    /// Generic code execution result block used in some Anthropic responses.
+    #[serde(rename = "code_execution_tool_result")]
+    CodeExecutionToolResult { tool_use_id: String, content: Value },
+    /// Bash code execution result block returned by Anthropic code execution.
+    #[serde(rename = "bash_code_execution_tool_result")]
+    BashCodeExecutionToolResult { tool_use_id: String, content: Value },
+    /// Text editor code execution result block returned by Anthropic code execution.
+    #[serde(rename = "text_editor_code_execution_tool_result")]
+    TextEditorCodeExecutionToolResult { tool_use_id: String, content: Value },
+    /// Native web search result blocks returned by Anthropic web search tools.
+    #[serde(rename = "web_search_tool_result")]
+    WebSearchToolResult { tool_use_id: String, content: Value },
 }
 
 /// Extracted struct for `AnthropicContentBlock::ToolUse` (boxed to reduce enum size).
@@ -163,6 +178,13 @@ pub enum TextCitation {
         start_block_index: usize,
         end_block_index: usize,
     },
+    #[serde(rename = "web_search_result_location")]
+    WebSearchResultLocation {
+        url: Option<String>,
+        title: Option<String>,
+        encrypted_index: Option<String>,
+        cited_text: Option<String>,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -188,6 +210,10 @@ pub struct CacheControl {
 pub enum AnthropicTool {
     /// Tool search tool (regex or bm25)
     ToolSearch(AnthropicToolSearchTool),
+    /// Native Anthropic code execution tool revision
+    CodeExecution(AnthropicCodeExecutionTool),
+    /// Native Anthropic memory tool revision
+    Memory(AnthropicMemoryTool),
     /// Native Anthropic web search tool revision
     WebSearch(AnthropicWebSearchTool),
     /// Regular function tool
@@ -201,10 +227,36 @@ pub struct AnthropicFunctionTool {
     pub description: String,
     pub input_schema: Value,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_examples: Option<Vec<Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strict: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allowed_callers: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub cache_control: Option<CacheControl>,
     /// When true, the tool is deferred and only loaded when discovered via tool search
     #[serde(skip_serializing_if = "Option::is_none")]
     pub defer_loading: Option<bool>,
+}
+
+/// Native code execution tool definition for Anthropic API.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AnthropicCodeExecutionTool {
+    /// Versioned code execution type (e.g. "code_execution_20250825")
+    #[serde(rename = "type")]
+    pub tool_type: String,
+    /// Tool name (typically "code_execution")
+    pub name: String,
+}
+
+/// Native memory tool definition for Anthropic API.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AnthropicMemoryTool {
+    /// Versioned memory type (e.g. "memory_20250818")
+    #[serde(rename = "type")]
+    pub tool_type: String,
+    /// Tool name (typically "memory")
+    pub name: String,
 }
 
 /// Tool search tool definition for Anthropic's advanced-tool-use beta
@@ -225,6 +277,9 @@ pub struct AnthropicWebSearchTool {
     pub tool_type: String,
     /// Tool name (typically "web_search")
     pub name: String,
+    /// Optional Anthropic-native web search configuration.
+    #[serde(flatten, default, skip_serializing_if = "Map::is_empty")]
+    pub options: Map<String, Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -307,7 +362,17 @@ pub struct AnthropicErrorBody {
 /// Output configuration for Anthropic API (e.g., effort parameter)
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AnthropicOutputConfig {
-    pub effort: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effort: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub format: Option<AnthropicOutputFormat>,
+}
+
+/// Native structured output format for Anthropic responses.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum AnthropicOutputFormat {
+    JsonSchema { schema: Value },
 }
 
 /// Request body for Anthropic's count_tokens endpoint
@@ -332,7 +397,7 @@ pub struct CountTokensResponse {
 
 #[cfg(test)]
 mod tests {
-    use super::{AnthropicContentBlock, AnthropicStreamEvent};
+    use super::{AnthropicContentBlock, AnthropicStreamEvent, TextCitation};
 
     #[test]
     fn stream_content_block_start_thinking_allows_missing_signature() {
@@ -361,6 +426,131 @@ mod tests {
                 assert!(signature.is_none());
             }
             other => panic!("expected thinking content_block_start, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn stream_content_block_start_accepts_web_search_tool_result() {
+        let payload = r#"{
+            "type": "content_block_start",
+            "index": 1,
+            "content_block": {
+                "type": "web_search_tool_result",
+                "tool_use_id": "srvtoolu_123",
+                "content": [{
+                    "type": "web_search_result",
+                    "title": "Rust Releases",
+                    "url": "https://blog.rust-lang.org"
+                }]
+            }
+        }"#;
+
+        let event: AnthropicStreamEvent =
+            serde_json::from_str(payload).expect("should deserialize web search tool result");
+        match event {
+            AnthropicStreamEvent::ContentBlockStart {
+                content_block: AnthropicContentBlock::WebSearchToolResult { tool_use_id, .. },
+                ..
+            } => assert_eq!(tool_use_id, "srvtoolu_123"),
+            other => panic!("expected web_search_tool_result content_block_start, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn stream_content_block_start_accepts_bash_code_execution_result() {
+        let payload = r#"{
+            "type": "content_block_start",
+            "index": 1,
+            "content_block": {
+                "type": "bash_code_execution_tool_result",
+                "tool_use_id": "srvtoolu_456",
+                "content": {
+                    "type": "bash_code_execution_result",
+                    "stdout": "Python 3.11.12",
+                    "stderr": "",
+                    "return_code": 0
+                }
+            }
+        }"#;
+
+        let event: AnthropicStreamEvent =
+            serde_json::from_str(payload).expect("should deserialize bash code execution result");
+        match event {
+            AnthropicStreamEvent::ContentBlockStart {
+                content_block:
+                    AnthropicContentBlock::BashCodeExecutionToolResult { tool_use_id, .. },
+                ..
+            } => assert_eq!(tool_use_id, "srvtoolu_456"),
+            other => panic!(
+                "expected bash_code_execution_tool_result content_block_start, got {other:?}"
+            ),
+        }
+    }
+
+    #[test]
+    fn stream_content_block_start_accepts_text_editor_code_execution_result() {
+        let payload = r#"{
+            "type": "content_block_start",
+            "index": 2,
+            "content_block": {
+                "type": "text_editor_code_execution_tool_result",
+                "tool_use_id": "srvtoolu_789",
+                "content": {
+                    "type": "text_editor_code_execution_result",
+                    "is_file_update": false
+                }
+            }
+        }"#;
+
+        let event: AnthropicStreamEvent = serde_json::from_str(payload)
+            .expect("should deserialize text editor code execution result");
+        match event {
+            AnthropicStreamEvent::ContentBlockStart {
+                content_block:
+                    AnthropicContentBlock::TextEditorCodeExecutionToolResult { tool_use_id, .. },
+                ..
+            } => assert_eq!(tool_use_id, "srvtoolu_789"),
+            other => panic!(
+                "expected text_editor_code_execution_tool_result content_block_start, got {other:?}"
+            ),
+        }
+    }
+
+    #[test]
+    fn text_block_accepts_web_search_result_citation() {
+        let payload = r#"{
+            "type": "text",
+            "text": "Rust 1.82 shipped",
+            "citations": [{
+                "type": "web_search_result_location",
+                "url": "https://blog.rust-lang.org",
+                "title": "Rust Blog",
+                "encrypted_index": "enc_123",
+                "cited_text": "Rust 1.82 shipped"
+            }]
+        }"#;
+
+        let block: AnthropicContentBlock =
+            serde_json::from_str(payload).expect("should deserialize cited text block");
+        match block {
+            AnthropicContentBlock::Text {
+                citations: Some(citations),
+                ..
+            } => {
+                assert!(matches!(
+                    &citations[0],
+                    TextCitation::WebSearchResultLocation {
+                        url: Some(url),
+                        title: Some(title),
+                        encrypted_index: Some(index),
+                        cited_text: Some(cited_text),
+                    } if url == "https://blog.rust-lang.org"
+                        && title == "Rust Blog"
+                        && index == "enc_123"
+                        && cited_text == "Rust 1.82 shipped"
+                ));
+            }
+            other => panic!("expected text block with citations, got {other:?}"),
         }
     }
 }

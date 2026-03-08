@@ -19,11 +19,19 @@ mod capabilities_tests {
             models::anthropic::DEFAULT_MODEL
         ));
         assert!(supports_structured_output(
-            "claude-3-7-sonnet-test",
+            "claude-opus-4-5-20251101",
             models::anthropic::DEFAULT_MODEL
         ));
         assert!(supports_structured_output(
-            "claude-3-5-sonnet-test",
+            "claude-sonnet-4-5-20250929",
+            models::anthropic::DEFAULT_MODEL
+        ));
+        assert!(supports_structured_output(
+            models::CLAUDE_HAIKU_4_5,
+            models::anthropic::DEFAULT_MODEL
+        ));
+        assert!(!supports_structured_output(
+            "claude-3-7-sonnet-test",
             models::anthropic::DEFAULT_MODEL
         ));
     }
@@ -108,9 +116,12 @@ mod prompt_cache_tests {
 mod validation_tests {
     use crate::config::constants::models;
     use crate::config::core::AnthropicConfig;
-    use crate::llm::provider::LLMRequest;
+    use crate::llm::provider::{
+        LLMRequest, Message, ParallelToolConfig, ToolChoice, ToolDefinition,
+    };
     use crate::llm::providers::anthropic::validation::*;
     use serde_json::json;
+    use std::sync::Arc;
 
     #[test]
     fn test_validate_empty_messages() {
@@ -172,7 +183,7 @@ mod validation_tests {
     #[test]
     fn test_validate_effort_rejects_unsupported_models() {
         let request = LLMRequest {
-            messages: vec![crate::llm::provider::Message::user("hi".to_string())],
+            messages: vec![Message::user("hi".to_string())],
             model: models::CLAUDE_SONNET_4_6.to_string(),
             effort: Some("medium".to_string()),
             ..Default::default()
@@ -185,7 +196,7 @@ mod validation_tests {
     fn test_validate_effort_max_only_for_opus_4_6() {
         let config = AnthropicConfig::default();
         let request = LLMRequest {
-            messages: vec![crate::llm::provider::Message::user("hi".to_string())],
+            messages: vec![Message::user("hi".to_string())],
             model: models::CLAUDE_SONNET_4_6.to_string(),
             effort: Some("max".to_string()),
             ..Default::default()
@@ -193,12 +204,162 @@ mod validation_tests {
         assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_err());
 
         let request = LLMRequest {
-            messages: vec![crate::llm::provider::Message::user("hi".to_string())],
+            messages: vec![Message::user("hi".to_string())],
             model: models::CLAUDE_OPUS_4_6.to_string(),
             effort: Some("max".to_string()),
             ..Default::default()
         };
         assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_ok());
+    }
+
+    #[test]
+    fn test_validate_programmatic_tool_calling_rejects_disable_parallel_tool_use() {
+        let config = AnthropicConfig::default();
+        let request = LLMRequest {
+            messages: vec![Message::user("find warmest city".to_string())],
+            model: models::CLAUDE_OPUS_4_6.to_string(),
+            tools: Some(Arc::new(vec![
+                ToolDefinition::function(
+                    "get_weather".to_string(),
+                    "Get weather for a city".to_string(),
+                    json!({
+                        "type": "object",
+                        "properties": {
+                            "city": {"type": "string"}
+                        },
+                        "required": ["city"]
+                    }),
+                )
+                .with_allowed_callers(vec!["code_execution_20250825".to_string()]),
+            ])),
+            parallel_tool_config: Some(Box::new(ParallelToolConfig::sequential_only())),
+            ..Default::default()
+        };
+
+        assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_err());
+    }
+
+    #[test]
+    fn test_validate_programmatic_tool_calling_rejects_strict_tools() {
+        let config = AnthropicConfig::default();
+        let request = LLMRequest {
+            messages: vec![Message::user("find warmest city".to_string())],
+            model: models::CLAUDE_OPUS_4_6.to_string(),
+            tools: Some(Arc::new(vec![
+                ToolDefinition::function(
+                    "get_weather".to_string(),
+                    "Get weather for a city".to_string(),
+                    json!({
+                        "type": "object",
+                        "properties": {
+                            "city": {"type": "string"}
+                        },
+                        "required": ["city"]
+                    }),
+                )
+                .with_strict(true)
+                .with_allowed_callers(vec!["code_execution_20250825".to_string()]),
+            ])),
+            ..Default::default()
+        };
+
+        assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_err());
+    }
+
+    #[test]
+    fn test_validate_programmatic_tool_calling_rejects_any_tool_choice() {
+        let config = AnthropicConfig::default();
+        let request = LLMRequest {
+            messages: vec![Message::user("find warmest city".to_string())],
+            model: models::CLAUDE_OPUS_4_6.to_string(),
+            tools: Some(Arc::new(vec![
+                ToolDefinition::function(
+                    "get_weather".to_string(),
+                    "Get weather for a city".to_string(),
+                    json!({
+                        "type": "object",
+                        "properties": {
+                            "city": {"type": "string"}
+                        },
+                        "required": ["city"]
+                    }),
+                )
+                .with_allowed_callers(vec!["code_execution_20250825".to_string()]),
+            ])),
+            tool_choice: Some(ToolChoice::any()),
+            ..Default::default()
+        };
+
+        assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_err());
+    }
+
+    #[test]
+    fn test_validate_programmatic_tool_calling_rejects_specific_tool_choice() {
+        let config = AnthropicConfig::default();
+        let request = LLMRequest {
+            messages: vec![Message::user("find warmest city".to_string())],
+            model: models::CLAUDE_OPUS_4_6.to_string(),
+            tools: Some(Arc::new(vec![
+                ToolDefinition::function(
+                    "get_weather".to_string(),
+                    "Get weather for a city".to_string(),
+                    json!({
+                        "type": "object",
+                        "properties": {
+                            "city": {"type": "string"}
+                        },
+                        "required": ["city"]
+                    }),
+                )
+                .with_allowed_callers(vec!["code_execution_20250825".to_string()]),
+            ])),
+            tool_choice: Some(ToolChoice::function("get_weather".to_string())),
+            ..Default::default()
+        };
+
+        assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_err());
+    }
+
+    #[test]
+    fn test_validate_structured_outputs_rejects_prefill() {
+        let config = AnthropicConfig::default();
+        let request = LLMRequest {
+            messages: vec![Message::user("hi".to_string())],
+            model: models::CLAUDE_SONNET_4_6.to_string(),
+            output_format: Some(json!({
+                "type": "object",
+                "properties": {
+                    "answer": {"type": "string"}
+                },
+                "required": ["answer"],
+                "additionalProperties": false
+            })),
+            prefill: Some("{\"answer\":".to_string()),
+            ..Default::default()
+        };
+
+        assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_err());
+    }
+
+    #[test]
+    fn test_validate_anthropic_tool_name_rejects_invalid_names() {
+        let config = AnthropicConfig::default();
+        let request = LLMRequest {
+            messages: vec![Message::user("hi".to_string())],
+            model: models::CLAUDE_OPUS_4_6.to_string(),
+            tools: Some(Arc::new(vec![ToolDefinition::function(
+                "bad tool name".to_string(),
+                "Bad name".to_string(),
+                json!({
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }),
+            )])),
+            ..Default::default()
+        };
+
+        assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_err());
     }
 }
 
@@ -366,6 +527,40 @@ mod request_builder_tests {
     }
 
     #[test]
+    fn test_convert_to_anthropic_format_uses_native_structured_outputs() {
+        let request = LLMRequest {
+            model: models::CLAUDE_SONNET_4_6.to_string(),
+            messages: vec![Message::user("hello".to_string())],
+            output_format: Some(json!({
+                "type": "object",
+                "properties": {
+                    "answer": {"type": "string"}
+                },
+                "required": ["answer"],
+                "additionalProperties": false
+            })),
+            ..Default::default()
+        };
+        let cache_settings = AnthropicPromptCacheSettings::default();
+        let anthropic_config = AnthropicConfig::default();
+        let ctx = RequestBuilderContext {
+            prompt_cache_enabled: false,
+            prompt_cache_settings: &cache_settings,
+            anthropic_config: &anthropic_config,
+            model: models::anthropic::DEFAULT_MODEL,
+        };
+
+        let payload = convert_to_anthropic_format(&request, &ctx).expect("payload conversion");
+
+        assert_eq!(payload["output_config"]["format"]["type"], "json_schema");
+        assert_eq!(
+            payload["output_config"]["format"]["schema"]["required"],
+            json!(["answer"])
+        );
+        assert!(payload.get("tools").is_none());
+    }
+
+    #[test]
     fn test_convert_to_anthropic_format_reuses_last_explicit_ttl_for_automatic_cache() {
         let request = LLMRequest {
             model: models::CLAUDE_SONNET_4_6.to_string(),
@@ -484,7 +679,11 @@ mod request_builder_tests {
             tools: Some(Arc::new(vec![ToolDefinition {
                 tool_type: "web_search_20260209".to_string(),
                 function: None,
-                web_search: None,
+                allowed_callers: None,
+                input_examples: None,
+                web_search: Some(json!({
+                    "allowed_callers": ["direct"]
+                })),
                 hosted_tool_config: None,
                 shell: None,
                 grammar: None,
@@ -506,6 +705,199 @@ mod request_builder_tests {
 
         assert_eq!(payload["tools"][0]["type"], "web_search_20260209");
         assert_eq!(payload["tools"][0]["name"], "web_search");
+        assert_eq!(payload["tools"][0]["allowed_callers"], json!(["direct"]));
         assert!(payload["tools"][0]["input_schema"].is_null());
+    }
+
+    #[test]
+    fn test_convert_to_anthropic_format_rejects_mixed_web_search_domain_filters() {
+        let request = LLMRequest {
+            model: models::CLAUDE_OPUS_4_6.to_string(),
+            messages: vec![Message::user("search docs".to_string())],
+            tools: Some(Arc::new(vec![ToolDefinition {
+                tool_type: "web_search_20250305".to_string(),
+                function: None,
+                allowed_callers: None,
+                input_examples: None,
+                web_search: Some(json!({
+                    "allowed_domains": ["docs.rs"],
+                    "blocked_domains": ["example.com"]
+                })),
+                hosted_tool_config: None,
+                shell: None,
+                grammar: None,
+                strict: None,
+                defer_loading: None,
+            }])),
+            ..Default::default()
+        };
+        let cache_settings = AnthropicPromptCacheSettings::default();
+        let anthropic_config = AnthropicConfig::default();
+        let ctx = RequestBuilderContext {
+            prompt_cache_enabled: false,
+            prompt_cache_settings: &cache_settings,
+            anthropic_config: &anthropic_config,
+            model: models::anthropic::DEFAULT_MODEL,
+        };
+
+        assert!(convert_to_anthropic_format(&request, &ctx).is_err());
+    }
+
+    #[test]
+    fn test_convert_to_anthropic_format_includes_native_code_execution_tool() {
+        let request = LLMRequest {
+            model: models::CLAUDE_OPUS_4_6.to_string(),
+            messages: vec![Message::user("analyze this csv".to_string())],
+            tools: Some(Arc::new(vec![ToolDefinition {
+                tool_type: "code_execution_20250825".to_string(),
+                function: None,
+                allowed_callers: None,
+                input_examples: None,
+                web_search: None,
+                hosted_tool_config: None,
+                shell: None,
+                grammar: None,
+                strict: None,
+                defer_loading: None,
+            }])),
+            ..Default::default()
+        };
+        let cache_settings = AnthropicPromptCacheSettings::default();
+        let anthropic_config = AnthropicConfig::default();
+        let ctx = RequestBuilderContext {
+            prompt_cache_enabled: false,
+            prompt_cache_settings: &cache_settings,
+            anthropic_config: &anthropic_config,
+            model: models::anthropic::DEFAULT_MODEL,
+        };
+
+        let payload = convert_to_anthropic_format(&request, &ctx).expect("payload conversion");
+
+        assert_eq!(payload["tools"][0]["type"], "code_execution_20250825");
+        assert_eq!(payload["tools"][0]["name"], "code_execution");
+    }
+
+    #[test]
+    fn test_convert_to_anthropic_format_includes_native_memory_tool() {
+        let request = LLMRequest {
+            model: models::CLAUDE_OPUS_4_6.to_string(),
+            messages: vec![Message::user(
+                "remember my preferred test runner".to_string(),
+            )],
+            tools: Some(Arc::new(vec![ToolDefinition {
+                tool_type: "memory_20250818".to_string(),
+                function: None,
+                allowed_callers: None,
+                input_examples: None,
+                web_search: None,
+                hosted_tool_config: None,
+                shell: None,
+                grammar: None,
+                strict: None,
+                defer_loading: None,
+            }])),
+            ..Default::default()
+        };
+        let cache_settings = AnthropicPromptCacheSettings::default();
+        let anthropic_config = AnthropicConfig::default();
+        let ctx = RequestBuilderContext {
+            prompt_cache_enabled: false,
+            prompt_cache_settings: &cache_settings,
+            anthropic_config: &anthropic_config,
+            model: models::anthropic::DEFAULT_MODEL,
+        };
+
+        let payload = convert_to_anthropic_format(&request, &ctx).expect("payload conversion");
+
+        assert_eq!(payload["tools"][0]["type"], "memory_20250818");
+        assert_eq!(payload["tools"][0]["name"], "memory");
+    }
+
+    #[test]
+    fn test_convert_to_anthropic_format_preserves_function_allowed_callers() {
+        let mut tool = ToolDefinition::function(
+            "get_weather".to_string(),
+            "Get weather for a city".to_string(),
+            json!({
+                "type": "object",
+                "properties": {
+                    "city": {"type": "string"}
+                },
+                "required": ["city"]
+            }),
+        );
+        tool.allowed_callers = Some(vec!["code_execution_20250825".to_string()]);
+
+        let request = LLMRequest {
+            model: models::CLAUDE_OPUS_4_6.to_string(),
+            messages: vec![Message::user("find warmest city".to_string())],
+            tools: Some(Arc::new(vec![tool])),
+            ..Default::default()
+        };
+        let cache_settings = AnthropicPromptCacheSettings::default();
+        let anthropic_config = AnthropicConfig::default();
+        let ctx = RequestBuilderContext {
+            prompt_cache_enabled: false,
+            prompt_cache_settings: &cache_settings,
+            anthropic_config: &anthropic_config,
+            model: models::anthropic::DEFAULT_MODEL,
+        };
+
+        let payload = convert_to_anthropic_format(&request, &ctx).expect("payload conversion");
+
+        assert_eq!(
+            payload["tools"][0]["allowed_callers"],
+            json!(["code_execution_20250825"])
+        );
+    }
+
+    #[test]
+    fn test_convert_to_anthropic_format_preserves_tool_examples_and_strict() {
+        let tool = ToolDefinition::function(
+            "get_weather".to_string(),
+            "Get weather for a city".to_string(),
+            json!({
+                "type": "object",
+                "properties": {
+                    "city": {"type": "string"}
+                },
+                "required": ["city"]
+            }),
+        )
+        .with_strict(true)
+        .with_input_examples(vec![json!({
+            "input": "Weather in Paris",
+            "tool_use": {
+                "city": "Paris"
+            }
+        })]);
+
+        let request = LLMRequest {
+            model: models::CLAUDE_OPUS_4_6.to_string(),
+            messages: vec![Message::user("find warmest city".to_string())],
+            tools: Some(Arc::new(vec![tool])),
+            ..Default::default()
+        };
+        let cache_settings = AnthropicPromptCacheSettings::default();
+        let anthropic_config = AnthropicConfig::default();
+        let ctx = RequestBuilderContext {
+            prompt_cache_enabled: false,
+            prompt_cache_settings: &cache_settings,
+            anthropic_config: &anthropic_config,
+            model: models::anthropic::DEFAULT_MODEL,
+        };
+
+        let payload = convert_to_anthropic_format(&request, &ctx).expect("payload conversion");
+
+        assert_eq!(payload["tools"][0]["strict"], json!(true));
+        assert_eq!(
+            payload["tools"][0]["input_examples"],
+            json!([{
+                "input": "Weather in Paris",
+                "tool_use": {
+                    "city": "Paris"
+                }
+            }])
+        );
     }
 }

@@ -17,7 +17,10 @@ use crate::config::core::{
     AnthropicConfig, AnthropicPromptCacheSettings, ModelConfig, PromptCachingConfig,
 };
 use crate::llm::client::LLMClient;
-use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, Message};
+use crate::llm::provider::{
+    ContentPart, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, Message,
+    MessageContent, ToolDefinition,
+};
 use crate::llm::types as llm_types;
 
 use super::capabilities;
@@ -38,6 +41,9 @@ use async_trait::async_trait;
 use reqwest::Client as HttpClient;
 use serde_json::Value;
 use std::env;
+
+const ANTHROPIC_COMPACT_BETA: &str = "compact-2026-01-12";
+const ANTHROPIC_CONTEXT_MANAGEMENT_BETA: &str = "context-management-2025-06-27";
 
 pub struct AnthropicProvider {
     api_key: String,
@@ -224,17 +230,86 @@ impl AnthropicProvider {
         format!("{}/v1", without_v1.trim_end_matches('/'))
     }
 
-    fn requires_tool_search_beta(&self, request: &LLMRequest) -> bool {
-        if !self.anthropic_config.tool_search.enabled {
-            return false;
+    fn requires_advanced_tool_use_beta(&self, request: &LLMRequest) -> bool {
+        request.tools.as_ref().is_some_and(|tools| {
+            tools.iter().any(|tool| {
+                (tool.is_tool_search() || tool.defer_loading.unwrap_or(false))
+                    || tool
+                        .allowed_callers
+                        .as_ref()
+                        .is_some_and(|callers| !callers.is_empty())
+                    || tool
+                        .input_examples
+                        .as_ref()
+                        .is_some_and(|examples| !examples.is_empty())
+            })
+        })
+    }
+
+    fn code_execution_betas(&self, request: &LLMRequest) -> Vec<String> {
+        request
+            .tools
+            .as_ref()
+            .map(|tools| {
+                tools
+                    .iter()
+                    .filter_map(|tool| {
+                        tool.is_anthropic_code_execution()
+                            .then(|| code_execution_beta_name(&tool.tool_type))
+                            .flatten()
+                    })
+                    .fold(Vec::new(), |mut betas, beta| {
+                        if !betas.contains(&beta) {
+                            betas.push(beta);
+                        }
+                        betas
+                    })
+            })
+            .unwrap_or_default()
+    }
+
+    fn context_management_betas(&self, request: &LLMRequest) -> Vec<&'static str> {
+        let mut betas = Vec::new();
+
+        if request
+            .tools
+            .as_ref()
+            .is_some_and(|tools| tools.iter().any(ToolDefinition::is_anthropic_memory_tool))
+        {
+            betas.push(ANTHROPIC_CONTEXT_MANAGEMENT_BETA);
         }
-        if let Some(tools) = &request.tools {
-            tools
-                .iter()
-                .any(|t| t.is_tool_search() || t.defer_loading.unwrap_or(false))
-        } else {
-            false
+
+        if let Some(context_management) = request.context_management.as_ref() {
+            if uses_anthropic_compaction(context_management) {
+                betas.push(ANTHROPIC_COMPACT_BETA);
+            }
+
+            if uses_anthropic_context_edits(context_management)
+                && !betas.contains(&ANTHROPIC_CONTEXT_MANAGEMENT_BETA)
+            {
+                betas.push(ANTHROPIC_CONTEXT_MANAGEMENT_BETA);
+            }
         }
+
+        betas
+    }
+
+    fn requires_files_api_beta(&self, request: &LLMRequest) -> bool {
+        request
+            .messages
+            .iter()
+            .any(|message| match &message.content {
+                MessageContent::Parts(parts) => parts.iter().any(|part| {
+                    matches!(
+                        part,
+                        ContentPart::File {
+                            file_id: Some(_),
+                            ..
+                        }
+                    )
+                }),
+                MessageContent::Text(_) => false,
+            })
     }
 
     pub fn with_leak_protection(
@@ -316,10 +391,20 @@ impl AnthropicProvider {
 
     fn effective_betas(&self, request: &LLMRequest) -> Option<Vec<String>> {
         let mut betas = request.betas.clone().unwrap_or_default();
-        if request.context_management.is_some()
-            && !betas.iter().any(|beta| beta == "compact-2026-01-12")
+        for beta in self.context_management_betas(request) {
+            if !betas.iter().any(|existing| existing == beta) {
+                betas.push(beta.to_string());
+            }
+        }
+        for beta in self.code_execution_betas(request) {
+            if !betas.iter().any(|existing| existing == &beta) {
+                betas.push(beta);
+            }
+        }
+        if self.requires_files_api_beta(request)
+            && !betas.iter().any(|beta| beta == "files-api-2025-04-14")
         {
-            betas.push("compact-2026-01-12".to_string());
+            betas.push("files-api-2025-04-14".to_string());
         }
 
         if betas.is_empty() { None } else { Some(betas) }
@@ -328,6 +413,70 @@ impl AnthropicProvider {
     fn convert_to_anthropic_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
         request_builder::convert_to_anthropic_format(request, &self.request_builder_context())
     }
+
+    fn beta_header_for_request(
+        &self,
+        _request: &LLMRequest,
+        anthropic_request: &Value,
+        include_advanced_tool_use: bool,
+        request_betas: Option<&Vec<String>>,
+    ) -> Option<String> {
+        let beta_config = headers::BetaHeaderConfig {
+            config: &self.anthropic_config,
+            model: &self.model,
+            include_advanced_tool_use,
+            request_betas,
+            include_effort: anthropic_request
+                .get("output_config")
+                .and_then(|value| value.get("effort"))
+                .is_some(),
+        };
+
+        headers::combined_beta_header_value(
+            self.prompt_cache_enabled,
+            &self.prompt_cache_settings,
+            &beta_config,
+        )
+    }
+}
+
+fn code_execution_beta_name(tool_type: &str) -> Option<String> {
+    let suffix = tool_type.strip_prefix("code_execution_")?;
+    if suffix.len() != 8 || !suffix.chars().all(|ch| ch.is_ascii_digit()) {
+        return None;
+    }
+
+    Some(format!(
+        "code-execution-{}-{}-{}",
+        &suffix[0..4],
+        &suffix[4..6],
+        &suffix[6..8]
+    ))
+}
+
+fn uses_anthropic_compaction(context_management: &Value) -> bool {
+    context_management
+        .as_array()
+        .is_some_and(|items| items.iter().any(is_compaction_item))
+}
+
+fn is_compaction_item(item: &Value) -> bool {
+    item.get("type").and_then(Value::as_str) == Some("compaction")
+}
+
+fn uses_anthropic_context_edits(context_management: &Value) -> bool {
+    context_management
+        .get("edits")
+        .and_then(Value::as_array)
+        .is_some_and(|edits| edits.iter().any(is_context_edit_item))
+}
+
+fn is_context_edit_item(item: &Value) -> bool {
+    item.get("type")
+        .and_then(Value::as_str)
+        .is_some_and(|edit_type| {
+            edit_type.starts_with("clear_tool_uses_") || edit_type.starts_with("clear_thinking_")
+        })
 }
 
 #[async_trait]
@@ -378,7 +527,7 @@ impl LLMProvider for AnthropicProvider {
     }
 
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
-        let include_tool_search = self.requires_tool_search_beta(&request);
+        let include_advanced_tool_use = self.requires_advanced_tool_use_beta(&request);
         let anthropic_request = self.convert_to_anthropic_format(&request)?;
         let url = format!("{}/messages", self.base_url);
         let betas = self.effective_betas(&request);
@@ -389,22 +538,11 @@ impl LLMProvider for AnthropicProvider {
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", urls::ANTHROPIC_API_VERSION);
 
-        let include_structured = anthropic_request.get("output_format").is_some();
-        let include_effort = anthropic_request.get("output_config").is_some();
-
-        let beta_config = headers::BetaHeaderConfig {
-            config: &self.anthropic_config,
-            model: &self.model,
-            include_structured,
-            include_tool_search,
-            request_betas: betas.as_ref(),
-            include_effort,
-        };
-
-        if let Some(beta_header) = headers::combined_beta_header_value(
-            self.prompt_cache_enabled,
-            &self.prompt_cache_settings,
-            &beta_config,
+        if let Some(beta_header) = self.beta_header_for_request(
+            &request,
+            &anthropic_request,
+            include_advanced_tool_use,
+            betas.as_ref(),
         ) {
             request_builder = request_builder.header("anthropic-beta", beta_header);
         }
@@ -446,7 +584,7 @@ impl LLMProvider for AnthropicProvider {
     }
 
     async fn stream(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {
-        let include_tool_search = self.requires_tool_search_beta(&request);
+        let include_advanced_tool_use = self.requires_advanced_tool_use_beta(&request);
         let mut anthropic_request = self.convert_to_anthropic_format(&request)?;
         let betas = self.effective_betas(&request);
 
@@ -463,22 +601,11 @@ impl LLMProvider for AnthropicProvider {
             .header("anthropic-version", urls::ANTHROPIC_API_VERSION)
             .header("content-type", "application/json");
 
-        let include_structured = anthropic_request.get("output_format").is_some();
-        let include_effort = anthropic_request.get("output_config").is_some();
-
-        let beta_config = headers::BetaHeaderConfig {
-            config: &self.anthropic_config,
-            model: &self.model,
-            include_structured,
-            include_tool_search,
-            request_betas: betas.as_ref(),
-            include_effort,
-        };
-
-        if let Some(beta_header) = headers::combined_beta_header_value(
-            self.prompt_cache_enabled,
-            &self.prompt_cache_settings,
-            &beta_config,
+        if let Some(beta_header) = self.beta_header_for_request(
+            &request,
+            &anthropic_request,
+            include_advanced_tool_use,
+            betas.as_ref(),
         ) {
             request_builder = request_builder.header("anthropic-beta", beta_header);
         }
@@ -558,7 +685,10 @@ impl LLMClient for AnthropicProvider {
 
 #[cfg(test)]
 mod tests {
-    use super::AnthropicProvider;
+    use super::{AnthropicProvider, code_execution_beta_name};
+    use crate::config::constants::models;
+    use crate::llm::provider::{ContentPart, LLMRequest, Message, MessageContent, ToolDefinition};
+    use serde_json::json;
 
     #[test]
     fn resolve_minimax_base_url_defaults_to_anthropic_v1() {
@@ -606,5 +736,226 @@ mod tests {
             )),
             "https://proxy.example.com/minimax/v1"
         );
+    }
+
+    #[test]
+    fn native_structured_outputs_do_not_require_structured_output_beta() {
+        let provider = AnthropicProvider::with_model(
+            "test-key".to_string(),
+            models::CLAUDE_SONNET_4_6.to_string(),
+        );
+        let request = LLMRequest {
+            model: models::CLAUDE_SONNET_4_6.to_string(),
+            messages: vec![Message::user("hello".to_string())],
+            output_format: Some(json!({
+                "type": "object",
+                "properties": {
+                    "answer": {"type": "string"}
+                },
+                "required": ["answer"],
+                "additionalProperties": false
+            })),
+            ..Default::default()
+        };
+
+        let payload = provider
+            .convert_to_anthropic_format(&request)
+            .expect("payload conversion");
+        let beta_header = provider
+            .beta_header_for_request(&request, &payload, false, None)
+            .expect("beta header");
+
+        assert_eq!(payload["output_config"]["format"]["type"], "json_schema");
+        assert!(!beta_header.contains("structured-outputs-2025-11-13"));
+    }
+
+    #[test]
+    fn effective_betas_include_code_execution_and_files_api_when_needed() {
+        let provider = AnthropicProvider::with_model(
+            "test-key".to_string(),
+            models::CLAUDE_OPUS_4_6.to_string(),
+        );
+        let request = LLMRequest {
+            model: models::CLAUDE_OPUS_4_6.to_string(),
+            messages: vec![Message {
+                role: crate::llm::provider::MessageRole::User,
+                content: MessageContent::Parts(vec![
+                    ContentPart::text("Analyze this CSV".to_string()),
+                    ContentPart::file_from_id("file_abc123".to_string()),
+                ]),
+                ..Default::default()
+            }],
+            tools: Some(std::sync::Arc::new(vec![ToolDefinition {
+                tool_type: "code_execution_20250825".to_string(),
+                function: None,
+                allowed_callers: None,
+                input_examples: None,
+                web_search: None,
+                hosted_tool_config: None,
+                shell: None,
+                grammar: None,
+                strict: None,
+                defer_loading: None,
+            }])),
+            ..Default::default()
+        };
+
+        let betas = provider.effective_betas(&request).expect("betas");
+        assert!(betas.iter().any(|beta| beta == "code-execution-2025-08-25"));
+        assert!(betas.iter().any(|beta| beta == "files-api-2025-04-14"));
+    }
+
+    #[test]
+    fn effective_betas_include_context_management_beta_for_memory_tools() {
+        let provider = AnthropicProvider::with_model(
+            "test-key".to_string(),
+            models::CLAUDE_OPUS_4_6.to_string(),
+        );
+        let request = LLMRequest {
+            model: models::CLAUDE_OPUS_4_6.to_string(),
+            messages: vec![Message::user("remember this preference".to_string())],
+            tools: Some(std::sync::Arc::new(vec![ToolDefinition {
+                tool_type: "memory_20250818".to_string(),
+                function: None,
+                allowed_callers: None,
+                input_examples: None,
+                web_search: None,
+                hosted_tool_config: None,
+                shell: None,
+                grammar: None,
+                strict: None,
+                defer_loading: None,
+            }])),
+            ..Default::default()
+        };
+
+        let betas = provider.effective_betas(&request).expect("betas");
+        assert!(
+            betas
+                .iter()
+                .any(|beta| beta == "context-management-2025-06-27")
+        );
+    }
+
+    #[test]
+    fn effective_betas_include_context_management_beta_for_context_edits() {
+        let provider = AnthropicProvider::with_model(
+            "test-key".to_string(),
+            models::CLAUDE_OPUS_4_6.to_string(),
+        );
+        let request = LLMRequest {
+            model: models::CLAUDE_OPUS_4_6.to_string(),
+            messages: vec![Message::user("continue".to_string())],
+            context_management: Some(json!({
+                "edits": [
+                    {"type": "clear_tool_uses_20250919"}
+                ]
+            })),
+            ..Default::default()
+        };
+
+        let betas = provider.effective_betas(&request).expect("betas");
+        assert!(
+            betas
+                .iter()
+                .any(|beta| beta == "context-management-2025-06-27")
+        );
+        assert!(!betas.iter().any(|beta| beta == "compact-2026-01-12"));
+    }
+
+    #[test]
+    fn effective_betas_include_compact_beta_for_compaction_requests() {
+        let provider = AnthropicProvider::with_model(
+            "test-key".to_string(),
+            models::CLAUDE_OPUS_4_6.to_string(),
+        );
+        let request = LLMRequest {
+            model: models::CLAUDE_OPUS_4_6.to_string(),
+            messages: vec![Message::user("continue".to_string())],
+            context_management: Some(json!([
+                {
+                    "type": "compaction",
+                    "compact_threshold": 180000
+                }
+            ])),
+            ..Default::default()
+        };
+
+        let betas = provider.effective_betas(&request).expect("betas");
+        assert!(betas.iter().any(|beta| beta == "compact-2026-01-12"));
+    }
+
+    #[test]
+    fn beta_header_includes_advanced_tool_use_for_programmatic_tools() {
+        let provider = AnthropicProvider::with_model(
+            "test-key".to_string(),
+            models::CLAUDE_OPUS_4_6.to_string(),
+        );
+        let request = LLMRequest {
+            model: models::CLAUDE_OPUS_4_6.to_string(),
+            messages: vec![Message::user("find warmest city".to_string())],
+            tools: Some(std::sync::Arc::new(vec![
+                ToolDefinition::function(
+                    "get_weather".to_string(),
+                    "Get weather for a city".to_string(),
+                    json!({
+                        "type": "object",
+                        "properties": {
+                            "city": {"type": "string"}
+                        },
+                        "required": ["city"]
+                    }),
+                )
+                .with_allowed_callers(vec!["code_execution_20250825".to_string()]),
+            ])),
+            ..Default::default()
+        };
+
+        let payload = provider
+            .convert_to_anthropic_format(&request)
+            .expect("payload conversion");
+        let beta_header = provider
+            .beta_header_for_request(&request, &payload, true, None)
+            .expect("beta header");
+
+        assert!(beta_header.contains("advanced-tool-use-2025-11-20"));
+    }
+
+    #[test]
+    fn beta_header_includes_advanced_tool_use_for_tool_search_requests() {
+        let provider = AnthropicProvider::with_model(
+            "test-key".to_string(),
+            models::CLAUDE_OPUS_4_6.to_string(),
+        );
+        let request = LLMRequest {
+            model: models::CLAUDE_OPUS_4_6.to_string(),
+            messages: vec![Message::user("find the deployment tool".to_string())],
+            tools: Some(std::sync::Arc::new(vec![ToolDefinition::tool_search(
+                crate::llm::provider::ToolSearchAlgorithm::Regex,
+            )])),
+            ..Default::default()
+        };
+
+        let payload = provider
+            .convert_to_anthropic_format(&request)
+            .expect("payload conversion");
+        let beta_header = provider
+            .beta_header_for_request(&request, &payload, true, None)
+            .expect("beta header");
+
+        assert!(beta_header.contains("advanced-tool-use-2025-11-20"));
+    }
+
+    #[test]
+    fn code_execution_beta_name_uses_tool_revision() {
+        assert_eq!(
+            code_execution_beta_name("code_execution_20250825").as_deref(),
+            Some("code-execution-2025-08-25")
+        );
+        assert_eq!(
+            code_execution_beta_name("code_execution_20250522").as_deref(),
+            Some("code-execution-2025-05-22")
+        );
+        assert!(code_execution_beta_name("code_execution_latest").is_none());
     }
 }

@@ -10,7 +10,7 @@ use crate::config::core::{AnthropicConfig, AnthropicPromptCacheSettings};
 use crate::config::types::ReasoningEffortLevel;
 use crate::llm::provider::{LLMError, LLMRequest};
 use crate::llm::providers::anthropic_types::{
-    AnthropicOutputConfig, AnthropicRequest, CacheControl,
+    AnthropicOutputConfig, AnthropicOutputFormat, AnthropicRequest, CacheControl,
 };
 use serde_json::Value;
 
@@ -19,7 +19,7 @@ use super::prompt_cache::{get_messages_cache_ttl, get_tools_cache_ttl};
 use messages::{build_messages, hoist_largest_user_message};
 use system::{SystemPromptBuildResult, build_system_prompt};
 use thinking::build_thinking_config;
-use tools::{append_structured_output_tool, build_tool_choice, build_tools};
+use tools::{build_tool_choice, build_tools};
 
 #[cfg(test)]
 pub use messages::tool_result_blocks;
@@ -75,7 +75,7 @@ pub fn convert_to_anthropic_format(
     let mut breakpoints_remaining = max_breakpoints;
 
     let tools_breakpoints_before = breakpoints_remaining;
-    let tools = build_tools(request, &tools_cache_control, &mut breakpoints_remaining);
+    let tools = build_tools(request, &tools_cache_control, &mut breakpoints_remaining)?;
     let tools_breakpoints_used = tools_breakpoints_before.saturating_sub(breakpoints_remaining);
 
     let SystemPromptBuildResult {
@@ -119,8 +119,6 @@ pub fn convert_to_anthropic_format(
     let (thinking_val, reasoning_val) =
         build_thinking_config(request, ctx.anthropic_config, ctx.model);
 
-    let tools = append_structured_output_tool(request, tools, ctx.model);
-
     let final_tool_choice = build_tool_choice(request, &thinking_val);
 
     let resolved_model = if request.model.trim().is_empty() {
@@ -157,7 +155,21 @@ pub fn convert_to_anthropic_format(
     } else {
         None
     };
-    let output_config = effort_value.map(|effort| AnthropicOutputConfig { effort });
+    let output_format =
+        request
+            .output_format
+            .as_ref()
+            .map(|schema| AnthropicOutputFormat::JsonSchema {
+                schema: schema.clone(),
+            });
+    let output_config = if effort_value.is_some() || output_format.is_some() {
+        Some(AnthropicOutputConfig {
+            effort: effort_value,
+            format: output_format,
+        })
+    } else {
+        None
+    };
 
     let effective_temperature = if thinking_val.is_some() {
         None

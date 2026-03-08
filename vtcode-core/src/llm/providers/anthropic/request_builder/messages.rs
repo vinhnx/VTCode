@@ -43,6 +43,10 @@ pub(crate) fn build_messages(
 ) -> Result<Vec<AnthropicMessage>, LLMError> {
     let mut messages = Vec::with_capacity(messages_to_process.len());
     let mut tool_use_ids = HashSet::new();
+    let allow_container_uploads = request
+        .tools
+        .as_ref()
+        .is_some_and(|tools| tools.iter().any(|tool| tool.is_anthropic_code_execution()));
 
     for msg in messages_to_process {
         if msg.role == MessageRole::System {
@@ -60,7 +64,11 @@ pub(crate) fn build_messages(
                 }
                 blocks.extend(build_reasoning_blocks(msg));
 
-                blocks.extend(content_blocks_from_message_content(&msg.content, None));
+                blocks.extend(content_blocks_from_message_content(
+                    &msg.content,
+                    None,
+                    allow_container_uploads,
+                ));
 
                 blocks.extend(build_tool_use_blocks(msg));
 
@@ -124,7 +132,11 @@ pub(crate) fn build_messages(
                     *breakpoints_remaining -= 1;
                 }
 
-                let blocks = content_blocks_from_message_content(&msg.content, cache_ctrl);
+                let blocks = content_blocks_from_message_content(
+                    &msg.content,
+                    cache_ctrl,
+                    allow_container_uploads,
+                );
                 if blocks.is_empty() {
                     continue;
                 }
@@ -201,6 +213,7 @@ fn build_reasoning_blocks(msg: &Message) -> Vec<AnthropicContentBlock> {
 fn content_blocks_from_message_content(
     content: &MessageContent,
     cache_control: Option<CacheControl>,
+    allow_container_uploads: bool,
 ) -> Vec<AnthropicContentBlock> {
     let mut blocks = Vec::new();
     let mut cache_used = false;
@@ -252,6 +265,13 @@ fn content_blocks_from_message_content(
                         file_url,
                         ..
                     } => {
+                        if allow_container_uploads && let Some(file_id) = file_id {
+                            blocks.push(AnthropicContentBlock::ContainerUpload {
+                                file_id: file_id.clone(),
+                            });
+                            continue;
+                        }
+
                         let fallback = filename
                             .clone()
                             .or_else(|| file_id.clone())
@@ -362,8 +382,8 @@ pub fn tool_result_blocks(content: &str) -> Vec<Value> {
 
 #[cfg(test)]
 mod tests {
-    use super::build_reasoning_blocks;
-    use crate::llm::provider::Message;
+    use super::{build_reasoning_blocks, content_blocks_from_message_content};
+    use crate::llm::provider::{ContentPart, Message, MessageContent};
     use crate::llm::providers::anthropic_types::AnthropicContentBlock;
     use serde_json::json;
 
@@ -386,5 +406,34 @@ mod tests {
             }
             other => panic!("expected thinking block, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn content_blocks_from_message_content_maps_file_id_to_container_upload() {
+        let blocks = content_blocks_from_message_content(
+            &MessageContent::Parts(vec![ContentPart::file_from_id("file_abc123".to_string())]),
+            None,
+            true,
+        );
+
+        assert!(matches!(
+            &blocks[0],
+            AnthropicContentBlock::ContainerUpload { file_id } if file_id == "file_abc123"
+        ));
+    }
+
+    #[test]
+    fn content_blocks_from_message_content_keeps_file_id_as_fallback_without_code_execution() {
+        let blocks = content_blocks_from_message_content(
+            &MessageContent::Parts(vec![ContentPart::file_from_id("file_abc123".to_string())]),
+            None,
+            false,
+        );
+
+        assert!(matches!(
+            &blocks[0],
+            AnthropicContentBlock::Text { text, .. }
+                if text == "[File input not directly supported: file_abc123]"
+        ));
     }
 }
