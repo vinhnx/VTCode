@@ -191,10 +191,15 @@ pub(super) async fn start_model_picker(
         .as_ref()
         .map(|cfg| cfg.agent.reasoning_effort)
         .unwrap_or(ctx.config.reasoning_effort);
+    let service_tier = ctx
+        .vt_cfg
+        .as_ref()
+        .and_then(|cfg| cfg.provider.openai.service_tier);
     let workspace_hint = Some(ctx.config.workspace.clone());
     match ModelPickerState::new(
         ctx.renderer,
         reasoning,
+        service_tier,
         workspace_hint,
         ctx.config.provider.clone(),
         ctx.config.model.clone(),

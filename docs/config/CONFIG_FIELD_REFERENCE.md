@@ -375,6 +375,11 @@ python3 scripts/generate_config_field_reference.py
 | `provider.anthropic.tool_search.defer_by_default` | `boolean` | no | `true` | Automatically defer loading of all tools except core tools |
 | `provider.anthropic.tool_search.enabled` | `boolean` | no | `false` | Enable tool search feature (requires advanced-tool-use-2025-11-20 beta) |
 | `provider.anthropic.tool_search.max_results` | `integer` | no | `5` | Maximum number of tool search results to return |
+| `provider.openai.responses_include` | `array` | no | `-` | Optional Responses API `include` selectors. Example: `["reasoning.encrypted_content"]` for encrypted reasoning continuity. |
+| `provider.openai.responses_include[]` | `string` | no | `-` | - |
+| `provider.openai.responses_store` | `boolean \| null` | no | `-` | Optional Responses API `store` flag. Set to `false` to avoid server-side storage when using Responses-compatible models. |
+| `provider.openai.service_tier` | `OpenAIServiceTier \| null` | no | `-` | Optional native OpenAI `service_tier` request parameter. Leave unset to inherit the Project-level default service tier. Options: "priority" |
+| `provider.openai.websocket_mode` | `boolean` | no | `false` | Enable Responses API WebSocket transport for non-streaming requests. This is an opt-in path designed for long-running, tool-heavy workflows. |
 | `pty.command_timeout_seconds` | `integer` | no | `300` | Command timeout in seconds (prevents hanging commands) |
 | `pty.default_cols` | `integer` | no | `80` | Default terminal columns for PTY sessions |
 | `pty.default_rows` | `integer` | no | `24` | Default terminal rows for PTY sessions |

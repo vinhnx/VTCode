@@ -135,6 +135,16 @@ impl Provider {
             Provider::HuggingFace => models::huggingface::REASONING_MODELS.contains(&model),
         }
     }
+
+    /// Determine if the provider supports the `service_tier` request parameter for the model.
+    pub fn supports_service_tier(&self, model: &str) -> bool {
+        use crate::constants::models;
+
+        match self {
+            Provider::OpenAI => models::openai::SERVICE_TIER_MODELS.contains(&model),
+            _ => false,
+        }
+    }
 }
 
 impl fmt::Display for Provider {

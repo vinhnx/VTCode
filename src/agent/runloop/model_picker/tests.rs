@@ -2,6 +2,7 @@ use super::*;
 use anyhow::Result;
 use std::fs;
 use tempfile::tempdir;
+use vtcode_config::OpenAIServiceTier;
 use vtcode_core::config::models::ModelId;
 
 fn has_model(options: &[ModelOption], model: ModelId) -> bool {
@@ -76,10 +77,12 @@ fn base_picker_state(current_provider: &str, current_model: &str) -> ModelPicker
         step: PickerStep::AwaitModel,
         inline_enabled: true,
         current_reasoning: ReasoningEffortLevel::Medium,
+        current_service_tier: None,
         current_provider: current_provider.to_string(),
         current_model: current_model.to_string(),
         selection: None,
         selected_reasoning: None,
+        selected_service_tier: None,
         pending_api_key: None,
         workspace: None,
         dynamic_models: DynamicModelRegistry::default(),
@@ -137,4 +140,54 @@ fn read_workspace_env_returns_none_when_key_absent() -> Result<()> {
     let value = super::read_workspace_env(dir.path(), "OPENAI_API_KEY")?;
     assert_eq!(value, None);
     Ok(())
+}
+
+#[test]
+fn selection_marks_openai_service_tier_support_for_supported_models() {
+    let detail = selection::selection_from_option(
+        MODEL_OPTIONS
+            .iter()
+            .find(|option| option.id == "gpt-5.2")
+            .expect("gpt-5.2 option should exist"),
+    );
+
+    assert!(detail.service_tier_supported);
+}
+
+#[test]
+fn selection_omits_openai_service_tier_support_for_gpt_oss() {
+    let detail = selection::selection_from_option(
+        MODEL_OPTIONS
+            .iter()
+            .find(|option| option.id == "gpt-oss-20b")
+            .expect("gpt-oss option should exist"),
+    );
+
+    assert!(!detail.service_tier_supported);
+}
+
+#[test]
+fn build_result_uses_selected_service_tier() {
+    let mut picker = base_picker_state("openai", "gpt-5.2");
+    picker.selection = Some(selection::SelectionDetail {
+        provider_key: "openai".to_string(),
+        provider_label: "OpenAI".to_string(),
+        provider_enum: Some(Provider::OpenAI),
+        model_id: "gpt-5.2".to_string(),
+        model_display: "GPT-5.2".to_string(),
+        known_model: true,
+        reasoning_supported: true,
+        reasoning_optional: false,
+        reasoning_off_model: None,
+        service_tier_supported: true,
+        requires_api_key: false,
+        env_key: "OPENAI_API_KEY".to_string(),
+    });
+    picker.selected_reasoning = Some(ReasoningEffortLevel::Low);
+    picker.selected_service_tier = Some(true);
+
+    let result = picker.build_result().expect("result should build");
+
+    assert_eq!(result.service_tier, Some(OpenAIServiceTier::Priority));
+    assert!(result.service_tier_changed);
 }

@@ -14,13 +14,15 @@ use super::options::{ModelOption, picker_provider_order};
 mod prompts;
 pub(super) use prompts::{
     prompt_api_key_plain, prompt_custom_model_entry, prompt_reasoning_plain,
-    render_reasoning_inline, show_secure_api_modal,
+    prompt_service_tier_plain, render_reasoning_inline, render_service_tier_inline,
+    show_secure_api_modal,
 };
 
 pub(super) const CLOSE_THEME_MESSAGE: &str =
     "Close the active model picker before selecting a theme.";
 const STEP_ONE_TITLE: &str = "Model";
 const STEP_TWO_TITLE: &str = "Reasoning";
+const STEP_THREE_TITLE: &str = "Service Tier";
 
 pub(super) const CUSTOM_PROVIDER_TITLE: &str = "Custom provider + model";
 pub(super) const CUSTOM_PROVIDER_SUBTITLE: &str =

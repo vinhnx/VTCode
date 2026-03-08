@@ -1,5 +1,6 @@
 use super::super::tool_serialization;
 use super::*;
+use crate::config::core::OpenAIServiceTier;
 use crate::llm::provider::ParallelToolConfig;
 use serde_json::{Value, json};
 
@@ -23,6 +24,13 @@ fn sample_request(model: &str) -> provider::LLMRequest {
         messages: vec![provider::Message::user("Hello".to_owned())],
         tools: Some(Arc::new(vec![sample_tool()])),
         model: model.to_string(),
+        ..Default::default()
+    }
+}
+
+fn priority_openai_config() -> OpenAIConfig {
+    OpenAIConfig {
+        service_tier: Some(OpenAIServiceTier::Priority),
         ..Default::default()
     }
 }
@@ -630,6 +638,51 @@ fn responses_payload_uses_provider_level_responses_options() {
 }
 
 #[test]
+fn responses_payload_uses_provider_level_service_tier_for_native_openai() {
+    let provider = OpenAIProvider::from_config(
+        Some("key".to_owned()),
+        Some(models::openai::GPT_5_2.to_string()),
+        None,
+        None,
+        None,
+        None,
+        Some(priority_openai_config()),
+        None,
+    );
+    let request = sample_request(models::openai::GPT_5_2);
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    assert_eq!(
+        payload.get("service_tier").and_then(Value::as_str),
+        Some("priority")
+    );
+}
+
+#[test]
+fn responses_payload_omits_service_tier_for_models_without_service_tier_support() {
+    let provider = OpenAIProvider::from_config(
+        Some("key".to_owned()),
+        Some(models::openai::GPT_OSS_20B.to_string()),
+        None,
+        None,
+        None,
+        None,
+        Some(priority_openai_config()),
+        None,
+    );
+    let request = sample_request(models::openai::GPT_OSS_20B);
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    assert!(payload.get("service_tier").is_none());
+}
+
+#[test]
 fn supported_models_include_o_series_reasoning_models() {
     let provider = OpenAIProvider::new("key".to_owned());
     let supported = provider.supported_models();
@@ -722,6 +775,49 @@ fn chat_payload_includes_prompt_cache_key_for_native_openai() {
 }
 
 #[test]
+fn chat_payload_uses_provider_level_service_tier_for_native_openai() {
+    let provider = OpenAIProvider::from_config(
+        Some("key".to_owned()),
+        Some(models::openai::DEFAULT_MODEL.to_string()),
+        None,
+        None,
+        None,
+        None,
+        Some(priority_openai_config()),
+        None,
+    );
+
+    let payload = provider
+        .convert_to_openai_format(&sample_request(models::openai::DEFAULT_MODEL))
+        .expect("conversion should succeed");
+
+    assert_eq!(
+        payload.get("service_tier").and_then(Value::as_str),
+        Some("priority")
+    );
+}
+
+#[test]
+fn chat_payload_omits_service_tier_for_models_without_service_tier_support() {
+    let provider = OpenAIProvider::from_config(
+        Some("key".to_owned()),
+        Some(models::openai::GPT_OSS_20B.to_string()),
+        None,
+        None,
+        None,
+        None,
+        Some(priority_openai_config()),
+        None,
+    );
+
+    let payload = provider
+        .convert_to_openai_format(&sample_request(models::openai::GPT_OSS_20B))
+        .expect("conversion should succeed");
+
+    assert!(payload.get("service_tier").is_none());
+}
+
+#[test]
 fn chat_payload_omits_assistant_phase_metadata() {
     let provider =
         OpenAIProvider::with_model(String::new(), models::openai::DEFAULT_MODEL.to_string());
@@ -766,6 +862,26 @@ fn responses_payload_omits_prompt_cache_key_for_non_native_openai_base_url() {
         .expect("conversion should succeed");
 
     assert!(payload.get("prompt_cache_key").is_none());
+}
+
+#[test]
+fn responses_payload_omits_service_tier_for_non_native_openai_base_url() {
+    let provider = OpenAIProvider::from_config(
+        Some("key".to_owned()),
+        Some(models::openai::GPT_5_2.to_string()),
+        Some("https://example.local/v1".to_string()),
+        None,
+        None,
+        None,
+        Some(priority_openai_config()),
+        None,
+    );
+
+    let payload = provider
+        .convert_to_openai_responses_format(&sample_request(models::openai::GPT_5_2))
+        .expect("conversion should succeed");
+
+    assert!(payload.get("service_tier").is_none());
 }
 
 #[test]
@@ -885,6 +1001,45 @@ fn provider_from_config_respects_websocket_mode_opt_in() {
     );
 
     assert!(provider.websocket_mode_enabled(models::openai::GPT_5_2));
+}
+
+#[test]
+fn provider_from_config_respects_service_tier() {
+    let provider = OpenAIProvider::from_config(
+        Some("key".to_string()),
+        Some(models::openai::GPT_5_2.to_string()),
+        None,
+        None,
+        None,
+        None,
+        Some(priority_openai_config()),
+        None,
+    );
+
+    assert_eq!(
+        provider.service_tier.map(OpenAIServiceTier::as_str),
+        Some("priority")
+    );
+}
+
+#[test]
+fn chat_payload_omits_service_tier_for_non_native_openai_base_url() {
+    let provider = OpenAIProvider::from_config(
+        Some("key".to_owned()),
+        Some(models::openai::DEFAULT_MODEL.to_string()),
+        Some("https://example.local/v1".to_string()),
+        None,
+        None,
+        None,
+        Some(priority_openai_config()),
+        None,
+    );
+
+    let payload = provider
+        .convert_to_openai_format(&sample_request(models::openai::DEFAULT_MODEL))
+        .expect("conversion should succeed");
+
+    assert!(payload.get("service_tier").is_none());
 }
 
 #[test]

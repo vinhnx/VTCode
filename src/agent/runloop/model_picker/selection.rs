@@ -1,6 +1,7 @@
 use anyhow::{Result, anyhow};
 use std::str::FromStr;
 
+use vtcode_config::OpenAIServiceTier;
 use vtcode_core::config::constants::reasoning;
 use vtcode_core::config::models::{ModelId, Provider};
 use vtcode_core::config::types::ReasoningEffortLevel;
@@ -18,6 +19,7 @@ pub(super) struct SelectionDetail {
     pub(super) reasoning_supported: bool,
     pub(super) reasoning_optional: bool,
     pub(super) reasoning_off_model: Option<ModelId>,
+    pub(super) service_tier_supported: bool,
     pub(super) requires_api_key: bool,
     pub(super) env_key: String,
 }
@@ -26,6 +28,12 @@ pub(super) struct SelectionDetail {
 pub(super) enum ReasoningChoice {
     Level(ReasoningEffortLevel),
     Disable,
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum ServiceTierChoice {
+    ProjectDefault,
+    Priority,
 }
 
 pub(super) enum ExistingKey {
@@ -46,6 +54,9 @@ pub struct ModelSelectionResult {
     pub reasoning_supported: bool,
     pub reasoning: ReasoningEffortLevel,
     pub reasoning_changed: bool,
+    pub service_tier_supported: bool,
+    pub service_tier: Option<OpenAIServiceTier>,
+    pub service_tier_changed: bool,
     pub api_key: Option<String>,
     pub env_key: String,
     pub requires_api_key: bool,
@@ -96,6 +107,9 @@ pub(super) fn parse_model_selection(
     let reasoning_supported = provider_enum
         .map(|provider| provider.supports_reasoning_effort(model_token.trim()))
         .unwrap_or(false);
+    let service_tier_supported = provider_enum
+        .map(|provider| provider.supports_service_tier(model_token.trim()))
+        .unwrap_or(false);
     let requires_api_key = if let Some(provider) = provider_enum {
         provider_requires_api_key(provider, model_token.trim(), &env_key)
     } else {
@@ -115,6 +129,7 @@ pub(super) fn parse_model_selection(
         reasoning_supported,
         reasoning_optional: true,
         reasoning_off_model: None,
+        service_tier_supported,
         requires_api_key,
         env_key,
     })
@@ -133,6 +148,7 @@ pub(super) fn selection_from_option(option: &ModelOption) -> SelectionDetail {
         reasoning_supported: option.supports_reasoning,
         reasoning_optional: false,
         reasoning_off_model: option.reasoning_alternative,
+        service_tier_supported: option.provider.supports_service_tier(option.id),
         requires_api_key,
         env_key,
     }
@@ -152,6 +168,7 @@ pub(super) fn selection_from_dynamic(provider: Provider, model_id: &str) -> Sele
         reasoning_supported: provider.supports_reasoning_effort(model_id),
         reasoning_optional: true,
         reasoning_off_model: None,
+        service_tier_supported: provider.supports_service_tier(model_id),
         requires_api_key,
         env_key,
     }
@@ -189,6 +206,13 @@ pub(super) fn reasoning_level_description(level: ReasoningEffortLevel) -> &'stat
         ReasoningEffortLevel::XHigh => {
             "Maximum reasoning for hardest long-running tasks (GPT-5.3+/GPT-5.4 family only)"
         }
+    }
+}
+
+pub(super) fn service_tier_label(service_tier: Option<OpenAIServiceTier>) -> &'static str {
+    match service_tier {
+        Some(OpenAIServiceTier::Priority) => "Priority",
+        None => "Project default",
     }
 }
 

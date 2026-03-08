@@ -5,6 +5,7 @@ use std::str::FromStr;
 
 use crate::agent::runloop::tui_compat::from_tui_reasoning;
 use vtcode::interactive_list::SelectionInterrupted;
+use vtcode_config::OpenAIServiceTier;
 use vtcode_config::auth::CustomApiKeyStorage;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::models::Provider;
@@ -16,15 +17,17 @@ use vtcode_core::utils::dot_config::update_model_preference;
 use dynamic_models::DynamicModelRegistry;
 use interaction::{
     ModelSelectionListOutcome, select_model_with_ratatui_list, select_reasoning_with_ratatui,
+    select_service_tier_with_ratatui,
 };
 use options::{MODEL_OPTIONS, ModelOption};
 use rendering::{
     CLOSE_THEME_MESSAGE, prompt_api_key_plain, prompt_custom_model_entry, prompt_reasoning_plain,
-    render_reasoning_inline, render_step_one_inline, render_step_one_plain, show_secure_api_modal,
+    prompt_service_tier_plain, render_reasoning_inline, render_service_tier_inline,
+    render_step_one_inline, render_step_one_plain, show_secure_api_modal,
 };
 use selection::{
-    ExistingKey, ReasoningChoice, SelectionDetail, is_cancel_command, parse_model_selection,
-    selection_from_option,
+    ExistingKey, ReasoningChoice, SelectionDetail, ServiceTierChoice, is_cancel_command,
+    parse_model_selection, selection_from_option,
 };
 
 mod dynamic_models;
@@ -41,6 +44,7 @@ pub use selection::ModelSelectionResult;
 enum PickerStep {
     AwaitModel,
     AwaitReasoning,
+    AwaitServiceTier,
     AwaitApiKey,
 }
 
@@ -56,10 +60,12 @@ pub struct ModelPickerState {
     step: PickerStep,
     inline_enabled: bool,
     current_reasoning: ReasoningEffortLevel,
+    current_service_tier: Option<OpenAIServiceTier>,
     current_provider: String,
     current_model: String,
     selection: Option<SelectionDetail>,
     selected_reasoning: Option<ReasoningEffortLevel>,
+    selected_service_tier: Option<bool>,
     pending_api_key: Option<String>,
     workspace: Option<PathBuf>,
     dynamic_models: DynamicModelRegistry,
@@ -79,6 +85,7 @@ impl ModelPickerState {
     pub async fn new(
         renderer: &mut AnsiRenderer,
         current_reasoning: ReasoningEffortLevel,
+        current_service_tier: Option<OpenAIServiceTier>,
         workspace: Option<PathBuf>,
         current_provider: String,
         current_model: String,
@@ -92,10 +99,12 @@ impl ModelPickerState {
             step: PickerStep::AwaitModel,
             inline_enabled,
             current_reasoning,
+            current_service_tier,
             current_provider,
             current_model,
             selection: None,
             selected_reasoning: None,
+            selected_service_tier: None,
             pending_api_key: None,
             workspace,
             dynamic_models,
@@ -192,6 +201,7 @@ impl ModelPickerState {
             DynamicModelRegistry::load(self.options, self.workspace.as_deref()).await;
         self.selection = None;
         self.selected_reasoning = None;
+        self.selected_service_tier = None;
         self.pending_api_key = None;
         self.step = PickerStep::AwaitModel;
         if self.inline_enabled {
@@ -242,6 +252,7 @@ impl ModelPickerState {
         match self.step {
             PickerStep::AwaitModel => self.handle_model_selection(renderer, trimmed),
             PickerStep::AwaitReasoning => self.handle_reasoning(renderer, trimmed),
+            PickerStep::AwaitServiceTier => self.handle_service_tier(renderer, trimmed),
             PickerStep::AwaitApiKey => self.handle_api_key(renderer, trimmed),
         }
     }
@@ -324,6 +335,9 @@ impl ModelPickerState {
 
         config.agent.default_model = selection.model.clone();
         config.agent.reasoning_effort = selection.reasoning;
+        if selection.provider_enum == Some(Provider::OpenAI) && selection.service_tier_supported {
+            config.provider.openai.service_tier = selection.service_tier;
+        }
 
         manager.save_config(&config)?;
         update_model_preference(&selection.provider, &selection.model)
@@ -379,6 +393,13 @@ impl ModelPickerState {
                     )?;
                     Ok(ModelPickerProgress::InProgress)
                 }
+                InlineListSelection::OpenAIServiceTier(_) => {
+                    renderer.line(
+                        MessageStyle::Error,
+                        "Select a model before choosing a service tier.",
+                    )?;
+                    Ok(ModelPickerProgress::InProgress)
+                }
                 InlineListSelection::Theme(_) => {
                     renderer.line(MessageStyle::Error, CLOSE_THEME_MESSAGE)?;
                     Ok(ModelPickerProgress::InProgress)
@@ -390,6 +411,13 @@ impl ModelPickerState {
                     self.apply_reasoning_choice(renderer, from_tui_reasoning(level))
                 }
                 InlineListSelection::DisableReasoning => self.apply_reasoning_off_choice(renderer),
+                InlineListSelection::OpenAIServiceTier(_) => {
+                    renderer.line(
+                        MessageStyle::Error,
+                        "Reasoning selection is active. Choose a reasoning level or press Esc to cancel.",
+                    )?;
+                    Ok(ModelPickerProgress::InProgress)
+                }
                 InlineListSelection::CustomModel
                 | InlineListSelection::Model(_)
                 | InlineListSelection::RefreshDynamicModels
@@ -401,6 +429,32 @@ impl ModelPickerState {
                     renderer.line(
                         MessageStyle::Error,
                         "Reasoning selection is active. Choose a reasoning level or press Esc to cancel.",
+                    )?;
+                    Ok(ModelPickerProgress::InProgress)
+                }
+                InlineListSelection::Theme(_) => {
+                    renderer.line(MessageStyle::Error, CLOSE_THEME_MESSAGE)?;
+                    Ok(ModelPickerProgress::InProgress)
+                }
+                _ => Ok(ModelPickerProgress::InProgress),
+            },
+            PickerStep::AwaitServiceTier => match choice {
+                InlineListSelection::OpenAIServiceTier(priority) => {
+                    self.apply_service_tier_choice(renderer, priority)
+                }
+                InlineListSelection::CustomModel
+                | InlineListSelection::Model(_)
+                | InlineListSelection::RefreshDynamicModels
+                | InlineListSelection::DynamicModel(_)
+                | InlineListSelection::Reasoning(_)
+                | InlineListSelection::DisableReasoning
+                | InlineListSelection::ToolApproval(_)
+                | InlineListSelection::ToolApprovalDenyOnce
+                | InlineListSelection::ToolApprovalSession
+                | InlineListSelection::ToolApprovalPermanent => {
+                    renderer.line(
+                        MessageStyle::Error,
+                        "Service tier selection is active. Choose a value or press Esc to cancel.",
                     )?;
                     Ok(ModelPickerProgress::InProgress)
                 }

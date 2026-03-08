@@ -10,7 +10,8 @@
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{
-    AnthropicConfig, ModelConfig, OpenAIConfig, OpenAIPromptCacheSettings, PromptCachingConfig,
+    AnthropicConfig, ModelConfig, OpenAIConfig, OpenAIPromptCacheSettings, OpenAIServiceTier,
+    PromptCachingConfig,
 };
 use crate::llm::error_display;
 use crate::llm::provider;
@@ -60,6 +61,7 @@ pub struct OpenAIProvider {
     websocket_mode: bool,
     responses_store: Option<bool>,
     responses_include: Vec<String>,
+    service_tier: Option<OpenAIServiceTier>,
     websocket_session: AsyncMutex<Option<OpenAIResponsesWebSocketSession>>,
 }
 
@@ -124,6 +126,7 @@ impl OpenAIProvider {
             websocket_mode: false,
             responses_store: None,
             responses_include: Vec::new(),
+            service_tier: None,
             websocket_session: AsyncMutex::new(None),
         }
     }
@@ -192,6 +195,7 @@ impl OpenAIProvider {
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
+        let service_tier = openai.as_ref().and_then(|cfg| cfg.service_tier);
 
         let initial_state = if is_xai || !is_native_openai {
             ResponsesApiState::Disabled
@@ -216,6 +220,7 @@ impl OpenAIProvider {
             websocket_mode,
             responses_store,
             responses_include,
+            service_tier,
             websocket_session: AsyncMutex::new(None),
         }
     }
@@ -273,14 +278,24 @@ impl OpenAIProvider {
         request: &provider::LLMRequest,
     ) -> Result<Value, provider::LLMError> {
         let is_native_openai = self.base_url.contains("api.openai.com");
+        let prompt_cache_key = if is_native_openai {
+            request.prompt_cache_key.as_deref()
+        } else {
+            None
+        };
+        let default_service_tier = if is_native_openai {
+            self.service_tier.map(OpenAIServiceTier::as_str)
+        } else {
+            None
+        };
         let ctx = request_builder::ChatRequestContext {
             model: &self.model,
             base_url: &self.base_url,
             supports_tools: self.supports_tools(&request.model),
             supports_parallel_tool_config: self.supports_parallel_tool_config(&request.model),
             supports_temperature: Self::supports_temperature_parameter(&request.model),
-            supports_prompt_cache_key: is_native_openai,
-            prompt_cache_key: request.prompt_cache_key.as_deref(),
+            prompt_cache_key,
+            default_service_tier,
         };
 
         request_builder::build_chat_request(request, &ctx)
@@ -290,30 +305,34 @@ impl OpenAIProvider {
         &self,
         request: &provider::LLMRequest,
     ) -> Result<Value, provider::LLMError> {
-        let mut effective_request = request.clone();
-        if effective_request.response_store.is_none() {
-            effective_request.response_store = self.responses_store;
-        }
-        if effective_request.responses_include.is_none() && !self.responses_include.is_empty() {
-            effective_request.responses_include = Some(self.responses_include.clone());
-        }
-
         let is_native_openai = self.base_url.contains("api.openai.com");
+        let prompt_cache_key = if is_native_openai {
+            request.prompt_cache_key.as_deref()
+        } else {
+            None
+        };
+        let default_service_tier = if is_native_openai {
+            self.service_tier.map(OpenAIServiceTier::as_str)
+        } else {
+            None
+        };
         let ctx = request_builder::ResponsesRequestContext {
-            supports_tools: self.supports_tools(&effective_request.model),
-            supports_parallel_tool_config: self
-                .supports_parallel_tool_config(&effective_request.model),
-            supports_temperature: Self::supports_temperature_parameter(&effective_request.model),
-            supports_reasoning_effort: self.supports_reasoning_effort(&effective_request.model),
-            supports_reasoning: self.supports_reasoning(&effective_request.model),
-            is_responses_api_model: Self::is_responses_api_model(&effective_request.model),
+            supports_tools: self.supports_tools(&request.model),
+            supports_parallel_tool_config: self.supports_parallel_tool_config(&request.model),
+            supports_temperature: Self::supports_temperature_parameter(&request.model),
+            supports_reasoning_effort: self.supports_reasoning_effort(&request.model),
+            supports_reasoning: self.supports_reasoning(&request.model),
+            is_responses_api_model: Self::is_responses_api_model(&request.model),
             include_assistant_phase: is_native_openai,
-            supports_prompt_cache_key: is_native_openai,
-            prompt_cache_key: effective_request.prompt_cache_key.as_deref(),
+            prompt_cache_key,
             prompt_cache_retention: self.prompt_cache_settings.prompt_cache_retention.as_deref(),
+            default_service_tier,
+            default_response_store: self.responses_store,
+            default_responses_include: (!self.responses_include.is_empty())
+                .then_some(self.responses_include.as_slice()),
         };
 
-        request_builder::build_responses_request(&effective_request, &ctx)
+        request_builder::build_responses_request(request, &ctx)
     }
 
     fn parse_openai_response(

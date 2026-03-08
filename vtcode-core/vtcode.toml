@@ -841,6 +841,8 @@ loop_detection_interactive = true
 
 [provider.openai]
 websocket_mode = false
+# Optional native OpenAI service tier override. Leave commented out to use the Project default.
+# service_tier = "priority"
 
 [provider.anthropic]
 skip_model_validation = false

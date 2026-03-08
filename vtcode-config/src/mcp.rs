@@ -221,6 +221,10 @@ pub struct McpUiConfig {
 
     /// Custom renderer profiles for provider-specific output formatting
     #[serde(default)]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(with = "BTreeMap<String, McpRendererProfile>")
+    )]
     pub renderers: HashMap<String, McpRendererProfile>,
 }
 
@@ -306,6 +310,7 @@ pub struct McpProviderConfig {
 
     /// Provider-specific environment variables
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "BTreeMap<String, String>"))]
     pub env: HashMap<String, String>,
 
     /// Whether this provider is enabled
@@ -641,11 +646,13 @@ pub struct McpHttpServerConfig {
 
     /// Headers to include in requests
     #[serde(default, alias = "headers")]
+    #[cfg_attr(feature = "schema", schemars(with = "BTreeMap<String, String>"))]
     pub http_headers: HashMap<String, String>,
 
     /// Headers whose values are sourced from environment variables
     /// (`{ header-name = "ENV_VAR" }`). Empty values are ignored.
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "BTreeMap<String, String>"))]
     pub env_http_headers: HashMap<String, String>,
 }
 

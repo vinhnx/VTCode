@@ -2,16 +2,19 @@ use std::path::Path;
 
 use crate::agent::runloop::tui_compat::to_tui_reasoning;
 use anyhow::Result;
+use vtcode_config::OpenAIServiceTier;
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_core::ui::{InlineListItem, InlineListSelection};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::super::selection::{
-    SelectionDetail, reasoning_level_description, reasoning_level_label,
+    SelectionDetail, reasoning_level_description, reasoning_level_label, service_tier_label,
     supports_gpt5_none_reasoning, supports_xhigh_reasoning,
 };
-use super::{CURRENT_BADGE, KEEP_CURRENT_DESCRIPTION, REASONING_OFF_BADGE, STEP_TWO_TITLE};
+use super::{
+    CURRENT_BADGE, KEEP_CURRENT_DESCRIPTION, REASONING_OFF_BADGE, STEP_THREE_TITLE, STEP_TWO_TITLE,
+};
 
 pub(crate) fn render_reasoning_inline(
     renderer: &mut AnsiRenderer,
@@ -186,7 +189,7 @@ pub(crate) fn prompt_api_key_plain(
     renderer.line(
         MessageStyle::Info,
         &format!(
-            "Step 3 – enter an API key for {} (env: {}).",
+            "API key – enter a key for {} (env: {}).",
             selection.provider_label, selection.env_key
         ),
     )?;
@@ -208,6 +211,76 @@ pub(crate) fn prompt_api_key_plain(
     renderer.line(
         MessageStyle::Info,
         "Paste the API key now or type 'skip' to reuse a stored credential.",
+    )?;
+    Ok(())
+}
+
+pub(crate) fn render_service_tier_inline(
+    renderer: &mut AnsiRenderer,
+    selection: &SelectionDetail,
+    current: Option<OpenAIServiceTier>,
+) -> Result<()> {
+    let current_priority = current.is_some();
+    let items = vec![
+        InlineListItem {
+            title: format!("Keep current ({})", service_tier_label(current)),
+            subtitle: Some("Retain the existing service tier configuration.".to_string()),
+            badge: Some(CURRENT_BADGE.to_string()),
+            indent: 0,
+            selection: Some(InlineListSelection::OpenAIServiceTier(current_priority)),
+            search_value: None,
+        },
+        InlineListItem {
+            title: "Project default".to_string(),
+            subtitle: Some(
+                "Do not send service_tier; inherit the OpenAI Project setting.".to_string(),
+            ),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::OpenAIServiceTier(false)),
+            search_value: None,
+        },
+        InlineListItem {
+            title: "Priority".to_string(),
+            subtitle: Some(
+                "Send service_tier=priority for lower and more consistent latency.".to_string(),
+            ),
+            badge: Some("OpenAI".to_string()),
+            indent: 0,
+            selection: Some(InlineListSelection::OpenAIServiceTier(true)),
+            search_value: None,
+        },
+    ];
+
+    renderer.show_list_modal(
+        STEP_THREE_TITLE,
+        vec![
+            format!("Select a service tier for {}.", selection.model_display),
+            "Applies only to native OpenAI models that support priority processing.".to_string(),
+        ],
+        items,
+        Some(InlineListSelection::OpenAIServiceTier(current_priority)),
+        None,
+    );
+    Ok(())
+}
+
+pub(crate) fn prompt_service_tier_plain(
+    renderer: &mut AnsiRenderer,
+    selection: &SelectionDetail,
+    current: Option<OpenAIServiceTier>,
+) -> Result<()> {
+    renderer.line(
+        MessageStyle::Info,
+        &format!(
+            "Service tier – choose 'priority' or 'default' for {}. Type 'skip' to keep {}.",
+            selection.model_display,
+            service_tier_label(current)
+        ),
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "This applies only to native OpenAI models that support priority processing.",
     )?;
     Ok(())
 }

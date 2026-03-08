@@ -89,22 +89,95 @@ impl ModelPickerState {
         prompt_api_key_plain(renderer, selection, self.workspace.as_deref())
     }
 
+    fn prompt_service_tier_step(
+        &mut self,
+        renderer: &mut AnsiRenderer,
+    ) -> Result<Option<ModelPickerProgress>> {
+        let Some(selection) = self.selection.as_ref() else {
+            return Err(anyhow!("Service tier requested before selecting a model"));
+        };
+        if self.inline_enabled {
+            render_service_tier_inline(renderer, selection, self.current_service_tier)?;
+            return Ok(None);
+        }
+
+        match select_service_tier_with_ratatui(selection, self.current_service_tier) {
+            Ok(Some(ServiceTierChoice::ProjectDefault)) => {
+                self.apply_service_tier_choice(renderer, false).map(Some)
+            }
+            Ok(Some(ServiceTierChoice::Priority)) => {
+                self.apply_service_tier_choice(renderer, true).map(Some)
+            }
+            Ok(None) => {
+                prompt_service_tier_plain(renderer, selection, self.current_service_tier)?;
+                Ok(None)
+            }
+            Err(err) => {
+                if err.is::<SelectionInterrupted>() {
+                    return Err(err);
+                }
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!(
+                        "Interactive service tier selector unavailable ({}). Falling back to manual input.",
+                        err
+                    ),
+                )?;
+                prompt_service_tier_plain(renderer, selection, self.current_service_tier)?;
+                Ok(None)
+            }
+        }
+    }
+
+    fn continue_after_reasoning(
+        &mut self,
+        renderer: &mut AnsiRenderer,
+    ) -> Result<ModelPickerProgress> {
+        if self
+            .selection
+            .as_ref()
+            .map(|detail| detail.service_tier_supported)
+            .unwrap_or(false)
+        {
+            self.step = PickerStep::AwaitServiceTier;
+            if let Some(progress) = self.prompt_service_tier_step(renderer)? {
+                return Ok(progress);
+            }
+            return Ok(ModelPickerProgress::InProgress);
+        }
+
+        self.finish_after_service_tier(renderer)
+    }
+
+    fn finish_after_service_tier(
+        &mut self,
+        renderer: &mut AnsiRenderer,
+    ) -> Result<ModelPickerProgress> {
+        if self
+            .selection
+            .as_ref()
+            .map(|detail| detail.requires_api_key)
+            .unwrap_or(false)
+        {
+            self.step = PickerStep::AwaitApiKey;
+            self.prompt_api_key_step(renderer)?;
+            return Ok(ModelPickerProgress::InProgress);
+        }
+
+        let result = self.build_result();
+        Ok(ModelPickerProgress::Completed(result?))
+    }
+
     pub(super) fn apply_reasoning_choice(
         &mut self,
         renderer: &mut AnsiRenderer,
         level: ReasoningEffortLevel,
     ) -> Result<ModelPickerProgress> {
-        let Some(selection) = self.selection.as_ref() else {
+        let Some(_selection) = self.selection.as_ref() else {
             return Err(anyhow!("Reasoning requested before selecting a model"));
         };
         self.selected_reasoning = Some(level);
-        if selection.requires_api_key {
-            self.step = PickerStep::AwaitApiKey;
-            self.prompt_api_key_step(renderer)?;
-            return Ok(ModelPickerProgress::InProgress);
-        }
-        let result = self.build_result();
-        Ok(ModelPickerProgress::Completed(result?))
+        self.continue_after_reasoning(renderer)
     }
 
     pub(super) fn apply_reasoning_off_choice(
@@ -127,14 +200,7 @@ impl ModelPickerState {
                 ),
             )?;
 
-            if current_selection.requires_api_key {
-                self.step = PickerStep::AwaitApiKey;
-                self.prompt_api_key_step(renderer)?;
-                return Ok(ModelPickerProgress::InProgress);
-            }
-
-            let result = self.build_result();
-            return Ok(ModelPickerProgress::Completed(result?));
+            return self.continue_after_reasoning(renderer);
         }
 
         let Some(target_model) = current_selection.reasoning_off_model else {
@@ -189,13 +255,19 @@ impl ModelPickerState {
         Ok(progress)
     }
 
-    fn build_result(&self) -> Result<ModelSelectionResult> {
+    pub(super) fn build_result(&self) -> Result<ModelSelectionResult> {
         let selection = self
             .selection
             .as_ref()
             .ok_or_else(|| anyhow!("Model selection missing"))?;
         let chosen_reasoning = self.selected_reasoning.unwrap_or(self.current_reasoning);
         let reasoning_changed = chosen_reasoning != self.current_reasoning;
+        let chosen_service_tier = match self.selected_service_tier {
+            Some(true) => Some(OpenAIServiceTier::Priority),
+            Some(false) => None,
+            None => self.current_service_tier,
+        };
+        let service_tier_changed = chosen_service_tier != self.current_service_tier;
 
         Ok(ModelSelectionResult {
             provider: selection.provider_key.clone(),
@@ -207,6 +279,9 @@ impl ModelPickerState {
             reasoning_supported: selection.reasoning_supported,
             reasoning: chosen_reasoning,
             reasoning_changed,
+            service_tier_supported: selection.service_tier_supported,
+            service_tier: chosen_service_tier,
+            service_tier_changed,
             api_key: self.pending_api_key.clone(),
             env_key: selection.env_key.clone(),
             requires_api_key: selection.requires_api_key,
@@ -238,6 +313,7 @@ impl ModelPickerState {
         }
 
         self.pending_api_key = None;
+        self.selected_service_tier = None;
         let mut selection = selection;
         if selection.requires_api_key {
             match self.find_existing_api_key(&selection.env_key) {
@@ -302,19 +378,44 @@ impl ModelPickerState {
             return Ok(ModelPickerProgress::InProgress);
         }
 
-        if self
-            .selection
-            .as_ref()
-            .map(|detail| detail.requires_api_key)
-            .unwrap_or(false)
-        {
-            self.step = PickerStep::AwaitApiKey;
-            self.prompt_api_key_step(renderer)?;
-            return Ok(ModelPickerProgress::InProgress);
+        self.continue_after_reasoning(renderer)
+    }
+
+    pub(super) fn handle_service_tier(
+        &mut self,
+        renderer: &mut AnsiRenderer,
+        input: &str,
+    ) -> Result<ModelPickerProgress> {
+        let Some(selection) = self.selection.as_ref() else {
+            return Err(anyhow!("Service tier requested before selecting a model"));
+        };
+
+        match input.to_ascii_lowercase().as_str() {
+            "priority" => self.apply_service_tier_choice(renderer, true),
+            "default" | "project" | "inherit" => self.apply_service_tier_choice(renderer, false),
+            "skip" => self.apply_service_tier_choice(renderer, self.current_service_tier.is_some()),
+            _ => {
+                renderer.line(
+                    MessageStyle::Error,
+                    "Unknown service tier option. Use priority, default, or skip.",
+                )?;
+                prompt_service_tier_plain(renderer, selection, self.current_service_tier)?;
+                Ok(ModelPickerProgress::InProgress)
+            }
+        }
+    }
+
+    pub(super) fn apply_service_tier_choice(
+        &mut self,
+        renderer: &mut AnsiRenderer,
+        priority: bool,
+    ) -> Result<ModelPickerProgress> {
+        if self.selection.is_none() {
+            return Err(anyhow!("Service tier requested before selecting a model"));
         }
 
-        let result = self.build_result();
-        Ok(ModelPickerProgress::Completed(result?))
+        self.selected_service_tier = Some(priority);
+        self.finish_after_service_tier(renderer)
     }
 
     pub(super) fn handle_api_key(

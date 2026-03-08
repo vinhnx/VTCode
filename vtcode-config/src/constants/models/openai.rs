@@ -42,6 +42,9 @@ pub const REASONING_MODELS: &[&str] = &[
     O4_MINI,
 ];
 
+/// Models that support the native OpenAI `service_tier` request parameter.
+pub const SERVICE_TIER_MODELS: &[&str] = RESPONSES_API_MODELS;
+
 /// Models that do not expose structured tool calling on the OpenAI platform
 pub const TOOL_UNAVAILABLE_MODELS: &[&str] = &[];
 

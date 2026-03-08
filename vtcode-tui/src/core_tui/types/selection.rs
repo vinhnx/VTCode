@@ -7,6 +7,7 @@ pub enum InlineListSelection {
     RefreshDynamicModels,
     Reasoning(ReasoningEffortLevel),
     DisableReasoning,
+    OpenAIServiceTier(bool),
     CustomModel,
     Theme(String),
     Session(String),

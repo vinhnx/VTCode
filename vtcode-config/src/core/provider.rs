@@ -1,5 +1,21 @@
 use serde::{Deserialize, Serialize};
 
+/// Native OpenAI service tier selection.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum OpenAIServiceTier {
+    Priority,
+}
+
+impl OpenAIServiceTier {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Priority => "priority",
+        }
+    }
+}
+
 /// OpenAI-specific provider configuration
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
@@ -18,6 +34,12 @@ pub struct OpenAIConfig {
     /// Example: `["reasoning.encrypted_content"]` for encrypted reasoning continuity.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub responses_include: Vec<String>,
+
+    /// Optional native OpenAI `service_tier` request parameter.
+    /// Leave unset to inherit the Project-level default service tier.
+    /// Options: "priority"
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub service_tier: Option<OpenAIServiceTier>,
 }
 
 /// Anthropic-specific provider configuration
@@ -179,7 +201,7 @@ fn default_effort() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::OpenAIConfig;
+    use super::{OpenAIConfig, OpenAIServiceTier};
 
     #[test]
     fn openai_config_defaults_to_websocket_mode_disabled() {
@@ -187,6 +209,7 @@ mod tests {
         assert!(!config.websocket_mode);
         assert_eq!(config.responses_store, None);
         assert!(config.responses_include.is_empty());
+        assert_eq!(config.service_tier, None);
     }
 
     #[test]
@@ -196,6 +219,7 @@ mod tests {
         assert!(parsed.websocket_mode);
         assert_eq!(parsed.responses_store, None);
         assert!(parsed.responses_include.is_empty());
+        assert_eq!(parsed.service_tier, None);
     }
 
     #[test]
@@ -215,5 +239,13 @@ responses_include = ["reasoning.encrypted_content", "output_text.annotations"]
                 "output_text.annotations".to_string()
             ]
         );
+        assert_eq!(parsed.service_tier, None);
+    }
+
+    #[test]
+    fn openai_config_parses_service_tier() {
+        let parsed: OpenAIConfig =
+            toml::from_str(r#"service_tier = "priority""#).expect("config should parse");
+        assert_eq!(parsed.service_tier, Some(OpenAIServiceTier::Priority));
     }
 }

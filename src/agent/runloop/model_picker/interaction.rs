@@ -1,6 +1,7 @@
 use anyhow::{Result, anyhow};
 
 use vtcode::interactive_list::{SelectionEntry, run_interactive_selection};
+use vtcode_config::OpenAIServiceTier;
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::ReasoningEffortLevel;
 
@@ -8,8 +9,8 @@ use super::dynamic_models::DynamicModelRegistry;
 use super::options::{ModelOption, picker_provider_order};
 use super::rendering::{CUSTOM_PROVIDER_SUBTITLE, CUSTOM_PROVIDER_TITLE, KEEP_CURRENT_DESCRIPTION};
 use super::selection::{
-    ReasoningChoice, SelectionDetail, reasoning_level_description, reasoning_level_label,
-    selection_from_option, supports_xhigh_reasoning,
+    ReasoningChoice, SelectionDetail, ServiceTierChoice, reasoning_level_description,
+    reasoning_level_label, selection_from_option, service_tier_label, supports_xhigh_reasoning,
 };
 
 pub(super) const REFRESH_ENTRY_LABEL: &str = "Refresh local LM Studio/Ollama models";
@@ -231,4 +232,51 @@ pub(super) fn select_reasoning_with_ratatui(
         .unwrap_or(current);
 
     Ok(Some(ReasoningChoice::Level(selected_level)))
+}
+
+pub(super) fn select_service_tier_with_ratatui(
+    selection: &SelectionDetail,
+    current: Option<OpenAIServiceTier>,
+) -> Result<Option<ServiceTierChoice>> {
+    let current_choice = match current {
+        Some(OpenAIServiceTier::Priority) => ServiceTierChoice::Priority,
+        None => ServiceTierChoice::ProjectDefault,
+    };
+
+    let choices = [
+        (
+            format!("Keep current ({})", service_tier_label(current)),
+            "Retain the existing service tier configuration.".to_string(),
+            current_choice,
+        ),
+        (
+            "Project default".to_string(),
+            "Do not send service_tier; inherit the OpenAI Project setting.".to_string(),
+            ServiceTierChoice::ProjectDefault,
+        ),
+        (
+            "Priority".to_string(),
+            "Send service_tier=priority for lower and more consistent latency.".to_string(),
+            ServiceTierChoice::Priority,
+        ),
+    ];
+
+    let entries: Vec<SelectionEntry> = choices
+        .iter()
+        .map(|(title, subtitle, _)| SelectionEntry::new(title.clone(), Some(subtitle.clone())))
+        .collect();
+
+    let instructions = format!(
+        "Select a service tier for {}. Esc keeps the current setting ({}).",
+        selection.model_display,
+        service_tier_label(current)
+    );
+
+    let selection_index = run_interactive_selection("Service tier", &instructions, &entries, 0)?;
+
+    let Some(index) = selection_index else {
+        return Ok(None);
+    };
+
+    Ok(Some(choices[index].2))
 }

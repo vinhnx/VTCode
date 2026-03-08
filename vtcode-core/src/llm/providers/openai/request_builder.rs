@@ -21,8 +21,8 @@ pub(crate) struct ChatRequestContext<'a> {
     pub supports_tools: bool,
     pub supports_parallel_tool_config: bool,
     pub supports_temperature: bool,
-    pub supports_prompt_cache_key: bool,
     pub prompt_cache_key: Option<&'a str>,
+    pub default_service_tier: Option<&'a str>,
 }
 
 pub(crate) struct ResponsesRequestContext<'a> {
@@ -33,9 +33,11 @@ pub(crate) struct ResponsesRequestContext<'a> {
     pub supports_reasoning: bool,
     pub is_responses_api_model: bool,
     pub include_assistant_phase: bool,
-    pub supports_prompt_cache_key: bool,
     pub prompt_cache_key: Option<&'a str>,
     pub prompt_cache_retention: Option<&'a str>,
+    pub default_service_tier: Option<&'a str>,
+    pub default_response_store: Option<bool>,
+    pub default_responses_include: Option<&'a [String]>,
 }
 
 fn strip_non_native_assistant_phase(input: &mut [Value]) {
@@ -53,6 +55,10 @@ fn default_reasoning_effort_for_model(model: &str) -> Option<ReasoningEffortLeve
         _ if model.starts_with("gpt-5.3") => Some(ReasoningEffortLevel::Medium),
         _ => None,
     }
+}
+
+fn trimmed_non_empty(value: Option<&str>) -> Option<&str> {
+    value.map(str::trim).filter(|value| !value.is_empty())
 }
 
 fn allows_sampling_parameters(model: &str, reasoning_effort: Option<ReasoningEffortLevel>) -> bool {
@@ -186,13 +192,15 @@ pub(crate) fn build_chat_request(
         openai_request["temperature"] = json!(temperature);
     }
 
-    if ctx.supports_prompt_cache_key
-        && let Some(prompt_cache_key) = ctx.prompt_cache_key
+    if ModelProvider::OpenAI.supports_service_tier(&request.model)
+        && let Some(service_tier) =
+            trimmed_non_empty(request.service_tier.as_deref().or(ctx.default_service_tier))
     {
-        let trimmed = prompt_cache_key.trim();
-        if !trimmed.is_empty() {
-            openai_request["prompt_cache_key"] = json!(trimmed);
-        }
+        openai_request["service_tier"] = json!(service_tier);
+    }
+
+    if let Some(prompt_cache_key) = trimmed_non_empty(ctx.prompt_cache_key) {
+        openai_request["prompt_cache_key"] = json!(prompt_cache_key);
     }
 
     if ctx.supports_tools
@@ -270,18 +278,26 @@ pub(crate) fn build_responses_request(
         openai_request["instructions"] = json!(instructions);
     }
 
-    if let Some(previous_response_id) = request.previous_response_id.as_deref() {
-        let trimmed = previous_response_id.trim();
-        if !trimmed.is_empty() {
-            openai_request["previous_response_id"] = json!(trimmed);
-        }
+    if let Some(previous_response_id) = trimmed_non_empty(request.previous_response_id.as_deref()) {
+        openai_request["previous_response_id"] = json!(previous_response_id);
     }
 
-    if let Some(store) = request.response_store {
+    if ModelProvider::OpenAI.supports_service_tier(&request.model)
+        && let Some(service_tier) =
+            trimmed_non_empty(request.service_tier.as_deref().or(ctx.default_service_tier))
+    {
+        openai_request["service_tier"] = json!(service_tier);
+    }
+
+    if let Some(store) = request.response_store.or(ctx.default_response_store) {
         openai_request["store"] = json!(store);
     }
 
-    if let Some(include_fields) = &request.responses_include {
+    if let Some(include_fields) = request
+        .responses_include
+        .as_deref()
+        .or(ctx.default_responses_include)
+    {
         let include_values: Vec<String> = include_fields
             .iter()
             .map(|field| field.trim())
@@ -436,13 +452,8 @@ pub(crate) fn build_responses_request(
         openai_request["text"] = text_format;
     }
 
-    if ctx.supports_prompt_cache_key
-        && let Some(prompt_cache_key) = ctx.prompt_cache_key
-    {
-        let trimmed = prompt_cache_key.trim();
-        if !trimmed.is_empty() {
-            openai_request["prompt_cache_key"] = json!(trimmed);
-        }
+    if let Some(prompt_cache_key) = trimmed_non_empty(ctx.prompt_cache_key) {
+        openai_request["prompt_cache_key"] = json!(prompt_cache_key);
     }
 
     // If configured, include the `prompt_cache_retention` value in the Responses API

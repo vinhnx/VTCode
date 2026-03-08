@@ -199,6 +199,14 @@ fn test_provider_defaults() {
 }
 
 #[test]
+fn test_provider_service_tier_support() {
+    assert!(Provider::OpenAI.supports_service_tier(models::GPT_5));
+    assert!(Provider::OpenAI.supports_service_tier(models::openai::O3));
+    assert!(!Provider::OpenAI.supports_service_tier(models::openai::GPT_OSS_20B));
+    assert!(!Provider::Anthropic.supports_service_tier(models::GPT_5));
+}
+
+#[test]
 fn test_model_defaults() {
     assert_eq!(ModelId::default(), ModelId::Gemini3FlashPreview);
     assert_eq!(ModelId::default_orchestrator(), ModelId::Gemini31ProPreview);

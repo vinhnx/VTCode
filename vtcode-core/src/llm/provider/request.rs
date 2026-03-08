@@ -91,6 +91,10 @@ pub struct LLMRequest {
     /// Passed through only for providers/APIs that support include selectors.
     pub responses_include: Option<Vec<String>>,
 
+    /// Optional native OpenAI `service_tier` request parameter.
+    /// Passed through only for native OpenAI endpoints that support service tiers.
+    pub service_tier: Option<String>,
+
     /// Optional provider routing hint for prompt cache stickiness.
     /// OpenAI uses this value to improve routing locality for repeated prefixes.
     pub prompt_cache_key: Option<String>,

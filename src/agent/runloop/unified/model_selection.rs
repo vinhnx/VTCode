@@ -195,6 +195,19 @@ pub(crate) async fn finalize_model_selection(
         renderer.line(MessageStyle::Info, &message)?;
     }
 
+    if selection.service_tier_supported {
+        let service_tier_label = match selection.service_tier {
+            Some(_) => "priority",
+            None => "project default",
+        };
+        let message = if selection.service_tier_changed {
+            format!("Service tier updated to '{}'.", service_tier_label)
+        } else {
+            format!("Service tier remains '{}'.", service_tier_label)
+        };
+        renderer.line(MessageStyle::Info, &message)?;
+    }
+
     if selection.api_key.is_some() {
         renderer.line(
             MessageStyle::Info,

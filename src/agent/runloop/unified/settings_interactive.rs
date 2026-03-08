@@ -22,6 +22,7 @@ const ACTION_PREFIX_OPEN: &str = "settings:open:";
 const ACTION_PREFIX_ARRAY_ADD: &str = "settings:array_add:";
 const ACTION_PREFIX_ARRAY_POP: &str = "settings:array_pop:";
 const ACTION_PREFIX_SET: &str = "settings:set:";
+const OPTIONAL_DOC_FIELDS: &[&str] = &["provider.openai.service_tier"];
 
 const FIELD_REFERENCE_MARKDOWN: &str =
     include_str!("../../../../docs/config/CONFIG_FIELD_REFERENCE.md");
@@ -288,6 +289,7 @@ fn build_settings_items(
                 }
             }
         }
+        append_missing_optional_doc_items(&mut items, draft, None);
     }
 
     Ok(items)
@@ -333,6 +335,7 @@ fn append_node_items(items: &mut Vec<InlineListItem>, path: &str, node: &TomlVal
                 let child_path = format!("{}.{}", path, key);
                 items.push(item_for_value(key, &child_path, value));
             }
+            append_missing_optional_doc_items(items, node, Some(path));
         }
         TomlValue::Array(entries) => {
             items.push(action_item(
@@ -360,6 +363,29 @@ fn append_node_items(items: &mut Vec<InlineListItem>, path: &str, node: &TomlVal
     }
 
     Ok(())
+}
+
+fn append_missing_optional_doc_items(
+    items: &mut Vec<InlineListItem>,
+    root: &TomlValue,
+    parent_path: Option<&str>,
+) {
+    for path in OPTIONAL_DOC_FIELDS {
+        let lookup_path = parent_path
+            .and_then(|parent| {
+                path.strip_prefix(parent)
+                    .and_then(|suffix| suffix.strip_prefix('.'))
+            })
+            .unwrap_or(path);
+        if get_node(root, lookup_path).is_some() {
+            continue;
+        }
+
+        let Some(label) = missing_doc_label(path, parent_path) else {
+            continue;
+        };
+        items.push(item_for_missing_doc_value(label, path));
+    }
 }
 
 fn item_for_value(label: &str, path: &str, value: &TomlValue) -> InlineListItem {
@@ -461,6 +487,39 @@ fn item_for_value(label: &str, path: &str, value: &TomlValue) -> InlineListItem 
     }
 }
 
+fn item_for_missing_doc_value(label: &str, path: &str) -> InlineListItem {
+    let doc = FIELD_DOCS.lookup(path);
+    let description = doc
+        .and_then(|entry| (!entry.description.is_empty()).then(|| entry.description.clone()))
+        .unwrap_or_default();
+    let has_options = doc.map(|entry| !entry.options.is_empty()).unwrap_or(false);
+
+    InlineListItem {
+        title: label.to_string(),
+        subtitle: Some(setting_subtitle(path, "<unset>", &description, has_options)),
+        badge: Some(if has_options {
+            "Cycle".to_string()
+        } else {
+            "Unset".to_string()
+        }),
+        indent: 0,
+        selection: has_options.then(|| {
+            InlineListSelection::ConfigAction(format!("{}{}:cycle", ACTION_PREFIX_SET, path))
+        }),
+        search_value: Some(search_value_for_missing_doc(path, label, doc)),
+    }
+}
+
+fn missing_doc_label<'a>(path: &'a str, parent_path: Option<&str>) -> Option<&'a str> {
+    match parent_path {
+        Some(parent) => path
+            .strip_prefix(parent)
+            .and_then(|suffix| suffix.strip_prefix('.'))
+            .filter(|suffix| !suffix.contains('.') && !suffix.contains('[')),
+        None => Some(path),
+    }
+}
+
 fn setting_subtitle(path: &str, summary: &str, description: &str, adjustable: bool) -> String {
     let value_display = if adjustable {
         format!("<- {} ->", summary)
@@ -472,6 +531,19 @@ fn setting_subtitle(path: &str, summary: &str, description: &str, adjustable: bo
         parts.push(description.to_string());
     }
     parts.join(" • ")
+}
+
+fn search_value_for_missing_doc(path: &str, label: &str, doc: Option<&FieldDoc>) -> String {
+    let mut parts = vec![path.to_string(), label.to_string(), "unset".to_string()];
+    if let Some(doc) = doc {
+        if !doc.description.is_empty() {
+            parts.push(doc.description.clone());
+        }
+        if !doc.options.is_empty() {
+            parts.push(doc.options.join(" "));
+        }
+    }
+    parts.join(" ").to_ascii_lowercase()
 }
 
 fn section_item(label: &str) -> InlineListItem {
@@ -914,8 +986,9 @@ fn apply_scalar_operation(
     path: &str,
     operation: ScalarOperation,
 ) -> Result<()> {
-    let node = get_node_mut(root, path)
-        .ok_or_else(|| anyhow!("Settings path '{}' was not found", path))?;
+    let Some(node) = get_node_mut(root, path) else {
+        return apply_missing_scalar_operation(root, path, operation);
+    };
 
     match node {
         TomlValue::Boolean(value) => {
@@ -951,6 +1024,66 @@ fn apply_scalar_operation(
             Ok(())
         }
         _ => bail!("{} is not a scalar setting", path),
+    }
+}
+
+fn apply_missing_scalar_operation(
+    root: &mut TomlValue,
+    path: &str,
+    operation: ScalarOperation,
+) -> Result<()> {
+    match operation {
+        ScalarOperation::CycleNext | ScalarOperation::CyclePrev => {
+            let mut options = resolve_cycle_options(path, "");
+            if options.is_empty() {
+                bail!("Settings path '{}' was not found", path);
+            }
+            options.sort();
+            options.dedup();
+            let value = match operation {
+                ScalarOperation::CycleNext => options.first().cloned(),
+                ScalarOperation::CyclePrev => options.last().cloned(),
+                _ => None,
+            }
+            .ok_or_else(|| anyhow!("{} has no predefined values to cycle", path))?;
+            insert_missing_string_value(root, path, value)?;
+            Ok(())
+        }
+        _ => bail!("Settings path '{}' was not found", path),
+    }
+}
+
+fn insert_missing_string_value(root: &mut TomlValue, path: &str, value: String) -> Result<()> {
+    let tokens = parse_path_tokens(path)?;
+    if tokens.is_empty() {
+        bail!("Settings path '{}' was not found", path);
+    }
+
+    let mut current = root;
+    for token in &tokens[..tokens.len() - 1] {
+        match token {
+            PathToken::Key(key) => {
+                let TomlValue::Table(table) = current else {
+                    bail!("Parent path for '{}' is not a table", path);
+                };
+                current = table
+                    .entry(key.clone())
+                    .or_insert_with(|| TomlValue::Table(toml::map::Map::new()));
+            }
+            PathToken::Index(_) => bail!("Cannot create missing array path '{}'", path),
+        }
+    }
+
+    match tokens.last() {
+        Some(PathToken::Key(key)) => {
+            let TomlValue::Table(table) = current else {
+                bail!("Parent path for '{}' is not a table", path);
+            };
+            table.insert(key.clone(), TomlValue::String(value));
+            Ok(())
+        }
+        Some(PathToken::Index(_)) => bail!("Cannot create missing array path '{}'", path),
+        None => bail!("Settings path '{}' was not found", path),
     }
 }
 
@@ -1258,5 +1391,46 @@ mod tests {
         let search_value = entry.search_value.as_deref().expect("search value");
         assert!(search_value.contains("external_editor"));
         assert!(search_value.contains("code --wait"));
+    }
+
+    #[test]
+    fn provider_openai_view_includes_missing_service_tier_doc_field() {
+        let state = SettingsPaletteState {
+            workspace: PathBuf::from("."),
+            source_path: PathBuf::from("vtcode.toml"),
+            source_label: "test".to_string(),
+            draft: VTCodeConfig::default(),
+            view_path: Some("provider.openai".to_string()),
+        };
+        let draft =
+            TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
+
+        let items = build_settings_items(&state, &draft).expect("settings items");
+        assert!(items.iter().any(|item| item.title == "service_tier"));
+    }
+
+    #[test]
+    fn missing_service_tier_cycle_creates_value() {
+        let mut state = SettingsPaletteState {
+            workspace: PathBuf::from("."),
+            source_path: PathBuf::from("vtcode.toml"),
+            source_label: "test".to_string(),
+            draft: VTCodeConfig::default(),
+            view_path: Some("provider.openai".to_string()),
+        };
+
+        mutate_draft(&mut state, |draft| {
+            apply_scalar_operation(
+                draft,
+                "provider.openai.service_tier",
+                ScalarOperation::CycleNext,
+            )
+        })
+        .expect("service tier should be inserted");
+
+        assert_eq!(
+            state.draft.provider.openai.service_tier,
+            Some(vtcode_config::OpenAIServiceTier::Priority)
+        );
     }
 }
