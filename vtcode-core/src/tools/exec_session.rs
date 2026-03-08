@@ -4,12 +4,15 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use anyhow::{Context, Result, anyhow};
 use hashbrown::HashMap;
+use portable_pty::PtySize;
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinHandle;
 use vtcode_bash_runner::{PipeSpawnOptions, ProcessHandle, spawn_pipe_process_with_options};
 
+use crate::tools::registry::{PtySessionGuard, PtySessionManager};
 use crate::tools::types::VTCodeExecSession;
 use crate::utils::path::{canonicalize_workspace, ensure_path_within_workspace};
+use crate::zsh_exec_bridge::ZshExecBridgeSession;
 
 struct PipeSessionRecord {
     metadata: VTCodeExecSession,
@@ -37,21 +40,20 @@ impl PipeSessionRecord {
 }
 
 #[derive(Clone)]
-pub struct PipeSessionManager {
+struct PipeSessionManager {
     workspace_root: PathBuf,
     sessions: Arc<RwLock<HashMap<String, Arc<PipeSessionRecord>>>>,
 }
 
 impl PipeSessionManager {
-    #[must_use]
-    pub fn new(workspace_root: PathBuf) -> Self {
+    fn new(workspace_root: PathBuf) -> Self {
         Self {
             workspace_root: canonicalize_workspace(&workspace_root),
             sessions: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
-    pub async fn create_session(
+    async fn create_session(
         &self,
         session_id: String,
         command: Vec<String>,
@@ -123,29 +125,7 @@ impl PipeSessionManager {
         Ok(metadata)
     }
 
-    pub async fn has_session(&self, session_id: &str) -> bool {
-        let sessions = self.sessions.read().await;
-        sessions.contains_key(session_id)
-    }
-
-    pub async fn list_sessions(&self) -> Vec<VTCodeExecSession> {
-        let sessions = self.sessions.read().await;
-        sessions
-            .values()
-            .map(|record| record.metadata.clone())
-            .collect()
-    }
-
-    pub async fn snapshot_session(&self, session_id: &str) -> Result<VTCodeExecSession> {
-        let record = self.session_record(session_id).await?;
-        Ok(record.metadata.clone())
-    }
-
-    pub async fn read_session_output(
-        &self,
-        session_id: &str,
-        drain: bool,
-    ) -> Result<Option<String>> {
+    async fn read_session_output(&self, session_id: &str, drain: bool) -> Result<Option<String>> {
         let record = self.session_record(session_id).await?;
         let start = record.pending_offset.load(Ordering::SeqCst);
         let output = record.output.lock().await;
@@ -171,7 +151,7 @@ impl PipeSessionManager {
         }
     }
 
-    pub async fn send_input_to_session(
+    async fn send_input_to_session(
         &self,
         session_id: &str,
         data: &[u8],
@@ -195,7 +175,7 @@ impl PipeSessionManager {
         Ok(data.len() + usize::from(append_newline))
     }
 
-    pub async fn is_session_completed(&self, session_id: &str) -> Result<Option<i32>> {
+    async fn is_session_completed(&self, session_id: &str) -> Result<Option<i32>> {
         let record = self.session_record(session_id).await?;
         if record.handle.has_exited() {
             Ok(record.handle.exit_code())
@@ -204,7 +184,7 @@ impl PipeSessionManager {
         }
     }
 
-    pub async fn close_session(&self, session_id: &str) -> Result<VTCodeExecSession> {
+    async fn close_session(&self, session_id: &str) -> Result<VTCodeExecSession> {
         let record = {
             let mut sessions = self.sessions.write().await;
             sessions
@@ -218,6 +198,19 @@ impl PipeSessionManager {
         }
 
         Ok(record.metadata.clone())
+    }
+
+    async fn terminate_all_sessions(&self) -> Result<()> {
+        let ids = {
+            let sessions = self.sessions.read().await;
+            sessions.keys().cloned().collect::<Vec<_>>()
+        };
+
+        for session_id in ids {
+            self.close_session(&session_id).await?;
+        }
+
+        Ok(())
     }
 
     async fn session_record(&self, session_id: &str) -> Result<Arc<PipeSessionRecord>> {
@@ -238,5 +231,348 @@ impl PipeSessionManager {
             Ok(relative) => relative.to_string_lossy().replace("\\", "/"),
             Err(_) => path.to_string_lossy().into_owned(),
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecSessionBackend {
+    Pipe,
+    Pty,
+}
+
+struct ExecSessionRecord {
+    metadata: VTCodeExecSession,
+    backend: ExecSessionBackend,
+    _pty_guard: Option<PtySessionGuard>,
+}
+
+impl ExecSessionRecord {
+    fn new(
+        metadata: VTCodeExecSession,
+        backend: ExecSessionBackend,
+        pty_guard: Option<PtySessionGuard>,
+    ) -> Self {
+        Self {
+            metadata,
+            backend,
+            _pty_guard: pty_guard,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct ExecSessionManager {
+    pipe_sessions: PipeSessionManager,
+    pty_sessions: PtySessionManager,
+    sessions: Arc<RwLock<HashMap<String, Arc<ExecSessionRecord>>>>,
+}
+
+impl ExecSessionManager {
+    #[must_use]
+    pub fn new(workspace_root: PathBuf, pty_sessions: PtySessionManager) -> Self {
+        Self {
+            pipe_sessions: PipeSessionManager::new(workspace_root),
+            pty_sessions,
+            sessions: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+
+    pub(crate) async fn create_pipe_session(
+        &self,
+        session_id: String,
+        command: Vec<String>,
+        working_dir: PathBuf,
+        env: HashMap<String, String>,
+    ) -> Result<VTCodeExecSession> {
+        self.ensure_session_absent(&session_id).await?;
+        let metadata = self
+            .pipe_sessions
+            .create_session(session_id, command, working_dir, env)
+            .await?;
+        self.insert_session(metadata.clone(), ExecSessionBackend::Pipe, None)
+            .await?;
+        Ok(metadata)
+    }
+
+    pub(crate) async fn create_pty_session(
+        &self,
+        session_id: String,
+        command: Vec<String>,
+        working_dir: PathBuf,
+        size: PtySize,
+        extra_env: HashMap<String, String>,
+        zsh_exec_bridge: Option<ZshExecBridgeSession>,
+    ) -> Result<VTCodeExecSession> {
+        self.ensure_session_absent(&session_id).await?;
+        let pty_guard = self.pty_sessions.start_session()?;
+        let metadata = self.pty_sessions.manager().create_session_with_bridge(
+            session_id,
+            command,
+            working_dir,
+            size,
+            extra_env,
+            zsh_exec_bridge,
+        )?;
+        let exec_metadata = VTCodeExecSession::from(metadata);
+        self.insert_session(
+            exec_metadata.clone(),
+            ExecSessionBackend::Pty,
+            Some(pty_guard),
+        )
+        .await?;
+        Ok(exec_metadata)
+    }
+
+    pub(crate) async fn snapshot_session(&self, session_id: &str) -> Result<VTCodeExecSession> {
+        let record = self.session_record(session_id).await?;
+        match record.backend {
+            ExecSessionBackend::Pipe => self
+                .pipe_sessions
+                .session_record(session_id)
+                .await
+                .map(|r| r.metadata.clone()),
+            ExecSessionBackend::Pty => self
+                .pty_sessions
+                .manager()
+                .snapshot_session(session_id)
+                .map(VTCodeExecSession::from),
+        }
+    }
+
+    pub(crate) async fn list_sessions(&self) -> Vec<VTCodeExecSession> {
+        let sessions = self.sessions.read().await;
+        let mut listed = sessions
+            .values()
+            .map(|record| record.metadata.clone())
+            .collect::<Vec<_>>();
+        listed.sort_by(|left, right| left.id.cmp(&right.id));
+        listed
+    }
+
+    pub(crate) async fn read_session_output(
+        &self,
+        session_id: &str,
+        drain: bool,
+    ) -> Result<Option<String>> {
+        let record = self.session_record(session_id).await?;
+        match record.backend {
+            ExecSessionBackend::Pipe => {
+                self.pipe_sessions
+                    .read_session_output(session_id, drain)
+                    .await
+            }
+            ExecSessionBackend::Pty => self
+                .pty_sessions
+                .manager()
+                .read_session_output(session_id, drain),
+        }
+    }
+
+    pub(crate) async fn send_input_to_session(
+        &self,
+        session_id: &str,
+        data: &[u8],
+        append_newline: bool,
+    ) -> Result<usize> {
+        let record = self.session_record(session_id).await?;
+        match record.backend {
+            ExecSessionBackend::Pipe => {
+                self.pipe_sessions
+                    .send_input_to_session(session_id, data, append_newline)
+                    .await
+            }
+            ExecSessionBackend::Pty => {
+                self.pty_sessions
+                    .manager()
+                    .send_input_to_session(session_id, data, append_newline)
+            }
+        }
+    }
+
+    pub(crate) async fn is_session_completed(&self, session_id: &str) -> Result<Option<i32>> {
+        let record = self.session_record(session_id).await?;
+        match record.backend {
+            ExecSessionBackend::Pipe => self.pipe_sessions.is_session_completed(session_id).await,
+            ExecSessionBackend::Pty => self.pty_sessions.manager().is_session_completed(session_id),
+        }
+    }
+
+    pub(crate) async fn close_session(&self, session_id: &str) -> Result<VTCodeExecSession> {
+        let record = {
+            let mut sessions = self.sessions.write().await;
+            sessions
+                .remove(session_id)
+                .ok_or_else(|| anyhow!("exec session '{}' not found", session_id))?
+        };
+
+        let metadata = match record.backend {
+            ExecSessionBackend::Pipe => self.pipe_sessions.close_session(session_id).await?,
+            ExecSessionBackend::Pty => self
+                .pty_sessions
+                .manager()
+                .close_session(session_id)
+                .map(VTCodeExecSession::from)?,
+        };
+
+        Ok(metadata)
+    }
+
+    pub(crate) async fn prune_exited_session(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<VTCodeExecSession>> {
+        if self.is_session_completed(session_id).await?.is_some() {
+            return self.close_session(session_id).await.map(Some);
+        }
+        Ok(None)
+    }
+
+    pub(crate) async fn terminate_all_sessions_async(&self) -> Result<()> {
+        let ids = {
+            let sessions = self.sessions.read().await;
+            sessions.keys().cloned().collect::<Vec<_>>()
+        };
+
+        let mut failures = Vec::new();
+        for session_id in ids {
+            if let Err(err) = self.close_session(&session_id).await {
+                failures.push(format!("{session_id}: {err}"));
+            }
+        }
+
+        if let Err(err) = self.pipe_sessions.terminate_all_sessions().await {
+            failures.push(err.to_string());
+        }
+
+        if failures.is_empty() {
+            Ok(())
+        } else {
+            Err(anyhow!(
+                "failed to terminate all exec sessions: {}",
+                failures.join("; ")
+            ))
+        }
+    }
+
+    async fn insert_session(
+        &self,
+        metadata: VTCodeExecSession,
+        backend: ExecSessionBackend,
+        pty_guard: Option<PtySessionGuard>,
+    ) -> Result<()> {
+        let mut sessions = self.sessions.write().await;
+        if sessions.contains_key(&metadata.id) {
+            return Err(anyhow!("exec session '{}' already exists", metadata.id));
+        }
+        sessions.insert(
+            metadata.id.clone(),
+            Arc::new(ExecSessionRecord::new(metadata, backend, pty_guard)),
+        );
+        Ok(())
+    }
+
+    async fn ensure_session_absent(&self, session_id: &str) -> Result<()> {
+        let sessions = self.sessions.read().await;
+        if sessions.contains_key(session_id) {
+            return Err(anyhow!("exec session '{}' already exists", session_id));
+        }
+        Ok(())
+    }
+
+    async fn session_record(&self, session_id: &str) -> Result<Arc<ExecSessionRecord>> {
+        let sessions = self.sessions.read().await;
+        sessions
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| anyhow!("exec session '{}' not found", session_id))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use hashbrown::HashMap;
+    use portable_pty::PtySize;
+    use tempfile::tempdir;
+
+    use super::ExecSessionManager;
+    use crate::config::PtyConfig;
+    use crate::tools::registry::PtySessionManager;
+    use crate::utils::path::canonicalize_workspace;
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn pty_session_limit_holds_until_exec_session_close() -> anyhow::Result<()> {
+        let temp_dir = tempdir()?;
+        let workspace_root = canonicalize_workspace(temp_dir.path());
+        let pty_sessions = PtySessionManager::new(
+            workspace_root.clone(),
+            PtyConfig {
+                max_sessions: 1,
+                ..Default::default()
+            },
+        );
+        let manager = ExecSessionManager::new(workspace_root.clone(), pty_sessions);
+        let size = PtySize {
+            rows: 24,
+            cols: 80,
+            pixel_width: 0,
+            pixel_height: 0,
+        };
+
+        manager
+            .create_pty_session(
+                "run-1".to_string(),
+                vec![
+                    "/bin/sh".to_string(),
+                    "-c".to_string(),
+                    "sleep 1".to_string(),
+                ],
+                workspace_root.clone(),
+                size,
+                HashMap::new(),
+                None,
+            )
+            .await?;
+
+        let second = manager
+            .create_pty_session(
+                "run-2".to_string(),
+                vec![
+                    "/bin/sh".to_string(),
+                    "-c".to_string(),
+                    "sleep 1".to_string(),
+                ],
+                workspace_root.clone(),
+                size,
+                HashMap::new(),
+                None,
+            )
+            .await;
+        assert!(second.is_err());
+        assert!(
+            second
+                .unwrap_err()
+                .to_string()
+                .contains("Maximum PTY sessions")
+        );
+
+        manager.close_session("run-1").await?;
+        manager
+            .create_pty_session(
+                "run-3".to_string(),
+                vec![
+                    "/bin/sh".to_string(),
+                    "-c".to_string(),
+                    "sleep 1".to_string(),
+                ],
+                workspace_root,
+                size,
+                HashMap::new(),
+                None,
+            )
+            .await?;
+        manager.close_session("run-3").await?;
+
+        Ok(())
     }
 }

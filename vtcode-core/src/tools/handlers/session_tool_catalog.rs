@@ -367,7 +367,16 @@ pub(crate) fn unified_exec_parameters() -> Value {
     json!({
         "type": "object",
         "properties": {
-            "command": {"type": "string", "description": "Raw command (no shell redirections)."},
+            "command": {
+                "description": "Command as a shell string or argv array.",
+                "anyOf": [
+                    {"type": "string"},
+                    {
+                        "type": "array",
+                        "items": {"type": "string"}
+                    }
+                ]
+            },
             "input": {"type": "string", "description": "stdin content for write action."},
             "session_id": {"type": "string", "description": "Session id for write/poll/continue/inspect/close."},
             "spool_path": {"type": "string", "description": "Spool file path for inspect action."},
@@ -748,6 +757,18 @@ mod tests {
 
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0].tool_type, "function");
+    }
+
+    #[test]
+    fn unified_exec_schema_accepts_string_or_array_commands() {
+        let params = unified_exec_parameters();
+        let command = &params["properties"]["command"];
+        let variants = command["anyOf"].as_array().expect("command anyOf");
+
+        assert_eq!(variants.len(), 2);
+        assert_eq!(variants[0]["type"], "string");
+        assert_eq!(variants[1]["type"], "array");
+        assert_eq!(variants[1]["items"]["type"], "string");
     }
 
     #[test]

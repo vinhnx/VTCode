@@ -830,8 +830,8 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         let active_pty_sessions_before_cancel = tool_registry.active_pty_sessions();
                         let attempted_tool_calls = harness_state.tool_calls;
                         let timed_out_phase = harness_state.phase;
-                        if let Err(err) = tool_registry.terminate_all_pty_sessions_async().await {
-                            tracing::warn!(error = %err, "Failed to terminate all PTY sessions after turn timeout");
+                        if let Err(err) = tool_registry.terminate_all_exec_sessions_async().await {
+                            tracing::warn!(error = %err, "Failed to terminate all exec sessions after turn timeout");
                         }
                         let execution_history_len_after_attempt =
                             tool_registry.execution_history_len();

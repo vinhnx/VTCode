@@ -132,7 +132,7 @@ pub(super) fn builtin_tool_registrations(
         ToolRegistration::new(
             tools::UNIFIED_EXEC,
             CapabilityLevel::Bash,
-            true,
+            false,
             ToolRegistry::unified_exec_executor,
         )
         .with_description(
@@ -224,22 +224,29 @@ pub(super) fn builtin_tool_registrations(
         ToolRegistration::new(
             tools::RUN_PTY_CMD,
             CapabilityLevel::Bash,
-            true,
+            false,
             ToolRegistry::run_pty_cmd_executor,
         )
         .with_llm_visibility(false),
         ToolRegistration::new(
             tools::SEND_PTY_INPUT,
             CapabilityLevel::Bash,
-            true,
+            false,
             ToolRegistry::send_pty_input_executor,
         )
         .with_llm_visibility(false),
         ToolRegistration::new(
             tools::READ_PTY_SESSION,
             CapabilityLevel::Bash,
-            true,
+            false,
             ToolRegistry::read_pty_session_executor,
+        )
+        .with_llm_visibility(false),
+        ToolRegistration::new(
+            tools::CREATE_PTY_SESSION,
+            CapabilityLevel::Bash,
+            false,
+            ToolRegistry::create_pty_session_executor,
         )
         .with_llm_visibility(false),
         ToolRegistration::new(

@@ -22,7 +22,7 @@ fn required_args_for_tool(tool_name: &str) -> &'static [&'static str] {
         tool_names::READ_FILE => &["path"],
         tool_names::WRITE_FILE => &["path", "content"],
         tool_names::EDIT_FILE => &["path", "old_str", "new_str"],
-        tool_names::RUN_PTY_CMD => &["command"],
+        tool_names::RUN_PTY_CMD | tool_names::CREATE_PTY_SESSION => &["command"],
         tool_names::APPLY_PATCH => &["patch"],
         _ => &[],
     }
@@ -139,7 +139,10 @@ fn preflight_validation_args<'a>(
 ) -> Result<std::borrow::Cow<'a, Value>> {
     if matches!(
         normalized_tool_name,
-        tool_names::RUN_PTY_CMD | tool_names::UNIFIED_EXEC | "shell"
+        tool_names::RUN_PTY_CMD
+            | tool_names::CREATE_PTY_SESSION
+            | tool_names::UNIFIED_EXEC
+            | "shell"
     ) {
         let normalized = crate::tools::command_args::normalize_shell_args(args)
             .map_err(|error| anyhow!(error))?;
@@ -194,6 +197,7 @@ pub(super) fn preflight_validate_resolved_call(
     }
 
     let should_validate_command = normalized_tool_name == tool_names::RUN_PTY_CMD
+        || normalized_tool_name == tool_names::CREATE_PTY_SESSION
         || normalized_tool_name == tool_names::UNIFIED_EXEC
         || normalized_tool_name == "shell";
     if should_validate_command

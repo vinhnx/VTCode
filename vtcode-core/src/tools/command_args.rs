@@ -127,7 +127,6 @@ pub fn interactive_input_text(args: &Value) -> Option<&str> {
         .and_then(Value::as_str)
         .or_else(|| args.get("chars").and_then(Value::as_str))
         .or_else(|| args.get("text").and_then(Value::as_str))
-        .map(str::trim)
         .filter(|value| !value.is_empty())
 }
 
@@ -176,6 +175,18 @@ pub fn normalize_shell_args(args: &Value) -> Result<Value, &'static str> {
         } else if let Some(input) = payload.get("text").cloned() {
             payload.insert("input".to_string(), input);
         }
+    }
+
+    if payload.get("max_tokens").is_none()
+        && let Some(max_output_tokens) = payload.get("max_output_tokens").cloned()
+    {
+        payload.insert("max_tokens".to_string(), max_output_tokens);
+    }
+
+    if payload.get("max_output_tokens").is_none()
+        && let Some(max_tokens) = payload.get("max_tokens").cloned()
+    {
+        payload.insert("max_output_tokens".to_string(), max_tokens);
     }
 
     Ok(normalized)
@@ -293,10 +304,10 @@ mod tests {
     }
 
     #[test]
-    fn interactive_input_text_trims_whitespace() {
+    fn interactive_input_text_preserves_whitespace() {
         assert_eq!(
             interactive_input_text(&json!({"chars": "  echo hi\n"})),
-            Some("echo hi")
+            Some("  echo hi\n")
         );
     }
 
@@ -336,6 +347,42 @@ mod tests {
         assert_eq!(
             normalized.get("input").and_then(Value::as_str),
             Some("status\n")
+        );
+    }
+
+    #[test]
+    fn normalize_shell_args_copies_max_output_tokens_to_max_tokens() {
+        let normalized = normalize_shell_args(&json!({
+            "command": "echo hi",
+            "max_output_tokens": 42
+        }))
+        .expect("valid shell args");
+
+        assert_eq!(
+            normalized.get("max_output_tokens").and_then(Value::as_u64),
+            Some(42)
+        );
+        assert_eq!(
+            normalized.get("max_tokens").and_then(Value::as_u64),
+            Some(42)
+        );
+    }
+
+    #[test]
+    fn normalize_shell_args_copies_max_tokens_to_max_output_tokens() {
+        let normalized = normalize_shell_args(&json!({
+            "command": "echo hi",
+            "max_tokens": 42
+        }))
+        .expect("valid shell args");
+
+        assert_eq!(
+            normalized.get("max_tokens").and_then(Value::as_u64),
+            Some(42)
+        );
+        assert_eq!(
+            normalized.get("max_output_tokens").and_then(Value::as_u64),
+            Some(42)
         );
     }
 }

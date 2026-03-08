@@ -380,7 +380,7 @@ impl ResultScorer for ShellScorer {
                     metadata.completeness = ResultCompleteness::Empty;
                 }
 
-                if let Some(output) = map.get("stdout")
+                if let Some(output) = map.get("output").or_else(|| map.get("stdout"))
                     && let Some(s) = output.as_str()
                 {
                     metadata.result_count = s.lines().count();

@@ -421,13 +421,15 @@ mod tests {
 
         // Test creating a PTY session
         let args = serde_json::json!({
-            "session_id": "test_session",
-            "command": "echo"
+            "command": "cat",
+            "yield_time_ms": 10
         });
 
         let result = registry.execute_tool("create_pty_session", args).await;
         assert!(result.is_ok());
         let response: serde_json::Value = result.expect("Failed to create PTY session");
+        assert_eq!(response["success"], true);
+        assert_eq!(response["is_exited"], false);
         let session_id = response["session_id"]
             .as_str()
             .expect("create_pty_session should return a session id")

@@ -65,8 +65,10 @@ impl ToolRegistry {
         register_builtin_tools(&inventory, &plan_mode_state);
 
         let pty_sessions = pty::PtySessionManager::new(workspace_root.clone(), pty_config);
-        let pipe_sessions =
-            crate::tools::exec_session::PipeSessionManager::new(workspace_root.clone());
+        let exec_sessions = crate::tools::exec_session::ExecSessionManager::new(
+            workspace_root.clone(),
+            pty_sessions.clone(),
+        );
 
         let policy_gateway = match policy_manager {
             Some(pm) => ToolPolicyGateway::with_policy_manager(pm),
@@ -83,7 +85,7 @@ impl ToolRegistry {
             inventory,
             policy_gateway: Arc::new(tokio::sync::RwLock::new(policy_gateway)),
             pty_sessions,
-            pipe_sessions,
+            exec_sessions,
             mcp_client: Arc::new(RwLock::new(None)),
             mcp_tool_index: Arc::new(tokio::sync::RwLock::new(rustc_hash::FxHashMap::default())),
             mcp_reverse_index: Arc::new(tokio::sync::RwLock::new(rustc_hash::FxHashMap::default())),

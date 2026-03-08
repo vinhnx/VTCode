@@ -881,6 +881,19 @@ fn is_valid_pty_session_id(session_id: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
+fn validate_exec_session_id<'a>(raw_session_id: &'a str, context: &str) -> Result<&'a str> {
+    let session_id = raw_session_id.trim();
+    if is_valid_pty_session_id(session_id) {
+        Ok(session_id)
+    } else {
+        Err(anyhow!(
+            "Invalid session_id for {}: '{}'. Expected an ASCII token (letters, digits, '-', '_').",
+            context,
+            raw_session_id
+        ))
+    }
+}
+
 fn build_session_command_display_parts(command: &str, args: &[String]) -> String {
     if let Some(flag_index) = args
         .iter()
@@ -983,12 +996,43 @@ fn build_read_pty_fallback_args(args: &Value, error_message: &str) -> Option<Val
 const DEFAULT_INSPECT_HEAD_LINES: usize = 30;
 const DEFAULT_INSPECT_TAIL_LINES: usize = 30;
 const DEFAULT_INSPECT_MAX_MATCHES: usize = 200;
+const MIN_EXEC_YIELD_MS: u64 = 250;
+const MAX_EXEC_YIELD_MS: u64 = 30_000;
 
 fn attach_pty_continuation(response: &mut Value, session_id: &str, include_follow_up_prompt: bool) {
     if include_follow_up_prompt {
         response["follow_up_prompt"] = json!(NEXT_CONTINUE_PROMPT);
     }
     response["next_continue_args"] = PtyContinuationArgs::new(session_id).to_value();
+}
+
+fn clamp_exec_yield_ms(value: Option<u64>, default: u64) -> u64 {
+    value
+        .unwrap_or(default)
+        .clamp(MIN_EXEC_YIELD_MS, MAX_EXEC_YIELD_MS)
+}
+
+fn clamp_peek_yield_ms(value: Option<u64>) -> u64 {
+    value.unwrap_or(0).min(MAX_EXEC_YIELD_MS)
+}
+
+fn max_output_tokens_from_payload(payload: &serde_json::Map<String, Value>) -> Option<usize> {
+    payload
+        .get("max_output_tokens")
+        .or_else(|| payload.get("max_tokens"))
+        .and_then(Value::as_u64)
+        .map(|value| value as usize)
+}
+
+fn truncate_exec_output(output: &mut String, max_tokens: usize) -> bool {
+    let max_output_len = max_tokens.saturating_mul(4);
+    if max_tokens > 0 && output.len() > max_output_len {
+        output.truncate(max_output_len);
+        output.push_str("\n[Output truncated]");
+        true
+    } else {
+        false
+    }
 }
 
 fn clamp_inspect_lines(value: Option<u64>, default: usize) -> usize {
@@ -1519,23 +1563,89 @@ impl ToolRegistry {
     }
 
     pub(super) fn run_pty_cmd_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_command_session_run_pty(args).await })
+        Box::pin(async move {
+            let mut args = crate::tools::command_args::normalize_shell_args(&args)
+                .map_err(|error| anyhow!(error))?;
+            if let Some(payload) = args.as_object_mut() {
+                payload
+                    .entry("action".to_string())
+                    .or_insert_with(|| json!("run"));
+                payload
+                    .entry("tty".to_string())
+                    .or_insert_with(|| json!(true));
+            }
+            self.execute_unified_exec(args)
+                .await
+                .map(super::normalize_tool_output)
+        })
     }
 
     pub(super) fn send_pty_input_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_command_session_write(args).await })
+        Box::pin(async move {
+            let mut args = args;
+            if let Some(payload) = args.as_object_mut() {
+                payload
+                    .entry("action".to_string())
+                    .or_insert_with(|| json!("write"));
+            }
+            self.execute_unified_exec(args)
+                .await
+                .map(super::normalize_tool_output)
+        })
     }
 
     pub(super) fn read_pty_session_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_command_session_poll(args).await })
+        Box::pin(async move {
+            let mut args = args;
+            if let Some(payload) = args.as_object_mut() {
+                payload
+                    .entry("action".to_string())
+                    .or_insert_with(|| json!("poll"));
+            }
+            self.execute_unified_exec(args)
+                .await
+                .map(super::normalize_tool_output)
+        })
+    }
+
+    pub(super) fn create_pty_session_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move {
+            let mut args = crate::tools::command_args::normalize_shell_args(&args)
+                .map_err(|error| anyhow!(error))?;
+            if let Some(payload) = args.as_object_mut() {
+                payload
+                    .entry("action".to_string())
+                    .or_insert_with(|| json!("run"));
+                payload
+                    .entry("tty".to_string())
+                    .or_insert_with(|| json!(true));
+            }
+            self.execute_unified_exec(args)
+                .await
+                .map(super::normalize_tool_output)
+        })
     }
 
     pub(super) fn list_pty_sessions_executor(&self, _args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_command_session_list().await })
+        Box::pin(async move {
+            self.execute_unified_exec(json!({"action": "list"}))
+                .await
+                .map(super::normalize_tool_output)
+        })
     }
 
     pub(super) fn close_pty_session_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_command_session_close(args).await })
+        Box::pin(async move {
+            let mut args = args;
+            if let Some(payload) = args.as_object_mut() {
+                payload
+                    .entry("action".to_string())
+                    .or_insert_with(|| json!("close"));
+            }
+            self.execute_unified_exec(args)
+                .await
+                .map(super::normalize_tool_output)
+        })
     }
 
     pub(super) fn get_errors_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
@@ -1639,10 +1749,7 @@ impl ToolRegistry {
             };
 
         // Use explicit max_tokens if provided, otherwise check if command suggests a limit
-        let max_tokens = payload
-            .get("max_tokens")
-            .and_then(|v| v.as_u64())
-            .map(|v| v as usize)
+        let max_tokens = max_output_tokens_from_payload(payload)
             .or_else(|| suggest_max_tokens_for_command(&display_command))
             .unwrap_or(crate::config::constants::defaults::DEFAULT_PTY_OUTPUT_MAX_TOKENS);
         let inspect_query = payload
@@ -1669,11 +1776,10 @@ impl ToolRegistry {
             additional_permissions.as_ref(),
         )?;
 
-        let yield_duration = payload
-            .get("yield_time_ms")
-            .and_then(|v| v.as_u64())
-            .map(Duration::from_millis)
-            .unwrap_or(Duration::from_secs(10));
+        let yield_duration = Duration::from_millis(clamp_exec_yield_ms(
+            payload.get("yield_time_ms").and_then(Value::as_u64),
+            10_000,
+        ));
 
         let mut session_env = HashMap::new();
         let mut zsh_exec_bridge = None;
@@ -1686,72 +1792,36 @@ impl ToolRegistry {
             zsh_exec_bridge = Some(bridge);
         }
 
-        let _session_guard = self
-            .start_pty_session()
+        let session_id = generate_session_id("run");
+        let session_metadata = self
+            .exec_sessions
+            .create_pty_session(
+                session_id.clone(),
+                command,
+                working_dir_path,
+                portable_pty::PtySize {
+                    rows,
+                    cols,
+                    pixel_width: 0,
+                    pixel_height: 0,
+                },
+                session_env,
+                zsh_exec_bridge,
+            )
+            .await
             .context("Maximum PTY sessions reached; cannot start new session")?;
-
         self.increment_active_pty_sessions();
 
-        let session_id = generate_session_id("run");
-
-        let session_metadata = self.pty_manager().create_session_with_bridge(
-            session_id.clone(),
-            command,
-            working_dir_path,
-            portable_pty::PtySize {
-                rows,
-                cols,
-                pixel_width: 0,
-                pixel_height: 0,
-            },
-            session_env,
-            zsh_exec_bridge,
-        )?;
-
-        let mut output = String::new();
-        let mut truncated = false;
-        let max_output_len = max_tokens.saturating_mul(4);
-        let timeout_seconds = self.pty_config().command_timeout_seconds;
-        let mut exit_code = None;
-        let start = Instant::now();
-        let allow_polling = !yield_duration.is_zero();
-
-        loop {
-            if timeout_seconds > 0 && start.elapsed() >= Duration::from_secs(timeout_seconds) {
-                break;
-            }
-
-            let remaining = if timeout_seconds > 0 {
-                Duration::from_secs(timeout_seconds).saturating_sub(start.elapsed())
-            } else {
-                yield_duration
-            };
-            let wait_duration = if allow_polling {
-                yield_duration.min(remaining)
-            } else {
-                Duration::ZERO
-            };
-
-            let capture = self.wait_for_pty_yield(&session_id, wait_duration).await;
-            if !truncated {
-                let cleaned_output = filter_pty_output(&strip_ansi(&capture.output));
-                output.push_str(&cleaned_output);
-                if max_tokens > 0 && output.len() > max_output_len {
-                    output.truncate(max_output_len);
-                    output.push_str("\n[Output truncated]");
-                    truncated = true;
-                }
-            }
-
-            if let Some(code) = capture.exit_code {
-                exit_code = Some(code);
-                break;
-            }
-
-            if !allow_polling {
-                break;
-            }
-        }
+        let capture = self
+            .wait_for_exec_yield(
+                &session_id,
+                yield_duration,
+                Some(crate::config::constants::tools::UNIFIED_EXEC),
+                true,
+            )
+            .await;
+        let mut output = filter_pty_output(&strip_ansi(&capture.output));
+        let truncated = truncate_exec_output(&mut output, max_tokens);
 
         let mut matched_count = None;
         let mut query_truncated = false;
@@ -1763,8 +1833,9 @@ impl ToolRegistry {
             query_truncated = truncated_matches;
         }
 
-        let wall_time = start.elapsed().as_secs_f64();
+        let wall_time = capture.duration.as_secs_f64();
         let mut response = json!({
+            "success": true,
             "output": output,
             "wall_time": wall_time,
         });
@@ -1772,17 +1843,16 @@ impl ToolRegistry {
             response["matched_count"] = json!(count);
             response["query_truncated"] = json!(query_truncated);
         }
-        let exec_session = VTCodeExecSession::from(session_metadata);
         attach_exec_response_context(
             &mut response,
-            &exec_session,
+            &session_metadata,
             &requested_command_display,
-            exit_code.is_some(),
+            capture.exit_code.is_some(),
         );
 
-        if let Some(code) = exit_code {
+        if let Some(code) = capture.exit_code {
             response["exit_code"] = json!(code);
-            self.decrement_active_pty_sessions();
+            self.prune_completed_exec_session(&session_id).await?;
         } else {
             response["process_id"] = json!(session_id);
         }
@@ -1790,7 +1860,7 @@ impl ToolRegistry {
         if truncated {
             response["truncated"] = json!(true);
         }
-        if truncated || exit_code.is_none() {
+        if truncated || capture.exit_code.is_none() {
             attach_pty_continuation(&mut response, &session_id, true);
         }
         if is_git_diff {
@@ -1883,10 +1953,7 @@ impl ToolRegistry {
                 shell_words::join(requested_command.iter().map(|part| part.as_str()))
             };
 
-        let max_tokens = payload
-            .get("max_tokens")
-            .and_then(|v| v.as_u64())
-            .map(|v| v as usize)
+        let max_tokens = max_output_tokens_from_payload(payload)
             .or_else(|| suggest_max_tokens_for_command(&display_command))
             .unwrap_or(crate::config::constants::defaults::DEFAULT_PTY_OUTPUT_MAX_TOKENS);
         let inspect_query = payload
@@ -1913,28 +1980,28 @@ impl ToolRegistry {
             additional_permissions.as_ref(),
         )?;
 
-        let yield_duration = payload
-            .get("yield_time_ms")
-            .and_then(|v| v.as_u64())
-            .map(Duration::from_millis)
-            .unwrap_or(Duration::from_secs(10));
+        let yield_duration = Duration::from_millis(clamp_exec_yield_ms(
+            payload.get("yield_time_ms").and_then(Value::as_u64),
+            10_000,
+        ));
 
         let session_id = generate_session_id("run");
         let session_env = self.build_pipe_session_env(&shell_program, HashMap::new());
         let session_metadata = self
-            .pipe_sessions
-            .create_session(session_id.clone(), command, working_dir_path, session_env)
+            .exec_sessions
+            .create_pipe_session(session_id.clone(), command, working_dir_path, session_env)
             .await?;
 
-        let capture = self.wait_for_pipe_yield(&session_id, yield_duration).await;
+        let capture = self
+            .wait_for_exec_yield(
+                &session_id,
+                yield_duration,
+                Some(crate::config::constants::tools::UNIFIED_EXEC),
+                true,
+            )
+            .await;
         let mut output = filter_pty_output(&strip_ansi(&capture.output));
-        let mut truncated = false;
-        let max_output_len = max_tokens.saturating_mul(4);
-        if max_tokens > 0 && output.len() > max_output_len {
-            output.truncate(max_output_len);
-            output.push_str("\n[Output truncated]");
-            truncated = true;
-        }
+        let truncated = truncate_exec_output(&mut output, max_tokens);
 
         let mut matched_count = None;
         let mut query_truncated = false;
@@ -1948,6 +2015,7 @@ impl ToolRegistry {
 
         let wall_time = capture.duration.as_secs_f64();
         let mut response = json!({
+            "success": true,
             "output": output,
             "wall_time": wall_time,
         });
@@ -1965,6 +2033,7 @@ impl ToolRegistry {
 
         if let Some(code) = capture.exit_code {
             response["exit_code"] = json!(code);
+            self.prune_completed_exec_session(&session_id).await?;
         } else {
             response["process_id"] = json!(session_id);
         }
@@ -1990,27 +2059,15 @@ impl ToolRegistry {
 
         let raw_sid = crate::tools::command_args::session_id_text(&args)
             .ok_or_else(|| anyhow!("session_id is required for command session write"))?;
-        let sid = raw_sid.trim();
-
-        if !is_valid_pty_session_id(sid) {
-            return Err(anyhow!(
-                "Invalid session_id for command session write: '{}'. Expected an ASCII token (letters, digits, '-', '_').",
-                raw_sid
-            ));
-        }
+        let sid = validate_exec_session_id(raw_sid, "command session write")?;
 
         let input = crate::tools::command_args::interactive_input_text(&args)
             .ok_or_else(|| anyhow!("input is required for command session write"))?;
 
-        let yield_time_ms = payload
-            .get("yield_time_ms")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(250);
+        let yield_time_ms =
+            clamp_exec_yield_ms(payload.get("yield_time_ms").and_then(Value::as_u64), 250);
 
-        let max_tokens = payload
-            .get("max_tokens")
-            .and_then(|v| v.as_u64())
-            .map(|v| v as usize)
+        let max_tokens = max_output_tokens_from_payload(payload)
             .unwrap_or(crate::config::constants::defaults::DEFAULT_PTY_OUTPUT_MAX_TOKENS);
         let session_metadata = self.exec_session_metadata(sid).await?;
         let session_command = build_exec_session_command_display(&session_metadata);
@@ -2022,20 +2079,16 @@ impl ToolRegistry {
             .wait_for_exec_yield(
                 sid,
                 Duration::from_millis(yield_time_ms),
-                crate::config::constants::tools::UNIFIED_EXEC,
+                Some(crate::config::constants::tools::UNIFIED_EXEC),
+                true,
             )
             .await;
 
         let mut output = filter_pty_output(&strip_ansi(&capture.output));
-        let mut truncated = false;
-
-        if max_tokens > 0 && output.len() > max_tokens * 4 {
-            output.truncate(max_tokens * 4);
-            output.push_str("\n[Output truncated]");
-            truncated = true;
-        }
+        let truncated = truncate_exec_output(&mut output, max_tokens);
 
         let mut response = json!({
+            "success": true,
             "output": output,
             "wall_time": capture.duration.as_secs_f64(),
         });
@@ -2048,9 +2101,7 @@ impl ToolRegistry {
 
         if let Some(code) = capture.exit_code {
             response["exit_code"] = json!(code);
-            if is_pty_exec_session(&session_metadata) {
-                self.decrement_active_pty_sessions();
-            }
+            self.prune_completed_exec_session(sid).await?;
         }
 
         if truncated {
@@ -2070,33 +2121,26 @@ impl ToolRegistry {
 
         let raw_sid = crate::tools::command_args::session_id_text(&args)
             .ok_or_else(|| anyhow!("session_id is required for command session read"))?;
-        let sid = raw_sid.trim();
-
-        if !is_valid_pty_session_id(sid) {
-            return Err(anyhow!(
-                "Invalid session_id for command session read: '{}'. Expected an ASCII token (letters, digits, '-', '_').",
-                raw_sid
-            ));
-        }
+        let sid = validate_exec_session_id(raw_sid, "command session read")?;
         let session_metadata = self.exec_session_metadata(sid).await?;
         let session_command = build_exec_session_command_display(&session_metadata);
 
-        let yield_time_ms = payload
-            .get("yield_time_ms")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(1000);
+        let yield_time_ms =
+            clamp_exec_yield_ms(payload.get("yield_time_ms").and_then(Value::as_u64), 1000);
 
         let capture = self
             .wait_for_exec_yield(
                 sid,
                 Duration::from_millis(yield_time_ms),
-                crate::config::constants::tools::UNIFIED_EXEC,
+                Some(crate::config::constants::tools::UNIFIED_EXEC),
+                true,
             )
             .await;
 
         let output = filter_pty_output(&strip_ansi(&capture.output));
 
         let mut response = json!({
+            "success": true,
             "output": output,
             "wall_time": capture.duration.as_secs_f64(),
         });
@@ -2109,9 +2153,7 @@ impl ToolRegistry {
 
         if let Some(code) = capture.exit_code {
             response["exit_code"] = json!(code);
-            if is_pty_exec_session(&session_metadata) {
-                self.decrement_active_pty_sessions();
-            }
+            self.prune_completed_exec_session(sid).await?;
         } else {
             attach_pty_continuation(&mut response, sid, false);
         }
@@ -2174,30 +2216,19 @@ impl ToolRegistry {
                 format!("Failed to read inspect spool path: {}", resolved.display())
             })?
         } else if let Some(session_id) = source_session_id.as_deref() {
-            if !is_valid_pty_session_id(session_id) {
-                return Err(anyhow!(
-                    "Invalid session_id for inspect: '{}'. Expected an ASCII token (letters, digits, '-', '_').",
-                    session_id
-                ));
-            }
+            let session_id = validate_exec_session_id(session_id, "inspect")?;
 
-            let mut read_args = serde_json::Map::new();
-            read_args.insert("session_id".to_string(), json!(session_id));
-            if let Some(yield_time_ms) = payload.get("yield_time_ms").cloned() {
-                read_args.insert("yield_time_ms".to_string(), yield_time_ms);
-            } else {
-                read_args.insert("yield_time_ms".to_string(), json!(0));
-            }
-
-            let read_result = self
-                .execute_command_session_poll(Value::Object(read_args))
-                .await
-                .context("Failed to inspect command session output")?;
-            read_result
-                .get("output")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_string()
+            let yield_time_ms =
+                clamp_peek_yield_ms(payload.get("yield_time_ms").and_then(Value::as_u64));
+            let capture = self
+                .wait_for_exec_yield(
+                    session_id,
+                    Duration::from_millis(yield_time_ms),
+                    None,
+                    false,
+                )
+                .await;
+            filter_pty_output(&strip_ansi(&capture.output))
         } else {
             return Err(anyhow!(
                 "inspect requires either `session_id` or `spool_path`"
@@ -2214,10 +2245,10 @@ impl ToolRegistry {
         };
 
         let mut response = json!({
+            "success": true,
             "output": output,
             "matched_count": matched_count,
             "truncated": truncated,
-            "success": true,
             "content_type": "exec_inspect"
         });
         if let Some(session_id) = source_session_id {
@@ -2232,7 +2263,7 @@ impl ToolRegistry {
 
     async fn execute_command_session_list(&self) -> Result<Value> {
         let sessions = self.list_exec_sessions().await;
-        Ok(json!({ "sessions": sessions }))
+        Ok(json!({ "success": true, "sessions": sessions }))
     }
 
     async fn execute_command_session_close(&self, args: Value) -> Result<Value> {
@@ -2242,11 +2273,10 @@ impl ToolRegistry {
 
         let sid = crate::tools::command_args::session_id_text(&args)
             .ok_or_else(|| anyhow!("session_id is required for command session close"))?;
+        let sid = validate_exec_session_id(sid, "command session close")?;
 
         let session_metadata = self.close_exec_session(sid).await?;
-        if is_pty_exec_session(&session_metadata) {
-            self.decrement_active_pty_sessions();
-        }
+        self.handle_closed_exec_session(&session_metadata);
 
         Ok(json!({
             "success": true,
@@ -2323,24 +2353,11 @@ impl ToolRegistry {
     }
 
     async fn exec_session_metadata(&self, session_id: &str) -> Result<VTCodeExecSession> {
-        if self.pipe_sessions.has_session(session_id).await {
-            return self.pipe_sessions.snapshot_session(session_id).await;
-        }
-        self.pty_manager()
-            .snapshot_session(session_id)
-            .map(VTCodeExecSession::from)
+        self.exec_sessions.snapshot_session(session_id).await
     }
 
     async fn list_exec_sessions(&self) -> Vec<VTCodeExecSession> {
-        let mut sessions: Vec<VTCodeExecSession> = self
-            .pty_manager()
-            .list_sessions()
-            .into_iter()
-            .map(VTCodeExecSession::from)
-            .collect();
-        sessions.extend(self.pipe_sessions.list_sessions().await);
-        sessions.sort_by(|left, right| left.id.cmp(&right.id));
-        sessions
+        self.exec_sessions.list_sessions().await
     }
 
     async fn read_exec_session_output(
@@ -2348,13 +2365,9 @@ impl ToolRegistry {
         session_id: &str,
         drain: bool,
     ) -> Result<Option<String>> {
-        if self.pipe_sessions.has_session(session_id).await {
-            return self
-                .pipe_sessions
-                .read_session_output(session_id, drain)
-                .await;
-        }
-        self.pty_manager().read_session_output(session_id, drain)
+        self.exec_sessions
+            .read_session_output(session_id, drain)
+            .await
     }
 
     async fn send_input_to_exec_session(
@@ -2363,30 +2376,30 @@ impl ToolRegistry {
         data: &[u8],
         append_newline: bool,
     ) -> Result<usize> {
-        if self.pipe_sessions.has_session(session_id).await {
-            return self
-                .pipe_sessions
-                .send_input_to_session(session_id, data, append_newline)
-                .await;
-        }
-        self.pty_manager()
+        self.exec_sessions
             .send_input_to_session(session_id, data, append_newline)
+            .await
     }
 
     async fn exec_session_completed(&self, session_id: &str) -> Result<Option<i32>> {
-        if self.pipe_sessions.has_session(session_id).await {
-            return self.pipe_sessions.is_session_completed(session_id).await;
-        }
-        self.pty_manager().is_session_completed(session_id)
+        self.exec_sessions.is_session_completed(session_id).await
     }
 
     async fn close_exec_session(&self, session_id: &str) -> Result<VTCodeExecSession> {
-        if self.pipe_sessions.has_session(session_id).await {
-            return self.pipe_sessions.close_session(session_id).await;
+        self.exec_sessions.close_session(session_id).await
+    }
+
+    fn handle_closed_exec_session(&self, session_metadata: &VTCodeExecSession) {
+        if is_pty_exec_session(session_metadata) {
+            self.decrement_active_pty_sessions();
         }
-        self.pty_manager()
-            .close_session(session_id)
-            .map(VTCodeExecSession::from)
+    }
+
+    async fn prune_completed_exec_session(&self, session_id: &str) -> Result<()> {
+        if let Some(session_metadata) = self.exec_sessions.prune_exited_session(session_id).await? {
+            self.handle_closed_exec_session(&session_metadata);
+        }
+        Ok(())
     }
 
     async fn execute_agent_info(&self) -> Result<Value> {
@@ -2495,9 +2508,11 @@ impl ToolRegistry {
         &self,
         session_id: &str,
         yield_duration: Duration,
-        tool_name: &str,
+        tool_name: Option<&str>,
+        drain_output: bool,
     ) -> PtyEphemeralCapture {
         let mut output = String::new();
+        let mut peeked_bytes = 0usize;
         let start = Instant::now();
         let poll_interval = Duration::from_millis(50);
 
@@ -2511,13 +2526,16 @@ impl ToolRegistry {
 
         loop {
             if let Ok(Some(code)) = self.exec_session_completed(session_id).await {
-                if let Ok(Some(final_output)) =
-                    self.read_exec_session_output(session_id, true).await
+                if let Ok(Some(final_output)) = self
+                    .next_exec_session_output(session_id, drain_output, &mut peeked_bytes)
+                    .await
                 {
                     output.push_str(&final_output);
 
                     // Stream final output to TUI
-                    if let Some(ref callback) = progress_callback {
+                    if let Some(tool_name) = tool_name
+                        && let Some(ref callback) = progress_callback
+                    {
                         pending_lines.push_str(&final_output);
                         if !pending_lines.is_empty() {
                             callback(tool_name, &pending_lines);
@@ -2531,12 +2549,19 @@ impl ToolRegistry {
                 };
             }
 
-            if let Ok(Some(new_output)) = self.read_exec_session_output(session_id, true).await {
+            if let Ok(Some(new_output)) = self
+                .next_exec_session_output(session_id, drain_output, &mut peeked_bytes)
+                .await
+            {
                 output.push_str(&new_output);
-                pending_lines.push_str(&new_output);
+                if tool_name.is_some() {
+                    pending_lines.push_str(&new_output);
+                }
 
                 // Stream output to TUI with throttling
-                if let Some(ref callback) = progress_callback {
+                if let Some(tool_name) = tool_name
+                    && let Some(ref callback) = progress_callback
+                {
                     let now = Instant::now();
                     // Flush pending lines if interval elapsed or if we have a complete line
                     if (now.duration_since(last_ui_update) >= ui_update_interval
@@ -2552,7 +2577,8 @@ impl ToolRegistry {
 
             if start.elapsed() >= yield_duration {
                 // Flush any remaining pending lines
-                if let Some(ref callback) = progress_callback
+                if let Some(tool_name) = tool_name
+                    && let Some(ref callback) = progress_callback
                     && !pending_lines.is_empty()
                 {
                     callback(tool_name, &pending_lines);
@@ -2568,30 +2594,40 @@ impl ToolRegistry {
         }
     }
 
-    async fn wait_for_pty_yield(
+    async fn next_exec_session_output(
         &self,
         session_id: &str,
-        yield_duration: Duration,
-    ) -> PtyEphemeralCapture {
-        self.wait_for_exec_yield(
-            session_id,
-            yield_duration,
-            crate::config::constants::tools::UNIFIED_EXEC,
-        )
-        .await
-    }
+        drain_output: bool,
+        peeked_bytes: &mut usize,
+    ) -> Result<Option<String>> {
+        let Some(output) = self
+            .read_exec_session_output(session_id, drain_output)
+            .await?
+        else {
+            return Ok(None);
+        };
+        if drain_output {
+            return Ok(Some(output));
+        }
+        if output.len() <= *peeked_bytes {
+            return Ok(None);
+        }
 
-    async fn wait_for_pipe_yield(
-        &self,
-        session_id: &str,
-        yield_duration: Duration,
-    ) -> PtyEphemeralCapture {
-        self.wait_for_exec_yield(
-            session_id,
-            yield_duration,
-            crate::config::constants::tools::UNIFIED_EXEC,
-        )
-        .await
+        let next = output
+            .get(*peeked_bytes..)
+            .ok_or_else(|| {
+                anyhow!(
+                    "exec session '{}' output boundary became invalid",
+                    session_id
+                )
+            })?
+            .to_string();
+        *peeked_bytes = output.len();
+        if next.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(next))
+        }
     }
 }
 
