@@ -188,8 +188,8 @@ impl Default for SafetyGatewayConfig {
 /// Rate limiter state (shared across async contexts)
 #[derive(Debug, Default)]
 struct RateLimiterState {
-    calls_per_second: Vec<Instant>,
-    calls_per_minute: Vec<Instant>,
+    calls_per_second: std::collections::VecDeque<Instant>,
+    calls_per_minute: std::collections::VecDeque<Instant>,
     current_turn_count: usize,
     session_count: usize,
 }
@@ -212,7 +212,7 @@ pub struct SafetyGateway {
     dotfile_guardian: Option<Arc<DotfileGuardian>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct FileAccessTarget {
     path: PathBuf,
     access_type: AccessType,
@@ -235,11 +235,14 @@ fn push_file_access_target(
     path: &str,
     access_type: AccessType,
 ) {
-    if path.trim().is_empty() {
+    let path_str = path.trim();
+    if path_str.is_empty() {
         return;
     }
 
-    let path = PathBuf::from(path);
+    let path = PathBuf::from(path_str);
+    // For small number of targets, linear search is faster than HashSet.
+    // In large patches, we'll use a local HashSet in patch_file_access_targets.
     if targets
         .iter()
         .any(|existing| existing.path == path && existing.access_type == access_type)
@@ -284,27 +287,40 @@ fn patch_file_access_targets(args: &Value) -> Vec<FileAccessTarget> {
         return Vec::new();
     };
 
-    let mut targets = Vec::new();
+    // Use HashSet for large patches to avoid O(N^2) (KISS/DRY/Perf)
+    let mut targets_set = HashSet::new();
     for operation in patch.operations() {
         match operation {
             PatchOperation::AddFile { path, .. } => {
-                push_file_access_target(&mut targets, path, AccessType::Write);
+                targets_set.insert(FileAccessTarget {
+                    path: PathBuf::from(path),
+                    access_type: AccessType::Write,
+                });
             }
             PatchOperation::DeleteFile { path } => {
-                push_file_access_target(&mut targets, path, AccessType::Delete);
+                targets_set.insert(FileAccessTarget {
+                    path: PathBuf::from(path),
+                    access_type: AccessType::Delete,
+                });
             }
             PatchOperation::UpdateFile { path, new_path, .. } => {
-                push_file_access_target(&mut targets, path, AccessType::Modify);
+                targets_set.insert(FileAccessTarget {
+                    path: PathBuf::from(path),
+                    access_type: AccessType::Modify,
+                });
                 if let Some(destination) =
                     new_path.as_deref().filter(|candidate| *candidate != path)
                 {
-                    push_file_access_target(&mut targets, destination, AccessType::Write);
+                    targets_set.insert(FileAccessTarget {
+                        path: PathBuf::from(destination),
+                        access_type: AccessType::Write,
+                    });
                 }
             }
         }
     }
 
-    targets
+    targets_set.into_iter().collect()
 }
 
 fn file_access_targets(tool_name: &str, args: &Value) -> Vec<FileAccessTarget> {
@@ -805,12 +821,20 @@ impl SafetyGateway {
     }
 
     fn prune_rate_windows(&self, state: &mut RateLimiterState, now: Instant) {
-        state
-            .calls_per_second
-            .retain(|&t| now.duration_since(t) <= Duration::from_secs(1));
-        state
-            .calls_per_minute
-            .retain(|&t| now.duration_since(t) <= Duration::from_secs(60));
+        while let Some(front) = state.calls_per_second.front() {
+            if now.duration_since(*front) > Duration::from_secs(1) {
+                state.calls_per_second.pop_front();
+            } else {
+                break;
+            }
+        }
+        while let Some(front) = state.calls_per_minute.front() {
+            if now.duration_since(*front) > Duration::from_secs(60) {
+                state.calls_per_minute.pop_front();
+            } else {
+                break;
+            }
+        }
     }
 
     fn retry_after_for_violation(
@@ -822,11 +846,11 @@ impl SafetyGateway {
         match violation {
             SafetyError::RateLimitExceeded { window: "1s", .. } => state
                 .calls_per_second
-                .first()
+                .front()
                 .map(|first| Duration::from_secs(1).saturating_sub(now.duration_since(*first))),
             SafetyError::RateLimitExceeded { window: "60s", .. } => state
                 .calls_per_minute
-                .first()
+                .front()
                 .map(|first| Duration::from_secs(60).saturating_sub(now.duration_since(*first))),
             _ => None,
         }

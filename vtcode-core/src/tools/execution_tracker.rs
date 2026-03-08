@@ -43,7 +43,7 @@ pub enum ExecutionStatus {
 /// Tool execution tracker with bounded memory usage
 pub struct ExecutionTracker {
     /// Mapping of tool names to IDs (deduplicate strings)
-    tool_ids: Vec<&'static str>, // Use &'static str to avoid allocations
+    tool_ids: Vec<String>,
     /// Bounded execution history
     history: VecDeque<ExecutionRecord>,
     /// Maximum history size
@@ -114,20 +114,17 @@ impl ExecutionTracker {
 
     /// Get or create a tool ID (interns string)
     fn get_or_intern_tool_id(&mut self, tool_name: &str) -> u32 {
-        self.tool_ids
-            .iter()
-            .position(|&t| t == tool_name)
-            .unwrap_or_else(|| {
-                // Leak the string to get &'static str - acceptable for tool names
-                let leaked = Box::leak(tool_name.to_string().into_boxed_str());
-                self.tool_ids.push(leaked);
-                self.tool_ids.len() - 1
-            }) as u32
+        if let Some(pos) = self.tool_ids.iter().position(|t| t == tool_name) {
+            pos as u32
+        } else {
+            self.tool_ids.push(tool_name.to_string());
+            (self.tool_ids.len() - 1) as u32
+        }
     }
 
     /// Get tool name from ID
     pub fn get_tool_name(&self, id: u32) -> Option<&str> {
-        self.tool_ids.get(id as usize).copied()
+        self.tool_ids.get(id as usize).map(|s| s.as_str())
     }
 
     /// Get recent executions (bounded to prevent large allocations)
@@ -150,18 +147,19 @@ impl ExecutionTracker {
 
     /// Get average execution time for a tool
     pub fn avg_duration_for_tool(&self, tool_name: &str) -> Option<u64> {
-        let executions: Vec<_> = self
+        let (total, count) = self
             .history
             .iter()
             .filter(|rec| self.get_tool_name(rec.tool_id) == Some(tool_name))
-            .collect();
+            .fold((0u64, 0u64), |(sum, count), rec| {
+                (sum + rec.duration_ms, count + 1)
+            });
 
-        if executions.is_empty() {
+        if count == 0 {
             return None;
         }
 
-        let total: u64 = executions.iter().map(|e| e.duration_ms).sum();
-        Some(total / executions.len() as u64)
+        Some(total / count)
     }
 
     /// Clear history (useful for session boundaries)

@@ -136,7 +136,12 @@ impl OptimizedToolRegistry {
             circuit_breaker_state: None,
         };
 
-        self.execution_stats.write().push(record);
+        let mut stats = self.execution_stats.write();
+        // Prune stats to prevent memory leaks (KISS/DRY/Perf)
+        if stats.len() >= 1024 {
+            stats.drain(..128); // Remove oldest 128 entries
+        }
+        stats.push(record);
     }
 
     /// Actual tool execution implementation

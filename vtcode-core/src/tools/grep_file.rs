@@ -164,6 +164,10 @@ impl GrepSearchInput {
 }
 
 fn is_hidden_path(path: &str) -> bool {
+    // Fast path for non-hidden files without full path decomposition
+    if !path.contains("/.") && !path.starts_with('.') {
+        return false;
+    }
     Path::new(path)
         .components()
         .filter_map(|component| component.as_os_str().to_str())
@@ -229,7 +233,7 @@ impl GrepSearchManager {
     }
 
     /// Call whenever the user edits the search query.
-    pub fn on_user_query(&self, query: String) {
+    pub fn on_user_query(&self, query: &str) {
         {
             let mut st = match self.state.lock() {
                 Ok(state) => state,
@@ -238,14 +242,12 @@ impl GrepSearchManager {
                     return;
                 }
             };
-            if query == st.latest_query {
-                // No change, nothing to do.
+            if query != st.latest_query {
+                st.latest_query.clear();
+                st.latest_query.push_str(query);
+            } else {
                 return;
             }
-
-            // Update latest query.
-            st.latest_query.clear();
-            st.latest_query.push_str(&query);
 
             // If there is an in-flight search that is definitely obsolete,
             // cancel it now.
@@ -507,19 +509,22 @@ impl GrepSearchManager {
 
         if let Some(limit) = input.max_result_bytes {
             let mut total = 0usize;
-            let mut kept = Vec::with_capacity(matches.len());
-            for entry in matches.into_iter() {
-                let bytes = serde_json::to_vec(&entry)
-                    .map(|v| v.len())
-                    .unwrap_or_default();
-                if total + bytes > limit {
+            let mut kept_count = 0;
+            for entry in &matches {
+                // Estimated size to avoid expensive JSON serialization in the hot loop
+                let est_bytes = match entry {
+                    Value::Object(m) => m.len() * 64, // Estimate 64 bytes per field
+                    Value::String(s) => s.len(),
+                    _ => 128,
+                };
+                if total + est_bytes > limit {
                     truncated = true;
                     break;
                 }
-                total += bytes;
-                kept.push(entry);
+                total += est_bytes;
+                kept_count += 1;
             }
-            matches = kept;
+            matches.truncate(kept_count);
         }
 
         (matches, truncated)
