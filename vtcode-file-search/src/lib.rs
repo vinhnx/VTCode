@@ -29,7 +29,7 @@
 //! # Ok::<(), anyhow::Error>(())
 //! ```
 
-use nucleo_matcher::{Matcher, Utf32Str};
+use parking_lot::Mutex;
 use serde::Serialize;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
@@ -79,17 +79,21 @@ pub use vtcode_commons::paths::file_name_from_path;
 struct BestMatchesList {
     matches: BinaryHeap<Reverse<(u32, String)>>,
     limit: usize,
-    matcher: Matcher,
+    matcher: nucleo_matcher::Matcher,
     haystack_buf: Vec<char>,
+    pattern_buf: Vec<char>,
+    pattern_text: String,
 }
 
 impl BestMatchesList {
-    fn new(limit: usize) -> Self {
+    fn new(limit: usize, pattern_text: &str) -> Self {
         Self {
             matches: BinaryHeap::new(),
             limit,
-            matcher: Matcher::new(nucleo_matcher::Config::DEFAULT),
-            haystack_buf: Vec::new(),
+            matcher: nucleo_matcher::Matcher::new(nucleo_matcher::Config::DEFAULT),
+            haystack_buf: Vec::with_capacity(256),
+            pattern_buf: Vec::with_capacity(pattern_text.len()),
+            pattern_text: pattern_text.to_string(),
         }
     }
 
@@ -97,11 +101,9 @@ impl BestMatchesList {
     ///
     /// Returns Some(score) if the match was added or if it would replace
     /// a lower-scoring match.
-    fn try_add(&mut self, path: &str, pattern_text: &str) -> Option<u32> {
-        self.haystack_buf.clear();
-        let haystack = Utf32Str::new(path, &mut self.haystack_buf);
-        let mut pattern_buf = Vec::new();
-        let needle = Utf32Str::new(pattern_text, &mut pattern_buf);
+    fn try_add(&mut self, path: &str) -> Option<u32> {
+        let haystack = nucleo_matcher::Utf32Str::new(path, &mut self.haystack_buf);
+        let needle = nucleo_matcher::Utf32Str::new(&self.pattern_text, &mut self.pattern_buf);
         let score = self.matcher.fuzzy_match(haystack, needle)? as u32;
 
         if self.matches.len() < self.limit {
@@ -191,13 +193,17 @@ pub fn run(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
 
     // Create per-worker result collection using Arc + Mutex for thread safety
     let num_workers = threads.get();
-    let best_matchers_per_worker: Vec<Arc<std::sync::Mutex<BestMatchesList>>> = (0..num_workers)
-        .map(|_| Arc::new(std::sync::Mutex::new(BestMatchesList::new(limit.get()))))
+    let best_matchers_per_worker: Vec<Arc<Mutex<BestMatchesList>>> = (0..num_workers)
+        .map(|_| {
+            Arc::new(Mutex::new(BestMatchesList::new(
+                limit.get(),
+                &config.pattern_text,
+            )))
+        })
         .collect();
 
     let index_counter = AtomicUsize::new(0);
     let total_match_count = Arc::new(AtomicUsize::new(0));
-    let pattern_text = pattern_text.to_string();
 
     // Run parallel traversal
     walker.run(|| {
@@ -205,7 +211,6 @@ pub fn run(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
             index_counter.fetch_add(1, Ordering::Relaxed) % best_matchers_per_worker.len();
         let best_list = best_matchers_per_worker[worker_id].clone();
         let cancel_flag_clone = cancel_flag.clone();
-        let pattern_text_clone = pattern_text.clone();
         let total_match_count_clone = total_match_count.clone();
 
         Box::new(move |result| {
@@ -230,10 +235,11 @@ pub fn run(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
             };
 
             // Try to add to results
-            if let Ok(mut list) = best_list.lock()
-                && list.try_add(path, &pattern_text_clone).is_some()
             {
-                total_match_count_clone.fetch_add(1, Ordering::Relaxed);
+                let mut list = best_list.lock();
+                if list.try_add(path).is_some() {
+                    total_match_count_clone.fetch_add(1, Ordering::Relaxed);
+                }
             }
 
             ignore::WalkState::Continue
@@ -243,10 +249,9 @@ pub fn run(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
     // Merge results from all workers
     let mut all_matches = Vec::new();
     for arc in best_matchers_per_worker {
-        if let Ok(list) = arc.lock() {
-            let matches = list.clone_matches();
-            all_matches.extend(matches);
-        }
+        let list = arc.lock();
+        let matches = list.clone_matches();
+        all_matches.extend(matches);
     }
 
     // Sort by score (descending) and limit
