@@ -106,38 +106,36 @@ impl BestMatchesList {
         let needle = nucleo_matcher::Utf32Str::new(&self.pattern_text, &mut self.pattern_buf);
         let score = self.matcher.fuzzy_match(haystack, needle)? as u32;
 
-        if self.matches.len() < self.limit {
-            self.matches.push(Reverse((score, path.to_string())));
+        if push_top_match(&mut self.matches, self.limit, score, path.to_string()) {
             Some(score)
         } else {
-            let min_score = self.matches.peek().map(|entry| entry.0.0).unwrap_or(0);
-            if score > min_score {
-                self.matches.pop();
-                self.matches.push(Reverse((score, path.to_string())));
-                Some(score)
-            } else {
-                None
-            }
+            None
         }
     }
+}
 
-    /// Convert into sorted matches (highest score first).
-    #[allow(dead_code)]
-    fn into_matches(self) -> Vec<(u32, String)> {
-        self.matches
-            .into_sorted_vec()
-            .into_iter()
-            .map(|Reverse((score, path))| (score, path))
-            .collect()
+fn push_top_match(
+    matches: &mut BinaryHeap<Reverse<(u32, String)>>,
+    limit: usize,
+    score: u32,
+    path: String,
+) -> bool {
+    if matches.len() < limit {
+        matches.push(Reverse((score, path)));
+        return true;
     }
 
-    /// Clone current matches without consuming self.
-    fn clone_matches(&self) -> Vec<(u32, String)> {
-        self.matches
-            .iter()
-            .map(|Reverse((score, path))| (*score, path.clone()))
-            .collect()
+    let Some(min_score) = matches.peek().map(|entry| entry.0.0) else {
+        return false;
+    };
+
+    if score <= min_score {
+        return false;
     }
+
+    matches.pop();
+    matches.push(Reverse((score, path)));
+    true
 }
 
 /// Run fuzzy file search with parallel traversal.
@@ -150,7 +148,6 @@ impl BestMatchesList {
 ///
 /// FileSearchResults containing matched files and total match count.
 pub fn run(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
-    let pattern_text = &config.pattern_text;
     let limit = config.limit;
     let search_directory = &config.search_directory;
     let exclude = &config.exclude;
@@ -246,22 +243,20 @@ pub fn run(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
         })
     });
 
-    // Merge results from all workers
-    let mut all_matches = Vec::new();
+    // Merge worker-local top-K heaps into one final top-K heap.
+    let mut merged_matches = BinaryHeap::with_capacity(limit.get());
     for arc in best_matchers_per_worker {
-        let list = arc.lock();
-        let matches = list.clone_matches();
-        all_matches.extend(matches);
+        let mut list = arc.lock();
+        while let Some(Reverse((score, path))) = list.matches.pop() {
+            push_top_match(&mut merged_matches, limit.get(), score, path);
+        }
     }
 
-    // Sort by score (descending) and limit
-    all_matches.sort_by(|a, b| b.0.cmp(&a.0));
-    all_matches.truncate(limit.get());
-
     // Build final results
-    let matches = all_matches
+    let matches = merged_matches
+        .into_sorted_vec()
         .into_iter()
-        .map(|(score, path)| FileMatch {
+        .map(|Reverse((score, path))| FileMatch {
             score,
             path,
             indices: if compute_indices {
@@ -337,6 +332,35 @@ mod tests {
 
         assert_eq!(results.matches.len(), 3);
         assert!(results.matches.iter().all(|m| m.path.contains("test")));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_limit_is_respected_across_workers() -> anyhow::Result<()> {
+        let temp = TempDir::new()?;
+        for name in ["alpha.rs", "alphabet.rs", "alphanumeric.rs", "alpaca.rs"] {
+            fs::write(temp.path().join(name), "")?;
+        }
+
+        let results = run(FileSearchConfig {
+            pattern_text: "alpha".to_string(),
+            limit: NonZero::new(2).unwrap(),
+            search_directory: temp.path().to_path_buf(),
+            exclude: vec![],
+            threads: NonZero::new(4).unwrap(),
+            cancel_flag: Arc::new(AtomicBool::new(false)),
+            compute_indices: false,
+            respect_gitignore: false,
+        })?;
+
+        assert_eq!(results.matches.len(), 2);
+        assert!(
+            results
+                .matches
+                .windows(2)
+                .all(|window| window[0].score >= window[1].score)
+        );
 
         Ok(())
     }
