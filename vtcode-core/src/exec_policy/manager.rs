@@ -68,7 +68,7 @@ pub struct ExecPolicyConfig {
 impl Default for ExecPolicyConfig {
     fn default() -> Self {
         Self {
-            default_sandbox_policy: SandboxPolicy::ReadOnly,
+            default_sandbox_policy: SandboxPolicy::read_only(),
             default_approval: AskForApproval::UnlessTrusted,
             use_heuristics: true,
             max_auto_approve_length: 256,

@@ -567,11 +567,17 @@ impl SeccompProfile {
 /// 3. What survives between runs? (lifecycle)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-#[derive(Default)]
 pub enum SandboxPolicy {
-    /// No write access to the filesystem; network access disabled.
-    #[default]
-    ReadOnly,
+    /// No write access to the filesystem; network access may be restricted or allowlisted.
+    ReadOnly {
+        /// Whether network access is enabled when no allowlist is set.
+        #[serde(default)]
+        network_access: bool,
+
+        /// Domain-based network egress allowlist.
+        #[serde(default)]
+        network_allowlist: Vec<NetworkAllowlistEntry>,
+    },
 
     /// Write access limited to the specified roots; network controlled by allowlist.
     WorkspaceWrite {
@@ -627,12 +633,31 @@ pub enum SandboxPolicy {
 impl SandboxPolicy {
     /// Create a read-only policy.
     pub fn read_only() -> Self {
-        Self::ReadOnly
+        Self::ReadOnly {
+            network_access: false,
+            network_allowlist: Vec::new(),
+        }
     }
 
     /// Create a new read-only policy (alias for backwards compatibility).
     pub fn new_read_only_policy() -> Self {
-        Self::ReadOnly
+        Self::read_only()
+    }
+
+    /// Create a read-only policy with a network allowlist.
+    pub fn read_only_with_network(network_allowlist: Vec<NetworkAllowlistEntry>) -> Self {
+        Self::ReadOnly {
+            network_access: !network_allowlist.is_empty(),
+            network_allowlist,
+        }
+    }
+
+    /// Create a read-only policy with full network access.
+    pub fn read_only_with_full_network() -> Self {
+        Self::ReadOnly {
+            network_access: true,
+            network_allowlist: Vec::new(),
+        }
     }
 
     /// Create a workspace-write policy with specified roots.
@@ -744,8 +769,11 @@ impl SandboxPolicy {
     /// Check if the policy allows full network access (unrestricted).
     pub fn has_full_network_access(&self) -> bool {
         match self {
-            Self::ReadOnly => false,
-            Self::WorkspaceWrite {
+            Self::ReadOnly {
+                network_access,
+                network_allowlist,
+            }
+            | Self::WorkspaceWrite {
                 network_access,
                 network_allowlist,
                 ..
@@ -757,7 +785,10 @@ impl SandboxPolicy {
     /// Check if the policy has a network allowlist (domain-restricted access).
     pub fn has_network_allowlist(&self) -> bool {
         match self {
-            Self::WorkspaceWrite {
+            Self::ReadOnly {
+                network_allowlist, ..
+            }
+            | Self::WorkspaceWrite {
                 network_allowlist, ..
             } => !network_allowlist.is_empty(),
             _ => false,
@@ -767,7 +798,10 @@ impl SandboxPolicy {
     /// Get the network allowlist entries, if any.
     pub fn network_allowlist(&self) -> &[NetworkAllowlistEntry] {
         match self {
-            Self::WorkspaceWrite {
+            Self::ReadOnly {
+                network_allowlist, ..
+            }
+            | Self::WorkspaceWrite {
                 network_allowlist, ..
             } => network_allowlist,
             _ => &[],
@@ -777,8 +811,11 @@ impl SandboxPolicy {
     /// Check if network access to a specific domain:port is allowed.
     pub fn is_network_allowed(&self, domain: &str, port: u16) -> bool {
         match self {
-            Self::ReadOnly => false,
-            Self::WorkspaceWrite {
+            Self::ReadOnly {
+                network_access,
+                network_allowlist,
+            }
+            | Self::WorkspaceWrite {
                 network_access,
                 network_allowlist,
                 ..
@@ -801,7 +838,7 @@ impl SandboxPolicy {
     /// Returns default paths if not explicitly configured.
     pub fn sensitive_paths(&self) -> Vec<SensitivePath> {
         match self {
-            Self::ReadOnly => default_sensitive_paths(),
+            Self::ReadOnly { .. } => default_sensitive_paths(),
             Self::WorkspaceWrite {
                 sensitive_paths, ..
             } => sensitive_paths
@@ -855,7 +892,7 @@ impl SandboxPolicy {
     /// Get the resource limits for this policy.
     pub fn resource_limits(&self) -> ResourceLimits {
         match self {
-            Self::ReadOnly => ResourceLimits::conservative(),
+            Self::ReadOnly { .. } => ResourceLimits::conservative(),
             Self::WorkspaceWrite {
                 resource_limits, ..
             } => resource_limits.clone(),
@@ -866,7 +903,16 @@ impl SandboxPolicy {
     /// Get the seccomp profile for this policy (Linux only).
     pub fn seccomp_profile(&self) -> SeccompProfile {
         match self {
-            Self::ReadOnly => SeccompProfile::strict(),
+            Self::ReadOnly {
+                network_access,
+                network_allowlist,
+            } => {
+                let mut profile = SeccompProfile::strict();
+                if *network_access || !network_allowlist.is_empty() {
+                    profile = profile.with_network();
+                }
+                profile
+            }
             Self::WorkspaceWrite {
                 seccomp_profile, ..
             } => seccomp_profile.clone(),
@@ -888,7 +934,7 @@ impl SandboxPolicy {
     /// Get the list of writable roots including the current working directory.
     pub fn get_writable_roots_with_cwd(&self, cwd: &Path) -> Vec<WritableRoot> {
         match self {
-            Self::ReadOnly => vec![],
+            Self::ReadOnly { .. } => vec![],
             Self::WorkspaceWrite { writable_roots, .. } => {
                 let mut roots = writable_roots.clone();
                 // Add cwd if not already included
@@ -908,7 +954,7 @@ impl SandboxPolicy {
     /// Check if a path is writable under this policy.
     pub fn is_path_writable(&self, path: &Path, cwd: &Path) -> bool {
         match self {
-            Self::ReadOnly => false,
+            Self::ReadOnly { .. } => false,
             Self::WorkspaceWrite { .. } => {
                 let writable = self.get_writable_roots_with_cwd(cwd);
                 writable.iter().any(|root| path.starts_with(&root.root))
@@ -927,7 +973,7 @@ impl SandboxPolicy {
             // Can always downgrade
             (DangerFullAccess, _) => Ok(()),
             // Cannot escalate from ReadOnly to write-capable
-            (ReadOnly, WorkspaceWrite { .. } | DangerFullAccess) => Err(anyhow::anyhow!(
+            (ReadOnly { .. }, WorkspaceWrite { .. } | DangerFullAccess) => Err(anyhow::anyhow!(
                 "cannot escalate from read-only to write-capable policy"
             )),
             // Other transitions are allowed
@@ -938,11 +984,17 @@ impl SandboxPolicy {
     /// Get a human-readable description of the policy.
     pub fn description(&self) -> &'static str {
         match self {
-            Self::ReadOnly => "read-only access",
+            Self::ReadOnly { .. } => "read-only access",
             Self::WorkspaceWrite { .. } => "workspace write access",
             Self::DangerFullAccess => "full access (dangerous)",
             Self::ExternalSandbox { .. } => "external sandbox",
         }
+    }
+}
+
+impl Default for SandboxPolicy {
+    fn default() -> Self {
+        Self::read_only()
     }
 }
 
@@ -954,8 +1006,40 @@ mod tests {
     fn test_read_only_policy() {
         let policy = SandboxPolicy::read_only();
         assert!(!policy.has_full_network_access());
+        assert!(!policy.has_network_allowlist());
         assert!(!policy.has_full_disk_write_access());
         assert!(policy.has_full_disk_read_access());
+    }
+
+    #[test]
+    fn test_read_only_with_network_allowlist() {
+        let policy = SandboxPolicy::read_only_with_network(vec![
+            NetworkAllowlistEntry::https("api.github.com"),
+            NetworkAllowlistEntry::with_port("registry.npmjs.org", 443),
+        ]);
+
+        assert!(!policy.has_full_network_access());
+        assert!(policy.has_network_allowlist());
+        assert!(policy.is_network_allowed("api.github.com", 443));
+        assert!(policy.is_network_allowed("registry.npmjs.org", 443));
+        assert!(!policy.is_network_allowed("example.com", 443));
+    }
+
+    #[test]
+    fn test_read_only_with_full_network_access() {
+        let policy = SandboxPolicy::read_only_with_full_network();
+
+        assert!(policy.has_full_network_access());
+        assert!(policy.is_network_allowed("example.com", 443));
+        assert!(policy.seccomp_profile().allow_network_sockets);
+    }
+
+    #[test]
+    fn test_read_only_deserializes_legacy_shape() {
+        let policy: SandboxPolicy =
+            serde_json::from_str(r#"{"type":"read_only"}"#).expect("legacy read-only policy");
+
+        assert_eq!(policy, SandboxPolicy::read_only());
     }
 
     #[test]

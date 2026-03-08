@@ -107,7 +107,7 @@ fn build_shell_execution_plan(
     }
 
     let mut policy = sandbox_policy_from_runtime_config(sandbox_config, workspace_root)?;
-    if matches!(policy, SandboxPolicy::ReadOnly)
+    if matches!(policy, SandboxPolicy::ReadOnly { .. })
         && command_likely_writes_workspace(requested_command)
     {
         push_unique_reason(
@@ -141,7 +141,7 @@ fn sandbox_policy_from_runtime_config(
     workspace_root: &Path,
 ) -> Result<SandboxPolicy> {
     match sandbox_config.default_mode {
-        RuntimeSandboxMode::ReadOnly => Ok(SandboxPolicy::read_only()),
+        RuntimeSandboxMode::ReadOnly => Ok(read_only_policy_from_runtime_config(sandbox_config)),
         RuntimeSandboxMode::DangerFullAccess => Ok(SandboxPolicy::full_access()),
         RuntimeSandboxMode::External => Ok(SandboxPolicy::ExternalSandbox {
             description: format!(
@@ -156,26 +156,25 @@ fn sandbox_policy_from_runtime_config(
     }
 }
 
+fn read_only_policy_from_runtime_config(
+    sandbox_config: &vtcode_config::SandboxConfig,
+) -> SandboxPolicy {
+    let (network_allow_all, network_allowlist) = runtime_network_policy(sandbox_config);
+
+    if network_allow_all {
+        SandboxPolicy::read_only_with_full_network()
+    } else if network_allowlist.is_empty() {
+        SandboxPolicy::read_only()
+    } else {
+        SandboxPolicy::read_only_with_network(network_allowlist)
+    }
+}
+
 fn workspace_write_policy_from_runtime_config(
     sandbox_config: &vtcode_config::SandboxConfig,
     workspace_root: &Path,
 ) -> SandboxPolicy {
-    let network_blocked = sandbox_config.network.block_all;
-    let network_allow_all = !network_blocked && sandbox_config.network.allow_all;
-    let network_allowlist = if network_blocked || sandbox_config.network.allow_all {
-        Vec::new()
-    } else {
-        sandbox_config
-            .network
-            .allowlist
-            .iter()
-            .filter_map(|entry| {
-                let domain = entry.domain.trim();
-                (!domain.is_empty())
-                    .then(|| NetworkAllowlistEntry::with_port(domain.to_string(), entry.port))
-            })
-            .collect::<Vec<_>>()
-    };
+    let (network_allow_all, network_allowlist) = runtime_network_policy(sandbox_config);
     let network_enabled = network_allow_all || !network_allowlist.is_empty();
     let sensitive_paths = sensitive_paths_from_runtime_config(&sandbox_config.sensitive_paths);
     let resource_limits = resource_limits_from_runtime_config(&sandbox_config.resource_limits);
@@ -199,6 +198,29 @@ fn workspace_write_policy_from_runtime_config(
         network_allowlist.clear();
     }
     policy
+}
+
+fn runtime_network_policy(
+    sandbox_config: &vtcode_config::SandboxConfig,
+) -> (bool, Vec<NetworkAllowlistEntry>) {
+    let network_blocked = sandbox_config.network.block_all;
+    let network_allow_all = !network_blocked && sandbox_config.network.allow_all;
+    let network_allowlist = if network_blocked || sandbox_config.network.allow_all {
+        Vec::new()
+    } else {
+        sandbox_config
+            .network
+            .allowlist
+            .iter()
+            .filter_map(|entry| {
+                let domain = entry.domain.trim();
+                (!domain.is_empty())
+                    .then(|| NetworkAllowlistEntry::with_port(domain.to_string(), entry.port))
+            })
+            .collect()
+    };
+
+    (network_allow_all, network_allowlist)
 }
 
 fn resource_limits_from_runtime_config(
@@ -450,10 +472,17 @@ fn sandbox_policy_with_additional_permissions(
                 exclude_slash_tmp,
             }
         }
-        SandboxPolicy::ReadOnly => {
+        SandboxPolicy::ReadOnly {
+            network_access,
+            network_allowlist,
+        } => {
             if additional_permissions.fs_write.is_empty() {
-                SandboxPolicy::ReadOnly
+                SandboxPolicy::ReadOnly {
+                    network_access,
+                    network_allowlist,
+                }
             } else {
+                let network_enabled = network_access || !network_allowlist.is_empty();
                 SandboxPolicy::WorkspaceWrite {
                     writable_roots: dedupe_writable_roots(
                         additional_permissions
@@ -463,11 +492,15 @@ fn sandbox_policy_with_additional_permissions(
                             .map(WritableRoot::new)
                             .collect(),
                     ),
-                    network_access: false,
-                    network_allowlist: Vec::new(),
+                    network_access,
+                    network_allowlist,
                     sensitive_paths: None,
                     resource_limits: ResourceLimits::conservative(),
-                    seccomp_profile: SeccompProfile::strict(),
+                    seccomp_profile: if network_enabled {
+                        SeccompProfile::strict().with_network()
+                    } else {
+                        SeccompProfile::strict()
+                    },
                     exclude_tmpdir_env_var: false,
                     exclude_slash_tmp: false,
                 }
@@ -3270,10 +3303,11 @@ mod sandbox_runtime_tests {
     use super::{
         apply_runtime_sandbox_to_command, build_shell_execution_plan,
         enforce_sandbox_preflight_guards, parse_command_parts, parse_requested_sandbox_permissions,
-        sandbox_policy_from_runtime_config,
+        sandbox_policy_from_runtime_config, sandbox_policy_with_additional_permissions,
     };
     use crate::sandboxing::{
-        AdditionalPermissions, SandboxPermissions, SandboxPolicy, SensitivePath,
+        AdditionalPermissions, NetworkAllowlistEntry, SandboxPermissions, SandboxPolicy,
+        SensitivePath,
     };
     use serde_json::json;
     use std::path::PathBuf;
@@ -3348,7 +3382,10 @@ mod sandbox_runtime_tests {
         )
         .unwrap();
         assert!(plan.approval_reason.is_none());
-        assert!(matches!(plan.sandbox_policy, Some(SandboxPolicy::ReadOnly)));
+        assert!(matches!(
+            plan.sandbox_policy,
+            Some(SandboxPolicy::ReadOnly { .. })
+        ));
     }
 
     #[test]
@@ -3379,6 +3416,50 @@ mod sandbox_runtime_tests {
         let command = vec!["curl".to_string(), "https://example.com".to_string()];
         enforce_sandbox_preflight_guards(&command, &policy, PathBuf::from(".").as_path())
             .expect("allow_all network should permit network commands");
+    }
+
+    #[test]
+    fn read_only_allow_all_network_is_not_blocked() {
+        let mut config = vtcode_config::SandboxConfig {
+            enabled: true,
+            default_mode: vtcode_config::SandboxMode::ReadOnly,
+            ..Default::default()
+        };
+        config.network.allow_all = true;
+        config.network.block_all = false;
+
+        let policy =
+            sandbox_policy_from_runtime_config(&config, PathBuf::from("/tmp/ws").as_path())
+                .unwrap();
+        assert!(policy.has_full_network_access());
+
+        let command = vec!["curl".to_string(), "https://example.com".to_string()];
+        enforce_sandbox_preflight_guards(&command, &policy, PathBuf::from(".").as_path())
+            .expect("read-only allow_all network should permit network commands");
+    }
+
+    #[test]
+    fn read_only_allowlist_network_is_not_blocked() {
+        let mut config = vtcode_config::SandboxConfig {
+            enabled: true,
+            default_mode: vtcode_config::SandboxMode::ReadOnly,
+            ..Default::default()
+        };
+        config.network.allow_all = false;
+        config.network.allowlist = vec![vtcode_config::NetworkAllowlistEntryConfig {
+            domain: "api.github.com".to_string(),
+            port: 443,
+        }];
+
+        let policy =
+            sandbox_policy_from_runtime_config(&config, PathBuf::from("/tmp/ws").as_path())
+                .unwrap();
+        assert!(policy.has_network_allowlist());
+        assert!(policy.is_network_allowed("api.github.com", 443));
+
+        let command = vec!["curl".to_string(), "https://api.github.com".to_string()];
+        enforce_sandbox_preflight_guards(&command, &policy, PathBuf::from(".").as_path())
+            .expect("read-only allowlist network should permit network commands");
     }
 
     #[test]
@@ -3492,6 +3573,48 @@ mod sandbox_runtime_tests {
             transformed.iter().any(|arg| arg.contains(&needle)),
             "transformed sandbox command should include additional writable root"
         );
+    }
+
+    #[test]
+    fn with_additional_permissions_preserves_read_only_network_access() {
+        let base_policy = SandboxPolicy::read_only_with_full_network();
+        let extra_path = PathBuf::from("/tmp/extra-write-root");
+        let additional_permissions = AdditionalPermissions {
+            fs_read: Vec::new(),
+            fs_write: vec![extra_path.clone()],
+        };
+
+        let merged =
+            sandbox_policy_with_additional_permissions(base_policy, &additional_permissions);
+
+        assert!(merged.has_full_network_access());
+        assert!(merged.is_path_writable(
+            &extra_path.join("file.txt"),
+            PathBuf::from("/tmp/ws").as_path()
+        ));
+    }
+
+    #[test]
+    fn with_additional_permissions_preserves_read_only_network_allowlist() {
+        let base_policy =
+            SandboxPolicy::read_only_with_network(vec![NetworkAllowlistEntry::https(
+                "api.github.com",
+            )]);
+        let extra_path = PathBuf::from("/tmp/extra-write-root");
+        let additional_permissions = AdditionalPermissions {
+            fs_read: Vec::new(),
+            fs_write: vec![extra_path.clone()],
+        };
+
+        let merged =
+            sandbox_policy_with_additional_permissions(base_policy, &additional_permissions);
+
+        assert!(merged.has_network_allowlist());
+        assert!(merged.is_network_allowed("api.github.com", 443));
+        assert!(merged.is_path_writable(
+            &extra_path.join("file.txt"),
+            PathBuf::from("/tmp/ws").as_path()
+        ));
     }
 
     #[test]

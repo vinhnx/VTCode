@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use super::exec_env::{CommandSpec, ExecEnv, SandboxType};
-use super::policy::SandboxPolicy;
+use super::policy::{NetworkAllowlistEntry, SandboxPolicy};
 
 /// Error type for sandbox transformation failures.
 #[derive(Debug, thiserror::Error)]
@@ -87,7 +87,7 @@ impl SandboxManager {
             SandboxPolicy::DangerFullAccess | SandboxPolicy::ExternalSandbox { .. } => {
                 Ok(SandboxType::None)
             }
-            SandboxPolicy::ReadOnly | SandboxPolicy::WorkspaceWrite { .. } => {
+            SandboxPolicy::ReadOnly { .. } | SandboxPolicy::WorkspaceWrite { .. } => {
                 Ok(SandboxType::platform_default())
             }
         }
@@ -139,6 +139,30 @@ impl SandboxManager {
     /// - Block sensitive paths to prevent credential leakage.
     #[cfg(target_os = "macos")]
     fn build_seatbelt_profile(&self, policy: &SandboxPolicy, sandbox_cwd: &Path) -> String {
+        fn append_network_rules(
+            profile: &mut String,
+            network_access: bool,
+            network_allowlist: &[NetworkAllowlistEntry],
+        ) {
+            let has_network_allowlist = !network_allowlist.is_empty();
+            if has_network_allowlist || !network_access {
+                // Keep local unix sockets available even when outbound network is restricted.
+                profile.push_str("(allow network* (local unix))\n");
+            }
+            if has_network_allowlist {
+                for entry in network_allowlist {
+                    profile.push_str(&format!(
+                        "(allow network-outbound (remote {} (require-any (port {}))))\n",
+                        entry.protocol, entry.port
+                    ));
+                }
+                profile.push_str("(allow network-outbound (remote udp (port 53)))\n");
+                profile.push_str("(allow network-outbound (remote tcp (port 53)))\n");
+            } else if network_access {
+                profile.push_str("(allow network*)\n");
+            }
+        }
+
         let mut profile = String::from("(version 1)\n");
         profile.push_str("(deny default)\n");
         profile.push_str("(allow process-exec)\n");
@@ -164,10 +188,13 @@ impl SandboxManager {
         profile.push_str("(allow file-read*)\n");
 
         match policy {
-            SandboxPolicy::ReadOnly => {
+            SandboxPolicy::ReadOnly {
+                network_access,
+                network_allowlist,
+            } => {
                 // Read-only: only allow writing to /dev/null
                 profile.push_str("(allow file-write* (literal \"/dev/null\"))\n");
-                // No network access for read-only
+                append_network_rules(&mut profile, *network_access, network_allowlist);
             }
             SandboxPolicy::WorkspaceWrite {
                 network_access,
@@ -178,33 +205,7 @@ impl SandboxManager {
                     let path = root.root.display();
                     profile.push_str(&format!("(allow file-write* (subpath \"{}\"))\n", path));
                 }
-
-                // Network access: allowlist-based or legacy boolean
-                let has_network_allowlist = !network_allowlist.is_empty();
-                if has_network_allowlist || !(*network_access) {
-                    // Keep local unix sockets available even when outbound network is restricted.
-                    profile.push_str("(allow network* (local unix))\n");
-                }
-                if has_network_allowlist {
-                    // Add allowlisted network destinations
-                    // Note: Seatbelt's network filtering is limited; we use remote-ip filters
-                    // For domain-based filtering, we rely on the application layer
-                    for entry in network_allowlist {
-                        // Seatbelt supports remote filters with IP addresses and ports
-                        // For domain names, we allow the connection and rely on DNS resolution
-                        // This is a defense-in-depth approach
-                        profile.push_str(&format!(
-                            "(allow network-outbound (remote {} (require-any (port {}))))\n",
-                            entry.protocol, entry.port
-                        ));
-                    }
-                    // Allow DNS resolution for allowlisted domains
-                    profile.push_str("(allow network-outbound (remote udp (port 53)))\n");
-                    profile.push_str("(allow network-outbound (remote tcp (port 53)))\n");
-                } else if *network_access {
-                    // Legacy: full network access
-                    profile.push_str("(allow network*)\n");
-                }
+                append_network_rules(&mut profile, *network_access, network_allowlist);
             }
             _ => {}
         }
@@ -328,7 +329,7 @@ mod tests {
         assert_eq!(result.unwrap(), SandboxType::None);
 
         // Read-only = platform default
-        let result = manager.determine_sandbox_type(&SandboxPolicy::ReadOnly);
+        let result = manager.determine_sandbox_type(&SandboxPolicy::read_only());
         assert_eq!(result.unwrap(), SandboxType::platform_default());
     }
 }

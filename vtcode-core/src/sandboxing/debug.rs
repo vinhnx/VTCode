@@ -175,7 +175,9 @@ pub fn sandbox_capabilities_summary() -> String {
     }
 
     summary.push_str("\nSandbox policies:\n");
-    summary.push_str("  - ReadOnly: Read files, no writes except /dev/null, no network\n");
+    summary.push_str(
+        "  - ReadOnly: Read files, no writes except /dev/null, optional network policy\n",
+    );
     summary
         .push_str("  - WorkspaceWrite: Read all, write to workspace, optional network allowlist\n");
     summary.push_str("  - DangerFullAccess: No restrictions (use with caution)\n");
