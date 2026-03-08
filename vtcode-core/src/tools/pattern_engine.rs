@@ -61,9 +61,7 @@ impl PatternEngine {
 
     /// Record an execution event.
     pub fn record(&self, event: ExecutionEvent) {
-        let Ok(mut events) = self.events.write() else {
-            return;
-        };
+        let mut events = self.events.write();
 
         if events.len() >= self.max_history {
             events.pop_front();
@@ -134,7 +132,6 @@ impl PatternEngine {
     /// combined loop is clearer and faster.
     pub fn summary(&self) -> ExecutionSummary {
         let events = self.events.read();
-
         if events.is_empty() {
             return ExecutionSummary::default();
         }
@@ -163,8 +160,21 @@ impl PatternEngine {
             average_quality: quality_sum / total as f32,
             average_duration_ms: duration_sum / total as u64,
             unique_tools: unique_tools.len(),
-            current_pattern: self.detect_pattern(),
+            current_pattern: self.detect_pattern_with_guard(&events),
         }
+    }
+
+    /// Internal helper to detect patterns given a read guard.
+    fn detect_pattern_with_guard(&self, events: &VecDeque<ExecutionEvent>) -> DetectedPattern {
+        let len = events.len();
+        if len < 2 {
+            return DetectedPattern::Single;
+        }
+
+        let mut recent = SmallVec::<[&ExecutionEvent; 32]>::new();
+        recent.extend(events.iter().rev().take(self.sequence_window));
+
+        detect_in_sequence(&recent)
     }
 }
 
