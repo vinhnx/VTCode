@@ -4,14 +4,14 @@
 
 #[cfg(test)]
 mod tests {
+    use async_trait::async_trait;
     use std::collections::hash_map::DefaultHasher;
     use std::hash::Hasher;
     use std::sync::Arc;
     use std::time::Duration;
-    use async_trait::async_trait;
     use vtcode_tools::{
-        cache::LruCache, middleware::*, patterns::PatternDetector, CachedToolExecutor,
-        UnifiedErrorKind, UnifiedToolError,
+        CachedToolExecutor, UnifiedErrorKind, UnifiedToolError, cache::LruCache, middleware::*,
+        patterns::PatternDetector,
     };
 
     struct RejectingMiddleware;

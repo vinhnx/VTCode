@@ -32,10 +32,9 @@
 //! - Parser state preserved across multiline constructs
 
 use crate::ui::theme::get_syntax_theme_for_ui_theme;
-use anstyle::Style as AnstyleStyle;
-use anstyle_syntect::to_anstyle;
+use anstyle::{Ansi256Color, AnsiColor, Effects, RgbColor, Style as AnstyleStyle};
 use once_cell::sync::Lazy;
-use syntect::highlighting::{Highlighter, Theme, ThemeSet};
+use syntect::highlighting::{FontStyle, Highlighter, Theme, ThemeSet};
 use syntect::parsing::{Scope, SyntaxReference, SyntaxSet};
 use syntect::util::LinesWithEndings;
 use tracing::warn;
@@ -48,6 +47,12 @@ const MAX_INPUT_SIZE_BYTES: usize = 512 * 1024;
 
 /// Input line guardrail - skip highlighting for files > 10K lines
 const MAX_INPUT_LINES: usize = 10_000;
+
+// Syntect/bat encode ANSI palette semantics in alpha:
+// `a=0` => ANSI palette index stored in `r`, `a=1` => terminal default.
+const ANSI_ALPHA_INDEX: u8 = 0x00;
+const ANSI_ALPHA_DEFAULT: u8 = 0x01;
+const OPAQUE_ALPHA: u8 = u8::MAX;
 
 /// Global SyntaxSet singleton (~250 grammars)
 static SHARED_SYNTAX_SET: Lazy<SyntaxSet> = Lazy::new(SyntaxSet::load_defaults_newlines);
@@ -207,6 +212,51 @@ fn scope_background_rgb(highlighter: &Highlighter<'_>, scope_name: &str) -> Opti
     Some((background.r, background.g, background.b))
 }
 
+fn ansi_palette_color(index: u8) -> anstyle::Color {
+    match index {
+        0x00 => AnsiColor::Black.into(),
+        0x01 => AnsiColor::Red.into(),
+        0x02 => AnsiColor::Green.into(),
+        0x03 => AnsiColor::Yellow.into(),
+        0x04 => AnsiColor::Blue.into(),
+        0x05 => AnsiColor::Magenta.into(),
+        0x06 => AnsiColor::Cyan.into(),
+        0x07 => AnsiColor::White.into(),
+        index => Ansi256Color(index).into(),
+    }
+}
+
+fn convert_syntect_color(color: syntect::highlighting::Color) -> Option<anstyle::Color> {
+    match color.a {
+        // Bat-compatible encoding for ANSI-family themes.
+        ANSI_ALPHA_INDEX => Some(ansi_palette_color(color.r)),
+        // Preserve terminal defaults rather than forcing black.
+        ANSI_ALPHA_DEFAULT => None,
+        // Standard syntect themes use opaque RGB values.
+        OPAQUE_ALPHA => Some(RgbColor(color.r, color.g, color.b).into()),
+        // Some theme dumps use other alpha values; keep them readable as RGB.
+        _ => Some(RgbColor(color.r, color.g, color.b).into()),
+    }
+}
+
+fn convert_syntect_style(style: syntect::highlighting::Style) -> AnstyleStyle {
+    let mut effects = Effects::new();
+    if style.font_style.contains(FontStyle::BOLD) {
+        effects |= Effects::BOLD;
+    }
+    if style.font_style.contains(FontStyle::ITALIC) {
+        effects |= Effects::ITALIC;
+    }
+    if style.font_style.contains(FontStyle::UNDERLINE) {
+        effects |= Effects::UNDERLINE;
+    }
+
+    AnstyleStyle::new()
+        .fg_color(convert_syntect_color(style.foreground))
+        .bg_color(convert_syntect_color(style.background))
+        .effects(effects)
+}
+
 #[inline]
 fn select_syntax(language: Option<&str>) -> &'static SyntaxReference {
     language
@@ -223,13 +273,21 @@ pub fn highlight_code_to_line_segments(
     language: Option<&str>,
     theme_name: &str,
 ) -> Vec<Vec<(syntect::highlighting::Style, String)>> {
+    let theme = load_theme(theme_name, true);
+    highlight_code_to_line_segments_with_theme(code, language, &theme)
+}
+
+fn highlight_code_to_line_segments_with_theme(
+    code: &str,
+    language: Option<&str>,
+    theme: &Theme,
+) -> Vec<Vec<(syntect::highlighting::Style, String)>> {
     if !should_highlight(code) {
         return plain_text_line_segments(code);
     }
 
     let syntax = select_syntax(language);
-    let theme = load_theme(theme_name, true);
-    let mut highlighter = syntect::easy::HighlightLines::new(syntax, &theme);
+    let mut highlighter = syntect::easy::HighlightLines::new(syntax, theme);
     let mut result = Vec::new();
     let mut ends_with_newline = false;
 
@@ -253,21 +311,20 @@ pub fn highlight_code_to_line_segments(
     result
 }
 
-/// Highlight code and convert to `anstyle` segments with optional bg stripping.
-pub fn highlight_code_to_anstyle_line_segments(
+fn highlight_code_to_anstyle_line_segments_with_theme(
     code: &str,
     language: Option<&str>,
-    theme_name: &str,
+    theme: &Theme,
     strip_background: bool,
 ) -> Vec<Vec<(AnstyleStyle, String)>> {
-    highlight_code_to_line_segments(code, language, theme_name)
+    highlight_code_to_line_segments_with_theme(code, language, theme)
         .into_iter()
         .map(|ranges| {
             ranges
                 .into_iter()
                 .filter(|(_, text)| !text.is_empty())
                 .map(|(style, text)| {
-                    let mut anstyle = to_anstyle(style);
+                    let mut anstyle = convert_syntect_style(style);
                     if strip_background {
                         anstyle = anstyle.bg_color(None);
                     }
@@ -276,6 +333,17 @@ pub fn highlight_code_to_anstyle_line_segments(
                 .collect()
         })
         .collect()
+}
+
+/// Highlight code and convert to `anstyle` segments with optional bg stripping.
+pub fn highlight_code_to_anstyle_line_segments(
+    code: &str,
+    language: Option<&str>,
+    theme_name: &str,
+    strip_background: bool,
+) -> Vec<Vec<(AnstyleStyle, String)>> {
+    let theme = load_theme(theme_name, true);
+    highlight_code_to_anstyle_line_segments_with_theme(code, language, &theme, strip_background)
 }
 
 /// Highlight one line and convert to `anstyle` segments with optional bg stripping.
@@ -329,11 +397,10 @@ pub fn highlight_line_for_diff(
 
 /// Convert code to ANSI escape sequences
 pub fn highlight_code_to_ansi(code: &str, language: Option<&str>, theme_name: &str) -> String {
-    let segments = highlight_code_to_segments(code, language, theme_name);
+    let segments = highlight_code_to_anstyle_line_segments(code, language, theme_name, false);
     let mut output = String::with_capacity(code.len() + segments.len() * 10);
 
-    for (style, text) in segments {
-        let ansi_style = to_anstyle(style);
+    for (ansi_style, text) in segments.into_iter().flatten() {
         output.push_str(&ansi_style.to_string());
         output.push_str(&text);
         output.push_str("\x1b[0m"); // Reset
@@ -398,6 +465,147 @@ mod tests {
         let theme1 = load_theme("base16-ocean.dark", true);
         let theme2 = load_theme("base16-ocean.dark", true);
         assert_eq!(theme1.name, theme2.name);
+    }
+
+    #[test]
+    fn convert_syntect_style_uses_named_ansi_for_low_palette_indexes() {
+        let style = convert_syntect_style(syntect::highlighting::Style {
+            foreground: SyntectColor {
+                r: 0x02,
+                g: 0,
+                b: 0,
+                a: ANSI_ALPHA_INDEX,
+            },
+            background: SyntectColor {
+                r: 0,
+                g: 0,
+                b: 0,
+                a: OPAQUE_ALPHA,
+            },
+            font_style: FontStyle::empty(),
+        });
+
+        assert_eq!(style.get_fg_color(), Some(AnsiColor::Green.into()));
+    }
+
+    #[test]
+    fn convert_syntect_style_uses_ansi256_for_high_palette_indexes() {
+        let style = convert_syntect_style(syntect::highlighting::Style {
+            foreground: SyntectColor {
+                r: 0x9a,
+                g: 0,
+                b: 0,
+                a: ANSI_ALPHA_INDEX,
+            },
+            background: SyntectColor {
+                r: 0,
+                g: 0,
+                b: 0,
+                a: OPAQUE_ALPHA,
+            },
+            font_style: FontStyle::empty(),
+        });
+
+        assert_eq!(style.get_fg_color(), Some(Ansi256Color(0x9a).into()));
+    }
+
+    #[test]
+    fn convert_syntect_style_uses_terminal_default_for_alpha_one() {
+        let style = convert_syntect_style(syntect::highlighting::Style {
+            foreground: SyntectColor {
+                r: 0,
+                g: 0,
+                b: 0,
+                a: ANSI_ALPHA_DEFAULT,
+            },
+            background: SyntectColor {
+                r: 0,
+                g: 0,
+                b: 0,
+                a: OPAQUE_ALPHA,
+            },
+            font_style: FontStyle::empty(),
+        });
+
+        assert_eq!(style.get_fg_color(), None);
+    }
+
+    #[test]
+    fn convert_syntect_style_falls_back_to_rgb_for_unexpected_alpha() {
+        let style = convert_syntect_style(syntect::highlighting::Style {
+            foreground: SyntectColor {
+                r: 10,
+                g: 20,
+                b: 30,
+                a: 0x80,
+            },
+            background: SyntectColor {
+                r: 0,
+                g: 0,
+                b: 0,
+                a: OPAQUE_ALPHA,
+            },
+            font_style: FontStyle::empty(),
+        });
+
+        assert_eq!(style.get_fg_color(), Some(RgbColor(10, 20, 30).into()));
+    }
+
+    #[test]
+    fn convert_syntect_style_preserves_effects() {
+        let style = convert_syntect_style(syntect::highlighting::Style {
+            foreground: SyntectColor {
+                r: 10,
+                g: 20,
+                b: 30,
+                a: OPAQUE_ALPHA,
+            },
+            background: SyntectColor {
+                r: 0,
+                g: 0,
+                b: 0,
+                a: OPAQUE_ALPHA,
+            },
+            font_style: FontStyle::BOLD | FontStyle::ITALIC | FontStyle::UNDERLINE,
+        });
+
+        let effects = style.get_effects();
+        assert!(effects.contains(Effects::BOLD));
+        assert!(effects.contains(Effects::ITALIC));
+        assert!(effects.contains(Effects::UNDERLINE));
+    }
+
+    #[test]
+    fn highlight_pipeline_decodes_alpha_encoded_theme_colors() {
+        let theme = Theme {
+            settings: ThemeSettings {
+                foreground: Some(SyntectColor {
+                    r: 0x02,
+                    g: 0,
+                    b: 0,
+                    a: ANSI_ALPHA_INDEX,
+                }),
+                background: Some(SyntectColor {
+                    r: 0,
+                    g: 0,
+                    b: 0,
+                    a: ANSI_ALPHA_DEFAULT,
+                }),
+                ..ThemeSettings::default()
+            },
+            ..Theme::default()
+        };
+
+        let segments =
+            highlight_code_to_anstyle_line_segments_with_theme("plain text", None, &theme, false);
+        assert_eq!(segments.len(), 1);
+        assert_eq!(segments[0].len(), 1);
+        assert_eq!(
+            segments[0][0].0.get_fg_color(),
+            Some(AnsiColor::Green.into())
+        );
+        assert_eq!(segments[0][0].0.get_bg_color(), None);
+        assert_eq!(segments[0][0].1, "plain text");
     }
 
     #[test]

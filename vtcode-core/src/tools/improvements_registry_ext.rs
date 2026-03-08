@@ -89,13 +89,15 @@ impl ToolRegistryImprovement {
             let entry = if let Some(m) = metrics.get_mut(tool_name) {
                 m
             } else {
-                metrics.entry(tool_name.to_string()).or_insert_with(|| ToolMetrics {
-                    name: tool_name.to_string(),
-                    total_calls: 0,
-                    successful_calls: 0,
-                    total_duration_ms: 0,
-                    avg_quality: 0.0,
-                })
+                metrics
+                    .entry(tool_name.to_string())
+                    .or_insert_with(|| ToolMetrics {
+                        name: tool_name.to_string(),
+                        total_calls: 0,
+                        successful_calls: 0,
+                        total_duration_ms: 0,
+                        avg_quality: 0.0,
+                    })
             };
 
             entry.total_calls += 1;
@@ -125,17 +127,13 @@ impl ToolRegistryImprovement {
 
         // Log metric - avoid format! if possible, but for key names it's needed
         let metric_key = format!("{}_success_rate", tool_name);
-        self.obs_context.metric(
-            "tool_effectiveness",
-            &metric_key,
-            {
-                let metrics = self.tool_metrics.read();
-                metrics
-                    .get(tool_name)
-                    .map(|m| m.success_rate())
-                    .unwrap_or(0.0)
-            },
-        );
+        self.obs_context.metric("tool_effectiveness", &metric_key, {
+            let metrics = self.tool_metrics.read();
+            metrics
+                .get(tool_name)
+                .map(|m| m.success_rate())
+                .unwrap_or(0.0)
+        });
     }
 
     /// Get tool metrics
@@ -210,13 +208,7 @@ mod tests {
         let obs = Arc::new(ObservabilityContext::noop());
         let ext = ToolRegistryImprovement::new(obs);
 
-        ext.record_execution(
-            tools::UNIFIED_SEARCH,
-            "pattern",
-            true,
-            0.8,
-            100,
-        );
+        ext.record_execution(tools::UNIFIED_SEARCH, "pattern", true, 0.8, 100);
 
         let metrics = ext.get_tool_metrics(tools::UNIFIED_SEARCH);
         assert!(metrics.is_some());

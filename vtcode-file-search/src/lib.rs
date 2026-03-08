@@ -108,7 +108,12 @@ impl BestMatchesList {
             return false;
         };
 
-        push_top_match(&mut self.matches, self.limit, score as u32, path.to_string());
+        push_top_match(
+            &mut self.matches,
+            self.limit,
+            score as u32,
+            path.to_string(),
+        );
         true
     }
 }
@@ -190,7 +195,10 @@ pub fn run(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
     // Create per-worker result collection using Arc + Mutex for thread safety
     let best_matchers_per_worker: Vec<Arc<Mutex<BestMatchesList>>> = (0..threads)
         .map(|_| {
-            Arc::new(Mutex::new(BestMatchesList::new(limit, &config.pattern_text)))
+            Arc::new(Mutex::new(BestMatchesList::new(
+                limit,
+                &config.pattern_text,
+            )))
         })
         .collect();
 
