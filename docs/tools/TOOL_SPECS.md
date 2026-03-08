@@ -1,87 +1,113 @@
-# VT Code Tool Specifications (Anthropic-Aligned)
+# VT Code Tool Specifications
 
-This document summarizes the updated tool schemas and guidance following Anthropic’s best practices for agent tools. Use these specs when writing prompts and building evaluations.
+This document describes the canonical public tool surface exposed to VT Code models. Legacy aliases such as `read_file`, `grep_file`, `list_files`, and PTY helpers may still route internally, but prompts, schemas, and evaluations should target the unified tools below.
 
-## Common Conventions
+## Canonical Public Tools
 
--   Arguments are unambiguous (e.g., `path`, `max_results`, `response_format`).
--   Default `response_format` is `"concise"`. Use `"detailed"` only when necessary.
--   Long-listing tools support pagination via `page` (1-based) and `per_page`.
--   Errors are actionable and include examples to retry with corrected inputs.
+- `unified_search`
+  Purpose: Read-only discovery and lookup across the workspace and related runtime state.
+  Actions:
+  - `grep`: broad text search
+  - `list`: file discovery
+  - `structural`: syntax-aware code search via local ast-grep (`sg`)
+  - `tools`: tool discovery
+  - `errors`: archived/current error lookup
+  - `agent`: agent/runtime info
+  - `web`: fetch a URL
+  - `skill`: load a skill by name
 
-## Tools
+- `unified_file`
+  Purpose: File reads and workspace-local edits.
+  Actions:
+  - `read`
+  - `write`
+  - `edit`
+  - `patch`
+  - `delete`
+  - `move`
+  - `copy`
 
--   grep_file
+- `unified_exec`
+  Purpose: Command execution and session control.
+  Actions:
+  - `run`
+  - `write`
+  - `poll`
+  - `continue`
+  - `inspect`
+  - `list`
+  - `close`
+  - `code`
 
-    -   Purpose: Unified code search. Modes: `exact` | `fuzzy` | `multi` | `similarity`.
-    -   Key args: `pattern` (string), `path` (string, default "."), `max_results` (int), `mode` (string), `response_format` (string: concise|detailed).
-    -   Multi-mode: `patterns: string[]`, `logic: 'AND'|'OR'`.
-    -   Similarity-mode: `reference_file` (string), `content_type: 'structure'|'imports'|'functions'|'all'`.
-    -   Returns: `matches` with file, line, text (concise: `[ { path, line_number, text } ]`) or raw rg JSON (detailed). Adds guidance when results hit caps.
+- `request_user_input`
+  Purpose: Collect short structured user decisions when the current mode allows it.
 
--   list_files
+- `apply_patch`
+  Purpose: First-class patch application for models that support the freeform patch surface.
 
-    -   Purpose: File discovery. Modes: `list` | `recursive` | `find_name` | `find_content`.
-    -   Key args: `path` (string), `max_items` (int), `page` (int), `per_page` (int), `include_hidden` (bool), `response_format` (string: concise|detailed).
-    -   Mode args: `name_pattern` (string), `content_pattern` (string), `file_extensions` (string[]), `case_sensitive` (bool).
-    -   Patterns are matched with `nucleo-matcher` fuzzy scoring over a corpus gathered via the
-        `ignore` crate (respects `.gitignore`, global ignores, and hidden file rules).
-    -   Returns: Paginated items with guidance (`message`) when more pages are available. Concise output omits low-signal fields.
+## `unified_search`
 
--   read_file
+### `grep`
 
-    -   Purpose: Read a file with optional `max_bytes` to conserve tokens.
-    -   Key args: `path` (string), `max_bytes` (int, optional).
+- Required: `pattern`
+- Optional: `path` (default `"."`), `case_sensitive`, `context_lines`, `max_results`
+- Use when: you need broad text matching or a quick file-content sweep
 
--   write_file
+### `list`
 
-    -   Purpose: Write content to a file.
-    -   Key args: `path` (string), `content` (string), `mode` (string: overwrite|append|skip_if_exists).
+- Optional: `path` (default `"."`), `mode`, `max_results`
+- Use when: you need file names, directories, or tree-style discovery
 
--   edit_file
+### `structural`
 
-    -   Purpose: Replace specific text in a file.
-    -   Key args: `path` (string), `old_str` (string), `new_str` (string).
+- Required: `action="structural"`, `pattern`
+- Optional: `path` (default `"."`), `lang`, `selector`, `strictness`, `debug_query`, `globs`, `context_lines`, `max_results`
+- Result shape: top-level `matches` array with `file`, `line_number`, `text`/`lines`, `language`, and compact `range` metadata, plus `backend: "ast-grep"`
+- Constraints:
+  - Read-only only; rewrite/apply flags are rejected
+  - `lang` is optional for normal search
+  - `lang` is required when `debug_query` is set
+  - Requires a local `sg` / `ast-grep` binary; if missing, VT Code returns an actionable error, points to the bundled `ast-grep` skill, and recommends `vtcode dependencies install search-tools` or `vtcode dependencies install ast-grep`
+  - VT Code-managed installs live in `~/.vtcode/bin`
+  - On Linux, prefer the canonical `ast-grep` binary name instead of `sg`
+  - Syntax-aware only; do not treat this surface as scope, type, or data-flow analysis
+  - Patterns must be valid parseable code; for fragments, unnamed-token cases, or role-sensitive matching, prefer the bundled `ast-grep` skill workflow
+  - Custom languages are supported only through local ast-grep configuration, typically workspace `sgconfig.yml` `customLanguages` plus a compiled tree-sitter dynamic library
+  - Non-standard extensions and embedded languages should be handled through local ast-grep config such as `languageGlobs` and `languageInjections`, not by guessing a different file language in the tool call
+  - Rewrite-oriented ast-grep features like `fix`, `transform`, `rewriters`, `sg scan`, `sg test`, and `sg new` stay outside this read-only surface; use the bundled `ast-grep` skill workflow instead
+- Use when: you need syntax-aware search that should ignore irrelevant text matches
+- Avoid when: plain text grep is simpler, the search target is not syntax-sensitive, or the task depends on semantic/static-analysis facts
 
--   run_pty_cmd
+### `tools`
 
-    -   Purpose: Execute a program with arguments.
-    -   Key args: `command` (string|string[]), `working_dir` (string), `timeout_secs` (int), `mode` (string: pty|terminal|streaming), `response_format`.
-    -   Default mode is `pty` so output retains ANSI styling.
+- Required: `keyword`
+- Optional: `detail_level`
 
-## Policy Constraints (scoped)
+### `errors`
 
-The workspace `.vtcode/tool-policy.json` may include constraints like:
+- Optional: `scope`
 
-```json
-{
-    "constraints": {
-        "run_pty_cmd": {
-            "allowed_modes": ["pty", "terminal", "streaming"],
-            "default_response_format": "concise"
-        },
-        "list_files": {
-            "max_items_per_call": 500,
-            "default_response_format": "concise"
-        },
-        "grep_file": {
-            "max_results_per_call": 200,
-            "default_response_format": "concise"
-        },
-        "read_file": { "max_bytes_per_read": 200000 }
-    }
-}
-```
+### `agent`
 
-These are applied automatically by the ToolRegistry at runtime.
+- Optional: `mode`
 
-## Error Style
+### `web`
 
--   Include missing-field names, allowed values, and a concrete example.
--   Example: `Error: Missing 'name_pattern'. Example: list_files(path='.', mode='recursive', name_pattern='*.rs')`.
+- Required: `url`
+- Optional: `prompt`, `max_bytes`, `timeout_secs`
 
-## Evaluation Tips
+### `skill`
 
--   Use real tasks that chain tools (search → read → edit → write) and require multiple calls.
--   Track: success rate, tool call count, token usage, and errors.
--   Let agents iterate on error feedback to refine prompts and parameters.
+- Required: `name`
+
+## Guidance
+
+- Prefer `unified_search` over shell `grep`/`find` for normal workspace discovery.
+- Prefer `grep` for broad text search.
+- Prefer `structural` for syntax-sensitive search.
+- Prefer `load_skill` with the bundled `ast-grep` skill when the task becomes a rule-authoring, debug-query, `sg scan`, `sg test`, `sg new`, or `sgconfig.yml` workflow.
+- Prefer `load_skill` with the bundled `ast-grep` skill when the target snippet is not valid standalone code and needs pattern-object `context` plus `selector`.
+- Prefer `load_skill` with the bundled `ast-grep` skill when matching depends on `$$VAR`, `field`, modifiers/operators, or other CST-level distinctions.
+- Prefer `load_skill` with the bundled `ast-grep` skill when the requested language is not built into ast-grep and needs workspace `sgconfig.yml` `customLanguages` setup or `expandoChar`.
+- Prefer `load_skill` with the bundled `ast-grep` skill when the task needs `languageGlobs`, `languageInjections`, local/global utility rules, `transform`, or `rewriters`.
+- `action="intelligence"` remains executor-compatible for legacy callers, but it is deprecated and not part of the public schema.

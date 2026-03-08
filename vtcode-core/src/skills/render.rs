@@ -7,13 +7,39 @@ pub fn render_skills_section(skills: &[SkillMetadata]) -> Option<String> {
 
     let mut lines: Vec<String> = Vec::new();
     lines.push("## Skills".to_string());
-    lines.push("These skills are discovered at startup from multiple local sources. Each entry includes a name, description, and file path so you can open the source for full instructions.".to_string());
+    lines.push("These skills are discovered at startup from multiple local sources. Each entry includes routing metadata and a file path so you can open the source for full instructions.".to_string());
 
-    for skill in skills {
+    let mut sorted_skills = skills.iter().collect::<Vec<_>>();
+    sorted_skills.sort_by(|left, right| left.name.cmp(&right.name));
+    let overflow = sorted_skills.len().saturating_sub(10);
+    if overflow > 0 {
+        sorted_skills.truncate(10);
+    }
+
+    for skill in sorted_skills {
         let path_str = skill.path.to_string_lossy().replace('\\', "/");
         let name = skill.name.as_str();
         let description = skill.description.as_str();
-        lines.push(format!("- {name}: {description} (file: {path_str})"));
+        let scope = match skill.scope {
+            crate::skills::model::SkillScope::User => "user",
+            crate::skills::model::SkillScope::Repo => "repo",
+            crate::skills::model::SkillScope::System => "system",
+            crate::skills::model::SkillScope::Admin => "admin",
+        };
+        let mut line = format!("- {name}: {description} (file: {path_str}, scope: {scope})");
+        if let Some(manifest) = &skill.manifest {
+            if let Some(when_to_use) = &manifest.when_to_use {
+                line.push_str(&format!("; use: {when_to_use}"));
+            }
+            if let Some(when_not_to_use) = &manifest.when_not_to_use {
+                line.push_str(&format!("; avoid: {when_not_to_use}"));
+            }
+        }
+        lines.push(line);
+    }
+
+    if overflow > 0 {
+        lines.push(format!("(+{} more skills available)", overflow));
     }
 
     lines.push(render_skills_usage_rules().to_string());
@@ -71,7 +97,7 @@ mod tests {
         assert!(result.is_some());
         let output = result.unwrap();
         assert!(output.contains("## Skills"));
-        assert!(output.contains("- test-skill: A test skill (file: /path/to/skill)"));
+        assert!(output.contains("- test-skill: A test skill (file: /path/to/skill, scope: user)"));
         // Check for Codex-style usage rules
         assert!(output.contains("Discovery: Available skills are listed"));
         assert!(output.contains("Description as trigger"));
@@ -101,8 +127,8 @@ mod tests {
         assert!(result.is_some());
         let output = result.unwrap();
         assert!(output.contains("## Skills"));
-        assert!(output.contains("- skill-one: First skill (file: /path/to/skill1)"));
-        assert!(output.contains("- skill-two: Second skill (file: /path/to/skill2)")); // Path separator replaced
+        assert!(output.contains("- skill-one: First skill (file: /path/to/skill1, scope: user)"));
+        assert!(output.contains("- skill-two: Second skill (file: /path/to/skill2, scope: repo)")); // Path separator replaced
         assert!(output.contains("Context hygiene"));
     }
 

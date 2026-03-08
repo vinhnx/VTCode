@@ -159,6 +159,38 @@ vtcode update
   vtcode update
   ```
 
+## dependencies
+
+Manage optional VT Code dependencies such as ripgrep and ast-grep.
+
+### Usage
+
+```bash
+# Install both optional search tools in one step
+vtcode dependencies install search-tools
+
+# Check whether VT Code can resolve the optional search tools
+vtcode dependencies status search-tools
+
+# Install ripgrep using a supported system installer
+vtcode dependencies install ripgrep
+
+# Install the managed ast-grep binary into ~/.vtcode/bin
+vtcode dependencies install ast-grep
+
+# Check whether VT Code can resolve ast-grep
+vtcode dependencies status ast-grep
+```
+
+### Notes
+
+- `vtcode deps ...` is a short alias for `vtcode dependencies ...`
+- `vtcode dependencies install search-tools` bundles the recommended `ripgrep` + `ast-grep` setup after any install method
+- `vtcode dependencies install ripgrep` installs `rg` through a supported system installer and keeps startup non-blocking when you skip it
+- VT Code does not auto-edit your shell profile; add `export PATH="$HOME/.vtcode/bin:$PATH"` yourself if you want the managed binary outside VT Code
+- On Linux, prefer `ast-grep` over `sg`
+- The curl installer includes the search-tools bundle by default; use `--without-search-tools` to skip it
+
 ## Tips
 
 -   The agent respects `.vtcodegitignore` to exclude files from search and I/O.

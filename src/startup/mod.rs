@@ -5,10 +5,14 @@ use anyhow::{Context, Result, bail};
 use vtcode_core::dotfile_protection::init_global_guardian;
 use vtcode_core::utils::validation::validate_path_exists;
 
+mod dependency_advisories;
 mod first_run;
 mod first_run_prompts;
 mod helpers;
 
+pub use dependency_advisories::{
+    append_optional_search_tools_highlight, render_optional_search_tools_notice,
+};
 use first_run::maybe_run_first_run_setup;
 use helpers::{
     api_key_env_var, apply_permission_mode_override, determine_theme, parse_cli_config_entries,

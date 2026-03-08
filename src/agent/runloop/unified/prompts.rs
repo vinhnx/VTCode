@@ -18,8 +18,9 @@ pub(crate) async fn read_system_prompt(
     session_addendum: Option<&str>,
     available_tools: &[String],
 ) -> String {
-    let prompt_context =
+    let mut prompt_context =
         PromptContext::from_workspace_tools(workspace, available_tools.iter().cloned());
+    prompt_context.load_available_skills();
 
     // Load configuration
     let vt_cfg = ConfigManager::load_from_workspace(workspace)

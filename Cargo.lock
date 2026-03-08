@@ -6199,6 +6199,7 @@ dependencies = [
  "dialoguer",
  "dirs",
  "dotenvy",
+ "flate2",
  "futures",
  "hashbrown 0.15.5",
  "home",
@@ -6225,6 +6226,7 @@ dependencies = [
  "sha2",
  "shell-words",
  "smallvec",
+ "tar",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
@@ -6243,6 +6245,7 @@ dependencies = [
  "walkdir",
  "webbrowser",
  "windows-sys 0.61.2",
+ "zip",
 ]
 
 [[package]]

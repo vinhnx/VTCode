@@ -567,6 +567,10 @@ pub enum Commands {
     #[command(name = "list-skills")]
     ListSkills {},
 
+    /// Manage optional VT Code dependencies
+    #[command(name = "dependencies", visible_alias = "deps", subcommand)]
+    Dependencies(DependenciesSubcommand),
+
     /// Check for and install binary updates from GitHub Releases
     #[command(name = "update")]
     Update {
@@ -768,6 +772,35 @@ pub enum SkillsRefSubcommand {
     },
 }
 
+/// Optional VT Code dependency names
+#[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
+pub enum ManagedDependency {
+    #[value(name = "search-tools")]
+    SearchTools,
+    #[value(name = "ripgrep")]
+    Ripgrep,
+    #[value(name = "ast-grep")]
+    AstGrep,
+}
+
+/// Dependency management subcommands
+#[derive(Debug, Subcommand, Clone)]
+pub enum DependenciesSubcommand {
+    /// Install or update an optional dependency
+    #[command(name = "install")]
+    Install {
+        /// Dependency to install
+        dependency: ManagedDependency,
+    },
+
+    /// Show current status for an optional dependency
+    #[command(name = "status")]
+    Status {
+        /// Dependency to inspect
+        dependency: ManagedDependency,
+    },
+}
+
 /// Configuration file structure with latest features
 #[derive(Debug)]
 pub struct ConfigFile {
@@ -810,7 +843,7 @@ pub struct LoggingConfig {
 
 #[cfg(test)]
 mod exec_command_tests {
-    use super::{Cli, Commands, ExecSubcommand};
+    use super::{Cli, Commands, DependenciesSubcommand, ExecSubcommand, ManagedDependency};
     use clap::Parser;
     use std::path::PathBuf;
 
@@ -954,6 +987,78 @@ mod exec_command_tests {
         assert_eq!(review.files.len(), 2);
         assert_eq!(review.files[0], PathBuf::from("src/main.rs"));
         assert_eq!(review.files[1], PathBuf::from("src/lib.rs"));
+    }
+
+    #[test]
+    fn dependencies_install_parses_ast_grep() {
+        let cli = Cli::parse_from(["vtcode", "dependencies", "install", "ast-grep"]);
+        let Some(Commands::Dependencies(DependenciesSubcommand::Install { dependency })) =
+            cli.command
+        else {
+            panic!("expected dependencies install command");
+        };
+
+        assert_eq!(dependency, ManagedDependency::AstGrep);
+    }
+
+    #[test]
+    fn dependencies_install_parses_ripgrep() {
+        let cli = Cli::parse_from(["vtcode", "dependencies", "install", "ripgrep"]);
+        let Some(Commands::Dependencies(DependenciesSubcommand::Install { dependency })) =
+            cli.command
+        else {
+            panic!("expected dependencies install command");
+        };
+
+        assert_eq!(dependency, ManagedDependency::Ripgrep);
+    }
+
+    #[test]
+    fn dependencies_install_parses_search_tools() {
+        let cli = Cli::parse_from(["vtcode", "dependencies", "install", "search-tools"]);
+        let Some(Commands::Dependencies(DependenciesSubcommand::Install { dependency })) =
+            cli.command
+        else {
+            panic!("expected dependencies install command");
+        };
+
+        assert_eq!(dependency, ManagedDependency::SearchTools);
+    }
+
+    #[test]
+    fn deps_alias_parses_status_command() {
+        let cli = Cli::parse_from(["vtcode", "deps", "status", "ast-grep"]);
+        let Some(Commands::Dependencies(DependenciesSubcommand::Status { dependency })) =
+            cli.command
+        else {
+            panic!("expected deps status command");
+        };
+
+        assert_eq!(dependency, ManagedDependency::AstGrep);
+    }
+
+    #[test]
+    fn deps_alias_parses_ripgrep_status_command() {
+        let cli = Cli::parse_from(["vtcode", "deps", "status", "ripgrep"]);
+        let Some(Commands::Dependencies(DependenciesSubcommand::Status { dependency })) =
+            cli.command
+        else {
+            panic!("expected deps status command");
+        };
+
+        assert_eq!(dependency, ManagedDependency::Ripgrep);
+    }
+
+    #[test]
+    fn deps_alias_parses_search_tools_status_command() {
+        let cli = Cli::parse_from(["vtcode", "deps", "status", "search-tools"]);
+        let Some(Commands::Dependencies(DependenciesSubcommand::Status { dependency })) =
+            cli.command
+        else {
+            panic!("expected deps status command");
+        };
+
+        assert_eq!(dependency, ManagedDependency::SearchTools);
     }
 }
 

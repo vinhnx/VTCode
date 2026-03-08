@@ -111,7 +111,7 @@ pub(super) fn builtin_tool_registrations(
             ToolRegistry::unified_search_executor,
         )
         .with_description(
-            "Unified discovery tool: grep, list, tool discovery, errors, agent status, web fetch, and skills.",
+            "Unified discovery tool: grep, structural search, list, tool discovery, errors, agent status, web fetch, and skills.",
         )
         .with_parameter_schema(unified_search_parameters())
         .with_permission(ToolPolicy::Allow)
@@ -120,6 +120,7 @@ pub(super) fn builtin_tool_registrations(
             tools::LIST_FILES,
             "grep",
             "search text",
+            "structural search",
             "list files",
             "list tools",
             "list errors",

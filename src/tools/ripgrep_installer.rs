@@ -1,7 +1,7 @@
-//! Ripgrep availability detection and installation management.
+//! Ripgrep availability detection and explicit installation management.
 //!
-//! This module handles detecting if ripgrep is available and optionally
-//! installing it if missing, similar to how Qwen-code manages dependencies.
+//! This module handles detecting if ripgrep is available and installing it on
+//! demand through `vtcode dependencies install ripgrep`.
 //!
 //! Features:
 //! - Smart installer detection (checks available tools before attempting)
@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
+use vtcode_core::tools::ripgrep_binary::RIPGREP_INSTALL_COMMAND;
 use vtcode_core::utils::file_utils::{
     ensure_dir_exists_sync, read_file_with_context_sync, write_file_with_context_sync,
 };
@@ -203,10 +204,15 @@ impl RipgrepStatus {
         }
     }
 
-    /// Attempt to install ripgrep for the current platform
-    /// Uses smart installer detection to try available tools first
+    /// Attempt to install ripgrep for the current platform.
+    /// Uses smart installer detection to try available tools first.
     pub fn install() -> Result<()> {
         debug_log("Installation attempt started");
+
+        if matches!(Self::check(), RipgrepStatus::Available { .. }) {
+            debug_log("ripgrep already available; skipping installation");
+            return Ok(());
+        }
 
         // Check if auto-install is disabled
         if std::env::var("VTCODE_RIPGREP_NO_INSTALL").is_ok() {
@@ -350,12 +356,12 @@ impl RipgrepStatus {
         }
     }
 
-    /// Check if ripgrep is available, attempting auto-installation if missing
+    /// Check if ripgrep is available, installing it if the caller explicitly requests that flow.
     pub fn ensure_available() -> Result<Self> {
         match Self::check() {
             status @ RipgrepStatus::Available { .. } => Ok(status),
             RipgrepStatus::NotFound => {
-                eprintln!("Ripgrep not found. Attempting auto-installation...");
+                eprintln!("Ripgrep not found. Run `{RIPGREP_INSTALL_COMMAND}` to install it.");
                 Self::install()?;
                 Ok(Self::check())
             }

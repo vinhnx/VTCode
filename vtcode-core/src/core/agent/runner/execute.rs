@@ -82,10 +82,11 @@ impl AgentRunner {
                 // One-time clone for simple tasks to override prompt mode (not per-turn)
                 let mut config = self.config().clone();
                 config.agent.system_prompt_mode = SystemPromptMode::Minimal;
-                let prompt_context = PromptContext::from_workspace_tools(
+                let mut prompt_context = PromptContext::from_workspace_tools(
                     self._workspace.as_path(),
                     tools.iter().map(|tool| tool.function_name().to_string()),
                 );
+                prompt_context.load_available_skills();
                 compose_system_instruction_text(
                     self._workspace.as_path(),
                     Some(&config),

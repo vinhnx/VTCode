@@ -4,10 +4,15 @@ VT Code supports multiple installation methods. Choose the one that works best f
 
 ## Quick Install
 
+The default macOS/Linux native installer also attempts the recommended `ripgrep` + `ast-grep` bundle.
+
 ### macOS & Linux
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash
+
+# Skip ripgrep + ast-grep if you only want VT Code
+curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash -s -- --without-search-tools
 ```
 
 ### Windows (PowerShell)
@@ -20,12 +25,18 @@ irm https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.ps1 | i
 
 ```bash
 brew install vinhnx/tap/vtcode
+
+# Optional after brew install
+vtcode dependencies install search-tools
 ```
 
 ### Cargo (Rust)
 
 ```bash
 cargo install vtcode
+
+# Optional after any install method
+vtcode dependencies install search-tools
 ```
 
 ### npm (Node.js)

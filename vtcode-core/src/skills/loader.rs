@@ -273,9 +273,8 @@ fn discover_skills_under_root(root: &SkillRoot, outcome: &mut SkillLoadOutcome) 
     }
 }
 
-/// Lightweight metadata discovery without parsing SKILL.md files.
-/// Extracts skill name and description from filesystem structure only.
-/// Much faster than full discovery, suitable for quick skill listing.
+/// Lightweight metadata discovery that parses only SKILL.md frontmatter.
+/// This preserves routing-critical fields without loading full instructions.
 fn discover_metadata_under_root(root: &SkillRoot, outcome: &mut SkillLoadOutcome) {
     let Ok(root_path) = normalize_path(&root.path) else {
         return;
@@ -318,24 +317,48 @@ fn discover_metadata_under_root(root: &SkillRoot, outcome: &mut SkillLoadOutcome
                 continue;
             }
 
-            // Check for SKILL.md but only extract stub metadata
-            // Extract skill name from parent directory name as fallback
-            if file_name == "SKILL.md"
-                && let Some(skill_dir_name) = path
-                    .parent()
-                    .and_then(|p| p.file_name())
-                    .and_then(|n| n.to_str())
-            {
-                // Create minimal metadata stub without parsing
-                // This allows quick skill listing with ~50-100 tokens instead of full manifest parsing
-                outcome.skills.push(SkillMetadata {
-                    name: skill_dir_name.to_string(),
-                    description: format!("Skill from {}", skill_dir_name), // Placeholder
-                    short_description: None,
-                    path: path.clone(),
-                    scope: root.scope,
-                    manifest: None, // Important: Don't parse manifest
-                });
+            if file_name == "SKILL.md" {
+                match fs::read_to_string(&path)
+                    .with_context(|| format!("reading {}", path.display()))
+                {
+                    Ok(contents) => {
+                        let default_name = path
+                            .parent()
+                            .and_then(|p| p.file_name())
+                            .and_then(|n| n.to_str());
+                        match crate::skills::manifest::parse_skill_content_with_defaults(
+                            &contents,
+                            default_name,
+                        ) {
+                            Ok((manifest, _)) => {
+                                outcome.skills.push(SkillMetadata {
+                                    name: manifest.name.clone(),
+                                    description: manifest.description.clone(),
+                                    short_description: manifest.when_to_use.clone(),
+                                    path: path.clone(),
+                                    scope: root.scope,
+                                    manifest: Some(manifest),
+                                });
+                            }
+                            Err(err) => {
+                                if root.scope != SkillScope::System {
+                                    outcome.errors.push(SkillErrorInfo {
+                                        path: path.clone(),
+                                        message: err.to_string(),
+                                    });
+                                }
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        if root.scope != SkillScope::System {
+                            outcome.errors.push(SkillErrorInfo {
+                                path: path.clone(),
+                                message: err.to_string(),
+                            });
+                        }
+                    }
+                }
             }
         }
     }

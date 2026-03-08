@@ -10,8 +10,9 @@ use tokio::process::Command;
 
 use super::matcher::{normalise_text, seek_segment};
 use super::{PatchChunk, PatchError};
-
-const AST_GREP_BIN_ENV: &str = "VTCODE_AST_GREP_BIN";
+use crate::tools::ast_grep_binary::{
+    AST_GREP_INSTALL_COMMAND, missing_ast_grep_message, resolve_ast_grep_binary_from_env_and_fs,
+};
 
 static IDENTIFIER_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"[A-Za-z_][A-Za-z0-9_]*").expect("semantic identifier regex must compile")
@@ -37,6 +38,7 @@ enum SupportedLanguage {
     Java,
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Debug, Clone, Default)]
 enum AstGrepBinaryOverride {
     #[default]
@@ -256,6 +258,14 @@ pub(crate) async fn resolve_semantic_match(
 }
 
 fn resolve_ast_grep_binary(display_path: &str, anchor: &str) -> Result<PathBuf, PatchError> {
+    resolve_ast_grep_binary_path().map_err(|reason| PatchError::SemanticResolutionFailed {
+        path: display_path.to_string(),
+        anchor: anchor.to_string(),
+        reason,
+    })
+}
+
+pub(crate) fn resolve_ast_grep_binary_path() -> Result<PathBuf, String> {
     match AST_GREP_OVERRIDE
         .lock()
         .expect("ast-grep override mutex must not be poisoned")
@@ -263,32 +273,20 @@ fn resolve_ast_grep_binary(display_path: &str, anchor: &str) -> Result<PathBuf, 
     {
         AstGrepBinaryOverride::System => {}
         AstGrepBinaryOverride::Missing => {
-            return Err(PatchError::SemanticResolutionFailed {
-                path: display_path.to_string(),
-                anchor: anchor.to_string(),
-                reason:
-                    "ast-grep is not available; install `sg`/`ast-grep` or use exact context lines"
-                        .to_string(),
-            });
+            return Err(missing_ast_grep_message(
+                "Use exact context lines if you cannot install it.",
+            ));
         }
         AstGrepBinaryOverride::Path(path) => return Ok(path),
     }
 
-    if let Some(path) = std::env::var_os(AST_GREP_BIN_ENV).filter(|value| !value.is_empty()) {
-        let path = PathBuf::from(path);
-        if path.exists() {
-            return Ok(path);
-        }
+    if let Some(path) = resolve_ast_grep_binary_from_env_and_fs() {
+        return Ok(path);
     }
 
-    which::which("sg")
-        .or_else(|_| which::which("ast-grep"))
-        .map_err(|_| PatchError::SemanticResolutionFailed {
-            path: display_path.to_string(),
-            anchor: anchor.to_string(),
-            reason: "ast-grep is not available; install `sg`/`ast-grep` or use exact context lines"
-                .to_string(),
-        })
+    Err(missing_ast_grep_message(&format!(
+        "Use exact context lines if you cannot install it with `{AST_GREP_INSTALL_COMMAND}`."
+    )))
 }
 
 async fn collect_candidates(

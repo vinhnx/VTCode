@@ -469,11 +469,30 @@ pub(crate) fn unified_search_parameters() -> Value {
         "properties": {
             "action": {
                 "type": "string",
-                "enum": ["grep", "list", "tools", "errors", "agent", "web", "skill"],
+                "enum": ["grep", "list", "structural", "tools", "errors", "agent", "web", "skill"],
                 "description": "Action to perform."
             },
             "pattern": {"type": "string", "description": "Regex or literal pattern for 'grep' or 'errors' search."},
             "path": {"type": "string", "description": "Directory or file path to search in.", "default": "."},
+            "lang": {"type": "string", "description": "Language hint for structural search patterns or required language for debug_query."},
+            "selector": {"type": "string", "description": "ast-grep selector for the structural matcher subtree."},
+            "strictness": {
+                "type": "string",
+                "enum": ["cst", "smart", "ast", "relaxed", "signature", "template"],
+                "description": "Pattern strictness for structural search."
+            },
+            "debug_query": {
+                "type": "string",
+                "enum": ["pattern", "ast", "cst", "sexp"],
+                "description": "Print the structural query AST instead of matches. Requires lang."
+            },
+            "globs": {
+                "description": "Optional include/exclude globs for structural search.",
+                "anyOf": [
+                    {"type": "string"},
+                    {"type": "array", "items": {"type": "string"}}
+                ]
+            },
             "keyword": {"type": "string", "description": "Keyword for 'tools' search."},
             "url": {"type": "string", "format": "uri", "description": "The URL to fetch content from (for 'web' action)."},
             "prompt": {"type": "string", "description": "The prompt to run on the fetched content (for 'web' action)."},
@@ -491,7 +510,7 @@ pub(crate) fn unified_search_parameters() -> Value {
             },
             "max_results": {"type": "integer", "description": "Max results to return.", "default": 100},
             "case_sensitive": {"type": "boolean", "description": "Case-sensitive search.", "default": false},
-            "context_lines": {"type": "integer", "description": "Context lines for 'grep' results.", "default": 0},
+            "context_lines": {"type": "integer", "description": "Context lines for 'grep' or 'structural' results.", "default": 0},
             "scope": {"type": "string", "description": "Scope for 'errors' action (archive|all).", "default": "archive"},
             "max_bytes": {"type": "integer", "description": "Maximum bytes to fetch for 'web' action.", "default": 500000},
             "timeout_secs": {"type": "integer", "description": "Timeout in seconds.", "default": 30}
@@ -763,6 +782,24 @@ mod tests {
         assert_eq!(variants[0]["type"], "string");
         assert_eq!(variants[1]["type"], "array");
         assert_eq!(variants[1]["items"]["type"], "string");
+    }
+
+    #[test]
+    fn unified_search_schema_advertises_structural_and_hides_intelligence() {
+        let params = unified_search_parameters();
+        let actions = params["properties"]["action"]["enum"]
+            .as_array()
+            .expect("action enum");
+
+        assert!(actions.iter().any(|value| value == "structural"));
+        assert!(!actions.iter().any(|value| value == "intelligence"));
+        assert!(
+            params["properties"]["debug_query"]["enum"]
+                .as_array()
+                .expect("debug_query enum")
+                .iter()
+                .any(|value| value == "ast")
+        );
     }
 
     #[test]

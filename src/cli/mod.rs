@@ -26,6 +26,7 @@ pub struct SkillsCommandOptions {
 
 pub mod analyze;
 pub mod benchmark;
+pub mod dependencies;
 pub mod exec;
 pub mod review;
 pub mod schema;
@@ -284,6 +285,9 @@ async fn dispatch_command(args: &Cli, startup: &StartupContext, command: Command
         Commands::ListSkills {} => {
             let skills_options = skills_options(startup);
             skills::handle_skills_list(&skills_options).await?;
+        }
+        Commands::Dependencies(command) => {
+            dependencies::handle_dependencies_command(command).await?;
         }
         Commands::Skills(skills_cmd) => {
             let skills_options = skills_options(startup);

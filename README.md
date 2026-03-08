@@ -17,11 +17,15 @@
 ## Installation
 
 **Native Installer (Recommended)** - No dependencies, instant setup:
+The default macOS/Linux installer also attempts the recommended `ripgrep` + `ast-grep` bundle.
 
 **macOS & Linux:**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash
+
+# Or skip ripgrep + ast-grep during install
+curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash -s -- --without-search-tools
 ```
 
 **Windows (PowerShell):**
@@ -38,6 +42,9 @@ cargo install vtcode
 
 # Homebrew (macOS/Linux)
 brew install vinhnx/tap/vtcode
+
+# Optional: install the search tools bundle later
+vtcode dependencies install search-tools
 ```
 
 **See [Installation Guide](./docs/installation/) and [Native Installer Guide](./docs/installation/NATIVE_INSTALLERS.md) for more options and troubleshooting.**

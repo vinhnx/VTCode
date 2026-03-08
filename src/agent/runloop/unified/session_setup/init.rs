@@ -33,6 +33,7 @@ use vtcode_core::llm::{
     provider as uni,
 };
 
+use vtcode::startup::append_optional_search_tools_highlight;
 use vtcode::updater::Updater;
 use vtcode_core::models::ModelId;
 use vtcode_core::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
@@ -95,6 +96,7 @@ pub(crate) async fn initialize_session(
     let mcp_error = determine_mcp_bootstrap_error(async_mcp_manager.as_ref()).await;
 
     let mut session_bootstrap = prepare_session_bootstrap(config, vt_cfg, mcp_error).await;
+    append_optional_search_tools_highlight(&mut session_bootstrap.header_highlights).await;
     append_update_highlight(&mut session_bootstrap).await;
     let provider_client = create_provider_client(config, vt_cfg)?;
     let mut full_auto_allowlist = None;

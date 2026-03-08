@@ -367,6 +367,10 @@ async fn semantic_anchor_fails_when_ast_grep_is_unavailable() {
 
     assert!(result["error"].is_object(), "{result:?}");
     assert!(error_message(&result).contains("ast-grep is not available"));
+    assert!(
+        error_message(&result).contains("vtcode dependencies install ast-grep"),
+        "{result:?}"
+    );
 }
 
 #[tokio::test]

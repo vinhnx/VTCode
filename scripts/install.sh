@@ -19,6 +19,8 @@ INSTALL_DIR="${INSTALL_DIR:-.local/bin}"
 BIN_NAME="vtcode"
 GITHUB_API="https://api.github.com/repos/$REPO/releases/latest"
 GITHUB_RELEASES="https://github.com/$REPO/releases/download"
+WITH_AST_GREP=0
+WITH_SEARCH_TOOLS=1
 
 # Expand ~ to home directory
 INSTALL_DIR="${INSTALL_DIR/#\~/$HOME}"
@@ -44,6 +46,18 @@ log_error() {
 
 log_warning() {
     printf '%b\n' "${YELLOW}⚠${NC} $1" >&2
+}
+
+install_optional_dependency() {
+    local target_path="$1"
+    local dependency="$2"
+    local label="$3"
+
+    if "$target_path" dependencies install "$dependency"; then
+        log_success "$label installed"
+    else
+        log_warning "Failed to install $label. You can retry later with: $target_path dependencies install $dependency"
+    fi
 }
 
 # Spinner for long running tasks
@@ -455,6 +469,21 @@ main() {
         log_warning "Could not verify installation, but binary appears to be installed"
     fi
 
+    if [[ "$WITH_SEARCH_TOOLS" -eq 1 ]]; then
+        echo ""
+        log_info "Installing search tools bundle..."
+        install_optional_dependency "$target_path" "search-tools" "search tools bundle"
+    elif [[ "$WITH_AST_GREP" -eq 1 ]]; then
+        echo ""
+        log_info "Installing VT Code-managed ast-grep..."
+        install_optional_dependency "$target_path" "ast-grep" "ast-grep"
+    fi
+
+    echo ""
+    log_info "Search tools bundle is enabled by default. To skip it, rerun with --without-search-tools."
+    log_info "Dependency commands:"
+    log_info "  vtcode dependencies install search-tools"
+    log_info "  vtcode dependencies status search-tools"
     echo ""
     log_info "To get started, run: vtcode ask 'hello world'"
 }
@@ -468,10 +497,15 @@ Usage: ./install.sh [options]
 
 Options:
   -d, --dir DIR      Installation directory (default: ~/.local/bin)
+  --with-search-tools Install ripgrep and ast-grep after VT Code is installed (default)
+  --without-search-tools Skip ripgrep and ast-grep during install
+  --with-ast-grep    Install VT Code-managed ast-grep after VT Code is installed
   -h, --help         Show this help message
 
 Examples:
-  ./install.sh                          # Install to ~/.local/bin
+  ./install.sh                           # Install VT Code plus ripgrep and ast-grep
+  ./install.sh --without-search-tools    # Install VT Code only
+  ./install.sh --with-ast-grep           # Install VT Code and managed ast-grep only
   ./install.sh --dir /usr/local/bin    # Install to /usr/local/bin (may need sudo)
 
 Environment variables:
@@ -489,6 +523,20 @@ while [[ $# -gt 0 ]]; do
         -h|--help)
             show_usage
             exit 0
+            ;;
+        --with-ast-grep)
+            WITH_AST_GREP=1
+            shift
+            ;;
+        --with-search-tools)
+            WITH_SEARCH_TOOLS=1
+            WITH_AST_GREP=1
+            shift
+            ;;
+        --without-search-tools)
+            WITH_SEARCH_TOOLS=0
+            WITH_AST_GREP=0
+            shift
             ;;
         *)
             log_error "Unknown option: $1"

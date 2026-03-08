@@ -75,6 +75,9 @@ cd vtcode
 ```bash
 # When published to crates.io
 cargo install vtcode
+
+# Optional: install search dependencies after VT Code is on PATH
+vtcode dependencies install search-tools
 ```
 
 ## Quick Start
@@ -248,7 +251,7 @@ usage_tips = [
     "Share the outcome you need or ask for a quick /status summary.",
     "Reference AGENTS.md expectations before changing files.",
     "Draft or refresh your TODOs with task_tracker before editing.",
-    "Prefer targeted reads (read_file, grep_file) before editing.",
+    "Prefer targeted reads and unified_search (grep or structural) before editing.",
 ]
 recommended_actions = [
     "Outline a 3-6 step TODO plan via task_tracker before coding.",

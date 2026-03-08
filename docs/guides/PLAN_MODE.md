@@ -6,7 +6,7 @@ Plan Mode is a read-only exploration mode that allows you to iterate with the ag
 
 In Plan Mode, the agent can:
 - **Read files** - explore the codebase structure
-- **Search code** - use grep, code intelligence, and other search tools
+- **Search code** - use grep, structural search, and other read-only search tools
 - **Analyze patterns** - understand architecture and design decisions
 
 In Plan Mode, the agent **cannot**:
