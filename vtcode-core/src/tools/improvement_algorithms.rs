@@ -79,7 +79,7 @@ fn jaro_similarity(s1: &str, s2: &str) -> f32 {
         .enumerate()
         .filter(|&(i, _)| s1_matched[i])
         .zip(s2c.iter().enumerate().filter(|&(i, _)| s2_matched[i]))
-        .filter(|((_, &a), (_, &b))| a != b)
+        .filter(|&((_, &a), (_, &b))| a != b)
         .count()
         / 2;
 

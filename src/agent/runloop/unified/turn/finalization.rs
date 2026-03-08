@@ -156,7 +156,7 @@ pub(super) async fn finalize_session(
         .collect();
 
     // Sort for stable output
-    unhealthy_tools.sort_by(|a, b| a.0.cmp(b.0));
+    unhealthy_tools.sort_by(|a, b| a.0.cmp(&b.0));
 
     if !unhealthy_tools.is_empty() {
         renderer.line(

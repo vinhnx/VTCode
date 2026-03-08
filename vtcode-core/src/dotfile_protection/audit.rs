@@ -48,7 +48,7 @@ impl std::fmt::Display for AuditOutcome {
 }
 
 /// Type of access being attempted.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AccessType {
     Read,

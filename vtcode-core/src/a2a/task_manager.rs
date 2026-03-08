@@ -3,7 +3,7 @@
 //! Manages task lifecycle, storage, and queries for the A2A protocol.
 //! Provides an in-memory store with support for concurrent access.
 
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -14,14 +14,17 @@ use super::types::{Artifact, Message, Task, TaskState, TaskStatus};
 /// A2A Task Manager - handles task creation, updates, and queries
 #[derive(Debug, Clone)]
 pub struct TaskManager {
-    /// In-memory task storage
-    tasks: Arc<RwLock<HashMap<String, Task>>>,
-    /// Context ID to task IDs mapping
-    contexts: Arc<RwLock<HashMap<String, Vec<String>>>>,
-    /// Webhook configurations per task
-    webhook_configs: Arc<RwLock<HashMap<String, TaskPushNotificationConfig>>>,
+    /// All mutable task manager state lives behind one lock so related indexes stay in sync.
+    state: Arc<RwLock<TaskManagerState>>,
     /// Maximum tasks to retain (for memory management)
     max_tasks: usize,
+}
+
+#[derive(Debug, Default)]
+struct TaskManagerState {
+    tasks: HashMap<String, Task>,
+    contexts: HashMap<String, Vec<String>>,
+    webhook_configs: HashMap<String, TaskPushNotificationConfig>,
 }
 
 impl Default for TaskManager {
@@ -34,9 +37,7 @@ impl TaskManager {
     /// Create a new task manager
     pub fn new() -> Self {
         Self {
-            tasks: Arc::new(RwLock::new(HashMap::new())),
-            contexts: Arc::new(RwLock::new(HashMap::new())),
-            webhook_configs: Arc::new(RwLock::new(HashMap::new())),
+            state: Arc::new(RwLock::new(TaskManagerState::default())),
             max_tasks: 1000,
         }
     }
@@ -44,9 +45,11 @@ impl TaskManager {
     /// Create a new task manager with custom capacity
     pub fn with_capacity(max_tasks: usize) -> Self {
         Self {
-            tasks: Arc::new(RwLock::new(HashMap::with_capacity(max_tasks.min(100)))),
-            contexts: Arc::new(RwLock::new(HashMap::new())),
-            webhook_configs: Arc::new(RwLock::new(HashMap::new())),
+            state: Arc::new(RwLock::new(TaskManagerState {
+                tasks: HashMap::with_capacity(max_tasks.min(100)),
+                contexts: HashMap::new(),
+                webhook_configs: HashMap::new(),
+            })),
             max_tasks,
         }
     }
@@ -59,53 +62,57 @@ impl TaskManager {
         }
 
         let task_id = task.id.clone();
+        let mut state = self.state.write().await;
 
-        // Store the task
-        {
-            let mut tasks = self.tasks.write().await;
-
-            // Evict old tasks if at capacity
-            if tasks.len() >= self.max_tasks {
-                self.evict_oldest_tasks(&mut tasks).await;
-            }
-
-            tasks.insert(task_id.clone(), task.clone());
+        if state.tasks.len() >= self.max_tasks {
+            self.evict_oldest_tasks(&mut state);
         }
 
-        // Update context mapping
+        state.tasks.insert(task_id.clone(), task.clone());
         if let Some(ctx_id) = context_id {
-            let mut contexts = self.contexts.write().await;
-            contexts
-                .entry(ctx_id)
-                .or_insert_with(Vec::new)
-                .push(task_id);
+            state.contexts.entry(ctx_id).or_default().push(task_id);
         }
 
         task
     }
 
     /// Evict oldest completed tasks when at capacity
-    async fn evict_oldest_tasks(&self, tasks: &mut HashMap<String, Task>) {
-        // Find completed tasks and sort by timestamp
-        let mut completed_tasks: Vec<_> = tasks
+    fn evict_oldest_tasks(&self, state: &mut TaskManagerState) {
+        let mut completed_tasks: Vec<_> = state
+            .tasks
             .iter()
-            .filter(|(_, t)| t.is_terminal())
-            .map(|(id, t)| (id.clone(), t.status.timestamp))
+            .filter(|(_, task)| task.is_terminal())
+            .map(|(id, task)| (id.clone(), task.status.timestamp))
             .collect();
 
         completed_tasks.sort_by(|a, b| a.1.cmp(&b.1));
 
-        // Evict oldest 10% of completed tasks
         let evict_count = (self.max_tasks / 10).max(1);
-        for (id, _) in completed_tasks.into_iter().take(evict_count) {
-            tasks.remove(&id);
+        let evicted_ids: HashSet<_> = completed_tasks
+            .into_iter()
+            .take(evict_count)
+            .map(|(id, _)| id)
+            .collect();
+
+        if evicted_ids.is_empty() {
+            return;
         }
+
+        for id in &evicted_ids {
+            state.tasks.remove(id);
+            state.webhook_configs.remove(id);
+        }
+
+        state.contexts.retain(|_, task_ids| {
+            task_ids.retain(|task_id| !evicted_ids.contains(task_id));
+            !task_ids.is_empty()
+        });
     }
 
     /// Get a task by ID
     pub async fn get_task(&self, task_id: &str) -> Option<Task> {
-        let tasks = self.tasks.read().await;
-        tasks.get(task_id).cloned()
+        let state = self.state.read().await;
+        state.tasks.get(task_id).cloned()
     }
 
     /// Get a task by ID, returning an error if not found
@@ -122,8 +129,9 @@ impl TaskManager {
         state: TaskState,
         message: Option<Message>,
     ) -> A2aResult<Task> {
-        let mut tasks = self.tasks.write().await;
-        let task = tasks
+        let mut manager_state = self.state.write().await;
+        let task = manager_state
+            .tasks
             .get_mut(task_id)
             .ok_or_else(|| A2aError::TaskNotFound(task_id.to_string()))?;
 
@@ -137,8 +145,9 @@ impl TaskManager {
 
     /// Add an artifact to a task
     pub async fn add_artifact(&self, task_id: &str, artifact: Artifact) -> A2aResult<Task> {
-        let mut tasks = self.tasks.write().await;
-        let task = tasks
+        let mut state = self.state.write().await;
+        let task = state
+            .tasks
             .get_mut(task_id)
             .ok_or_else(|| A2aError::TaskNotFound(task_id.to_string()))?;
 
@@ -148,8 +157,9 @@ impl TaskManager {
 
     /// Add a message to task history
     pub async fn add_message(&self, task_id: &str, message: Message) -> A2aResult<Task> {
-        let mut tasks = self.tasks.write().await;
-        let task = tasks
+        let mut state = self.state.write().await;
+        let task = state
+            .tasks
             .get_mut(task_id)
             .ok_or_else(|| A2aError::TaskNotFound(task_id.to_string()))?;
 
@@ -159,8 +169,9 @@ impl TaskManager {
 
     /// Cancel a task
     pub async fn cancel_task(&self, task_id: &str) -> A2aResult<Task> {
-        let mut tasks = self.tasks.write().await;
-        let task = tasks
+        let mut state = self.state.write().await;
+        let task = state
+            .tasks
             .get_mut(task_id)
             .ok_or_else(|| A2aError::TaskNotFound(task_id.to_string()))?;
 
@@ -177,9 +188,10 @@ impl TaskManager {
 
     /// List tasks with optional filtering
     pub async fn list_tasks(&self, params: ListTasksParams) -> ListTasksResult {
-        let tasks = self.tasks.read().await;
+        let state = self.state.read().await;
 
-        let mut result: Vec<Task> = tasks
+        let mut result: Vec<Task> = state
+            .tasks
             .values()
             .filter(|task| {
                 if let Some(ref ctx_id) = params.context_id
@@ -188,14 +200,12 @@ impl TaskManager {
                     return false;
                 }
 
-                // Filter by status
                 if let Some(ref status) = params.status
                     && &task.status.state != status
                 {
                     return false;
                 }
 
-                // Filter by last updated
                 if let Some(ref after) = params.last_updated_after
                     && let Ok(after_time) = chrono::DateTime::parse_from_rfc3339(after)
                     && task.status.timestamp < after_time.to_utc()
@@ -208,16 +218,14 @@ impl TaskManager {
             .cloned()
             .collect();
 
-        // Sort by timestamp (newest first)
         result.sort_by(|a, b| b.status.timestamp.cmp(&a.status.timestamp));
 
-        // Apply pagination
         let total_size = result.len() as u32;
         let page_size = params.page_size.unwrap_or(50).min(100);
         let start_idx = params
             .page_token
             .as_ref()
-            .and_then(|t| t.parse::<usize>().ok())
+            .and_then(|token| token.parse::<usize>().ok())
             .unwrap_or(0);
 
         let end_idx = (start_idx + page_size as usize).min(result.len());
@@ -233,14 +241,12 @@ impl TaskManager {
             .take(page_size as usize)
             .collect();
 
-        // Optionally trim artifacts
         if params.include_artifacts != Some(true) {
             for task in &mut result {
                 task.artifacts.clear();
             }
         }
 
-        // Optionally trim history
         if let Some(history_len) = params.history_length {
             for task in &mut result {
                 if task.history.len() > history_len as usize {
@@ -260,57 +266,59 @@ impl TaskManager {
 
     /// Get tasks by context ID
     pub async fn get_tasks_by_context(&self, context_id: &str) -> Vec<Task> {
-        let contexts = self.contexts.read().await;
-        if let Some(task_ids) = contexts.get(context_id) {
-            let tasks = self.tasks.read().await;
-            task_ids
-                .iter()
-                .filter_map(|id| tasks.get(id).cloned())
-                .collect()
-        } else {
-            Vec::new()
-        }
+        let state = self.state.read().await;
+        state
+            .contexts
+            .get(context_id)
+            .map(|task_ids| {
+                task_ids
+                    .iter()
+                    .filter_map(|id| state.tasks.get(id).cloned())
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     /// Get the number of tasks
     pub async fn task_count(&self) -> usize {
-        self.tasks.read().await.len()
+        self.state.read().await.tasks.len()
     }
 
     /// Clear all tasks (for testing)
     pub async fn clear(&self) {
-        self.tasks.write().await.clear();
-        self.contexts.write().await.clear();
-        self.webhook_configs.write().await.clear();
+        let mut state = self.state.write().await;
+        state.tasks.clear();
+        state.contexts.clear();
+        state.webhook_configs.clear();
     }
 
     /// Set webhook configuration for a task
     pub async fn set_webhook_config(&self, config: TaskPushNotificationConfig) -> A2aResult<()> {
-        // Validate webhook URL (basic SSRF protection)
         if !config.url.starts_with("https://") && !config.url.starts_with("http://localhost") {
             return Err(A2aError::UnsupportedOperation(
                 "Webhook URL must use HTTPS or be localhost".to_string(),
             ));
         }
 
-        // Verify task exists
-        let _ = self.get_task_or_error(&config.task_id).await?;
+        let mut state = self.state.write().await;
+        if !state.tasks.contains_key(&config.task_id) {
+            return Err(A2aError::TaskNotFound(config.task_id));
+        }
 
-        let mut configs = self.webhook_configs.write().await;
-        configs.insert(config.task_id.clone(), config);
+        state.webhook_configs.insert(config.task_id.clone(), config);
         Ok(())
     }
 
     /// Get webhook configuration for a task
     pub async fn get_webhook_config(&self, task_id: &str) -> Option<TaskPushNotificationConfig> {
-        let configs = self.webhook_configs.read().await;
-        configs.get(task_id).cloned()
+        let state = self.state.read().await;
+        state.webhook_configs.get(task_id).cloned()
     }
 
     /// Remove webhook configuration for a task
     pub async fn remove_webhook_config(&self, task_id: &str) {
-        let mut configs = self.webhook_configs.write().await;
-        configs.remove(task_id);
+        let mut state = self.state.write().await;
+        state.webhook_configs.remove(task_id);
     }
 }
 
@@ -412,19 +420,46 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_eviction_cleans_context_and_webhook_indexes() {
+        let manager = TaskManager::with_capacity(1);
+        let task = manager.create_task(Some("ctx-1".to_string())).await;
+
+        manager
+            .update_status(&task.id, TaskState::Completed, None)
+            .await
+            .expect("complete");
+        manager
+            .set_webhook_config(TaskPushNotificationConfig {
+                task_id: task.id.clone(),
+                url: "https://example.com/webhook".to_string(),
+                authentication: None,
+            })
+            .await
+            .expect("set webhook");
+
+        let replacement = manager.create_task(None).await;
+
+        assert_eq!(manager.task_count().await, 1);
+        assert!(manager.get_task(&task.id).await.is_none());
+        assert!(manager.get_webhook_config(&task.id).await.is_none());
+        assert!(manager.get_tasks_by_context("ctx-1").await.is_empty());
+        assert_eq!(
+            manager.get_task(&replacement.id).await.unwrap().id,
+            replacement.id
+        );
+    }
+
+    #[tokio::test]
     async fn test_list_tasks() {
         let manager = TaskManager::new();
 
-        // Create multiple tasks
         let _task1 = manager.create_task(Some("ctx-1".to_string())).await;
         let _task2 = manager.create_task(Some("ctx-1".to_string())).await;
         let _task3 = manager.create_task(Some("ctx-2".to_string())).await;
 
-        // List all
         let all = manager.list_tasks(ListTasksParams::default()).await;
         assert_eq!(all.tasks.len(), 3);
 
-        // List by context
         let ctx1_tasks = manager
             .list_tasks(ListTasksParams {
                 context_id: Some("ctx-1".to_string()),

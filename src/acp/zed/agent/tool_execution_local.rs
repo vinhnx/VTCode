@@ -44,10 +44,10 @@ impl ZedAgent {
             );
         }
 
-        let result = {
-            let registry = self.local_tool_registry.lock().await;
-            registry.execute_public_tool_ref(tool_name, args).await
-        };
+        let result = self
+            .local_tool_registry
+            .execute_public_tool_ref(tool_name, args)
+            .await;
         match result {
             Ok(output) => {
                 if let Some(error_value) = output.get("error") {

@@ -5,7 +5,7 @@ use serde_json::Value;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{RwLock, Semaphore, mpsc};
+use tokio::sync::{Notify, RwLock, Semaphore, mpsc};
 use tokio::time::timeout;
 use tracing::{debug, error};
 
@@ -62,8 +62,14 @@ pub struct AsyncToolPipeline {
     /// Request queue with priority ordering
     request_queue: Arc<RwLock<VecDeque<ToolRequest>>>,
 
-    /// Batch processor for grouping similar requests
-    batch_processor: Arc<BatchProcessor>,
+    /// Wakes the processing task when new requests arrive.
+    work_notify: Arc<Notify>,
+
+    /// Maximum requests to execute in one batch.
+    batch_size: usize,
+
+    /// Maximum time to hold the oldest queued request before flushing a batch.
+    batch_timeout: Duration,
 
     /// Execution semaphore for concurrency control
     execution_semaphore: Arc<Semaphore>,
@@ -79,12 +85,6 @@ pub struct AsyncToolPipeline {
 
     /// Background processing task lifecycle handle
     processing_task: Option<tokio::task::JoinHandle<()>>,
-}
-
-/// Batch processor for grouping similar tool requests
-pub struct BatchProcessor {
-    /// Batch size threshold
-    batch_size: usize,
 }
 
 /// Pipeline performance metrics
@@ -107,7 +107,9 @@ impl AsyncToolPipeline {
     ) -> Self {
         Self {
             request_queue: Arc::new(RwLock::new(VecDeque::with_capacity(256))),
-            batch_processor: Arc::new(BatchProcessor::new(batch_size, batch_timeout)),
+            work_notify: Arc::new(Notify::new()),
+            batch_size,
+            batch_timeout,
             execution_semaphore: Arc::new(Semaphore::new(max_concurrent_tools)),
             result_cache: Arc::new(RwLock::new(lru::LruCache::new(
                 std::num::NonZeroUsize::new(cache_size).unwrap_or(std::num::NonZeroUsize::MIN),
@@ -128,29 +130,63 @@ impl AsyncToolPipeline {
         self.shutdown_tx = Some(shutdown_tx);
 
         let request_queue = Arc::clone(&self.request_queue);
-        let batch_processor = Arc::clone(&self.batch_processor);
+        let work_notify = Arc::clone(&self.work_notify);
+        let batch_size = self.batch_size;
+        let batch_timeout = self.batch_timeout;
         let execution_semaphore = Arc::clone(&self.execution_semaphore);
         let result_cache = Arc::clone(&self.result_cache);
         let metrics = Arc::clone(&self.metrics);
 
-        // Main processing loop
         let processing_task = tokio::spawn(async move {
-            let mut batch_timer = tokio::time::interval(Duration::from_millis(50));
-
-            loop {
+            'outer: loop {
                 tokio::select! {
-                    _ = batch_timer.tick() => {
-                        Self::process_batch(
-                            &request_queue,
-                            &batch_processor,
-                            &execution_semaphore,
-                            &result_cache,
-                            &metrics,
-                        ).await;
-                    }
                     _ = shutdown_rx.recv() => {
                         debug!("Pipeline shutdown requested");
                         break;
+                    }
+                    _ = work_notify.notified() => {}
+                }
+
+                let mut flush_deadline = tokio::time::Instant::now() + batch_timeout;
+                loop {
+                    let queue_len = request_queue.read().await.len();
+                    if queue_len == 0 {
+                        break;
+                    }
+
+                    if queue_len >= batch_size {
+                        Self::process_batch(
+                            &request_queue,
+                            batch_size,
+                            &execution_semaphore,
+                            &result_cache,
+                            &metrics,
+                        )
+                        .await;
+                        flush_deadline = tokio::time::Instant::now() + batch_timeout;
+                        continue;
+                    }
+
+                    let sleep_until_flush = tokio::time::sleep_until(flush_deadline);
+                    tokio::pin!(sleep_until_flush);
+
+                    tokio::select! {
+                        _ = shutdown_rx.recv() => {
+                            debug!("Pipeline shutdown requested");
+                            break 'outer;
+                        }
+                        _ = &mut sleep_until_flush => {
+                            Self::process_batch(
+                                &request_queue,
+                                batch_size,
+                                &execution_semaphore,
+                                &result_cache,
+                                &metrics,
+                            )
+                            .await;
+                            flush_deadline = tokio::time::Instant::now() + batch_timeout;
+                        }
+                        _ = work_notify.notified() => {}
                     }
                 }
             }
@@ -171,18 +207,18 @@ impl AsyncToolPipeline {
 
         let request_id = request.call.id.clone();
 
-        // Add to priority queue
-        let mut queue = self.request_queue.write().await;
+        {
+            let mut queue = self.request_queue.write().await;
+            let insert_pos = queue
+                .iter()
+                .position(|r| r.priority < request.priority)
+                .unwrap_or(queue.len());
 
-        // Insert based on priority (higher priority first)
-        let insert_pos = queue
-            .iter()
-            .position(|r| r.priority < request.priority)
-            .unwrap_or(queue.len());
-
-        queue.insert(insert_pos, request);
+            queue.insert(insert_pos, request);
+        }
 
         self.metrics.write().await.total_requests += 1;
+        self.work_notify.notify_one();
 
         Ok(request_id)
     }
@@ -190,7 +226,7 @@ impl AsyncToolPipeline {
     /// Process a batch of requests efficiently
     async fn process_batch(
         request_queue: &Arc<RwLock<VecDeque<ToolRequest>>>,
-        batch_processor: &Arc<BatchProcessor>,
+        batch_size: usize,
         execution_semaphore: &Arc<Semaphore>,
         result_cache: &Arc<RwLock<lru::LruCache<String, ToolResult>>>,
         metrics: &Arc<RwLock<PipelineMetrics>>,
@@ -202,8 +238,8 @@ impl AsyncToolPipeline {
                 return;
             }
 
-            let batch_size = std::cmp::min(queue.len(), batch_processor.batch_size);
-            let requests: Vec<_> = queue.drain(..batch_size).collect();
+            let current_batch_size = std::cmp::min(queue.len(), batch_size);
+            let requests: Vec<_> = queue.drain(..current_batch_size).collect();
 
             ToolBatch {
                 requests,
@@ -379,11 +415,5 @@ impl Drop for AsyncToolPipeline {
         if let Some(handle) = self.processing_task.take() {
             handle.abort();
         }
-    }
-}
-
-impl BatchProcessor {
-    pub fn new(batch_size: usize, _batch_timeout: Duration) -> Self {
-        Self { batch_size }
     }
 }

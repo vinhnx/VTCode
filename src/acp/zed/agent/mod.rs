@@ -5,7 +5,7 @@ use hashbrown::HashMap;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::Arc;
-use tokio::sync::{Mutex, mpsc};
+use tokio::sync::mpsc;
 use tracing::warn;
 use vtcode_core::config::ToolDocumentationMode;
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, CapabilityLevel};
@@ -36,7 +36,7 @@ pub(crate) struct ZedAgent {
     session_update_tx: mpsc::UnboundedSender<NotificationEnvelope>,
     acp_tool_registry: Rc<AcpToolRegistry>,
     permission_prompter: Rc<dyn AcpPermissionPrompter>,
-    local_tool_registry: Mutex<CoreToolRegistry>,
+    local_tool_registry: CoreToolRegistry,
     file_ops_tool: Option<FileOpsTool>,
     thread_manager: ThreadManager,
     client_capabilities: Rc<RefCell<Option<acp::ClientCapabilities>>>,
@@ -99,7 +99,7 @@ impl ZedAgent {
             session_update_tx,
             acp_tool_registry,
             permission_prompter,
-            local_tool_registry: Mutex::new(core_tool_registry),
+            local_tool_registry: core_tool_registry,
             file_ops_tool,
             thread_manager: ThreadManager::new(),
             client_capabilities: Rc::new(RefCell::new(None)),

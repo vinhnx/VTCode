@@ -7,7 +7,7 @@ use serde_json::Value;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
-use tokio::sync::{RwLock, Semaphore, mpsc};
+use tokio::sync::{Notify, RwLock, Semaphore, mpsc};
 use tracing::debug;
 
 use crate::llm::types::LLMError;
@@ -44,6 +44,9 @@ pub struct ConnectionPool {
 pub struct RequestBatcher {
     /// Pending requests waiting to be batched
     pending_requests: Arc<RwLock<HashMap<String, Vec<BatchedRequest>>>>,
+
+    /// Wakes the processing loop when new partial batches arrive.
+    work_notify: Arc<Notify>,
 
     /// Batch processing interval
     batch_interval: Duration,
@@ -178,6 +181,7 @@ impl RequestBatcher {
     pub fn new(batch_interval: Duration, max_batch_size: usize) -> Self {
         Self {
             pending_requests: Arc::new(RwLock::new(HashMap::new())),
+            work_notify: Arc::new(Notify::new()),
             batch_interval,
             max_batch_size,
             processing_started: AtomicBool::new(false),
@@ -204,6 +208,9 @@ impl RequestBatcher {
             tokio::spawn(async move {
                 Self::process_batch(batch_requests).await;
             });
+        } else {
+            drop(pending);
+            self.work_notify.notify_one();
         }
 
         Ok(())
@@ -256,45 +263,60 @@ impl RequestBatcher {
         *self.shutdown_tx.lock() = Some(shutdown_tx);
 
         let pending_requests = Arc::clone(&self.pending_requests);
+        let work_notify = Arc::clone(&self.work_notify);
         let batch_interval = self.batch_interval;
 
         let processing_task = tokio::spawn(async move {
-            let mut interval = tokio::time::interval(batch_interval);
-
             loop {
                 tokio::select! {
-                    _ = interval.tick() => {
-                        let batches_to_process = {
-                            let mut pending = pending_requests.write().await;
-                            let mut batches = Vec::new();
-
-                            for (key, requests) in pending.iter_mut() {
-                                if !requests.is_empty() {
-                                    batches.push((key.clone(), std::mem::take(requests)));
-                                }
-                            }
-
-                            // Clean up empty entries
-                            pending.retain(|_, v| !v.is_empty());
-
-                            batches
-                        };
-
-                        // Process all batches concurrently
-                        for (_, batch) in batches_to_process {
-                            tokio::spawn(async move {
-                                Self::process_batch(batch).await;
-                            });
-                        }
-                    }
                     _ = shutdown_rx.recv() => {
                         debug!("LLM request batch processing shutdown requested");
                         break;
+                    }
+                    _ = work_notify.notified() => {}
+                }
+
+                let flush_deadline = tokio::time::Instant::now() + batch_interval;
+                let sleep_until_flush = tokio::time::sleep_until(flush_deadline);
+                tokio::pin!(sleep_until_flush);
+
+                loop {
+                    tokio::select! {
+                        _ = shutdown_rx.recv() => {
+                            debug!("LLM request batch processing shutdown requested");
+                            return;
+                        }
+                        _ = &mut sleep_until_flush => {
+                            let batches_to_process = Self::take_pending_batches(&pending_requests).await;
+                            for batch in batches_to_process {
+                                tokio::spawn(async move {
+                                    Self::process_batch(batch).await;
+                                });
+                            }
+                            break;
+                        }
+                        _ = work_notify.notified() => {}
                     }
                 }
             }
         });
         *self.processing_task.lock() = Some(processing_task);
+    }
+
+    async fn take_pending_batches(
+        pending_requests: &Arc<RwLock<HashMap<String, Vec<BatchedRequest>>>>,
+    ) -> Vec<Vec<BatchedRequest>> {
+        let mut pending = pending_requests.write().await;
+        let mut batches = Vec::new();
+
+        for requests in pending.values_mut() {
+            if !requests.is_empty() {
+                batches.push(std::mem::take(requests));
+            }
+        }
+
+        pending.retain(|_, requests| !requests.is_empty());
+        batches
     }
 
     pub async fn shutdown_processing(&self) {

@@ -816,8 +816,8 @@ impl SafetyGateway {
     fn record_execution_locked(&self, state: &mut RateLimiterState, now: Instant) {
         state.current_turn_count = state.current_turn_count.saturating_add(1);
         state.session_count = state.session_count.saturating_add(1);
-        state.calls_per_second.push(now);
-        state.calls_per_minute.push(now);
+        state.calls_per_second.push_back(now);
+        state.calls_per_minute.push_back(now);
     }
 
     fn prune_rate_windows(&self, state: &mut RateLimiterState, now: Instant) {
