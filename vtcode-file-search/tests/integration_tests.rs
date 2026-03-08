@@ -117,7 +117,7 @@ fn test_limit_respects_count() -> anyhow::Result<()> {
     })?;
 
     assert_eq!(results.matches.len(), 5);
-    assert!(results.total_match_count >= 5);
+    assert_eq!(results.total_match_count, 20);
     Ok(())
 }
 

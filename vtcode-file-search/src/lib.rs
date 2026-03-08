@@ -97,20 +97,19 @@ impl BestMatchesList {
         }
     }
 
-    /// Try to add a match, maintaining top-K results.
+    /// Record a matching path while preserving the worker-local top-K heap.
     ///
-    /// Returns Some(score) if the match was added or if it would replace
-    /// a lower-scoring match.
-    fn try_add(&mut self, path: &str) -> Option<u32> {
+    /// Returns true when the path matches the search pattern, even if it
+    /// does not survive the top-K cutoff.
+    fn record_match(&mut self, path: &str) -> bool {
         let haystack = nucleo_matcher::Utf32Str::new(path, &mut self.haystack_buf);
         let needle = nucleo_matcher::Utf32Str::new(&self.pattern_text, &mut self.pattern_buf);
-        let score = self.matcher.fuzzy_match(haystack, needle)? as u32;
+        let Some(score) = self.matcher.fuzzy_match(haystack, needle) else {
+            return false;
+        };
 
-        if push_top_match(&mut self.matches, self.limit, score, path.to_string()) {
-            Some(score)
-        } else {
-            None
-        }
+        push_top_match(&mut self.matches, self.limit, score as u32, path.to_string());
+        true
     }
 }
 
@@ -148,10 +147,10 @@ fn push_top_match(
 ///
 /// FileSearchResults containing matched files and total match count.
 pub fn run(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
-    let limit = config.limit;
+    let limit = config.limit.get();
     let search_directory = &config.search_directory;
     let exclude = &config.exclude;
-    let threads = config.threads;
+    let threads = config.threads.get();
     let cancel_flag = &config.cancel_flag;
     let compute_indices = config.compute_indices;
     let respect_gitignore = config.respect_gitignore;
@@ -161,7 +160,7 @@ pub fn run(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
     // Build the directory walker
     let mut walk_builder = ignore::WalkBuilder::new(search_directory);
     walk_builder
-        .threads(threads.get())
+        .threads(threads)
         .hidden(false)
         .follow_links(true)
         .require_git(false);
@@ -189,13 +188,9 @@ pub fn run(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
     let walker = walk_builder.build_parallel();
 
     // Create per-worker result collection using Arc + Mutex for thread safety
-    let num_workers = threads.get();
-    let best_matchers_per_worker: Vec<Arc<Mutex<BestMatchesList>>> = (0..num_workers)
+    let best_matchers_per_worker: Vec<Arc<Mutex<BestMatchesList>>> = (0..threads)
         .map(|_| {
-            Arc::new(Mutex::new(BestMatchesList::new(
-                limit.get(),
-                &config.pattern_text,
-            )))
+            Arc::new(Mutex::new(BestMatchesList::new(limit, &config.pattern_text)))
         })
         .collect();
 
@@ -234,7 +229,7 @@ pub fn run(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
             // Try to add to results
             {
                 let mut list = best_list.lock();
-                if list.try_add(path).is_some() {
+                if list.record_match(path) {
                     total_match_count_clone.fetch_add(1, Ordering::Relaxed);
                 }
             }
@@ -244,11 +239,11 @@ pub fn run(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
     });
 
     // Merge worker-local top-K heaps into one final top-K heap.
-    let mut merged_matches = BinaryHeap::with_capacity(limit.get());
+    let mut merged_matches = BinaryHeap::with_capacity(limit);
     for arc in best_matchers_per_worker {
         let mut list = arc.lock();
-        while let Some(Reverse((score, path))) = list.matches.pop() {
-            push_top_match(&mut merged_matches, limit.get(), score, path);
+        for Reverse((score, path)) in std::mem::take(&mut list.matches).into_vec() {
+            push_top_match(&mut merged_matches, limit, score, path);
         }
     }
 
@@ -269,7 +264,7 @@ pub fn run(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
 
     Ok(FileSearchResults {
         matches,
-        total_match_count: total_match_count.as_ref().load(Ordering::Relaxed),
+        total_match_count: total_match_count.load(Ordering::Relaxed),
     })
 }
 
