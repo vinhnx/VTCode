@@ -96,8 +96,10 @@ impl StartupContext {
 
         // Apply explicit CLI overrides for model and provider
         if let Some(ref model) = args.model {
-            builder =
-                builder.cli_override("agent.model".to_owned(), toml::Value::String(model.clone()));
+            builder = builder.cli_override(
+                "agent.default_model".to_owned(),
+                toml::Value::String(model.clone()),
+            );
         }
         if let Some(ref provider) = args.provider {
             builder = builder.cli_override(

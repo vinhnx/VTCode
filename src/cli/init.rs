@@ -52,7 +52,7 @@ pub async fn handle_init_command(workspace: &Path, force: bool, run: bool) -> Re
             max_conversation_turns: 50,
             model_behavior: None,
         };
-        crate::agent::agents::run_single_agent_loop(&config, false, false, false, None)
+        crate::agent::agents::run_single_agent_loop(&config, None, false, false, false, None)
             .await
             .with_context(|| "failed to start chat session")?;
     }

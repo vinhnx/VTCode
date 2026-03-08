@@ -87,20 +87,13 @@ pub async fn load_resume_session(
 
 pub async fn run_single_agent_loop(
     config: &CoreAgentConfig,
+    initial_vt_cfg: Option<VTCodeConfig>,
     skip_confirmations: bool,
     full_auto: bool,
     plan_mode: bool,
     resume: Option<SessionContinuation>,
 ) -> Result<()> {
-    // Cache the workspace path to avoid repeated current_dir calls
-    let workspace_path = &config.workspace;
-
-    // Load configuration once and cache it
-    let mut vt_cfg = ConfigManager::load_from_workspace(workspace_path)
-        .ok()
-        .map(|manager| manager.config().clone());
-
-    apply_runtime_overrides(vt_cfg.as_mut(), config);
+    let vt_cfg = prepare_session_vt_config(initial_vt_cfg, config);
 
     let runtime = crate::agent::runloop::unified::UnifiedSessionRuntime;
     let mut steering_receiver = None;
@@ -116,13 +109,26 @@ pub async fn run_single_agent_loop(
     runtime.run_session(params).await
 }
 
+fn prepare_session_vt_config(
+    initial_vt_cfg: Option<VTCodeConfig>,
+    runtime_cfg: &CoreAgentConfig,
+) -> Option<VTCodeConfig> {
+    let mut vt_cfg = initial_vt_cfg.or_else(|| {
+        ConfigManager::load_from_workspace(&runtime_cfg.workspace)
+            .ok()
+            .map(|manager| manager.config().clone())
+    });
+
+    apply_runtime_overrides(vt_cfg.as_mut(), runtime_cfg);
+    vt_cfg
+}
+
 pub fn apply_runtime_overrides(vt_cfg: Option<&mut VTCodeConfig>, runtime_cfg: &CoreAgentConfig) {
     if let Some(cfg) = vt_cfg {
         cfg.agent.provider = runtime_cfg.provider.clone();
 
         if matches!(runtime_cfg.model_source, ModelSelectionSource::CliOverride) {
-            let override_model = runtime_cfg.model.clone();
-            cfg.agent.default_model = override_model.clone();
+            cfg.agent.default_model = runtime_cfg.model.clone();
         }
     }
 }
@@ -208,5 +214,41 @@ mod tests {
 
         assert_eq!(vt_cfg.agent.default_model, "config-model");
         assert_eq!(vt_cfg.agent.provider, "config-provider");
+    }
+
+    #[test]
+    fn initial_session_config_is_preserved() {
+        let mut initial_vt_cfg = VTCodeConfig::default();
+        initial_vt_cfg.agent.default_model = "startup-model".to_string();
+        initial_vt_cfg.agent.provider = "startup-provider".to_string();
+
+        let current_dir = std::env::current_dir().unwrap();
+        let runtime_cfg = CoreAgentConfig {
+            model: "startup-model".to_string(),
+            api_key: String::new(),
+            provider: "startup-provider".to_string(),
+            api_key_env: Provider::Gemini.default_api_key_env().to_string(),
+            workspace: current_dir,
+            verbose: false,
+            quiet: false,
+            theme: String::new(),
+            reasoning_effort: ReasoningEffortLevel::default(),
+            ui_surface: UiSurfacePreference::default(),
+            prompt_cache: PromptCachingConfig::default(),
+            model_source: ModelSelectionSource::WorkspaceConfig,
+            custom_api_keys: BTreeMap::new(),
+            checkpointing_enabled: DEFAULT_CHECKPOINTS_ENABLED,
+            checkpointing_storage_dir: None,
+            checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
+            checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
+            max_conversation_turns: 1000,
+            model_behavior: None,
+        };
+
+        let prepared = prepare_session_vt_config(Some(initial_vt_cfg), &runtime_cfg)
+            .expect("startup config should be preserved");
+
+        assert_eq!(prepared.agent.default_model, "startup-model");
+        assert_eq!(prepared.agent.provider, "startup-provider");
     }
 }

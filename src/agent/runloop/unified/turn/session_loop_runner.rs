@@ -38,6 +38,34 @@ fn workspace_archive_label(workspace: &std::path::Path) -> String {
         .unwrap_or_else(|| "workspace".to_string())
 }
 
+fn live_reload_preserves_session_config(
+    initial_vt_cfg: Option<&VTCodeConfig>,
+    runtime_cfg: &CoreAgentConfig,
+) -> bool {
+    let Some(initial_vt_cfg) = initial_vt_cfg else {
+        return true;
+    };
+
+    let mut reloaded_vt_cfg =
+        vtcode_core::config::loader::ConfigManager::load_from_workspace(&runtime_cfg.workspace)
+            .ok()
+            .map(|manager| manager.config().clone());
+    crate::agent::agents::apply_runtime_overrides(reloaded_vt_cfg.as_mut(), runtime_cfg);
+
+    let Some(reloaded_vt_cfg) = reloaded_vt_cfg else {
+        return false;
+    };
+
+    let Ok(initial_value) = serde_json::to_value(initial_vt_cfg) else {
+        return false;
+    };
+    let Ok(reloaded_value) = serde_json::to_value(reloaded_vt_cfg) else {
+        return false;
+    };
+
+    initial_value == reloaded_value
+}
+
 #[derive(Debug, PartialEq, Eq)]
 enum NextRuntimeArchiveId {
     Existing(String),
@@ -411,7 +439,7 @@ fn build_exit_header_context_fast(
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn run_single_agent_loop_unified_impl(
     config: &CoreAgentConfig,
-    _vt_cfg: Option<VTCodeConfig>,
+    initial_vt_cfg: Option<VTCodeConfig>,
     _skip_confirmations: bool,
     full_auto: bool,
     plan_mode: bool,
@@ -427,7 +455,13 @@ pub(super) async fn run_single_agent_loop_unified_impl(
     let mut config_watcher = SimpleConfigWatcher::new(config.workspace.clone());
     config_watcher.set_check_interval(15);
     config_watcher.set_debounce_duration(500);
-    let mut vt_cfg = config_watcher.load_config();
+    let live_reload_enabled = live_reload_preserves_session_config(initial_vt_cfg.as_ref(), &config);
+    if !live_reload_enabled {
+        tracing::debug!(
+            "Configuration live reload disabled because startup overrides cannot be reproduced from workspace config"
+        );
+    }
+    let mut vt_cfg = initial_vt_cfg.or_else(|| config_watcher.load_config());
     let mut idle_config = extract_idle_config(vt_cfg.as_ref());
 
     loop {
@@ -1078,8 +1112,9 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             continue;
         }
         if matches!(session_end_reason, SessionEndReason::NewSession) {
-            if config_watcher.should_reload() {
+            if live_reload_enabled && config_watcher.should_reload() {
                 vt_cfg = config_watcher.load_config();
+                crate::agent::agents::apply_runtime_overrides(vt_cfg.as_mut(), &config);
                 idle_config = extract_idle_config(vt_cfg.as_ref());
                 tracing::debug!("Configuration reloaded due to file changes");
             }
@@ -1090,8 +1125,9 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             _consecutive_idle_cycles = 0;
             continue;
         }
-        if config_watcher.should_reload() {
+        if live_reload_enabled && config_watcher.should_reload() {
             vt_cfg = config_watcher.load_config();
+            crate::agent::agents::apply_runtime_overrides(vt_cfg.as_mut(), &config);
             idle_config = extract_idle_config(vt_cfg.as_ref());
             tracing::debug!("Configuration reloaded during idle period");
         }

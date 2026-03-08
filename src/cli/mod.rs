@@ -96,6 +96,7 @@ pub async fn dispatch(
         ResolvedCliAction::Chat => {
             handle_chat_command(
                 core_cfg.clone(),
+                startup.config.clone(),
                 startup.skip_confirmations,
                 startup.full_auto_requested,
                 startup.plan_mode_requested,
@@ -166,6 +167,7 @@ async fn dispatch_command(args: &Cli, startup: &StartupContext, command: Command
         Commands::Chat | Commands::ChatVerbose => {
             handle_chat_command(
                 core_cfg.clone(),
+                startup.config.clone(),
                 skip_confirmations,
                 full_auto_requested,
                 startup.plan_mode_requested,
@@ -395,12 +397,14 @@ async fn handle_ask_single_command(
 
 async fn handle_chat_command(
     core_cfg: vtcode_core::config::types::AgentConfig,
+    vt_cfg: vtcode_core::config::loader::VTCodeConfig,
     skip_confirmations: bool,
     full_auto_requested: bool,
     plan_mode: bool,
 ) -> Result<()> {
     crate::agent::agents::run_single_agent_loop(
         &core_cfg,
+        Some(vt_cfg),
         skip_confirmations,
         full_auto_requested,
         plan_mode,

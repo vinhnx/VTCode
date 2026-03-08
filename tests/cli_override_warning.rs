@@ -35,6 +35,37 @@ async fn cli_override_with_non_responses_model_warns() {
 }
 
 #[tokio::test]
+async fn cli_model_override_updates_merged_startup_config() {
+    let temp = TempDir::new().unwrap();
+    let workspace = temp.path().to_path_buf();
+
+    unsafe {
+        std::env::set_var("OPENAI_API_KEY", "test");
+    }
+    let args = Cli::try_parse_from([
+        "vtcode",
+        "--workspace",
+        workspace.to_str().unwrap(),
+        "--model",
+        vtcode_core::config::constants::models::openai::GPT_5,
+    ])
+    .unwrap();
+
+    let ctx = StartupContext::from_cli_args(&args)
+        .await
+        .expect("startup success");
+
+    assert_eq!(
+        ctx.config.agent.default_model,
+        vtcode_core::config::constants::models::openai::GPT_5
+    );
+    assert_eq!(
+        ctx.agent_config.model,
+        vtcode_core::config::constants::models::openai::GPT_5
+    );
+}
+
+#[tokio::test]
 async fn cli_override_with_responses_model_no_warn() {
     let temp = TempDir::new().unwrap();
     let workspace = temp.path().to_path_buf();

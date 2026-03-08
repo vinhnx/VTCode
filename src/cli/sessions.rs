@@ -222,6 +222,7 @@ async fn run_single_agent_loop(
 
     crate::agent::agents::run_single_agent_loop(
         &resume_config,
+        None,
         skip_confirmations,
         false,
         false,
