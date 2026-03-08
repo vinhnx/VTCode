@@ -2,6 +2,35 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.87.1 - 2026-03-08
+
+### Highlights
+### Other Changes
+#### Other
+
+- Enhance exec command functionality with session resumption and prompt handling (d234fee7) 
+- Add review command and related functionality (ef0298c7) 
+- Refactor tool execution and safety gateway: remove legacy orchestrator and unified executor, streamline parallel execution, and enhance safety context handling. (2946fcf7) 
+- Add support for resuming and forking sessions across workspaces (32bd498f) 
+- Add structured error handling with VtCodeError and ErrorCode (93beb517) 
+- Consolidate reliability plan (47186a92) 
+- Refactor ToolRegistration to use Arc<str> for name and add unregister_tool method in ToolRegistry (cba4392f) 
+- Refactor tool policy handling and enhance safety checks for file access (2e9a9c16) 
+- Refactor command session handling and rename PTY references to unified_exec (80023410) 
+- Refactor tool execution handling to unify command names and improve compatibility (e1f3b602) 
+- Refactor tool intent handling to unify command names and improve output processing (cb0581be) 
+- Refactor tool execution handling and update command aliases to use unified_exec (097b5d85) 
+- Add support for creating and managing PTY sessions in the tool registry (8cbfcb87) 
+- Add support for optional patch input in apply_patch handler and update related schemas (29ed7b6e) 
+- Add assistant phase handling to message processing and tests (f448df1c) 
+- Add support for OpenAI service tier configuration and handling (5586bffc) 
+- Implement VT Code ast-grep installer (f8901da1) 
+- Fix build release (f9f272e9) 
+#### Refactors
+
+- Streamline event processing and enhance modal state management (1e7c6031) 
+### Contributors
+@vinhnx
 ## 0.86.12 - 2026-03-07
 
 ### Highlights
