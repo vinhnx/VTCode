@@ -284,7 +284,8 @@ impl AgentRunner {
             .into_iter()
             .map(|tool| tool.function_name().to_string())
             .collect::<Vec<_>>();
-        let prompt_context = PromptContext::from_workspace_tools(&workspace, available_tools);
+        let mut prompt_context = PromptContext::from_workspace_tools(&workspace, available_tools);
+        prompt_context.load_available_skills();
         let system_prompt = compose_system_instruction_text(
             workspace.as_path(),
             Some(session_config.effective()),

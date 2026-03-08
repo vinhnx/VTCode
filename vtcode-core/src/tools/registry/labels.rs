@@ -46,6 +46,7 @@ pub fn tool_action_label(tool_name: &str, args: &Value) -> String {
             match tool_intent::unified_search_action(args).unwrap_or("grep") {
                 "grep" => "Search text".to_string(),
                 "list" => "List files".to_string(),
+                "structural" => "Structural search".to_string(),
                 "tools" => "List tools".to_string(),
                 "errors" => "List errors".to_string(),
                 "agent" => "Show agent info".to_string(),

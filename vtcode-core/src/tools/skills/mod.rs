@@ -1,9 +1,13 @@
 use crate::config::ToolDocumentationMode;
 use crate::config::types::CapabilityLevel;
 use crate::llm::provider::ToolDefinition;
+use crate::skills::cli_bridge::CliToolConfig;
+use crate::skills::discovery::{DiscoveryConfig, SkillDiscovery};
 use crate::skills::executor::SkillToolAdapter;
 use crate::skills::file_references::FileReferenceValidator;
-use crate::skills::loader::{EnhancedSkill, EnhancedSkillLoader};
+use crate::skills::loader::{SkillLoaderConfig, discover_skill_metadata_lightweight};
+use crate::skills::manager::SkillsManager;
+use crate::skills::model::{SkillErrorInfo, SkillLoadOutcome};
 use crate::skills::types::{Skill, SkillVariety};
 use crate::tool_policy::ToolPolicy;
 use crate::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
@@ -14,9 +18,10 @@ use anyhow::Context;
 use async_trait::async_trait;
 use hashbrown::HashMap;
 use serde_json::{Value, json};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tracing::{debug, warn};
 
 type SkillMap = Arc<RwLock<HashMap<String, Skill>>>;
 type ToolDefList = Arc<RwLock<Vec<ToolDefinition>>>;
@@ -177,6 +182,81 @@ fn build_skill_response(skill: &Skill, activation_status: &str) -> Value {
     })
 }
 
+fn default_vtcode_home_dir() -> PathBuf {
+    std::env::var_os("VTCODE_HOME")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| dirs::home_dir().map(|home| home.join(".vtcode")))
+        .unwrap_or_else(|| PathBuf::from(".vtcode"))
+}
+
+fn effective_codex_home(explicit_home: Option<&Path>) -> PathBuf {
+    explicit_home
+        .map(Path::to_path_buf)
+        .unwrap_or_else(default_vtcode_home_dir)
+}
+
+fn find_project_root(path: &Path) -> Option<PathBuf> {
+    let mut current = Some(path);
+    while let Some(dir) = current {
+        if dir.join(".git").exists() {
+            return Some(dir.to_path_buf());
+        }
+        current = dir.parent();
+    }
+    None
+}
+
+fn build_skill_loader_config(workspace_root: &Path, codex_home: &Path) -> SkillLoaderConfig {
+    SkillLoaderConfig {
+        codex_home: codex_home.to_path_buf(),
+        cwd: workspace_root.to_path_buf(),
+        project_root: find_project_root(workspace_root)
+            .or_else(|| Some(workspace_root.to_path_buf())),
+    }
+}
+
+fn discover_session_skill_metadata(workspace_root: &Path, codex_home: &Path) -> SkillLoadOutcome {
+    let manager = SkillsManager::new(codex_home.to_path_buf());
+    manager.ensure_system_skills_installed();
+    let config = build_skill_loader_config(workspace_root, codex_home);
+    discover_skill_metadata_lightweight(&config)
+}
+
+async fn discover_session_utilities(
+    workspace_root: &Path,
+    codex_home: &Path,
+) -> anyhow::Result<Vec<CliToolConfig>> {
+    let mut config = DiscoveryConfig::default();
+    config.skill_paths.clear();
+    config.tool_paths = vec![
+        PathBuf::from("./tools"),
+        PathBuf::from("./vendor/tools"),
+        codex_home.join("tools"),
+    ];
+
+    let mut discovery = SkillDiscovery::with_config(config);
+    Ok(discovery.discover_all(workspace_root).await?.tools)
+}
+
+fn skill_root_from_metadata_path(path: &Path) -> PathBuf {
+    match path.file_name().and_then(|name| name.to_str()) {
+        Some("SKILL.md") => path
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| path.to_path_buf()),
+        _ => path.to_path_buf(),
+    }
+}
+
+fn discovery_error_samples(errors: &[SkillErrorInfo]) -> Vec<String> {
+    errors
+        .iter()
+        .take(3)
+        .map(|error| format!("{}: {}", error.path.display(), error.message))
+        .collect()
+}
+
 fn matches_skill_filters(
     name: &str,
     description: &str,
@@ -206,6 +286,7 @@ fn matches_skill_filters(
 /// Tool to load skill instructions on demand (Progressive Disclosure)
 pub struct LoadSkillTool {
     workspace_root: PathBuf,
+    codex_home: Option<PathBuf>,
     active_skills: SkillMap,
     runtime: SkillToolSessionRuntime,
 }
@@ -216,8 +297,18 @@ impl LoadSkillTool {
         active_skills: SkillMap,
         runtime: SkillToolSessionRuntime,
     ) -> Self {
+        Self::with_codex_home(workspace_root, active_skills, runtime, None)
+    }
+
+    pub fn with_codex_home(
+        workspace_root: PathBuf,
+        active_skills: SkillMap,
+        runtime: SkillToolSessionRuntime,
+        codex_home: Option<PathBuf>,
+    ) -> Self {
         Self {
             workspace_root,
+            codex_home,
             active_skills,
             runtime,
         }
@@ -270,21 +361,51 @@ impl Tool for LoadSkillTool {
             return Ok(build_skill_response(&skill, SKILL_ALREADY_ACTIVE_STATUS));
         }
 
-        let mut loader = EnhancedSkillLoader::new(self.workspace_root.clone());
-        let skill = match loader.get_skill(name).await? {
-            EnhancedSkill::Traditional(skill) => *skill,
-            EnhancedSkill::CliTool(_) => {
+        let codex_home = effective_codex_home(self.codex_home.as_deref());
+        debug!(
+            skill = name,
+            workspace = %self.workspace_root.display(),
+            codex_home = %codex_home.display(),
+            "Loading session skill via manager-backed discovery"
+        );
+
+        let metadata = discover_session_skill_metadata(&self.workspace_root, &codex_home);
+        if !metadata.errors.is_empty() {
+            warn!(
+                skill = name,
+                error_count = metadata.errors.len(),
+                sample = ?discovery_error_samples(&metadata.errors),
+                "Session skill discovery reported warnings during load_skill"
+            );
+        }
+
+        let manager = SkillsManager::new(codex_home.clone());
+        let skill = if let Some(skill_meta) = metadata
+            .skills
+            .iter()
+            .find(|skill| skill.name == name && skill.manifest.is_some())
+        {
+            let skill_root = skill_root_from_metadata_path(&skill_meta.path);
+            manager.load_skill_instructions(name, &skill_root)?
+        } else {
+            let tools = discover_session_utilities(&self.workspace_root, &codex_home).await?;
+            if tools.iter().any(|tool| tool.name == name) {
                 return Err(anyhow::anyhow!(
                     "Skill '{}' is a system utility and cannot be activated via load_skill",
                     name
                 ));
             }
-            EnhancedSkill::NativePlugin(_) => {
-                return Err(anyhow::anyhow!(
-                    "Skill '{}' is a native plugin and cannot be activated via load_skill",
-                    name
-                ));
-            }
+
+            let detail = if metadata.errors.is_empty() {
+                String::new()
+            } else {
+                format!(
+                    " Session discovery also reported {} issue(s); use `list_skills` to inspect warning samples.",
+                    metadata.errors.len()
+                )
+            };
+
+            return Err(anyhow::anyhow!("Skill '{}' not found.{}", name, detail));
         };
 
         let activation_status = match self
@@ -303,13 +424,23 @@ impl Tool for LoadSkillTool {
 /// Tool to list all available skills
 pub struct ListSkillsTool {
     workspace_root: PathBuf,
+    codex_home: Option<PathBuf>,
     active_skills: SkillMap,
 }
 
 impl ListSkillsTool {
     pub fn new(workspace_root: PathBuf, active_skills: SkillMap) -> Self {
+        Self::with_codex_home(workspace_root, active_skills, None)
+    }
+
+    pub fn with_codex_home(
+        workspace_root: PathBuf,
+        active_skills: SkillMap,
+        codex_home: Option<PathBuf>,
+    ) -> Self {
         Self {
             workspace_root,
+            codex_home,
             active_skills,
         }
     }
@@ -369,12 +500,33 @@ impl Tool for ListSkillsTool {
         }
         drop(active_skills);
 
-        let mut loader = EnhancedSkillLoader::new(self.workspace_root.clone());
-        let discovery = loader.discover_all_skills().await?;
+        let codex_home = effective_codex_home(self.codex_home.as_deref());
+        debug!(
+            workspace = %self.workspace_root.display(),
+            codex_home = %codex_home.display(),
+            "Listing session skills via manager-backed discovery"
+        );
+
+        let discovery = discover_session_skill_metadata(&self.workspace_root, &codex_home);
+        if !discovery.errors.is_empty() {
+            warn!(
+                error_count = discovery.errors.len(),
+                sample = ?discovery_error_samples(&discovery.errors),
+                "Session skill discovery reported warnings during list_skills"
+            );
+        }
+
         let mut skill_list = Vec::new();
 
-        for skill_ctx in discovery.skills {
-            let manifest = skill_ctx.manifest();
+        for skill_meta in discovery
+            .skills
+            .iter()
+            .filter(|skill| skill.manifest.is_some())
+        {
+            let manifest = skill_meta
+                .manifest
+                .as_ref()
+                .expect("filtered to skills with manifests");
             if !matches_skill_filters(
                 manifest.name.as_str(),
                 manifest.description.as_str(),
@@ -399,7 +551,7 @@ impl Tool for ListSkillsTool {
             }));
         }
 
-        for tool in discovery.tools {
+        for tool in discover_session_utilities(&self.workspace_root, &codex_home).await? {
             if !matches_skill_filters(
                 tool.name.as_str(),
                 tool.description.as_str(),
@@ -448,6 +600,19 @@ impl Tool for ListSkillsTool {
             && let Some(response_object) = response.as_object_mut()
         {
             response_object.insert("filter_applied".to_string(), serde_json::json!(true));
+        }
+
+        if !discovery.errors.is_empty()
+            && let Some(response_object) = response.as_object_mut()
+        {
+            response_object.insert(
+                "discovery_errors".to_string(),
+                serde_json::json!(discovery.errors.len()),
+            );
+            response_object.insert(
+                "discovery_error_samples".to_string(),
+                serde_json::json!(discovery_error_samples(&discovery.errors)),
+            );
         }
 
         Ok(response)
@@ -557,6 +722,10 @@ mod tests {
 
     const DEMO_SKILL_TOOL_NAME: &str = "demo-skill";
 
+    fn temp_codex_home(workspace: &Path) -> PathBuf {
+        workspace.join(".test-vtcode-home")
+    }
+
     fn write_skill_fixture(workspace: &Path, name: &str) {
         let skill_dir = workspace.join(".agents/skills").join(name);
         let references_dir = skill_dir.join("references");
@@ -577,6 +746,24 @@ See `references/notes.txt`.
         )
         .expect("skill file");
         fs::write(references_dir.join("notes.txt"), "demo notes").expect("skill resource");
+    }
+
+    fn write_invalid_skill_fixture(workspace: &Path, name: &str) {
+        let skill_dir = workspace.join(".agents/skills").join(name);
+        fs::create_dir_all(&skill_dir).expect("invalid skill dir");
+        fs::write(
+            skill_dir.join("SKILL.md"),
+            format!(
+                r#"---
+name: {name}
+description:
+  - invalid
+---
+Broken skill
+"#
+            ),
+        )
+        .expect("invalid skill file");
     }
 
     #[tokio::test]
@@ -600,10 +787,11 @@ See `references/notes.txt`.
             })),
         );
 
-        let tool = LoadSkillTool::new(
+        let tool = LoadSkillTool::with_codex_home(
             temp_dir.path().to_path_buf(),
             Arc::clone(&active_skills),
             runtime,
+            Some(temp_codex_home(temp_dir.path())),
         );
 
         let result = tool
@@ -641,10 +829,11 @@ See `references/notes.txt`.
             ToolModelCapabilities::default(),
             None,
         );
-        let tool = LoadSkillTool::new(
+        let tool = LoadSkillTool::with_codex_home(
             temp_dir.path().to_path_buf(),
             Arc::clone(&active_skills),
             runtime,
+            Some(temp_codex_home(temp_dir.path())),
         );
 
         tool.execute(json!({ "name": skill_name }))
@@ -679,13 +868,14 @@ See `references/notes.txt`.
             ToolModelCapabilities::default(),
             None,
         );
-        let mut loader = EnhancedSkillLoader::new(temp_dir.path().to_path_buf());
+        let mut loader =
+            crate::skills::loader::EnhancedSkillLoader::new(temp_dir.path().to_path_buf());
         let skill = match loader
             .get_skill(skill_name)
             .await
             .expect("discover skill for activation")
         {
-            EnhancedSkill::Traditional(skill) => *skill,
+            crate::skills::loader::EnhancedSkill::Traditional(skill) => *skill,
             _ => panic!("expected traditional skill"),
         };
 
@@ -709,6 +899,87 @@ See `references/notes.txt`.
                 .await
                 .iter()
                 .all(|tool| tool.function_name() != skill_name)
+        );
+    }
+
+    #[tokio::test]
+    async fn list_skills_discovers_bundled_ast_grep_from_vtcode_home() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let active_skills = Arc::new(RwLock::new(HashMap::new()));
+        let tool = ListSkillsTool::with_codex_home(
+            temp_dir.path().to_path_buf(),
+            active_skills,
+            Some(temp_codex_home(temp_dir.path())),
+        );
+
+        let result = tool
+            .execute(json!({ "query": "ast-grep" }))
+            .await
+            .expect("list skills succeeds");
+
+        assert_eq!(result["count"].as_u64(), Some(1));
+        let groups = result["groups"]["agent_skill"]
+            .as_array()
+            .expect("agent skill group");
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0]["name"].as_str(), Some("ast-grep"));
+    }
+
+    #[tokio::test]
+    async fn load_skill_activates_bundled_ast_grep_from_vtcode_home() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let registry = Arc::new(ToolRegistry::new(temp_dir.path().to_path_buf()).await);
+        let active_skills = Arc::new(RwLock::new(HashMap::new()));
+        let runtime = SkillToolSessionRuntime::new(
+            Arc::clone(&registry),
+            None,
+            ToolDocumentationMode::Full,
+            ToolModelCapabilities::default(),
+            None,
+        );
+        let tool = LoadSkillTool::with_codex_home(
+            temp_dir.path().to_path_buf(),
+            Arc::clone(&active_skills),
+            runtime,
+            Some(temp_codex_home(temp_dir.path())),
+        );
+
+        let result = tool
+            .execute(json!({ "name": "ast-grep" }))
+            .await
+            .expect("load bundled skill succeeds");
+
+        assert_eq!(result["name"].as_str(), Some("ast-grep"));
+        assert_eq!(
+            result["activation_status"].as_str(),
+            Some("Associated tools activated and added to context.")
+        );
+        assert!(active_skills.read().await.contains_key("ast-grep"));
+    }
+
+    #[tokio::test]
+    async fn list_skills_surfaces_discovery_errors() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        write_invalid_skill_fixture(temp_dir.path(), "broken-skill");
+        let active_skills = Arc::new(RwLock::new(HashMap::new()));
+        let tool = ListSkillsTool::with_codex_home(
+            temp_dir.path().to_path_buf(),
+            active_skills,
+            Some(temp_codex_home(temp_dir.path())),
+        );
+
+        let result = tool.execute(json!({})).await.expect("list skills succeeds");
+
+        assert_eq!(result["discovery_errors"].as_u64(), Some(1));
+        let samples = result["discovery_error_samples"]
+            .as_array()
+            .expect("error samples");
+        assert_eq!(samples.len(), 1);
+        assert!(
+            samples[0]
+                .as_str()
+                .expect("sample string")
+                .contains("broken-skill")
         );
     }
 }

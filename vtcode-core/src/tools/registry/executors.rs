@@ -867,7 +867,7 @@ fn missing_unified_file_action_error(args: &Value) -> anyhow::Error {
 fn missing_unified_search_action_error(args: &Value) -> anyhow::Error {
     anyhow!(
         "Missing unified_search action. Use `action` or fields: \
-         `pattern|query` (grep), `path` (list), `keyword` (tools), \
+         `pattern|query` (grep), `action:\"structural\"` with `pattern` (structural search), `path` (list), `keyword` (tools), \
          `scope` (errors), `url` (web), `sub_action|name` (skill). Keys: {}",
         summarized_arg_keys(args)
     )
@@ -1325,6 +1325,13 @@ impl ToolRegistry {
             UnifiedSearchAction::List => {
                 let tool = self.inventory.file_ops_tool().clone();
                 tool.execute(args).await
+            }
+            UnifiedSearchAction::Structural => {
+                crate::tools::structural_search::execute_structural_search(
+                    self.workspace_root(),
+                    args,
+                )
+                .await
             }
             UnifiedSearchAction::Intelligence => Ok(
                 serde_json::json!({"error": "Action 'intelligence' is deprecated. Use action='grep' or action='list'."}),

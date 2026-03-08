@@ -119,6 +119,7 @@
 //! the monolithic implementation into focused, reusable components.
 
 pub mod apply_patch;
+pub mod ast_grep_binary;
 pub mod builder;
 pub mod constants;
 pub mod error_messages;
@@ -157,11 +158,13 @@ pub mod registry;
 pub mod result;
 pub mod result_cache;
 pub mod result_metadata;
+pub mod ripgrep_binary;
 pub mod safety_gateway;
 pub mod search_metrics;
 pub mod shell;
 pub mod shell_snapshot;
 pub mod skills;
+pub mod structural_search;
 pub mod summarizers;
 pub mod terminal_app;
 pub mod tool_effectiveness;

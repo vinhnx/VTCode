@@ -4,6 +4,7 @@ use vtcode_core::config::ToolPolicy;
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+use vtcode_core::tools::ripgrep_binary::RIPGREP_INSTALL_COMMAND;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::async_mcp_manager::{AsyncMcpManager, McpInitStatus};
@@ -527,7 +528,9 @@ fn get_suggestion_for_issue(label: &str, detail: &str) -> Option<String> {
     } else if label_lower == "npm" {
         Some("Install npm with Node.js or update it: npm install -g npm@latest".to_string())
     } else if label_lower.contains("ripgrep") {
-        Some("Install Ripgrep: brew install ripgrep (macOS), apt install ripgrep (Linux), or cargo install ripgrep".to_string())
+        Some(format!(
+            "Run `{RIPGREP_INSTALL_COMMAND}` for guided installation, or install `ripgrep` manually with your package manager."
+        ))
     } else if label_lower.contains("mcp") && detail_lower.contains("error") {
         Some(
             "Check MCP configuration in vtcode.toml, server availability, and timeouts."

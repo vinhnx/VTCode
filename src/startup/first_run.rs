@@ -12,6 +12,7 @@ use vtcode_core::utils::dot_config::{WorkspaceTrustLevel, WorkspaceTrustRecord, 
 use vtcode_core::utils::file_utils::ensure_dir_exists_sync;
 use vtcode_core::{initialize_dot_folder, update_model_preference};
 
+use super::dependency_advisories::render_optional_search_tools_notice;
 use super::first_run_prompts::{
     default_model_for_provider, prompt_model, prompt_provider, prompt_reasoning_effort,
     prompt_trust, resolve_initial_provider,
@@ -207,6 +208,7 @@ async fn run_first_run_setup(
         &format!("Auth: {}", api_key_hint(provider)),
     )?;
     renderer.line(MessageStyle::Info, "")?;
+    render_optional_search_tools_notice(&mut renderer).await?;
     renderer.line(
         MessageStyle::Status,
         "Tip: run `/init` anytime to rerun this setup and refresh other workspace defaults.",

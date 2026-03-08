@@ -59,9 +59,9 @@ pub fn generate_tool_guidelines(
     // Tool preference guidelines
     if has_exec && has_search {
         guidelines.push(
-            "**Tool Selection**: Prefer `unified_search` (action='grep' or 'list') over `unified_exec` \
-             for file exploration - they're faster, provide structured output, and \
-             respect .gitignore automatically."
+            "**Tool Selection**: Prefer `unified_search` over `unified_exec` for exploration. \
+             Use action='grep' for broad text search, action='list' for file discovery, and \
+             action='structural' for syntax-aware code search."
                 .to_string(),
         );
     }

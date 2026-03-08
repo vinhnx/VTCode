@@ -1,4 +1,6 @@
 use crate::config::types::CapabilityLevel;
+use crate::skills::manager::SkillsManager;
+use crate::skills::model::SkillMetadata;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -15,6 +17,8 @@ pub struct PromptContext {
     pub available_tools: Vec<String>,
     /// Available skills (name: description)
     pub available_skills: Vec<(String, String)>,
+    /// Available skill metadata for lean prompt rendering
+    pub available_skill_metadata: Vec<SkillMetadata>,
     /// User preferences
     pub user_preferences: Option<UserPreferences>,
     /// Capability level (inferred from tools or explicitly set)
@@ -72,6 +76,25 @@ impl PromptContext {
         }
     }
 
+    /// Add available skill metadata
+    pub fn add_skill_metadata(&mut self, metadata: SkillMetadata) {
+        self.add_skill(metadata.name.clone(), metadata.description.clone());
+        if !self
+            .available_skill_metadata
+            .iter()
+            .any(|skill| skill.name == metadata.name)
+        {
+            self.available_skill_metadata.push(metadata);
+        }
+    }
+
+    /// Add multiple skill metadata entries
+    pub fn add_skill_metadata_entries(&mut self, skills: Vec<SkillMetadata>) {
+        for skill in skills {
+            self.add_skill_metadata(skill);
+        }
+    }
+
     /// Add multiple skills
     pub fn add_skills(&mut self, skills: Vec<(String, String)>) {
         for (name, description) in skills {
@@ -94,6 +117,24 @@ impl PromptContext {
     /// Set current working directory
     pub fn set_current_directory(&mut self, dir: PathBuf) {
         self.current_directory = Some(dir);
+    }
+
+    pub fn load_available_skills(&mut self) {
+        let home_dir = default_vtcode_home_dir();
+        self.load_available_skills_with_home_dir(home_dir.as_deref());
+    }
+
+    pub(crate) fn load_available_skills_with_home_dir(&mut self, home_dir: Option<&Path>) {
+        let Some(workspace) = self.workspace.as_deref() else {
+            return;
+        };
+        let Some(home_dir) = home_dir else {
+            return;
+        };
+
+        let manager = SkillsManager::new(home_dir.to_path_buf());
+        let outcome = manager.skills_metadata_lightweight(workspace);
+        self.add_skill_metadata_entries(outcome.skills);
     }
 
     /// Build prompt context from a workspace and the tool names exposed to the model.
@@ -123,10 +164,30 @@ impl PromptContext {
     }
 }
 
+fn default_vtcode_home_dir() -> Option<PathBuf> {
+    std::env::var_os("VTCODE_HOME")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| dirs::home_dir().map(|home| home.join(".vtcode")))
+}
+
 #[cfg(test)]
 mod tests {
     use super::PromptContext;
+    use std::fs;
     use std::path::PathBuf;
+    use tempfile::TempDir;
+
+    fn write_skill(skill_dir: &std::path::Path, name: &str, description: &str) {
+        fs::create_dir_all(skill_dir).expect("create skill dir");
+        fs::write(
+            skill_dir.join("SKILL.md"),
+            format!(
+                "---\nname: {name}\ndescription: {description}\nwhen-to-use: Use this skill.\nwhen-not-to-use: Avoid this skill.\n---\n# {name}\n"
+            ),
+        )
+        .expect("write skill");
+    }
 
     #[test]
     fn from_workspace_tools_populates_workspace_and_tools() {
@@ -139,5 +200,32 @@ mod tests {
         assert_eq!(context.available_tools.len(), 2);
         assert!(context.capability_level.is_some());
         assert!(context.current_directory.is_some());
+    }
+
+    #[test]
+    fn load_available_skills_discovers_repo_and_system_skills() {
+        let workspace = TempDir::new().expect("workspace tempdir");
+        fs::create_dir(workspace.path().join(".git")).expect("create git dir");
+        write_skill(
+            &workspace.path().join(".vtcode/skills/repo-skill"),
+            "repo-skill",
+            "Repo-local skill",
+        );
+
+        let home = TempDir::new().expect("home tempdir");
+        let mut context = PromptContext::from_workspace_tools(workspace.path(), ["unified_search"]);
+
+        assert!(context.available_skill_metadata.is_empty());
+
+        context.load_available_skills_with_home_dir(Some(home.path()));
+
+        let skill_names = context
+            .available_skill_metadata
+            .iter()
+            .map(|skill| skill.name.as_str())
+            .collect::<Vec<_>>();
+
+        assert!(skill_names.contains(&"repo-skill"));
+        assert!(skill_names.contains(&"ast-grep"));
     }
 }

@@ -198,6 +198,9 @@ reqwest = { workspace = true }
 semver = { workspace = true }
 thiserror = { workspace = true }
 axum = { version = "0.8", optional = true }
+flate2 = "1.1"
+tar = "0.4"
+zip = { version = "8.1", default-features = false, features = ["deflate"] }
 
 [features]
 default = ["tool-chat", "a2a-server"]

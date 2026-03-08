@@ -264,7 +264,7 @@ pub(super) fn validate_startup_configuration(
     workspace: &Path,
     quiet: bool,
 ) -> Result<()> {
-    check_ripgrep_availability(quiet);
+    check_ripgrep_availability();
 
     let mut models_json_paths = vec![workspace.join("docs/models.json")];
     if let Ok(cwd) = std::env::current_dir() {
@@ -296,19 +296,13 @@ pub(super) fn validate_startup_configuration(
     Ok(())
 }
 
-fn check_ripgrep_availability(quiet: bool) {
+fn check_ripgrep_availability() {
     match RipgrepStatus::check() {
         RipgrepStatus::Available { version } => {
             tracing::debug!("Ripgrep available: {}", version);
         }
         RipgrepStatus::NotFound => {
-            if quiet {
-                return;
-            }
-
-            if let Err(e) = RipgrepStatus::install() {
-                tracing::warn!("Ripgrep installation failed: {}", e);
-            }
+            tracing::debug!("Ripgrep not found; VT Code will use its built-in grep fallback");
         }
         RipgrepStatus::Error { reason } => {
             tracing::warn!("Ripgrep check error: {}", reason);

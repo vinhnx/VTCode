@@ -19,6 +19,8 @@ pub struct DotConfig {
     pub ui: UiConfig,
     #[serde(default)]
     pub workspace_trust: WorkspaceTrustStore,
+    #[serde(default)]
+    pub dependency_notices: DependencyNoticeStore,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,6 +60,14 @@ pub struct WorkspaceTrustRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct DependencyNoticeStore {
+    #[serde(default)]
+    pub ripgrep_missing_notice_shown: bool,
+    #[serde(default)]
+    pub ast_grep_missing_notice_shown: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProviderConfig {
     pub api_key: Option<String>,
     pub base_url: Option<String>,
@@ -94,6 +104,7 @@ impl Default for DotConfig {
             cache: CacheConfig::default(),
             ui: UiConfig::default(),
             workspace_trust: WorkspaceTrustStore::default(),
+            dependency_notices: DependencyNoticeStore::default(),
         }
     }
 }

@@ -373,6 +373,13 @@ fn is_unified_search_arg_key(key: &str) -> bool {
             | "pattern"
             | "query"
             | "path"
+            | "lang"
+            | "selector"
+            | "strictness"
+            | "debug_query"
+            | "globs"
+            | "context_lines"
+            | "max_results"
             | "keyword"
             | "url"
             | "scope"
@@ -442,6 +449,24 @@ pub fn normalize_unified_search_args(args: &Value) -> Value {
             "query"
         } else if key.eq_ignore_ascii_case("path") {
             "path"
+        } else if key.eq_ignore_ascii_case("lang") {
+            "lang"
+        } else if key.eq_ignore_ascii_case("selector") {
+            "selector"
+        } else if key.eq_ignore_ascii_case("strictness") {
+            "strictness"
+        } else if key.eq_ignore_ascii_case("debug_query") || key.eq_ignore_ascii_case("debug-query")
+        {
+            "debug_query"
+        } else if key.eq_ignore_ascii_case("globs") {
+            "globs"
+        } else if key.eq_ignore_ascii_case("context_lines")
+            || key.eq_ignore_ascii_case("context-lines")
+        {
+            "context_lines"
+        } else if key.eq_ignore_ascii_case("max_results") || key.eq_ignore_ascii_case("max-results")
+        {
+            "max_results"
         } else if key.eq_ignore_ascii_case("keyword") {
             "keyword"
         } else if key.eq_ignore_ascii_case("url") {
@@ -666,6 +691,23 @@ mod tests {
         assert_eq!(normalized["pattern"], "needle");
         assert_eq!(normalized["path"], ".");
         assert_eq!(normalized["action"], "grep");
+    }
+
+    #[test]
+    fn normalize_unified_search_args_keeps_structural_action_explicit() {
+        let normalized = normalize_unified_search_args(&json!({
+            "Action": "structural",
+            "Pattern": "fn $NAME() {}",
+            "Lang": "rust",
+            "Debug-Query": "ast",
+            "Max-Results": 5
+        }));
+
+        assert_eq!(normalized["action"], "structural");
+        assert_eq!(normalized["pattern"], "fn $NAME() {}");
+        assert_eq!(normalized["lang"], "rust");
+        assert_eq!(normalized["debug_query"], "ast");
+        assert_eq!(normalized["max_results"], 5);
     }
 
     #[test]

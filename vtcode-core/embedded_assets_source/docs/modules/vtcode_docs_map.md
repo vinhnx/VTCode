@@ -866,9 +866,9 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **User Questions**: "What can you tell me about Tool Search Integration?", "How does Overview work?", "How does Anthropic configuration work?"
 
 - **File**: `docs/tools/TOOL_SPECS.md`
-  - **Content**: VT Code Tool Specifications (Anthropic-Aligned)
-  - **Topics**: Common Conventions, Tools, Policy Constraints (scoped), Error Style, Evaluation Tips
-  - **User Questions**: "What can you tell me about VT Code Tool Specifications (Anthropic-Aligned)?", "How does Common Conventions work?", "How does Tools work?"
+  - **Content**: VT Code Tool Specifications
+  - **Topics**: Canonical Public Tools, `unified_search`, Guidance
+  - **User Questions**: "What can you tell me about VT Code Tool Specifications?", "How does Canonical Public Tools work?", "How does `unified_search` work?"
 
 - **File**: `docs/tools/web_fetch_security.md`
   - **Content**: Web Fetch Tool Security Configuration

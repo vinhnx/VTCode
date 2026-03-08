@@ -30,6 +30,7 @@ pub enum UnifiedFileAction {
 pub enum UnifiedSearchAction {
     Grep,
     List,
+    Structural,
     Intelligence,
     Tools,
     Errors,

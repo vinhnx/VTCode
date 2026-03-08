@@ -296,8 +296,8 @@ fn normalize_turn_balancer_tool_name(name: &str) -> Cow<'_, str> {
         "read file" | "repo_browser.read_file" => Cow::Borrowed(tool_names::READ_FILE),
         "write file" | "repo_browser.write_file" => Cow::Borrowed(tool_names::WRITE_FILE),
         "edit file" => Cow::Borrowed(tool_names::EDIT_FILE),
-        "search text" | "list files" | "code intelligence" | "list tools" | "list errors"
-        | "show agent info" | "fetch" => Cow::Borrowed(tool_names::UNIFIED_SEARCH),
+        "search text" | "list files" | "structural search" | "code intelligence" | "list tools"
+        | "list errors" | "show agent info" | "fetch" => Cow::Borrowed(tool_names::UNIFIED_SEARCH),
         "run command (pty)" | "run command" | "run code" | "exec code" | "bash"
         | "container.exec" => Cow::Borrowed(tool_names::UNIFIED_EXEC),
         "apply patch" | "delete file" | "move file" | "copy file" | "file operation" => {
