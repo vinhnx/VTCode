@@ -386,6 +386,7 @@ impl<'a> TurnProcessingContext<'a> {
         reasoning: Vec<ReasoningSegment>,
         reasoning_details: Option<Vec<String>>,
         response_streamed: bool,
+        phase: Option<uni::AssistantPhase>,
     ) -> anyhow::Result<()> {
         let mut text = text;
         let detail_reasoning = reasoning_details.as_deref().and_then(
@@ -451,7 +452,7 @@ impl<'a> TurnProcessingContext<'a> {
         {
             combined_reasoning = detail_text.to_string();
         }
-        let msg = uni::Message::assistant(text.clone());
+        let msg = uni::Message::assistant(text.clone()).with_phase(phase);
         let mut msg_with_reasoning = if !combined_reasoning.is_empty() {
             if reasoning_duplicates_content(&combined_reasoning, &text) {
                 msg
@@ -494,7 +495,13 @@ impl<'a> TurnProcessingContext<'a> {
             self.working_history,
             &text,
         );
-        self.handle_assistant_response(text, reasoning, reasoning_details, response_streamed)?;
+        self.handle_assistant_response(
+            text,
+            reasoning,
+            reasoning_details,
+            response_streamed,
+            Some(uni::AssistantPhase::FinalAnswer),
+        )?;
 
         if should_force_continue {
             push_system_directive_once(self.working_history, AUTONOMOUS_CONTINUE_DIRECTIVE);
@@ -617,6 +624,7 @@ fn push_assistant_message(history: &mut Vec<uni::Message>, msg: uni::Message) {
     if let Some(last) = history.last_mut()
         && last.role == uni::MessageRole::Assistant
         && last.tool_calls.is_none()
+        && last.phase == msg.phase
     {
         last.content = msg.content;
         last.reasoning = msg.reasoning;
@@ -1063,5 +1071,21 @@ mod tests {
                 serde_json::json!({"type":"reasoning.text","text":"trace"})
             ])
         );
+    }
+
+    #[test]
+    fn push_assistant_message_keeps_different_phases_separate() {
+        let mut history = vec![
+            uni::Message::assistant("working".to_string())
+                .with_phase(Some(uni::AssistantPhase::Commentary)),
+        ];
+        let new_msg = uni::Message::assistant("done".to_string())
+            .with_phase(Some(uni::AssistantPhase::FinalAnswer));
+
+        push_assistant_message(&mut history, new_msg);
+
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[0].phase, Some(uni::AssistantPhase::Commentary));
+        assert_eq!(history[1].phase, Some(uni::AssistantPhase::FinalAnswer));
     }
 }

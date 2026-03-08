@@ -1,6 +1,7 @@
 use crate::llm::error_display;
 use crate::llm::provider::{
-    ContentPart, LLMError, LLMResponse, Message, MessageContent, MessageRole, ToolCall,
+    AssistantPhase, ContentPart, LLMError, LLMResponse, Message, MessageContent, MessageRole,
+    ToolCall,
 };
 pub use crate::llm::providers::ReasoningBuffer;
 use crate::llm::providers::common::extract_reasoning_text_from_serialized_details;
@@ -463,15 +464,20 @@ fn parse_message_item(item: &Value) -> Option<Message> {
             Some((tool_call_id, tool_output))
         });
 
+    let assistant_phase = item
+        .get("phase")
+        .and_then(Value::as_str)
+        .and_then(AssistantPhase::from_wire_str);
+
     match role {
         "system" => Some(Message::system(content)),
         "developer" => Some(Message::system(content)),
         "user" => Some(Message::user(content)),
         "assistant" => {
             if tool_calls.is_empty() {
-                Some(Message::assistant(content))
+                Some(Message::assistant(content).with_phase(assistant_phase))
             } else {
-                Some(Message::assistant_with_tools(content, tool_calls))
+                Some(Message::assistant_with_tools(content, tool_calls).with_phase(assistant_phase))
             }
         }
         "tool" => {
@@ -1059,6 +1065,7 @@ mod tests {
         let output = vec![json!({
             "type": "message",
             "role": "assistant",
+            "phase": "final_answer",
             "content": [
                 { "type": "output_text", "text": "Compacted response" }
             ]
@@ -1067,6 +1074,7 @@ mod tests {
         let parsed = parse_compacted_output_messages(&output);
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0].role, MessageRole::Assistant);
+        assert_eq!(parsed[0].phase, Some(AssistantPhase::FinalAnswer));
         assert_eq!(parsed[0].content.as_text(), "Compacted response");
     }
 

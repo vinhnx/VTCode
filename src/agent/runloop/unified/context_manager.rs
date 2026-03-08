@@ -361,6 +361,10 @@ fn can_merge_consecutive_assistant_text(previous: &uni::Message, current: &uni::
         return false;
     }
 
+    if previous.phase != current.phase {
+        return false;
+    }
+
     if previous.tool_calls.is_some()
         || previous.tool_call_id.is_some()
         || previous.reasoning.is_some()

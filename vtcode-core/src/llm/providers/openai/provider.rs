@@ -307,6 +307,7 @@ impl OpenAIProvider {
             supports_reasoning_effort: self.supports_reasoning_effort(&effective_request.model),
             supports_reasoning: self.supports_reasoning(&effective_request.model),
             is_responses_api_model: Self::is_responses_api_model(&effective_request.model),
+            include_assistant_phase: is_native_openai,
             supports_prompt_cache_key: is_native_openai,
             prompt_cache_key: effective_request.prompt_cache_key.as_deref(),
             prompt_cache_retention: self.prompt_cache_settings.prompt_cache_retention.as_deref(),

@@ -1,7 +1,7 @@
 use mockito::{Matcher, Server};
 use serde_json::json;
 use vtcode_core::config::core::PromptCachingConfig;
-use vtcode_core::llm::provider::{LLMProvider, LLMRequest, Message};
+use vtcode_core::llm::provider::{AssistantPhase, LLMProvider, LLMRequest, Message};
 use vtcode_core::llm::providers::openai::OpenAIProvider;
 
 fn mock_openai_base_url(server: &Server) -> String {
@@ -223,6 +223,72 @@ async fn mock_responses_api_minimal_reasoning_effort() {
         messages: vec![Message::user("Hello".to_string())],
         model: "gpt-5".to_string(),
         reasoning_effort: Some(ReasoningEffortLevel::Minimal),
+        ..Default::default()
+    };
+
+    let response = LLMProvider::generate(&provider, request)
+        .await
+        .expect("provider should return");
+
+    mock.assert_async().await;
+    assert!(response.content.is_some());
+}
+
+#[tokio::test]
+async fn mock_responses_api_preserves_assistant_phase_history() {
+    let expect_body = json!({
+        "model": "gpt-5.4",
+        "input": [
+            {
+                "role": "user"
+            },
+            {
+                "role": "assistant",
+                "phase": "commentary"
+            },
+            {
+                "role": "assistant",
+                "phase": "final_answer"
+            },
+            {
+                "role": "user"
+            }
+        ]
+    });
+
+    let mut server = Server::new_async().await;
+    let mock = server
+        .mock("POST", "/api.openai.com/responses")
+        .match_body(Matcher::PartialJson(expect_body))
+        .with_status(200)
+        .with_body(
+            r#"{"output":[{"type":"message","content":[{"type":"output_text","text":"ok"}]}]}"#,
+        )
+        .create_async()
+        .await;
+
+    let base_url = mock_openai_base_url(&server);
+    let provider = OpenAIProvider::from_config(
+        Some("testkey".to_string()),
+        Some("gpt-5.4".to_string()),
+        Some(base_url.to_string()),
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+
+    let request = LLMRequest {
+        messages: vec![
+            Message::user("Start".to_string()),
+            Message::assistant("Checking prerequisites".to_string())
+                .with_phase(Some(AssistantPhase::Commentary)),
+            Message::assistant("Ready to answer".to_string())
+                .with_phase(Some(AssistantPhase::FinalAnswer)),
+            Message::user("Continue".to_string()),
+        ],
+        model: "gpt-5.4".to_string(),
         ..Default::default()
     };
 

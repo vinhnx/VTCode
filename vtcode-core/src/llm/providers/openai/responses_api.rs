@@ -1,7 +1,7 @@
 use crate::llm::error_display;
 use crate::llm::provider::{
-    ContentPart, FinishReason, LLMError, LLMRequest, LLMResponse, MessageContent, MessageRole,
-    ToolCall, Usage,
+    AssistantPhase, ContentPart, FinishReason, LLMError, LLMRequest, LLMResponse, MessageContent,
+    MessageRole, ToolCall, Usage,
 };
 use crate::llm::providers::common::append_normalized_reasoning_detail_items;
 use crate::llm::providers::openai::types::OpenAIResponsesPayload;
@@ -94,6 +94,21 @@ fn append_user_content_parts(content_parts: &mut Vec<Value>, message_content: &M
             }
         }
     }
+}
+
+fn assistant_input_item(content_parts: Vec<Value>, phase: Option<AssistantPhase>) -> Value {
+    let mut item = json!({
+        "role": "assistant",
+        "content": content_parts
+    });
+
+    if let Some(phase) = phase
+        && let Value::Object(ref mut map) = item
+    {
+        map.insert("phase".to_string(), json!(phase.as_str()));
+    }
+
+    item
 }
 
 pub fn parse_responses_payload(
@@ -378,10 +393,7 @@ pub fn build_standard_responses_payload(
                 }
 
                 if !content_parts.is_empty() {
-                    input.push(json!({
-                        "role": "assistant",
-                        "content": content_parts
-                    }));
+                    input.push(assistant_input_item(content_parts, msg.phase));
                 }
             }
             MessageRole::Tool => {
@@ -504,10 +516,7 @@ pub fn build_codex_responses_payload(
                 }
 
                 if !content_parts.is_empty() {
-                    input.push(json!({
-                        "role": "assistant",
-                        "content": content_parts
-                    }));
+                    input.push(assistant_input_item(content_parts, msg.phase));
                 }
             }
             MessageRole::Tool => {

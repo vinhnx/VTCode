@@ -32,9 +32,18 @@ pub(crate) struct ResponsesRequestContext<'a> {
     pub supports_reasoning_effort: bool,
     pub supports_reasoning: bool,
     pub is_responses_api_model: bool,
+    pub include_assistant_phase: bool,
     pub supports_prompt_cache_key: bool,
     pub prompt_cache_key: Option<&'a str>,
     pub prompt_cache_retention: Option<&'a str>,
+}
+
+fn strip_non_native_assistant_phase(input: &mut [Value]) {
+    for item in input {
+        if let Some(map) = item.as_object_mut() {
+            map.remove("phase");
+        }
+    }
 }
 
 fn default_reasoning_effort_for_model(model: &str) -> Option<ReasoningEffortLevel> {
@@ -224,8 +233,13 @@ pub(crate) fn build_responses_request(
     ctx: &ResponsesRequestContext<'_>,
 ) -> Result<Value, provider::LLMError> {
     let responses_payload = build_standard_responses_payload(request)?;
+    let mut input = responses_payload.input;
+    let instructions = responses_payload.instructions;
+    if !ctx.include_assistant_phase {
+        strip_non_native_assistant_phase(&mut input);
+    }
 
-    if responses_payload.input.is_empty() {
+    if input.is_empty() {
         let formatted_error =
             error_display::format_llm_error("OpenAI", "No messages provided for Responses API");
         return Err(provider::LLMError::InvalidRequest {
@@ -236,7 +250,7 @@ pub(crate) fn build_responses_request(
 
     let mut openai_request = json!({
         "model": request.model,
-        "input": responses_payload.input,
+        "input": input,
         "stream": request.stream,
     });
     let effective_reasoning_effort = request
@@ -250,7 +264,7 @@ pub(crate) fn build_responses_request(
     // 'output_types' is part of the GPT-5 Responses API spec
     openai_request["output_types"] = json!(["message", "tool_call"]);
 
-    if let Some(instructions) = responses_payload.instructions
+    if let Some(instructions) = instructions
         && !instructions.trim().is_empty()
     {
         openai_request["instructions"] = json!(instructions);

@@ -2,6 +2,8 @@
 
 VT Code routes OpenAI Responses models, including the GPT-5 family plus `o3` and `o4-mini`, through the Responses API. This guide focuses on the parts that matter in VT Code: reasoning continuity across tool calls, cache-friendly request shaping, encrypted reasoning for stateless workflows, and the config needed to turn those features on.
 
+VT Code's default OpenAI profile keeps `gpt-5.4` on a compact execution contract: concise structured outputs, reversible follow-through by default, dependency-aware tool use, completeness checks, verification before finalization, and grounding/citation rules that only activate when the task is research or citation sensitive.
+
 ## Key Concepts
 
 | Concept                 | Description                                                                                                                                               |
@@ -52,9 +54,11 @@ VT Code routes OpenAI Responses models, including the GPT-5 family plus `o3` and
 
 7. **Function calling etiquette**: Ensure any VT Code tool definitions expose their JSON schema via the `function` payload. The Responses API requires each tool message to include a `tool_call_id`, and VT Code already handles this when serializing `ToolDefinition`s.
 
-8. **Reasoning visibility**: When troubleshooting, inspect `.vtcode/logs/trajectory.jsonl` for `reasoning` entries and correlate them with the configured `reasoning_effort`.
+8. **Assistant phase continuity**: VT Code preserves assistant phase metadata on native OpenAI Responses requests when replaying assistant history. Interim preambles and progress updates are sent as `commentary`; completed answers are sent as `final_answer`. The field is omitted for Chat Completions, tool/user items, and non-native OpenAI-compatible endpoints.
 
-9. **Auto-compaction settings**: Auto compaction is disabled by default. Turn it on explicitly when you want long-session coherence via Responses `context_management`:
+9. **Reasoning visibility**: When troubleshooting, inspect `.vtcode/logs/trajectory.jsonl` for `reasoning` entries and correlate them with the configured `reasoning_effort`.
+
+10. **Auto-compaction settings**: Auto compaction is disabled by default. Turn it on explicitly when you want long-session coherence via Responses `context_management`:
 
     ```toml
     [agent.harness]

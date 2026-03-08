@@ -39,6 +39,7 @@ pub fn parse_chat_request_openai_format(value: &Value, default_model: &str) -> O
             reasoning_details: None,
             tool_calls: None,
             tool_call_id: None,
+            phase: None,
             origin_tool: None,
         });
     }
