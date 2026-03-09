@@ -34,9 +34,9 @@ pub use url::{base_url_to_host_root, is_openai_compatible_base_url};
 use semver::Version;
 
 use super::common::{
-    extract_reasoning_text_from_detail_values, extract_reasoning_text_from_serialized_details,
-    is_minimax_m2_model, override_base_url, parse_client_prompt_common, resolve_model,
-    serialize_reasoning_detail_values,
+    assistant_interleaved_history_text, extract_reasoning_text_from_detail_values,
+    extract_reasoning_text_from_serialized_details, is_minimax_m2_model, override_base_url,
+    parse_client_prompt_common, resolve_model, serialize_reasoning_detail_values,
 };
 use super::error_handling::{format_network_error, format_parse_error};
 
@@ -455,7 +455,13 @@ impl OllamaProvider {
         }
 
         for message in &request.messages {
-            let (content_text, images) = Self::extract_content_and_images(&message.content);
+            let (content_text, images) = if let Some(interleaved_content) =
+                assistant_interleaved_history_text(message, &request.model)
+            {
+                (interleaved_content, None)
+            } else {
+                Self::extract_content_and_images(&message.content)
+            };
             match message.role {
                 MessageRole::Tool => {
                     let tool_name = message
@@ -751,7 +757,7 @@ impl OllamaProvider {
                 .as_deref()
                 .and_then(extract_reasoning_text_from_detail_values)
         });
-        let reasoning_details = native_reasoning_details
+        let mut reasoning_details = native_reasoning_details
             .as_deref()
             .and_then(serialize_reasoning_detail_values);
 
@@ -764,6 +770,10 @@ impl OllamaProvider {
                 if reasoning_parts.is_empty() {
                     (None, content)
                 } else {
+                    super::common::preserve_interleaved_content_in_reasoning_details(
+                        &mut reasoning_details,
+                        content_str,
+                    );
                     (
                         Some(reasoning_parts.join("\n\n")),
                         cleaned_content.or(content),
@@ -1372,6 +1382,25 @@ mod tests {
             Some(tool_call_id.as_str())
         );
         assert_eq!(payload.think, Some(Value::String("low".to_string())));
+    }
+
+    #[test]
+    fn build_payload_rehydrates_glm_interleaved_history_into_content() {
+        let provider = test_provider();
+        let request = LLMRequest {
+            model: models::ollama::GLM_5_CLOUD.to_string(),
+            messages: vec![
+                Message::assistant("done".to_string()).with_reasoning(Some("trace".to_string())),
+            ],
+            ..Default::default()
+        };
+
+        let payload = provider.build_payload(&request, false).unwrap();
+
+        assert_eq!(
+            payload.messages[0].content.as_deref(),
+            Some("<think>trace</think>done")
+        );
     }
 
     #[test]

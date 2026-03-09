@@ -758,12 +758,17 @@ impl LLMProvider for OpenResponsesProvider {
 
         // Fallback: Extract reasoning from content tags if not provided natively
         // Handles <think></think>, <thought></thought>, <reasoning></reasoning>, <analysis></analysis>
+        let mut reasoning_details: Option<Vec<String>> = None;
         let (final_reasoning, final_content) = if reasoning.is_none() && !content.is_empty() {
             let (reasoning_parts, cleaned_content) =
                 crate::llm::utils::extract_reasoning_content(&content);
             if reasoning_parts.is_empty() {
                 (None, Some(content))
             } else {
+                crate::llm::providers::common::preserve_interleaved_content_in_reasoning_details(
+                    &mut reasoning_details,
+                    &content,
+                );
                 (
                     Some(reasoning_parts.join("\n\n")),
                     cleaned_content.or(Some(content)),
@@ -790,7 +795,7 @@ impl LLMProvider for OpenResponsesProvider {
             usage: None,
             finish_reason,
             reasoning: final_reasoning,
-            reasoning_details: None,
+            reasoning_details,
             tool_references: Vec::new(),
             request_id: json
                 .get("id")

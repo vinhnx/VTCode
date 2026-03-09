@@ -24,8 +24,9 @@ use reqwest::{Client as HttpClient, Response, StatusCode};
 use serde_json::{Value, json};
 
 use super::common::{
-    is_minimax_m2_model, map_finish_reason_common, normalize_reasoning_detail_objects,
-    override_base_url, parse_response_openai_format, resolve_model,
+    assistant_interleaved_history_text, is_minimax_m2_model, map_finish_reason_common,
+    normalize_reasoning_detail_objects, override_base_url, parse_response_openai_format,
+    resolve_model,
 };
 use super::error_handling::{format_network_error, format_parse_error};
 
@@ -184,16 +185,21 @@ impl HuggingFaceProvider {
                 Value::String(message.role.as_generic_str().to_owned()),
             );
 
-            match &message.content {
-                crate::llm::provider::MessageContent::Text(text) => {
-                    message_map.insert("content".to_owned(), Value::String(text.clone()));
-                }
-                crate::llm::provider::MessageContent::Parts(parts) => {
-                    let has_images = parts
-                        .iter()
-                        .any(crate::llm::provider::ContentPart::is_image);
-                    if has_images {
-                        let parts_json: Vec<Value> = parts
+            if let Some(interleaved_content) =
+                assistant_interleaved_history_text(message, &request.model)
+            {
+                message_map.insert("content".to_owned(), Value::String(interleaved_content));
+            } else {
+                match &message.content {
+                    crate::llm::provider::MessageContent::Text(text) => {
+                        message_map.insert("content".to_owned(), Value::String(text.clone()));
+                    }
+                    crate::llm::provider::MessageContent::Parts(parts) => {
+                        let has_images = parts
+                            .iter()
+                            .any(crate::llm::provider::ContentPart::is_image);
+                        if has_images {
+                            let parts_json: Vec<Value> = parts
                             .iter()
                             .map(|part| match part {
                                 crate::llm::provider::ContentPart::Text { text } => {
@@ -226,10 +232,11 @@ impl HuggingFaceProvider {
                                 }
                             })
                             .collect();
-                        message_map.insert("content".to_owned(), Value::Array(parts_json));
-                    } else {
-                        let text = message.content.as_text().into_owned();
-                        message_map.insert("content".to_owned(), Value::String(text));
+                            message_map.insert("content".to_owned(), Value::Array(parts_json));
+                        } else {
+                            let text = message.content.as_text().into_owned();
+                            message_map.insert("content".to_owned(), Value::String(text));
+                        }
                     }
                 }
             }
@@ -1200,6 +1207,25 @@ mod tests {
             .expect("message serialization should succeed");
         assert!(messages[0]["reasoning_details"].is_array());
         assert!(messages[0]["reasoning_details"][0].is_object());
+    }
+
+    #[test]
+    fn serialize_messages_rehydrates_glm_interleaved_history_into_content() {
+        let provider =
+            HuggingFaceProvider::with_model("test-key".to_string(), "zai-org/GLM-5:novita".into());
+        let request = LLMRequest {
+            model: "zai-org/GLM-5:novita".to_string(),
+            messages: vec![
+                Message::assistant("done".to_string()).with_reasoning(Some("trace".to_string())),
+            ],
+            ..Default::default()
+        };
+
+        let messages = provider
+            .serialize_messages_huggingface_chat(&request)
+            .expect("message serialization should succeed");
+
+        assert_eq!(messages[0]["content"], json!("<think>trace</think>done"));
     }
 
     #[test]

@@ -6,7 +6,7 @@ use crate::config::models::Provider as ModelProvider;
 use crate::config::types::ReasoningEffortLevel;
 use crate::llm::error_display;
 use crate::llm::provider;
-use crate::llm::providers::common::serialize_message_content_openai;
+use crate::llm::providers::common::serialize_message_content_openai_for_model;
 use crate::llm::rig_adapter::reasoning_parameters_for;
 use hashbrown::HashSet;
 use serde_json::{Value, json};
@@ -112,7 +112,7 @@ pub(crate) fn build_chat_request(
         let role = msg.role.as_openai_str();
         let mut message = json!({
             "role": role,
-            "content": serialize_message_content_openai(&msg.content)
+            "content": serialize_message_content_openai_for_model(msg, &request.model)
         });
         let mut skip_message = false;
 

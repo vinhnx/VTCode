@@ -149,11 +149,128 @@ pub fn serialize_message_content_openai_for_role(
     }
 }
 
+/// Serialize message content for OpenAI-compatible payloads while preserving
+/// interleaved thinking history for supported assistant models.
+pub fn serialize_message_content_openai_for_model(message: &Message, model: &str) -> Value {
+    if let Some(interleaved_content) = assistant_interleaved_history_text(message, model) {
+        Value::String(interleaved_content)
+    } else {
+        serialize_message_content_openai_for_role(&message.role, &message.content)
+    }
+}
+
 /// Returns true when the model identifier points to MiniMax M2 family models.
 /// Works across direct model ids and provider-qualified ids.
 #[inline]
 pub fn is_minimax_m2_model(model: &str) -> bool {
     model.to_ascii_lowercase().contains("minimax-m2")
+}
+
+#[inline]
+fn is_glm_interleaved_thinking_model(model: &str) -> bool {
+    let lower = model.to_ascii_lowercase();
+    lower.contains("glm-5") || lower.contains("glm45") || lower.contains("glm-4.5")
+}
+
+/// Returns true when the model family relies on interleaved `<think>...</think>`
+/// history to maintain reasoning quality across turns.
+#[inline]
+pub fn is_interleaved_thinking_model(model: &str) -> bool {
+    is_minimax_m2_model(model) || is_glm_interleaved_thinking_model(model)
+}
+
+#[inline]
+fn text_contains_interleaved_reasoning_markup(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    lower.contains("<think")
+        || lower.contains("<thinking")
+        || lower.contains("<reasoning")
+        || lower.contains("<analysis")
+        || lower.contains("<thought")
+}
+
+fn message_content_is_text_only(content: &MessageContent) -> bool {
+    match content {
+        MessageContent::Text(_) => true,
+        MessageContent::Parts(parts) => parts
+            .iter()
+            .all(|part| matches!(part, ContentPart::Text { .. })),
+    }
+}
+
+fn preserved_interleaved_content_from_details(details: &[Value]) -> Option<String> {
+    details.iter().find_map(|detail| match detail {
+        Value::String(text)
+            if !text.trim().is_empty() && text_contains_interleaved_reasoning_markup(text) =>
+        {
+            Some(text.clone())
+        }
+        _ => None,
+    })
+}
+
+/// Rehydrates assistant history into the tagged form expected by interleaved
+/// thinking models.
+pub fn assistant_interleaved_history_text(message: &Message, model: &str) -> Option<String> {
+    if message.role != MessageRole::Assistant
+        || !is_interleaved_thinking_model(model)
+        || !message_content_is_text_only(&message.content)
+    {
+        return None;
+    }
+
+    if let Some(details) = message.reasoning_details.as_deref()
+        && let Some(raw_content) = preserved_interleaved_content_from_details(details)
+    {
+        return Some(raw_content);
+    }
+
+    let content = message.content.as_text();
+    if text_contains_interleaved_reasoning_markup(content.as_ref()) {
+        return Some(content.into_owned());
+    }
+
+    let reasoning = message
+        .reasoning
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+        .or_else(|| {
+            message
+                .reasoning_details
+                .as_deref()
+                .and_then(extract_reasoning_text_from_detail_values)
+        })?;
+
+    let mut combined = String::with_capacity(reasoning.len() + content.len() + 16);
+    combined.push_str("<think>");
+    combined.push_str(reasoning.trim());
+    combined.push_str("</think>");
+    combined.push_str(content.as_ref());
+    Some(combined)
+}
+
+/// Stores the exact interleaved assistant content alongside normalized
+/// reasoning so later turns can replay the original tagged history.
+pub fn preserve_interleaved_content_in_reasoning_details(
+    reasoning_details: &mut Option<Vec<String>>,
+    raw_content: &str,
+) {
+    if raw_content.trim().is_empty() || !text_contains_interleaved_reasoning_markup(raw_content) {
+        return;
+    }
+
+    match reasoning_details {
+        Some(existing) => {
+            if !existing.iter().any(|detail| detail == raw_content) {
+                existing.push(raw_content.to_string());
+            }
+        }
+        None => {
+            *reasoning_details = Some(vec![raw_content.to_string()]);
+        }
+    }
 }
 
 /// Normalizes a reasoning detail into an object payload.
@@ -520,8 +637,7 @@ pub fn serialize_messages_openai_format(
             Value::String(message.role.as_generic_str().to_owned()),
         );
 
-        let content_value =
-            serialize_message_content_openai_for_role(&message.role, &message.content);
+        let content_value = serialize_message_content_openai_for_model(message, &request.model);
         message_map.insert(KEY_CONTENT.to_owned(), content_value);
 
         if let Some(tool_calls) = &message.tool_calls {
@@ -985,7 +1101,7 @@ where
     let native_reasoning_details_json = message.get("reasoning_details");
 
     // Extract reasoning using custom extractor if provided
-    let (mut reasoning, reasoning_details) = if let Some(extractor) = extract_reasoning {
+    let (mut reasoning, mut reasoning_details) = if let Some(extractor) = extract_reasoning {
         // Extractor should return (reasoning, reasoning_details)
         // For backwards compatibility, we'll wrap it if it only returns reasoning
         // But let's assume we update the extractor signature if needed.
@@ -1019,6 +1135,7 @@ where
         let (extracted_reasoning, cleaned_content) = extract_reasoning_content(content_str);
         if !extracted_reasoning.is_empty() {
             reasoning = Some(extracted_reasoning.join("\n\n"));
+            preserve_interleaved_content_in_reasoning_details(&mut reasoning_details, content_str);
             // If the content was mostly reasoning, we update it to the cleaned version
             content = cleaned_content;
         }
@@ -1068,9 +1185,11 @@ pub fn make_anthropic_thinking_config(config: &crate::config::core::AnthropicCon
 #[cfg(test)]
 mod tests {
     use super::{
-        extract_reasoning_text_from_detail_values, extract_reasoning_text_from_serialized_details,
+        assistant_interleaved_history_text, extract_reasoning_text_from_detail_values,
+        extract_reasoning_text_from_serialized_details, is_interleaved_thinking_model,
         is_minimax_m2_model, normalize_reasoning_detail_object, parse_response_openai_format,
     };
+    use crate::llm::provider::Message;
     use serde_json::{Value, json};
 
     #[test]
@@ -1079,6 +1198,14 @@ mod tests {
         assert!(is_minimax_m2_model("minimax/minimax-m2.5"));
         assert!(is_minimax_m2_model("MiniMaxAI/MiniMax-M2.5:novita"));
         assert!(!is_minimax_m2_model("gpt-5"));
+    }
+
+    #[test]
+    fn interleaved_thinking_model_detection_handles_glm5() {
+        assert!(is_interleaved_thinking_model("glm-5"));
+        assert!(is_interleaved_thinking_model("zai-org/GLM-5:novita"));
+        assert!(is_interleaved_thinking_model("MiniMax-M2.5"));
+        assert!(!is_interleaved_thinking_model("deepseek-r1"));
     }
 
     #[test]
@@ -1094,6 +1221,28 @@ mod tests {
     #[test]
     fn normalize_reasoning_detail_object_rejects_plain_text() {
         assert!(normalize_reasoning_detail_object(&json!("plain-text")).is_none());
+    }
+
+    #[test]
+    fn assistant_interleaved_history_prefers_preserved_raw_detail() {
+        let message = Message::assistant("answer".to_string())
+            .with_reasoning_details(Some(vec![json!("<think>raw trace</think>answer")]));
+
+        assert_eq!(
+            assistant_interleaved_history_text(&message, "glm-5").as_deref(),
+            Some("<think>raw trace</think>answer")
+        );
+    }
+
+    #[test]
+    fn assistant_interleaved_history_wraps_reasoning_when_needed() {
+        let message =
+            Message::assistant("answer".to_string()).with_reasoning(Some("trace".to_string()));
+
+        assert_eq!(
+            assistant_interleaved_history_text(&message, "MiniMax-M2.5").as_deref(),
+            Some("<think>trace</think>answer")
+        );
     }
 
     #[test]
@@ -1135,6 +1284,43 @@ mod tests {
         let parsed_detail: Value =
             serde_json::from_str(first_detail).expect("reasoning detail should be json");
         assert_eq!(parsed_detail["type"], "reasoning.text");
+    }
+
+    #[test]
+    fn parse_openai_response_preserves_raw_interleaved_content_in_reasoning_details() {
+        let response_json = json!({
+            "choices": [{
+                "message": {
+                    "content": "<think>step one</think>done"
+                },
+                "finish_reason": "stop"
+            }],
+            "usage": {
+                "prompt_tokens": 1,
+                "completion_tokens": 1,
+                "total_tokens": 2
+            }
+        });
+
+        let parsed = parse_response_openai_format::<fn(&Value, &Value) -> Option<String>>(
+            response_json,
+            "test",
+            "glm-5".to_string(),
+            false,
+            None,
+        )
+        .expect("response should parse");
+
+        assert_eq!(parsed.content.as_deref(), Some("done"));
+        assert_eq!(parsed.reasoning.as_deref(), Some("step one"));
+        assert_eq!(
+            parsed
+                .reasoning_details
+                .as_ref()
+                .and_then(|details| details.first())
+                .map(String::as_str),
+            Some("<think>step one</think>done")
+        );
     }
 
     #[test]

@@ -4,7 +4,7 @@ use crate::config::models::Provider;
 use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, MessageRole};
 use crate::llm::providers::common::{
-    is_minimax_m2_model, normalize_reasoning_detail_objects,
+    assistant_interleaved_history_text, normalize_reasoning_detail_objects,
     serialize_message_content_openai_for_role,
 };
 use crate::llm::rig_adapter::reasoning_parameters_for;
@@ -28,7 +28,11 @@ impl OpenRouterProvider {
 
         for msg in &request.messages {
             let role = msg.role.as_openai_str();
-            let content_value = serialize_message_content_openai_for_role(&msg.role, &msg.content);
+            let content_value = assistant_interleaved_history_text(msg, resolved_model)
+                .map(Value::String)
+                .unwrap_or_else(|| {
+                    serialize_message_content_openai_for_role(&msg.role, &msg.content)
+                });
 
             let mut message = json!({
                 "role": role,
@@ -60,14 +64,9 @@ impl OpenRouterProvider {
                 if let Some(reasoning_details) = &msg.reasoning_details
                     && !reasoning_details.is_empty()
                 {
-                    if is_minimax_m2_model(resolved_model) {
-                        let normalized_details =
-                            normalize_reasoning_detail_objects(reasoning_details);
-                        if !normalized_details.is_empty() {
-                            message["reasoning_details"] = Value::Array(normalized_details);
-                        }
-                    } else {
-                        message["reasoning_details"] = Value::Array(reasoning_details.clone());
+                    let normalized_details = normalize_reasoning_detail_objects(reasoning_details);
+                    if !normalized_details.is_empty() {
+                        message["reasoning_details"] = Value::Array(normalized_details);
                     }
                 }
             }
@@ -160,6 +159,8 @@ impl OpenRouterProvider {
 
 #[cfg(test)]
 mod tests {
+    use super::OpenRouterProvider;
+    use crate::llm::provider::{LLMRequest, Message};
     use crate::llm::providers::common::{is_minimax_m2_model, normalize_reasoning_detail_object};
     use serde_json::json;
 
@@ -182,5 +183,26 @@ mod tests {
     #[test]
     fn normalize_reasoning_detail_for_minimax_rejects_plain_text() {
         assert!(normalize_reasoning_detail_object(&json!("hello")).is_none());
+    }
+
+    #[test]
+    fn openrouter_payload_rehydrates_glm_interleaved_history_into_content() {
+        let provider = OpenRouterProvider::new("test-key".to_string());
+        let request = LLMRequest {
+            model: "z-ai/glm-5".to_string(),
+            messages: vec![
+                Message::assistant("done".to_string()).with_reasoning(Some("trace".to_string())),
+            ],
+            ..Default::default()
+        };
+
+        let payload = provider
+            .convert_to_openrouter_format(&request)
+            .expect("payload should serialize");
+        let messages = payload["messages"]
+            .as_array()
+            .expect("messages should be present");
+
+        assert_eq!(messages[0]["content"], json!("<think>trace</think>done"));
     }
 }
