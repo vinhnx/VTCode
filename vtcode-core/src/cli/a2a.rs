@@ -65,7 +65,9 @@ async fn serve_a2a_agent(
     println!("Streaming API: http://{}/a2a/stream", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, router).await?;
+    axum::serve(listener, router)
+        .with_graceful_shutdown(crate::shutdown::shutdown_signal_logged("A2A"))
+        .await?;
 
     Ok(())
 }

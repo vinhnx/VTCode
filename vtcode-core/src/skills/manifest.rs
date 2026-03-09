@@ -91,6 +91,9 @@ pub struct SkillYaml {
     #[serde(rename = "network")]
     #[serde(alias = "network_policy")]
     pub network_policy: Option<crate::skills::types::SkillNetworkPolicy>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(alias = "permission_profile")]
+    pub permissions: Option<crate::skills::types::SkillPermissionProfile>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -232,6 +235,7 @@ pub fn parse_skill_content_with_defaults(
         metadata: yaml.metadata,
         tools: yaml.tools,
         network_policy: yaml.network_policy,
+        permissions: yaml.permissions,
     };
 
     manifest.validate()?;
@@ -322,6 +326,9 @@ license: MIT
 # network:
 #   allowed_domains: ["api.example.com"]
 #   denied_domains: []
+# permissions:
+#   file_system:
+#     write: ["outputs"]
 ---
 
 # {} Skill
@@ -411,6 +418,35 @@ This is the instruction section.
         let content = "This is not valid";
         let result = parse_skill_content(content);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_skill_permissions() {
+        let content = r#"---
+name: sandboxed-skill
+description: A skill with filesystem additions
+permissions:
+  file_system:
+    read:
+      - references
+    write:
+      - outputs
+---
+
+# Instructions
+"#;
+
+        let (manifest, _) = parse_skill_content(content).expect("permissions should parse");
+        let permissions = manifest.permissions.expect("permissions should be present");
+        let file_system = permissions
+            .file_system
+            .expect("file_system permissions should be present");
+
+        assert_eq!(
+            file_system.read,
+            vec![std::path::PathBuf::from("references")]
+        );
+        assert_eq!(file_system.write, vec![std::path::PathBuf::from("outputs")]);
     }
 
     #[test]

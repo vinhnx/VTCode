@@ -32,6 +32,22 @@ pub struct SkillNetworkPolicy {
     pub denied_domains: Vec<String>,
 }
 
+/// Additional sandbox permissions requested by a skill.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct SkillPermissionProfile {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_system: Option<SkillFileSystemPermissions>,
+}
+
+/// Skill-scoped filesystem permission additions.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct SkillFileSystemPermissions {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub read: Vec<PathBuf>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub write: Vec<PathBuf>,
+}
+
 /// Skill manifest metadata from SKILL.md frontmatter
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SkillManifest {
@@ -133,6 +149,10 @@ pub struct SkillManifest {
     #[serde(rename = "network")]
     #[serde(alias = "network_policy")]
     pub network_policy: Option<SkillNetworkPolicy>,
+    /// Optional additive sandbox permissions for command tools.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(alias = "permission_profile")]
+    pub permissions: Option<SkillPermissionProfile>,
 }
 
 impl Default for SkillManifest {
@@ -164,6 +184,7 @@ impl Default for SkillManifest {
             metadata: None,
             tools: None,
             network_policy: None,
+            permissions: None,
         }
     }
 }
@@ -399,6 +420,13 @@ impl SkillManifest {
             }
         }
 
+        if let Some(permission_profile) = &self.permissions
+            && let Some(file_system) = &permission_profile.file_system
+        {
+            validate_permission_paths(&file_system.read, "permissions.file_system.read")?;
+            validate_permission_paths(&file_system.write, "permissions.file_system.write")?;
+        }
+
         Ok(())
     }
 
@@ -436,6 +464,16 @@ impl SkillManifest {
 
         Ok(())
     }
+}
+
+fn validate_permission_paths(paths: &[PathBuf], field: &str) -> anyhow::Result<()> {
+    for path in paths {
+        if path.as_os_str().is_empty() {
+            anyhow::bail!("{field} must not contain empty paths");
+        }
+    }
+
+    Ok(())
 }
 
 /// Resource types bundled with a skill

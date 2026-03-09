@@ -14,13 +14,17 @@
 //! 5. Final response is returned
 
 use crate::llm::provider::{FinishReason, LLMProvider, LLMRequest, Message, ToolDefinition};
+use crate::sandboxing::{AdditionalPermissions, SandboxPermissions};
 use crate::skills::types::Skill;
 use crate::tool_policy::ToolPolicy;
 use crate::tools::ToolRegistry;
+use crate::tools::tool_intent;
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use serde_json::Value;
 use std::borrow::Cow;
+use std::collections::BTreeSet;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tracing::{debug, info, warn};
 
@@ -80,6 +84,117 @@ pub fn filter_tools_for_skill(skill: &Skill, tools: Vec<ToolDefinition>) -> Vec<
             tools
         }
     }
+}
+
+fn skill_additional_permissions(skill: &Skill) -> Option<AdditionalPermissions> {
+    let file_system = skill.manifest.permissions.as_ref()?.file_system.as_ref()?;
+    let fs_read = resolve_skill_permission_paths(skill.path.as_path(), &file_system.read);
+    let fs_write = resolve_skill_permission_paths(skill.path.as_path(), &file_system.write);
+    let permissions = AdditionalPermissions { fs_read, fs_write };
+    (!permissions.is_empty()).then_some(permissions)
+}
+
+fn resolve_skill_permission_paths(skill_root: &Path, paths: &[PathBuf]) -> Vec<PathBuf> {
+    let mut resolved = Vec::with_capacity(paths.len());
+    let mut seen = BTreeSet::new();
+
+    for path in paths {
+        if path.as_os_str().is_empty() {
+            continue;
+        }
+
+        let absolute = if path.is_absolute() {
+            path.clone()
+        } else {
+            skill_root.join(path)
+        };
+        let normalized = crate::utils::path::normalize_path(&absolute);
+        if seen.insert(normalized.clone()) {
+            resolved.push(normalized);
+        }
+    }
+
+    resolved
+}
+
+fn merge_permission_paths(existing: &[PathBuf], extra: &[PathBuf]) -> Vec<PathBuf> {
+    let mut merged = Vec::with_capacity(existing.len() + extra.len());
+    let mut seen = BTreeSet::new();
+
+    for path in existing.iter().chain(extra.iter()) {
+        if seen.insert(path.clone()) {
+            merged.push(path.clone());
+        }
+    }
+
+    merged
+}
+
+fn merge_additional_permissions(
+    existing: &AdditionalPermissions,
+    extra: &AdditionalPermissions,
+) -> AdditionalPermissions {
+    AdditionalPermissions {
+        fs_read: merge_permission_paths(&existing.fs_read, &extra.fs_read),
+        fs_write: merge_permission_paths(&existing.fs_write, &extra.fs_write),
+    }
+}
+
+fn merge_skill_command_permissions(skill: &Skill, tool_name: &str, tool_args: Value) -> Value {
+    if !tool_intent::is_command_run_tool_call(tool_name, &tool_args) {
+        return tool_args;
+    }
+
+    let Some(skill_permissions) = skill_additional_permissions(skill) else {
+        return tool_args;
+    };
+
+    let mut args = match tool_args {
+        Value::Object(args) => args,
+        other => return other,
+    };
+
+    let sandbox_permissions = match args.get("sandbox_permissions") {
+        Some(value) => match serde_json::from_value::<SandboxPermissions>(value.clone()) {
+            Ok(value) => value,
+            Err(_) => return Value::Object(args),
+        },
+        None => SandboxPermissions::UseDefault,
+    };
+
+    if matches!(
+        sandbox_permissions,
+        SandboxPermissions::RequireEscalated | SandboxPermissions::BypassSandbox
+    ) {
+        return Value::Object(args);
+    }
+
+    let existing_permissions = match args.get("additional_permissions") {
+        Some(value) => match serde_json::from_value::<AdditionalPermissions>(value.clone()) {
+            Ok(value) => value,
+            Err(_) => return Value::Object(args),
+        },
+        None => AdditionalPermissions::default(),
+    };
+
+    let merged_permissions =
+        merge_additional_permissions(&existing_permissions, &skill_permissions);
+    args.insert(
+        "sandbox_permissions".to_string(),
+        serde_json::to_value(SandboxPermissions::WithAdditionalPermissions)
+            .expect("sandbox permissions should serialize"),
+    );
+    args.insert(
+        "additional_permissions".to_string(),
+        serde_json::to_value(&merged_permissions).expect("additional permissions should serialize"),
+    );
+    debug!(
+        "Applied skill-scoped sandbox permissions for '{}' to tool '{}'",
+        skill.name(),
+        tool_name
+    );
+
+    Value::Object(args)
 }
 
 /// Execute a skill with LLM sub-call support (Phase 5)
@@ -217,6 +332,8 @@ pub async fn execute_skill_with_sub_llm(
                         // Parse arguments as JSON
                         let tool_args = serde_json::from_str::<Value>(tool_args_str)
                             .unwrap_or_else(|_| serde_json::json!({}));
+                        let tool_args =
+                            merge_skill_command_permissions(skill, tool_name, tool_args);
 
                         // Execute tool via registry
                         let tool_result = match tool_registry
@@ -423,7 +540,7 @@ impl SkillExecutionContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::skills::types::SkillManifest;
+    use crate::skills::types::{SkillFileSystemPermissions, SkillManifest, SkillPermissionProfile};
     use crate::tools::traits::Tool;
     use std::path::PathBuf;
 
@@ -552,5 +669,109 @@ mod tests {
         let ctx = SkillExecutionContext::new(&skill, input, tools);
         assert_eq!(ctx.skill_name, "test-skill");
         assert_eq!(ctx.available_tools.len(), 2);
+    }
+
+    fn test_skill_with_permissions(permission_profile: Option<SkillPermissionProfile>) -> Skill {
+        let manifest = SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test skill".to_string(),
+            permissions: permission_profile,
+            vtcode_native: Some(true),
+            ..Default::default()
+        };
+
+        Skill::new(
+            manifest,
+            PathBuf::from("/tmp/test-skill"),
+            "Instructions".to_string(),
+        )
+        .expect("failed to create skill")
+    }
+
+    #[test]
+    fn skill_command_permissions_inject_additional_permissions() {
+        let skill = test_skill_with_permissions(Some(SkillPermissionProfile {
+            file_system: Some(SkillFileSystemPermissions {
+                read: vec![PathBuf::from("references")],
+                write: vec![PathBuf::from("outputs")],
+            }),
+        }));
+
+        let merged =
+            merge_skill_command_permissions(&skill, "shell", serde_json::json!({"command": "pwd"}));
+
+        assert_eq!(
+            merged["sandbox_permissions"],
+            serde_json::json!("with_additional_permissions")
+        );
+        assert_eq!(
+            merged["additional_permissions"]["fs_read"],
+            serde_json::json!(["/tmp/test-skill/references"])
+        );
+        assert_eq!(
+            merged["additional_permissions"]["fs_write"],
+            serde_json::json!(["/tmp/test-skill/outputs"])
+        );
+    }
+
+    #[test]
+    fn skill_command_permissions_merge_existing_permissions() {
+        let skill = test_skill_with_permissions(Some(SkillPermissionProfile {
+            file_system: Some(SkillFileSystemPermissions {
+                read: vec![PathBuf::from("references")],
+                write: vec![PathBuf::from("outputs")],
+            }),
+        }));
+
+        let merged = merge_skill_command_permissions(
+            &skill,
+            "shell",
+            serde_json::json!({
+                "command": "pwd",
+                "sandbox_permissions": "with_additional_permissions",
+                "additional_permissions": {
+                    "fs_read": ["/tmp/existing-read"],
+                    "fs_write": ["/tmp/existing-write"]
+                }
+            }),
+        );
+
+        assert_eq!(
+            merged["additional_permissions"]["fs_read"],
+            serde_json::json!(["/tmp/existing-read", "/tmp/test-skill/references"])
+        );
+        assert_eq!(
+            merged["additional_permissions"]["fs_write"],
+            serde_json::json!(["/tmp/existing-write", "/tmp/test-skill/outputs"])
+        );
+    }
+
+    #[test]
+    fn skill_command_permissions_ignore_require_escalated() {
+        let skill = test_skill_with_permissions(Some(SkillPermissionProfile {
+            file_system: Some(SkillFileSystemPermissions {
+                read: Vec::new(),
+                write: vec![PathBuf::from("outputs")],
+            }),
+        }));
+        let original = serde_json::json!({
+            "command": "pwd",
+            "sandbox_permissions": "require_escalated",
+            "justification": "Do you want to run this command without sandbox restrictions?"
+        });
+
+        let merged = merge_skill_command_permissions(&skill, "shell", original.clone());
+
+        assert_eq!(merged, original);
+    }
+
+    #[test]
+    fn skill_command_permissions_ignore_empty_skill_permissions() {
+        let skill = test_skill_with_permissions(None);
+        let original = serde_json::json!({"command": "pwd"});
+
+        let merged = merge_skill_command_permissions(&skill, "shell", original.clone());
+
+        assert_eq!(merged, original);
     }
 }

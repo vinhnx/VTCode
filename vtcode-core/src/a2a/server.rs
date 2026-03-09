@@ -512,7 +512,9 @@ pub async fn run(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!("A2A server listening on {}", addr);
-    axum::serve(listener, create_router(state)).await?;
+    axum::serve(listener, create_router(state))
+        .with_graceful_shutdown(crate::shutdown::shutdown_signal_logged("A2A"))
+        .await?;
     Ok(())
 }
 

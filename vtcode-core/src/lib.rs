@@ -168,6 +168,7 @@ pub mod safety;
 pub mod sandboxing; // Codex-style sandbox policy and execution environment
 pub mod security;
 pub mod session;
+pub mod shutdown;
 pub mod skills;
 pub mod telemetry;
 pub mod terminal_setup;

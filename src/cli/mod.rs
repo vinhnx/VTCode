@@ -496,14 +496,14 @@ async fn handle_anthropic_api_command(
     println!("Compatible with Anthropic Messages API at /v1/messages");
     println!("Press Ctrl+C to stop the server");
 
-    ::axum::serve(
-        tokio::net::TcpListener::bind(addr)
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to bind to address {}: {}", addr, e))?,
-        app,
-    )
-    .await
-    .map_err(|e| anyhow::anyhow!("Server error: {}", e))?;
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to bind to address {}: {}", addr, e))?;
+
+    ::axum::serve(listener, app)
+        .with_graceful_shutdown(vtcode_core::shutdown::shutdown_signal_logged("server"))
+        .await
+        .map_err(|e| anyhow::anyhow!("Server error: {}", e))?;
 
     Ok(())
 }

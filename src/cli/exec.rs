@@ -443,7 +443,7 @@ pub async fn handle_exec_command(
 ) -> Result<()> {
     tokio::select! {
         res = handle_exec_command_impl(config, vt_cfg, options) => res,
-        _ = tokio::signal::ctrl_c() => {
+        _ = vtcode_core::shutdown::shutdown_signal() => {
             eprintln!("{}", style("\nCancelled by user.").red());
             bail!("Operation cancelled");
         }

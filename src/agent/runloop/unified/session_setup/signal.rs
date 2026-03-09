@@ -34,7 +34,7 @@ pub(crate) fn spawn_signal_handler(
     let handle = tokio::spawn(async move {
         loop {
             tokio::select! {
-                _ = tokio::signal::ctrl_c() => {
+                _ = vtcode_core::shutdown::shutdown_signal() => {
                     let signal = ctrl_c_state.register_signal();
                     ctrl_c_notify.notify_waiters();
 
