@@ -5,7 +5,9 @@ use crate::skills::cli_bridge::CliToolConfig;
 use crate::skills::discovery::{DiscoveryConfig, SkillDiscovery};
 use crate::skills::executor::SkillToolAdapter;
 use crate::skills::file_references::FileReferenceValidator;
-use crate::skills::loader::{SkillLoaderConfig, discover_skill_metadata_lightweight};
+use crate::skills::loader::{
+    EnhancedSkill, EnhancedSkillLoader, SkillLoaderConfig, discover_skill_metadata_lightweight,
+};
 use crate::skills::manager::SkillsManager;
 use crate::skills::model::{SkillErrorInfo, SkillLoadOutcome};
 use crate::skills::types::{Skill, SkillVariety};
@@ -75,7 +77,7 @@ impl SkillToolSessionRuntime {
 
         if !self.tool_registry.has_tool(skill_name.as_str()).await {
             self.tool_registry
-                .register_tool(build_skill_tool_registration(&skill))
+                .register_tool(build_traditional_skill_tool_registration(&skill))
                 .await
                 .with_context(|| format!("failed to register skill tool '{skill_name}'"))?;
             self.refresh_tool_snapshot().await;
@@ -118,7 +120,7 @@ impl SkillToolSessionRuntime {
     }
 }
 
-pub fn build_skill_tool_registration(skill: &Skill) -> ToolRegistration {
+pub fn build_traditional_skill_tool_registration(skill: &Skill) -> ToolRegistration {
     let metadata = ToolMetadata::default()
         .with_description(skill.description())
         .with_parameter_schema(skill_tool_parameter_schema())
@@ -131,6 +133,10 @@ pub fn build_skill_tool_registration(skill: &Skill) -> ToolRegistration {
         Arc::new(SkillToolAdapter::new(skill.clone())),
         metadata,
     )
+}
+
+pub fn build_skill_tool_registration(skill: &Skill) -> ToolRegistration {
+    build_traditional_skill_tool_registration(skill)
 }
 
 fn skill_tool_parameter_schema() -> Value {
@@ -239,16 +245,6 @@ async fn discover_session_utilities(
     Ok(discovery.discover_all(workspace_root).await?.tools)
 }
 
-fn skill_root_from_metadata_path(path: &Path) -> PathBuf {
-    match path.file_name().and_then(|name| name.to_str()) {
-        Some("SKILL.md") => path
-            .parent()
-            .map(Path::to_path_buf)
-            .unwrap_or_else(|| path.to_path_buf()),
-        _ => path.to_path_buf(),
-    }
-}
-
 fn discovery_error_samples(errors: &[SkillErrorInfo]) -> Vec<String> {
     errors
         .iter()
@@ -322,7 +318,7 @@ impl Tool for LoadSkillTool {
     }
 
     fn description(&self) -> &'static str {
-        "Load detailed instructions for a specific skill and activate its associated tools into your environment. Use this to unlock high-level 'AgentSkill' workflows or 'SystemUtility' CLI bridges that are currently dormant."
+        "Load detailed instructions for a specific traditional skill and activate its associated tool into your environment."
     }
 
     fn parameter_schema(&self) -> Option<Value> {
@@ -379,33 +375,47 @@ impl Tool for LoadSkillTool {
             );
         }
 
-        let manager = SkillsManager::new(codex_home.clone());
-        let skill = if let Some(skill_meta) = metadata
-            .skills
-            .iter()
-            .find(|skill| skill.name == name && skill.manifest.is_some())
-        {
-            let skill_root = skill_root_from_metadata_path(&skill_meta.path);
-            manager.load_skill_instructions(name, &skill_root)?
-        } else {
-            let tools = discover_session_utilities(&self.workspace_root, &codex_home).await?;
-            if tools.iter().any(|tool| tool.name == name) {
+        let mut loader =
+            EnhancedSkillLoader::with_codex_home(self.workspace_root.clone(), codex_home.clone());
+        let skill = match loader.get_skill(name).await {
+            Ok(EnhancedSkill::Traditional(skill)) => *skill,
+            Ok(EnhancedSkill::CliTool(_)) => {
                 return Err(anyhow::anyhow!(
                     "Skill '{}' is a system utility and cannot be activated via load_skill",
                     name
                 ));
             }
+            Ok(EnhancedSkill::NativePlugin(_)) => {
+                return Err(anyhow::anyhow!(
+                    "Skill '{}' is a native plugin and cannot be activated via load_skill",
+                    name
+                ));
+            }
+            Err(error) => {
+                let tools = discover_session_utilities(&self.workspace_root, &codex_home).await?;
+                if tools.iter().any(|tool| tool.name == name) {
+                    return Err(anyhow::anyhow!(
+                        "Skill '{}' is a system utility and cannot be activated via load_skill",
+                        name
+                    ));
+                }
 
-            let detail = if metadata.errors.is_empty() {
-                String::new()
-            } else {
-                format!(
-                    " Session discovery also reported {} issue(s); use `list_skills` to inspect warning samples.",
-                    metadata.errors.len()
-                )
-            };
+                let detail = if metadata.errors.is_empty() {
+                    String::new()
+                } else {
+                    format!(
+                        " Session discovery also reported {} issue(s); use `list_skills` to inspect warning samples.",
+                        metadata.errors.len()
+                    )
+                };
 
-            return Err(anyhow::anyhow!("Skill '{}' not found.{}", name, detail));
+                return Err(anyhow::anyhow!(
+                    "Failed to load skill '{}': {}.{}",
+                    name,
+                    error,
+                    detail
+                ));
+            }
         };
 
         let activation_status = match self
@@ -453,7 +463,7 @@ impl Tool for ListSkillsTool {
     }
 
     fn description(&self) -> &'static str {
-        "List all available skills (high-level workflows) and system utilities (CLI tools). Use 'query' to filter by name or 'variety' to filter by type ('agent_skill' or 'system_utility'). Tools are dormant until activated via 'load_skill'."
+        "List all available skills and system utilities. Use 'query' to filter by name or 'variety' to filter by type ('agent_skill' or 'system_utility'). Traditional skills stay inactive until activated via 'load_skill'."
     }
 
     fn parameter_schema(&self) -> Option<Value> {
@@ -853,6 +863,26 @@ Broken skill
     }
 
     #[tokio::test]
+    async fn load_skill_resource_fails_before_activation() {
+        let active_skills = Arc::new(RwLock::new(HashMap::new()));
+        let resource_tool = LoadSkillResourceTool::new(active_skills);
+
+        let error = resource_tool
+            .execute(json!({
+                "skill_name": DEMO_SKILL_TOOL_NAME,
+                "resource_path": "references/notes.txt"
+            }))
+            .await
+            .expect_err("resource load should fail before activation");
+
+        assert!(
+            error
+                .to_string()
+                .contains("Use `load_skill` (or `/skills load <name>`) first.")
+        );
+    }
+
+    #[tokio::test]
     async fn deactivate_skill_unregisters_tool() {
         let temp_dir = TempDir::new().expect("temp dir");
         let skill_name = DEMO_SKILL_TOOL_NAME;
@@ -868,14 +898,13 @@ Broken skill
             ToolModelCapabilities::default(),
             None,
         );
-        let mut loader =
-            crate::skills::loader::EnhancedSkillLoader::new(temp_dir.path().to_path_buf());
+        let mut loader = EnhancedSkillLoader::new(temp_dir.path().to_path_buf());
         let skill = match loader
             .get_skill(skill_name)
             .await
             .expect("discover skill for activation")
         {
-            crate::skills::loader::EnhancedSkill::Traditional(skill) => *skill,
+            EnhancedSkill::Traditional(skill) => *skill,
             _ => panic!("expected traditional skill"),
         };
 

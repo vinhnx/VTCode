@@ -25,16 +25,9 @@ impl ToolRegistry {
                 .read()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             assembly
-                .policy_seeds()
+                .policy_seed_metadata()
                 .iter()
-                .filter(|(name, _)| {
-                    assembly
-                        .catalog()
-                        .entries()
-                        .iter()
-                        .any(|entry| entry.registration_name == *name)
-                })
-                .cloned()
+                .map(|(name, metadata)| (name.clone(), metadata.clone()))
                 .collect::<Vec<_>>()
         };
         let mut policy_gateway = self.policy_gateway.write().await;

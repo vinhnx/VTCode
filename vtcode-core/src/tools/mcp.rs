@@ -28,6 +28,16 @@ pub fn legacy_mcp_tool_name(name: &str) -> Option<&str> {
     }
 }
 
+pub fn parse_canonical_mcp_tool_name(name: &str) -> Option<(&str, &str)> {
+    let mut parts = name.splitn(3, "::");
+    match (parts.next()?, parts.next(), parts.next()) {
+        ("mcp", Some(provider), Some(tool)) if !provider.is_empty() && !tool.is_empty() => {
+            Some((provider, tool))
+        }
+        _ => None,
+    }
+}
+
 pub fn model_visible_mcp_tool_name(provider: &str, tool_name: &str) -> String {
     let provider = sanitize_tool_segment(provider);
     let tool = sanitize_tool_segment(tool_name);
@@ -142,7 +152,10 @@ impl Tool for McpProxyTool {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_legacy_mcp_tool_name, legacy_mcp_tool_name, model_visible_mcp_tool_name};
+    use super::{
+        is_legacy_mcp_tool_name, legacy_mcp_tool_name, model_visible_mcp_tool_name,
+        parse_canonical_mcp_tool_name,
+    };
 
     #[test]
     fn model_visible_name_uses_qualified_prefix() {
@@ -162,5 +175,14 @@ mod tests {
         assert!(!is_legacy_mcp_tool_name("mcp__context7__search"));
         assert_eq!(legacy_mcp_tool_name("mcp_fetch"), Some("fetch"));
         assert_eq!(legacy_mcp_tool_name("mcp__context7__search"), None);
+    }
+
+    #[test]
+    fn parse_canonical_name_extracts_provider_and_tool() {
+        assert_eq!(
+            parse_canonical_mcp_tool_name("mcp::context7::search-docs"),
+            Some(("context7", "search-docs"))
+        );
+        assert_eq!(parse_canonical_mcp_tool_name("mcp__context7__search"), None);
     }
 }
