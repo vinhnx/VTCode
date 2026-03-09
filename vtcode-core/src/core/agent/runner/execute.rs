@@ -31,6 +31,10 @@ fn record_terminal_turn_event(event_recorder: &mut ExecEventRecorder, outcome: &
     }
 }
 
+fn tool_loop_limit_reached(loop_count: usize, max_tool_loops: usize) -> bool {
+    max_tool_loops > 0 && loop_count >= max_tool_loops
+}
+
 impl AgentRunner {
     /// Execute a task with this agent
     pub async fn execute_task(
@@ -110,7 +114,7 @@ impl AgentRunner {
 
             // Track execution results
             // Determine loop guards via cached configuration
-            let max_tool_loops = self.config().tools.max_tool_loops.max(1);
+            let max_tool_loops = self.config().tools.max_tool_loops;
             let preserve_recent_turns = self.config().context.preserve_recent_turns;
             let max_context_tokens = self.config().context.max_context_tokens;
 
@@ -445,7 +449,7 @@ impl AgentRunner {
                     || had_effective_shell_tool_call;
                 if had_tool_call {
                     let loops = controller.state.register_tool_loop();
-                    if loops >= controller.state.constraints.max_tool_loops {
+                    if tool_loop_limit_reached(loops, controller.state.constraints.max_tool_loops) {
                         let warning_message = format!(
                             "Reached tool-call limit of {} iterations; pausing autonomous loop",
                             controller.state.constraints.max_tool_loops
@@ -574,7 +578,7 @@ impl AgentRunner {
 
 #[cfg(test)]
 mod tests {
-    use super::record_terminal_turn_event;
+    use super::{record_terminal_turn_event, tool_loop_limit_reached};
     use crate::core::agent::events::ExecEventRecorder;
     use crate::core::agent::task::TaskOutcome;
     use crate::exec::events::ThreadEvent;
@@ -630,5 +634,11 @@ mod tests {
                 .count(),
             0
         );
+    }
+
+    #[test]
+    fn disabled_tool_loop_limit_never_trips() {
+        assert!(!tool_loop_limit_reached(1, 0));
+        assert!(!tool_loop_limit_reached(32, 0));
     }
 }

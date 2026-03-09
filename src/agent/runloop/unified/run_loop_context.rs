@@ -110,8 +110,12 @@ impl HarnessTurnState {
         }
     }
 
+    pub fn has_tool_call_budget(&self) -> bool {
+        self.max_tool_calls > 0
+    }
+
     pub fn tool_budget_exhausted(&self) -> bool {
-        self.tool_calls >= self.max_tool_calls
+        self.has_tool_call_budget() && self.tool_calls >= self.max_tool_calls
     }
 
     pub fn wall_clock_exhausted(&self) -> bool {
@@ -133,8 +137,8 @@ impl HarnessTurnState {
     }
 
     pub fn tool_budget_usage_ratio(&self) -> f64 {
-        if self.max_tool_calls == 0 {
-            1.0
+        if !self.has_tool_call_budget() {
+            0.0
         } else {
             self.tool_calls as f64 / self.max_tool_calls as f64
         }
@@ -145,7 +149,9 @@ impl HarnessTurnState {
     }
 
     pub fn should_emit_tool_budget_warning(&self, threshold: f64) -> bool {
-        !self.tool_budget_warning_emitted && self.tool_budget_usage_ratio() >= threshold
+        self.has_tool_call_budget()
+            && !self.tool_budget_warning_emitted
+            && self.tool_budget_usage_ratio() >= threshold
     }
 
     pub fn mark_tool_budget_warning_emitted(&mut self) {
@@ -351,6 +357,25 @@ mod tests {
         assert!(state.tool_budget_exhausted());
         state.mark_tool_budget_exhausted_emitted();
         assert!(state.tool_budget_exhausted_emitted);
+    }
+
+    #[test]
+    fn harness_state_treats_zero_tool_budget_as_unlimited() {
+        let mut state = HarnessTurnState::new(
+            TurnRunId("run-1".to_string()),
+            TurnId("turn-1".to_string()),
+            0,
+            10,
+            1,
+        );
+
+        for _ in 0..8 {
+            state.record_tool_call();
+        }
+
+        assert!(!state.has_tool_call_budget());
+        assert!(!state.tool_budget_exhausted());
+        assert!(!state.should_emit_tool_budget_warning(0.75));
     }
 
     #[test]

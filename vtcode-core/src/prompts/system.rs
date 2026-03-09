@@ -646,12 +646,19 @@ pub async fn compose_system_instruction_text(
         } else {
             "disabled (manual guardrails)".to_owned()
         };
-        let _ = writeln!(
-            instruction,
-            "- **Loop guards**: max {} tool loops per turn; identical call limit: {}",
-            cfg.tools.max_tool_loops.max(1),
-            repeated_desc
-        );
+        if cfg.tools.max_tool_loops == 0 {
+            let _ = writeln!(
+                instruction,
+                "- **Loop guards**: tool loop cap: unlimited; identical call limit: {}",
+                repeated_desc
+            );
+        } else {
+            let _ = writeln!(
+                instruction,
+                "- **Loop guards**: max {} tool loops per turn; identical call limit: {}",
+                cfg.tools.max_tool_loops, repeated_desc
+            );
+        }
 
         if cfg.chat.ask_questions.enabled {
             instruction.push_str(
@@ -1394,6 +1401,18 @@ mod tests {
             !result.contains("Current date and time"),
             "Should not include temporal context when disabled"
         );
+    }
+
+    #[tokio::test]
+    async fn test_loop_guards_render_unlimited_when_disabled() {
+        let mut config = VTCodeConfig::default();
+        config.tools.max_tool_loops = 0;
+
+        let result =
+            compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
+
+        assert!(result.contains("Loop guards"));
+        assert!(result.contains("tool loop cap: unlimited"));
     }
 
     #[tokio::test]

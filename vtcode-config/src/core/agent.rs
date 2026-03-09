@@ -227,7 +227,7 @@ pub struct AgentConfig {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AgentHarnessConfig {
-    /// Maximum number of tool calls allowed per turn
+    /// Maximum number of tool calls allowed per turn. Set to `0` to disable the cap.
     #[serde(default = "default_harness_max_tool_calls_per_turn")]
     pub max_tool_calls_per_turn: usize,
     /// Maximum wall clock time (seconds) for tool execution in a turn

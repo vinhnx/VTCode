@@ -37,7 +37,7 @@ python3 scripts/generate_config_field_reference.py
 | `agent.enable_self_review` | `boolean` | no | `false` | Enable an extra self-review pass to refine final responses |
 | `agent.enable_split_tool_results` | `boolean` | no | `true` | Enable split tool results for massive token savings (Phase 4) When enabled, tools return dual-channel output: - llm_content: Concise summary sent to LLM (token-optimized, 53-95% reduction) - ui_content: Rich output displayed to user (full details preserved) Applies to: grep_file, list_files, read_file, run_pty_cmd, write_file, edit_file Default: true (opt-out for compatibility), recommended for production use |
 | `agent.harness.event_log_path` | `null \| string` | no | `null` | Optional JSONL event log path for harness events |
-| `agent.harness.max_tool_calls_per_turn` | `integer` | no | `48` | Maximum number of tool calls allowed per turn |
+| `agent.harness.max_tool_calls_per_turn` | `integer` | no | `0` | Maximum number of tool calls allowed per turn. Set to `0` to disable the cap. |
 | `agent.harness.max_tool_retries` | `integer` | no | `2` | Maximum retries for retryable tool errors |
 | `agent.harness.max_tool_wall_clock_secs` | `integer` | no | `600` | Maximum wall clock time (seconds) for tool execution in a turn |
 | `agent.include_temporal_context` | `boolean` | no | `true` | Include current date/time in system prompt for temporal awareness Helps LLM understand context for time-sensitive tasks (default: true) |
@@ -465,7 +465,7 @@ python3 scripts/generate_config_field_reference.py
 | `tools.loop_thresholds` | `object` | no | `{}` | Tool-specific loop thresholds (Adaptive Loop Detection) Allows setting higher loop limits for read-only tools (e.g., ls, grep) and lower limits for mutating tools. |
 | `tools.loop_thresholds.*` | `integer` | no | `-` | - |
 | `tools.max_repeated_tool_calls` | `integer` | no | `3` | Maximum number of times the same tool invocation can be retried with the identical arguments within a single turn. |
-| `tools.max_tool_loops` | `integer` | no | `200` | Maximum inner tool-call loops per user turn Prevents infinite tool-calling cycles in interactive chat. This limits how many back-and-forths the agent will perform executing tools and re-asking the model before returning a final answer. |
+| `tools.max_tool_loops` | `integer` | no | `0` | Maximum inner tool-call loops per user turn. Set to `0` to disable the limit. Prevents infinite tool-calling cycles in interactive chat when enabled. |
 | `tools.max_tool_rate_per_second` | `integer \| null` | no | `null` | Optional per-second rate limit for tool calls to smooth bursty retries. When unset, the runtime defaults apply. |
 | `tools.plugins.allow` | `array` | no | `[]` | Explicit allow-list of plugin identifiers permitted to load. |
 | `tools.plugins.allow[]` | `string` | no | `-` | - |

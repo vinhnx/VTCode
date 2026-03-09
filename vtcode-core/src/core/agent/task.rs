@@ -79,10 +79,19 @@ impl TaskOutcome {
             Self::ToolLoopLimitReached {
                 max_tool_loops,
                 actual_tool_loops,
-            } => format!(
-                "Stopped after reaching tool loop limit (max: {}, reached: {})",
-                max_tool_loops, actual_tool_loops
-            ),
+            } => {
+                if *max_tool_loops == 0 {
+                    format!(
+                        "Stopped after a tool-loop safeguard halted execution (reached: {})",
+                        actual_tool_loops
+                    )
+                } else {
+                    format!(
+                        "Stopped after reaching tool loop limit (max: {}, reached: {})",
+                        max_tool_loops, actual_tool_loops
+                    )
+                }
+            }
             Self::LoopDetected => "Stopped due to infinite loop detection".into(),
             Self::Cancelled => "Task cancelled by user".into(),
             Self::Failed { reason } => format!("Task failed: {}", reason),
@@ -125,6 +134,19 @@ impl TaskOutcome {
 impl fmt::Display for TaskOutcome {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.code())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TaskOutcome;
+
+    #[test]
+    fn tool_loop_limit_description_handles_disabled_limit() {
+        let description = TaskOutcome::tool_loop_limit_reached(0, 4).description();
+
+        assert!(description.contains("tool-loop safeguard halted execution"));
+        assert!(description.contains("reached: 4"));
     }
 }
 

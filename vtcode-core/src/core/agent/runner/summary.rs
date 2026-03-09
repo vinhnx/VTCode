@@ -42,9 +42,14 @@ impl AgentRunner {
         ));
 
         let tool_loops_used = peak_tool_loops;
+        let max_tool_loops_label = if max_tool_loops == 0 {
+            "unlimited".to_owned()
+        } else {
+            max_tool_loops.to_string()
+        };
         summary.push(format!(
             "Turns: {} used / {} max | Tool loops: {} used / {} max",
-            turns_executed, self.max_turns, tool_loops_used, max_tool_loops
+            turns_executed, self.max_turns, tool_loops_used, max_tool_loops_label
         ));
 
         let mut duration_line = format!("Duration: {} ms", total_duration_ms);

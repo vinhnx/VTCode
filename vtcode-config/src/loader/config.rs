@@ -371,10 +371,9 @@ max_age_days = 30
 # "deny" - Block the tool
 default_policy = "prompt"
 
-# Maximum number of tool loops allowed per turn (prevents infinite loops)
-# Higher values allow more complex operations but risk performance issues
-# Recommended: 20 for most tasks, 50 for complex multi-step workflows
-max_tool_loops = 20
+# Maximum number of tool loops allowed per turn
+# Set to 0 to disable the limit and let other turn safeguards govern termination.
+max_tool_loops = 0
 
 # Maximum number of repeated identical tool calls (prevents stuck loops)
 max_repeated_tool_calls = 2

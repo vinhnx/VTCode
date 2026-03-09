@@ -6,7 +6,7 @@ pub const DEFAULT_PROVIDER: &str = "openai";
 pub const DEFAULT_API_KEY_ENV: &str = "OPENAI_API_KEY";
 pub const DEFAULT_THEME: &str = "ciapre";
 pub const DEFAULT_FULL_AUTO_MAX_TURNS: usize = 30;
-pub const DEFAULT_MAX_TOOL_LOOPS: usize = 20;
+pub const DEFAULT_MAX_TOOL_LOOPS: usize = 0;
 pub const DEFAULT_MAX_REPEATED_TOOL_CALLS: usize = 2;
 pub const DEFAULT_MAX_SEQUENTIAL_SPOOL_CHUNK_READS_PER_TURN: usize = 6;
 pub const DEFAULT_MAX_CONSECUTIVE_BLOCKED_TOOL_CALLS_PER_TURN: usize = 3;
@@ -21,7 +21,7 @@ pub const DEFAULT_PTY_OUTPUT_MAX_TOKENS: usize = 8_000;
 /// Protects against edge cases where token estimation underestimates size.
 pub const DEFAULT_PTY_OUTPUT_BYTE_FUSE: usize = 40 * 1024; // 40 KiB
 
-pub const DEFAULT_MAX_TOOL_CALLS_PER_TURN: usize = 32;
+pub const DEFAULT_MAX_TOOL_CALLS_PER_TURN: usize = 0;
 pub const DEFAULT_MAX_TOOL_WALL_CLOCK_SECS: u64 = 600;
 pub const DEFAULT_MAX_TOOL_RETRIES: u32 = 2;
 

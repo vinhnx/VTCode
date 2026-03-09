@@ -39,6 +39,12 @@ pub fn upsert_harness_limits_section(
     max_tool_wall_clock_secs: u64,
     max_tool_retries: u32,
 ) {
+    let max_tool_calls_label = if max_tool_calls_per_turn == 0 {
+        "unlimited".to_string()
+    } else {
+        max_tool_calls_per_turn.to_string()
+    };
+
     while let Some((section_start, section_end)) =
         find_prompt_section_bounds(prompt, "[Harness Limits]")
     {
@@ -53,13 +59,13 @@ pub fn upsert_harness_limits_section(
         let _ = writeln!(
             prompt,
             "[Harness Limits]\n- max_tool_calls_per_turn: {}\n- max_tool_wall_clock_secs: {}\n- max_tool_retries: {}",
-            max_tool_calls_per_turn, max_tool_wall_clock_secs, max_tool_retries
+            max_tool_calls_label, max_tool_wall_clock_secs, max_tool_retries
         );
     } else {
         let _ = writeln!(
             prompt,
             "\n[Harness Limits]\n- max_tool_calls_per_turn: {}\n- max_tool_wall_clock_secs: {}\n- max_tool_retries: {}",
-            max_tool_calls_per_turn, max_tool_wall_clock_secs, max_tool_retries
+            max_tool_calls_label, max_tool_wall_clock_secs, max_tool_retries
         );
     }
 }
@@ -124,5 +130,16 @@ mod tests {
         assert_eq!(prompt.matches("[Harness Limits]").count(), 1);
         assert!(prompt.contains("- max_tool_calls_per_turn: 7"));
         assert!(prompt.contains("[Other]\nkeep"));
+    }
+
+    #[test]
+    fn upsert_harness_limits_renders_unlimited_when_tool_cap_disabled() {
+        let mut prompt = "Base prompt".to_string();
+
+        upsert_harness_limits_section(&mut prompt, 0, 600, 2);
+
+        assert!(prompt.contains("- max_tool_calls_per_turn: unlimited"));
+        assert!(prompt.contains("- max_tool_wall_clock_secs: 600"));
+        assert!(prompt.contains("- max_tool_retries: 2"));
     }
 }

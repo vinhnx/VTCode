@@ -24,6 +24,8 @@ pub(super) struct PrecomputedTurnConfig {
     pub(super) request_user_input_enabled: bool,
 }
 
+const UNLIMITED_TOOL_LOOPS: usize = usize::MAX;
+
 #[inline]
 pub(super) fn extract_turn_config(
     vt_cfg: Option<&VTCodeConfig>,
@@ -32,17 +34,7 @@ pub(super) fn extract_turn_config(
     let features = FeatureSet::from_config(vt_cfg);
     vt_cfg
         .map(|cfg| PrecomputedTurnConfig {
-            max_tool_loops: if plan_mode_active {
-                if cfg.tools.max_tool_loops > 0 {
-                    cfg.tools.max_tool_loops.max(PLAN_MODE_MIN_TOOL_LOOPS)
-                } else {
-                    DEFAULT_MAX_TOOL_LOOPS.max(PLAN_MODE_MIN_TOOL_LOOPS)
-                }
-            } else if cfg.tools.max_tool_loops > 0 {
-                cfg.tools.max_tool_loops
-            } else {
-                DEFAULT_MAX_TOOL_LOOPS
-            },
+            max_tool_loops: resolve_tool_loop_limit(cfg.tools.max_tool_loops, plan_mode_active),
             tool_repeat_limit: if cfg.tools.max_repeated_tool_calls > 0 {
                 cfg.tools.max_repeated_tool_calls
             } else {
@@ -52,11 +44,7 @@ pub(super) fn extract_turn_config(
             request_user_input_enabled: features.request_user_input_enabled(plan_mode_active, true),
         })
         .unwrap_or(PrecomputedTurnConfig {
-            max_tool_loops: if plan_mode_active {
-                DEFAULT_MAX_TOOL_LOOPS.max(PLAN_MODE_MIN_TOOL_LOOPS)
-            } else {
-                DEFAULT_MAX_TOOL_LOOPS
-            },
+            max_tool_loops: resolve_tool_loop_limit(DEFAULT_MAX_TOOL_LOOPS, plan_mode_active),
             tool_repeat_limit: DEFAULT_MAX_REPEATED_TOOL_CALLS,
             max_session_turns: DEFAULT_MAX_CONVERSATION_TURNS,
             request_user_input_enabled: features.request_user_input_enabled(plan_mode_active, true),
@@ -79,6 +67,16 @@ const PLAN_MODE_MAX_TOOL_LOOP_INCREMENT_PER_PROMPT: usize = 80;
 const PLAN_MODE_EXIT_TRIGGER_STATUS: &str = "Plan Mode: implementation intent detected from your message. Running `exit_plan_mode` for plan confirmation; once approved, VT Code will switch to Edit Mode and execute.";
 const PLAN_MODE_EXIT_SWITCHED_CONTINUE_STATUS: &str =
     "Plan Mode disabled. Continuing this turn in Edit Mode to execute your implementation request.";
+
+fn resolve_tool_loop_limit(configured_limit: usize, plan_mode_active: bool) -> usize {
+    if configured_limit == 0 {
+        UNLIMITED_TOOL_LOOPS
+    } else if plan_mode_active {
+        configured_limit.max(PLAN_MODE_MIN_TOOL_LOOPS)
+    } else {
+        configured_limit
+    }
+}
 
 fn plan_mode_fully_disabled(ctx: &TurnLoopContext<'_>) -> bool {
     !ctx.session_stats.is_plan_mode()
@@ -498,6 +496,10 @@ pub(super) async fn maybe_handle_tool_loop_limit(
     step_count: usize,
     current_max_tool_loops: &mut usize,
 ) -> Result<ToolLoopLimitAction> {
+    if *current_max_tool_loops == UNLIMITED_TOOL_LOOPS {
+        return Ok(ToolLoopLimitAction::Proceed);
+    }
+
     if step_count < *current_max_tool_loops {
         return Ok(ToolLoopLimitAction::Proceed);
     }
@@ -589,9 +591,9 @@ pub(super) async fn maybe_handle_tool_loop_limit(
 mod tests {
     use super::{
         PLAN_MODE_EXIT_SWITCHED_CONTINUE_STATUS, PLAN_MODE_EXIT_TRIGGER_STATUS,
-        PLAN_MODE_MIN_TOOL_LOOPS, clamp_tool_loop_increment, extract_turn_config,
-        should_exit_plan_mode_from_confirmation, should_exit_plan_mode_from_user_text,
-        tool_loop_hard_cap,
+        PLAN_MODE_MIN_TOOL_LOOPS, UNLIMITED_TOOL_LOOPS, clamp_tool_loop_increment,
+        extract_turn_config, resolve_tool_loop_limit, should_exit_plan_mode_from_confirmation,
+        should_exit_plan_mode_from_user_text, tool_loop_hard_cap,
     };
     use vtcode_core::config::loader::VTCodeConfig;
     use vtcode_core::llm::provider as uni;
@@ -748,6 +750,12 @@ mod tests {
         cfg.tools.max_tool_loops = 20;
         let turn_cfg = extract_turn_config(Some(&cfg), false);
         assert_eq!(turn_cfg.max_tool_loops, 20);
+    }
+
+    #[test]
+    fn resolve_tool_loop_limit_allows_unlimited_mode() {
+        assert_eq!(resolve_tool_loop_limit(0, false), UNLIMITED_TOOL_LOOPS);
+        assert_eq!(resolve_tool_loop_limit(0, true), UNLIMITED_TOOL_LOOPS);
     }
 
     #[test]

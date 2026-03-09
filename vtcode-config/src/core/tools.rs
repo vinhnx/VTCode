@@ -20,7 +20,7 @@ pub struct ToolsConfig {
     )]
     pub policies: IndexMap<String, ToolPolicy>,
 
-    /// Maximum inner tool-call loops per user turn
+    /// Maximum inner tool-call loops per user turn. Set to `0` to disable the limit.
     ///
     /// Prevents infinite tool-calling cycles in interactive chat. This limits how
     /// many back-and-forths the agent will perform executing tools and

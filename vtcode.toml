@@ -282,9 +282,10 @@ recovery_cooldown = 60
 auto_compaction_enabled = false
 
 # Maximum number of tool calls allowed per turn
-# Default: 48
+# Set to 0 to disable the cap and rely on the other turn safeguards instead.
+# Default: 0
 # Type: `integer`
-max_tool_calls_per_turn = 32
+max_tool_calls_per_turn = 0
 
 # Maximum retries for retryable tool errors
 # Default: 2
@@ -2351,12 +2352,11 @@ max_repeated_tool_calls = 2
 
 max_sequential_spool_chunk_reads = 6
 
-# Maximum inner tool-call loops per user turn Prevents infinite tool-calling cycles in interactive
-# chat. This limits how many back-and-forths the agent will perform executing tools and re-asking the
-# model before returning a final answer.
-# Default: 200
+# Maximum inner tool-call loops per user turn.
+# Set to 0 to disable the limit and let other turn safeguards govern termination.
+# Default: 0
 # Type: `integer`
-max_tool_loops = 20
+max_tool_loops = 0
 
 # External Editor
 # Editor launch command and editor fallback.

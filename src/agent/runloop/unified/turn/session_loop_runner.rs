@@ -135,7 +135,9 @@ fn resolve_effective_turn_timeout_secs(
 }
 
 fn effective_max_tool_calls_for_turn(configured_limit: usize, plan_mode_active: bool) -> usize {
-    if plan_mode_active {
+    if configured_limit == 0 {
+        0
+    } else if plan_mode_active {
         configured_limit.max(PLAN_MODE_MIN_TOOL_CALLS_PER_TURN)
     } else {
         configured_limit
@@ -1282,6 +1284,12 @@ mod tests {
     fn plan_mode_applies_tool_call_floor() {
         assert_eq!(effective_max_tool_calls_for_turn(32, true), 48);
         assert_eq!(effective_max_tool_calls_for_turn(64, true), 64);
+    }
+
+    #[test]
+    fn zero_tool_call_limit_stays_unlimited_in_all_modes() {
+        assert_eq!(effective_max_tool_calls_for_turn(0, true), 0);
+        assert_eq!(effective_max_tool_calls_for_turn(0, false), 0);
     }
 
     #[test]
