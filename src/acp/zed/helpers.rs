@@ -58,7 +58,7 @@ pub(crate) fn build_available_commands() -> Vec<acp::AvailableCommand> {
                 "Optional: --force flag",
             )),
         ),
-        acp::AvailableCommand::new("config", "View the effective vtcode.toml configuration"),
+        acp::AvailableCommand::new("config", "Browse vtcode.toml settings sections"),
         acp::AvailableCommand::new("status", "Show model, provider, workspace, and tool status"),
         acp::AvailableCommand::new("doctor", "Run installation and configuration diagnostics"),
         acp::AvailableCommand::new(

@@ -642,8 +642,10 @@ impl EnhancedSkillLoader {
 
     /// Create a loader pinned to a specific VT Code home directory.
     pub fn with_codex_home(workspace_root: PathBuf, codex_home: PathBuf) -> Self {
-        let discovery =
-            SkillDiscovery::with_config(discovery_config_for_codex_home(&workspace_root, &codex_home));
+        let discovery = SkillDiscovery::with_config(discovery_config_for_codex_home(
+            &workspace_root,
+            &codex_home,
+        ));
         let plugin_loader = plugin_loader_for_workspace(&workspace_root, Some(&codex_home));
         Self {
             workspace_root,

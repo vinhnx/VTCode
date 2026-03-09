@@ -501,7 +501,8 @@ mod tests {
             local_definition(tools::UNIFIED_EXEC),
             local_definition(tools::UNIFIED_SEARCH),
         ];
-        let registry = AcpToolRegistry::new(Path::new("/tmp/workspace"), true, true, local_definitions);
+        let registry =
+            AcpToolRegistry::new(Path::new("/tmp/workspace"), true, true, local_definitions);
 
         let definitions =
             registry.definitions_for(&[SupportedTool::ReadFile, SupportedTool::SwitchMode], true);
@@ -535,7 +536,10 @@ mod tests {
             registry.lookup(tools::READ_FILE),
             Some(ToolDescriptor::Acp(SupportedTool::ReadFile))
         );
-        assert_eq!(registry.lookup(tools::UNIFIED_SEARCH), Some(ToolDescriptor::Local));
+        assert_eq!(
+            registry.lookup(tools::UNIFIED_SEARCH),
+            Some(ToolDescriptor::Local)
+        );
         assert_eq!(registry.lookup("unknown_tool"), None);
     }
 }

@@ -2331,7 +2331,3 @@ don't stop the agent. remove this logic and let the agent decide when to stop or
 ```
 
 ===
-
-update each config in vtcode.toml with a human readable # heading describing the config settings item. and update /config item to use that heading as well.
-
----

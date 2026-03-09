@@ -769,8 +769,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn public_alias_resolution_stays_consistent_across_execution_preflight_and_policy(
-    ) -> Result<()> {
+    async fn public_alias_resolution_stays_consistent_across_execution_preflight_and_policy()
+    -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
@@ -793,7 +793,8 @@ mod tests {
             )
             .await?;
 
-        let preflight = registry.preflight_validate_call("Custom Tool", &json!({"input": "value"}))?;
+        let preflight =
+            registry.preflight_validate_call("Custom Tool", &json!({"input": "value"}))?;
         assert_eq!(preflight.normalized_tool_name, CUSTOM_TOOL_NAME);
 
         assert_eq!(
@@ -893,7 +894,9 @@ mod tests {
             ToolPermissionDecision::Allow
         );
         assert_eq!(
-            registry.evaluate_tool_policy("mcp::context7::search").await?,
+            registry
+                .evaluate_tool_policy("mcp::context7::search")
+                .await?,
             ToolPermissionDecision::Allow
         );
 

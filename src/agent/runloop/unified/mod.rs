@@ -1,5 +1,6 @@
 pub mod async_mcp_manager;
 
+mod config_section_headings;
 pub mod context_manager;
 
 mod diagnostics;

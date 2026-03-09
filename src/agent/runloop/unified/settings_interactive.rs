@@ -2,6 +2,9 @@ use hashbrown::HashMap;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
+use super::config_section_headings::{
+    heading_for_path, humanize_identifier, normalize_config_path,
+};
 use anyhow::{Context, Result, anyhow, bail};
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -13,9 +16,10 @@ use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_tui::{InlineListItem, InlineListSearchConfig, InlineListSelection};
 
 const SETTINGS_TITLE: &str = "VT Code Settings";
-const SETTINGS_HINT: &str = "↑/↓ select • Enter apply • ←/→ adjust • Auto-save on change • Esc parent (double Esc closes) • Type to filter";
+const SETTINGS_HINT: &str =
+    "Enter open/apply • ←/→ adjust • Esc back • Double Esc close • Type to filter";
 const SETTINGS_SEARCH_LABEL: &str = "Filter settings";
-const SETTINGS_SEARCH_PLACEHOLDER: &str = "path, key, value, or description";
+const SETTINGS_SEARCH_PLACEHOLDER: &str = "section, setting, or value";
 const ACTION_RELOAD: &str = "settings:reload";
 const ACTION_OPEN_ROOT: &str = "settings:open_root";
 const ACTION_PREFIX_OPEN: &str = "settings:open:";
@@ -53,7 +57,7 @@ impl FieldDocIndex {
     fn lookup(&self, path: &str) -> Option<&FieldDoc> {
         self.by_path
             .get(path)
-            .or_else(|| self.by_path.get(&normalize_field_path(path)))
+            .or_else(|| self.by_path.get(&normalize_config_path(path)))
     }
 }
 
@@ -80,7 +84,6 @@ enum PathToken {
 
 static QUOTED_VALUE_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r#"\"([^\"]+)\""#).expect("valid regex"));
-static ARRAY_INDEX_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\[(\d+)\]").expect("valid regex"));
 static FIELD_DOCS: Lazy<FieldDocIndex> = Lazy::new(parse_field_reference_markdown);
 
 pub(crate) fn create_settings_palette_state(
@@ -117,6 +120,32 @@ pub(crate) fn create_settings_palette_state(
     })
 }
 
+fn display_title(label: &str, path: &str, value: &TomlValue) -> String {
+    if label.starts_with('[') {
+        return format!("Item {}", label);
+    }
+
+    match value {
+        TomlValue::Table(_) => heading_for_path(path).title.into_owned(),
+        _ => humanize_identifier(label),
+    }
+}
+
+fn section_subtitle(path: &str, value: &TomlValue) -> String {
+    let heading = heading_for_path(path);
+    let count = count_leaf_entries(value);
+    let mut parts = Vec::new();
+    if !heading.summary.is_empty() {
+        parts.push(heading.summary.into_owned());
+    }
+    parts.push(format!(
+        "{} setting{}",
+        count,
+        if count == 1 { "" } else { "s" }
+    ));
+    parts.join(" • ")
+}
+
 pub(crate) fn show_settings_palette(
     renderer: &mut AnsiRenderer,
     state: &SettingsPaletteState,
@@ -127,14 +156,15 @@ pub(crate) fn show_settings_palette(
 
     let mut lines = Vec::new();
     lines.push(state.source_label.clone());
-    lines.push(format!(
-        "Editing: {}",
-        state
-            .view_path
-            .as_deref()
-            .map_or("categories", |value| value)
-    ));
-    lines.push("Changes are saved automatically.".to_string());
+    if let Some(view_path) = state.view_path.as_deref() {
+        let heading = heading_for_path(view_path);
+        lines.push(format!("{} ({})", heading.title, view_path));
+        if !heading.summary.is_empty() {
+            lines.push(heading.summary.into_owned());
+        }
+    } else {
+        lines.push("Choose a section to edit.".to_string());
+    }
     lines.push(SETTINGS_HINT.to_string());
 
     let items = build_settings_items(state, &draft_value)?;
@@ -236,8 +266,8 @@ fn build_settings_items(
 
     if let Some(view_path) = state.view_path.as_deref() {
         items.push(action_item(
-            "Back to categories",
-            "Return to top-level configuration categories",
+            "Back to sections",
+            "Return to the top-level settings sections",
             Some("Nav"),
             ACTION_OPEN_ROOT,
         ));
@@ -245,97 +275,17 @@ fn build_settings_items(
         let node = get_node(draft, view_path)
             .ok_or_else(|| anyhow!("Could not resolve settings path {}", view_path))?;
         append_node_items(&mut items, view_path, node)?;
-    } else {
-        items.push(section_item("Categories"));
-        if let TomlValue::Table(table) = draft {
-            let keys = sorted_table_keys(table);
-            for key in keys {
-                let Some(value) = table.get(key) else {
-                    continue;
-                };
-                let count = count_leaf_entries(value);
-                let subtitle = format!("{} setting{}", count, if count == 1 { "" } else { "s" });
-                items.push(InlineListItem {
-                    title: key.clone(),
-                    subtitle: Some(subtitle),
-                    badge: Some("Category".to_string()),
-                    indent: 0,
-                    selection: Some(InlineListSelection::ConfigAction(format!(
-                        "{}{}",
-                        ACTION_PREFIX_OPEN, key
-                    ))),
-                    search_value: Some(format!("{} category", key)),
-                });
-            }
-        }
-
-        items.push(section_item("All settings"));
-        if let TomlValue::Table(table) = draft {
-            let keys = sorted_table_keys(table);
-            for key in keys {
-                let Some(value) = table.get(key) else {
-                    continue;
-                };
-                if let TomlValue::Table(child_table) = value {
-                    for child_key in sorted_table_keys(child_table) {
-                        let Some(child_value) = child_table.get(child_key) else {
-                            continue;
-                        };
-                        let child_path = format!("{key}.{child_key}");
-                        append_flat_settings_items(&mut items, &child_path, child_value, 0);
-                    }
-                } else {
-                    append_flat_settings_items(&mut items, key, value, 0);
-                }
-            }
-        }
-        append_missing_optional_doc_items(&mut items, draft, None);
+    } else if let TomlValue::Table(table) = draft {
+        append_table_items(&mut items, table, None, None);
     }
 
     Ok(items)
 }
 
-fn append_flat_settings_items(
-    items: &mut Vec<InlineListItem>,
-    path: &str,
-    value: &TomlValue,
-    depth: usize,
-) {
-    let mut item = item_for_value(path, path, value);
-    item.indent = depth.min(u8::MAX as usize) as u8;
-    items.push(item);
-
-    match value {
-        TomlValue::Table(table) => {
-            for key in sorted_table_keys(table) {
-                let Some(child) = table.get(key) else {
-                    continue;
-                };
-                let child_path = format!("{}.{}", path, key);
-                append_flat_settings_items(items, &child_path, child, depth.saturating_add(1));
-            }
-        }
-        TomlValue::Array(entries) => {
-            for (index, child) in entries.iter().enumerate() {
-                let child_path = format!("{}[{}]", path, index);
-                append_flat_settings_items(items, &child_path, child, depth.saturating_add(1));
-            }
-        }
-        _ => {}
-    }
-}
-
 fn append_node_items(items: &mut Vec<InlineListItem>, path: &str, node: &TomlValue) -> Result<()> {
     match node {
         TomlValue::Table(table) => {
-            for key in sorted_table_keys(table) {
-                let Some(value) = table.get(key) else {
-                    continue;
-                };
-                let child_path = format!("{}.{}", path, key);
-                items.push(item_for_value(key, &child_path, value));
-            }
-            append_missing_optional_doc_items(items, node, Some(path));
+            append_table_items(items, table, Some(path), Some(node));
         }
         TomlValue::Array(entries) => {
             items.push(action_item(
@@ -365,6 +315,44 @@ fn append_node_items(items: &mut Vec<InlineListItem>, path: &str, node: &TomlVal
     Ok(())
 }
 
+fn append_table_items(
+    items: &mut Vec<InlineListItem>,
+    table: &toml::map::Map<String, TomlValue>,
+    parent_path: Option<&str>,
+    optional_doc_root: Option<&TomlValue>,
+) {
+    let mut section_items = Vec::new();
+    let mut setting_items = Vec::new();
+
+    for key in sorted_table_keys(table) {
+        let Some(value) = table.get(key) else {
+            continue;
+        };
+        let path = parent_path
+            .map(|parent| format!("{parent}.{key}"))
+            .unwrap_or_else(|| key.clone());
+        let entry = item_for_value(key, &path, value);
+        if matches!(value, TomlValue::Table(_)) {
+            section_items.push(entry);
+        } else {
+            setting_items.push(entry);
+        }
+    }
+
+    if let (Some(root), Some(path)) = (optional_doc_root, parent_path) {
+        append_missing_optional_doc_items(&mut setting_items, root, Some(path));
+    }
+
+    if !section_items.is_empty() {
+        items.push(section_item("Sections"));
+        items.extend(section_items);
+    }
+    if !setting_items.is_empty() {
+        items.push(section_item("Settings"));
+        items.extend(setting_items);
+    }
+}
+
 fn append_missing_optional_doc_items(
     items: &mut Vec<InlineListItem>,
     root: &TomlValue,
@@ -390,6 +378,7 @@ fn append_missing_optional_doc_items(
 
 fn item_for_value(label: &str, path: &str, value: &TomlValue) -> InlineListItem {
     let doc = FIELD_DOCS.lookup(path);
+    let title = display_title(label, path, value);
     let description = doc
         .and_then(|entry| {
             if entry.description.is_empty() {
@@ -401,13 +390,13 @@ fn item_for_value(label: &str, path: &str, value: &TomlValue) -> InlineListItem 
         .unwrap_or_default();
 
     let summary = summarize_value(value);
-    let subtitle = setting_subtitle(path, &summary, &description, false);
+    let subtitle = setting_subtitle(&summary, &description, false);
 
     match value {
         TomlValue::Boolean(_) => InlineListItem {
-            title: label.to_string(),
+            title,
             subtitle: Some(subtitle),
-            badge: Some("Toggle".to_string()),
+            badge: Some("On/Off".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
                 "{}{}:toggle",
@@ -416,9 +405,9 @@ fn item_for_value(label: &str, path: &str, value: &TomlValue) -> InlineListItem 
             search_value: Some(search_value_with_content(path, label, value, doc)),
         },
         TomlValue::Integer(_) | TomlValue::Float(_) => InlineListItem {
-            title: label.to_string(),
-            subtitle: Some(setting_subtitle(path, &summary, &description, true)),
-            badge: Some("Number".to_string()),
+            title,
+            subtitle: Some(setting_subtitle(&summary, &description, true)),
+            badge: Some("Step".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
                 "{}{}:inc",
@@ -429,13 +418,9 @@ fn item_for_value(label: &str, path: &str, value: &TomlValue) -> InlineListItem 
         TomlValue::String(current) => {
             let has_options = resolve_cycle_options(path, current).len() > 1;
             InlineListItem {
-                title: label.to_string(),
-                subtitle: Some(setting_subtitle(path, &summary, &description, has_options)),
-                badge: Some(if has_options {
-                    "Cycle".to_string()
-                } else {
-                    "String".to_string()
-                }),
+                title,
+                subtitle: Some(setting_subtitle(&summary, &description, has_options)),
+                badge: has_options.then(|| "Pick".to_string()),
                 indent: 0,
                 selection: has_options.then(|| {
                     InlineListSelection::ConfigAction(format!(
@@ -447,13 +432,16 @@ fn item_for_value(label: &str, path: &str, value: &TomlValue) -> InlineListItem 
             }
         }
         TomlValue::Array(entries) => InlineListItem {
-            title: label.to_string(),
-            subtitle: Some(format!(
-                "{} • {} entries",
-                setting_subtitle(path, &summary, &description, false),
-                entries.len()
+            title,
+            subtitle: Some(collection_subtitle(
+                format!(
+                    "{} item{}",
+                    entries.len(),
+                    if entries.len() == 1 { "" } else { "s" }
+                ),
+                &description,
             )),
-            badge: Some("Array".to_string()),
+            badge: Some("List".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
                 "{}{}",
@@ -461,13 +449,9 @@ fn item_for_value(label: &str, path: &str, value: &TomlValue) -> InlineListItem 
             ))),
             search_value: Some(search_value_with_content(path, label, value, doc)),
         },
-        TomlValue::Table(table) => InlineListItem {
-            title: label.to_string(),
-            subtitle: Some(format!(
-                "{} • {} keys",
-                setting_subtitle(path, &summary, &description, false),
-                table.len()
-            )),
+        TomlValue::Table(_) => InlineListItem {
+            title,
+            subtitle: Some(section_subtitle(path, value)),
             badge: Some("Section".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
@@ -477,9 +461,9 @@ fn item_for_value(label: &str, path: &str, value: &TomlValue) -> InlineListItem 
             search_value: Some(search_value_with_content(path, label, value, doc)),
         },
         _ => InlineListItem {
-            title: label.to_string(),
-            subtitle: Some(setting_subtitle(path, &summary, &description, false)),
-            badge: Some("Value".to_string()),
+            title,
+            subtitle: Some(setting_subtitle(&summary, &description, false)),
+            badge: None,
             indent: 0,
             selection: None,
             search_value: Some(search_value_with_content(path, label, value, doc)),
@@ -495,10 +479,10 @@ fn item_for_missing_doc_value(label: &str, path: &str) -> InlineListItem {
     let has_options = doc.map(|entry| !entry.options.is_empty()).unwrap_or(false);
 
     InlineListItem {
-        title: label.to_string(),
-        subtitle: Some(setting_subtitle(path, "<unset>", &description, has_options)),
+        title: humanize_identifier(label),
+        subtitle: Some(setting_subtitle("<unset>", &description, has_options)),
         badge: Some(if has_options {
-            "Cycle".to_string()
+            "Pick".to_string()
         } else {
             "Unset".to_string()
         }),
@@ -520,13 +504,21 @@ fn missing_doc_label<'a>(path: &'a str, parent_path: Option<&str>) -> Option<&'a
     }
 }
 
-fn setting_subtitle(path: &str, summary: &str, description: &str, adjustable: bool) -> String {
+fn setting_subtitle(summary: &str, description: &str, adjustable: bool) -> String {
     let value_display = if adjustable {
         format!("<- {} ->", summary)
     } else {
         summary.to_string()
     };
-    let mut parts = vec![format!("{} = {}", path, value_display)];
+    let mut parts = vec![value_display];
+    if !description.is_empty() {
+        parts.push(description.to_string());
+    }
+    parts.join(" • ")
+}
+
+fn collection_subtitle(summary: String, description: &str) -> String {
+    let mut parts = vec![summary];
     if !description.is_empty() {
         parts.push(description.to_string());
     }
@@ -574,16 +566,20 @@ fn search_value_with_content(
     value: &TomlValue,
     doc: Option<&FieldDoc>,
 ) -> String {
-    let mut parts = vec![path.to_string(), label.to_string()];
+    let mut parts = vec![
+        path.to_string(),
+        label.to_string(),
+        display_title(label, path, value),
+    ];
 
-    // Add the actual value content for searching
-    match value {
-        TomlValue::String(s) => parts.push(s.clone()),
-        TomlValue::Integer(n) => parts.push(n.to_string()),
-        TomlValue::Float(f) => parts.push(f.to_string()),
-        TomlValue::Boolean(b) => parts.push(b.to_string()),
-        _ => {}
+    if matches!(value, TomlValue::Table(_)) {
+        let heading = heading_for_path(path);
+        if !heading.summary.is_empty() {
+            parts.push(heading.summary.into_owned());
+        }
     }
+
+    collect_search_terms(path, value, &mut parts);
 
     if let Some(doc) = doc {
         if !doc.description.is_empty() {
@@ -594,6 +590,37 @@ fn search_value_with_content(
         }
     }
     parts.join(" ").to_ascii_lowercase()
+}
+
+fn collect_search_terms(path: &str, value: &TomlValue, parts: &mut Vec<String>) {
+    match value {
+        TomlValue::String(value) => parts.push(value.clone()),
+        TomlValue::Integer(value) => parts.push(value.to_string()),
+        TomlValue::Float(value) => parts.push(value.to_string()),
+        TomlValue::Boolean(value) => {
+            parts.push(value.to_string());
+            parts.push(if *value { "on" } else { "off" }.to_string());
+        }
+        TomlValue::Array(values) => {
+            for (index, child) in values.iter().enumerate() {
+                let child_path = format!("{}[{}]", path, index);
+                parts.push(child_path.clone());
+                collect_search_terms(&child_path, child, parts);
+            }
+        }
+        TomlValue::Table(table) => {
+            for key in sorted_table_keys(table) {
+                let Some(child) = table.get(key) else {
+                    continue;
+                };
+                let child_path = format!("{}.{}", path, key);
+                parts.push(child_path.clone());
+                parts.push(humanize_identifier(key));
+                collect_search_terms(&child_path, child, parts);
+            }
+        }
+        _ => {}
+    }
 }
 
 fn sorted_table_keys(table: &toml::map::Map<String, TomlValue>) -> Vec<&String> {
@@ -615,17 +642,22 @@ fn summarize_value(value: &TomlValue) -> String {
         TomlValue::String(text) => format!("\"{}\"", truncate_middle(text, 48)),
         TomlValue::Integer(number) => number.to_string(),
         TomlValue::Float(number) => number.to_string(),
-        TomlValue::Boolean(value) => value.to_string(),
+        TomlValue::Boolean(value) => {
+            if *value {
+                "On".to_string()
+            } else {
+                "Off".to_string()
+            }
+        }
         TomlValue::Array(values) => format!(
-            "[{} item{}]",
+            "{} item{}",
             values.len(),
             if values.len() == 1 { "" } else { "s" }
         ),
-        TomlValue::Table(values) => format!(
-            "{{{} key{}}}",
-            values.len(),
-            if values.len() == 1 { "" } else { "s" }
-        ),
+        TomlValue::Table(_) => {
+            let count = count_leaf_entries(value);
+            format!("{} setting{}", count, if count == 1 { "" } else { "s" })
+        }
         _ => "<unsupported>".to_string(),
     }
 }
@@ -769,10 +801,6 @@ fn extract_comma_options(value: &str) -> Vec<String> {
         })
         .map(str::to_string)
         .collect()
-}
-
-fn normalize_field_path(path: &str) -> String {
-    ARRAY_INDEX_RE.replace_all(path, "[]").to_string()
 }
 
 pub(crate) fn parent_view_path(path: &str) -> Option<String> {
@@ -1088,7 +1116,7 @@ fn insert_missing_string_value(root: &mut TomlValue, path: &str, value: String) 
 }
 
 fn resolve_cycle_options(path: &str, current: &str) -> Vec<String> {
-    if normalize_field_path(path) == "agent.theme" {
+    if normalize_config_path(path) == "agent.theme" {
         return theme::available_themes()
             .into_iter()
             .map(str::to_string)
@@ -1166,9 +1194,9 @@ fn render_commented_config(config: &VTCodeConfig) -> Result<String> {
 
     let mut output = String::new();
     output.push_str("# VT Code Configuration File\n");
-    output.push_str("# This file was generated by /settings interactive save.\n");
+    output.push_str("# Saved from /config with readable section headings.\n");
     output.push_str(
-        "# Every field includes description, possible values (when known), and default.\n\n",
+        "# Every field includes descriptions, defaults, and known choices where available.\n\n",
     );
 
     render_table_with_comments(&mut output, &root_table, None)?;
@@ -1234,8 +1262,12 @@ fn render_key_value(key: &str, value: &TomlValue) -> Result<String> {
 }
 
 fn write_section_comments(output: &mut String, path: &str) {
-    if let Some(doc) = FIELD_DOCS.lookup(path) {
-        write_doc_comments(output, doc, false);
+    let heading = heading_for_path(path);
+    if !heading.title.is_empty() {
+        let _ = writeln!(output, "# {}", heading.title);
+    }
+    if !heading.summary.is_empty() {
+        push_comment_lines(output, &heading.summary);
     }
 }
 
@@ -1315,7 +1347,7 @@ mod tests {
     #[test]
     fn normalize_field_path_replaces_indexes() {
         assert_eq!(
-            normalize_field_path("commands.allow_list[12]"),
+            normalize_config_path("commands.allow_list[12]"),
             "commands.allow_list[]"
         );
     }
@@ -1358,16 +1390,17 @@ mod tests {
         .expect("valid draft value");
 
         let items = build_settings_items(&state, &draft).expect("settings items");
-        assert!(items.iter().any(|item| item.title == "tools.editor"));
-        assert!(
-            items
-                .iter()
-                .any(|item| item.title == "tools.editor.external_editor")
-        );
+        let tools_entry = items
+            .iter()
+            .find(|item| item.title == "Tool Defaults")
+            .expect("root should show section heading");
+        let search_value = tools_entry.search_value.as_deref().expect("search value");
+        assert!(search_value.contains("tools.editor.external_editor"));
+        assert!(search_value.contains("code --wait"));
     }
 
     #[test]
-    fn root_settings_search_value_includes_scalar_value_content() {
+    fn root_settings_hide_nested_items_until_section_is_opened() {
         let state = SettingsPaletteState {
             workspace: PathBuf::from("."),
             source_path: PathBuf::from("vtcode.toml"),
@@ -1384,13 +1417,48 @@ mod tests {
         .expect("valid draft value");
 
         let items = build_settings_items(&state, &draft).expect("settings items");
-        let entry = items
-            .iter()
-            .find(|item| item.title == "tools.editor.external_editor")
-            .expect("flattened key should be present");
-        let search_value = entry.search_value.as_deref().expect("search value");
-        assert!(search_value.contains("external_editor"));
-        assert!(search_value.contains("code --wait"));
+        assert!(items.iter().any(|item| item.title == "Tool Defaults"));
+        assert!(!items.iter().any(|item| item.title == "External Editor"));
+    }
+
+    #[test]
+    fn root_settings_do_not_show_missing_nested_optional_fields() {
+        let state = SettingsPaletteState {
+            workspace: PathBuf::from("."),
+            source_path: PathBuf::from("vtcode.toml"),
+            source_label: "test".to_string(),
+            draft: VTCodeConfig::default(),
+            view_path: None,
+        };
+        let draft =
+            TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
+
+        let items = build_settings_items(&state, &draft).expect("settings items");
+        assert!(!items.iter().any(|item| item.title == "Service Tier"));
+    }
+
+    #[test]
+    fn nested_settings_titles_are_humanized() {
+        let state = SettingsPaletteState {
+            workspace: PathBuf::from("."),
+            source_path: PathBuf::from("vtcode.toml"),
+            source_label: "test".to_string(),
+            draft: VTCodeConfig::default(),
+            view_path: Some("agent".to_string()),
+        };
+        let draft: TomlValue = toml::from_str(
+            r#"
+            [agent]
+            default_model = "gpt-5.4"
+            [agent.circuit_breaker]
+            enabled = true
+            "#,
+        )
+        .expect("valid draft value");
+
+        let items = build_settings_items(&state, &draft).expect("settings items");
+        assert!(items.iter().any(|item| item.title == "Default Model"));
+        assert!(items.iter().any(|item| item.title == "Circuit Breaker"));
     }
 
     #[test]
@@ -1406,7 +1474,15 @@ mod tests {
             TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
 
         let items = build_settings_items(&state, &draft).expect("settings items");
-        assert!(items.iter().any(|item| item.title == "service_tier"));
+        assert!(items.iter().any(|item| item.title == "Service Tier"));
+    }
+
+    #[test]
+    fn render_commented_config_includes_section_heading() {
+        let rendered =
+            render_commented_config(&VTCodeConfig::default()).expect("config should render");
+        assert!(rendered.contains("# Agent Defaults"));
+        assert!(rendered.contains("[agent]"));
     }
 
     #[test]
