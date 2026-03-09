@@ -167,7 +167,8 @@ pub(super) fn preflight_validate_call(
     args: &Value,
 ) -> Result<ToolPreflightOutcome> {
     let normalized_tool_name = registry
-        .resolve_public_tool_name_sync(name)
+        .resolve_public_tool(name)
+        .map(|resolution| resolution.registration_name().to_string())
         .map_err(|_| anyhow!("Unknown tool: {}", canonical_tool_name(name)))?;
 
     preflight_validate_resolved_call(registry, &normalized_tool_name, args)
@@ -258,7 +259,7 @@ pub(super) fn preflight_validate_resolved_call(
 
 #[cfg(test)]
 mod tests {
-    use super::super::catalog_facade::public_tool_name_candidates;
+    use super::super::assembly::public_tool_name_candidates;
     use super::{
         configured_unified_file_max_payload_bytes, enforce_unified_file_payload_limit,
         is_missing_required_arg, parse_unified_file_max_payload_bytes, preflight_validation_args,

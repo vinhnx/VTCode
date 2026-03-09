@@ -407,26 +407,12 @@ pub async fn execute_skill_with_sub_llm(
 #[derive(Clone)]
 pub struct SkillToolAdapter {
     skill: Skill,
-    /// Cached leaked name to satisfy Tool trait's &'static str requirement
-    name: &'static str,
-    /// Cached leaked description to satisfy Tool trait's &'static str requirement
-    description: &'static str,
 }
 
 impl SkillToolAdapter {
     /// Create a new skill tool adapter
     pub fn new(skill: Skill) -> Self {
-        // SAFETY: We leak the name and description once to satisfy the Tool trait's
-        // &'static str requirement. These strings live for the duration of the program.
-        // This is better than leaking on every call to name() or description().
-        let name: &'static str = Box::leak(skill.name().to_owned().into_boxed_str());
-        let description: &'static str = Box::leak(skill.description().to_owned().into_boxed_str());
-
-        SkillToolAdapter {
-            skill,
-            name,
-            description,
-        }
+        SkillToolAdapter { skill }
     }
 
     /// Get reference to underlying skill
@@ -473,11 +459,11 @@ impl crate::tools::traits::Tool for SkillToolAdapter {
     }
 
     fn name(&self) -> &'static str {
-        self.name
+        "traditional_skill_tool"
     }
 
     fn description(&self) -> &'static str {
-        self.description
+        "Traditional VT Code skill adapter"
     }
 
     fn validate_args(&self, args: &Value) -> Result<()> {
@@ -545,7 +531,7 @@ mod tests {
     use std::path::PathBuf;
 
     #[tokio::test]
-    async fn test_skill_tool_adapter_name() {
+    async fn test_skill_tool_adapter_exposes_underlying_skill_name() {
         let manifest = SkillManifest {
             name: "test-skill".to_string(),
             description: "Test skill".to_string(),
@@ -561,7 +547,7 @@ mod tests {
         .expect("failed to create skill");
 
         let adapter = SkillToolAdapter::new(skill);
-        assert_eq!(adapter.name(), "test-skill");
+        assert_eq!(adapter.skill().name(), "test-skill");
     }
 
     #[tokio::test]

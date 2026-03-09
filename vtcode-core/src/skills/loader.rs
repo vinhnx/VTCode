@@ -2,7 +2,7 @@ use crate::skills::cli_bridge::{CliToolBridge, CliToolConfig, discover_cli_tools
 use crate::skills::container_validation::{
     ContainerSkillsValidator, ContainerValidationReport, ContainerValidationResult,
 };
-use crate::skills::discovery::{DiscoveryResult, SkillDiscovery};
+use crate::skills::discovery::{DiscoveryConfig, DiscoveryResult, SkillDiscovery};
 use crate::skills::model::{SkillErrorInfo, SkillLoadOutcome, SkillMetadata, SkillScope};
 use crate::skills::system::system_cache_root_dir;
 use crate::skills::types::{Skill, SkillContext, SkillManifest};
@@ -587,22 +587,67 @@ pub struct EnhancedSkillLoader {
     plugin_loader: crate::skills::native_plugin::PluginLoader,
 }
 
+fn plugin_loader_for_workspace(
+    workspace_root: &Path,
+    codex_home: Option<&Path>,
+) -> crate::skills::native_plugin::PluginLoader {
+    let mut plugin_loader = crate::skills::native_plugin::PluginLoader::new();
+
+    if let Some(codex_home) = codex_home {
+        plugin_loader.add_trusted_dir(codex_home.join("plugins"));
+    } else {
+        plugin_loader.add_trusted_dir(dirs::home_dir().unwrap_or_default().join(".vtcode/plugins"));
+    }
+
+    plugin_loader
+        .add_trusted_dir(workspace_root.join(".vtcode/plugins"))
+        .add_trusted_dir(workspace_root.join(".agents/plugins"));
+
+    plugin_loader
+}
+
+fn discovery_config_for_codex_home(workspace_root: &Path, codex_home: &Path) -> DiscoveryConfig {
+    let loader_config = SkillLoaderConfig {
+        codex_home: codex_home.to_path_buf(),
+        cwd: workspace_root.to_path_buf(),
+        project_root: Some(workspace_root.to_path_buf()),
+    };
+    let roots = skill_roots_with_home_dir(&loader_config, Some(codex_home));
+
+    DiscoveryConfig {
+        skill_paths: roots
+            .iter()
+            .filter(|root| !root.is_tool_root && !root.is_plugin_root)
+            .map(|root| root.path.clone())
+            .collect(),
+        tool_paths: roots
+            .iter()
+            .filter(|root| root.is_tool_root)
+            .map(|root| root.path.clone())
+            .collect(),
+        ..Default::default()
+    }
+}
+
 impl EnhancedSkillLoader {
     /// Create a new enhanced loader for workspace
     pub fn new(workspace_root: PathBuf) -> Self {
-        let mut plugin_loader = crate::skills::native_plugin::PluginLoader::new();
-
-        // Add trusted plugin directories
-        plugin_loader
-            // User plugins
-            .add_trusted_dir(dirs::home_dir().unwrap_or_default().join(".vtcode/plugins"))
-            // Project plugins
-            .add_trusted_dir(workspace_root.join(".vtcode/plugins"))
-            .add_trusted_dir(workspace_root.join(".agents/plugins"));
-
+        let plugin_loader = plugin_loader_for_workspace(&workspace_root, None);
         Self {
             workspace_root,
             discovery: SkillDiscovery::new(),
+            plugin_loader,
+        }
+    }
+
+    /// Create a loader pinned to a specific VT Code home directory.
+    pub fn with_codex_home(workspace_root: PathBuf, codex_home: PathBuf) -> Self {
+        let discovery =
+            SkillDiscovery::with_config(discovery_config_for_codex_home(&workspace_root, &codex_home));
+        let plugin_loader = plugin_loader_for_workspace(&workspace_root, Some(&codex_home));
+        Self {
+            workspace_root,
+            discovery,
             plugin_loader,
         }
     }

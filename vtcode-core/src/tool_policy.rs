@@ -17,6 +17,7 @@ use crate::config::constants::tools;
 use crate::config::core::tools::{ToolPolicy as ConfigToolPolicy, ToolsConfig};
 use crate::config::loader::{ConfigManager, VTCodeConfig};
 use crate::config::mcp::{McpAllowListConfig, McpAllowListRules};
+use crate::tools::mcp::parse_canonical_mcp_tool_name;
 use crate::tools::names::canonical_tool_name;
 use crate::utils::file_utils::{
     ensure_dir_exists, read_file_with_context, write_file_with_context,
@@ -279,14 +280,8 @@ fn default_secure_mcp_allowlist() -> McpAllowListConfig {
 }
 
 fn parse_mcp_policy_key(tool_name: &str) -> Option<(String, String)> {
-    let mut parts = tool_name.splitn(3, "::");
-    match (parts.next()?, parts.next(), parts.next()) {
-        ("mcp", Some(provider), Some(tool)) if !provider.is_empty() && !tool.is_empty() => {
-            // OPTIMIZATION: Use into() for cleaner conversion
-            Some((provider.into(), tool.into()))
-        }
-        _ => None,
-    }
+    parse_canonical_mcp_tool_name(tool_name)
+        .map(|(provider, tool)| (provider.to_string(), tool.to_string()))
 }
 
 /// Alternative tool policy configuration format (user's format)

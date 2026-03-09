@@ -6,20 +6,12 @@ use indexmap::IndexMap;
 
 use crate::config::ToolsConfig;
 use crate::tool_policy::{ToolPolicy, ToolPolicyManager};
-use crate::tools::mcp::{is_legacy_mcp_tool_name, legacy_mcp_tool_name};
+use crate::tools::mcp::{
+    is_legacy_mcp_tool_name, legacy_mcp_tool_name, parse_canonical_mcp_tool_name,
+};
 use crate::tools::names::canonical_tool_name;
 
 use super::{ToolPermissionDecision, ToolRegistry};
-
-fn parse_mcp_policy_target(name: &str) -> Option<(&str, &str)> {
-    let mut parts = name.splitn(3, "::");
-    match (parts.next()?, parts.next(), parts.next()) {
-        ("mcp", Some(provider), Some(tool)) if !provider.is_empty() && !tool.is_empty() => {
-            Some((provider, tool))
-        }
-        _ => None,
-    }
-}
 
 fn more_restrictive_policy(
     left: vtcode_config::ToolPolicy,
@@ -38,12 +30,12 @@ fn more_restrictive_policy(
 
 impl ToolRegistry {
     fn resolve_runtime_policy_name(&self, name: &str) -> String {
-        if is_legacy_mcp_tool_name(name) || parse_mcp_policy_target(name).is_some() {
+        if is_legacy_mcp_tool_name(name) || parse_canonical_mcp_tool_name(name).is_some() {
             return name.to_string();
         }
 
-        if let Ok(resolved) = self.resolve_public_tool_name_sync(name) {
-            return resolved;
+        if let Ok(resolved) = self.resolve_public_tool(name) {
+            return resolved.registration_name().to_string();
         }
 
         match name {
@@ -202,18 +194,19 @@ impl ToolRegistry {
             return self.evaluate_mcp_tool_policy(name, tool_name).await;
         }
 
-        if let Some((_, tool_name)) = parse_mcp_policy_target(name) {
+        if let Some((_, tool_name)) = parse_canonical_mcp_tool_name(name) {
             return self.evaluate_mcp_tool_policy(name, tool_name).await;
         }
 
         let resolved_name = self.resolve_runtime_policy_name(name);
-        let resolved_public_tool = self.resolve_public_tool_entry(name);
+        let resolved_public_tool = self.resolve_public_tool(name).ok();
 
-        if let Some((registration_name, _)) = &resolved_public_tool
-            && let Some((_, tool_name)) = parse_mcp_policy_target(registration_name)
+        if let Some(resolution) = &resolved_public_tool
+            && let Some((_, tool_name)) =
+                parse_canonical_mcp_tool_name(resolution.registration_name())
         {
             return self
-                .evaluate_mcp_tool_policy(registration_name, tool_name)
+                .evaluate_mcp_tool_policy(resolution.registration_name(), tool_name)
                 .await;
         }
 
@@ -236,7 +229,7 @@ impl ToolRegistry {
             .or_else(|| {
                 resolved_public_tool
                     .as_ref()
-                    .map(|(_, permission)| (permission.clone(), false))
+                    .map(|resolution| (resolution.default_permission().clone(), false))
             })
             .unwrap_or((ToolPolicy::Prompt, false));
 
@@ -343,10 +336,12 @@ impl ToolRegistry {
                 return Ok(());
             };
             (provider, tool_name.to_string())
-        } else if let Some((provider, tool_name)) = parse_mcp_policy_target(name) {
+        } else if let Some((provider, tool_name)) = parse_canonical_mcp_tool_name(name) {
             (provider.to_string(), tool_name.to_string())
-        } else if let Some((canonical, _)) = self.resolve_public_tool_entry(name) {
-            let Some((provider, tool_name)) = parse_mcp_policy_target(&canonical) else {
+        } else if let Ok(resolution) = self.resolve_public_tool(name) {
+            let Some((provider, tool_name)) =
+                parse_canonical_mcp_tool_name(resolution.registration_name())
+            else {
                 return Ok(());
             };
             (provider.to_string(), tool_name.to_string())

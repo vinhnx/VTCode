@@ -51,7 +51,7 @@ pub const TOOL_LIST_FILES_SUMMARY_MAX_ITEMS: usize = 20;
 /// - Search tools: Integrated into Zed's own search functionality
 /// - Plan mode tools (enter_plan_mode, exit_plan_mode): ACP has native session mode support - see https://agentclientprotocol.com/protocol/session-modes.md
 /// - HITL tools (request_user_input and legacy aliases): ACP has native permission request mechanism
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum SupportedTool {
     ReadFile,
     ListFiles,
@@ -92,7 +92,7 @@ impl SupportedTool {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ToolDescriptor {
     Acp(SupportedTool),
     Local,
@@ -479,5 +479,63 @@ impl AcpToolRegistry {
             Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
             None => formatted,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn local_definition(name: &str) -> ToolDefinition {
+        ToolDefinition::function(
+            name.to_string(),
+            format!("{name} description"),
+            json!({"type": "object"}),
+        )
+    }
+
+    #[test]
+    fn definitions_for_preserve_core_local_tool_order() {
+        let local_definitions = vec![
+            local_definition(tools::UNIFIED_FILE),
+            local_definition(tools::UNIFIED_EXEC),
+            local_definition(tools::UNIFIED_SEARCH),
+        ];
+        let registry = AcpToolRegistry::new(Path::new("/tmp/workspace"), true, true, local_definitions);
+
+        let definitions =
+            registry.definitions_for(&[SupportedTool::ReadFile, SupportedTool::SwitchMode], true);
+        let names = definitions
+            .into_iter()
+            .map(|definition| definition.function_name().to_string())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            names,
+            vec![
+                tools::READ_FILE.to_string(),
+                "switch_mode".to_string(),
+                tools::UNIFIED_FILE.to_string(),
+                tools::UNIFIED_EXEC.to_string(),
+                tools::UNIFIED_SEARCH.to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn lookup_checks_native_map_before_local_membership() {
+        let registry = AcpToolRegistry::new(
+            Path::new("/tmp/workspace"),
+            true,
+            false,
+            vec![local_definition(tools::UNIFIED_SEARCH)],
+        );
+
+        assert_eq!(
+            registry.lookup(tools::READ_FILE),
+            Some(ToolDescriptor::Acp(SupportedTool::ReadFile))
+        );
+        assert_eq!(registry.lookup(tools::UNIFIED_SEARCH), Some(ToolDescriptor::Local));
+        assert_eq!(registry.lookup("unknown_tool"), None);
     }
 }

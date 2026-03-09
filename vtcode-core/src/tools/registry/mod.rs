@@ -185,6 +185,7 @@ mod tests {
     use crate::tools::registry::mcp_helpers::normalize_mcp_tool_identifier;
     use anyhow::Result;
     use async_trait::async_trait;
+    use futures::future::BoxFuture;
     use serde_json::Value;
     use serde_json::json;
     use std::time::Duration;
@@ -218,14 +219,14 @@ mod tests {
     fn reentrant_tool_executor<'a>(
         registry: &'a ToolRegistry,
         args: Value,
-    ) -> futures::future::BoxFuture<'a, Result<Value>> {
+    ) -> BoxFuture<'a, Result<Value>> {
         Box::pin(async move { registry.execute_tool_ref(REENTRANT_TOOL_NAME, &args).await })
     }
 
     fn mutual_reentrant_tool_a_executor<'a>(
         registry: &'a ToolRegistry,
         args: Value,
-    ) -> futures::future::BoxFuture<'a, Result<Value>> {
+    ) -> BoxFuture<'a, Result<Value>> {
         Box::pin(async move {
             registry
                 .execute_tool_ref(MUTUAL_REENTRANT_TOOL_B, &args)
@@ -236,7 +237,7 @@ mod tests {
     fn mutual_reentrant_tool_b_executor<'a>(
         registry: &'a ToolRegistry,
         args: Value,
-    ) -> futures::future::BoxFuture<'a, Result<Value>> {
+    ) -> BoxFuture<'a, Result<Value>> {
         Box::pin(async move {
             registry
                 .execute_tool_ref(MUTUAL_REENTRANT_TOOL_A, &args)
@@ -768,6 +769,47 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn public_alias_resolution_stays_consistent_across_execution_preflight_and_policy(
+    ) -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+        registry
+            .register_tool(
+                ToolRegistration::from_tool_instance(
+                    CUSTOM_TOOL_NAME,
+                    CapabilityLevel::CodeSearch,
+                    CustomEchoTool,
+                )
+                .with_description("Custom echo tool for routing parity tests")
+                .with_parameter_schema(json!({
+                    "type": "object",
+                    "properties": {
+                        "input": {"type": "string"}
+                    }
+                }))
+                .with_permission(ToolPolicy::Allow)
+                .with_aliases(["custom tool"]),
+            )
+            .await?;
+
+        let preflight = registry.preflight_validate_call("Custom Tool", &json!({"input": "value"}))?;
+        assert_eq!(preflight.normalized_tool_name, CUSTOM_TOOL_NAME);
+
+        assert_eq!(
+            registry.evaluate_tool_policy("Custom Tool").await?,
+            ToolPermissionDecision::Allow
+        );
+
+        let response = registry
+            .execute_public_tool_ref("Custom Tool", &json!({"input": "value"}))
+            .await?;
+        assert_eq!(response["success"].as_bool(), Some(true));
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn safe_mode_prompt_uses_behavior_metadata() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
@@ -785,6 +827,74 @@ mod tests {
         assert_eq!(
             registry.evaluate_tool_policy(tools::APPLY_PATCH).await?,
             ToolPermissionDecision::Prompt
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn mcp_policy_paths_resolve_model_visible_aliases() -> Result<()> {
+        fn noop_executor<'a>(
+            _registry: &'a ToolRegistry,
+            _args: Value,
+        ) -> BoxFuture<'a, Result<Value>> {
+            Box::pin(async { Ok(json!({"success": true})) })
+        }
+
+        let temp_dir = TempDir::new()?;
+        let policy_path = temp_dir.path().join("tool-policy.json");
+        let policy_manager =
+            crate::tool_policy::ToolPolicyManager::new_with_config_path(&policy_path).await?;
+        let registry =
+            ToolRegistry::new_with_custom_policy(temp_dir.path().to_path_buf(), policy_manager)
+                .await;
+
+        let public_name = crate::tools::mcp::model_visible_mcp_tool_name("context7", "search");
+        registry
+            .register_tool(
+                ToolRegistration::new(
+                    "mcp::context7::search",
+                    CapabilityLevel::Basic,
+                    false,
+                    noop_executor,
+                )
+                .with_description("Fake MCP search tool")
+                .with_parameter_schema(json!({"type": "object"}))
+                .with_permission(ToolPolicy::Prompt)
+                .with_aliases([public_name.clone()])
+                .with_llm_visibility(false),
+            )
+            .await?;
+
+        registry
+            .mcp_tool_index
+            .write()
+            .await
+            .insert("context7".to_string(), vec!["search".to_string()]);
+        registry
+            .mcp_reverse_index
+            .write()
+            .await
+            .insert("search".to_string(), "context7".to_string());
+
+        registry
+            .persist_mcp_tool_policy(&public_name, ToolPolicy::Allow)
+            .await?;
+
+        let manager =
+            crate::tool_policy::ToolPolicyManager::new_with_config_path(&policy_path).await?;
+        assert_eq!(
+            manager.get_mcp_tool_policy("context7", "search"),
+            ToolPolicy::Allow
+        );
+
+        assert_eq!(
+            registry.evaluate_tool_policy(&public_name).await?,
+            ToolPermissionDecision::Allow
+        );
+        assert_eq!(
+            registry.evaluate_tool_policy("mcp::context7::search").await?,
+            ToolPermissionDecision::Allow
         );
 
         Ok(())

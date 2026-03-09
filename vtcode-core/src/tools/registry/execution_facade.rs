@@ -15,10 +15,11 @@ use crate::core::memory_pool::SizeRecommendation;
 use crate::mcp::McpToolExecutor;
 use crate::tool_policy::ToolExecutionDecision;
 use crate::tools::error_messages::agent_execution;
-use crate::tools::mcp::legacy_mcp_tool_name;
+use crate::tools::mcp::{legacy_mcp_tool_name, parse_canonical_mcp_tool_name};
 use crate::ui::search::fuzzy_match;
 
 use super::LOOP_THROTTLE_MAX_MS;
+use super::assembly::public_tool_name_candidates;
 use super::execution_kernel;
 use super::normalize_tool_output;
 use super::{ToolErrorType, ToolExecutionError, ToolExecutionRecord, ToolHandler, ToolRegistry};
@@ -33,16 +34,6 @@ static TOOL_REENTRANCY_STACKS: Lazy<Mutex<HashMap<TokioTaskId, Vec<String>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 thread_local! {
     static THREAD_REENTRANCY_STACK: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
-}
-
-fn parse_canonical_mcp_tool_name(name: &str) -> Option<(&str, &str)> {
-    let mut parts = name.splitn(3, "::");
-    match (parts.next()?, parts.next(), parts.next()) {
-        ("mcp", Some(provider), Some(tool)) if !provider.is_empty() && !tool.is_empty() => {
-            Some((provider, tool))
-        }
-        _ => None,
-    }
 }
 
 fn lock_reentrancy_stacks() -> std::sync::MutexGuard<'static, HashMap<TokioTaskId, Vec<String>>> {
@@ -173,8 +164,7 @@ impl ToolRegistry {
         tool_names.sort_unstable();
         tool_names.dedup();
 
-        let requested_candidates =
-            super::catalog_facade::public_tool_name_candidates(requested_name);
+        let requested_candidates = public_tool_name_candidates(requested_name);
         let mut similar_tools = Vec::new();
 
         if let Ok(resolved) = self.resolve_public_tool_name_sync(requested_name)
@@ -252,8 +242,8 @@ impl ToolRegistry {
         prevalidated: bool,
     ) -> Result<Value> {
         let routed_name = self
-            .resolve_public_tool_name(name)
-            .await
+            .resolve_public_tool(name)
+            .map(|resolution| resolution.registration_name().to_string())
             .map_err(|error| anyhow!(error.to_string()))?;
         self.execute_tool_ref_internal(routed_name.as_str(), args, prevalidated)
             .await

@@ -7,80 +7,8 @@ use crate::llm::provider::ToolDefinition;
 use crate::tools::handlers::{
     SessionSurface, SessionToolsConfig, ToolCallError, ToolModelCapabilities, ToolSchemaEntry,
 };
-use crate::tools::names::canonical_tool_name;
 
 use super::ToolRegistry;
-
-fn strip_wrapping_quotes(value: &str) -> &str {
-    value
-        .trim()
-        .trim_matches('"')
-        .trim_matches('\'')
-        .trim_matches('`')
-}
-
-fn strip_tool_namespace_prefix(value: &str) -> &str {
-    for prefix in [
-        "functions.",
-        "function.",
-        "tools.",
-        "tool.",
-        "assistant.",
-        "recipient_name.",
-    ] {
-        if let Some(stripped) = value.strip_prefix(prefix) {
-            return stripped;
-        }
-    }
-    value
-}
-
-fn push_candidate(candidates: &mut Vec<String>, value: &str) {
-    let trimmed = strip_wrapping_quotes(value);
-    if trimmed.is_empty() {
-        return;
-    }
-
-    if !candidates.iter().any(|existing| existing == trimmed) {
-        candidates.push(trimmed.to_string());
-    }
-
-    let stripped = strip_tool_namespace_prefix(trimmed);
-    if stripped != trimmed && !candidates.iter().any(|existing| existing == stripped) {
-        candidates.push(stripped.to_string());
-    }
-
-    let lowered = stripped.trim().to_ascii_lowercase();
-    if !lowered.is_empty() && !candidates.iter().any(|existing| existing == &lowered) {
-        candidates.push(lowered.clone());
-    }
-
-    let underscored = lowered.replace([' ', '-'], "_");
-    if !underscored.is_empty() && !candidates.iter().any(|existing| existing == &underscored) {
-        candidates.push(underscored);
-    }
-}
-
-pub(super) fn public_tool_name_candidates(name: &str) -> Vec<String> {
-    let mut candidates = Vec::new();
-    let raw = strip_wrapping_quotes(name);
-    if raw.is_empty() {
-        return candidates;
-    }
-
-    push_candidate(&mut candidates, raw);
-
-    if let Some((lhs, rhs)) = raw.split_once("<|channel|>") {
-        push_candidate(&mut candidates, rhs);
-        push_candidate(&mut candidates, lhs);
-    }
-
-    if let Some((_, suffix)) = raw.rsplit_once(':') {
-        push_candidate(&mut candidates, suffix);
-    }
-
-    candidates
-}
 
 impl ToolRegistry {
     pub(super) async fn rebuild_tool_assembly(&self) {
@@ -158,33 +86,20 @@ impl ToolRegistry {
             .tool_assembly
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        public_tool_name_candidates(name)
-            .into_iter()
-            .find_map(|candidate| assembly.resolve_registration_name(&candidate).ok())
-            .map(str::to_owned)
-            .ok_or_else(|| {
-                ToolCallError::respond(format!("Unknown tool: {}", canonical_tool_name(name)))
-            })
+        assembly
+            .resolve_public_tool(name)
+            .map(|resolution| resolution.registration_name().to_string())
     }
 
-    pub(crate) fn resolve_public_tool_entry(
+    pub(super) fn resolve_public_tool(
         &self,
         name: &str,
-    ) -> Option<(String, crate::tool_policy::ToolPolicy)> {
+    ) -> Result<super::assembly::PublicToolResolution, ToolCallError> {
         let assembly = self
             .tool_assembly
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        public_tool_name_candidates(name)
-            .into_iter()
-            .find_map(|candidate| {
-                assembly.find_catalog_entry(&candidate).map(|entry| {
-                    (
-                        entry.registration_name.clone(),
-                        entry.default_permission.clone(),
-                    )
-                })
-            })
+        assembly.resolve_public_tool(name)
     }
 
     pub(crate) async fn resolve_public_tool_name(
@@ -197,7 +112,7 @@ impl ToolRegistry {
 
 #[cfg(test)]
 mod tests {
-    use super::public_tool_name_candidates;
+    use super::super::assembly::public_tool_name_candidates;
 
     #[test]
     fn public_tool_name_candidates_keep_lowercase_human_label() {

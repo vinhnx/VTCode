@@ -1,14 +1,38 @@
 use rustc_hash::FxHashMap;
 
-use crate::tools::handlers::{SessionToolCatalog, ToolCallError, ToolCatalogEntry};
+use crate::tool_policy::ToolPolicy;
+use crate::tools::handlers::{SessionToolCatalog, ToolCallError};
+use crate::tools::names::canonical_tool_name;
 
 use super::{ToolMetadata, ToolRegistration};
 
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct PublicToolResolution {
+    registration_name: String,
+    default_permission: ToolPolicy,
+}
+
+impl PublicToolResolution {
+    fn new(registration_name: String, default_permission: ToolPolicy) -> Self {
+        Self {
+            registration_name,
+            default_permission,
+        }
+    }
+
+    pub(super) fn registration_name(&self) -> &str {
+        self.registration_name.as_str()
+    }
+
+    pub(super) fn default_permission(&self) -> &ToolPolicy {
+        &self.default_permission
+    }
+}
+
 pub(super) struct ToolAssembly {
-    policy_seeds: Vec<(String, ToolMetadata)>,
+    policy_seed_metadata: FxHashMap<String, ToolMetadata>,
     catalog: SessionToolCatalog,
-    public_routes: FxHashMap<String, String>,
-    catalog_entries: FxHashMap<String, usize>,
+    public_routes: FxHashMap<String, PublicToolResolution>,
 }
 
 impl ToolAssembly {
@@ -17,7 +41,7 @@ impl ToolAssembly {
     }
 
     pub(super) fn from_registrations(registrations: Vec<ToolRegistration>) -> Self {
-        let policy_seeds = registrations
+        let registration_metadata = registrations
             .iter()
             .map(|registration| {
                 (
@@ -25,54 +49,136 @@ impl ToolAssembly {
                     registration.metadata().clone(),
                 )
             })
-            .collect();
+            .collect::<FxHashMap<_, _>>();
         let catalog = SessionToolCatalog::rebuild_from_registrations(registrations);
-        let (public_routes, catalog_entries) = build_public_routes(&catalog);
+        let public_routes = build_public_routes(&catalog);
+        let policy_seed_metadata = catalog
+            .entries()
+            .iter()
+            .filter_map(|entry| {
+                registration_metadata
+                    .get(&entry.registration_name)
+                    .cloned()
+                    .map(|metadata| (entry.registration_name.clone(), metadata))
+            })
+            .collect();
         Self {
-            policy_seeds,
+            policy_seed_metadata,
             catalog,
             public_routes,
-            catalog_entries,
         }
     }
 
-    pub(super) fn policy_seeds(&self) -> &[(String, ToolMetadata)] {
-        &self.policy_seeds
+    pub(super) fn policy_seed_metadata(&self) -> &FxHashMap<String, ToolMetadata> {
+        &self.policy_seed_metadata
     }
 
     pub(super) fn catalog(&self) -> &SessionToolCatalog {
         &self.catalog
     }
 
-    pub(super) fn find_catalog_entry(&self, name: &str) -> Option<&ToolCatalogEntry> {
-        let registration_name = self.resolve_registration_name(name).ok()?;
-        let entry_index = self.catalog_entries.get(registration_name)?;
-        self.catalog.entries().get(*entry_index)
-    }
-
-    pub(super) fn resolve_registration_name(&self, name: &str) -> Result<&str, ToolCallError> {
-        self.public_routes
-            .get(name)
-            .map(String::as_str)
-            .ok_or_else(|| ToolCallError::respond(format!("Unknown tool: {name}")))
+    pub(super) fn resolve_public_tool(
+        &self,
+        requested_name: &str,
+    ) -> Result<PublicToolResolution, ToolCallError> {
+        public_tool_name_candidates(requested_name)
+            .into_iter()
+            .find_map(|candidate| self.public_routes.get(&candidate).cloned())
+            .ok_or_else(|| {
+                ToolCallError::respond(format!(
+                    "Unknown tool: {}",
+                    canonical_tool_name(requested_name)
+                ))
+            })
     }
 }
 
-fn build_public_routes(
-    catalog: &SessionToolCatalog,
-) -> (FxHashMap<String, String>, FxHashMap<String, usize>) {
-    let mut public_routes = FxHashMap::default();
-    let mut catalog_entries = FxHashMap::default();
+pub(super) fn public_tool_name_candidates(name: &str) -> Vec<String> {
+    let mut candidates = Vec::new();
+    let raw = strip_wrapping_quotes(name);
+    if raw.is_empty() {
+        return candidates;
+    }
 
-    for (index, entry) in catalog.entries().iter().enumerate() {
-        catalog_entries.insert(entry.registration_name.clone(), index);
-        public_routes.insert(entry.public_name.clone(), entry.registration_name.clone());
+    push_candidate(&mut candidates, raw);
+
+    if let Some((lhs, rhs)) = raw.split_once("<|channel|>") {
+        push_candidate(&mut candidates, rhs);
+        push_candidate(&mut candidates, lhs);
+    }
+
+    if let Some((_, suffix)) = raw.rsplit_once(':') {
+        push_candidate(&mut candidates, suffix);
+    }
+
+    candidates
+}
+
+fn build_public_routes(catalog: &SessionToolCatalog) -> FxHashMap<String, PublicToolResolution> {
+    let mut public_routes = FxHashMap::default();
+
+    for entry in catalog.entries() {
+        let resolution = PublicToolResolution::new(
+            entry.registration_name.clone(),
+            entry.default_permission.clone(),
+        );
+        public_routes.insert(entry.public_name.clone(), resolution.clone());
         for alias in &entry.aliases {
-            public_routes.insert(alias.clone(), entry.registration_name.clone());
+            public_routes.insert(alias.clone(), resolution.clone());
         }
     }
 
-    (public_routes, catalog_entries)
+    public_routes
+}
+
+fn strip_wrapping_quotes(value: &str) -> &str {
+    value
+        .trim()
+        .trim_matches('"')
+        .trim_matches('\'')
+        .trim_matches('`')
+}
+
+fn strip_tool_namespace_prefix(value: &str) -> &str {
+    for prefix in [
+        "functions.",
+        "function.",
+        "tools.",
+        "tool.",
+        "assistant.",
+        "recipient_name.",
+    ] {
+        if let Some(stripped) = value.strip_prefix(prefix) {
+            return stripped;
+        }
+    }
+    value
+}
+
+fn push_candidate(candidates: &mut Vec<String>, value: &str) {
+    let trimmed = strip_wrapping_quotes(value);
+    if trimmed.is_empty() {
+        return;
+    }
+
+    if !candidates.iter().any(|existing| existing == trimmed) {
+        candidates.push(trimmed.to_string());
+    }
+
+    let stripped = strip_tool_namespace_prefix(trimmed);
+    if stripped != trimmed && !candidates.iter().any(|existing| existing == stripped) {
+        candidates.push(stripped.to_string());
+    }
+
+    let lowered = stripped.trim().to_ascii_lowercase();
+    if !lowered.is_empty() && !candidates.iter().any(|existing| existing == &lowered) {
+        candidates.push(lowered.clone());
+    }
+
+    let underscored = lowered.replace([' ', '-'], "_");
+    if !underscored.is_empty() && !candidates.iter().any(|existing| existing == &underscored) {
+        candidates.push(underscored);
+    }
 }
 
 #[cfg(test)]
@@ -108,13 +214,32 @@ mod tests {
         let assembly = ToolAssembly::from_registrations(vec![registration]);
 
         assert_eq!(
-            assembly.resolve_registration_name("exec code").ok(),
-            Some(tools::UNIFIED_EXEC)
+            assembly
+                .resolve_public_tool("exec code")
+                .ok()
+                .map(|resolution| resolution.registration_name().to_string()),
+            Some(tools::UNIFIED_EXEC.to_string())
         );
         assert_eq!(
-            assembly.resolve_registration_name(tools::EXECUTE_CODE).ok(),
-            Some(tools::UNIFIED_EXEC)
+            assembly
+                .resolve_public_tool(tools::EXECUTE_CODE)
+                .ok()
+                .map(|resolution| resolution.registration_name().to_string()),
+            Some(tools::UNIFIED_EXEC.to_string())
         );
-        assert!(assembly.resolve_registration_name("exec_code").is_err());
+        assert!(assembly.resolve_public_tool("exec_code").is_err());
+    }
+
+    #[test]
+    fn public_tool_name_candidates_keep_lowercase_human_label() {
+        let candidates = public_tool_name_candidates("Exec code");
+        assert!(candidates.iter().any(|candidate| candidate == "exec code"));
+        assert!(candidates.iter().any(|candidate| candidate == "exec_code"));
+    }
+
+    #[test]
+    fn public_tool_name_candidates_strip_tool_prefixes() {
+        let candidates = public_tool_name_candidates("functions.read_file");
+        assert!(candidates.iter().any(|candidate| candidate == "read_file"));
     }
 }
