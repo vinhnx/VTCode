@@ -118,6 +118,22 @@ pub fn replace_last(count: usize, lines: &[String]) {
     }
 }
 
+pub fn tail_matches(lines: &[String]) -> bool {
+    if lines.is_empty() {
+        return false;
+    }
+
+    let log = TRANSCRIPT.read();
+    if lines.len() > log.len() {
+        return false;
+    }
+
+    log[log.len() - lines.len()..]
+        .iter()
+        .zip(lines.iter())
+        .all(|(left, right)| left == right)
+}
+
 pub fn snapshot() -> Vec<String> {
     TRANSCRIPT.read().clone()
 }

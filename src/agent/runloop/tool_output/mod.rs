@@ -244,7 +244,7 @@ fn is_git_diff_payload(val: &Value) -> bool {
         .is_some_and(|content_type| content_type == "git_diff")
 }
 
-fn render_tracker_view(renderer: &mut AnsiRenderer, val: &Value) -> Result<bool> {
+pub(crate) fn tracker_view_lines(val: &Value) -> Vec<String> {
     let view = val.get("view").and_then(Value::as_object);
     let summary_lines = tracker_summary_lines(val);
 
@@ -253,7 +253,7 @@ fn render_tracker_view(renderer: &mut AnsiRenderer, val: &Value) -> Result<bool>
         .and_then(Value::as_array)
         .is_some_and(|lines| !lines.is_empty());
     if !has_view_lines && summary_lines.is_empty() {
-        return Ok(false);
+        return Vec::new();
     }
 
     let title = view
@@ -266,21 +266,33 @@ fn render_tracker_view(renderer: &mut AnsiRenderer, val: &Value) -> Result<bool>
         })
         .unwrap_or("Task tracker");
 
-    renderer.line(MessageStyle::ToolDetail, &format!("• {}", title))?;
-    for line in summary_lines {
-        renderer.line(MessageStyle::ToolDetail, &line)?;
-    }
-    if let Some(lines) = view
+    let mut lines = Vec::new();
+    lines.push(format!("• {}", title));
+    lines.extend(summary_lines);
+    if let Some(view_lines) = view
         .and_then(|obj| obj.get("lines"))
         .and_then(Value::as_array)
     {
-        for line in lines {
+        for line in view_lines {
             if let Some(display) = line.get("display").and_then(Value::as_str) {
-                renderer.line(MessageStyle::ToolDetail, display)?;
+                lines.push(display.to_string());
             } else if let Some(text) = line.as_str() {
-                renderer.line(MessageStyle::ToolDetail, text)?;
+                lines.push(text.to_string());
             }
         }
+    }
+
+    lines
+}
+
+fn render_tracker_view(renderer: &mut AnsiRenderer, val: &Value) -> Result<bool> {
+    let lines = tracker_view_lines(val);
+    if lines.is_empty() {
+        return Ok(false);
+    }
+
+    for line in lines {
+        renderer.line(MessageStyle::ToolDetail, &line)?;
     }
 
     Ok(true)

@@ -75,6 +75,7 @@ pub struct HarnessTurnState {
     pub consecutive_same_shell_command_runs: usize,
     pub last_shell_command_signature: Option<String>,
     pub seen_task_tracker_create_signatures: HashSet<String>,
+    pub replaceable_task_tracker_block: Option<Vec<String>>,
     pub tool_budget_warning_emitted: bool,
     pub tool_budget_exhausted_emitted: bool,
     pub max_tool_calls: usize,
@@ -102,6 +103,7 @@ impl HarnessTurnState {
             consecutive_same_shell_command_runs: 0,
             last_shell_command_signature: None,
             seen_task_tracker_create_signatures: HashSet::new(),
+            replaceable_task_tracker_block: None,
             tool_budget_warning_emitted: false,
             tool_budget_exhausted_emitted: false,
             max_tool_calls,
@@ -190,6 +192,15 @@ impl HarnessTurnState {
 
     pub fn record_task_tracker_create_signature(&mut self, signature: String) -> bool {
         self.seen_task_tracker_create_signatures.insert(signature)
+    }
+
+    pub fn replaceable_task_tracker_count(&self) -> Option<usize> {
+        let lines = self.replaceable_task_tracker_block.as_ref()?;
+        vtcode_core::utils::transcript::tail_matches(lines).then_some(lines.len())
+    }
+
+    pub fn remember_task_tracker_block(&mut self, lines: Vec<String>) {
+        self.replaceable_task_tracker_block = (!lines.is_empty()).then_some(lines);
     }
 
     pub fn set_phase(&mut self, phase: TurnPhase) {

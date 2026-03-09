@@ -2,10 +2,13 @@ use crate::agent::runloop::mcp_events::McpPanelState;
 use crate::agent::runloop::unified::state::SessionStats;
 use anyhow::Result;
 use std::path::PathBuf;
+use vtcode_core::config::constants::tools;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::tools::tool_intent;
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_core::utils::transcript;
+use vtcode_tui::{InlineHandle, InlineMessageKind, InlineSegment, InlineTextStyle};
 
 use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
 use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
@@ -67,6 +70,95 @@ fn has_renderable_stream_content(output: &serde_json::Value) -> bool {
             .and_then(serde_json::Value::as_str)
             .is_some_and(|s| !s.trim().is_empty())
     })
+}
+
+fn is_task_tracker_tool(name: &str) -> bool {
+    matches!(name, tools::TASK_TRACKER | tools::PLAN_TASK_TRACKER)
+}
+
+fn task_tracker_call_lines(args_val: &serde_json::Value) -> Vec<String> {
+    let mut lines = vec!["• Task tracker".to_string()];
+
+    if let Some(action) = args_val.get("action").and_then(serde_json::Value::as_str) {
+        lines.push(format!("  └ Action: {action}"));
+    }
+    if let Some(title) = args_val.get("title").and_then(serde_json::Value::as_str) {
+        lines.push(format!("  └ Title: {title}"));
+    }
+    if let Some(index) = args_val.get("index").and_then(serde_json::Value::as_u64) {
+        lines.push(format!("  └ Index: {index}"));
+    } else if let Some(index_path) = args_val
+        .get("index_path")
+        .and_then(serde_json::Value::as_str)
+    {
+        lines.push(format!("  └ Index: {index_path}"));
+    }
+    if let Some(status) = args_val.get("status").and_then(serde_json::Value::as_str) {
+        lines.push(format!("  └ Status: {status}"));
+    }
+    if let Some(items) = args_val.get("items").and_then(serde_json::Value::as_array)
+        && !items.is_empty()
+    {
+        let preview = items
+            .iter()
+            .filter_map(serde_json::Value::as_str)
+            .take(2)
+            .collect::<Vec<_>>();
+        let suffix = match items.len().saturating_sub(preview.len()) {
+            0 => String::new(),
+            remaining => format!(" +{remaining} more"),
+        };
+        if !preview.is_empty() {
+            lines.push(format!("  └ Items: {}{}", preview.join(", "), suffix));
+        }
+    }
+
+    lines
+}
+
+fn task_tracker_block_lines(
+    args_val: &serde_json::Value,
+    output: &serde_json::Value,
+) -> Vec<String> {
+    let mut lines = task_tracker_call_lines(args_val);
+    lines.extend(crate::agent::runloop::tool_output::tracker_view_lines(
+        output,
+    ));
+    lines
+}
+
+fn task_tracker_block_segments(lines: &[String]) -> Vec<Vec<InlineSegment>> {
+    let style = std::sync::Arc::new(InlineTextStyle::default());
+    lines
+        .iter()
+        .map(|line| {
+            vec![InlineSegment {
+                text: line.clone(),
+                style: style.clone(),
+            }]
+        })
+        .collect()
+}
+
+fn apply_task_tracker_block(
+    handle: &InlineHandle,
+    harness_state: &mut crate::agent::runloop::unified::run_loop_context::HarnessTurnState,
+    lines: Vec<String>,
+) {
+    let replace_count = harness_state.replaceable_task_tracker_count();
+    let segments = task_tracker_block_segments(&lines);
+
+    if let Some(count) = replace_count {
+        handle.replace_last(count, InlineMessageKind::Tool, segments);
+        transcript::replace_last(count, &lines);
+    } else {
+        for (segments, plain_line) in segments.into_iter().zip(lines.iter()) {
+            handle.append_line(InlineMessageKind::Tool, segments);
+            transcript::append(plain_line);
+        }
+    }
+
+    harness_state.remember_task_tracker_block(lines);
 }
 
 async fn render_tool_output_common(
@@ -137,6 +229,8 @@ impl OutcomeState {
 struct OutcomeContext<'a> {
     session_stats: &'a mut SessionStats,
     renderer: &'a mut AnsiRenderer,
+    handle: &'a InlineHandle,
+    harness_state: &'a mut crate::agent::runloop::unified::run_loop_context::HarnessTurnState,
     mcp_panel_state: &'a mut McpPanelState,
     vt_config: Option<&'a VTCodeConfig>,
 }
@@ -161,6 +255,9 @@ async fn handle_success_common(
         let tool_name = tool_name.trim_start_matches('_');
         let tool_name = tool_name.split("__").last().unwrap_or(tool_name);
         record_mcp_success_event(ctx.mcp_panel_state, tool_name, args_val);
+    } else if is_task_tracker_tool(name) && ctx.renderer.supports_inline_ui() {
+        let block_lines = task_tracker_block_lines(args_val, payload.output);
+        apply_task_tracker_block(ctx.handle, ctx.harness_state, block_lines);
     } else {
         render_tool_output_common(
             ctx.renderer,
@@ -256,6 +353,8 @@ pub(crate) async fn handle_pipeline_output(
     let mut output_ctx = OutcomeContext {
         session_stats: ctx.session_stats,
         renderer: ctx.renderer,
+        handle: ctx.handle,
+        harness_state: ctx.harness_state,
         mcp_panel_state: ctx.mcp_panel_state,
         vt_config,
     };
@@ -282,7 +381,7 @@ mod tests {
     use std::io::{IsTerminal, stdin};
     use std::sync::Arc;
     use tempfile::TempDir;
-    use tokio::sync::RwLock;
+    use tokio::sync::{RwLock, mpsc::unbounded_channel};
     use vtcode_core::acp::ToolPermissionCache;
     use vtcode_core::config::loader::VTCodeConfig;
     use vtcode_core::core::decision_tracker::DecisionTracker;
@@ -291,7 +390,7 @@ mod tests {
     use vtcode_core::tools::registry::ToolRegistry;
     use vtcode_core::tools::result_cache::{ToolCacheKey, ToolResultCache};
     use vtcode_core::ui::theme;
-    use vtcode_tui::{SessionOptions, spawn_session_with_options};
+    use vtcode_tui::{InlineCommand, InlineHandle, SessionOptions, spawn_session_with_options};
 
     fn build_harness_state() -> crate::agent::runloop::unified::run_loop_context::HarnessTurnState {
         crate::agent::runloop::unified::run_loop_context::HarnessTurnState::new(
@@ -301,6 +400,10 @@ mod tests {
             60,
             0,
         )
+    }
+
+    fn dummy_handle() -> InlineHandle {
+        InlineHandle::new_for_tests(unbounded_channel().0)
     }
 
     // Use Tokio runtime for async test blocks
@@ -324,9 +427,13 @@ mod tests {
         });
 
         // Invoke the shared outcome processor via a minimal output context.
+        let handle = dummy_handle();
+        let mut harness_state = build_harness_state();
         let mut output_ctx = OutcomeContext {
             session_stats: &mut stats,
             renderer: &mut renderer,
+            handle: &handle,
+            harness_state: &mut harness_state,
             mcp_panel_state: &mut mcp,
             vt_config: None::<&VTCodeConfig>,
         };
@@ -365,9 +472,13 @@ mod tests {
             has_more: false,
         });
 
+        let handle = dummy_handle();
+        let mut harness_state = build_harness_state();
         let mut output_ctx = OutcomeContext {
             session_stats: &mut stats,
             renderer: &mut renderer,
+            handle: &handle,
+            harness_state: &mut harness_state,
             mcp_panel_state: &mut mcp,
             vt_config: None::<&VTCodeConfig>,
         };
@@ -473,6 +584,132 @@ mod tests {
         // Ensure session stats were updated
         let rec = session_stats.sorted_tools();
         assert!(rec.contains(&"read_file".to_string()));
+    }
+
+    #[tokio::test]
+    async fn task_tracker_updates_replace_previous_inline_block() {
+        transcript::clear();
+
+        let (sender, mut receiver) = unbounded_channel();
+        let handle = InlineHandle::new_for_tests(sender);
+        let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
+        let mut stats = SessionStats::default();
+        let mut mcp = McpPanelState::default();
+        let mut harness_state = build_harness_state();
+
+        let first = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
+            output: serde_json::json!({
+                "status": "updated",
+                "view": {
+                    "title": "Respond to user greeting and assess next steps",
+                    "lines": [
+                        {"display": "├ ✔ Greet user and summarize current workspace state"},
+                        {"display": "├ > Ask what task they'd like to tackle"},
+                        {"display": "└ • Offer to provide workspace tour if needed"}
+                    ]
+                },
+                "checklist": {
+                    "title": "Respond to user greeting and assess next steps",
+                    "total": 3,
+                    "completed": 1,
+                    "in_progress": 1,
+                    "pending": 1,
+                    "blocked": 0,
+                    "progress_percent": 33,
+                    "items": [
+                        {"index": 1, "description": "Greet user and summarize current workspace state", "status": "completed"},
+                        {"index": 2, "description": "Ask what task they'd like to tackle", "status": "in_progress"},
+                        {"index": 3, "description": "Offer to provide workspace tour if needed", "status": "pending"}
+                    ]
+                },
+                "message": "Item 2 status changed: pending → in_progress"
+            }),
+            stdout: None,
+            modified_files: vec![],
+            command_success: true,
+            has_more: false,
+        });
+        let second = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
+            output: serde_json::json!({
+                "status": "updated",
+                "view": {
+                    "title": "Respond to user greeting and assess next steps",
+                    "lines": [
+                        {"display": "├ ✔ Greet user and summarize current workspace state"},
+                        {"display": "├ ✔ Ask what task they'd like to tackle"},
+                        {"display": "└ • Offer to provide workspace tour if needed"}
+                    ]
+                },
+                "checklist": {
+                    "title": "Respond to user greeting and assess next steps",
+                    "total": 3,
+                    "completed": 2,
+                    "in_progress": 0,
+                    "pending": 1,
+                    "blocked": 0,
+                    "progress_percent": 67,
+                    "items": [
+                        {"index": 1, "description": "Greet user and summarize current workspace state", "status": "completed"},
+                        {"index": 2, "description": "Ask what task they'd like to tackle", "status": "completed"},
+                        {"index": 3, "description": "Offer to provide workspace tour if needed", "status": "pending"}
+                    ]
+                },
+                "message": "Item 2 status changed: in_progress → completed"
+            }),
+            stdout: None,
+            modified_files: vec![],
+            command_success: true,
+            has_more: false,
+        });
+
+        let args = serde_json::json!({"action": "update", "index": 2, "status": "in_progress"});
+        let mut output_ctx = OutcomeContext {
+            session_stats: &mut stats,
+            renderer: &mut renderer,
+            handle: &handle,
+            harness_state: &mut harness_state,
+            mcp_panel_state: &mut mcp,
+            vt_config: None::<&VTCodeConfig>,
+        };
+
+        process_outcome_common(&mut output_ctx, tools::TASK_TRACKER, &args, &first)
+            .await
+            .expect("first tracker render should succeed");
+
+        let args = serde_json::json!({"action": "update", "index": 2, "status": "completed"});
+        process_outcome_common(&mut output_ctx, tools::TASK_TRACKER, &args, &second)
+            .await
+            .expect("second tracker render should succeed");
+
+        let mut saw_replace = false;
+        while let Ok(command) = receiver.try_recv() {
+            if matches!(
+                command,
+                InlineCommand::ReplaceLast {
+                    kind: InlineMessageKind::Tool,
+                    ..
+                }
+            ) {
+                saw_replace = true;
+            }
+        }
+
+        let transcript_lines = transcript::snapshot();
+        assert!(
+            saw_replace,
+            "expected later tracker update to replace prior block"
+        );
+        assert_eq!(
+            transcript_lines
+                .iter()
+                .filter(|line| line.contains("• Task tracker"))
+                .count(),
+            1
+        );
+        assert!(transcript_lines.iter().any(|line| line.contains("67%)")));
+        assert!(!transcript_lines.iter().any(|line| line.contains("33%)")));
+
+        transcript::clear();
     }
 
     #[tokio::test]
