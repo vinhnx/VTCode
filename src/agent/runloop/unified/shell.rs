@@ -84,16 +84,23 @@ fn detect_show_diff_command(input: &str) -> Option<String> {
         return None;
     }
 
-    let target = normalize_show_diff_target(target);
+    let target = normalize_path_operand(target);
     if target.is_empty() {
         return None;
     }
 
     // Use -- to force path interpretation and avoid accidental rev parsing.
-    Some(format!("git diff -- {}", target))
+    Some(format!("git diff -- {}", shell_quote_if_needed(&target)))
 }
 
-fn normalize_show_diff_target(target: &str) -> &str {
+fn normalize_path_operand(target: &str) -> String {
+    let normalized = strip_optional_word_prefix(trim_wrapping_quotes_and_punctuation(target), "on");
+    let normalized = trim_wrapping_quotes_and_punctuation(normalized);
+    let normalized = normalized.strip_prefix('@').unwrap_or(normalized);
+    trim_wrapping_quotes_and_punctuation(normalized).to_string()
+}
+
+fn trim_wrapping_quotes_and_punctuation(target: &str) -> &str {
     let mut normalized = target.trim();
     loop {
         let previous = normalized;
@@ -109,6 +116,39 @@ fn normalize_show_diff_target(target: &str) -> &str {
             return normalized;
         }
     }
+}
+
+fn strip_optional_word_prefix<'a>(input: &'a str, word: &str) -> &'a str {
+    let Some(prefix) = input.get(..word.len()) else {
+        return input;
+    };
+
+    if !prefix.eq_ignore_ascii_case(word) {
+        return input;
+    }
+
+    let remainder = &input[word.len()..];
+    if remainder.chars().next().is_some_and(char::is_whitespace) {
+        remainder.trim_start()
+    } else {
+        input
+    }
+}
+
+pub(crate) fn shell_quote_if_needed(value: &str) -> String {
+    if value.is_empty() {
+        return "''".to_string();
+    }
+
+    if value.chars().all(is_shell_safe_unquoted_char) {
+        return value.to_string();
+    }
+
+    format!("'{}'", value.replace('\'', r#"'\''"#))
+}
+
+fn is_shell_safe_unquoted_char(ch: char) -> bool {
+    ch.is_ascii_alphanumeric() || matches!(ch, '/' | '.' | '_' | '-' | '~' | ':')
 }
 
 fn normalize_natural_language_command(command_part: &str) -> String {
@@ -282,7 +322,7 @@ fn normalize_pytest_phrase(command_part: &str) -> Option<String> {
             "func" | "function" | "test" | "case"
         )
     {
-        let path = trim_token(tokens[2]);
+        let path = shell_quote_if_needed(&normalize_path_operand(tokens[2]));
         let test_name_joined = tokens[5..].join(" ");
         let test_name = trim_token(&test_name_joined);
         if path.is_empty() || test_name.is_empty() {
@@ -294,7 +334,7 @@ fn normalize_pytest_phrase(command_part: &str) -> Option<String> {
     // pytest on <path>
     if lowered_tokens.len() >= 3 && lowered_tokens[1] == "on" {
         let path_joined = tokens[2..].join(" ");
-        let path = trim_token(&path_joined);
+        let path = shell_quote_if_needed(&normalize_path_operand(&path_joined));
         if path.is_empty() {
             return None;
         }
@@ -341,7 +381,7 @@ fn normalize_unix_phrase(command_part: &str) -> Option<String> {
     ];
     if lowered_tokens[1] == "on" && on_compatible_commands.contains(&cmd) {
         let target_joined = tokens[2..].join(" ");
-        let target = trim_token(&target_joined);
+        let target = shell_quote_if_needed(&normalize_path_operand(&target_joined));
         if !target.is_empty() {
             return Some(format!("{} {}", tokens[0], target));
         }
@@ -358,7 +398,7 @@ fn normalize_unix_phrase(command_part: &str) -> Option<String> {
         let pattern_joined = tokens[2..on_idx].join(" ");
         let pattern = trim_token(&pattern_joined);
         let target_joined = tokens[on_idx + 1..].join(" ");
-        let target = trim_token(&target_joined);
+        let target = shell_quote_if_needed(&normalize_path_operand(&target_joined));
         if !pattern.is_empty() && !target.is_empty() {
             return Some(format!("{} {} {}", tokens[0], pattern, target));
         }
@@ -373,7 +413,7 @@ fn normalize_unix_phrase(command_part: &str) -> Option<String> {
     {
         let for_idx = for_idx + 2;
         let base_joined = tokens[2..for_idx].join(" ");
-        let base = trim_token(&base_joined);
+        let base = shell_quote_if_needed(&normalize_path_operand(&base_joined));
         let pattern_joined = tokens[for_idx + 1..].join(" ");
         let pattern = trim_token(&pattern_joined);
         if !base.is_empty() && !pattern.is_empty() {
@@ -526,6 +566,34 @@ mod tests {
     }
 
     #[test]
+    fn test_detect_show_diff_normalizes_on_prefixed_file_mentions() {
+        let result =
+            detect_explicit_run_command("show diff on @vtcode-core/src/tools/registry/policy.rs");
+        assert!(result.is_some());
+        let (_, args) = result.expect("direct command expected");
+        assert_eq!(
+            args["command"],
+            "git diff -- vtcode-core/src/tools/registry/policy.rs"
+        );
+    }
+
+    #[test]
+    fn test_detect_show_diff_quotes_whitespace_paths_after_mention_normalization() {
+        let result = detect_explicit_run_command("show diff on @\"docs/file with spaces.md\"");
+        assert!(result.is_some());
+        let (_, args) = result.expect("direct command expected");
+        assert_eq!(args["command"], "git diff -- 'docs/file with spaces.md'");
+    }
+
+    #[test]
+    fn test_detect_show_diff_quotes_shell_sensitive_paths() {
+        let result = detect_explicit_run_command("show diff on @\"docs/file(1).md\"");
+        assert!(result.is_some());
+        let (_, args) = result.expect("direct command expected");
+        assert_eq!(args["command"], "git diff -- 'docs/file(1).md'");
+    }
+
+    #[test]
     fn test_detect_show_diff_allows_dot_prefixed_paths() {
         let result = detect_explicit_run_command("show diff .vtcode/tool-policy.json");
         assert!(result.is_some());
@@ -664,8 +732,24 @@ mod tests {
     }
 
     #[test]
+    fn test_detect_explicit_run_command_normalizes_unix_on_file_mention() {
+        let result = detect_explicit_run_command("run ls on @src");
+        assert!(result.is_some());
+        let (_, args) = result.expect("normalized command expected");
+        assert_eq!(args["command"], "ls src");
+    }
+
+    #[test]
     fn test_detect_explicit_run_command_normalizes_grep_for_on_pattern() {
         let result = detect_explicit_run_command("run rg for TODO on src");
+        assert!(result.is_some());
+        let (_, args) = result.expect("normalized command expected");
+        assert_eq!(args["command"], "rg TODO src");
+    }
+
+    #[test]
+    fn test_detect_explicit_run_command_normalizes_grep_target_file_mention() {
+        let result = detect_explicit_run_command("run rg for TODO on @src");
         assert!(result.is_some());
         let (_, args) = result.expect("normalized command expected");
         assert_eq!(args["command"], "rg TODO src");
@@ -677,5 +761,21 @@ mod tests {
         assert!(result.is_some());
         let (_, args) = result.expect("normalized command expected");
         assert_eq!(args["command"], "find src -name *.rs");
+    }
+
+    #[test]
+    fn test_detect_explicit_run_command_normalizes_find_base_file_mention() {
+        let result = detect_explicit_run_command("run find on @src for *.rs");
+        assert!(result.is_some());
+        let (_, args) = result.expect("normalized command expected");
+        assert_eq!(args["command"], "find src -name *.rs");
+    }
+
+    #[test]
+    fn test_detect_explicit_run_command_normalizes_pytest_file_mention_path() {
+        let result = detect_explicit_run_command("run pytest on @tests/unit/test_shell.py");
+        assert!(result.is_some());
+        let (_, args) = result.expect("normalized command expected");
+        assert_eq!(args["command"], "pytest tests/unit/test_shell.py");
     }
 }
