@@ -1,8 +1,10 @@
 use anyhow::Result;
 use std::collections::BTreeSet;
+use std::path::Path;
 
 use crate::agent::runloop::unified::display::display_user_message;
 use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, TurnId, TurnRunId};
+use crate::agent::runloop::unified::shell::shell_quote_if_needed;
 use crate::agent::runloop::unified::status_line::InputStatusState;
 use crate::agent::runloop::unified::turn::context::{TurnHandlerOutcome, TurnLoopResult};
 use crate::agent::runloop::unified::turn::session::interaction_loop::{
@@ -37,7 +39,9 @@ pub(crate) async fn handle_direct_tool_execution(
     input: &str,
     ctx: &mut DirectToolContext<'_, '_>,
 ) -> Result<Option<InteractionOutcome>> {
-    let Some(parsed) = parse_direct_tool_input(input) else {
+    let normalized_input =
+        normalize_direct_tool_mentions(input, &ctx.interaction_ctx.config.workspace);
+    let Some(parsed) = parse_direct_tool_input(&normalized_input) else {
         return Ok(None);
     };
 
@@ -177,6 +181,87 @@ fn parse_direct_tool_input(input: &str) -> Option<DirectToolInput> {
     )
 }
 
+fn normalize_direct_tool_mentions(input: &str, workspace_root: &Path) -> String {
+    let matches = vtcode_commons::at_pattern::find_at_patterns(input);
+    if matches.is_empty() {
+        return input.to_string();
+    }
+
+    let mut normalized = String::with_capacity(input.len());
+    let mut last_end = 0usize;
+    let mut replaced_any = false;
+
+    for at_match in matches {
+        if at_match.start < last_end {
+            continue;
+        }
+
+        let replacement =
+            resolve_direct_tool_mention(at_match.path, input, at_match.start, workspace_root);
+
+        normalized.push_str(&input[last_end..at_match.start]);
+        if let Some(replacement) = replacement {
+            normalized.push_str(&replacement);
+            replaced_any = true;
+        } else {
+            normalized.push_str(at_match.full_match);
+        }
+        last_end = at_match.end;
+    }
+
+    if !replaced_any {
+        return input.to_string();
+    }
+
+    normalized.push_str(&input[last_end..]);
+    normalized
+}
+
+fn resolve_direct_tool_mention(
+    alias: &str,
+    input: &str,
+    at_pos: usize,
+    workspace_root: &Path,
+) -> Option<String> {
+    let trimmed = alias.trim();
+    if trimmed.is_empty()
+        || trimmed.starts_with("http://")
+        || trimmed.starts_with("https://")
+        || trimmed.starts_with("data:")
+        || !vtcode_commons::paths::is_safe_relative_path(trimmed)
+    {
+        return None;
+    }
+
+    if is_package_manager_command_context(input, at_pos) && !looks_like_explicit_path(trimmed) {
+        return None;
+    }
+
+    let resolved =
+        vtcode_commons::paths::resolve_workspace_path(workspace_root, Path::new(trimmed)).ok()?;
+    if !resolved.exists() {
+        return None;
+    }
+
+    Some(shell_quote_if_needed(trimmed))
+}
+
+fn is_package_manager_command_context(input: &str, at_pos: usize) -> bool {
+    let before_at = &input[..at_pos];
+    ["npm", "npx", "yarn", "pnpm", "bun"]
+        .iter()
+        .any(|cmd| before_at.split_whitespace().any(|word| word == *cmd))
+}
+
+fn looks_like_explicit_path(value: &str) -> bool {
+    value.starts_with("./")
+        || value.starts_with("../")
+        || value.starts_with('/')
+        || value.starts_with("~/")
+        || value.contains('.')
+        || value.contains('\\')
+}
+
 fn validate_bang_shell_command(command: &str) -> std::result::Result<(), String> {
     match parse_shell_commands_tree_sitter(command) {
         Ok(commands) if !commands.is_empty() => Ok(()),
@@ -187,7 +272,11 @@ fn validate_bang_shell_command(command: &str) -> std::result::Result<(), String>
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
+    use super::normalize_direct_tool_mentions;
     use super::{DirectToolInput, parse_direct_tool_input};
+    use tempfile::TempDir;
 
     #[test]
     fn parses_bang_prefix_with_leading_whitespace() {
@@ -229,5 +318,56 @@ mod tests {
     #[test]
     fn rejects_empty_bang_command() {
         assert!(parse_direct_tool_input("!   ").is_none());
+    }
+
+    #[test]
+    fn normalizes_direct_run_file_mentions_before_parsing() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let file_path = temp_dir.path().join("src").join("main.rs");
+        fs::create_dir_all(file_path.parent().expect("parent")).expect("mkdir");
+        fs::write(&file_path, "fn main() {}\n").expect("write file");
+
+        let normalized = normalize_direct_tool_mentions("run cat @src/main.rs", temp_dir.path());
+        assert_eq!(normalized, "run cat src/main.rs");
+
+        let parsed = parse_direct_tool_input(&normalized).expect("direct tool");
+        match parsed {
+            DirectToolInput::Execute { args, .. } => {
+                assert_eq!(args["command"], "cat src/main.rs");
+            }
+            DirectToolInput::InvalidBang { .. } => panic!("expected valid direct command"),
+        }
+    }
+
+    #[test]
+    fn normalizes_bang_file_mentions_with_spaces() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let file_path = temp_dir.path().join("docs").join("file with spaces.md");
+        fs::create_dir_all(file_path.parent().expect("parent")).expect("mkdir");
+        fs::write(&file_path, "# doc\n").expect("write file");
+
+        let normalized =
+            normalize_direct_tool_mentions("!cat @\"docs/file with spaces.md\"", temp_dir.path());
+        assert_eq!(normalized, "!cat 'docs/file with spaces.md'");
+
+        let parsed = parse_direct_tool_input(&normalized).expect("direct tool");
+        match parsed {
+            DirectToolInput::Execute {
+                args,
+                is_bang_prefix,
+                ..
+            } => {
+                assert_eq!(args["command"], "cat 'docs/file with spaces.md'");
+                assert!(is_bang_prefix);
+            }
+            DirectToolInput::InvalidBang { .. } => panic!("expected valid bang command"),
+        }
+    }
+
+    #[test]
+    fn leaves_npm_scoped_packages_unchanged_when_not_a_path() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let normalized = normalize_direct_tool_mentions("run npm i @types/node", temp_dir.path());
+        assert_eq!(normalized, "run npm i @types/node");
     }
 }
