@@ -1,14 +1,12 @@
 use std::io::{self, Write};
 use std::path::Path;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use anstyle::Ansi256Color;
 use anyhow::{Context, Result};
 use vtcode_commons::color256_theme::rgb_to_ansi256_for_theme;
 use vtcode_core::utils::dot_config::{
-    WorkspaceTrustLevel, WorkspaceTrustRecord, get_dot_manager, load_user_config,
+    WorkspaceTrustLevel, load_workspace_trust_level, update_workspace_trust,
 };
-use vtcode_core::utils::path::canonicalize_workspace;
 use vtcode_core::utils::style_helpers::{ColorPalette, render_styled};
 use vtcode_core::utils::{ansi_capabilities, ansi_capabilities::ColorScheme};
 
@@ -43,17 +41,7 @@ pub async fn ensure_workspace_trust(
     workspace: &Path,
     full_auto_requested: bool,
 ) -> Result<WorkspaceTrustGateResult> {
-    let workspace_key = canonicalize_workspace(workspace)
-        .to_string_lossy()
-        .into_owned();
-    let config = load_user_config()
-        .await
-        .context("Failed to load user configuration for trust check")?;
-    let current_level = config
-        .workspace_trust
-        .entries
-        .get(&workspace_key)
-        .map(|record| record.level);
+    let current_level = workspace_trust_level(workspace).await?;
 
     if let Some(level) = current_level
         && (!full_auto_requested || level == WorkspaceTrustLevel::FullAuto)
@@ -66,7 +54,9 @@ pub async fn ensure_workspace_trust(
 
     match read_user_selection()? {
         TrustSelection::FullAuto => {
-            persist_trust_decision(&workspace_key, WorkspaceTrustLevel::FullAuto).await?;
+            update_workspace_trust(workspace, WorkspaceTrustLevel::FullAuto)
+                .await
+                .context("Failed to persist full-auto workspace trust")?;
             let msg = "Workspace marked as trusted with full auto capabilities.";
             let palette = ColorPalette::default();
             println!("{}", render_styled(msg, palette.success, None));
@@ -75,7 +65,9 @@ pub async fn ensure_workspace_trust(
             ))
         }
         TrustSelection::ToolsPolicy => {
-            persist_trust_decision(&workspace_key, WorkspaceTrustLevel::ToolsPolicy).await?;
+            update_workspace_trust(workspace, WorkspaceTrustLevel::ToolsPolicy)
+                .await
+                .context("Failed to persist tools-policy workspace trust")?;
             let msg = "Workspace marked as trusted with tools policy safeguards.";
             let palette = ColorPalette::default();
             println!("{}", render_styled(msg, palette.success, None));
@@ -167,17 +159,9 @@ fn read_user_selection() -> Result<TrustSelection> {
 }
 
 pub async fn workspace_trust_level(workspace: &Path) -> Result<Option<WorkspaceTrustLevel>> {
-    let workspace_key = canonicalize_workspace(workspace)
-        .to_string_lossy()
-        .into_owned();
-    let config = load_user_config()
+    load_workspace_trust_level(workspace)
         .await
-        .context("Failed to load user configuration for trust lookup")?;
-    Ok(config
-        .workspace_trust
-        .entries
-        .get(&workspace_key)
-        .map(|record| record.level))
+        .context("Failed to load user configuration for trust lookup")
 }
 
 #[allow(dead_code)] // Used via lib crate's acp module, not directly from binary
@@ -185,17 +169,9 @@ pub async fn ensure_workspace_trust_level_silent(
     workspace: &Path,
     desired_level: WorkspaceTrustLevel,
 ) -> Result<WorkspaceTrustSyncOutcome> {
-    let workspace_key = canonicalize_workspace(workspace)
-        .to_string_lossy()
-        .into_owned();
-    let config = load_user_config()
+    let current_level = load_workspace_trust_level(workspace)
         .await
         .context("Failed to load user configuration for trust sync")?;
-    let current_level = config
-        .workspace_trust
-        .entries
-        .get(&workspace_key)
-        .map(|record| record.level);
 
     if let Some(level) = current_level {
         if level == desired_level {
@@ -209,38 +185,14 @@ pub async fn ensure_workspace_trust_level_silent(
         }
     }
 
-    persist_trust_decision(&workspace_key, desired_level).await?;
+    update_workspace_trust(workspace, desired_level)
+        .await
+        .context("Failed to persist workspace trust sync")?;
 
     Ok(WorkspaceTrustSyncOutcome::Upgraded {
         previous: current_level,
         new: desired_level,
     })
-}
-
-async fn persist_trust_decision(workspace_key: &str, level: WorkspaceTrustLevel) -> Result<()> {
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .context("System clock is before UNIX_EPOCH while persisting trust decision")?
-        .as_secs();
-
-    let manager = get_dot_manager()
-        .context("Failed to initialize dot manager while persisting trust decision")?
-        .lock()
-        .map_err(|err| anyhow::anyhow!("Dot manager lock poisoned while persisting trust: {err}"))?
-        .clone();
-
-    manager
-        .update_config(|cfg| {
-            cfg.workspace_trust.entries.insert(
-                workspace_key.to_string(),
-                WorkspaceTrustRecord {
-                    level,
-                    trusted_at: timestamp,
-                },
-            );
-        })
-        .await
-        .context("Failed to persist workspace trust decision")
 }
 
 enum PromptTone {

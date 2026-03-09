@@ -164,9 +164,7 @@
 //! For the core library functionality, see [`vtcode-core`](https://docs.rs/vtcode-core).
 
 pub mod acp;
-pub mod config_watcher;
 pub mod ide_context;
-pub mod interactive_list;
 pub mod tools;
 #[allow(dead_code)]
 mod workspace_trust;
@@ -174,4 +172,9 @@ mod workspace_trust;
 pub mod startup;
 pub mod updater;
 
+pub mod config_watcher {
+    pub use vtcode_config::loader::watch::*;
+}
+
 pub use startup::StartupContext;
+pub use vtcode_tui::ui::interactive_list;

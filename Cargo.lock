@@ -6318,6 +6318,7 @@ dependencies = [
  "indexmap 2.13.0",
  "keyring",
  "nix 0.31.2",
+ "notify",
  "once_cell",
  "regex",
  "reqwest 0.12.28",
@@ -6336,6 +6337,7 @@ dependencies = [
  "tracing",
  "urlencoding",
  "vtcode-commons",
+ "walkdir",
 ]
 
 [[package]]

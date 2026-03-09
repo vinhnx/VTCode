@@ -6,7 +6,6 @@ use std::time::Instant;
 use tokio_util::sync::CancellationToken;
 
 use tokio::time::{Duration, sleep, timeout};
-use vtcode::config_watcher::SimpleConfigWatcher;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::resolve_timeout;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
@@ -48,7 +47,7 @@ use crate::agent::runloop::unified::status_line::InputStatusState;
 use crate::agent::runloop::unified::workspace_links::LinkedDirectory;
 use crate::hooks::lifecycle::{SessionEndReason, SessionStartTrigger};
 
-#[path = "session_loop_runner.rs"]
+#[path = "session_loop_runner/mod.rs"]
 mod session_loop_runner;
 
 const RECENT_MESSAGE_LIMIT: usize = 16;

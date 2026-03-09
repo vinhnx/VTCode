@@ -1,9 +1,9 @@
 use anyhow::{Result, anyhow};
 
-use vtcode::interactive_list::{SelectionEntry, run_interactive_selection};
 use vtcode_config::OpenAIServiceTier;
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::ReasoningEffortLevel;
+use vtcode_tui::ui::interactive_list::{SelectionEntry, run_interactive_selection};
 
 use super::dynamic_models::DynamicModelRegistry;
 use super::options::{ModelOption, picker_provider_order};

@@ -1,11 +1,10 @@
 use std::path::Path;
 
-use crate::agent::runloop::tui_compat::to_tui_reasoning;
 use anyhow::Result;
 use vtcode_config::OpenAIServiceTier;
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::ReasoningEffortLevel;
-use vtcode_core::ui::{InlineListItem, InlineListSelection};
+use vtcode_core::ui::{InlineListItem, InlineListSelection, to_tui_reasoning};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::super::selection::{

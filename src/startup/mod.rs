@@ -1,31 +1,36 @@
 use std::path::PathBuf;
-use std::str::FromStr;
 
 use anyhow::{Context, Result, bail};
 use vtcode_core::dotfile_protection::init_global_guardian;
 use vtcode_core::utils::validation::validate_path_exists;
 
+mod agent_config;
+mod config_loading;
 mod dependency_advisories;
 mod first_run;
 mod first_run_prompts;
-mod helpers;
+mod resume;
+mod theme;
+mod validation;
 
+pub use agent_config::check_prompt_cache_retention_compat;
+use agent_config::{
+    api_key_env_var, build_agent_config, provider_env_override, provider_label, resolve_provider,
+};
+use config_loading::load_startup_config;
 pub use dependency_advisories::{
     append_optional_search_tools_highlight, render_optional_search_tools_notice,
 };
-use first_run::maybe_run_first_run_setup;
-use helpers::{
-    api_key_env_var, apply_permission_mode_override, determine_theme, parse_cli_config_entries,
-    provider_label, resolve_config_path, resolve_workspace_path, validate_additional_directories,
-    validate_full_auto_configuration, validate_session_id_suffix, validate_startup_configuration,
+use resume::{resolve_session_resume, validate_resume_all_usage};
+use theme::determine_theme;
+use validation::{
+    apply_permission_mode_override, validate_full_auto_configuration,
+    validate_startup_configuration,
 };
-use vtcode_core::cli::args::{Cli, Commands, ExecSubcommand};
+use vtcode_core::cli::args::Cli;
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
-use vtcode_core::config::constants::defaults;
-use vtcode_core::config::loader::{ConfigBuilder, VTCodeConfig};
-use vtcode_core::config::models::Provider;
+use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, ModelSelectionSource};
-use vtcode_core::llm::factory::infer_provider;
 use vtcode_core::{initialize_dot_folder, update_theme_preference};
 
 /// Aggregated data required for CLI command execution after startup.
@@ -54,84 +59,12 @@ pub enum SessionResumeMode {
 
 impl StartupContext {
     pub async fn from_cli_args(args: &Cli) -> Result<Self> {
-        let workspace_override = args
-            .workspace_path
-            .clone()
-            .or_else(|| args.workspace.clone());
-
-        let workspace = resolve_workspace_path(workspace_override)
-            .context("Failed to resolve workspace directory")?;
-
+        let loaded = load_startup_config(args).await?;
         if args.workspace_path.is_some() {
-            validate_path_exists(&workspace, "Workspace")?;
+            validate_path_exists(&loaded.workspace, "Workspace")?;
         }
-
-        // Validate and resolve additional directories
-        let additional_dirs = validate_additional_directories(&args.additional_dirs)?;
-
-        let (cli_config_path_override, inline_config_overrides) =
-            parse_cli_config_entries(&args.config);
-        let env_config_path_override = std::env::var("VTCODE_CONFIG_PATH").ok().and_then(|value| {
-            let trimmed = value.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(PathBuf::from(trimmed))
-            }
-        });
-        let config_path_override = cli_config_path_override.or(env_config_path_override);
-
-        let mut builder = ConfigBuilder::new().workspace(workspace.clone());
-        if let Some(path_override) = config_path_override {
-            let resolved_path = resolve_config_path(&workspace, &path_override);
-            unsafe {
-                std::env::set_var("VTCODE_CONFIG_PATH", &resolved_path);
-            }
-            builder = builder.config_file(resolved_path);
-        }
-
-        if !inline_config_overrides.is_empty() {
-            builder = builder.cli_overrides(&inline_config_overrides);
-        }
-
-        // Apply explicit CLI overrides for model and provider
-        if let Some(ref model) = args.model {
-            builder = builder.cli_override(
-                "agent.default_model".to_owned(),
-                toml::Value::String(model.clone()),
-            );
-        }
-        if let Some(ref provider) = args.provider {
-            builder = builder.cli_override(
-                "agent.provider".to_owned(),
-                toml::Value::String(provider.clone()),
-            );
-        }
-
-        let manager = builder.build().context("Failed to load configuration")?;
-        let mut config = manager.config().clone();
-
-        let (full_auto_requested, automation_prompt) = match args.full_auto.clone() {
-            Some(value) => {
-                if value.trim().is_empty() {
-                    (true, None)
-                } else {
-                    (true, Some(value))
-                }
-            }
-            None => (false, None),
-        };
-
-        let _first_run = maybe_run_first_run_setup(args, &workspace, &mut config).await?;
-
-        if automation_prompt.is_some() && args.command.is_some() {
-            bail!(
-                "--auto/--full-auto with a prompt cannot be combined with other commands. Provide only the prompt."
-            );
-        }
-
-        if full_auto_requested {
-            validate_full_auto_configuration(&config, &workspace)?;
+        if loaded.full_auto_requested {
+            validate_full_auto_configuration(&loaded.config, &loaded.workspace)?;
         }
 
         // Determine plan mode: CLI flag takes precedence, then config default_editing_mode
@@ -142,16 +75,17 @@ impl StartupContext {
 
         // Check config for default_editing_mode = "plan" if not explicitly set via CLI
         let plan_mode_from_config =
-            !plan_mode_from_cli && config.agent.default_editing_mode.is_read_only();
+            !plan_mode_from_cli && loaded.config.agent.default_editing_mode.is_read_only();
 
         let plan_mode_requested = plan_mode_from_cli || plan_mode_from_config;
 
+        let mut config = loaded.config;
         if let Some(ref permission_mode) = args.permission_mode {
             apply_permission_mode_override(&mut config, permission_mode)?;
         }
 
         // Validate configuration against models database
-        validate_startup_configuration(&config, &workspace, args.quiet)?;
+        validate_startup_configuration(&config, &loaded.workspace, args.quiet)?;
 
         let (custom_session_id, session_resume) = resolve_session_resume(args)?;
         validate_resume_all_usage(args, session_resume.as_ref())?;
@@ -195,7 +129,7 @@ impl StartupContext {
         // Validate API key AFTER first-run setup so new users can complete setup first
         let api_key = get_api_key(&provider, &ApiKeySources::default())
             .with_context(|| {
-                let first_run_occurred = _first_run;
+                let first_run_occurred = loaded.first_run_occurred;
                 let provider_name = provider_label(&provider);
                 let env_var = api_key_env_var(&provider);
                 if first_run_occurred {
@@ -213,62 +147,18 @@ impl StartupContext {
                 }
             })?;
 
-        let provider_enum = Provider::from_str(&provider).unwrap_or(Provider::Gemini);
-        let cli_api_key_env = args.api_key_env.trim();
-        let api_key_env_override = if cli_api_key_env.is_empty()
-            || cli_api_key_env.eq_ignore_ascii_case(defaults::DEFAULT_API_KEY_ENV)
-        {
-            None
-        } else {
-            Some(cli_api_key_env.to_owned())
-        };
-
-        let configured_api_key_env = config.agent.api_key_env.trim();
-        // Compute provider default env once and reuse
-        let provider_default_env = provider_enum.default_api_key_env();
-        let resolved_api_key_env = if configured_api_key_env.is_empty()
-            || configured_api_key_env.eq_ignore_ascii_case(defaults::DEFAULT_API_KEY_ENV)
-        {
-            provider_default_env.to_owned()
-        } else {
-            configured_api_key_env.to_owned()
-        };
-
-        let api_key_env = api_key_env_override.unwrap_or(resolved_api_key_env);
-
-        let checkpointing_storage_dir =
-            config.agent.checkpointing.storage_dir.as_ref().map(|dir| {
-                let candidate = PathBuf::from(dir);
-                if candidate.is_absolute() {
-                    candidate
-                } else {
-                    workspace.join(candidate)
-                }
-            });
-
-        let agent_config = CoreAgentConfig {
-            model,
-            api_key,
+        let agent_config = build_agent_config(
+            args,
+            &config,
+            loaded.workspace.clone(),
             provider,
-            api_key_env,
-            workspace: workspace.clone(),
-            verbose: args.verbose,
-            quiet: args.quiet,
-            theme: theme_selection,
-            reasoning_effort: config.agent.reasoning_effort,
-            ui_surface: config.agent.ui_surface,
-            prompt_cache: config.prompt_cache.clone(),
+            model,
             model_source,
-            custom_api_keys: config.agent.custom_api_keys.clone(),
-            checkpointing_enabled: config.agent.checkpointing.enabled,
-            checkpointing_storage_dir,
-            checkpointing_max_snapshots: config.agent.checkpointing.max_snapshots,
-            checkpointing_max_age_days: config.agent.checkpointing.max_age_days,
-            max_conversation_turns: config.agent.max_conversation_turns,
-            model_behavior: Some(config.model.clone()),
-        };
+            api_key,
+            theme_selection,
+        );
 
-        let skip_confirmations = args.skip_confirmations || full_auto_requested;
+        let skip_confirmations = args.skip_confirmations || loaded.full_auto_requested;
 
         // CLI validation: warn if prompt_cache_retention is set but model does not use Responses API
         if agent_config.provider.eq_ignore_ascii_case("openai")
@@ -296,130 +186,23 @@ impl StartupContext {
         );
         vtcode_core::utils::gatekeeper::initialize_gatekeeper(
             &config.security.gatekeeper,
-            Some(&workspace),
+            Some(&loaded.workspace),
         );
 
         Ok(StartupContext {
-            workspace,
-            additional_dirs,
+            workspace: loaded.workspace,
+            additional_dirs: loaded.additional_dirs,
             config,
             agent_config,
             skip_confirmations: args.dangerously_skip_permissions || skip_confirmations,
-            full_auto_requested,
-            automation_prompt,
+            full_auto_requested: loaded.full_auto_requested,
+            automation_prompt: loaded.automation_prompt,
             session_resume,
             resume_show_all: args.all,
             custom_session_id,
             plan_mode_requested,
         })
     }
-}
-
-fn resolve_session_resume(args: &Cli) -> Result<(Option<String>, Option<SessionResumeMode>)> {
-    let custom_session_id = args.session_id.clone();
-    if let Some(ref suffix) = custom_session_id {
-        validate_session_id_suffix(suffix)?;
-    }
-
-    let session_resume = if let Some(fork_id) = args.fork_session.as_ref() {
-        Some(SessionResumeMode::Fork(fork_id.clone()))
-    } else if let Some(value) = args.resume_session.as_ref() {
-        if value == "__interactive__" {
-            Some(SessionResumeMode::Interactive)
-        } else if custom_session_id.is_some() {
-            Some(SessionResumeMode::Fork(value.clone()))
-        } else {
-            Some(SessionResumeMode::Specific(value.clone()))
-        }
-    } else if args.continue_latest {
-        if custom_session_id.is_some() {
-            Some(SessionResumeMode::Fork("__latest__".to_string()))
-        } else {
-            Some(SessionResumeMode::Latest)
-        }
-    } else {
-        None
-    };
-
-    Ok((custom_session_id, session_resume))
-}
-
-fn validate_resume_all_usage(args: &Cli, session_resume: Option<&SessionResumeMode>) -> Result<()> {
-    if args.all
-        && session_resume.is_none()
-        && !matches!(
-            args.command,
-            Some(Commands::Exec {
-                command: Some(ExecSubcommand::Resume(_)),
-                ..
-            })
-        )
-    {
-        bail!("--all can only be used with resume, continue, fork-session, or exec resume");
-    }
-
-    Ok(())
-}
-
-fn resolve_provider(
-    cli_provider: Option<String>,
-    configured_provider: &str,
-    model: &str,
-    model_source: ModelSelectionSource,
-) -> String {
-    if let Some(provider) = cli_provider {
-        return provider;
-    }
-
-    if matches!(model_source, ModelSelectionSource::CliOverride)
-        && let Some(provider) = infer_provider(None, model)
-    {
-        return provider.to_string();
-    }
-
-    let configured_provider = configured_provider.trim();
-    if !configured_provider.is_empty() {
-        return configured_provider.to_owned();
-    }
-
-    infer_provider(None, model)
-        .map(|provider| provider.to_string())
-        .unwrap_or_else(|| defaults::DEFAULT_PROVIDER.to_owned())
-}
-
-fn provider_env_override() -> Option<String> {
-    std::env::var("VTCODE_PROVIDER")
-        .ok()
-        .or_else(|| std::env::var("provider").ok())
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty())
-}
-
-/// Validate whether prompt_cache_retention is applicable for the given model and provider.
-/// Returns an optional warning message if compatibility is lacking.
-pub fn check_prompt_cache_retention_compat(
-    config: &VTCodeConfig,
-    model: &str,
-    provider: &str,
-) -> Option<String> {
-    // Only relevant for OpenAI provider
-    if !provider.eq_ignore_ascii_case("openai") {
-        return None;
-    }
-
-    if let Some(ref retention) = config.prompt_cache.providers.openai.prompt_cache_retention {
-        if retention.trim().is_empty() {
-            return None;
-        }
-        if !vtcode_core::config::constants::models::openai::RESPONSES_API_MODELS.contains(&model) {
-            return Some(format!(
-                "`prompt_cache_retention` is set but the selected model '{}' does not use the OpenAI Responses API. The setting will be ignored for this model. Run `vtcode models list --provider openai` to see supported Responses API models.",
-                model
-            ));
-        }
-    }
-
-    None
 }
 
 #[cfg(test)]

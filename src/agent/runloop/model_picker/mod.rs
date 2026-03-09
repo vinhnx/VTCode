@@ -1,18 +1,13 @@
 use anyhow::{Context, Result, anyhow};
-use std::io::ErrorKind;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::str::FromStr;
 
-use crate::agent::runloop::tui_compat::from_tui_reasoning;
-use vtcode::interactive_list::SelectionInterrupted;
-use vtcode_config::OpenAIServiceTier;
-use vtcode_config::auth::CustomApiKeyStorage;
-use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
+use vtcode_config::{OpenAIServiceTier, VTCodeConfig};
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::ReasoningEffortLevel;
-use vtcode_core::ui::InlineListSelection;
+use vtcode_core::ui::{InlineListSelection, from_tui_reasoning};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_core::utils::dot_config::update_model_preference;
+use vtcode_tui::ui::interactive_list::SelectionInterrupted;
 
 use dynamic_models::DynamicModelRegistry;
 use interaction::{
@@ -30,6 +25,7 @@ use selection::{
     parse_model_selection, selection_from_option,
 };
 
+mod config_persistence;
 mod dynamic_models;
 mod interaction;
 mod options;
@@ -37,6 +33,7 @@ mod rendering;
 mod selection;
 mod state_machine;
 
+pub(super) use vtcode_config::read_workspace_env_value as read_workspace_env;
 pub use selection::ModelSelectionResult;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -262,88 +259,7 @@ impl ModelPickerState {
         workspace: &std::path::Path,
         selection: &ModelSelectionResult,
     ) -> Result<VTCodeConfig> {
-        let mut manager = ConfigManager::load_from_workspace(workspace).with_context(|| {
-            format!(
-                "Failed to load vtcode configuration for workspace {}",
-                workspace.display()
-            )
-        })?;
-        let mut config = manager.config().clone();
-        config.agent.provider = selection.provider.clone();
-
-        if selection.provider_enum == Some(Provider::Ollama) {
-            let is_cloud_model =
-                selection.model.contains(":cloud") || selection.model.contains("-cloud");
-            if is_cloud_model {
-                config.agent.api_key_env = selection.env_key.clone();
-                if let Some(ref api_key) = selection.api_key {
-                    // Store API key in secure storage (keyring)
-                    let storage_mode = config.agent.credential_storage_mode;
-                    let key_storage = CustomApiKeyStorage::new(&selection.provider);
-                    if let Err(e) = key_storage.store(api_key, storage_mode) {
-                        tracing::warn!(
-                            "Failed to store API key for provider '{}' securely: {}",
-                            selection.provider,
-                            e
-                        );
-                    }
-                    // Track provider (key not serialized, just for UI/migration)
-                    config
-                        .agent
-                        .custom_api_keys
-                        .insert(selection.provider.clone(), String::new());
-                } else {
-                    config.agent.custom_api_keys.remove(&selection.provider);
-                    // Clear any previously stored key
-                    let storage_mode = config.agent.credential_storage_mode;
-                    let key_storage = CustomApiKeyStorage::new(&selection.provider);
-                    let _ = key_storage.clear(storage_mode);
-                }
-            } else {
-                config.agent.api_key_env = String::new();
-                config.agent.custom_api_keys.remove(&selection.provider);
-                let storage_mode = config.agent.credential_storage_mode;
-                let key_storage = CustomApiKeyStorage::new(&selection.provider);
-                let _ = key_storage.clear(storage_mode);
-            }
-        } else {
-            config.agent.api_key_env = selection.env_key.clone();
-            if let Some(ref api_key) = selection.api_key {
-                // Store API key in secure storage (keyring)
-                let storage_mode = config.agent.credential_storage_mode;
-                let key_storage = CustomApiKeyStorage::new(&selection.provider);
-                if let Err(e) = key_storage.store(api_key, storage_mode) {
-                    tracing::warn!(
-                        "Failed to store API key for provider '{}' securely: {}",
-                        selection.provider,
-                        e
-                    );
-                }
-                // Track provider (key not serialized, just for UI/migration)
-                config
-                    .agent
-                    .custom_api_keys
-                    .insert(selection.provider.clone(), String::new());
-            } else {
-                config.agent.custom_api_keys.remove(&selection.provider);
-                // Clear any previously stored key
-                let storage_mode = config.agent.credential_storage_mode;
-                let key_storage = CustomApiKeyStorage::new(&selection.provider);
-                let _ = key_storage.clear(storage_mode);
-            }
-        }
-
-        config.agent.default_model = selection.model.clone();
-        config.agent.reasoning_effort = selection.reasoning;
-        if selection.provider_enum == Some(Provider::OpenAI) && selection.service_tier_supported {
-            config.provider.openai.service_tier = selection.service_tier;
-        }
-
-        manager.save_config(&config)?;
-        update_model_preference(&selection.provider, &selection.model)
-            .await
-            .ok();
-        Ok(config)
+        config_persistence::persist_selection(workspace, selection).await
     }
 
     pub fn handle_list_selection(
@@ -520,33 +436,6 @@ impl ModelPickerState {
 
         None
     }
-}
-
-fn read_workspace_env(workspace: &Path, env_key: &str) -> Result<Option<String>> {
-    let env_path = workspace.join(".env");
-    let iter = match dotenvy::from_path_iter(&env_path) {
-        Ok(iter) => iter,
-        Err(dotenvy::Error::Io(err)) if err.kind() == ErrorKind::NotFound => {
-            return Ok(None);
-        }
-        Err(err) => {
-            return Err(anyhow!(err).context(format!("Failed to read {}", env_path.display())));
-        }
-    };
-
-    for item in iter {
-        let (key, value) = item
-            .map_err(|err: dotenvy::Error| anyhow!(err))
-            .with_context(|| format!("Failed to parse {}", env_path.display()))?;
-        if key == env_key {
-            if value.trim().is_empty() {
-                return Ok(None);
-            }
-            return Ok(Some(value));
-        }
-    }
-
-    Ok(None)
 }
 
 #[cfg(test)]

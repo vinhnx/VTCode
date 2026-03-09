@@ -45,6 +45,7 @@ pub mod telemetry;
 pub mod timeouts;
 pub mod types;
 pub mod update;
+pub mod workspace_env;
 
 pub use acp::{
     AgentClientProtocolConfig, AgentClientProtocolTransport, AgentClientProtocolZedConfig,
@@ -78,8 +79,9 @@ pub use loader::layers::{
     ConfigLayerStack, LayerDisabledReason,
 };
 pub use loader::{
-    ConfigBuilder, ConfigManager, SyntaxHighlightingConfig, VTCodeConfig, fingerprint_str,
-    fingerprint_toml_value, merge_toml_values, merge_toml_values_with_origins,
+    ConfigBuilder, ConfigManager, ConfigWatcher, SimpleConfigWatcher, SyntaxHighlightingConfig,
+    VTCodeConfig, fingerprint_str, fingerprint_toml_value, merge_toml_values,
+    merge_toml_values_with_origins,
 };
 pub use mcp::{
     McpAllowListConfig, McpAllowListRules, McpClientConfig, McpHttpServerConfig, McpProviderConfig,
@@ -104,6 +106,7 @@ pub use types::{
     EditingMode, ReasoningEffortLevel, SystemPromptMode, ToolDocumentationMode,
     UiSurfacePreference, VerbosityLevel,
 };
+pub use workspace_env::{read_workspace_env_value, write_workspace_env_value};
 
 // Re-export auth module types
 pub use auth::{

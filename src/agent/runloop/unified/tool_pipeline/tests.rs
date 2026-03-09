@@ -1,7 +1,6 @@
 use super::execution::{execute_tool_with_timeout, process_llm_tool_output};
 use super::timeout::create_timeout_error;
 use super::*;
-use crate::agent::runloop::tui_compat::inline_theme_from_core_styles;
 use crate::agent::runloop::unified::state::CtrlCState;
 
 use serde_json::json;
@@ -10,6 +9,7 @@ use tokio::sync::Notify;
 use vtcode_core::config::constants::tools;
 use vtcode_core::tools::registry::ToolRegistry;
 use vtcode_core::tools::registry::ToolTimeoutCategory;
+use vtcode_core::ui::inline_theme_from_core_styles;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_tui::{InlineHandle, InlineSession, SessionOptions, spawn_session_with_options};

@@ -7,11 +7,11 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::threads::ArchivedSessionIntent;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::ui::theme;
+use vtcode_core::ui::{inline_theme_from_core_styles, to_tui_appearance};
 use vtcode_core::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::model_picker::ModelPickerProgress;
 use crate::agent::runloop::prompt::refine_and_enrich_prompt;
-use crate::agent::runloop::tui_compat::{inline_theme_from_core_styles, to_tui_appearance};
 use crate::agent::runloop::unified::async_mcp_manager::{
     AsyncMcpManager, approval_policy_from_human_in_the_loop,
 };
@@ -25,7 +25,7 @@ use crate::agent::runloop::unified::turn::session::{
     mcp_lifecycle, slash_command_handler, tool_dispatch,
 };
 use crate::hooks::lifecycle::SessionEndReason;
-use vtcode::config_watcher::SimpleConfigWatcher;
+use vtcode_config::loader::SimpleConfigWatcher;
 
 use super::interaction_loop::{InteractionLoopContext, InteractionOutcome, InteractionState};
 

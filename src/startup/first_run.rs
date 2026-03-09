@@ -1,5 +1,4 @@
 use std::path::Path;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, anyhow};
 use vtcode_core::cli::args::{Cli, Commands};
@@ -8,7 +7,7 @@ use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_core::utils::dot_config::{WorkspaceTrustLevel, WorkspaceTrustRecord, get_dot_manager};
+use vtcode_core::utils::dot_config::{WorkspaceTrustLevel, update_workspace_trust};
 use vtcode_core::utils::file_utils::ensure_dir_exists_sync;
 use vtcode_core::{initialize_dot_folder, update_model_preference};
 
@@ -183,7 +182,7 @@ async fn run_first_run_setup(
 
     update_model_preference(&provider_key, &model).await.ok();
 
-    persist_workspace_trust(workspace, trust)
+    update_workspace_trust(workspace, trust)
         .await
         .with_context(|| {
             format!(
@@ -248,41 +247,4 @@ fn trust_label(level: WorkspaceTrustLevel) -> &'static str {
         WorkspaceTrustLevel::ToolsPolicy => "Tools policy",
         WorkspaceTrustLevel::FullAuto => "Full auto",
     }
-}
-
-async fn persist_workspace_trust(workspace: &Path, level: WorkspaceTrustLevel) -> Result<()> {
-    let canonical = workspace
-        .canonicalize()
-        .with_context(|| {
-            format!(
-                "Failed to canonicalize workspace path {} for trust setup",
-                workspace.display()
-            )
-        })?
-        .to_string_lossy()
-        .into_owned();
-
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .context("System clock is before UNIX_EPOCH while persisting workspace trust")?
-        .as_secs();
-
-    let manager = get_dot_manager()
-        .context("Failed to initialize dot manager while persisting workspace trust")?
-        .lock()
-        .map_err(|err| anyhow!("Dot manager lock poisoned while persisting trust: {err}"))?
-        .clone();
-
-    manager
-        .update_config(|cfg| {
-            cfg.workspace_trust.entries.insert(
-                canonical.clone(),
-                WorkspaceTrustRecord {
-                    level,
-                    trusted_at: timestamp,
-                },
-            );
-        })
-        .await
-        .context("Failed to update workspace trust in dot config")
 }

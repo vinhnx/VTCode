@@ -1,6 +1,7 @@
 #[cfg(feature = "bootstrap")]
 pub mod bootstrap;
 pub mod layers;
+pub mod watch;
 
 mod builder;
 mod config;
@@ -18,3 +19,4 @@ pub use fingerprint::{fingerprint_str, fingerprint_toml_value};
 pub use manager::ConfigManager;
 pub use merge::{merge_toml_values, merge_toml_values_with_origins};
 pub use syntax_highlighting::SyntaxHighlightingConfig;
+pub use watch::{ConfigWatcher, SimpleConfigWatcher};

@@ -1,8 +1,5 @@
-use std::io::{BufWriter, Write};
-use std::path::Path;
-
 use anyhow::{Context, Result, anyhow};
-use tempfile::Builder;
+use vtcode_config::write_workspace_env_value;
 
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::loader::VTCodeConfig;
@@ -11,10 +8,7 @@ use vtcode_core::llm::factory::{ProviderConfig, create_provider_with_config};
 use vtcode_core::llm::provider::LLMProvider;
 use vtcode_core::llm::rig_adapter::{reasoning_parameters_for, verify_model_with_rig};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_core::utils::file_utils::{ensure_dir_exists, read_file_with_context};
 use vtcode_tui::InlineHandle;
-
-use vtcode_config::auth::CustomApiKeyStorage;
 
 use crate::agent::runloop::model_picker::{ModelPickerState, ModelSelectionResult};
 use crate::agent::runloop::welcome::SessionBootstrap;
@@ -36,7 +30,7 @@ pub(crate) async fn finalize_model_selection(
     let workspace = config.workspace.clone();
 
     let api_key = if let Some(key) = selection.api_key.as_ref() {
-        persist_env_value(&workspace, &selection.env_key, key).await?;
+        write_workspace_env_value(&workspace, &selection.env_key, key)?;
         unsafe {
             // SAFETY: we only write ASCII-alphanumeric keys derived from known providers or
             // sanitized user input, and values are supplied directly by the user.
@@ -110,37 +104,7 @@ pub(crate) async fn finalize_model_selection(
     config.api_key = api_key;
     config.reasoning_effort = selection.reasoning;
     config.api_key_env = selection.env_key.clone();
-
-    // Store API key in secure storage (keyring) instead of config file
-    // Get storage mode from VTCodeConfig if available, otherwise use default
-    let storage_mode = vt_cfg
-        .as_ref()
-        .map(|cfg| cfg.agent.credential_storage_mode)
-        .unwrap_or_default();
-
-    if let Some(ref key) = selection.api_key {
-        let key_storage = CustomApiKeyStorage::new(&selection.provider);
-        if let Err(e) = key_storage.store(key, storage_mode) {
-            renderer.line(
-                MessageStyle::Warning,
-                &format!("Failed to store API key securely: {}", e),
-            )?;
-        } else {
-            tracing::debug!(
-                "Stored API key for provider '{}' in secure storage",
-                selection.provider
-            );
-        }
-        // Still track which providers have keys (for UI purposes, not serialized)
-        config
-            .custom_api_keys
-            .insert(selection.provider.clone(), String::new());
-    } else {
-        config.custom_api_keys.remove(&selection.provider);
-        // Clear any previously stored key
-        let key_storage = CustomApiKeyStorage::new(&selection.provider);
-        let _ = key_storage.clear(storage_mode);
-    }
+    sync_runtime_custom_api_key(config, &selection);
 
     if let Some(provider_enum) = selection.provider_enum
         && selection.reasoning_supported
@@ -229,82 +193,13 @@ pub(crate) async fn finalize_model_selection(
     Ok(())
 }
 
-async fn persist_env_value(workspace: &Path, key: &str, value: &str) -> Result<()> {
-    let env_path = workspace.join(".env");
-    let mut lines: Vec<String> = if env_path.exists() {
-        read_file_with_context(&env_path, ".env file")
-            .await?
-            .lines()
-            .map(|line| line.to_string())
-            .collect()
-    } else {
-        Vec::new()
-    };
-
-    let mut replaced = false;
-    for line in lines.iter_mut() {
-        if let Some((existing_key, _)) = line.split_once('=')
-            && existing_key.trim() == key
-        {
-            *line = format!("{key}={value}");
-            replaced = true;
-        }
+fn sync_runtime_custom_api_key(config: &mut CoreAgentConfig, selection: &ModelSelectionResult) {
+    if selection.api_key.is_some() {
+        config
+            .custom_api_keys
+            .insert(selection.provider.clone(), String::new());
+        return;
     }
 
-    if !replaced {
-        lines.push(format!("{key}={value}"));
-    }
-
-    let parent = env_path
-        .parent()
-        .map(std::path::Path::to_path_buf)
-        .unwrap_or_else(|| workspace.to_path_buf());
-
-    if !parent.exists() {
-        ensure_dir_exists(&parent).await?;
-    }
-
-    let temp = Builder::new()
-        .prefix(".env.")
-        .suffix(".tmp")
-        .tempfile_in(&parent)
-        .with_context(|| format!("Failed to create temporary file in {}", parent.display()))?;
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let permissions = std::fs::Permissions::from_mode(0o600);
-        temp.as_file()
-            .set_permissions(permissions)
-            .with_context(|| format!("Failed to set permissions on {}", temp.path().display()))?;
-    }
-
-    {
-        let mut writer = BufWriter::new(temp.as_file());
-        for line in &lines {
-            writeln!(writer, "{line}")
-                .with_context(|| format!("Failed to write .env entry for {key}"))?;
-        }
-        writer
-            .flush()
-            .with_context(|| format!("Failed to flush temporary .env for {}", key))?;
-    }
-
-    temp.as_file()
-        .sync_all()
-        .with_context(|| format!("Failed to sync temporary .env for {}", key))?;
-
-    let _file = temp
-        .persist(&env_path)
-        .with_context(|| format!("Failed to persist {}", env_path.display()))?;
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        tokio::fs::set_permissions(&env_path, std::fs::Permissions::from_mode(0o600))
-            .await
-            .with_context(|| format!("Failed to set permissions on {}", env_path.display()))?;
-    }
-
-    Ok(())
+    config.custom_api_keys.remove(&selection.provider);
 }

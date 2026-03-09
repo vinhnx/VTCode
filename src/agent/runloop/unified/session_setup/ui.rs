@@ -1,9 +1,5 @@
 use super::types::{BackgroundTaskGuard, SessionState, SessionUISetup};
 use crate::agent::runloop::ResumeSession;
-use crate::agent::runloop::tui_compat::{
-    inline_theme_from_core_styles, to_tui_appearance, to_tui_keyboard_protocol,
-    to_tui_slash_commands, to_tui_surface,
-};
 use crate::agent::runloop::ui::{build_inline_header_context, render_session_banner};
 use crate::agent::runloop::unified::reasoning::{
     model_supports_reasoning, resolve_reasoning_visibility,
@@ -26,6 +22,10 @@ use vtcode_core::llm::provider as uni;
 use vtcode_core::notifications::set_global_terminal_focused;
 use vtcode_core::ui::slash::SLASH_COMMANDS;
 use vtcode_core::ui::theme;
+use vtcode_core::ui::{
+    inline_theme_from_core_styles, to_tui_appearance, to_tui_keyboard_protocol,
+    to_tui_slash_commands, to_tui_surface,
+};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::SessionArchive;
 use vtcode_core::utils::transcript;

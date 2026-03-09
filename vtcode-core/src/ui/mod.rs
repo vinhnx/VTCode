@@ -18,6 +18,7 @@ pub mod theme;
 pub mod theme_config;
 pub mod theme_manager;
 pub mod tui;
+pub mod tui_compat;
 pub mod user_confirmation;
 
 pub use file_colorizer::FileColorizer;
@@ -31,6 +32,7 @@ pub use theme::*;
 pub use theme_config::ThemeConfig;
 pub use theme_manager::ThemeManager;
 pub use tui::*;
+pub use tui_compat::*;
 
 #[cfg(test)]
 mod tests {

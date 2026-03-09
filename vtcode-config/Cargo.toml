@@ -23,6 +23,7 @@ directories = "6.0"
 hostname = "0.4"
 indexmap = { workspace = true }
 keyring = { workspace = true }
+notify = "6.1.1"
 once_cell = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }
@@ -39,6 +40,8 @@ tracing = { workspace = true }
 urlencoding = "2.1"
 vtcode-commons = { path = "../vtcode-commons", version = "0.87.1" }
 dotenvy = { workspace = true }
+tempfile = { workspace = true }
+walkdir = { workspace = true }
 schemars = { workspace = true, optional = true, features = ["indexmap2"] }
 
 # Unix-specific dependencies
@@ -52,7 +55,6 @@ bootstrap = []
 schema = ["dep:schemars"]
 
 [dev-dependencies]
-tempfile = { workspace = true }
 assert_fs = { workspace = true }
 serial_test = { workspace = true }
 

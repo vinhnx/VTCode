@@ -2,6 +2,7 @@
 
 pub use crate::config::WorkspaceTrustLevel;
 use crate::config::constants::defaults;
+use crate::utils::path::canonicalize_workspace;
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -238,6 +239,38 @@ impl DotManager {
         updater(&mut config);
         config.last_updated = unix_timestamp_secs()?;
         self.save_config(&config).await
+    }
+
+    /// Load the trust level recorded for a workspace, if any.
+    pub async fn workspace_trust_level(
+        &self,
+        workspace: &Path,
+    ) -> Result<Option<WorkspaceTrustLevel>, DotError> {
+        let workspace_key = workspace_trust_key(workspace);
+        let config = self.load_config().await?;
+
+        Ok(config
+            .workspace_trust
+            .entries
+            .get(&workspace_key)
+            .map(|record| record.level))
+    }
+
+    /// Persist a workspace trust level in the dot configuration.
+    pub async fn update_workspace_trust(
+        &self,
+        workspace: &Path,
+        level: WorkspaceTrustLevel,
+    ) -> Result<(), DotError> {
+        let workspace_key = workspace_trust_key(workspace);
+        let trusted_at = unix_timestamp_secs()?;
+
+        self.update_config(|cfg| {
+            cfg.workspace_trust
+                .entries
+                .insert(workspace_key, WorkspaceTrustRecord { level, trusted_at });
+        })
+        .await
     }
 
     /// Get cache directory for a specific type
@@ -483,6 +516,12 @@ fn unix_timestamp_secs() -> Result<u64, DotError> {
         .as_secs())
 }
 
+fn workspace_trust_key(workspace: &Path) -> String {
+    canonicalize_workspace(workspace)
+        .to_string_lossy()
+        .into_owned()
+}
+
 /// Global dot manager instance
 static DOT_MANAGER: OnceLock<Mutex<DotManager>> = OnceLock::new();
 
@@ -520,6 +559,23 @@ pub async fn load_user_config() -> Result<DotConfig, DotError> {
 pub async fn save_user_config(config: &DotConfig) -> Result<(), DotError> {
     let manager = clone_manager()?;
     manager.save_config(config).await
+}
+
+/// Load the trust level recorded for a workspace, if any.
+pub async fn load_workspace_trust_level(
+    workspace: &Path,
+) -> Result<Option<WorkspaceTrustLevel>, DotError> {
+    let manager = clone_manager()?;
+    manager.workspace_trust_level(workspace).await
+}
+
+/// Persist the trust level recorded for a workspace.
+pub async fn update_workspace_trust(
+    workspace: &Path,
+    level: WorkspaceTrustLevel,
+) -> Result<(), DotError> {
+    let manager = clone_manager()?;
+    manager.update_workspace_trust(workspace, level).await
 }
 
 /// Persist the preferred UI theme in the user's dot configuration.

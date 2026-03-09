@@ -316,7 +316,8 @@ pub use ui::diff_renderer::DiffRenderer;
 pub use utils::dot_config::{
     CacheConfig, DotConfig, DotManager, ProviderConfigs, UiConfig, UserPreferences,
     WorkspaceTrustRecord, WorkspaceTrustStore, initialize_dot_folder, load_user_config,
-    save_user_config, update_model_preference, update_theme_preference,
+    load_workspace_trust_level, save_user_config, update_model_preference, update_theme_preference,
+    update_workspace_trust,
 };
 pub use utils::vtcodegitignore::initialize_vtcode_gitignore;
 pub use vtcode_indexer::SimpleIndexer;

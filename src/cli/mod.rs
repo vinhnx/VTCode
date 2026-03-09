@@ -1,15 +1,17 @@
-use std::path::{Path, PathBuf};
-
 use anyhow::Result;
-use vtcode_core::cli::args::{Cli, Commands, SkillsRefSubcommand, SkillsSubcommand};
-use vtcode_core::mcp::cli::handle_mcp_command;
 
 use vtcode::startup::StartupContext;
+use vtcode_core::cli::args::Cli;
 
 mod acp;
+mod action_resolution;
+mod adapters;
+mod anthropic_api;
 mod auto;
 mod config;
 mod create_project;
+mod dispatch;
+mod env;
 mod init;
 mod init_project;
 mod man;
@@ -17,12 +19,6 @@ mod sessions;
 mod skills_index;
 mod snapshots;
 mod trajectory;
-
-/// Skills command options
-#[derive(Debug)]
-pub struct SkillsCommandOptions {
-    pub workspace: PathBuf,
-}
 
 pub mod analyze;
 pub mod benchmark;
@@ -34,26 +30,18 @@ pub mod skills;
 pub mod skills_ref;
 pub mod update;
 
-use vtcode_core::cli::args::AskCommandOptions;
-
 mod revert;
 
-use self::acp::handle_acp_command;
+use action_resolution::ResolvedCliAction;
+use dispatch::{handle_ask_single_command, handle_chat_command, handle_resume_session_command};
 
-#[derive(Debug, Clone)]
-enum ResolvedCliAction {
-    Ask {
-        prompt: Option<String>,
-        options: AskCommandOptions,
-    },
-    FullAuto {
-        prompt: String,
-    },
-    Resume {
-        mode: vtcode::startup::SessionResumeMode,
-    },
-    Command(Commands),
-    Chat,
+pub(crate) use action_resolution::resolve_action;
+pub use env::{set_additional_dirs_env, set_workspace_env};
+
+/// Skills command options
+#[derive(Debug)]
+pub struct SkillsCommandOptions {
+    pub workspace: std::path::PathBuf,
 }
 
 pub async fn dispatch(
@@ -69,7 +57,7 @@ pub async fn dispatch(
         && args.command.is_none()
         && let Some(ide_target) = crate::main_helpers::detect_available_ide()?
     {
-        handle_acp_command(core_cfg, cfg, ide_target).await?;
+        acp::handle_acp_command(core_cfg, cfg, ide_target).await?;
         return Ok(());
     }
 
@@ -91,7 +79,7 @@ pub async fn dispatch(
             .await?;
         }
         ResolvedCliAction::Command(command) => {
-            dispatch_command(args, startup, command).await?;
+            dispatch::dispatch_command(args, startup, command).await?;
         }
         ResolvedCliAction::Chat => {
             handle_chat_command(
@@ -108,420 +96,9 @@ pub async fn dispatch(
     Ok(())
 }
 
-fn resolve_action(
-    args: &Cli,
-    startup: &StartupContext,
-    print_mode: Option<String>,
-    potential_prompt: Option<String>,
-) -> Result<ResolvedCliAction> {
-    if let Some(print_value) = print_mode {
-        return Ok(ResolvedCliAction::Ask {
-            prompt: Some(crate::main_helpers::build_print_prompt(print_value)?),
-            options: ask_options(args, None, startup.skip_confirmations),
-        });
-    }
-
-    if let Some(prompt) = potential_prompt {
-        return Ok(ResolvedCliAction::Ask {
-            prompt: Some(prompt),
-            options: ask_options(args, None, startup.skip_confirmations),
-        });
-    }
-
-    if let Some(prompt) = startup.automation_prompt.clone() {
-        return Ok(ResolvedCliAction::FullAuto { prompt });
-    }
-
-    if let Some(mode) = startup.session_resume.clone() {
-        return Ok(ResolvedCliAction::Resume { mode });
-    }
-
-    Ok(match args.command.clone() {
-        Some(command) => ResolvedCliAction::Command(command),
-        None => ResolvedCliAction::Chat,
-    })
-}
-
-async fn dispatch_command(args: &Cli, startup: &StartupContext, command: Commands) -> Result<()> {
-    let cfg = &startup.config;
-    let core_cfg = &startup.agent_config;
-    let skip_confirmations = startup.skip_confirmations;
-    let full_auto_requested = startup.full_auto_requested;
-
-    match command {
-        Commands::AgentClientProtocol { target } => {
-            handle_acp_command(core_cfg, cfg, target).await?;
-        }
-        Commands::ToolPolicy { command } => {
-            vtcode_core::cli::tool_policy_commands::handle_tool_policy_command(command).await?;
-        }
-        Commands::Mcp { command } => {
-            handle_mcp_command(command).await?;
-        }
-        Commands::A2a { command } => {
-            vtcode_core::cli::a2a::execute_a2a_command(command).await?;
-        }
-        Commands::Models { command } => {
-            vtcode_core::cli::models_commands::handle_models_command(args, &command).await?;
-        }
-        Commands::Chat | Commands::ChatVerbose => {
-            handle_chat_command(
-                core_cfg.clone(),
-                startup.config.clone(),
-                skip_confirmations,
-                full_auto_requested,
-                startup.plan_mode_requested,
-            )
-            .await?;
-        }
-        Commands::Ask {
-            prompt,
-            output_format,
-        } => {
-            handle_ask_single_command(
-                core_cfg.clone(),
-                prompt,
-                ask_options(args, output_format, skip_confirmations),
-            )
-            .await?;
-        }
-        Commands::Exec {
-            json,
-            dry_run,
-            events,
-            last_message_file,
-            command,
-            prompt,
-        } => {
-            let command = exec::resolve_exec_command(command, prompt)?;
-            let options = exec::ExecCommandOptions {
-                json,
-                dry_run,
-                events_path: events,
-                last_message_file,
-                command,
-            };
-            exec::handle_exec_command(core_cfg, cfg, options).await?;
-        }
-        Commands::Review(review) => {
-            let files = review
-                .files
-                .iter()
-                .map(|path| path.display().to_string())
-                .collect::<Vec<_>>();
-            let spec = vtcode_core::review::build_review_spec(
-                review.last_diff,
-                review.target.clone(),
-                files,
-                review.style.clone(),
-            )?;
-            let options = review::ReviewCommandOptions {
-                json: review.json,
-                events_path: review.events.clone(),
-                last_message_file: review.last_message_file.clone(),
-                spec,
-            };
-            review::handle_review_command(core_cfg, cfg, options).await?;
-        }
-        Commands::Schema { command } => {
-            schema::handle_schema_command(command).await?;
-        }
-        Commands::Analyze { analysis_type } => {
-            let analysis_type = match analysis_type.as_str() {
-                "full" => analyze::AnalysisType::Full,
-                "structure" => analyze::AnalysisType::Structure,
-                "security" => analyze::AnalysisType::Security,
-                "performance" => analyze::AnalysisType::Performance,
-                "dependencies" => analyze::AnalysisType::Dependencies,
-                "complexity" => analyze::AnalysisType::Complexity,
-                _ => analyze::AnalysisType::Full,
-            };
-            handle_analyze_command(core_cfg.clone(), analysis_type).await?;
-        }
-        Commands::Trajectory { file, top } => {
-            trajectory::handle_trajectory_command(core_cfg, file, top).await?;
-        }
-        Commands::CreateProject { name, features } => {
-            create_project::handle_create_project_command(core_cfg, &name, &features).await?;
-        }
-        Commands::Revert { turn, partial } => {
-            revert::handle_revert_command(core_cfg, turn, partial).await?;
-        }
-        Commands::Snapshots => {
-            snapshots::handle_snapshots_command(core_cfg).await?;
-        }
-        Commands::CleanupSnapshots { max } => {
-            snapshots::handle_cleanup_snapshots_command(core_cfg, Some(max)).await?;
-        }
-        Commands::Init => {
-            init::handle_init_command(&startup.workspace, false, false).await?;
-        }
-        Commands::Config { output, global } => {
-            config::handle_config_command(output.as_deref(), global).await?;
-        }
-        Commands::InitProject {
-            name,
-            force,
-            migrate,
-        } => {
-            init_project::handle_init_project_command(name, force, migrate).await?;
-        }
-        Commands::Benchmark {
-            task_file,
-            task,
-            output,
-            max_tasks,
-        } => {
-            let options = benchmark::BenchmarkCommandOptions {
-                task_file,
-                inline_task: task,
-                output,
-                max_tasks,
-            };
-            benchmark::handle_benchmark_command(core_cfg, cfg, options, full_auto_requested)
-                .await?;
-        }
-        Commands::Man { command, output } => {
-            man::handle_man_command(command, output).await?;
-        }
-        Commands::ListSkills {} => {
-            let skills_options = skills_options(startup);
-            skills::handle_skills_list(&skills_options).await?;
-        }
-        Commands::Dependencies(command) => {
-            dependencies::handle_dependencies_command(command).await?;
-        }
-        Commands::Skills(skills_cmd) => {
-            let skills_options = skills_options(startup);
-
-            match skills_cmd {
-                SkillsSubcommand::List { .. } => {
-                    skills::handle_skills_list(&skills_options).await?;
-                }
-                SkillsSubcommand::Load { name, path } => {
-                    if let Some(path_val) = path {
-                        skills::handle_skills_load(&skills_options, &name, Some(path_val)).await?;
-                    }
-                }
-                SkillsSubcommand::Info { name } => {
-                    skills::handle_skills_info(&skills_options, &name).await?;
-                }
-                SkillsSubcommand::Create { path, .. } => {
-                    skills::handle_skills_create(&path).await?;
-                }
-                SkillsSubcommand::Validate { path, strict } => {
-                    skills::handle_skills_validate(&path, strict).await?;
-                }
-                SkillsSubcommand::CheckCompatibility => {
-                    skills::handle_skills_validate_all(&skills_options).await?;
-                }
-                SkillsSubcommand::Config => {
-                    skills::handle_skills_config(&skills_options).await?;
-                }
-                SkillsSubcommand::RegenerateIndex => {
-                    skills_index::handle_skills_regenerate_index(&skills_options).await?;
-                }
-                SkillsSubcommand::Unload { .. } => {
-                    println!("Skill unload not yet implemented");
-                }
-                SkillsSubcommand::SkillsRef(skills_ref_cmd) => match skills_ref_cmd {
-                    SkillsRefSubcommand::Validate { path } => {
-                        skills_ref::handle_skills_ref_validate(&path).await?;
-                    }
-                    SkillsRefSubcommand::ToPrompt { paths } => {
-                        skills_ref::handle_skills_ref_to_prompt(&paths).await?;
-                    }
-                    SkillsRefSubcommand::List { path } => {
-                        skills_ref::handle_skills_ref_list(path.as_deref()).await?;
-                    }
-                },
-            }
-        }
-        Commands::AnthropicApi { port, host } => {
-            handle_anthropic_api_command(core_cfg.clone(), port, host).await?;
-        }
-        Commands::Update {
-            check,
-            force,
-            list,
-            limit,
-            pin,
-            unpin,
-            channel,
-            show_config,
-        } => {
-            let options = update::UpdateCommandOptions {
-                check_only: check,
-                force,
-                list,
-                limit,
-                pin,
-                unpin,
-                channel,
-                show_config,
-            };
-            update::handle_update_command(options).await?;
-        }
-    }
-
-    Ok(())
-}
-
-fn ask_options(
-    args: &Cli,
-    output_format: Option<vtcode_core::cli::args::AskOutputFormat>,
-    skip_confirmations: bool,
-) -> AskCommandOptions {
-    AskCommandOptions {
-        output_format,
-        allowed_tools: args.allowed_tools.clone(),
-        disallowed_tools: args.disallowed_tools.clone(),
-        skip_confirmations,
-    }
-}
-
-fn skills_options(startup: &StartupContext) -> SkillsCommandOptions {
-    SkillsCommandOptions {
-        workspace: startup.workspace.clone(),
-    }
-}
-
-async fn handle_ask_single_command(
-    core_cfg: vtcode_core::config::types::AgentConfig,
-    prompt: Option<String>,
-    options: AskCommandOptions,
-) -> Result<()> {
-    let prompt_vec = prompt.into_iter().collect::<Vec<_>>();
-    vtcode_core::commands::ask::handle_ask_command(core_cfg, prompt_vec, options).await
-}
-
-async fn handle_chat_command(
-    core_cfg: vtcode_core::config::types::AgentConfig,
-    vt_cfg: vtcode_core::config::loader::VTCodeConfig,
-    skip_confirmations: bool,
-    full_auto_requested: bool,
-    plan_mode: bool,
-) -> Result<()> {
-    crate::agent::agents::run_single_agent_loop(
-        &core_cfg,
-        Some(vt_cfg),
-        skip_confirmations,
-        full_auto_requested,
-        plan_mode,
-        None,
-    )
-    .await
-}
-
-async fn handle_analyze_command(
-    core_cfg: vtcode_core::config::types::AgentConfig,
-    analysis_type: analyze::AnalysisType,
-) -> Result<()> {
-    let depth = match analysis_type {
-        analyze::AnalysisType::Full
-        | analyze::AnalysisType::Structure
-        | analyze::AnalysisType::Complexity => "deep",
-        analyze::AnalysisType::Security
-        | analyze::AnalysisType::Performance
-        | analyze::AnalysisType::Dependencies => "standard",
-    };
-
-    vtcode_core::commands::analyze::handle_analyze_command(
-        core_cfg,
-        depth.to_string(),
-        "text".to_string(),
-    )
-    .await
-}
-
-async fn handle_resume_session_command(
-    core_cfg: &vtcode_core::config::types::AgentConfig,
-    mode: vtcode::startup::SessionResumeMode,
-    show_all: bool,
-    custom_session_id: Option<String>,
-    skip_confirmations: bool,
-) -> Result<()> {
-    sessions::handle_resume_session_command(
-        core_cfg,
-        mode,
-        show_all,
-        custom_session_id,
-        skip_confirmations,
-    )
-    .await
-}
-
-pub fn set_workspace_env(workspace: &Path) {
-    unsafe {
-        std::env::set_var("VTCODE_WORKSPACE", workspace);
-    }
-}
-
-pub fn set_additional_dirs_env(additional_dirs: &[PathBuf]) {
-    let dirs_str = additional_dirs
-        .iter()
-        .map(|path| path.to_string_lossy().to_string())
-        .collect::<Vec<_>>()
-        .join(":");
-    unsafe {
-        std::env::set_var("VTCODE_ADDITIONAL_DIRS", dirs_str);
-    }
-}
-
-#[cfg(feature = "anthropic-api")]
-async fn handle_anthropic_api_command(
-    core_cfg: vtcode_core::config::types::AgentConfig,
-    port: u16,
-    host: String,
-) -> Result<()> {
-    use std::net::SocketAddr;
-    use vtcode_core::anthropic_api::server::{AnthropicApiServerState, create_router};
-
-    let provider = vtcode_core::llm::factory::create_provider_for_model(
-        &core_cfg.model,
-        core_cfg.api_key.clone(),
-        None,
-    )
-    .map_err(|e| anyhow::anyhow!("Failed to create LLM provider: {}", e))?;
-
-    let state =
-        AnthropicApiServerState::new(std::sync::Arc::from(provider), core_cfg.model.clone());
-    let app = create_router(state);
-
-    let addr = format!("{}:{}", host, port)
-        .parse::<SocketAddr>()
-        .map_err(|e| anyhow::anyhow!("Invalid address {}:{}: {}", host, port, e))?;
-
-    println!("Anthropic API server starting on http://{}", addr);
-    println!("Compatible with Anthropic Messages API at /v1/messages");
-    println!("Press Ctrl+C to stop the server");
-
-    let listener = tokio::net::TcpListener::bind(addr)
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to bind to address {}: {}", addr, e))?;
-
-    ::axum::serve(listener, app)
-        .with_graceful_shutdown(vtcode_core::shutdown::shutdown_signal_logged("server"))
-        .await
-        .map_err(|e| anyhow::anyhow!("Server error: {}", e))?;
-
-    Ok(())
-}
-
-#[cfg(not(feature = "anthropic-api"))]
-async fn handle_anthropic_api_command(
-    _core_cfg: vtcode_core::config::types::AgentConfig,
-    _port: u16,
-    _host: String,
-) -> Result<()> {
-    Err(anyhow::anyhow!(
-        "Anthropic API server is not enabled. Recompile with --features anthropic-api"
-    ))
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{ResolvedCliAction, handle_resume_session_command, resolve_action};
+    use super::{ResolvedCliAction, dispatch::handle_resume_session_command, resolve_action};
     use clap::Parser;
     use std::collections::BTreeMap;
     use std::path::PathBuf;

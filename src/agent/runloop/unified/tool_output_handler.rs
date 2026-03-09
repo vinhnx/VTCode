@@ -377,7 +377,6 @@ pub(crate) async fn handle_pipeline_output_from_turn_ctx(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::runloop::tui_compat::inline_theme_from_core_styles;
     use std::io::{IsTerminal, stdin};
     use std::sync::Arc;
     use tempfile::TempDir;
@@ -389,6 +388,7 @@ mod tests {
     use vtcode_core::tools::ApprovalRecorder;
     use vtcode_core::tools::registry::ToolRegistry;
     use vtcode_core::tools::result_cache::{ToolCacheKey, ToolResultCache};
+    use vtcode_core::ui::inline_theme_from_core_styles;
     use vtcode_core::ui::theme;
     use vtcode_tui::{InlineCommand, InlineHandle, SessionOptions, spawn_session_with_options};
 

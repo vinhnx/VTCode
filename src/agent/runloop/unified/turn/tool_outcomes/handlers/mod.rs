@@ -1,0 +1,663 @@
+//! Tool outcome handling helpers for turn execution.
+
+use anyhow::Result;
+use std::time::Duration;
+
+use vtcode_core::config::constants::tools as tool_names;
+use vtcode_core::exec_policy::AskForApproval;
+use vtcode_core::llm::provider as uni;
+use vtcode_core::tools::registry::ToolExecutionError;
+use vtcode_core::tools::registry::labels::tool_action_label;
+use vtcode_core::utils::ansi::MessageStyle;
+
+use crate::agent::runloop::unified::async_mcp_manager::approval_policy_from_human_in_the_loop;
+use crate::agent::runloop::unified::tool_call_safety::SafetyError;
+use crate::agent::runloop::unified::tool_routing::{
+    ensure_tool_permission, prompt_session_limit_increase,
+};
+use crate::agent::runloop::unified::turn::context::{
+    TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext,
+};
+
+use super::helpers::push_tool_response;
+use crate::agent::runloop::unified::tool_routing::ToolPermissionFlow;
+mod budget;
+mod fallbacks;
+mod guards;
+#[path = "../handlers_batch.rs"]
+mod handlers_batch;
+mod looping;
+mod rate_limit;
+mod recovery;
+#[cfg(test)]
+mod tests;
+mod types;
+use budget::{build_tool_budget_exhausted_reason, record_tool_call_budget_usage};
+use fallbacks::{
+    build_validation_error_content_with_fallback, preflight_validation_fallback,
+    recovery_fallback_for_tool, remap_unified_file_command_args_to_unified_exec,
+    try_recover_preflight_with_fallback,
+};
+pub(crate) use guards::max_consecutive_blocked_tool_calls_per_turn;
+use guards::{
+    enforce_blocked_tool_call_guard, enforce_duplicate_task_tracker_create_guard,
+    enforce_repeated_shell_run_guard, enforce_spool_chunk_read_guard,
+};
+pub(crate) use handlers_batch::{
+    ParsedToolCall, execute_and_handle_tool_call, handle_tool_call_batch_parsed,
+};
+use looping::{loop_detection_tool_key, maybe_apply_spool_read_offset_hint};
+use rate_limit::acquire_adaptive_rate_limit_slot;
+use recovery::try_interactive_circuit_recovery;
+pub(crate) use types::{PreparedToolCall, ToolOutcomeContext, ValidationResult};
+
+fn build_failure_error_content(error: String, failure_kind: &'static str) -> String {
+    super::execution_result::build_error_content(error, None, None, failure_kind).to_string()
+}
+
+/// Unified handler for a single tool call (whether native or textual).
+///
+/// This handler applies the full pipeline of checks:
+/// 1. Circuit Breaker
+/// 2. Rate Limiting
+/// 3. Loop Detection
+/// 4. Safety Validation (with potential user interaction for limits)
+/// 5. Permission Checking (Allow/Deny/Ask)
+/// 6. Execution (with progress spinners and PTY streaming)
+/// 7. Result Handling (recording metrics, history, UI output)
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn handle_single_tool_call<'a, 'b, 'tool>(
+    t_ctx: &mut ToolOutcomeContext<'a, 'b>,
+    tool_call_id: String,
+    tool_name: &'tool str,
+    args_val: serde_json::Value,
+) -> Result<Option<TurnHandlerOutcome>> {
+    use crate::agent::runloop::unified::run_loop_context::TurnPhase;
+    {
+        let parts = t_ctx.ctx.parts_mut();
+        parts
+            .state
+            .harness_state
+            .set_phase(TurnPhase::ExecutingTools);
+    }
+
+    // 1. Validate (Circuit Breaker, Rate Limit, Loop Detection, Safety, Permission)
+    let prepared = match validate_tool_call(t_ctx.ctx, &tool_call_id, tool_name, &args_val).await? {
+        ValidationResult::Outcome(outcome) => return Ok(Some(outcome)),
+        ValidationResult::Handled => {
+            let parts = t_ctx.ctx.parts_mut();
+            parts.state.harness_state.reset_blocked_tool_call_streak();
+            return Ok(None);
+        }
+        ValidationResult::Blocked => {
+            if let Some(outcome) =
+                enforce_blocked_tool_call_guard(t_ctx.ctx, &tool_call_id, tool_name, &args_val)
+            {
+                return Ok(Some(outcome));
+            }
+            return Ok(None);
+        }
+        ValidationResult::Proceed(prepared) => {
+            let parts = t_ctx.ctx.parts_mut();
+            parts.state.harness_state.reset_blocked_tool_call_streak();
+            prepared
+        }
+    };
+
+    // 3. Execute and Handle Result
+    if let Some(outcome) = execute_and_handle_tool_call(
+        t_ctx.ctx,
+        t_ctx.repeated_tool_attempts,
+        t_ctx.turn_modified_files,
+        tool_call_id,
+        &prepared.canonical_name,
+        prepared.effective_args,
+        None,
+    )
+    .await?
+    {
+        return Ok(Some(outcome));
+    }
+
+    Ok(None)
+}
+
+/// Validates a tool call against all safety and permission checks.
+/// Returns Some(TurnHandlerOutcome) if the turn loop should break/exit/cancel.
+/// Returns None if execution should proceed (or if a local error was already handled/pushed).
+pub(crate) async fn validate_tool_call<'a>(
+    ctx: &mut TurnProcessingContext<'a>,
+    tool_call_id: &str,
+    tool_name: &str,
+    args_val: &serde_json::Value,
+) -> Result<ValidationResult> {
+    let tool_budget_exhausted = {
+        let parts = ctx.parts_mut();
+        parts.state.harness_state.tool_budget_exhausted()
+    };
+    if tool_budget_exhausted {
+        let (tool_calls, max_tool_calls, exhausted_emitted) = {
+            let parts = ctx.parts_mut();
+            (
+                parts.state.harness_state.tool_calls,
+                parts.state.harness_state.max_tool_calls,
+                parts.state.harness_state.tool_budget_exhausted_emitted,
+            )
+        };
+        let error_msg = format!(
+            "Policy violation: exceeded max tool calls per turn ({})",
+            max_tool_calls
+        );
+        let block_reason = build_tool_budget_exhausted_reason(tool_calls, max_tool_calls);
+        {
+            let parts = ctx.parts_mut();
+            push_tool_response(
+                parts.state.working_history,
+                tool_call_id.to_string(),
+                build_failure_error_content(error_msg, "policy"),
+            );
+            if !exhausted_emitted {
+                parts
+                    .state
+                    .working_history
+                    .push(uni::Message::system(block_reason.clone()));
+                parts
+                    .state
+                    .harness_state
+                    .mark_tool_budget_exhausted_emitted();
+            }
+        }
+        return Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(
+            TurnLoopResult::Blocked {
+                reason: Some(block_reason),
+            },
+        )));
+    }
+
+    let wall_clock_exhausted = {
+        let parts = ctx.parts_mut();
+        parts.state.harness_state.wall_clock_exhausted()
+    };
+    if wall_clock_exhausted {
+        let max_tool_wall_clock_secs = {
+            let parts = ctx.parts_mut();
+            parts.state.harness_state.max_tool_wall_clock.as_secs()
+        };
+        let error_msg = format!(
+            "Policy violation: exceeded tool wall clock budget ({}s)",
+            max_tool_wall_clock_secs
+        );
+        {
+            let parts = ctx.parts_mut();
+            push_tool_response(
+                parts.state.working_history,
+                tool_call_id.to_string(),
+                build_failure_error_content(error_msg, "policy"),
+            );
+        }
+        return Ok(ValidationResult::Blocked);
+    }
+
+    let (mut preflight, mut preflight_args) = match ctx
+        .tool_registry
+        .preflight_validate_call(tool_name, args_val)
+    {
+        Ok(preflight) => (preflight, args_val.clone()),
+        Err(err) => {
+            if let Some((recovered_tool_name, recovered_preflight, recovered_args)) =
+                try_recover_preflight_with_fallback(ctx, tool_name, args_val, &err)
+            {
+                tracing::info!(
+                    tool = tool_name,
+                    recovered_tool = %recovered_tool_name,
+                    "Recovered tool preflight by applying fallback arguments"
+                );
+                (recovered_preflight, recovered_args)
+            } else {
+                let fallback = preflight_validation_fallback(tool_name, args_val, &err);
+                let (fallback_tool, fallback_tool_args) = fallback
+                    .map(|(tool, args)| (Some(tool), Some(args)))
+                    .unwrap_or((None, None));
+                {
+                    let parts = ctx.parts_mut();
+                    push_tool_response(
+                        parts.state.working_history,
+                        tool_call_id.to_string(),
+                        build_validation_error_content_with_fallback(
+                            format!("Tool preflight validation failed: {}", err),
+                            "preflight",
+                            fallback_tool,
+                            fallback_tool_args,
+                        ),
+                    );
+                }
+                return Ok(ValidationResult::Blocked);
+            }
+        }
+    };
+
+    if preflight.normalized_tool_name == tool_names::UNIFIED_FILE
+        && let Some(remapped_args) =
+            remap_unified_file_command_args_to_unified_exec(&preflight_args)
+    {
+        let remapped_preflight = ctx
+            .tool_registry
+            .preflight_validate_call(tool_names::UNIFIED_EXEC, &remapped_args);
+        if let Ok(mapped) = remapped_preflight {
+            tracing::info!(
+                original_tool = tool_name,
+                remapped_tool = tool_names::UNIFIED_EXEC,
+                "Remapped unified_file command payload to unified_exec run action"
+            );
+            preflight = mapped;
+            preflight_args = remapped_args;
+        }
+    }
+
+    let canonical_tool_name = preflight.normalized_tool_name.clone();
+    let effective_args = {
+        let parts = ctx.parts_mut();
+        maybe_apply_spool_read_offset_hint(
+            parts.tool.tool_registry,
+            &canonical_tool_name,
+            &preflight_args,
+        )
+    };
+
+    if let Some(outcome) = enforce_duplicate_task_tracker_create_guard(
+        ctx,
+        tool_call_id,
+        &canonical_tool_name,
+        &effective_args,
+    ) {
+        return Ok(outcome);
+    }
+
+    if let Some(outcome) =
+        enforce_repeated_shell_run_guard(ctx, tool_call_id, &canonical_tool_name, &effective_args)
+    {
+        return Ok(outcome);
+    }
+
+    if let Some(outcome) =
+        enforce_spool_chunk_read_guard(ctx, tool_call_id, &canonical_tool_name, &effective_args)
+    {
+        return Ok(outcome);
+    }
+
+    // Phase 4 Check: Per-tool Circuit Breaker
+    let circuit_breaker_blocked = {
+        let parts = ctx.parts_mut();
+        !parts
+            .tool
+            .circuit_breaker
+            .allow_request_for_tool(&canonical_tool_name)
+    };
+    if circuit_breaker_blocked {
+        let display_tool = tool_action_label(&canonical_tool_name, args_val);
+        let (fallback_tool, fallback_tool_args) =
+            recovery_fallback_for_tool(&canonical_tool_name, &effective_args)
+                .map(|(tool, args)| (Some(tool), Some(args)))
+                .unwrap_or((None, None));
+        let block_reason = format!(
+            "Circuit breaker blocked '{}' due to high failure rate. Switching to autonomous fallback strategy.",
+            display_tool
+        );
+        tracing::warn!(tool = %canonical_tool_name, "Circuit breaker open, tool disabled");
+
+        // In interactive mode, attempt recovery prompt; None = user chose to proceed.
+        if let Some(result) = try_interactive_circuit_recovery(
+            ctx,
+            tool_call_id,
+            &canonical_tool_name,
+            fallback_tool,
+            fallback_tool_args,
+        )
+        .await?
+        {
+            let parts = ctx.parts_mut();
+            parts
+                .state
+                .working_history
+                .push(uni::Message::system(block_reason));
+            return Ok(result);
+        }
+    }
+
+    // Phase 4 Check: Adaptive Rate Limiter
+    if let Some(outcome) =
+        acquire_adaptive_rate_limit_slot(ctx, tool_call_id, &canonical_tool_name).await?
+    {
+        return Ok(outcome);
+    }
+
+    // Phase 4 Check: Adaptive Loop Detection
+    let loop_tool_key = loop_detection_tool_key(&canonical_tool_name, &effective_args);
+    let loop_warning = {
+        let parts = ctx.parts_mut();
+        parts
+            .tool
+            .autonomous_executor
+            .record_tool_call(&loop_tool_key, &effective_args)
+    };
+    if let Some(warning) = loop_warning {
+        let should_block = {
+            let parts = ctx.parts_mut();
+            if let Ok(detector) = parts.tool.autonomous_executor.loop_detector().read() {
+                detector.is_hard_limit_exceeded(&loop_tool_key)
+            } else {
+                false
+            }
+        };
+
+        if should_block {
+            tracing::warn!(tool = %loop_tool_key, "Loop detector blocked tool");
+            let display_tool = tool_action_label(&canonical_tool_name, args_val);
+            let block_reason = format!(
+                "Loop detector stopped repeated '{}' calls for this turn. Switching to autonomous fallback strategy.",
+                display_tool
+            );
+            // Ensure no orphan PTY processes keep running after a hard loop-detection stop.
+            let tool_registry = {
+                let parts = ctx.parts_mut();
+                parts.tool.tool_registry.clone()
+            };
+            if let Err(err) = tool_registry.terminate_all_exec_sessions_async().await {
+                tracing::warn!(
+                    error = %err,
+                    "Failed to terminate all exec sessions after loop detector block"
+                );
+            }
+            {
+                let parts = ctx.parts_mut();
+                parts.ui.handle.set_input_status(None, None);
+                parts.ui.input_status_state.left = None;
+                parts.ui.input_status_state.right = None;
+            }
+            let maybe_spooled = tool_registry.find_recent_spooled_output(
+                &canonical_tool_name,
+                &effective_args,
+                Duration::from_secs(120),
+            );
+            if let Some(mut spooled) = maybe_spooled {
+                if let Some(obj) = spooled.as_object_mut() {
+                    obj.remove("output");
+                    obj.remove("content");
+                    obj.remove("stdout");
+                    obj.remove("stderr");
+                    obj.remove("stderr_preview");
+                    obj.insert(
+                        "reused_spooled_output".to_string(),
+                        serde_json::Value::Bool(true),
+                    );
+                    obj.insert("loop_detected".to_string(), serde_json::Value::Bool(true));
+                    obj.insert("spool_ref_only".to_string(), serde_json::Value::Bool(true));
+                    obj.insert(
+                        "loop_detected_note".to_string(),
+                        serde_json::Value::String(
+                            "Loop detected; using recent spool reference. Read the spool file instead of re-running this call.".to_string(),
+                        ),
+                    );
+                }
+                {
+                    let parts = ctx.parts_mut();
+                    push_tool_response(
+                        parts.state.working_history,
+                        tool_call_id.to_string(),
+                        super::execution_result::maybe_inline_spooled(
+                            &canonical_tool_name,
+                            &spooled,
+                        ),
+                    );
+                }
+                return Ok(ValidationResult::Blocked);
+            }
+
+            let maybe_reused = if preflight.readonly_classification {
+                let parts = ctx.parts_mut();
+                parts.tool.tool_registry.find_recent_successful_output(
+                    &canonical_tool_name,
+                    &effective_args,
+                    Duration::from_secs(120),
+                )
+            } else {
+                None
+            };
+            if let Some(mut reused) = maybe_reused {
+                if let Some(obj) = reused.as_object_mut() {
+                    // Drop bulky payload fields for repeated read-only reuse to avoid
+                    // flooding context with duplicate content.
+                    obj.remove("output");
+                    obj.remove("content");
+                    obj.remove("stdout");
+                    obj.remove("stderr");
+                    obj.remove("stderr_preview");
+                    obj.insert(
+                        "reused_recent_result".to_string(),
+                        serde_json::Value::Bool(true),
+                    );
+                    obj.insert("result_ref_only".to_string(), serde_json::Value::Bool(true));
+                    obj.insert("loop_detected".to_string(), serde_json::Value::Bool(true));
+                    obj.insert(
+                        "loop_detected_note".to_string(),
+                        serde_json::Value::String(
+                            "Loop detected on repeated read-only call; reusing recent output. Use `grep_file` or summarize before another read."
+                                .to_string(),
+                        ),
+                    );
+                    obj.insert(
+                        "next_action".to_string(),
+                        serde_json::Value::String(
+                            "Use grep_file or adjust offset/limit before retrying this read."
+                                .to_string(),
+                        ),
+                    );
+                }
+                {
+                    let parts = ctx.parts_mut();
+                    push_tool_response(
+                        parts.state.working_history,
+                        tool_call_id.to_string(),
+                        super::execution_result::maybe_inline_spooled(
+                            &canonical_tool_name,
+                            &reused,
+                        ),
+                    );
+                }
+                return Ok(ValidationResult::Blocked);
+            }
+
+            let error_msg = format!(
+                "Tool '{}' is blocked due to excessive repetition (Loop Detected).",
+                display_tool
+            );
+            {
+                let parts = ctx.parts_mut();
+                let (fallback_tool, fallback_tool_args) =
+                    recovery_fallback_for_tool(&canonical_tool_name, &effective_args)
+                        .map(|(tool, args)| (Some(tool), Some(args)))
+                        .unwrap_or((None, None));
+                push_tool_response(
+                    parts.state.working_history,
+                    tool_call_id.to_string(),
+                    build_validation_error_content_with_fallback(
+                        error_msg,
+                        "loop_detection",
+                        fallback_tool,
+                        fallback_tool_args,
+                    ),
+                );
+                parts
+                    .state
+                    .working_history
+                    .push(uni::Message::system(block_reason));
+            }
+
+            return Ok(ValidationResult::Blocked);
+        } else {
+            tracing::warn!(tool = %loop_tool_key, warning = %warning, "Loop detector warning");
+        }
+    }
+
+    // Safety Validation Loop
+    loop {
+        let validation_result = {
+            let mut validator = {
+                let parts = ctx.parts_mut();
+                parts.tool.safety_validator.write().await
+            };
+            validator
+                .validate_call(&canonical_tool_name, &effective_args)
+                .await
+        };
+
+        match validation_result {
+            Ok(_) => break,
+            Err(SafetyError::SessionLimitReached { max }) => {
+                let increase_result = {
+                    let parts = ctx.parts_mut();
+                    prompt_session_limit_increase(
+                        parts.ui.handle,
+                        parts.ui.session,
+                        parts.ui.ctrl_c_state,
+                        parts.ui.ctrl_c_notify,
+                        max,
+                    )
+                    .await
+                };
+                match increase_result {
+                    Ok(Some(increment)) => {
+                        let mut validator = {
+                            let parts = ctx.parts_mut();
+                            parts.tool.safety_validator.write().await
+                        };
+                        validator.increase_session_limit(increment);
+                        continue;
+                    }
+                    _ => {
+                        {
+                            let parts = ctx.parts_mut();
+                            push_tool_response(
+                                parts.state.working_history,
+                                tool_call_id.to_string(),
+                                build_failure_error_content(
+                                    "Session tool limit reached and not increased by user"
+                                        .to_string(),
+                                    "safety_limit",
+                                ),
+                            );
+                        }
+                        return Ok(ValidationResult::Blocked);
+                    }
+                }
+            }
+            Err(err) => {
+                {
+                    let parts = ctx.parts_mut();
+                    parts.ui.renderer.line(
+                        MessageStyle::Error,
+                        &format!("Safety validation failed: {}", err),
+                    )?;
+                    push_tool_response(
+                        parts.state.working_history,
+                        tool_call_id.to_string(),
+                        build_failure_error_content(
+                            format!("Safety validation failed: {}", err),
+                            "safety_validation",
+                        ),
+                    );
+                }
+                return Ok(ValidationResult::Blocked);
+            }
+        }
+    }
+
+    // Ensure tool permission
+    let permission_result = {
+        let parts = ctx.parts_mut();
+        ensure_tool_permission(
+            crate::agent::runloop::unified::tool_routing::ToolPermissionsContext {
+                tool_registry: parts.tool.tool_registry,
+                renderer: parts.ui.renderer,
+                handle: parts.ui.handle,
+                session: parts.ui.session,
+                default_placeholder: parts.ui.default_placeholder.clone(),
+                ctrl_c_state: parts.ui.ctrl_c_state,
+                ctrl_c_notify: parts.ui.ctrl_c_notify,
+                hooks: parts.ui.lifecycle_hooks,
+                justification: None,
+                approval_recorder: Some(parts.tool.approval_recorder.as_ref()),
+                decision_ledger: Some(parts.llm.decision_ledger),
+                tool_permission_cache: Some(parts.tool.tool_permission_cache),
+                hitl_notification_bell: parts
+                    .llm
+                    .vt_cfg
+                    .map(|cfg| cfg.security.hitl_notification_bell)
+                    .unwrap_or(true),
+                autonomous_mode: parts.state.session_stats.is_autonomous_mode(),
+                approval_policy: parts
+                    .llm
+                    .vt_cfg
+                    .map(|cfg| cfg.security.human_in_the_loop)
+                    .map(approval_policy_from_human_in_the_loop)
+                    .unwrap_or(AskForApproval::OnRequest),
+                skip_confirmations: false, // Normal tool calls should prompt if configured
+            },
+            &canonical_tool_name,
+            Some(&effective_args),
+        )
+        .await
+    };
+
+    match permission_result {
+        Ok(ToolPermissionFlow::Approved) => {
+            // Count budget only for calls that pass all validation/permission gates.
+            record_tool_call_budget_usage(ctx);
+            Ok(ValidationResult::Proceed(PreparedToolCall {
+                canonical_name: canonical_tool_name,
+                readonly_classification: preflight.readonly_classification,
+                effective_args,
+            }))
+        }
+        Ok(ToolPermissionFlow::Denied) => {
+            let denial = ToolExecutionError::policy_violation(
+                canonical_tool_name,
+                format!(
+                    "Tool '{}' execution denied by policy",
+                    preflight.normalized_tool_name
+                ),
+            )
+            .to_json_value();
+
+            {
+                let parts = ctx.parts_mut();
+                push_tool_response(
+                    parts.state.working_history,
+                    tool_call_id.to_string(),
+                    serde_json::to_string(&denial).unwrap_or_else(|_| "{}".to_string()),
+                );
+            }
+            Ok(ValidationResult::Blocked)
+        }
+        Ok(ToolPermissionFlow::Exit) => Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(
+            TurnLoopResult::Exit,
+        ))),
+        Ok(ToolPermissionFlow::Interrupted) => Ok(ValidationResult::Outcome(
+            TurnHandlerOutcome::Break(TurnLoopResult::Cancelled),
+        )),
+        Err(err) => {
+            let err_json = serde_json::json!({
+                "error": format!("Failed to evaluate policy for tool '{}': {}", tool_name, err)
+            });
+            {
+                let parts = ctx.parts_mut();
+                push_tool_response(
+                    parts.state.working_history,
+                    tool_call_id.to_string(),
+                    err_json.to_string(),
+                );
+            }
+            Ok(ValidationResult::Blocked)
+        }
+    }
+}

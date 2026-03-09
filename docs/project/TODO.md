@@ -103,24 +103,3 @@ kiweuro
 writedownapp
 humidapp
 vtchat.io
-
----
-
-Prompt Stashing
-
-Long prompt, short detour? Control + S stashes your draft so you can fire off a quick question first.
-
-Your stashed prompt restores automatically after you submit.
-
-https://x.com/adocomplete/status/2029988814924722559
-
---
-
-PSA: Codex CLI does this automatically when you press Ctrl+C.
-
-If you are in the middle of a prompt and need to steer or do another prompt before what you were writing, just hit Ctrl+C once.
-
-Later on just use the arrow up as you would and the saved prompt will be there.
-https://x.com/fcoury/status/2030011522060022031
-
----
