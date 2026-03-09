@@ -1,6 +1,6 @@
 use super::ZedAgent;
-use crate::acp::reports::TOOL_FAILURE_PREFIX;
-use crate::acp::tooling::{SupportedTool, TOOL_READ_FILE_PATH_ARG, TOOL_READ_FILE_URI_ARG};
+use crate::reports::TOOL_FAILURE_PREFIX;
+use crate::tooling::{SupportedTool, TOOL_READ_FILE_PATH_ARG, TOOL_READ_FILE_URI_ARG};
 use agent_client_protocol as acp;
 use anyhow::Result;
 use serde_json::Value;

@@ -94,7 +94,7 @@ impl McpEvent {
     }
 
     /// Get the compact title for this event
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn compact_title(&self) -> String {
         format!(
             "[{}] MCP {} `{}`",
@@ -105,7 +105,7 @@ impl McpEvent {
     }
 
     /// Get the detailed title for this event
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn detailed_title(&self) -> String {
         let duration = self
             .duration_ms
@@ -195,13 +195,13 @@ impl McpPanelState {
     }
 
     /// Number of tracked events
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub fn event_count(&self) -> usize {
         self.events.len()
     }
 
     /// Get compact status string for display
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub fn compact_status(&self) -> Option<String> {
         if self.events.is_empty() {
             return None;
@@ -228,7 +228,7 @@ impl McpPanelState {
     }
 
     /// Create a disabled panel state
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub fn disabled() -> Self {
         Self {
             events: VecDeque::new(),

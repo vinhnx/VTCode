@@ -8,7 +8,7 @@ use url::Url;
 use vtcode_core::config::constants::tools;
 
 use super::super::constants::*;
-use crate::acp::tooling::TOOL_READ_FILE_URI_ARG;
+use crate::tooling::TOOL_READ_FILE_URI_ARG;
 
 impl ZedAgent {
     fn append_segment(target: &mut String, segment: &str) {

@@ -6225,7 +6225,7 @@ dependencies = [
  "tracing-subscriber",
  "unicode-width 0.2.2",
  "url",
- "vtcode-acp-client",
+ "vtcode-acp",
  "vtcode-commons",
  "vtcode-config",
  "vtcode-core",
@@ -6234,6 +6234,26 @@ dependencies = [
  "webbrowser",
  "windows-sys 0.61.2",
  "zip",
+]
+
+[[package]]
+name = "vtcode-acp"
+version = "0.87.1"
+dependencies = [
+ "agent-client-protocol",
+ "anyhow",
+ "assert_fs",
+ "async-trait",
+ "futures",
+ "hashbrown 0.15.5",
+ "percent-encoding",
+ "serde_json",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "url",
+ "vtcode-acp-client",
+ "vtcode-core",
 ]
 
 [[package]]

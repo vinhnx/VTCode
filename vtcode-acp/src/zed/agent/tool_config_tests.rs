@@ -1,5 +1,5 @@
 use super::ZedAgent;
-use crate::acp::zed::types::{NotificationEnvelope, ToolRuntime};
+use crate::zed::types::{NotificationEnvelope, ToolRuntime};
 use assert_fs::TempDir;
 use serde_json::json;
 use std::collections::BTreeMap;

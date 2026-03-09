@@ -33,8 +33,8 @@ mod rendering;
 mod selection;
 mod state_machine;
 
-pub(super) use vtcode_config::read_workspace_env_value as read_workspace_env;
 pub use selection::ModelSelectionResult;
+pub(super) use vtcode_config::read_workspace_env_value as read_workspace_env;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(clippy::enum_variant_names)]

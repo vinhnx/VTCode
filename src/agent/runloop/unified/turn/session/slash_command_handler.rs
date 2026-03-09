@@ -60,7 +60,6 @@ pub(crate) async fn handle_input_commands(
                         tool_registry: ctx.tool_registry,
                         conversation_history: ctx.conversation_history,
                         decision_ledger: ctx.decision_ledger,
-                        context_manager: ctx.context_manager,
                         session_stats: ctx.session_stats,
                         tools: ctx.tools,
                         tool_catalog: ctx.tool_catalog,
@@ -69,11 +68,7 @@ pub(crate) async fn handle_input_commands(
                         linked_directories: ctx.linked_directories,
                         ctrl_c_state: ctx.ctrl_c_state,
                         ctrl_c_notify: ctx.ctrl_c_notify,
-                        default_placeholder: ctx.default_placeholder,
-                        lifecycle_hooks: ctx.lifecycle_hooks,
                         full_auto: ctx.full_auto,
-                        approval_recorder: Some(ctx.approval_recorder),
-                        tool_permission_cache: ctx.tool_permission_cache,
                         loaded_skills: ctx.loaded_skills,
                         checkpoint_manager: ctx.checkpoint_manager,
                     },
@@ -90,11 +85,6 @@ pub(crate) async fn handle_input_commands(
                     SlashCommandControl::BreakWithReason(reason) => {
                         return Ok(CommandProcessingResult::Outcome(InteractionOutcome::Exit {
                             reason,
-                        }));
-                    }
-                    SlashCommandControl::BreakWithoutReason => {
-                        return Ok(CommandProcessingResult::Outcome(InteractionOutcome::Exit {
-                            reason: SessionEndReason::Exit,
                         }));
                     }
                 }

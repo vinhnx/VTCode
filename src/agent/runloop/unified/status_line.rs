@@ -29,27 +29,12 @@ pub(crate) struct InputStatusState {
     pub(crate) context_tokens: Option<usize>,
     pub(crate) context_limit_tokens: Option<usize>,
     pub(crate) context_remaining_tokens: Option<usize>,
-    #[allow(dead_code)]
-    pub(crate) semantic_value_per_token: Option<f64>,
     pub(crate) is_cancelling: bool,
     // Dynamic context discovery status
     pub(crate) spooled_files_count: Option<usize>,
 }
 
 const GIT_STATUS_REFRESH_INTERVAL: Duration = Duration::from_secs(2);
-
-/// Update context efficiency metrics in the status state
-#[allow(dead_code)]
-pub(crate) fn update_context_efficiency(
-    state: &mut InputStatusState,
-    utilization: f64,
-    tokens: usize,
-    semantic_per_token: f64,
-) {
-    state.context_utilization = Some(utilization);
-    state.context_tokens = Some(tokens);
-    state.semantic_value_per_token = Some(semantic_per_token);
-}
 
 pub(crate) fn update_context_budget(
     state: &mut InputStatusState,
@@ -258,46 +243,6 @@ pub(crate) async fn update_input_status_if_changed(
     } else {
         Ok(())
     }
-}
-
-#[allow(dead_code)]
-fn build_model_status_right(model: &str, reasoning: &str) -> Option<String> {
-    let mut parts = Vec::new();
-
-    if model.is_empty() {
-        None
-    } else if reasoning.is_empty() {
-        if parts.is_empty() {
-            Some(model.to_string())
-        } else {
-            parts.push(model.to_string());
-            Some(parts.join(" | "))
-        }
-    } else {
-        parts.push(format!("{} ({})", model, reasoning));
-        Some(parts.join(" | "))
-    }
-}
-
-/// Build status display with context efficiency metrics
-///
-/// Format: "model | 65% context left"
-#[allow(dead_code)]
-pub(crate) fn build_model_status_with_context(
-    model: &str,
-    reasoning: &str,
-    context_utilization: Option<f64>,
-    total_tokens: Option<usize>,
-    is_cancelling: bool,
-) -> Option<String> {
-    build_model_status_with_context_and_spooled(
-        model,
-        reasoning,
-        context_utilization,
-        total_tokens,
-        is_cancelling,
-        None,
-    )
 }
 
 /// Build model status with all context indicators including spooled files

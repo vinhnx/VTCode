@@ -19,16 +19,14 @@ use vtcode_tui::{InlineHandle, InlineSession};
 // use super::super::workspace::{bootstrap_config_files, build_workspace_index};
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::model_picker::ModelPickerState;
-// use crate::agent::runloop::slash_commands::McpCommandAction;
 pub use crate::agent::runloop::slash_commands::SlashCommandOutcome;
 use crate::agent::runloop::unified::async_mcp_manager::AsyncMcpManager;
-use crate::agent::runloop::unified::context_manager::ContextManager;
 use crate::agent::runloop::unified::palettes::ActivePalette;
 use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
 use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
 use crate::agent::runloop::unified::workspace_links::LinkedDirectory;
 use crate::agent::runloop::welcome::SessionBootstrap;
-use crate::hooks::lifecycle::{LifecycleHookEngine, SessionEndReason};
+use crate::hooks::lifecycle::SessionEndReason;
 
 pub mod handlers;
 
@@ -36,7 +34,6 @@ pub enum SlashCommandControl {
     Continue,
     SubmitPrompt(String),
     BreakWithReason(SessionEndReason),
-    BreakWithoutReason,
 }
 
 pub struct SlashCommandContext<'a> {
@@ -52,8 +49,6 @@ pub struct SlashCommandContext<'a> {
     pub tool_registry: &'a mut ToolRegistry,
     pub conversation_history: &'a mut Vec<uni::Message>,
     pub decision_ledger: &'a Arc<RwLock<DecisionTracker>>,
-    #[allow(dead_code)]
-    pub context_manager: &'a mut ContextManager,
     pub session_stats: &'a mut SessionStats,
     pub tools: &'a Arc<RwLock<Vec<uni::ToolDefinition>>>,
     pub tool_catalog: &'a Arc<ToolCatalogState>,
@@ -62,11 +57,7 @@ pub struct SlashCommandContext<'a> {
     pub linked_directories: &'a mut Vec<LinkedDirectory>,
     pub ctrl_c_state: &'a Arc<CtrlCState>,
     pub ctrl_c_notify: &'a Arc<Notify>,
-    pub default_placeholder: &'a Option<String>,
-    pub lifecycle_hooks: Option<&'a LifecycleHookEngine>,
     pub full_auto: bool,
-    pub approval_recorder: Option<&'a vtcode_core::tools::ApprovalRecorder>,
-    pub tool_permission_cache: &'a Arc<RwLock<vtcode_core::acp::ToolPermissionCache>>,
     pub loaded_skills:
         &'a Arc<RwLock<hashbrown::HashMap<String, vtcode_core::skills::types::Skill>>>,
     pub checkpoint_manager: Option<&'a vtcode_core::core::agent::snapshots::SnapshotManager>,
@@ -102,13 +93,7 @@ pub async fn handle_outcome(
         SlashCommandOutcome::InitializeWorkspace { force } => {
             handlers::handle_initialize_workspace(ctx, force).await
         }
-        SlashCommandOutcome::GenerateAgentFile { overwrite } => {
-            handlers::handle_generate_agent_file(ctx, overwrite).await
-        }
         SlashCommandOutcome::ShowSettings => handlers::handle_show_settings(ctx).await,
-        SlashCommandOutcome::ExecuteTool { name, args } => {
-            handlers::handle_execute_tool(ctx, name, args).await
-        }
         SlashCommandOutcome::ClearScreen => handlers::handle_clear_screen(ctx).await,
         SlashCommandOutcome::ClearConversation => handlers::handle_clear_conversation(ctx).await,
         SlashCommandOutcome::CompactConversation => {

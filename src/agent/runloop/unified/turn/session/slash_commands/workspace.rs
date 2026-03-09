@@ -1,5 +1,4 @@
 use anyhow::Result;
-use vtcode_core::commands::init::{GenerateAgentsFileStatus, generate_agents_file};
 use vtcode_core::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::slash_commands::WorkspaceDirectoryCommand;
@@ -67,49 +66,6 @@ pub async fn handle_initialize_workspace(
             ctx.renderer.line(
                 MessageStyle::Error,
                 &format!("Failed to index workspace: {}", err),
-            )?;
-        }
-    }
-    Ok(SlashCommandControl::Continue)
-}
-
-pub async fn handle_generate_agent_file(
-    ctx: SlashCommandContext<'_>,
-    overwrite: bool,
-) -> Result<SlashCommandControl> {
-    let workspace_path = ctx.config.workspace.clone();
-    ctx.renderer.line(
-        MessageStyle::Info,
-        "Generating AGENTS.md guidance. This may take a moment...",
-    )?;
-    match generate_agents_file(ctx.tool_registry, workspace_path.as_path(), overwrite).await {
-        Ok(report) => match report.status {
-            GenerateAgentsFileStatus::Created => {
-                ctx.renderer.line(
-                    MessageStyle::Info,
-                    &format!("Created AGENTS.md at {}", report.path.display()),
-                )?;
-            }
-            GenerateAgentsFileStatus::Overwritten => {
-                ctx.renderer.line(
-                    MessageStyle::Info,
-                    &format!("Overwrote existing AGENTS.md at {}", report.path.display()),
-                )?;
-            }
-            GenerateAgentsFileStatus::SkippedExisting => {
-                ctx.renderer.line(
-                    MessageStyle::Info,
-                    &format!(
-                        "AGENTS.md already exists at {}. Use /generate-agent-file --force to regenerate it.",
-                        report.path.display()
-                    ),
-                )?;
-            }
-        },
-        Err(err) => {
-            ctx.renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to generate AGENTS.md guidance: {}", err),
             )?;
         }
     }

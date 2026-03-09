@@ -1,7 +1,7 @@
 use serde_json::Value;
 use vtcode_core::llm::provider::ToolDefinition;
 
-use crate::acp::tooling::{AcpToolRegistry, SupportedTool, ToolDescriptor};
+use crate::tooling::{AcpToolRegistry, SupportedTool, ToolDescriptor};
 
 pub trait ToolRegistryProvider {
     fn registered_tools(&self) -> Vec<SupportedTool>;

@@ -1,6 +1,7 @@
-use crate::acp::register_acp_connection;
-use crate::acp::workspace::{DefaultWorkspaceTrustSynchronizer, WorkspaceTrustSynchronizer};
-use crate::workspace_trust::WorkspaceTrustSyncOutcome;
+use crate::register_acp_connection;
+use crate::workspace::{
+    DefaultWorkspaceTrustSynchronizer, WorkspaceTrustSyncOutcome, WorkspaceTrustSynchronizer,
+};
 use agent_client_protocol as acp;
 use agent_client_protocol::Client;
 use anyhow::{Context, Result};

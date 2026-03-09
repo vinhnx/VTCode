@@ -1,20 +1,19 @@
 use anyhow::Result;
-use vtcode::startup::{SessionResumeMode, StartupContext};
-use vtcode_core::cli::args::{Cli, Commands, SkillsRefSubcommand, SkillsSubcommand};
-use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+use vtcode::startup::StartupContext;
+use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::mcp::cli::handle_mcp_command;
 
-use super::acp::handle_acp_command;
-use super::adapters::{ask_options, skills_options};
-use super::anthropic_api::handle_anthropic_api_command;
-use super::{
+use super::run::{handle_analyze_command, handle_ask_single_command, handle_chat_command};
+use super::skills::dispatch_skills_command;
+use crate::cli::acp::handle_acp_command;
+use crate::cli::adapters::{ask_options, skills_options};
+use crate::cli::anthropic_api::handle_anthropic_api_command;
+use crate::cli::{
     analyze, benchmark, config, create_project, dependencies, exec, init, init_project, man,
-    revert, review, schema, sessions, skills, skills_index, skills_ref, snapshots, trajectory,
-    update,
+    revert, review, schema, skills, snapshots, trajectory, update,
 };
 
-pub(super) async fn dispatch_command(
+pub(crate) async fn dispatch_command(
     args: &Cli,
     startup: &StartupContext,
     command: Commands,
@@ -103,16 +102,11 @@ pub(super) async fn dispatch_command(
             schema::handle_schema_command(command).await?;
         }
         Commands::Analyze { analysis_type } => {
-            let analysis_type = match analysis_type.as_str() {
-                "full" => analyze::AnalysisType::Full,
-                "structure" => analyze::AnalysisType::Structure,
-                "security" => analyze::AnalysisType::Security,
-                "performance" => analyze::AnalysisType::Performance,
-                "dependencies" => analyze::AnalysisType::Dependencies,
-                "complexity" => analyze::AnalysisType::Complexity,
-                _ => analyze::AnalysisType::Full,
-            };
-            handle_analyze_command(core_cfg.clone(), analysis_type).await?;
+            handle_analyze_command(
+                core_cfg.clone(),
+                analyze::AnalysisType::from_cli_arg(&analysis_type),
+            )
+            .await?;
         }
         Commands::Trajectory { file, top } => {
             trajectory::handle_trajectory_command(core_cfg, file, top).await?;
@@ -198,119 +192,4 @@ pub(super) async fn dispatch_command(
     }
 
     Ok(())
-}
-
-async fn dispatch_skills_command(
-    startup: &StartupContext,
-    skills_cmd: SkillsSubcommand,
-) -> Result<()> {
-    let skills_options = skills_options(startup);
-
-    match skills_cmd {
-        SkillsSubcommand::List { .. } => {
-            skills::handle_skills_list(&skills_options).await?;
-        }
-        SkillsSubcommand::Load { name, path } => {
-            skills::handle_skills_load(&skills_options, &name, path).await?;
-        }
-        SkillsSubcommand::Info { name } => {
-            skills::handle_skills_info(&skills_options, &name).await?;
-        }
-        SkillsSubcommand::Create { path, .. } => {
-            skills::handle_skills_create(&path).await?;
-        }
-        SkillsSubcommand::Validate { path, strict } => {
-            skills::handle_skills_validate(&path, strict).await?;
-        }
-        SkillsSubcommand::CheckCompatibility => {
-            skills::handle_skills_validate_all(&skills_options).await?;
-        }
-        SkillsSubcommand::Config => {
-            skills::handle_skills_config(&skills_options).await?;
-        }
-        SkillsSubcommand::RegenerateIndex => {
-            skills_index::handle_skills_regenerate_index(&skills_options).await?;
-        }
-        SkillsSubcommand::Unload { .. } => {
-            println!("Skill unload not yet implemented");
-        }
-        SkillsSubcommand::SkillsRef(skills_ref_cmd) => match skills_ref_cmd {
-            SkillsRefSubcommand::Validate { path } => {
-                skills_ref::handle_skills_ref_validate(&path).await?;
-            }
-            SkillsRefSubcommand::ToPrompt { paths } => {
-                skills_ref::handle_skills_ref_to_prompt(&paths).await?;
-            }
-            SkillsRefSubcommand::List { path } => {
-                skills_ref::handle_skills_ref_list(path.as_deref()).await?;
-            }
-        },
-    }
-
-    Ok(())
-}
-
-pub(crate) async fn handle_ask_single_command(
-    core_cfg: CoreAgentConfig,
-    prompt: Option<String>,
-    options: vtcode_core::cli::args::AskCommandOptions,
-) -> Result<()> {
-    let prompt_vec = prompt.into_iter().collect::<Vec<_>>();
-    vtcode_core::commands::ask::handle_ask_command(core_cfg, prompt_vec, options).await
-}
-
-pub(crate) async fn handle_chat_command(
-    core_cfg: CoreAgentConfig,
-    vt_cfg: VTCodeConfig,
-    skip_confirmations: bool,
-    full_auto_requested: bool,
-    plan_mode: bool,
-) -> Result<()> {
-    crate::agent::agents::run_single_agent_loop(
-        &core_cfg,
-        Some(vt_cfg),
-        skip_confirmations,
-        full_auto_requested,
-        plan_mode,
-        None,
-    )
-    .await
-}
-
-async fn handle_analyze_command(
-    core_cfg: CoreAgentConfig,
-    analysis_type: analyze::AnalysisType,
-) -> Result<()> {
-    let depth = match analysis_type {
-        analyze::AnalysisType::Full
-        | analyze::AnalysisType::Structure
-        | analyze::AnalysisType::Complexity => "deep",
-        analyze::AnalysisType::Security
-        | analyze::AnalysisType::Performance
-        | analyze::AnalysisType::Dependencies => "standard",
-    };
-
-    vtcode_core::commands::analyze::handle_analyze_command(
-        core_cfg,
-        depth.to_string(),
-        "text".to_string(),
-    )
-    .await
-}
-
-pub(crate) async fn handle_resume_session_command(
-    core_cfg: &CoreAgentConfig,
-    mode: SessionResumeMode,
-    show_all: bool,
-    custom_session_id: Option<String>,
-    skip_confirmations: bool,
-) -> Result<()> {
-    sessions::handle_resume_session_command(
-        core_cfg,
-        mode,
-        show_all,
-        custom_session_id,
-        skip_confirmations,
-    )
-    .await
 }

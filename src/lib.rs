@@ -163,10 +163,11 @@
 //! This package contains the binary executable for VT Code.
 //! For the core library functionality, see [`vtcode-core`](https://docs.rs/vtcode-core).
 
-pub mod acp;
+pub use vtcode_acp as acp;
 pub mod ide_context;
 pub mod tools;
 #[allow(dead_code)]
+// Binary-only workspace trust flow is compiled in the lib target for shared paths.
 mod workspace_trust;
 
 pub mod startup;

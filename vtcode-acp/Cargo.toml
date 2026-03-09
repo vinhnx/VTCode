@@ -1,0 +1,34 @@
+[package]
+name = "vtcode-acp"
+version.workspace = true
+edition.workspace = true
+rust-version = "1.88"
+authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
+description = "ACP bridge integration for VT Code"
+license.workspace = true
+homepage = "https://github.com/vinhnx/vtcode"
+repository = "https://github.com/vinhnx/vtcode"
+documentation = "https://docs.rs/vtcode-acp"
+keywords = ["vtcode", "acp", "zed", "agent", "bridge"]
+categories = ["api-bindings", "development-tools", "text-editors"]
+
+[dependencies]
+agent-client-protocol = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+hashbrown = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tokio-util = { workspace = true, features = ["compat"] }
+tracing = { workspace = true }
+url = { workspace = true }
+percent-encoding = "2.3"
+vtcode-acp-client = { path = "../vtcode-acp-client", version = "0.87.1" }
+vtcode-core = { path = "../vtcode-core", version = "0.87.1" }
+
+[dev-dependencies]
+assert_fs = { workspace = true }
+
+[lints]
+workspace = true

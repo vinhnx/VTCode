@@ -94,6 +94,7 @@ license = "MIT"
 [workspace]
 resolver = "2"
 members = [
+    "vtcode-acp",
     "vtcode-acp-client",
     "vtcode-core",
     "vtcode-tui",
@@ -142,7 +143,7 @@ multiple_unsafe_ops_per_block = "warn"
 
 
 [dependencies]
-vtcode-acp-client = { path = "vtcode-acp-client", version = "0.87.1" }
+vtcode-acp = { path = "vtcode-acp", version = "0.87.1" }
 vtcode-commons = { path = "vtcode-commons", version = "0.87.1" }
 vtcode-config = { path = "vtcode-config", version = "0.87.1" }
 vtcode-core = { path = "vtcode-core", version = "0.87.1", default-features = false }

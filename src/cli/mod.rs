@@ -8,6 +8,7 @@ mod action_resolution;
 mod adapters;
 mod anthropic_api;
 mod auto;
+mod checkpoints;
 mod config;
 mod create_project;
 mod dispatch;

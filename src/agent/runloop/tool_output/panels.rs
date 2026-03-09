@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use anstyle::Style as AnsiStyle;
 use anyhow::Result;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
@@ -21,28 +19,6 @@ impl PanelContentLine {
     }
 }
 
-pub(crate) fn render_panel(
-    renderer: &mut AnsiRenderer,
-    title: Option<String>,
-    lines: Vec<PanelContentLine>,
-    header_style: MessageStyle,
-) -> Result<()> {
-    if let Some(title_text) = title {
-        renderer.line(header_style, title_text.trim_end())?;
-    }
-
-    for line in lines {
-        let text = line.rendered.trim_end();
-        if let Some(override_style) = line.override_style {
-            renderer.line_with_override_style(line.style, override_style, text)?;
-        } else {
-            renderer.line(line.style, text)?;
-        }
-    }
-
-    Ok(())
-}
-
 pub(crate) fn render_left_border_panel(
     renderer: &mut AnsiRenderer,
     lines: Vec<PanelContentLine>,
@@ -60,24 +36,6 @@ pub(crate) fn render_left_border_panel(
     }
 
     Ok(())
-}
-
-pub(crate) fn clamp_panel_text(text: &str, limit: usize) -> String {
-    if limit == 0 {
-        return String::new();
-    }
-    if text.chars().count() <= limit {
-        return text.to_string();
-    }
-    let mut truncated = String::new();
-    for (index, ch) in text.chars().enumerate() {
-        if index + 1 >= limit {
-            truncated.push('…');
-            break;
-        }
-        truncated.push(ch);
-    }
-    truncated
 }
 
 #[cfg(test)]

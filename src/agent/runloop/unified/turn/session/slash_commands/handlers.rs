@@ -1,18 +1,14 @@
 use anyhow::{Context, Result};
-use serde_json;
 use vtcode_core::llm::provider::MessageRole;
 
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::types::EditingMode as ConfigEditingMode;
 use vtcode_core::core::decision_tracker::DecisionTracker;
-use vtcode_core::exec_policy::AskForApproval;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_core::utils::transcript;
 
-use crate::agent::runloop::unified::async_mcp_manager::approval_policy_from_human_in_the_loop;
 use crate::agent::runloop::unified::state::SessionStats;
-use crate::agent::runloop::unified::tool_routing::{ToolPermissionFlow, ensure_tool_permission};
 use crate::hooks::lifecycle::SessionEndReason;
 
 use super::{SlashCommandContext, SlashCommandControl};
@@ -57,9 +53,7 @@ pub use ui::{
     handle_start_session_palette, handle_start_theme_palette, handle_theme_changed,
 };
 pub use update::handle_update;
-pub use workspace::{
-    handle_generate_agent_file, handle_initialize_workspace, handle_manage_workspace_directories,
-};
+pub use workspace::{handle_initialize_workspace, handle_manage_workspace_directories};
 
 pub(super) fn persist_mode_settings(
     workspace: &std::path::Path,
@@ -128,60 +122,6 @@ pub async fn handle_show_settings(mut ctx: SlashCommandContext<'_>) -> Result<Sl
     }
 
     Ok(SlashCommandControl::Continue)
-}
-
-pub async fn handle_execute_tool(
-    ctx: SlashCommandContext<'_>,
-    name: String,
-    args: serde_json::Value,
-) -> Result<SlashCommandControl> {
-    match ensure_tool_permission(
-        crate::agent::runloop::unified::tool_routing::ToolPermissionsContext {
-            tool_registry: ctx.tool_registry,
-            renderer: ctx.renderer,
-            handle: ctx.handle,
-            session: ctx.session,
-            default_placeholder: ctx.default_placeholder.clone(),
-            ctrl_c_state: ctx.ctrl_c_state,
-            ctrl_c_notify: ctx.ctrl_c_notify,
-            hooks: ctx.lifecycle_hooks,
-            justification: None,
-            approval_recorder: ctx.approval_recorder,
-            decision_ledger: Some(ctx.decision_ledger),
-            tool_permission_cache: Some(ctx.tool_permission_cache),
-            hitl_notification_bell: ctx
-                .vt_cfg
-                .as_ref()
-                .map(|cfg| cfg.security.hitl_notification_bell)
-                .unwrap_or(true),
-            autonomous_mode: ctx.session_stats.is_autonomous_mode(),
-            approval_policy: ctx
-                .vt_cfg
-                .as_ref()
-                .map(|cfg| cfg.security.human_in_the_loop)
-                .map(approval_policy_from_human_in_the_loop)
-                .unwrap_or(AskForApproval::OnRequest),
-            skip_confirmations: false,
-        },
-        &name,
-        Some(&args),
-    )
-    .await
-    {
-        Ok(ToolPermissionFlow::Approved) => Ok(SlashCommandControl::Continue),
-        Ok(ToolPermissionFlow::Denied) => Ok(SlashCommandControl::Continue),
-        Ok(ToolPermissionFlow::Exit) => {
-            Ok(SlashCommandControl::BreakWithReason(SessionEndReason::Exit))
-        }
-        Ok(ToolPermissionFlow::Interrupted) => Ok(SlashCommandControl::BreakWithoutReason),
-        Err(err) => {
-            ctx.renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to evaluate policy for tool '{}': {}", name, err),
-            )?;
-            Ok(SlashCommandControl::Continue)
-        }
-    }
 }
 
 pub async fn handle_clear_conversation(

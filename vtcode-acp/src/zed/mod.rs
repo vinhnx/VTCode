@@ -39,10 +39,10 @@ impl AcpClientAdapter for StandardAcpAdapter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::acp::tooling::{
+    use crate::tooling::{
         TOOL_LIST_FILES_ITEMS_KEY, TOOL_LIST_FILES_RESULT_KEY, TOOL_LIST_FILES_URI_ARG,
     };
-    use crate::acp::zed::types::NotificationEnvelope;
+    use crate::zed::types::NotificationEnvelope;
     use agent_client_protocol::{Agent, LoadSessionRequest, SessionModeId, ToolCallStatus};
     use assert_fs::TempDir;
     use serde_json::{Value, json};

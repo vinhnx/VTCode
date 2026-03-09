@@ -1,7 +1,6 @@
 use std::path::Path;
 
 use anyhow::Result;
-use serde_json::Value;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
@@ -42,15 +41,6 @@ pub enum SessionLogExportFormat {
 pub enum SlashCommandOutcome {
     Handled,
     ThemeChanged(String),
-    #[allow(dead_code)]
-    ExecuteTool {
-        name: String,
-        args: Value,
-    },
-    #[allow(dead_code)]
-    GenerateAgentFile {
-        overwrite: bool,
-    },
     InitializeWorkspace {
         force: bool,
     },

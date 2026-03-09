@@ -193,18 +193,3 @@ impl StatusLineGit {
         }
     }
 }
-
-impl StatusLineContext {
-    #[allow(dead_code)]
-    pub(crate) fn from_efficiency(
-        utilization_percent: f64,
-        total_tokens: usize,
-        semantic_value_per_token: f64,
-    ) -> Self {
-        Self {
-            utilization_percent,
-            total_tokens,
-            semantic_value_per_token,
-        }
-    }
-}

@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use serde_json::Value;
 use tracing::{error, warn};
 
-use crate::acp::reports::{
+use crate::reports::{
     TOOL_PERMISSION_ALLOW_ALWAYS_OPTION_ID, TOOL_PERMISSION_ALLOW_OPTION_ID,
     TOOL_PERMISSION_ALLOW_PREFIX, TOOL_PERMISSION_CANCELLED_MESSAGE,
     TOOL_PERMISSION_DENIED_MESSAGE, TOOL_PERMISSION_DENY_ALWAYS_OPTION_ID,

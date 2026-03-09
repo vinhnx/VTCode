@@ -26,7 +26,7 @@ enum TrustSelection {
     Quit,
 }
 
-#[allow(dead_code)] // Used via lib crate's acp module, not directly from binary
+#[allow(dead_code)] // Used by the library ACP workspace synchronizer path, not the bin target.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorkspaceTrustSyncOutcome {
     AlreadyMatches(WorkspaceTrustLevel),
@@ -164,7 +164,7 @@ pub async fn workspace_trust_level(workspace: &Path) -> Result<Option<WorkspaceT
         .context("Failed to load user configuration for trust lookup")
 }
 
-#[allow(dead_code)] // Used via lib crate's acp module, not directly from binary
+#[allow(dead_code)] // Used by the library ACP workspace synchronizer path, not the bin target.
 pub async fn ensure_workspace_trust_level_silent(
     workspace: &Path,
     desired_level: WorkspaceTrustLevel,
