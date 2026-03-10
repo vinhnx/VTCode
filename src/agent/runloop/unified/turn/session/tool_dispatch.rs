@@ -142,7 +142,7 @@ pub(crate) async fn handle_direct_tool_execution(
 
     if let Some(TurnHandlerOutcome::Break(TurnLoopResult::Exit)) = outcome {
         return Ok(Some(InteractionOutcome::Exit {
-            reason: crate::hooks::lifecycle::SessionEndReason::Exit,
+            reason: vtcode_core::hooks::SessionEndReason::Exit,
         }));
     }
 

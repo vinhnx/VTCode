@@ -8,7 +8,7 @@ mod state;
 
 use anyhow::{Result, anyhow};
 use std::process::Command;
-use vtcode_core::tools::ripgrep_binary::RIPGREP_INSTALL_COMMAND;
+use crate::tools::ripgrep_binary::RIPGREP_INSTALL_COMMAND;
 
 use self::platform::install_with_smart_detection;
 use self::state::{InstallLockGuard, InstallationCache};

@@ -22,23 +22,23 @@ use parsing::{parse_session_log_export_format, split_command_and_args};
 use rendering::{render_generate_agent_file_usage, render_help, render_theme_list};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ThemePaletteMode {
+pub(crate) enum ThemePaletteMode {
     Select,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SessionPaletteMode {
+pub(crate) enum SessionPaletteMode {
     Resume,
     Fork,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SessionLogExportFormat {
+pub(crate) enum SessionLogExportFormat {
     Json,
     Markdown,
 }
 
-pub enum SlashCommandOutcome {
+pub(crate) enum SlashCommandOutcome {
     Handled,
     ThemeChanged(String),
     InitializeWorkspace {
@@ -126,7 +126,7 @@ pub enum SlashCommandOutcome {
 }
 
 #[derive(Clone, Debug)]
-pub enum McpCommandAction {
+pub(crate) enum McpCommandAction {
     Interactive,
     Overview,
     ListProviders,
@@ -141,13 +141,13 @@ pub enum McpCommandAction {
 }
 
 #[derive(Clone, Debug)]
-pub enum WorkspaceDirectoryCommand {
+pub(crate) enum WorkspaceDirectoryCommand {
     Add(Vec<String>),
     List,
     Remove(Vec<String>),
 }
 
-pub async fn handle_slash_command(
+pub(crate) async fn handle_slash_command(
     input: &str,
     renderer: &mut AnsiRenderer,
     workspace: &Path,

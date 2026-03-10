@@ -15,7 +15,7 @@ use super::{SlashCommandContext, SlashCommandControl};
 const MCP_ACTION_PREFIX: &str = "mcp.action.";
 const MCP_ACTION_BACK: &str = "mcp.action.back";
 
-pub async fn handle_manage_mcp(
+pub(crate) async fn handle_manage_mcp(
     mut ctx: SlashCommandContext<'_>,
     action: McpCommandAction,
 ) -> Result<SlashCommandControl> {

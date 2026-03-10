@@ -1,7 +1,7 @@
 use anyhow::Result;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
-use crate::hooks::lifecycle::{HookMessage, HookMessageLevel};
+use vtcode_core::hooks::{HookMessage, HookMessageLevel};
 
 pub(super) fn render_hook_messages(
     renderer: &mut AnsiRenderer,

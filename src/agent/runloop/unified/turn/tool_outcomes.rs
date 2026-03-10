@@ -14,11 +14,3 @@ pub(crate) mod helpers;
 pub(crate) use apply::apply_turn_outcome;
 pub(crate) use dispatch::handle_tool_calls;
 pub(crate) use handlers::ToolOutcomeContext;
-
-#[allow(dead_code)]
-pub enum PrepareToolCallResult {
-    Approved,
-    Denied,
-    Exit,
-    Interrupted,
-}

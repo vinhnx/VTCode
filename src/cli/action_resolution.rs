@@ -1,5 +1,5 @@
 use anyhow::Result;
-use vtcode::startup::StartupContext;
+use crate::startup::StartupContext;
 use vtcode_core::cli::args::{AskCommandOptions, Cli, Commands};
 
 use super::adapters::ask_options;
@@ -14,7 +14,7 @@ pub(crate) enum ResolvedCliAction {
         prompt: String,
     },
     Resume {
-        mode: vtcode::startup::SessionResumeMode,
+        mode: crate::startup::SessionResumeMode,
     },
     Command(Commands),
     Chat,

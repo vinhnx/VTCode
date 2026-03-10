@@ -1,4 +1,4 @@
 //! Agent run loops for single-agent mode
 
-pub mod agents;
-pub mod runloop;
+pub(crate) mod agents;
+pub(crate) mod runloop;

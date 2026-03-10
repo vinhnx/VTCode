@@ -5,7 +5,7 @@ use vtcode_tui::EditingMode;
 
 use super::{SlashCommandContext, SlashCommandControl};
 
-pub async fn handle_toggle_plan_mode(
+pub(crate) async fn handle_toggle_plan_mode(
     ctx: SlashCommandContext<'_>,
     enable: Option<bool>,
 ) -> Result<SlashCommandControl> {
@@ -94,7 +94,7 @@ pub async fn handle_toggle_plan_mode(
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_cycle_mode(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+pub(crate) async fn handle_cycle_mode(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     let new_mode = ctx.session_stats.cycle_mode();
     if new_mode == EditingMode::Plan {
         crate::agent::runloop::unified::plan_mode_state::transition_to_plan_mode(

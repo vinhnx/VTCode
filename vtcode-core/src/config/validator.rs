@@ -9,20 +9,19 @@ use std::path::Path;
 
 use crate::config::api_keys::ApiKeySources;
 use crate::config::api_keys::get_api_key;
+use crate::config::constants::models::openai::RESPONSES_API_MODELS;
 use crate::config::loader::VTCodeConfig;
 use crate::utils::file_utils::read_file_with_context_sync;
 
 /// Loaded models database from docs/models.json
 #[derive(Debug, Clone)]
-pub struct ModelsDatabase {
+struct ModelsDatabase {
     /// Provider ID -> models
     providers: HashMap<String, ProviderModels>,
 }
 
 #[derive(Debug, Clone)]
 struct ProviderModels {
-    #[allow(dead_code)]
-    default_model: String,
     models: HashMap<String, ModelInfo>,
 }
 
@@ -44,12 +43,6 @@ impl ModelsDatabase {
         if let Some(obj) = json.as_object() {
             for (provider_id, provider_data) in obj {
                 if let Some(provider_obj) = provider_data.as_object() {
-                    let default_model = provider_obj
-                        .get("default_model")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("unknown")
-                        .to_string();
-
                     let mut models = HashMap::new();
 
                     if let Some(models_obj) = provider_obj.get("models").and_then(|v| v.as_object())
@@ -68,7 +61,6 @@ impl ModelsDatabase {
                     providers.insert(
                         provider_id.clone(),
                         ProviderModels {
-                            default_model,
                             models,
                         },
                     );
@@ -104,8 +96,9 @@ pub struct ConfigValidator {
 impl ConfigValidator {
     /// Create a new validator from models database file
     pub fn new(models_db_path: &Path) -> Result<Self> {
-        let models_db = ModelsDatabase::from_file(models_db_path)?;
-        Ok(ConfigValidator { models_db })
+        Ok(Self {
+            models_db: ModelsDatabase::from_file(models_db_path)?,
+        })
     }
 
     /// Validate entire configuration
@@ -195,42 +188,28 @@ pub struct ValidationResult {
     pub warnings: Vec<String>,
 }
 
-// Note: Source enum from original was for tracking validation sources,
-// but since we're implementing simple validators, this is not needed yet.
-#[allow(dead_code)]
-enum ValidationSource {
-    Config,
-    Models,
-}
-
-impl ValidationResult {
-    /// Check if validation has any errors
-    pub fn has_errors(&self) -> bool {
-        !self.errors.is_empty()
+pub fn check_prompt_cache_retention_compat(
+    config: &VTCodeConfig,
+    model: &str,
+    provider: &str,
+) -> Option<String> {
+    if !provider.eq_ignore_ascii_case("openai") {
+        return None;
     }
 
-    /// Format results for display
-    pub fn format_for_display(&self) -> String {
-        use std::fmt::Write;
-        let mut output = String::new();
-
-        if !self.errors.is_empty() {
-            output.push_str("Configuration Errors:\n");
-            for error in &self.errors {
-                let _ = writeln!(output, "  Error: {}", error);
-            }
-            output.push('\n');
+    if let Some(ref retention) = config.prompt_cache.providers.openai.prompt_cache_retention {
+        if retention.trim().is_empty() {
+            return None;
         }
-
-        if !self.warnings.is_empty() {
-            output.push_str("Configuration Warnings:\n");
-            for warning in &self.warnings {
-                let _ = writeln!(output, "  Warning: {}", warning);
-            }
+        if !RESPONSES_API_MODELS.contains(&model) {
+            return Some(format!(
+                "`prompt_cache_retention` is set but the selected model '{}' does not use the OpenAI Responses API. The setting will be ignored for this model. Run `vtcode models list --provider openai` to see supported Responses API models.",
+                model
+            ));
         }
-
-        output
     }
+
+    None
 }
 
 #[cfg(test)]
@@ -326,5 +305,25 @@ mod tests {
 
         let result = validator.validate(&config).unwrap();
         assert!(result.warnings.iter().any(|w| w.contains("exceeds")));
+    }
+
+    #[test]
+    fn retention_warning_for_non_responses_model() {
+        let mut cfg = VTCodeConfig::default();
+        cfg.prompt_cache.providers.openai.prompt_cache_retention = Some("24h".to_owned());
+        let msg = check_prompt_cache_retention_compat(&cfg, "gpt-oss-20b", "openai");
+        assert!(msg.is_some());
+    }
+
+    #[test]
+    fn retention_ok_for_responses_model() {
+        let mut cfg = VTCodeConfig::default();
+        cfg.prompt_cache.providers.openai.prompt_cache_retention = Some("24h".to_owned());
+        let msg = check_prompt_cache_retention_compat(
+            &cfg,
+            crate::config::constants::models::openai::GPT_5,
+            "openai",
+        );
+        assert!(msg.is_none());
     }
 }

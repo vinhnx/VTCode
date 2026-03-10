@@ -1,14 +1,11 @@
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
-use vtcode_core::core::agent::error_recovery::ErrorRecoveryState;
-use vtcode_core::tools::ApprovalRecorder;
 use vtcode_tui::EditingMode;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum ModelPickerTarget {
+pub(crate) enum ModelPickerTarget {
     #[default]
     Main,
 }
@@ -30,18 +27,11 @@ pub(crate) struct SessionStats {
     plan_mode_last_interview_cancelled: bool,
     /// Autonomous mode - auto-approve safe tools with reduced HITL prompts
     pub autonomous_mode: bool,
-    #[allow(dead_code)]
-    pub approval_recorder: Arc<ApprovalRecorder>,
-    #[allow(dead_code)]
-    pub safety_validator: Arc<RwLock<ToolCallSafetyValidator>>,
     // Phase 4 Integration: Resilient execution components
     pub circuit_breaker: Arc<vtcode_core::tools::circuit_breaker::CircuitBreaker>,
     pub tool_health_tracker: Arc<vtcode_core::tools::health::ToolHealthTracker>,
     pub rate_limiter: Arc<vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter>,
     pub validation_cache: Arc<vtcode_core::tools::validation_cache::ValidationCache>,
-    /// Error recovery state for circuit breaker recovery flow
-    #[allow(dead_code)]
-    pub error_recovery: Arc<RwLock<ErrorRecoveryState>>,
 
     /// Target configuration for the active model picker
     pub model_picker_target: ModelPickerTarget,

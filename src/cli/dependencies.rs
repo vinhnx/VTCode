@@ -1,10 +1,9 @@
 use anyhow::Result;
 use crossterm::style::Stylize;
-use vtcode::tools::AstGrepStatus;
-use vtcode::tools::RipgrepStatus;
 use vtcode_core::cli::args::{DependenciesSubcommand, ManagedDependency};
 use vtcode_core::tools::ast_grep_binary::AST_GREP_INSTALL_COMMAND;
 use vtcode_core::tools::ripgrep_binary::RIPGREP_INSTALL_COMMAND;
+use vtcode_core::tools::{AstGrepStatus, RipgrepStatus};
 
 const SEARCH_TOOLS_INSTALL_COMMAND: &str = "vtcode dependencies install search-tools";
 

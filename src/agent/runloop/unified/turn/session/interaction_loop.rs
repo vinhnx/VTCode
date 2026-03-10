@@ -13,13 +13,13 @@ use vtcode_tui::InlineHandle;
 use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::model_picker::ModelPickerState;
 use vtcode_core::core::agent::steering::SteeringMessage;
+use vtcode_core::hooks::{LifecycleHookEngine, SessionEndReason};
 
 use crate::agent::runloop::unified::async_mcp_manager::AsyncMcpManager;
 use crate::agent::runloop::unified::palettes::ActivePalette;
 use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
 use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
 use crate::agent::runloop::welcome::SessionBootstrap;
-use crate::hooks::lifecycle::SessionEndReason;
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) struct InteractionLoopContext<'a> {
@@ -44,7 +44,7 @@ pub(crate) struct InteractionLoopContext<'a> {
     pub mcp_panel_state: &'a mut crate::agent::runloop::mcp_events::McpPanelState,
     pub linked_directories:
         &'a mut Vec<crate::agent::runloop::unified::workspace_links::LinkedDirectory>,
-    pub lifecycle_hooks: Option<&'a crate::hooks::lifecycle::LifecycleHookEngine>,
+    pub lifecycle_hooks: Option<&'a LifecycleHookEngine>,
     pub full_auto: bool,
     pub approval_recorder: &'a Arc<vtcode_core::tools::ApprovalRecorder>,
     pub tool_permission_cache: &'a Arc<tokio::sync::RwLock<vtcode_core::acp::ToolPermissionCache>>,

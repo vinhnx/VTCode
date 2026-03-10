@@ -8,12 +8,17 @@
 
 use anyhow::Result;
 use std::path::PathBuf;
-use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::skills::authoring::SkillAuthor;
+use vtcode_core::skills::loader::EnhancedSkillLoader;
+use vtcode_core::skills::types::Skill;
+#[cfg(test)]
+use vtcode_core::config::loader::ConfigManager;
+#[cfg(test)]
 use vtcode_core::skills::loader::{
-    EnhancedSkillLoader, SkillMentionDetectionOptions, detect_skill_mentions_with_options,
+    SkillMentionDetectionOptions, detect_skill_mentions_with_options,
 };
-use vtcode_core::skills::types::{Skill, SkillManifest};
+#[cfg(test)]
+use vtcode_core::skills::types::SkillManifest;
 
 use super::skills_commands_parser::parse_skill_command as parse_skill_command_impl;
 
@@ -27,7 +32,7 @@ async fn regenerate_skills_index_best_effort(workspace: &std::path::Path) {
 
 /// Skill-related command actions
 #[derive(Clone, Debug)]
-pub enum SkillCommandAction {
+pub(crate) enum SkillCommandAction {
     /// Open interactive skill manager
     Interactive,
     /// Show help
@@ -54,7 +59,7 @@ pub enum SkillCommandAction {
 
 /// Result of a skill command
 #[derive(Clone, Debug)]
-pub enum SkillCommandOutcome {
+pub(crate) enum SkillCommandOutcome {
     /// Command handled, display info
     Handled { message: String },
     /// Load skill into session
@@ -68,12 +73,12 @@ pub enum SkillCommandOutcome {
 }
 
 /// Parse skill subcommand from input
-pub fn parse_skill_command(input: &str) -> Result<Option<SkillCommandAction>> {
+pub(crate) fn parse_skill_command(input: &str) -> Result<Option<SkillCommandAction>> {
     parse_skill_command_impl(input)
 }
 
 /// Execute a skill command
-pub async fn handle_skill_command(
+pub(crate) async fn handle_skill_command(
     action: SkillCommandAction,
     workspace: PathBuf,
 ) -> Result<SkillCommandOutcome> {
@@ -366,8 +371,8 @@ Shortcuts:
 /// // Description matching
 /// "Extract tables from PDF document" -> ["pdf-analyzer"] (if description contains "extract" + "tables" or "PDF")
 /// ```
-#[allow(dead_code)]
-pub async fn detect_mentioned_skills(
+#[cfg(test)]
+async fn detect_mentioned_skills(
     user_input: &str,
     workspace: PathBuf,
 ) -> Result<Vec<(String, Skill)>> {

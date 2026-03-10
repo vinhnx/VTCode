@@ -9,6 +9,7 @@ use tokio::time::{Duration, sleep, timeout};
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::resolve_timeout;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+use vtcode_core::hooks::{SessionEndReason, SessionStartTrigger};
 
 /// Optimization: Pre-computed idle detection thresholds to avoid repeated config lookups
 #[derive(Clone, Copy)]
@@ -45,7 +46,6 @@ use crate::agent::runloop::unified::session_setup::{
 use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::status_line::InputStatusState;
 use crate::agent::runloop::unified::workspace_links::LinkedDirectory;
-use crate::hooks::lifecycle::{SessionEndReason, SessionStartTrigger};
 
 #[path = "session_loop_runner/mod.rs"]
 mod session_loop_runner;

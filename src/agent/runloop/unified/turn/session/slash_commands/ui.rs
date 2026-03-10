@@ -64,7 +64,7 @@ pub(super) async fn wait_for_list_modal_selection(
     }
 }
 
-pub async fn handle_theme_changed(
+pub(crate) async fn handle_theme_changed(
     ctx: SlashCommandContext<'_>,
     theme_id: String,
 ) -> Result<SlashCommandControl> {
@@ -76,7 +76,7 @@ pub async fn handle_theme_changed(
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_start_theme_palette(
+pub(crate) async fn handle_start_theme_palette(
     mut ctx: SlashCommandContext<'_>,
     mode: crate::agent::runloop::slash_commands::ThemePaletteMode,
 ) -> Result<SlashCommandControl> {
@@ -92,7 +92,7 @@ pub async fn handle_start_theme_palette(
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_start_session_palette(
+pub(crate) async fn handle_start_session_palette(
     mut ctx: SlashCommandContext<'_>,
     mode: SessionPaletteMode,
     limit: usize,
@@ -132,7 +132,7 @@ pub async fn handle_start_session_palette(
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_start_history_picker(
+pub(crate) async fn handle_start_history_picker(
     mut ctx: SlashCommandContext<'_>,
 ) -> Result<SlashCommandControl> {
     if !ctx.renderer.supports_inline_ui() {
@@ -151,7 +151,7 @@ pub async fn handle_start_history_picker(
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_start_file_browser(
+pub(crate) async fn handle_start_file_browser(
     mut ctx: SlashCommandContext<'_>,
     initial_filter: Option<String>,
 ) -> Result<SlashCommandControl> {
@@ -169,7 +169,7 @@ pub async fn handle_start_file_browser(
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_start_model_selection(
+pub(crate) async fn handle_start_model_selection(
     ctx: SlashCommandContext<'_>,
 ) -> Result<SlashCommandControl> {
     ctx.session_stats.model_picker_target = ModelPickerTarget::Main;

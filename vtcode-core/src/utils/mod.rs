@@ -125,6 +125,7 @@ pub mod path;
 pub mod ratatui_styles;
 pub mod safety;
 pub mod serde_helpers;
+pub mod session_debug;
 pub mod session_archive;
 pub mod style_helpers;
 pub mod terminal_color_probe;

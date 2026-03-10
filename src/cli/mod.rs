@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use vtcode::startup::StartupContext;
+use crate::startup::StartupContext;
 use vtcode_core::cli::args::Cli;
 
 mod acp;
@@ -104,7 +104,7 @@ mod tests {
     use std::collections::BTreeMap;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
-    use vtcode::startup::{SessionResumeMode, StartupContext};
+    use crate::startup::{SessionResumeMode, StartupContext};
     use vtcode_core::cli::args::{Cli, Commands};
     use vtcode_core::config::core::PromptCachingConfig;
     use vtcode_core::config::loader::VTCodeConfig;

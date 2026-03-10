@@ -8,7 +8,7 @@ use std::collections::VecDeque;
 
 /// Status of an MCP event
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum McpEventStatus {
+pub(crate) enum McpEventStatus {
     /// Event is pending/starting
     Pending,
     /// Event completed successfully
@@ -21,7 +21,7 @@ pub enum McpEventStatus {
 
 impl McpEventStatus {
     #[inline]
-    pub fn symbol(self) -> &'static str {
+    pub(crate) fn symbol(self) -> &'static str {
         match self {
             Self::Pending => "[~]",
             Self::Success => "[OK]",
@@ -31,7 +31,7 @@ impl McpEventStatus {
     }
 
     #[inline]
-    pub fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> &'static str {
         match self {
             Self::Pending => "pending",
             Self::Success => "success",
@@ -43,28 +43,28 @@ impl McpEventStatus {
 
 /// A single MCP event
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct McpEvent {
+pub(crate) struct McpEvent {
     /// Unique event ID
-    pub id: String,
+    pub(crate) id: String,
     /// Provider name
-    pub provider: String,
+    pub(crate) provider: String,
     /// Method/tool name
-    pub method: String,
+    pub(crate) method: String,
     /// Event status
-    pub status: McpEventStatus,
+    pub(crate) status: McpEventStatus,
     /// Arguments preview (for debugging)
-    pub args_preview: Option<String>,
+    pub(crate) args_preview: Option<String>,
     /// Full event data (only shown in full mode)
-    pub full_data: Option<serde_json::Value>,
+    pub(crate) full_data: Option<serde_json::Value>,
     /// Timestamp when event occurred
-    pub timestamp: std::time::SystemTime,
+    pub(crate) timestamp: std::time::SystemTime,
     /// Duration in milliseconds (if completed)
-    pub duration_ms: Option<u64>,
+    pub(crate) duration_ms: Option<u64>,
 }
 
 impl McpEvent {
     /// Create a new MCP event
-    pub fn new(provider: String, method: String, args_preview: Option<String>) -> Self {
+    pub(crate) fn new(provider: String, method: String, args_preview: Option<String>) -> Self {
         Self {
             id: format!("mcp_{}_{}", provider, method),
             provider,
@@ -78,14 +78,14 @@ impl McpEvent {
     }
 
     /// Mark event as successful
-    pub fn success(&mut self, full_data: Option<serde_json::Value>) {
+    pub(crate) fn success(&mut self, full_data: Option<serde_json::Value>) {
         self.status = McpEventStatus::Success;
         self.full_data = full_data;
         self.update_duration();
     }
 
     /// Mark event as failed
-    pub fn failure(&mut self, error_message: Option<String>) {
+    pub(crate) fn failure(&mut self, error_message: Option<String>) {
         self.status = McpEventStatus::Failure;
         if let Some(error) = error_message {
             self.full_data = Some(serde_json::json!({"error": error}));
@@ -132,7 +132,7 @@ impl McpEvent {
 
 /// MCP panel state for managing events and UI
 #[derive(Debug, Clone)]
-pub struct McpPanelState {
+pub(crate) struct McpPanelState {
     /// Event queue (newest first)
     events: VecDeque<McpEvent>,
     /// UI configuration
@@ -144,7 +144,7 @@ pub struct McpPanelState {
 
 impl McpPanelState {
     /// Create a new MCP panel state
-    pub fn new(max_events: usize, mcp_enabled: bool) -> Self {
+    pub(crate) fn new(max_events: usize, mcp_enabled: bool) -> Self {
         Self {
             events: VecDeque::new(),
             max_events,
@@ -153,7 +153,7 @@ impl McpPanelState {
     }
 
     /// Add a new event to the panel
-    pub fn add_event(&mut self, event: McpEvent) {
+    pub(crate) fn add_event(&mut self, event: McpEvent) {
         if !self.enabled {
             return;
         }
@@ -181,12 +181,12 @@ impl McpPanelState {
     }
 
     /// Return whether MCP tracking is currently enabled.
-    pub fn is_enabled(&self) -> bool {
+    pub(crate) fn is_enabled(&self) -> bool {
         self.enabled
     }
 
     /// Snapshot the newest events (up to `limit`) for presentation.
-    pub fn recent_events_snapshot(&self, limit: usize) -> Vec<McpEvent> {
+    pub(crate) fn recent_events_snapshot(&self, limit: usize) -> Vec<McpEvent> {
         if limit == 0 {
             return Vec::new();
         }

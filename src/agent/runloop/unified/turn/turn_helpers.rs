@@ -6,7 +6,7 @@ use std::time::Duration;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 /// Centralized error display with consistent formatting
-pub fn display_error(
+pub(crate) fn display_error(
     renderer: &mut AnsiRenderer,
     category: &str,
     error: &anyhow::Error,
@@ -15,28 +15,8 @@ pub fn display_error(
     renderer.line(MessageStyle::Error, &format!("{}: {}", category, error))
 }
 
-/// Error display with recovery suggestions from [`vtcode_commons::ErrorCategory`].
-///
-/// Shows the error itself, then appends actionable recovery hints when available.
-#[allow(dead_code)]
-pub fn display_error_with_recovery(
-    renderer: &mut AnsiRenderer,
-    category: &str,
-    error: &anyhow::Error,
-) -> Result<()> {
-    display_error(renderer, category, error)?;
-
-    let err_cat = vtcode_commons::classify_anyhow_error(error);
-    let suggestions = err_cat.recovery_suggestions();
-    if !suggestions.is_empty() {
-        let hint = suggestions.join("; ");
-        renderer.line(MessageStyle::Info, &format!("Hint: {}", hint))?;
-    }
-    Ok(())
-}
-
 /// Centralized status message display
-pub fn display_status(renderer: &mut AnsiRenderer, message: &str) -> Result<()> {
+pub(crate) fn display_status(renderer: &mut AnsiRenderer, message: &str) -> Result<()> {
     renderer.line(MessageStyle::Info, message)
 }
 
@@ -47,7 +27,7 @@ pub(crate) fn supports_responses_chaining(provider_name: &str) -> bool {
 }
 
 /// Check if operation should continue based on ctrl-c state
-pub fn should_continue_operation(ctrl_c_state: &CtrlCState) -> bool {
+pub(crate) fn should_continue_operation(ctrl_c_state: &CtrlCState) -> bool {
     !ctrl_c_state.is_cancel_requested() && !ctrl_c_state.is_exit_requested()
 }
 
@@ -56,7 +36,7 @@ pub fn should_continue_operation(ctrl_c_state: &CtrlCState) -> bool {
 /// Strips internal implementation details that leak from `anyhow` error chains,
 /// long stack traces, and duplicated "context: source" patterns so that the TUI
 /// shows a clean, actionable one-liner.
-pub fn sanitize_error_for_display(raw: &str) -> String {
+pub(crate) fn sanitize_error_for_display(raw: &str) -> String {
     // 1. Take only the first meaningful line — anyhow chains are newline-separated.
     let first_line = raw
         .lines()
@@ -91,7 +71,7 @@ pub fn sanitize_error_for_display(raw: &str) -> String {
 /// Format a tool error with category label and optional recovery hint.
 ///
 /// Returns a tuple of (primary_message, optional_hint).
-pub fn format_tool_error_for_user(
+pub(crate) fn format_tool_error_for_user(
     tool_name: &str,
     error_message: &str,
 ) -> (String, Option<String>) {
@@ -112,7 +92,7 @@ pub fn format_tool_error_for_user(
 }
 
 /// Exponential backoff calculation
-pub fn calculate_backoff(attempt: usize, base_ms: u64, max_ms: u64) -> Duration {
+pub(crate) fn calculate_backoff(attempt: usize, base_ms: u64, max_ms: u64) -> Duration {
     let exp = 2_u64.saturating_pow(attempt.min(4) as u32);
     let backoff_ms = base_ms.saturating_mul(exp);
     Duration::from_millis(backoff_ms.min(max_ms))

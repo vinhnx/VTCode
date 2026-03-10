@@ -1,5 +1,5 @@
 use anyhow::Result;
-use vtcode::startup::SessionResumeMode;
+use crate::startup::SessionResumeMode;
 use vtcode_core::cli::args::AskCommandOptions;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;

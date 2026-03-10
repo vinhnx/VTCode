@@ -106,17 +106,11 @@ pub(crate) fn process_llm_tool_output(output: Value) -> ToolExecutionStatus {
                 .collect::<Vec<String>>()
         })
         .unwrap_or_default();
-    let has_more = output
-        .get("has_more")
-        .and_then(|value| value.as_bool())
-        .unwrap_or(false);
-
     ToolExecutionStatus::Success {
         output,
         stdout,
         modified_files,
         command_success,
-        has_more,
     }
 }
 

@@ -14,14 +14,14 @@ use vtcode_core::{
 
 /// Interactive handler that prompts the user on the terminal when an MCP provider
 /// requests additional input via the elicitation flow.
-pub struct InteractiveMcpElicitationHandler {
+pub(crate) struct InteractiveMcpElicitationHandler {
     prompt_lock: Mutex<()>,
     hitl_notification_bell: bool,
     approval_policy: Arc<StdRwLock<AskForApproval>>,
 }
 
 impl InteractiveMcpElicitationHandler {
-    pub fn new(
+    pub(crate) fn new(
         hitl_notification_bell: bool,
         approval_policy: Arc<StdRwLock<AskForApproval>>,
     ) -> Self {

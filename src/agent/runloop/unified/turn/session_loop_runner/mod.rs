@@ -240,6 +240,9 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 Some(archive),
             )
         };
+        crate::main_helpers::set_runtime_archive_session_id(Some(
+            thread_handle.thread_id().to_string(),
+        ));
         let _session_trigger = if resume_ref.is_some() {
             SessionStartTrigger::Resume
         } else {
@@ -304,7 +307,6 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         let mut follow_up_placeholder = ui_setup.follow_up_placeholder;
         let mut next_checkpoint_turn = ui_setup.next_checkpoint_turn;
         let mut session_end_reason = ui_setup.session_end_reason;
-        let _ui_redraw_batcher = ui_setup.ui_redraw_batcher;
         let _file_palette_task_guard = ui_setup.file_palette_task_guard;
         let SessionState {
             session_bootstrap,
@@ -568,7 +570,6 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     crate::agent::runloop::unified::turn::run_turn_loop(
                         &mut working_history,
                         turn_loop_ctx,
-                        &mut session_end_reason,
                     ),
                 )
                 .await;

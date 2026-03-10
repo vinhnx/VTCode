@@ -82,20 +82,20 @@ fn append_context_metrics(prompt: &mut String, context: &SystemPromptContext) {
 
 /// Cached system prompt that avoids redundant rebuilding
 #[derive(Clone)]
-pub struct IncrementalSystemPrompt {
+pub(crate) struct IncrementalSystemPrompt {
     /// The cached system prompt content
     cached_prompt: Arc<RwLock<CachedPrompt>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub enum PromptAssemblyMode {
+pub(crate) enum PromptAssemblyMode {
     #[default]
     AppendInstructions,
     BaseIncludesInstructions,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub enum PromptCacheShapingMode {
+pub(crate) enum PromptCacheShapingMode {
     #[default]
     Disabled,
     TrailingRuntimeContext,
@@ -103,7 +103,7 @@ pub enum PromptCacheShapingMode {
 }
 
 impl PromptCacheShapingMode {
-    pub fn is_enabled(self) -> bool {
+    pub(crate) fn is_enabled(self) -> bool {
         !matches!(self, Self::Disabled)
     }
 }
@@ -123,7 +123,7 @@ struct CachedPrompt {
 }
 
 impl IncrementalSystemPrompt {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             cached_prompt: Arc::new(RwLock::new(CachedPrompt {
                 content: String::new(),
@@ -136,7 +136,7 @@ impl IncrementalSystemPrompt {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub async fn get_system_prompt(
+    pub(crate) async fn get_system_prompt(
         &self,
         base_system_prompt: &str,
         config_hash: u64,
@@ -176,7 +176,7 @@ impl IncrementalSystemPrompt {
 
     /// Rebuild the prompt
     #[allow(clippy::too_many_arguments)]
-    pub async fn rebuild_prompt(
+    pub(crate) async fn rebuild_prompt(
         &self,
         base_system_prompt: &str,
         config_hash: u64,
@@ -386,20 +386,9 @@ impl IncrementalSystemPrompt {
         prompt
     }
 
-    /// Clear the cached prompt (useful when configuration changes)
-    #[allow(dead_code)]
-    pub async fn clear_cache(&self) {
-        let mut write_guard = self.cached_prompt.write().await;
-        write_guard.content.clear();
-        write_guard.config_hash = 0;
-        write_guard.context_hash = 0;
-        write_guard.retry_attempts = usize::MAX;
-        write_guard.assembly_mode = PromptAssemblyMode::AppendInstructions;
-    }
-
     /// Get cache statistics
-    #[allow(dead_code)]
-    pub async fn cache_stats(&self) -> (bool, usize) {
+    #[cfg(test)]
+    async fn cache_stats(&self) -> (bool, usize) {
         let read_guard = self.cached_prompt.read().await;
         (!read_guard.content.is_empty(), read_guard.content.len())
     }
@@ -414,18 +403,18 @@ impl Default for IncrementalSystemPrompt {
 /// Configuration that affects system prompt building
 /// Uses pre-computed hash of base_prompt to avoid cloning the full string
 #[derive(Debug, Clone, Hash)]
-pub struct SystemPromptConfig {
+pub(crate) struct SystemPromptConfig {
     /// Pre-computed hash of the base prompt (avoids storing full string)
-    pub base_prompt_hash: u64,
-    pub enable_retry_context: bool,
-    pub enable_token_tracking: bool,
-    pub max_retry_attempts: usize,
-    pub prompt_assembly_mode: PromptAssemblyMode,
+    pub(crate) base_prompt_hash: u64,
+    pub(crate) enable_retry_context: bool,
+    pub(crate) enable_token_tracking: bool,
+    pub(crate) max_retry_attempts: usize,
+    pub(crate) prompt_assembly_mode: PromptAssemblyMode,
 }
 
 impl SystemPromptConfig {
     /// Create a new config with a pre-computed hash of the base prompt
-    pub fn new(
+    pub(crate) fn new(
         base_prompt: &str,
         enable_retry_context: bool,
         enable_token_tracking: bool,
@@ -447,7 +436,7 @@ impl SystemPromptConfig {
         }
     }
 
-    pub fn hash(&self) -> u64 {
+    pub(crate) fn hash(&self) -> u64 {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
 
@@ -463,30 +452,30 @@ impl SystemPromptConfig {
 
 /// Context that affects system prompt building
 #[derive(Debug, Clone)]
-pub struct SystemPromptContext {
-    pub conversation_length: usize,
-    pub tool_usage_count: usize,
-    pub error_count: usize,
-    pub token_usage_ratio: f64,
-    pub full_auto: bool,
+pub(crate) struct SystemPromptContext {
+    pub(crate) conversation_length: usize,
+    pub(crate) tool_usage_count: usize,
+    pub(crate) error_count: usize,
+    pub(crate) token_usage_ratio: f64,
+    pub(crate) full_auto: bool,
     /// Plan mode: read-only mode for exploration and planning.
-    pub plan_mode: bool,
+    pub(crate) plan_mode: bool,
     /// Discovered skills for immediate awareness
-    pub discovered_skills: Vec<vtcode_core::skills::types::Skill>,
+    pub(crate) discovered_skills: Vec<vtcode_core::skills::types::Skill>,
     /// Total context window size for the current model (e.g., 200000, 1000000)
-    pub context_window_size: Option<usize>,
+    pub(crate) context_window_size: Option<usize>,
     /// Current tokens used in the conversation
-    pub current_token_usage: Option<usize>,
+    pub(crate) current_token_usage: Option<usize>,
     /// Whether the model supports context awareness (Claude 4.5+)
-    pub supports_context_awareness: bool,
+    pub(crate) supports_context_awareness: bool,
     /// Actionable guidance based on token budget status
-    pub token_budget_guidance: &'static str,
+    pub(crate) token_budget_guidance: &'static str,
     /// Runtime context shaping strategy used to improve prompt prefix cache locality.
-    pub prompt_cache_shaping_mode: PromptCacheShapingMode,
+    pub(crate) prompt_cache_shaping_mode: PromptCacheShapingMode,
 }
 
 impl SystemPromptContext {
-    pub fn hash(&self) -> u64 {
+    pub(crate) fn hash(&self) -> u64 {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
 

@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
-use vtcode_core::tools::ast_grep_binary::{
+use crate::tools::ast_grep_binary::{
     alias_ast_grep_binary_name, canonical_ast_grep_binary_name,
 };
 

@@ -9,17 +9,17 @@ use std::time::Duration;
 use tracing::{debug, info};
 use vtcode_config::update::UpdateConfig;
 
-pub use install_source::InstallSource;
-pub use types::{InstallOutcome, UpdateGuidance, UpdateInfo, VersionInfo};
+pub(crate) use install_source::InstallSource;
+pub(crate) use types::{InstallOutcome, UpdateGuidance, UpdateInfo, VersionInfo};
 
 /// Auto-updater for VT Code binary from GitHub Releases
-pub struct Updater {
+pub(crate) struct Updater {
     current_version: Version,
     config: UpdateConfig,
 }
 
 impl Updater {
-    pub fn new(current_version_str: &str) -> Result<Self> {
+    pub(crate) fn new(current_version_str: &str) -> Result<Self> {
         let current_version = Version::parse(current_version_str)
             .with_context(|| format!("Invalid version format: {}", current_version_str))?;
 
@@ -34,29 +34,19 @@ impl Updater {
         })
     }
 
-    pub fn with_config(current_version_str: &str, config: UpdateConfig) -> Result<Self> {
-        let current_version = Version::parse(current_version_str)
-            .with_context(|| format!("Invalid version format: {}", current_version_str))?;
-
-        Ok(Self {
-            current_version,
-            config,
-        })
-    }
-
-    pub fn current_version(&self) -> &Version {
+    pub(crate) fn current_version(&self) -> &Version {
         &self.current_version
     }
 
-    pub fn config(&self) -> &UpdateConfig {
+    pub(crate) fn config(&self) -> &UpdateConfig {
         &self.config
     }
 
-    pub fn release_url(version: &Version) -> String {
+    pub(crate) fn release_url(version: &Version) -> String {
         github::release_url(version)
     }
 
-    pub async fn check_for_updates(&self) -> Result<Option<UpdateInfo>> {
+    pub(crate) async fn check_for_updates(&self) -> Result<Option<UpdateInfo>> {
         debug!(
             "Checking for VT Code updates (channel: {})...",
             self.config.channel
@@ -89,7 +79,7 @@ impl Updater {
         Ok(latest)
     }
 
-    pub async fn check_for_updates_cached(
+    pub(crate) async fn check_for_updates_cached(
         &self,
         min_interval: Duration,
     ) -> Result<Option<UpdateInfo>> {
@@ -103,7 +93,7 @@ impl Updater {
         result
     }
 
-    pub async fn install_update(&self, force: bool) -> Result<InstallOutcome> {
+    pub(crate) async fn install_update(&self, force: bool) -> Result<InstallOutcome> {
         let guidance = self.update_guidance();
         if guidance.source.is_managed() {
             bail!(
@@ -150,7 +140,7 @@ impl Updater {
         }
     }
 
-    pub fn update_guidance(&self) -> UpdateGuidance {
+    pub(crate) fn update_guidance(&self) -> UpdateGuidance {
         let source = install_source::detect_install_source();
         UpdateGuidance {
             source,
@@ -158,16 +148,12 @@ impl Updater {
         }
     }
 
-    pub fn record_update_check() -> Result<()> {
-        cache::record_update_check()
-    }
-
-    pub async fn list_versions(&self, limit: usize) -> Result<Vec<VersionInfo>> {
+    pub(crate) async fn list_versions(&self, limit: usize) -> Result<Vec<VersionInfo>> {
         debug!("Fetching available versions (limit: {})...", limit);
         github::list_versions(limit).await
     }
 
-    pub fn pin_version(
+    pub(crate) fn pin_version(
         &mut self,
         version: Version,
         reason: Option<String>,
@@ -180,7 +166,7 @@ impl Updater {
         Ok(())
     }
 
-    pub fn unpin_version(&mut self) -> Result<()> {
+    pub(crate) fn unpin_version(&mut self) -> Result<()> {
         self.config.clear_pin();
         self.config
             .save()
@@ -188,32 +174,12 @@ impl Updater {
         Ok(())
     }
 
-    pub fn is_pinned(&self) -> bool {
+    pub(crate) fn is_pinned(&self) -> bool {
         self.config.is_pinned()
     }
 
-    pub fn pinned_version(&self) -> Option<&Version> {
+    pub(crate) fn pinned_version(&self) -> Option<&Version> {
         self.config.pinned_version()
-    }
-}
-
-impl UpdateInfo {
-    pub fn is_major_update(&self, current: &Version) -> bool {
-        self.version.major > current.major
-    }
-
-    pub fn is_minor_update(&self, current: &Version) -> bool {
-        self.version.major == current.major && self.version.minor > current.minor
-    }
-
-    pub fn is_patch_update(&self, current: &Version) -> bool {
-        self.version.major == current.major
-            && self.version.minor == current.minor
-            && self.version.patch > current.patch
-    }
-
-    pub fn is_prerelease(&self) -> bool {
-        !self.version.pre.is_empty()
     }
 }
 
@@ -254,58 +220,5 @@ mod tests {
             install_source::detect_install_source_from_path(Path::new("/usr/local/bin/vtcode")),
             InstallSource::Standalone
         );
-    }
-
-    #[test]
-    fn test_update_info_major() {
-        let current = Version::parse("1.0.0").expect("current");
-        let update = UpdateInfo {
-            version: Version::parse("2.0.0").expect("version"),
-            tag: "v2.0.0".to_string(),
-            download_url: "http://example.com".to_string(),
-            release_notes: "".to_string(),
-        };
-        assert!(update.is_major_update(&current));
-        assert!(!update.is_minor_update(&current));
-        assert!(!update.is_patch_update(&current));
-    }
-
-    #[test]
-    fn test_update_info_minor() {
-        let current = Version::parse("1.0.0").expect("current");
-        let update = UpdateInfo {
-            version: Version::parse("1.1.0").expect("version"),
-            tag: "v1.1.0".to_string(),
-            download_url: "http://example.com".to_string(),
-            release_notes: "".to_string(),
-        };
-        assert!(!update.is_major_update(&current));
-        assert!(update.is_minor_update(&current));
-        assert!(!update.is_patch_update(&current));
-    }
-
-    #[test]
-    fn test_update_info_patch() {
-        let current = Version::parse("1.0.0").expect("current");
-        let update = UpdateInfo {
-            version: Version::parse("1.0.1").expect("version"),
-            tag: "v1.0.1".to_string(),
-            download_url: "http://example.com".to_string(),
-            release_notes: "".to_string(),
-        };
-        assert!(!update.is_major_update(&current));
-        assert!(!update.is_minor_update(&current));
-        assert!(update.is_patch_update(&current));
-    }
-
-    #[test]
-    fn test_prerelease_detection() {
-        let update = UpdateInfo {
-            version: Version::parse("1.0.0-alpha.1").expect("version"),
-            tag: "v1.0.0-alpha.1".to_string(),
-            download_url: "http://example.com".to_string(),
-            release_notes: "".to_string(),
-        };
-        assert!(update.is_prerelease());
     }
 }

@@ -15,7 +15,7 @@ use vtcode_core::tools::{
 
 /// Safety violation errors
 #[derive(Debug, Error)]
-pub enum SafetyError {
+pub(crate) enum SafetyError {
     #[error("Per-turn tool limit reached (max: {max}). Wait or adjust config.")]
     TurnLimitReached { max: usize },
     #[error("Session tool limit reached (max: {max}). End turn or reduce tool calls.")]
@@ -31,7 +31,7 @@ pub enum SafetyError {
 }
 
 /// Safety validation rules for tool calls
-pub struct ToolCallSafetyValidator {
+pub(crate) struct ToolCallSafetyValidator {
     /// Total tool limit per session
     max_per_session: usize,
     /// Shared safety gateway for canonical checks
@@ -49,7 +49,7 @@ struct TestRateLimits {
 }
 
 impl ToolCallSafetyValidator {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let rate_limit_per_second = std::env::var("VTCODE_TOOL_RATE_LIMIT_PER_SECOND")
             .ok()
             .and_then(|v| v.parse::<usize>().ok())
@@ -89,19 +89,19 @@ impl ToolCallSafetyValidator {
     }
 
     /// Reset per-turn counters; call at the start of a turn
-    pub async fn start_turn(&mut self) {
+    pub(crate) async fn start_turn(&mut self) {
         self.safety_gateway.start_turn().await;
     }
 
     /// Override per-turn and session limits based on runtime config
-    pub fn set_limits(&mut self, max_per_turn: usize, max_per_session: usize) {
+    pub(crate) fn set_limits(&mut self, max_per_turn: usize, max_per_session: usize) {
         self.max_per_session = max_per_session;
         self.safety_gateway
             .set_limits(max_per_turn, max_per_session);
     }
 
     /// Increase the session tool limit
-    pub fn increase_session_limit(&mut self, increment: usize) {
+    pub(crate) fn increase_session_limit(&mut self, increment: usize) {
         self.max_per_session = self.max_per_session.saturating_add(increment);
         self.safety_gateway.increase_session_limit(increment);
         tracing::info!("Session tool limit increased to {}", self.max_per_session);
@@ -124,12 +124,12 @@ impl ToolCallSafetyValidator {
     }
 
     /// Get the current session limit
-    pub fn get_session_limit(&self) -> usize {
+    pub(crate) fn get_session_limit(&self) -> usize {
         self.max_per_session
     }
 
     /// Validate a tool call before execution
-    pub async fn validate_call(
+    pub(crate) async fn validate_call(
         &mut self,
         tool_name: &str,
         args: &Value,
@@ -139,7 +139,7 @@ impl ToolCallSafetyValidator {
     }
 
     /// Validate a tool call with an explicit invocation id for log correlation.
-    pub async fn validate_call_with_invocation_id(
+    pub(crate) async fn validate_call_with_invocation_id(
         &mut self,
         tool_name: &str,
         args: &Value,

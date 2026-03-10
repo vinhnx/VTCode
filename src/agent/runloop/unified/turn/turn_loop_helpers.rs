@@ -6,7 +6,6 @@ use crate::agent::runloop::unified::plan_mode_state::{
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use crate::agent::runloop::unified::turn::turn_helpers::{display_error, display_status};
 use crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext;
-use crate::hooks::lifecycle::SessionEndReason;
 use vtcode_core::config::constants::defaults::{
     DEFAULT_MAX_CONVERSATION_TURNS, DEFAULT_MAX_REPEATED_TOOL_CALLS, DEFAULT_MAX_TOOL_LOOPS,
 };
@@ -211,47 +210,6 @@ pub(super) async fn handle_steering_messages(
     }
 
     Ok(false)
-}
-
-pub(super) async fn handle_pre_request_action(
-    ctx: &mut TurnLoopContext<'_>,
-    working_history: &mut Vec<uni::Message>,
-    session_end_reason: &mut SessionEndReason,
-    result: &mut TurnLoopResult,
-) -> Result<bool> {
-    use crate::agent::runloop::unified::context_manager::PreRequestAction;
-
-    let context_window_size = ctx
-        .provider_client
-        .effective_context_size(&ctx.config.model);
-    match ctx
-        .context_manager
-        .pre_request_check(working_history, context_window_size)
-    {
-        PreRequestAction::Stop(msg) => {
-            display_error(
-                ctx.renderer,
-                "Session Limit Reached",
-                &anyhow::anyhow!("{}", msg),
-            )?;
-            *result = TurnLoopResult::Aborted;
-            *session_end_reason = SessionEndReason::Error;
-            Ok(true)
-        }
-        PreRequestAction::Warn(msg) => {
-            display_status(ctx.renderer, &format!("Warning: {}", msg))?;
-            let alert = format!("SYSTEM ALERT: {}", msg);
-            let duplicate_alert = working_history.last().is_some_and(|last| {
-                last.role == uni::MessageRole::System
-                    && last.content.as_text_borrowed() == Some(alert.as_str())
-            });
-            if !duplicate_alert {
-                working_history.push(uni::Message::system(alert));
-            }
-            Ok(false)
-        }
-        PreRequestAction::Proceed => Ok(false),
-    }
 }
 
 pub(super) async fn maybe_handle_plan_mode_exit_trigger(

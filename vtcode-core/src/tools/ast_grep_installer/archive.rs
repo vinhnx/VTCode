@@ -7,7 +7,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use flate2::read::GzDecoder;
 use tar::Archive;
 use tempfile::TempDir;
-use vtcode_core::tools::ast_grep_binary::{
+use crate::tools::ast_grep_binary::{
     alias_ast_grep_binary_name, canonical_ast_grep_binary_name,
 };
 use zip::ZipArchive;

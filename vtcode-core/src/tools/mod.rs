@@ -120,6 +120,7 @@
 
 pub mod apply_patch;
 pub mod ast_grep_binary;
+pub mod ast_grep_installer;
 pub mod builder;
 pub mod constants;
 pub mod error_messages;
@@ -159,6 +160,7 @@ pub mod result;
 pub mod result_cache;
 pub mod result_metadata;
 pub mod ripgrep_binary;
+pub mod ripgrep_installer;
 pub mod safety_gateway;
 pub mod search_metrics;
 pub mod shell;
@@ -185,6 +187,7 @@ pub mod improvement_algorithms;
 pub mod improvements_config;
 pub mod improvements_errors;
 pub mod improvements_registry_ext;
+mod install_support;
 #[allow(deprecated)]
 pub mod middleware; // Deprecated - prefer async_middleware
 pub mod optimized_registry;
@@ -203,6 +206,7 @@ pub const NEW_SHARED_TRACKER_ID: &str = "new_shared_tracker";
 pub use async_pipeline::{
     AsyncToolPipeline, ExecutionContext, ExecutionPriority, ToolRequest as AsyncToolRequest,
 };
+pub use ast_grep_installer::{AstGrepInstallOutcome, AstGrepStatus};
 pub use autonomous_executor::{AutonomousExecutor, AutonomousPolicy};
 pub use cache::FileCache;
 pub use command_cache::PermissionCache;
@@ -234,6 +238,7 @@ pub use result_cache::{ToolCacheKey, ToolResultCache};
 pub use result_metadata::{
     EnhancedToolResult, ResultCompleteness, ResultMetadata, ResultScorer, ScorerRegistry,
 };
+pub use ripgrep_installer::RipgrepStatus;
 pub use safety_gateway::{
     SafetyCheckResult, SafetyContext, SafetyDecision, SafetyError, SafetyGateway,
     SafetyGatewayConfig, SafetyStats, SafetyTrustLevel,

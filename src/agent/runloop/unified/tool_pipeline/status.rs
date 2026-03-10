@@ -15,9 +15,6 @@ pub(crate) enum ToolExecutionStatus {
         modified_files: Vec<String>,
         /// Whether the command was successful
         command_success: bool,
-        /// Whether there are more results available
-        #[allow(dead_code)]
-        has_more: bool,
     },
     /// Tool execution failed
     Failure {
@@ -43,9 +40,7 @@ pub(crate) struct ToolPipelineOutcome {
 impl ToolPipelineOutcome {
     pub(crate) fn from_status(status: ToolExecutionStatus) -> Self {
         let command_success = match &status {
-            ToolExecutionStatus::Success {
-                command_success, ..
-            } => *command_success,
+            ToolExecutionStatus::Success { command_success, .. } => *command_success,
             _ => false,
         };
         ToolPipelineOutcome {
@@ -219,7 +214,6 @@ mod tests {
             stdout: None,
             modified_files: vec![],
             command_success: true,
-            has_more: false,
         };
         batch.record(&success);
         batch.record(&success);
@@ -239,7 +233,6 @@ mod tests {
             stdout: None,
             modified_files: vec![],
             command_success: true,
-            has_more: false,
         };
         let failure = ToolExecutionStatus::Failure {
             error: anyhow::anyhow!("permission denied"),

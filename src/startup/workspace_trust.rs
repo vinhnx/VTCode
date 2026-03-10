@@ -14,7 +14,7 @@ const WARNING_RGB: (u8, u8, u8) = (166, 51, 51);
 const INFO_RGB: (u8, u8, u8) = (217, 154, 78);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WorkspaceTrustGateResult {
+pub(crate) enum WorkspaceTrustGateResult {
     Trusted(WorkspaceTrustLevel),
     Aborted,
 }
@@ -26,7 +26,7 @@ enum TrustSelection {
     Quit,
 }
 
-pub async fn ensure_workspace_trust(
+pub(crate) async fn ensure_workspace_trust(
     workspace: &Path,
     full_auto_requested: bool,
 ) -> Result<WorkspaceTrustGateResult> {
@@ -147,7 +147,9 @@ fn read_user_selection() -> Result<TrustSelection> {
     }
 }
 
-pub async fn workspace_trust_level(workspace: &Path) -> Result<Option<WorkspaceTrustLevel>> {
+pub(crate) async fn workspace_trust_level(
+    workspace: &Path,
+) -> Result<Option<WorkspaceTrustLevel>> {
     load_workspace_trust_level(workspace)
         .await
         .context("Failed to load user configuration for trust lookup")

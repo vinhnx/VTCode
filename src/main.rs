@@ -16,10 +16,9 @@ use vtcode_tui::panic_hook;
 
 mod agent;
 mod cli; // local CLI handlers in src/cli // agent runloops (single-agent only)
-mod hooks;
-mod ide_context;
 mod main_helpers;
-mod workspace_trust;
+mod startup;
+mod updater;
 
 use main_helpers::{
     build_augmented_cli_command, configure_debug_session_routing, debug_runtime_flag_enabled,

@@ -4,11 +4,10 @@ use crate::agent::runloop::ui::{build_inline_header_context, render_session_bann
 use crate::agent::runloop::unified::reasoning::{
     model_supports_reasoning, resolve_reasoning_visibility,
 };
+use crate::agent::runloop::unified::session_setup::ide_context::IdeContextBridge;
 use crate::agent::runloop::unified::turn::utils::render_hook_messages;
 use crate::agent::runloop::unified::turn::workspace::load_workspace_files;
 use crate::agent::runloop::unified::{context_manager, palettes, state};
-use crate::hooks::lifecycle::{LifecycleHookEngine, SessionEndReason, SessionStartTrigger};
-use crate::ide_context::IdeContextBridge;
 use anyhow::{Context, Result};
 use chrono::Local;
 use hashbrown::HashMap;
@@ -18,6 +17,7 @@ use tracing::warn;
 use vtcode_core::config::constants::ui;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+use vtcode_core::hooks::{LifecycleHookEngine, SessionEndReason, SessionStartTrigger};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::notifications::set_global_terminal_focused;
 use vtcode_core::ui::slash::SLASH_COMMANDS;
@@ -144,11 +144,6 @@ pub(crate) async fn initialize_session_ui(
         renderer.set_screen_reader_mode(cfg.ui.screen_reader_mode);
         renderer.set_show_diagnostics_in_transcript(cfg.ui.show_diagnostics_in_transcript);
     }
-    let ui_redraw_batcher =
-        crate::agent::runloop::unified::turn::utils::UIRedrawBatcher::with_auto_flush(
-            handle.clone(),
-        );
-
     let workspace_for_indexer = config.workspace.clone();
     let workspace_for_palette = config.workspace.clone();
     let handle_for_indexer = handle.clone();
@@ -299,7 +294,6 @@ pub(crate) async fn initialize_session_ui(
         default_placeholder,
         follow_up_placeholder,
         next_checkpoint_turn,
-        ui_redraw_batcher,
         file_palette_task_guard,
     })
 }

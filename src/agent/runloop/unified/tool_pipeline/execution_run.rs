@@ -7,6 +7,7 @@ use vtcode_core::config::constants::tools;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::agent::features::FeatureSet;
 use vtcode_core::exec::events::ToolCallStatus;
+use vtcode_core::hooks::LifecycleHookEngine;
 use vtcode_core::tools::ToolInvocationId;
 
 use crate::agent::runloop::git::confirm_changes_with_git_diff;
@@ -18,7 +19,6 @@ use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
 use crate::agent::runloop::unified::state::CtrlCState;
 use crate::agent::runloop::unified::tool_routing::ToolPermissionFlow;
 use crate::agent::runloop::unified::tool_routing::ensure_tool_permission;
-use crate::hooks::lifecycle::LifecycleHookEngine;
 
 use super::execute_hitl_tool;
 use super::execution_events::{emit_tool_completion_for_status, emit_tool_completion_status};
@@ -224,7 +224,6 @@ pub(crate) async fn run_tool_call_with_args(
                 stdout: None,
                 modified_files: vec![],
                 command_success: true,
-                has_more: false,
             },
             Err(error) => ToolExecutionStatus::Failure { error },
         };

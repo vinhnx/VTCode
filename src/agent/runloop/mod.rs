@@ -10,13 +10,12 @@ mod telemetry;
 mod text_tools;
 mod tool_output;
 mod ui;
-pub mod unified;
+pub(crate) mod unified;
 mod welcome;
 #[cfg(test)]
 mod welcome_tests;
 
-// Re-export ResumeSession for backward compatibility with modules that import it from runloop
-pub use crate::agent::agents::ResumeSession;
-pub use skills_commands::{
+pub(crate) use crate::agent::agents::ResumeSession;
+pub(crate) use skills_commands::{
     SkillCommandAction, SkillCommandOutcome, handle_skill_command, parse_skill_command,
 };

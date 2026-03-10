@@ -123,7 +123,7 @@ impl ActionMatcher {
 }
 
 /// Extract action suggestion from user prompt with intelligent matching
-pub fn extract_action_suggestion(prompt: &str) -> String {
+pub(crate) fn extract_action_suggestion(prompt: &str) -> String {
     if prompt.trim().is_empty() {
         return "Processing".to_string();
     }
@@ -157,7 +157,9 @@ pub fn extract_action_suggestion(prompt: &str) -> String {
 
 /// Extract action suggestion from a message
 /// Looks at the last user message in the history
-pub fn extract_action_from_messages(messages: &[vtcode_core::llm::provider::Message]) -> String {
+pub(crate) fn extract_action_from_messages(
+    messages: &[vtcode_core::llm::provider::Message],
+) -> String {
     // Find the last user message
     let last_user_msg = messages
         .iter()

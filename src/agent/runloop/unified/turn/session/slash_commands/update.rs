@@ -4,9 +4,9 @@ use std::env;
 use vtcode_core::utils::ansi::MessageStyle;
 
 use super::{SlashCommandContext, SlashCommandControl};
-use vtcode::updater::{InstallOutcome, Updater};
+use crate::updater::{InstallOutcome, Updater};
 
-pub async fn handle_update(
+pub(crate) async fn handle_update(
     ctx: SlashCommandContext<'_>,
     check_only: bool,
     install: bool,

@@ -58,7 +58,7 @@ impl SkillFilter {
     }
 }
 
-pub async fn handle_manage_skills(
+pub(crate) async fn handle_manage_skills(
     mut ctx: SlashCommandContext<'_>,
     action: SkillCommandAction,
 ) -> Result<SlashCommandControl> {

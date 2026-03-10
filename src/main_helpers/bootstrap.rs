@@ -1,9 +1,10 @@
 use anyhow::{Context, Result};
 use clap::{ColorChoice as CliColorChoice, CommandFactory};
 use std::path::PathBuf;
-use vtcode::startup::StartupContext;
 use vtcode_commons::color_policy::{self, ColorOutputPolicy, ColorOutputPolicySource};
 use vtcode_core::cli::args::Cli;
+
+use crate::startup::StartupContext;
 
 fn env_flag_enabled(var_name: &str) -> bool {
     std::env::var(var_name)

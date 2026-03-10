@@ -127,7 +127,6 @@ pub(super) async fn handle_exit_plan_mode(
                     stdout: None,
                     modified_files: vec![],
                     command_success: true,
-                    has_more: false,
                 },
             ));
         }
@@ -185,7 +184,6 @@ async fn handle_pending_confirmation(
         stdout: None,
         modified_files: vec![],
         command_success: true,
-        has_more: false,
     })
 }
 

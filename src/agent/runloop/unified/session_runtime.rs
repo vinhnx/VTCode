@@ -8,7 +8,7 @@ use crate::agent::runloop::ResumeSession;
 use super::turn::run_single_agent_loop_unified;
 
 #[derive(Debug, Default, Clone, Copy)]
-pub struct UnifiedSessionRuntime;
+pub(crate) struct UnifiedSessionRuntime;
 
 #[async_trait]
 impl SessionRuntime<ResumeSession> for UnifiedSessionRuntime {

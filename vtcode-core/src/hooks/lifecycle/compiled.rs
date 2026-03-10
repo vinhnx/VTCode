@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use regex::Regex;
 
-use vtcode_core::config::{HookCommandConfig, HookGroupConfig, LifecycleHooksConfig};
+use crate::config::{HookCommandConfig, HookGroupConfig, LifecycleHooksConfig};
 
 #[derive(Default)]
 pub(super) struct CompiledLifecycleHooks {

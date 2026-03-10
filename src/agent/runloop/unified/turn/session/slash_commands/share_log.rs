@@ -114,7 +114,7 @@ fn render_session_log_markdown(
     markdown
 }
 
-pub async fn handle_share_log(
+pub(crate) async fn handle_share_log(
     ctx: SlashCommandContext<'_>,
     format: SessionLogExportFormat,
 ) -> Result<SlashCommandControl> {

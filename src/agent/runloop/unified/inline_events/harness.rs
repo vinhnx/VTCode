@@ -2,13 +2,15 @@ use anyhow::{Context, Result};
 use serde_json::Value;
 use std::fs::{File, OpenOptions};
 use std::io::{BufWriter, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use chrono::Utc;
 use vtcode_config::OpenResponsesConfig;
 #[cfg(test)]
 use vtcode_core::exec::events::ThreadStartedEvent;
+#[cfg(test)]
+use std::path::Path;
 use vtcode_core::exec::events::{
     ItemCompletedEvent, ItemStartedEvent, ThreadEvent, ThreadItem, ThreadItemDetails,
     ToolCallStatus, ToolInvocationItem, ToolOutputItem, TurnCompletedEvent, TurnFailedEvent,
@@ -20,12 +22,12 @@ use vtcode_core::utils::file_utils::ensure_dir_exists_sync;
 use crate::agent::runloop::unified::run_loop_context::TurnRunId;
 
 #[derive(Clone)]
-pub struct HarnessEventEmitter {
+pub(crate) struct HarnessEventEmitter {
     inner: Arc<HarnessEventEmitterInner>,
 }
 
 struct HarnessEventEmitterInner {
-    #[allow(dead_code)]
+    #[cfg(test)]
     path: PathBuf,
     writer: Mutex<BufWriter<File>>,
     open_responses: Mutex<Option<OpenResponsesState>>,
@@ -39,7 +41,7 @@ struct OpenResponsesState {
 }
 
 impl HarnessEventEmitter {
-    pub fn new(path: PathBuf) -> Result<Self> {
+    pub(crate) fn new(path: PathBuf) -> Result<Self> {
         if let Some(parent) = path.parent() {
             ensure_dir_exists_sync(parent).with_context(|| {
                 format!("Failed to create harness log dir {}", parent.display())
@@ -52,6 +54,7 @@ impl HarnessEventEmitter {
             .with_context(|| format!("Failed to open harness log {}", path.display()))?;
         Ok(Self {
             inner: Arc::new(HarnessEventEmitterInner {
+                #[cfg(test)]
                 path,
                 writer: Mutex::new(BufWriter::new(file)),
                 open_responses: Mutex::new(None),
@@ -62,7 +65,7 @@ impl HarnessEventEmitter {
     /// Enables Open Responses event emission with the given configuration.
     ///
     /// When enabled, events are also written in Open Responses format to a separate file.
-    pub fn enable_open_responses(
+    pub(crate) fn enable_open_responses(
         &self,
         config: OpenResponsesConfig,
         model: &str,
@@ -99,7 +102,7 @@ impl HarnessEventEmitter {
         Ok(())
     }
 
-    pub fn emit(&self, event: ThreadEvent) -> Result<()> {
+    pub(crate) fn emit(&self, event: ThreadEvent) -> Result<()> {
         // Write to harness log (internal format)
         let payload = VersionedThreadEvent::new(event.clone());
         {
@@ -147,7 +150,7 @@ impl HarnessEventEmitter {
     }
 
     /// Finishes the Open Responses session and writes the terminal marker.
-    pub fn finish_open_responses(&self) {
+    pub(crate) fn finish_open_responses(&self) {
         if let Ok(mut guard) = self.inner.open_responses.lock()
             && let Some(ref mut state) = *guard
         {
@@ -159,13 +162,13 @@ impl HarnessEventEmitter {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn path(&self) -> &Path {
+    #[cfg(test)]
+    fn path(&self) -> &Path {
         &self.inner.path
     }
 }
 
-pub fn resolve_event_log_path(path: &str, run_id: &TurnRunId) -> PathBuf {
+pub(crate) fn resolve_event_log_path(path: &str, run_id: &TurnRunId) -> PathBuf {
     let mut base = PathBuf::from(path);
     if base.extension().is_none() {
         let timestamp = Utc::now().format("%Y%m%dT%H%M%SZ");
@@ -211,13 +214,13 @@ fn tool_output_item(
     }
 }
 
-pub fn tool_started_event(item_id: String, tool_name: &str, args: &Value) -> ThreadEvent {
+pub(crate) fn tool_started_event(item_id: String, tool_name: &str, args: &Value) -> ThreadEvent {
     ThreadEvent::ItemStarted(ItemStartedEvent {
         item: tool_invocation_item(item_id, tool_name, args, ToolCallStatus::InProgress),
     })
 }
 
-pub fn tool_invocation_completed_event(
+pub(crate) fn tool_invocation_completed_event(
     item_id: String,
     tool_name: &str,
     args: &Value,
@@ -228,7 +231,7 @@ pub fn tool_invocation_completed_event(
     })
 }
 
-pub fn tool_output_started_event(call_item_id: String) -> ThreadEvent {
+pub(crate) fn tool_output_started_event(call_item_id: String) -> ThreadEvent {
     ThreadEvent::ItemStarted(ItemStartedEvent {
         item: tool_output_item(
             &call_item_id,
@@ -239,7 +242,7 @@ pub fn tool_output_started_event(call_item_id: String) -> ThreadEvent {
     })
 }
 
-pub fn tool_output_completed_event(
+pub(crate) fn tool_output_completed_event(
     call_item_id: String,
     status: ToolCallStatus,
     exit_code: Option<i32>,
@@ -250,23 +253,23 @@ pub fn tool_output_completed_event(
     })
 }
 
-pub fn tool_updated_event(call_item_id: String, output: impl Into<String>) -> ThreadEvent {
+pub(crate) fn tool_updated_event(call_item_id: String, output: impl Into<String>) -> ThreadEvent {
     ThreadEvent::ItemUpdated(vtcode_core::exec::events::ItemUpdatedEvent {
         item: tool_output_item(&call_item_id, ToolCallStatus::InProgress, None, output),
     })
 }
 
-pub fn turn_started_event() -> ThreadEvent {
+pub(crate) fn turn_started_event() -> ThreadEvent {
     ThreadEvent::TurnStarted(TurnStartedEvent::default())
 }
 
-pub fn turn_completed_event() -> ThreadEvent {
+pub(crate) fn turn_completed_event() -> ThreadEvent {
     ThreadEvent::TurnCompleted(TurnCompletedEvent {
         usage: Usage::default(),
     })
 }
 
-pub fn turn_failed_event(message: impl Into<String>) -> ThreadEvent {
+pub(crate) fn turn_failed_event(message: impl Into<String>) -> ThreadEvent {
     ThreadEvent::TurnFailed(TurnFailedEvent {
         message: message.into(),
         usage: None,

@@ -32,7 +32,6 @@ pub(crate) async fn handle_tool_execution_result(
             stdout: _,
             modified_files,
             command_success,
-            has_more,
         } => {
             // Add successful tool result to history
 
@@ -56,7 +55,6 @@ pub(crate) async fn handle_tool_execution_result(
                 stdout: None,
                 modified_files: modified_files.clone(),
                 command_success: *command_success,
-                has_more: *has_more,
             });
 
             // Build a small RunLoopContext to reuse the generic `handle_pipeline_output`

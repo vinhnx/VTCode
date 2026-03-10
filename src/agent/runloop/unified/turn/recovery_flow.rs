@@ -14,22 +14,22 @@ use vtcode_tui::{
 use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
 use crate::agent::runloop::unified::state::CtrlCState;
 
-pub struct RecoveryPromptBuilder {
-    pub title: String,
-    pub summary: String,
-    pub recommendations: Vec<RecoveryOption>,
+pub(crate) struct RecoveryPromptBuilder {
+    pub(crate) title: String,
+    pub(crate) summary: String,
+    pub(crate) recommendations: Vec<RecoveryOption>,
 }
 
 #[derive(Debug, Clone)]
-pub struct RecoveryOption {
-    pub id: String,
-    pub title: String,
-    pub subtitle: String,
-    pub badge: Option<String>,
+pub(crate) struct RecoveryOption {
+    pub(crate) id: String,
+    pub(crate) title: String,
+    pub(crate) subtitle: String,
+    pub(crate) badge: Option<String>,
 }
 
 #[derive(Debug, Clone)]
-pub enum RecoveryAction {
+pub(crate) enum RecoveryAction {
     ResetAllCircuits,
     SkipStep,
     SaveAndExit,
@@ -108,7 +108,7 @@ fn split_question_lines(question: &str) -> Vec<String> {
 }
 
 impl RecoveryPromptBuilder {
-    pub fn new(title: String) -> Self {
+    pub(crate) fn new(title: String) -> Self {
         Self {
             title,
             summary: String::new(),
@@ -116,17 +116,17 @@ impl RecoveryPromptBuilder {
         }
     }
 
-    pub fn with_summary(mut self, summary: String) -> Self {
+    pub(crate) fn with_summary(mut self, summary: String) -> Self {
         self.summary = summary;
         self
     }
 
-    pub fn add_recommendation(mut self, option: RecoveryOption) -> Self {
+    pub(crate) fn add_recommendation(mut self, option: RecoveryOption) -> Self {
         self.recommendations.push(option);
         self
     }
 
-    pub fn build(self) -> Value {
+    pub(crate) fn build(self) -> Value {
         #[derive(Debug, Clone, Serialize)]
         struct RecoveryTabInternal {
             id: String,
@@ -183,7 +183,7 @@ impl RecoveryPromptBuilder {
     }
 }
 
-pub async fn execute_recovery_prompt(
+pub(crate) async fn execute_recovery_prompt(
     handle: &InlineHandle,
     session: &mut InlineSession,
     args: &Value,
@@ -280,7 +280,7 @@ pub async fn execute_recovery_prompt(
     })
 }
 
-pub fn build_recovery_prompt_from_diagnostics(
+pub(crate) fn build_recovery_prompt_from_diagnostics(
     diagnostics: &RecoveryDiagnostics,
 ) -> RecoveryPromptBuilder {
     let summary = format!(
@@ -382,7 +382,7 @@ fn action_from_choice_id(choice_id: &str) -> Option<RecoveryAction> {
     }
 }
 
-pub fn parse_recovery_response(response: &Value) -> Option<RecoveryAction> {
+pub(crate) fn parse_recovery_response(response: &Value) -> Option<RecoveryAction> {
     let choice_id = response.get("choice_id")?.as_str()?;
     let tab_id = response
         .get("tab_id")

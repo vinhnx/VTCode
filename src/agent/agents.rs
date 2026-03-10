@@ -10,7 +10,7 @@ use vtcode_core::llm::provider::Message as ProviderMessage;
 use vtcode_core::utils::session_archive::{SessionListing, SessionSnapshot};
 
 #[derive(Clone, Debug)]
-pub struct SessionContinuation {
+pub(crate) struct SessionContinuation {
     listing: SessionListing,
     history: Vec<ProviderMessage>,
     loaded_skills: Vec<String>,
@@ -18,50 +18,50 @@ pub struct SessionContinuation {
 }
 
 impl SessionContinuation {
-    pub fn listing(&self) -> &SessionListing {
+    pub(crate) fn listing(&self) -> &SessionListing {
         &self.listing
     }
 
-    pub fn identifier(&self) -> String {
+    pub(crate) fn identifier(&self) -> String {
         self.listing.identifier()
     }
 
-    pub fn snapshot(&self) -> &SessionSnapshot {
+    pub(crate) fn snapshot(&self) -> &SessionSnapshot {
         &self.listing.snapshot
     }
 
-    pub fn path(&self) -> &PathBuf {
+    pub(crate) fn path(&self) -> &PathBuf {
         &self.listing.path
     }
 
-    pub fn is_fork(&self) -> bool {
+    pub(crate) fn is_fork(&self) -> bool {
         matches!(self.intent, ArchivedSessionIntent::ForkNewArchive { .. })
     }
 
-    pub fn intent(&self) -> &ArchivedSessionIntent {
+    pub(crate) fn intent(&self) -> &ArchivedSessionIntent {
         &self.intent
     }
 
-    pub fn custom_suffix(&self) -> Option<&str> {
+    pub(crate) fn custom_suffix(&self) -> Option<&str> {
         match &self.intent {
             ArchivedSessionIntent::ForkNewArchive { custom_suffix } => custom_suffix.as_deref(),
             ArchivedSessionIntent::ResumeInPlace => None,
         }
     }
 
-    pub fn history(&self) -> &[ProviderMessage] {
+    pub(crate) fn history(&self) -> &[ProviderMessage] {
         &self.history
     }
 
-    pub fn loaded_skills(&self) -> &[String] {
+    pub(crate) fn loaded_skills(&self) -> &[String] {
         &self.loaded_skills
     }
 
-    pub fn message_count(&self) -> usize {
+    pub(crate) fn message_count(&self) -> usize {
         self.history.len()
     }
 
-    pub fn from_listing(listing: &SessionListing, intent: ArchivedSessionIntent) -> Self {
+    pub(crate) fn from_listing(listing: &SessionListing, intent: ArchivedSessionIntent) -> Self {
         Self {
             listing: listing.clone(),
             history: messages_from_session_listing(listing),
@@ -71,9 +71,9 @@ impl SessionContinuation {
     }
 }
 
-pub type ResumeSession = SessionContinuation;
+pub(crate) type ResumeSession = SessionContinuation;
 
-pub async fn load_resume_session(
+pub(crate) async fn load_resume_session(
     identifier: &str,
     intent: ArchivedSessionIntent,
 ) -> Result<Option<SessionContinuation>> {
@@ -85,7 +85,7 @@ pub async fn load_resume_session(
     Ok(Some(SessionContinuation::from_listing(&listing, intent)))
 }
 
-pub async fn run_single_agent_loop(
+pub(crate) async fn run_single_agent_loop(
     config: &CoreAgentConfig,
     initial_vt_cfg: Option<VTCodeConfig>,
     skip_confirmations: bool,
@@ -123,7 +123,10 @@ fn prepare_session_vt_config(
     vt_cfg
 }
 
-pub fn apply_runtime_overrides(vt_cfg: Option<&mut VTCodeConfig>, runtime_cfg: &CoreAgentConfig) {
+pub(crate) fn apply_runtime_overrides(
+    vt_cfg: Option<&mut VTCodeConfig>,
+    runtime_cfg: &CoreAgentConfig,
+) {
     if let Some(cfg) = vt_cfg {
         cfg.agent.provider = runtime_cfg.provider.clone();
 

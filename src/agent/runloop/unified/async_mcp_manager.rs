@@ -6,7 +6,7 @@ use tokio::time::{Duration, timeout};
 use tracing::{error, info, warn};
 use vtcode_core::config::mcp::McpClientConfig;
 use vtcode_core::exec_policy::{AskForApproval, RejectConfig};
-use vtcode_core::mcp::{McpClient, McpClientStatus};
+use vtcode_core::mcp::McpClient;
 
 use crate::agent::runloop::mcp_events::McpEvent;
 
@@ -24,7 +24,7 @@ pub(crate) fn approval_policy_from_human_in_the_loop(human_in_the_loop: bool) ->
 
 /// Represents the initialization status of MCP components
 #[derive(Clone)]
-pub enum McpInitStatus {
+pub(crate) enum McpInitStatus {
     /// MCP is not enabled
     Disabled,
     /// MCP initialization is in progress
@@ -36,17 +36,9 @@ pub enum McpInitStatus {
 }
 
 impl McpInitStatus {
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn is_ready(&self) -> bool {
         matches!(self, McpInitStatus::Ready { .. })
-    }
-
-    #[allow(dead_code)]
-    pub fn get_client(&self) -> Option<&Arc<McpClient>> {
-        match self {
-            McpInitStatus::Ready { client } => Some(client),
-            _ => None,
-        }
     }
 
     pub fn is_error(&self) -> bool {
@@ -60,7 +52,7 @@ impl McpInitStatus {
         }
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn is_initializing(&self) -> bool {
         matches!(self, McpInitStatus::Initializing { .. })
     }
@@ -94,7 +86,7 @@ impl Display for McpInitStatus {
 }
 
 /// Async manager for MCP client initialization and lifecycle
-pub struct AsyncMcpManager {
+pub(crate) struct AsyncMcpManager {
     /// Configuration for MCP client
     config: McpClientConfig,
     /// Whether to ring terminal bell for HITL prompts
@@ -112,7 +104,7 @@ pub struct AsyncMcpManager {
 }
 
 impl AsyncMcpManager {
-    pub fn new(
+    pub(crate) fn new(
         config: McpClientConfig,
         hitl_notification_bell: bool,
         approval_policy: AskForApproval,
@@ -138,7 +130,7 @@ impl AsyncMcpManager {
     }
 
     /// Start async initialization of MCP client
-    pub fn start_initialization(&self) -> Result<()> {
+    pub(crate) fn start_initialization(&self) -> Result<()> {
         if !self.config.enabled {
             // If MCP is disabled, set status immediately
             let mut status_guard = self.status.blocking_write();
@@ -284,11 +276,11 @@ impl AsyncMcpManager {
     }
 
     /// Get current status
-    pub async fn get_status(&self) -> McpInitStatus {
+    pub(crate) async fn get_status(&self) -> McpInitStatus {
         self.status.read().await.clone()
     }
 
-    pub fn approval_policy(&self) -> AskForApproval {
+    pub(crate) fn approval_policy(&self) -> AskForApproval {
         match self.approval_policy.read() {
             Ok(policy) => *policy,
             Err(poisoned) => {
@@ -298,7 +290,7 @@ impl AsyncMcpManager {
         }
     }
 
-    pub fn set_approval_policy(&self, approval_policy: AskForApproval) {
+    pub(crate) fn set_approval_policy(&self, approval_policy: AskForApproval) {
         let mut policy_guard = match self.approval_policy.write() {
             Ok(policy) => policy,
             Err(poisoned) => {
@@ -309,23 +301,8 @@ impl AsyncMcpManager {
         *policy_guard = approval_policy;
     }
 
-    /// Get current status reference
-    #[allow(dead_code)]
-    pub fn get_status_arc(&self) -> Arc<RwLock<McpInitStatus>> {
-        Arc::clone(&self.status)
-    }
-
-    /// Get current MCP client status (runtime status)
-    #[allow(dead_code)]
-    pub async fn get_client_status(&self) -> Option<McpClientStatus> {
-        match self.get_status().await {
-            McpInitStatus::Ready { client } => Some(client.get_status()),
-            _ => None,
-        }
-    }
-
     /// Shutdown MCP client if active
-    pub async fn shutdown(&self) -> Result<()> {
+    pub(crate) async fn shutdown(&self) -> Result<()> {
         match self.get_status().await {
             McpInitStatus::Ready { client } => {
                 if let Err(e) = client.shutdown().await {

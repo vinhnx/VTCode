@@ -5,7 +5,7 @@ mod state;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
-use vtcode_core::tools::ast_grep_binary::{
+use crate::tools::ast_grep_binary::{
     managed_ast_grep_bin_dir, resolve_ast_grep_binary_from_env_and_fs,
 };
 

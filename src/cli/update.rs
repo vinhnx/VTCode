@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use crossterm::style::Stylize;
 use std::env;
-use vtcode::updater::{InstallOutcome, UpdateInfo, Updater};
+use crate::updater::{InstallOutcome, UpdateInfo, Updater};
 use vtcode_config::update::{ReleaseChannel, UpdateConfig};
 use vtcode_core::ui::user_confirmation::UserConfirmation;
 

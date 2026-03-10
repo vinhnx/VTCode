@@ -135,7 +135,6 @@ mod tests {
             stdout: Some("boom".to_string()),
             modified_files: vec![],
             command_success: false,
-            has_more: false,
         };
 
         let (event_status, exit_code, aggregated_output) = match &status {

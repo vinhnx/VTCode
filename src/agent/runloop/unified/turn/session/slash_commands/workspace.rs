@@ -9,7 +9,7 @@ use crate::agent::runloop::unified::workspace_links::handle_workspace_directory_
 
 use super::{SlashCommandContext, SlashCommandControl};
 
-pub async fn handle_initialize_workspace(
+pub(crate) async fn handle_initialize_workspace(
     ctx: SlashCommandContext<'_>,
     force: bool,
 ) -> Result<SlashCommandControl> {
@@ -72,7 +72,7 @@ pub async fn handle_initialize_workspace(
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_manage_workspace_directories(
+pub(crate) async fn handle_manage_workspace_directories(
     ctx: SlashCommandContext<'_>,
     command: WorkspaceDirectoryCommand,
 ) -> Result<SlashCommandControl> {

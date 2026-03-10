@@ -1,6 +1,6 @@
 use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
 use rustc_hash::FxHashMap;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use vtcode_core::llm::provider as uni;
 
 pub(crate) const EXIT_PLAN_MODE_REASON_AUTO_TRIGGER_ON_DENIAL: &str = "auto_trigger_on_plan_denial";
@@ -18,8 +18,6 @@ pub(crate) const NAVIGATION_LOOP_THRESHOLD: usize = 15;
 /// Optimized loop detection with bounded signature keys and exponential backoff.
 pub(crate) struct LoopTracker {
     attempts: FxHashMap<String, (usize, Instant)>,
-    #[allow(dead_code)]
-    backoff_base: Duration,
     /// Counter for consecutive mutating file operations without execution/verification
     pub consecutive_mutations: usize,
     /// Counter for consecutive read/search operations without action or synthesis
@@ -30,7 +28,6 @@ impl LoopTracker {
     pub(crate) fn new() -> Self {
         Self {
             attempts: FxHashMap::with_capacity_and_hasher(16, Default::default()),
-            backoff_base: Duration::from_secs(5),
             consecutive_mutations: 0,
             consecutive_navigations: 0,
         }
@@ -45,21 +42,6 @@ impl LoopTracker {
         entry.0 += 1;
         entry.1 = Instant::now();
         entry.0
-    }
-
-    /// Check if a warning should be emitted (with exponential backoff)
-    #[allow(dead_code)]
-    pub(crate) fn should_warn(&self, signature: &str, threshold: usize) -> bool {
-        if let Some((count, last_time)) = self.attempts.get(signature) {
-            if *count < threshold {
-                return false;
-            }
-            let excess = count.saturating_sub(threshold);
-            let backoff = self.backoff_base * 3u32.pow(excess.min(5) as u32);
-            last_time.elapsed() >= backoff
-        } else {
-            false
-        }
     }
 
     /// Get the maximum repetition count, optionally filtering by a predicate on the signature
@@ -379,7 +361,6 @@ mod tests {
             stdout: None,
             modified_files: vec![],
             command_success: true,
-            has_more: false,
         });
 
         // edit_file is classified as mutating
@@ -409,7 +390,6 @@ mod tests {
             stdout: None,
             modified_files: vec![],
             command_success: true,
-            has_more: false,
         });
 
         // Two mutations
@@ -446,7 +426,6 @@ mod tests {
             stdout: None,
             modified_files: vec![],
             command_success: true,
-            has_more: false,
         });
 
         update_repetition_tracker(
@@ -475,7 +454,6 @@ mod tests {
             stdout: None,
             modified_files: vec![],
             command_success: true,
-            has_more: false,
         });
 
         // Several reads
@@ -508,7 +486,6 @@ mod tests {
             stdout: None,
             modified_files: vec![],
             command_success: true,
-            has_more: false,
         });
 
         update_repetition_tracker(
@@ -529,7 +506,6 @@ mod tests {
             stdout: None,
             modified_files: vec![],
             command_success: true,
-            has_more: false,
         });
 
         update_repetition_tracker(
@@ -550,7 +526,6 @@ mod tests {
             stdout: None,
             modified_files: vec![],
             command_success: true,
-            has_more: false,
         });
 
         update_repetition_tracker(
@@ -571,7 +546,6 @@ mod tests {
             stdout: None,
             modified_files: vec![],
             command_success: true,
-            has_more: false,
         });
 
         update_repetition_tracker(

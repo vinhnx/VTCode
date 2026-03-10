@@ -1,21 +1,5 @@
 use super::*;
 
-#[tokio::test]
-async fn pre_request_check_returns_proceed() {
-    let manager = ContextManager::new(
-        "sys".into(),
-        (),
-        Arc::new(RwLock::new(HashMap::new())),
-        None,
-    );
-
-    let history = vec![uni::Message::user("hello".to_string())];
-    assert_eq!(
-        manager.pre_request_check(&history, 200_000),
-        super::PreRequestAction::Proceed
-    );
-}
-
 #[test]
 fn normalize_history_for_request_drops_empty_noop_messages() {
     let manager = ContextManager::new(
@@ -102,71 +86,6 @@ fn normalize_history_for_request_keeps_tool_sequences_intact() {
     assert_eq!(normalized.len(), 3);
     assert!(normalized[0].tool_calls.is_some());
     assert_eq!(normalized[1].role, uni::MessageRole::Tool);
-}
-
-#[test]
-fn test_pre_request_check_ignores_conversation_length() {
-    use vtcode_config::core::AgentConfig;
-    let manager = ContextManager::new(
-        "sys".into(),
-        (),
-        Arc::new(RwLock::new(HashMap::new())),
-        Some(AgentConfig {
-            max_conversation_turns: 50,
-            ..Default::default()
-        }),
-    );
-
-    let mut history = Vec::new();
-    for _ in 0..40 {
-        history.push(uni::Message::user("test".to_string()));
-    }
-
-    assert_eq!(
-        manager.pre_request_check(&history, 200_000),
-        super::PreRequestAction::Proceed
-    );
-}
-
-#[test]
-fn test_pre_request_check_skips_compaction_when_disabled() {
-    let mut manager = ContextManager::new(
-        "sys".into(),
-        (),
-        Arc::new(RwLock::new(HashMap::new())),
-        None,
-    );
-    manager.cached_stats.total_token_usage = 195_000;
-
-    let history = vec![uni::Message::user("hello".to_string())];
-    assert_eq!(
-        manager.pre_request_check(&history, 200_000),
-        super::PreRequestAction::Proceed
-    );
-}
-
-#[test]
-fn test_pre_request_check_skips_compaction_when_enabled() {
-    use vtcode_config::core::AgentConfig;
-    let mut manager = ContextManager::new(
-        "sys".into(),
-        (),
-        Arc::new(RwLock::new(HashMap::new())),
-        Some(AgentConfig {
-            harness: vtcode_config::core::agent::AgentHarnessConfig {
-                auto_compaction_enabled: true,
-                ..Default::default()
-            },
-            ..Default::default()
-        }),
-    );
-    manager.cached_stats.total_token_usage = 195_000;
-
-    let history = vec![uni::Message::user("hello".to_string())];
-    assert_eq!(
-        manager.pre_request_check(&history, 200_000),
-        super::PreRequestAction::Proceed
-    );
 }
 
 #[test]

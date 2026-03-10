@@ -1,9 +1,8 @@
-use vtcode::startup::{SessionResumeMode, StartupContext};
+use crate::startup::{SessionResumeMode, StartupContext};
 use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::core::threads::{SessionQueryScope, list_recent_sessions_in_scope};
-use vtcode_core::utils::session_archive::reserve_session_archive_identifier;
 
-use super::debug_context::{build_command_debug_session_id, configure_runtime_debug_context};
+use super::{build_command_debug_session_id, configure_runtime_debug_context};
 
 fn resolve_mode_hint(
     args: &Cli,
@@ -99,18 +98,7 @@ pub(crate) async fn configure_debug_session_routing(
         }
     }
 
-    let workspace_label = startup
-        .workspace
-        .file_name()
-        .and_then(|component| component.to_str())
-        .map(ToOwned::to_owned)
-        .unwrap_or_else(|| "workspace".to_string());
-    match reserve_session_archive_identifier(&workspace_label, startup.custom_session_id.clone())
-        .await
-    {
-        Ok(session_id) => configure_runtime_debug_context(session_id.clone(), Some(session_id)),
-        Err(_) => configure_runtime_debug_context(command_debug_session_id, None),
-    }
+    configure_runtime_debug_context(command_debug_session_id, None);
 }
 
 #[cfg(test)]

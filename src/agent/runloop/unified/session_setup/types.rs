@@ -6,13 +6,13 @@ use crate::agent::runloop::unified::state::CtrlCState;
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
 use crate::agent::runloop::welcome::SessionBootstrap;
-use crate::hooks::lifecycle::LifecycleHookEngine;
 use hashbrown::HashMap;
 use std::sync::Arc;
 use tokio::sync::{Notify, RwLock};
 use vtcode_core::acp::ToolPermissionCache;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::trajectory::TrajectoryLogger;
+use vtcode_core::hooks::{LifecycleHookEngine, SessionEndReason};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::ApprovalRecorder;
 use vtcode_core::tools::{ToolRegistry, ToolResultCache};
@@ -84,12 +84,11 @@ pub(crate) struct SessionUISetup {
     pub checkpoint_manager: Option<vtcode_core::core::agent::snapshots::SnapshotManager>,
     pub session_archive: Option<SessionArchive>,
     pub lifecycle_hooks: Option<LifecycleHookEngine>,
-    pub session_end_reason: crate::hooks::lifecycle::SessionEndReason,
+    pub session_end_reason: SessionEndReason,
     pub context_manager: ContextManager,
     pub default_placeholder: Option<String>,
     pub follow_up_placeholder: Option<String>,
     pub next_checkpoint_turn: usize,
-    pub ui_redraw_batcher: crate::agent::runloop::unified::turn::utils::UIRedrawBatcher,
     pub file_palette_task_guard: BackgroundTaskGuard,
 }
 

@@ -6,7 +6,7 @@ use vtcode_tui::InlineHandle;
 use super::action::InlineLoopAction;
 use super::queue::InlineQueueState;
 use crate::agent::runloop::unified::state::CtrlCState;
-use crate::hooks::lifecycle::SessionEndReason;
+use vtcode_core::hooks::SessionEndReason;
 
 #[derive(Clone, Copy)]
 pub(crate) struct InlineInterruptCoordinator<'a> {

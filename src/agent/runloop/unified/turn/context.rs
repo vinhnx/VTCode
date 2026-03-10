@@ -19,6 +19,7 @@ use vtcode_core::exec::events::{
     ItemCompletedEvent, ItemStartedEvent, PlanDeltaEvent, PlanItem, ThreadEvent, ThreadItem,
     ThreadItemDetails,
 };
+use vtcode_core::hooks::{LifecycleHookEngine, SessionEndReason};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::llm::providers::ReasoningSegment;
 use vtcode_core::utils::ansi::AnsiRenderer;
@@ -30,7 +31,7 @@ use crate::agent::runloop::unified::state::CtrlCState;
 const AUTONOMOUS_CONTINUE_DIRECTIVE: &str = "Do not stop with intent-only updates. Execute the next concrete action now, then report completion or blocker.";
 
 #[derive(Clone, Debug)]
-pub enum TurnLoopResult {
+pub(crate) enum TurnLoopResult {
     Completed,
     Aborted,
     Cancelled,
@@ -56,15 +57,6 @@ pub(crate) enum TurnProcessingResult {
     },
     /// Turn resulted in no actionable output
     Empty,
-    /// Turn was completed successfully (used in match exhaustiveness)
-    #[allow(dead_code)]
-    Completed,
-    /// Turn was cancelled by user (used in match exhaustiveness)
-    #[allow(dead_code)]
-    Cancelled,
-    /// Turn was aborted due to error (used in match exhaustiveness)
-    #[allow(dead_code)]
-    Aborted,
 }
 
 pub(crate) enum TurnHandlerOutcome {
@@ -72,7 +64,7 @@ pub(crate) enum TurnHandlerOutcome {
     Break(TurnLoopResult),
 }
 
-pub struct TurnOutcomeContext<'a> {
+pub(crate) struct TurnOutcomeContext<'a> {
     pub conversation_history: &'a mut Vec<uni::Message>,
     pub renderer: &'a mut AnsiRenderer,
     pub handle: &'a InlineHandle,
@@ -80,7 +72,7 @@ pub struct TurnOutcomeContext<'a> {
     pub default_placeholder: &'a Option<String>,
     pub checkpoint_manager: Option<&'a SnapshotManager>,
     pub next_checkpoint_turn: &'a mut usize,
-    pub session_end_reason: &'a mut crate::hooks::lifecycle::SessionEndReason,
+    pub session_end_reason: &'a mut SessionEndReason,
     pub turn_elapsed: Duration,
     pub show_turn_timer: bool,
 }
@@ -122,7 +114,7 @@ pub(crate) struct UIContext<'a> {
     pub session: &'a mut vtcode_tui::InlineSession,
     pub ctrl_c_state: &'a Arc<CtrlCState>,
     pub ctrl_c_notify: &'a Arc<Notify>,
-    pub lifecycle_hooks: Option<&'a crate::hooks::lifecycle::LifecycleHookEngine>,
+    pub lifecycle_hooks: Option<&'a LifecycleHookEngine>,
     pub default_placeholder: &'a Option<String>,
     pub last_forced_redraw: &'a mut Instant,
     pub input_status_state: &'a mut crate::agent::runloop::unified::status_line::InputStatusState,
@@ -169,7 +161,7 @@ pub(crate) struct TurnProcessingContext<'a> {
     pub last_forced_redraw: &'a mut Instant,
     pub input_status_state: &'a mut crate::agent::runloop::unified::status_line::InputStatusState,
     pub session: &'a mut vtcode_tui::InlineSession,
-    pub lifecycle_hooks: Option<&'a crate::hooks::lifecycle::LifecycleHookEngine>,
+    pub lifecycle_hooks: Option<&'a LifecycleHookEngine>,
     pub default_placeholder: &'a Option<String>,
     pub tool_permission_cache: &'a Arc<tokio::sync::RwLock<vtcode_core::acp::ToolPermissionCache>>,
     pub safety_validator: &'a Arc<
@@ -196,7 +188,7 @@ pub(crate) struct TurnProcessingContext<'a> {
 }
 
 impl<'a> TurnProcessingContext<'a> {
-    pub fn from_parts(parts: TurnProcessingContextParts<'a>) -> Self {
+    pub(crate) fn from_parts(parts: TurnProcessingContextParts<'a>) -> Self {
         let TurnProcessingContextParts {
             tool,
             llm,
@@ -244,7 +236,7 @@ impl<'a> TurnProcessingContext<'a> {
         }
     }
 
-    pub fn parts_mut(&mut self) -> TurnProcessingContextParts<'_> {
+    pub(crate) fn parts_mut(&mut self) -> TurnProcessingContextParts<'_> {
         let tool = ToolContext {
             tool_result_cache: self.tool_result_cache,
             approval_recorder: self.approval_recorder,
@@ -300,7 +292,7 @@ impl<'a> TurnProcessingContext<'a> {
 
     /// Creates a TurnLoopContext from this TurnProcessingContext.
     /// This is used when calling handle_tool_execution_result which requires TurnLoopContext.
-    pub fn as_turn_loop_context(
+    pub(crate) fn as_turn_loop_context(
         &mut self,
     ) -> crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext<'_> {
         let TurnProcessingContextParts {
@@ -351,7 +343,7 @@ impl<'a> TurnProcessingContext<'a> {
 
     /// Creates a RunLoopContext directly from this TurnProcessingContext,
     /// skipping the intermediate TurnLoopContext conversion.
-    pub fn as_run_loop_context(
+    pub(crate) fn as_run_loop_context(
         &mut self,
     ) -> crate::agent::runloop::unified::run_loop_context::RunLoopContext<'_> {
         let TurnProcessingContextParts {
@@ -380,7 +372,7 @@ impl<'a> TurnProcessingContext<'a> {
         )
     }
 
-    pub fn handle_assistant_response(
+    pub(crate) fn handle_assistant_response(
         &mut self,
         text: String,
         reasoning: Vec<ReasoningSegment>,
@@ -481,7 +473,7 @@ impl<'a> TurnProcessingContext<'a> {
         Ok(())
     }
 
-    pub async fn handle_text_response(
+    pub(crate) async fn handle_text_response(
         &mut self,
         text: String,
         reasoning: Vec<ReasoningSegment>,

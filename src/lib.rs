@@ -164,15 +164,8 @@
 //! For the core library functionality, see [`vtcode-core`](https://docs.rs/vtcode-core).
 
 pub use vtcode_acp as acp;
-pub mod ide_context;
-pub mod tools;
-
-pub mod startup;
-pub mod updater;
 
 pub mod config_watcher {
     pub use vtcode_config::loader::watch::*;
 }
-
-pub use startup::StartupContext;
 pub use vtcode_tui::ui::interactive_list;

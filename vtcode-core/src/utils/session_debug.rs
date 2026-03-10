@@ -1,19 +1,110 @@
-use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use vtcode_core::utils::dot_config::DotManager;
-use vtcode_core::utils::session_archive::SESSION_DIR_ENV;
+use anyhow::{Context, Result};
 
-use super::debug_context::sanitize_debug_component;
+use crate::utils::dot_config::DotManager;
+use crate::utils::session_archive::SESSION_DIR_ENV;
 
-pub(super) const DEFAULT_MAX_DEBUG_LOG_SIZE_MB: u64 = 50;
-pub(super) const DEFAULT_MAX_DEBUG_LOG_AGE_DAYS: u32 = 7;
+#[derive(Debug, Clone, Default)]
+struct RuntimeDebugContext {
+    debug_session_id: Option<String>,
+    archive_session_id: Option<String>,
+    debug_log_path: Option<PathBuf>,
+}
+
+static RUNTIME_DEBUG_CONTEXT: LazyLock<Mutex<RuntimeDebugContext>> =
+    LazyLock::new(|| Mutex::new(RuntimeDebugContext::default()));
+
+pub const DEFAULT_MAX_DEBUG_LOG_SIZE_MB: u64 = 50;
+pub const DEFAULT_MAX_DEBUG_LOG_AGE_DAYS: u32 = 7;
 
 const DEBUG_LOG_FILE_PREFIX: &str = "debug-";
 const DEBUG_BYTES_PER_MB: u64 = 1024 * 1024;
 const SECONDS_PER_DAY: u64 = 24 * 60 * 60;
+
+fn with_runtime_debug_context<R>(f: impl FnOnce(&mut RuntimeDebugContext) -> R) -> R {
+    match RUNTIME_DEBUG_CONTEXT.lock() {
+        Ok(mut context) => f(&mut context),
+        Err(poisoned) => {
+            let mut context = poisoned.into_inner();
+            f(&mut context)
+        }
+    }
+}
+
+pub fn configure_runtime_debug_context(
+    debug_session_id: String,
+    archive_session_id: Option<String>,
+) {
+    with_runtime_debug_context(|context| {
+        context.debug_session_id = Some(debug_session_id);
+        context.archive_session_id = archive_session_id;
+        context.debug_log_path = None;
+    });
+}
+
+pub fn set_runtime_archive_session_id(archive_session_id: Option<String>) {
+    with_runtime_debug_context(|context| {
+        context.archive_session_id = archive_session_id;
+    });
+}
+
+pub fn runtime_archive_session_id() -> Option<String> {
+    with_runtime_debug_context(|context| context.archive_session_id.clone())
+}
+
+pub fn runtime_debug_log_path() -> Option<PathBuf> {
+    with_runtime_debug_context(|context| context.debug_log_path.clone())
+}
+
+pub fn set_runtime_debug_log_path(path: PathBuf) {
+    with_runtime_debug_context(|context| {
+        context.debug_log_path = Some(path);
+    });
+}
+
+pub fn sanitize_debug_component(value: &str, fallback: &str) -> String {
+    let mut normalized = String::new();
+    let mut last_was_separator = false;
+    for ch in value.chars() {
+        if ch.is_ascii_alphanumeric() {
+            normalized.push(ch.to_ascii_lowercase());
+            last_was_separator = false;
+        } else if matches!(ch, '-' | '_') {
+            if !last_was_separator {
+                normalized.push(ch);
+                last_was_separator = true;
+            }
+        } else if !last_was_separator {
+            normalized.push('-');
+            last_was_separator = true;
+        }
+    }
+
+    let trimmed = normalized.trim_matches(|c| c == '-' || c == '_');
+    if trimmed.is_empty() {
+        fallback.to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+pub fn build_command_debug_session_id(mode_hint: &str) -> String {
+    let mode = sanitize_debug_component(mode_hint, "cmd");
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    format!("cmd-{mode}-{timestamp}-{}", std::process::id())
+}
+
+pub fn current_debug_session_id() -> String {
+    with_runtime_debug_context(|context| context.debug_session_id.clone())
+        .unwrap_or_else(|| build_command_debug_session_id("default"))
+}
 
 fn debug_log_file_name(session_id: &str) -> String {
     let normalized = sanitize_debug_component(session_id, "session");
@@ -138,7 +229,7 @@ fn rotate_debug_log_if_needed(log_file: &Path, session_id: &str, max_size_mb: u6
     Ok(())
 }
 
-pub(super) fn prepare_debug_log_file(
+pub fn prepare_debug_log_file(
     configured_dir: Option<PathBuf>,
     session_id: &str,
     max_size_mb: u64,

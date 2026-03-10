@@ -2,26 +2,24 @@ use semver::Version;
 
 use super::InstallSource;
 
-pub struct UpdateGuidance {
-    pub source: InstallSource,
-    pub command: String,
+pub(crate) struct UpdateGuidance {
+    pub(crate) source: InstallSource,
+    pub(crate) command: String,
 }
 
-pub enum InstallOutcome {
+pub(crate) enum InstallOutcome {
     Updated(String),
     UpToDate(String),
 }
 
-pub struct UpdateInfo {
-    pub version: Version,
-    pub tag: String,
-    pub download_url: String,
-    pub release_notes: String,
+pub(crate) struct UpdateInfo {
+    pub(crate) version: Version,
+    pub(crate) release_notes: String,
 }
 
-pub struct VersionInfo {
-    pub version: Version,
-    pub tag: String,
-    pub is_prerelease: bool,
-    pub published_at: Option<String>,
+pub(crate) struct VersionInfo {
+    pub(crate) version: Version,
+    pub(crate) tag: String,
+    pub(crate) is_prerelease: bool,
+    pub(crate) published_at: Option<String>,
 }

@@ -10,7 +10,7 @@ use super::{SlashCommandContext, SlashCommandControl};
 const DOCTOR_ACTION_PREFIX: &str = "doctor.action.";
 const DOCTOR_ACTION_BACK: &str = "doctor.action.back";
 
-pub async fn handle_show_status(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+pub(crate) async fn handle_show_status(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     let tool_count = ctx.tools.read().await.len();
     display_session_status(
         ctx.renderer,
@@ -28,7 +28,7 @@ pub async fn handle_show_status(ctx: SlashCommandContext<'_>) -> Result<SlashCom
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_run_doctor(
+pub(crate) async fn handle_run_doctor(
     mut ctx: SlashCommandContext<'_>,
     quick: bool,
 ) -> Result<SlashCommandControl> {
@@ -36,7 +36,7 @@ pub async fn handle_run_doctor(
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_start_doctor_interactive(
+pub(crate) async fn handle_start_doctor_interactive(
     mut ctx: SlashCommandContext<'_>,
 ) -> Result<SlashCommandControl> {
     if !ctx.renderer.supports_inline_ui() {
@@ -90,7 +90,7 @@ async fn run_doctor(ctx: &mut SlashCommandContext<'_>, quick: bool) -> Result<()
     Ok(())
 }
 
-pub async fn handle_start_terminal_setup(
+pub(crate) async fn handle_start_terminal_setup(
     ctx: SlashCommandContext<'_>,
 ) -> Result<SlashCommandControl> {
     let vt_cfg = ctx

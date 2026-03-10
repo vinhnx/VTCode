@@ -1,10 +1,9 @@
 use anyhow::Result;
 use vtcode_core::utils::ansi::MessageStyle;
-use webbrowser;
 
 use super::{SlashCommandContext, SlashCommandControl};
 
-pub async fn handle_oauth_login(
+pub(crate) async fn handle_oauth_login(
     ctx: SlashCommandContext<'_>,
     provider: String,
 ) -> Result<SlashCommandControl> {
@@ -127,7 +126,7 @@ pub async fn handle_oauth_login(
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_oauth_logout(
+pub(crate) async fn handle_oauth_logout(
     ctx: SlashCommandContext<'_>,
     provider: String,
 ) -> Result<SlashCommandControl> {
@@ -161,7 +160,7 @@ pub async fn handle_oauth_logout(
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_show_auth_status(
+pub(crate) async fn handle_show_auth_status(
     ctx: SlashCommandContext<'_>,
     provider: Option<String>,
 ) -> Result<SlashCommandControl> {

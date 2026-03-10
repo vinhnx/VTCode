@@ -33,7 +33,7 @@ mod rendering;
 mod selection;
 mod state_machine;
 
-pub use selection::ModelSelectionResult;
+pub(crate) use selection::ModelSelectionResult;
 pub(super) use vtcode_config::read_workspace_env_value as read_workspace_env;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -45,14 +45,14 @@ enum PickerStep {
     AwaitApiKey,
 }
 
-pub enum ModelPickerProgress {
+pub(crate) enum ModelPickerProgress {
     InProgress,
     NeedsRefresh,
     Completed(ModelSelectionResult),
     Cancelled,
 }
 
-pub struct ModelPickerState {
+pub(crate) struct ModelPickerState {
     options: &'static [ModelOption],
     step: PickerStep,
     inline_enabled: bool,
@@ -69,7 +69,7 @@ pub struct ModelPickerState {
     plain_mode_active: bool,
 }
 
-pub enum ModelPickerStart {
+pub(crate) enum ModelPickerStart {
     Completed {
         state: ModelPickerState,
         selection: ModelSelectionResult,
@@ -79,7 +79,7 @@ pub enum ModelPickerStart {
 
 impl ModelPickerState {
     #[allow(clippy::new_ret_no_self)]
-    pub async fn new(
+    pub(crate) async fn new(
         renderer: &mut AnsiRenderer,
         current_reasoning: ReasoningEffortLevel,
         current_service_tier: Option<OpenAIServiceTier>,

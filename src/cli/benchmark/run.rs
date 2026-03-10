@@ -8,7 +8,7 @@ use vtcode_core::core::agent::runner::{AgentRunner, RunnerSettings};
 use vtcode_core::core::agent::types::AgentType;
 use vtcode_core::utils::file_utils::write_file_with_context_sync;
 
-use crate::workspace_trust::{WorkspaceTrustGateResult, ensure_workspace_trust};
+use crate::startup::{WorkspaceTrustGateResult, ensure_workspace_trust};
 
 use super::BenchmarkCommandOptions;
 use super::report::{BenchmarkReport, BenchmarkTaskReport};

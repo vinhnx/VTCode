@@ -58,7 +58,7 @@ pub(crate) fn resolve_reasoning_visibility(
 /// Detects if reasoning text indicates the agent is giving up on a task.
 ///
 /// Looks for patterns like "stop", "probably stop", "can't continue", "too complex", etc.
-pub fn is_giving_up_reasoning(text: &str) -> bool {
+pub(crate) fn is_giving_up_reasoning(text: &str) -> bool {
     let lower = text.to_lowercase();
 
     let giving_up_patterns = [
@@ -78,22 +78,22 @@ pub fn is_giving_up_reasoning(text: &str) -> bool {
 }
 
 /// Detects rushing behavior indicating context anxiety.
-pub fn is_rushing_to_conclude(text: &str) -> bool {
+pub(crate) fn is_rushing_to_conclude(text: &str) -> bool {
     RUSHING_PATTERNS.is_match(text)
 }
 
 /// Detects uncertainty in agent reasoning.
-pub fn has_high_uncertainty(text: &str) -> bool {
+pub(crate) fn has_high_uncertainty(text: &str) -> bool {
     UNCERTAIN_PATTERNS.is_match(text)
 }
 
 /// Detects complexity avoidance patterns.
-pub fn is_avoiding_complexity(text: &str) -> bool {
+pub(crate) fn is_avoiding_complexity(text: &str) -> bool {
     COMPLEXITY_AVOIDANCE_PATTERNS.is_match(text)
 }
 
 /// Analyzes reasoning text for multiple concern patterns.
-pub fn analyze_reasoning(text: &str) -> ReasoningAnalysis {
+pub(crate) fn analyze_reasoning(text: &str) -> ReasoningAnalysis {
     ReasoningAnalysis {
         is_giving_up: is_giving_up_reasoning(text),
         is_rushing: is_rushing_to_conclude(text),
@@ -104,19 +104,19 @@ pub fn analyze_reasoning(text: &str) -> ReasoningAnalysis {
 
 /// Result of reasoning analysis with concern flags.
 #[derive(Debug, Clone, Default)]
-pub struct ReasoningAnalysis {
-    pub is_giving_up: bool,
-    pub is_rushing: bool,
-    pub has_uncertainty: bool,
-    pub is_avoiding_complexity: bool,
+pub(crate) struct ReasoningAnalysis {
+    pub(crate) is_giving_up: bool,
+    pub(crate) is_rushing: bool,
+    pub(crate) has_uncertainty: bool,
+    pub(crate) is_avoiding_complexity: bool,
 }
 
 impl ReasoningAnalysis {
-    pub fn has_concerns(&self) -> bool {
+    pub(crate) fn has_concerns(&self) -> bool {
         self.is_giving_up || self.is_rushing || self.has_uncertainty || self.is_avoiding_complexity
     }
 
-    pub fn priority_concern(&self) -> Option<ReasoningConcern> {
+    pub(crate) fn priority_concern(&self) -> Option<ReasoningConcern> {
         if self.is_giving_up {
             Some(ReasoningConcern::GivingUp)
         } else if self.is_rushing {
@@ -132,7 +132,7 @@ impl ReasoningAnalysis {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ReasoningConcern {
+pub(crate) enum ReasoningConcern {
     GivingUp,
     Rushing,
     Uncertainty,

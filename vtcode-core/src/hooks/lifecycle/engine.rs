@@ -10,7 +10,7 @@ use tokio::process::Command;
 use tokio::sync::Mutex;
 use tokio::time;
 
-use vtcode_core::config::{HookCommandConfig, HooksConfig};
+use crate::config::{HookCommandConfig, HooksConfig};
 
 use crate::hooks::lifecycle::compiled::CompiledLifecycleHooks;
 use crate::hooks::lifecycle::interpret::{

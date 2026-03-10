@@ -308,7 +308,6 @@ async fn lookup_cached_status(
                     stdout: None,
                     modified_files: vec![],
                     command_success: true,
-                    has_more: false,
                 });
             }
             Err(error) => {

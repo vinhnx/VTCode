@@ -11,7 +11,7 @@ use tracing::warn;
 
 use super::git::git_status_summary;
 use super::welcome::SessionBootstrap;
-use crate::workspace_trust;
+use crate::startup;
 use dirs::home_dir;
 
 #[derive(Clone, Debug)]
@@ -49,7 +49,7 @@ async fn gather_inline_status_details(
     let workspace_trust = if session_bootstrap.acp_workspace_trust.is_some() {
         None
     } else {
-        workspace_trust::workspace_trust_level(&config.workspace)
+        startup::workspace_trust_level(&config.workspace)
             .await
             .context("Failed to determine workspace trust level for banner")?
     };

@@ -1,11 +1,10 @@
 use anyhow::Result;
 use vtcode_core::tools::ast_grep_binary::AST_GREP_INSTALL_COMMAND;
 use vtcode_core::tools::ripgrep_binary::RIPGREP_INSTALL_COMMAND;
+use vtcode_core::tools::{AstGrepStatus, RipgrepStatus};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::dot_config::DotConfig;
 use vtcode_tui::InlineHeaderHighlight;
-
-use crate::tools::{AstGrepStatus, RipgrepStatus};
 
 const SEARCH_TOOLS_INSTALLER_FLAG: &str = "--with-search-tools";
 const SEARCH_TOOLS_INSTALL_COMMAND: &str = "vtcode dependencies install search-tools";
@@ -111,7 +110,7 @@ mod tests {
     use super::{OptionalDependency, OptionalSearchToolsNotice};
     use vtcode_core::utils::dot_config::DotConfig;
 
-    use crate::tools::{AstGrepStatus, RipgrepStatus};
+    use vtcode_core::tools::{AstGrepStatus, RipgrepStatus};
 
     #[test]
     fn builds_notice_for_unseen_missing_dependencies() {

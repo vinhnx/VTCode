@@ -30,18 +30,11 @@ struct ContextStats {
     last_history_len: usize,
     /// Current prompt-side token pressure used for compaction checks.
     total_token_usage: usize,
-    /// Most recent provider-reported prompt token count.
-    last_prompt_tokens: usize,
-    /// Most recent provider-reported total token count.
-    last_total_tokens: usize,
-    /// Cumulative completion tokens, retained for diagnostics only.
-    completion_tokens_cumulative: usize,
 }
 
 /// Token budget status for proactive context management
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TokenBudgetStatus {
+pub(crate) enum TokenBudgetStatus {
     /// Below 70% - normal operation
     Normal,
     /// 70-90% - start preparing for context handoff
@@ -80,18 +73,6 @@ impl ContextManager {
         }
     }
 
-    /// Pre-request check that returns recommended action before making an LLM request.
-    /// Checks session boundaries to correct runaway sessions.
-    pub(crate) fn pre_request_check(
-        &self,
-        _history: &[uni::Message],
-        _context_window_size: usize,
-    ) -> PreRequestAction {
-        // Auto compaction is handled by provider-side Responses `context_management`.
-        // Keep pre-request flow non-mutating here.
-        PreRequestAction::Proceed
-    }
-
     fn update_stats(&mut self, history: &[uni::Message]) {
         let new_len = history.len();
         if new_len < self.cached_stats.last_history_len {
@@ -124,12 +105,6 @@ impl ContextManager {
             let completion_tokens = usage.completion_tokens as usize;
             let total_tokens = usage.total_tokens as usize;
 
-            self.cached_stats.completion_tokens_cumulative = self
-                .cached_stats
-                .completion_tokens_cumulative
-                .saturating_add(completion_tokens);
-            self.cached_stats.last_total_tokens = total_tokens;
-
             let estimated_prompt_pressure = if prompt_tokens > 0 {
                 prompt_tokens
             } else if total_tokens > completion_tokens {
@@ -140,7 +115,6 @@ impl ContextManager {
                     .saturating_add(completion_tokens)
             };
 
-            self.cached_stats.last_prompt_tokens = estimated_prompt_pressure;
             self.cached_stats.total_token_usage = estimated_prompt_pressure;
         }
     }
@@ -225,14 +199,13 @@ impl ContextManager {
     }
 
     /// Get current token budget status based on usage ratio
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub(crate) fn get_token_budget_status(&self, context_window_size: usize) -> TokenBudgetStatus {
         self.get_token_budget_status_and_guidance(context_window_size)
             .0
     }
 
     /// Get current token usage
-    #[allow(dead_code)]
     pub(crate) fn current_token_usage(&self) -> usize {
         self.cached_stats.total_token_usage
     }
@@ -395,17 +368,6 @@ fn append_assistant_text(previous: &mut uni::Message, current: &uni::Message) {
         previous_text.push('\n');
     }
     previous_text.push_str(current_text);
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)]
-pub enum PreRequestAction {
-    /// Normal operation, proceed with request
-    Proceed,
-    /// Proceed but inject a warning/reminder to the agent
-    Warn(String),
-    /// Stop execution and force user intervention or summary
-    Stop(String),
 }
 
 #[cfg(test)]

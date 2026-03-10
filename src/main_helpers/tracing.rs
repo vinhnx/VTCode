@@ -1,11 +1,10 @@
 use anyhow::{Context, Result};
 use vtcode_core::utils::error_log_collector::ErrorLogCollectorLayer;
-use vtcode_tui::log::{is_tui_log_capture_enabled, make_tui_log_layer};
-
-use super::debug_context::{current_debug_session_id, set_runtime_debug_log_path};
-use super::debug_logs::{
-    DEFAULT_MAX_DEBUG_LOG_AGE_DAYS, DEFAULT_MAX_DEBUG_LOG_SIZE_MB, prepare_debug_log_file,
+use vtcode_core::utils::session_debug::{
+    DEFAULT_MAX_DEBUG_LOG_AGE_DAYS, DEFAULT_MAX_DEBUG_LOG_SIZE_MB, current_debug_session_id,
+    prepare_debug_log_file, set_runtime_debug_log_path,
 };
+use vtcode_tui::log::{is_tui_log_capture_enabled, make_tui_log_layer};
 
 fn maybe_tui_log_layer() -> Option<vtcode_tui::log::TuiLogLayer> {
     if is_tui_log_capture_enabled() {

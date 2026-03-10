@@ -164,33 +164,33 @@ const VAGUE_PATTERNS: &[&str] = &[
 
 /// A vague reference detected in the prompt
 #[derive(Debug, Clone)]
-pub struct VagueReference {
-    pub term: String,
+pub(crate) struct VagueReference {
+    pub(crate) term: String,
 }
 
 /// Resolution of a vague reference to a concrete entity
 #[derive(Debug, Clone)]
-pub struct EntityResolution {
-    pub original: String,
-    pub resolved: String,
-    pub file: String,
-    pub line: usize,
-    pub confidence: f32,
+pub(crate) struct EntityResolution {
+    pub(crate) original: String,
+    pub(crate) resolved: String,
+    pub(crate) file: String,
+    pub(crate) line: usize,
+    pub(crate) confidence: f32,
 }
 
 /// Enriched prompt with context and resolutions
 #[derive(Debug, Clone)]
-pub struct EnrichedPrompt {
-    pub original: String,
-    pub resolutions: Vec<EntityResolution>,
-    pub recent_files: Vec<String>,
-    pub inferred_values: Vec<(String, String)>,
-    pub context_hints: Vec<String>,
+pub(crate) struct EnrichedPrompt {
+    pub(crate) original: String,
+    pub(crate) resolutions: Vec<EntityResolution>,
+    pub(crate) recent_files: Vec<String>,
+    pub(crate) inferred_values: Vec<(String, String)>,
+    pub(crate) context_hints: Vec<String>,
 }
 
 impl EnrichedPrompt {
     /// Create new enriched prompt
-    pub fn new(original: String) -> Self {
+    pub(crate) fn new(original: String) -> Self {
         Self {
             original,
             resolutions: Vec::new(),
@@ -201,29 +201,29 @@ impl EnrichedPrompt {
     }
 
     /// Add an entity resolution
-    pub fn add_resolution(&mut self, resolution: EntityResolution) {
+    pub(crate) fn add_resolution(&mut self, resolution: EntityResolution) {
         self.resolutions.push(resolution);
     }
 
     /// Add a recent file
-    pub fn add_recent_file(&mut self, file: String) {
+    pub(crate) fn add_recent_file(&mut self, file: String) {
         if !self.recent_files.contains(&file) {
             self.recent_files.push(file);
         }
     }
 
     /// Add an inferred value
-    pub fn add_inferred_value(&mut self, expression: String, value: String) {
+    pub(crate) fn add_inferred_value(&mut self, expression: String, value: String) {
         self.inferred_values.push((expression, value));
     }
 
     /// Add a context hint
-    pub fn add_context_hint(&mut self, hint: String) {
+    pub(crate) fn add_context_hint(&mut self, hint: String) {
         self.context_hints.push(hint);
     }
 
     /// Convert to LLM prompt format
-    pub fn to_llm_prompt(&self) -> String {
+    pub(crate) fn to_llm_prompt(&self) -> String {
         let mut prompt = format!("User request: {}\n\n", self.original);
 
         if !self.resolutions.is_empty() {
@@ -271,7 +271,7 @@ impl EnrichedPrompt {
 }
 
 /// Detect vague references in a prompt
-pub fn detect_vague_references(prompt: &str) -> Vec<VagueReference> {
+pub(crate) fn detect_vague_references(prompt: &str) -> Vec<VagueReference> {
     let mut references = Vec::new();
     let prompt_lower = prompt.to_lowercase();
 
@@ -293,7 +293,7 @@ pub fn detect_vague_references(prompt: &str) -> Vec<VagueReference> {
 }
 
 /// Check if prompt should be enriched (vibe coding enabled)
-pub fn should_enrich_prompt(prompt: &str, vt_cfg: Option<&VTCodeConfig>) -> bool {
+pub(crate) fn should_enrich_prompt(prompt: &str, vt_cfg: Option<&VTCodeConfig>) -> bool {
     let Some(vtc) = vt_cfg else {
         return false;
     };
@@ -321,7 +321,7 @@ pub fn should_enrich_prompt(prompt: &str, vt_cfg: Option<&VTCodeConfig>) -> bool
 }
 
 /// Orchestrator that ties together all vibe coding components
-pub struct PromptEnricher {
+pub(crate) struct PromptEnricher {
     /// Entity resolver for fuzzy matching
     entity_resolver: Arc<RwLock<EntityResolver>>,
 
@@ -337,7 +337,7 @@ pub struct PromptEnricher {
 
 impl PromptEnricher {
     /// Create new enricher
-    pub fn new(workspace_root: PathBuf, vt_cfg: VTCodeConfig) -> Self {
+    pub(crate) fn new(workspace_root: PathBuf, vt_cfg: VTCodeConfig) -> Self {
         let workspace_state = Arc::new(RwLock::new(WorkspaceState::new()));
         let entity_resolver = Arc::new(RwLock::new(EntityResolver::with_cache(
             workspace_root.clone(),
@@ -354,7 +354,7 @@ impl PromptEnricher {
     }
 
     /// Enrich a vague/lazy prompt with contextual information
-    pub async fn enrich_vague_prompt(&self, prompt: &str) -> EnrichedPrompt {
+    pub(crate) async fn enrich_vague_prompt(&self, prompt: &str) -> EnrichedPrompt {
         let mut enriched = EnrichedPrompt::new(prompt.to_string());
 
         // Step 1: Detect vague patterns

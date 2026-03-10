@@ -3,7 +3,7 @@ use super::*;
 use tempfile::TempDir;
 use tokio;
 
-use vtcode_core::config::{HookCommandConfig, HookGroupConfig, HooksConfig, LifecycleHooksConfig};
+use crate::config::{HookCommandConfig, HookGroupConfig, HooksConfig, LifecycleHooksConfig};
 
 /// Create a temporary directory for testing with sample hooks
 fn create_test_workspace() -> TempDir {

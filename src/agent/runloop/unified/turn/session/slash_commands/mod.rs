@@ -7,6 +7,7 @@ use tokio::sync::{Notify, RwLock};
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::decision_tracker::DecisionTracker;
+use vtcode_core::hooks::SessionEndReason;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::ToolRegistry;
 
@@ -19,51 +20,51 @@ use vtcode_tui::{InlineHandle, InlineSession};
 // use super::super::workspace::{bootstrap_config_files, build_workspace_index};
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::model_picker::ModelPickerState;
-pub use crate::agent::runloop::slash_commands::SlashCommandOutcome;
+pub(crate) use crate::agent::runloop::slash_commands::SlashCommandOutcome;
 use crate::agent::runloop::unified::async_mcp_manager::AsyncMcpManager;
 use crate::agent::runloop::unified::palettes::ActivePalette;
 use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
 use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
 use crate::agent::runloop::unified::workspace_links::LinkedDirectory;
 use crate::agent::runloop::welcome::SessionBootstrap;
-use crate::hooks::lifecycle::SessionEndReason;
 
-pub mod handlers;
+mod handlers;
 
-pub enum SlashCommandControl {
+pub(crate) enum SlashCommandControl {
     Continue,
     SubmitPrompt(String),
     BreakWithReason(SessionEndReason),
 }
 
-pub struct SlashCommandContext<'a> {
-    pub renderer: &'a mut AnsiRenderer,
-    pub handle: &'a InlineHandle,
-    pub session: &'a mut InlineSession,
-    pub config: &'a mut CoreAgentConfig,
-    pub vt_cfg: &'a mut Option<VTCodeConfig>,
-    pub provider_client: &'a mut Box<dyn uni::LLMProvider>,
-    pub session_bootstrap: &'a SessionBootstrap,
-    pub model_picker_state: &'a mut Option<ModelPickerState>,
-    pub palette_state: &'a mut Option<ActivePalette>,
-    pub tool_registry: &'a mut ToolRegistry,
-    pub conversation_history: &'a mut Vec<uni::Message>,
-    pub decision_ledger: &'a Arc<RwLock<DecisionTracker>>,
-    pub session_stats: &'a mut SessionStats,
-    pub tools: &'a Arc<RwLock<Vec<uni::ToolDefinition>>>,
-    pub tool_catalog: &'a Arc<ToolCatalogState>,
-    pub async_mcp_manager: Option<&'a Arc<AsyncMcpManager>>,
-    pub mcp_panel_state: &'a mut mcp_events::McpPanelState,
-    pub linked_directories: &'a mut Vec<LinkedDirectory>,
-    pub ctrl_c_state: &'a Arc<CtrlCState>,
-    pub ctrl_c_notify: &'a Arc<Notify>,
-    pub full_auto: bool,
-    pub loaded_skills:
+pub(crate) struct SlashCommandContext<'a> {
+    pub(crate) renderer: &'a mut AnsiRenderer,
+    pub(crate) handle: &'a InlineHandle,
+    pub(crate) session: &'a mut InlineSession,
+    pub(crate) config: &'a mut CoreAgentConfig,
+    pub(crate) vt_cfg: &'a mut Option<VTCodeConfig>,
+    pub(crate) provider_client: &'a mut Box<dyn uni::LLMProvider>,
+    pub(crate) session_bootstrap: &'a SessionBootstrap,
+    pub(crate) model_picker_state: &'a mut Option<ModelPickerState>,
+    pub(crate) palette_state: &'a mut Option<ActivePalette>,
+    pub(crate) tool_registry: &'a mut ToolRegistry,
+    pub(crate) conversation_history: &'a mut Vec<uni::Message>,
+    pub(crate) decision_ledger: &'a Arc<RwLock<DecisionTracker>>,
+    pub(crate) session_stats: &'a mut SessionStats,
+    pub(crate) tools: &'a Arc<RwLock<Vec<uni::ToolDefinition>>>,
+    pub(crate) tool_catalog: &'a Arc<ToolCatalogState>,
+    pub(crate) async_mcp_manager: Option<&'a Arc<AsyncMcpManager>>,
+    pub(crate) mcp_panel_state: &'a mut mcp_events::McpPanelState,
+    pub(crate) linked_directories: &'a mut Vec<LinkedDirectory>,
+    pub(crate) ctrl_c_state: &'a Arc<CtrlCState>,
+    pub(crate) ctrl_c_notify: &'a Arc<Notify>,
+    pub(crate) full_auto: bool,
+    pub(crate) loaded_skills:
         &'a Arc<RwLock<hashbrown::HashMap<String, vtcode_core::skills::types::Skill>>>,
-    pub checkpoint_manager: Option<&'a vtcode_core::core::agent::snapshots::SnapshotManager>,
+    pub(crate) checkpoint_manager:
+        Option<&'a vtcode_core::core::agent::snapshots::SnapshotManager>,
 }
 
-pub async fn handle_outcome(
+pub(crate) async fn handle_outcome(
     outcome: SlashCommandOutcome,
     ctx: SlashCommandContext<'_>,
 ) -> Result<SlashCommandControl> {

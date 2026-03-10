@@ -284,10 +284,7 @@ fn strip_assistant_text(processing_result: TurnProcessingResult) -> TurnProcessi
             reasoning_details,
         },
         TurnProcessingResult::TextResponse { .. } => TurnProcessingResult::Empty,
-        TurnProcessingResult::Empty
-        | TurnProcessingResult::Completed
-        | TurnProcessingResult::Cancelled
-        | TurnProcessingResult::Aborted => processing_result,
+        TurnProcessingResult::Empty => processing_result,
     }
 }
 
@@ -333,10 +330,7 @@ fn maybe_append_plan_mode_reminder(
                 proposed_plan,
             }
         }
-        TurnProcessingResult::Empty
-        | TurnProcessingResult::Completed
-        | TurnProcessingResult::Cancelled
-        | TurnProcessingResult::Aborted => processing_result,
+        TurnProcessingResult::Empty => processing_result,
     }
 }
 
@@ -928,15 +922,12 @@ fn inject_plan_mode_interview(
             reasoning,
             reasoning_details,
         },
-        TurnProcessingResult::Empty | TurnProcessingResult::Completed => {
-            TurnProcessingResult::ToolCalls {
-                tool_calls: vec![call],
-                assistant_text: String::new(),
-                reasoning: Vec::new(),
-                reasoning_details: None,
-            }
-        }
-        TurnProcessingResult::Cancelled | TurnProcessingResult::Aborted => processing_result,
+        TurnProcessingResult::Empty => TurnProcessingResult::ToolCalls {
+            tool_calls: vec![call],
+            assistant_text: String::new(),
+            reasoning: Vec::new(),
+            reasoning_details: None,
+        },
     }
 }
 

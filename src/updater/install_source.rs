@@ -5,7 +5,7 @@ const CURL_INSTALL_COMMAND: &str =
     "curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum InstallSource {
+pub(crate) enum InstallSource {
     Standalone,
     Homebrew,
     Cargo,
@@ -13,11 +13,11 @@ pub enum InstallSource {
 }
 
 impl InstallSource {
-    pub fn is_managed(self) -> bool {
+    pub(crate) fn is_managed(self) -> bool {
         !matches!(self, Self::Standalone)
     }
 
-    pub fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> &'static str {
         match self {
             Self::Standalone => "standalone",
             Self::Homebrew => "homebrew",
@@ -26,7 +26,7 @@ impl InstallSource {
         }
     }
 
-    pub fn update_command(self) -> &'static str {
+    pub(crate) fn update_command(self) -> &'static str {
         match self {
             Self::Standalone => CURL_INSTALL_COMMAND,
             Self::Homebrew => "brew upgrade vinhnx/tap/vtcode",

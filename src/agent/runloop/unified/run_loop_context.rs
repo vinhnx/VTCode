@@ -19,13 +19,13 @@ use vtcode_core::acp::ToolPermissionCache;
 use vtcode_core::tools::ApprovalRecorder;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TurnRunId(pub String);
+pub(crate) struct TurnRunId(pub String);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TurnId(pub String);
+pub(crate) struct TurnId(pub String);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TurnPhase {
+pub(crate) enum TurnPhase {
     Preparing,
     Requesting,
     ExecutingTools,
@@ -33,7 +33,7 @@ pub enum TurnPhase {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TurnExecutionPhase {
+pub(crate) enum TurnExecutionPhase {
     Preparing,
     Requesting,
     ExecutingTools,
@@ -52,7 +52,7 @@ impl From<TurnPhase> for TurnExecutionPhase {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TurnExecutionSnapshot {
+pub(crate) struct TurnExecutionSnapshot {
     pub run_id: String,
     pub turn_id: String,
     pub phase: TurnExecutionPhase,
@@ -61,10 +61,8 @@ pub struct TurnExecutionSnapshot {
     pub max_tool_retries: u32,
 }
 
-pub struct HarnessTurnState {
-    #[allow(dead_code)]
+pub(crate) struct HarnessTurnState {
     pub run_id: TurnRunId,
-    #[allow(dead_code)]
     pub turn_id: TurnId,
     pub phase: TurnPhase,
     pub turn_started_at: Instant,
@@ -84,7 +82,7 @@ pub struct HarnessTurnState {
 }
 
 impl HarnessTurnState {
-    pub fn new(
+    pub(crate) fn new(
         run_id: TurnRunId,
         turn_id: TurnId,
         max_tool_calls: usize,
@@ -112,33 +110,33 @@ impl HarnessTurnState {
         }
     }
 
-    pub fn has_tool_call_budget(&self) -> bool {
+    pub(crate) fn has_tool_call_budget(&self) -> bool {
         self.max_tool_calls > 0
     }
 
-    pub fn tool_budget_exhausted(&self) -> bool {
+    pub(crate) fn tool_budget_exhausted(&self) -> bool {
         self.has_tool_call_budget() && self.tool_calls >= self.max_tool_calls
     }
 
-    pub fn wall_clock_exhausted(&self) -> bool {
+    pub(crate) fn wall_clock_exhausted(&self) -> bool {
         self.turn_started_at.elapsed() >= self.max_tool_wall_clock
     }
 
-    pub fn record_tool_call(&mut self) {
+    pub(crate) fn record_tool_call(&mut self) {
         self.tool_calls = self.tool_calls.saturating_add(1);
     }
 
-    pub fn record_blocked_tool_call(&mut self) -> usize {
+    pub(crate) fn record_blocked_tool_call(&mut self) -> usize {
         self.blocked_tool_calls = self.blocked_tool_calls.saturating_add(1);
         self.consecutive_blocked_tool_calls = self.consecutive_blocked_tool_calls.saturating_add(1);
         self.consecutive_blocked_tool_calls
     }
 
-    pub fn reset_blocked_tool_call_streak(&mut self) {
+    pub(crate) fn reset_blocked_tool_call_streak(&mut self) {
         self.consecutive_blocked_tool_calls = 0;
     }
 
-    pub fn tool_budget_usage_ratio(&self) -> f64 {
+    pub(crate) fn tool_budget_usage_ratio(&self) -> f64 {
         if !self.has_tool_call_budget() {
             0.0
         } else {
@@ -146,34 +144,34 @@ impl HarnessTurnState {
         }
     }
 
-    pub fn remaining_tool_calls(&self) -> usize {
+    pub(crate) fn remaining_tool_calls(&self) -> usize {
         self.max_tool_calls.saturating_sub(self.tool_calls)
     }
 
-    pub fn should_emit_tool_budget_warning(&self, threshold: f64) -> bool {
+    pub(crate) fn should_emit_tool_budget_warning(&self, threshold: f64) -> bool {
         self.has_tool_call_budget()
             && !self.tool_budget_warning_emitted
             && self.tool_budget_usage_ratio() >= threshold
     }
 
-    pub fn mark_tool_budget_warning_emitted(&mut self) {
+    pub(crate) fn mark_tool_budget_warning_emitted(&mut self) {
         self.tool_budget_warning_emitted = true;
     }
 
-    pub fn mark_tool_budget_exhausted_emitted(&mut self) {
+    pub(crate) fn mark_tool_budget_exhausted_emitted(&mut self) {
         self.tool_budget_exhausted_emitted = true;
     }
 
-    pub fn record_spool_chunk_read(&mut self) -> usize {
+    pub(crate) fn record_spool_chunk_read(&mut self) -> usize {
         self.consecutive_spool_chunk_reads = self.consecutive_spool_chunk_reads.saturating_add(1);
         self.consecutive_spool_chunk_reads
     }
 
-    pub fn reset_spool_chunk_read_streak(&mut self) {
+    pub(crate) fn reset_spool_chunk_read_streak(&mut self) {
         self.consecutive_spool_chunk_reads = 0;
     }
 
-    pub fn record_shell_command_run(&mut self, signature: String) -> usize {
+    pub(crate) fn record_shell_command_run(&mut self, signature: String) -> usize {
         if self.last_shell_command_signature.as_deref() == Some(signature.as_str()) {
             self.consecutive_same_shell_command_runs =
                 self.consecutive_same_shell_command_runs.saturating_add(1);
@@ -185,29 +183,29 @@ impl HarnessTurnState {
         self.consecutive_same_shell_command_runs
     }
 
-    pub fn reset_shell_command_run_streak(&mut self) {
+    pub(crate) fn reset_shell_command_run_streak(&mut self) {
         self.last_shell_command_signature = None;
         self.consecutive_same_shell_command_runs = 0;
     }
 
-    pub fn record_task_tracker_create_signature(&mut self, signature: String) -> bool {
+    pub(crate) fn record_task_tracker_create_signature(&mut self, signature: String) -> bool {
         self.seen_task_tracker_create_signatures.insert(signature)
     }
 
-    pub fn replaceable_task_tracker_count(&self) -> Option<usize> {
+    pub(crate) fn replaceable_task_tracker_count(&self) -> Option<usize> {
         let lines = self.replaceable_task_tracker_block.as_ref()?;
         vtcode_core::utils::transcript::tail_matches(lines).then_some(lines.len())
     }
 
-    pub fn remember_task_tracker_block(&mut self, lines: Vec<String>) {
+    pub(crate) fn remember_task_tracker_block(&mut self, lines: Vec<String>) {
         self.replaceable_task_tracker_block = (!lines.is_empty()).then_some(lines);
     }
 
-    pub fn set_phase(&mut self, phase: TurnPhase) {
+    pub(crate) fn set_phase(&mut self, phase: TurnPhase) {
         self.phase = phase;
     }
 
-    pub fn execution_snapshot(&self) -> TurnExecutionSnapshot {
+    pub(crate) fn execution_snapshot(&self) -> TurnExecutionSnapshot {
         TurnExecutionSnapshot {
             run_id: self.run_id.0.clone(),
             turn_id: self.turn_id.0.clone(),
@@ -219,12 +217,10 @@ impl HarnessTurnState {
     }
 }
 
-#[allow(dead_code)]
 pub(crate) struct RunLoopContext<'a> {
     pub renderer: &'a mut AnsiRenderer,
     pub handle: &'a InlineHandle,
     pub tool_registry: &'a mut ToolRegistry,
-    pub tools: &'a Arc<RwLock<Vec<uni::ToolDefinition>>>,
     pub tool_result_cache: &'a Arc<RwLock<ToolResultCache>>,
     pub tool_permission_cache: &'a Arc<RwLock<ToolPermissionCache>>,
     pub decision_ledger: &'a Arc<RwLock<DecisionTracker>>,
@@ -240,11 +236,11 @@ pub(crate) struct RunLoopContext<'a> {
 
 impl<'a> RunLoopContext<'a> {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
+    pub(crate) fn new(
         renderer: &'a mut AnsiRenderer,
         handle: &'a InlineHandle,
         tool_registry: &'a mut ToolRegistry,
-        tools: &'a Arc<RwLock<Vec<uni::ToolDefinition>>>,
+        _tools: &'a Arc<RwLock<Vec<uni::ToolDefinition>>>,
         tool_result_cache: &'a Arc<RwLock<ToolResultCache>>,
         tool_permission_cache: &'a Arc<RwLock<ToolPermissionCache>>,
         decision_ledger: &'a Arc<RwLock<DecisionTracker>>,
@@ -261,7 +257,6 @@ impl<'a> RunLoopContext<'a> {
             renderer,
             handle,
             tool_registry,
-            tools,
             tool_result_cache,
             tool_permission_cache,
             decision_ledger,
@@ -275,16 +270,6 @@ impl<'a> RunLoopContext<'a> {
             harness_emitter,
         }
     }
-}
-
-// Lightweight adapter that provides a smaller context for per-turn operations.
-#[allow(dead_code)]
-pub(crate) struct TurnExecutionContext<'a> {
-    pub renderer: &'a mut AnsiRenderer,
-    pub handle: &'a InlineHandle,
-    pub session_stats: &'a mut SessionStats,
-    pub mcp_panel_state: &'a mut McpPanelState,
-    pub approval_recorder: &'a ApprovalRecorder,
 }
 
 #[cfg(test)]

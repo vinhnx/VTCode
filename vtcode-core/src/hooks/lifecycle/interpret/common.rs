@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-use vtcode_core::config::HookCommandConfig;
+use crate::config::HookCommandConfig;
 
 use crate::hooks::lifecycle::types::{HookMessage, HookMessageLevel};
 

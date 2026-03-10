@@ -14,7 +14,7 @@ use crate::agent::runloop::unified::run_loop_context::TurnPhase;
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use crate::agent::runloop::unified::turn::turn_loop_helpers::{
-    ToolLoopLimitAction, extract_turn_config, handle_pre_request_action, handle_steering_messages,
+    ToolLoopLimitAction, extract_turn_config, handle_steering_messages,
     maybe_handle_plan_mode_exit_trigger, maybe_handle_tool_loop_limit,
 };
 use vtcode_core::acp::ToolPermissionCache;
@@ -22,6 +22,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::agent::steering::SteeringMessage;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::trajectory::TrajectoryLogger;
+use vtcode_core::hooks::LifecycleHookEngine;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::notifications::{CompletionStatus, NotificationEvent, send_global_notification};
 use vtcode_core::tools::ToolResultCache;
@@ -37,12 +38,12 @@ use crate::agent::runloop::unified::turn::turn_helpers::display_error;
 use vtcode_core::config::types::AgentConfig;
 use vtcode_core::core::agent::error_recovery::ErrorType;
 
-pub struct TurnLoopOutcome {
+pub(crate) struct TurnLoopOutcome {
     pub result: TurnLoopResult,
     pub turn_modified_files: BTreeSet<PathBuf>,
 }
 
-pub struct TurnLoopContext<'a> {
+pub(crate) struct TurnLoopContext<'a> {
     pub renderer: &'a mut AnsiRenderer,
     pub handle: &'a InlineHandle,
     pub session: &'a mut InlineSession,
@@ -60,7 +61,7 @@ pub struct TurnLoopContext<'a> {
     pub context_manager: &'a mut crate::agent::runloop::unified::context_manager::ContextManager,
     pub last_forced_redraw: &'a mut Instant,
     pub input_status_state: &'a mut crate::agent::runloop::unified::status_line::InputStatusState,
-    pub lifecycle_hooks: Option<&'a crate::hooks::lifecycle::LifecycleHookEngine>,
+    pub lifecycle_hooks: Option<&'a LifecycleHookEngine>,
     pub default_placeholder: &'a Option<String>,
     pub tool_permission_cache: &'a Arc<RwLock<ToolPermissionCache>>,
     pub safety_validator: &'a Arc<RwLock<ToolCallSafetyValidator>>,
@@ -83,7 +84,7 @@ pub struct TurnLoopContext<'a> {
 
 impl<'a> TurnLoopContext<'a> {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
+    pub(crate) fn new(
         renderer: &'a mut AnsiRenderer,
         handle: &'a InlineHandle,
         session: &'a mut InlineSession,
@@ -101,7 +102,7 @@ impl<'a> TurnLoopContext<'a> {
         context_manager: &'a mut crate::agent::runloop::unified::context_manager::ContextManager,
         last_forced_redraw: &'a mut Instant,
         input_status_state: &'a mut crate::agent::runloop::unified::status_line::InputStatusState,
-        lifecycle_hooks: Option<&'a crate::hooks::lifecycle::LifecycleHookEngine>,
+        lifecycle_hooks: Option<&'a LifecycleHookEngine>,
         default_placeholder: &'a Option<String>,
         tool_permission_cache: &'a Arc<RwLock<ToolPermissionCache>>,
         safety_validator: &'a Arc<RwLock<ToolCallSafetyValidator>>,
@@ -161,7 +162,7 @@ impl<'a> TurnLoopContext<'a> {
         }
     }
 
-    pub fn as_run_loop_context(
+    pub(crate) fn as_run_loop_context(
         &mut self,
     ) -> crate::agent::runloop::unified::run_loop_context::RunLoopContext<'_> {
         crate::agent::runloop::unified::run_loop_context::RunLoopContext::new(
@@ -183,7 +184,7 @@ impl<'a> TurnLoopContext<'a> {
         )
     }
 
-    pub fn as_turn_processing_context<'b>(
+    pub(crate) fn as_turn_processing_context<'b>(
         &'b mut self,
         working_history: &'b mut Vec<uni::Message>,
     ) -> crate::agent::runloop::unified::turn::context::TurnProcessingContext<'b> {
@@ -298,10 +299,9 @@ fn maybe_recover_after_post_tool_llm_failure(
 
 // For `TurnLoopContext`, we will reuse the generic `handle_pipeline_output` via an adapter below.
 
-pub async fn run_turn_loop(
+pub(crate) async fn run_turn_loop(
     working_history: &mut Vec<uni::Message>,
     mut ctx: TurnLoopContext<'_>,
-    session_end_reason: &mut crate::hooks::lifecycle::SessionEndReason,
 ) -> Result<TurnLoopOutcome> {
     use crate::agent::runloop::unified::turn::context::{TurnHandlerOutcome, TurnProcessingResult};
     use crate::agent::runloop::unified::turn::guards::run_proactive_guards;
@@ -352,12 +352,6 @@ pub async fn run_turn_loop(
 
         step_count += 1;
         ctx.telemetry.record_turn();
-
-        if handle_pre_request_action(&mut ctx, working_history, session_end_reason, &mut result)
-            .await?
-        {
-            break;
-        }
 
         if maybe_handle_plan_mode_exit_trigger(&mut ctx, working_history, step_count, &mut result)
             .await?
@@ -609,7 +603,6 @@ pub async fn run_turn_loop(
             step_count,
             repeated_tool_attempts: &mut repeated_tool_attempts,
             turn_modified_files: &mut turn_modified_files,
-            session_end_reason,
             max_tool_loops: current_max_tool_loops,
             tool_repeat_limit: turn_config.tool_repeat_limit,
         })

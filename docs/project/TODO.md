@@ -120,15 +120,4 @@ check for unused, redundant, dead code from /src and remove completely, cleanup.
 
 ---
 
-check
-
-- src/main_helpers/
-- src/startup
-- src/tools
-- src/updater
-- src/agent
-- src/hooks
-
-and refine the structure and extract to existing crate module .
-
-check for unused, redundant, dead code from /src and remove completely, cleanup. use /rust-skills and enhance impl. review overall changes again carefully, can you do better? continue with your careful recommendations, proceed with outcome. KISS and DRY, do repeatly until all done, don't stop ---> do not leave unused, redundant, dead code
+https://defuddle.md/x.com/akshay_pachaar/status/2031021906254766128

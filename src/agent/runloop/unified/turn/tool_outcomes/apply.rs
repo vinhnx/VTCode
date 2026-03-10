@@ -23,14 +23,14 @@ fn format_turn_elapsed_label(duration: Duration) -> String {
     format!("{hours}h {minutes}m")
 }
 
-pub async fn apply_turn_outcome(
+pub(crate) async fn apply_turn_outcome(
     outcome: TurnLoopOutcome,
     ctx: TurnOutcomeContext<'_>,
 ) -> Result<()> {
     match outcome.result {
         TurnLoopResult::Cancelled => {
             if ctx.ctrl_c_state.is_exit_requested() {
-                *ctx.session_end_reason = crate::hooks::lifecycle::SessionEndReason::Exit;
+                *ctx.session_end_reason = vtcode_core::hooks::SessionEndReason::Exit;
                 return Ok(());
             }
             ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
@@ -41,11 +41,11 @@ pub async fn apply_turn_outcome(
             ctx.handle.clear_input();
             ctx.handle.set_placeholder(ctx.default_placeholder.clone());
             ctx.ctrl_c_state.clear_cancel();
-            *ctx.session_end_reason = crate::hooks::lifecycle::SessionEndReason::Cancelled;
+            *ctx.session_end_reason = vtcode_core::hooks::SessionEndReason::Cancelled;
             Ok(())
         }
         TurnLoopResult::Exit => {
-            *ctx.session_end_reason = crate::hooks::lifecycle::SessionEndReason::Exit;
+            *ctx.session_end_reason = vtcode_core::hooks::SessionEndReason::Exit;
             Ok(())
         }
         TurnLoopResult::Aborted => {
@@ -164,7 +164,7 @@ mod tests {
         let (handle, mut renderer, mut receiver) = renderer_with_channel();
         let ctrl_c_state = Arc::new(CtrlCState::new());
         let default_placeholder = None;
-        let mut session_end_reason = crate::hooks::lifecycle::SessionEndReason::Completed;
+        let mut session_end_reason = vtcode_core::hooks::SessionEndReason::Completed;
         let mut next_checkpoint_turn = 1usize;
         let mut conversation_history = Vec::new();
         let outcome = TurnLoopOutcome {
@@ -200,7 +200,7 @@ mod tests {
         let (handle, mut renderer, mut receiver) = renderer_with_channel();
         let ctrl_c_state = Arc::new(CtrlCState::new());
         let default_placeholder = None;
-        let mut session_end_reason = crate::hooks::lifecycle::SessionEndReason::Completed;
+        let mut session_end_reason = vtcode_core::hooks::SessionEndReason::Completed;
         let mut next_checkpoint_turn = 1usize;
         let mut conversation_history = Vec::new();
         let outcome = TurnLoopOutcome {
@@ -235,7 +235,7 @@ mod tests {
         let (handle, mut renderer, mut receiver) = renderer_with_channel();
         let ctrl_c_state = Arc::new(CtrlCState::new());
         let default_placeholder = None;
-        let mut session_end_reason = crate::hooks::lifecycle::SessionEndReason::Completed;
+        let mut session_end_reason = vtcode_core::hooks::SessionEndReason::Completed;
         let mut next_checkpoint_turn = 1usize;
         let mut conversation_history = Vec::new();
         let outcome = TurnLoopOutcome {

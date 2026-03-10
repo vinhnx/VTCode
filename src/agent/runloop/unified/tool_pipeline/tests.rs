@@ -170,13 +170,12 @@ fn test_process_tool_output() {
         stdout,
         modified_files,
         command_success,
-        has_more,
+        ..
     } = status
     {
         assert_eq!(stdout, Some("test output".to_string()));
         assert_eq!(modified_files, vec!["file1.txt", "file2.txt"]);
         assert!(command_success);
-        assert!(!has_more);
     } else {
         panic!("Expected Success variant");
     }

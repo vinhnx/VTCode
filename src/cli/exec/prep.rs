@@ -21,7 +21,7 @@ use vtcode_core::utils::tty::TtyExt;
 use vtcode_core::utils::validation::validate_non_empty;
 
 use crate::agent::agents::apply_runtime_overrides;
-use crate::workspace_trust::workspace_trust_level;
+use crate::startup::workspace_trust_level;
 
 use super::super::exec::ExecCommandOptions;
 

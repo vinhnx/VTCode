@@ -148,6 +148,7 @@ pub use exec_policy::command_validation as execpolicy;
 pub mod gemini;
 pub mod git_info; // Git repository information collection
 pub mod http_client;
+pub mod hooks;
 pub mod instructions;
 pub mod llm;
 pub mod marketplace;

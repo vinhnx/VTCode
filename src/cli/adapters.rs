@@ -1,4 +1,4 @@
-use vtcode::startup::StartupContext;
+use crate::startup::StartupContext;
 use vtcode_core::cli::args::{AskCommandOptions, AskOutputFormat, Cli};
 
 use super::SkillsCommandOptions;

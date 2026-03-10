@@ -11,7 +11,7 @@ use vtcode_core::core::agent::task::{ContextItem, Task};
 use vtcode_core::core::agent::types::AgentType;
 use vtcode_core::utils::colors::style;
 
-use crate::workspace_trust::workspace_trust_level;
+use crate::startup::workspace_trust_level;
 
 const AUTO_SESSION_PREFIX: &str = "auto-task";
 const AUTO_TASK_ID: &str = "auto-task";

@@ -511,17 +511,12 @@ impl GrepSearchManager {
             let mut total = 0usize;
             let mut kept_count = 0;
             for entry in &matches {
-                // Estimated size to avoid expensive JSON serialization in the hot loop
-                let est_bytes = match entry {
-                    Value::Object(m) => m.len() * 64, // Estimate 64 bytes per field
-                    Value::String(s) => s.len(),
-                    _ => 128,
-                };
-                if total + est_bytes > limit {
+                let entry_bytes = entry.to_string().len();
+                if total + entry_bytes > limit {
                     truncated = true;
                     break;
                 }
-                total += est_bytes;
+                total += entry_bytes;
                 kept_count += 1;
             }
             matches.truncate(kept_count);

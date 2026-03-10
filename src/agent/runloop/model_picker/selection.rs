@@ -44,22 +44,22 @@ pub(super) enum ExistingKey {
 }
 
 #[derive(Clone)]
-pub struct ModelSelectionResult {
-    pub provider: String,
-    pub provider_label: String,
-    pub provider_enum: Option<Provider>,
-    pub model: String,
-    pub model_display: String,
-    pub known_model: bool,
-    pub reasoning_supported: bool,
-    pub reasoning: ReasoningEffortLevel,
-    pub reasoning_changed: bool,
-    pub service_tier_supported: bool,
-    pub service_tier: Option<OpenAIServiceTier>,
-    pub service_tier_changed: bool,
-    pub api_key: Option<String>,
-    pub env_key: String,
-    pub requires_api_key: bool,
+pub(crate) struct ModelSelectionResult {
+    pub(crate) provider: String,
+    pub(crate) provider_label: String,
+    pub(crate) provider_enum: Option<Provider>,
+    pub(crate) model: String,
+    pub(crate) model_display: String,
+    pub(crate) known_model: bool,
+    pub(crate) reasoning_supported: bool,
+    pub(crate) reasoning: ReasoningEffortLevel,
+    pub(crate) reasoning_changed: bool,
+    pub(crate) service_tier_supported: bool,
+    pub(crate) service_tier: Option<OpenAIServiceTier>,
+    pub(crate) service_tier_changed: bool,
+    pub(crate) api_key: Option<String>,
+    pub(crate) env_key: String,
+    pub(crate) requires_api_key: bool,
 }
 
 pub(super) fn parse_model_selection(

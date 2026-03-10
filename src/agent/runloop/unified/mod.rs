@@ -1,7 +1,7 @@
-pub mod async_mcp_manager;
+pub(crate) mod async_mcp_manager;
 
 mod config_section_headings;
-pub mod context_manager;
+pub(crate) mod context_manager;
 
 mod diagnostics;
 mod display;
@@ -23,14 +23,13 @@ mod prompts;
 mod request_user_input;
 pub(crate) mod run_loop_context;
 mod session_runtime;
-pub mod session_setup;
+pub(crate) mod session_setup;
 pub(crate) mod settings_interactive;
 mod shell;
-pub mod state;
+pub(crate) mod state;
 mod status_line;
 mod status_line_command;
 pub(crate) mod tool_catalog;
-mod tool_ledger;
 mod tool_output_handler;
 mod tool_pipeline;
 mod tool_routing;
@@ -38,7 +37,7 @@ mod tool_summary;
 mod tool_summary_helpers;
 #[cfg(test)]
 mod tool_summary_tests;
-pub mod turn;
+pub(crate) mod turn;
 mod ui_interaction;
 mod ui_interaction_stream;
 mod ui_interaction_stream_helpers;
@@ -51,7 +50,7 @@ mod workspace_links;
 pub(crate) mod reasoning;
 
 // Optimization and safety modules
-pub mod tool_call_safety;
+pub(crate) mod tool_call_safety;
 
 pub(crate) use intent_extractor::extract_action_from_messages;
 pub(crate) use session_runtime::UnifiedSessionRuntime;

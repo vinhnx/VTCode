@@ -1,5 +1,5 @@
 use anyhow::Result;
-use vtcode::startup::StartupContext;
+use crate::startup::StartupContext;
 use vtcode_core::cli::args::{SkillsRefSubcommand, SkillsSubcommand};
 
 use crate::cli::adapters::skills_options;

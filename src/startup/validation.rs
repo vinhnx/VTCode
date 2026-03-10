@@ -3,10 +3,9 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, anyhow, bail};
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::validator::ConfigValidator;
+use vtcode_core::tools::RipgrepStatus;
 use vtcode_core::utils::path::canonicalize_workspace;
 use vtcode_core::utils::validation::validate_is_directory;
-
-use crate::tools::RipgrepStatus;
 
 pub(super) fn apply_permission_mode_override(config: &mut VTCodeConfig, mode: &str) -> Result<()> {
     use vtcode_config::constants::tools;
@@ -174,10 +173,9 @@ pub(super) fn validate_startup_configuration(
 
     if let Some(models_path) = models_json_path {
         match ConfigValidator::new(&models_path) {
-            Ok(validator) => match validator.validate(config) {
-                Ok(result) => if !result.warnings.is_empty() && !quiet {},
-                Err(_e) => if !quiet {},
-            },
+            Ok(validator) => {
+                let _ = validator.validate(config);
+            }
             Err(e) => {
                 if !quiet {
                     eprintln!(

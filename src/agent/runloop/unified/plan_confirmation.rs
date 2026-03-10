@@ -19,7 +19,7 @@ use super::state::CtrlCState;
 
 /// Result of the plan confirmation flow
 #[derive(Debug, Clone)]
-pub enum PlanConfirmationOutcome {
+pub(crate) enum PlanConfirmationOutcome {
     /// User approved execution with manual edit approvals
     Execute,
     /// User approved with auto-accept enabled for future confirmations

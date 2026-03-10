@@ -9,7 +9,7 @@ use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_core::utils::transcript;
 
 use crate::agent::runloop::unified::state::SessionStats;
-use crate::hooks::lifecycle::SessionEndReason;
+use vtcode_core::hooks::SessionEndReason;
 
 use super::{SlashCommandContext, SlashCommandControl};
 use crate::agent::runloop::unified::palettes::ActivePalette;
@@ -38,22 +38,22 @@ mod ui;
 mod update;
 #[path = "workspace.rs"]
 mod workspace;
-pub use apps::{handle_launch_editor, handle_launch_git, handle_new_session, handle_open_docs};
-pub use diagnostics::{
+pub(super) use apps::{handle_launch_editor, handle_launch_git, handle_new_session, handle_open_docs};
+pub(super) use diagnostics::{
     handle_run_doctor, handle_show_status, handle_start_doctor_interactive,
     handle_start_terminal_setup,
 };
-pub use mcp::handle_manage_mcp;
-pub use modes::{handle_cycle_mode, handle_toggle_plan_mode};
-pub use oauth::{handle_oauth_login, handle_oauth_logout, handle_show_auth_status};
-pub use share_log::handle_share_log;
-pub use skills::handle_manage_skills;
-pub use ui::{
+pub(super) use mcp::handle_manage_mcp;
+pub(super) use modes::{handle_cycle_mode, handle_toggle_plan_mode};
+pub(super) use oauth::{handle_oauth_login, handle_oauth_logout, handle_show_auth_status};
+pub(super) use share_log::handle_share_log;
+pub(super) use skills::handle_manage_skills;
+pub(super) use ui::{
     handle_start_file_browser, handle_start_history_picker, handle_start_model_selection,
     handle_start_session_palette, handle_start_theme_palette, handle_theme_changed,
 };
-pub use update::handle_update;
-pub use workspace::{handle_initialize_workspace, handle_manage_workspace_directories};
+pub(super) use update::handle_update;
+pub(super) use workspace::{handle_initialize_workspace, handle_manage_workspace_directories};
 
 pub(super) fn persist_mode_settings(
     workspace: &std::path::Path,
@@ -97,7 +97,9 @@ pub(super) fn persist_mode_settings(
     Ok(())
 }
 
-pub async fn handle_show_settings(mut ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+pub(super) async fn handle_show_settings(
+    mut ctx: SlashCommandContext<'_>,
+) -> Result<SlashCommandControl> {
     if !ui::ensure_selection_ui_available(&mut ctx, "configuring settings")? {
         return Ok(SlashCommandControl::Continue);
     }
@@ -124,7 +126,7 @@ pub async fn handle_show_settings(mut ctx: SlashCommandContext<'_>) -> Result<Sl
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_clear_conversation(
+pub(super) async fn handle_clear_conversation(
     ctx: SlashCommandContext<'_>,
 ) -> Result<SlashCommandControl> {
     ctx.conversation_history.clear();
@@ -141,7 +143,7 @@ pub async fn handle_clear_conversation(
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_compact_conversation(
+pub(super) async fn handle_compact_conversation(
     ctx: SlashCommandContext<'_>,
 ) -> Result<SlashCommandControl> {
     if ctx.conversation_history.is_empty() {
@@ -197,7 +199,7 @@ pub async fn handle_compact_conversation(
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_clear_screen(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+pub(super) async fn handle_clear_screen(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     ctx.renderer.clear_screen();
     ctx.renderer.line(
         MessageStyle::Info,
@@ -207,7 +209,7 @@ pub async fn handle_clear_screen(ctx: SlashCommandContext<'_>) -> Result<SlashCo
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_copy_latest_assistant_reply(
+pub(super) async fn handle_copy_latest_assistant_reply(
     ctx: SlashCommandContext<'_>,
 ) -> Result<SlashCommandControl> {
     let latest_reply = ctx.conversation_history.iter().rev().find_map(|message| {
@@ -248,7 +250,7 @@ pub async fn handle_copy_latest_assistant_reply(
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_rewind_latest(
+pub(super) async fn handle_rewind_latest(
     ctx: SlashCommandContext<'_>,
     scope: vtcode_core::core::agent::snapshots::RevertScope,
 ) -> Result<SlashCommandControl> {
@@ -280,7 +282,7 @@ pub async fn handle_rewind_latest(
     handle_rewind_to_turn(ctx, latest.turn_number, scope).await
 }
 
-pub async fn handle_rewind_to_turn(
+pub(super) async fn handle_rewind_to_turn(
     ctx: SlashCommandContext<'_>,
     turn: usize,
     scope: vtcode_core::core::agent::snapshots::RevertScope,
@@ -366,7 +368,7 @@ pub async fn handle_rewind_to_turn(
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_exit(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+pub(super) async fn handle_exit(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     ctx.renderer.line(MessageStyle::Info, "✓")?;
     Ok(SlashCommandControl::BreakWithReason(SessionEndReason::Exit))
 }

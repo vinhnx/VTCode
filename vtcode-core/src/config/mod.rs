@@ -59,7 +59,7 @@ pub use types::{
     VerbosityLevel,
 };
 pub use validation::{ValidationResult, validate_config, validate_model_exists};
-pub use validator::{ConfigValidator, ModelsDatabase, ValidationResult as ConfigValidationResult};
+pub use validator::ConfigValidator;
 pub use vtcode_config::root::{
     KeyboardProtocolConfig, LayoutModeOverride, PtyConfig, ReasoningDisplayMode, ToolOutputMode,
     UiConfig, UiDisplayMode,

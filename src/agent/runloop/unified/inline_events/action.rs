@@ -1,4 +1,4 @@
-use crate::hooks::lifecycle::SessionEndReason;
+use vtcode_core::hooks::SessionEndReason;
 
 pub(crate) enum InlineLoopAction {
     Continue,

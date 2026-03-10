@@ -1,12 +1,11 @@
 use anyhow::Result;
 use vtcode_core::utils::ansi::MessageStyle;
-use webbrowser;
 
-use crate::hooks::lifecycle::SessionEndReason;
+use vtcode_core::hooks::SessionEndReason;
 
 use super::{SlashCommandContext, SlashCommandControl};
 
-pub async fn handle_new_session(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+pub(crate) async fn handle_new_session(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     ctx.renderer
         .line(MessageStyle::Info, "Starting new session...")?;
     Ok(SlashCommandControl::BreakWithReason(
@@ -14,7 +13,7 @@ pub async fn handle_new_session(ctx: SlashCommandContext<'_>) -> Result<SlashCom
     ))
 }
 
-pub async fn handle_open_docs(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+pub(crate) async fn handle_open_docs(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     const DOCS_URL: &str = "https://deepwiki.com/vinhnx/vtcode";
     match webbrowser::open(DOCS_URL) {
         Ok(_) => {
@@ -36,7 +35,7 @@ pub async fn handle_open_docs(ctx: SlashCommandContext<'_>) -> Result<SlashComma
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_launch_editor(
+pub(crate) async fn handle_launch_editor(
     ctx: SlashCommandContext<'_>,
     file: Option<String>,
 ) -> Result<SlashCommandControl> {
@@ -129,7 +128,7 @@ pub async fn handle_launch_editor(
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_launch_git(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+pub(crate) async fn handle_launch_git(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     use vtcode_core::tools::terminal_app::TerminalAppLauncher;
 
     let launcher = TerminalAppLauncher::new(ctx.config.workspace.clone());

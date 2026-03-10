@@ -10,7 +10,7 @@ use vtcode_core::utils::colors::style;
 use vtcode_core::utils::session_archive::{SessionListing, session_workspace_path};
 
 use crate::agent::agents::{ResumeSession, SessionContinuation};
-use vtcode::startup::SessionResumeMode;
+use crate::startup::SessionResumeMode;
 
 const INTERACTIVE_SESSION_LIMIT: usize = 10;
 

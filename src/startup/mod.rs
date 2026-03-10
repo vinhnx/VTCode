@@ -12,14 +12,15 @@ mod first_run_prompts;
 mod resume;
 mod theme;
 mod validation;
+mod workspace_trust;
 
-pub use agent_config::check_prompt_cache_retention_compat;
 use agent_config::{
     api_key_env_var, build_agent_config, provider_env_override, provider_label, resolve_provider,
 };
 use config_loading::load_startup_config;
-pub use dependency_advisories::{
-    append_optional_search_tools_highlight, render_optional_search_tools_notice,
+pub(crate) use dependency_advisories::append_optional_search_tools_highlight;
+pub(crate) use workspace_trust::{
+    WorkspaceTrustGateResult, ensure_workspace_trust, workspace_trust_level,
 };
 use resume::{resolve_session_resume, validate_resume_all_usage};
 use theme::determine_theme;
@@ -31,26 +32,27 @@ use vtcode_core::cli::args::Cli;
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, ModelSelectionSource};
+use vtcode_core::config::validator::check_prompt_cache_retention_compat;
 use vtcode_core::{initialize_dot_folder, update_theme_preference};
 
 /// Aggregated data required for CLI command execution after startup.
 #[derive(Debug, Clone)]
-pub struct StartupContext {
-    pub workspace: PathBuf,
-    pub additional_dirs: Vec<PathBuf>,
-    pub config: VTCodeConfig,
-    pub agent_config: CoreAgentConfig,
-    pub skip_confirmations: bool,
-    pub full_auto_requested: bool,
-    pub automation_prompt: Option<String>,
-    pub session_resume: Option<SessionResumeMode>,
-    pub resume_show_all: bool,
-    pub custom_session_id: Option<String>,
-    pub plan_mode_requested: bool,
+pub(crate) struct StartupContext {
+    pub(crate) workspace: PathBuf,
+    pub(crate) additional_dirs: Vec<PathBuf>,
+    pub(crate) config: VTCodeConfig,
+    pub(crate) agent_config: CoreAgentConfig,
+    pub(crate) skip_confirmations: bool,
+    pub(crate) full_auto_requested: bool,
+    pub(crate) automation_prompt: Option<String>,
+    pub(crate) session_resume: Option<SessionResumeMode>,
+    pub(crate) resume_show_all: bool,
+    pub(crate) custom_session_id: Option<String>,
+    pub(crate) plan_mode_requested: bool,
 }
 
 #[derive(Debug, Clone)]
-pub enum SessionResumeMode {
+pub(crate) enum SessionResumeMode {
     Interactive,
     Latest,
     Specific(String),
@@ -58,7 +60,7 @@ pub enum SessionResumeMode {
 }
 
 impl StartupContext {
-    pub async fn from_cli_args(args: &Cli) -> Result<Self> {
+    pub(crate) async fn from_cli_args(args: &Cli) -> Result<Self> {
         let loaded = load_startup_config(args).await?;
         if args.workspace_path.is_some() {
             validate_path_exists(&loaded.workspace, "Workspace")?;
@@ -208,6 +210,7 @@ impl StartupContext {
 #[cfg(test)]
 mod validation_tests {
     use super::*;
+    use assert_fs::TempDir;
     use clap::Parser;
     use vtcode_core::cli::args::Cli;
 
@@ -320,5 +323,95 @@ mod validation_tests {
         assert!(err.to_string().contains(
             "--all can only be used with resume, continue, fork-session, or exec resume"
         ));
+    }
+
+    #[tokio::test]
+    async fn cli_model_override_updates_merged_startup_config() {
+        let temp = TempDir::new().expect("temp dir");
+        let workspace = temp.path().to_path_buf();
+
+        unsafe {
+            std::env::set_var("OPENAI_API_KEY", "test");
+        }
+        let args = Cli::parse_from([
+            "vtcode",
+            "--workspace",
+            workspace.to_str().expect("workspace path"),
+            "--model",
+            vtcode_core::config::constants::models::openai::GPT_5,
+        ]);
+
+        let ctx = StartupContext::from_cli_args(&args)
+            .await
+            .expect("startup success");
+
+        assert_eq!(
+            ctx.config.agent.default_model,
+            vtcode_core::config::constants::models::openai::GPT_5
+        );
+        assert_eq!(
+            ctx.agent_config.model,
+            vtcode_core::config::constants::models::openai::GPT_5
+        );
+    }
+
+    #[tokio::test]
+    async fn cli_override_with_non_responses_model_warns() {
+        let temp = TempDir::new().expect("temp dir");
+        let workspace = temp.path().to_path_buf();
+
+        unsafe {
+            std::env::set_var("OPENAI_API_KEY", "test");
+        }
+        let args = Cli::parse_from([
+            "vtcode",
+            "--workspace",
+            workspace.to_str().expect("workspace path"),
+            "--model",
+            "gpt-oss-20b",
+            "--config",
+            "prompt_cache.providers.openai.prompt_cache_retention=24h",
+        ]);
+
+        let ctx = StartupContext::from_cli_args(&args)
+            .await
+            .expect("startup success");
+        let maybe_warning = check_prompt_cache_retention_compat(
+            &ctx.config,
+            &ctx.agent_config.model,
+            &ctx.agent_config.provider,
+        );
+
+        assert!(maybe_warning.is_some());
+    }
+
+    #[tokio::test]
+    async fn cli_override_with_responses_model_no_warn() {
+        let temp = TempDir::new().expect("temp dir");
+        let workspace = temp.path().to_path_buf();
+
+        unsafe {
+            std::env::set_var("OPENAI_API_KEY", "test");
+        }
+        let args = Cli::parse_from([
+            "vtcode",
+            "--workspace",
+            workspace.to_str().expect("workspace path"),
+            "--model",
+            vtcode_core::config::constants::models::openai::GPT_5,
+            "--config",
+            "prompt_cache.providers.openai.prompt_cache_retention=24h",
+        ]);
+
+        let ctx = StartupContext::from_cli_args(&args)
+            .await
+            .expect("startup success");
+        let maybe_warning = check_prompt_cache_retention_compat(
+            &ctx.config,
+            &ctx.agent_config.model,
+            &ctx.agent_config.provider,
+        );
+
+        assert!(maybe_warning.is_none());
     }
 }

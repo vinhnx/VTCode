@@ -1,17 +1,17 @@
 use std::sync::{
     Arc,
-    atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
 };
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 
 /// RAII guard to ensure a background progress task is aborted when dropped
-pub struct ProgressUpdateGuard {
+pub(crate) struct ProgressUpdateGuard {
     handle: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl ProgressUpdateGuard {
-    pub fn new(handle: tokio::task::JoinHandle<()>) -> Self {
+    pub(crate) fn new(handle: tokio::task::JoinHandle<()>) -> Self {
         Self {
             handle: Some(handle),
         }
@@ -27,23 +27,19 @@ impl Drop for ProgressUpdateGuard {
 }
 
 /// Tracks the state of a long-running operation with detailed progress information
-#[allow(dead_code)]
-pub struct ProgressState {
+pub(crate) struct ProgressState {
     current: AtomicU64,
     total: AtomicU64,
     metadata: Mutex<ProgressMetadata>,
     is_complete: AtomicBool,
     start_time: Instant,
-    stage: AtomicU8,
 }
 
 struct ProgressMetadata {
     message: String,
     estimated_remaining: Option<Duration>,
-    stage_name: String,
 }
 
-#[allow(dead_code)]
 impl ProgressState {
     /// Create a new ProgressState
     pub fn new() -> Self {
@@ -53,11 +49,9 @@ impl ProgressState {
             metadata: Mutex::new(ProgressMetadata {
                 message: String::new(),
                 estimated_remaining: None,
-                stage_name: String::new(),
             }),
             is_complete: AtomicBool::new(false),
             start_time: Instant::now(),
-            stage: AtomicU8::new(0),
         }
     }
 
@@ -73,23 +67,10 @@ impl ProgressState {
         self.update_eta().await;
     }
 
-    /// Increment the current progress by delta
-    pub async fn increment(&self, delta: u64) {
-        self.current.fetch_add(delta, Ordering::SeqCst);
-        self.update_eta().await;
-    }
-
     /// Update the progress message
     pub async fn set_message(&self, message: String) {
         let mut metadata = self.metadata.lock().await;
         metadata.message = message;
-    }
-
-    /// Set the current stage and its name
-    pub async fn set_stage(&self, stage: u8, name: &str) {
-        self.stage.store(stage, Ordering::SeqCst);
-        let mut metadata = self.metadata.lock().await;
-        metadata.stage_name = name.to_string();
     }
 
     /// Calculate and update the estimated time remaining
@@ -113,22 +94,17 @@ impl ProgressState {
         self.is_complete.store(true, Ordering::SeqCst);
         self.current
             .store(self.total.load(Ordering::SeqCst), Ordering::SeqCst);
-        self.stage.store(100, Ordering::SeqCst);
-        let mut metadata = self.metadata.lock().await;
-        metadata.stage_name = "Completed".to_string();
     }
 
     /// Get the current progress state
-    pub async fn get_progress(&self) -> (u64, u64, String, Option<Duration>, u8, String) {
+    pub async fn get_progress(&self) -> (u64, u64, String, Option<Duration>) {
         let current = self.current.load(Ordering::SeqCst);
         let total = self.total.load(Ordering::SeqCst);
         let metadata = self.metadata.lock().await;
         let message = metadata.message.clone();
         let remaining = metadata.estimated_remaining;
-        let stage = self.stage.load(Ordering::SeqCst);
-        let stage_name = metadata.stage_name.clone();
 
-        (current, total, message, remaining, stage, stage_name)
+        (current, total, message, remaining)
     }
 
     /// Check if the operation is complete
@@ -139,13 +115,11 @@ impl ProgressState {
 
 /// Provides a thread-safe way to report progress with enhanced features
 #[derive(Clone)]
-#[allow(dead_code)]
-pub struct ProgressReporter {
+pub(crate) struct ProgressReporter {
     state: Arc<ProgressState>,
     last_progress: Arc<AtomicU64>,
 }
 
-#[allow(dead_code)]
 impl ProgressReporter {
     /// Create a new ProgressReporter
     pub fn new() -> Self {
@@ -171,33 +145,9 @@ impl ProgressReporter {
         self.last_progress.store(current, Ordering::SeqCst);
     }
 
-    /// Get the current progress
-    pub fn current_progress(&self) -> u64 {
-        self.last_progress.load(Ordering::SeqCst)
-    }
-
-    /// Increment the current progress by delta and return the new current value
-    pub async fn increment(&self, delta: u64) -> u64 {
-        let new_current = self.state.current.fetch_add(delta, Ordering::SeqCst) + delta;
-        self.last_progress.store(new_current, Ordering::SeqCst);
-        self.state.update_eta().await;
-        new_current
-    }
-
     /// Update the progress message
     pub async fn set_message(&self, message: impl Into<String>) {
         self.state.set_message(message.into()).await;
-    }
-
-    /// Set the current stage and its name
-    pub async fn set_stage(&self, stage: u8, name: &str) {
-        self.state.set_stage(stage, name).await;
-    }
-
-    /// Get the current stage information
-    pub async fn stage_info(&self) -> (u8, String) {
-        let (_, _, _, _, stage, stage_name) = self.state.get_progress().await;
-        (stage, stage_name)
     }
 
     /// Mark the operation as complete
@@ -207,7 +157,7 @@ impl ProgressReporter {
 
     /// Get the current progress as a percentage (0-100)
     pub async fn percentage(&self) -> u8 {
-        let (current, total, ..) = self.state.get_progress().await;
+        let (current, total, _, _) = self.state.get_progress().await;
         if total > 0 {
             ((current as f64 / total as f64) * 100.0).round() as u8
         } else {
@@ -215,47 +165,39 @@ impl ProgressReporter {
         }
     }
 
-    /// Get the elapsed time since the operation started
-    pub fn elapsed(&self) -> Duration {
-        self.state.start_time.elapsed()
-    }
-
     /// Get the current progress information
     pub async fn progress_info(&self) -> ProgressInfo {
-        let (current, total, message, eta, stage, stage_name) = self.state.get_progress().await;
+        let (current, total, message, eta) = self.state.get_progress().await;
+        #[cfg(not(test))]
+        let _ = current;
         let percentage = self.percentage().await;
-        let elapsed = self.elapsed();
 
         ProgressInfo {
+            #[cfg(test)]
             current,
             total,
             percentage,
             message,
             eta,
-            stage,
-            stage_name,
+            #[cfg(test)]
             is_complete: self.state.is_complete(),
-            elapsed,
         }
     }
 }
 
 /// Information about the current progress of an operation
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
-pub struct ProgressInfo {
+pub(crate) struct ProgressInfo {
+    #[cfg(test)]
     pub current: u64,
     pub total: u64,
     pub percentage: u8,
     pub message: String,
     pub eta: Option<Duration>,
-    pub stage: u8,
-    pub stage_name: String,
+    #[cfg(test)]
     pub is_complete: bool,
-    pub elapsed: Duration,
 }
 
-#[allow(dead_code)]
 impl ProgressInfo {
     /// Format the ETA as a human-readable string
     pub fn eta_formatted(&self) -> String {
@@ -266,7 +208,6 @@ impl ProgressInfo {
 }
 
 /// Format an ETA duration as a human-readable string
-#[allow(dead_code)]
 fn format_eta(duration: Duration) -> String {
     let secs = duration.as_secs();
     if secs < 60 {
@@ -285,7 +226,7 @@ fn format_eta(duration: Duration) -> String {
 }
 
 /// Spawns a background task that updates the progress message with elapsed time
-pub fn spawn_elapsed_time_updater(
+pub(crate) fn spawn_elapsed_time_updater(
     reporter: ProgressReporter,
     task_name: String,
     interval_ms: u64,
@@ -330,9 +271,9 @@ mod tests {
     #[tokio::test]
     async fn test_progress_basics() {
         let progress = ProgressReporter::new();
-        assert_eq!(progress.current_progress(), 0);
         assert_eq!(progress.percentage().await, 0);
         let info = progress.progress_info().await;
+        assert_eq!(info.current, 0);
         assert!(!info.is_complete);
     }
 
@@ -341,17 +282,9 @@ mod tests {
         let progress = ProgressReporter::new();
         progress.set_total(100).await;
         progress.set_progress(50).await;
-        assert_eq!(progress.current_progress(), 50);
-        assert_eq!(progress.percentage().await, 50);
-    }
-
-    #[tokio::test]
-    async fn test_stage_management() {
-        let progress = ProgressReporter::new();
-        progress.set_stage(30, "Processing").await;
-        let (stage, stage_name) = progress.stage_info().await;
-        assert_eq!(stage, 30);
-        assert_eq!(stage_name, "Processing");
+        let info = progress.progress_info().await;
+        assert_eq!(info.current, 50);
+        assert_eq!(info.percentage, 50);
     }
 
     #[tokio::test]
@@ -386,27 +319,4 @@ mod tests {
         assert_eq!(info.percentage, 100);
     }
 
-    #[tokio::test]
-    async fn test_concurrent_updates() {
-        let progress = Arc::new(ProgressReporter::new());
-        progress.set_total(100).await;
-
-        let handles: Vec<_> = (0..10)
-            .map(|_i| {
-                let progress = progress.clone();
-                tokio::spawn(async move {
-                    for _ in 0..10 {
-                        progress.increment(1).await;
-                        tokio::time::sleep(Duration::from_millis(10)).await;
-                    }
-                })
-            })
-            .collect();
-
-        for handle in handles {
-            handle.await.unwrap();
-        }
-
-        assert_eq!(progress.current_progress(), 100);
-    }
 }

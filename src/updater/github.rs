@@ -3,7 +3,6 @@ use semver::Version;
 use std::time::Duration;
 
 use super::Updater;
-use super::install_source::get_target_triple;
 use super::types::{UpdateInfo, VersionInfo};
 
 pub(super) const REPO_OWNER: &str = "vinhnx";
@@ -55,28 +54,13 @@ async fn fetch_latest_release_info() -> Result<UpdateInfo> {
         .with_context(|| format!("Invalid version in GitHub release: {}", tag_name))?;
 
     Ok(UpdateInfo {
-        download_url: download_url(&version)?,
         version,
-        tag: tag_name.to_string(),
         release_notes: json
             .get("body")
             .and_then(|v| v.as_str())
             .unwrap_or("See release notes on GitHub")
             .to_string(),
     })
-}
-
-fn download_url(version: &Version) -> Result<String> {
-    let target = get_target_triple().context("Unsupported platform for auto-update")?;
-    let file_ext = if target.contains("windows") {
-        "zip"
-    } else {
-        "tar.gz"
-    };
-
-    Ok(format!(
-        "https://github.com/{REPO_SLUG}/releases/download/v{version}/vtcode-v{version}-{target}.{file_ext}"
-    ))
 }
 
 pub(super) async fn list_versions(limit: usize) -> Result<Vec<VersionInfo>> {

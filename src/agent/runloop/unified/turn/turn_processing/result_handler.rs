@@ -19,7 +19,6 @@ pub(crate) struct HandleTurnProcessingResultParams<'a> {
     pub repeated_tool_attempts:
         &'a mut crate::agent::runloop::unified::turn::tool_outcomes::helpers::LoopTracker,
     pub turn_modified_files: &'a mut BTreeSet<PathBuf>,
-    pub session_end_reason: &'a mut crate::hooks::lifecycle::SessionEndReason,
     /// Pre-computed max tool loops limit for efficiency.
     pub max_tool_loops: usize,
     /// Pre-computed tool repeat limit for efficiency.
@@ -170,14 +169,7 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                 )
                 .await
         }
-        TurnProcessingResult::Empty | TurnProcessingResult::Completed => {
-            Ok(TurnHandlerOutcome::Break(TurnLoopResult::Completed))
-        }
-        TurnProcessingResult::Cancelled => {
-            *params.session_end_reason = crate::hooks::lifecycle::SessionEndReason::Cancelled;
-            Ok(TurnHandlerOutcome::Break(TurnLoopResult::Cancelled))
-        }
-        TurnProcessingResult::Aborted => Ok(TurnHandlerOutcome::Break(TurnLoopResult::Aborted)),
+        TurnProcessingResult::Empty => Ok(TurnHandlerOutcome::Break(TurnLoopResult::Completed)),
     }
 }
 

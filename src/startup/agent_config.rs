@@ -116,27 +116,3 @@ pub(super) fn build_agent_config(
         model_behavior: Some(config.model.clone()),
     }
 }
-
-pub fn check_prompt_cache_retention_compat(
-    config: &VTCodeConfig,
-    model: &str,
-    provider: &str,
-) -> Option<String> {
-    if !provider.eq_ignore_ascii_case("openai") {
-        return None;
-    }
-
-    if let Some(ref retention) = config.prompt_cache.providers.openai.prompt_cache_retention {
-        if retention.trim().is_empty() {
-            return None;
-        }
-        if !vtcode_core::config::constants::models::openai::RESPONSES_API_MODELS.contains(&model) {
-            return Some(format!(
-                "`prompt_cache_retention` is set but the selected model '{}' does not use the OpenAI Responses API. The setting will be ignored for this model. Run `vtcode models list --provider openai` to see supported Responses API models.",
-                model
-            ));
-        }
-    }
-
-    None
-}

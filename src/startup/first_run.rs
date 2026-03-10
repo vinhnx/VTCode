@@ -18,7 +18,7 @@ use super::first_run_prompts::{
 };
 
 /// Drive the first-run interactive setup wizard when a workspace lacks VT Code artifacts.
-pub async fn maybe_run_first_run_setup(
+pub(crate) async fn maybe_run_first_run_setup(
     args: &Cli,
     workspace: &Path,
     config: &mut VTCodeConfig,

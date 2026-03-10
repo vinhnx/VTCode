@@ -321,7 +321,7 @@ async fn process_outcome_common(
             stdout,
             modified_files,
             command_success,
-            has_more: _,
+            ..
         } => {
             handle_success_common(
                 ctx,
@@ -423,7 +423,6 @@ mod tests {
             stdout: None,
             modified_files: vec!["/tmp/foo.txt".to_string()],
             command_success: true,
-            has_more: false,
         });
 
         // Invoke the shared outcome processor via a minimal output context.
@@ -469,7 +468,6 @@ mod tests {
             stdout: Some("ok".to_string()),
             modified_files: vec![],
             command_success: true,
-            has_more: false,
         });
 
         let handle = dummy_handle();
@@ -560,7 +558,6 @@ mod tests {
             stdout: None,
             modified_files: vec!["/tmp/foo.txt".to_string()],
             command_success: true,
-            has_more: false,
         });
 
         let (mod_files, _last_stdout) = handle_pipeline_output(
@@ -627,7 +624,6 @@ mod tests {
             stdout: None,
             modified_files: vec![],
             command_success: true,
-            has_more: false,
         });
         let second = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
             output: serde_json::json!({
@@ -659,7 +655,6 @@ mod tests {
             stdout: None,
             modified_files: vec![],
             command_success: true,
-            has_more: false,
         });
 
         let args = serde_json::json!({"action": "update", "index": 2, "status": "in_progress"});
@@ -769,7 +764,6 @@ mod tests {
             stdout: Some("ok".to_string()),
             modified_files: vec![],
             command_success: true,
-            has_more: false,
         });
 
         let (_mod_files, _last_stdout) = handle_pipeline_output(

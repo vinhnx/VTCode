@@ -1,20 +1,20 @@
+use std::collections::hash_map::DefaultHasher;
 use std::env;
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use std::collections::hash_map::DefaultHasher;
 
 const IDE_CONTEXT_ENV_VAR: &str = "VT_VSCODE_CONTEXT_FILE";
 
-pub struct IdeContextBridge {
+pub(crate) struct IdeContextBridge {
     path: PathBuf,
     last_digest: Option<u64>,
 }
 
 impl IdeContextBridge {
-    pub fn from_env() -> Option<Self> {
+    pub(crate) fn from_env() -> Option<Self> {
         let raw = env::var(IDE_CONTEXT_ENV_VAR).ok()?;
         let trimmed = raw.trim();
         if trimmed.is_empty() {
@@ -27,7 +27,7 @@ impl IdeContextBridge {
         })
     }
 
-    pub fn snapshot(&mut self) -> Result<Option<String>> {
+    pub(crate) fn snapshot(&mut self) -> Result<Option<String>> {
         let content = match fs::read_to_string(&self.path) {
             Ok(value) => value,
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => {

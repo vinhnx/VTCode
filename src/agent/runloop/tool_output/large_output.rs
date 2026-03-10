@@ -32,11 +32,13 @@ use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
-use vtcode_core::utils::file_utils::{ensure_dir_exists_sync, read_file_with_context_sync};
+use vtcode_core::utils::file_utils::ensure_dir_exists_sync;
+#[cfg(test)]
+use vtcode_core::utils::file_utils::read_file_with_context_sync;
 
 /// Configuration for large output spooling
 #[derive(Debug, Clone)]
-pub struct LargeOutputConfig {
+pub(crate) struct LargeOutputConfig {
     /// Base directory for temporary output files (default: ~/.vtcode/tmp)
     pub base_dir: PathBuf,
     /// Size threshold (bytes) above which output is spooled to file
@@ -67,10 +69,13 @@ impl LargeOutputConfig {
 }
 
 /// Number of lines to show in preview (head)
+#[cfg(test)]
 const PREVIEW_HEAD_LINES: usize = 20;
 /// Number of lines to show in preview (tail)
+#[cfg(test)]
 const PREVIEW_TAIL_LINES: usize = 10;
 /// Metadata header line count to skip when reading content
+#[cfg(test)]
 const METADATA_HEADER_LINES: usize = 5;
 
 /// Result of large output handling - This is the SOURCE OF TRUTH for the output
@@ -81,21 +86,24 @@ const METADATA_HEADER_LINES: usize = 5;
 /// - Get a preview suitable for the agent
 /// - Generate notifications for the client
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
-pub struct SpoolResult {
+pub(crate) struct SpoolResult {
     /// Path where the full output was saved (source of truth)
-    pub file_path: PathBuf,
+    pub(crate) file_path: PathBuf,
+    #[cfg(test)]
     /// Size of the saved content in bytes
-    pub size_bytes: usize,
+    pub(crate) size_bytes: usize,
+    #[cfg(test)]
     /// Total number of lines in the output
-    pub line_count: usize,
+    pub(crate) line_count: usize,
+    #[cfg(test)]
     /// Tool name that produced this output
-    pub tool_name: String,
+    pub(crate) tool_name: String,
+    #[cfg(test)]
     /// Whether the content was actually spooled
-    pub was_spooled: bool,
+    pub(crate) was_spooled: bool,
 }
 
-#[allow(dead_code)]
+#[cfg(test)]
 impl SpoolResult {
     /// Read the full content from the spooled file (skips metadata header)
     ///
@@ -279,7 +287,7 @@ fn generate_call_id() -> String {
 /// Spool large output to a temporary file if it exceeds the threshold
 ///
 /// Returns `Ok(Some(result))` if output was spooled, `Ok(None)` if below threshold
-pub fn spool_large_output(
+pub(crate) fn spool_large_output(
     content: &str,
     tool_name: &str,
     config: &LargeOutputConfig,
@@ -324,14 +332,18 @@ pub fn spool_large_output(
     file.write_all(content.as_bytes())
         .with_context(|| format!("Failed to write content to: {}", file_path.display()))?;
 
-    // Count lines for metadata
+    #[cfg(test)]
     let line_count = content.lines().count();
 
     Ok(Some(SpoolResult {
         file_path,
+        #[cfg(test)]
         size_bytes: content.len(),
+        #[cfg(test)]
         line_count,
+        #[cfg(test)]
         tool_name: tool_name.to_string(),
+        #[cfg(test)]
         was_spooled: true,
     }))
 }
@@ -345,7 +357,7 @@ pub fn spool_large_output(
 /// │ call_b557fe1443144e71a2c00a34.output                                  │
 /// ```
 #[cfg(test)]
-pub fn format_spool_notification(result: &SpoolResult) -> String {
+pub(crate) fn format_spool_notification(result: &SpoolResult) -> String {
     let path_str = result.file_path.display().to_string();
 
     // Format with box drawing characters for visual appeal

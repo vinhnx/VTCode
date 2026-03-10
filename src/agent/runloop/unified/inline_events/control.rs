@@ -4,7 +4,7 @@ use vtcode_core::utils::ansi::MessageStyle;
 
 use super::action::InlineLoopAction;
 use super::state::InlineEventState;
-use crate::hooks::lifecycle::SessionEndReason;
+use vtcode_core::hooks::SessionEndReason;
 
 pub(crate) struct InlineControlProcessor<'a, 'state> {
     state: &'a mut InlineEventState<'state>,
