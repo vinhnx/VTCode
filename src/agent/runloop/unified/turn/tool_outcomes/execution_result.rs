@@ -507,167 +507,112 @@ pub(crate) async fn handle_tool_execution_result<'a>(
 }
 
 pub(super) fn maybe_inline_spooled(_tool_name: &str, output: &serde_json::Value) -> String {
-    let mut sanitized = output.clone();
-    if let Some(obj) = sanitized.as_object_mut() {
-        if let Some(next_continue) = obj
-            .get_mut("next_continue_args")
-            .and_then(serde_json::Value::as_object_mut)
-            && next_continue
-                .get("action")
-                .and_then(serde_json::Value::as_str)
-                .is_some_and(|action| action == "continue")
-        {
-            next_continue.remove("action");
-        }
-        let next_continue_args = obj
-            .get("next_continue_args")
-            .and_then(PtyContinuationArgs::from_value);
-        let next_read_args = obj
-            .get("next_read_args")
-            .and_then(ReadChunkContinuationArgs::from_value);
+    let Some(obj) = output.as_object() else {
+        return serialize_output(output);
+    };
 
-        obj.remove("message");
-        obj.remove("metadata");
-        obj.remove("no_spool");
+    let next_continue_args = obj
+        .get("next_continue_args")
+        .and_then(PtyContinuationArgs::from_value);
+    let next_read_args = obj
+        .get("next_read_args")
+        .and_then(ReadChunkContinuationArgs::from_value);
+    let session_id = obj.get("session_id").and_then(serde_json::Value::as_str);
+    let process_session_id = session_id.or_else(|| {
+        next_continue_args
+            .as_ref()
+            .map(|next_continue| next_continue.session_id.as_str())
+    });
+    let spooled_to_file = obj
+        .get("spooled_to_file")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+    let output_value = obj.get("output");
 
-        if obj
-            .get("success")
-            .and_then(serde_json::Value::as_bool)
-            .unwrap_or(false)
-        {
-            obj.remove("success");
-        }
-        if obj
-            .get("status")
-            .and_then(serde_json::Value::as_str)
-            .is_some_and(|status| status == "success")
-        {
-            obj.remove("status");
-        }
-
-        if obj
-            .get("spooled_to_file")
-            .and_then(serde_json::Value::as_bool)
-            .unwrap_or(false)
-        {
-            obj.remove("spool_hint");
-            obj.remove("spooled_bytes");
-        }
-        if obj.get("spool_path").is_some() {
-            obj.remove("spooled_to_file");
-        }
-
-        if matches!(
-            (obj.get("id"), obj.get("session_id")),
-            (Some(id), Some(session_id)) if id == session_id
-        ) {
-            obj.remove("id");
-        }
-
-        if obj
-            .get("working_directory")
-            .is_some_and(serde_json::Value::is_null)
-        {
-            obj.remove("working_directory");
-        }
-
-        obj.remove("follow_up_prompt");
-        obj.remove("next_poll_args");
-        if next_continue_args.is_some() || next_read_args.is_some() {
-            obj.remove("has_more");
-            obj.remove("preferred_next_action");
-        }
-        if let Some(next_continue) = next_continue_args.as_ref()
-            && obj
-                .get("session_id")
-                .and_then(serde_json::Value::as_str)
-                .is_some_and(|session_id| session_id == next_continue.session_id.as_str())
-        {
-            obj.remove("session_id");
-        }
-
-        if let Some(next_read) = next_read_args.as_ref() {
-            if obj
-                .get("spool_path")
-                .and_then(serde_json::Value::as_str)
-                .is_some_and(|spool_path| spool_path == next_read.path.as_str())
-            {
-                obj.remove("spool_path");
+    let mut sanitized = serde_json::Map::with_capacity(obj.len());
+    for (key, value) in obj {
+        let skip = match key.as_str() {
+            "message" | "metadata" | "no_spool" | "follow_up_prompt" | "next_poll_args"
+            | "rows" | "cols" | "wall_time" => true,
+            "success" => value.as_bool().unwrap_or(false),
+            "status" => value.as_str().is_some_and(|status| status == "success"),
+            "spool_hint" | "spooled_bytes" => spooled_to_file,
+            "spooled_to_file" => obj.contains_key("spool_path"),
+            "id" => session_id.is_some_and(|sid| value == sid),
+            "working_directory" => value.is_null(),
+            "has_more" | "preferred_next_action" => {
+                next_continue_args.is_some() || next_read_args.is_some() || is_false_bool(value)
             }
-            if obj
-                .get("next_offset")
-                .is_some_and(|next_offset| *next_offset == serde_json::json!(next_read.offset))
-            {
-                obj.remove("next_offset");
-            }
-            if obj
-                .get("chunk_limit")
-                .is_some_and(|chunk_limit| *chunk_limit == serde_json::json!(next_read.limit))
-            {
-                obj.remove("chunk_limit");
-            }
+            "session_id" => next_continue_args
+                .as_ref()
+                .is_some_and(|next_continue| value == next_continue.session_id.as_str()),
+            "spool_path" => next_read_args
+                .as_ref()
+                .is_some_and(|next_read| value == next_read.path.as_str()),
+            "next_offset" => next_read_args
+                .as_ref()
+                .is_some_and(|next_read| value_matches_usize(value, next_read.offset)),
+            "chunk_limit" => next_read_args
+                .as_ref()
+                .is_some_and(|next_read| value_matches_usize(value, next_read.limit)),
+            "truncated"
+            | "auto_recovered"
+            | "reused_spooled_output"
+            | "reused_recent_result"
+            | "loop_detected"
+            | "query_truncated" => is_false_bool(value),
+            "stdout" => output_value.is_some_and(|output| output == value),
+            "process_id" => process_session_id.is_some_and(|sid| value == sid),
+            "command" => next_continue_args.is_some(),
+            "is_exited" => next_continue_args.is_some() && is_false_bool(value),
+            _ => false,
+        };
+
+        if skip {
+            continue;
         }
 
-        for key in [
-            "has_more",
-            "truncated",
-            "auto_recovered",
-            "reused_spooled_output",
-            "reused_recent_result",
-            "loop_detected",
-            "query_truncated",
-        ] {
-            if obj
-                .get(key)
-                .and_then(serde_json::Value::as_bool)
-                .is_some_and(|value| !value)
-            {
-                obj.remove(key);
-            }
-        }
-
-        if matches!(
-            (obj.get("output"), obj.get("stdout")),
-            (Some(output), Some(stdout)) if output == stdout
-        ) {
-            obj.remove("stdout");
-        }
-
-        obj.remove("rows");
-        obj.remove("cols");
-        obj.remove("wall_time");
-
-        let process_session_id = obj
-            .get("session_id")
-            .and_then(serde_json::Value::as_str)
-            .or_else(|| {
-                next_continue_args
-                    .as_ref()
-                    .map(|next_continue| next_continue.session_id.as_str())
-            });
-        if matches!(
-            (
-                obj.get("process_id").and_then(serde_json::Value::as_str),
-                process_session_id
-            ),
-            (Some(process_id), Some(session_id)) if process_id == session_id
-        ) {
-            obj.remove("process_id");
-        }
-
-        if next_continue_args.is_some() {
-            obj.remove("command");
-            if obj
-                .get("is_exited")
-                .and_then(serde_json::Value::as_bool)
-                .is_some_and(|value| !value)
-            {
-                obj.remove("is_exited");
-            }
-        }
+        let cloned_value = if key == "next_continue_args" {
+            compact_next_continue_args(value)
+        } else {
+            value.clone()
+        };
+        sanitized.insert(key.clone(), cloned_value);
     }
 
-    serialize_output(&sanitized)
+    serialize_output(&serde_json::Value::Object(sanitized))
+}
+
+fn compact_next_continue_args(value: &serde_json::Value) -> serde_json::Value {
+    let Some(obj) = value.as_object() else {
+        return value.clone();
+    };
+    if obj
+        .get("action")
+        .and_then(serde_json::Value::as_str)
+        .is_none_or(|action| action != "continue")
+    {
+        return value.clone();
+    }
+
+    let mut compacted = serde_json::Map::with_capacity(obj.len().saturating_sub(1));
+    for (key, nested_value) in obj {
+        if key != "action" {
+            compacted.insert(key.clone(), nested_value.clone());
+        }
+    }
+    serde_json::Value::Object(compacted)
+}
+
+fn is_false_bool(value: &serde_json::Value) -> bool {
+    value.as_bool().is_some_and(|flag| !flag)
+}
+
+fn value_matches_usize(value: &serde_json::Value, expected: usize) -> bool {
+    value
+        .as_u64()
+        .and_then(|actual| usize::try_from(actual).ok())
+        .is_some_and(|actual| actual == expected)
 }
 
 async fn handle_success<'a>(
@@ -1325,6 +1270,30 @@ mod tests {
                 "path": ".vtcode/context/tool_outputs/unified_exec_1.txt",
                 "offset": 81,
                 "limit": 40
+            }))
+        );
+    }
+
+    #[test]
+    fn maybe_inline_spooled_preserves_extra_continue_args_fields() {
+        let serialized = maybe_inline_spooled(
+            tool_names::UNIFIED_EXEC,
+            &serde_json::json!({
+                "next_continue_args": {
+                    "action": "continue",
+                    "session_id": "run-1",
+                    "cursor": 42
+                }
+            }),
+        );
+
+        let parsed: serde_json::Value =
+            serde_json::from_str(&serialized).expect("serialized JSON payload");
+        assert_eq!(
+            parsed.get("next_continue_args"),
+            Some(&serde_json::json!({
+                "session_id": "run-1",
+                "cursor": 42
             }))
         );
     }

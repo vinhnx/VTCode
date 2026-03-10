@@ -67,20 +67,23 @@ impl LoopTracker {
     }
 }
 
-pub(crate) fn push_tool_response(
+pub(crate) fn push_tool_response<S>(
     history: &mut Vec<uni::Message>,
-    tool_call_id: String,
+    tool_call_id: S,
     content: String,
-) {
+) where
+    S: AsRef<str> + Into<String>,
+{
+    let tool_call_id_ref = tool_call_id.as_ref();
     if let Some(existing) = history
         .iter_mut()
         .rev()
-        .find(|message| message.tool_call_id.as_deref() == Some(tool_call_id.as_str()))
+        .find(|message| message.tool_call_id.as_deref() == Some(tool_call_id_ref))
     {
         existing.content = uni::MessageContent::Text(content);
         return;
     }
-    history.push(uni::Message::tool_response(tool_call_id, content));
+    history.push(uni::Message::tool_response(tool_call_id.into(), content));
 }
 
 pub(crate) fn build_exit_plan_mode_args(reason: &str) -> serde_json::Value {

@@ -22,7 +22,7 @@ pub(super) async fn fetch_latest_release(updater: &Updater) -> Result<Option<Upd
     }
 }
 
-async fn fetch_latest_release_info() -> Result<UpdateInfo> {
+pub(super) async fn fetch_latest_release_info() -> Result<UpdateInfo> {
     let url = format!("https://api.github.com/repos/{REPO_SLUG}/releases/latest");
 
     let client = reqwest::Client::builder()

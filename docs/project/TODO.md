@@ -44,6 +44,8 @@ Conduct a comprehensive review and enhancement of error handling and recovery me
 
 check src/agent/runloop/unified/turn module Analyze the agent harness codebase focusing on the runloop, unified, turn, and tool_outcomes components to identify performance bottlenecks, inefficiencies, and optimization opportunities. Perform a comprehensive review of data flow and control flow through these components, examining how tool calls are executed, how outcomes are processed, and how turn execution manages state and sequencing. Evaluate whether the current implementation maximizes parallelism where possible, minimizes blocking operations, and maintains efficient memory usage patterns. Identify any redundant computational steps, unnecessary data transformations, or algorithmic inefficiencies that degrade performance. Assess the current error handling mechanisms for robustness, examining exception propagation paths, retry logic, and failure recovery procedures to ensure they do not introduce excessive latency or create cascading failure scenarios. Examine the design of core data structures used throughout these components for optimal access patterns, memory efficiency, and scalability characteristics. Provide specific, actionable recommendations for refactoring code to reduce complexity, implementing caching where appropriate to avoid redundant computation, optimizing hot path execution, and improving the overall responsiveness and throughput of the agent harness. Your analysis should include concrete code-level suggestions with estimated impact on performance metrics and potential tradeoffs to consider when implementing optimizations.
 
+> do refactor.
+
 ---
 
 support litellm
@@ -71,21 +73,3 @@ vtchat.io
 ---
 
 https://defuddle.md/x.com/akshay_pachaar/status/2031021906254766128
-
-===
-
-idea: implement live file system watcher to detect external modifications to files being edited by the agent. If a file is modified outside of the agent's control (e.g. by the user or a linter), the agent should immediately halt any ongoing operations on that file and prompt the user to review the changes before proceeding. This would prevent conflicts and ensure that the agent is always working with the most up-to-date version of the file, reducing errors and improving reliability. suggest show a HITL (Human In The Loop) prompt to the user when a file modification is detected, with options to either reload the file and discard the agent's changes, or to review the differences and decide how to proceed.
-
-"
-⎿  Error: File has been modified since read, either by the user or by a linter.
-Read it again before attempting to write it."
-
----
-
-╭─────────────────────────────────────────────────╮
-│ ✨ Update available! 0.111.0 -> 0.113.0 │
-│ Run brew upgrade --cask codex to update. │
-│ │
-│ See full release notes: │
-│ https://github.com/openai/codex/releases/latest │
-╰─────────────────────────────────────────────────╯

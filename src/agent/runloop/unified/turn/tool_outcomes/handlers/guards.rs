@@ -46,7 +46,7 @@ pub(super) fn enforce_blocked_tool_call_guard(
         let parts = ctx.parts_mut();
         push_tool_response(
             parts.state.working_history,
-            tool_call_id.to_string(),
+            tool_call_id,
             build_failure_error_content(
                 format!(
                     "Consecutive blocked tool calls exceeded cap ({max_streak}) for this turn."
@@ -112,11 +112,7 @@ pub(super) fn enforce_duplicate_task_tracker_create_guard<'a>(
     .to_string();
     {
         let parts = ctx.parts_mut();
-        push_tool_response(
-            parts.state.working_history,
-            tool_call_id.to_string(),
-            content,
-        );
+        push_tool_response(parts.state.working_history, tool_call_id, content);
     }
     let block_reason =
         "Blocked duplicate task_tracker.create in the same turn. Continue with task_tracker.update/list."
@@ -162,7 +158,7 @@ pub(super) fn enforce_repeated_shell_run_guard(
         let parts = ctx.parts_mut();
         push_tool_response(
             parts.state.working_history,
-            tool_call_id.to_string(),
+            tool_call_id,
             build_repeated_shell_run_error_content(max_repeated_runs),
         );
     }
@@ -228,7 +224,7 @@ pub(super) fn enforce_spool_chunk_read_guard(
         let parts = ctx.parts_mut();
         push_tool_response(
             parts.state.working_history,
-            tool_call_id.to_string(),
+            tool_call_id,
             build_spool_chunk_guard_error_content(spool_path, max_reads_per_turn),
         );
     }

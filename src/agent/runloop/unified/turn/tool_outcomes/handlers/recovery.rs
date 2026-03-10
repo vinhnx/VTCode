@@ -19,7 +19,7 @@ fn circuit_breaker_default_blocked(
     let parts = ctx.parts_mut();
     push_tool_response(
         parts.state.working_history,
-        tool_call_id.to_string(),
+        tool_call_id,
         build_validation_error_content_with_fallback(
             format!(
                 "Tool '{}' is temporarily disabled due to high failure rate (Circuit Breaker OPEN).",
@@ -101,7 +101,7 @@ pub(crate) async fn try_interactive_circuit_recovery(
             let parts = ctx.parts_mut();
             push_tool_response(
                 parts.state.working_history,
-                tool_call_id.to_string(),
+                tool_call_id,
                 serde_json::json!({
                     "skipped": true,
                     "reason": "Skipped by user via recovery wizard. Try a different approach."

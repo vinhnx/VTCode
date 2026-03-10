@@ -129,7 +129,7 @@ pub(crate) async fn handle_direct_tool_execution(
         ));
 
     // 3. Execute through unified pipeline to ensure safety, metrics, and consistent output
-    let outcome = handle_single_tool_call(&mut t_ctx, tool_call_id, &tool_name_str, args).await?;
+    let outcome = handle_single_tool_call(&mut t_ctx, &tool_call_id, &tool_name_str, args).await?;
 
     // 4. Cleanup UI and return outcome
     t_ctx.ctx.handle.clear_input();

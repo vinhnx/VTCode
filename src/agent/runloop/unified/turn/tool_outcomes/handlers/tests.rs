@@ -554,7 +554,7 @@ async fn end_to_end_blocked_calls_do_not_burn_budget_before_valid_call() {
     let blocked_args = json!({"path":"/var/db/shadow"});
     let first = handle_single_tool_call(
         &mut outcome_ctx,
-        "blocked_1".to_string(),
+        "blocked_1",
         tool_names::READ_FILE,
         blocked_args.clone(),
     )
@@ -564,7 +564,7 @@ async fn end_to_end_blocked_calls_do_not_burn_budget_before_valid_call() {
 
     let second = handle_single_tool_call(
         &mut outcome_ctx,
-        "blocked_2".to_string(),
+        "blocked_2",
         tool_names::READ_FILE,
         blocked_args,
     )
@@ -577,7 +577,7 @@ async fn end_to_end_blocked_calls_do_not_burn_budget_before_valid_call() {
     let valid_args = json!({"path": valid_file.to_string_lossy()});
     let third = handle_single_tool_call(
         &mut outcome_ctx,
-        "valid_1".to_string(),
+        "valid_1",
         tool_names::READ_FILE,
         valid_args.clone(),
     )
@@ -589,7 +589,7 @@ async fn end_to_end_blocked_calls_do_not_burn_budget_before_valid_call() {
 
     let exhausted = handle_single_tool_call(
         &mut outcome_ctx,
-        "exhausted".to_string(),
+        "exhausted",
         tool_names::READ_FILE,
         valid_args,
     )

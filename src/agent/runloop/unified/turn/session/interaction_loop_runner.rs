@@ -320,6 +320,7 @@ pub(super) async fn run_interaction_loop_impl(
             .await?;
         }
 
+        let use_unicode = ctx.renderer.should_use_unicode_formatting();
         let resources = InlineEventLoopResources {
             renderer: ctx.renderer,
             handle: ctx.handle,
@@ -334,6 +335,9 @@ pub(super) async fn run_interaction_loop_impl(
             provider_client: ctx.provider_client,
             session_bootstrap: ctx.session_bootstrap,
             full_auto: ctx.full_auto,
+            startup_update_notice_rx: ctx.startup_update_notice_rx,
+            header_context: ctx.header_context,
+            use_unicode,
         };
 
         let inline_action =

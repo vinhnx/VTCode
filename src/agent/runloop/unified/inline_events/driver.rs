@@ -8,11 +8,12 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider::{self as uni};
 use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_tui::{InlineHandle, InlineSession};
+use vtcode_tui::{InlineHandle, InlineHeaderContext, InlineSession};
 
 use crate::agent::runloop::model_picker::ModelPickerState;
 use crate::agent::runloop::unified::palettes::ActivePalette;
 use crate::agent::runloop::welcome::SessionBootstrap;
+use crate::updater::{StartupUpdateNotice, display_update_notice};
 
 use super::{InlineEventContext, InlineInterruptCoordinator, InlineLoopAction, InlineQueueState};
 
@@ -30,6 +31,15 @@ struct InlineEventLoop<'a> {
     provider_client: &'a mut Box<dyn uni::LLMProvider>,
     session_bootstrap: &'a SessionBootstrap,
     full_auto: bool,
+    startup_update_notice_rx:
+        &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<StartupUpdateNotice>>,
+    header_context: &'a mut InlineHeaderContext,
+    use_unicode: bool,
+}
+
+enum StartupUpdateEvent {
+    Notice(StartupUpdateNotice),
+    Closed,
 }
 
 impl<'a> InlineEventLoop<'a> {
@@ -48,6 +58,9 @@ impl<'a> InlineEventLoop<'a> {
             provider_client,
             session_bootstrap,
             full_auto,
+            startup_update_notice_rx,
+            header_context,
+            use_unicode,
         } = resources;
 
         Self {
@@ -64,6 +77,9 @@ impl<'a> InlineEventLoop<'a> {
             provider_client,
             session_bootstrap,
             full_auto,
+            startup_update_notice_rx,
+            header_context,
+            use_unicode,
         }
     }
 
@@ -85,6 +101,20 @@ impl<'a> InlineEventLoop<'a> {
         let maybe_event = tokio::select! {
             biased;
 
+            notice = recv_startup_update_notice(self.startup_update_notice_rx) => {
+                match notice {
+                    StartupUpdateEvent::Notice(notice) => {
+                        display_update_notice(
+                            self.handle,
+                            self.header_context,
+                            self.use_unicode,
+                            &notice,
+                        );
+                    }
+                    StartupUpdateEvent::Closed => {}
+                }
+                None
+            }
             _ = ctrl_c_notify.notified() => None,
             _ = tokio::time::sleep(INLINE_EVENT_POLL_TICK) => None,
             event = session.next_event() => event,
@@ -183,6 +213,10 @@ pub(crate) struct InlineEventLoopResources<'a> {
     pub provider_client: &'a mut Box<dyn uni::LLMProvider>,
     pub session_bootstrap: &'a SessionBootstrap,
     pub full_auto: bool,
+    pub startup_update_notice_rx:
+        &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<StartupUpdateNotice>>,
+    pub header_context: &'a mut InlineHeaderContext,
+    pub use_unicode: bool,
 }
 
 pub(crate) async fn poll_inline_loop_action(
@@ -193,4 +227,49 @@ pub(crate) async fn poll_inline_loop_action(
     InlineEventLoop::new(resources)
         .poll(session, ctrl_c_notify)
         .await
+}
+
+async fn recv_startup_update_notice(
+    receiver: &mut Option<tokio::sync::mpsc::UnboundedReceiver<StartupUpdateNotice>>,
+) -> StartupUpdateEvent {
+    match receiver.as_mut() {
+        Some(rx) => match rx.recv().await {
+            Some(notice) => StartupUpdateEvent::Notice(notice),
+            None => {
+                *receiver = None;
+                StartupUpdateEvent::Closed
+            }
+        },
+        None => std::future::pending().await,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use semver::Version;
+
+    #[tokio::test]
+    async fn closed_update_receiver_is_cleared() {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        drop(tx);
+        let mut receiver = Some(rx);
+
+        let event = recv_startup_update_notice(&mut receiver).await;
+        assert!(matches!(event, StartupUpdateEvent::Closed));
+        assert!(receiver.is_none());
+    }
+
+    #[tokio::test]
+    async fn notice_receiver_returns_notice_without_clearing_channel() {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let updater = crate::updater::Updater::new("0.111.0").expect("updater");
+        tx.send(updater.notice_for_version(Version::parse("0.113.0").expect("version")))
+            .expect("send notice");
+        let mut receiver = Some(rx);
+
+        let event = recv_startup_update_notice(&mut receiver).await;
+        assert!(matches!(event, StartupUpdateEvent::Notice(_)));
+        assert!(receiver.is_some());
+    }
 }

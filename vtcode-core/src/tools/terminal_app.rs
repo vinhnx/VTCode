@@ -32,6 +32,12 @@ pub struct EditorLaunchConfig {
     pub preferred_editor: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TerminalCommandStrategy {
+    Shell,
+    PowerShell,
+}
+
 /// Manages launching terminal applications
 pub struct TerminalAppLauncher {
     workspace_root: PathBuf,
@@ -241,9 +247,9 @@ impl TerminalAppLauncher {
     /// # Errors
     ///
     /// Returns an error if terminal state management fails or command fails.
-    fn suspend_terminal_for_command<F>(&self, f: F) -> Result<()>
+    fn suspend_terminal_for_command<F, T>(&self, f: F) -> Result<T>
     where
-        F: FnOnce() -> Result<()>,
+        F: FnOnce() -> Result<T>,
     {
         let was_raw_mode = match is_raw_mode_enabled() {
             Ok(enabled) => enabled,
@@ -295,7 +301,7 @@ impl TerminalAppLauncher {
             if !restore_errors.is_empty() {
                 let restore_summary = restore_errors.join("; ");
                 return match result {
-                    Ok(()) => Err(anyhow!("terminal restore failed: {}", restore_summary)),
+                    Ok(_) => Err(anyhow!("terminal restore failed: {}", restore_summary)),
                     Err(command_error) => Err(command_error
                         .context(format!("terminal restore also failed: {}", restore_summary))),
                 };
@@ -303,6 +309,54 @@ impl TerminalAppLauncher {
         }
 
         result
+    }
+
+    pub fn run_command_with_strategy(
+        &self,
+        command: &str,
+        strategy: TerminalCommandStrategy,
+    ) -> Result<TerminalAppResult> {
+        self.suspend_terminal_for_command(|| {
+            let mut cmd = match strategy {
+                TerminalCommandStrategy::Shell => {
+                    #[cfg(target_os = "windows")]
+                    {
+                        let mut command_builder = Command::new("cmd");
+                        command_builder.arg("/C").arg(command);
+                        command_builder
+                    }
+                    #[cfg(not(target_os = "windows"))]
+                    {
+                        let mut command_builder = Command::new("/bin/sh");
+                        command_builder.arg("-lc").arg(command);
+                        command_builder
+                    }
+                }
+                TerminalCommandStrategy::PowerShell => {
+                    let mut command_builder = if cfg!(target_os = "windows") {
+                        Command::new("powershell")
+                    } else {
+                        Command::new("pwsh")
+                    };
+                    command_builder
+                        .arg("-NoLogo")
+                        .arg("-NoProfile")
+                        .arg("-Command")
+                        .arg(command);
+                    command_builder
+                }
+            };
+
+            let status = cmd
+                .current_dir(&self.workspace_root)
+                .status()
+                .with_context(|| format!("failed to spawn update command: {}", command))?;
+
+            Ok(TerminalAppResult {
+                exit_code: status.code().unwrap_or(-1),
+                success: status.success(),
+            })
+        })
     }
 
     /// Launch git interface (Lazygit or interactive git)

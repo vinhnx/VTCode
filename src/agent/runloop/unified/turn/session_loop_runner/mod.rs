@@ -9,6 +9,7 @@ use crate::agent::runloop::unified::plan_mode_state::render_plan_mode_next_step_
 use crate::agent::runloop::unified::postamble::{ExitSummaryData, print_exit_summary};
 use crate::agent::runloop::unified::turn::turn_loop::TurnLoopOutcome;
 use crate::agent::runloop::welcome::SessionBootstrap;
+use crate::updater::{InlineUpdateOutcome, display_update_notice, run_inline_update_prompt};
 use vtcode_config::loader::SimpleConfigWatcher;
 use vtcode_core::core::agent::features::FeatureSet;
 
@@ -297,6 +298,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         let mut renderer = ui_setup.renderer;
         let mut session = ui_setup.session;
         let handle = ui_setup.handle;
+        let mut header_context = ui_setup.header_context;
         let ctrl_c_state = ui_setup.ctrl_c_state;
         let ctrl_c_notify = ui_setup.ctrl_c_notify;
         let checkpoint_manager = ui_setup.checkpoint_manager;
@@ -308,6 +310,9 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         let mut next_checkpoint_turn = ui_setup.next_checkpoint_turn;
         let mut session_end_reason = ui_setup.session_end_reason;
         let _file_palette_task_guard = ui_setup.file_palette_task_guard;
+        let _startup_update_task_guard = ui_setup.startup_update_task_guard;
+        let startup_update_cached_notice = ui_setup.startup_update_cached_notice;
+        let mut startup_update_notice_rx = ui_setup.startup_update_notice_rx;
         let SessionState {
             session_bootstrap,
             mut provider_client,
@@ -363,12 +368,43 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         let mut last_known_mcp_tools: Vec<String> = Vec::with_capacity(16);
         let mut pending_mcp_refresh = false;
         let mut last_mcp_refresh = std::time::Instant::now();
-        loop {
-            let interaction_outcome = {
-                let mut interaction_ctx = crate::agent::runloop::unified::turn::session::interaction_loop::InteractionLoopContext {
+        let startup_update_requested_restart =
+            if let Some(notice) = startup_update_cached_notice.as_ref() {
+                display_update_notice(
+                    &handle,
+                    &mut header_context,
+                    renderer.should_use_unicode_formatting(),
+                    notice,
+                );
+                matches!(
+                    run_inline_update_prompt(
+                        &mut renderer,
+                        &handle,
+                        &mut session,
+                        &ctrl_c_state,
+                        &ctrl_c_notify,
+                        config.workspace.as_path(),
+                        notice,
+                    )
+                    .await?,
+                    InlineUpdateOutcome::RestartRequested
+                )
+            } else {
+                false
+            };
+
+        if startup_update_requested_restart {
+            session_end_reason = SessionEndReason::Completed;
+        }
+
+        if !startup_update_requested_restart {
+            loop {
+                let interaction_outcome = {
+                    let mut interaction_ctx = crate::agent::runloop::unified::turn::session::interaction_loop::InteractionLoopContext {
                     renderer: &mut renderer,
                     session: &mut session,
                     handle: &handle,
+                    header_context: &mut header_context,
                     ctrl_c_state: &ctrl_c_state,
                     ctrl_c_notify: &ctrl_c_notify,
                     config: &mut config,
@@ -406,9 +442,10 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     last_forced_redraw: &mut last_forced_redraw,
                     harness_config: harness_config.clone(),
                     steering_receiver,
+                    startup_update_notice_rx: &mut startup_update_notice_rx,
                 };
 
-                let mut interaction_state =
+                    let mut interaction_state =
                     crate::agent::runloop::unified::turn::session::interaction_loop::InteractionState {
                         input_status_state: &mut input_status_state,
                         queued_inputs: &mut queued_inputs,
@@ -421,371 +458,382 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         ctrl_c_notice_displayed: &mut ctrl_c_notice_displayed,
                     };
 
-                crate::agent::runloop::unified::turn::session::interaction_loop::run_interaction_loop(
+                    crate::agent::runloop::unified::turn::session::interaction_loop::run_interaction_loop(
                     &mut interaction_ctx,
                     &mut interaction_state,
                 ).await?
-            };
-            use crate::agent::runloop::unified::turn::session::interaction_loop::InteractionOutcome;
-            let next_turn_input = match interaction_outcome {
-                InteractionOutcome::Exit { reason } => {
-                    session_end_reason = reason;
-                    break;
-                }
-                InteractionOutcome::Resume { resume_session } => {
-                    resume_state = Some(*resume_session);
-                    session_end_reason = SessionEndReason::Completed;
-                    break;
-                }
-                InteractionOutcome::DirectToolHandled => {
-                    // Preserve interrupt behavior: when Ctrl+C cancellation is active,
-                    // stop after direct tool execution and wait for the next user input.
-                    if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
-                        continue;
+                };
+                use crate::agent::runloop::unified::turn::session::interaction_loop::InteractionOutcome;
+                let next_turn_input = match interaction_outcome {
+                    InteractionOutcome::Exit { reason } => {
+                        session_end_reason = reason;
+                        break;
                     }
-                    conversation_history.push(vtcode_core::llm::provider::Message::system(
-                        DIRECT_TOOL_FOLLOW_UP_DIRECTIVE.to_string(),
-                    ));
-                    // A direct run/! command already updated history with user -> tool call ->
-                    // tool response. Start an immediate assistant turn so users receive
-                    // follow-up analysis without typing an extra "continue".
-                    "__direct_tool_follow_up__".to_string()
+                    InteractionOutcome::Resume { resume_session } => {
+                        resume_state = Some(*resume_session);
+                        session_end_reason = SessionEndReason::Completed;
+                        break;
+                    }
+                    InteractionOutcome::DirectToolHandled => {
+                        // Preserve interrupt behavior: when Ctrl+C cancellation is active,
+                        // stop after direct tool execution and wait for the next user input.
+                        if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
+                            continue;
+                        }
+                        conversation_history.push(vtcode_core::llm::provider::Message::system(
+                            DIRECT_TOOL_FOLLOW_UP_DIRECTIVE.to_string(),
+                        ));
+                        // A direct run/! command already updated history with user -> tool call ->
+                        // tool response. Start an immediate assistant turn so users receive
+                        // follow-up analysis without typing an extra "continue".
+                        "__direct_tool_follow_up__".to_string()
+                    }
+                    InteractionOutcome::Continue { input } => input,
+                    InteractionOutcome::PlanApproved { auto_accept } => {
+                        let plan_seed = load_active_plan_seed(&tool_registry).await;
+                        crate::agent::runloop::unified::plan_mode_state::transition_to_edit_mode(
+                            &tool_registry,
+                            &mut session_stats,
+                            &handle,
+                            true,
+                        )
+                        .await;
+                        handle.set_skip_confirmations(auto_accept);
+                        renderer.line(MessageStyle::Info, "Executing approved plan...")?;
+
+                        if let Err(err) = force_reload_workspace_config_for_execution(
+                            config.workspace.as_path(),
+                            &config,
+                            &mut vt_cfg,
+                            &mut tool_registry,
+                            async_mcp_manager.as_deref(),
+                        )
+                        .await
+                        {
+                            tracing::warn!(
+                                "Failed to reload workspace configuration at plan approval: {}",
+                                err
+                            );
+                            renderer.line(
+                                MessageStyle::Error,
+                                &format!("Failed to reload configuration: {}", err),
+                            )?;
+                        }
+
+                        let mut execution_directive = PLAN_APPROVED_EXECUTION_DIRECTIVE.to_string();
+                        if let Some(seed) = plan_seed {
+                            execution_directive.push_str("\n\nApproved plan context:\n");
+                            execution_directive.push_str(&seed);
+                        }
+                        conversation_history.push(vtcode_core::llm::provider::Message::system(
+                            execution_directive,
+                        ));
+                        PLAN_APPROVED_EXECUTION_INPUT.to_string()
+                    }
+                };
+                if next_turn_input.trim().is_empty() {
+                    continue;
                 }
-                InteractionOutcome::Continue { input } => input,
-                InteractionOutcome::PlanApproved { auto_accept } => {
-                    let plan_seed = load_active_plan_seed(&tool_registry).await;
-                    crate::agent::runloop::unified::plan_mode_state::transition_to_edit_mode(
-                        &tool_registry,
-                        &mut session_stats,
+                let is_direct_tool_follow_up = next_turn_input == "__direct_tool_follow_up__";
+                let mut working_history = std::mem::take(&mut conversation_history);
+                let timeout_secs = resolve_effective_turn_timeout_secs(
+                    resolve_timeout(
+                        vt_cfg
+                            .as_ref()
+                            .map(|cfg| cfg.optimization.agent_execution.max_execution_time_secs),
+                    ),
+                    harness_config.max_tool_wall_clock_secs,
+                );
+                let turn_started_at = Instant::now();
+                let mut attempts: usize = 0;
+                let history_snapshot_bytes = estimate_history_bytes(&working_history);
+                let mut turn_history_checkpoint: Option<Vec<vtcode_core::llm::provider::Message>> =
+                    Some(working_history.clone());
+                let outcome = match loop {
+                    let mut auto_exit_plan_mode_attempted = false;
+                    let plan_mode_active = session_stats.is_plan_mode();
+                    let max_tool_calls_per_turn = effective_max_tool_calls_for_turn(
+                        harness_config.max_tool_calls_per_turn,
+                        plan_mode_active,
+                    );
+                    let mut harness_state = HarnessTurnState::new(
+                        TurnRunId(turn_run_id.0.clone()),
+                        TurnId(SessionId::new().0),
+                        max_tool_calls_per_turn,
+                        harness_config.max_tool_wall_clock_secs,
+                        harness_config.max_tool_retries,
+                    );
+                    let execution_history_len_before_attempt =
+                        tool_registry.execution_history_len();
+                    let turn_loop_ctx = crate::agent::runloop::unified::turn::TurnLoopContext::new(
+                        &mut renderer,
                         &handle,
-                        true,
+                        &mut session,
+                        &mut session_stats,
+                        &mut auto_exit_plan_mode_attempted,
+                        &mut mcp_panel_state,
+                        &tool_result_cache,
+                        &approval_recorder,
+                        &decision_ledger,
+                        &mut tool_registry,
+                        &tools,
+                        &tool_catalog,
+                        &ctrl_c_state,
+                        &ctrl_c_notify,
+                        &mut context_manager,
+                        &mut last_forced_redraw,
+                        &mut input_status_state,
+                        lifecycle_hooks.as_ref(),
+                        &default_placeholder,
+                        &tool_permission_cache,
+                        &safety_validator,
+                        &circuit_breaker,
+                        &tool_health_tracker,
+                        &rate_limiter,
+                        &telemetry,
+                        &autonomous_executor,
+                        &error_recovery,
+                        &mut harness_state,
+                        harness_emitter.as_ref(),
+                        &mut config,
+                        vt_cfg.as_ref(),
+                        &mut provider_client,
+                        &traj,
+                        full_auto,
+                        steering_receiver,
+                    );
+
+                    let result = timeout(
+                        Duration::from_secs(timeout_secs),
+                        crate::agent::runloop::unified::turn::run_turn_loop(
+                            &mut working_history,
+                            turn_loop_ctx,
+                        ),
                     )
                     .await;
-                    handle.set_skip_confirmations(auto_accept);
-                    renderer.line(MessageStyle::Info, "Executing approved plan...")?;
 
-                    if let Err(err) = force_reload_workspace_config_for_execution(
-                        config.workspace.as_path(),
-                        &config,
-                        &mut vt_cfg,
-                        &mut tool_registry,
-                        async_mcp_manager.as_deref(),
-                    )
-                    .await
-                    {
-                        tracing::warn!(
-                            "Failed to reload workspace configuration at plan approval: {}",
-                            err
-                        );
-                        renderer.line(
-                            MessageStyle::Error,
-                            &format!("Failed to reload configuration: {}", err),
-                        )?;
-                    }
-
-                    let mut execution_directive = PLAN_APPROVED_EXECUTION_DIRECTIVE.to_string();
-                    if let Some(seed) = plan_seed {
-                        execution_directive.push_str("\n\nApproved plan context:\n");
-                        execution_directive.push_str(&seed);
-                    }
-                    conversation_history.push(vtcode_core::llm::provider::Message::system(
-                        execution_directive,
-                    ));
-                    PLAN_APPROVED_EXECUTION_INPUT.to_string()
-                }
-            };
-            if next_turn_input.trim().is_empty() {
-                continue;
-            }
-            let is_direct_tool_follow_up = next_turn_input == "__direct_tool_follow_up__";
-            let mut working_history = std::mem::take(&mut conversation_history);
-            let timeout_secs = resolve_effective_turn_timeout_secs(
-                resolve_timeout(
-                    vt_cfg
-                        .as_ref()
-                        .map(|cfg| cfg.optimization.agent_execution.max_execution_time_secs),
-                ),
-                harness_config.max_tool_wall_clock_secs,
-            );
-            let turn_started_at = Instant::now();
-            let mut attempts: usize = 0;
-            let history_snapshot_bytes = estimate_history_bytes(&working_history);
-            let mut turn_history_checkpoint: Option<Vec<vtcode_core::llm::provider::Message>> =
-                Some(working_history.clone());
-            let outcome = match loop {
-                let mut auto_exit_plan_mode_attempted = false;
-                let plan_mode_active = session_stats.is_plan_mode();
-                let max_tool_calls_per_turn = effective_max_tool_calls_for_turn(
-                    harness_config.max_tool_calls_per_turn,
-                    plan_mode_active,
-                );
-                let mut harness_state = HarnessTurnState::new(
-                    TurnRunId(turn_run_id.0.clone()),
-                    TurnId(SessionId::new().0),
-                    max_tool_calls_per_turn,
-                    harness_config.max_tool_wall_clock_secs,
-                    harness_config.max_tool_retries,
-                );
-                let execution_history_len_before_attempt = tool_registry.execution_history_len();
-                let turn_loop_ctx = crate::agent::runloop::unified::turn::TurnLoopContext::new(
-                    &mut renderer,
-                    &handle,
-                    &mut session,
-                    &mut session_stats,
-                    &mut auto_exit_plan_mode_attempted,
-                    &mut mcp_panel_state,
-                    &tool_result_cache,
-                    &approval_recorder,
-                    &decision_ledger,
-                    &mut tool_registry,
-                    &tools,
-                    &tool_catalog,
-                    &ctrl_c_state,
-                    &ctrl_c_notify,
-                    &mut context_manager,
-                    &mut last_forced_redraw,
-                    &mut input_status_state,
-                    lifecycle_hooks.as_ref(),
-                    &default_placeholder,
-                    &tool_permission_cache,
-                    &safety_validator,
-                    &circuit_breaker,
-                    &tool_health_tracker,
-                    &rate_limiter,
-                    &telemetry,
-                    &autonomous_executor,
-                    &error_recovery,
-                    &mut harness_state,
-                    harness_emitter.as_ref(),
-                    &mut config,
-                    vt_cfg.as_ref(),
-                    &mut provider_client,
-                    &traj,
-                    full_auto,
-                    steering_receiver,
-                );
-
-                let result = timeout(
-                    Duration::from_secs(timeout_secs),
-                    crate::agent::runloop::unified::turn::run_turn_loop(
-                        &mut working_history,
-                        turn_loop_ctx,
-                    ),
-                )
-                .await;
-
-                match result {
-                    Ok(inner) => break inner,
-                    Err(_) => {
-                        let active_pty_sessions_before_cancel = tool_registry.active_pty_sessions();
-                        let attempted_tool_calls = harness_state.tool_calls;
-                        let timed_out_phase = harness_state.phase;
-                        if let Err(err) = tool_registry.terminate_all_exec_sessions_async().await {
-                            tracing::warn!(error = %err, "Failed to terminate all exec sessions after turn timeout");
-                        }
-                        let execution_history_len_after_attempt =
-                            tool_registry.execution_history_len();
-                        handle.set_input_status(None, None);
-                        input_status_state.left = None;
-                        input_status_state.right = None;
-
-                        if ctrl_c_state.is_exit_requested() || ctrl_c_state.is_cancel_requested() {
-                            let interrupted_result = if ctrl_c_state.is_exit_requested() {
-                                RunLoopTurnLoopResult::Exit
-                            } else {
-                                RunLoopTurnLoopResult::Cancelled
-                            };
-                            if let Some(snapshot) = turn_history_checkpoint.take() {
-                                working_history = snapshot;
+                    match result {
+                        Ok(inner) => break inner,
+                        Err(_) => {
+                            let active_pty_sessions_before_cancel =
+                                tool_registry.active_pty_sessions();
+                            let attempted_tool_calls = harness_state.tool_calls;
+                            let timed_out_phase = harness_state.phase;
+                            if let Err(err) =
+                                tool_registry.terminate_all_exec_sessions_async().await
+                            {
+                                tracing::warn!(error = %err, "Failed to terminate all exec sessions after turn timeout");
                             }
-                            break Ok(TurnLoopOutcome {
-                                result: interrupted_result,
-                                turn_modified_files: std::collections::BTreeSet::new(),
-                            });
-                        }
+                            let execution_history_len_after_attempt =
+                                tool_registry.execution_history_len();
+                            handle.set_input_status(None, None);
+                            input_status_state.left = None;
+                            input_status_state.right = None;
 
-                        let had_tool_activity = execution_history_len_after_attempt
-                            > execution_history_len_before_attempt
-                            || active_pty_sessions_before_cancel > 0
-                            || attempted_tool_calls > 0;
-                        attempts += 1;
-                        if had_tool_activity {
-                            let (timeout_message, timeout_error_message) =
-                                build_partial_timeout_messages(
-                                    timeout_secs,
-                                    timed_out_phase,
-                                    attempted_tool_calls,
-                                    active_pty_sessions_before_cancel,
-                                    plan_mode,
-                                    had_tool_activity,
-                                );
-                            renderer.line(MessageStyle::Error, &timeout_message)?;
-                            break Err(anyhow::Error::msg(timeout_error_message));
-                        }
-                        if attempts >= 2 {
-                            renderer.line(
+                            if ctrl_c_state.is_exit_requested()
+                                || ctrl_c_state.is_cancel_requested()
+                            {
+                                let interrupted_result = if ctrl_c_state.is_exit_requested() {
+                                    RunLoopTurnLoopResult::Exit
+                                } else {
+                                    RunLoopTurnLoopResult::Cancelled
+                                };
+                                if let Some(snapshot) = turn_history_checkpoint.take() {
+                                    working_history = snapshot;
+                                }
+                                break Ok(TurnLoopOutcome {
+                                    result: interrupted_result,
+                                    turn_modified_files: std::collections::BTreeSet::new(),
+                                });
+                            }
+
+                            let had_tool_activity = execution_history_len_after_attempt
+                                > execution_history_len_before_attempt
+                                || active_pty_sessions_before_cancel > 0
+                                || attempted_tool_calls > 0;
+                            attempts += 1;
+                            if had_tool_activity {
+                                let (timeout_message, timeout_error_message) =
+                                    build_partial_timeout_messages(
+                                        timeout_secs,
+                                        timed_out_phase,
+                                        attempted_tool_calls,
+                                        active_pty_sessions_before_cancel,
+                                        plan_mode,
+                                        had_tool_activity,
+                                    );
+                                renderer.line(MessageStyle::Error, &timeout_message)?;
+                                break Err(anyhow::Error::msg(timeout_error_message));
+                            }
+                            if attempts >= 2 {
+                                renderer.line(
                                   MessageStyle::Error,
                                   &format!(
                                       "Turn timed out after {} seconds. PTY sessions cancelled; stopping turn.",
                                     timeout_secs
                                 ),
                             )?;
-                            break Err(anyhow::anyhow!(
-                                "Turn timed out after {} seconds",
-                                timeout_secs
-                            ));
-                        }
-                        let Some(snapshot) = turn_history_checkpoint.take() else {
-                            let checkpoint_error =
-                                "Turn timeout retry checkpoint unavailable; stopping turn."
-                                    .to_string();
-                            renderer.line(MessageStyle::Error, &checkpoint_error)?;
-                            break Err(anyhow::anyhow!(checkpoint_error));
-                        };
-                        working_history = snapshot;
-                        renderer.line(
+                                break Err(anyhow::anyhow!(
+                                    "Turn timed out after {} seconds",
+                                    timeout_secs
+                                ));
+                            }
+                            let Some(snapshot) = turn_history_checkpoint.take() else {
+                                let checkpoint_error =
+                                    "Turn timeout retry checkpoint unavailable; stopping turn."
+                                        .to_string();
+                                renderer.line(MessageStyle::Error, &checkpoint_error)?;
+                                break Err(anyhow::anyhow!(checkpoint_error));
+                            };
+                            working_history = snapshot;
+                            renderer.line(
                             MessageStyle::Error,
                             &format!(
                                 "Turn timed out after {} seconds. PTY sessions cancelled; retrying once.",
                                 timeout_secs
                             ),
                         )?;
+                        }
                     }
-                }
-            } {
-                Ok(outcome) => outcome,
-                Err(err) => {
-                    handle.set_input_status(None, None);
-                    let _ = renderer.line_if_not_empty(MessageStyle::Output);
-                    if is_direct_tool_follow_up {
-                        // The direct command already succeeded; the LLM follow-up is
-                        // optional analysis. Downgrade to a non-fatal warning so the
-                        // user sees the tool output as valid.
-                        tracing::warn!(
-                            "Direct-tool follow-up LLM turn failed (non-fatal): {}",
-                            err
-                        );
-                        let _ = renderer.line(
+                } {
+                    Ok(outcome) => outcome,
+                    Err(err) => {
+                        handle.set_input_status(None, None);
+                        let _ = renderer.line_if_not_empty(MessageStyle::Output);
+                        if is_direct_tool_follow_up {
+                            // The direct command already succeeded; the LLM follow-up is
+                            // optional analysis. Downgrade to a non-fatal warning so the
+                            // user sees the tool output as valid.
+                            tracing::warn!(
+                                "Direct-tool follow-up LLM turn failed (non-fatal): {}",
+                                err
+                            );
+                            let _ = renderer.line(
                             MessageStyle::Info,
                             "Command completed. Model follow-up unavailable; output above is valid.",
                         );
-                        TurnLoopOutcome {
-                            result: RunLoopTurnLoopResult::Completed,
-                            turn_modified_files: std::collections::BTreeSet::new(),
-                        }
-                    } else {
-                        tracing::error!("Turn execution error: {}", err);
-                        let _ = renderer.line(MessageStyle::Error, &format!("Error: {}", err));
-                        TurnLoopOutcome {
-                            result: RunLoopTurnLoopResult::Aborted,
-                            turn_modified_files: std::collections::BTreeSet::new(),
+                            TurnLoopOutcome {
+                                result: RunLoopTurnLoopResult::Completed,
+                                turn_modified_files: std::collections::BTreeSet::new(),
+                            }
+                        } else {
+                            tracing::error!("Turn execution error: {}", err);
+                            let _ = renderer.line(MessageStyle::Error, &format!("Error: {}", err));
+                            TurnLoopOutcome {
+                                result: RunLoopTurnLoopResult::Aborted,
+                                turn_modified_files: std::collections::BTreeSet::new(),
+                            }
                         }
                     }
-                }
-            };
-            conversation_history = working_history;
-            let outcome_result = outcome.result.clone();
-            let turn_elapsed = turn_started_at.elapsed();
-            let show_turn_timer = vt_cfg
-                .as_ref()
-                .map(|cfg| cfg.ui.show_turn_timer)
-                .unwrap_or(true);
-            if let Err(err) = crate::agent::runloop::unified::turn::apply_turn_outcome(
-                outcome,
-                crate::agent::runloop::unified::turn::TurnOutcomeContext {
-                    conversation_history: &mut conversation_history,
-                    renderer: &mut renderer,
-                    handle: &handle,
-                    ctrl_c_state: &ctrl_c_state,
-                    default_placeholder: &default_placeholder,
-                    checkpoint_manager: checkpoint_manager.as_ref(),
-                    next_checkpoint_turn: &mut next_checkpoint_turn,
-                    session_end_reason: &mut session_end_reason,
-                    turn_elapsed,
-                    show_turn_timer,
-                },
-            )
-            .await
-            {
-                tracing::error!("Failed to apply turn outcome: {}", err);
-                renderer
-                    .line(
-                        MessageStyle::Error,
-                        &format!("Failed to finalize turn: {}", err),
-                    )
-                    .ok();
-            }
-            emit_turn_execution_metrics(TurnExecutionMetrics {
-                attempts_made: attempts.saturating_add(1),
-                retry_count: attempts,
-                history_snapshot_bytes,
-                timeout_secs,
-                elapsed_ms: turn_elapsed.as_millis(),
-                outcome: match &outcome_result {
-                    RunLoopTurnLoopResult::Completed => "completed",
-                    RunLoopTurnLoopResult::Aborted => "aborted",
-                    RunLoopTurnLoopResult::Cancelled => "cancelled",
-                    RunLoopTurnLoopResult::Exit => "exit",
-                    RunLoopTurnLoopResult::Blocked { .. } => "blocked",
-                },
-            });
-
-            last_activity_time = Some(Instant::now());
-            vtcode_core::tools::cache::FILE_CACHE
-                .check_pressure_and_evict()
-                .await;
-            tool_result_cache.write().await.check_pressure_and_evict();
-            if let Some(archive) = session_archive.as_ref() {
-                let mut recent_messages: Vec<SessionMessage> = conversation_history
-                    .iter()
-                    .rev()
-                    .take(RECENT_MESSAGE_LIMIT)
-                    .map(SessionMessage::from)
-                    .collect();
-                recent_messages.reverse();
-
-                let progress_turn = next_checkpoint_turn.saturating_sub(1).max(1);
-                let distinct_tools = session_stats.sorted_tools();
-                let skill_names: Vec<String> = loaded_skills.read().await.keys().cloned().collect();
-
-                if let Err(err) = archive
-                    .persist_progress_async(SessionProgressArgs {
-                        total_messages: conversation_history.len(),
-                        distinct_tools: distinct_tools.clone(),
-                        recent_messages,
-                        turn_number: progress_turn,
-                        token_usage: None,
-                        max_context_tokens: None,
-                        loaded_skills: Some(skill_names),
-                    })
-                    .await
+                };
+                conversation_history = working_history;
+                let outcome_result = outcome.result.clone();
+                let turn_elapsed = turn_started_at.elapsed();
+                let show_turn_timer = vt_cfg
+                    .as_ref()
+                    .map(|cfg| cfg.ui.show_turn_timer)
+                    .unwrap_or(true);
+                if let Err(err) = crate::agent::runloop::unified::turn::apply_turn_outcome(
+                    outcome,
+                    crate::agent::runloop::unified::turn::TurnOutcomeContext {
+                        conversation_history: &mut conversation_history,
+                        renderer: &mut renderer,
+                        handle: &handle,
+                        ctrl_c_state: &ctrl_c_state,
+                        default_placeholder: &default_placeholder,
+                        checkpoint_manager: checkpoint_manager.as_ref(),
+                        next_checkpoint_turn: &mut next_checkpoint_turn,
+                        session_end_reason: &mut session_end_reason,
+                        turn_elapsed,
+                        show_turn_timer,
+                    },
+                )
+                .await
                 {
-                    tracing::warn!("Failed to persist session progress: {}", err);
+                    tracing::error!("Failed to apply turn outcome: {}", err);
+                    renderer
+                        .line(
+                            MessageStyle::Error,
+                            &format!("Failed to finalize turn: {}", err),
+                        )
+                        .ok();
                 }
+                emit_turn_execution_metrics(TurnExecutionMetrics {
+                    attempts_made: attempts.saturating_add(1),
+                    retry_count: attempts,
+                    history_snapshot_bytes,
+                    timeout_secs,
+                    elapsed_ms: turn_elapsed.as_millis(),
+                    outcome: match &outcome_result {
+                        RunLoopTurnLoopResult::Completed => "completed",
+                        RunLoopTurnLoopResult::Aborted => "aborted",
+                        RunLoopTurnLoopResult::Cancelled => "cancelled",
+                        RunLoopTurnLoopResult::Exit => "exit",
+                        RunLoopTurnLoopResult::Blocked { .. } => "blocked",
+                    },
+                });
+
+                last_activity_time = Some(Instant::now());
+                vtcode_core::tools::cache::FILE_CACHE
+                    .check_pressure_and_evict()
+                    .await;
+                tool_result_cache.write().await.check_pressure_and_evict();
+                if let Some(archive) = session_archive.as_ref() {
+                    let mut recent_messages: Vec<SessionMessage> = conversation_history
+                        .iter()
+                        .rev()
+                        .take(RECENT_MESSAGE_LIMIT)
+                        .map(SessionMessage::from)
+                        .collect();
+                    recent_messages.reverse();
+
+                    let progress_turn = next_checkpoint_turn.saturating_sub(1).max(1);
+                    let distinct_tools = session_stats.sorted_tools();
+                    let skill_names: Vec<String> =
+                        loaded_skills.read().await.keys().cloned().collect();
+
+                    if let Err(err) = archive
+                        .persist_progress_async(SessionProgressArgs {
+                            total_messages: conversation_history.len(),
+                            distinct_tools: distinct_tools.clone(),
+                            recent_messages,
+                            turn_number: progress_turn,
+                            token_usage: None,
+                            max_context_tokens: None,
+                            loaded_skills: Some(skill_names),
+                        })
+                        .await
+                    {
+                        tracing::warn!("Failed to persist session progress: {}", err);
+                    }
+                }
+                match &outcome_result {
+                    RunLoopTurnLoopResult::Aborted => {
+                        session_stats.mark_turn_stalled(
+                            true,
+                            Some("Turn aborted due to an execution error.".to_string()),
+                        );
+                    }
+                    RunLoopTurnLoopResult::Blocked { reason } => {
+                        session_stats.mark_turn_stalled(
+                            true,
+                            reason.clone().or_else(|| {
+                                Some(
+                                    "Turn blocked due to repeated failing tool behavior."
+                                        .to_string(),
+                                )
+                            }),
+                        );
+                    }
+                    _ => {
+                        session_stats.mark_turn_stalled(false, None);
+                    }
+                }
+                if matches!(session_end_reason, SessionEndReason::Exit) {
+                    break;
+                }
+                continue;
             }
-            match &outcome_result {
-                RunLoopTurnLoopResult::Aborted => {
-                    session_stats.mark_turn_stalled(
-                        true,
-                        Some("Turn aborted due to an execution error.".to_string()),
-                    );
-                }
-                RunLoopTurnLoopResult::Blocked { reason } => {
-                    session_stats.mark_turn_stalled(
-                        true,
-                        reason.clone().or_else(|| {
-                            Some("Turn blocked due to repeated failing tool behavior.".to_string())
-                        }),
-                    );
-                }
-                _ => {
-                    session_stats.mark_turn_stalled(false, None);
-                }
-            }
-            if matches!(session_end_reason, SessionEndReason::Exit) {
-                break;
-            }
-            continue;
         }
         if let Some(archive) = session_archive.as_mut() {
             let skill_names: Vec<String> = loaded_skills.read().await.keys().cloned().collect();

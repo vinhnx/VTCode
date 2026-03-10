@@ -1,16 +1,23 @@
 mod cache;
 mod github;
 mod install_source;
+mod interactive;
 mod types;
 
 use anyhow::{Context, Result, bail};
 use semver::Version;
-use std::time::Duration;
 use tracing::{debug, info};
 use vtcode_config::update::UpdateConfig;
 
 pub(crate) use install_source::InstallSource;
-pub(crate) use types::{InstallOutcome, UpdateGuidance, UpdateInfo, VersionInfo};
+pub(crate) use interactive::{
+    InlineUpdateOutcome, append_notice_highlight, display_update_notice, execute_inline_update,
+    run_inline_update_prompt,
+};
+pub(crate) use types::{
+    InstallOutcome, StartupUpdateCheck, StartupUpdateNotice, UpdateExecutionStrategy,
+    UpdateGuidance, UpdateInfo, VersionInfo,
+};
 
 /// Auto-updater for VT Code binary from GitHub Releases
 pub(crate) struct Updater {
@@ -79,18 +86,52 @@ impl Updater {
         Ok(latest)
     }
 
-    pub(crate) async fn check_for_updates_cached(
-        &self,
-        min_interval: Duration,
-    ) -> Result<Option<UpdateInfo>> {
-        if !cache::is_check_due(min_interval)? {
-            debug!("Skipping update check (checked recently)");
+    pub(crate) fn startup_update_check(&self) -> Result<StartupUpdateCheck> {
+        if self.config.check_interval_hours == 0 {
+            debug!("Startup update checks disabled by configuration");
+            return Ok(StartupUpdateCheck::default());
+        }
+
+        if let Some(pinned_version) = self.config.pinned_version() {
+            debug!(
+                "Version pinned to {}, suppressing startup update prompt",
+                pinned_version
+            );
+            return Ok(StartupUpdateCheck::default());
+        }
+
+        let snapshot = cache::read_snapshot()?;
+        let cached_notice = snapshot.latest_version.as_ref().and_then(|latest_version| {
+            if snapshot.latest_was_newer && latest_version > &self.current_version {
+                Some(self.notice_for_version(latest_version.clone()))
+            } else {
+                None
+            }
+        });
+
+        Ok(StartupUpdateCheck {
+            cached_notice,
+            should_refresh: self.config.is_check_due(snapshot.last_checked),
+        })
+    }
+
+    pub(crate) async fn refresh_startup_update_cache(&self) -> Result<Option<StartupUpdateNotice>> {
+        if self.config.check_interval_hours == 0 || self.config.is_pinned() {
             return Ok(None);
         }
 
-        let result = self.check_for_updates().await;
-        let _ = cache::record_update_check();
-        result
+        let latest = match github::fetch_latest_release_info().await {
+            Ok(info) => info,
+            Err(err) => {
+                let _ = cache::record_failed_check();
+                return Err(err);
+            }
+        };
+
+        let latest_is_newer = latest.version > self.current_version;
+        cache::record_successful_check(Some(&latest.version), latest_is_newer)?;
+
+        Ok(latest_is_newer.then(|| self.notice_for_version(latest.version)))
     }
 
     pub(crate) async fn install_update(&self, force: bool) -> Result<InstallOutcome> {
@@ -99,7 +140,7 @@ impl Updater {
             bail!(
                 "VT Code was installed via {}. Update with: {}",
                 guidance.source.label(),
-                guidance.command
+                guidance.command()
             );
         }
 
@@ -144,7 +185,7 @@ impl Updater {
         let source = install_source::detect_install_source();
         UpdateGuidance {
             source,
-            command: source.update_command().to_string(),
+            action: source.update_action(),
         }
     }
 
@@ -180,6 +221,14 @@ impl Updater {
 
     pub(crate) fn pinned_version(&self) -> Option<&Version> {
         self.config.pinned_version()
+    }
+
+    pub(crate) fn notice_for_version(&self, latest_version: Version) -> StartupUpdateNotice {
+        StartupUpdateNotice {
+            current_version: self.current_version.clone(),
+            latest_version,
+            guidance: self.update_guidance(),
+        }
     }
 }
 
@@ -220,5 +269,34 @@ mod tests {
             install_source::detect_install_source_from_path(Path::new("/usr/local/bin/vtcode")),
             InstallSource::Standalone
         );
+    }
+
+    #[test]
+    fn startup_update_check_respects_disabled_interval() {
+        let updater = Updater {
+            current_version: Version::parse("0.111.0").expect("version"),
+            config: UpdateConfig {
+                check_interval_hours: 0,
+                ..UpdateConfig::default()
+            },
+        };
+
+        let check = updater.startup_update_check().expect("startup check");
+        assert!(check.cached_notice.is_none());
+        assert!(!check.should_refresh);
+    }
+
+    #[test]
+    fn startup_update_check_respects_pinned_version() {
+        let mut config = UpdateConfig::default();
+        config.set_pin(Version::parse("0.111.0").expect("version"), None, false);
+        let updater = Updater {
+            current_version: Version::parse("0.111.0").expect("version"),
+            config,
+        };
+
+        let check = updater.startup_update_check().expect("startup check");
+        assert!(check.cached_notice.is_none());
+        assert!(!check.should_refresh);
     }
 }

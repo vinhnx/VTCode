@@ -1,7 +1,5 @@
 use anyhow::Result;
 use futures::stream::{FuturesUnordered, StreamExt};
-use std::sync::Arc;
-use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::tool_intent;
 
 use crate::agent::runloop::unified::progress::ProgressReporter;
@@ -15,8 +13,9 @@ use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
 };
 
 pub(crate) struct ParsedToolCall<'a> {
-    pub tool_call: &'a uni::ToolCall,
-    pub args: Arc<serde_json::Value>,
+    pub call_id: &'a str,
+    pub tool_name: &'a str,
+    pub args: serde_json::Value,
 }
 
 fn can_parallelize_batch_tool_call(prepared: &PreparedToolCall) -> bool {
@@ -31,18 +30,17 @@ pub(crate) async fn handle_tool_call_batch_parsed<'a, 'b>(
     use crate::agent::runloop::unified::run_loop_context::TurnPhase;
     t_ctx.ctx.harness_state.set_phase(TurnPhase::ExecutingTools);
 
-    let mut validated_calls = Vec::new();
+    let mut validated_calls = Vec::with_capacity(tool_calls.len());
 
     // 1. Validate all calls sequentially (safety first)
     for parsed_call in tool_calls {
-        let func = match parsed_call.tool_call.function.as_ref() {
-            Some(f) => f,
-            None => continue, // Skip non-function calls
-        };
-        let tool_name = func.name.as_str();
-        let args_val = parsed_call.args;
-
-        match validate_tool_call(t_ctx.ctx, &parsed_call.tool_call.id, tool_name, &args_val).await?
+        match validate_tool_call(
+            t_ctx.ctx,
+            parsed_call.call_id,
+            parsed_call.tool_name,
+            &parsed_call.args,
+        )
+        .await?
         {
             ValidationResult::Outcome(outcome) => return Ok(Some(outcome)),
             ValidationResult::Handled => {
@@ -52,9 +50,9 @@ pub(crate) async fn handle_tool_call_batch_parsed<'a, 'b>(
             ValidationResult::Blocked => {
                 if let Some(outcome) = super::enforce_blocked_tool_call_guard(
                     t_ctx.ctx,
-                    &parsed_call.tool_call.id,
-                    tool_name,
-                    &args_val,
+                    parsed_call.call_id,
+                    parsed_call.tool_name,
+                    &parsed_call.args,
                 ) {
                     return Ok(Some(outcome));
                 }
@@ -62,7 +60,7 @@ pub(crate) async fn handle_tool_call_batch_parsed<'a, 'b>(
             }
             ValidationResult::Proceed(prepared) => {
                 t_ctx.ctx.harness_state.reset_blocked_tool_call_streak();
-                validated_calls.push((parsed_call.tool_call, prepared));
+                validated_calls.push((parsed_call.call_id, prepared));
             }
         }
     }
@@ -75,12 +73,12 @@ pub(crate) async fn handle_tool_call_batch_parsed<'a, 'b>(
         .iter()
         .all(|(_, prepared)| can_parallelize_batch_tool_call(prepared));
     if !can_parallelize {
-        for (tool_call, prepared) in validated_calls {
+        for (call_id, prepared) in validated_calls {
             if let Some(outcome) = execute_and_handle_tool_call(
                 t_ctx.ctx,
                 t_ctx.repeated_tool_attempts,
                 t_ctx.turn_modified_files,
-                tool_call.id.clone(),
+                call_id.to_string(),
                 &prepared.canonical_name,
                 prepared.effective_args,
                 None,
@@ -111,14 +109,14 @@ pub(crate) async fn handle_tool_call_batch_parsed<'a, 'b>(
     let vt_cfg = t_ctx.ctx.vt_cfg;
 
     let mut execution_futures = FuturesUnordered::new();
-    for (tool_call, prepared) in validated_calls {
+    for (call_id, prepared) in validated_calls {
         let registry = registry.clone();
         let ctrl_c_state = std::sync::Arc::clone(&ctrl_c_state);
         let ctrl_c_notify = std::sync::Arc::clone(&ctrl_c_notify);
         let reporter = progress_reporter.clone();
         let name = prepared.canonical_name;
-        let call_id = tool_call.id.clone();
         let args = prepared.effective_args;
+        let call_id = call_id.to_string();
 
         let fut = async move {
             let start_time = std::time::Instant::now();
@@ -208,24 +206,18 @@ pub(crate) fn execute_and_handle_tool_call<'a, 'b>(
     repeated_tool_attempts: &'b mut super::super::helpers::LoopTracker,
     turn_modified_files: &'b mut std::collections::BTreeSet<std::path::PathBuf>,
     tool_call_id: String,
-    tool_name: &str,
+    tool_name: &'b str,
     args_val: serde_json::Value,
-    batch_progress_reporter: Option<&'b ProgressReporter>,
+    _batch_progress_reporter: Option<&'b ProgressReporter>,
 ) -> futures::future::BoxFuture<'b, Result<Option<TurnHandlerOutcome>>> {
-    let tool_name_owned = tool_name.to_string();
-
-    Box::pin(async move {
-        execute_and_handle_tool_call_inner(
-            ctx,
-            repeated_tool_attempts,
-            turn_modified_files,
-            tool_call_id,
-            &tool_name_owned,
-            args_val,
-            batch_progress_reporter,
-        )
-        .await
-    })
+    Box::pin(execute_and_handle_tool_call_inner(
+        ctx,
+        repeated_tool_attempts,
+        turn_modified_files,
+        tool_call_id,
+        tool_name,
+        args_val,
+    ))
 }
 
 async fn execute_and_handle_tool_call_inner<'a>(
@@ -235,7 +227,6 @@ async fn execute_and_handle_tool_call_inner<'a>(
     tool_call_id: String,
     tool_name: &str,
     args_val: serde_json::Value,
-    _batch_progress_reporter: Option<&ProgressReporter>,
 ) -> Result<Option<TurnHandlerOutcome>> {
     // Show pre-execution indicator for file modification operations
     if crate::agent::runloop::unified::tool_summary::is_file_modification_tool(tool_name, &args_val)

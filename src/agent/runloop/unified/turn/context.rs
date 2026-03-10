@@ -387,13 +387,16 @@ impl<'a> TurnProcessingContext<'a> {
         if should_suppress_redundant_diff_recap(self.working_history, &text) {
             text.clear();
         }
+        let has_visible_text = !text.trim().is_empty();
 
         if !response_streamed {
             use vtcode_core::utils::ansi::MessageStyle;
             if !text.trim().is_empty() {
                 self.renderer.line(MessageStyle::Response, &text)?;
             }
-            let mut rendered_reasoning = Vec::new();
+            let mut rendered_reasoning = detail_reasoning
+                .is_some()
+                .then(|| Vec::with_capacity(reasoning.len()));
 
             for segment in &reasoning {
                 if let Some(stage) = &segment.stage {
@@ -402,8 +405,8 @@ impl<'a> TurnProcessingContext<'a> {
 
                 let reasoning_text = &segment.text;
                 if !reasoning_text.trim().is_empty() {
-                    let duplicates_content = !text.trim().is_empty()
-                        && reasoning_duplicates_content(reasoning_text, &text);
+                    let duplicates_content =
+                        has_visible_text && reasoning_duplicates_content(reasoning_text, &text);
                     if !duplicates_content {
                         let cleaned_for_display =
                             vtcode_core::llm::providers::clean_reasoning_text(reasoning_text);
@@ -412,7 +415,9 @@ impl<'a> TurnProcessingContext<'a> {
                         }
                         self.renderer
                             .line(MessageStyle::Reasoning, &cleaned_for_display)?;
-                        rendered_reasoning.push(cleaned_for_display);
+                        if let Some(rendered_reasoning) = rendered_reasoning.as_mut() {
+                            rendered_reasoning.push(cleaned_for_display);
+                        }
                     }
                 }
             }
@@ -420,11 +425,16 @@ impl<'a> TurnProcessingContext<'a> {
             if let Some(detail_text) = detail_reasoning.as_deref() {
                 let cleaned_detail = vtcode_core::llm::providers::clean_reasoning_text(detail_text);
                 let duplicates_content =
-                    !text.trim().is_empty() && reasoning_duplicates_content(&cleaned_detail, &text);
-                let duplicates_rendered = rendered_reasoning.iter().any(|existing: &String| {
-                    reasoning_duplicates_content(existing, &cleaned_detail)
-                        || reasoning_duplicates_content(&cleaned_detail, existing)
-                });
+                    has_visible_text && reasoning_duplicates_content(&cleaned_detail, &text);
+                let duplicates_rendered =
+                    rendered_reasoning
+                        .as_ref()
+                        .is_some_and(|rendered_reasoning| {
+                            rendered_reasoning.iter().any(|existing: &String| {
+                                reasoning_duplicates_content(existing, &cleaned_detail)
+                                    || reasoning_duplicates_content(&cleaned_detail, existing)
+                            })
+                        });
                 if !cleaned_detail.is_empty() && !duplicates_content && !duplicates_rendered {
                     self.renderer
                         .line(MessageStyle::Reasoning, &cleaned_detail)?;
@@ -434,23 +444,15 @@ impl<'a> TurnProcessingContext<'a> {
             self.handle.set_reasoning_stage(None);
         }
 
-        let mut combined_reasoning = reasoning
-            .iter()
-            .map(|s| s.text.clone())
-            .collect::<Vec<_>>()
-            .join("\n");
-        if combined_reasoning.trim().is_empty()
-            && let Some(detail_text) = detail_reasoning.as_deref()
-        {
-            combined_reasoning = detail_text.to_string();
-        }
-        let msg = uni::Message::assistant(text.clone()).with_phase(phase);
-        let mut msg_with_reasoning = if !combined_reasoning.is_empty() {
-            if reasoning_duplicates_content(&combined_reasoning, &text) {
-                msg
-            } else {
-                msg.with_reasoning(Some(combined_reasoning))
-            }
+        let combined_reasoning = build_combined_reasoning(&reasoning, detail_reasoning.as_deref());
+        let include_reasoning = combined_reasoning
+            .as_deref()
+            .is_some_and(|combined_reasoning| {
+                !reasoning_duplicates_content(combined_reasoning, &text)
+            });
+        let msg = uni::Message::assistant(text).with_phase(phase);
+        let mut msg_with_reasoning = if include_reasoning {
+            msg.with_reasoning(combined_reasoning)
         } else {
             msg
         };
@@ -463,7 +465,7 @@ impl<'a> TurnProcessingContext<'a> {
             msg_with_reasoning = msg_with_reasoning.with_reasoning_details(Some(payload));
         }
 
-        if !text.is_empty()
+        if !msg_with_reasoning.content.as_text().is_empty()
             || msg_with_reasoning.reasoning.is_some()
             || msg_with_reasoning.reasoning_details.is_some()
         {
@@ -600,6 +602,37 @@ fn reasoning_duplicates_content(reasoning: &str, content: &str) -> bool {
         return false;
     }
     r == c || r.contains(c) || c.contains(r)
+}
+
+fn build_combined_reasoning(
+    reasoning: &[ReasoningSegment],
+    detail_reasoning: Option<&str>,
+) -> Option<String> {
+    let capacity = reasoning
+        .iter()
+        .map(|segment| segment.text.len())
+        .sum::<usize>()
+        + reasoning.len().saturating_sub(1);
+    let mut combined_reasoning = String::with_capacity(capacity);
+
+    for segment in reasoning {
+        if !combined_reasoning.is_empty() {
+            combined_reasoning.push('\n');
+        }
+        combined_reasoning.push_str(&segment.text);
+    }
+
+    if combined_reasoning.trim().is_empty()
+        && let Some(detail_reasoning) = detail_reasoning
+    {
+        return Some(detail_reasoning.to_string());
+    }
+
+    if combined_reasoning.is_empty() {
+        None
+    } else {
+        Some(combined_reasoning)
+    }
 }
 
 fn parse_reasoning_detail_value(detail: &str) -> serde_json::Value {
@@ -1043,6 +1076,18 @@ mod tests {
             parse_reasoning_detail_value(r#"{"type":"reasoning.text","id":"r1","text":"hello"}"#);
         assert!(parsed.is_object());
         assert_eq!(parsed["type"], "reasoning.text");
+    }
+
+    #[test]
+    fn build_combined_reasoning_falls_back_to_detail_text() {
+        let combined = build_combined_reasoning(&[], Some("detail trace"));
+        assert_eq!(combined.as_deref(), Some("detail trace"));
+    }
+
+    #[test]
+    fn build_combined_reasoning_preserves_whitespace_only_segments_without_detail() {
+        let combined = build_combined_reasoning(&[ReasoningSegment::new("  ", None)], None);
+        assert_eq!(combined.as_deref(), Some("  "));
     }
 
     #[test]

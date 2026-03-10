@@ -8,7 +8,7 @@ mod display;
 mod incremental_system_prompt;
 mod inline_events;
 mod intent_extractor;
-mod overlay_prompt;
+pub(crate) mod overlay_prompt;
 
 mod mcp_support;
 mod mcp_tool_manager;

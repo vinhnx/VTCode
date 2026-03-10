@@ -4,7 +4,18 @@ use std::env;
 use vtcode_core::utils::ansi::MessageStyle;
 
 use super::{SlashCommandContext, SlashCommandControl};
-use crate::updater::{InstallOutcome, Updater};
+use crate::updater::{
+    InlineUpdateOutcome, Updater, execute_inline_update, run_inline_update_prompt,
+};
+
+fn control_for_update_outcome(outcome: InlineUpdateOutcome) -> SlashCommandControl {
+    match outcome {
+        InlineUpdateOutcome::Continue => SlashCommandControl::Continue,
+        InlineUpdateOutcome::RestartRequested => {
+            SlashCommandControl::BreakWithReason(vtcode_core::hooks::SessionEndReason::Completed)
+        }
+    }
+}
 
 pub(crate) async fn handle_update(
     ctx: SlashCommandContext<'_>,
@@ -42,18 +53,40 @@ pub(crate) async fn handle_update(
                 let guidance = updater.update_guidance();
                 ctx.renderer.line(
                     MessageStyle::Info,
-                    &format!("Recommended command: {}", guidance.command.as_str().green()),
+                    &format!("Recommended command: {}", guidance.command().green()),
                 )?;
                 return Ok(SlashCommandControl::Continue);
             }
 
-            install_update(ctx, &updater, force).await
+            let notice = updater.notice_for_version(update.version.clone());
+            run_inline_update_prompt(
+                ctx.renderer,
+                ctx.handle,
+                ctx.session,
+                ctx.ctrl_c_state,
+                ctx.ctrl_c_notify,
+                ctx.config.workspace.as_path(),
+                &notice,
+            )
+            .await
+            .map(control_for_update_outcome)
         }
         Ok(None) => {
             ctx.renderer
                 .line(MessageStyle::Info, "Already on the latest version.")?;
             if install && force {
-                install_update(ctx, &updater, true).await
+                ctx.renderer.line(
+                    MessageStyle::Info,
+                    "Force reinstall requested; running the current install command.",
+                )?;
+                let notice = updater.notice_for_version(updater.current_version().clone());
+                execute_inline_update(
+                    ctx.renderer,
+                    ctx.handle,
+                    ctx.config.workspace.as_path(),
+                    &notice,
+                )
+                .map(control_for_update_outcome)
             } else {
                 Ok(SlashCommandControl::Continue)
             }
@@ -66,52 +99,4 @@ pub(crate) async fn handle_update(
             Ok(SlashCommandControl::Continue)
         }
     }
-}
-
-async fn install_update(
-    ctx: SlashCommandContext<'_>,
-    updater: &Updater,
-    force: bool,
-) -> Result<SlashCommandControl> {
-    let guidance = updater.update_guidance();
-    if guidance.source.is_managed() {
-        ctx.renderer.line(
-            MessageStyle::Warning,
-            &format!("Managed install detected ({}).", guidance.source.label()),
-        )?;
-        ctx.renderer.line(
-            MessageStyle::Info,
-            &format!("Update with: {}", guidance.command.as_str().green()),
-        )?;
-        return Ok(SlashCommandControl::Continue);
-    }
-
-    ctx.renderer
-        .line(MessageStyle::Info, "Installing update now...")?;
-
-    match updater.install_update(force).await {
-        Ok(InstallOutcome::Updated(version)) => {
-            ctx.renderer.line(
-                MessageStyle::Info,
-                &format!(
-                    "Updated successfully to {}. Restart VT Code.",
-                    version.bold()
-                ),
-            )?;
-        }
-        Ok(InstallOutcome::UpToDate(version)) => {
-            ctx.renderer.line(
-                MessageStyle::Info,
-                &format!("Already up to date ({})", version.bold()),
-            )?;
-        }
-        Err(err) => {
-            ctx.renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to install update: {}", err),
-            )?;
-        }
-    }
-
-    Ok(SlashCommandControl::Continue)
 }

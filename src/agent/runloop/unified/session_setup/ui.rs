@@ -266,7 +266,38 @@ pub(crate) async fn initialize_session_ui(
         reasoning_label.clone(),
     )
     .await?;
-    handle.set_header_context(header_context);
+    handle.set_header_context(header_context.clone());
+
+    let mut startup_update_notice_rx = None;
+    let mut startup_update_task_guard = None;
+    if session_state.startup_update_check.should_refresh {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let announced_version = session_state
+            .startup_update_check
+            .cached_notice
+            .as_ref()
+            .map(|notice| notice.latest_version.clone());
+        startup_update_notice_rx = Some(rx);
+        startup_update_task_guard = Some(BackgroundTaskGuard::new(tokio::spawn(async move {
+            let updater = match crate::updater::Updater::new(env!("CARGO_PKG_VERSION")) {
+                Ok(updater) => updater,
+                Err(err) => {
+                    tracing::debug!("Failed to initialize updater in background task: {}", err);
+                    return;
+                }
+            };
+
+            match updater.refresh_startup_update_cache().await {
+                Ok(Some(notice)) if Some(notice.latest_version.clone()) != announced_version => {
+                    let _ = tx.send(notice);
+                }
+                Ok(_) => {}
+                Err(err) => {
+                    tracing::debug!("Background startup update refresh failed: {}", err);
+                }
+            }
+        })));
+    }
 
     let next_checkpoint_turn = checkpoint_manager
         .as_ref()
@@ -277,6 +308,7 @@ pub(crate) async fn initialize_session_ui(
         renderer,
         session,
         handle,
+        header_context,
         ctrl_c_state,
         ctrl_c_notify,
         checkpoint_manager,
@@ -288,6 +320,9 @@ pub(crate) async fn initialize_session_ui(
         follow_up_placeholder,
         next_checkpoint_turn,
         file_palette_task_guard,
+        startup_update_cached_notice: session_state.startup_update_check.cached_notice.clone(),
+        startup_update_notice_rx,
+        startup_update_task_guard,
     })
 }
 

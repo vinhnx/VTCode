@@ -12,6 +12,7 @@ use vtcode_tui::InlineHandle;
 
 use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::model_picker::ModelPickerState;
+use crate::updater::StartupUpdateNotice;
 use vtcode_core::core::agent::steering::SteeringMessage;
 use vtcode_core::hooks::{LifecycleHookEngine, SessionEndReason};
 
@@ -26,6 +27,7 @@ pub(crate) struct InteractionLoopContext<'a> {
     pub renderer: &'a mut AnsiRenderer,
     pub session: &'a mut vtcode_tui::InlineSession,
     pub handle: &'a InlineHandle,
+    pub header_context: &'a mut vtcode_tui::InlineHeaderContext,
     pub ctrl_c_state: &'a Arc<CtrlCState>,
     pub ctrl_c_notify: &'a Arc<Notify>,
     pub config: &'a mut AgentConfig,
@@ -72,6 +74,8 @@ pub(crate) struct InteractionLoopContext<'a> {
     pub last_forced_redraw: &'a mut std::time::Instant,
     pub harness_config: vtcode_config::core::agent::AgentHarnessConfig,
     pub steering_receiver: &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
+    pub startup_update_notice_rx:
+        &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<StartupUpdateNotice>>,
 }
 
 impl<'a> InteractionLoopContext<'a> {

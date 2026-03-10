@@ -21,9 +21,10 @@ mod startup;
 mod updater;
 
 use main_helpers::{
-    build_augmented_cli_command, configure_debug_session_routing, debug_runtime_flag_enabled,
+    build_augmented_cli_command, configure_debug_session_routing,
+    configure_runtime_relaunch_context, debug_runtime_flag_enabled,
     initialize_default_error_tracing, initialize_tracing, initialize_tracing_from_config,
-    resolve_runtime_color_policy, resolve_startup_context,
+    perform_queued_runtime_relaunch, resolve_runtime_color_policy, resolve_startup_context,
 };
 
 fn main() -> std::process::ExitCode {
@@ -60,6 +61,10 @@ fn main() -> std::process::ExitCode {
 }
 
 async fn run() -> Result<()> {
+    let launch_argv = std::env::args_os().collect::<Vec<_>>();
+    let launch_cwd = std::env::current_dir().context("failed to resolve current directory")?;
+    configure_runtime_relaunch_context(launch_argv, launch_cwd);
+
     // Suppress macOS malloc warnings that appear as stderr output
     // IMPORTANT: Remove the variables rather than setting to "0"
     // Setting to "0" triggers macOS to output "can't turn off malloc stack logging"
@@ -153,7 +158,9 @@ async fn run() -> Result<()> {
     // Sync global diagnostics flag so TuiLogLayer respects ui.show_diagnostics_in_transcript
     panic_hook::set_show_diagnostics(startup.config.ui.show_diagnostics_in_transcript);
 
-    cli::dispatch(&args, &startup, print_mode, potential_prompt).await?;
+    let dispatch_result = cli::dispatch(&args, &startup, print_mode, potential_prompt).await;
+    perform_queued_runtime_relaunch();
+    dispatch_result?;
 
     Ok(())
 }

@@ -2,6 +2,7 @@ mod bootstrap;
 mod debug_routing;
 mod ide;
 mod prompt_input;
+mod relaunch;
 mod tracing;
 
 pub(crate) use bootstrap::{
@@ -11,6 +12,10 @@ pub(crate) use bootstrap::{
 pub(crate) use debug_routing::configure_debug_session_routing;
 pub(crate) use ide::detect_available_ide;
 pub(crate) use prompt_input::build_print_prompt;
+pub(crate) use relaunch::{
+    RelaunchPreference, configure_runtime_relaunch_context, perform_queued_runtime_relaunch,
+    queue_runtime_relaunch,
+};
 pub(crate) use tracing::{
     initialize_default_error_tracing, initialize_tracing, initialize_tracing_from_config,
 };

@@ -300,7 +300,7 @@ async fn handle_update_available(
         println!(
             "\n{} Update command: {}",
             "→".cyan(),
-            guidance.command.as_str().green()
+            guidance.command().green()
         );
         println!(
             "{} Release page: {}",
@@ -339,11 +339,7 @@ async fn install_update(updater: &Updater, force: bool) -> Result<()> {
             "!".yellow(),
             guidance.source.label()
         );
-        println!(
-            "{} Update with: {}",
-            "→".cyan(),
-            guidance.command.as_str().green()
-        );
+        println!("{} Update with: {}", "→".cyan(), guidance.command().green());
         return Ok(());
     }
 

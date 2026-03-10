@@ -233,7 +233,7 @@ If VT Code was installed via a package manager, the update system will detect th
 
 - **Homebrew**: `brew upgrade vinhnx/tap/vtcode`
 - **Cargo**: `cargo install vtcode --force`
-- **npm**: `npm install -g vtcode@latest`
+- **npm**: `npm install -g @vinhnx/vtcode@latest --registry=https://npm.pkg.github.com`
 - **Standalone**: Direct update via `vtcode update`
 
 ### Backup and Rollback

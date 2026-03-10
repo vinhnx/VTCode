@@ -69,7 +69,7 @@ pub(crate) async fn acquire_adaptive_rate_limit_slot<'a>(
                         let parts = ctx.parts_mut();
                         push_tool_response(
                             parts.state.working_history,
-                            tool_call_id.to_string(),
+                            tool_call_id,
                             build_rate_limit_error_content(tool_name, retry_after_ms),
                         );
                     }

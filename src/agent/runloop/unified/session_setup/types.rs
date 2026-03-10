@@ -18,7 +18,9 @@ use vtcode_core::tools::ApprovalRecorder;
 use vtcode_core::tools::{ToolRegistry, ToolResultCache};
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::utils::session_archive::SessionArchive;
-use vtcode_tui::{InlineHandle, InlineSession};
+use vtcode_tui::{InlineHandle, InlineHeaderContext, InlineSession};
+
+use crate::updater::{StartupUpdateCheck, StartupUpdateNotice};
 
 pub(crate) struct BackgroundTaskGuard {
     handle: Option<tokio::task::JoinHandle<()>>,
@@ -61,6 +63,7 @@ pub(crate) struct SessionMetadataContext {
 
 pub(crate) struct SessionState {
     pub session_bootstrap: SessionBootstrap,
+    pub startup_update_check: StartupUpdateCheck,
     pub provider_client: Box<dyn uni::LLMProvider>,
     pub tool_registry: ToolRegistry,
     pub tools: Arc<RwLock<Vec<uni::ToolDefinition>>>,
@@ -79,6 +82,7 @@ pub(crate) struct SessionUISetup {
     pub renderer: AnsiRenderer,
     pub session: InlineSession,
     pub handle: InlineHandle,
+    pub header_context: InlineHeaderContext,
     pub ctrl_c_state: Arc<CtrlCState>,
     pub ctrl_c_notify: Arc<Notify>,
     pub checkpoint_manager: Option<vtcode_core::core::agent::snapshots::SnapshotManager>,
@@ -90,6 +94,9 @@ pub(crate) struct SessionUISetup {
     pub follow_up_placeholder: Option<String>,
     pub next_checkpoint_turn: usize,
     pub file_palette_task_guard: BackgroundTaskGuard,
+    pub startup_update_cached_notice: Option<StartupUpdateNotice>,
+    pub startup_update_notice_rx: Option<tokio::sync::mpsc::UnboundedReceiver<StartupUpdateNotice>>,
+    pub startup_update_task_guard: Option<BackgroundTaskGuard>,
 }
 
 pub(crate) async fn build_conversation_history_from_resume(

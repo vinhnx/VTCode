@@ -161,10 +161,10 @@ pub(crate) async fn handle_turn_processing_result<'a>(
             params
                 .ctx
                 .handle_text_response(
-                    text.clone(),
-                    reasoning.clone(),
-                    reasoning_details.clone(),
-                    proposed_plan.clone(),
+                    text,
+                    reasoning,
+                    reasoning_details,
+                    proposed_plan,
                     params.response_streamed,
                 )
                 .await

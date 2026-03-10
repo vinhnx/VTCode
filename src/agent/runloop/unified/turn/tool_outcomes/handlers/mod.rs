@@ -68,7 +68,7 @@ fn build_failure_error_content(error: String, failure_kind: &'static str) -> Str
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn handle_single_tool_call<'a, 'b, 'tool>(
     t_ctx: &mut ToolOutcomeContext<'a, 'b>,
-    tool_call_id: String,
+    tool_call_id: &str,
     tool_name: &'tool str,
     args_val: serde_json::Value,
 ) -> Result<Option<TurnHandlerOutcome>> {
@@ -82,7 +82,7 @@ pub(crate) async fn handle_single_tool_call<'a, 'b, 'tool>(
     }
 
     // 1. Validate (Circuit Breaker, Rate Limit, Loop Detection, Safety, Permission)
-    let prepared = match validate_tool_call(t_ctx.ctx, &tool_call_id, tool_name, &args_val).await? {
+    let prepared = match validate_tool_call(t_ctx.ctx, tool_call_id, tool_name, &args_val).await? {
         ValidationResult::Outcome(outcome) => return Ok(Some(outcome)),
         ValidationResult::Handled => {
             let parts = t_ctx.ctx.parts_mut();
@@ -91,7 +91,7 @@ pub(crate) async fn handle_single_tool_call<'a, 'b, 'tool>(
         }
         ValidationResult::Blocked => {
             if let Some(outcome) =
-                enforce_blocked_tool_call_guard(t_ctx.ctx, &tool_call_id, tool_name, &args_val)
+                enforce_blocked_tool_call_guard(t_ctx.ctx, tool_call_id, tool_name, &args_val)
             {
                 return Ok(Some(outcome));
             }
@@ -109,7 +109,7 @@ pub(crate) async fn handle_single_tool_call<'a, 'b, 'tool>(
         t_ctx.ctx,
         t_ctx.repeated_tool_attempts,
         t_ctx.turn_modified_files,
-        tool_call_id,
+        tool_call_id.to_string(),
         &prepared.canonical_name,
         prepared.effective_args,
         None,
@@ -153,7 +153,7 @@ pub(crate) async fn validate_tool_call<'a>(
             let parts = ctx.parts_mut();
             push_tool_response(
                 parts.state.working_history,
-                tool_call_id.to_string(),
+                tool_call_id,
                 build_failure_error_content(error_msg, "policy"),
             );
             if !exhausted_emitted {
@@ -191,7 +191,7 @@ pub(crate) async fn validate_tool_call<'a>(
             let parts = ctx.parts_mut();
             push_tool_response(
                 parts.state.working_history,
-                tool_call_id.to_string(),
+                tool_call_id,
                 build_failure_error_content(error_msg, "policy"),
             );
         }
@@ -222,7 +222,7 @@ pub(crate) async fn validate_tool_call<'a>(
                     let parts = ctx.parts_mut();
                     push_tool_response(
                         parts.state.working_history,
-                        tool_call_id.to_string(),
+                        tool_call_id,
                         build_validation_error_content_with_fallback(
                             format!("Tool preflight validation failed: {}", err),
                             "preflight",
@@ -403,7 +403,7 @@ pub(crate) async fn validate_tool_call<'a>(
                     let parts = ctx.parts_mut();
                     push_tool_response(
                         parts.state.working_history,
-                        tool_call_id.to_string(),
+                        tool_call_id,
                         super::execution_result::maybe_inline_spooled(
                             &canonical_tool_name,
                             &spooled,
@@ -457,7 +457,7 @@ pub(crate) async fn validate_tool_call<'a>(
                     let parts = ctx.parts_mut();
                     push_tool_response(
                         parts.state.working_history,
-                        tool_call_id.to_string(),
+                        tool_call_id,
                         super::execution_result::maybe_inline_spooled(
                             &canonical_tool_name,
                             &reused,
@@ -479,7 +479,7 @@ pub(crate) async fn validate_tool_call<'a>(
                         .unwrap_or((None, None));
                 push_tool_response(
                     parts.state.working_history,
-                    tool_call_id.to_string(),
+                    tool_call_id,
                     build_validation_error_content_with_fallback(
                         error_msg,
                         "loop_detection",
@@ -539,7 +539,7 @@ pub(crate) async fn validate_tool_call<'a>(
                             let parts = ctx.parts_mut();
                             push_tool_response(
                                 parts.state.working_history,
-                                tool_call_id.to_string(),
+                                tool_call_id,
                                 build_failure_error_content(
                                     "Session tool limit reached and not increased by user"
                                         .to_string(),
@@ -560,7 +560,7 @@ pub(crate) async fn validate_tool_call<'a>(
                     )?;
                     push_tool_response(
                         parts.state.working_history,
-                        tool_call_id.to_string(),
+                        tool_call_id,
                         build_failure_error_content(
                             format!("Safety validation failed: {}", err),
                             "safety_validation",
@@ -633,7 +633,7 @@ pub(crate) async fn validate_tool_call<'a>(
                 let parts = ctx.parts_mut();
                 push_tool_response(
                     parts.state.working_history,
-                    tool_call_id.to_string(),
+                    tool_call_id,
                     serde_json::to_string(&denial).unwrap_or_else(|_| "{}".to_string()),
                 );
             }
@@ -653,7 +653,7 @@ pub(crate) async fn validate_tool_call<'a>(
                 let parts = ctx.parts_mut();
                 push_tool_response(
                     parts.state.working_history,
-                    tool_call_id.to_string(),
+                    tool_call_id,
                     err_json.to_string(),
                 );
             }
