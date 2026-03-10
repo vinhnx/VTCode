@@ -34,13 +34,7 @@ impl InteractiveMcpElicitationHandler {
 }
 
 fn elicitation_is_rejected_by_policy(approval_policy: AskForApproval) -> bool {
-    match approval_policy {
-        AskForApproval::Never => true,
-        AskForApproval::OnFailure => false,
-        AskForApproval::OnRequest => false,
-        AskForApproval::UnlessTrusted => false,
-        AskForApproval::Reject(reject_config) => reject_config.rejects_mcp_elicitations(),
-    }
+    approval_policy.rejects_mcp_elicitation()
 }
 
 #[async_trait]

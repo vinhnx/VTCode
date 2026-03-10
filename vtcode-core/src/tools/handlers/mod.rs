@@ -99,9 +99,9 @@ pub use list_dir_handler::{DirEntry, ListDirArgs, ListDirHandler, create_list_di
 pub use sandboxing::{
     Approvable, ApprovalCtx, ApprovalStore, AskForApproval, BoxFuture, CommandSpec,
     ExecApprovalRequirement, ExecEnv, ExecPolicyAmendment, ExecToolCallOutput, NetworkAccess,
-    ReviewDecision, SandboxAttempt, SandboxManager, SandboxMode, SandboxOverride, SandboxPolicy,
-    SandboxTransformError, SandboxType, Sandboxable, SandboxablePreference, ToolCtx, ToolError,
-    ToolRuntime, default_exec_approval_requirement, execute_env, with_cached_approval,
+    RejectConfig, ReviewDecision, SandboxAttempt, SandboxManager, SandboxMode, SandboxOverride,
+    SandboxPolicy, SandboxTransformError, SandboxType, Sandboxable, SandboxablePreference, ToolCtx,
+    ToolError, ToolRuntime, default_exec_approval_requirement, execute_env, with_cached_approval,
 };
 
 // Tool Orchestrator (Codex-compatible)

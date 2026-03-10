@@ -57,6 +57,62 @@ impl AskForApproval {
             Self::UnlessTrusted | Self::OnRequest | Self::Reject(_)
         )
     }
+
+    /// Check whether rule-triggered approval prompts are rejected.
+    pub const fn rejects_rule_prompt(self) -> bool {
+        match self {
+            Self::Never => true,
+            Self::Reject(reject_config) => reject_config.rejects_rules_approval(),
+            Self::OnFailure | Self::OnRequest | Self::UnlessTrusted => false,
+        }
+    }
+
+    /// Check whether sandbox-related approval prompts are rejected.
+    pub const fn rejects_sandbox_prompt(self) -> bool {
+        match self {
+            Self::Never => true,
+            Self::Reject(reject_config) => reject_config.rejects_sandbox_approval(),
+            Self::OnFailure | Self::OnRequest | Self::UnlessTrusted => false,
+        }
+    }
+
+    /// Check whether MCP elicitation prompts are rejected.
+    pub const fn rejects_mcp_elicitation(self) -> bool {
+        match self {
+            Self::Never => true,
+            Self::Reject(reject_config) => reject_config.rejects_mcp_elicitations(),
+            Self::OnFailure | Self::OnRequest | Self::UnlessTrusted => false,
+        }
+    }
+}
+
+/// Compute the default approval requirement for a tool invocation.
+///
+/// `requires_sandbox_approval_prompt` should be `true` when the selected
+/// sandbox mode still requires an approval prompt, and `false` when the tool is
+/// already running unsandboxed or under an external sandbox that should not
+/// trigger an additional sandbox approval prompt.
+#[must_use]
+pub fn default_exec_approval_requirement(
+    policy: AskForApproval,
+    requires_sandbox_approval_prompt: bool,
+) -> ExecApprovalRequirement {
+    let needs_approval = match policy {
+        AskForApproval::Never | AskForApproval::OnFailure => false,
+        AskForApproval::OnRequest | AskForApproval::Reject(_) => requires_sandbox_approval_prompt,
+        AskForApproval::UnlessTrusted => true,
+    };
+
+    if needs_approval && policy.rejects_sandbox_prompt() {
+        ExecApprovalRequirement::forbidden("approval policy rejected sandbox approval prompt")
+    } else if needs_approval {
+        ExecApprovalRequirement::NeedsApproval {
+            reason: None,
+            proposed_execpolicy_amendment: None,
+        }
+    } else {
+        ExecApprovalRequirement::skip()
+    }
 }
 
 /// A proposed amendment to the execution policy.
@@ -265,6 +321,26 @@ mod tests {
     }
 
     #[test]
+    fn test_ask_for_approval_rejection_helpers() {
+        assert!(AskForApproval::Never.rejects_rule_prompt());
+        assert!(AskForApproval::Never.rejects_sandbox_prompt());
+        assert!(AskForApproval::Never.rejects_mcp_elicitation());
+
+        assert!(!AskForApproval::OnRequest.rejects_rule_prompt());
+        assert!(!AskForApproval::OnRequest.rejects_sandbox_prompt());
+        assert!(!AskForApproval::OnRequest.rejects_mcp_elicitation());
+
+        let reject_policy = AskForApproval::Reject(RejectConfig {
+            sandbox_approval: true,
+            rules: false,
+            mcp_elicitations: true,
+        });
+        assert!(!reject_policy.rejects_rule_prompt());
+        assert!(reject_policy.rejects_sandbox_prompt());
+        assert!(reject_policy.rejects_mcp_elicitation());
+    }
+
+    #[test]
     fn test_reject_policy_serde_roundtrip() {
         let value = json!({
             "reject": {
@@ -293,6 +369,90 @@ mod tests {
                     "mcp_elicitations": true
                 }
             })
+        );
+    }
+
+    #[test]
+    fn default_exec_approval_requirement_skips_for_never() {
+        let requirement = default_exec_approval_requirement(AskForApproval::Never, true);
+
+        assert_eq!(requirement, ExecApprovalRequirement::skip());
+    }
+
+    #[test]
+    fn default_exec_approval_requirement_skips_for_on_failure() {
+        let requirement = default_exec_approval_requirement(AskForApproval::OnFailure, true);
+
+        assert_eq!(requirement, ExecApprovalRequirement::skip());
+    }
+
+    #[test]
+    fn default_exec_approval_requirement_requires_approval_for_on_request() {
+        let requirement = default_exec_approval_requirement(AskForApproval::OnRequest, true);
+
+        assert_eq!(
+            requirement,
+            ExecApprovalRequirement::NeedsApproval {
+                reason: None,
+                proposed_execpolicy_amendment: None,
+            }
+        );
+    }
+
+    #[test]
+    fn default_exec_approval_requirement_skips_on_request_without_prompt() {
+        let requirement = default_exec_approval_requirement(AskForApproval::OnRequest, false);
+
+        assert_eq!(requirement, ExecApprovalRequirement::skip());
+    }
+
+    #[test]
+    fn default_exec_approval_requirement_requires_approval_for_unless_trusted() {
+        let requirement = default_exec_approval_requirement(AskForApproval::UnlessTrusted, false);
+
+        assert_eq!(
+            requirement,
+            ExecApprovalRequirement::NeedsApproval {
+                reason: None,
+                proposed_execpolicy_amendment: None,
+            }
+        );
+    }
+
+    #[test]
+    fn default_exec_approval_requirement_rejects_sandbox_prompt_when_configured() {
+        let policy = AskForApproval::Reject(RejectConfig {
+            sandbox_approval: true,
+            rules: false,
+            mcp_elicitations: false,
+        });
+
+        let requirement = default_exec_approval_requirement(policy, true);
+
+        assert_eq!(
+            requirement,
+            ExecApprovalRequirement::Forbidden {
+                reason: "approval policy rejected sandbox approval prompt".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn default_exec_approval_requirement_keeps_prompt_when_rejection_disabled() {
+        let policy = AskForApproval::Reject(RejectConfig {
+            sandbox_approval: false,
+            rules: true,
+            mcp_elicitations: true,
+        });
+
+        let requirement = default_exec_approval_requirement(policy, true);
+
+        assert_eq!(
+            requirement,
+            ExecApprovalRequirement::NeedsApproval {
+                reason: None,
+                proposed_execpolicy_amendment: None,
+            }
         );
     }
 }

@@ -16,7 +16,10 @@ use async_trait::async_trait;
 use serde::Serialize;
 use tokio::sync::RwLock;
 
-pub use crate::exec_policy::{ExecApprovalRequirement, ExecPolicyAmendment, RejectConfig};
+use crate::exec_policy::default_exec_approval_requirement as canonical_default_exec_approval_requirement;
+pub use crate::exec_policy::{
+    AskForApproval, ExecApprovalRequirement, ExecPolicyAmendment, RejectConfig,
+};
 
 use super::tool_handler::{ToolSession, TurnContext};
 
@@ -199,7 +202,7 @@ pub trait Approvable<Req>: Send + Sync {
             AskForApproval::UnlessTrusted => true,
             AskForApproval::Never => false,
             AskForApproval::OnRequest => false,
-            AskForApproval::Reject(reject_config) => !reject_config.sandbox_approval,
+            AskForApproval::Reject(_) => !policy.rejects_sandbox_prompt(),
         }
     }
 
@@ -209,26 +212,6 @@ pub trait Approvable<Req>: Send + Sync {
         req: &'a Req,
         ctx: ApprovalCtx<'a>,
     ) -> BoxFuture<'a, ReviewDecision>;
-}
-
-// ============================================================================
-// Ask For Approval Policy (from Codex)
-// ============================================================================
-
-/// When to ask for approval (from Codex protocol)
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum AskForApproval {
-    /// Never ask for approval
-    Never,
-    /// Ask on failure only
-    OnFailure,
-    /// Ask on request
-    #[default]
-    OnRequest,
-    /// Always ask unless trusted
-    UnlessTrusted,
-    /// Fine-grained rejection controls for approval prompts.
-    Reject(RejectConfig),
 }
 
 // ============================================================================
@@ -273,35 +256,17 @@ pub fn default_exec_approval_requirement(
     policy: AskForApproval,
     sandbox_policy: &SandboxPolicy,
 ) -> ExecApprovalRequirement {
-    let needs_approval = match policy {
-        AskForApproval::Never | AskForApproval::OnFailure => false,
-        AskForApproval::OnRequest | AskForApproval::Reject(_) => !matches!(
-            sandbox_policy.mode,
-            SandboxMode::DangerFullAccess | SandboxMode::ExternalSandbox
-        ),
-        AskForApproval::UnlessTrusted => true,
-    };
+    canonical_default_exec_approval_requirement(
+        policy,
+        sandbox_requires_approval_prompt(sandbox_policy),
+    )
+}
 
-    if needs_approval
-        && matches!(
-            policy,
-            AskForApproval::Reject(reject_config) if reject_config.rejects_sandbox_approval()
-        )
-    {
-        ExecApprovalRequirement::Forbidden {
-            reason: "approval policy rejected sandbox approval prompt".to_string(),
-        }
-    } else if needs_approval {
-        ExecApprovalRequirement::NeedsApproval {
-            reason: None,
-            proposed_execpolicy_amendment: None,
-        }
-    } else {
-        ExecApprovalRequirement::Skip {
-            bypass_sandbox: false,
-            proposed_execpolicy_amendment: None,
-        }
-    }
+fn sandbox_requires_approval_prompt(sandbox_policy: &SandboxPolicy) -> bool {
+    !matches!(
+        sandbox_policy.mode,
+        SandboxMode::DangerFullAccess | SandboxMode::ExternalSandbox
+    )
 }
 
 // ============================================================================
@@ -585,37 +550,7 @@ mod tests {
     }
 
     #[test]
-    fn test_never_policy_skips_approval() {
-        let result =
-            default_exec_approval_requirement(AskForApproval::Never, &SandboxPolicy::default());
-
-        assert_eq!(
-            result,
-            ExecApprovalRequirement::Skip {
-                bypass_sandbox: false,
-                proposed_execpolicy_amendment: None,
-            }
-        );
-    }
-
-    #[test]
-    fn test_unless_trusted_requires_approval() {
-        let result = default_exec_approval_requirement(
-            AskForApproval::UnlessTrusted,
-            &SandboxPolicy::default(),
-        );
-
-        assert_eq!(
-            result,
-            ExecApprovalRequirement::NeedsApproval {
-                reason: None,
-                proposed_execpolicy_amendment: None,
-            }
-        );
-    }
-
-    #[test]
-    fn default_exec_approval_requirement_rejects_sandbox_prompt_when_configured() {
+    fn reject_policy_still_flows_through_handler_wrapper() {
         let policy = AskForApproval::Reject(RejectConfig {
             sandbox_approval: true,
             rules: false,
@@ -636,51 +571,6 @@ mod tests {
                 reason: "approval policy rejected sandbox approval prompt".to_string(),
             }
         );
-    }
-
-    #[test]
-    fn default_exec_approval_requirement_keeps_prompt_when_sandbox_rejection_is_disabled() {
-        let policy = AskForApproval::Reject(RejectConfig {
-            sandbox_approval: false,
-            rules: true,
-            mcp_elicitations: true,
-        });
-
-        let requirement = default_exec_approval_requirement(
-            policy,
-            &SandboxPolicy {
-                mode: SandboxMode::ReadOnly,
-                network_access: NetworkAccess::Restricted,
-            },
-        );
-
-        assert_eq!(
-            requirement,
-            ExecApprovalRequirement::NeedsApproval {
-                reason: None,
-                proposed_execpolicy_amendment: None,
-            }
-        );
-    }
-
-    #[test]
-    fn test_exec_policy_amendment() {
-        let amendment = ExecPolicyAmendment::new(vec!["cargo".to_string(), "build".to_string()]);
-        assert_eq!(amendment.command_pattern(), vec!["cargo", "build"]);
-    }
-
-    #[test]
-    fn test_proposed_amendment_extraction() {
-        let req = ExecApprovalRequirement::NeedsApproval {
-            reason: Some("test".to_string()),
-            proposed_execpolicy_amendment: Some(ExecPolicyAmendment::new(vec!["test".to_string()])),
-        };
-        assert!(req.proposed_execpolicy_amendment().is_some());
-
-        let req = ExecApprovalRequirement::Forbidden {
-            reason: "forbidden".to_string(),
-        };
-        assert!(req.proposed_execpolicy_amendment().is_none());
     }
 
     #[tokio::test]

@@ -22,14 +22,6 @@ pub(super) fn approval_policy_rejects_prompt(
     requires_rule_prompt: bool,
     requires_sandbox_prompt: bool,
 ) -> bool {
-    match approval_policy {
-        AskForApproval::Never => requires_rule_prompt || requires_sandbox_prompt,
-        AskForApproval::Reject(reject_config) => {
-            (requires_rule_prompt && reject_config.rejects_rules_approval())
-                || (requires_sandbox_prompt && reject_config.rejects_sandbox_approval())
-        }
-        AskForApproval::OnFailure | AskForApproval::OnRequest | AskForApproval::UnlessTrusted => {
-            false
-        }
-    }
+    (requires_rule_prompt && approval_policy.rejects_rule_prompt())
+        || (requires_sandbox_prompt && approval_policy.rejects_sandbox_prompt())
 }
