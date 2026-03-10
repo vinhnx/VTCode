@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-use super::orchestrator::{Approvable, Sandboxable, SandboxablePreference};
+use super::sandboxing::{Sandboxable, SandboxablePreference};
 use super::tool_handler::{
     ToolCallError, ToolHandler, ToolInvocation, ToolKind, ToolOutput, ToolPayload,
 };
@@ -168,13 +168,9 @@ impl Sandboxable for ListDirHandler {
     fn sandbox_preference(&self) -> SandboxablePreference {
         SandboxablePreference::Auto
     }
-}
 
-impl<R> Approvable<R> for ListDirHandler {
-    type ApprovalKey = String;
-
-    fn approval_key(&self, _req: &R) -> Self::ApprovalKey {
-        "list_dir".to_string()
+    fn escalate_on_failure(&self) -> bool {
+        false
     }
 }
 
@@ -280,6 +276,11 @@ pub fn create_list_dir_tool() -> super::tool_handler::ToolSpec {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn list_dir_handler_disables_sandbox_retry() {
+        assert!(!ListDirHandler::new().escalate_on_failure());
+    }
 
     #[test]
     fn test_list_dir_handler_kind() {

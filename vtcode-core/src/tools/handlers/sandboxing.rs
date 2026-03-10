@@ -20,6 +20,13 @@ use crate::exec_policy::default_exec_approval_requirement as canonical_default_e
 pub use crate::exec_policy::{
     AskForApproval, ExecApprovalRequirement, ExecPolicyAmendment, RejectConfig,
 };
+use crate::sandboxing::{
+    CommandSpec as CanonicalCommandSpec, ExecEnv as CanonicalExecEnv,
+    ExecExpiration as CanonicalExecExpiration, ResourceLimits,
+    SandboxManager as CanonicalSandboxManager, SandboxPolicy as CanonicalSandboxPolicy,
+    SandboxTransformError as CanonicalSandboxTransformError, SandboxType as CanonicalSandboxType,
+    SeccompProfile,
+};
 
 use super::tool_handler::{ToolSession, TurnContext};
 
@@ -219,7 +226,7 @@ pub trait Approvable<Req>: Send + Sync {
 // ============================================================================
 
 /// Sandbox policy configuration (from Codex protocol)
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct SandboxPolicy {
     pub mode: SandboxMode,
     pub network_access: NetworkAccess,
@@ -251,6 +258,64 @@ pub enum NetworkAccess {
     Full,
 }
 
+const LEGACY_EXTERNAL_SANDBOX_DESCRIPTION: &str = "legacy handler external sandbox";
+
+impl SandboxPolicy {
+    #[must_use]
+    pub fn requires_approval_prompt(&self) -> bool {
+        !matches!(
+            self.mode,
+            SandboxMode::DangerFullAccess | SandboxMode::ExternalSandbox
+        )
+    }
+
+    #[must_use]
+    pub fn uses_runtime_sandbox(&self) -> bool {
+        matches!(
+            self.mode,
+            SandboxMode::ReadOnly | SandboxMode::WorkspaceWrite
+        )
+    }
+
+    #[must_use]
+    pub fn to_canonical_policy(&self, sandbox_cwd: &Path) -> CanonicalSandboxPolicy {
+        match (&self.mode, &self.network_access) {
+            (SandboxMode::ReadOnly, NetworkAccess::Restricted | NetworkAccess::Limited) => {
+                CanonicalSandboxPolicy::read_only()
+            }
+            (SandboxMode::ReadOnly, NetworkAccess::Full) => {
+                CanonicalSandboxPolicy::read_only_with_full_network()
+            }
+            (SandboxMode::WorkspaceWrite, NetworkAccess::Restricted | NetworkAccess::Limited) => {
+                CanonicalSandboxPolicy::workspace_write(vec![sandbox_cwd.to_path_buf()])
+            }
+            (SandboxMode::WorkspaceWrite, NetworkAccess::Full) => {
+                CanonicalSandboxPolicy::workspace_write_full(
+                    vec![sandbox_cwd.to_path_buf()],
+                    Vec::new(),
+                    None,
+                    ResourceLimits::default(),
+                    SeccompProfile::strict().with_network(),
+                )
+            }
+            (SandboxMode::DangerFullAccess, _) => CanonicalSandboxPolicy::full_access(),
+            (SandboxMode::ExternalSandbox, _) => CanonicalSandboxPolicy::ExternalSandbox {
+                description: LEGACY_EXTERNAL_SANDBOX_DESCRIPTION.to_string(),
+            },
+        }
+    }
+
+    #[must_use]
+    pub fn to_canonical_policy_for_turn(&self, turn: &TurnContext) -> CanonicalSandboxPolicy {
+        self.to_canonical_policy(&turn.cwd)
+    }
+}
+
+#[must_use]
+pub fn canonical_sandbox_policy(turn: &TurnContext) -> CanonicalSandboxPolicy {
+    turn.sandbox_policy.get().to_canonical_policy_for_turn(turn)
+}
+
 /// Compute default exec approval requirement (from Codex)
 pub fn default_exec_approval_requirement(
     policy: AskForApproval,
@@ -263,10 +328,7 @@ pub fn default_exec_approval_requirement(
 }
 
 fn sandbox_requires_approval_prompt(sandbox_policy: &SandboxPolicy) -> bool {
-    !matches!(
-        sandbox_policy.mode,
-        SandboxMode::DangerFullAccess | SandboxMode::ExternalSandbox
-    )
+    sandbox_policy.requires_approval_prompt()
 }
 
 // ============================================================================
@@ -316,6 +378,17 @@ pub enum SandboxType {
     LinuxSandbox,
 }
 
+impl SandboxType {
+    fn from_canonical(value: CanonicalSandboxType) -> Self {
+        match value {
+            CanonicalSandboxType::None => Self::None,
+            CanonicalSandboxType::MacosSeatbelt => Self::Seatbelt,
+            CanonicalSandboxType::LinuxLandlock => Self::LinuxSandbox,
+            CanonicalSandboxType::WindowsRestrictedToken => Self::None,
+        }
+    }
+}
+
 /// Sandbox attempt context (from Codex)
 pub struct SandboxAttempt<'a> {
     pub sandbox: SandboxType,
@@ -327,14 +400,26 @@ pub struct SandboxAttempt<'a> {
 impl<'a> SandboxAttempt<'a> {
     /// Create execution environment for a command spec
     pub fn env_for(&self, spec: CommandSpec) -> Result<ExecEnv, SandboxTransformError> {
-        Ok(ExecEnv {
-            program: spec.program,
-            args: spec.args,
-            cwd: spec.cwd,
-            env: spec.env,
-            timeout_ms: spec.timeout_ms,
-            sandbox: self.sandbox,
-        })
+        let canonical_policy = if self.sandbox == SandboxType::None {
+            CanonicalSandboxPolicy::full_access()
+        } else {
+            self.policy.to_canonical_policy(self.sandbox_cwd)
+        };
+        let canonical_spec = CanonicalCommandSpec::new(spec.program)
+            .with_args(spec.args)
+            .with_cwd(spec.cwd)
+            .with_env(spec.env)
+            .with_expiration(CanonicalExecExpiration::from(spec.timeout_ms));
+        let canonical_env = CanonicalSandboxManager::new()
+            .transform(
+                canonical_spec,
+                &canonical_policy,
+                self.sandbox_cwd,
+                self.codex_linux_sandbox_exe.map(PathBuf::as_path),
+            )
+            .map_err(SandboxTransformError::from)?;
+
+        Ok(ExecEnv::from_canonical(canonical_env))
     }
 }
 
@@ -359,6 +444,19 @@ pub struct ExecEnv {
     pub sandbox: SandboxType,
 }
 
+impl ExecEnv {
+    fn from_canonical(env: CanonicalExecEnv) -> Self {
+        Self {
+            program: env.program.to_string_lossy().into_owned(),
+            args: env.args,
+            cwd: env.cwd,
+            env: env.env,
+            timeout_ms: env.expiration.timeout_ms(),
+            sandbox: SandboxType::from_canonical(env.sandbox_type),
+        }
+    }
+}
+
 /// Error during sandbox transformation
 #[derive(Debug, thiserror::Error)]
 pub enum SandboxTransformError {
@@ -370,6 +468,19 @@ pub enum SandboxTransformError {
 
     #[error("sandbox configuration error: {0}")]
     ConfigError(String),
+}
+
+impl From<CanonicalSandboxTransformError> for SandboxTransformError {
+    fn from(value: CanonicalSandboxTransformError) -> Self {
+        match value {
+            CanonicalSandboxTransformError::MissingSandboxExecutable => {
+                Self::MissingSandboxExecutable
+            }
+            CanonicalSandboxTransformError::UnavailableSandboxType(_) => Self::SandboxUnavailable,
+            CanonicalSandboxTransformError::CreationFailed(message)
+            | CanonicalSandboxTransformError::InvalidPolicy(message) => Self::ConfigError(message),
+        }
+    }
 }
 
 // ============================================================================
@@ -418,7 +529,29 @@ impl SandboxManager {
             SandboxablePreference::Forbid => SandboxType::None,
             SandboxablePreference::Require => self.platform_sandbox(),
             SandboxablePreference::Auto => {
-                if matches!(policy.mode, SandboxMode::DangerFullAccess) {
+                if policy.uses_runtime_sandbox() {
+                    self.platform_sandbox()
+                } else {
+                    SandboxType::None
+                }
+            }
+        }
+    }
+
+    pub fn select_initial_for_canonical(
+        &self,
+        policy: &CanonicalSandboxPolicy,
+        preference: SandboxablePreference,
+    ) -> SandboxType {
+        match preference {
+            SandboxablePreference::Forbid => SandboxType::None,
+            SandboxablePreference::Require => self.platform_sandbox(),
+            SandboxablePreference::Auto => {
+                if matches!(
+                    policy,
+                    CanonicalSandboxPolicy::DangerFullAccess
+                        | CanonicalSandboxPolicy::ExternalSandbox { .. }
+                ) {
                     SandboxType::None
                 } else {
                     self.platform_sandbox()
@@ -510,6 +643,7 @@ pub async fn execute_env(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::{Path, PathBuf};
 
     #[test]
     fn test_external_sandbox_skips_exec_approval_on_request() {
@@ -570,6 +704,107 @@ mod tests {
             ExecApprovalRequirement::Forbidden {
                 reason: "approval policy rejected sandbox approval prompt".to_string(),
             }
+        );
+    }
+
+    #[test]
+    fn read_only_restricted_maps_to_canonical_read_only() {
+        let policy = SandboxPolicy {
+            mode: SandboxMode::ReadOnly,
+            network_access: NetworkAccess::Restricted,
+        };
+
+        assert_eq!(
+            policy.to_canonical_policy(Path::new("/workspace")),
+            CanonicalSandboxPolicy::read_only()
+        );
+    }
+
+    #[test]
+    fn read_only_full_maps_to_canonical_full_network() {
+        let policy = SandboxPolicy {
+            mode: SandboxMode::ReadOnly,
+            network_access: NetworkAccess::Full,
+        };
+
+        assert_eq!(
+            policy.to_canonical_policy(Path::new("/workspace")),
+            CanonicalSandboxPolicy::read_only_with_full_network()
+        );
+    }
+
+    #[test]
+    fn workspace_write_restricted_maps_to_canonical_workspace_write() {
+        let root = PathBuf::from("/workspace");
+        let policy = SandboxPolicy {
+            mode: SandboxMode::WorkspaceWrite,
+            network_access: NetworkAccess::Restricted,
+        };
+
+        assert_eq!(
+            policy.to_canonical_policy(&root),
+            CanonicalSandboxPolicy::workspace_write(vec![root])
+        );
+    }
+
+    #[test]
+    fn workspace_write_full_maps_to_canonical_workspace_write_with_network() {
+        let root = PathBuf::from("/workspace");
+        let policy = SandboxPolicy {
+            mode: SandboxMode::WorkspaceWrite,
+            network_access: NetworkAccess::Full,
+        };
+
+        assert_eq!(
+            policy.to_canonical_policy(&root),
+            CanonicalSandboxPolicy::workspace_write_full(
+                vec![root],
+                Vec::new(),
+                None,
+                ResourceLimits::default(),
+                SeccompProfile::strict().with_network(),
+            )
+        );
+    }
+
+    #[test]
+    fn danger_full_access_maps_to_canonical_full_access() {
+        let policy = SandboxPolicy {
+            mode: SandboxMode::DangerFullAccess,
+            network_access: NetworkAccess::Restricted,
+        };
+
+        assert_eq!(
+            policy.to_canonical_policy(Path::new("/workspace")),
+            CanonicalSandboxPolicy::full_access()
+        );
+    }
+
+    #[test]
+    fn external_sandbox_maps_to_canonical_external_sandbox() {
+        let policy = SandboxPolicy {
+            mode: SandboxMode::ExternalSandbox,
+            network_access: NetworkAccess::Full,
+        };
+
+        assert_eq!(
+            policy.to_canonical_policy(Path::new("/workspace")),
+            CanonicalSandboxPolicy::ExternalSandbox {
+                description: LEGACY_EXTERNAL_SANDBOX_DESCRIPTION.to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn limited_network_maps_to_restricted_network() {
+        let policy = SandboxPolicy {
+            mode: SandboxMode::WorkspaceWrite,
+            network_access: NetworkAccess::Limited,
+        };
+
+        assert_eq!(
+            policy.to_canonical_policy(Path::new("/workspace")),
+            CanonicalSandboxPolicy::workspace_write(vec![PathBuf::from("/workspace")])
         );
     }
 

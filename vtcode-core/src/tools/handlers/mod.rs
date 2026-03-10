@@ -12,7 +12,7 @@
 //! - [`tool_handler`]: Core traits and types (ToolHandler, ToolKind, ToolPayload, etc.)
 //! - [`sandboxing`]: Approval, sandbox, and runtime traits (from Codex)
 //! - [`tool_orchestrator`]: Approval → sandbox → attempt → retry orchestration
-//! - [`orchestrator`]: Legacy sandbox management (for backwards compatibility)
+//! - [`orchestrator`]: Legacy compatibility shim over the active sandbox/orchestrator modules
 //! - [`events`]: Event emission for tool lifecycle (begin, success, failure)
 //! - [`router`]: Tool routing and dispatch (ToolRouter, DispatchRegistry, DispatchRegistryBuilder)
 //! - [`adapter`]: Bidirectional adapters between ToolHandler and Tool trait

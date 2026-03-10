@@ -10,7 +10,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use serde::Deserialize;
 
-use super::orchestrator::{Approvable, Sandboxable, SandboxablePreference};
+use super::sandboxing::{Sandboxable, SandboxablePreference};
 use super::tool_handler::{
     ShellToolCallParams, ToolCallError, ToolHandler, ToolInvocation, ToolKind, ToolOutput,
     ToolPayload,
@@ -118,14 +118,6 @@ impl Sandboxable for ShellHandler {
     }
 }
 
-impl<R> Approvable<R> for ShellHandler {
-    type ApprovalKey = String;
-
-    fn approval_key(&self, _req: &R) -> Self::ApprovalKey {
-        "shell".to_string()
-    }
-}
-
 #[async_trait]
 impl ToolHandler for ShellHandler {
     fn kind(&self) -> ToolKind {
@@ -224,6 +216,11 @@ pub fn create_shell_tool() -> super::tool_handler::ToolSpec {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shell_handler_keeps_sandbox_retry_enabled() {
+        assert!(ShellHandler::new().escalate_on_failure());
+    }
 
     #[tokio::test]
     async fn test_shell_handler_echo() {

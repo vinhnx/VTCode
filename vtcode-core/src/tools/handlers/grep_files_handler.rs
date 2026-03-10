@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-use super::orchestrator::{Approvable, Sandboxable, SandboxablePreference};
+use super::sandboxing::{Sandboxable, SandboxablePreference};
 use super::tool_handler::{
     ToolCallError, ToolHandler, ToolInvocation, ToolKind, ToolOutput, ToolPayload,
 };
@@ -246,13 +246,9 @@ impl Sandboxable for GrepFilesHandler {
     fn sandbox_preference(&self) -> SandboxablePreference {
         SandboxablePreference::Auto
     }
-}
 
-impl<R> Approvable<R> for GrepFilesHandler {
-    type ApprovalKey = String;
-
-    fn approval_key(&self, _req: &R) -> Self::ApprovalKey {
-        "grep_files".to_string()
+    fn escalate_on_failure(&self) -> bool {
+        false
     }
 }
 
@@ -382,6 +378,11 @@ pub fn create_grep_files_tool() -> super::tool_handler::ToolSpec {
 mod tests {
     use super::super::tool_handler::ToolSpec;
     use super::*;
+
+    #[test]
+    fn grep_files_handler_disables_sandbox_retry() {
+        assert!(!GrepFilesHandler::new().escalate_on_failure());
+    }
 
     #[test]
     fn test_grep_files_handler_kind() {
