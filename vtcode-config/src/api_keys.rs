@@ -10,6 +10,7 @@ use std::env;
 use std::str::FromStr;
 
 use crate::auth::CustomApiKeyStorage;
+use crate::constants::defaults;
 use crate::models::Provider;
 
 /// API key sources for different providers
@@ -79,10 +80,24 @@ impl ApiKeySources {
     }
 }
 
-fn inferred_api_key_env(provider: &str) -> &'static str {
-    Provider::from_str(provider)
-        .map(|resolved| resolved.default_api_key_env())
-        .unwrap_or("GEMINI_API_KEY")
+pub fn api_key_env_var(provider: &str) -> String {
+    let trimmed = provider.trim();
+    if trimmed.is_empty() {
+        return defaults::DEFAULT_API_KEY_ENV.to_owned();
+    }
+
+    Provider::from_str(trimmed)
+        .map(|resolved| resolved.default_api_key_env().to_owned())
+        .unwrap_or_else(|_| format!("{}_API_KEY", trimmed.to_ascii_uppercase()))
+}
+
+pub fn resolve_api_key_env(provider: &str, configured_env: &str) -> String {
+    let trimmed = configured_env.trim();
+    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case(defaults::DEFAULT_API_KEY_ENV) {
+        api_key_env_var(provider)
+    } else {
+        trimmed.to_owned()
+    }
 }
 
 #[cfg(test)]
@@ -172,10 +187,10 @@ pub fn load_dotenv() -> Result<()> {
 pub fn get_api_key(provider: &str, sources: &ApiKeySources) -> Result<String> {
     let normalized_provider = provider.to_lowercase();
     // Automatically infer the correct environment variable based on provider
-    let inferred_env = inferred_api_key_env(&normalized_provider);
+    let inferred_env = api_key_env_var(&normalized_provider);
 
     // Try the inferred environment variable first
-    if let Some(key) = read_env_var(inferred_env)
+    if let Some(key) = read_env_var(&inferred_env)
         && !key.is_empty()
     {
         return Ok(key);
@@ -608,6 +623,28 @@ mod tests {
                 assert!(result.is_ok());
                 assert_eq!(result.unwrap(), "test-lmstudio-env-key");
             },
+        );
+    }
+
+    #[test]
+    fn api_key_env_var_uses_provider_defaults() {
+        assert_eq!(api_key_env_var("minimax"), "MINIMAX_API_KEY");
+        assert_eq!(api_key_env_var("huggingface"), "HF_TOKEN");
+    }
+
+    #[test]
+    fn resolve_api_key_env_uses_provider_default_for_placeholder() {
+        assert_eq!(
+            resolve_api_key_env("minimax", defaults::DEFAULT_API_KEY_ENV),
+            "MINIMAX_API_KEY"
+        );
+    }
+
+    #[test]
+    fn resolve_api_key_env_preserves_explicit_override() {
+        assert_eq!(
+            resolve_api_key_env("openai", "CUSTOM_OPENAI_KEY"),
+            "CUSTOM_OPENAI_KEY"
         );
     }
 }

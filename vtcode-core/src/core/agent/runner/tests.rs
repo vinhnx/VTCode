@@ -243,6 +243,41 @@ async fn new_with_preloaded_config_uses_override_snapshot() {
 }
 
 #[tokio::test]
+async fn core_agent_config_normalizes_api_key_env_and_checkpoint_dir() {
+    let temp = TempDir::new().expect("tempdir");
+    let absolute_checkpoint_dir = temp.path().join("snapshots-absolute");
+
+    let mut vt_cfg = VTCodeConfig::default();
+    vt_cfg.agent.provider = "minimax".to_string();
+    vt_cfg.agent.api_key_env = crate::config::constants::defaults::DEFAULT_API_KEY_ENV.to_string();
+    vt_cfg.agent.checkpointing.storage_dir = Some(absolute_checkpoint_dir.display().to_string());
+
+    let runner = AgentRunner::new_with_thread_bootstrap_and_config(
+        AgentType::Single,
+        ModelId::default(),
+        "test-key".to_string(),
+        temp.path().to_path_buf(),
+        "thread-test-normalized-config".to_string(),
+        RunnerSettings {
+            reasoning_effort: None,
+            verbosity: None,
+        },
+        None,
+        ThreadBootstrap::new(None),
+        vt_cfg,
+    )
+    .await
+    .expect("runner");
+
+    let config = runner.core_agent_config();
+    assert_eq!(config.api_key_env, "MINIMAX_API_KEY");
+    assert_eq!(
+        config.checkpointing_storage_dir,
+        Some(absolute_checkpoint_dir)
+    );
+}
+
+#[tokio::test]
 async fn review_tool_allowlist_excludes_mutating_and_plan_only_tools() {
     let temp = TempDir::new().expect("tempdir");
     let runner = AgentRunner::new_with_thread_bootstrap_and_config(

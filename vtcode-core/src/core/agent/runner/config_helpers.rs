@@ -1,6 +1,11 @@
 use super::AgentRunner;
 use crate::config::VTCodeConfig;
+#[cfg(test)]
+use crate::config::api_keys::resolve_api_key_env;
+#[cfg(test)]
 use crate::config::types::{AgentConfig as CoreAgentConfig, ModelSelectionSource};
+#[cfg(test)]
+use crate::core::agent::config::resolve_checkpointing_storage_dir;
 use crate::core::agent::task::ContextItem;
 use crate::core::agent::task::Task;
 
@@ -33,21 +38,15 @@ impl AgentRunner {
         self.session_config.effective()
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub(super) fn core_agent_config(&self) -> CoreAgentConfig {
         let cfg = self.config();
-        let checkpoint_dir = cfg
-            .agent
-            .checkpointing
-            .storage_dir
-            .as_ref()
-            .map(|dir| self._workspace.join(dir));
 
         CoreAgentConfig {
             model: self.model.clone(),
             api_key: self._api_key.clone(),
             provider: cfg.agent.provider.clone(),
-            api_key_env: cfg.agent.api_key_env.clone(),
+            api_key_env: resolve_api_key_env(&cfg.agent.provider, &cfg.agent.api_key_env),
             workspace: self._workspace.clone(),
             verbose: false,
             quiet: self.quiet,
@@ -58,7 +57,10 @@ impl AgentRunner {
             model_source: ModelSelectionSource::WorkspaceConfig,
             custom_api_keys: cfg.agent.custom_api_keys.clone(),
             checkpointing_enabled: cfg.agent.checkpointing.enabled,
-            checkpointing_storage_dir: checkpoint_dir,
+            checkpointing_storage_dir: resolve_checkpointing_storage_dir(
+                &self._workspace,
+                cfg.agent.checkpointing.storage_dir.as_deref(),
+            ),
             checkpointing_max_snapshots: cfg.agent.checkpointing.max_snapshots,
             checkpointing_max_age_days: cfg.agent.checkpointing.max_age_days,
             max_conversation_turns: cfg.agent.max_conversation_turns,
