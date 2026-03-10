@@ -1,5 +1,5 @@
-use serde_json::Value;
 use crate::config::HookCommandConfig;
+use serde_json::Value;
 
 use crate::hooks::lifecycle::types::HookMessage;
 

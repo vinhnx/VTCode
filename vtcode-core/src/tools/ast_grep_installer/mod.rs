@@ -4,10 +4,10 @@ mod state;
 
 use std::path::PathBuf;
 
-use anyhow::{Context, Result, bail};
 use crate::tools::ast_grep_binary::{
     managed_ast_grep_bin_dir, resolve_ast_grep_binary_from_env_and_fs,
 };
+use anyhow::{Context, Result, bail};
 
 use self::archive::{ast_grep_version, install_archive};
 use self::release::{

@@ -6,11 +6,11 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use chrono::Utc;
+#[cfg(test)]
+use std::path::Path;
 use vtcode_config::OpenResponsesConfig;
 #[cfg(test)]
 use vtcode_core::exec::events::ThreadStartedEvent;
-#[cfg(test)]
-use std::path::Path;
 use vtcode_core::exec::events::{
     ItemCompletedEvent, ItemStartedEvent, ThreadEvent, ThreadItem, ThreadItemDetails,
     ToolCallStatus, ToolInvocationItem, ToolOutputItem, TurnCompletedEvent, TurnFailedEvent,

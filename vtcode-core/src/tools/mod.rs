@@ -203,10 +203,10 @@ pub const INTERCEPT_APPLY_PATCH_ID: &str = "intercept_apply_patch";
 pub const NEW_SHARED_TRACKER_ID: &str = "new_shared_tracker";
 
 // Re-export main types and traits for backward compatibility
+pub use ast_grep_installer::{AstGrepInstallOutcome, AstGrepStatus};
 pub use async_pipeline::{
     AsyncToolPipeline, ExecutionContext, ExecutionPriority, ToolRequest as AsyncToolRequest,
 };
-pub use ast_grep_installer::{AstGrepInstallOutcome, AstGrepStatus};
 pub use autonomous_executor::{AutonomousExecutor, AutonomousPolicy};
 pub use cache::FileCache;
 pub use command_cache::PermissionCache;

@@ -15,9 +15,7 @@ pub(crate) async fn append_optional_search_tools_highlight(
     }
 }
 
-pub(crate) async fn render_optional_search_tools_notice(
-    renderer: &mut AnsiRenderer,
-) -> Result<()> {
+pub(crate) async fn render_optional_search_tools_notice(renderer: &mut AnsiRenderer) -> Result<()> {
     if let Some(notice) = take_optional_search_tools_notice().await {
         notice.render(renderer)?;
     }

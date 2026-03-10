@@ -1,6 +1,6 @@
 use super::types::{BackgroundTaskGuard, SessionState, SessionUISetup};
 use crate::agent::runloop::ResumeSession;
-use crate::agent::runloop::ui::{build_inline_header_context, render_session_banner};
+use crate::agent::runloop::ui::build_inline_header_context;
 use crate::agent::runloop::unified::reasoning::{
     model_supports_reasoning, resolve_reasoning_visibility,
 };
@@ -239,13 +239,6 @@ pub(crate) async fn initialize_session_ui(
         .as_ref()
         .map(|cfg| cfg.agent.reasoning_effort.as_str().to_string())
         .unwrap_or_else(|| config.reasoning_effort.as_str().to_string());
-    render_session_banner(
-        &mut renderer,
-        config,
-        &session_state.session_bootstrap,
-        &config.model,
-        &reasoning_label,
-    )?;
 
     if let Some(bridge) = ide_context_bridge.as_mut() {
         match bridge.snapshot() {

@@ -3,7 +3,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, anyhow, bail};
 use vtcode_core::config::VTCodeConfig;
-use vtcode_core::config::WorkspaceTrustLevel;
 use vtcode_core::config::models::ModelId;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::runner::{AgentRunner, RunnerSettings};
@@ -11,7 +10,7 @@ use vtcode_core::core::agent::task::{ContextItem, Task};
 use vtcode_core::core::agent::types::AgentType;
 use vtcode_core::utils::colors::style;
 
-use crate::startup::workspace_trust_level;
+use crate::startup::require_full_auto_workspace_trust;
 
 const AUTO_SESSION_PREFIX: &str = "auto-task";
 const AUTO_TASK_ID: &str = "auto-task";
@@ -27,25 +26,8 @@ pub async fn handle_auto_task_command(
         bail!("Automation prompt is empty. Provide instructions after --auto/--full-auto.");
     }
 
-    let trust_level = workspace_trust_level(&config.workspace)
-        .await
-        .context("Failed to determine workspace trust level")?;
-
-    match trust_level {
-        Some(WorkspaceTrustLevel::FullAuto) => {}
-        Some(level) => {
-            bail!(
-                "Workspace trust level '{level}' does not permit autonomous runs. Start an interactive \
-                 session and upgrade trust to full auto before using --auto/--full-auto."
-            );
-        }
-        None => {
-            bail!(
-                "Workspace is not trusted. Start vtcode interactively once and mark the workspace \
-                 as full auto before using --auto/--full-auto."
-            );
-        }
-    }
+    require_full_auto_workspace_trust(&config.workspace, "autonomous runs", "--auto/--full-auto")
+        .await?;
 
     let automation_cfg = &vt_cfg.automation.full_auto;
     if !automation_cfg.enabled {

@@ -1,11 +1,9 @@
 use std::fs::{self, File};
 use std::path::PathBuf;
 
+use crate::tools::ast_grep_binary::{alias_ast_grep_binary_name, canonical_ast_grep_binary_name};
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
-use crate::tools::ast_grep_binary::{
-    alias_ast_grep_binary_name, canonical_ast_grep_binary_name,
-};
 
 #[cfg(test)]
 use super::super::install_support::vtcode_state_dir_from_home;

@@ -106,18 +106,4 @@ vtchat.io
 
 ---
 
-check for unused, redundant, dead code from /src and remove completely, cleanup. use /rust-skills and enhance impl. review overall changes again carefully, can you do better? continue with your careful recommendations, proceed with outcome. KISS and DRY, do repeatly until all done, don't stop ---> do not leave unused, redundant, dead code
-
----
-
-The next careful target, if continuing, is src/workspace_trust.rs; anything deeper in model-selection now needs a deliberate core-safe DTO boundary before moving more into vtcode-core
-
-> continue
-
----
-
-check for unused, redundant, dead code from /src and remove completely, cleanup. use /rust-skills and enhance impl. review overall changes again carefully, can you do better? continue with your careful recommendations, proceed with outcome. KISS and DRY, do repeatly until all done, don't stop ---> do not leave unused, redundant, dead code
-
----
-
 https://defuddle.md/x.com/akshay_pachaar/status/2031021906254766128

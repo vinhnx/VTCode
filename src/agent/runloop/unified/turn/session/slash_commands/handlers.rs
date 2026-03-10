@@ -38,7 +38,9 @@ mod ui;
 mod update;
 #[path = "workspace.rs"]
 mod workspace;
-pub(super) use apps::{handle_launch_editor, handle_launch_git, handle_new_session, handle_open_docs};
+pub(super) use apps::{
+    handle_launch_editor, handle_launch_git, handle_new_session, handle_open_docs,
+};
 pub(super) use diagnostics::{
     handle_run_doctor, handle_show_status, handle_start_doctor_interactive,
     handle_start_terminal_setup,
@@ -199,7 +201,9 @@ pub(super) async fn handle_compact_conversation(
     Ok(SlashCommandControl::Continue)
 }
 
-pub(super) async fn handle_clear_screen(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+pub(super) async fn handle_clear_screen(
+    ctx: SlashCommandContext<'_>,
+) -> Result<SlashCommandControl> {
     ctx.renderer.clear_screen();
     ctx.renderer.line(
         MessageStyle::Info,

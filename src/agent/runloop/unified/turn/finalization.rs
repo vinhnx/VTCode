@@ -2,12 +2,12 @@
 use anyhow::Result;
 use std::io;
 use std::path::PathBuf;
+use vtcode_core::hooks::{LifecycleHookEngine, SessionEndReason};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::notifications::set_global_terminal_focused;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::{SessionArchive, SessionMessage};
 use vtcode_core::utils::transcript;
-use vtcode_core::hooks::{LifecycleHookEngine, SessionEndReason};
 use vtcode_tui::InlineHandle;
 
 use crate::agent::runloop::unified::async_mcp_manager::AsyncMcpManager;

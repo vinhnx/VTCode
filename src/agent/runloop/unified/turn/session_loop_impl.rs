@@ -36,7 +36,6 @@ use crate::agent::runloop::unified::plan_mode_state::transition_to_plan_mode;
 
 use super::super::context::TurnLoopResult as RunLoopTurnLoopResult;
 use super::super::finalization::finalize_session;
-// use super::finalization::finalize_session;
 use vtcode_core::core::agent::steering::SteeringMessage;
 
 use crate::agent::runloop::unified::palettes::ActivePalette;

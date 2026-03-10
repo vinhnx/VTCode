@@ -2,7 +2,7 @@ use std::io::{self, Write};
 use std::path::Path;
 
 use anstyle::Ansi256Color;
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use vtcode_commons::color256_theme::rgb_to_ansi256_for_theme;
 use vtcode_core::utils::dot_config::{
     WorkspaceTrustLevel, load_workspace_trust_level, update_workspace_trust,
@@ -12,33 +12,26 @@ use vtcode_core::utils::{ansi_capabilities, ansi_capabilities::ColorScheme};
 
 const WARNING_RGB: (u8, u8, u8) = (166, 51, 51);
 const INFO_RGB: (u8, u8, u8) = (217, 154, 78);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum WorkspaceTrustGateResult {
-    Trusted(WorkspaceTrustLevel),
-    Aborted,
-}
+const CHOICE_PROMPT: &str = "Enter your choice (a/q): ";
+const INVALID_CHOICE_MESSAGE: &str = "Invalid selection. Please enter 'a' or 'q'.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TrustSelection {
     FullAuto,
-    ToolsPolicy,
     Quit,
 }
 
-pub(crate) async fn ensure_workspace_trust(
-    workspace: &Path,
-    full_auto_requested: bool,
-) -> Result<WorkspaceTrustGateResult> {
-    let current_level = workspace_trust_level(workspace).await?;
+pub(crate) async fn ensure_full_auto_workspace_trust(workspace: &Path) -> Result<bool> {
+    let current_level = load_workspace_trust_level(workspace)
+        .await
+        .context("Failed to determine workspace trust level for benchmark command")?;
 
-    if let Some(level) = current_level
-        && (!full_auto_requested || level == WorkspaceTrustLevel::FullAuto)
-    {
-        return Ok(WorkspaceTrustGateResult::Trusted(level));
+    if current_level == Some(WorkspaceTrustLevel::FullAuto) {
+        return Ok(true);
     }
 
-    let require_full_auto_upgrade = full_auto_requested && current_level.is_some();
+    let require_full_auto_upgrade = current_level.is_some();
+    let palette = ColorPalette::default();
     render_prompt(workspace, require_full_auto_upgrade);
 
     match read_user_selection()? {
@@ -47,37 +40,34 @@ pub(crate) async fn ensure_workspace_trust(
                 .await
                 .context("Failed to persist full-auto workspace trust")?;
             let msg = "Workspace marked as trusted with full auto capabilities.";
-            let palette = ColorPalette::default();
             println!("{}", render_styled(msg, palette.success, None));
-            Ok(WorkspaceTrustGateResult::Trusted(
-                WorkspaceTrustLevel::FullAuto,
-            ))
-        }
-        TrustSelection::ToolsPolicy => {
-            update_workspace_trust(workspace, WorkspaceTrustLevel::ToolsPolicy)
-                .await
-                .context("Failed to persist tools-policy workspace trust")?;
-            let msg = "Workspace marked as trusted with tools policy safeguards.";
-            let palette = ColorPalette::default();
-            println!("{}", render_styled(msg, palette.success, None));
-            if full_auto_requested {
-                let msg1 = "Full-auto mode requires the full auto trust option.";
-                println!("{}", render_styled(msg1, palette.warning, None));
-                let msg2 =
-                    "Rerun with --full-auto after upgrading trust or start without --full-auto.";
-                println!("{}", render_styled(msg2, palette.warning, None));
-                return Ok(WorkspaceTrustGateResult::Aborted);
-            }
-            Ok(WorkspaceTrustGateResult::Trusted(
-                WorkspaceTrustLevel::ToolsPolicy,
-            ))
+            Ok(true)
         }
         TrustSelection::Quit => {
-            let msg = "Workspace not trusted. Exiting chat session.";
-            let palette = ColorPalette::default();
+            let msg = "Workspace not trusted. Exiting benchmark command.";
             println!("{}", render_styled(msg, palette.warning, None));
-            Ok(WorkspaceTrustGateResult::Aborted)
+            Ok(false)
         }
+    }
+}
+
+pub(crate) async fn require_full_auto_workspace_trust(
+    workspace: &Path,
+    denied_action: &str,
+    command_name: &str,
+) -> Result<()> {
+    let trust_level = load_workspace_trust_level(workspace)
+        .await
+        .context("Failed to determine workspace trust level")?;
+
+    match trust_level {
+        Some(WorkspaceTrustLevel::FullAuto) => Ok(()),
+        Some(level) => bail!(
+            "Workspace trust level '{level}' does not permit {denied_action}. Upgrade trust to full auto."
+        ),
+        None => bail!(
+            "Workspace is not trusted. Start VT Code interactively once and mark it as full auto before using {command_name}."
+        ),
     }
 }
 
@@ -95,7 +85,7 @@ fn render_prompt(workspace: &Path, require_full_auto_upgrade: bool) {
     );
     println!();
     print_prompt_line(
-        "Do you want to mark this workspace as trusted?",
+        "VT Code benchmark execution requires full auto workspace trust.",
         PromptTone::Body,
     );
     println!();
@@ -110,49 +100,40 @@ fn render_prompt(workspace: &Path, require_full_auto_upgrade: bool) {
     let requirement_line = if require_full_auto_upgrade {
         "Full-auto mode requires upgrading this workspace to full auto."
     } else {
-        "Select a trust level for this workspace:"
+        "Trust this workspace with full auto capabilities to continue:"
     };
     print_prompt_line(requirement_line, PromptTone::Body);
     println!();
 
     print_prompt_line("  [a] Trust with full auto capabilities", PromptTone::Body);
-    print_prompt_line(
-        "  [w] Trust with tools policy safeguards (recommended)",
-        PromptTone::Body,
-    );
     print_prompt_line("  [q] Quit without trusting", PromptTone::Body);
     println!();
-
-    print_prompt_line("Enter your choice (a/w/q): ", PromptTone::Heading);
-    io::stdout().flush().ok();
 }
 
 fn read_user_selection() -> Result<TrustSelection> {
     loop {
+        print_prompt(CHOICE_PROMPT, PromptTone::Heading)?;
         let mut input = String::new();
         io::stdin()
             .read_line(&mut input)
             .context("Failed to read workspace trust selection")?;
-        match input.trim().to_lowercase().as_str() {
-            "a" => return Ok(TrustSelection::FullAuto),
-            "w" => return Ok(TrustSelection::ToolsPolicy),
-            "q" => return Ok(TrustSelection::Quit),
-            _ => {
-                print_prompt_line(
-                    "Invalid selection. Please enter 'a', 'w', or 'q'.",
-                    PromptTone::Heading,
-                );
-            }
+
+        if let Some(selection) = parse_trust_selection(input.trim()) {
+            return Ok(selection);
         }
+
+        print_prompt_line(INVALID_CHOICE_MESSAGE, PromptTone::Heading);
     }
 }
 
-pub(crate) async fn workspace_trust_level(
-    workspace: &Path,
-) -> Result<Option<WorkspaceTrustLevel>> {
-    load_workspace_trust_level(workspace)
-        .await
-        .context("Failed to load user configuration for trust lookup")
+fn parse_trust_selection(input: &str) -> Option<TrustSelection> {
+    if input.eq_ignore_ascii_case("a") {
+        Some(TrustSelection::FullAuto)
+    } else if input.eq_ignore_ascii_case("q") {
+        Some(TrustSelection::Quit)
+    } else {
+        None
+    }
 }
 
 enum PromptTone {
@@ -160,7 +141,18 @@ enum PromptTone {
     Body,
 }
 
+fn print_prompt(message: &str, tone: PromptTone) -> Result<()> {
+    print!("{}", styled_prompt_message(message, tone));
+    io::stdout()
+        .flush()
+        .context("Failed to flush workspace trust prompt")
+}
+
 fn print_prompt_line(message: &str, tone: PromptTone) {
+    println!("{}", styled_prompt_message(message, tone));
+}
+
+fn styled_prompt_message(message: &str, tone: PromptTone) -> String {
     use anstyle::Color;
 
     let is_light_theme = matches!(ansi_capabilities::detect_color_scheme(), ColorScheme::Light);
@@ -175,10 +167,26 @@ fn print_prompt_line(message: &str, tone: PromptTone) {
         rgb.2,
         is_light_theme,
     )));
-    let styled = if is_heading {
+    if is_heading {
         render_styled(message, color, Some("bold".to_string()))
     } else {
         render_styled(message, color, None)
-    };
-    println!("{}", styled);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_trust_selection_accepts_expected_choices() {
+        assert_eq!(parse_trust_selection("a"), Some(TrustSelection::FullAuto));
+        assert_eq!(parse_trust_selection("q"), Some(TrustSelection::Quit));
+    }
+
+    #[test]
+    fn parse_trust_selection_rejects_unknown_choices() {
+        assert_eq!(parse_trust_selection(""), None);
+        assert_eq!(parse_trust_selection("w"), None);
+    }
 }

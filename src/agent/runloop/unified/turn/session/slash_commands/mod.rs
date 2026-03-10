@@ -3,7 +3,6 @@ use std::sync::Arc;
 use anyhow::Result;
 use tokio::sync::{Notify, RwLock};
 
-// use vtcode_core::commands::init::{GenerateAgentsFileStatus, generate_agents_file};
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::decision_tracker::DecisionTracker;
@@ -11,13 +10,6 @@ use vtcode_core::hooks::SessionEndReason;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::ToolRegistry;
 
-// use vtcode_core::ui::theme;
-use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_tui::{InlineHandle, InlineSession};
-// use vtcode_core::utils::session_archive;
-// use vtcode_core::utils::transcript;
-
-// use super::super::workspace::{bootstrap_config_files, build_workspace_index};
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::model_picker::ModelPickerState;
 pub(crate) use crate::agent::runloop::slash_commands::SlashCommandOutcome;
@@ -27,6 +19,8 @@ use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
 use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
 use crate::agent::runloop::unified::workspace_links::LinkedDirectory;
 use crate::agent::runloop::welcome::SessionBootstrap;
+use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_tui::{InlineHandle, InlineSession};
 
 mod handlers;
 
@@ -60,8 +54,7 @@ pub(crate) struct SlashCommandContext<'a> {
     pub(crate) full_auto: bool,
     pub(crate) loaded_skills:
         &'a Arc<RwLock<hashbrown::HashMap<String, vtcode_core::skills::types::Skill>>>,
-    pub(crate) checkpoint_manager:
-        Option<&'a vtcode_core::core::agent::snapshots::SnapshotManager>,
+    pub(crate) checkpoint_manager: Option<&'a vtcode_core::core::agent::snapshots::SnapshotManager>,
 }
 
 pub(crate) async fn handle_outcome(

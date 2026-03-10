@@ -318,5 +318,4 @@ mod tests {
         assert!(info.is_complete);
         assert_eq!(info.percentage, 100);
     }
-
 }

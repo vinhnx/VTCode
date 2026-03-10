@@ -1,5 +1,5 @@
-mod init;
 mod ide_context;
+mod init;
 mod signal;
 mod skill_setup;
 mod types;

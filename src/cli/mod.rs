@@ -100,11 +100,11 @@ pub async fn dispatch(
 #[cfg(test)]
 mod tests {
     use super::{ResolvedCliAction, dispatch::handle_resume_session_command, resolve_action};
+    use crate::startup::{SessionResumeMode, StartupContext};
     use clap::Parser;
     use std::collections::BTreeMap;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
-    use crate::startup::{SessionResumeMode, StartupContext};
     use vtcode_core::cli::args::{Cli, Commands};
     use vtcode_core::config::core::PromptCachingConfig;
     use vtcode_core::config::loader::VTCodeConfig;

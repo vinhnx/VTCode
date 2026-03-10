@@ -10,7 +10,9 @@ use super::{SlashCommandContext, SlashCommandControl};
 const DOCTOR_ACTION_PREFIX: &str = "doctor.action.";
 const DOCTOR_ACTION_BACK: &str = "doctor.action.back";
 
-pub(crate) async fn handle_show_status(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+pub(crate) async fn handle_show_status(
+    ctx: SlashCommandContext<'_>,
+) -> Result<SlashCommandControl> {
     let tool_count = ctx.tools.read().await.len();
     display_session_status(
         ctx.renderer,

@@ -5,7 +5,9 @@ use vtcode_core::hooks::SessionEndReason;
 
 use super::{SlashCommandContext, SlashCommandControl};
 
-pub(crate) async fn handle_new_session(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+pub(crate) async fn handle_new_session(
+    ctx: SlashCommandContext<'_>,
+) -> Result<SlashCommandControl> {
     ctx.renderer
         .line(MessageStyle::Info, "Starting new session...")?;
     Ok(SlashCommandControl::BreakWithReason(

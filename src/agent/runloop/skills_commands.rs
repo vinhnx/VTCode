@@ -8,15 +8,15 @@
 
 use anyhow::Result;
 use std::path::PathBuf;
-use vtcode_core::skills::authoring::SkillAuthor;
-use vtcode_core::skills::loader::EnhancedSkillLoader;
-use vtcode_core::skills::types::Skill;
 #[cfg(test)]
 use vtcode_core::config::loader::ConfigManager;
+use vtcode_core::skills::authoring::SkillAuthor;
+use vtcode_core::skills::loader::EnhancedSkillLoader;
 #[cfg(test)]
 use vtcode_core::skills::loader::{
     SkillMentionDetectionOptions, detect_skill_mentions_with_options,
 };
+use vtcode_core::skills::types::Skill;
 #[cfg(test)]
 use vtcode_core::skills::types::SkillManifest;
 

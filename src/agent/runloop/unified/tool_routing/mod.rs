@@ -23,7 +23,6 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_tui::InlineHandle;
 
 use super::state::CtrlCState;
-use vtcode_core::hooks::{LifecycleHookEngine, PreToolHookDecision};
 use approval_cache::{approval_history_can_skip_prompt, cache_key, spawn_approval_record_task};
 use approval_persistence::{persist_shell_approval_prefix_rule, persisted_shell_approval};
 use approval_policy::{approval_policy_rejects_prompt, build_tool_risk_context};
@@ -33,6 +32,7 @@ use permission_prompt::{
     shell_allows_persistent_decisions,
 };
 use shell_approval::{approval_learning_target, tool_display_labels};
+use vtcode_core::hooks::{LifecycleHookEngine, PreToolHookDecision};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum HitlDecision {

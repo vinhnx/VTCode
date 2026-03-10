@@ -4,14 +4,13 @@ use vtcode_core::config::WorkspaceTrustLevel;
 use vtcode_core::config::constants::ui;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::tool_policy::{ToolPolicy, ToolPolicyManager};
-use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_core::utils::dot_config::load_workspace_trust_level;
 use vtcode_tui::InlineHeaderContext;
 
 use tracing::warn;
 
 use super::git::git_status_summary;
 use super::welcome::SessionBootstrap;
-use crate::startup;
 use dirs::home_dir;
 
 #[derive(Clone, Debug)]
@@ -49,7 +48,7 @@ async fn gather_inline_status_details(
     let workspace_trust = if session_bootstrap.acp_workspace_trust.is_some() {
         None
     } else {
-        startup::workspace_trust_level(&config.workspace)
+        load_workspace_trust_level(&config.workspace)
             .await
             .context("Failed to determine workspace trust level for banner")?
     };
@@ -296,17 +295,3 @@ pub(crate) async fn build_inline_header_context(
         reasoning_stage: None,
     })
 }
-
-pub(crate) fn render_session_banner(
-    _renderer: &mut AnsiRenderer,
-    _config: &CoreAgentConfig,
-    _session_bootstrap: &SessionBootstrap,
-    _model_label: &str,
-    _reasoning_label: &str,
-) -> Result<()> {
-    // Preamble removed as requested. Diagnostics are still available in the status bar/header.
-    Ok(())
-}
-
-#[cfg(test)]
-mod tests {}

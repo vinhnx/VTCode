@@ -13,7 +13,6 @@ use crate::agent::runloop::unified::prompts::read_system_prompt;
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
 use crate::agent::runloop::welcome::prepare_session_bootstrap;
-use crate::startup;
 use anyhow::{Context, Result};
 use hashbrown::HashMap;
 use std::path::PathBuf;
@@ -36,6 +35,7 @@ use vtcode_core::llm::{
 use vtcode_core::models::ModelId;
 use vtcode_core::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
 use vtcode_core::tools::{ApprovalRecorder, ToolRegistry, ToolResultCache};
+use vtcode_core::utils::dot_config::load_workspace_trust_level;
 use vtcode_core::{apply_global_notification_config_from_vtcode, init_global_notification_manager};
 use vtcode_tui::InlineHeaderHighlight;
 
@@ -138,7 +138,7 @@ pub(crate) async fn initialize_session(
 
     let workspace_trust_level = match session_bootstrap.acp_workspace_trust {
         Some(level) => Some(level.to_workspace_trust_level()),
-        None => startup::workspace_trust_level(&config.workspace)
+        None => load_workspace_trust_level(&config.workspace)
             .await
             .context("Failed to determine workspace trust level for tool policy")?,
     };

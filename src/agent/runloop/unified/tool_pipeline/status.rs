@@ -40,7 +40,9 @@ pub(crate) struct ToolPipelineOutcome {
 impl ToolPipelineOutcome {
     pub(crate) fn from_status(status: ToolExecutionStatus) -> Self {
         let command_success = match &status {
-            ToolExecutionStatus::Success { command_success, .. } => *command_success,
+            ToolExecutionStatus::Success {
+                command_success, ..
+            } => *command_success,
             _ => false,
         };
         ToolPipelineOutcome {

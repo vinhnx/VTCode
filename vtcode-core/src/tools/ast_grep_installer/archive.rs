@@ -3,13 +3,11 @@ use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use crate::tools::ast_grep_binary::{alias_ast_grep_binary_name, canonical_ast_grep_binary_name};
 use anyhow::{Context, Result, anyhow, bail};
 use flate2::read::GzDecoder;
 use tar::Archive;
 use tempfile::TempDir;
-use crate::tools::ast_grep_binary::{
-    alias_ast_grep_binary_name, canonical_ast_grep_binary_name,
-};
 use zip::ZipArchive;
 
 use super::state::InstallPaths;

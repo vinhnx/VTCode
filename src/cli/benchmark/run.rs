@@ -1,14 +1,13 @@
 use anyhow::{Context, Result, anyhow, bail};
 use std::str::FromStr;
 use vtcode_core::config::VTCodeConfig;
-use vtcode_core::config::WorkspaceTrustLevel;
 use vtcode_core::config::models::ModelId;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::runner::{AgentRunner, RunnerSettings};
 use vtcode_core::core::agent::types::AgentType;
 use vtcode_core::utils::file_utils::write_file_with_context_sync;
 
-use crate::startup::{WorkspaceTrustGateResult, ensure_workspace_trust};
+use crate::startup::ensure_full_auto_workspace_trust;
 
 use super::BenchmarkCommandOptions;
 use super::report::{BenchmarkReport, BenchmarkTaskReport};
@@ -24,17 +23,6 @@ pub async fn handle_benchmark_command(
     options: BenchmarkCommandOptions,
     full_auto_requested: bool,
 ) -> Result<()> {
-    match ensure_workspace_trust(&config.workspace, true).await? {
-        WorkspaceTrustGateResult::Trusted(level) => {
-            if level != WorkspaceTrustLevel::FullAuto {
-                bail!(
-                    "Benchmark command requires workspace trust level 'full_auto'. Upgrade trust before proceeding."
-                );
-            }
-        }
-        WorkspaceTrustGateResult::Aborted => return Ok(()),
-    }
-
     if !full_auto_requested {
         bail!(ERROR_FULL_AUTO_REQUIRED);
     }
@@ -42,6 +30,10 @@ pub async fn handle_benchmark_command(
     let automation_cfg = &vt_cfg.automation.full_auto;
     if !automation_cfg.enabled {
         bail!(ERROR_FULL_AUTO_REQUIRED);
+    }
+
+    if !ensure_full_auto_workspace_trust(&config.workspace).await? {
+        return Ok(());
     }
 
     let mut tasks = load_prepared_tasks(&options, &config.workspace)?;

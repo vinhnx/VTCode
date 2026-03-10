@@ -1,5 +1,5 @@
-use anyhow::Result;
 use crate::startup::StartupContext;
+use anyhow::Result;
 use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::mcp::cli::handle_mcp_command;
 

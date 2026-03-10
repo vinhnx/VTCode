@@ -1,22 +1,21 @@
+use crate::agent::runloop::mcp_events::McpPanelState;
+use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
 use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use hashbrown::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
+use vtcode_core::acp::ToolPermissionCache;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::llm::provider as uni;
+use vtcode_core::tools::ApprovalRecorder;
 use vtcode_core::tools::ToolRegistry;
 use vtcode_core::tools::ToolResultCache;
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_tui::InlineHandle;
 use vtcode_tui::InlineSession;
-// use crate::agent::runloop::unified::mcp_tool_manager::McpToolManager; // unused
-use crate::agent::runloop::mcp_events::McpPanelState;
-use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
-use vtcode_core::acp::ToolPermissionCache;
-use vtcode_core::tools::ApprovalRecorder;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct TurnRunId(pub String);

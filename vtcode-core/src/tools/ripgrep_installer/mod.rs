@@ -6,9 +6,9 @@
 mod platform;
 mod state;
 
+use crate::tools::ripgrep_binary::RIPGREP_INSTALL_COMMAND;
 use anyhow::{Result, anyhow};
 use std::process::Command;
-use crate::tools::ripgrep_binary::RIPGREP_INSTALL_COMMAND;
 
 use self::platform::install_with_smart_detection;
 use self::state::{InstallLockGuard, InstallationCache};

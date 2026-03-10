@@ -10,9 +10,9 @@ use crate::agent::runloop::unified::turn::session::interaction_loop::{
 use crate::agent::runloop::unified::turn::session::slash_commands::{
     self, SlashCommandContext, SlashCommandControl,
 };
+use vtcode_core::hooks::SessionEndReason;
 use vtcode_core::tools::file_ops::is_image_path;
 use vtcode_core::utils::ansi::MessageStyle;
-use vtcode_core::hooks::SessionEndReason;
 
 pub(crate) enum CommandProcessingResult {
     Outcome(InteractionOutcome),

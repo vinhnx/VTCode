@@ -5,7 +5,6 @@ use std::str::FromStr;
 use vtcode_core::cli::args::{ExecResumeArgs, ExecSubcommand};
 use vtcode_core::cli::input_hardening::validate_agent_safe_text;
 use vtcode_core::config::VTCodeConfig;
-use vtcode_core::config::WorkspaceTrustLevel;
 use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::config::models::ModelId;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
@@ -21,7 +20,7 @@ use vtcode_core::utils::tty::TtyExt;
 use vtcode_core::utils::validation::validate_non_empty;
 
 use crate::agent::agents::apply_runtime_overrides;
-use crate::startup::workspace_trust_level;
+use crate::startup::require_full_auto_workspace_trust;
 
 use super::super::exec::ExecCommandOptions;
 
@@ -114,23 +113,7 @@ pub(super) async fn prepare_exec_run(
     let mut run_vt_cfg = load_exec_vt_config(vt_cfg, &run_workspace, &config.workspace).await?;
     apply_runtime_overrides(Some(&mut run_vt_cfg), &run_config);
 
-    let trust_level = workspace_trust_level(&run_config.workspace)
-        .await
-        .context("Failed to determine workspace trust level")?;
-
-    match trust_level {
-        Some(WorkspaceTrustLevel::FullAuto) => {}
-        Some(level) => {
-            bail!(
-                "Workspace trust level '{level}' does not permit exec runs. Upgrade trust to full auto."
-            );
-        }
-        None => {
-            bail!(
-                "Workspace is not trusted. Start vtcode interactively once and mark it as full auto before using exec."
-            );
-        }
-    }
+    require_full_auto_workspace_trust(&run_config.workspace, "exec runs", "exec").await?;
 
     let automation_cfg = &run_vt_cfg.automation.full_auto;
     if !automation_cfg.enabled {

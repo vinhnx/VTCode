@@ -58,12 +58,7 @@ impl ModelsDatabase {
                         }
                     }
 
-                    providers.insert(
-                        provider_id.clone(),
-                        ProviderModels {
-                            models,
-                        },
-                    );
+                    providers.insert(provider_id.clone(), ProviderModels { models });
                 }
             }
         }

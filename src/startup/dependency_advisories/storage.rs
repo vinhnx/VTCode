@@ -1,5 +1,5 @@
-use vtcode_core::utils::dot_config::{DotConfig, load_user_config, save_user_config};
 use vtcode_core::tools::{AstGrepStatus, RipgrepStatus};
+use vtcode_core::utils::dot_config::{DotConfig, load_user_config, save_user_config};
 
 use super::notice::OptionalSearchToolsNotice;
 

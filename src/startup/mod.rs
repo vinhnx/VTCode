@@ -19,9 +19,6 @@ use agent_config::{
 };
 use config_loading::load_startup_config;
 pub(crate) use dependency_advisories::append_optional_search_tools_highlight;
-pub(crate) use workspace_trust::{
-    WorkspaceTrustGateResult, ensure_workspace_trust, workspace_trust_level,
-};
 use resume::{resolve_session_resume, validate_resume_all_usage};
 use theme::determine_theme;
 use validation::{
@@ -34,6 +31,9 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, ModelSelectionSource};
 use vtcode_core::config::validator::check_prompt_cache_retention_compat;
 use vtcode_core::{initialize_dot_folder, update_theme_preference};
+pub(crate) use workspace_trust::{
+    ensure_full_auto_workspace_trust, require_full_auto_workspace_trust,
+};
 
 /// Aggregated data required for CLI command execution after startup.
 #[derive(Debug, Clone)]

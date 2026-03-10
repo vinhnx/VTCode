@@ -214,13 +214,6 @@ fn test_process_tool_output_loop_detection() {
     }
 }
 
-/*
-#[tokio::test]
-async fn test_run_tool_call_read_file_success() {
-...
-}
-*/
-
 #[test]
 fn test_create_timeout_error() {
     let status = create_timeout_error(
@@ -236,71 +229,3 @@ fn test_create_timeout_error() {
         panic!("Expected Timeout variant");
     }
 }
-
-// Note: This test requires tokio's test-util feature (start_paused, advance)
-// which is not enabled in the standard build. The test is commented out
-// to avoid compilation errors. To run it, enable tokio/test-util in Cargo.toml.
-//
-// #[tokio::test(start_paused = true)]
-// async fn emits_warning_before_timeout_ceiling() {
-//     let warnings = Arc::new(Mutex::new(Vec::new()));
-//     let writer_buffer = warnings.clone();
-//
-//     let subscriber = fmt()
-//         .with_writer(move || CaptureWriter::new(writer_buffer.clone()))
-//         .with_max_level(Level::WARN)
-//         .without_time()
-//         .finish();
-//
-//     let _guard = tracing::subscriber::set_default(subscriber);
-//
-//     let temp_dir = TempDir::new().expect(\"create temp dir\");
-//     let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
-//     registry
-//         .register_tool(ToolRegistration::new(
-//             \"__test_slow_tool__\",
-//             CapabilityLevel::Basic,
-//             false,
-//             slow_tool_executor,
-//         ))
-//         .expect(\"register slow tool\");
-//
-//     let ctrl_c_state = Arc::new(CtrlCState::new());
-//     let ctrl_c_notify = Arc::new(Notify::new());
-//
-//     let mut registry_task = registry;
-//     let ctrl_c_state_clone = ctrl_c_state.clone();
-//     let ctrl_c_notify_clone = ctrl_c_notify.clone();
-//
-//     let execution = tokio::spawn(async move {
-//         execute_tool_with_timeout(
-//             &mut registry_task,
-//             \"__test_slow_tool__\",
-//             Value::Null,
-//             &ctrl_c_state_clone,
-//             &ctrl_c_notify_clone,
-//             None,
-//         )
-//         .await
-//     });
-//
-//     let default_timeout = Duration::from_secs(300);
-//     let warning_delay = default_timeout
-//         .checked_sub(TOOL_TIMEOUT_WARNING_HEADROOM)
-//         .expect(\"warning delay\");
-//     advance(warning_delay).await;
-//     yield_now().await;
-//
-//     let captured = warnings.lock().unwrap();
-//     let combined = captured.join(\"\");
-//     assert!(
-//         combined.contains(\"has run\"),
-//         \"expected warning log to include 'has run', captured logs: {}\",
-//         combined
-//     );
-//     drop(captured);
-//
-//     advance(TOOL_TIMEOUT_WARNING_HEADROOM + Duration::from_secs(1)).await;
-//     let status = execution.await.expect(\"join execution\");
-//     assert!(matches!(status, ToolExecutionStatus::Timeout { .. }));
-// }
