@@ -1,5 +1,6 @@
 use super::super::stream_decoder::parse_usage_value;
 use super::*;
+use crate::config::TimeoutsConfig;
 use crate::llm::providers::openrouter::stream_decoder::parse_stream_payload;
 
 use crate::llm::FinishReason;
@@ -8,6 +9,8 @@ use crate::llm::providers::ReasoningBuffer;
 use crate::llm::providers::shared::NoopStreamTelemetry;
 use crate::llm::providers::shared::{StreamFragment, extract_data_payload};
 use serde_json::json;
+use wiremock::matchers::{body_partial_json, method, path};
+use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn sample_tool() -> ToolDefinition {
     ToolDefinition::function(
@@ -29,6 +32,20 @@ fn request_with_tools(model: &str) -> LLMRequest {
         parallel_tool_calls: Some(true),
         ..Default::default()
     }
+}
+
+fn test_provider(base_url: &str, model: &str) -> OpenRouterProvider {
+    let http_client = reqwest::Client::builder()
+        .no_proxy()
+        .build()
+        .expect("test client should build");
+    OpenRouterProvider::new_with_client(
+        "test-key".to_string(),
+        model.to_string(),
+        http_client,
+        base_url.to_string(),
+        TimeoutsConfig::default(),
+    )
 }
 
 #[test]
@@ -198,4 +215,54 @@ fn parse_usage_value_includes_cache_metrics() {
     assert_eq!(usage.cached_prompt_tokens, Some(90));
     assert_eq!(usage.cache_read_tokens, Some(90));
     assert_eq!(usage.cache_creation_tokens, Some(15));
+}
+
+#[tokio::test]
+async fn generate_retries_without_tools_when_openrouter_rejects_tool_endpoints() {
+    let model_id = "moonshotai/kimi-latest";
+    let server = MockServer::start().await;
+    let provider = test_provider(&server.uri(), model_id);
+
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .and(body_partial_json(json!({
+            "model": model_id,
+            "tool_choice": "required"
+        })))
+        .respond_with(
+            ResponseTemplate::new(404).set_body_string("No endpoints found that support tool use"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .and(body_partial_json(json!({
+            "model": model_id,
+            "tool_choice": "none"
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "choices": [{
+                "finish_reason": "stop",
+                "message": {
+                    "content": "fallback answer"
+                }
+            }],
+            "usage": {
+                "prompt_tokens": 1,
+                "completion_tokens": 1,
+                "total_tokens": 2
+            }
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let response =
+        crate::llm::provider::LLMProvider::generate(&provider, request_with_tools(model_id))
+            .await
+            .expect("fallback request should succeed");
+
+    assert_eq!(response.content.as_deref(), Some("fallback answer"));
 }

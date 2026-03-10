@@ -94,13 +94,22 @@ impl OpenAIProvider {
             models::openai::DEFAULT_MODEL.to_string(),
             None,
             None,
+            TimeoutsConfig::default(),
             None,
             None,
         )
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        Self::with_model_internal(api_key, model, None, None, None, None)
+        Self::with_model_internal(
+            api_key,
+            model,
+            None,
+            None,
+            TimeoutsConfig::default(),
+            None,
+            None,
+        )
     }
 
     pub fn new_with_client(
@@ -137,7 +146,7 @@ impl OpenAIProvider {
         model: Option<String>,
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
-        _timeouts: Option<TimeoutsConfig>,
+        timeouts: Option<TimeoutsConfig>,
         _anthropic: Option<AnthropicConfig>,
         openai: Option<OpenAIConfig>,
         model_behavior: Option<ModelConfig>,
@@ -150,6 +159,7 @@ impl OpenAIProvider {
             model_value,
             prompt_cache,
             base_url,
+            timeouts.unwrap_or_default(),
             openai,
             model_behavior,
         )
@@ -160,6 +170,7 @@ impl OpenAIProvider {
         model: String,
         prompt_cache: Option<PromptCachingConfig>,
         base_url: Option<String>,
+        timeouts: TimeoutsConfig,
         openai: Option<OpenAIConfig>,
         model_behavior: Option<ModelConfig>,
     ) -> Self {
@@ -205,8 +216,7 @@ impl OpenAIProvider {
         responses_api_modes.insert(model.clone(), initial_state);
 
         use crate::llm::http_client::HttpClientFactory;
-        let http_client =
-            HttpClientFactory::with_timeouts(Duration::from_secs(120), Duration::from_secs(30));
+        let http_client = HttpClientFactory::for_llm(&timeouts);
 
         Self {
             api_key: Arc::from(api_key.as_str()),

@@ -45,7 +45,7 @@ impl OpenResponsesProvider {
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        Self::with_model_internal(model, None, api_key, None)
+        Self::with_model_internal(model, None, api_key, TimeoutsConfig::default(), None)
     }
 
     pub fn new_with_client(
@@ -69,23 +69,32 @@ impl OpenResponsesProvider {
         model: Option<String>,
         base_url: Option<String>,
         _prompt_cache: Option<PromptCachingConfig>,
-        _timeouts: Option<TimeoutsConfig>,
+        timeouts: Option<TimeoutsConfig>,
         _anthropic: Option<AnthropicConfig>,
         model_behavior: Option<ModelConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
         let resolved_model = resolve_model(model, models::openresponses::DEFAULT_MODEL);
-        Self::with_model_internal(resolved_model, base_url, api_key_value, model_behavior)
+        Self::with_model_internal(
+            resolved_model,
+            base_url,
+            api_key_value,
+            timeouts.unwrap_or_default(),
+            model_behavior,
+        )
     }
 
     fn with_model_internal(
         model: String,
         base_url: Option<String>,
         api_key: String,
+        timeouts: TimeoutsConfig,
         model_behavior: Option<ModelConfig>,
     ) -> Self {
+        use crate::llm::http_client::HttpClientFactory;
+
         Self {
-            http_client: HttpClient::new(),
+            http_client: HttpClientFactory::for_llm(&timeouts),
             base_url: override_base_url(
                 urls::OPENRESPONSES_API_BASE,
                 base_url,
@@ -918,6 +927,9 @@ impl LLMProvider for OpenResponsesProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use futures::StreamExt;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     fn test_provider(base_url: &str) -> OpenResponsesProvider {
         let http_client = reqwest::Client::builder()
@@ -1152,5 +1164,93 @@ mod tests {
         assert_eq!(output_items[0]["text"], "inline image note");
         assert_eq!(output_items[1]["type"], "input_image");
         assert_eq!(output_items[1]["image_url"], "data:image/png;base64,abc");
+    }
+
+    #[tokio::test]
+    async fn generate_falls_back_to_chat_completions_when_native_endpoint_is_missing() {
+        let server = MockServer::start().await;
+        let provider = test_provider(&server.uri());
+
+        Mock::given(method("POST"))
+            .and(path("/responses"))
+            .respond_with(ResponseTemplate::new(404))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": "chatcmpl_fallback",
+                "choices": [{
+                    "finish_reason": "stop",
+                    "message": {
+                        "content": "fallback completion"
+                    }
+                }]
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let response = provider
+            .generate(LLMRequest {
+                model: "gpt-5".to_string(),
+                messages: vec![Message::user("hello".to_string())],
+                ..Default::default()
+            })
+            .await
+            .expect("fallback generate should succeed");
+
+        assert_eq!(response.content.as_deref(), Some("fallback completion"));
+    }
+
+    #[tokio::test]
+    async fn stream_falls_back_to_chat_completions_when_native_endpoint_is_missing() {
+        let server = MockServer::start().await;
+        let provider = test_provider(&server.uri());
+
+        Mock::given(method("POST"))
+            .and(path("/responses"))
+            .respond_with(ResponseTemplate::new(404))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .insert_header("content-type", "text/event-stream")
+                    .set_body_string(
+                        "data: {\"choices\":[{\"delta\":{\"content\":\"fallback stream\"}}]}\n\n\
+data: [DONE]\n\n",
+                    ),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let mut stream = provider
+            .stream(LLMRequest {
+                model: "gpt-5".to_string(),
+                messages: vec![Message::user("hello".to_string())],
+                ..Default::default()
+            })
+            .await
+            .expect("fallback stream should succeed");
+
+        let mut completed = None;
+        while let Some(event) = stream.next().await {
+            match event.expect("stream event should parse") {
+                LLMStreamEvent::Completed { response } => completed = Some(response),
+                LLMStreamEvent::Token { .. }
+                | LLMStreamEvent::Reasoning { .. }
+                | LLMStreamEvent::ReasoningStage { .. } => {}
+            }
+        }
+
+        let response = completed.expect("stream should finish with a completed response");
+        assert_eq!(response.content.as_deref(), Some("fallback stream"));
     }
 }

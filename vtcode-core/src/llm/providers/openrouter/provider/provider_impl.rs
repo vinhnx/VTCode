@@ -43,19 +43,7 @@ impl LLMProvider for OpenRouterProvider {
 
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
         let model = request.model.clone();
-        let openai_request = self.convert_to_openrouter_format(&request)?;
-        let url = format!("{}/chat/completions", self.base_url);
-
-        let response = self
-            .http_client
-            .post(&url)
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .header("HTTP-Referer", "https://vtcode.dev")
-            .header("X-Title", "VT Code")
-            .json(&openai_request)
-            .send()
-            .await
-            .map_err(|e| format_network_error("OpenRouter", &e))?;
+        let response = self.send_with_tool_fallback(&request, Some(false)).await?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -82,21 +70,7 @@ impl LLMProvider for OpenRouterProvider {
 
     async fn stream(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {
         let model = request.model.clone();
-        let mut openai_request = self.convert_to_openrouter_format(&request)?;
-        openai_request["stream"] = Value::Bool(true);
-
-        let url = format!("{}/chat/completions", self.base_url);
-
-        let response = self
-            .http_client
-            .post(&url)
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .header("HTTP-Referer", "https://vtcode.dev")
-            .header("X-Title", "VT Code")
-            .json(&openai_request)
-            .send()
-            .await
-            .map_err(|e| format_network_error("OpenRouter", &e))?;
+        let response = self.send_with_tool_fallback(&request, Some(true)).await?;
 
         if !response.status().is_success() {
             let status = response.status();

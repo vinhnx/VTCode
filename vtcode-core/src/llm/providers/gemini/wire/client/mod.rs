@@ -9,8 +9,10 @@ use super::streaming::{StreamingError, StreamingMetrics, StreamingProcessor, Str
 use crate::retry::RetryPolicy;
 use anyhow::{Context, Result};
 use reqwest::Client as ReqwestClient;
+use reqwest::StatusCode;
 use std::time::Instant;
 use tracing::warn;
+use vtcode_commons::llm::{LLMError, LLMErrorMetadata};
 
 #[derive(Clone)]
 pub struct Client {
@@ -101,6 +103,17 @@ impl Client {
         }
     }
 
+    fn classify_api_error(&self, status: StatusCode, message: String) -> StreamingError {
+        let error = llm_error_for_status(status, &message);
+        let decision = RetryPolicy::default().decision_for_llm_error(&error, 0);
+
+        StreamingError::ApiError {
+            status_code: status.as_u16(),
+            message,
+            is_retryable: decision.retryable,
+        }
+    }
+
     /// Generate content with the Gemini API
     pub async fn generate(
         &mut self,
@@ -125,7 +138,8 @@ impl Client {
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
-            return Err(anyhow::anyhow!("API error {}: {}", status, error_text));
+            let error = llm_error_for_status(status, &error_text);
+            return Err(anyhow::Error::new(error));
         }
 
         let response_data: GenerateContentResponse =
@@ -168,14 +182,7 @@ impl Client {
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
-
-            let is_retryable = matches!(status.as_u16(), 429 | 500 | 502 | 503 | 504);
-
-            return Err(StreamingError::ApiError {
-                status_code: status.as_u16(),
-                message: error_text,
-                is_retryable,
-            });
+            return Err(self.classify_api_error(status, error_text));
         }
 
         // Process the streaming response
@@ -186,5 +193,33 @@ impl Client {
         self.metrics.total_response_time += start_time.elapsed();
 
         result
+    }
+}
+
+fn llm_error_for_status(status: StatusCode, message: &str) -> LLMError {
+    let metadata = Some(LLMErrorMetadata::new(
+        "gemini",
+        Some(status.as_u16()),
+        None,
+        None,
+        None,
+        None,
+        Some(message.to_string()),
+    ));
+
+    match status {
+        StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => LLMError::Authentication {
+            message: message.to_string(),
+            metadata,
+        },
+        StatusCode::TOO_MANY_REQUESTS => LLMError::RateLimit { metadata },
+        StatusCode::BAD_REQUEST | StatusCode::UNPROCESSABLE_ENTITY => LLMError::InvalidRequest {
+            message: message.to_string(),
+            metadata,
+        },
+        _ => LLMError::Provider {
+            message: message.to_string(),
+            metadata,
+        },
     }
 }

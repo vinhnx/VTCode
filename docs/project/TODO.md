@@ -54,16 +54,6 @@ https://docs.litellm.ai/docs/
 
 ---
 
-improve /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/llm module
-
----
-
-maybe move /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/llm to /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-llm?
-
----
-
----
-
 improve /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-indexer
 
 ---

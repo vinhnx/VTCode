@@ -8,8 +8,8 @@
 use std::collections::VecDeque;
 
 use async_trait::async_trait;
+use vtcode_commons::llm::{BackendKind, LLMError, LLMResponse};
 use vtcode_core::llm::client::LLMClient;
-use vtcode_core::llm::types::{BackendKind, LLMError, LLMResponse};
 
 /// Deterministic `LLMClient` that yields queued responses.
 #[derive(Debug)]
@@ -61,9 +61,10 @@ impl StaticResponseClient {
 impl LLMClient for StaticResponseClient {
     async fn generate(&mut self, _prompt: &str) -> Result<LLMResponse, LLMError> {
         self.queue.pop_front().unwrap_or_else(|| {
-            Err(LLMError::InvalidRequest(
-                "StaticResponseClient has no queued responses".to_string(),
-            ))
+            Err(LLMError::InvalidRequest {
+                message: "StaticResponseClient has no queued responses".to_string(),
+                metadata: None,
+            })
         })
     }
 
@@ -79,21 +80,34 @@ impl LLMClient for StaticResponseClient {
 #[cfg(test)]
 mod tests {
     use super::StaticResponseClient;
-    use vtcode_core::llm::types::{BackendKind, LLMError, LLMResponse};
+    use vtcode_commons::llm::{BackendKind, FinishReason, LLMError, LLMResponse};
+    use vtcode_core::llm::client::LLMClient;
 
     #[test]
     fn returns_responses_in_fifo_order() {
         let response_one = LLMResponse {
-            content: "first".to_string(),
+            content: Some("first".to_string()),
+            tool_calls: None,
             model: "test".to_string(),
             usage: None,
+            finish_reason: FinishReason::Stop,
             reasoning: None,
+            reasoning_details: None,
+            tool_references: Vec::new(),
+            request_id: None,
+            organization_id: None,
         };
         let response_two = LLMResponse {
-            content: "second".to_string(),
+            content: Some("second".to_string()),
+            tool_calls: None,
             model: "test".to_string(),
             usage: None,
+            finish_reason: FinishReason::Stop,
             reasoning: None,
+            reasoning_details: None,
+            tool_references: Vec::new(),
+            request_id: None,
+            organization_id: None,
         };
 
         let mut client = StaticResponseClient::new("test", BackendKind::OpenAI);
@@ -113,6 +127,6 @@ mod tests {
         let error = futures::executor::block_on(client.generate("prompt"))
             .expect_err("expected error when queue is empty");
 
-        assert!(matches!(error, LLMError::InvalidRequest(_)));
+        assert!(matches!(error, LLMError::InvalidRequest { .. }));
     }
 }

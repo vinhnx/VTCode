@@ -18,13 +18,13 @@ pub use vtcode_commons::{
     ErrorFormatter, ErrorReporter, PathResolver, PathScope, TelemetrySink, WorkspacePaths,
 };
 
+pub use vtcode_commons::llm::{BackendKind, LLMError, LLMErrorMetadata, LLMResponse, Usage};
 pub use vtcode_core::llm::client::{AnyClient, make_client};
 pub use vtcode_core::llm::error_display;
 pub use vtcode_core::llm::factory::{
     ProviderConfig as CoreProviderConfig, create_provider_with_config, get_factory,
 };
 pub use vtcode_core::llm::rig_adapter;
-pub use vtcode_core::llm::types::{BackendKind, LLMError, LLMResponse, Usage};
 
 pub mod provider {
     //! Re-export the provider abstraction and shared request/response types.
@@ -107,3 +107,27 @@ pub mod telemetry {
 
 #[cfg(feature = "telemetry")]
 pub use telemetry::{NoopStreamTelemetry, StreamTelemetry};
+
+#[cfg(test)]
+mod tests {
+    use super::{BackendKind, LLMResponse, Usage};
+
+    #[test]
+    fn facade_reexports_shared_llm_types() {
+        let backend = BackendKind::OpenAI;
+        let usage = Usage {
+            prompt_tokens: 10,
+            completion_tokens: 5,
+            total_tokens: 15,
+            cached_prompt_tokens: None,
+            cache_creation_tokens: None,
+            cache_read_tokens: None,
+        };
+        let response = LLMResponse::new("gpt-5", "hello");
+
+        assert!(matches!(backend, BackendKind::OpenAI));
+        assert_eq!(usage.total_tokens, 15);
+        assert_eq!(response.model, "gpt-5");
+        assert_eq!(response.content.as_deref(), Some("hello"));
+    }
+}

@@ -1,8 +1,13 @@
 use super::super::tool_serialization;
 use super::*;
+use crate::config::TimeoutsConfig;
 use crate::config::core::OpenAIServiceTier;
 use crate::llm::provider::ParallelToolConfig;
+use futures::StreamExt;
 use serde_json::{Value, json};
+use std::sync::Mutex;
+use wiremock::matchers::{method, path};
+use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn sample_tool() -> provider::ToolDefinition {
     provider::ToolDefinition::function(
@@ -33,6 +38,20 @@ fn priority_openai_config() -> OpenAIConfig {
         service_tier: Some(OpenAIServiceTier::Priority),
         ..Default::default()
     }
+}
+
+fn test_provider(base_url: &str, model: &str) -> OpenAIProvider {
+    let http_client = reqwest::Client::builder()
+        .no_proxy()
+        .build()
+        .expect("test client should build");
+    OpenAIProvider::new_with_client(
+        "test-key".to_string(),
+        model.to_string(),
+        http_client,
+        base_url.to_string(),
+        TimeoutsConfig::default(),
+    )
 }
 
 #[test]
@@ -1313,4 +1332,154 @@ mod caching_tests {
         // Should NOT have prompt_cache_retention
         assert!(json.get("prompt_cache_retention").is_none());
     }
+}
+
+#[tokio::test]
+async fn responses_request_retries_with_fallback_model_after_not_found() {
+    let server = MockServer::start().await;
+    let provider = test_provider(&server.uri(), models::openai::GPT_5_NANO);
+    let seen_models = Arc::new(Mutex::new(Vec::new()));
+    let seen_models_for_response = Arc::clone(&seen_models);
+
+    Mock::given(method("POST"))
+        .and(path("/responses"))
+        .respond_with(move |request: &wiremock::Request| {
+            let payload: Value =
+                serde_json::from_slice(&request.body).expect("request body should be valid json");
+            let model = payload
+                .get("model")
+                .and_then(Value::as_str)
+                .expect("responses payload should include a model");
+            seen_models_for_response
+                .lock()
+                .expect("models mutex should not be poisoned")
+                .push(model.to_string());
+
+            match model {
+                models::openai::GPT_5_NANO => {
+                    ResponseTemplate::new(404).set_body_string("model_not_found")
+                }
+                models::openai::GPT_5_MINI => ResponseTemplate::new(200).set_body_json(json!({
+                    "id": "resp_fallback",
+                    "status": "completed",
+                    "output": [{
+                        "type": "message",
+                        "role": "assistant",
+                        "content": [{
+                            "type": "output_text",
+                            "text": "fallback response"
+                        }]
+                    }]
+                })),
+                other => ResponseTemplate::new(500)
+                    .set_body_string(format!("unexpected fallback model: {other}")),
+            }
+        })
+        .expect(2)
+        .mount(&server)
+        .await;
+
+    let response = provider
+        .generate(provider::LLMRequest {
+            messages: vec![provider::Message::user("Hello".to_string())],
+            model: models::openai::GPT_5_NANO.to_string(),
+            ..Default::default()
+        })
+        .await
+        .expect("fallback request should succeed");
+
+    assert_eq!(response.content.as_deref(), Some("fallback response"));
+    assert_eq!(
+        seen_models
+            .lock()
+            .expect("models mutex should not be poisoned")
+            .as_slice(),
+        &[
+            models::openai::GPT_5_NANO.to_string(),
+            models::openai::GPT_5_MINI.to_string(),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn responses_stream_retries_with_fallback_model_after_not_found() {
+    let server = MockServer::start().await;
+    let provider = test_provider(&server.uri(), models::openai::GPT_5_NANO);
+    let seen_models = Arc::new(Mutex::new(Vec::new()));
+    let seen_models_for_response = Arc::clone(&seen_models);
+
+    Mock::given(method("POST"))
+        .and(path("/responses"))
+        .respond_with(move |request: &wiremock::Request| {
+            let payload: Value =
+                serde_json::from_slice(&request.body).expect("request body should be valid json");
+            let model = payload
+                .get("model")
+                .and_then(Value::as_str)
+                .expect("responses payload should include a model");
+            seen_models_for_response
+                .lock()
+                .expect("models mutex should not be poisoned")
+                .push(model.to_string());
+
+            match model {
+                models::openai::GPT_5_NANO => {
+                    ResponseTemplate::new(404).set_body_string("model_not_found")
+                }
+                models::openai::GPT_5_MINI => ResponseTemplate::new(200)
+                    .insert_header("content-type", "application/json")
+                    .set_body_json(json!({
+                        "id": "resp_stream_fallback",
+                        "status": "completed",
+                        "output": [{
+                            "type": "message",
+                            "role": "assistant",
+                            "content": [{
+                                "type": "output_text",
+                                "text": "fallback stream response"
+                            }]
+                        }]
+                    })),
+                other => ResponseTemplate::new(500)
+                    .set_body_string(format!("unexpected fallback model: {other}")),
+            }
+        })
+        .expect(2)
+        .mount(&server)
+        .await;
+
+    let mut stream = provider
+        .stream(provider::LLMRequest {
+            messages: vec![provider::Message::user("Hello".to_string())],
+            model: models::openai::GPT_5_NANO.to_string(),
+            ..Default::default()
+        })
+        .await
+        .expect("fallback stream should succeed");
+
+    let mut completed = None;
+    while let Some(event) = stream.next().await {
+        match event.expect("stream event should parse") {
+            provider::LLMStreamEvent::Completed { response } => completed = Some(response),
+            provider::LLMStreamEvent::Token { .. }
+            | provider::LLMStreamEvent::Reasoning { .. }
+            | provider::LLMStreamEvent::ReasoningStage { .. } => {}
+        }
+    }
+
+    let response = completed.expect("stream should finish with a completed response");
+    assert_eq!(
+        response.content.as_deref(),
+        Some("fallback stream response")
+    );
+    assert_eq!(
+        seen_models
+            .lock()
+            .expect("models mutex should not be poisoned")
+            .as_slice(),
+        &[
+            models::openai::GPT_5_NANO.to_string(),
+            models::openai::GPT_5_MINI.to_string(),
+        ]
+    );
 }

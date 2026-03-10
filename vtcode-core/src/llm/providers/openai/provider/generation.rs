@@ -225,20 +225,7 @@ impl OpenAIProvider {
                 let headers = response.headers().clone();
                 let error_text = response.text().await.unwrap_or_default();
 
-                if matches!(responses_state, ResponsesApiState::Allowed)
-                    && is_responses_api_unsupported(status, &error_text)
-                {
-                    #[cfg(debug_assertions)]
-                    debug!(
-                        target = "vtcode::llm::openai",
-                        model = %request.model,
-                        "Responses API unsupported; falling back to Chat Completions"
-                    );
-                    self.set_responses_api_state(&request.model, ResponsesApiState::Disabled);
-                    return self.generate_chat_completions(&request).await;
-                } else if is_rate_limit_error(status.as_u16(), &error_text) {
-                    return Err(provider::LLMError::RateLimit { metadata: None });
-                } else if is_model_not_found(status, &error_text) {
+                if is_model_not_found(status, &error_text) {
                     if let Some(fallback_model) = fallback_model_if_not_found(&request.model) {
                         if fallback_model != request.model {
                             #[cfg(debug_assertions)]
@@ -299,6 +286,19 @@ impl OpenAIProvider {
                         message: formatted_error,
                         metadata: None,
                     });
+                } else if matches!(responses_state, ResponsesApiState::Allowed)
+                    && is_responses_api_unsupported(status, &error_text)
+                {
+                    #[cfg(debug_assertions)]
+                    debug!(
+                        target = "vtcode::llm::openai",
+                        model = %request.model,
+                        "Responses API unsupported; falling back to Chat Completions"
+                    );
+                    self.set_responses_api_state(&request.model, ResponsesApiState::Disabled);
+                    return self.generate_chat_completions(&request).await;
+                } else if is_rate_limit_error(status.as_u16(), &error_text) {
+                    return Err(provider::LLMError::RateLimit { metadata: None });
                 } else {
                     let formatted_error = error_display::format_llm_error(
                         "OpenAI",

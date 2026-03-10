@@ -91,23 +91,6 @@ impl OpenAIProvider {
             let headers = response.headers().clone();
             let error_text = response.text().await.unwrap_or_default();
 
-            if matches!(responses_state, ResponsesApiState::Allowed)
-                && is_responses_api_unsupported(status, &error_text)
-            {
-                #[cfg(debug_assertions)]
-                debug!(
-                    target = "vtcode::llm::openai",
-                    model = %request.model,
-                    "Responses API unsupported; falling back to Chat Completions for streaming"
-                );
-                self.set_responses_api_state(&request.model, ResponsesApiState::Disabled);
-                return self.stream_chat_completions(&request).await;
-            }
-
-            if is_rate_limit_error(status.as_u16(), &error_text) {
-                return Err(provider::LLMError::RateLimit { metadata: None });
-            }
-
             if is_model_not_found(status, &error_text) {
                 if let Some(fallback_model) = fallback_model_if_not_found(&request.model)
                     && fallback_model != request.model
@@ -136,6 +119,23 @@ impl OpenAIProvider {
                     message: formatted_error,
                     metadata: None,
                 });
+            }
+
+            if matches!(responses_state, ResponsesApiState::Allowed)
+                && is_responses_api_unsupported(status, &error_text)
+            {
+                #[cfg(debug_assertions)]
+                debug!(
+                    target = "vtcode::llm::openai",
+                    model = %request.model,
+                    "Responses API unsupported; falling back to Chat Completions for streaming"
+                );
+                self.set_responses_api_state(&request.model, ResponsesApiState::Disabled);
+                return self.stream_chat_completions(&request).await;
+            }
+
+            if is_rate_limit_error(status.as_u16(), &error_text) {
+                return Err(provider::LLMError::RateLimit { metadata: None });
             }
 
             let formatted_error = error_display::format_llm_error(

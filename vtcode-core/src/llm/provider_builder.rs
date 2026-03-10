@@ -1,6 +1,6 @@
 use crate::config::TimeoutsConfig;
 use crate::config::core::PromptCachingConfig;
-use crate::llm::provider::LLMProvider;
+use crate::llm::provider::{LLMError, LLMProvider};
 use std::marker::PhantomData;
 
 /// Generic provider builder to eliminate duplicate provider creation patterns
@@ -59,32 +59,26 @@ where
         self
     }
 
-    pub fn build(self) -> Box<dyn LLMProvider> {
-        let api_key = self.api_key.unwrap_or_default();
-        let model = crate::llm::providers::common::resolve_model(self.model, T::DEFAULT_MODEL);
-        let timeouts = self.timeouts.unwrap_or_default();
-
-        let (prompt_cache_enabled, _) =
-            crate::llm::providers::common::extract_prompt_cache_settings_default(
-                self.prompt_cache,
-                T::PROVIDER_KEY,
-            );
-        let prompt_cache_settings = T::PromptCacheSettings::default();
-
-        let base_url = crate::llm::providers::common::override_base_url(
-            T::API_BASE_URL,
+    pub fn try_build(self) -> Result<Box<dyn LLMProvider>, LLMError> {
+        crate::llm::provider_config::create_provider_unified(
+            T::PROVIDER_KEY,
+            self.api_key,
+            self.model,
             self.base_url,
-            T::BASE_URL_ENV_VAR,
-        );
-
-        T::create_provider(
-            api_key,
-            model,
-            base_url,
-            prompt_cache_enabled,
-            prompt_cache_settings,
-            timeouts,
+            self.prompt_cache,
+            self.timeouts,
         )
+    }
+
+    pub fn build(self) -> Box<dyn LLMProvider> {
+        match self.try_build() {
+            Ok(provider) => provider,
+            Err(error) => unreachable!(
+                "provider builder invariant violated for `{}`: {}",
+                T::PROVIDER_KEY,
+                error
+            ),
+        }
     }
 }
 
@@ -105,7 +99,30 @@ pub trait ProviderConfig {
         timeouts: TimeoutsConfig,
     ) -> Box<dyn LLMProvider>
     where
-        Self::PromptCacheSettings: Send + Sync + 'static;
+        Self::PromptCacheSettings: Send + Sync + 'static,
+    {
+        let _ = prompt_cache_settings;
+        let prompt_cache = prompt_cache_enabled.then(|| PromptCachingConfig {
+            enabled: true,
+            ..Default::default()
+        });
+
+        match crate::llm::provider_config::create_provider_unified(
+            Self::PROVIDER_KEY,
+            (!api_key.trim().is_empty()).then_some(api_key),
+            (!model.trim().is_empty()).then_some(model),
+            (!base_url.trim().is_empty()).then_some(base_url),
+            prompt_cache,
+            Some(timeouts),
+        ) {
+            Ok(provider) => provider,
+            Err(error) => unreachable!(
+                "provider config invariant violated for `{}`: {}",
+                Self::PROVIDER_KEY,
+                error
+            ),
+        }
+    }
 
     type PromptCacheSettings: Clone + Default + Send + Sync + 'static;
 }
