@@ -10,6 +10,8 @@ use std::path::PathBuf;
 
 use anyhow::Error;
 use vtcode_commons::{ErrorFormatter, ErrorReporter, PathScope, TelemetrySink, WorkspacePaths};
+use vtcode_core::config::TimeoutsConfig;
+use vtcode_core::config::core::{AnthropicConfig, OpenAIConfig};
 use vtcode_core::config::core::{ModelConfig, PromptCachingConfig};
 
 /// Trait describing the configuration required to instantiate an LLM provider.
@@ -39,6 +41,21 @@ pub trait ProviderConfig {
         None
     }
 
+    /// Optional request timeout configuration forwarded to the provider factory.
+    fn timeouts(&self) -> Option<Cow<'_, TimeoutsConfig>> {
+        None
+    }
+
+    /// Optional OpenAI-specific configuration forwarded to the provider factory.
+    fn openai(&self) -> Option<Cow<'_, OpenAIConfig>> {
+        None
+    }
+
+    /// Optional Anthropic-specific configuration forwarded to the provider factory.
+    fn anthropic(&self) -> Option<Cow<'_, AnthropicConfig>> {
+        None
+    }
+
     /// Optional model behavior configuration (loop detection, capability overrides).
     fn model_behavior(&self) -> Option<Cow<'_, ModelConfig>> {
         None
@@ -52,11 +69,11 @@ pub fn as_factory_config(source: &dyn ProviderConfig) -> vtcode_core::llm::facto
         api_key: source.api_key().map(Cow::into_owned),
         base_url: source.base_url().map(Cow::into_owned),
         model: source.model().map(Cow::into_owned),
-        prompt_cache: source.prompt_cache().map(|cfg| cfg.into_owned()),
-        timeouts: None,
-        openai: None,
-        anthropic: None,
-        model_behavior: source.model_behavior().map(|cfg| cfg.into_owned()),
+        prompt_cache: source.prompt_cache().map(Cow::into_owned),
+        timeouts: source.timeouts().map(Cow::into_owned),
+        openai: source.openai().map(Cow::into_owned),
+        anthropic: source.anthropic().map(Cow::into_owned),
+        model_behavior: source.model_behavior().map(Cow::into_owned),
     }
 }
 
@@ -156,9 +173,14 @@ where
         }
     }
 
+    fn capture_error_message(&self, error: &Error) -> String {
+        let message = self.error_formatter.format_error(error).into_owned();
+        let _ = self.error_reporter.capture(error);
+        message
+    }
+
     fn report_error(&self, error: Error) {
-        let message = self.error_formatter.format_error(&error).into_owned();
-        let _ = self.error_reporter.capture(&error);
+        let message = self.capture_error_message(&error);
         // Best-effort recording of the formatted message; ignore additional
         // failures to avoid recursive error handling loops.
         let _ = self
@@ -167,8 +189,7 @@ where
     }
 
     fn handle_error(&self, error: Error) {
-        let message = self.error_formatter.format_error(&error).into_owned();
-        let _ = self.error_reporter.capture(&error);
+        let message = self.capture_error_message(&error);
         let _ = self
             .telemetry
             .record(&AdapterEvent::TelemetryFailure { message });
@@ -188,6 +209,14 @@ where
     Formatter: ErrorFormatter + ?Sized,
 {
     hooks.apply_to(source)
+}
+
+fn borrowed_optional_str(value: &Option<String>) -> Option<Cow<'_, str>> {
+    value.as_deref().map(Cow::Borrowed)
+}
+
+fn borrowed_optional<T: Clone>(value: &Option<T>) -> Option<Cow<'_, T>> {
+    value.as_ref().map(Cow::Borrowed)
 }
 
 #[cfg(test)]
@@ -352,59 +381,191 @@ mod tests {
         // failure flag is cleared.
         let events = telemetry.events.lock().unwrap();
         assert_eq!(events.len(), 1);
-        matches!(events[0], AdapterEvent::TelemetryFailure { .. });
+        assert!(matches!(events[0], AdapterEvent::TelemetryFailure { .. }));
+    }
+
+    #[test]
+    fn core_provider_config_exposes_borrowed_nested_values() {
+        let config = vtcode_core::llm::factory::ProviderConfig {
+            api_key: None,
+            base_url: None,
+            model: None,
+            prompt_cache: Some(PromptCachingConfig::default()),
+            timeouts: Some(TimeoutsConfig::default()),
+            openai: Some(OpenAIConfig::default()),
+            anthropic: Some(AnthropicConfig::default()),
+            model_behavior: Some(ModelConfig::default()),
+        };
+
+        assert!(matches!(
+            <vtcode_core::llm::factory::ProviderConfig as ProviderConfig>::prompt_cache(&config),
+            Some(Cow::Borrowed(_))
+        ));
+        assert!(matches!(
+            <vtcode_core::llm::factory::ProviderConfig as ProviderConfig>::timeouts(&config),
+            Some(Cow::Borrowed(_))
+        ));
+        assert!(matches!(
+            <vtcode_core::llm::factory::ProviderConfig as ProviderConfig>::openai(&config),
+            Some(Cow::Borrowed(_))
+        ));
+        assert!(matches!(
+            <vtcode_core::llm::factory::ProviderConfig as ProviderConfig>::anthropic(&config),
+            Some(Cow::Borrowed(_))
+        ));
+        assert!(matches!(
+            <vtcode_core::llm::factory::ProviderConfig as ProviderConfig>::model_behavior(&config),
+            Some(Cow::Borrowed(_))
+        ));
+    }
+
+    #[test]
+    fn owned_provider_config_exposes_borrowed_nested_values() {
+        let config = OwnedProviderConfig::new()
+            .with_prompt_cache(PromptCachingConfig::default())
+            .with_timeouts(TimeoutsConfig::default())
+            .with_openai(OpenAIConfig::default())
+            .with_anthropic(AnthropicConfig::default())
+            .with_model_behavior(ModelConfig::default());
+
+        assert!(matches!(
+            <OwnedProviderConfig as ProviderConfig>::prompt_cache(&config),
+            Some(Cow::Borrowed(_))
+        ));
+        assert!(matches!(
+            <OwnedProviderConfig as ProviderConfig>::timeouts(&config),
+            Some(Cow::Borrowed(_))
+        ));
+        assert!(matches!(
+            <OwnedProviderConfig as ProviderConfig>::openai(&config),
+            Some(Cow::Borrowed(_))
+        ));
+        assert!(matches!(
+            <OwnedProviderConfig as ProviderConfig>::anthropic(&config),
+            Some(Cow::Borrowed(_))
+        ));
+        assert!(matches!(
+            <OwnedProviderConfig as ProviderConfig>::model_behavior(&config),
+            Some(Cow::Borrowed(_))
+        ));
+    }
+
+    #[test]
+    fn preserves_provider_specific_fields_from_core_config() {
+        let source = vtcode_core::llm::factory::ProviderConfig {
+            api_key: Some("secret".to_string()),
+            base_url: Some("https://api.example.com".to_string()),
+            model: Some("gpt-5".to_string()),
+            prompt_cache: Some(PromptCachingConfig::default()),
+            timeouts: Some(TimeoutsConfig::default()),
+            openai: Some(OpenAIConfig {
+                websocket_mode: true,
+                ..OpenAIConfig::default()
+            }),
+            anthropic: Some(AnthropicConfig {
+                count_tokens_enabled: true,
+                ..AnthropicConfig::default()
+            }),
+            model_behavior: Some(ModelConfig::default()),
+        };
+
+        let adapted = as_factory_config(&source);
+
+        assert_eq!(adapted.api_key, source.api_key);
+        assert_eq!(adapted.base_url, source.base_url);
+        assert_eq!(adapted.model, source.model);
+        assert!(adapted.prompt_cache.is_some());
+        assert_eq!(adapted.timeouts.as_ref().unwrap().pty_ceiling_seconds, 300);
+        assert!(adapted.openai.as_ref().unwrap().websocket_mode);
+        assert!(adapted.anthropic.as_ref().unwrap().count_tokens_enabled);
+        assert!(adapted.model_behavior.is_some());
+    }
+
+    #[test]
+    fn owned_provider_config_keeps_provider_specific_fields() {
+        let config = OwnedProviderConfig::new()
+            .with_timeouts(TimeoutsConfig::default())
+            .with_openai(OpenAIConfig {
+                websocket_mode: true,
+                ..OpenAIConfig::default()
+            })
+            .with_anthropic(AnthropicConfig {
+                count_tokens_enabled: true,
+                ..AnthropicConfig::default()
+            });
+
+        let adapted = as_factory_config(&config);
+
+        assert_eq!(
+            adapted.timeouts.as_ref().unwrap().streaming_ceiling_seconds,
+            600
+        );
+        assert!(adapted.openai.as_ref().unwrap().websocket_mode);
+        assert!(adapted.anthropic.as_ref().unwrap().count_tokens_enabled);
     }
 }
 
 /// [`ProviderConfig`] implementation for VT Code's dot-config provider entries.
 impl ProviderConfig for vtcode_core::utils::dot_config::ProviderConfig {
     fn api_key(&self) -> Option<Cow<'_, str>> {
-        self.api_key.as_deref().map(Cow::Borrowed)
+        borrowed_optional_str(&self.api_key)
     }
 
     fn base_url(&self) -> Option<Cow<'_, str>> {
-        self.base_url.as_deref().map(Cow::Borrowed)
+        borrowed_optional_str(&self.base_url)
     }
 
     fn model(&self) -> Option<Cow<'_, str>> {
-        self.model.as_deref().map(Cow::Borrowed)
+        borrowed_optional_str(&self.model)
     }
 }
 
 /// [`ProviderConfig`] implementation for the concrete factory configuration.
 impl ProviderConfig for vtcode_core::llm::factory::ProviderConfig {
     fn api_key(&self) -> Option<Cow<'_, str>> {
-        self.api_key.as_deref().map(Cow::Borrowed)
+        borrowed_optional_str(&self.api_key)
     }
 
     fn base_url(&self) -> Option<Cow<'_, str>> {
-        self.base_url.as_deref().map(Cow::Borrowed)
+        borrowed_optional_str(&self.base_url)
     }
 
     fn model(&self) -> Option<Cow<'_, str>> {
-        self.model.as_deref().map(Cow::Borrowed)
+        borrowed_optional_str(&self.model)
     }
 
     fn prompt_cache(&self) -> Option<Cow<'_, PromptCachingConfig>> {
-        self.prompt_cache
-            .as_ref()
-            .map(|cfg| Cow::Owned(cfg.clone()))
+        borrowed_optional(&self.prompt_cache)
+    }
+
+    fn timeouts(&self) -> Option<Cow<'_, TimeoutsConfig>> {
+        borrowed_optional(&self.timeouts)
+    }
+
+    fn openai(&self) -> Option<Cow<'_, OpenAIConfig>> {
+        borrowed_optional(&self.openai)
+    }
+
+    fn anthropic(&self) -> Option<Cow<'_, AnthropicConfig>> {
+        borrowed_optional(&self.anthropic)
     }
 
     fn model_behavior(&self) -> Option<Cow<'_, ModelConfig>> {
-        self.model_behavior
-            .as_ref()
-            .map(|cfg| Cow::Owned(cfg.clone()))
+        borrowed_optional(&self.model_behavior)
     }
 }
 
 /// Simple builder-friendly provider configuration backed by owned values.
 #[derive(Clone, Debug, Default)]
+#[must_use = "builders do nothing unless consumed"]
 pub struct OwnedProviderConfig {
     api_key: Option<String>,
     base_url: Option<String>,
     model: Option<String>,
     prompt_cache: Option<PromptCachingConfig>,
+    timeouts: Option<TimeoutsConfig>,
+    openai: Option<OpenAIConfig>,
+    anthropic: Option<AnthropicConfig>,
     model_behavior: Option<ModelConfig>,
 }
 
@@ -433,6 +594,21 @@ impl OwnedProviderConfig {
         self
     }
 
+    pub fn with_timeouts(mut self, value: TimeoutsConfig) -> Self {
+        self.timeouts = Some(value);
+        self
+    }
+
+    pub fn with_openai(mut self, value: OpenAIConfig) -> Self {
+        self.openai = Some(value);
+        self
+    }
+
+    pub fn with_anthropic(mut self, value: AnthropicConfig) -> Self {
+        self.anthropic = Some(value);
+        self
+    }
+
     pub fn with_model_behavior(mut self, value: ModelConfig) -> Self {
         self.model_behavior = Some(value);
         self
@@ -441,26 +617,34 @@ impl OwnedProviderConfig {
 
 impl ProviderConfig for OwnedProviderConfig {
     fn api_key(&self) -> Option<Cow<'_, str>> {
-        self.api_key.as_deref().map(Cow::Borrowed)
+        borrowed_optional_str(&self.api_key)
     }
 
     fn base_url(&self) -> Option<Cow<'_, str>> {
-        self.base_url.as_deref().map(Cow::Borrowed)
+        borrowed_optional_str(&self.base_url)
     }
 
     fn model(&self) -> Option<Cow<'_, str>> {
-        self.model.as_deref().map(Cow::Borrowed)
+        borrowed_optional_str(&self.model)
     }
 
     fn prompt_cache(&self) -> Option<Cow<'_, PromptCachingConfig>> {
-        self.prompt_cache
-            .as_ref()
-            .map(|cfg| Cow::Owned(cfg.clone()))
+        borrowed_optional(&self.prompt_cache)
+    }
+
+    fn timeouts(&self) -> Option<Cow<'_, TimeoutsConfig>> {
+        borrowed_optional(&self.timeouts)
+    }
+
+    fn openai(&self) -> Option<Cow<'_, OpenAIConfig>> {
+        borrowed_optional(&self.openai)
+    }
+
+    fn anthropic(&self) -> Option<Cow<'_, AnthropicConfig>> {
+        borrowed_optional(&self.anthropic)
     }
 
     fn model_behavior(&self) -> Option<Cow<'_, ModelConfig>> {
-        self.model_behavior
-            .as_ref()
-            .map(|cfg| Cow::Owned(cfg.clone()))
+        borrowed_optional(&self.model_behavior)
     }
 }

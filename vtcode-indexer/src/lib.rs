@@ -7,9 +7,10 @@
 
 use anyhow::Result;
 use hashbrown::HashMap;
-use ignore::{Walk, WalkBuilder};
+use ignore::{DirEntry, Walk, WalkBuilder};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::fmt::Write as FmtWrite;
 use std::fs;
 use std::io::{BufWriter, ErrorKind, Write};
 use std::path::{Path, PathBuf};
@@ -23,6 +24,22 @@ pub trait IndexStorage: Send + Sync {
 
     /// Persist an indexed file entry.
     fn persist(&self, index_dir: &Path, entry: &FileIndex) -> Result<()>;
+
+    /// Whether this backend expects full-snapshot persistence.
+    ///
+    /// Snapshot-aware backends receive the complete in-memory index on each
+    /// update so on-disk state stays consistent across single-file and
+    /// directory indexing flows.
+    fn prefers_snapshot_persistence(&self) -> bool {
+        false
+    }
+
+    /// Remove a previously persisted file entry.
+    ///
+    /// Defaults to a no-op to keep existing custom storage backends compatible.
+    fn remove(&self, _index_dir: &Path, _file_path: &Path) -> Result<()> {
+        Ok(())
+    }
 
     /// Persist a batch of indexed file entries.
     ///
@@ -65,6 +82,23 @@ impl IndexStorage for MarkdownIndexStorage {
         write_markdown_fields(&mut writer, entry)?;
         writer.flush()?;
         Ok(())
+    }
+
+    fn prefers_snapshot_persistence(&self) -> bool {
+        true
+    }
+
+    fn remove(&self, index_dir: &Path, file_path: &Path) -> Result<()> {
+        let file_name = format!(
+            "{}.md",
+            calculate_hash(file_path.to_string_lossy().as_ref())
+        );
+        let index_path = index_dir.join(file_name);
+        match fs::remove_file(index_path) {
+            Ok(()) => Ok(()),
+            Err(err) if err.kind() == ErrorKind::NotFound => Ok(()),
+            Err(err) => Err(err.into()),
+        }
     }
 
     fn persist_batch(&self, index_dir: &Path, entries: &[FileIndex]) -> Result<()> {
@@ -317,13 +351,41 @@ impl SimpleIndexer {
 
     /// Index a single file.
     pub fn index_file(&mut self, file_path: &Path) -> Result<()> {
-        if !file_path.exists() {
+        let cache_key = file_path.to_string_lossy().into_owned();
+
+        if self.storage.prefers_snapshot_persistence() {
+            let mut next_cache = self.index_cache.clone();
+
+            if file_path.exists() && self.should_process_file_path(file_path) {
+                if let Some(index) = self.build_file_index(file_path)? {
+                    next_cache.insert(index.path.clone(), index);
+                } else {
+                    next_cache.remove(cache_key.as_str());
+                }
+            } else {
+                next_cache.remove(cache_key.as_str());
+            }
+
+            let mut snapshot = next_cache.values().cloned().collect::<Vec<_>>();
+            snapshot.sort_unstable_by(|left, right| left.path.cmp(&right.path));
+            self.storage
+                .persist_batch(self.config.index_dir(), &snapshot)?;
+            self.index_cache = next_cache;
+            return Ok(());
+        }
+
+        if !file_path.exists() || !self.should_process_file_path(file_path) {
+            self.index_cache.remove(cache_key.as_str());
+            self.storage.remove(self.config.index_dir(), file_path)?;
             return Ok(());
         }
 
         if let Some(index) = self.build_file_index(file_path)? {
-            self.index_cache.insert(index.path.clone(), index.clone());
             self.storage.persist(self.config.index_dir(), &index)?;
+            self.index_cache.insert(index.path.clone(), index);
+        } else {
+            self.index_cache.remove(cache_key.as_str());
+            self.storage.remove(self.config.index_dir(), file_path)?;
         }
 
         Ok(())
@@ -342,17 +404,30 @@ impl SimpleIndexer {
 
             // Only index files, not directories
             if entry.file_type().is_some_and(|ft| ft.is_file())
-                && !self.is_excluded_path(path)
                 && let Some(index) = self.build_file_index(path)?
             {
-                self.index_cache.insert(index.path.clone(), index.clone());
                 entries.push(index);
             }
         }
 
-        entries.sort_unstable_by(|left, right| left.path.cmp(&right.path));
-        self.storage
-            .persist_batch(self.config.index_dir(), &entries)?;
+        if self.storage.prefers_snapshot_persistence() {
+            let mut persisted_entries = self
+                .index_cache
+                .iter()
+                .filter(|(path, _)| !Path::new(path).starts_with(dir_path))
+                .map(|(_, entry)| entry.clone())
+                .collect::<Vec<_>>();
+            persisted_entries.extend(entries.iter().cloned());
+            persisted_entries.sort_unstable_by(|left, right| left.path.cmp(&right.path));
+            self.storage
+                .persist_batch(self.config.index_dir(), &persisted_entries)?;
+        } else {
+            entries.sort_unstable_by(|left, right| left.path.cmp(&right.path));
+            self.storage
+                .persist_batch(self.config.index_dir(), &entries)?;
+        }
+
+        self.replace_cached_entries(dir_path, &entries);
 
         Ok(())
     }
@@ -362,18 +437,19 @@ impl SimpleIndexer {
     pub fn discover_files(&self, dir_path: &Path) -> Vec<String> {
         let walker = self.build_walker(dir_path);
 
-        walker
+        let mut files = walker
             .filter_map(|e| e.ok())
             .filter(|e| {
                 if !e.file_type().is_some_and(|ft| ft.is_file()) {
                     return false;
                 }
-                let path = e.path();
 
-                !self.is_excluded_path(path) && self.should_index_file_path(path)
+                self.should_process_file_path(e.path())
             })
             .map(|e| e.path().to_string_lossy().into_owned())
-            .collect()
+            .collect::<Vec<_>>();
+        files.sort_unstable();
+        files
     }
 
     /// Internal helper for regex-based file content search.
@@ -414,6 +490,11 @@ impl SimpleIndexer {
             }
         }
 
+        results.sort_unstable_by(|left, right| {
+            left.file_path
+                .cmp(&right.file_path)
+                .then_with(|| left.line_number.cmp(&right.line_number))
+        });
         results
     }
 
@@ -434,13 +515,16 @@ impl SimpleIndexer {
             }
         }
 
+        results.sort_unstable();
         Ok(results)
     }
 
     /// Get all indexed files without pattern matching.
     /// This is more efficient than using find_files(".*").
     pub fn all_files(&self) -> Vec<String> {
-        self.index_cache.keys().cloned().collect()
+        let mut files = self.index_cache.keys().cloned().collect::<Vec<_>>();
+        files.sort_unstable();
+        files
     }
 
     /// Get file content with line numbers.
@@ -451,16 +535,23 @@ impl SimpleIndexer {
         end_line: Option<usize>,
     ) -> Result<String> {
         let content = fs::read_to_string(file_path)?;
-        let lines: Vec<&str> = content.lines().collect();
+        let start = start_line.unwrap_or(1).max(1);
+        let end = end_line.unwrap_or(usize::MAX);
 
-        let start = start_line.unwrap_or(1).saturating_sub(1);
-        let end = end_line.unwrap_or(lines.len());
-
-        let selected_lines = &lines[start..end.min(lines.len())];
+        if start > end {
+            return Ok(String::new());
+        }
 
         let mut result = String::new();
-        for (i, line) in selected_lines.iter().enumerate() {
-            result.push_str(&format!("{}: {}\n", start + i + 1, line));
+        for (line_number, line) in content.lines().enumerate() {
+            let line_number = line_number + 1;
+            if line_number < start {
+                continue;
+            }
+            if line_number > end {
+                break;
+            }
+            writeln!(&mut result, "{line_number}: {line}")?;
         }
 
         Ok(result)
@@ -486,6 +577,7 @@ impl SimpleIndexer {
             files.push(file_name);
         }
 
+        files.sort_unstable();
         Ok(files)
     }
 
@@ -517,7 +609,7 @@ impl SimpleIndexer {
             let path = entry.path();
 
             if path.is_dir() {
-                if self.is_allowed_dir(&path) {
+                if self.is_allowed_path(&path) {
                     self.walk_directory_internal(&path, callback)?;
                     continue;
                 }
@@ -537,7 +629,7 @@ impl SimpleIndexer {
     }
 
     #[allow(dead_code)]
-    fn is_allowed_dir(&self, path: &Path) -> bool {
+    fn is_allowed_path(&self, path: &Path) -> bool {
         self.config
             .allowed_dirs
             .iter()
@@ -575,7 +667,7 @@ impl SimpleIndexer {
     }
 
     fn build_file_index(&self, file_path: &Path) -> Result<Option<FileIndex>> {
-        if !self.should_index_file_path(file_path) {
+        if !self.should_process_file_path(file_path) {
             return Ok(None);
         }
 
@@ -614,15 +706,44 @@ impl SimpleIndexer {
         self.filter.should_index_file(path, &self.config)
     }
 
+    #[inline]
+    fn should_process_file_path(&self, path: &Path) -> bool {
+        if self.is_allowed_path(path) {
+            return self.should_index_file_path(path);
+        }
+
+        !self.is_excluded_path(path) && self.should_index_file_path(path)
+    }
+
     fn build_walker(&self, dir_path: &Path) -> Walk {
-        WalkBuilder::new(dir_path)
-            .hidden(self.config.ignore_hidden)
+        let walk_root = dir_path.to_path_buf();
+        let config = self.config.clone();
+        let filter = Arc::clone(&self.filter);
+
+        let mut builder = WalkBuilder::new(dir_path);
+        builder
+            .hidden(false)
             .git_ignore(true)
             .git_global(true)
             .git_exclude(true)
             .ignore(true)
-            .parents(true)
-            .build()
+            .parents(true);
+        builder.filter_entry(move |entry| {
+            should_visit_entry(entry, walk_root.as_path(), &config, filter.as_ref())
+        });
+        builder.build()
+    }
+
+    fn replace_cached_entries(&mut self, dir_path: &Path, entries: &[FileIndex]) {
+        self.index_cache
+            .retain(|path, _| !Path::new(path).starts_with(dir_path));
+
+        self.index_cache.extend(
+            entries
+                .iter()
+                .cloned()
+                .map(|entry| (entry.path.clone(), entry)),
+        );
     }
 }
 
@@ -638,11 +759,7 @@ impl Clone for SimpleIndexer {
 }
 
 fn should_skip_dir(path: &Path, config: &SimpleIndexerConfig) -> bool {
-    if config
-        .allowed_dirs
-        .iter()
-        .any(|allowed| path.starts_with(allowed))
-    {
+    if is_allowed_path_or_ancestor(path, config) {
         return false;
     }
 
@@ -664,6 +781,33 @@ fn should_skip_dir(path: &Path, config: &SimpleIndexerConfig) -> bool {
     }
 
     false
+}
+
+fn is_allowed_path_or_ancestor(path: &Path, config: &SimpleIndexerConfig) -> bool {
+    config
+        .allowed_dirs
+        .iter()
+        .any(|allowed| path.starts_with(allowed) || allowed.starts_with(path))
+}
+
+fn should_visit_entry(
+    entry: &DirEntry,
+    walk_root: &Path,
+    config: &SimpleIndexerConfig,
+    filter: &dyn TraversalFilter,
+) -> bool {
+    if entry.path() == walk_root {
+        return true;
+    }
+
+    if !entry
+        .file_type()
+        .is_some_and(|file_type| file_type.is_dir())
+    {
+        return true;
+    }
+
+    filter.should_descend(entry.path(), config)
 }
 
 #[inline]
@@ -758,6 +902,140 @@ mod tests {
     }
 
     #[test]
+    fn indexes_allowed_directories_inside_hidden_excluded_parents() -> Result<()> {
+        let temp = tempdir()?;
+        let workspace = temp.path();
+        let allowed_dir = workspace.join(".vtcode").join("external");
+        fs::create_dir_all(&allowed_dir)?;
+        fs::write(allowed_dir.join("plugin.toml"), "name = 'demo'")?;
+
+        let mut indexer = SimpleIndexer::new(workspace.to_path_buf());
+        indexer.init()?;
+        indexer.index_directory(workspace)?;
+
+        let results = indexer.find_files("plugin\\.toml$")?;
+        assert_eq!(results.len(), 1);
+
+        Ok(())
+    }
+
+    #[test]
+    fn reindexing_prunes_deleted_files_from_cache() -> Result<()> {
+        let temp = tempdir()?;
+        let workspace = temp.path();
+        let file_path = workspace.join("notes.txt");
+        fs::write(&file_path, "remember this")?;
+
+        let mut indexer = SimpleIndexer::new(workspace.to_path_buf());
+        indexer.init()?;
+        indexer.index_directory(workspace)?;
+        assert_eq!(indexer.find_files("notes\\.txt$")?.len(), 1);
+
+        fs::remove_file(&file_path)?;
+        indexer.index_directory(workspace)?;
+
+        assert!(indexer.find_files("notes\\.txt$")?.is_empty());
+        assert!(indexer.all_files().is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn index_file_skips_excluded_paths() -> Result<()> {
+        let temp = tempdir()?;
+        let workspace = temp.path();
+        let index_dir = workspace.join(".vtcode").join("index");
+        fs::create_dir_all(&index_dir)?;
+        let generated_index = index_dir.join("index.md");
+        fs::write(&generated_index, "# generated")?;
+
+        let mut indexer = SimpleIndexer::new(workspace.to_path_buf());
+        indexer.init()?;
+        indexer.index_file(&generated_index)?;
+
+        assert!(indexer.all_files().is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn index_file_removes_stale_entry_when_file_becomes_unreadable() -> Result<()> {
+        let temp = tempdir()?;
+        let workspace = temp.path();
+        let file_path = workspace.join("notes.txt");
+        fs::write(&file_path, "remember this")?;
+
+        let mut indexer = SimpleIndexer::new(workspace.to_path_buf());
+        indexer.init()?;
+        indexer.index_file(&file_path)?;
+        assert!(
+            indexer
+                .find_files("notes\\.txt$")?
+                .iter()
+                .any(|file| file.ends_with("notes.txt"))
+        );
+
+        fs::write(&file_path, [0xFF, 0xFE, 0xFD])?;
+        indexer.index_file(&file_path)?;
+
+        assert!(indexer.find_files("notes\\.txt$")?.is_empty());
+
+        let index_content =
+            fs::read_to_string(workspace.join(".vtcode").join("index").join("index.md"))?;
+        assert!(!index_content.contains(file_path.to_string_lossy().as_ref()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn index_file_maintains_markdown_snapshot_across_updates() -> Result<()> {
+        let temp = tempdir()?;
+        let workspace = temp.path();
+        let first = workspace.join("first.txt");
+        let second = workspace.join("second.txt");
+        fs::write(&first, "one")?;
+        fs::write(&second, "two")?;
+
+        let mut indexer = SimpleIndexer::new(workspace.to_path_buf());
+        indexer.init()?;
+        indexer.index_file(&first)?;
+        indexer.index_file(&second)?;
+
+        let index_dir = workspace.join(".vtcode").join("index");
+        let files = fs::read_dir(&index_dir)?
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+        assert_eq!(files, vec!["index.md".to_string()]);
+
+        let index_content = fs::read_to_string(index_dir.join("index.md"))?;
+        assert!(index_content.contains(first.to_string_lossy().as_ref()));
+        assert!(index_content.contains(second.to_string_lossy().as_ref()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn get_file_content_clamps_ranges_without_panicking() -> Result<()> {
+        let temp = tempdir()?;
+        let workspace = temp.path();
+        let file_path = workspace.join("notes.txt");
+        fs::write(&file_path, "first\nsecond")?;
+
+        let indexer = SimpleIndexer::new(workspace.to_path_buf());
+        let file_path = file_path.to_string_lossy().into_owned();
+
+        assert_eq!(indexer.get_file_content(&file_path, Some(5), None)?, "");
+        assert_eq!(
+            indexer.get_file_content(&file_path, Some(0), Some(1))?,
+            "1: first\n"
+        );
+        assert_eq!(indexer.get_file_content(&file_path, Some(2), Some(1))?, "");
+
+        Ok(())
+    }
+
+    #[test]
     fn supports_custom_storage_backends() -> Result<()> {
         #[derive(Clone, Default)]
         struct MemoryStorage {
@@ -842,6 +1120,82 @@ mod tests {
 
         assert!(indexer.find_files("lib\\.rs$")?.is_empty());
         assert!(!indexer.find_files("README\\.md$")?.is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn custom_filters_can_skip_directories() -> Result<()> {
+        #[derive(Default)]
+        struct SkipGeneratedFilter {
+            inner: ConfigTraversalFilter,
+        }
+
+        impl TraversalFilter for SkipGeneratedFilter {
+            fn should_descend(&self, path: &Path, config: &SimpleIndexerConfig) -> bool {
+                if path.ends_with("generated") {
+                    return false;
+                }
+
+                self.inner.should_descend(path, config)
+            }
+
+            fn should_index_file(&self, path: &Path, config: &SimpleIndexerConfig) -> bool {
+                self.inner.should_index_file(path, config)
+            }
+        }
+
+        let temp = tempdir()?;
+        let workspace = temp.path();
+        let generated_dir = workspace.join("generated");
+        fs::create_dir_all(&generated_dir)?;
+        fs::write(generated_dir.join("skip.txt"), "ignore me")?;
+        fs::write(workspace.join("README.md"), "# Notes")?;
+
+        let config = SimpleIndexerConfig::new(workspace.to_path_buf());
+        let indexer = SimpleIndexer::with_config(config)
+            .with_filter(Arc::new(SkipGeneratedFilter::default()));
+        let files = indexer.discover_files(workspace);
+
+        assert!(!files.iter().any(|file| file.ends_with("skip.txt")));
+        assert!(files.iter().any(|file| file.ends_with("README.md")));
+
+        Ok(())
+    }
+
+    #[test]
+    fn indexing_multiple_directories_preserves_existing_cache_entries() -> Result<()> {
+        let temp = tempdir()?;
+        let workspace = temp.path();
+        let src_dir = workspace.join("src");
+        let docs_dir = workspace.join("docs");
+        fs::create_dir_all(&src_dir)?;
+        fs::create_dir_all(&docs_dir)?;
+        fs::write(src_dir.join("lib.rs"), "fn main() {}")?;
+        fs::write(docs_dir.join("guide.md"), "# Guide")?;
+
+        let mut indexer = SimpleIndexer::new(workspace.to_path_buf());
+        indexer.init()?;
+        indexer.index_directory(&src_dir)?;
+        indexer.index_directory(&docs_dir)?;
+
+        assert!(
+            indexer
+                .find_files("lib\\.rs$")?
+                .iter()
+                .any(|file| file.ends_with("lib.rs"))
+        );
+        assert!(
+            indexer
+                .find_files("guide\\.md$")?
+                .iter()
+                .any(|file| file.ends_with("guide.md"))
+        );
+
+        let index_content =
+            fs::read_to_string(workspace.join(".vtcode").join("index").join("index.md"))?;
+        assert!(index_content.contains(src_dir.join("lib.rs").to_string_lossy().as_ref()));
+        assert!(index_content.contains(docs_dir.join("guide.md").to_string_lossy().as_ref()));
 
         Ok(())
     }

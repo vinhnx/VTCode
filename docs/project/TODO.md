@@ -54,12 +54,6 @@ https://docs.litellm.ai/docs/
 
 ---
 
-improve /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-indexer
-
----
-
-improve /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-llm
-
 ---
 
 https://claude.ai/chat/bac1e18f-f11a-496d-b260-7de5948faf7a
