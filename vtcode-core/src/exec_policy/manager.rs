@@ -28,25 +28,27 @@ fn prompt_is_rejected_by_policy(
     approval_policy: AskForApproval,
     prompt_is_rule: bool,
 ) -> Option<&'static str> {
-    match approval_policy {
-        AskForApproval::Never => Some(PROMPT_CONFLICT_REASON),
-        AskForApproval::OnFailure => None,
-        AskForApproval::OnRequest => None,
-        AskForApproval::UnlessTrusted => None,
-        AskForApproval::Reject(reject_config) => {
-            if prompt_is_rule {
-                if reject_config.rejects_rules_approval() {
-                    Some(REJECT_RULES_APPROVAL_REASON)
-                } else {
-                    None
-                }
-            } else if reject_config.rejects_sandbox_approval() {
-                Some(REJECT_SANDBOX_APPROVAL_REASON)
-            } else {
-                None
-            }
+    if prompt_is_rule {
+        if !approval_policy.rejects_rule_prompt() {
+            return None;
         }
+
+        return Some(if matches!(approval_policy, AskForApproval::Never) {
+            PROMPT_CONFLICT_REASON
+        } else {
+            REJECT_RULES_APPROVAL_REASON
+        });
     }
+
+    if !approval_policy.rejects_sandbox_prompt() {
+        return None;
+    }
+
+    Some(if matches!(approval_policy, AskForApproval::Never) {
+        PROMPT_CONFLICT_REASON
+    } else {
+        REJECT_SANDBOX_APPROVAL_REASON
+    })
 }
 
 /// Configuration for the execution policy manager.

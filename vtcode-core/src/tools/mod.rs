@@ -303,16 +303,19 @@ pub use handlers::{
     Approvable,
     // Core handler traits and types
     ApprovalPolicy,
+    AskForApproval,
     // Turn diff tracker with Agent Trace support
     ChangeAttribution,
     CommandSpec,
     ConfiguredToolSpec,
     ContentItem,
     DiffTracker,
+    ExecApprovalRequirement,
     // Event emission
     ExecCommandInput,
     ExecCommandSource,
     ExecEnv,
+    ExecPolicyAmendment,
     ExecToolCallOutput,
     FileChange,
     FileChangeKind,
@@ -321,6 +324,7 @@ pub use handlers::{
     JsonSchema as ToolJsonSchema,
     McpToolResult,
     ParsedCommand,
+    RejectConfig,
     ResponsesApiTool,
     SandboxAttempt,
     SandboxManager,
@@ -358,6 +362,7 @@ pub use handlers::{
     TurnDiffTracker,
     create_apply_patch_freeform_tool,
     create_apply_patch_json_tool,
+    default_exec_approval_requirement,
     intercept_apply_patch,
     new_shared_tracker,
 };
