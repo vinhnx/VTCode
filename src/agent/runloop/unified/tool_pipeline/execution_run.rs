@@ -273,7 +273,7 @@ pub(crate) async fn run_tool_call_with_args(
         return Ok(outcome);
     }
 
-    let execution_status = execute_with_cache_and_streaming(
+    let execution = execute_with_cache_and_streaming(
         ctx.tool_registry,
         ctx.tool_result_cache,
         name,
@@ -295,7 +295,7 @@ pub(crate) async fn run_tool_call_with_args(
         name,
         &tool_item_id,
         args_val,
-        execution_status,
+        execution,
         ctrl_c_state,
         ctrl_c_notify,
         harness_emitter.cloned(),
