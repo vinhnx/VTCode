@@ -7,7 +7,7 @@
 use crate::tools::handlers::sandboxing::{
     ApprovalCtx, AskForApproval, ExecApprovalRequirement, ReviewDecision, SandboxAttempt,
     SandboxManager, SandboxOverride, SandboxType, ToolCtx, ToolError, ToolRuntime,
-    default_exec_approval_requirement,
+    canonical_sandbox_policy, default_exec_approval_requirement,
 };
 use crate::tools::handlers::tool_handler::TurnContext;
 
@@ -95,11 +95,12 @@ impl ToolOrchestrator {
         }
 
         // 2) Select initial sandbox
+        let canonical_policy = canonical_sandbox_policy(turn_ctx);
         let initial_sandbox = match tool.sandbox_mode_for_first_attempt(req) {
             SandboxOverride::BypassSandboxFirstAttempt => SandboxType::None,
             SandboxOverride::NoOverride => self
                 .sandbox
-                .select_initial(turn_ctx.sandbox_policy.get(), tool.sandbox_preference()),
+                .select_initial_for_canonical(&canonical_policy, tool.sandbox_preference()),
         };
 
         // 3) First attempt
@@ -183,6 +184,172 @@ fn truncate_output(output: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use async_trait::async_trait;
+    use std::path::PathBuf;
+    use std::sync::Arc;
+
+    use crate::tools::handlers::sandboxing::{
+        Approvable, BoxFuture, NetworkAccess, SandboxMode, SandboxPolicy, Sandboxable,
+        SandboxablePreference,
+    };
+    use crate::tools::handlers::tool_handler::{
+        ApprovalPolicy, Constrained, ShellEnvironmentPolicy, ToolEvent, ToolSession,
+    };
+
+    struct TestSession {
+        cwd: PathBuf,
+    }
+
+    impl TestSession {
+        fn new(cwd: PathBuf) -> Self {
+            Self { cwd }
+        }
+    }
+
+    #[async_trait]
+    impl ToolSession for TestSession {
+        fn cwd(&self) -> &PathBuf {
+            &self.cwd
+        }
+
+        fn workspace_root(&self) -> &PathBuf {
+            &self.cwd
+        }
+
+        async fn record_warning(&self, _message: String) {}
+
+        fn user_shell(&self) -> &str {
+            "/bin/zsh"
+        }
+
+        async fn send_event(&self, _event: ToolEvent) {}
+    }
+
+    struct TestRuntime {
+        calls: usize,
+        escalate: bool,
+    }
+
+    impl TestRuntime {
+        fn new(escalate: bool) -> Self {
+            Self { calls: 0, escalate }
+        }
+    }
+
+    impl Sandboxable for TestRuntime {
+        fn sandbox_preference(&self) -> SandboxablePreference {
+            SandboxablePreference::Auto
+        }
+
+        fn escalate_on_failure(&self) -> bool {
+            self.escalate
+        }
+    }
+
+    impl Approvable<()> for TestRuntime {
+        type ApprovalKey = String;
+
+        fn approval_key(&self, _req: &()) -> Self::ApprovalKey {
+            "test-runtime".to_string()
+        }
+
+        fn start_approval_async<'a>(
+            &'a mut self,
+            _req: &'a (),
+            _ctx: ApprovalCtx<'a>,
+        ) -> BoxFuture<'a, ReviewDecision> {
+            Box::pin(async { ReviewDecision::Approved })
+        }
+    }
+
+    #[async_trait]
+    impl ToolRuntime<(), &'static str> for TestRuntime {
+        async fn run(
+            &mut self,
+            _req: &(),
+            attempt: &SandboxAttempt<'_>,
+            _ctx: &ToolCtx,
+        ) -> Result<&'static str, ToolError> {
+            self.calls += 1;
+            if attempt.sandbox == SandboxType::None {
+                Ok("ok")
+            } else {
+                Err(ToolError::SandboxDenied("denied".to_string()))
+            }
+        }
+    }
+
+    struct FirstAttemptProbeRuntime {
+        first_sandbox: Option<SandboxType>,
+        preference: SandboxablePreference,
+    }
+
+    impl FirstAttemptProbeRuntime {
+        fn new(preference: SandboxablePreference) -> Self {
+            Self {
+                first_sandbox: None,
+                preference,
+            }
+        }
+    }
+
+    impl Sandboxable for FirstAttemptProbeRuntime {
+        fn sandbox_preference(&self) -> SandboxablePreference {
+            self.preference
+        }
+    }
+
+    impl Approvable<()> for FirstAttemptProbeRuntime {
+        type ApprovalKey = String;
+
+        fn approval_key(&self, _req: &()) -> Self::ApprovalKey {
+            "probe-runtime".to_string()
+        }
+
+        fn start_approval_async<'a>(
+            &'a mut self,
+            _req: &'a (),
+            _ctx: ApprovalCtx<'a>,
+        ) -> BoxFuture<'a, ReviewDecision> {
+            Box::pin(async { ReviewDecision::Approved })
+        }
+    }
+
+    #[async_trait]
+    impl ToolRuntime<(), &'static str> for FirstAttemptProbeRuntime {
+        async fn run(
+            &mut self,
+            _req: &(),
+            attempt: &SandboxAttempt<'_>,
+            _ctx: &ToolCtx,
+        ) -> Result<&'static str, ToolError> {
+            if self.first_sandbox.is_none() {
+                self.first_sandbox = Some(attempt.sandbox);
+            }
+            Ok("ok")
+        }
+    }
+
+    fn test_turn_context(cwd: PathBuf, sandbox_policy: SandboxPolicy) -> TurnContext {
+        TurnContext {
+            cwd,
+            turn_id: "turn-1".to_string(),
+            sub_id: None,
+            shell_environment_policy: ShellEnvironmentPolicy::Inherit,
+            approval_policy: Constrained::allow_any(ApprovalPolicy::Never),
+            codex_linux_sandbox_exe: None,
+            sandbox_policy: Constrained::allow_any(sandbox_policy),
+        }
+    }
+
+    fn test_tool_ctx(turn: Arc<TurnContext>, session: Arc<TestSession>) -> ToolCtx {
+        ToolCtx {
+            session,
+            turn,
+            call_id: "call-1".to_string(),
+            tool_name: "test".to_string(),
+        }
+    }
 
     #[test]
     fn test_build_denial_reason_empty() {
@@ -209,5 +376,82 @@ mod tests {
 
         let long = "a".repeat(1000);
         assert_eq!(truncate_output(&long).len(), 500);
+    }
+
+    #[tokio::test]
+    async fn orchestrator_escalates_when_runtime_allows_it() {
+        let cwd = PathBuf::from(".");
+        let session = Arc::new(TestSession::new(cwd.clone()));
+        let turn = Arc::new(test_turn_context(cwd, SandboxPolicy::default()));
+        let tool_ctx = test_tool_ctx(turn.clone(), session);
+        let mut runtime = TestRuntime::new(true);
+        let mut orchestrator = ToolOrchestrator::new();
+
+        let out = orchestrator
+            .run(
+                &mut runtime,
+                &(),
+                &tool_ctx,
+                turn.as_ref(),
+                AskForApproval::OnFailure,
+            )
+            .await
+            .expect("expected escalated retry to succeed");
+
+        assert_eq!(out, "ok");
+        assert_eq!(runtime.calls, 2);
+    }
+
+    #[tokio::test]
+    async fn orchestrator_stops_on_sandbox_denial_when_runtime_disables_retry() {
+        let cwd = PathBuf::from(".");
+        let session = Arc::new(TestSession::new(cwd.clone()));
+        let turn = Arc::new(test_turn_context(cwd, SandboxPolicy::default()));
+        let tool_ctx = test_tool_ctx(turn.clone(), session);
+        let mut runtime = TestRuntime::new(false);
+        let mut orchestrator = ToolOrchestrator::new();
+
+        let err = orchestrator
+            .run(
+                &mut runtime,
+                &(),
+                &tool_ctx,
+                turn.as_ref(),
+                AskForApproval::OnFailure,
+            )
+            .await
+            .expect_err("expected sandbox denial without retry");
+
+        assert!(matches!(err, ToolError::SandboxDenied(_)));
+        assert_eq!(runtime.calls, 1);
+    }
+
+    #[tokio::test]
+    async fn canonical_full_access_turn_starts_without_sandbox() {
+        let cwd = PathBuf::from(".");
+        let session = Arc::new(TestSession::new(cwd.clone()));
+        let turn = Arc::new(test_turn_context(
+            cwd,
+            SandboxPolicy {
+                mode: SandboxMode::DangerFullAccess,
+                network_access: NetworkAccess::Full,
+            },
+        ));
+        let tool_ctx = test_tool_ctx(turn.clone(), session);
+        let mut runtime = FirstAttemptProbeRuntime::new(SandboxablePreference::Auto);
+        let mut orchestrator = ToolOrchestrator::new();
+
+        orchestrator
+            .run(
+                &mut runtime,
+                &(),
+                &tool_ctx,
+                turn.as_ref(),
+                AskForApproval::Never,
+            )
+            .await
+            .expect("expected run to succeed");
+
+        assert_eq!(runtime.first_sandbox, Some(SandboxType::None));
     }
 }
