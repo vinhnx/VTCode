@@ -164,7 +164,10 @@ async fn extract_pending_conflict(
     else {
         return Ok(None);
     };
-    let absolute_path = registry.file_ops_tool().normalize_user_path(&display_path).await?;
+    let absolute_path = registry
+        .file_ops_tool()
+        .normalize_user_path(&display_path)
+        .await?;
     let message = output
         .get("message")
         .and_then(Value::as_str)
@@ -176,7 +179,10 @@ async fn extract_pending_conflict(
         display_path,
         absolute_path,
         message,
-        approved_snapshot: output.get("disk_snapshot").cloned().filter(Value::is_object),
+        approved_snapshot: output
+            .get("disk_snapshot")
+            .cloned()
+            .filter(Value::is_object),
         disk_content: output
             .get("disk_content")
             .and_then(Value::as_str)

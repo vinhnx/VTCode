@@ -47,18 +47,19 @@ impl FileSnapshot {
     }
 
     fn same_identity(&self, other: &Self) -> bool {
-        self.same_contents(other)
-            && self.modified_millis == other.modified_millis
+        self.same_contents(other) && self.modified_millis == other.modified_millis
     }
 
     fn from_identity_value(value: &Value) -> Option<Self> {
         let object = value.as_object()?;
         let modified_millis = match object.get("modified_millis") {
             Some(Value::Null) | None => None,
-            Some(value) => value
-                .as_u64()
-                .map(u128::from)
-                .or_else(|| value.as_i64().filter(|millis| *millis >= 0).map(|millis| millis as u128)),
+            Some(value) => value.as_u64().map(u128::from).or_else(|| {
+                value
+                    .as_i64()
+                    .filter(|millis| *millis >= 0)
+                    .map(|millis| millis as u128)
+            }),
         };
 
         Some(Self {
@@ -559,8 +560,12 @@ impl EditedFileMonitor {
 
     fn process_path_change(&self, path: PathBuf) -> Result<()> {
         let tracked_path = normalize_event_path(&path);
-        let snapshot = snapshot_path_sync(&tracked_path)
-            .with_context(|| format!("Failed to snapshot externally modified file {}", tracked_path.display()))?;
+        let snapshot = snapshot_path_sync(&tracked_path).with_context(|| {
+            format!(
+                "Failed to snapshot externally modified file {}",
+                tracked_path.display()
+            )
+        })?;
 
         let mut should_audit = false;
 
@@ -618,7 +623,11 @@ impl EditedFileMonitor {
         }
 
         if should_audit {
-            self.record_conflict_audit(&tracked_path, &snapshot, "watcher_detected_external_change");
+            self.record_conflict_audit(
+                &tracked_path,
+                &snapshot,
+                "watcher_detected_external_change",
+            );
         }
 
         Ok(())
@@ -693,17 +702,17 @@ fn snapshot_path_sync(path: &Path) -> Result<FileSnapshot> {
                 text_content: None,
             });
         }
-        Err(err) => return Err(err).with_context(|| format!("Failed to read metadata for {}", path.display())),
+        Err(err) => {
+            return Err(err)
+                .with_context(|| format!("Failed to read metadata for {}", path.display()));
+        }
     };
 
     if !metadata.is_file() {
         return Ok(FileSnapshot {
             exists: false,
             size_bytes: 0,
-            modified_millis: metadata
-                .modified()
-                .ok()
-                .and_then(system_time_to_millis),
+            modified_millis: metadata.modified().ok().and_then(system_time_to_millis),
             sha256: String::new(),
             text_content: None,
         });
@@ -719,17 +728,16 @@ fn snapshot_path_sync(path: &Path) -> Result<FileSnapshot> {
     Ok(FileSnapshot {
         exists: true,
         size_bytes: metadata.len(),
-        modified_millis: metadata
-            .modified()
-            .ok()
-            .and_then(system_time_to_millis),
+        modified_millis: metadata.modified().ok().and_then(system_time_to_millis),
         sha256,
         text_content: String::from_utf8(bytes).ok(),
     })
 }
 
 fn system_time_to_millis(time: SystemTime) -> Option<u128> {
-    time.duration_since(UNIX_EPOCH).ok().map(|duration| duration.as_millis())
+    time.duration_since(UNIX_EPOCH)
+        .ok()
+        .map(|duration| duration.as_millis())
 }
 
 fn hex_digest(bytes: &[u8]) -> String {
@@ -811,10 +819,12 @@ mod tests {
         monitor.record_agent_write_text(&file, "after\n")?;
         monitor.debug_process_path_change(&file).await?;
 
-        assert!(monitor
-            .detect_conflict(&file, Some("after\n".to_string()), None)
-            .await?
-            .is_none());
+        assert!(
+            monitor
+                .detect_conflict(&file, Some("after\n".to_string()), None)
+                .await?
+                .is_none()
+        );
         Ok(())
     }
 
@@ -929,10 +939,12 @@ mod tests {
 
         std::fs::write(&file, "before\n")?;
         monitor.debug_process_path_change(&file).await?;
-        assert!(monitor
-            .detect_conflict(&file, Some("agent\n".to_string()), None)
-            .await?
-            .is_none());
+        assert!(
+            monitor
+                .detect_conflict(&file, Some("agent\n".to_string()), None)
+                .await?
+                .is_none()
+        );
 
         std::fs::write(&file, "external two\n")?;
         monitor.debug_process_path_change(&file).await?;
@@ -958,11 +970,7 @@ mod tests {
         std::fs::write(&file, "external two\n")?;
 
         let conflict = monitor
-            .detect_conflict(
-                &file,
-                Some("agent\n".to_string()),
-                Some(approved_snapshot),
-            )
+            .detect_conflict(&file, Some("agent\n".to_string()), Some(approved_snapshot))
             .await?;
         assert!(conflict.is_some());
         Ok(())
@@ -974,7 +982,10 @@ mod tests {
         let missing = temp.path().join("missing.txt");
         let canonical_parent = std::fs::canonicalize(temp.path())?;
 
-        assert_eq!(normalize_event_path(&missing), canonical_parent.join("missing.txt"));
+        assert_eq!(
+            normalize_event_path(&missing),
+            canonical_parent.join("missing.txt")
+        );
         Ok(())
     }
 }

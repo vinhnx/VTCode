@@ -61,10 +61,8 @@ impl ToolRegistry {
     ) -> Self {
         let edited_file_monitor =
             Arc::new(crate::tools::edited_file_monitor::EditedFileMonitor::new());
-        let inventory = ToolInventory::new(
-            workspace_root.clone(),
-            Arc::clone(&edited_file_monitor),
-        );
+        let inventory =
+            ToolInventory::new(workspace_root.clone(), Arc::clone(&edited_file_monitor));
         let plan_mode_state = PlanModeState::new(workspace_root.clone());
 
         register_builtin_tools(&inventory, &plan_mode_state);

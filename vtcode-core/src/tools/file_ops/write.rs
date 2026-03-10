@@ -3,8 +3,8 @@ use super::diff_preview::{build_diff_preview, diff_preview_error_skip, diff_prev
 mod chunked;
 mod fs_ops;
 use crate::config::constants::diff;
-use crate::tools::edited_file_monitor::conflict_override_snapshot;
 use crate::tools::builder::ToolResponseBuilder;
+use crate::tools::edited_file_monitor::conflict_override_snapshot;
 use crate::tools::traits::FileTool;
 use crate::tools::types::WriteInput;
 use crate::utils::file_utils::{ensure_dir_exists, read_file_with_context};
@@ -75,11 +75,7 @@ impl FileOpsTool {
         }
 
         let _mutation_lease = if acquire_mutation {
-            Some(
-                self.edited_file_monitor
-                    .acquire_mutation(&file_path)
-                    .await,
-            )
+            Some(self.edited_file_monitor.acquire_mutation(&file_path).await)
         } else {
             None
         };
@@ -147,7 +143,11 @@ impl FileOpsTool {
 
         if let Some(conflict) = self
             .edited_file_monitor
-            .detect_conflict(&file_path, intended_content.clone(), override_snapshot.clone())
+            .detect_conflict(
+                &file_path,
+                intended_content.clone(),
+                override_snapshot.clone(),
+            )
             .await?
         {
             return Ok(conflict.to_tool_output(&self.workspace_root));

@@ -12,9 +12,7 @@ use tokio::fs;
 use crate::utils::path::resolve_workspace_path;
 
 use crate::config::constants::tools;
-use crate::tools::edited_file_monitor::{
-    FILE_CONFLICT_OVERRIDE_ARG, conflict_override_snapshot,
-};
+use crate::tools::edited_file_monitor::{FILE_CONFLICT_OVERRIDE_ARG, conflict_override_snapshot};
 use crate::tools::grep_file::GrepSearchResult;
 use crate::tools::types::EditInput;
 
@@ -262,11 +260,7 @@ impl ToolRegistry {
 
         if let Some(conflict) = self
             .edited_file_monitor()
-            .detect_conflict(
-                &canonical_path,
-                intended_content,
-                override_snapshot.clone(),
-            )
+            .detect_conflict(&canonical_path, intended_content, override_snapshot.clone())
             .await?
         {
             return Ok(conflict.to_tool_output(self.workspace_root()));
@@ -295,7 +289,9 @@ impl ToolRegistry {
             write_args[FILE_CONFLICT_OVERRIDE_ARG] = snapshot.clone();
         }
 
-        self.file_ops_tool().write_file_internal(write_args, false).await
+        self.file_ops_tool()
+            .write_file_internal(write_args, false)
+            .await
     }
 
     pub async fn delete_file(&self, _args: Value) -> Result<Value> {

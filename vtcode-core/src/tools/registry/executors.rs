@@ -2635,11 +2635,7 @@ impl ToolRegistry {
     ) -> Result<Vec<MutationLease>> {
         let mut leases = Vec::new();
         for path in self.patch_mutation_paths(patch).await? {
-            leases.push(
-                self.edited_file_monitor()
-                    .acquire_mutation(&path)
-                    .await,
-            );
+            leases.push(self.edited_file_monitor().acquire_mutation(&path).await);
         }
         Ok(leases)
     }
@@ -2665,30 +2661,29 @@ impl ToolRegistry {
             }
             crate::tools::editing::PatchOperation::UpdateFile { path, chunks, .. } => {
                 let canonical_path = self.file_ops_tool().normalize_user_path(path).await?;
-                let intended_content = if let Some(content) =
-                    monitor.tracked_read_text(&canonical_path).await
-                {
-                    match crate::tools::editing::patch::render_patch_update_content(
-                        &canonical_path,
-                        &content,
-                        chunks,
-                        path,
-                    )
-                    .await
-                    {
-                        Ok(rendered) => Some(rendered),
-                        Err(err) => {
-                            tracing::debug!(
-                                path = %canonical_path.display(),
-                                error = %err,
-                                "Failed to render patch conflict preview content"
-                            );
-                            None
+                let intended_content =
+                    if let Some(content) = monitor.tracked_read_text(&canonical_path).await {
+                        match crate::tools::editing::patch::render_patch_update_content(
+                            &canonical_path,
+                            &content,
+                            chunks,
+                            path,
+                        )
+                        .await
+                        {
+                            Ok(rendered) => Some(rendered),
+                            Err(err) => {
+                                tracing::debug!(
+                                    path = %canonical_path.display(),
+                                    error = %err,
+                                    "Failed to render patch conflict preview content"
+                                );
+                                None
+                            }
                         }
-                    }
-                } else {
-                    None
-                };
+                    } else {
+                        None
+                    };
 
                 monitor
                     .detect_conflict(&canonical_path, intended_content, override_snapshot)
@@ -2702,21 +2697,27 @@ impl ToolRegistry {
         operation: &crate::tools::editing::PatchOperation,
     ) -> Result<Vec<PlannedPatchWrite>> {
         match operation {
-            crate::tools::editing::PatchOperation::AddFile { path, content } => Ok(vec![
-                PlannedPatchWrite::Text {
+            crate::tools::editing::PatchOperation::AddFile { path, content } => {
+                Ok(vec![PlannedPatchWrite::Text {
                     path: self.file_ops_tool().normalize_user_path(path).await?,
                     content: content.clone(),
-                },
-            ]),
-            crate::tools::editing::PatchOperation::DeleteFile { path } => Ok(vec![
-                PlannedPatchWrite::Removal {
+                }])
+            }
+            crate::tools::editing::PatchOperation::DeleteFile { path } => {
+                Ok(vec![PlannedPatchWrite::Removal {
                     path: self.file_ops_tool().normalize_user_path(path).await?,
-                },
-            ]),
-            crate::tools::editing::PatchOperation::UpdateFile { path, new_path, chunks } => {
+                }])
+            }
+            crate::tools::editing::PatchOperation::UpdateFile {
+                path,
+                new_path,
+                chunks,
+            } => {
                 let canonical_path = self.file_ops_tool().normalize_user_path(path).await?;
-                let source_content = if let Some(content) =
-                    self.edited_file_monitor().tracked_read_text(&canonical_path).await
+                let source_content = if let Some(content) = self
+                    .edited_file_monitor()
+                    .tracked_read_text(&canonical_path)
+                    .await
                 {
                     content
                 } else {
@@ -2735,7 +2736,12 @@ impl ToolRegistry {
                     path,
                 )
                 .await
-                .with_context(|| format!("Failed to plan patch output for {}", canonical_path.display()))?;
+                .with_context(|| {
+                    format!(
+                        "Failed to plan patch output for {}",
+                        canonical_path.display()
+                    )
+                })?;
 
                 let mut writes = Vec::new();
                 if let Some(destination) = new_path
@@ -2746,7 +2752,10 @@ impl ToolRegistry {
                         path: canonical_path,
                     });
                     writes.push(PlannedPatchWrite::Text {
-                        path: self.file_ops_tool().normalize_user_path(destination).await?,
+                        path: self
+                            .file_ops_tool()
+                            .normalize_user_path(destination)
+                            .await?,
                         content: rendered,
                     });
                 } else {

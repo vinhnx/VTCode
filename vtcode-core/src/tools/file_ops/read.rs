@@ -280,7 +280,8 @@ impl FileOpsTool {
             && let Some(content) = response.get("content").and_then(Value::as_str)
             && let Some(size_bytes) = response_size_bytes(response)
         {
-            self.track_exact_text_snapshot(path, content, size_bytes).await;
+            self.track_exact_text_snapshot(path, content, size_bytes)
+                .await;
             return;
         }
 
@@ -367,7 +368,8 @@ impl FileOpsTool {
                 && let Some(cached) = FILE_CACHE.get_file(key).await
             {
                 perf.tag("cache", "hit");
-                self.track_cached_read_snapshot(&canonical, &args, &cached).await;
+                self.track_cached_read_snapshot(&canonical, &args, &cached)
+                    .await;
                 return Ok(cached);
             }
             perf.tag("cache", if cache_key.is_some() { "miss" } else { "skip" });
