@@ -24,6 +24,7 @@ use super::execution_attempts::execute_tool_with_timeout_ref_prevalidated;
 use super::execution_helpers::{
     build_tool_status_message, is_loop_detection_status, parse_cached_output,
 };
+use super::file_conflict_runtime::{RuntimeToolExecution, into_runtime_tool_execution};
 use super::pty_stream::PtyStreamRuntime;
 use super::status::ToolExecutionStatus;
 
@@ -121,7 +122,7 @@ pub(super) async fn execute_with_cache_and_streaming(
     harness_emitter: Option<HarnessEventEmitter>,
     vt_cfg: Option<&VTCodeConfig>,
     max_tool_retries: usize,
-) -> ToolExecutionStatus {
+) -> RuntimeToolExecution {
     let is_cacheable_tool = is_tool_cacheable(name, args_val);
     let cache_target = cache_target_path(name, args_val);
 
@@ -136,7 +137,7 @@ pub(super) async fn execute_with_cache_and_streaming(
         )
         .await
     {
-        return cached_status;
+        return into_runtime_tool_execution(name, args_val, cached_status);
     }
 
     handle.force_redraw();
@@ -206,7 +207,7 @@ pub(super) async fn execute_with_cache_and_streaming(
         {
             Some(status) => {
                 tool_spinner.finish();
-                return status;
+                return into_runtime_tool_execution(name, args_val, status);
             }
             None => outcome,
         }
@@ -214,23 +215,27 @@ pub(super) async fn execute_with_cache_and_streaming(
         outcome
     };
 
-    if let ToolExecutionStatus::Success {
+    if let ToolExecutionStatus::Success { .. } = &outcome {
+        tool_spinner.finish();
+    }
+
+    let runtime_execution = into_runtime_tool_execution(name, args_val, outcome);
+
+    if let RuntimeToolExecution::Completed(ToolExecutionStatus::Success {
         output,
         command_success,
         ..
-    } = &outcome
+    }) = &runtime_execution
+        && is_cacheable_tool
+        && should_cache_success_output(name, output, *command_success)
     {
-        tool_spinner.finish();
-        if is_cacheable_tool && should_cache_success_output(name, output, *command_success) {
-            let (_, cache_key) =
-                workspace_scoped_cache_key(registry, name, args_val, &cache_target);
-            let output_json = serde_json::to_string(output).unwrap_or_else(|_| "{}".to_string());
-            let mut cache = tool_result_cache.write().await;
-            cache.insert_arc(cache_key, Arc::new(output_json));
-        }
+        let (_, cache_key) = workspace_scoped_cache_key(registry, name, args_val, &cache_target);
+        let output_json = serde_json::to_string(output).unwrap_or_else(|_| "{}".to_string());
+        let mut cache = tool_result_cache.write().await;
+        cache.insert_arc(cache_key, Arc::new(output_json));
     }
 
-    outcome
+    runtime_execution
 }
 
 fn should_cache_success_output(name: &str, output: &Value, command_success: bool) -> bool {

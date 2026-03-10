@@ -7,9 +7,7 @@ use tokio::sync::Notify;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::interfaces::ui::UiSession;
 use vtcode_core::notifications::{NotificationEvent, send_global_notification};
-use vtcode_core::tools::edited_file_monitor::{
-    FILE_CONFLICT_DETECTED_FIELD, FILE_CONFLICT_OVERRIDE_ARG, FILE_CONFLICT_PATH_FIELD,
-};
+use vtcode_core::tools::edited_file_monitor::FILE_CONFLICT_OVERRIDE_ARG;
 use vtcode_core::tools::registry::ToolRegistry;
 use vtcode_core::tools::result_cache::ToolResultCache;
 use vtcode_tui::{
@@ -22,6 +20,7 @@ use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_ov
 use crate::agent::runloop::unified::state::CtrlCState;
 
 use super::execution_runtime::execute_with_cache_and_streaming;
+use super::file_conflict_runtime::{PendingFileConflictStatus, RuntimeToolExecution};
 use super::status::ToolExecutionStatus;
 
 #[derive(Clone)]
@@ -50,7 +49,7 @@ pub(super) async fn resolve_file_conflict_status<S>(
     name: &str,
     tool_item_id: &str,
     args_val: &Value,
-    mut status: ToolExecutionStatus,
+    mut execution: RuntimeToolExecution,
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
     harness_emitter: Option<HarnessEventEmitter>,
@@ -61,8 +60,11 @@ where
     S: UiSession + ?Sized,
 {
     loop {
-        let Some(conflict) = extract_pending_conflict(registry, &status).await? else {
-            return Ok(status);
+        let conflict = match execution {
+            RuntimeToolExecution::Completed(status) => return Ok(status),
+            RuntimeToolExecution::PendingFileConflict(conflict) => {
+                hydrate_pending_conflict(registry, conflict).await?
+            }
         };
 
         match prompt_for_conflict_resolution(
@@ -96,7 +98,7 @@ where
             }
             OverlayWaitOutcome::Submitted(ConflictResolution::Proceed) => {
                 let override_args = build_override_args(args_val, &conflict)?;
-                status = execute_with_cache_and_streaming(
+                execution = execute_with_cache_and_streaming(
                     registry,
                     tool_result_cache,
                     name,
@@ -142,60 +144,25 @@ impl PendingFileConflict {
     }
 }
 
-async fn extract_pending_conflict(
+async fn hydrate_pending_conflict(
     registry: &ToolRegistry,
-    status: &ToolExecutionStatus,
-) -> Result<Option<PendingFileConflict>> {
-    let ToolExecutionStatus::Success { output, .. } = status else {
-        return Ok(None);
-    };
-    if output
-        .get(FILE_CONFLICT_DETECTED_FIELD)
-        .and_then(Value::as_bool)
-        != Some(true)
-    {
-        return Ok(None);
-    }
-
-    let Some(display_path) = output
-        .get(FILE_CONFLICT_PATH_FIELD)
-        .and_then(Value::as_str)
-        .map(ToOwned::to_owned)
-    else {
-        return Ok(None);
-    };
+    conflict: PendingFileConflictStatus,
+) -> Result<PendingFileConflict> {
     let absolute_path = registry
         .file_ops_tool()
-        .normalize_user_path(&display_path)
+        .normalize_user_path(&conflict.display_path)
         .await?;
-    let message = output
-        .get("message")
-        .and_then(Value::as_str)
-        .unwrap_or("File changed on disk since the agent last read it.")
-        .to_string();
 
-    Ok(Some(PendingFileConflict {
-        output: output.clone(),
-        display_path,
+    Ok(PendingFileConflict {
+        output: conflict.output,
+        display_path: conflict.display_path,
         absolute_path,
-        message,
-        approved_snapshot: output
-            .get("disk_snapshot")
-            .cloned()
-            .filter(Value::is_object),
-        disk_content: output
-            .get("disk_content")
-            .and_then(Value::as_str)
-            .map(ToOwned::to_owned),
-        intended_content: output
-            .get("intended_content")
-            .and_then(Value::as_str)
-            .map(ToOwned::to_owned),
-        emit_hitl_notification: output
-            .get("emit_hitl_notification")
-            .and_then(Value::as_bool)
-            .unwrap_or(false),
-    }))
+        message: conflict.message,
+        approved_snapshot: conflict.approved_snapshot,
+        disk_content: conflict.disk_content,
+        intended_content: conflict.intended_content,
+        emit_hitl_notification: conflict.emit_hitl_notification,
+    })
 }
 
 async fn prompt_for_conflict_resolution<S>(
@@ -427,6 +394,12 @@ mod tests {
         output["emit_hitl_notification"] = Value::Bool(false);
     }
 
+    fn pending_conflict(output: Value) -> RuntimeToolExecution {
+        RuntimeToolExecution::PendingFileConflict(
+            PendingFileConflictStatus::from_output(output).expect("valid file-conflict output"),
+        )
+    }
+
     #[tokio::test]
     async fn reload_resolution_discards_agent_write() -> Result<()> {
         let workspace = TempDir::new()?;
@@ -454,12 +427,7 @@ mod tests {
             tools::WRITE_FILE,
             "tool_1",
             &json!({"path": "sample.txt", "content": "agent\n", "mode": "overwrite"}),
-            ToolExecutionStatus::Success {
-                output: conflict_output,
-                stdout: None,
-                modified_files: vec![],
-                command_success: true,
-            },
+            pending_conflict(conflict_output),
             &Arc::new(CtrlCState::new()),
             &Arc::new(Notify::new()),
             None,
@@ -506,12 +474,7 @@ mod tests {
             tools::WRITE_FILE,
             "tool_1",
             &json!({"path": "sample.txt", "content": "agent\n", "mode": "overwrite"}),
-            ToolExecutionStatus::Success {
-                output: conflict_output,
-                stdout: None,
-                modified_files: vec![],
-                command_success: true,
-            },
+            pending_conflict(conflict_output),
             &Arc::new(CtrlCState::new()),
             &Arc::new(Notify::new()),
             None,
@@ -565,12 +528,7 @@ mod tests {
             tools::WRITE_FILE,
             "tool_1",
             &json!({"path": "sample.txt", "content": "agent\n", "mode": "overwrite"}),
-            ToolExecutionStatus::Success {
-                output: conflict_output,
-                stdout: None,
-                modified_files: vec![],
-                command_success: true,
-            },
+            pending_conflict(conflict_output),
             &Arc::new(CtrlCState::new()),
             &Arc::new(Notify::new()),
             None,
@@ -586,6 +544,60 @@ mod tests {
             other => panic!("unexpected status: {other:?}"),
         }
         assert_eq!(std::fs::read_to_string(path)?, "agent\n");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn proceed_resolution_reconflicts_when_disk_changes_again() -> Result<()> {
+        let workspace = TempDir::new()?;
+        let mut registry = create_registry(&workspace).await;
+        let path = workspace.path().join("sample.txt");
+        std::fs::write(&path, "before\n")?;
+        registry.read_file(json!({ "path": "sample.txt" })).await?;
+        std::fs::write(&path, "external one\n")?;
+        let mut conflict_output = registry
+            .write_file(json!({"path": "sample.txt", "content": "agent\n", "mode": "overwrite"}))
+            .await?;
+        disable_hitl_notification(&mut conflict_output);
+        std::fs::write(&path, "external two\n")?;
+
+        let (mut session, event_tx, _commands) = test_session();
+        let handle = session.inline_handle().clone();
+        event_tx.send(InlineEvent::Overlay(OverlayEvent::Submitted(
+            OverlaySubmission::Selection(InlineListSelection::FileConflictViewDiff),
+        )))?;
+        event_tx.send(InlineEvent::Overlay(OverlayEvent::Submitted(
+            OverlaySubmission::DiffProceed,
+        )))?;
+        event_tx.send(InlineEvent::Overlay(OverlayEvent::Submitted(
+            OverlaySubmission::Selection(InlineListSelection::FileConflictReload),
+        )))?;
+
+        let status = resolve_file_conflict_status(
+            &mut registry,
+            &Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(8))),
+            &mut session,
+            &handle,
+            tools::WRITE_FILE,
+            "tool_1",
+            &json!({"path": "sample.txt", "content": "agent\n", "mode": "overwrite"}),
+            pending_conflict(conflict_output),
+            &Arc::new(CtrlCState::new()),
+            &Arc::new(Notify::new()),
+            None,
+            None,
+            0,
+        )
+        .await?;
+
+        match status {
+            ToolExecutionStatus::Success { output, .. } => {
+                assert_eq!(output["resolution"], json!("reloaded"));
+                assert_eq!(output["disk_content"], json!("external two\n"));
+            }
+            other => panic!("unexpected status: {other:?}"),
+        }
+        assert_eq!(std::fs::read_to_string(path)?, "external two\n");
         Ok(())
     }
 }

@@ -10,6 +10,7 @@ mod execution_plan_mode;
 mod execution_run;
 mod execution_runtime;
 mod file_conflict_prompt;
+mod file_conflict_runtime;
 mod hitl;
 mod pty_stream;
 mod status;

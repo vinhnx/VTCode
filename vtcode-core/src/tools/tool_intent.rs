@@ -187,6 +187,24 @@ pub fn classify_tool_intent(tool_name: &str, args: &Value) -> ToolIntent {
         .unwrap_or_else(ToolIntent::mutating)
 }
 
+pub fn is_edited_file_conflict_guarded_call(tool_name: &str, args: &Value) -> bool {
+    let canonical = canonical_tool_name(tool_name);
+    match canonical.as_ref() {
+        tools::WRITE_FILE | tools::CREATE_FILE | tools::EDIT_FILE | tools::APPLY_PATCH => true,
+        tools::UNIFIED_FILE => unified_file_action(args)
+            .map(is_edited_file_conflict_guarded_unified_file_action)
+            .unwrap_or(false),
+        _ => false,
+    }
+}
+
+fn is_edited_file_conflict_guarded_unified_file_action(action: &str) -> bool {
+    action.eq_ignore_ascii_case("write")
+        || action.eq_ignore_ascii_case("create")
+        || action.eq_ignore_ascii_case("edit")
+        || action.eq_ignore_ascii_case("patch")
+}
+
 pub fn canonical_unified_exec_tool_name(tool_name: &str) -> Option<&'static str> {
     match tool_name {
         tools::UNIFIED_EXEC
@@ -501,7 +519,8 @@ pub fn normalize_unified_search_args(args: &Value) -> Value {
 mod tests {
     use super::{
         canonical_unified_exec_tool_name, classify_tool_intent, is_command_run_tool_call,
-        is_parallel_safe_call, normalize_unified_search_args, unified_file_action,
+        is_edited_file_conflict_guarded_call, is_parallel_safe_call, normalize_unified_search_args,
+        unified_file_action,
     };
     use crate::config::constants::tools;
     use serde_json::json;
@@ -654,6 +673,66 @@ mod tests {
         });
         let action = unified_file_action(&args);
         assert_eq!(action, None);
+    }
+
+    #[test]
+    fn edited_file_conflict_guard_accepts_supported_mutations() {
+        assert!(is_edited_file_conflict_guarded_call(
+            tools::WRITE_FILE,
+            &json!({"path": "README.md", "content": "agent"})
+        ));
+        assert!(is_edited_file_conflict_guarded_call(
+            tools::CREATE_FILE,
+            &json!({"path": "README.md", "content": "agent"})
+        ));
+        assert!(is_edited_file_conflict_guarded_call(
+            tools::EDIT_FILE,
+            &json!({"path": "README.md", "old_str": "a", "new_str": "b"})
+        ));
+        assert!(is_edited_file_conflict_guarded_call(
+            tools::APPLY_PATCH,
+            &json!({"patch": "*** Begin Patch\n*** End Patch\n"})
+        ));
+        assert!(is_edited_file_conflict_guarded_call(
+            tools::UNIFIED_FILE,
+            &json!({"action": "write", "path": "README.md", "content": "agent"})
+        ));
+        assert!(is_edited_file_conflict_guarded_call(
+            tools::UNIFIED_FILE,
+            &json!({"action": "create", "path": "README.md", "content": "agent"})
+        ));
+        assert!(is_edited_file_conflict_guarded_call(
+            tools::UNIFIED_FILE,
+            &json!({"patch": "*** Begin Patch\n*** End Patch\n"})
+        ));
+    }
+
+    #[test]
+    fn edited_file_conflict_guard_rejects_non_guarded_calls() {
+        assert!(!is_edited_file_conflict_guarded_call(
+            tools::READ_FILE,
+            &json!({"path": "README.md"})
+        ));
+        assert!(!is_edited_file_conflict_guarded_call(
+            tools::GREP_FILE,
+            &json!({"pattern": "needle", "path": "."})
+        ));
+        assert!(!is_edited_file_conflict_guarded_call(
+            tools::LIST_FILES,
+            &json!({"path": "."})
+        ));
+        assert!(!is_edited_file_conflict_guarded_call(
+            tools::UNIFIED_FILE,
+            &json!({"action": "read", "path": "README.md"})
+        ));
+        assert!(!is_edited_file_conflict_guarded_call(
+            tools::UNIFIED_FILE,
+            &json!({"action": "delete", "path": "README.md"})
+        ));
+        assert!(!is_edited_file_conflict_guarded_call(
+            tools::UNIFIED_EXEC,
+            &json!({"action": "run", "command": "git status"})
+        ));
     }
 
     #[test]
