@@ -37,7 +37,7 @@ use vtcode::startup::append_optional_search_tools_highlight;
 use vtcode::updater::Updater;
 use vtcode_core::models::ModelId;
 use vtcode_core::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
-use vtcode_core::tools::{ApprovalRecorder, SearchMetrics, ToolRegistry, ToolResultCache};
+use vtcode_core::tools::{ApprovalRecorder, ToolRegistry, ToolResultCache};
 use vtcode_core::{apply_global_notification_config_from_vtcode, init_global_notification_manager};
 use vtcode_tui::InlineHeaderHighlight;
 
@@ -190,7 +190,6 @@ pub(crate) async fn initialize_session(
 
     let tool_result_cache = Arc::new(RwLock::new(ToolResultCache::new(128)));
     let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
-    let search_metrics = Arc::new(RwLock::new(SearchMetrics::new()));
     let cache_dir = std::env::var("HOME")
         .ok()
         .map(|home| PathBuf::from(home).join(".vtcode").join("cache"))
@@ -261,7 +260,6 @@ pub(crate) async fn initialize_session(
         full_auto_allowlist,
         async_mcp_manager,
         mcp_panel_state,
-        search_metrics,
         loaded_skills: skill_setup.active_skills_map,
     })
 }

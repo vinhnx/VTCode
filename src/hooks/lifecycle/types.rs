@@ -80,13 +80,10 @@ pub enum PreToolHookDecision {
     Ask,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 pub enum SessionStartTrigger {
     Startup,
     Resume,
-    Clear,
-    Compact,
 }
 
 impl SessionStartTrigger {
@@ -94,13 +91,10 @@ impl SessionStartTrigger {
         match self {
             Self::Startup => "startup",
             Self::Resume => "resume",
-            Self::Clear => "clear",
-            Self::Compact => "compact",
         }
     }
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 pub enum SessionEndReason {
     Completed,
@@ -108,7 +102,6 @@ pub enum SessionEndReason {
     Cancelled,
     Error,
     NewSession,
-    Other,
 }
 
 impl SessionEndReason {
@@ -119,7 +112,6 @@ impl SessionEndReason {
             Self::Cancelled => "cancelled",
             Self::Error => "error",
             Self::NewSession => "new_session",
-            Self::Other => "other",
         }
     }
 }

@@ -5,9 +5,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use super::progress::{ProgressReporter, ProgressState};
-#[allow(unused_imports)]
-use super::reasoning::{analyze_reasoning, is_giving_up_reasoning};
+use super::progress::ProgressReporter;
 
 use anyhow::Result;
 use tokio::sync::{Notify, RwLock, mpsc};
@@ -356,19 +354,6 @@ fn truncate_status_value(value: &str, max_len: usize) -> String {
     truncated
 }
 
-#[allow(dead_code)]
-pub(crate) async fn display_token_cost(
-    renderer: &mut AnsiRenderer,
-    _max_tokens: usize,
-    prefix: &str,
-) -> Result<()> {
-    renderer.line(
-        MessageStyle::Info,
-        &format!("{prefix}Token tracking is disabled."),
-    )?;
-    Ok(())
-}
-
 pub(crate) struct PlaceholderGuard {
     handle: InlineHandle,
     restore: Option<String>,
@@ -391,14 +376,12 @@ impl Drop for PlaceholderGuard {
 
 const SPINNER_UPDATE_INTERVAL_MS: u64 = 150;
 
-#[allow(dead_code)]
 pub(crate) struct PlaceholderSpinner {
     handle: InlineHandle,
     restore_left: Option<String>,
     restore_right: Option<String>,
     active: Arc<AtomicBool>,
     task: task::JoinHandle<()>,
-    progress_state: Option<Arc<ProgressState>>,
     message_sender: Option<mpsc::UnboundedSender<String>>,
     defer_restore: Arc<AtomicBool>,
 }
@@ -485,7 +468,6 @@ impl PlaceholderSpinner {
             restore_right,
             active,
             task,
-            progress_state: progress_reporter.map(|r| r.get_state().clone()),
             message_sender: Some(message_sender_clone),
             defer_restore: Arc::new(AtomicBool::new(false)),
         }
@@ -506,12 +488,6 @@ impl PlaceholderSpinner {
         self.defer_restore.store(defer, Ordering::SeqCst);
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn progress_state(&self) -> Option<Arc<ProgressState>> {
-        self.progress_state.clone()
-    }
-
-    #[allow(dead_code)]
     pub(crate) fn update_message(&self, message: impl Into<String>) {
         if let Some(sender) = &self.message_sender {
             let _ = sender.send(message.into());
@@ -557,7 +533,7 @@ pub(crate) enum StreamProgressEvent {
     ReasoningStage(String),
 }
 
-#[allow(dead_code)]
+#[cfg(test)]
 pub(crate) async fn stream_and_render_response(
     provider: &dyn uni::LLMProvider,
     request: uni::LLMRequest,
@@ -578,6 +554,7 @@ pub(crate) async fn stream_and_render_response(
     .await
 }
 
+#[cfg(test)]
 pub(crate) async fn stream_and_render_response_with_options(
     provider: &dyn uni::LLMProvider,
     request: uni::LLMRequest,

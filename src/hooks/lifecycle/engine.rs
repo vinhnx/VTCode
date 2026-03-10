@@ -17,7 +17,6 @@ use crate::hooks::lifecycle::interpret::{
     HookCommandResult, interpret_post_tool, interpret_pre_tool, interpret_session_end,
     interpret_session_start, interpret_user_prompt,
 };
-use crate::hooks::lifecycle::interpret_events::interpret_task_completion;
 use crate::hooks::lifecycle::types::{
     HookMessage, PostToolHookOutcome, PreToolHookDecision, PreToolHookOutcome, SessionEndReason,
     SessionStartHookOutcome, SessionStartTrigger, UserPromptHookOutcome,
@@ -244,45 +243,6 @@ impl LifecycleHookEngine {
         }
 
         Ok(outcome)
-    }
-
-    #[allow(dead_code)]
-    pub async fn run_task_completion(
-        &self,
-        task_name: &str,
-        status: &str,
-        details: Option<&Value>,
-    ) -> Result<Vec<HookMessage>> {
-        let mut messages = Vec::new();
-
-        if self.inner.hooks.task_completion.is_empty() {
-            return Ok(messages);
-        }
-
-        let payload = self
-            .build_task_completion_payload(task_name, status, details)
-            .await?;
-
-        for group in &self.inner.hooks.task_completion {
-            if !group.matcher.matches(task_name) {
-                continue;
-            }
-
-            for command in &group.commands {
-                match self
-                    .execute_command("TaskCompletion", command, &payload)
-                    .await
-                {
-                    Ok(result) => interpret_task_completion(command, &result, &mut messages),
-                    Err(err) => messages.push(HookMessage::error(format!(
-                        "TaskCompletion hook `{}` failed: {err}",
-                        command.command
-                    ))),
-                }
-            }
-        }
-
-        Ok(messages)
     }
 
     pub async fn update_transcript_path(&self, path: Option<PathBuf>) {

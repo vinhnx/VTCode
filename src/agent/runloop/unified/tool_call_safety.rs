@@ -4,7 +4,9 @@
 //! checks to `vtcode_core::tools::SafetyGateway` for single-source consistency.
 
 use anyhow::anyhow;
-use serde_json::{Map, Value};
+#[cfg(test)]
+use serde_json::Map;
+use serde_json::Value;
 use thiserror::Error;
 use vtcode_core::tools::{
     RiskLevel, SafetyContext, SafetyDecision, SafetyError as GatewaySafetyError, SafetyGateway,
@@ -32,14 +34,18 @@ pub enum SafetyError {
 pub struct ToolCallSafetyValidator {
     /// Total tool limit per session
     max_per_session: usize,
-    /// Call rate limit (max calls per second)
-    rate_limit_per_second: usize,
-    /// Optional per-minute cap to prevent bursts that dodge the per-second window
-    rate_limit_per_minute: Option<usize>,
     /// Shared safety gateway for canonical checks
     safety_gateway: SafetyGateway,
     /// Validator-scoped execution context
     gateway_ctx: SafetyContext,
+    #[cfg(test)]
+    test_rate_limits: TestRateLimits,
+}
+
+#[cfg(test)]
+struct TestRateLimits {
+    per_second: usize,
+    per_minute: Option<usize>,
 }
 
 impl ToolCallSafetyValidator {
@@ -72,10 +78,13 @@ impl ToolCallSafetyValidator {
 
         Self {
             max_per_session,
-            rate_limit_per_second,
-            rate_limit_per_minute,
             safety_gateway: SafetyGateway::with_config(gateway_config),
             gateway_ctx: SafetyContext::new("runloop-safety-validator"),
+            #[cfg(test)]
+            test_rate_limits: TestRateLimits {
+                per_second: rate_limit_per_second,
+                per_minute: rate_limit_per_minute,
+            },
         }
     }
 
@@ -98,35 +107,20 @@ impl ToolCallSafetyValidator {
         tracing::info!("Session tool limit increased to {}", self.max_per_session);
     }
 
-    #[allow(dead_code)]
-    pub fn rate_limit_per_second(&self) -> usize {
-        self.rate_limit_per_second
-    }
-
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn set_rate_limit_per_second(&mut self, limit: usize) {
         if limit > 0 {
-            self.rate_limit_per_second = limit;
-            self.safety_gateway
-                .set_rate_limits(self.rate_limit_per_second, self.rate_limit_per_minute);
+            self.test_rate_limits.per_second = limit;
+            self.safety_gateway.set_rate_limits(
+                self.test_rate_limits.per_second,
+                self.test_rate_limits.per_minute,
+            );
         }
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn set_rate_limit_enforcement(&mut self, enabled: bool) {
         self.safety_gateway.set_rate_limit_enforcement(enabled);
-    }
-
-    #[allow(dead_code)]
-    pub fn set_rate_limit_per_minute(&mut self, limit: Option<usize>) {
-        self.rate_limit_per_minute = limit.filter(|v| *v > 0);
-        self.safety_gateway
-            .set_rate_limits(self.rate_limit_per_second, self.rate_limit_per_minute);
-    }
-
-    #[allow(dead_code)]
-    pub fn rate_limit_per_minute(&self) -> Option<usize> {
-        self.rate_limit_per_minute
     }
 
     /// Get the current session limit
@@ -139,7 +133,7 @@ impl ToolCallSafetyValidator {
         &mut self,
         tool_name: &str,
         args: &Value,
-    ) -> std::result::Result<CallValidation, SafetyError> {
+    ) -> std::result::Result<(), SafetyError> {
         self.validate_call_with_invocation_id(tool_name, args, ToolInvocationId::new())
             .await
     }
@@ -150,26 +144,20 @@ impl ToolCallSafetyValidator {
         tool_name: &str,
         args: &Value,
         invocation_id: ToolInvocationId,
-    ) -> std::result::Result<CallValidation, SafetyError> {
-        let intent = vtcode_core::tools::tool_intent::classify_tool_intent(tool_name, args);
-
+    ) -> std::result::Result<(), SafetyError> {
         let result = self
             .safety_gateway
             .check_and_record_with_id(&self.gateway_ctx, tool_name, args, Some(invocation_id))
             .await;
 
         match result.decision {
-            SafetyDecision::Allow | SafetyDecision::NeedsApproval(_) => Ok(CallValidation {
-                is_destructive: intent.destructive,
-                requires_confirmation: intent.destructive,
-                execution_allowed: true,
-            }),
+            SafetyDecision::Allow | SafetyDecision::NeedsApproval(_) => Ok(()),
             SafetyDecision::Deny(reason) => Err(map_gateway_violation(result.violation, &reason)),
         }
     }
 
     /// Check if tool is destructive
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn is_destructive(&self, tool_name: &str) -> bool {
         let normalized = tool_name.trim().to_ascii_lowercase();
         vtcode_core::tools::tool_intent::classify_tool_intent(
@@ -177,41 +165,6 @@ impl ToolCallSafetyValidator {
             &Value::Object(Map::new()),
         )
         .destructive
-    }
-
-    /// Get list of destructive tools
-    #[allow(dead_code)]
-    pub fn destructive_tools(&self) -> Vec<&'static str> {
-        [
-            vtcode_core::config::constants::tools::UNIFIED_SEARCH,
-            vtcode_core::config::constants::tools::UNIFIED_EXEC,
-            vtcode_core::config::constants::tools::UNIFIED_FILE,
-            vtcode_core::config::constants::tools::REQUEST_USER_INPUT,
-            vtcode_core::config::constants::tools::APPLY_PATCH,
-            vtcode_core::config::constants::tools::READ_FILE,
-            vtcode_core::config::constants::tools::WRITE_FILE,
-            vtcode_core::config::constants::tools::EDIT_FILE,
-            vtcode_core::config::constants::tools::DELETE_FILE,
-            vtcode_core::config::constants::tools::CREATE_FILE,
-            vtcode_core::config::constants::tools::GREP_FILE,
-            vtcode_core::config::constants::tools::LIST_FILES,
-            vtcode_core::config::constants::tools::CREATE_PTY_SESSION,
-        ]
-        .into_iter()
-        .filter(|tool_name| {
-            vtcode_core::tools::tool_intent::classify_tool_intent(
-                tool_name,
-                &Value::Object(Map::new()),
-            )
-            .destructive
-        })
-        .collect()
-    }
-
-    /// Reset rate limit tracking
-    #[allow(dead_code)]
-    pub async fn reset_rate_limit(&mut self) {
-        self.start_turn().await;
     }
 }
 
@@ -239,20 +192,6 @@ impl Default for ToolCallSafetyValidator {
     fn default() -> Self {
         Self::new()
     }
-}
-
-/// Result of tool call validation
-#[derive(Debug, Clone)]
-pub struct CallValidation {
-    /// Whether tool is destructive
-    #[allow(dead_code)]
-    pub is_destructive: bool,
-    /// Whether confirmation is required
-    #[allow(dead_code)]
-    pub requires_confirmation: bool,
-    /// Whether execution is allowed
-    #[allow(dead_code)]
-    pub execution_allowed: bool,
 }
 
 #[cfg(test)]
@@ -295,25 +234,22 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_validation_structure() {
+    async fn test_validation_allows_safe_and_destructive_tools() {
         let mut validator = ToolCallSafetyValidator::new();
         validator.start_turn().await;
 
-        let validation = validator
-            .validate_call("read_file", &json!({}))
-            .await
-            .unwrap();
-        assert!(!validation.is_destructive);
-        assert!(!validation.requires_confirmation);
-        assert!(validation.execution_allowed);
-
-        let validation = validator
-            .validate_call("delete_file", &json!({}))
-            .await
-            .unwrap();
-        assert!(validation.is_destructive);
-        assert!(validation.requires_confirmation);
-        assert!(validation.execution_allowed);
+        assert!(
+            validator
+                .validate_call("read_file", &json!({}))
+                .await
+                .is_ok()
+        );
+        assert!(
+            validator
+                .validate_call("delete_file", &json!({}))
+                .await
+                .is_ok()
+        );
     }
 
     #[tokio::test]

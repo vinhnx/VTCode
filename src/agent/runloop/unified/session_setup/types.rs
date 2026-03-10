@@ -15,7 +15,7 @@ use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::ApprovalRecorder;
-use vtcode_core::tools::{SearchMetrics, ToolRegistry, ToolResultCache};
+use vtcode_core::tools::{ToolRegistry, ToolResultCache};
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::utils::session_archive::SessionArchive;
 use vtcode_tui::{InlineHandle, InlineSession};
@@ -72,12 +72,9 @@ pub(crate) struct SessionState {
     pub full_auto_allowlist: Option<Vec<String>>,
     pub async_mcp_manager: Option<Arc<AsyncMcpManager>>,
     pub mcp_panel_state: mcp_events::McpPanelState,
-    #[allow(dead_code)]
-    pub search_metrics: Arc<RwLock<SearchMetrics>>,
     pub loaded_skills: Arc<RwLock<HashMap<String, vtcode_core::skills::types::Skill>>>,
 }
 
-#[allow(dead_code)]
 pub(crate) struct SessionUISetup {
     pub renderer: AnsiRenderer,
     pub session: InlineSession,
@@ -96,7 +93,6 @@ pub(crate) struct SessionUISetup {
     pub file_palette_task_guard: BackgroundTaskGuard,
 }
 
-#[allow(dead_code)]
 pub(crate) async fn build_conversation_history_from_resume(
     resume: Option<&ResumeSession>,
 ) -> Vec<uni::Message> {

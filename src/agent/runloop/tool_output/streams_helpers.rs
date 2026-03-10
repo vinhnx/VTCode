@@ -165,32 +165,6 @@ pub(super) async fn spool_output_if_needed(
     Ok(Some(path))
 }
 
-/// Spool large output with full SpoolResult for agent access
-///
-/// Returns the SpoolResult which is the SOURCE OF TRUTH for large outputs.
-/// The SpoolResult provides:
-/// - `file_path`: Where the full output is stored
-/// - `read_full_content()`: Read the entire output
-/// - `read_lines(start, end)`: Read specific line ranges
-/// - `get_preview()`: Get head+tail preview
-/// - `to_agent_response()`: Get formatted response for agent
-#[allow(dead_code)]
-pub(crate) fn spool_output_with_notification(
-    content: &str,
-    tool_name: &str,
-    session_id: Option<&str>,
-) -> Result<Option<super::super::large_output::SpoolResult>> {
-    if content.len() < super::LARGE_OUTPUT_NOTIFICATION_THRESHOLD {
-        return Ok(None);
-    }
-
-    let config = LargeOutputConfig::default()
-        .with_threshold(super::LARGE_OUTPUT_NOTIFICATION_THRESHOLD)
-        .with_session_id(session_id.unwrap_or("default").to_string());
-
-    spool_large_output(content, tool_name, &config)
-}
-
 pub(super) fn tail_lines_streaming<'a>(
     text: &'a str,
     limit: usize,

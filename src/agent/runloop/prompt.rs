@@ -4,7 +4,7 @@ use tokio::sync::RwLock;
 
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
-use vtcode_core::context::{ConversationMemory, EntityResolver, ProactiveGatherer, WorkspaceState};
+use vtcode_core::context::{ConversationMemory, EntityResolver, WorkspaceState};
 use vtcode_core::llm::{
     factory::{ProviderConfig, create_provider_with_config},
     provider as uni,
@@ -166,8 +166,6 @@ const VAGUE_PATTERNS: &[&str] = &[
 #[derive(Debug, Clone)]
 pub struct VagueReference {
     pub term: String,
-    #[allow(dead_code)]
-    pub position: usize,
 }
 
 /// Resolution of a vague reference to a concrete entity
@@ -281,12 +279,11 @@ pub fn detect_vague_references(prompt: &str) -> Vec<VagueReference> {
         // Simple word boundary check (not full regex for now)
         let pattern_word = pattern.trim_start_matches(r"\b").trim_end_matches(r"\b");
 
-        for (idx, word) in prompt_lower.split_whitespace().enumerate() {
+        for word in prompt_lower.split_whitespace() {
             let cleaned = word.trim_matches(|c: char| !c.is_alphanumeric());
             if cleaned == pattern_word {
                 references.push(VagueReference {
                     term: cleaned.to_string(),
-                    position: idx,
                 });
             }
         }
@@ -334,10 +331,6 @@ pub struct PromptEnricher {
     /// Conversation memory for pronoun resolution
     conversation_memory: Arc<RwLock<ConversationMemory>>,
 
-    /// Proactive context gatherer (planned for Phase 3 integration)
-    #[allow(dead_code)]
-    proactive_gatherer: Arc<ProactiveGatherer>,
-
     /// Configuration
     vt_cfg: VTCodeConfig,
 }
@@ -351,34 +344,11 @@ impl PromptEnricher {
             PathBuf::from(&vt_cfg.agent.vibe_coding.entity_index_cache),
         )));
         let conversation_memory = Arc::new(RwLock::new(ConversationMemory::new()));
-        let proactive_gatherer = Arc::new(ProactiveGatherer::new(
-            workspace_root,
-            workspace_state.clone(),
-        ));
 
         Self {
             entity_resolver,
             workspace_state,
             conversation_memory,
-            proactive_gatherer,
-            vt_cfg,
-        }
-    }
-
-    /// Create enricher with existing components (for testing)
-    #[allow(dead_code)]
-    pub fn with_components(
-        entity_resolver: Arc<RwLock<EntityResolver>>,
-        workspace_state: Arc<RwLock<WorkspaceState>>,
-        conversation_memory: Arc<RwLock<ConversationMemory>>,
-        proactive_gatherer: Arc<ProactiveGatherer>,
-        vt_cfg: VTCodeConfig,
-    ) -> Self {
-        Self {
-            entity_resolver,
-            workspace_state,
-            conversation_memory,
-            proactive_gatherer,
             vt_cfg,
         }
     }
@@ -456,21 +426,9 @@ impl PromptEnricher {
         enriched
     }
 
-    /// Get reference to workspace state (for tool execution tracking)
-    #[allow(dead_code)]
+    /// Get reference to workspace state for tests that seed activity.
+    #[cfg(test)]
     pub fn workspace_state(&self) -> Arc<RwLock<WorkspaceState>> {
         self.workspace_state.clone()
-    }
-
-    /// Get reference to conversation memory (for message tracking)
-    #[allow(dead_code)]
-    pub fn conversation_memory(&self) -> Arc<RwLock<ConversationMemory>> {
-        self.conversation_memory.clone()
-    }
-
-    /// Get reference to entity resolver (for index updates)
-    #[allow(dead_code)]
-    pub fn entity_resolver(&self) -> Arc<RwLock<EntityResolver>> {
-        self.entity_resolver.clone()
     }
 }

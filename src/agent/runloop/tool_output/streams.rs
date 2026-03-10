@@ -64,8 +64,7 @@ use streams_helpers::{
     should_render_as_code_block, spool_output_if_needed, tail_lines_streaming,
 };
 pub(crate) use streams_helpers::{
-    render_code_fence_blocks, resolve_stdout_tail_limit, spool_output_with_notification,
-    strip_ansi_codes,
+    render_code_fence_blocks, resolve_stdout_tail_limit, strip_ansi_codes,
 };
 
 /// Maximum number of lines to display in inline mode before truncating
@@ -80,12 +79,6 @@ const MAX_LINE_LENGTH: usize = 150;
 const DEFAULT_SPOOL_THRESHOLD: usize = 50_000; // 50KB — UI render truncation
 /// Maximum number of lines to display in code fence blocks
 const MAX_CODE_LINES: usize = 500;
-/// Preview window lines used by large-output previewing (kept local)
-#[allow(dead_code)]
-const PREVIEW_HEAD_LINES: usize = 20;
-/// Preview tail lines used by large-output previewing (kept local)
-#[allow(dead_code)]
-const PREVIEW_TAIL_LINES: usize = 10;
 /// Size threshold (bytes) at which to show minimal preview instead of full output
 const LARGE_OUTPUT_THRESHOLD_MB: usize = 1_000_000;
 /// Size threshold (bytes) at which to show fewer preview lines

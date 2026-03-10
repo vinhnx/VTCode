@@ -59,24 +59,9 @@ impl Default for LargeOutputConfig {
 }
 
 impl LargeOutputConfig {
-    /// Create a new config with custom base directory
-    #[allow(dead_code)]
-    pub fn with_base_dir(base_dir: PathBuf) -> Self {
-        Self {
-            base_dir,
-            ..Default::default()
-        }
-    }
-
     /// Set the size threshold for spooling
     pub fn with_threshold(mut self, threshold_bytes: usize) -> Self {
         self.threshold_bytes = threshold_bytes;
-        self
-    }
-
-    /// Set the session ID for grouping outputs
-    pub fn with_session_id(mut self, session_id: String) -> Self {
-        self.session_id = Some(session_id);
         self
     }
 }
@@ -86,7 +71,6 @@ const PREVIEW_HEAD_LINES: usize = 20;
 /// Number of lines to show in preview (tail)
 const PREVIEW_TAIL_LINES: usize = 10;
 /// Metadata header line count to skip when reading content
-#[allow(dead_code)]
 const METADATA_HEADER_LINES: usize = 5;
 
 /// Result of large output handling - This is the SOURCE OF TRUTH for the output
@@ -121,7 +105,7 @@ impl SpoolResult {
 
         // Skip the metadata header (lines before "---\n\n")
         if let Some(idx) = content.find("---\n\n") {
-            Ok(content[idx + 5..].to_string())
+            Ok(content[idx + METADATA_HEADER_LINES..].to_string())
         } else {
             Ok(content)
         }
@@ -360,7 +344,7 @@ pub fn spool_large_output(
 /// │ /Users/user/.vtcode/tmp/40490821eec37be65d00bb1d9e60f6f4d2aa9753e... │
 /// │ call_b557fe1443144e71a2c00a34.output                                  │
 /// ```
-#[allow(dead_code)]
+#[cfg(test)]
 pub fn format_spool_notification(result: &SpoolResult) -> String {
     let path_str = result.file_path.display().to_string();
 
@@ -386,53 +370,4 @@ pub fn format_spool_notification(result: &SpoolResult) -> String {
     }
 
     lines.join("\n")
-}
-
-/// Format a compact notification for inline display
-#[allow(dead_code)]
-pub fn format_compact_notification(result: &SpoolResult) -> String {
-    format!(
-        "[Output saved: {} ({} bytes)]",
-        result.file_path.display(),
-        result.size_bytes
-    )
-}
-
-/// Clean up old spool directories older than the specified duration
-#[allow(dead_code)]
-pub fn cleanup_old_spool_dirs(base_dir: &PathBuf, max_age_hours: u64) -> Result<usize> {
-    let mut cleaned = 0;
-    let max_age = std::time::Duration::from_secs(max_age_hours * 3600);
-    let now = SystemTime::now();
-
-    if !base_dir.exists() {
-        return Ok(0);
-    }
-
-    for entry in fs::read_dir(base_dir)? {
-        let entry = entry?;
-        let path = entry.path();
-
-        if !path.is_dir() {
-            continue;
-        }
-
-        let Ok(metadata) = fs::metadata(&path) else {
-            continue;
-        };
-
-        let Ok(modified) = metadata.modified() else {
-            continue;
-        };
-
-        let Ok(age) = now.duration_since(modified) else {
-            continue;
-        };
-
-        if age > max_age && fs::remove_dir_all(&path).is_ok() {
-            cleaned += 1;
-        }
-    }
-
-    Ok(cleaned)
 }

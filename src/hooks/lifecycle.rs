@@ -1,7 +1,6 @@
 mod compiled;
 mod engine;
 mod interpret;
-mod interpret_events;
 mod types;
 mod utils;
 
@@ -9,8 +8,6 @@ mod utils;
 mod tests;
 
 pub use engine::LifecycleHookEngine;
-#[allow(unused_imports)]
 pub use types::{
-    HookMessage, HookMessageLevel, PostToolHookOutcome, PreToolHookDecision, PreToolHookOutcome,
-    SessionEndReason, SessionStartHookOutcome, SessionStartTrigger, UserPromptHookOutcome,
+    HookMessage, HookMessageLevel, PreToolHookDecision, SessionEndReason, SessionStartTrigger,
 };

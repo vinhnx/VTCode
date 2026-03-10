@@ -6,7 +6,6 @@ pub(crate) mod plan_content;
 pub mod recovery_flow;
 pub(crate) mod session;
 mod session_loop;
-mod tool_execution;
 mod tool_outcomes;
 pub(crate) mod turn_helpers;
 mod turn_loop;

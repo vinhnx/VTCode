@@ -39,7 +39,6 @@ pub struct ProgressState {
 
 struct ProgressMetadata {
     message: String,
-    last_update: Instant,
     estimated_remaining: Option<Duration>,
     stage_name: String,
 }
@@ -53,7 +52,6 @@ impl ProgressState {
             total: AtomicU64::new(0),
             metadata: Mutex::new(ProgressMetadata {
                 message: String::new(),
-                last_update: Instant::now(),
                 estimated_remaining: None,
                 stage_name: String::new(),
             }),
@@ -137,12 +135,6 @@ impl ProgressState {
     pub fn is_complete(&self) -> bool {
         self.is_complete.load(Ordering::SeqCst)
     }
-
-    /// Check if enough time has passed since last update to warrant a UI refresh
-    pub async fn should_update(&self) -> bool {
-        let metadata = self.metadata.lock().await;
-        metadata.last_update.elapsed() >= Duration::from_millis(100)
-    }
 }
 
 /// Provides a thread-safe way to report progress with enhanced features
@@ -208,20 +200,6 @@ impl ProgressReporter {
         (stage, stage_name)
     }
 
-    /// Get the estimated time remaining
-    pub async fn eta(&self) -> Option<Duration> {
-        let (_, _, _, remaining, _, _) = self.state.get_progress().await;
-        remaining
-    }
-
-    /// Format the estimated time remaining as a string
-    pub async fn eta_formatted(&self) -> String {
-        match self.eta().await {
-            Some(duration) => format_eta(duration),
-            None => "Calculating...".to_string(),
-        }
-    }
-
     /// Mark the operation as complete
     pub async fn complete(&self) {
         self.state.complete().await;
@@ -284,11 +262,6 @@ impl ProgressInfo {
         self.eta
             .map(format_eta)
             .unwrap_or_else(|| "Calculating...".to_string())
-    }
-
-    /// Format the elapsed time as a human-readable string
-    pub fn elapsed_formatted(&self) -> String {
-        super::palettes::format_duration_label(self.elapsed)
     }
 }
 

@@ -18,7 +18,7 @@ use super::status::ToolExecutionStatus;
 use super::timeout::{TimeoutWarningGuard, create_timeout_error};
 use super::{DEFAULT_TOOL_TIMEOUT, MAX_RETRY_BACKOFF, RETRY_BACKOFF_BASE};
 
-#[allow(dead_code)]
+#[cfg(test)]
 pub(crate) async fn execute_tool_with_timeout(
     registry: &ToolRegistry,
     name: &str,
@@ -40,6 +40,7 @@ pub(crate) async fn execute_tool_with_timeout(
     .await
 }
 
+#[cfg(test)]
 pub(crate) async fn execute_tool_with_timeout_ref(
     registry: &ToolRegistry,
     name: &str,

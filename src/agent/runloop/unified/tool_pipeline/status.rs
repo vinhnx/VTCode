@@ -34,20 +34,6 @@ pub(crate) enum ToolExecutionStatus {
     // TODO: Progress variant planned for streaming tool progress updates
 }
 
-impl ToolExecutionStatus {
-    /// Returns `true` if this status represents a successful execution.
-    pub(crate) fn is_success(&self) -> bool {
-        matches!(self, Self::Success { .. })
-    }
-
-    /// Returns `true` if this status represents any kind of failure
-    /// (error, timeout, or cancellation).
-    #[allow(dead_code)]
-    pub(crate) fn is_failure(&self) -> bool {
-        !self.is_success()
-    }
-}
-
 /// Outcome produced by a tool pipeline run - returns a success/failure wrapper along with stdout and modified files
 pub(crate) struct ToolPipelineOutcome {
     pub status: ToolExecutionStatus,
@@ -110,11 +96,6 @@ pub(crate) struct ToolBatchOutcome {
 /// A single entry inside a [`ToolBatchOutcome`].
 #[derive(Debug)]
 pub(crate) struct ToolBatchEntry {
-    /// Tool name (e.g. `"read_file"`, `"mcp_github_create_issue"`)
-    pub tool_name: String,
-    /// The provider-assigned call id.
-    #[allow(dead_code)]
-    pub call_id: String,
     /// High-level result category.
     pub result: ToolBatchResult,
 }
@@ -159,15 +140,8 @@ impl ToolBatchOutcome {
     }
 
     /// Record the result of one tool call.
-    pub(crate) fn record(
-        &mut self,
-        tool_name: impl Into<String>,
-        call_id: impl Into<String>,
-        status: &ToolExecutionStatus,
-    ) {
+    pub(crate) fn record(&mut self, status: &ToolExecutionStatus) {
         self.entries.push(ToolBatchEntry {
-            tool_name: tool_name.into(),
-            call_id: call_id.into(),
             result: ToolBatchResult::from(status),
         });
     }
@@ -222,21 +196,6 @@ impl ToolBatchOutcome {
         }
         format!("{}/{} tools: {}", s.total, s.total, parts.join(", "))
     }
-
-    /// Names of tools that failed or timed out.
-    #[allow(dead_code)]
-    pub(crate) fn failed_tool_names(&self) -> Vec<&str> {
-        self.entries
-            .iter()
-            .filter(|e| {
-                matches!(
-                    e.result,
-                    ToolBatchResult::Failure | ToolBatchResult::Timeout
-                )
-            })
-            .map(|e| e.tool_name.as_str())
-            .collect()
-    }
 }
 
 #[cfg(test)]
@@ -262,8 +221,8 @@ mod tests {
             command_success: true,
             has_more: false,
         };
-        batch.record("read_file", "c1", &success);
-        batch.record("list_files", "c2", &success);
+        batch.record(&success);
+        batch.record(&success);
 
         let s = batch.stats();
         assert_eq!(s.total, 2);
@@ -285,8 +244,8 @@ mod tests {
         let failure = ToolExecutionStatus::Failure {
             error: anyhow::anyhow!("permission denied"),
         };
-        batch.record("read_file", "c1", &success);
-        batch.record("write_file", "c2", &failure);
+        batch.record(&success);
+        batch.record(&failure);
 
         assert!(batch.is_partial_success());
         let s = batch.stats();
@@ -302,7 +261,7 @@ mod tests {
         let failure = ToolExecutionStatus::Failure {
             error: anyhow::anyhow!("boom"),
         };
-        batch.record("write_file", "c1", &failure);
+        batch.record(&failure);
         assert!(!batch.is_partial_success());
     }
 
@@ -316,28 +275,8 @@ mod tests {
                 "timed out after 30s".to_string(),
             ),
         };
-        batch.record("slow_tool", "c1", &timeout);
+        batch.record(&timeout);
         let s = batch.stats();
         assert_eq!(s.timed_out, 1);
-    }
-
-    #[test]
-    fn failed_tool_names_returns_correct_names() {
-        let mut batch = ToolBatchOutcome::new();
-        let success = ToolExecutionStatus::Success {
-            output: serde_json::json!("ok"),
-            stdout: None,
-            modified_files: vec![],
-            command_success: true,
-            has_more: false,
-        };
-        let failure = ToolExecutionStatus::Failure {
-            error: anyhow::anyhow!("nope"),
-        };
-        batch.record("good_tool", "c1", &success);
-        batch.record("bad_tool", "c2", &failure);
-
-        let failed = batch.failed_tool_names();
-        assert_eq!(failed, vec!["bad_tool"]);
     }
 }

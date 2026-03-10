@@ -11,7 +11,7 @@ use crate::agent::runloop::unified::turn::context::{TurnHandlerOutcome, TurnProc
 use super::{PreparedToolCall, ToolOutcomeContext, ValidationResult, validate_tool_call};
 use crate::agent::runloop::unified::turn::tool_outcomes::execution_result::handle_tool_execution_result;
 use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
-    push_tool_response, resolve_max_tool_retries, update_repetition_tracker,
+    resolve_max_tool_retries, update_repetition_tracker,
 };
 
 pub(crate) struct ParsedToolCall<'a> {
@@ -22,43 +22,6 @@ pub(crate) struct ParsedToolCall<'a> {
 fn can_parallelize_batch_tool_call(prepared: &PreparedToolCall) -> bool {
     prepared.readonly_classification
         && tool_intent::is_parallel_safe_call(&prepared.canonical_name, &prepared.effective_args)
-}
-
-#[allow(dead_code)]
-pub(crate) async fn handle_tool_call_batch<'a, 'b>(
-    t_ctx: &mut ToolOutcomeContext<'a, 'b>,
-    tool_calls: &[&uni::ToolCall],
-) -> Result<Option<TurnHandlerOutcome>> {
-    let mut parsed_calls = Vec::with_capacity(tool_calls.len());
-    for tool_call in tool_calls {
-        let Some(func) = tool_call.function.as_ref() else {
-            continue;
-        };
-        let args = match tool_call.parsed_arguments() {
-            Ok(args) => args,
-            Err(err) => {
-                push_tool_response(
-                    t_ctx.ctx.working_history,
-                    tool_call.id.clone(),
-                    serde_json::json!({
-                        "error": format!(
-                            "Invalid tool arguments for '{}': {}",
-                            func.name,
-                            err
-                        )
-                    })
-                    .to_string(),
-                );
-                continue;
-            }
-        };
-        parsed_calls.push(ParsedToolCall {
-            tool_call,
-            args: Arc::new(args),
-        });
-    }
-
-    handle_tool_call_batch_parsed(t_ctx, parsed_calls).await
 }
 
 pub(crate) async fn handle_tool_call_batch_parsed<'a, 'b>(
@@ -198,7 +161,7 @@ pub(crate) async fn handle_tool_call_batch_parsed<'a, 'b>(
         };
 
         // Record in the batch tracker before wrapping into ToolPipelineOutcome.
-        batch_tracker.record(&name, &call_id, &status);
+        batch_tracker.record(&status);
 
         let outcome =
             crate::agent::runloop::unified::tool_pipeline::ToolPipelineOutcome::from_status(status);

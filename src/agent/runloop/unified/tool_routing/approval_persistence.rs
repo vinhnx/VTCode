@@ -5,7 +5,7 @@ use vtcode_core::tools::registry::ToolRegistry;
 
 use super::permission_prompt::{
     extract_shell_approval_command_prefix_words, extract_shell_approval_scope_signature,
-    render_shell_approval_command_words, render_shell_persistent_approval_prefix_entry,
+    render_shell_persistent_approval_prefix_entry,
 };
 
 const SHELL_APPROVAL_SCOPE_MARKER: &str = "|sandbox_permissions=";
@@ -112,9 +112,4 @@ pub(super) fn persist_shell_approval_prefix_rule(
 
     tool_registry.apply_commands_config(&config.commands);
     Ok(rendered_rule)
-}
-
-#[allow(dead_code)]
-pub(super) fn render_persisted_prefix(prefix_rule: &[String]) -> String {
-    render_shell_approval_command_words(prefix_rule)
 }

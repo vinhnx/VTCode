@@ -191,24 +191,6 @@ pub(crate) fn validate_tool_args_security(
     failures
 }
 
-// Deprecated: use validate_tool_args_security instead
-#[allow(dead_code)]
-pub(crate) fn validate_required_tool_args(
-    name: &str,
-    args: &serde_json::Value,
-) -> Option<Vec<&'static str>> {
-    // This function is kept for backward compatibility if needed,
-    // but the logic is now superset in validate_tool_args_security.
-    // We map the new result back to the old signature roughly.
-    let result = validate_tool_args_security(name, args, None, None);
-    result.map(|_failures| {
-        // Convert dynamic strings to static error messages for compatibility
-        // THIS IS A LOSS OF DETAIL but necessary to match signature.
-        // Consumers should migrate to validate_tool_args_security.
-        vec!["Validation failed (use validate_tool_args_security for details)"]
-    })
-}
-
 pub(crate) async fn run_proactive_guards(
     ctx: &mut TurnProcessingContext<'_>,
     _step_count: usize,

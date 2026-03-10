@@ -9,17 +9,8 @@ mod panels;
 mod streams;
 mod styles;
 
-// Re-export large output handling utilities for external use
-#[allow(unused_imports)]
-pub(crate) use large_output::{
-    LargeOutputConfig, SpoolResult, cleanup_old_spool_dirs, format_compact_notification,
-    format_spool_notification, spool_large_output,
-};
 // Re-export stream utilities
-#[allow(unused_imports)]
-pub(crate) use streams::{
-    render_code_fence_blocks, resolve_stdout_tail_limit, spool_output_with_notification,
-};
+pub(crate) use streams::{render_code_fence_blocks, resolve_stdout_tail_limit};
 
 use anyhow::Result;
 use serde_json::Value;

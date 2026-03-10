@@ -40,18 +40,6 @@ fn persist_theme_config(theme_id: &str) -> Result<()> {
     Ok(())
 }
 
-#[allow(dead_code)]
-pub(crate) fn ensure_turn_bottom_gap(
-    renderer: &mut AnsiRenderer,
-    applied: &mut bool,
-) -> Result<()> {
-    if !*applied {
-        renderer.line_if_not_empty(MessageStyle::Output)?;
-        *applied = true;
-    }
-    Ok(())
-}
-
 /// Display a user message using the active user styling
 pub(crate) fn display_user_message(renderer: &mut AnsiRenderer, message: &str) -> Result<()> {
     let rendered = highlight_shell_user_input(message).unwrap_or_else(|| message.to_string());
