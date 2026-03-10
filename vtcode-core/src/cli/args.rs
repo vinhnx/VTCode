@@ -1280,29 +1280,12 @@ impl Cli {
     /// Automatically infers the API key environment variable based on the provider
     /// when the current value matches the default or is not explicitly set.
     pub fn get_api_key_env(&self) -> String {
-        // If api_key_env is the default or empty, infer from provider
-        if self.api_key_env == crate::config::constants::defaults::DEFAULT_API_KEY_ENV
-            || self.api_key_env.is_empty()
-        {
-            let provider = self
-                .provider
+        crate::config::api_keys::resolve_api_key_env(
+            self.provider
                 .as_deref()
-                .unwrap_or(crate::config::constants::defaults::DEFAULT_PROVIDER);
-            let provider_key = provider.to_ascii_lowercase();
-
-            match provider_key.as_str() {
-                "openai" => "OPENAI_API_KEY".to_owned(),
-                "anthropic" => "ANTHROPIC_API_KEY".to_owned(),
-                "gemini" => "GEMINI_API_KEY".to_owned(),
-                "deepseek" => "DEEPSEEK_API_KEY".to_owned(),
-                "openrouter" => "OPENROUTER_API_KEY".to_owned(),
-                "zai" => "ZAI_API_KEY".to_owned(),
-                "minimax" => "ANTHROPIC_API_KEY".to_owned(),
-                _ => crate::config::constants::defaults::DEFAULT_API_KEY_ENV.to_owned(),
-            }
-        } else {
-            self.api_key_env.clone()
-        }
+                .unwrap_or(crate::config::constants::defaults::DEFAULT_PROVIDER),
+            &self.api_key_env,
+        )
     }
 
     /// Check if verbose mode is enabled
@@ -1329,7 +1312,8 @@ impl Cli {
 
 #[cfg(test)]
 mod tests {
-    use super::long_version;
+    use super::{Cli, long_version};
+    use clap::Parser;
 
     #[test]
     fn long_version_includes_expected_sections() {
@@ -1346,5 +1330,25 @@ mod tests {
         let text = long_version();
         let expected = option_env!("VT_CODE_GIT_INFO").unwrap_or(env!("CARGO_PKG_VERSION"));
         assert!(text.starts_with(expected));
+    }
+
+    #[test]
+    fn config_file_api_key_env_uses_provider_default() {
+        let cli = Cli::parse_from(["vtcode", "--provider", "minimax"]);
+
+        assert_eq!(cli.get_api_key_env(), "MINIMAX_API_KEY");
+    }
+
+    #[test]
+    fn config_file_api_key_env_preserves_explicit_override() {
+        let cli = Cli::parse_from([
+            "vtcode",
+            "--provider",
+            "openai",
+            "--api-key-env",
+            "CUSTOM_OPENAI_KEY",
+        ]);
+
+        assert_eq!(cli.get_api_key_env(), "CUSTOM_OPENAI_KEY");
     }
 }

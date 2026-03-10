@@ -4,7 +4,6 @@ use anyhow::{Context, Result, bail};
 use vtcode_core::dotfile_protection::init_global_guardian;
 use vtcode_core::utils::validation::validate_path_exists;
 
-mod agent_config;
 mod config_loading;
 mod dependency_advisories;
 mod first_run;
@@ -14,9 +13,6 @@ mod theme;
 mod validation;
 mod workspace_trust;
 
-use agent_config::{
-    api_key_env_var, build_agent_config, provider_env_override, provider_label, resolve_provider,
-};
 use config_loading::load_startup_config;
 pub(crate) use dependency_advisories::append_optional_search_tools_highlight;
 use resume::{resolve_session_resume, validate_resume_all_usage};
@@ -28,8 +24,11 @@ use validation::{
 use vtcode_core::cli::args::Cli;
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, ModelSelectionSource};
+use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::config::validator::check_prompt_cache_retention_compat;
+use vtcode_core::core::agent::config::{
+    api_key_env_var, build_runtime_agent_config, provider_label, resolve_runtime_model_selection,
+};
 use vtcode_core::{initialize_dot_folder, update_theme_preference};
 pub(crate) use workspace_trust::{
     ensure_full_auto_workspace_trust, require_full_auto_workspace_trust,
@@ -98,24 +97,7 @@ impl StartupContext {
             );
         }
 
-        // Determine model: --agent flag takes precedence, then --model, then config
-        let (model, model_source) = if let Some(agent) = args.agent.clone() {
-            (agent, ModelSelectionSource::CliOverride)
-        } else if let Some(value) = args.model.clone() {
-            (value, ModelSelectionSource::CliOverride)
-        } else {
-            (
-                config.agent.default_model.clone(),
-                ModelSelectionSource::WorkspaceConfig,
-            )
-        };
-
-        let provider = resolve_provider(
-            args.provider.clone().or_else(provider_env_override),
-            config.agent.provider.as_str(),
-            &model,
-            model_source,
-        );
+        let selection = resolve_runtime_model_selection(args, &config);
 
         initialize_dot_folder().await.ok();
 
@@ -129,11 +111,11 @@ impl StartupContext {
         update_theme_preference(&theme_selection).await.ok();
 
         // Validate API key AFTER first-run setup so new users can complete setup first
-        let api_key = get_api_key(&provider, &ApiKeySources::default())
+        let api_key = get_api_key(&selection.provider, &ApiKeySources::default())
             .with_context(|| {
                 let first_run_occurred = loaded.first_run_occurred;
-                let provider_name = provider_label(&provider);
-                let env_var = api_key_env_var(&provider);
+                let provider_name = provider_label(&selection.provider);
+                let env_var = api_key_env_var(&selection.provider);
                 if first_run_occurred {
                     format!(
                         "API key not found for {}. To fix:\n  1. Set {} environment variable, or\n  2. Add to .env file, or\n  3. Configure in vtcode.toml\n\nRun `/init` anytime to reconfigure.",
@@ -143,19 +125,17 @@ impl StartupContext {
                 } else {
                     format!(
                         "API key not found for provider '{}'. Set {} environment variable (or add to .env file) or configure in vtcode.toml.",
-                        provider,
-                        api_key_env_var(&provider)
+                        selection.provider,
+                        api_key_env_var(&selection.provider)
                     )
                 }
             })?;
 
-        let agent_config = build_agent_config(
+        let agent_config = build_runtime_agent_config(
             args,
             &config,
             loaded.workspace.clone(),
-            provider,
-            model,
-            model_source,
+            selection,
             api_key,
             theme_selection,
         );
@@ -232,39 +212,6 @@ mod validation_tests {
         let provider = "openai";
         let msg = check_prompt_cache_retention_compat(&cfg, model, provider);
         assert!(msg.is_none());
-    }
-
-    #[test]
-    fn provider_resolution_prefers_configured_provider_for_config_model() {
-        let provider = resolve_provider(
-            None,
-            "zai",
-            vtcode_core::config::constants::models::ollama::MINIMAX_M25_CLOUD,
-            ModelSelectionSource::WorkspaceConfig,
-        );
-        assert_eq!(provider, "zai");
-    }
-
-    #[test]
-    fn provider_resolution_infers_from_cli_model_without_cli_provider() {
-        let provider = resolve_provider(
-            None,
-            "zai",
-            vtcode_core::config::constants::models::ollama::MINIMAX_M25_CLOUD,
-            ModelSelectionSource::CliOverride,
-        );
-        assert_eq!(provider, "ollama");
-    }
-
-    #[test]
-    fn provider_resolution_uses_cli_provider_when_present() {
-        let provider = resolve_provider(
-            Some("minimax".to_owned()),
-            "zai",
-            vtcode_core::config::constants::models::ollama::MINIMAX_M25_CLOUD,
-            ModelSelectionSource::CliOverride,
-        );
-        assert_eq!(provider, "minimax");
     }
 
     #[test]
