@@ -4,4 +4,4 @@
 //! applications to VT Code, including tools like Claude Code.
 
 #[cfg(feature = "anthropic-api")]
-pub mod server;
+pub use crate::llm::providers::anthropic::api as server;

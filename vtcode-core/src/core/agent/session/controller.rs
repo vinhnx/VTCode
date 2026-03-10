@@ -229,14 +229,16 @@ impl AgentSessionController {
         self.state.messages.push(assistant_msg.clone());
 
         // Handle Gemini content conversion if needed (legacy)
-        let parts = vec![crate::gemini::Part::Text {
+        let parts = vec![crate::llm::providers::gemini::wire::Part::Text {
             text: full_text.clone(),
             thought_signature: None,
         }];
-        self.state.conversation.push(crate::gemini::Content {
-            role: "model".to_string(),
-            parts,
-        });
+        self.state
+            .conversation
+            .push(crate::llm::providers::gemini::wire::Content {
+                role: "model".to_string(),
+                parts,
+            });
         self.state.last_processed_message_idx = self.state.conversation.len();
 
         self.emit(AgentEvent::TurnCompleted {

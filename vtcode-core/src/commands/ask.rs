@@ -3,12 +3,12 @@
 use crate::cli::input_hardening::validate_agent_safe_text;
 use crate::config::models::ModelId;
 use crate::config::types::AgentConfig;
-use crate::gemini::models::SystemInstruction;
-use crate::gemini::{Content, GenerateContentRequest};
-use crate::llm::make_client;
-use crate::prompts::{generate_lightweight_instruction, generate_system_instruction};
+use crate::llm::factory::create_provider_for_model;
+use crate::llm::provider::{LLMRequest, Message};
+use crate::prompts::system::lightweight_instruction_text;
 use anyhow::Result;
 use crossterm::tty::IsTty;
+use std::sync::Arc;
 
 /// Handle the ask command - single prompt without tools
 pub async fn handle_ask_command(
@@ -20,7 +20,6 @@ pub async fn handle_ask_command(
         .model
         .parse::<ModelId>()
         .map_err(|_| anyhow::anyhow!("Invalid model: {}", config.model))?;
-    let mut client = make_client(config.api_key.clone(), model_id)?;
     let prompt_text = prompt.join(" ");
     validate_agent_safe_text("prompt", &prompt_text)?;
 
@@ -28,58 +27,20 @@ pub async fn handle_ask_command(
         eprintln!("Sending prompt to {}: {}", config.model, prompt_text);
     }
 
-    let contents = vec![Content::user_text(prompt_text)];
-    let lightweight_instruction = generate_lightweight_instruction();
-
-    // Convert Content to SystemInstruction
-    let system_instruction = if let Some(part) = lightweight_instruction.parts.first() {
-        if let Some(text) = part.as_text() {
-            SystemInstruction::new(text)
-        } else {
-            let content = generate_system_instruction(&Default::default()).await;
-            if let Some(text) = content.parts.first().and_then(|p| p.as_text()) {
-                SystemInstruction::new(text)
-            } else {
-                SystemInstruction::new(crate::prompts::system::default_lightweight_prompt())
-            }
-        }
+    let request = LLMRequest {
+        messages: vec![Message::user(prompt_text)],
+        system_prompt: Some(Arc::new(lightweight_instruction_text())),
+        model: model_id.to_string(),
+        ..Default::default()
+    };
+    let provider = create_provider_for_model(&request.model, config.api_key.clone(), None, None)?;
+    let backend_kind = provider.name().to_string();
+    let response = provider.generate(request).await?;
+    let response_model = if response.model.is_empty() {
+        model_id.to_string()
     } else {
-        let content = generate_system_instruction(&Default::default()).await;
-        if let Some(text) = content.parts.first().and_then(|p| p.as_text()) {
-            SystemInstruction::new(text)
-        } else {
-            SystemInstruction::new(crate::prompts::system::default_lightweight_prompt())
-        }
+        response.model.clone()
     };
-
-    let request = GenerateContentRequest {
-        contents,
-        tools: None,
-        tool_config: None,
-        generation_config: None,
-        system_instruction: Some(system_instruction),
-    };
-
-    // Convert the request to a string prompt
-    let prompt = request
-        .contents
-        .iter()
-        .map(|content| {
-            content
-                .parts
-                .iter()
-                .map(|part| match part {
-                    crate::gemini::Part::Text { text, .. } => text.clone(),
-                    _ => String::new(),
-                })
-                .collect::<Vec<_>>()
-                .join("\n")
-        })
-        .collect::<Vec<_>>()
-        .join("\n\n");
-
-    let response = client.generate(&prompt).await?;
-    let backend_kind = client.backend_kind();
 
     // Handle output based on format preference
     if let Some(crate::cli::args::AskOutputFormat::Json) = options.output_format {
@@ -88,7 +49,7 @@ pub async fn handle_ask_command(
             "response": response,
             "provider": {
                 "kind": backend_kind,
-                "model": response.model,
+                "model": response_model,
             }
         });
         use std::io::Write;

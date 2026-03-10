@@ -1,7 +1,7 @@
 use crate::core::agent::task::{TaskOutcome, TaskResults};
 use crate::exec::events::ThreadEvent;
-use crate::gemini::{Content, Part};
 use crate::llm::provider::Message;
+use crate::llm::providers::gemini::wire::{Content, FunctionResponse, Part};
 use hashbrown::{HashMap, HashSet};
 use std::time::Duration;
 
@@ -461,7 +461,7 @@ impl TaskRunState {
             self.conversation.push(Content {
                 role: "function".to_string(),
                 parts: vec![Part::FunctionResponse {
-                    function_response: crate::gemini::FunctionResponse {
+                    function_response: FunctionResponse {
                         name: tool_name.to_string(),
                         response: response_value,
                         id: Some(call_id.clone()),
@@ -488,7 +488,7 @@ impl TaskRunState {
             self.conversation.push(Content {
                 role: "function".to_string(),
                 parts: vec![Part::FunctionResponse {
-                    function_response: crate::gemini::FunctionResponse {
+                    function_response: FunctionResponse {
                         name: tool_name.to_string(),
                         response: serde_json::json!({ "error": error_msg }),
                         id: Some(call_id.clone()),

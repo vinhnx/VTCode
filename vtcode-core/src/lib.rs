@@ -125,7 +125,7 @@
 pub mod a2a; // Agent2Agent Protocol support
 pub mod acp;
 #[cfg(feature = "anthropic-api")]
-pub mod anthropic_api;
+pub mod anthropic_api; // Compatibility facade; canonical implementation lives under llm/providers/anthropic
 pub mod audit;
 pub mod auth; // OAuth PKCE authentication for providers
 pub mod cache; // Unified caching system
@@ -145,7 +145,7 @@ pub mod exec;
 pub mod exec_policy; // Codex-style execution policy management
 /// Backward-compatible alias: command-level validation now lives in `exec_policy::command_validation`.
 pub use exec_policy::command_validation as execpolicy;
-pub mod gemini;
+pub mod gemini; // Compatibility facade; canonical internal import path is llm/providers/gemini::wire
 pub mod git_info; // Git repository information collection
 pub mod hooks;
 pub mod http_client;
@@ -241,7 +241,7 @@ pub use exec::events::{
     TurnFailedEvent, TurnStartedEvent, Usage, VersionedThreadEvent, WebSearchItem,
 };
 pub use exec::{CodeExecutor, ExecutionConfig, ExecutionResult, Language};
-pub use gemini::{Content, FunctionDeclaration, Part};
+pub use llm::providers::gemini::wire::{Content, FunctionDeclaration, Part};
 pub use llm::{AnyClient, make_client};
 pub use mcp::{
     tool_discovery::{DetailLevel, ToolDiscovery, ToolDiscoveryResult},

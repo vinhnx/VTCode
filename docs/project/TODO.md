@@ -64,10 +64,6 @@ maybe move /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src
 
 merge /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/exec and /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/exec_policy?
 
-=--
-
-more /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/gemini and /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/anthropic_api into unified provider-agnostic places and unify with other provider.
-
 ---
 
 improve /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-indexer
@@ -78,17 +74,9 @@ improve /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-llm
 
 ---
 
----
-
-extract /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src/acp to module /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-acp-client
-
----
-
-==
-
 https://claude.ai/chat/bac1e18f-f11a-496d-b260-7de5948faf7a
 
---
+---
 
 CODEX plus
 

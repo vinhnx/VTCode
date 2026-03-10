@@ -2,8 +2,8 @@
 
 use crate::config::ToolDocumentationMode;
 use crate::config::types::CapabilityLevel;
-use crate::gemini::FunctionDeclaration;
 use crate::llm::provider::ToolDefinition;
+use crate::llm::providers::gemini::wire::FunctionDeclaration;
 use crate::tools::handlers::{
     SessionSurface, SessionToolsConfig, ToolCallError, ToolModelCapabilities, ToolSchemaEntry,
 };

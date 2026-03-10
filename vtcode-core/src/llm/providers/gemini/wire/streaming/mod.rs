@@ -32,7 +32,7 @@ pub struct StreamingResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StreamingCandidate {
-    pub content: crate::gemini::models::Content,
+    pub content: super::models::Content,
     pub finish_reason: Option<String>,
     pub index: Option<usize>,
 }

@@ -3,10 +3,8 @@
 //! This module provides functionality to process streaming responses from the Gemini API,
 //! parse them in real-time, and provide callbacks for handling each chunk of data.
 
-use crate::gemini::models::{Content, Part};
-use crate::gemini::streaming::{
-    StreamingCandidate, StreamingError, StreamingMetrics, StreamingResponse,
-};
+use super::super::models::{Content, Part};
+use super::{StreamingCandidate, StreamingError, StreamingMetrics, StreamingResponse};
 use futures::stream::StreamExt;
 use reqwest::Response;
 use serde_json::Value;

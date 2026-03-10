@@ -1,8 +1,10 @@
 //! Helpers for composing agent conversations and bridging provider-specific message formats.
 
 use crate::core::agent::task::{ContextItem, Task};
-use crate::gemini::{Content, Part};
 use crate::llm::provider::{ContentPart, Message, MessageContent, MessageRole};
+use crate::llm::providers::gemini::wire::{
+    Content, FunctionCall, FunctionResponse, InlineData, Part,
+};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::fmt::Write;
@@ -57,13 +59,8 @@ pub fn build_conversation(task: &Task, contexts: &[ContextItem]) -> Vec<Content>
 }
 
 /// Convert Gemini `Content` structures into universal provider messages.
-pub fn build_messages_from_conversation(
-    system_instruction: &str,
-    conversation: &[Content],
-) -> Vec<Message> {
-    let mut messages = Vec::with_capacity(conversation.len() + 1);
-    messages.push(Message::system(system_instruction.to_string()));
-
+pub fn messages_from_conversation(conversation: &[Content]) -> Vec<Message> {
+    let mut messages = Vec::with_capacity(conversation.len());
     for content in conversation {
         let mut content_parts = Vec::new();
         let mut tool_calls = Vec::new();
@@ -153,6 +150,18 @@ pub fn build_messages_from_conversation(
     messages
 }
 
+/// Convert Gemini `Content` structures into universal provider messages and prepend the current
+/// system instruction.
+pub fn build_messages_from_conversation(
+    system_instruction: &str,
+    conversation: &[Content],
+) -> Vec<Message> {
+    let mut messages = Vec::with_capacity(conversation.len() + 1);
+    messages.push(Message::system(system_instruction.to_string()));
+    messages.extend(messages_from_conversation(conversation));
+    messages
+}
+
 fn parts_from_message_content(content: &MessageContent) -> Vec<Part> {
     match content {
         MessageContent::Text(text) => {
@@ -181,7 +190,7 @@ fn parts_from_message_content(content: &MessageContent) -> Vec<Part> {
                         data, mime_type, ..
                     } => {
                         converted.push(Part::InlineData {
-                            inline_data: crate::gemini::models::InlineData {
+                            inline_data: InlineData {
                                 mime_type: mime_type.clone(),
                                 data: data.clone(),
                             },
@@ -252,7 +261,7 @@ pub fn conversation_from_messages(messages: &[Message]) -> Vec<Content> {
                         }
 
                         parts.push(Part::FunctionCall {
-                            function_call: crate::gemini::FunctionCall {
+                            function_call: FunctionCall {
                                 name: function.name.clone(),
                                 args: tool_call_arguments(&function.arguments),
                                 id,
@@ -295,7 +304,7 @@ pub fn conversation_from_messages(messages: &[Message]) -> Vec<Content> {
                 conversation.push(Content {
                     role: "function".to_string(),
                     parts: vec![Part::FunctionResponse {
-                        function_response: crate::gemini::FunctionResponse {
+                        function_response: FunctionResponse {
                             name: tool_name,
                             response: tool_response_value(&message.content),
                             id: Some(call_id),

@@ -2,8 +2,8 @@ use crate::config::ModelId;
 use crate::config::ToolDocumentationMode;
 use crate::config::constants::tools;
 use crate::config::types::CapabilityLevel;
-use crate::gemini::FunctionDeclaration;
 use crate::llm::provider::ToolDefinition;
+use crate::llm::providers::gemini::wire::FunctionDeclaration;
 use crate::tool_policy::ToolPolicy;
 use crate::tools::mcp::MCP_QUALIFIED_TOOL_PREFIX;
 use crate::tools::registry::{ToolHandler as RegistryToolHandler, ToolRegistration};
@@ -571,16 +571,22 @@ fn compact_parameters(parameters: Value, mode: ToolDocumentationMode) -> Value {
 }
 
 fn remove_schema_descriptions(value: &mut Value) {
+    remove_schema_descriptions_impl(value, false);
+}
+
+fn remove_schema_descriptions_impl(value: &mut Value, inside_properties_map: bool) {
     match value {
         Value::Object(map) => {
-            map.remove("description");
-            for nested in map.values_mut() {
-                remove_schema_descriptions(nested);
+            if !inside_properties_map {
+                map.remove("description");
+            }
+            for (key, nested) in map.iter_mut() {
+                remove_schema_descriptions_impl(nested, key == "properties");
             }
         }
         Value::Array(items) => {
             for item in items {
-                remove_schema_descriptions(item);
+                remove_schema_descriptions_impl(item, false);
             }
         }
         _ => {}
@@ -675,7 +681,9 @@ fn json_schema_from_value(value: &Value) -> JsonSchema {
 mod tests {
     use super::*;
     use crate::tools::registry::ToolRegistration;
+    use crate::tools::request_user_input::RequestUserInputTool;
     use crate::tools::tool_intent::{ToolBehavior, ToolMutationModel};
+    use crate::tools::traits::Tool;
     use serde_json::json;
 
     fn registration(name: &'static str) -> ToolRegistration {
@@ -845,5 +853,22 @@ mod tests {
         assert!(serialized["anyOf"].is_array());
         assert!(serialized.get("additional_properties").is_none());
         assert!(serialized.get("any_of").is_none());
+    }
+
+    #[test]
+    fn compact_parameters_preserves_property_named_description() {
+        let schema = RequestUserInputTool
+            .parameter_schema()
+            .expect("request_user_input schema");
+
+        let compacted = compact_parameters(schema, ToolDocumentationMode::Progressive);
+        let description_property = &compacted["properties"]["questions"]["items"]["properties"]["options"]
+            ["items"]["properties"]["description"];
+
+        assert!(description_property.is_object());
+        assert_eq!(
+            compacted["properties"]["questions"]["items"]["properties"]["options"]["items"]["required"],
+            json!(["label", "description"])
+        );
     }
 }

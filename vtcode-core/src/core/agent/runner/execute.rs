@@ -14,8 +14,8 @@ use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::session::controller::AgentSessionController;
 use crate::core::agent::steering::SteeringMessage;
 use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
-use crate::gemini::Part;
 use crate::llm::provider::{LLMRequest, Message, ToolCall};
+use crate::llm::providers::gemini::wire::Part;
 use crate::prompts::PromptContext;
 use crate::prompts::system::compose_system_instruction_text;
 use crate::utils::colors::style;
@@ -541,7 +541,7 @@ impl AgentRunner {
                 &controller.state.modified_files,
                 &controller.state.executed_commands,
                 &controller.state.warnings,
-                &controller.state.conversation,
+                &controller.state.messages,
                 controller.state.stats.turns_executed,
                 controller.state.max_tool_loop_streak,
                 max_tool_loops,

@@ -4,10 +4,8 @@ pub mod retry;
 pub use config::ClientConfig;
 pub use retry::RetryConfig;
 
-use crate::gemini::models::{GenerateContentRequest, GenerateContentResponse};
-use crate::gemini::streaming::{
-    StreamingError, StreamingMetrics, StreamingProcessor, StreamingResponse,
-};
+use super::models::{GenerateContentRequest, GenerateContentResponse};
+use super::streaming::{StreamingError, StreamingMetrics, StreamingProcessor, StreamingResponse};
 use crate::retry::RetryPolicy;
 use anyhow::{Context, Result};
 use reqwest::Client as ReqwestClient;

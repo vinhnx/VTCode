@@ -1,20 +1,16 @@
 #![allow(clippy::collapsible_if, clippy::result_large_err)]
 
+use self::wire::function_calling::FunctionCall as GeminiFunctionCall;
+use self::wire::{
+    Candidate, Content, FunctionDeclaration, GenerateContentRequest, GenerateContentResponse, Part,
+    StreamingCandidate, StreamingConfig, StreamingError, StreamingProcessor, StreamingResponse,
+    SystemInstruction, Tool, ToolConfig,
+};
+use self::wire::{FunctionCallingConfig, FunctionResponse};
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{
     AnthropicConfig, GeminiPromptCacheMode, GeminiPromptCacheSettings, PromptCachingConfig,
-};
-use crate::gemini::function_calling::{
-    FunctionCall as GeminiFunctionCall, FunctionCallingConfig, FunctionResponse,
-};
-use crate::gemini::models::SystemInstruction;
-use crate::gemini::streaming::{
-    StreamingCandidate, StreamingConfig, StreamingError, StreamingProcessor, StreamingResponse,
-};
-use crate::gemini::{
-    Candidate, Content, FunctionDeclaration, GenerateContentRequest, GenerateContentResponse, Part,
-    Tool, ToolConfig,
 };
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
@@ -43,6 +39,7 @@ mod provider;
 mod sanitize;
 #[cfg(test)]
 mod tests;
+pub mod wire;
 
 pub use provider::GeminiProvider;
 pub use sanitize::sanitize_function_parameters;

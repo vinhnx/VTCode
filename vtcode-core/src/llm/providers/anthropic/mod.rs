@@ -12,7 +12,10 @@
 //! - `capabilities`: Model capability detection (vision, reasoning, structured output)
 //! - `validation`: Request validation and schema checking
 
+#[cfg(feature = "anthropic-api")]
+pub mod api;
 mod capabilities;
+pub mod compat;
 mod headers;
 mod message_parser;
 mod prompt_cache;

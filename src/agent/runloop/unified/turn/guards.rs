@@ -421,10 +421,10 @@ mod tests {
     fn readonly_signature_handles_alias_and_search_signatures() {
         assert!(is_readonly_signature(r#"read file:{"path":"README.md"}"#));
         assert!(is_readonly_signature(
-            r#"search text:{"pattern":"match provider_event","path":"vtcode-core/src/anthropic_api/server.rs"}"#
+            r#"search text:{"pattern":"match provider_event","path":"vtcode-core/src/llm/providers/anthropic/api.rs"}"#
         ));
         assert!(is_readonly_signature(
-            r#"unified_search:{"pattern":"LLMStreamEvent::","path":"vtcode-core/src/anthropic_api/server.rs"}"#
+            r#"unified_search:{"pattern":"LLMStreamEvent::","path":"vtcode-core/src/llm/providers/anthropic/api.rs"}"#
         ));
     }
 

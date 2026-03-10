@@ -1,7 +1,9 @@
 use super::AgentRunner;
-use crate::core::agent::conversation::build_messages_from_conversation;
+use crate::core::agent::conversation::{
+    build_messages_from_conversation, messages_from_conversation,
+};
 use crate::core::agent::session::AgentSessionState;
-use crate::gemini::{Content, Part};
+use crate::llm::providers::gemini::wire::{Content, Part};
 use tracing::{info, warn};
 
 impl AgentRunner {
@@ -109,13 +111,13 @@ impl AgentRunner {
         modified_files: &[String],
         executed_commands: &[String],
     ) -> Option<std::path::PathBuf> {
-        use crate::context::history_files::{HistoryFileManager, content_to_history_messages};
+        use crate::context::history_files::{HistoryFileManager, messages_to_history_messages};
 
         // Create history manager for this session
         let mut manager = HistoryFileManager::new(&self._workspace, session_id);
 
-        // Convert conversation to history messages
-        let messages = content_to_history_messages(conversation, 0);
+        // Convert the legacy Gemini conversation into provider-agnostic messages before writing it.
+        let messages = messages_to_history_messages(&messages_from_conversation(conversation), 0);
 
         // Write history file
         match manager.write_history_sync(

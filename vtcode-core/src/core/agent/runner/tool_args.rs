@@ -3,7 +3,7 @@ use super::constants::ROLE_USER;
 use crate::config::constants::tools;
 use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::task::TaskOutcome;
-use crate::gemini::{Content, Part};
+use crate::llm::providers::gemini::wire::{Content, Part};
 use crate::utils::colors::style;
 use serde_json::Value;
 use std::path::Path;

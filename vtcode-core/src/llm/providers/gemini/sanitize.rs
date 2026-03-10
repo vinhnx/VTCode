@@ -39,6 +39,31 @@ pub fn sanitize_function_parameters(parameters: Value) -> Value {
                 // Recursively sanitize nested values
                 sanitized.insert(key, sanitize_function_parameters(value));
             }
+
+            let property_names = sanitized
+                .get("properties")
+                .and_then(Value::as_object)
+                .map(|properties| properties.keys().cloned().collect::<Vec<_>>());
+            let drop_required = sanitized
+                .get_mut("required")
+                .and_then(Value::as_array_mut)
+                .map(|required| {
+                    let Some(property_names) = property_names.as_ref() else {
+                        return true;
+                    };
+
+                    required.retain(|item| {
+                        item.as_str()
+                            .map(|name| property_names.iter().any(|property| property == name))
+                            .unwrap_or(false)
+                    });
+                    required.is_empty()
+                })
+                .unwrap_or(false);
+            if drop_required {
+                sanitized.remove("required");
+            }
+
             Value::Object(sanitized)
         }
         Value::Array(values) => Value::Array(

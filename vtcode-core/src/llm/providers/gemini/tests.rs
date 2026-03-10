@@ -1,3 +1,6 @@
+use super::wire::{
+    Candidate, Content, FunctionCall as GeminiFunctionCall, GenerateContentResponse, Part,
+};
 use super::*;
 use crate::config::constants::models;
 use crate::llm::provider::{
@@ -233,6 +236,20 @@ fn sanitize_function_parameters_removes_exclusive_min_max() {
 }
 
 #[test]
+fn sanitize_function_parameters_drops_invalid_required_entries() {
+    let parameters = json!({
+        "type": "object",
+        "properties": {
+            "label": { "type": "string" }
+        },
+        "required": ["label", "description"]
+    });
+
+    let sanitized = sanitize_function_parameters(parameters);
+    assert_eq!(sanitized["required"], json!(["label"]));
+}
+
+#[test]
 fn apply_stream_delta_handles_replayed_chunks() {
     let mut acc = String::new();
     assert_eq!(
@@ -386,9 +403,6 @@ fn gemini31_pro_reasoning_mapping() {
 
 #[test]
 fn thought_signature_preserved_in_function_call_response() {
-    use crate::gemini::function_calling::FunctionCall as GeminiFunctionCall;
-    use crate::gemini::models::{Candidate, Content, GenerateContentResponse, Part};
-
     let test_signature = "encrypted_signature_xyz123".to_string();
 
     let response = GenerateContentResponse {
@@ -478,9 +492,6 @@ fn thought_signature_roundtrip_in_request() {
 
 #[test]
 fn parallel_function_calls_single_signature() {
-    use crate::gemini::function_calling::FunctionCall as GeminiFunctionCall;
-    use crate::gemini::models::{Candidate, Content, GenerateContentResponse, Part};
-
     let test_signature = "parallel_sig_123".to_string();
 
     let response = GenerateContentResponse {
@@ -533,9 +544,6 @@ fn parallel_function_calls_single_signature() {
 
 #[test]
 fn thought_signature_propagation_from_text_to_function_call() {
-    use crate::gemini::function_calling::FunctionCall as GeminiFunctionCall;
-    use crate::gemini::models::{Candidate, Content, GenerateContentResponse, Part};
-
     let test_signature = "text_reasoning_signature_789".to_string();
 
     // Scenario: Gemini 3 returns reasoning text with a signature, followed by a function call without one.
@@ -630,6 +638,22 @@ fn gemini3_flash_extended_thinking_levels() {
     let pro_levels =
         GeminiProvider::supported_thinking_levels(models::google::GEMINI_3_1_PRO_PREVIEW);
     assert_eq!(pro_levels, vec!["low", "high"]);
+}
+
+#[test]
+fn gemini_3_pro_temperature_warning_predicate_excludes_flash_models() {
+    assert!(GeminiProvider::is_gemini_3_pro_model(
+        models::google::GEMINI_3_1_PRO_PREVIEW
+    ));
+    assert!(GeminiProvider::is_gemini_3_pro_model(
+        models::google::GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS
+    ));
+    assert!(!GeminiProvider::is_gemini_3_pro_model(
+        models::google::GEMINI_3_FLASH_PREVIEW
+    ));
+    assert!(!GeminiProvider::is_gemini_3_pro_model(
+        models::google::GEMINI_3_1_FLASH_LITE_PREVIEW
+    ));
 }
 
 #[test]
@@ -883,8 +907,6 @@ mod caching_tests {
 
 #[test]
 fn part_json_deserialization_function_call_with_thought_signature() {
-    use crate::gemini::models::Part;
-
     // Test 1: FunctionCall with thoughtSignature (camelCase - native Gemini API)
     let json_camel = json!({
         "functionCall": {"name": "test_func", "args": {"key": "value"}},

@@ -11,9 +11,11 @@
 //! 2. Include file reference in summary message
 //! 3. Agent can search history with `grep_file` when details are needed
 
+use crate::llm::provider::{ContentPart, Message, MessageContent, MessageRole};
 use crate::telemetry::perf::PerfSpan;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
+use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -432,62 +434,115 @@ fn sanitize_session_id(id: &str) -> String {
         .collect()
 }
 
-/// Convert conversation content to history messages
-pub fn content_to_history_messages(
-    conversation: &[crate::gemini::Content],
+fn history_text_from_message_content(content: &MessageContent) -> String {
+    match content {
+        MessageContent::Text(text) => text.clone(),
+        MessageContent::Parts(parts) => parts
+            .iter()
+            .map(|part| match part {
+                ContentPart::Text { text } => text.clone(),
+                ContentPart::Image { .. } => "[Image]".to_string(),
+                ContentPart::File {
+                    filename,
+                    file_id,
+                    file_url,
+                    ..
+                } => filename
+                    .clone()
+                    .or_else(|| file_id.clone())
+                    .or_else(|| file_url.clone())
+                    .map(|value| format!("[File: {value}]"))
+                    .unwrap_or_else(|| "[File]".to_string()),
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
+    }
+}
+
+/// Convert provider-agnostic messages into persisted history messages.
+pub fn messages_to_history_messages(
+    messages: &[Message],
     start_turn: usize,
 ) -> Vec<HistoryMessage> {
-    let mut messages = Vec::with_capacity(conversation.len());
+    let mut history_messages = Vec::with_capacity(messages.len());
     let now = Utc::now();
+    let mut tool_names_by_call_id = HashMap::new();
 
-    for (i, content) in conversation.iter().enumerate() {
+    for (i, message) in messages.iter().enumerate() {
         let turn = start_turn + i;
-        let role = content.role.clone();
+        let role = message.role.as_generic_str().to_string();
 
-        // Extract text content from parts
-        let mut text_parts: Vec<String> = Vec::new();
-        for part in &content.parts {
-            match part {
-                crate::gemini::Part::Text { text, .. } => {
-                    text_parts.push(text.clone());
+        if let Some(tool_calls) = &message.tool_calls {
+            for tool_call in tool_calls {
+                if let Some(function) = &tool_call.function {
+                    tool_names_by_call_id.insert(tool_call.id.clone(), function.name.clone());
                 }
-                crate::gemini::Part::InlineData { .. } => {
-                    text_parts.push("[Image]".to_string());
-                }
-                crate::gemini::Part::FunctionCall { function_call, .. } => {
-                    text_parts.push(format!(
-                        "[Tool call: {} with args: {}]",
-                        function_call.name, function_call.args
-                    ));
-                }
-                crate::gemini::Part::FunctionResponse {
-                    function_response, ..
-                } => {
-                    text_parts.push(format!(
-                        "[Tool response from {}: {}]",
-                        function_response.name, function_response.response
-                    ));
-                }
-                crate::gemini::Part::CacheControl { .. } => {}
             }
         }
 
-        messages.push(HistoryMessage {
+        let content = if message.role == MessageRole::Tool {
+            let tool_name = message
+                .origin_tool
+                .clone()
+                .or_else(|| {
+                    message
+                        .tool_call_id
+                        .as_ref()
+                        .and_then(|id| tool_names_by_call_id.get(id).cloned())
+                })
+                .unwrap_or_else(|| "tool".to_string());
+            format!(
+                "[Tool response from {}: {}]",
+                tool_name,
+                history_text_from_message_content(&message.content)
+            )
+        } else {
+            let mut text_parts = Vec::new();
+            let content_text = history_text_from_message_content(&message.content);
+            if !content_text.is_empty() {
+                text_parts.push(content_text);
+            }
+
+            if let Some(reasoning) = message.reasoning.as_ref()
+                && !reasoning.trim().is_empty()
+            {
+                text_parts.push(format!("[Reasoning: {}]", reasoning.trim()));
+            }
+
+            if let Some(tool_calls) = &message.tool_calls {
+                for tool_call in tool_calls {
+                    if let Some(function) = &tool_call.function {
+                        text_parts.push(format!(
+                            "[Tool call: {} with args: {}]",
+                            function.name, function.arguments
+                        ));
+                    }
+                }
+            }
+
+            text_parts.join("\n")
+        };
+
+        history_messages.push(HistoryMessage {
             turn,
             role,
-            content: text_parts.join("\n"),
-            tool_call_id: None,
-            tool_name: None,
+            content,
+            tool_call_id: message.tool_call_id.clone(),
+            tool_name: message
+                .tool_call_id
+                .as_ref()
+                .and_then(|id| tool_names_by_call_id.get(id).cloned()),
             timestamp: now,
         });
     }
 
-    messages
+    history_messages
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::llm::provider::{FunctionCall, Message, ToolCall};
     use tempfile::tempdir;
 
     #[tokio::test]
@@ -586,5 +641,32 @@ mod tests {
         assert!(summary.contains("Summarized 10 turns"));
         assert!(summary.contains(".vtcode/history/test.jsonl"));
         assert!(summary.contains("grep_file"));
+    }
+
+    #[test]
+    fn messages_to_history_messages_preserves_tool_names() {
+        let messages = vec![
+            Message::assistant_with_tools(
+                "Calling tool".to_string(),
+                vec![ToolCall {
+                    id: "call_1".to_string(),
+                    call_type: "function".to_string(),
+                    function: Some(FunctionCall {
+                        name: "read_file".to_string(),
+                        arguments: "{\"path\":\"src/main.rs\"}".to_string(),
+                    }),
+                    text: None,
+                    thought_signature: None,
+                }],
+            ),
+            Message::tool_response("call_1".to_string(), "{\"ok\":true}".to_string()),
+        ];
+
+        let history = messages_to_history_messages(&messages, 4);
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[0].turn, 4);
+        assert!(history[0].content.contains("read_file"));
+        assert_eq!(history[1].tool_name.as_deref(), Some("read_file"));
+        assert!(history[1].content.contains("Tool response from read_file"));
     }
 }

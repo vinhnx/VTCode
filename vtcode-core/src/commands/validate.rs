@@ -2,11 +2,14 @@
 
 use crate::config::constants::tools;
 use crate::config::types::AgentConfig;
-use crate::prompts::generate_system_instruction;
+use crate::llm::factory::create_provider_for_model;
+use crate::llm::provider::{LLMRequest, Message};
+use crate::prompts::system::lightweight_instruction_text;
 use crate::tools::ToolRegistry;
 use crate::utils::colors::style;
 use anyhow::Result;
 use serde_json::json;
+use std::sync::Arc;
 
 /// Handle the validate command - check environment and configuration
 pub async fn handle_validate_command(
@@ -67,49 +70,17 @@ pub async fn handle_validate_command(
 
 /// Check API connectivity
 async fn check_api_connectivity(config: &AgentConfig) -> Result<()> {
-    use crate::gemini::models::GenerationConfig;
-    use crate::gemini::models::SystemInstruction;
-    use crate::gemini::{Client, Content, GenerateContentRequest};
-    use crate::prompts::generate_lightweight_instruction;
-
-    let mut client = Client::new(config.api_key.clone(), config.model.to_string());
-    let contents = vec![Content::user_text("Hello")];
-    let lightweight_instruction = generate_lightweight_instruction();
-
-    // Convert Content to SystemInstruction
-    let system_instruction = if let Some(part) = lightweight_instruction.parts.first() {
-        if let Some(text) = part.as_text() {
-            SystemInstruction::new(text)
-        } else {
-            let content = generate_system_instruction(&Default::default()).await;
-            if let Some(text) = content.parts.first().and_then(|p| p.as_text()) {
-                SystemInstruction::new(text)
-            } else {
-                SystemInstruction::new(crate::prompts::system::default_lightweight_prompt())
-            }
-        }
-    } else {
-        let content = generate_system_instruction(&Default::default()).await;
-        if let Some(text) = content.parts.first().and_then(|p| p.as_text()) {
-            SystemInstruction::new(text)
-        } else {
-            SystemInstruction::new(crate::prompts::system::default_lightweight_prompt())
-        }
+    let provider = create_provider_for_model(&config.model, config.api_key.clone(), None, None)?;
+    let request = LLMRequest {
+        messages: vec![Message::user("Hello".to_string())],
+        system_prompt: Some(Arc::new(lightweight_instruction_text())),
+        model: config.model.to_string(),
+        max_tokens: Some(10),
+        temperature: Some(0.1),
+        ..Default::default()
     };
 
-    let request = GenerateContentRequest {
-        contents,
-        tools: None,
-        tool_config: None,
-        generation_config: Some(GenerationConfig {
-            max_output_tokens: Some(10),
-            temperature: Some(0.1),
-            ..Default::default()
-        }),
-        system_instruction: Some(system_instruction),
-    };
-
-    client.generate(&request).await?;
+    provider.generate(request).await?;
     Ok(())
 }
 

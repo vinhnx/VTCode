@@ -1,6 +1,6 @@
 use super::AgentRunner;
 use crate::core::agent::task::{Task, TaskOutcome};
-use crate::gemini::Content;
+use crate::llm::provider::{Message, MessageRole};
 
 impl AgentRunner {
     /// Generate a meaningful summary of the task execution
@@ -11,7 +11,7 @@ impl AgentRunner {
         modified_files: &[String],
         executed_commands: &[String],
         warnings: &[String],
-        conversation: &[Content],
+        messages: &[Message],
         turns_executed: usize,
         peak_tool_loops: usize,
         max_tool_loops: usize,
@@ -69,14 +69,16 @@ impl AgentRunner {
 
         let mut resolved_outcome = outcome;
         if matches!(resolved_outcome, TaskOutcome::Unknown)
-            && conversation.last().is_some_and(|c| {
-                c.role == "model"
-                    && c.parts.iter().any(|p| {
-                        p.as_text().is_some_and(|t| {
-                            t.contains("completed") || t.contains("done") || t.contains("finished")
-                        })
-                    })
-            })
+            && messages
+                .iter()
+                .rev()
+                .find(|message| message.role == MessageRole::Assistant)
+                .is_some_and(|message| {
+                    let content = message.content.as_text();
+                    content.contains("completed")
+                        || content.contains("done")
+                        || content.contains("finished")
+                })
         {
             resolved_outcome = TaskOutcome::Success;
         }

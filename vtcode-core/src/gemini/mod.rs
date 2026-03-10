@@ -1,21 +1,14 @@
-//! Gemini API client with modular architecture
+//! Gemini API compatibility facade for VT Code.
 //!
-//! This module provides a clean separation between HTTP client configuration,
-//! API models, streaming functionality, and function calling integration.
+//! Canonical internal imports live under `crate::llm::providers::gemini::wire`.
 
-pub mod client;
-pub mod function_calling;
-pub mod models;
-pub mod streaming;
-
-// Re-export main types for backward compatibility
-pub use client::{Client, ClientConfig, RetryConfig};
-pub use function_calling::{FunctionCall, FunctionCallingConfig, FunctionResponse};
-pub use models::{
-    Candidate, Content, FunctionDeclaration, GenerateContentRequest, GenerateContentResponse, Part,
-    Tool, ToolConfig,
-};
-pub use streaming::{
-    StreamingCandidate, StreamingConfig, StreamingError, StreamingMetrics, StreamingProcessor,
-    StreamingResponse,
+pub use crate::llm::providers::gemini::wire::client;
+pub use crate::llm::providers::gemini::wire::function_calling;
+pub use crate::llm::providers::gemini::wire::models;
+pub use crate::llm::providers::gemini::wire::streaming;
+pub use crate::llm::providers::gemini::wire::{
+    Candidate, Client, ClientConfig, Content, FunctionCall, FunctionCallingConfig,
+    FunctionDeclaration, FunctionResponse, GenerateContentRequest, GenerateContentResponse, Part,
+    RetryConfig, StreamingCandidate, StreamingConfig, StreamingError, StreamingMetrics,
+    StreamingProcessor, StreamingResponse, Tool, ToolConfig,
 };

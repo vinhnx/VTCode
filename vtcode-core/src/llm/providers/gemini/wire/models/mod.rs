@@ -84,7 +84,7 @@ impl SystemInstruction {
 pub enum Part {
     #[serde(rename_all = "camelCase")]
     FunctionCall {
-        function_call: crate::gemini::function_calling::FunctionCall,
+        function_call: super::function_calling::FunctionCall,
         /// Gemini 3 thought signature for maintaining reasoning context
         /// Required for sequential function calling, optional for parallel calls (only first has it)
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -93,7 +93,7 @@ pub enum Part {
     },
     #[serde(rename_all = "camelCase")]
     FunctionResponse {
-        function_response: crate::gemini::function_calling::FunctionResponse,
+        function_response: super::function_calling::FunctionResponse,
         /// Gemini 3 thought signature for maintaining reasoning context
         /// Preserved when echoing function responses back to the model
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -154,13 +154,13 @@ pub struct FunctionDeclaration {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolConfig {
     #[serde(rename = "functionCallingConfig")]
-    pub function_calling_config: crate::gemini::function_calling::FunctionCallingConfig,
+    pub function_calling_config: super::function_calling::FunctionCallingConfig,
 }
 
 impl ToolConfig {
     pub fn auto() -> Self {
         Self {
-            function_calling_config: crate::gemini::function_calling::FunctionCallingConfig::auto(),
+            function_calling_config: super::function_calling::FunctionCallingConfig::auto(),
         }
     }
 }

@@ -1,12 +1,16 @@
+use super::wire::{GenerationConfig, InlineData, StreamingError, ThinkingConfig};
 use super::*;
 use crate::config::constants::models;
-use crate::gemini::streaming::StreamingError;
 use crate::llm::error_display;
 use crate::llm::provider::LLMError;
 use crate::llm::provider::{ContentPart, MessageContent};
 use crate::prompts::system::default_system_prompt;
 
 impl GeminiProvider {
+    pub(super) fn is_gemini_3_pro_model(model: &str) -> bool {
+        model.contains("gemini-3") && model.contains("pro") && !model.contains("flash")
+    }
+
     /// Check if model supports context caching
     pub fn supports_caching(model: &str) -> bool {
         models::google::CACHING_MODELS.contains(&model)
@@ -222,7 +226,7 @@ impl GeminiProvider {
                 .collect()
         });
 
-        let mut generation_config = crate::gemini::models::request::GenerationConfig {
+        let mut generation_config = GenerationConfig {
             max_output_tokens: request.max_tokens,
             temperature: request.temperature,
             top_p: request.top_p,
@@ -235,7 +239,7 @@ impl GeminiProvider {
 
         // For Gemini 3 Pro, Google recommends keeping temperature at 1.0 default
         if let Some(temp) = request.temperature {
-            if request.model.contains("gemini-3") && temp < 1.0 {
+            if Self::is_gemini_3_pro_model(&request.model) && temp < 1.0 {
                 tracing::warn!(
                     "When using Gemini 3 Pro with temperature values below 1.0, be aware that this may cause looping or degraded performance on complex tasks. Consider using 1.0 or higher for optimal results."
                 );
@@ -303,10 +307,9 @@ impl GeminiProvider {
                 };
 
                 if let Some(level) = thinking_level {
-                    generation_config.thinking_config =
-                        Some(crate::gemini::models::ThinkingConfig {
-                            thinking_level: Some(level.to_string()),
-                        });
+                    generation_config.thinking_config = Some(ThinkingConfig {
+                        thinking_level: Some(level.to_string()),
+                    });
                 }
             }
         }
@@ -619,7 +622,7 @@ fn parts_from_message_content(content: &MessageContent) -> Vec<Part> {
                         data, mime_type, ..
                     } => {
                         converted.push(Part::InlineData {
-                            inline_data: crate::gemini::models::InlineData {
+                            inline_data: InlineData {
                                 mime_type: mime_type.clone(),
                                 data: data.clone(),
                             },

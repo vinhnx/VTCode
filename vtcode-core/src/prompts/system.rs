@@ -31,8 +31,8 @@ use crate::config::types::SystemPromptMode;
 // - TokenBudgetConfig defaults: 75% warning, 85% alert
 // - ContextOptimizer: 90% compact, 95% checkpoint
 // - MAX_TOOL_RESPONSE_TOKENS: 25,000 tokens per tool call
-use crate::gemini::Content;
 use crate::instructions::{InstructionBundle, InstructionScope, read_instruction_bundle};
+use crate::llm::providers::gemini::wire::Content;
 use crate::project_doc::read_project_doc;
 use crate::prompts::context::PromptContext;
 use crate::prompts::guidelines::generate_tool_guidelines;
@@ -321,6 +321,18 @@ pub fn minimal_system_prompt() -> &'static str {
 
 pub fn default_lightweight_prompt() -> &'static str {
     DEFAULT_LIGHTWEIGHT_PROMPT
+}
+
+pub fn minimal_instruction_text() -> String {
+    MINIMAL_SYSTEM_PROMPT.replace("__UNIFIED_TOOL_GUIDANCE__", COMPACT_TOOL_GUIDANCE)
+}
+
+pub fn lightweight_instruction_text() -> String {
+    DEFAULT_LIGHTWEIGHT_PROMPT.replace("__UNIFIED_TOOL_GUIDANCE__", COMPACT_TOOL_GUIDANCE)
+}
+
+pub fn specialized_instruction_text() -> String {
+    DEFAULT_SPECIALIZED_PROMPT.replace("__UNIFIED_TOOL_GUIDANCE__", UNIFIED_TOOL_GUIDANCE)
 }
 
 /// MINIMAL PROMPT (v6.0 - Harness-engineered, Pi-inspired, provider-agnostic, <1K tokens)
@@ -933,23 +945,17 @@ fn cache_key(project_root: &Path, vtcode_config: Option<&crate::config::VTCodeCo
 
 /// Generate a minimal system instruction (pi-inspired, <1K tokens)
 pub fn generate_minimal_instruction() -> Content {
-    let instruction =
-        MINIMAL_SYSTEM_PROMPT.replace("__UNIFIED_TOOL_GUIDANCE__", COMPACT_TOOL_GUIDANCE);
-    Content::system_text(instruction)
+    Content::system_text(minimal_instruction_text())
 }
 
 /// Generate a lightweight system instruction for simple operations
 pub fn generate_lightweight_instruction() -> Content {
-    let instruction =
-        DEFAULT_LIGHTWEIGHT_PROMPT.replace("__UNIFIED_TOOL_GUIDANCE__", COMPACT_TOOL_GUIDANCE);
-    Content::system_text(instruction)
+    Content::system_text(lightweight_instruction_text())
 }
 
 /// Generate a specialized system instruction for advanced operations
 pub fn generate_specialized_instruction() -> Content {
-    let instruction =
-        DEFAULT_SPECIALIZED_PROMPT.replace("__UNIFIED_TOOL_GUIDANCE__", UNIFIED_TOOL_GUIDANCE);
-    Content::system_text(instruction)
+    Content::system_text(specialized_instruction_text())
 }
 
 fn tool_guidance_for_mode(prompt_mode: SystemPromptMode) -> &'static str {

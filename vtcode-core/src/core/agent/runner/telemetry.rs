@@ -4,7 +4,7 @@ use super::types::ToolFailureContext;
 use crate::core::agent::events::ExecEventRecorder;
 use crate::core::agent::session::AgentSessionState;
 use crate::exec::events::CommandExecutionStatus;
-use crate::gemini::{Content, Part};
+use crate::llm::providers::gemini::wire::{Content, Part};
 use crate::utils::colors::style;
 use crate::utils::error_messages::ERR_TOOL_DENIED;
 

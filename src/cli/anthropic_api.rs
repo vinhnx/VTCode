@@ -7,7 +7,7 @@ pub(super) async fn handle_anthropic_api_command(
     host: String,
 ) -> Result<()> {
     use std::net::SocketAddr;
-    use vtcode_core::anthropic_api::server::{AnthropicApiServerState, create_router};
+    use vtcode_core::llm::providers::anthropic::api::{AnthropicApiServerState, create_router};
 
     let provider = vtcode_core::llm::factory::create_provider_for_model(
         &core_cfg.model,
