@@ -116,7 +116,13 @@ pub(crate) async fn initialize_session(
     tool_registry.initialize_async().await?;
     if let Some(cfg) = vt_cfg {
         if let Err(err) = tool_registry
-            .apply_session_runtime_config(&cfg.commands, &cfg.sandbox, &cfg.timeouts, &cfg.tools)
+            .apply_session_runtime_config(
+                &cfg.commands,
+                &cfg.permissions,
+                &cfg.sandbox,
+                &cfg.timeouts,
+                &cfg.tools,
+            )
             .await
         {
             warn!("Failed to apply tool policies from config: {}", err);

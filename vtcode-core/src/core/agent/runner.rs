@@ -246,6 +246,7 @@ impl AgentRunner {
         if let Err(err) = tool_registry
             .apply_session_runtime_config(
                 &session_config.effective().commands,
+                &session_config.effective().permissions,
                 &session_config.effective().sandbox,
                 &session_config.effective().timeouts,
                 &session_config.effective().tools,

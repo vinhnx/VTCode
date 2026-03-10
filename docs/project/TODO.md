@@ -74,8 +74,18 @@ https://defuddle.md/x.com/akshay_pachaar/status/2031021906254766128
 
 ===
 
-idea: implement live file system watcher to detect external modifications to files being edited by the agent. If a file is modified outside of the agent's control (e.g. by the user or a linter), the agent should immediately halt any ongoing operations on that file and prompt the user to review the changes before proceeding. This would prevent conflicts and ensure that the agent is always working with the most up-to-date version of the file, reducing errors and improving reliability.
+idea: implement live file system watcher to detect external modifications to files being edited by the agent. If a file is modified outside of the agent's control (e.g. by the user or a linter), the agent should immediately halt any ongoing operations on that file and prompt the user to review the changes before proceeding. This would prevent conflicts and ensure that the agent is always working with the most up-to-date version of the file, reducing errors and improving reliability. suggest show a HITL (Human In The Loop) prompt to the user when a file modification is detected, with options to either reload the file and discard the agent's changes, or to review the differences and decide how to proceed.
 
 "
 ⎿  Error: File has been modified since read, either by the user or by a linter.
 Read it again before attempting to write it."
+
+---
+
+╭─────────────────────────────────────────────────╮
+│ ✨ Update available! 0.111.0 -> 0.113.0 │
+│ Run brew upgrade --cask codex to update. │
+│ │
+│ See full release notes: │
+│ https://github.com/openai/codex/releases/latest │
+╰─────────────────────────────────────────────────╯

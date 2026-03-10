@@ -17,6 +17,7 @@ mod execution_history;
 mod execution_kernel;
 mod executors;
 mod file_helpers;
+mod file_monitor_facade;
 mod harness;
 mod harness_facade;
 mod history_facade;
@@ -92,6 +93,7 @@ use std::sync::Arc;
 const LOOP_THROTTLE_MAX_MS: u64 = 500;
 
 use crate::mcp::McpClient;
+use crate::tools::edited_file_monitor::EditedFileMonitor;
 use std::sync::RwLock;
 
 /// Callback for tool progress and output streaming
@@ -107,6 +109,7 @@ const DEFAULT_LOOP_DETECT_WINDOW: usize = 5;
 #[derive(Clone)]
 pub struct ToolRegistry {
     inventory: ToolInventory,
+    edited_file_monitor: Arc<EditedFileMonitor>,
     policy_gateway: Arc<tokio::sync::RwLock<ToolPolicyGateway>>,
     pty_sessions: PtySessionManager,
     exec_sessions: ExecSessionManager,

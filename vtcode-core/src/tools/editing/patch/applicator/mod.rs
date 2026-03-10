@@ -22,3 +22,12 @@ pub(crate) async fn apply(
     let plan = planner::plan_operations(root, operations).await?;
     runner::execute_plan(root, plan).await
 }
+
+pub(crate) async fn render_updated_content(
+    source_path: &Path,
+    content: &str,
+    chunks: &[PatchChunk],
+    path: &str,
+) -> Result<String, PatchError> {
+    text::render_patched_text_from_content(source_path, content, chunks, path).await
+}

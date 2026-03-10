@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 
-use crate::config::{CommandsConfig, TimeoutsConfig, ToolsConfig};
+use crate::config::{CommandsConfig, PermissionsConfig, TimeoutsConfig, ToolsConfig};
 
 use super::ToolRegistry;
 
@@ -19,11 +19,13 @@ impl ToolRegistry {
     pub async fn apply_session_runtime_config(
         &self,
         commands_config: &CommandsConfig,
+        permissions_config: &PermissionsConfig,
         sandbox_config: &vtcode_config::SandboxConfig,
         timeouts: &TimeoutsConfig,
         tools_config: &ToolsConfig,
     ) -> Result<()> {
         self.apply_commands_config(commands_config);
+        self.apply_permissions_config(permissions_config);
         self.apply_sandbox_config(sandbox_config);
         self.apply_timeout_policy(timeouts);
         self.apply_config_policies(tools_config).await

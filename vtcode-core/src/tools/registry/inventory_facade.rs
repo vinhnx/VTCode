@@ -4,6 +4,7 @@ use std::borrow::Cow;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use crate::tools::edited_file_monitor::EditedFileMonitor;
 use crate::tools::file_ops::FileOpsTool;
 use crate::tools::grep_file::GrepSearchManager;
 
@@ -66,6 +67,10 @@ impl ToolRegistry {
 
     pub fn file_ops_tool(&self) -> &FileOpsTool {
         self.inventory.file_ops_tool()
+    }
+
+    pub fn edited_file_monitor(&self) -> &Arc<EditedFileMonitor> {
+        &self.edited_file_monitor
     }
 
     pub fn grep_file_manager(&self) -> Arc<GrepSearchManager> {

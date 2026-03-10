@@ -387,11 +387,12 @@ impl Session {
     }
 
     fn activate_diff_overlay(&mut self, request: DiffOverlayRequest) {
-        let mut state = DiffPreviewState::new(
+        let mut state = DiffPreviewState::new_with_mode(
             request.file_path,
             request.before,
             request.after,
             request.hunks,
+            request.mode,
         );
         state.current_hunk = request.current_hunk;
         self.active_overlay = Some(ActiveOverlay::Diff(Box::new(state)));

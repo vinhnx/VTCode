@@ -17,6 +17,9 @@ pub enum InlineListSelection {
     ToolApprovalDenyOnce,
     ToolApprovalSession,
     ToolApprovalPermanent,
+    FileConflictReload,
+    FileConflictViewDiff,
+    FileConflictAbort,
     SessionLimitIncrease(usize),
 
     /// Selection shape used by legacy tabbed HITL flows.

@@ -78,6 +78,17 @@ pub(super) async fn load_file_lines(
     Ok((lines, had_trailing_newline, line_ending))
 }
 
+fn lines_from_content(content: &str) -> (Vec<String>, bool, LineEnding) {
+    let had_trailing_newline = content.ends_with('\n');
+    let line_ending = if content.contains("\r\n") {
+        LineEnding::Crlf
+    } else {
+        LineEnding::LF
+    };
+    let lines = content.lines().map(ToOwned::to_owned).collect();
+    (lines, had_trailing_newline, line_ending)
+}
+
 pub(super) async fn compute_replacements(
     source_path: &Path,
     original_lines: &[String],
@@ -177,6 +188,70 @@ pub(super) async fn compute_replacements(
 
     replacements.sort_by_key(|(idx, _, _)| *idx);
     Ok(replacements)
+}
+
+pub(super) async fn render_patched_text_from_content(
+    source_path: &Path,
+    content: &str,
+    chunks: &[PatchChunk],
+    path: &str,
+) -> Result<String, PatchError> {
+    let (original_lines, had_trailing_newline, line_ending) = lines_from_content(content);
+    let replacements = compute_replacements(source_path, &original_lines, chunks, path).await?;
+    let ensure_trailing_newline =
+        had_trailing_newline || chunks.iter().any(|chunk| chunk.is_end_of_file());
+    Ok(render_patched_content(
+        original_lines,
+        replacements,
+        ensure_trailing_newline,
+        line_ending,
+    ))
+}
+
+fn render_patched_content(
+    original_lines: Vec<String>,
+    replacements: Vec<(usize, usize, Vec<String>)>,
+    ensure_trailing_newline: bool,
+    line_ending: LineEnding,
+) -> String {
+    let ending = line_ending.as_str();
+    let mut rendered = String::new();
+    let mut current_idx = 0usize;
+    let mut first = true;
+
+    for (start_idx, old_len, new_segment) in replacements {
+        for line in original_lines.iter().take(start_idx).skip(current_idx) {
+            if !first {
+                rendered.push_str(ending);
+            }
+            rendered.push_str(line);
+            first = false;
+        }
+
+        for line in new_segment {
+            if !first {
+                rendered.push_str(ending);
+            }
+            rendered.push_str(&line);
+            first = false;
+        }
+
+        current_idx = start_idx + old_len;
+    }
+
+    for line in original_lines.iter().skip(current_idx) {
+        if !first {
+            rendered.push_str(ending);
+        }
+        rendered.push_str(line);
+        first = false;
+    }
+
+    if ensure_trailing_newline && !rendered.ends_with(ending) {
+        rendered.push_str(ending);
+    }
+
+    rendered
 }
 
 pub(super) async fn write_patched_content(

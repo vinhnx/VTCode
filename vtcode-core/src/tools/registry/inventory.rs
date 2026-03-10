@@ -6,6 +6,7 @@ use tracing::info;
 
 use super::registration::ToolRegistration;
 use crate::exec::skill_manager::SkillManager;
+use crate::tools::edited_file_monitor::EditedFileMonitor;
 use crate::tools::command::CommandTool;
 use crate::tools::file_ops::FileOpsTool;
 use crate::tools::grep_file::GrepSearchManager;
@@ -48,11 +49,15 @@ pub(super) struct ToolInventory {
 }
 
 impl ToolInventory {
-    pub fn new(workspace_root: PathBuf) -> Self {
+    pub fn new(workspace_root: PathBuf, edited_file_monitor: Arc<EditedFileMonitor>) -> Self {
         // Clone once for command_tool (needs ownership), share reference for others
         let command_tool = CommandTool::new(workspace_root.clone());
         let grep_search = Arc::new(GrepSearchManager::new(workspace_root.clone()));
-        let file_ops_tool = FileOpsTool::new(workspace_root.clone(), Arc::clone(&grep_search));
+        let file_ops_tool = FileOpsTool::new_with_monitor(
+            workspace_root.clone(),
+            Arc::clone(&grep_search),
+            edited_file_monitor,
+        );
         let skill_manager = SkillManager::new(&workspace_root);
 
         Self {
@@ -440,12 +445,17 @@ impl ToolInventory {
 mod tests {
     use super::*;
     use crate::config::types::CapabilityLevel;
+    use crate::tools::edited_file_monitor::EditedFileMonitor;
     use crate::tools::registry::registration::ToolRegistration;
     use serde_json::Value;
     use std::path::PathBuf;
+    use std::sync::Arc;
 
     fn make_test_inventory() -> ToolInventory {
-        ToolInventory::new(PathBuf::from("/tmp/vtcode-test"))
+        ToolInventory::new(
+            PathBuf::from("/tmp/vtcode-test"),
+            Arc::new(EditedFileMonitor::new()),
+        )
     }
 
     fn make_visible_registration(name: &'static str) -> ToolRegistration {

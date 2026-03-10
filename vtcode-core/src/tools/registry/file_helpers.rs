@@ -12,6 +12,9 @@ use tokio::fs;
 use crate::utils::path::resolve_workspace_path;
 
 use crate::config::constants::tools;
+use crate::tools::edited_file_monitor::{
+    FILE_CONFLICT_OVERRIDE_ARG, conflict_override_snapshot,
+};
 use crate::tools::grep_file::GrepSearchResult;
 use crate::tools::types::EditInput;
 
@@ -87,6 +90,111 @@ fn strip_line_prefixes(text: &str) -> (String, bool) {
     (stripped, true)
 }
 
+fn apply_edit_replacement(
+    content: &str,
+    effective_old_str: &str,
+    effective_new_str: &str,
+) -> Option<String> {
+    let had_trailing_newline = content.ends_with('\n');
+    let mut replacement_occurred = false;
+    let mut new_content = content.to_owned();
+
+    if content.contains(effective_old_str) {
+        new_content = content.replace(effective_old_str, effective_new_str);
+        replacement_occurred = new_content != content;
+    }
+
+    if !replacement_occurred {
+        let old_lines: Vec<&str> = effective_old_str.lines().collect();
+        let content_lines: Vec<&str> = content.lines().collect();
+
+        'outer: for (i, window) in content_lines.windows(old_lines.len()).enumerate() {
+            if utils::lines_match(window, &old_lines) {
+                let replacement_lines: Vec<&str> = effective_new_str.lines().collect();
+                let mut result_lines = Vec::with_capacity(
+                    i + replacement_lines.len()
+                        + content_lines.len().saturating_sub(i + old_lines.len()),
+                );
+                result_lines.extend_from_slice(&content_lines[..i]);
+                result_lines.extend_from_slice(&replacement_lines);
+                result_lines.extend_from_slice(&content_lines[i + old_lines.len()..]);
+
+                new_content = result_lines.join("\n");
+                replacement_occurred = true;
+                break 'outer;
+            }
+        }
+
+        if !replacement_occurred {
+            for (i, window) in content_lines.windows(old_lines.len()).enumerate() {
+                let window_normalized: Vec<String> = window
+                    .iter()
+                    .map(|line| line.split_whitespace().collect::<Vec<_>>().join(" "))
+                    .collect();
+                let old_normalized: Vec<String> = old_lines
+                    .iter()
+                    .map(|line| line.split_whitespace().collect::<Vec<_>>().join(" "))
+                    .collect();
+
+                if window_normalized == old_normalized {
+                    let replacement_lines: Vec<&str> = effective_new_str.lines().collect();
+                    let mut result_lines = Vec::with_capacity(
+                        i + replacement_lines.len()
+                            + content_lines.len().saturating_sub(i + old_lines.len()),
+                    );
+                    result_lines.extend_from_slice(&content_lines[..i]);
+                    result_lines.extend_from_slice(&replacement_lines);
+                    result_lines.extend_from_slice(&content_lines[i + old_lines.len()..]);
+
+                    new_content = result_lines.join("\n");
+                    replacement_occurred = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    if !replacement_occurred {
+        return None;
+    }
+
+    if had_trailing_newline && !new_content.ends_with('\n') {
+        new_content.push('\n');
+    }
+
+    Some(new_content)
+}
+
+fn edit_not_found_error(
+    current_content: &str,
+    effective_old_str: &str,
+    stripped_old: bool,
+    stripped_new: bool,
+) -> anyhow::Error {
+    let content_preview = if current_content.len() > 500 {
+        format!(
+            "{}...{}",
+            &current_content[..250],
+            &current_content[current_content.len().saturating_sub(250)..]
+        )
+    } else {
+        current_content.to_owned()
+    };
+
+    let numbering_note = if stripped_old || stripped_new {
+        "\n\nNote: line-number prefixes were stripped before matching."
+    } else {
+        ""
+    };
+
+    anyhow!(
+        "Could not find text to replace in file.\n\nExpected to replace:\n{}\n\nFile content preview:\n{}\n\nFix: The old_str must EXACTLY match the file content including all whitespace and newlines. Use read_file first to get the exact text, then copy it precisely into old_str. Do NOT add extra newlines or change indentation.{}",
+        effective_old_str,
+        content_preview,
+        numbering_note
+    )
+}
+
 impl ToolRegistry {
     pub async fn read_file(&self, args: Value) -> Result<Value> {
         self.execute_tool(tools::READ_FILE, args).await
@@ -101,7 +209,9 @@ impl ToolRegistry {
     }
 
     pub async fn edit_file(&self, args: Value) -> Result<Value> {
-        let input: EditInput = serde_json::from_value(args).context("invalid edit_file args")?;
+        let input: EditInput =
+            serde_json::from_value(args.clone()).context("invalid edit_file args")?;
+        let override_snapshot = conflict_override_snapshot(&args);
 
         let (effective_old_str, stripped_old) = strip_line_prefixes(&input.old_str);
         let (effective_new_str, stripped_new) = strip_line_prefixes(&input.new_str);
@@ -126,6 +236,10 @@ impl ToolRegistry {
         let requested_path = PathBuf::from(&input.path);
         let canonical_path = resolve_workspace_path(self.workspace_root(), &requested_path)
             .with_context(|| format!("Failed to resolve path: {}", requested_path.display()))?;
+        let _mutation_lease = self
+            .edited_file_monitor()
+            .acquire_mutation(&canonical_path)
+            .await;
 
         let metadata = fs::metadata(&canonical_path)
             .await
@@ -138,116 +252,50 @@ impl ToolRegistry {
             ));
         }
 
+        let intended_content = self
+            .edited_file_monitor()
+            .tracked_read_text(&canonical_path)
+            .await
+            .and_then(|content| {
+                apply_edit_replacement(&content, &effective_old_str, &effective_new_str)
+            });
+
+        if let Some(conflict) = self
+            .edited_file_monitor()
+            .detect_conflict(
+                &canonical_path,
+                intended_content,
+                override_snapshot.clone(),
+            )
+            .await?
+        {
+            return Ok(conflict.to_tool_output(self.workspace_root()));
+        }
+
         let current_content = fs::read_to_string(&canonical_path)
             .await
             .with_context(|| format!("Cannot read file: {}", canonical_path.display()))?;
-
-        // Track whether the original file had a trailing newline (Unix convention)
-        let had_trailing_newline = current_content.ends_with('\n');
-
-        let mut replacement_occurred = false;
-        let mut new_content = current_content.to_owned();
-
-        if current_content.contains(&effective_old_str) {
-            new_content = current_content.replace(&effective_old_str, &effective_new_str);
-            replacement_occurred = new_content != current_content;
-        }
-
-        if !replacement_occurred {
-            let old_lines: Vec<&str> = effective_old_str.lines().collect();
-            let content_lines: Vec<&str> = current_content.lines().collect();
-
-            // Try multiple matching strategies with increasing leniency
-            // Strategy 1: Exact line-by-line match with trim()
-            'outer: for (i, window) in content_lines.windows(old_lines.len()).enumerate() {
-                if utils::lines_match(window, &old_lines) {
-                    let replacement_lines: Vec<&str> = effective_new_str.lines().collect();
-
-                    // Build new content by replacing the matched window
-                    let mut result_lines = Vec::with_capacity(
-                        i + replacement_lines.len()
-                            + content_lines.len().saturating_sub(i + old_lines.len()),
-                    );
-                    result_lines.extend_from_slice(&content_lines[..i]);
-                    result_lines.extend_from_slice(&replacement_lines);
-                    result_lines.extend_from_slice(&content_lines[i + old_lines.len()..]);
-
-                    new_content = result_lines.join("\n");
-                    replacement_occurred = true;
-                    break 'outer;
-                }
-            }
-
-            // Strategy 2: If still not found, try matching with normalized whitespace
-            // (collapse multiple spaces, ignore leading/trailing whitespace)
-            if !replacement_occurred {
-                for (i, window) in content_lines.windows(old_lines.len()).enumerate() {
-                    let window_normalized: Vec<String> = window
-                        .iter()
-                        .map(|line| line.split_whitespace().collect::<Vec<_>>().join(" "))
-                        .collect();
-                    let old_normalized: Vec<String> = old_lines
-                        .iter()
-                        .map(|line| line.split_whitespace().collect::<Vec<_>>().join(" "))
-                        .collect();
-
-                    if window_normalized == old_normalized {
-                        let replacement_lines: Vec<&str> = effective_new_str.lines().collect();
-
-                        // Build new content by replacing the matched window
-                        let mut result_lines = Vec::with_capacity(
-                            i + replacement_lines.len()
-                                + content_lines.len().saturating_sub(i + old_lines.len()),
-                        );
-                        result_lines.extend_from_slice(&content_lines[..i]);
-                        result_lines.extend_from_slice(&replacement_lines);
-                        result_lines.extend_from_slice(&content_lines[i + old_lines.len()..]);
-
-                        new_content = result_lines.join("\n");
-                        replacement_occurred = true;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if !replacement_occurred {
-            let content_preview = if current_content.len() > 500 {
-                format!(
-                    "{}...{}",
-                    &current_content[..250],
-                    &current_content[current_content.len().saturating_sub(250)..]
-                )
-            } else {
-                current_content.to_owned()
-            };
-
-            let numbering_note = if stripped_old || stripped_new {
-                "\n\nNote: line-number prefixes were stripped before matching."
-            } else {
-                ""
-            };
-
-            return Err(anyhow!(
-                "Could not find text to replace in file.\n\nExpected to replace:\n{}\n\nFile content preview:\n{}\n\nFix: The old_str must EXACTLY match the file content including all whitespace and newlines. Use read_file first to get the exact text, then copy it precisely into old_str. Do NOT add extra newlines or change indentation.{}",
-                effective_old_str,
-                content_preview,
-                numbering_note
+        let Some(new_content) =
+            apply_edit_replacement(&current_content, &effective_old_str, &effective_new_str)
+        else {
+            return Err(edit_not_found_error(
+                &current_content,
+                &effective_old_str,
+                stripped_old,
+                stripped_new,
             ));
-        }
+        };
 
-        // Preserve trailing newline if original file had one (Unix convention)
-        if had_trailing_newline && !new_content.ends_with('\n') {
-            new_content.push('\n');
-        }
-
-        let write_args = json!({
+        let mut write_args = json!({
             "path": input.path,
             "content": new_content,
             "mode": "overwrite"
         });
+        if let Some(snapshot) = args.get(FILE_CONFLICT_OVERRIDE_ARG) {
+            write_args[FILE_CONFLICT_OVERRIDE_ARG] = snapshot.clone();
+        }
 
-        self.file_ops_tool().write_file(write_args).await
+        self.file_ops_tool().write_file_internal(write_args, false).await
     }
 
     pub async fn delete_file(&self, _args: Value) -> Result<Value> {

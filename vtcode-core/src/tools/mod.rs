@@ -135,6 +135,7 @@ pub mod command_policy;
 pub mod command_resolver;
 pub mod continuation;
 pub mod editing;
+pub mod edited_file_monitor;
 pub mod error_context;
 pub mod error_helpers;
 pub mod exec_session;

@@ -156,6 +156,7 @@ arc-swap = "1.7"
 libloading = { workspace = true }
 
 lsp-types = "0.97.0"
+notify = "6.1.1"
 notify-rust = { version = "4.12", optional = true }
 ring = { workspace = true }
 

@@ -97,6 +97,14 @@ impl<'a> InlineEventContext<'a> {
                     self.state.reset_interrupt_state();
                     InlineLoopAction::DiffRejected
                 }
+                OverlayEvent::Submitted(
+                    OverlaySubmission::DiffProceed
+                    | OverlaySubmission::DiffReload
+                    | OverlaySubmission::DiffAbort,
+                ) => {
+                    self.state.reset_interrupt_state();
+                    self.input_processor().passive()
+                }
                 OverlayEvent::Submitted(OverlaySubmission::Hotkey(action)) => {
                     self.state.reset_interrupt_state();
                     match action {

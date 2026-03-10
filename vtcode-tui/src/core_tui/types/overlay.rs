@@ -1,4 +1,4 @@
-use super::diff::{DiffHunk, TrustMode};
+use super::diff::{DiffHunk, DiffPreviewMode, TrustMode};
 use super::selection::{
     InlineListItem, InlineListSearchConfig, InlineListSelection, SecurePromptConfig,
     WizardModalMode, WizardStep,
@@ -38,6 +38,7 @@ pub struct DiffOverlayRequest {
     pub after: String,
     pub hunks: Vec<DiffHunk>,
     pub current_hunk: usize,
+    pub mode: DiffPreviewMode,
 }
 
 #[derive(Clone, Debug)]
@@ -83,5 +84,8 @@ pub enum OverlaySubmission {
     Wizard(Vec<InlineListSelection>),
     DiffApply,
     DiffReject,
+    DiffProceed,
+    DiffReload,
+    DiffAbort,
     Hotkey(OverlayHotkeyAction),
 }

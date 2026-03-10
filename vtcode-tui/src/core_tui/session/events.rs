@@ -2,7 +2,9 @@ use super::*;
 use ratatui::crossterm::event::{KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind};
 use std::sync::Arc;
 
-use super::super::types::{ContentPart, OverlayEvent, OverlaySelectionChange, OverlaySubmission};
+use super::super::types::{
+    ContentPart, DiffPreviewMode, OverlayEvent, OverlaySelectionChange, OverlaySubmission,
+};
 use crate::ui::tui::InlineSegment;
 use crate::ui::tui::session::modal::{ModalKeyModifiers, ModalListKeyResult};
 
@@ -779,12 +781,11 @@ pub(super) fn handle_diff_preview_key(
     session: &mut Session,
     key: &KeyEvent,
 ) -> Option<InlineEvent> {
-    session.diff_preview_state()?;
-
-    let diff_state = session.diff_preview_state_mut()?;
+    let mode = session.diff_preview_state()?.mode;
 
     match key.code {
         KeyCode::Tab => {
+            let diff_state = session.diff_preview_state_mut()?;
             if diff_state.current_hunk + 1 < diff_state.hunk_count() {
                 diff_state.current_hunk += 1;
             }
@@ -792,6 +793,7 @@ pub(super) fn handle_diff_preview_key(
             None
         }
         KeyCode::BackTab => {
+            let diff_state = session.diff_preview_state_mut()?;
             if diff_state.current_hunk > 0 {
                 diff_state.current_hunk -= 1;
             }
@@ -801,18 +803,30 @@ pub(super) fn handle_diff_preview_key(
         KeyCode::Enter => {
             session.close_overlay();
             session.mark_dirty();
+            Some(InlineEvent::Overlay(OverlayEvent::Submitted(match mode {
+                DiffPreviewMode::EditApproval => OverlaySubmission::DiffApply,
+                DiffPreviewMode::FileConflict => OverlaySubmission::DiffProceed,
+            })))
+        }
+        KeyCode::Char('r') | KeyCode::Char('R')
+            if matches!(mode, DiffPreviewMode::FileConflict) =>
+        {
+            session.close_overlay();
+            session.mark_dirty();
             Some(InlineEvent::Overlay(OverlayEvent::Submitted(
-                OverlaySubmission::DiffApply,
+                OverlaySubmission::DiffReload,
             )))
         }
         KeyCode::Esc => {
             session.close_overlay();
             session.mark_dirty();
-            Some(InlineEvent::Overlay(OverlayEvent::Submitted(
-                OverlaySubmission::DiffReject,
-            )))
+            Some(InlineEvent::Overlay(OverlayEvent::Submitted(match mode {
+                DiffPreviewMode::EditApproval => OverlaySubmission::DiffReject,
+                DiffPreviewMode::FileConflict => OverlaySubmission::DiffAbort,
+            })))
         }
-        KeyCode::Char('1') => {
+        KeyCode::Char('1') if matches!(mode, DiffPreviewMode::EditApproval) => {
+            let diff_state = session.diff_preview_state_mut()?;
             diff_state.trust_mode = crate::ui::tui::types::TrustMode::Once;
             let mode = diff_state.trust_mode;
             session.mark_dirty();
@@ -820,7 +834,8 @@ pub(super) fn handle_diff_preview_key(
                 OverlaySelectionChange::DiffTrustMode { mode },
             )))
         }
-        KeyCode::Char('2') => {
+        KeyCode::Char('2') if matches!(mode, DiffPreviewMode::EditApproval) => {
+            let diff_state = session.diff_preview_state_mut()?;
             diff_state.trust_mode = crate::ui::tui::types::TrustMode::Session;
             let mode = diff_state.trust_mode;
             session.mark_dirty();
@@ -828,7 +843,8 @@ pub(super) fn handle_diff_preview_key(
                 OverlaySelectionChange::DiffTrustMode { mode },
             )))
         }
-        KeyCode::Char('3') => {
+        KeyCode::Char('3') if matches!(mode, DiffPreviewMode::EditApproval) => {
+            let diff_state = session.diff_preview_state_mut()?;
             diff_state.trust_mode = crate::ui::tui::types::TrustMode::Always;
             let mode = diff_state.trust_mode;
             session.mark_dirty();
@@ -836,7 +852,8 @@ pub(super) fn handle_diff_preview_key(
                 OverlaySelectionChange::DiffTrustMode { mode },
             )))
         }
-        KeyCode::Char('4') => {
+        KeyCode::Char('4') if matches!(mode, DiffPreviewMode::EditApproval) => {
+            let diff_state = session.diff_preview_state_mut()?;
             diff_state.trust_mode = crate::ui::tui::types::TrustMode::AutoTrust;
             let mode = diff_state.trust_mode;
             session.mark_dirty();

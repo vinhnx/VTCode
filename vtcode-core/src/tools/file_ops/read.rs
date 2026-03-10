@@ -108,6 +108,36 @@ fn has_explicit_limit(args: &Value) -> bool {
         .any(|key| args.get(*key).is_some())
 }
 
+fn has_explicit_offset(args: &Value) -> bool {
+    ["offset", "offset_lines", "offset_bytes"]
+        .iter()
+        .any(|key| args.get(*key).is_some())
+}
+
+fn is_full_text_read(args: &Value, is_spool_output: bool) -> bool {
+    !is_spool_output && !has_explicit_offset(args) && !has_explicit_limit(args)
+}
+
+fn restore_exact_text_content(content: &str, size_bytes: u64) -> Option<String> {
+    let content_size = content.len() as u64;
+    match size_bytes.checked_sub(content_size) {
+        Some(0) => Some(content.to_string()),
+        Some(1) => Some(format!("{content}\n")),
+        Some(2) if content.contains("\r\n") || !content.contains('\n') => {
+            Some(format!("{content}\r\n"))
+        }
+        _ => None,
+    }
+}
+
+fn response_size_bytes(response: &Value) -> Option<u64> {
+    response
+        .get("metadata")
+        .and_then(|metadata| metadata.get("data"))
+        .and_then(|data| data.get("size_bytes"))
+        .and_then(Value::as_u64)
+}
+
 fn apply_spool_chunk_defaults(handler_args_json: &mut Value, raw_args: &Value) -> SpoolChunkPlan {
     let mut offset = 1usize;
     let mut limit = SPOOL_CHUNK_DEFAULT_LIMIT_LINES;
@@ -217,6 +247,46 @@ fn build_history_cache_key(
 }
 
 impl FileOpsTool {
+    async fn track_read_snapshot(&self, path: &Path) {
+        if let Err(err) = self.edited_file_monitor.track_read(path).await {
+            tracing::warn!(
+                path = %path.display(),
+                error = %err,
+                "Failed to record edited-file read snapshot"
+            );
+        }
+    }
+
+    fn track_read_text_snapshot(&self, path: &Path, content: &str) {
+        if let Err(err) = self.edited_file_monitor.record_read_text(path, content) {
+            tracing::warn!(
+                path = %path.display(),
+                error = %err,
+                "Failed to record edited-file read snapshot"
+            );
+        }
+    }
+
+    async fn track_exact_text_snapshot(&self, path: &Path, content: &str, size_bytes: u64) {
+        if let Some(exact_content) = restore_exact_text_content(content, size_bytes) {
+            self.track_read_text_snapshot(path, &exact_content);
+        } else {
+            self.track_read_snapshot(path).await;
+        }
+    }
+
+    async fn track_cached_read_snapshot(&self, path: &Path, args: &Value, response: &Value) {
+        if is_full_text_read(args, false)
+            && let Some(content) = response.get("content").and_then(Value::as_str)
+            && let Some(size_bytes) = response_size_bytes(response)
+        {
+            self.track_exact_text_snapshot(path, content, size_bytes).await;
+            return;
+        }
+
+        self.track_read_snapshot(path).await;
+    }
+
     pub async fn read_file(&self, args: Value) -> Result<Value> {
         let mut perf = PerfSpan::new("vtcode.perf.read_file_ms");
 
@@ -297,6 +367,7 @@ impl FileOpsTool {
                 && let Some(cached) = FILE_CACHE.get_file(key).await
             {
                 perf.tag("cache", "hit");
+                self.track_cached_read_snapshot(&canonical, &args, &cached).await;
                 return Ok(cached);
             }
             perf.tag("cache", if cache_key.is_some() { "miss" } else { "skip" });
@@ -318,11 +389,12 @@ impl FileOpsTool {
                         } else {
                             content.lines().count()
                         };
+                        let full_text_read = is_full_text_read(&args, is_spool_output);
 
                         let mut builder = ToolResponseBuilder::new("read_file")
                             .success()
                             .message(format!("Successfully read file {}", requested_path))
-                            .content(content)
+                            .content(&content)
                             .field("path", json!(requested_path.clone()))
                             .field("no_spool", json!(true))
                             .field("content_kind", json!("text"))
@@ -356,6 +428,12 @@ impl FileOpsTool {
 
                         let response = builder.build_json();
 
+                        if full_text_read {
+                            self.track_exact_text_snapshot(&canonical, &content, size_bytes)
+                                .await;
+                        } else {
+                            self.track_read_snapshot(&canonical).await;
+                        }
                         if let Some(key) = cache_key.as_ref() {
                             FILE_CACHE.put_file(key.clone(), response.clone()).await;
                         }
@@ -397,7 +475,7 @@ impl FileOpsTool {
                     size_bytes,
                     self.workspace_relative_display(&canonical)
                 ))
-                .content(content)
+                .content(&content)
                 .field("path", json!(self.workspace_relative_display(&canonical)))
                 .field("no_spool", json!(true));
 
@@ -445,7 +523,18 @@ impl FileOpsTool {
                 }
             }
 
+            let content_kind = metadata
+                .get("content_kind")
+                .and_then(Value::as_str)
+                .unwrap_or("text");
+            let full_legacy_text_read = !use_paging && !truncated && content_kind == "text";
             let response = builder.build_json();
+            if full_legacy_text_read {
+                self.track_exact_text_snapshot(&canonical, &content, size_bytes)
+                    .await;
+            } else {
+                self.track_read_snapshot(&canonical).await;
+            }
             if let Some(key) = cache_key.as_ref() {
                 FILE_CACHE.put_file(key.clone(), response.clone()).await;
             }

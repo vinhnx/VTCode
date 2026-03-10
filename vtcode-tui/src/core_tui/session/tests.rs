@@ -2,10 +2,11 @@ use super::*;
 use crate::config::constants::ui;
 use crate::ui::tui::style::ratatui_style_from_inline;
 use crate::ui::tui::{
-    InlineListItem, InlineListSearchConfig, InlineListSelection, InlineSegment, InlineTextStyle,
-    InlineTheme, ListOverlayRequest, OverlayEvent, OverlayHotkey, OverlayHotkeyAction,
-    OverlayHotkeyKey, OverlayRequest, OverlaySubmission, SlashCommandItem, WizardModalMode,
-    WizardOverlayRequest, WizardStep,
+    DiffHunk, DiffOverlayRequest, DiffPreviewMode, DiffPreviewState, InlineListItem,
+    InlineListSearchConfig, InlineListSelection, InlineSegment, InlineTextStyle, InlineTheme,
+    ListOverlayRequest, OverlayEvent, OverlayHotkey, OverlayHotkeyAction, OverlayHotkeyKey,
+    OverlayRequest, OverlaySubmission, SlashCommandItem, WizardModalMode, WizardOverlayRequest,
+    WizardStep,
 };
 use ratatui::crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
@@ -66,6 +67,23 @@ fn session_with_slash_palette_commands() -> Session {
         ],
         "Agent TUI".to_string(),
     )
+}
+
+fn show_diff_overlay(session: &mut Session, mode: DiffPreviewMode) {
+    session.show_overlay(OverlayRequest::Diff(DiffOverlayRequest {
+        file_path: "src/main.rs".to_string(),
+        before: "fn old() {}\n".to_string(),
+        after: "fn new() {}\n".to_string(),
+        hunks: vec![DiffHunk {
+            old_start: 0,
+            new_start: 0,
+            old_lines: 1,
+            new_lines: 1,
+            display: "@@ -1 +1 @@".to_string(),
+        }],
+        current_hunk: 0,
+        mode,
+    }));
 }
 
 fn visible_transcript(session: &mut Session) -> Vec<String> {
@@ -882,6 +900,91 @@ fn control_super_e_does_not_launch_editor() {
 
     // Should not launch editor when both Control and Super (Cmd) are pressed
     assert!(!matches!(result, Some(InlineEvent::LaunchEditor)));
+}
+
+#[test]
+fn diff_overlay_defaults_to_edit_approval_mode() {
+    let preview = DiffPreviewState::new(
+        "src/main.rs".to_string(),
+        "before".to_string(),
+        "after".to_string(),
+        Vec::new(),
+    );
+
+    assert_eq!(preview.mode, DiffPreviewMode::EditApproval);
+}
+
+#[test]
+fn diff_overlay_edit_approval_keys_remain_unchanged() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+
+    show_diff_overlay(&mut session, DiffPreviewMode::EditApproval);
+    let apply = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(matches!(
+        apply,
+        Some(InlineEvent::Overlay(OverlayEvent::Submitted(
+            OverlaySubmission::DiffApply
+        )))
+    ));
+
+    show_diff_overlay(&mut session, DiffPreviewMode::EditApproval);
+    let reload = session.process_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE));
+    assert!(reload.is_none());
+    assert!(session.diff_preview_state().is_some());
+
+    let reject = session.process_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(matches!(
+        reject,
+        Some(InlineEvent::Overlay(OverlayEvent::Submitted(
+            OverlaySubmission::DiffReject
+        )))
+    ));
+}
+
+#[test]
+fn diff_overlay_conflict_mode_maps_enter_reload_and_escape() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+
+    show_diff_overlay(&mut session, DiffPreviewMode::FileConflict);
+    let proceed = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(matches!(
+        proceed,
+        Some(InlineEvent::Overlay(OverlayEvent::Submitted(
+            OverlaySubmission::DiffProceed
+        )))
+    ));
+
+    show_diff_overlay(&mut session, DiffPreviewMode::FileConflict);
+    let reload = session.process_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE));
+    assert!(matches!(
+        reload,
+        Some(InlineEvent::Overlay(OverlayEvent::Submitted(
+            OverlaySubmission::DiffReload
+        )))
+    ));
+
+    show_diff_overlay(&mut session, DiffPreviewMode::FileConflict);
+    let abort = session.process_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(matches!(
+        abort,
+        Some(InlineEvent::Overlay(OverlayEvent::Submitted(
+            OverlaySubmission::DiffAbort
+        )))
+    ));
+}
+
+#[test]
+fn diff_overlay_conflict_mode_ignores_trust_shortcuts() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+
+    show_diff_overlay(&mut session, DiffPreviewMode::FileConflict);
+    let event = session.process_key(KeyEvent::new(KeyCode::Char('1'), KeyModifiers::NONE));
+
+    assert!(event.is_none());
+    assert!(matches!(
+        session.diff_preview_state().map(|preview| preview.mode),
+        Some(DiffPreviewMode::FileConflict)
+    ));
 }
 
 #[test]

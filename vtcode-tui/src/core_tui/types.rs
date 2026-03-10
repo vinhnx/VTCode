@@ -8,7 +8,7 @@ mod slash;
 mod style;
 
 pub use content::ContentPart;
-pub use diff::{DiffHunk, DiffPreviewState, TrustMode};
+pub use diff::{DiffHunk, DiffPreviewMode, DiffPreviewState, TrustMode};
 pub use overlay::{
     DiffOverlayRequest, ListOverlayRequest, ModalOverlayRequest, OverlayEvent, OverlayHotkey,
     OverlayHotkeyAction, OverlayHotkeyKey, OverlayRequest, OverlaySelectionChange,

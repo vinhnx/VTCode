@@ -24,6 +24,7 @@ use super::execute_hitl_tool;
 use super::execution_events::{emit_tool_completion_for_status, emit_tool_completion_status};
 use super::execution_plan_mode::{handle_enter_plan_mode, handle_exit_plan_mode};
 use super::execution_runtime::execute_with_cache_and_streaming;
+use super::file_conflict_prompt::resolve_file_conflict_status;
 use super::status::{ToolExecutionStatus, ToolPipelineOutcome};
 
 pub(crate) async fn run_tool_call(
@@ -286,6 +287,22 @@ pub(crate) async fn run_tool_call_with_args(
         max_tool_retries,
     )
     .await;
+    let execution_status = resolve_file_conflict_status(
+        ctx.tool_registry,
+        ctx.tool_result_cache,
+        ctx.session,
+        ctx.handle,
+        name,
+        &tool_item_id,
+        args_val,
+        execution_status,
+        ctrl_c_state,
+        ctrl_c_notify,
+        harness_emitter.cloned(),
+        vt_cfg,
+        max_tool_retries,
+    )
+    .await?;
 
     let mut pipeline_outcome = ToolPipelineOutcome::from_status(execution_status);
     apply_post_execution_side_effects(

@@ -6410,6 +6410,7 @@ dependencies = [
  "lsp-types",
  "mockito",
  "nix 0.31.2",
+ "notify",
  "notify-rust",
  "nucleo-matcher",
  "num_cpus",

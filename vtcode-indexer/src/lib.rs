@@ -73,6 +73,7 @@ impl IndexStorage for MarkdownIndexStorage {
     }
 
     fn persist(&self, index_dir: &Path, entry: &FileIndex) -> Result<()> {
+        fs::create_dir_all(index_dir)?;
         let file_name = format!("{}.md", calculate_hash(&entry.path));
         let index_path = index_dir.join(file_name);
         let file = fs::File::create(index_path)?;
@@ -102,6 +103,7 @@ impl IndexStorage for MarkdownIndexStorage {
     }
 
     fn persist_batch(&self, index_dir: &Path, entries: &[FileIndex]) -> Result<()> {
+        fs::create_dir_all(index_dir)?;
         let temp_path = index_dir.join(".index.md.tmp");
         let final_path = index_dir.join("index.md");
         let file = fs::File::create(&temp_path)?;
@@ -1011,6 +1013,22 @@ mod tests {
         let index_content = fs::read_to_string(index_dir.join("index.md"))?;
         assert!(index_content.contains(first.to_string_lossy().as_ref()));
         assert!(index_content.contains(second.to_string_lossy().as_ref()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn index_directory_writes_markdown_snapshot_without_manual_init() -> Result<()> {
+        let temp = tempdir()?;
+        let workspace = temp.path();
+        fs::write(workspace.join("notes.txt"), "remember this")?;
+
+        let mut indexer = SimpleIndexer::new(workspace.to_path_buf());
+        indexer.index_directory(workspace)?;
+
+        let index_content =
+            fs::read_to_string(workspace.join(".vtcode").join("index").join("index.md"))?;
+        assert!(index_content.contains(workspace.join("notes.txt").to_string_lossy().as_ref()));
 
         Ok(())
     }

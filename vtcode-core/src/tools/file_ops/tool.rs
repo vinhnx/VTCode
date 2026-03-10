@@ -1,5 +1,6 @@
 //! File operations tool implementation.
 
+use crate::tools::edited_file_monitor::EditedFileMonitor;
 use crate::tools::grep_file::GrepSearchManager;
 use crate::tools::traits::{CacheableTool, FileTool, ModeTool, Tool};
 use crate::tools::types::{ListInput, PathArgs};
@@ -18,10 +19,20 @@ pub struct FileOpsTool {
     pub(super) workspace_root: PathBuf,
     pub(super) canonical_workspace_root: PathBuf,
     pub(super) grep_manager: Arc<GrepSearchManager>,
+    pub(super) edited_file_monitor: Arc<EditedFileMonitor>,
 }
 
 impl FileOpsTool {
     pub fn new(workspace_root: PathBuf, grep_search: Arc<GrepSearchManager>) -> Self {
+        let edited_file_monitor = Arc::new(EditedFileMonitor::new());
+        Self::new_with_monitor(workspace_root, grep_search, edited_file_monitor)
+    }
+
+    pub fn new_with_monitor(
+        workspace_root: PathBuf,
+        grep_search: Arc<GrepSearchManager>,
+        edited_file_monitor: Arc<EditedFileMonitor>,
+    ) -> Self {
         // grep_file manager is unused; keep param to avoid broad call-site churn
         let canonical_workspace_root = canonicalize_workspace(&workspace_root);
 
@@ -29,7 +40,12 @@ impl FileOpsTool {
             workspace_root,
             canonical_workspace_root,
             grep_manager: grep_search,
+            edited_file_monitor,
         }
+    }
+
+    pub fn edited_file_monitor(&self) -> &Arc<EditedFileMonitor> {
+        &self.edited_file_monitor
     }
 
     /// Get relative path from workspace root, avoiding allocation when possible

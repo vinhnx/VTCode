@@ -149,6 +149,17 @@ impl Patch {
     }
 }
 
+pub async fn render_patch_update_content(
+    source_path: &Path,
+    content: &str,
+    chunks: &[PatchChunk],
+    path: &str,
+) -> anyhow::Result<String> {
+    applicator::render_updated_content(source_path, content, chunks, path)
+        .await
+        .map_err(|err| anyhow!(err))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

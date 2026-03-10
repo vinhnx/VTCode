@@ -60,6 +60,14 @@ impl TrustMode {
     }
 }
 
+/// Behavior mode for diff preview overlays.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DiffPreviewMode {
+    #[default]
+    EditApproval,
+    FileConflict,
+}
+
 /// State for diff preview modal
 #[derive(Debug, Clone)]
 pub struct DiffPreviewState {
@@ -69,10 +77,27 @@ pub struct DiffPreviewState {
     pub hunks: Vec<DiffHunk>,
     pub current_hunk: usize,
     pub trust_mode: TrustMode,
+    pub mode: DiffPreviewMode,
 }
 
 impl DiffPreviewState {
     pub fn new(file_path: String, before: String, after: String, hunks: Vec<DiffHunk>) -> Self {
+        Self::new_with_mode(
+            file_path,
+            before,
+            after,
+            hunks,
+            DiffPreviewMode::EditApproval,
+        )
+    }
+
+    pub fn new_with_mode(
+        file_path: String,
+        before: String,
+        after: String,
+        hunks: Vec<DiffHunk>,
+        mode: DiffPreviewMode,
+    ) -> Self {
         Self {
             file_path,
             before,
@@ -80,6 +105,7 @@ impl DiffPreviewState {
             hunks,
             current_hunk: 0,
             trust_mode: TrustMode::Once,
+            mode,
         }
     }
 

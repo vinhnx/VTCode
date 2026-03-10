@@ -46,7 +46,7 @@ impl FileOpsTool {
         let mut payload = json!({
             "path": path,
             "content": content,
-            "mode": "overwrite"
+            "mode": "fail_if_exists"
         });
 
         if let Some(encoding) = encoding {

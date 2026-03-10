@@ -9,6 +9,7 @@ mod execution_helpers;
 mod execution_plan_mode;
 mod execution_run;
 mod execution_runtime;
+mod file_conflict_prompt;
 mod hitl;
 mod pty_stream;
 mod status;
