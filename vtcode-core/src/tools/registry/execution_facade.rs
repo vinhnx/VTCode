@@ -335,6 +335,13 @@ impl ToolRegistry {
                 .put(tool_name.clone(), tool_arc.clone());
         }
 
+        let parameter_schema = self
+            .inventory
+            .registration_for(&tool_name)
+            .and_then(|registration| registration.parameter_schema().cloned());
+        let normalized_args =
+            execution_kernel::normalize_tool_args(&tool_name, args, parameter_schema.as_ref())?;
+        let args = normalized_args.as_ref();
         let requested_name = name.to_string();
 
         // Clone args once at the start for error recording paths (clone only here)

@@ -6,6 +6,8 @@ use crate::config::constants::models;
 use crate::llm::provider::{
     MessageContent, MessageRole, SpecificFunctionChoice, SpecificToolChoice, ToolDefinition,
 };
+use crate::tools::request_user_input::RequestUserInputTool;
+use crate::tools::traits::Tool;
 use serde_json::json;
 
 #[test]
@@ -247,6 +249,48 @@ fn sanitize_function_parameters_drops_invalid_required_entries() {
 
     let sanitized = sanitize_function_parameters(parameters);
     assert_eq!(sanitized["required"], json!(["label"]));
+}
+
+#[test]
+fn sanitize_function_parameters_renames_nested_description_property_names() {
+    let parameters = RequestUserInputTool
+        .parameter_schema()
+        .expect("request_user_input schema");
+
+    let sanitized = sanitize_function_parameters(parameters);
+    let option_items =
+        &sanitized["properties"]["questions"]["items"]["properties"]["options"]["items"];
+    let option_properties = option_items["properties"]
+        .as_object()
+        .expect("option properties should remain an object");
+
+    assert!(!option_properties.contains_key("description"));
+    assert_eq!(
+        option_properties["details"]["description"],
+        json!("One short sentence explaining impact/tradeoff if selected.")
+    );
+    assert_eq!(option_items["required"], json!(["label", "details"]));
+}
+
+#[test]
+fn sanitize_function_parameters_preserves_real_details_property() {
+    let parameters = json!({
+        "type": "object",
+        "properties": {
+            "description": { "type": "string" },
+            "details": { "type": "string" }
+        },
+        "required": ["description", "details"]
+    });
+
+    let sanitized = sanitize_function_parameters(parameters);
+    let properties = sanitized["properties"]
+        .as_object()
+        .expect("properties should remain an object");
+
+    assert!(properties.contains_key("description"));
+    assert!(properties.contains_key("details"));
+    assert_eq!(sanitized["required"], json!(["description", "details"]));
 }
 
 #[test]

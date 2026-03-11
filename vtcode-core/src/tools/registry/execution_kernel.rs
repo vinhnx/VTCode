@@ -1,4 +1,5 @@
 use anyhow::{Result, anyhow};
+use serde_json::Map;
 use serde_json::Value;
 
 use crate::config::constants::tools as tool_names;
@@ -10,6 +11,8 @@ use super::ToolRegistry;
 
 pub(super) const UNIFIED_FILE_MAX_PAYLOAD_BYTES: usize = 1024 * 1024;
 const UNIFIED_FILE_MAX_PAYLOAD_BYTES_ENV: &str = "VTCODE_UNIFIED_FILE_MAX_PAYLOAD_BYTES";
+const DESCRIPTION_FIELD: &str = "description";
+const DETAILS_ALIAS_FIELD: &str = "details";
 
 #[derive(Debug, Clone)]
 pub struct ToolPreflightOutcome {
@@ -76,6 +79,74 @@ fn configured_unified_file_max_payload_bytes() -> usize {
     .unwrap_or(UNIFIED_FILE_MAX_PAYLOAD_BYTES)
 }
 
+fn schema_uses_description_alias(schema_properties: &Map<String, Value>) -> bool {
+    schema_properties.contains_key(DESCRIPTION_FIELD)
+        && !schema_properties.contains_key(DETAILS_ALIAS_FIELD)
+}
+
+fn normalize_description_alias(
+    object: &mut Map<String, Value>,
+    schema_properties: &Map<String, Value>,
+) -> bool {
+    if !schema_uses_description_alias(schema_properties) || object.contains_key(DESCRIPTION_FIELD) {
+        return false;
+    }
+
+    let Some(details) = object.remove(DETAILS_ALIAS_FIELD) else {
+        return false;
+    };
+    object.insert(DESCRIPTION_FIELD.to_string(), details);
+    true
+}
+
+fn normalize_schema_aliases_in_place(value: &mut Value, schema: &Value) -> bool {
+    let Some(schema_object) = schema.as_object() else {
+        return false;
+    };
+
+    let mut changed = false;
+
+    if let Value::Object(object) = value
+        && let Some(properties) = schema_object.get("properties").and_then(Value::as_object)
+    {
+        changed |= normalize_description_alias(object, properties);
+        for (property_name, property_schema) in properties {
+            if let Some(property_value) = object.get_mut(property_name) {
+                changed |= normalize_schema_aliases_in_place(property_value, property_schema);
+            }
+        }
+    }
+
+    if let Value::Array(items) = value
+        && let Some(items_schema) = schema_object.get("items")
+    {
+        for item in items {
+            changed |= normalize_schema_aliases_in_place(item, items_schema);
+        }
+    }
+
+    for keyword in ["allOf", "anyOf", "oneOf"] {
+        if let Some(branches) = schema_object.get(keyword).and_then(Value::as_array) {
+            for branch in branches {
+                changed |= normalize_schema_aliases_in_place(value, branch);
+            }
+        }
+    }
+    for keyword in ["if", "then", "else"] {
+        if let Some(branch) = schema_object.get(keyword) {
+            changed |= normalize_schema_aliases_in_place(value, branch);
+        }
+    }
+
+    changed
+}
+
+fn normalize_details_aliases(args: &Value, parameter_schema: Option<&Value>) -> Option<Value> {
+    let schema = parameter_schema?;
+    let mut normalized = args.clone();
+    normalize_schema_aliases_in_place(&mut normalized, schema).then_some(normalized)
+}
+
 fn serialized_payload_size_bytes(args: &Value) -> usize {
     serde_json::to_vec(args)
         .map(|bytes| bytes.len())
@@ -133,10 +204,13 @@ fn enforce_unified_file_payload_limit(
     ));
 }
 
-fn preflight_validation_args<'a>(
+pub(super) fn normalize_tool_args<'a>(
     normalized_tool_name: &str,
     args: &'a Value,
+    parameter_schema: Option<&Value>,
 ) -> Result<std::borrow::Cow<'a, Value>> {
+    let mut normalized = std::borrow::Cow::Borrowed(args);
+
     if matches!(
         normalized_tool_name,
         tool_names::RUN_PTY_CMD
@@ -144,21 +218,26 @@ fn preflight_validation_args<'a>(
             | tool_names::UNIFIED_EXEC
             | "shell"
     ) {
-        let normalized = crate::tools::command_args::normalize_shell_args(args)
+        let shell_args = crate::tools::command_args::normalize_shell_args(normalized.as_ref())
             .map_err(|error| anyhow!(error))?;
-        if normalized != *args {
-            return Ok(std::borrow::Cow::Owned(normalized));
+        if shell_args != *normalized.as_ref() {
+            normalized = std::borrow::Cow::Owned(shell_args);
         }
     }
 
     if normalized_tool_name == tool_names::UNIFIED_SEARCH {
-        let normalized = crate::tools::tool_intent::normalize_unified_search_args(args);
-        if normalized != *args {
-            return Ok(std::borrow::Cow::Owned(normalized));
+        let search_args =
+            crate::tools::tool_intent::normalize_unified_search_args(normalized.as_ref());
+        if search_args != *normalized.as_ref() {
+            normalized = std::borrow::Cow::Owned(search_args);
         }
     }
 
-    Ok(std::borrow::Cow::Borrowed(args))
+    if let Some(alias_args) = normalize_details_aliases(normalized.as_ref(), parameter_schema) {
+        normalized = std::borrow::Cow::Owned(alias_args);
+    }
+
+    Ok(normalized)
 }
 
 pub(super) fn preflight_validate_call(
@@ -179,7 +258,12 @@ pub(super) fn preflight_validate_resolved_call(
     normalized_tool_name: &str,
     args: &Value,
 ) -> Result<ToolPreflightOutcome> {
-    let validation_args = preflight_validation_args(normalized_tool_name, args)?;
+    let parameter_schema = registry
+        .inventory
+        .registration_for(normalized_tool_name)
+        .and_then(|registration| registration.parameter_schema().cloned());
+    let validation_args =
+        normalize_tool_args(normalized_tool_name, args, parameter_schema.as_ref())?;
     let required = required_args_for_tool(normalized_tool_name);
     let mut failures = Vec::new();
     for key in required {
@@ -233,8 +317,7 @@ pub(super) fn preflight_validate_resolved_call(
             normalized_tool_name
         ));
     }
-    if let Some(registration) = registry.inventory.registration_for(normalized_tool_name)
-        && let Some(schema) = registration.parameter_schema()
+    if let Some(schema) = parameter_schema.as_ref()
         && let Err(errors) = jsonschema::validate(schema, validation_args.as_ref())
     {
         return Err(anyhow!(
@@ -262,12 +345,14 @@ mod tests {
     use super::super::assembly::public_tool_name_candidates;
     use super::{
         configured_unified_file_max_payload_bytes, enforce_unified_file_payload_limit,
-        is_missing_required_arg, parse_unified_file_max_payload_bytes, preflight_validation_args,
+        is_missing_required_arg, normalize_tool_args, parse_unified_file_max_payload_bytes,
     };
     use crate::config::constants::tools as tool_names;
     use crate::tools::command_args::parse_indexed_command_parts;
+    use crate::tools::request_user_input::RequestUserInputTool;
+    use crate::tools::traits::Tool;
     use anyhow::Result;
-    use serde_json::json;
+    use serde_json::{Value, json};
 
     #[test]
     fn patch_action_within_limit_is_allowed() {
@@ -394,7 +479,7 @@ mod tests {
             "command.0": "ls",
             "command.1": "-a"
         });
-        let args = preflight_validation_args(tool_names::RUN_PTY_CMD, &input)?;
+        let args = normalize_tool_args(tool_names::RUN_PTY_CMD, &input, None)?;
 
         assert!(!is_missing_required_arg(
             tool_names::RUN_PTY_CMD,
@@ -414,7 +499,7 @@ mod tests {
             "command.1": "ls",
             "command.2": "-a"
         });
-        let args = preflight_validation_args(tool_names::RUN_PTY_CMD, &input)?;
+        let args = normalize_tool_args(tool_names::RUN_PTY_CMD, &input, None)?;
 
         assert!(!is_missing_required_arg(
             tool_names::RUN_PTY_CMD,
@@ -480,7 +565,7 @@ mod tests {
             "path": "."
         });
 
-        let normalized = preflight_validation_args(tool_names::UNIFIED_SEARCH, &args)?;
+        let normalized = normalize_tool_args(tool_names::UNIFIED_SEARCH, &args, None)?;
         assert_eq!(
             normalized.get("action").and_then(|v| v.as_str()),
             Some("grep")
@@ -494,7 +579,7 @@ mod tests {
             "max_results": 10
         });
 
-        let normalized = preflight_validation_args(tool_names::UNIFIED_SEARCH, &args)?;
+        let normalized = normalize_tool_args(tool_names::UNIFIED_SEARCH, &args, None)?;
         assert!(normalized.get("action").is_none());
         Ok(())
     }
@@ -506,7 +591,7 @@ mod tests {
             "Path": "."
         });
 
-        let normalized = preflight_validation_args(tool_names::UNIFIED_SEARCH, &args)?;
+        let normalized = normalize_tool_args(tool_names::UNIFIED_SEARCH, &args, None)?;
         assert_eq!(
             normalized.get("pattern").and_then(|v| v.as_str()),
             Some("ReasoningStage")
@@ -515,6 +600,84 @@ mod tests {
         assert_eq!(
             normalized.get("action").and_then(|v| v.as_str()),
             Some("grep")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn request_user_input_args_accept_details_alias() -> Result<()> {
+        let schema = RequestUserInputTool
+            .parameter_schema()
+            .expect("request_user_input schema");
+        let args = json!({
+            "questions": [{
+                "id": "scope",
+                "header": "Scope",
+                "question": "Which direction should we take?",
+                "options": [
+                    {
+                        "label": "Minimal",
+                        "details": "Ship the smallest viable slice."
+                    },
+                    {
+                        "label": "Full",
+                        "details": "Ship the full implementation."
+                    }
+                ]
+            }]
+        });
+
+        let normalized = normalize_tool_args(tool_names::REQUEST_USER_INPUT, &args, Some(&schema))?;
+        let option = &normalized["questions"][0]["options"][0];
+        assert_eq!(
+            option.get("description").and_then(Value::as_str),
+            Some("Ship the smallest viable slice.")
+        );
+        assert!(option.get("details").is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn task_tracker_args_accept_details_alias() -> Result<()> {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "action": { "type": "string" },
+                "description": { "type": "string" }
+            }
+        });
+        let args = json!({
+            "action": "add",
+            "details": "Add regression coverage"
+        });
+
+        let normalized = normalize_tool_args(tool_names::TASK_TRACKER, &args, Some(&schema))?;
+        assert_eq!(
+            normalized.get("description").and_then(Value::as_str),
+            Some("Add regression coverage")
+        );
+        assert!(normalized.get("details").is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn details_alias_does_not_shadow_real_details_field() -> Result<()> {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "description": { "type": "string" },
+                "details": { "type": "string" }
+            }
+        });
+        let args = json!({
+            "details": "Keep the real details field."
+        });
+
+        let normalized = normalize_tool_args(tool_names::TASK_TRACKER, &args, Some(&schema))?;
+        assert!(normalized.get("description").is_none());
+        assert_eq!(
+            normalized.get("details").and_then(Value::as_str),
+            Some("Keep the real details field.")
         );
         Ok(())
     }
