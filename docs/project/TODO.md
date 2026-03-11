@@ -42,19 +42,9 @@ Conduct a comprehensive review and enhancement of error handling and recovery me
 
 ---
 
-check src/agent/runloop/unified/turn module Analyze the agent harness codebase focusing on the runloop, unified, turn, and tool_outcomes components to identify performance bottlenecks, inefficiencies, and optimization opportunities. Perform a comprehensive review of data flow and control flow through these components, examining how tool calls are executed, how outcomes are processed, and how turn execution manages state and sequencing. Evaluate whether the current implementation maximizes parallelism where possible, minimizes blocking operations, and maintains efficient memory usage patterns. Identify any redundant computational steps, unnecessary data transformations, or algorithmic inefficiencies that degrade performance. Assess the current error handling mechanisms for robustness, examining exception propagation paths, retry logic, and failure recovery procedures to ensure they do not introduce excessive latency or create cascading failure scenarios. Examine the design of core data structures used throughout these components for optimal access patterns, memory efficiency, and scalability characteristics. Provide specific, actionable recommendations for refactoring code to reduce complexity, implementing caching where appropriate to avoid redundant computation, optimizing hot path execution, and improving the overall responsiveness and throughput of the agent harness. Your analysis should include concrete code-level suggestions with estimated impact on performance metrics and potential tradeoffs to consider when implementing optimizations.
+support litellm provider in vtcode agent harness
 
-> do refactor.
-
----
-
-support litellm
-
-https://github.com/majiayu000/litellm-rs
-
-https://docs.litellm.ai/docs/
-
----
+https://docs.litellm.ai/llms.txt
 
 ---
 
@@ -73,3 +63,7 @@ vtchat.io
 ---
 
 https://defuddle.md/x.com/akshay_pachaar/status/2031021906254766128
+
+---
+
+Agent runs, human steers. I also apply this philosophy in the VT Code harness.
