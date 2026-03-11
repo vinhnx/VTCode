@@ -253,10 +253,8 @@ pub(crate) async fn validate_tool_call<'a>(
     tool_name: &str,
     args_val: &serde_json::Value,
 ) -> Result<ValidationResult> {
-    let tool_budget_exhausted = ctx.harness_state.tool_budget_exhausted();
-    if tool_budget_exhausted {
+    if let Some(max_tool_calls) = ctx.harness_state.exhausted_tool_call_limit() {
         let tool_calls = ctx.harness_state.tool_calls;
-        let max_tool_calls = ctx.harness_state.max_tool_calls;
         let exhausted_emitted = ctx.harness_state.tool_budget_exhausted_emitted;
         let error_msg = format!(
             "Policy violation: exceeded max tool calls per turn ({})",

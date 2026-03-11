@@ -10,6 +10,7 @@ fn build_tool_budget_warning_message(used: usize, max: usize, remaining: usize) 
 }
 
 pub(crate) fn build_tool_budget_exhausted_reason(used: usize, max: usize) -> String {
+    debug_assert!(max > 0, "disabled tool-call caps must not emit exhaustion");
     format!(
         "Tool-call budget exhausted for this turn ({used}/{max}). Start a new turn with \"continue\" or provide a new instruction to proceed."
     )
