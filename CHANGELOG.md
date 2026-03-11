@@ -2,6 +2,62 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.88.0 - 2026-03-11
+
+### Highlights
+#### Features
+
+- Refactor pattern detection logic, improve concurrency with `parking_lot`, and optimize performance with `SmallVec` and pre-allocated buffers. (28d0d534) 
+- Optimize tool execution tracking, file path parsing, and grep result handling, while preventing memory leaks in stats. (c319aebe) 
+- Add Miri check to the `check.sh` script and update documentation for detecting undefined behavior. (15f3d5c1) 
+### Other Changes
+#### Other
+
+- Refactor pattern detection and command safety checks for improved efficiency and optimize tool name caching. (4abdbc6f) 
+- Review ZedAgent registry mutex (3ead1b8b) 
+- Apply async docs updates (3b75f5cf) 
+- Incorporate async docs guidance (800f1927) 
+- Enhance task listing filters (24b35cee) 
+- Improve batched request handling (e1cbedf5) 
+- Improve ANSI styles (cbe58ce9) 
+- Refactor agent loop to support initial configuration and enhance live reload functionality (7aaba845) 
+- Review vtcode PR 13090 updates (e4ee2358) 
+- Refactor SandboxPolicy to support network access and allowlisting in ReadOnly mode (89127618) 
+- Enhance Anthropic tool support with code execution and memory tools; improve validation and error handling (fac76a15) 
+- Implement referenced Rust PR updates (c43428b1) 
+- Fix @file diff lookup (183a1ec3) 
+- Refactor tool routing and ACP (c37388a6) 
+- Add headings to vtcode configs (b0f294f7) 
+- Remove forced budget stop logic (6ec74d5c) 
+- Enhance interleaved thinking model support and serialization across providers (a8e8bd27) 
+- Refactor task tracker rendering and state management (06566014) 
+- Implement workspace environment variable management and interactive selection UI (7e94f5df) 
+- Add local tool execution and session management for ZedAgent (1a460fc2) 
+- Refactor session setup and tool execution: remove unused code and improve clarity (06cc7671) 
+- Implement ast-grep installer with caching and locking mechanisms; add ripgrep installer with platform-specific installation logic; enhance debug logging capabilities. (fd0dadc9) 
+- Clean unused rust code (98f12364) 
+- Refactor agent configuration: remove unused code, enhance API key environment handling, and streamline model selection logic (89cbd68a) 
+- Add Gemini wire models and streaming processor implementation (4114e15c) 
+- Refactor approval policy handling: streamline rejection logic and enhance clarity in related modules (10630d73) 
+- Refactor sandbox policy handling and improve test coverage (8bfd4efa) 
+- Refactor error handling and add fallback mechanisms for model not found scenarios in OpenAI and OpenResponses providers (12f7a717) 
+- Refactor provider configuration: add timeout and specific OpenAI/Anthropic options (288cb188) 
+- Implement file conflict monitoring and auditing features (07e4b493) 
+- Refactor code for improved readability and consistency across file operations and conflict detection (6354965c) 
+- Refactor file conflict handling and introduce runtime execution management (e60faf6a) 
+- Refactor update handling and relaunch logic; enhance update command execution strategy (dffb89da) 
+- Enhance tool policies and follow-up prompt detection; update theme configuration (1463e225) 
+- Update notes (aefceac2) 
+- Enhance TurnLoopContext and processing logic for improved tool call handling and metadata management (327379f2) 
+- Add exhausted_tool_call_limit method and update budget handling logic (ebdc1b6f) 
+- Add LiteLLM provider support and documentation (327183cb) 
+- Enhance parameter sanitization and alias handling for tool arguments (190ee131) 
+- Update TODO (3b2e19fc) 
+#### Refactors
+
+- Introduce `detect_pattern_with_guard` for improved pattern detection logic and simplify `RwLock` write guard acquisition. (5f70ca7c) 
+### Contributors
+@vinhnx
 ## 0.87.1 - 2026-03-08
 
 ### Highlights
