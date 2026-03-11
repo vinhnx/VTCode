@@ -96,12 +96,12 @@ pub(crate) async fn run_tool_call_with_args(
     let mut canonical_name = requested_name.to_string();
 
     if !prevalidated {
-        if ctx.harness_state.tool_budget_exhausted() {
+        if let Some(max_tool_calls) = ctx.harness_state.exhausted_tool_call_limit() {
             return Ok(ToolPipelineOutcome::from_status(
                 ToolExecutionStatus::Failure {
                     error: anyhow::anyhow!(
                         "Policy violation: exceeded max tool calls per turn ({})",
-                        ctx.harness_state.max_tool_calls
+                        max_tool_calls
                     ),
                 },
             ));

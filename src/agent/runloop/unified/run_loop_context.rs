@@ -117,6 +117,10 @@ impl HarnessTurnState {
         self.has_tool_call_budget() && self.tool_calls >= self.max_tool_calls
     }
 
+    pub(crate) fn exhausted_tool_call_limit(&self) -> Option<usize> {
+        self.tool_budget_exhausted().then_some(self.max_tool_calls)
+    }
+
     pub(crate) fn wall_clock_exhausted(&self) -> bool {
         self.turn_started_at.elapsed() >= self.max_tool_wall_clock
     }
@@ -370,6 +374,7 @@ mod tests {
 
         assert!(!state.has_tool_call_budget());
         assert!(!state.tool_budget_exhausted());
+        assert_eq!(state.exhausted_tool_call_limit(), None);
         assert!(!state.should_emit_tool_budget_warning(0.75));
     }
 
