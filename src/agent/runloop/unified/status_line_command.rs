@@ -6,9 +6,11 @@ use serde::Serialize;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::process::Command as TokioCommand;
 use vtcode_core::config::StatusLineConfig;
+use vtcode_core::tools::dominant_workspace_language;
 use vtcode_core::utils::ansi_parser::strip_ansi;
 
 use crate::agent::runloop::git::GitStatusSummary;
+use crate::agent::runloop::unified::session_setup::preferred_display_language_for_workspace;
 
 pub(super) async fn run_status_line_command(
     command: &str,
@@ -147,6 +149,8 @@ impl StatusLineCommandPayload {
             workspace: StatusLineWorkspace {
                 current_dir: workspace_path.clone(),
                 project_dir: workspace_path,
+                dominant_language: dominant_workspace_language(workspace),
+                active_language: preferred_display_language_for_workspace(workspace),
             },
             model: StatusLineModel {
                 id: model_id.to_string(),
@@ -166,6 +170,8 @@ impl StatusLineCommandPayload {
 struct StatusLineWorkspace {
     current_dir: String,
     project_dir: String,
+    dominant_language: Option<String>,
+    active_language: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -191,5 +197,33 @@ impl StatusLineGit {
             branch: summary.branch.clone(),
             dirty: summary.dirty,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::StatusLineCommandPayload;
+    use serde_json::Value;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn payload_includes_dominant_workspace_language() {
+        let workspace = TempDir::new().expect("workspace tempdir");
+        fs::create_dir_all(workspace.path().join("src")).expect("create src");
+        fs::write(workspace.path().join("src/lib.rs"), "fn alpha() {}\n").expect("write rust");
+
+        let payload =
+            StatusLineCommandPayload::new(workspace.path(), "model", "Model", "low", None);
+        let value = serde_json::to_value(payload).expect("serialize payload");
+
+        assert_eq!(
+            value["workspace"]["dominant_language"],
+            Value::String("Rust".to_string())
+        );
+        assert_eq!(
+            value["workspace"]["active_language"],
+            Value::String("Rust".to_string())
+        );
     }
 }

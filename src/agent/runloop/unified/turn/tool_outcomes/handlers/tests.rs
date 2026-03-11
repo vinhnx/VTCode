@@ -1,5 +1,6 @@
 use super::fallbacks::{
     build_validation_error_content_with_fallback, preflight_validation_fallback,
+    recovery_fallback_for_tool,
 };
 use super::looping::{
     loop_detection_tool_key, shell_run_signature, spool_chunk_read_path,
@@ -360,6 +361,64 @@ fn loop_key_for_unified_file_move_includes_source_and_destination() {
 }
 
 #[test]
+fn loop_key_for_unified_search_grep_differs_by_pattern() {
+    let first = loop_detection_tool_key(
+        tool_names::UNIFIED_SEARCH,
+        &json!({"action":"grep","path":"src","pattern":"Result<"}),
+    );
+    let second = loop_detection_tool_key(
+        tool_names::UNIFIED_SEARCH,
+        &json!({"action":"grep","path":"src","pattern":"anyhow::Result"}),
+    );
+    assert_ne!(first, second);
+}
+
+#[test]
+fn loop_key_for_unified_search_structural_differs_by_pattern_and_lang() {
+    let first = loop_detection_tool_key(
+        tool_names::UNIFIED_SEARCH,
+        &json!({
+            "action":"structural",
+            "path":"src",
+            "pattern":"fn $NAME() {}",
+            "lang":"rust"
+        }),
+    );
+    let second = loop_detection_tool_key(
+        tool_names::UNIFIED_SEARCH,
+        &json!({
+            "action":"structural",
+            "path":"src",
+            "pattern":"fn $NAME() {}",
+            "lang":"typescript"
+        }),
+    );
+    assert_ne!(first, second);
+}
+
+#[test]
+fn loop_key_for_unified_search_list_includes_path_and_mode() {
+    let key = loop_detection_tool_key(
+        tool_names::UNIFIED_SEARCH,
+        &json!({"action":"list","path":"src","mode":"tree"}),
+    );
+    assert!(key.contains("unified_search::list::src::mode=tree"));
+}
+
+#[test]
+fn loop_key_for_unified_search_identical_payloads_match() {
+    let first = loop_detection_tool_key(
+        tool_names::UNIFIED_SEARCH,
+        &json!({"action":"grep","path":"src","pattern":"Result<","globs":["**/*.rs"]}),
+    );
+    let second = loop_detection_tool_key(
+        tool_names::UNIFIED_SEARCH,
+        &json!({"action":"grep","path":"src","pattern":"Result<","globs":["**/*.rs"]}),
+    );
+    assert_eq!(first, second);
+}
+
+#[test]
 fn loop_key_for_unified_exec_poll_includes_session_id() {
     let key = loop_detection_tool_key(
         tool_names::UNIFIED_EXEC,
@@ -467,6 +526,35 @@ fn preflight_fallback_remaps_unified_search_read_action() {
     assert_eq!(fallback.0, tool_names::UNIFIED_SEARCH);
     assert_eq!(fallback.1["action"], "grep");
     assert_eq!(fallback.1["pattern"], "retry");
+}
+
+#[test]
+fn recovery_fallback_skips_list_degradation_for_search_refinement() {
+    let grep = recovery_fallback_for_tool(
+        tool_names::UNIFIED_SEARCH,
+        &json!({"action":"grep","path":"src","pattern":"Result<"}),
+    );
+    let structural = recovery_fallback_for_tool(
+        tool_names::UNIFIED_SEARCH,
+        &json!({"action":"structural","path":"src","pattern":"fn $NAME() {}","lang":"rust"}),
+    );
+
+    assert!(grep.is_none());
+    assert!(structural.is_none());
+}
+
+#[test]
+fn recovery_fallback_preserves_list_for_file_discovery_calls() {
+    let fallback = recovery_fallback_for_tool(
+        tool_names::UNIFIED_SEARCH,
+        &json!({"action":"list","path":"src","mode":"tree"}),
+    )
+    .expect("list fallback expected");
+
+    assert_eq!(fallback.0, tool_names::UNIFIED_SEARCH);
+    assert_eq!(fallback.1["action"], "list");
+    assert_eq!(fallback.1["path"], "src");
+    assert_eq!(fallback.1["mode"], "tree");
 }
 
 #[test]

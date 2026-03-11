@@ -44,7 +44,7 @@ pub(super) fn is_tool_summary_line(message: &MessageLine) -> bool {
         .map(|segment| segment.text.as_str())
         .collect();
     let trimmed = text.trim_start();
-    trimmed.starts_with("• ") || trimmed.starts_with("└ ")
+    trimmed.starts_with("• ") || trimmed.starts_with("└ ") || trimmed.starts_with("│ ")
 }
 
 pub(super) fn split_tool_spans(spans: Vec<Span<'static>>) -> Vec<Vec<Span<'static>>> {

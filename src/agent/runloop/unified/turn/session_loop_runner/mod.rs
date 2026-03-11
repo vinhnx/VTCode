@@ -173,6 +173,9 @@ fn build_exit_header_context_fast(
         provider: format!("{}{}", ui::HEADER_PROVIDER_PREFIX, provider_label),
         model: format!("{}{}", ui::HEADER_MODEL_PREFIX, config.model),
         version: env!("CARGO_PKG_VERSION").to_string(),
+        search_tools: Some(crate::agent::runloop::ui::build_search_tools_badge(
+            &config.workspace,
+        )),
         git: format!(
             "{}{}",
             ui::HEADER_GIT_PREFIX,

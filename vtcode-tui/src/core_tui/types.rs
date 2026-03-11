@@ -25,6 +25,6 @@ pub use selection::{
 };
 pub use slash::SlashCommandItem;
 pub use style::{
-    EditingMode, InlineHeaderContext, InlineHeaderHighlight, InlineSegment, InlineTextStyle,
-    InlineTheme,
+    EditingMode, InlineHeaderContext, InlineHeaderHighlight, InlineHeaderStatusBadge,
+    InlineHeaderStatusTone, InlineSegment, InlineTextStyle, InlineTheme,
 };

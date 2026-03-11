@@ -776,6 +776,28 @@ Broken skill
         .expect("invalid skill file");
     }
 
+    fn write_rust_skills_metadata_fixture(workspace: &Path) {
+        let skill_dir = workspace.join(".agents/skills").join("rust-skills");
+        fs::create_dir_all(&skill_dir).expect("rust-skills dir");
+        fs::write(
+            skill_dir.join("SKILL.md"),
+            r#"---
+name: rust-skills
+description: Rust guidance
+license: MIT
+metadata:
+  author: leonardomso
+  version: "1.0.0"
+  sources:
+    - Rust API Guidelines
+    - Rust Performance Book
+---
+Use `/rust-skills`.
+"#,
+        )
+        .expect("rust-skills skill file");
+    }
+
     #[tokio::test]
     async fn load_skill_notifies_when_tool_snapshot_changes() {
         let temp_dir = TempDir::new().expect("temp dir");
@@ -932,7 +954,7 @@ Broken skill
     }
 
     #[tokio::test]
-    async fn list_skills_discovers_bundled_ast_grep_from_vtcode_home() {
+    async fn list_skills_discovers_bundled_skill_creator_from_vtcode_home() {
         let temp_dir = TempDir::new().expect("temp dir");
         let active_skills = Arc::new(RwLock::new(HashMap::new()));
         let tool = ListSkillsTool::with_codex_home(
@@ -942,7 +964,7 @@ Broken skill
         );
 
         let result = tool
-            .execute(json!({ "query": "ast-grep" }))
+            .execute(json!({ "query": "skill-creator" }))
             .await
             .expect("list skills succeeds");
 
@@ -951,11 +973,11 @@ Broken skill
             .as_array()
             .expect("agent skill group");
         assert_eq!(groups.len(), 1);
-        assert_eq!(groups[0]["name"].as_str(), Some("ast-grep"));
+        assert_eq!(groups[0]["name"].as_str(), Some("skill-creator"));
     }
 
     #[tokio::test]
-    async fn load_skill_activates_bundled_ast_grep_from_vtcode_home() {
+    async fn load_skill_activates_bundled_skill_creator_from_vtcode_home() {
         let temp_dir = TempDir::new().expect("temp dir");
         let registry = Arc::new(ToolRegistry::new(temp_dir.path().to_path_buf()).await);
         let active_skills = Arc::new(RwLock::new(HashMap::new()));
@@ -974,16 +996,16 @@ Broken skill
         );
 
         let result = tool
-            .execute(json!({ "name": "ast-grep" }))
+            .execute(json!({ "name": "skill-creator" }))
             .await
             .expect("load bundled skill succeeds");
 
-        assert_eq!(result["name"].as_str(), Some("ast-grep"));
+        assert_eq!(result["name"].as_str(), Some("skill-creator"));
         assert_eq!(
             result["activation_status"].as_str(),
             Some("Associated tools activated and added to context.")
         );
-        assert!(active_skills.read().await.contains_key("ast-grep"));
+        assert!(active_skills.read().await.contains_key("skill-creator"));
     }
 
     #[tokio::test]
@@ -1010,5 +1032,29 @@ Broken skill
                 .expect("sample string")
                 .contains("broken-skill")
         );
+    }
+
+    #[tokio::test]
+    async fn list_skills_accepts_rust_skills_metadata_arrays() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        write_rust_skills_metadata_fixture(temp_dir.path());
+        let active_skills = Arc::new(RwLock::new(HashMap::new()));
+        let tool = ListSkillsTool::with_codex_home(
+            temp_dir.path().to_path_buf(),
+            active_skills,
+            Some(temp_codex_home(temp_dir.path())),
+        );
+
+        let result = tool
+            .execute(json!({ "query": "rust-skills" }))
+            .await
+            .expect("list skills succeeds");
+
+        assert_eq!(result["count"].as_u64(), Some(1));
+        assert_eq!(result.get("discovery_errors"), None);
+        let groups = result["groups"]["agent_skill"]
+            .as_array()
+            .expect("agent skill group");
+        assert_eq!(groups[0]["name"].as_str(), Some("rust-skills"));
     }
 }

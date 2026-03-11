@@ -413,20 +413,23 @@ impl LoopDetector {
         match tool_name {
             LEGACY_LIST_FILES => Some(
                 "Instead of listing files repeatedly:\n\
-                 • Use unified_search with action='grep' to search for specific patterns\n\
+                 • Use unified_search with action='structural' plus lang for code patterns\n\
+                 • Use unified_search with action='grep' for raw text, docs, or logs\n\
                  • Target specific subdirectories (e.g., 'src/', 'tests/')\n\
                  • Use unified_file with action='read' if you know the exact file path"
                     .to_string(),
             ),
             LEGACY_GREP_FILE => Some(
                 "Instead of grepping repeatedly:\n\
-                 • Refine your search pattern to be more specific\n\
+                 • If syntax matters, switch to unified_search with action='structural' and set lang\n\
+                 • Refine your text pattern or narrow the path when grep is the right tool\n\
                  • Use unified_file with action='read' to examine specific files\n\
                  • Consider using unified_exec with action='code' for complex filtering"
                     .to_string(),
             ),
             tools::READ_FILE => Some(
                 "Instead of reading files repeatedly:\n\
+                 • Use unified_search with action='structural' plus lang for code lookups\n\
                  • Use unified_search with action='grep' to find specific content first\n\
                  • Read specific line ranges with unified_file offset/limit parameters\n\
                  • Consider if you already have the information needed"
@@ -515,16 +518,19 @@ impl LoopDetector {
     fn suggest_alternative_for_tool(tool_name: &str) -> String {
         match base_tool_name(tool_name) {
             LEGACY_LIST_FILES => "Instead of listing repeatedly:\n\
-                 • Use unified_search with action='grep' to search for specific patterns\n\
+                 • Use unified_search with action='structural' plus lang for code patterns\n\
+                 • Use unified_search with action='grep' for raw text, docs, or logs\n\
                  • Target specific subdirectories (e.g., 'src/', 'tests/')\n\
                  • Use unified_file with action='read' if you know the exact file path"
                 .to_string(),
             LEGACY_GREP_FILE => "Instead of grepping repeatedly:\n\
-                 • Refine your search pattern to be more specific\n\
+                 • If syntax matters, switch to unified_search with action='structural' and set lang\n\
+                 • Refine your text pattern or narrow the path when grep is the right tool\n\
                  • Use unified_file with action='read' to examine specific files\n\
                  • Consider using unified_exec with action='code' for complex filtering"
                 .to_string(),
             tools::READ_FILE => "Instead of reading files repeatedly:\n\
+                 • Use unified_search with action='structural' plus lang for code lookups\n\
                  • Use unified_search with action='grep' to find specific content first\n\
                  • Read specific line ranges with unified_file offset/limit parameters\n\
                  • Consider if you already have the information needed"
@@ -812,6 +818,7 @@ mod tests {
         assert!(suggestion.is_some());
         let msg = suggestion.unwrap();
         assert!(msg.contains("unified_search"));
+        assert!(msg.contains("action='structural'"));
         assert!(msg.contains("subdirectories"));
     }
 
@@ -823,6 +830,7 @@ mod tests {
         assert!(suggestion.is_some());
         let msg = suggestion.unwrap();
         assert!(msg.contains("unified_file"));
+        assert!(msg.contains("set lang"));
         assert!(msg.contains("pattern"));
     }
 

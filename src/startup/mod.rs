@@ -14,7 +14,7 @@ mod validation;
 mod workspace_trust;
 
 use config_loading::load_startup_config;
-pub(crate) use dependency_advisories::append_optional_search_tools_highlight;
+pub(crate) use dependency_advisories::{SearchToolsBundleNotice, take_search_tools_bundle_notice};
 use resume::{resolve_session_resume, validate_resume_all_usage};
 use theme::determine_theme;
 use validation::{

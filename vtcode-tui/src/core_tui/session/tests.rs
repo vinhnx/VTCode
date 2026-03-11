@@ -2,11 +2,11 @@ use super::*;
 use crate::config::constants::ui;
 use crate::ui::tui::style::ratatui_style_from_inline;
 use crate::ui::tui::{
-    DiffHunk, DiffOverlayRequest, DiffPreviewMode, DiffPreviewState, InlineListItem,
-    InlineListSearchConfig, InlineListSelection, InlineSegment, InlineTextStyle, InlineTheme,
-    ListOverlayRequest, OverlayEvent, OverlayHotkey, OverlayHotkeyAction, OverlayHotkeyKey,
-    OverlayRequest, OverlaySubmission, SlashCommandItem, WizardModalMode, WizardOverlayRequest,
-    WizardStep,
+    DiffHunk, DiffOverlayRequest, DiffPreviewMode, DiffPreviewState, InlineHeaderStatusBadge,
+    InlineHeaderStatusTone, InlineListItem, InlineListSearchConfig, InlineListSelection,
+    InlineSegment, InlineTextStyle, InlineTheme, ListOverlayRequest, OverlayEvent, OverlayHotkey,
+    OverlayHotkeyAction, OverlayHotkeyKey, OverlayRequest, OverlaySubmission, SlashCommandItem,
+    WizardModalMode, WizardOverlayRequest, WizardStep,
 };
 use ratatui::crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
@@ -1481,6 +1481,29 @@ fn header_shows_safe_badge_for_tools_policy_trust() {
         .map(|span| span.content.clone().into_owned())
         .collect();
     assert!(line_text.contains("[SAFE]"));
+}
+
+#[test]
+fn header_shows_search_tools_status_badge() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.header_context.search_tools = Some(InlineHeaderStatusBadge {
+        text: "Search: rg ready · sg missing".to_string(),
+        tone: InlineHeaderStatusTone::Warning,
+    });
+    session.input_manager.set_content("test".to_string());
+    session
+        .input_manager
+        .set_cursor(session.input_manager.content().len());
+
+    let line = session.header_meta_line();
+    let badge_span = line
+        .spans
+        .iter()
+        .find(|span| span.content.as_ref() == "Search: rg ready · sg missing")
+        .expect("search tools badge span");
+
+    assert_eq!(badge_span.style.fg, Some(Color::Yellow));
+    assert!(badge_span.style.add_modifier.contains(Modifier::BOLD));
 }
 
 #[test]

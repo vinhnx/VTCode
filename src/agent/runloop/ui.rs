@@ -4,8 +4,9 @@ use vtcode_core::config::WorkspaceTrustLevel;
 use vtcode_core::config::constants::ui;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::tool_policy::{ToolPolicy, ToolPolicyManager};
+use vtcode_core::tools::search_tool_bundle_status;
 use vtcode_core::utils::dot_config::load_workspace_trust_level;
-use vtcode_tui::InlineHeaderContext;
+use vtcode_tui::{InlineHeaderContext, InlineHeaderStatusBadge, InlineHeaderStatusTone};
 
 use tracing::warn;
 
@@ -117,6 +118,22 @@ fn is_home_directory(workspace_path: &Path) -> bool {
         return workspace_path == home_dir;
     }
     false
+}
+
+pub(crate) fn build_search_tools_badge(workspace: &Path) -> InlineHeaderStatusBadge {
+    let status = search_tool_bundle_status(workspace);
+    let tone = if status.all_ready() {
+        InlineHeaderStatusTone::Ready
+    } else if status.has_errors() || status.all_unavailable() {
+        InlineHeaderStatusTone::Error
+    } else {
+        InlineHeaderStatusTone::Warning
+    };
+
+    InlineHeaderStatusBadge {
+        text: status.header_summary(),
+        tone,
+    }
 }
 
 pub(crate) async fn build_inline_header_context(
@@ -283,6 +300,7 @@ pub(crate) async fn build_inline_header_context(
         provider: provider_value,
         model: model_value,
         version,
+        search_tools: Some(build_search_tools_badge(&config.workspace)),
         git: git_value,
         mode,
         reasoning,

@@ -7,6 +7,7 @@ use ratatui::{
 
 use super::layout_mode::LayoutMode;
 use super::panel::PanelStyles;
+use crate::core_tui::language_badge::language_badge_style;
 use crate::ui::tui::session::styling::SessionStyles;
 use crate::ui::tui::session::terminal_capabilities;
 use tui_shimmer::shimmer_spans_with_style_at_phase;
@@ -142,13 +143,26 @@ impl<'a> FooterWidget<'a> {
         if left_len + right_len + 2 <= available {
             let padding = available.saturating_sub(left_len + right_len);
             spans.push(Span::raw(" ".repeat(padding)));
-            spans.push(Span::styled(
-                right_text.to_string(),
-                self.styles.muted_style(),
-            ));
+            spans.extend(self.build_right_status_spans(right_text));
         }
 
         Line::from(spans)
+    }
+
+    fn build_right_status_spans(&self, status: &str) -> Vec<Span<'static>> {
+        let mut spans = Vec::new();
+        let mut parts = status.split(" | ").peekable();
+
+        while let Some(part) = parts.next() {
+            let style = language_badge_style(part).unwrap_or_else(|| self.styles.muted_style());
+            spans.push(Span::styled(part.to_string(), style));
+
+            if parts.peek().is_some() {
+                spans.push(Span::styled(" | ".to_string(), self.styles.muted_style()));
+            }
+        }
+
+        spans
     }
 
     fn build_hint_line(&self) -> Option<Line<'static>> {
@@ -208,4 +222,25 @@ pub mod hints {
     pub const PROCESSING: &str = "Ctrl+C cancel";
     pub const MODAL: &str = "↑↓ navigate • Enter select • Esc close";
     pub const EDITING: &str = "Enter send • Ctrl+C cancel • ↑ history";
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FooterWidget;
+    use crate::core_tui::session::styling::SessionStyles;
+    use crate::ui::tui::types::InlineTheme;
+    use ratatui::style::Color;
+
+    #[test]
+    fn build_right_status_spans_highlights_dominant_language() {
+        let styles = SessionStyles::new(InlineTheme::default());
+        let widget = FooterWidget::new(&styles);
+
+        let spans = widget.build_right_status_spans("Rust | model | 17% context left");
+
+        assert_eq!(spans[0].content.as_ref(), "Rust");
+        assert_eq!(spans[0].style.fg, Some(Color::Rgb(0xCE, 0x7E, 0x47)));
+        assert_eq!(spans[2].content.as_ref(), "model");
+        assert_ne!(spans[2].style.fg, Some(Color::Rgb(0xCE, 0x7E, 0x47)));
+    }
 }

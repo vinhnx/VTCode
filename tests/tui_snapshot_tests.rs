@@ -49,6 +49,7 @@ fn test_header_context_snapshot() {
         mcp: "disabled".to_string(),
         highlights: vec![],
         version: "0.37.1".to_string(),
+        search_tools: None,
         editing_mode: EditingMode::default(),
         autonomous_mode: false,
     };

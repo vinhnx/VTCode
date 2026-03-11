@@ -13,6 +13,7 @@ use super::{PatchChunk, PatchError};
 use crate::tools::ast_grep_binary::{
     AST_GREP_INSTALL_COMMAND, missing_ast_grep_message, resolve_ast_grep_binary_from_env_and_fs,
 };
+use crate::tools::ast_grep_language::AstGrepLanguage;
 
 static IDENTIFIER_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"[A-Za-z_][A-Za-z0-9_]*").expect("semantic identifier regex must compile")
@@ -25,17 +26,6 @@ pub(crate) struct SemanticMatch {
     pub(crate) start_idx: usize,
     pub(crate) old_segment: Vec<String>,
     pub(crate) new_segment: Vec<String>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SupportedLanguage {
-    Rust,
-    Python,
-    JavaScript,
-    TypeScript,
-    Tsx,
-    Go,
-    Java,
 }
 
 #[cfg_attr(not(test), allow(dead_code))]
@@ -72,33 +62,6 @@ pub fn set_ast_grep_binary_override_for_tests(path: Option<PathBuf>) -> AstGrepB
         None => AstGrepBinaryOverride::Missing,
     };
     AstGrepBinaryOverrideGuard { previous }
-}
-
-impl SupportedLanguage {
-    fn from_path(path: &Path) -> Option<Self> {
-        match path.extension().and_then(|ext| ext.to_str()) {
-            Some("rs") => Some(Self::Rust),
-            Some("py") => Some(Self::Python),
-            Some("js") => Some(Self::JavaScript),
-            Some("ts") => Some(Self::TypeScript),
-            Some("tsx") => Some(Self::Tsx),
-            Some("go") => Some(Self::Go),
-            Some("java") => Some(Self::Java),
-            _ => None,
-        }
-    }
-
-    fn ast_grep_lang(self) -> &'static str {
-        match self {
-            Self::Rust => "rust",
-            Self::Python => "python",
-            Self::JavaScript => "javascript",
-            Self::TypeScript => "typescript",
-            Self::Tsx => "tsx",
-            Self::Go => "go",
-            Self::Java => "java",
-        }
-    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -178,7 +141,7 @@ pub(crate) async fn resolve_semantic_match(
             reason: "missing semantic @@ anchor".to_string(),
         })?;
 
-    let language = SupportedLanguage::from_path(source_path).ok_or_else(|| {
+    let language = AstGrepLanguage::from_path(source_path).ok_or_else(|| {
         PatchError::SemanticResolutionFailed {
             path: display_path.to_string(),
             anchor: anchor.to_string(),
@@ -291,7 +254,7 @@ pub(crate) fn resolve_ast_grep_binary_path() -> Result<PathBuf, String> {
 
 async fn collect_candidates(
     ast_grep: &Path,
-    language: SupportedLanguage,
+    language: AstGrepLanguage,
     source_path: &Path,
     original_lines: &[String],
     primary_term: &str,
@@ -300,10 +263,9 @@ async fn collect_candidates(
 ) -> Result<Vec<StructuralCandidate>, PatchError> {
     let output = Command::new(ast_grep)
         .arg("run")
-        .arg("--pattern")
-        .arg("$A")
+        .arg("--pattern=$A")
         .arg("--lang")
-        .arg(language.ast_grep_lang())
+        .arg(language.as_str())
         .arg("--json=stream")
         .arg(source_path)
         .stdout(Stdio::piped())

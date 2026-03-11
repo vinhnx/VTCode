@@ -36,6 +36,7 @@ pub struct InlineHeaderContext {
     pub provider: String,
     pub model: String,
     pub version: String,
+    pub search_tools: Option<InlineHeaderStatusBadge>,
     pub git: String,
     pub mode: String,
     pub reasoning: String,
@@ -92,6 +93,7 @@ impl Default for InlineHeaderContext {
                 ui::HEADER_UNKNOWN_PLACEHOLDER
             ),
             version,
+            search_tools: None,
             git,
             mode: ui::HEADER_MODE_INLINE.to_string(),
             reasoning,
@@ -104,6 +106,20 @@ impl Default for InlineHeaderContext {
             autonomous_mode: false,
         }
     }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct InlineHeaderStatusBadge {
+    pub text: String,
+    pub tone: InlineHeaderStatusTone,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum InlineHeaderStatusTone {
+    #[default]
+    Ready,
+    Warning,
+    Error,
 }
 
 #[derive(Clone, Debug, Default)]

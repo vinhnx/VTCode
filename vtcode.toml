@@ -77,7 +77,7 @@ default_editing_mode = "edit"
 # Default model to use
 # Default: "claude-sonnet-4-5"
 # Type: `string`
-default_model = "zai-org/GLM-5:novita"
+default_model = "XiaomiMiMo/MiMo-V2-Flash:novita"
 
 # Enable an extra self-review pass to refine final responses
 # Default: false

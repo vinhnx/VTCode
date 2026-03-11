@@ -8,13 +8,30 @@ use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
 
 pub(super) fn recovery_fallback_for_tool(tool_name: &str, args: &Value) -> Option<(String, Value)> {
     match tool_name {
-        tool_names::UNIFIED_SEARCH | "list files" | "search text" => Some((
+        tool_names::UNIFIED_SEARCH => {
+            let normalized = tool_intent::normalize_unified_search_args(args);
+            let action = tool_intent::unified_search_action(&normalized).unwrap_or("grep");
+            if action.eq_ignore_ascii_case("list") {
+                Some((
+                    tool_names::UNIFIED_SEARCH.to_string(),
+                    json!({
+                        "action": "list",
+                        "path": normalized.get("path").and_then(|v| v.as_str()).unwrap_or("."),
+                        "mode": normalized.get("mode").and_then(|v| v.as_str()).unwrap_or("list")
+                    }),
+                ))
+            } else {
+                None
+            }
+        }
+        "list files" => Some((
             tool_names::UNIFIED_SEARCH.to_string(),
             json!({
                 "action": "list",
                 "path": args.get("path").and_then(|v| v.as_str()).unwrap_or(".")
             }),
         )),
+        "search text" => None,
         tool_names::READ_FILE | "read file" | "repo_browser.read_file" => {
             let parent_path = args
                 .get("path")
