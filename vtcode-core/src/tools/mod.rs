@@ -121,6 +121,7 @@
 pub mod apply_patch;
 pub mod ast_grep_binary;
 pub mod ast_grep_installer;
+pub(crate) mod ast_grep_language;
 pub mod builder;
 pub mod constants;
 pub mod error_messages;
@@ -164,6 +165,7 @@ pub mod ripgrep_binary;
 pub mod ripgrep_installer;
 pub mod safety_gateway;
 pub mod search_metrics;
+pub(crate) mod search_runtime;
 pub mod shell;
 pub mod shell_snapshot;
 pub mod skills;
@@ -173,6 +175,7 @@ pub mod terminal_app;
 pub mod tool_effectiveness;
 pub mod tool_intent;
 pub mod traits;
+pub(crate) mod tree_sitter_runtime;
 pub mod types;
 pub mod validation;
 pub mod validation_cache;
@@ -223,6 +226,10 @@ pub use file_search_rpc::{
 pub use grep_file::GrepSearchManager;
 pub use invocation::{
     InvocationBuilder, ToolInvocation as UnifiedToolInvocation, ToolInvocationId,
+};
+pub use search_runtime::{
+    SearchToolBundleStatus, SearchToolReadiness, dominant_workspace_language,
+    search_tool_bundle_status,
 };
 
 pub use optimized_registry::{OptimizedToolRegistry, ToolMetadata as OptimizedToolMetadata};

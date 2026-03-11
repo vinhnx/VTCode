@@ -1,6 +1,7 @@
 use crate::config::types::CapabilityLevel;
 use crate::skills::manager::SkillsManager;
 use crate::skills::model::SkillMetadata;
+use crate::tools::search_runtime::snapshot_for_workspace;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -152,6 +153,10 @@ impl PromptContext {
             context.set_current_directory(cwd);
         }
 
+        for language in snapshot_for_workspace(workspace.as_ref()).workspace_languages {
+            context.add_language(language);
+        }
+
         for tool in available_tools {
             context.add_tool(tool.into());
         }
@@ -203,6 +208,22 @@ mod tests {
     }
 
     #[test]
+    fn from_workspace_tools_populates_detected_languages() {
+        let workspace = TempDir::new().expect("workspace tempdir");
+        fs::create_dir_all(workspace.path().join("src")).expect("create src");
+        fs::create_dir_all(workspace.path().join("web")).expect("create web");
+        fs::write(workspace.path().join("src/lib.rs"), "fn alpha() {}\n").expect("write rust");
+        fs::write(workspace.path().join("web/app.ts"), "const app = 1;\n").expect("write ts");
+
+        let context = PromptContext::from_workspace_tools(workspace.path(), ["unified_search"]);
+
+        assert_eq!(
+            context.languages,
+            vec!["Rust".to_string(), "TypeScript".to_string()]
+        );
+    }
+
+    #[test]
     fn load_available_skills_discovers_repo_and_system_skills() {
         let workspace = TempDir::new().expect("workspace tempdir");
         fs::create_dir(workspace.path().join(".git")).expect("create git dir");
@@ -226,6 +247,6 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert!(skill_names.contains(&"repo-skill"));
-        assert!(skill_names.contains(&"ast-grep"));
+        assert!(skill_names.contains(&"skill-creator"));
     }
 }

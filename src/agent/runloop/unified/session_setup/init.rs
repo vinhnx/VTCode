@@ -37,7 +37,7 @@ use vtcode_core::tools::{ApprovalRecorder, ToolRegistry, ToolResultCache};
 use vtcode_core::utils::dot_config::load_workspace_trust_level;
 use vtcode_core::{apply_global_notification_config_from_vtcode, init_global_notification_manager};
 
-use crate::startup::append_optional_search_tools_highlight;
+use crate::startup::take_search_tools_bundle_notice;
 use crate::updater::{Updater, append_notice_highlight};
 
 #[allow(clippy::unnecessary_cast)]
@@ -93,7 +93,7 @@ pub(crate) async fn initialize_session(
     let mcp_error = determine_mcp_bootstrap_error(async_mcp_manager.as_ref()).await;
 
     let mut session_bootstrap = prepare_session_bootstrap(config, vt_cfg, mcp_error).await;
-    append_optional_search_tools_highlight(&mut session_bootstrap.header_highlights).await;
+    session_bootstrap.search_tools_notice = take_search_tools_bundle_notice().await;
     let startup_update_check = load_startup_update_check();
     if let Some(notice) = startup_update_check.cached_notice.as_ref() {
         append_notice_highlight(&mut session_bootstrap.header_highlights, notice);

@@ -48,12 +48,14 @@ use tracing::warn;
 
 /// Unified tool guidance referenced by all prompt variants to reduce duplication
 const UNIFIED_TOOL_GUIDANCE: &str = r#"**Search & exploration**:
-- Prefer `unified_search` and `rg` over repeated reads/`grep`
-- Use `unified_search` (action='grep') for broad text search and `action='structural'` for syntax-aware code search
+- Prefer `unified_search` and `rg` over repeated reads or shell `grep`
+- Default to `unified_search` (action='structural') for language-aware code search when syntax matters or the language/file type is known; set `lang` whenever you know it
+- Use `unified_search` (action='grep') for plain text, docs, logs, config, comments/strings, or when structural matching is unnecessary
+- For `action='structural'`, `pattern` must be valid parseable code for the selected language; do not send raw fragments like `-> Result<$T>`
 - Treat `action='structural'` as syntax-aware only, not scope/type/data-flow analysis
-- Remember `action='structural'` follows ast-grep core concepts: parseable code patterns, CST-aware matching, named-node metavariables by default, and `field`-sensitive role matching via the bundled skill workflow
+- Remember `action='structural'` follows ast-grep core concepts: parseable code patterns, CST-aware matching, named-node metavariables by default, and selector-based subnode targeting when the parseable pattern is broader than the real match
 - If `action='structural'` hits an unsupported language or unknown extension, pivot to workspace-local ast-grep custom-language setup instead of retrying with guesses
-- If the target code is embedded inside another language or uses a non-standard extension, pivot to bundled ast-grep skill guidance for `languageInjections` or `languageGlobs`
+- If the target code is embedded inside another language or uses a non-standard extension, pivot to workspace `sgconfig.yml` `languageInjections` or `languageGlobs`
 - Read a file once; avoid duplicate `read` calls
 - For spooled output (>8KB), use `spool_path` with `unified_file` (action='read') or `unified_search` (action='grep'); advance offsets, don't repeat identical chunk args
 - If chunk reads stall, switch to targeted `unified_search` and summarize
@@ -67,7 +69,7 @@ const UNIFIED_TOOL_GUIDANCE: &str = r#"**Search & exploration**:
 
 **Command execution**:
 - `unified_exec` for shell commands; it runs pipe-first by default, and `tty=true` opts into PTY/interactive mode.
-- Prefer `rg` over `grep` for pattern matching
+- Prefer `rg` over `grep` for shell pattern matching; fall back to `grep` only when `rg` is unavailable or exact POSIX grep semantics are required
 - Stay in WORKSPACE_DIR; confirm destructive ops (rm, force-push)
 - After command output, acknowledge result briefly and suggest next steps
 
@@ -79,11 +81,12 @@ const UNIFIED_TOOL_GUIDANCE: &str = r#"**Search & exploration**:
 **Skills routing**:
 - Treat skill descriptions as routing logic, not marketing copy
 - Check both `when-to-use` and `when-not-to-use` before loading a skill
-- Use `load_skill` for multi-step ast-grep workflows such as debug-query inspection, rule authoring, `sg scan`, `sg test`, `sg new`, or `sgconfig.yml` setup
-- If an ast-grep pattern is not valid standalone code, load the bundled `ast-grep` skill and switch to pattern-object guidance with `context` plus `selector`
-- If an ast-grep task depends on unnamed tokens, operator/modifier syntax, or node roles like key/value, load the bundled `ast-grep` skill before guessing
-- If an ast-grep task depends on a non-built-in parser, load the bundled `ast-grep` skill and use workspace `sgconfig.yml` `customLanguages` guidance instead of inventing a built-in `lang`
-- If an ast-grep task depends on embedded-language parsing, unusual extensions, rewrite transformations, or rewriters, load the bundled `ast-grep` skill before improvising
+- For ast-grep-backed work, retry `unified_search` with a refined structural pattern before switching tools
+- If an ast-grep pattern is not valid standalone code, retry `unified_search` with a larger parseable structural pattern before considering any shell workflow
+- If an ast-grep task depends on unnamed tokens, operator/modifier syntax, or node roles like key/value, refine the parseable structural pattern or use `selector` instead of guessing
+- If an ast-grep task depends on a non-built-in parser, use workspace `sgconfig.yml` `customLanguages` guidance instead of inventing a built-in `lang`
+- If an ast-grep task depends on embedded-language parsing or unusual extensions, use workspace `sgconfig.yml` `languageInjections` or `languageGlobs`
+- Use `unified_exec` only for raw ast-grep CLI workflows such as `sg scan`, `sg test`, `sg new`, or rewrite flows outside read-only `action='structural'`
 - If user explicitly says "Use <skill>", treat it as deterministic routing
 
 **Network containment**:
@@ -91,10 +94,12 @@ const UNIFIED_TOOL_GUIDANCE: &str = r#"**Search & exploration**:
 - Keep network access default-deny with a minimal per-task allowlist"#;
 
 const COMPACT_TOOL_GUIDANCE: &str = r#"**Tools**:
-- Prefer `unified_search` over repeated reads; use `action='grep'` for text and `action='structural'` for syntax-aware search
-- `action='structural'` is syntax-aware only; load the bundled `ast-grep` skill for fragile ast-grep queries or rule workflows
+- Prefer `unified_search` over repeated reads; default to `action='structural'` for code search and `action='grep'` for plain text
+- For `action='structural'`, set `lang` when known and keep `pattern` parseable code, not fragments like `-> Result<$T>`
+- If a structural query is a fragment, retry `unified_search` with a larger parseable pattern before switching tools or loading a skill
+- `action='structural'` is syntax-aware only; keep refining `unified_search` first and use `unified_exec` only for raw `sg scan`/`sg test` or rewrite workflows
 - Use `unified_file` for edits/writes and avoid redundant re-reads after successful changes
-- Use `unified_exec` for shell commands; prefer `rg` over `grep`; stay in WORKSPACE_DIR and confirm destructive ops
+- Use `unified_exec` for shell commands; prefer `rg` over shell `grep`; stay in WORKSPACE_DIR and confirm destructive ops
 - Hidden capabilities route through `list_skills` and `load_skill`; check routing hints before loading a skill
 - If a call pattern stalls or repeats twice, pivot instead of retrying identically"#;
 
@@ -606,6 +611,10 @@ pub async fn compose_system_instruction_text(
         if !guidelines.is_empty() {
             instruction.push_str(&guidelines);
         }
+        if let Some(language_hints) = render_workspace_language_hints(&ctx.languages) {
+            instruction.push_str("\n\n");
+            instruction.push_str(&language_hints);
+        }
         if let Some(skills_section) = render_skills_section(&ctx.available_skill_metadata) {
             instruction.push_str("\n\n");
             instruction.push_str(&skills_section);
@@ -965,6 +974,17 @@ fn tool_guidance_for_mode(prompt_mode: SystemPromptMode) -> &'static str {
     }
 }
 
+fn render_workspace_language_hints(languages: &[String]) -> Option<String> {
+    if languages.is_empty() {
+        return None;
+    }
+
+    Some(format!(
+        "## Workspace Language Hints\n- Detected workspace languages: {}\n- Prefer matching structural-search `lang` values when working in these files; omitting `lang` is only safe when `path` or positive `globs` make the language unambiguous.",
+        languages.join(", ")
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1308,6 +1328,26 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_search_guidance_prefers_structural_and_rg() {
+        assert!(
+            UNIFIED_TOOL_GUIDANCE.contains("Default to `unified_search` (action='structural')"),
+            "Unified guidance should prefer structural search for code"
+        );
+        assert!(
+            UNIFIED_TOOL_GUIDANCE.contains("valid parseable code"),
+            "Unified guidance should warn that structural patterns must be parseable"
+        );
+        assert!(
+            COMPACT_TOOL_GUIDANCE.contains("default to `action='structural'` for code search"),
+            "Compact guidance should prefer structural search for code"
+        );
+        assert!(
+            COMPACT_TOOL_GUIDANCE.contains("prefer `rg` over shell `grep`"),
+            "Compact guidance should prefer ripgrep in shell"
+        );
+    }
+
     // ENHANCEMENT TESTS
 
     #[tokio::test]
@@ -1350,6 +1390,35 @@ mod tests {
             result.contains("unified_search") || result.contains("unified_file"),
             "Should suggest canonical search/file tools"
         );
+    }
+
+    #[tokio::test]
+    async fn test_live_prompt_renders_workspace_language_hints() {
+        let workspace = tempfile::TempDir::new().expect("workspace tempdir");
+        std::fs::create_dir_all(workspace.path().join("src")).expect("create src");
+        std::fs::create_dir_all(workspace.path().join("web")).expect("create web");
+        std::fs::write(workspace.path().join("src/lib.rs"), "fn alpha() {}\n").expect("write rust");
+        std::fs::write(workspace.path().join("web/app.ts"), "const app = 1;\n").expect("write ts");
+
+        let config = VTCodeConfig::default();
+        let ctx = PromptContext::from_workspace_tools(workspace.path(), ["unified_search"]);
+        let result =
+            compose_system_instruction_text(workspace.path(), Some(&config), Some(&ctx)).await;
+
+        assert!(result.contains("## Workspace Language Hints"));
+        assert!(result.contains("Rust, TypeScript"));
+        assert!(result.contains("positive `globs`"));
+    }
+
+    #[tokio::test]
+    async fn test_live_prompt_omits_workspace_language_hints_without_languages() {
+        let workspace = tempfile::TempDir::new().expect("workspace tempdir");
+        let config = VTCodeConfig::default();
+        let ctx = PromptContext::from_workspace_tools(workspace.path(), ["unified_search"]);
+        let result =
+            compose_system_instruction_text(workspace.path(), Some(&config), Some(&ctx)).await;
+
+        assert!(!result.contains("## Workspace Language Hints"));
     }
 
     #[tokio::test]
@@ -1539,14 +1608,14 @@ mod tests {
         let mut ctx = PromptContext::default();
         ctx.available_skill_metadata
             .push(crate::skills::model::SkillMetadata {
-                name: "ast-grep".to_string(),
-                description: "Structural code search".to_string(),
+                name: "skill-creator".to_string(),
+                description: "Create or update skills".to_string(),
                 short_description: None,
-                path: PathBuf::from("/tmp/ast-grep/SKILL.md"),
+                path: PathBuf::from("/tmp/skill-creator/SKILL.md"),
                 scope: SkillScope::System,
                 manifest: Some(SkillManifest {
-                    when_to_use: Some("Use for syntax-aware structural search.".to_string()),
-                    when_not_to_use: Some("Avoid for plain text grep.".to_string()),
+                    when_to_use: Some("Use when creating or updating a skill.".to_string()),
+                    when_not_to_use: Some("Avoid for unrelated implementation work.".to_string()),
                     ..SkillManifest::default()
                 }),
             });
@@ -1555,10 +1624,10 @@ mod tests {
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;
 
         assert!(result.contains("## Skills"));
-        assert!(result.contains("ast-grep: Structural code search"));
+        assert!(result.contains("skill-creator: Create or update skills"));
         assert!(result.contains("scope: system"));
-        assert!(result.contains("use: Use for syntax-aware structural search."));
-        assert!(result.contains("avoid: Avoid for plain text grep."));
+        assert!(result.contains("use: Use when creating or updating a skill."));
+        assert!(result.contains("avoid: Avoid for unrelated implementation work."));
     }
 
     #[test]

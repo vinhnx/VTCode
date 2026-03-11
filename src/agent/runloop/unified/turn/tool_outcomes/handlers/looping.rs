@@ -8,6 +8,56 @@ fn compact_loop_key_part(value: &str, max_chars: usize) -> String {
     value.trim().chars().take(max_chars).collect()
 }
 
+fn compact_loop_text(value: &str, max_chars: usize) -> String {
+    compact_loop_key_part(
+        &value.split_whitespace().collect::<Vec<_>>().join(" "),
+        max_chars,
+    )
+}
+
+fn unified_search_text_arg(args: &Value, key: &str) -> Option<String> {
+    args.get(key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| compact_loop_text(value, 120))
+}
+
+fn unified_search_pattern_arg(args: &Value) -> Option<String> {
+    ["pattern", "keyword", "query"]
+        .iter()
+        .find_map(|key| unified_search_text_arg(args, key))
+}
+
+fn unified_search_globs_arg(args: &Value) -> Option<String> {
+    let globs = args.get("globs")?;
+    match globs {
+        Value::String(value) => {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(compact_loop_text(trimmed, 120))
+            }
+        }
+        Value::Array(items) => {
+            let joined = items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .collect::<Vec<_>>()
+                .join(",");
+            if joined.is_empty() {
+                None
+            } else {
+                Some(compact_loop_text(&joined, 120))
+            }
+        }
+        _ => None,
+    }
+}
+
 fn patch_source_arg(args: &Value) -> Option<&str> {
     args.as_str()
         .or_else(|| args.get("input").and_then(|v| v.as_str()))
@@ -346,6 +396,62 @@ pub(super) fn loop_detection_tool_key(canonical_tool_name: &str, args: &Value) -
                 );
             }
             format!("{canonical_tool_name}::{action}")
+        }
+        tool_names::UNIFIED_SEARCH => {
+            let normalized = tool_intent::normalize_unified_search_args(args);
+            let action = tool_intent::unified_search_action(&normalized).unwrap_or("grep");
+            let action = action.to_ascii_lowercase();
+            let path = normalized
+                .get("path")
+                .and_then(Value::as_str)
+                .map(|value| compact_loop_key_part(value, 120))
+                .unwrap_or_else(|| ".".to_string());
+            match action.as_str() {
+                "list" => {
+                    let mode = normalized
+                        .get("mode")
+                        .and_then(Value::as_str)
+                        .map(|value| compact_loop_key_part(value, 32))
+                        .unwrap_or_else(|| "list".to_string());
+                    format!("{canonical_tool_name}::{action}::{path}::mode={mode}")
+                }
+                "structural" => {
+                    let pattern = unified_search_pattern_arg(&normalized)
+                        .unwrap_or_else(|| "<missing-pattern>".to_string());
+                    let mut key = format!("{canonical_tool_name}::{action}::{path}::{pattern}");
+                    if let Some(lang) = unified_search_text_arg(&normalized, "lang") {
+                        key.push_str("::lang=");
+                        key.push_str(&compact_loop_key_part(&lang, 32));
+                    }
+                    if let Some(selector) = unified_search_text_arg(&normalized, "selector") {
+                        key.push_str("::selector=");
+                        key.push_str(&compact_loop_key_part(&selector, 64));
+                    }
+                    if let Some(strictness) = unified_search_text_arg(&normalized, "strictness") {
+                        key.push_str("::strictness=");
+                        key.push_str(&compact_loop_key_part(&strictness, 32));
+                    }
+                    if let Some(debug_query) = unified_search_text_arg(&normalized, "debug_query") {
+                        key.push_str("::debug_query=");
+                        key.push_str(&compact_loop_key_part(&debug_query, 32));
+                    }
+                    if let Some(globs) = unified_search_globs_arg(&normalized) {
+                        key.push_str("::globs=");
+                        key.push_str(&globs);
+                    }
+                    key
+                }
+                _ => {
+                    let pattern = unified_search_pattern_arg(&normalized)
+                        .unwrap_or_else(|| "<missing-pattern>".to_string());
+                    let mut key = format!("{canonical_tool_name}::{action}::{path}::{pattern}");
+                    if let Some(globs) = unified_search_globs_arg(&normalized) {
+                        key.push_str("::globs=");
+                        key.push_str(&globs);
+                    }
+                    key
+                }
+            }
         }
         _ => canonical_tool_name.to_string(),
     }

@@ -1,17 +1,22 @@
 use anyhow::{Context, Result, anyhow, bail};
+use once_cell::sync::Lazy;
+use regex::Regex;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use std::path::{Path, PathBuf};
 use tokio::process::Command;
 
 use crate::tools::ast_grep_binary::AST_GREP_INSTALL_COMMAND;
+use crate::tools::ast_grep_language::AstGrepLanguage;
 use crate::tools::editing::patch::resolve_ast_grep_binary_path;
+use crate::tools::tree_sitter_runtime::parse_source;
 use crate::utils::path::resolve_workspace_path;
 
 const DEFAULT_MAX_RESULTS: usize = 100;
 const MAX_ALLOWED_RESULTS: usize = 10_000;
-const AST_GREP_FAQ_HINT: &str = "Hints: patterns must be valid parseable code for the selected language; ast-grep matches CST structure, not raw text; if the target is only a fragment, switch to the bundled `ast-grep` skill and use pattern-object guidance with `context` + `selector`; `$VAR` matches named nodes by default and `$$VAR` includes unnamed nodes; if node role matters, use the bundled skill workflow for `field`-aware rules; structural search is syntax-aware, not scope/type/data-flow analysis.";
+const AST_GREP_FAQ_HINT: &str = "Hints: patterns must be valid parseable code for the selected language; ast-grep matches CST structure, not raw text; if the target is only a fragment, retry with a larger parseable pattern and use `selector` when the real match is a subnode inside that pattern; `$VAR` matches named nodes by default and `$$VAR` includes unnamed nodes; if node role matters, make it explicit in the parseable pattern instead of guessing; structural search is syntax-aware, not scope/type/data-flow analysis.";
 const AST_GREP_PROJECT_CONFIG_HINT: &str = "If the target language is not built into ast-grep, register it in workspace-local `sgconfig.yml` under `customLanguages` with a compiled tree-sitter dynamic library. If the parser exists but the extension is unusual, map it with `languageGlobs`. If the target syntax is embedded inside another host language, configure `languageInjections`. If `$VAR` is not valid syntax for that language, use its configured `expandoChar` instead.";
+const DEBUG_QUERY_LANG_HINT: &str = "action='structural' requires an effective `lang` when `debug_query` is set. Inference only works for unambiguous file paths or single-language positive globs; narrow `path`, add a single-language glob, or set `lang` explicitly";
 const STRUCTURAL_FORBIDDEN_KEYS: &[&str] = &[
     "rewrite",
     "interactive",
@@ -20,6 +25,9 @@ const STRUCTURAL_FORBIDDEN_KEYS: &[&str] = &[
     "inline_rules",
     "config",
 ];
+static AST_GREP_METAVARIABLE_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"\$\$?[A-Za-z_][A-Za-z0-9_]*").expect("ast-grep metavariable regex must compile")
+});
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -106,15 +114,16 @@ impl StructuralSearchRequest {
     fn from_args(args: &Value) -> Result<Self> {
         reject_forbidden_args(args)?;
 
-        let request: Self =
+        let mut request: Self =
             serde_json::from_value(args.clone()).context("invalid structural search args")?;
+        request.normalize_language();
 
         if request.pattern.trim().is_empty() {
             bail!("action='structural' requires a non-empty `pattern`");
         }
 
         if request.debug_query.is_some() && request.lang.as_deref().is_none_or(str::is_empty) {
-            bail!("action='structural' requires `lang` when `debug_query` is set");
+            bail!(DEBUG_QUERY_LANG_HINT);
         }
 
         Ok(request)
@@ -131,6 +140,41 @@ impl StructuralSearchRequest {
         self.max_results
             .unwrap_or(DEFAULT_MAX_RESULTS)
             .clamp(1, MAX_ALLOWED_RESULTS)
+    }
+
+    fn normalize_language(&mut self) {
+        self.lang = self.normalized_or_inferred_lang();
+    }
+
+    fn normalized_or_inferred_lang(&self) -> Option<String> {
+        if let Some(lang) = self
+            .lang
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            return Some(
+                AstGrepLanguage::from_user_value(lang)
+                    .map(|language| language.as_str().to_string())
+                    .unwrap_or_else(|| lang.to_string()),
+            );
+        }
+
+        if let Some(language) = AstGrepLanguage::infer_from_path_str(self.requested_path()) {
+            return Some(language.as_str().to_string());
+        }
+
+        let inferred = match self.globs.as_ref() {
+            Some(GlobInput::Single(glob)) => {
+                AstGrepLanguage::infer_from_positive_globs([glob.as_str()])
+            }
+            Some(GlobInput::Multiple(globs)) => {
+                AstGrepLanguage::infer_from_positive_globs(globs.iter().map(String::as_str))
+            }
+            None => None,
+        };
+
+        inferred.map(|language| language.as_str().to_string())
     }
 }
 
@@ -161,12 +205,17 @@ pub async fn execute_structural_search(workspace_root: &Path, args: Value) -> Re
     let request = StructuralSearchRequest::from_args(&args)?;
     let ast_grep = resolve_ast_grep_binary_path().map_err(|reason| {
         anyhow!(
-            "Structural search requires ast-grep (`sg`). {reason}. {}",
-            ast_grep_skill_hint()
+            "Structural search requires ast-grep (`sg`). {reason}. Install it with `{AST_GREP_INSTALL_COMMAND}`."
         )
     })?;
-
     let search_path = resolve_search_path(workspace_root, request.requested_path())?;
+    if let Some(hint) = preflight_parseable_pattern(&request)? {
+        return Ok(build_fragment_result(
+            &request,
+            &search_path.display_path,
+            hint,
+        ));
+    }
     let command_path = search_path.command_arg.clone();
 
     if let Some(debug_query) = &request.debug_query {
@@ -174,8 +223,7 @@ pub async fn execute_structural_search(workspace_root: &Path, args: Value) -> Re
         command
             .current_dir(workspace_root)
             .arg("run")
-            .arg("--pattern")
-            .arg(&request.pattern)
+            .arg(format!("--pattern={}", request.pattern))
             .arg("--lang")
             .arg(
                 request
@@ -217,8 +265,7 @@ pub async fn execute_structural_search(workspace_root: &Path, args: Value) -> Re
     command
         .current_dir(workspace_root)
         .arg("run")
-        .arg("--pattern")
-        .arg(&request.pattern)
+        .arg(format!("--pattern={}", request.pattern))
         .arg("--json=compact")
         .arg("--color=never");
 
@@ -272,6 +319,74 @@ pub async fn execute_structural_search(workspace_root: &Path, args: Value) -> Re
     Ok(build_result(&request, &search_path.display_path, matches))
 }
 
+fn preflight_parseable_pattern(request: &StructuralSearchRequest) -> Result<Option<String>> {
+    let Some(language) = request
+        .lang
+        .as_deref()
+        .and_then(AstGrepLanguage::from_user_value)
+    else {
+        return Ok(None);
+    };
+
+    let (sanitized_pattern, contains_metavariables) =
+        sanitize_pattern_for_tree_sitter(&request.pattern);
+    let tree = match parse_source(language, &sanitized_pattern) {
+        Ok(tree) => tree,
+        Err(_) if contains_metavariables => {
+            return Ok(Some(fragment_pattern_hint(request, language)));
+        }
+        Err(detail) => {
+            bail!(
+                "{}",
+                format_ast_grep_failure(
+                    "structural pattern preflight failed",
+                    format!(
+                        "pattern is not parseable as {} syntax ({detail})",
+                        language.display_name()
+                    ),
+                )
+            );
+        }
+    };
+
+    if tree.root_node().has_error() {
+        if contains_metavariables {
+            return Ok(Some(fragment_pattern_hint(request, language)));
+        }
+
+        bail!(
+            "{}",
+            format_ast_grep_failure(
+                "structural pattern preflight failed",
+                format!(
+                    "pattern is not parseable as {} syntax",
+                    language.display_name()
+                ),
+            )
+        );
+    }
+
+    Ok(None)
+}
+
+fn sanitize_pattern_for_tree_sitter(pattern: &str) -> (String, bool) {
+    let mut contains_metavariables = false;
+    let sanitized =
+        AST_GREP_METAVARIABLE_RE.replace_all(pattern, |captures: &regex::Captures<'_>| {
+            contains_metavariables = true;
+            if captures
+                .get(0)
+                .is_some_and(|matched| matched.as_str().starts_with("$$"))
+            {
+                "placeholders"
+            } else {
+                "placeholder"
+            }
+        });
+
+    (sanitized.into_owned(), contains_metavariables)
+}
+
 fn reject_forbidden_args(args: &Value) -> Result<()> {
     let Some(object) = args.as_object() else {
         return Ok(());
@@ -280,7 +395,7 @@ fn reject_forbidden_args(args: &Value) -> Result<()> {
     for key in STRUCTURAL_FORBIDDEN_KEYS {
         if object.get(*key).is_some() {
             bail!(
-                "action='structural' is read-only; remove `{}` and use the bundled `ast-grep` skill for rewrite/test workflows",
+                "action='structural' is read-only; remove `{}`. If you need raw `sg scan`, `sg test`, or rewrite workflows, run ast-grep explicitly via `unified_exec`.",
                 key
             );
         }
@@ -312,6 +427,21 @@ fn build_result(
         "path": display_path,
         "matches": normalized_matches,
         "truncated": truncated,
+    })
+}
+
+fn build_fragment_result(
+    request: &StructuralSearchRequest,
+    display_path: &str,
+    hint: String,
+) -> Value {
+    json!({
+        "backend": "ast-grep",
+        "pattern": request.pattern,
+        "path": display_path,
+        "matches": [],
+        "truncated": false,
+        "hint": hint,
     })
 }
 
@@ -364,8 +494,15 @@ fn format_ast_grep_failure(prefix: &str, detail: String) -> String {
         message.push(' ');
         message.push_str(AST_GREP_PROJECT_CONFIG_HINT);
     }
-    message.push(' ');
-    message.push_str(&ast_grep_skill_hint());
+    message.push_str(
+        " Retry `unified_search` with a refined structural pattern before switching tools. Use `unified_exec` only for raw `sg scan`, `sg test`, or rewrite workflows.",
+    );
+    if !detail.contains(AST_GREP_INSTALL_COMMAND) {
+        message.push(' ');
+        message.push_str(&format!(
+            "If the binary is missing, install it with `{AST_GREP_INSTALL_COMMAND}`."
+        ));
+    }
     message
 }
 
@@ -380,10 +517,29 @@ fn looks_like_language_support_issue(detail: &str) -> bool {
             || detail.contains("not supported"))
 }
 
-fn ast_grep_skill_hint() -> String {
-    format!(
-        "Load the bundled `ast-grep` skill for workflow guidance (`load_skill` with `name: \"ast-grep\"`). If the binary is missing, install it with `{AST_GREP_INSTALL_COMMAND}`."
-    )
+fn fragment_pattern_hint(request: &StructuralSearchRequest, language: AstGrepLanguage) -> String {
+    let trimmed = request.pattern.trim();
+    let mut message = format!(
+        "Pattern looks like a code fragment, not standalone parseable {} syntax for `action='structural'`.",
+        language.display_name()
+    );
+
+    if language == AstGrepLanguage::Rust
+        && (trimmed.starts_with("Result<")
+            || trimmed.starts_with("-> Result<")
+            || trimmed.contains("-> Result<"))
+    {
+        message.push_str(
+            " For Result return-type queries, anchor it in a full signature like `fn $NAME($$ARGS) -> Result<$T> { $$BODY }`.",
+        );
+    } else {
+        message.push_str(
+            " Wrap the target in surrounding parseable code, then use `selector` only to focus the real subnode inside that larger pattern.",
+        );
+    }
+
+    message.push_str(" Retry `unified_search` with `action='structural'` using a larger parseable pattern before switching tools. Do not retry the same fragment with grep if syntax matters.");
+    message
 }
 
 struct ResolvedSearchPath {
@@ -423,7 +579,7 @@ fn resolve_search_path(workspace_root: &Path, requested_path: &str) -> Result<Re
 mod tests {
     use super::{
         StructuralSearchRequest, build_result, execute_structural_search, format_ast_grep_failure,
-        normalize_match,
+        normalize_match, preflight_parseable_pattern, sanitize_pattern_for_tree_sitter,
     };
     use crate::tools::ast_grep_binary::AST_GREP_INSTALL_COMMAND;
     use crate::tools::editing::patch::set_ast_grep_binary_override_for_tests;
@@ -568,10 +724,47 @@ mod tests {
         }))
         .expect_err("lang required");
 
-        assert!(
-            err.to_string()
-                .contains("requires `lang` when `debug_query` is set")
-        );
+        assert!(err.to_string().contains(
+            "Inference only works for unambiguous file paths or single-language positive globs"
+        ));
+    }
+
+    #[test]
+    fn structural_request_canonicalizes_known_lang_alias() {
+        let request = StructuralSearchRequest::from_args(&json!({
+            "action": "structural",
+            "pattern": "fn $NAME() {}",
+            "lang": "ts"
+        }))
+        .expect("valid request");
+
+        assert_eq!(request.lang.as_deref(), Some("typescript"));
+    }
+
+    #[test]
+    fn structural_request_infers_lang_from_unambiguous_path() {
+        let request = StructuralSearchRequest::from_args(&json!({
+            "action": "structural",
+            "pattern": "fn $NAME() {}",
+            "path": "src/lib.rs",
+            "debug_query": "ast"
+        }))
+        .expect("path inference should satisfy debug query");
+
+        assert_eq!(request.lang.as_deref(), Some("rust"));
+    }
+
+    #[test]
+    fn structural_request_infers_lang_from_unambiguous_globs() {
+        let request = StructuralSearchRequest::from_args(&json!({
+            "action": "structural",
+            "pattern": "fn $NAME() {}",
+            "globs": ["**/*.rs", "!target/**"],
+            "debug_query": "ast"
+        }))
+        .expect("glob inference should satisfy debug query");
+
+        assert_eq!(request.lang.as_deref(), Some("rust"));
     }
 
     #[test]
@@ -585,6 +778,73 @@ mod tests {
 
         assert!(err.to_string().contains("read-only"));
         assert!(err.to_string().contains("ast-grep"));
+    }
+
+    #[test]
+    fn sanitize_pattern_for_tree_sitter_rewrites_ast_grep_metavariables() {
+        let (sanitized, contains_metavariables) =
+            sanitize_pattern_for_tree_sitter("fn $NAME($$ARGS) { $BODY }");
+
+        assert!(contains_metavariables);
+        assert_eq!(sanitized, "fn placeholder(placeholders) { placeholder }");
+    }
+
+    #[test]
+    fn structural_pattern_preflight_accepts_supported_metavariable_patterns() {
+        let request = StructuralSearchRequest::from_args(&json!({
+            "action": "structural",
+            "pattern": "fn $NAME($$ARGS) {}",
+            "lang": "rust"
+        }))
+        .expect("valid request");
+
+        assert!(
+            preflight_parseable_pattern(&request)
+                .expect("metavariable pattern should preflight")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn structural_pattern_preflight_guides_result_type_fragments() {
+        let request = StructuralSearchRequest::from_args(&json!({
+            "action": "structural",
+            "pattern": "Result<$T>",
+            "lang": "rust"
+        }))
+        .expect("valid request");
+
+        let hint = preflight_parseable_pattern(&request)
+            .expect("fragment hint should be returned")
+            .expect("expected guidance");
+        assert!(hint.contains("Result return-type queries"), "{hint}");
+        assert!(
+            hint.contains("fn $NAME($$ARGS) -> Result<$T> { $$BODY }"),
+            "{hint}"
+        );
+        assert!(
+            hint.contains("Do not retry the same fragment with grep"),
+            "{hint}"
+        );
+    }
+
+    #[test]
+    fn structural_pattern_preflight_guides_return_arrow_fragments() {
+        let request = StructuralSearchRequest::from_args(&json!({
+            "action": "structural",
+            "pattern": "-> Result<$T>",
+            "lang": "rust"
+        }))
+        .expect("valid request");
+
+        let hint = preflight_parseable_pattern(&request)
+            .expect("fragment hint should be returned")
+            .expect("expected guidance");
+        assert!(hint.contains("Result return-type queries"), "{hint}");
+        assert!(
+            hint.contains("fn $NAME($$ARGS) -> Result<$T> { $$BODY }"),
+            "{hint}"
+        );
     }
 
     #[tokio::test]
@@ -605,9 +865,173 @@ mod tests {
         .expect_err("missing ast-grep");
 
         let text = err.to_string();
-        assert!(text.contains("load_skill"));
         assert!(text.contains("ast-grep"));
         assert!(text.contains(AST_GREP_INSTALL_COMMAND));
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn structural_search_preflight_rejects_invalid_literal_pattern_before_ast_grep_runs() {
+        let temp = TempDir::new().expect("workspace tempdir");
+        let invoked_marker = temp.path().join("sg_invoked");
+        let script = format!(
+            "#!/bin/sh\ntouch \"{}\"\nprintf '[]'\n",
+            invoked_marker.display()
+        );
+        let (_script_dir, script_path) = write_fake_sg(&script);
+
+        let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+        let err = execute_structural_search(
+            temp.path(),
+            json!({
+                "action": "structural",
+                "pattern": "fn alpha( {}",
+                "lang": "rust",
+                "path": "."
+            }),
+        )
+        .await
+        .expect_err("invalid literal pattern should fail in preflight");
+
+        let text = err.to_string();
+        assert!(
+            text.contains("structural pattern preflight failed"),
+            "{text}"
+        );
+        assert!(text.contains("valid parseable code"), "{text}");
+        assert!(!invoked_marker.exists(), "ast-grep should not be invoked");
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn structural_search_returns_fragment_guidance_without_running_ast_grep() {
+        let temp = TempDir::new().expect("workspace tempdir");
+        let invoked_marker = temp.path().join("sg_invoked");
+        let script = format!(
+            "#!/bin/sh\ntouch \"{}\"\nprintf '[]'\n",
+            invoked_marker.display()
+        );
+        let (_script_dir, script_path) = write_fake_sg(&script);
+
+        let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+        let result = execute_structural_search(
+            temp.path(),
+            json!({
+                "action": "structural",
+                "pattern": "Result<$T>",
+                "lang": "rust",
+                "path": "."
+            }),
+        )
+        .await
+        .expect("fragment guidance should be returned");
+
+        assert_eq!(result["matches"], json!([]));
+        let hint = result["hint"].as_str().expect("hint");
+        assert!(hint.contains("Result return-type queries"), "{hint}");
+        assert!(
+            hint.contains("fn $NAME($$ARGS) -> Result<$T> { $$BODY }"),
+            "{hint}"
+        );
+        assert!(
+            hint.contains("Retry `unified_search` with `action='structural'`"),
+            "{hint}"
+        );
+        assert!(!hint.contains("load_skill"), "{hint}");
+        assert!(!invoked_marker.exists(), "ast-grep should not be invoked");
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn structural_search_arrow_fragment_guidance_prefers_direct_retry() {
+        let temp = TempDir::new().expect("workspace tempdir");
+        let invoked_marker = temp.path().join("sg_invoked");
+        let script = format!(
+            "#!/bin/sh\ntouch \"{}\"\nprintf '[]'\n",
+            invoked_marker.display()
+        );
+        let (_script_dir, script_path) = write_fake_sg(&script);
+
+        let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+        let result = execute_structural_search(
+            temp.path(),
+            json!({
+                "action": "structural",
+                "pattern": "-> Result<$T>",
+                "lang": "rust",
+                "path": "."
+            }),
+        )
+        .await
+        .expect("fragment guidance should be returned");
+
+        let hint = result["hint"].as_str().expect("hint");
+        assert!(hint.contains("Result return-type queries"), "{hint}");
+        assert!(
+            hint.contains("Retry `unified_search` with `action='structural'`"),
+            "{hint}"
+        );
+        assert!(!hint.contains("load_skill"), "{hint}");
+        assert!(!invoked_marker.exists(), "ast-grep should not be invoked");
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn structural_search_passes_leading_dash_patterns_with_equals_syntax() {
+        let temp = TempDir::new().expect("workspace tempdir");
+        let args_path = temp.path().join("sg_args.txt");
+        let script = format!(
+            "#!/bin/sh\nprintf '%s\n' \"$@\" > \"{}\"\nprintf '[]'\n",
+            args_path.display()
+        );
+        let (_script_dir, script_path) = write_fake_sg(&script);
+
+        let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+        let result = execute_structural_search(
+            temp.path(),
+            json!({
+                "action": "structural",
+                "pattern": "const X: i32 = -1;",
+                "lang": "rust",
+                "path": "."
+            }),
+        )
+        .await
+        .expect("search should run");
+
+        assert_eq!(result["matches"], json!([]));
+        let args = fs::read_to_string(args_path).expect("read sg args");
+        assert!(
+            args.lines()
+                .any(|line| line == "--pattern=const X: i32 = -1;")
+        );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn structural_search_debug_query_uses_inferred_path_language() {
+        let temp = TempDir::new().expect("workspace tempdir");
+        let src_dir = temp.path().join("src");
+        fs::create_dir_all(&src_dir).expect("create src dir");
+        fs::write(src_dir.join("lib.rs"), "fn alpha() {}\n").expect("write rust file");
+        let (_script_dir, script_path) = write_fake_sg("#!/bin/sh\nprintf 'query-ast'\n");
+
+        let _override = set_ast_grep_binary_override_for_tests(Some(script_path));
+        let result = execute_structural_search(
+            temp.path(),
+            json!({
+                "action": "structural",
+                "pattern": "fn $NAME() {}",
+                "path": "src/lib.rs",
+                "debug_query": "ast"
+            }),
+        )
+        .await
+        .expect("debug query should succeed");
+
+        assert_eq!(result["lang"], "rust");
+        assert_eq!(result["debug_query"], "ast");
+        assert_eq!(result["debug_query_output"], "query-ast");
     }
 
     #[test]
@@ -629,11 +1053,11 @@ mod tests {
         );
 
         assert!(text.contains("valid parseable code"));
-        assert!(text.contains("context` + `selector"));
+        assert!(text.contains("use `selector`"));
         assert!(text.contains("`$$VAR`"));
-        assert!(text.contains("`field`-aware"));
         assert!(text.contains("not scope/type/data-flow analysis"));
-        assert!(text.contains("load_skill"));
+        assert!(text.contains("Retry `unified_search`"));
+        assert!(text.contains("`unified_exec`"));
     }
 
     #[test]
@@ -660,7 +1084,8 @@ mod tests {
         assert!(text.contains("languageGlobs"));
         assert!(text.contains("languageInjections"));
         assert!(text.contains("expandoChar"));
-        assert!(text.contains("load_skill"));
+        assert!(text.contains("Retry `unified_search`"));
+        assert!(text.contains("`unified_exec`"));
     }
 
     #[tokio::test]
@@ -685,9 +1110,9 @@ mod tests {
 
         let text = err.to_string();
         assert!(text.contains("valid parseable code"));
-        assert!(text.contains("context` + `selector"));
+        assert!(text.contains("use `selector`"));
         assert!(!text.contains("customLanguages"));
-        assert!(text.contains("load_skill"));
+        assert!(text.contains("Retry `unified_search`"));
     }
 
     #[tokio::test]
@@ -715,6 +1140,7 @@ mod tests {
         assert!(text.contains("languageGlobs"), "{text}");
         assert!(text.contains("languageInjections"), "{text}");
         assert!(text.contains("expandoChar"), "{text}");
-        assert!(text.contains("load_skill"), "{text}");
+        assert!(text.contains("Retry `unified_search`"), "{text}");
+        assert!(text.contains("`unified_exec`"), "{text}");
     }
 }

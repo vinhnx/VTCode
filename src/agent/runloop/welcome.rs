@@ -21,6 +21,7 @@ pub(crate) struct SessionBootstrap {
     pub mcp_enabled: Option<bool>,
     pub mcp_providers: Option<Vec<vtcode_core::config::mcp::McpProviderConfig>>,
     pub mcp_error: Option<String>,
+    pub search_tools_notice: Option<crate::startup::SearchToolsBundleNotice>,
     pub header_highlights: Vec<InlineHeaderHighlight>,
     pub acp_workspace_trust: Option<AgentClientProtocolZedWorkspaceTrustMode>,
 }
@@ -100,6 +101,7 @@ pub(crate) async fn prepare_session_bootstrap(
         mcp_enabled: vt_cfg.map(|cfg| cfg.mcp.enabled),
         mcp_providers: vt_cfg.map(|cfg| cfg.mcp.providers.clone()),
         mcp_error,
+        search_tools_notice: None,
         header_highlights,
         acp_workspace_trust,
     }

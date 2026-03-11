@@ -46,6 +46,7 @@ mod resiliency_facade;
 mod risk_scorer;
 mod runtime_config_facade;
 mod sandbox_facade;
+mod search_runtime_facade;
 mod shell_policy;
 mod shell_policy_facade;
 mod spooler_facade;

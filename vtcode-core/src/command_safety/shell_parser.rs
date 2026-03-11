@@ -34,6 +34,12 @@ fn get_bash_parser() -> Result<&'static Mutex<tree_sitter::Parser>, String> {
         .map_err(Clone::clone)
 }
 
+/// Ensures the bash tree-sitter parser is initialized.
+pub fn prewarm_bash_parser() -> Result<(), String> {
+    let _ = get_bash_parser()?;
+    Ok(())
+}
+
 /// Parses a shell script into individual commands using tree-sitter bash grammar
 ///
 /// # Example
@@ -378,5 +384,10 @@ mod tests {
         let commands = parse_shell_commands(script).unwrap();
         assert_eq!(commands.len(), 2);
         assert_eq!(commands[0][0], "rm");
+    }
+
+    #[test]
+    fn prewarm_bash_parser_initializes_successfully() {
+        prewarm_bash_parser().expect("bash parser should initialize");
     }
 }

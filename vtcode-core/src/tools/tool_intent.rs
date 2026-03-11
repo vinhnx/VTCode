@@ -357,14 +357,31 @@ fn get_field_case_insensitive<'a>(
     })
 }
 
+fn has_meaningful_search_field(args: &serde_json::Map<String, Value>, key: &str) -> bool {
+    match get_field_case_insensitive(args, key) {
+        Some(Value::Null) | None => false,
+        Some(Value::String(text)) => !text.trim().is_empty(),
+        Some(Value::Array(values)) => !values.is_empty(),
+        Some(_) => true,
+    }
+}
+
 fn unified_search_action_from_object(args: &serde_json::Map<String, Value>) -> Option<&str> {
     get_field_case_insensitive(args, "action")
         .and_then(|value| value.as_str())
         .or_else(|| {
             // Smart action inference based on parameters
-            if get_field_case_insensitive(args, "pattern").is_some()
-                || get_field_case_insensitive(args, "query").is_some()
-            {
+            let has_pattern = has_meaningful_search_field(args, "pattern")
+                || has_meaningful_search_field(args, "query");
+            let has_structural_hint = has_meaningful_search_field(args, "lang")
+                || has_meaningful_search_field(args, "selector")
+                || has_meaningful_search_field(args, "strictness")
+                || has_meaningful_search_field(args, "debug_query")
+                || has_meaningful_search_field(args, "globs");
+
+            if has_pattern && has_structural_hint {
+                Some("structural")
+            } else if has_pattern {
                 Some("grep")
             } else if get_field_case_insensitive(args, "keyword").is_some() {
                 Some("tools")
@@ -825,6 +842,19 @@ mod tests {
         assert_eq!(normalized["lang"], "rust");
         assert_eq!(normalized["debug_query"], "ast");
         assert_eq!(normalized["max_results"], 5);
+    }
+
+    #[test]
+    fn normalize_unified_search_args_infers_structural_from_pattern_and_lang() {
+        let normalized = normalize_unified_search_args(&json!({
+            "Pattern": "fn $NAME($$$ARGS) { $$$BODY }",
+            "Lang": "rust",
+            "Path": "."
+        }));
+
+        assert_eq!(normalized["action"], "structural");
+        assert_eq!(normalized["lang"], "rust");
+        assert_eq!(normalized["path"], ".");
     }
 
     #[test]

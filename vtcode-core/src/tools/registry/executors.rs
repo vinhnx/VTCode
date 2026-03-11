@@ -2736,9 +2736,9 @@ impl ToolRegistry {
                     path,
                 )
                 .await
-                .with_context(|| {
-                    format!(
-                        "Failed to plan patch output for {}",
+                .map_err(|err| {
+                    anyhow!(
+                        "Failed to plan patch output for {}: {err}",
                         canonical_path.display()
                     )
                 })?;

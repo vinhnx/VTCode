@@ -3,7 +3,7 @@ use vtcode_core::utils::dot_config::{DotConfig, load_user_config, save_user_conf
 
 use super::notice::OptionalSearchToolsNotice;
 
-pub(super) async fn take_optional_search_tools_notice() -> Option<OptionalSearchToolsNotice> {
+pub(crate) async fn take_optional_search_tools_notice() -> Option<OptionalSearchToolsNotice> {
     let ripgrep_status = RipgrepStatus::check();
     let ast_grep_status = AstGrepStatus::check();
     let (mut config, persist_notice) = load_notice_config().await;

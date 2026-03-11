@@ -231,6 +231,10 @@ pub(crate) async fn initialize_session_ui(
         }
     }
 
+    if let Some(notice) = session_state.session_bootstrap.search_tools_notice.as_ref() {
+        notice.render(&mut renderer)?;
+    }
+
     handle.set_theme(theme_spec.clone());
     palettes::apply_prompt_style(&handle);
     handle.set_placeholder(default_placeholder.clone());

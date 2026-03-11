@@ -108,6 +108,7 @@ impl ToolRegistry {
             );
         }
 
+        self.prewarm_search_runtime();
         self.sync_policy_catalog().await;
         self.initialized
             .store(true, std::sync::atomic::Ordering::Relaxed);

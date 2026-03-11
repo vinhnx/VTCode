@@ -10,6 +10,8 @@ use std::path::PathBuf;
 
 pub use crate::skills::model::{SkillErrorInfo, SkillMetadata, SkillScope};
 
+pub type SkillManifestMetadata = HashMap<String, JsonValue>;
+
 /// Skill variety indicating the type of skill
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -138,9 +140,9 @@ pub struct SkillManifest {
     /// The variety of this skill
     #[serde(default)]
     pub variety: SkillVariety,
-    /// Arbitrary key-value metadata (Agent Skills spec)
+    /// Arbitrary JSON-compatible metadata (Agent Skills spec)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<HashMap<String, String>>,
+    pub metadata: Option<SkillManifestMetadata>,
     /// Tool dependencies for this skill (Agent Skills spec extension)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tools: Option<Vec<String>>,
@@ -793,8 +795,8 @@ mod tests {
     #[test]
     fn test_metadata_field() {
         let mut metadata = HashMap::new();
-        metadata.insert("author".to_string(), "Test Author".to_string());
-        metadata.insert("version".to_string(), "1.0.0".to_string());
+        metadata.insert("author".to_string(), serde_json::json!("Test Author"));
+        metadata.insert("version".to_string(), serde_json::json!("1.0.0"));
 
         let m = SkillManifest {
             name: "test-skill".to_string(),

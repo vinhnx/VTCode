@@ -400,7 +400,7 @@ mod tests {
         use hashbrown::HashMap as StdHashMap;
 
         let mut metadata = StdHashMap::new();
-        metadata.insert("author".to_string(), "Test Author".to_string());
+        metadata.insert("author".to_string(), serde_json::json!("Test Author"));
 
         let manifest = SkillManifest {
             name: "test-xml-skill".to_string(),

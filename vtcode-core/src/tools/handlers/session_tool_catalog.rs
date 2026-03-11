@@ -470,12 +470,12 @@ pub(crate) fn unified_search_parameters() -> Value {
             "action": {
                 "type": "string",
                 "enum": ["grep", "list", "structural", "tools", "errors", "agent", "web", "skill"],
-                "description": "Action to perform."
+                "description": "Action to perform. Default to `structural` for code or syntax-aware search, `grep` for raw text, and `list` for file discovery. Refine and retry `grep` or `structural` here before switching tools."
             },
-            "pattern": {"type": "string", "description": "Regex or literal pattern for 'grep' or 'errors' search."},
+            "pattern": {"type": "string", "description": "For `grep` or `errors`, regex or literal text. For `structural`, valid parseable code for the selected language, not a raw code fragment; if a fragment fails, retry `action='structural'` with a larger parseable pattern such as a full function signature."},
             "path": {"type": "string", "description": "Directory or file path to search in.", "default": "."},
-            "lang": {"type": "string", "description": "Language hint for structural search patterns or required language for debug_query."},
-            "selector": {"type": "string", "description": "ast-grep selector for the structural matcher subtree."},
+            "lang": {"type": "string", "description": "Language for structural search. Set it whenever the code language is known; required for debug_query."},
+            "selector": {"type": "string", "description": "ast-grep selector for structural search when the real match is a subnode inside the parseable pattern."},
             "strictness": {
                 "type": "string",
                 "enum": ["cst", "smart", "ast", "relaxed", "signature", "template"],
@@ -807,6 +807,27 @@ mod tests {
                 .expect("debug_query enum")
                 .iter()
                 .any(|value| value == "ast")
+        );
+        assert!(
+            params["properties"]["action"]["description"]
+                .as_str()
+                .expect("action description")
+                .contains("Default to `structural`"),
+            "schema should bias code search toward structural mode"
+        );
+        assert!(
+            params["properties"]["pattern"]["description"]
+                .as_str()
+                .expect("pattern description")
+                .contains("valid parseable code"),
+            "schema should explain structural pattern requirements"
+        );
+        assert!(
+            params["properties"]["action"]["description"]
+                .as_str()
+                .expect("action description")
+                .contains("Refine and retry `grep` or `structural`"),
+            "schema should keep search refinement inside unified_search"
         );
     }
 

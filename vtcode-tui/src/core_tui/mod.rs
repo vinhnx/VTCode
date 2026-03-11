@@ -5,6 +5,7 @@ use tokio::sync::mpsc;
 use crate::config::types::UiSurfacePreference;
 
 pub mod alternate_screen;
+pub(crate) mod language_badge;
 pub mod log;
 pub mod panic_hook;
 pub mod runner;
@@ -19,12 +20,13 @@ pub use theme_parser::ThemeConfigParser;
 pub use types::{
     ContentPart, DiffHunk, DiffOverlayRequest, DiffPreviewMode, DiffPreviewState, EditingMode,
     FocusChangeCallback, InlineCommand, InlineEvent, InlineEventCallback, InlineHandle,
-    InlineHeaderContext, InlineHeaderHighlight, InlineListItem, InlineListSearchConfig,
-    InlineListSelection, InlineMessageKind, InlineSegment, InlineSession, InlineTextStyle,
-    InlineTheme, ListOverlayRequest, ModalOverlayRequest, OverlayEvent, OverlayHotkey,
-    OverlayHotkeyAction, OverlayHotkeyKey, OverlayRequest, OverlaySelectionChange,
-    OverlaySubmission, PlanContent, PlanPhase, PlanStep, SecurePromptConfig, SlashCommandItem,
-    TrustMode, WizardModalMode, WizardOverlayRequest, WizardStep,
+    InlineHeaderContext, InlineHeaderHighlight, InlineHeaderStatusBadge, InlineHeaderStatusTone,
+    InlineListItem, InlineListSearchConfig, InlineListSelection, InlineMessageKind, InlineSegment,
+    InlineSession, InlineTextStyle, InlineTheme, ListOverlayRequest, ModalOverlayRequest,
+    OverlayEvent, OverlayHotkey, OverlayHotkeyAction, OverlayHotkeyKey, OverlayRequest,
+    OverlaySelectionChange, OverlaySubmission, PlanContent, PlanPhase, PlanStep,
+    SecurePromptConfig, SlashCommandItem, TrustMode, WizardModalMode, WizardOverlayRequest,
+    WizardStep,
 };
 
 use runner::{TuiOptions, run_tui};

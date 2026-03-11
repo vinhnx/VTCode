@@ -337,7 +337,6 @@ pub(super) async fn run_interaction_loop_impl(
             context_used_tokens,
             context_limit_tokens,
         );
-
         if let Err(error) =
             crate::agent::runloop::unified::status_line::update_input_status_if_changed(
                 ctx.handle,

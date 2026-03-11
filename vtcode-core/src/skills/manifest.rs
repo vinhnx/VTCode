@@ -3,9 +3,8 @@
 //! Parses YAML frontmatter from SKILL.md files to extract skill metadata and instructions.
 
 use crate::skills::file_references::FileReferenceValidator;
-use crate::skills::types::SkillManifest;
+use crate::skills::types::{SkillManifest, SkillManifestMetadata};
 use anyhow::Context;
-use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
@@ -83,7 +82,7 @@ pub struct SkillYaml {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub compatibility: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<HashMap<String, String>>,
+    pub metadata: Option<SkillManifestMetadata>,
     /// Tool dependencies for this skill (Agent Skills spec extension)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tools: Option<Vec<String>>,
@@ -383,6 +382,7 @@ Remember to create these files in the appropriate directories.
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn test_parse_valid_skill() {
@@ -461,6 +461,34 @@ missing_required_fields: true
 
         let result = parse_skill_content(content);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_skill_metadata_accepts_arrays_and_maps() {
+        let content = r#"---
+name: rust-skills
+description: Rust guidance
+license: MIT
+metadata:
+  author: leonardomso
+  version: "1.0.0"
+  sources:
+    - Rust API Guidelines
+    - Rust Performance Book
+---
+
+# Rust Best Practices
+"#;
+
+        let (manifest, _) = parse_skill_content(content).expect("metadata arrays should parse");
+        let metadata = manifest.metadata.expect("metadata should be present");
+
+        assert_eq!(metadata.get("author"), Some(&json!("leonardomso")));
+        assert_eq!(metadata.get("version"), Some(&json!("1.0.0")));
+        assert_eq!(
+            metadata.get("sources"),
+            Some(&json!(["Rust API Guidelines", "Rust Performance Book"]))
+        );
     }
 
     #[test]

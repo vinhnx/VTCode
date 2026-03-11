@@ -60,8 +60,8 @@ pub fn generate_tool_guidelines(
     if has_exec && has_search {
         guidelines.push(
             "**Tool Selection**: Prefer `unified_search` over `unified_exec` for exploration. \
-             Use action='grep' for broad text search, action='list' for file discovery, and \
-             action='structural' for syntax-aware code search."
+             Default to action='structural' for language-aware code search, set `lang` when known, \
+             use action='grep' for plain-text search, and action='list' for file discovery."
                 .to_string(),
         );
     }
@@ -228,8 +228,8 @@ mod tests {
             "Should suggest using search over unified_exec"
         );
         assert!(
-            guidelines.contains("unified_exec"),
-            "Should mention unified_exec as alternative"
+            guidelines.contains("action='structural'") && guidelines.contains("`lang` when known"),
+            "Should prefer structural search for code"
         );
     }
 

@@ -3,7 +3,7 @@ use std::fmt::Write;
 use ratatui::{
     Frame,
     layout::Rect,
-    style::{Modifier, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Paragraph, Wrap},
 };
@@ -11,7 +11,9 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use crate::config::constants::ui;
 
-use super::super::types::{InlineHeaderContext, InlineHeaderHighlight};
+use super::super::types::{
+    InlineHeaderContext, InlineHeaderHighlight, InlineHeaderStatusBadge, InlineHeaderStatusTone,
+};
 use super::terminal_capabilities;
 use super::{Session, ratatui_color_from_ansi};
 
@@ -53,6 +55,15 @@ fn compact_tools_format(tools_str: &str) -> String {
 
 fn line_is_empty(spans: &[Span<'static>]) -> bool {
     spans.len() == 1 && spans.first().is_some_and(|span| span.content.is_empty())
+}
+
+fn header_status_badge_style(badge: &InlineHeaderStatusBadge, fallback: Style) -> Style {
+    let color = match badge.tone {
+        InlineHeaderStatusTone::Ready => Color::Green,
+        InlineHeaderStatusTone::Warning => Color::Yellow,
+        InlineHeaderStatusTone::Error => Color::Red,
+    };
+    fallback.fg(color).add_modifier(Modifier::BOLD)
 }
 
 impl Session {
@@ -385,7 +396,7 @@ impl Session {
             EditingMode::Plan => {
                 // Yellow badge for Plan mode (read-only)
                 let badge_style = Style::default()
-                    .fg(ratatui::style::Color::Yellow)
+                    .fg(Color::Yellow)
                     .add_modifier(Modifier::BOLD);
                 spans.push(Span::styled("Plan mode on".to_string(), badge_style));
                 spans.push(Span::styled(
@@ -401,7 +412,7 @@ impl Session {
         // Show autonomous mode indicator
         if self.header_context.autonomous_mode {
             let badge_style = Style::default()
-                .fg(ratatui::style::Color::Green)
+                .fg(Color::Green)
                 .add_modifier(Modifier::BOLD);
             spans.push(Span::styled("[AUTO]".to_string(), badge_style));
             spans.push(Span::styled(
@@ -415,7 +426,7 @@ impl Session {
         if trust_value.contains("full auto") || trust_value.contains("full_auto") {
             // Cyan badge for full auto trust
             let badge_style = Style::default()
-                .fg(ratatui::style::Color::Cyan)
+                .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD);
             spans.push(Span::styled("Accept edits".to_string(), badge_style));
             spans.push(Span::styled(
@@ -425,7 +436,7 @@ impl Session {
         } else if trust_value.contains("tools policy") || trust_value.contains("tools_policy") {
             // Green badge for tools policy (safeguarded)
             let badge_style = Style::default()
-                .fg(ratatui::style::Color::Green)
+                .fg(Color::Green)
                 .add_modifier(Modifier::BOLD);
             spans.push(Span::styled("[SAFE]".to_string(), badge_style));
             spans.push(Span::styled(
@@ -439,11 +450,28 @@ impl Session {
         if !mode_label.trim().is_empty() {
             let mut mode_style = self.header_primary_style().add_modifier(Modifier::BOLD);
             if self.header_context.editing_mode == EditingMode::Plan {
-                mode_style = mode_style.fg(ratatui::style::Color::Yellow);
+                mode_style = mode_style.fg(Color::Yellow);
             } else if self.header_context.autonomous_mode {
-                mode_style = mode_style.fg(ratatui::style::Color::Green);
+                mode_style = mode_style.fg(Color::Green);
             }
             spans.push(Span::styled(mode_label, mode_style));
+            first_section = false;
+        }
+
+        if let Some(badge) = self
+            .header_context
+            .search_tools
+            .as_ref()
+            .filter(|badge| !badge.text.trim().is_empty())
+        {
+            if !first_section {
+                spans.push(Span::styled(
+                    ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
+                    self.header_secondary_style(),
+                ));
+            }
+            let style = header_status_badge_style(badge, self.header_primary_style());
+            spans.push(Span::styled(badge.text.clone(), style));
             first_section = false;
         }
 
