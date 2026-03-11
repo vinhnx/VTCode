@@ -165,12 +165,60 @@ let chatLaunchHintShown = false;
 
 let ideContextBridge: IdeContextFileBridge | undefined;
 
-const IDE_CONTEXT_ENV_VARIABLE = "VT_VSCODE_CONTEXT_FILE";
+const CANONICAL_IDE_CONTEXT_ENV_VARIABLE = "VT_IDE_CONTEXT_FILE";
+const LEGACY_IDE_CONTEXT_ENV_VARIABLE = "VT_VSCODE_CONTEXT_FILE";
+const IDE_CONTEXT_SNAPSHOT_VERSION = 1;
 const IDE_CONTEXT_HEADER = "## VS Code Context";
+const WORKSPACE_IDE_CONTEXT_DIRNAME = ".vtcode";
+const WORKSPACE_IDE_CONTEXT_JSON_FILE = "ide-context.json";
+const WORKSPACE_IDE_CONTEXT_MARKDOWN_FILE = "ide-context.md";
 const MAX_IDE_CONTEXT_CHARS = 6000;
 const MAX_FULL_DOCUMENT_CONTEXT_LINES = 400;
 const ACTIVE_EDITOR_CONTEXT_WINDOW = 80;
 const MAX_VISIBLE_EDITOR_CONTEXTS = 3;
+
+type IdeContextProviderFamily = "vscode_compatible";
+
+interface IdeContextSnapshot {
+    readonly version: number;
+    readonly provider_family: IdeContextProviderFamily;
+    readonly editor_name?: string;
+    readonly workspace_root?: string;
+    readonly active_file?: IdeContextFileSnapshot;
+    readonly visible_editors?: IdeContextFileSnapshot[];
+}
+
+interface IdeContextFileSnapshot {
+    readonly path: string;
+    readonly language_id?: string;
+    readonly line_range?: IdeContextLineRange;
+    readonly dirty: boolean;
+    readonly truncated: boolean;
+    readonly selection?: IdeContextSelectionSnapshot;
+}
+
+interface IdeContextLineRange {
+    readonly start: number;
+    readonly end: number;
+}
+
+interface IdeContextSelectionSnapshot {
+    readonly range: IdeContextSelectionRange;
+    readonly text?: string;
+}
+
+interface IdeContextSelectionRange {
+    readonly start_line: number;
+    readonly start_column: number;
+    readonly end_line: number;
+    readonly end_column: number;
+}
+
+interface IdeContextFileTarget {
+    readonly directoryUri?: vscode.Uri;
+    readonly snapshotUri: vscode.Uri;
+    readonly legacyMarkdownUri: vscode.Uri;
+}
 
 export function activate(context: vscode.ExtensionContext) {
     activationContext = context;
@@ -887,7 +935,7 @@ async function initializeIdeContextBridge(
     context: vscode.ExtensionContext
 ): Promise<void> {
     const storageRoot = context.globalStorageUri ?? context.storageUri;
-    if (!storageRoot || storageRoot.scheme !== "file") {
+    if (!storageRoot) {
         return;
     }
 
@@ -900,8 +948,15 @@ async function initializeIdeContextBridge(
         );
     }
 
-    const fileUri = vscode.Uri.joinPath(storageRoot, "vtcode-ide-context.md");
-    const bridge = new IdeContextFileBridge(fileUri);
+    const jsonFileUri = vscode.Uri.joinPath(
+        storageRoot,
+        "vtcode-ide-context.json"
+    );
+    const markdownFileUri = vscode.Uri.joinPath(
+        storageRoot,
+        "vtcode-ide-context.md"
+    );
+    const bridge = new IdeContextFileBridge(jsonFileUri, markdownFileUri);
     ideContextBridge = bridge;
     syncIdeContextEnvironmentVariable();
     context.subscriptions.push(bridge);
@@ -2265,8 +2320,28 @@ function buildTaskTrackerPrompt(definition: VtcodeTaskDefinition): string {
 
 function registerVtcodeAiIntegrations(context: vscode.ExtensionContext): void {
     context.subscriptions.push(mcpDefinitionsChanged);
+    const contributedLanguageModelTools = Array.isArray(
+        context.extension.packageJSON?.contributes?.languageModelTools
+    )
+        ? context.extension.packageJSON.contributes.languageModelTools
+        : [];
+    const hasTaskTrackerToolContribution = contributedLanguageModelTools.some(
+        (tool) => tool?.name === VT_CODE_TASK_TRACKER_TOOL
+    );
+    const contributedChatParticipants = Array.isArray(
+        context.extension.packageJSON?.contributes?.chatParticipants
+    )
+        ? context.extension.packageJSON.contributes.chatParticipants
+        : [];
+    const hasChatParticipantContribution = contributedChatParticipants.some(
+        (participant) => participant?.id === VT_CODE_CHAT_PARTICIPANT_ID
+    );
 
-    if ("lm" in vscode && typeof vscode.lm?.registerTool === "function") {
+    if (
+        hasTaskTrackerToolContribution &&
+        "lm" in vscode &&
+        typeof vscode.lm?.registerTool === "function"
+    ) {
         const toolDisposable = vscode.lm.registerTool<TaskTrackerToolInput>(
             VT_CODE_TASK_TRACKER_TOOL,
             {
@@ -2394,120 +2469,133 @@ function registerVtcodeAiIntegrations(context: vscode.ExtensionContext): void {
     }
 
     if (
+        hasChatParticipantContribution &&
         "chat" in vscode &&
         typeof vscode.chat?.createChatParticipant === "function"
     ) {
-        const participant = vscode.chat.createChatParticipant(
-            VT_CODE_CHAT_PARTICIPANT_ID,
-            async (request, _context, response, token) => {
-                const basePrompt = request.prompt.trim();
-                if (!basePrompt) {
-                    response.markdown(
-                        "Ask a question or describe a task for the VT Code agent to begin."
-                    );
-                    return;
-                }
-
-                if (vscode.env.uiKind === vscode.UIKind.Web) {
-                    const message =
-                        "The VT Code CLI is not available in VS Code for the Web. Open a desktop workspace to chat with the CLI-driven agent.";
-                    response.markdown(message);
-                    return {
-                        errorDetails: { message },
-                    };
-                }
-
-                if (!workspaceTrusted) {
-                    const message =
-                        "Trust this workspace to allow VT Code to run CLI commands from chat.";
-                    response.markdown(message);
-                    return {
-                        errorDetails: { message },
-                    };
-                }
-
-                await refreshCliAvailability("manual");
-                if (!cliAvailable) {
-                    const commandPath = getConfiguredCommandPath();
-                    const message = `The VT Code CLI (\`${commandPath}\`) is not available. Install it or update the \`vtcode.commandPath\` setting.`;
-                    response.markdown(message);
-                    return {
-                        errorDetails: { message },
-                    };
-                }
-
-                const promptWithContext = await appendIdeContextToPrompt(
-                    basePrompt,
-                    {
-                        includeActiveEditor: true,
-                        chatRequest: request,
-                        cancellationToken: token,
-                    }
-                );
-
-                response.progress("Running `vtcode ask`…");
-
-                const collected: string[] = [];
-                try {
-                    await runVtcodeCommand(["ask", promptWithContext], {
-                        title: "Asking VT Code…",
-                        revealOutput: false,
-                        showProgress: false,
-                        cancellationToken: token,
-                        onStdout: (text) => collected.push(text),
-                        onStderr: (text) => collected.push(text),
-                    });
-                } catch (error) {
-                    if (error instanceof vscode.CancellationError) {
-                        response.progress("VT Code chat request cancelled.");
+        try {
+            const participant = vscode.chat.createChatParticipant(
+                VT_CODE_CHAT_PARTICIPANT_ID,
+                async (request, _context, response, token) => {
+                    const basePrompt = request.prompt.trim();
+                    if (!basePrompt) {
+                        response.markdown(
+                            "Ask a question or describe a task for the VT Code agent to begin."
+                        );
                         return;
                     }
 
-                    const message =
-                        error instanceof Error ? error.message : String(error);
-                    response.markdown(
-                        `VT Code encountered an error while running the CLI: ${message}`
+                    if (vscode.env.uiKind === vscode.UIKind.Web) {
+                        const message =
+                            "The VT Code CLI is not available in VS Code for the Web. Open a desktop workspace to chat with the CLI-driven agent.";
+                        response.markdown(message);
+                        return {
+                            errorDetails: { message },
+                        };
+                    }
+
+                    if (!workspaceTrusted) {
+                        const message =
+                            "Trust this workspace to allow VT Code to run CLI commands from chat.";
+                        response.markdown(message);
+                        return {
+                            errorDetails: { message },
+                        };
+                    }
+
+                    await refreshCliAvailability("manual");
+                    if (!cliAvailable) {
+                        const commandPath = getConfiguredCommandPath();
+                        const message = `The VT Code CLI (\`${commandPath}\`) is not available. Install it or update the \`vtcode.commandPath\` setting.`;
+                        response.markdown(message);
+                        return {
+                            errorDetails: { message },
+                        };
+                    }
+
+                    const promptWithContext = await appendIdeContextToPrompt(
+                        basePrompt,
+                        {
+                            includeActiveEditor: true,
+                            chatRequest: request,
+                            cancellationToken: token,
+                        }
                     );
+
+                    response.progress("Running `vtcode ask`…");
+
+                    const collected: string[] = [];
+                    try {
+                        await runVtcodeCommand(["ask", promptWithContext], {
+                            title: "Asking VT Code…",
+                            revealOutput: false,
+                            showProgress: false,
+                            cancellationToken: token,
+                            onStdout: (text) => collected.push(text),
+                            onStderr: (text) => collected.push(text),
+                        });
+                    } catch (error) {
+                        if (error instanceof vscode.CancellationError) {
+                            response.progress(
+                                "VT Code chat request cancelled."
+                            );
+                            return;
+                        }
+
+                        const message =
+                            error instanceof Error
+                                ? error.message
+                                : String(error);
+                        response.markdown(
+                            `VT Code encountered an error while running the CLI: ${message}`
+                        );
+                        return {
+                            errorDetails: { message },
+                        };
+                    }
+
+                    const combined = collected.join("");
+                    const normalized = combined.replace(/\r\n/g, "\n").trim();
+                    if (normalized.length > 0) {
+                        response.markdown(`\`\`\`\n${normalized}\n\`\`\``);
+                    } else {
+                        response.markdown(
+                            "VT Code completed the request but did not emit any output."
+                        );
+                    }
+
                     return {
-                        errorDetails: { message },
+                        metadata: {
+                            command: "ask",
+                        },
                     };
                 }
-
-                const combined = collected.join("");
-                const normalized = combined.replace(/\r\n/g, "\n").trim();
-                if (normalized.length > 0) {
-                    response.markdown(`\`\`\`\n${normalized}\n\`\`\``);
-                } else {
-                    response.markdown(
-                        "VT Code completed the request but did not emit any output."
-                    );
-                }
-
-                return {
-                    metadata: {
-                        command: "ask",
+            );
+            participant.iconPath = new vscode.ThemeIcon("rocket");
+            participant.followupProvider = {
+                provideFollowups: async () => [
+                    {
+                        prompt: "Summarize the current TODO plan.",
+                        label: "Summarize TODO plan",
                     },
-                };
-            }
-        );
-        participant.iconPath = new vscode.ThemeIcon("rocket");
-        participant.followupProvider = {
-            provideFollowups: async () => [
-                {
-                    prompt: "Summarize the current TODO plan.",
-                    label: "Summarize TODO plan",
-                },
-                {
-                    prompt: "Review configured MCP providers and highlight anything that needs attention.",
-                    label: "Audit MCP providers",
-                },
-                {
-                    prompt: "Suggest the next high-priority tasks VT Code should tackle in this workspace.",
-                    label: "Suggest next tasks",
-                },
-            ],
-        };
-        context.subscriptions.push(participant);
+                    {
+                        prompt: "Review configured MCP providers and highlight anything that needs attention.",
+                        label: "Audit MCP providers",
+                    },
+                    {
+                        prompt: "Suggest the next high-priority tasks VT Code should tackle in this workspace.",
+                        label: "Suggest next tasks",
+                    },
+                ],
+            };
+            context.subscriptions.push(participant);
+        } catch (error) {
+            const message =
+                error instanceof Error ? error.message : String(error);
+            getOutputChannel().appendLine(
+                `[warn] Failed to register VT Code chat participant: ${message}`
+            );
+        }
     }
 }
 
@@ -2874,6 +2962,181 @@ interface DocumentContext {
     readonly truncated: boolean;
 }
 
+interface IdeContextFileMetadata {
+    readonly line_range?: IdeContextLineRange;
+    readonly truncated: boolean;
+}
+
+interface IdeContextSelectionResult {
+    readonly selection?: IdeContextSelectionSnapshot;
+    readonly truncated: boolean;
+}
+
+function buildIdeContextSnapshot(): IdeContextSnapshot | undefined {
+    const activeFile = buildActiveEditorSnapshot();
+    const visibleEditors = buildVisibleEditorSnapshots(activeFile?.path);
+
+    if (!activeFile && visibleEditors.length === 0) {
+        return undefined;
+    }
+
+    const workspaceRoot = getPrimaryWorkspaceFolder()?.uri.fsPath;
+    return {
+        version: IDE_CONTEXT_SNAPSHOT_VERSION,
+        provider_family: "vscode_compatible",
+        editor_name: currentIdeDisplayName(),
+        workspace_root: workspaceRoot,
+        active_file: activeFile,
+        visible_editors:
+            visibleEditors.length > 0 ? visibleEditors : undefined,
+    };
+}
+
+function currentIdeDisplayName(): string {
+    const appName = vscode.env.appName?.trim().toLowerCase() ?? "";
+    if (appName.includes("kiro")) {
+        return "Kiro";
+    }
+    if (appName.includes("cursor")) {
+        return "Cursor";
+    }
+    if (appName.includes("windsurf")) {
+        return "Windsurf";
+    }
+    if (appName.includes("vscodium")) {
+        return "VSCodium";
+    }
+    if (appName.includes("insider")) {
+        return "VS Code Insiders";
+    }
+    return "VS Code";
+}
+
+function buildActiveEditorSnapshot():
+    IdeContextFileSnapshot | undefined {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+        return undefined;
+    }
+
+    return buildEditorFileSnapshot(editor, computeActiveEditorRange(editor));
+}
+
+function buildVisibleEditorSnapshots(
+    activePath: string | undefined
+): IdeContextFileSnapshot[] {
+    const snapshots: IdeContextFileSnapshot[] = [];
+    const seenPaths = new Set<string>();
+    if (activePath) {
+        seenPaths.add(activePath);
+    }
+
+    for (const editor of vscode.window.visibleTextEditors) {
+        if (snapshots.length >= MAX_VISIBLE_EDITOR_CONTEXTS) {
+            break;
+        }
+
+        const snapshot = buildEditorFileSnapshot(editor, undefined);
+        if (!snapshot || seenPaths.has(snapshot.path)) {
+            continue;
+        }
+
+        seenPaths.add(snapshot.path);
+        snapshots.push(snapshot);
+    }
+
+    return snapshots;
+}
+
+function buildEditorFileSnapshot(
+    editor: vscode.TextEditor,
+    preferredRange: vscode.Range | undefined
+): IdeContextFileSnapshot | undefined {
+    const document = editor.document;
+    const metadata = buildIdeContextFileMetadata(document, preferredRange);
+    if (!metadata.line_range) {
+        return undefined;
+    }
+    const selection = buildSelectionSnapshot(editor);
+
+    const languageId = document.languageId.trim();
+    return {
+        path: getSnapshotPath(document.uri),
+        language_id: languageId.length > 0 ? languageId : undefined,
+        line_range: metadata.line_range,
+        dirty: document.isDirty,
+        truncated: metadata.truncated || selection.truncated,
+        selection: selection.selection,
+    };
+}
+
+function buildSelectionSnapshot(
+    editor: vscode.TextEditor
+): IdeContextSelectionResult {
+    if (editor.selection.isEmpty) {
+        return { truncated: false };
+    }
+
+    const limited = truncateForPrompt(
+        normalizeForPrompt(editor.document.getText(editor.selection)),
+        MAX_IDE_CONTEXT_CHARS
+    );
+    const text =
+        limited.text.trim().length > 0 ? limited.text : undefined;
+
+    return {
+        selection: {
+            range: {
+                start_line: editor.selection.start.line + 1,
+                start_column: editor.selection.start.character + 1,
+                end_line: editor.selection.end.line + 1,
+                end_column: editor.selection.end.character + 1,
+            },
+            text,
+        },
+        truncated: limited.truncated,
+    };
+}
+
+function rangeToLineRange(range: vscode.Range): IdeContextLineRange {
+    return {
+        start: range.start.line + 1,
+        end: range.end.line + 1,
+    };
+}
+
+function getSnapshotPath(uri: vscode.Uri): string {
+    if (uri.scheme === "file") {
+        return uri.fsPath;
+    }
+
+    return uri.toString(true);
+}
+
+function buildIdeContextFileMetadata(
+    document: vscode.TextDocument,
+    preferredRange: vscode.Range | undefined
+): IdeContextFileMetadata {
+    if (document.lineCount === 0) {
+        return { truncated: false };
+    }
+
+    if (preferredRange) {
+        return {
+            line_range: rangeToLineRange(preferredRange),
+            truncated:
+                document.lineCount >
+                preferredRange.end.line - preferredRange.start.line + 1,
+        };
+    }
+
+    const endLine = Math.min(document.lineCount, MAX_FULL_DOCUMENT_CONTEXT_LINES);
+    return {
+        line_range: { start: 1, end: endLine },
+        truncated: document.lineCount > MAX_FULL_DOCUMENT_CONTEXT_LINES,
+    };
+}
+
 function extractDocumentContext(
     document: vscode.TextDocument,
     range: vscode.Range | undefined
@@ -2981,17 +3244,86 @@ function truncateForPrompt(
 }
 
 function getIdeContextFilePath(): string | undefined {
-    return ideContextBridge?.filePath;
+    return ideContextBridge?.canonicalFilePath;
+}
+
+function getLegacyIdeContextFilePath(): string | undefined {
+    return ideContextBridge?.legacyFilePath;
+}
+
+function getWorkspaceIdeContextTarget(
+    workspaceRoot: string | undefined
+): IdeContextFileTarget | undefined {
+    const resolvedWorkspaceRoot =
+        workspaceRoot ?? getPrimaryWorkspaceFolder()?.uri.fsPath;
+    if (!resolvedWorkspaceRoot) {
+        return undefined;
+    }
+
+    const workspaceUri = vscode.Uri.file(resolvedWorkspaceRoot);
+    const directoryUri = vscode.Uri.joinPath(
+        workspaceUri,
+        WORKSPACE_IDE_CONTEXT_DIRNAME
+    );
+    return {
+        directoryUri,
+        snapshotUri: vscode.Uri.joinPath(
+            directoryUri,
+            WORKSPACE_IDE_CONTEXT_JSON_FILE
+        ),
+        legacyMarkdownUri: vscode.Uri.joinPath(
+            directoryUri,
+            WORKSPACE_IDE_CONTEXT_MARKDOWN_FILE
+        ),
+    };
+}
+
+function isSameIdeContextTarget(
+    left: IdeContextFileTarget | undefined,
+    right: IdeContextFileTarget | undefined
+): boolean {
+    if (!left || !right) {
+        return left === right;
+    }
+
+    return left.snapshotUri.toString() === right.snapshotUri.toString();
+}
+
+async function writeIdeContextTarget(
+    target: IdeContextFileTarget,
+    snapshotContent: string,
+    markdownContent: string
+): Promise<void> {
+    if (target.directoryUri) {
+        await vscode.workspace.fs.createDirectory(target.directoryUri);
+    }
+
+    await Promise.all([
+        vscode.workspace.fs.writeFile(
+            target.snapshotUri,
+            Buffer.from(snapshotContent, "utf8")
+        ),
+        vscode.workspace.fs.writeFile(
+            target.legacyMarkdownUri,
+            Buffer.from(markdownContent, "utf8")
+        ),
+    ]);
 }
 
 function syncIdeContextEnvironmentVariable(): void {
-    const contextPath = getIdeContextFilePath();
-    if (contextPath) {
-        process.env[IDE_CONTEXT_ENV_VARIABLE] = contextPath;
-        return;
+    const canonicalPath = getIdeContextFilePath();
+    if (canonicalPath) {
+        process.env[CANONICAL_IDE_CONTEXT_ENV_VARIABLE] = canonicalPath;
+    } else {
+        delete process.env[CANONICAL_IDE_CONTEXT_ENV_VARIABLE];
     }
 
-    delete process.env[IDE_CONTEXT_ENV_VARIABLE];
+    const legacyPath = getLegacyIdeContextFilePath();
+    if (legacyPath) {
+        process.env[LEGACY_IDE_CONTEXT_ENV_VARIABLE] = legacyPath;
+    } else {
+        delete process.env[LEGACY_IDE_CONTEXT_ENV_VARIABLE];
+    }
 }
 
 function isDocumentVisible(document: vscode.TextDocument): boolean {
@@ -3007,9 +3339,13 @@ function isDocumentVisible(document: vscode.TextDocument): boolean {
 class IdeContextFileBridge implements vscode.Disposable {
     private pendingTimer: NodeJS.Timeout | undefined;
     private currentRefresh: Promise<void> | undefined;
+    private workspaceMirrorTarget: IdeContextFileTarget | undefined;
     private disposed = false;
 
-    constructor(private readonly fileUri: vscode.Uri) {}
+    constructor(
+        private readonly snapshotUri: vscode.Uri,
+        private readonly legacyMarkdownUri: vscode.Uri
+    ) {}
 
     dispose(): void {
         this.disposed = true;
@@ -3043,11 +3379,18 @@ class IdeContextFileBridge implements vscode.Disposable {
         await this.performRefresh();
     }
 
-    get filePath(): string | undefined {
-        if (this.fileUri.scheme !== "file") {
+    get canonicalFilePath(): string | undefined {
+        if (this.snapshotUri.scheme !== "file") {
             return undefined;
         }
-        return this.fileUri.fsPath;
+        return this.snapshotUri.fsPath;
+    }
+
+    get legacyFilePath(): string | undefined {
+        if (this.legacyMarkdownUri.scheme !== "file") {
+            return undefined;
+        }
+        return this.legacyMarkdownUri.fsPath;
     }
 
     private async performRefresh(): Promise<void> {
@@ -3062,15 +3405,63 @@ class IdeContextFileBridge implements vscode.Disposable {
 
         const task = (async () => {
             try {
-                const block = await buildIdeContextBlock({
-                    includeActiveEditor: true,
-                    includeVisibleEditors: true,
-                });
-                const content = block ? `${block}\n` : "";
-                await vscode.workspace.fs.writeFile(
-                    this.fileUri,
-                    Buffer.from(content, "utf8")
+                const snapshot = buildIdeContextSnapshot();
+                let block: string | undefined;
+                try {
+                    block = await buildIdeContextBlock({
+                        includeActiveEditor: true,
+                        includeVisibleEditors: true,
+                    });
+                } catch (error) {
+                    const message =
+                        error instanceof Error ? error.message : String(error);
+                    getOutputChannel().appendLine(
+                        `[warn] Failed to render legacy IDE context markdown: ${message}`
+                    );
+                }
+                const snapshotContent = snapshot
+                    ? `${JSON.stringify(snapshot, null, 2)}\n`
+                    : "";
+                const markdownContent = block ? `${block}\n` : "";
+                const storageTarget: IdeContextFileTarget = {
+                    snapshotUri: this.snapshotUri,
+                    legacyMarkdownUri: this.legacyMarkdownUri,
+                };
+                const workspaceTarget = getWorkspaceIdeContextTarget(
+                    snapshot?.workspace_root
                 );
+                const writes = [
+                    writeIdeContextTarget(
+                        storageTarget,
+                        snapshotContent,
+                        markdownContent
+                    ),
+                ];
+                if (
+                    workspaceTarget &&
+                    !isSameIdeContextTarget(workspaceTarget, storageTarget)
+                ) {
+                    writes.push(
+                        writeIdeContextTarget(
+                            workspaceTarget,
+                            snapshotContent,
+                            markdownContent
+                        )
+                    );
+                }
+                if (
+                    this.workspaceMirrorTarget &&
+                    !isSameIdeContextTarget(
+                        this.workspaceMirrorTarget,
+                        workspaceTarget
+                    )
+                ) {
+                    writes.push(
+                        writeIdeContextTarget(this.workspaceMirrorTarget, "", "")
+                    );
+                }
+                this.workspaceMirrorTarget = workspaceTarget;
+                await Promise.all(writes);
             } catch (error) {
                 const message =
                     error instanceof Error ? error.message : String(error);
@@ -3104,9 +3495,16 @@ function getVtcodeEnvironment(
 
     const contextPath = getIdeContextFilePath();
     if (contextPath) {
-        env[IDE_CONTEXT_ENV_VARIABLE] = contextPath;
+        env[CANONICAL_IDE_CONTEXT_ENV_VARIABLE] = contextPath;
     } else {
-        delete env[IDE_CONTEXT_ENV_VARIABLE];
+        delete env[CANONICAL_IDE_CONTEXT_ENV_VARIABLE];
+    }
+
+    const legacyContextPath = getLegacyIdeContextFilePath();
+    if (legacyContextPath) {
+        env[LEGACY_IDE_CONTEXT_ENV_VARIABLE] = legacyContextPath;
+    } else {
+        delete env[LEGACY_IDE_CONTEXT_ENV_VARIABLE];
     }
 
     return env;

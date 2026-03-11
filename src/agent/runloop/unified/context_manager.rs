@@ -1,11 +1,14 @@
 use hashbrown::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use anyhow::{Result, bail};
+use vtcode_config::IdeContextConfig;
 use vtcode_config::constants::context::{
     TOKEN_BUDGET_CRITICAL_THRESHOLD, TOKEN_BUDGET_HIGH_THRESHOLD, TOKEN_BUDGET_WARNING_THRESHOLD,
 };
+use vtcode_core::EditorContextSnapshot;
 use vtcode_core::llm::provider as uni;
 
 use crate::agent::runloop::unified::incremental_system_prompt::{
@@ -55,6 +58,12 @@ pub(crate) struct ContextManager {
     cached_stats: ContextStats,
     /// Agent configuration
     agent_config: Option<vtcode_config::core::AgentConfig>,
+    /// Workspace root used for request-time editor context rendering.
+    workspace_root: Option<PathBuf>,
+    /// Normalized editor snapshot used for request-time prompt injection.
+    editor_context_snapshot: Option<EditorContextSnapshot>,
+    /// Prompt/TUI behavior for IDE context injection.
+    ide_context_config: IdeContextConfig,
 }
 
 impl ContextManager {
@@ -70,6 +79,24 @@ impl ContextManager {
             loaded_skills,
             cached_stats: ContextStats::default(),
             agent_config,
+            workspace_root: None,
+            editor_context_snapshot: None,
+            ide_context_config: IdeContextConfig::default(),
+        }
+    }
+
+    pub(crate) fn set_workspace_root(&mut self, workspace_root: &Path) {
+        self.workspace_root = Some(workspace_root.to_path_buf());
+    }
+
+    pub(crate) fn set_editor_context_snapshot(
+        &mut self,
+        snapshot: Option<EditorContextSnapshot>,
+        ide_context_config: Option<&IdeContextConfig>,
+    ) {
+        self.editor_context_snapshot = snapshot;
+        if let Some(config) = ide_context_config {
+            self.ide_context_config = config.clone();
         }
     }
 
@@ -266,6 +293,7 @@ impl ContextManager {
             supports_context_awareness,
             token_budget_guidance,
             prompt_cache_shaping_mode: params.prompt_cache_shaping_mode,
+            editor_context_block: self.editor_context_prompt_block(),
         };
 
         // Use incremental builder to avoid redundant cloning and processing
@@ -318,6 +346,23 @@ impl ContextManager {
         } else {
             normalized
         }
+    }
+
+    fn editor_context_prompt_block(&self) -> Option<String> {
+        if !self.ide_context_config.enabled || !self.ide_context_config.inject_into_prompt {
+            return None;
+        }
+
+        let workspace = self.workspace_root.as_deref()?;
+        self.editor_context_snapshot
+            .as_ref()
+            .filter(|snapshot| {
+                self.ide_context_config
+                    .allows_provider_family(snapshot.provider_family)
+            })
+            .and_then(|snapshot| {
+                snapshot.prompt_block(workspace, self.ide_context_config.include_selection_text)
+            })
     }
 }
 

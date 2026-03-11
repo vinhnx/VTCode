@@ -19,7 +19,10 @@ mod blocks;
 mod formatting;
 mod helpers;
 
-use helpers::{block_chars, is_info_box_line, is_tool_summary_line, truncate_line_to_width};
+use helpers::{
+    agent_code_continuation_prefix, block_chars, is_info_box_line, is_tool_summary_line,
+    truncate_line_to_width,
+};
 
 impl Session {
     /// Reflow message lines for a given width (test-only method)
@@ -350,6 +353,7 @@ impl Session {
             let t = &seg.text;
             t.contains('│') || t.contains('├') || t.contains('┤') || t.contains('┼')
         });
+        let code_continuation_prefix = agent_code_continuation_prefix(message);
 
         let mut wrapped = if content_width == 0 {
             vec![Line::default()]
@@ -360,6 +364,12 @@ impl Session {
                 Line::from(content_spans),
                 content_width,
             )]
+        } else if let Some(prefix) = code_continuation_prefix.as_deref() {
+            text_utils::wrap_line_with_hanging_prefix(
+                Line::from(content_spans),
+                content_width,
+                prefix,
+            )
         } else {
             self.wrap_line(Line::from(content_spans), content_width)
         };

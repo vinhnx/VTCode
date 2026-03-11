@@ -74,6 +74,7 @@ mod terminal_title;
 #[cfg(test)]
 mod tests;
 mod tool_renderer;
+mod transcript_links;
 mod trust;
 
 use self::file_palette::FilePalette;
@@ -91,6 +92,7 @@ use self::slash_palette::SlashPalette;
 use self::spinner::{ShimmerState, ThinkingSpinner};
 use self::styling::SessionStyles;
 use self::transcript::TranscriptReflowCache;
+use self::transcript_links::TranscriptFileLinkTarget;
 #[cfg(test)]
 use super::types::InlineHeaderHighlight;
 // TaskPlan integration intentionally omitted in this UI crate.
@@ -223,6 +225,9 @@ pub struct Session {
     pub(crate) transcript_view_top: usize,
     transcript_area: Option<Rect>,
     input_area: Option<Rect>,
+    transcript_file_link_targets: Vec<TranscriptFileLinkTarget>,
+    hovered_transcript_file_link: Option<usize>,
+    last_mouse_position: Option<(u16, u16)>,
 
     // --- Logging ---
     log_receiver: Option<UnboundedReceiver<LogEntry>>,

@@ -8,15 +8,19 @@ use crate::ui::tui::{
     OverlayHotkeyAction, OverlayHotkeyKey, OverlayRequest, OverlaySubmission, SlashCommandItem,
     WizardModalMode, WizardOverlayRequest, WizardStep,
 };
-use ratatui::crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers};
+use ratatui::crossterm::event::{
+    Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
+    MouseEventKind,
+};
 use ratatui::{
     Terminal,
     backend::TestBackend,
     style::{Color, Modifier},
     text::{Line, Span},
 };
+use std::fs;
 use std::path::PathBuf;
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 
@@ -25,6 +29,7 @@ const VIEW_WIDTH: u16 = 100;
 const LINE_COUNT: usize = 10;
 const LABEL_PREFIX: &str = "line";
 const EXTRA_SEGMENT: &str = "\nextra-line";
+static TRANSCRIPT_TEST_FILE_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 fn make_segment(text: &str) -> InlineSegment {
     InlineSegment {
@@ -135,6 +140,36 @@ fn text_content(text: &Text<'static>) -> String {
         .join("\n")
 }
 
+fn vtcode_tui_workspace_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+}
+
+fn transcript_file_fixture_relative_path() -> &'static str {
+    "src/core_tui/session.rs"
+}
+
+fn transcript_file_fixture_absolute_path() -> String {
+    vtcode_tui_workspace_root()
+        .join(transcript_file_fixture_relative_path())
+        .display()
+        .to_string()
+}
+
+fn quoted_transcript_temp_file_path() -> PathBuf {
+    let unique = TRANSCRIPT_TEST_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
+    std::env::temp_dir().join(format!("vtcode transcript quoted path {unique}.txt"))
+}
+
+#[cfg(target_os = "macos")]
+fn open_file_click_modifiers() -> KeyModifiers {
+    KeyModifiers::SUPER
+}
+
+#[cfg(not(target_os = "macos"))]
+fn open_file_click_modifiers() -> KeyModifiers {
+    KeyModifiers::CONTROL
+}
+
 #[test]
 fn move_left_word_from_end_moves_to_word_start() {
     let text = "hello world";
@@ -145,6 +180,165 @@ fn move_left_word_from_end_moves_to_word_start() {
 
     session.move_left_word();
     assert_eq!(session.input_manager.cursor(), 0);
+}
+
+#[test]
+fn transcript_relative_file_reference_is_underlined() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.set_workspace_root(Some(vtcode_tui_workspace_root()));
+
+    let line = Line::from(format!("See {}", transcript_file_fixture_relative_path()));
+    let decorated = session.decorate_visible_transcript_links(vec![line], Rect::new(0, 0, 120, 1));
+
+    assert_eq!(session.transcript_file_link_targets.len(), 1);
+    let linked_span = decorated[0]
+        .spans
+        .iter()
+        .find(|span| {
+            span.content
+                .contains(transcript_file_fixture_relative_path())
+        })
+        .expect("expected linked span");
+    assert!(
+        linked_span
+            .style
+            .add_modifier
+            .contains(Modifier::UNDERLINED)
+    );
+}
+
+#[test]
+fn hovered_transcript_file_reference_adds_hover_style() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.set_workspace_root(Some(vtcode_tui_workspace_root()));
+
+    let line = Line::from(format!("Open {}", transcript_file_fixture_relative_path()));
+    let area = Rect::new(0, 0, 120, 1);
+    let _ = session.decorate_visible_transcript_links(vec![line.clone()], area);
+    let target = session
+        .transcript_file_link_targets
+        .first()
+        .expect("expected transcript file target")
+        .clone();
+
+    assert!(session.update_transcript_file_link_hover(target.area.x, target.area.y));
+
+    let decorated = session.decorate_visible_transcript_links(vec![line], area);
+    let linked_span = decorated[0]
+        .spans
+        .iter()
+        .find(|span| {
+            span.content
+                .contains(transcript_file_fixture_relative_path())
+        })
+        .expect("expected hovered linked span");
+    assert!(
+        linked_span
+            .style
+            .add_modifier
+            .contains(Modifier::UNDERLINED)
+    );
+    assert!(linked_span.style.add_modifier.contains(Modifier::BOLD));
+}
+
+#[test]
+fn mixed_transcript_file_references_are_all_underlined() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.set_workspace_root(Some(vtcode_tui_workspace_root()));
+    let temp_file = quoted_transcript_temp_file_path();
+    fs::write(&temp_file, "mixed-transcript-link").expect("write mixed transcript temp file");
+
+    let line = Line::from(format!(
+        "Open {} and `{}`",
+        transcript_file_fixture_relative_path(),
+        temp_file.display()
+    ));
+    let temp_file_display = temp_file.display().to_string();
+    let decorated = session.decorate_visible_transcript_links(vec![line], Rect::new(0, 0, 200, 1));
+
+    assert_eq!(session.transcript_file_link_targets.len(), 2);
+    assert!(decorated[0].spans.iter().any(|span| {
+        span.content
+            .contains(transcript_file_fixture_relative_path())
+            && span.style.add_modifier.contains(Modifier::UNDERLINED)
+    }));
+    assert!(decorated[0].spans.iter().any(|span| {
+        span.content.contains(&temp_file_display)
+            && span.style.add_modifier.contains(Modifier::UNDERLINED)
+    }));
+
+    let _ = fs::remove_file(&temp_file);
+}
+
+#[test]
+fn modifier_click_emits_open_file_event_for_absolute_transcript_path() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let absolute_path = transcript_file_fixture_absolute_path();
+    session.push_line(
+        InlineMessageKind::Agent,
+        vec![make_segment(&format!("Open {}", absolute_path))],
+    );
+
+    let _ = visible_transcript(&mut session);
+    let target = session
+        .transcript_file_link_targets
+        .first()
+        .expect("expected transcript file target")
+        .clone();
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: target.area.x,
+            row: target.area.y,
+            modifiers: open_file_click_modifiers(),
+        }),
+        &tx,
+        None,
+    );
+
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(InlineEvent::OpenFileInEditor(path)) if path == absolute_path
+    ));
+}
+
+#[test]
+fn modifier_click_emits_open_file_event_for_quoted_path_with_spaces() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let temp_file = quoted_transcript_temp_file_path();
+    fs::write(&temp_file, "transcript-link").expect("write quoted transcript temp file");
+    let quoted_path = format!("`{}`", temp_file.display());
+    let _ = session.decorate_visible_transcript_links(
+        vec![Line::from(format!("Open {}", quoted_path))],
+        Rect::new(0, 0, 200, 1),
+    );
+    let target = session
+        .transcript_file_link_targets
+        .iter()
+        .find(|target| target.file_path == temp_file)
+        .expect("expected quoted transcript file target")
+        .clone();
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: target.area.x,
+            row: target.area.y,
+            modifiers: open_file_click_modifiers(),
+        }),
+        &tx,
+        None,
+    );
+
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(InlineEvent::OpenFileInEditor(path)) if path == temp_file.display().to_string()
+    ));
+
+    let _ = fs::remove_file(&temp_file);
 }
 
 #[test]
@@ -1507,6 +1701,18 @@ fn header_shows_search_tools_status_badge() {
 }
 
 #[test]
+fn header_meta_line_includes_editor_context_summary() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.header_context.editor_context =
+        Some("File: src/main.rs · Rust · Sel 120-148".to_string());
+
+    let line = session.header_meta_line();
+    let summary = line_text(&line);
+
+    assert!(summary.contains("File: src/main.rs · Rust · Sel 120-148"));
+}
+
+#[test]
 fn header_highlights_collapse_to_single_line() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.header_context.highlights = vec![
@@ -1919,6 +2125,107 @@ fn tool_diff_numbered_lines_keep_hanging_indent_when_wrapped() {
     assert!(
         second.starts_with("          "),
         "wrapped line should keep hanging indent after tool prefix, got: {second:?}"
+    );
+}
+
+#[test]
+fn agent_numbered_code_lines_keep_hanging_indent_when_wrapped() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.push_line(
+        InlineMessageKind::Agent,
+        vec![
+            InlineSegment {
+                text: " 12  ".to_string(),
+                style: Arc::new(InlineTextStyle {
+                    effects: anstyle::Effects::DIMMED,
+                    ..InlineTextStyle::default()
+                }),
+            },
+            make_segment(
+                "fn wrapped_diff_continuation_prefix(line_text: &str) -> Option<String> {",
+            ),
+        ],
+    );
+
+    let rendered = session.reflow_transcript_lines(36);
+    let content_lines: Vec<String> = rendered
+        .iter()
+        .map(line_text)
+        .filter(|text| !text.trim().is_empty())
+        .collect();
+    assert!(
+        content_lines.len() >= 2,
+        "expected wrapped code line, got: {content_lines:?}"
+    );
+
+    let first = &content_lines[0];
+    let second = &content_lines[1];
+    let agent_indent = " ".repeat(
+        format!(
+            "{}{}",
+            ui::INLINE_AGENT_QUOTE_PREFIX,
+            ui::INLINE_AGENT_MESSAGE_LEFT_PADDING
+        )
+        .chars()
+        .count(),
+    );
+    let expected_prefix = format!("{agent_indent}{}", " ".repeat(" 12  ".chars().count()));
+
+    assert!(
+        first.contains("12  fn wrapped_diff"),
+        "first line was: {first:?}"
+    );
+    assert!(
+        second.starts_with(&expected_prefix),
+        "wrapped code continuation should keep gutter indent, got: {second:?}"
+    );
+}
+
+#[test]
+fn agent_omitted_code_lines_keep_hanging_indent_when_wrapped() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.push_line(
+        InlineMessageKind::Agent,
+        vec![InlineSegment {
+            text: "21-421  … [+400 lines omitted; use read_file with offset/limit (1-indexed line numbers) for full content]".to_string(),
+            style: Arc::new(InlineTextStyle {
+                effects: anstyle::Effects::DIMMED,
+                ..InlineTextStyle::default()
+            }),
+        }],
+    );
+
+    let rendered = session.reflow_transcript_lines(52);
+    let content_lines: Vec<String> = rendered
+        .iter()
+        .map(line_text)
+        .filter(|text| !text.trim().is_empty())
+        .collect();
+    assert!(
+        content_lines.len() >= 2,
+        "expected wrapped omitted line, got: {content_lines:?}"
+    );
+
+    let first = &content_lines[0];
+    let second = &content_lines[1];
+    let agent_indent = " ".repeat(
+        format!(
+            "{}{}",
+            ui::INLINE_AGENT_QUOTE_PREFIX,
+            ui::INLINE_AGENT_MESSAGE_LEFT_PADDING
+        )
+        .chars()
+        .count(),
+    );
+    let expected_prefix = format!("{agent_indent}{}", " ".repeat("21-421  ".chars().count()));
+
+    assert!(
+        first.contains("21-421  … [+400 lines omitted"),
+        "first line was: {first:?}"
+    );
+    assert!(
+        second.starts_with(&expected_prefix),
+        "wrapped omitted-line continuation should keep gutter indent, got: {second:?}"
     );
 }
 

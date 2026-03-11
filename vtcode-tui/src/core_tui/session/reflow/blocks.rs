@@ -5,7 +5,7 @@ use vtcode_commons::diff_paths::{is_diff_addition_line, is_diff_deletion_line};
 use super::super::super::style::ratatui_pty_style_from_inline;
 use super::super::super::types::InlineMessageKind;
 use super::super::{Session, render, text_utils};
-use super::helpers::{is_tool_summary_line, split_tool_spans};
+use super::helpers::{has_summary_prefix, is_tool_summary_line, split_tool_spans};
 use crate::config::constants::ui;
 
 impl Session {
@@ -262,14 +262,11 @@ impl Session {
         let detail_border_style = border_style.add_modifier(Modifier::DIM);
 
         for line_spans in split_lines {
-            let mut line_text = String::new();
-            for span in &line_spans {
-                line_text.push_str(<std::borrow::Cow<'_, str> as AsRef<str>>::as_ref(
-                    &span.content,
-                ));
-            }
-            let trimmed = line_text.trim_start();
-            let is_summary = trimmed.starts_with("• ") || trimmed.starts_with("└ ");
+            let line_text: String = line_spans
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect();
+            let is_summary = has_summary_prefix(&line_text);
 
             if is_summary {
                 // For tool call summaries, preserve inline colors and add padded borders.

@@ -112,6 +112,7 @@ pub enum InlineEvent {
     ScrollPageUp,
     ScrollPageDown,
     FileSelected(String),
+    OpenFileInEditor(String),
     LaunchEditor,
     ForceCancelPtySession,
     /// Toggle editing mode (Shift+Tab cycles through Edit -> Plan -> Edit).

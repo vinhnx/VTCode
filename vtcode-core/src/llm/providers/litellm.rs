@@ -279,12 +279,11 @@ impl LLMProvider for LiteLLMProvider {
                         }
                     }
 
-                    if value.get("usage").is_some() {
-                        if let Some(usage) =
+                    if value.get("usage").is_some()
+                        && let Some(usage) =
                             crate::llm::providers::common::parse_usage_openai_format(&value, false)
-                        {
-                            aggregator.set_usage(usage);
-                        }
+                    {
+                        aggregator.set_usage(usage);
                     }
                     Ok(())
                 },

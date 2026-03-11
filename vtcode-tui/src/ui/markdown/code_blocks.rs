@@ -179,51 +179,67 @@ fn highlight_code_block(
     if let Some(config) = highlight_config.filter(|cfg| cfg.enabled)
         && let Some(highlighted) = try_highlight(code_to_display, language, config)
     {
-        let line_count = highlighted.len();
+        let source_lines: Vec<&str> = code_to_display.lines().collect();
+        let line_count = source_line_count(code_to_display);
         let number_width = line_number_width(line_count);
+        let gutter_style = line_number_style(theme_styles, base_style);
+        let mut line_number = 1usize;
         for (index, segments) in highlighted.into_iter().enumerate() {
-            let mut line = code_line_with_prefix(
-                prefix_segments,
-                theme_styles,
-                base_style,
-                use_line_numbers.then_some((index + 1, number_width)),
-            );
-            for (style, text) in segments {
-                line.push_segment(style, &text);
+            let src = source_lines.get(index).copied().unwrap_or("");
+            let is_omitted = parse_omitted_line_count(src).is_some();
+            let (gutter_text, omitted) = if use_line_numbers {
+                let (text, om) = format_gutter_text(line_number, number_width, src);
+                (Some(text), om)
+            } else {
+                (None, 1)
+            };
+            let mut line =
+                code_line_with_prefix(prefix_segments, gutter_text.as_deref(), gutter_style);
+            if is_omitted {
+                line.push_segment(gutter_style, src);
+            } else {
+                for (style, text) in segments {
+                    line.push_segment(style, &text);
+                }
             }
+            line_number = line_number.saturating_add(omitted);
             lines.push(line);
         }
         return lines;
     }
 
     let mut line_number = 1usize;
-    let mut line_count = LinesWithEndings::from(code_to_display).count();
-    if code_to_display.ends_with('\n') {
-        line_count = line_count.saturating_add(1);
-    }
+    let line_count = source_line_count(code_to_display);
     let number_width = line_number_width(line_count);
+    let gutter_style = line_number_style(theme_styles, base_style);
 
     for raw_line in LinesWithEndings::from(code_to_display) {
         let trimmed = raw_line.trim_end_matches('\n');
-        let mut line = code_line_with_prefix(
-            prefix_segments,
-            theme_styles,
-            base_style,
-            use_line_numbers.then_some((line_number, number_width)),
-        );
+        let is_omitted = parse_omitted_line_count(trimmed).is_some();
+        let (gutter_text, omitted) = if use_line_numbers {
+            let (text, om) = format_gutter_text(line_number, number_width, trimmed);
+            (Some(text), om)
+        } else {
+            (None, 1)
+        };
+        let mut line = code_line_with_prefix(prefix_segments, gutter_text.as_deref(), gutter_style);
         if !trimmed.is_empty() {
-            line.push_segment(code_block_style(theme_styles, base_style), trimmed);
+            if is_omitted {
+                line.push_segment(gutter_style, trimmed);
+            } else {
+                line.push_segment(code_block_style(theme_styles, base_style), trimmed);
+            }
         }
         lines.push(line);
-        line_number = line_number.saturating_add(1);
+        line_number = line_number.saturating_add(omitted);
     }
 
     if code_to_display.ends_with('\n') {
+        let (gutter_text, _) = format_gutter_text(line_number, number_width, "");
         let line = code_line_with_prefix(
             prefix_segments,
-            theme_styles,
-            base_style,
-            use_line_numbers.then_some((line_number, number_width)),
+            use_line_numbers.then_some(gutter_text.as_str()),
+            gutter_style,
         );
         lines.push(line);
     }
@@ -398,47 +414,63 @@ fn prefixed_line(prefix_segments: &[MarkdownSegment]) -> MarkdownLine {
     line
 }
 
-fn append_code_line_prefix(
-    line: &mut MarkdownLine,
-    prefix_segments: &[MarkdownSegment],
-    theme_styles: &ThemeStyles,
-    base_style: Style,
-    line_number: Option<(usize, usize)>,
-) {
-    append_prefix_segments(line, prefix_segments);
-    let Some((line_number, width)) = line_number else {
-        return;
-    };
-
-    let number_text = format!("{line_number:>width$}  ");
-    let number_style = if base_style == theme_styles.tool_output {
+fn line_number_style(theme_styles: &ThemeStyles, base_style: Style) -> Style {
+    if base_style == theme_styles.tool_output {
         theme_styles.tool_detail.dimmed()
     } else {
         base_style.dimmed()
-    };
-    line.push_segment(number_style, &number_text);
+    }
+}
+
+/// Format the gutter text for a line. Returns `(gutter_text, source_line_advance)`.
+fn format_gutter_text(line_num: usize, width: usize, line_text: &str) -> (String, usize) {
+    if let Some(omitted) = parse_omitted_line_count(line_text) {
+        let range_end = line_num.saturating_add(omitted.saturating_sub(1));
+        let range = format!("{line_num}-{range_end}");
+        (format!("{range:>width$}  "), omitted)
+    } else {
+        (format!("{line_num:>width$}  "), 1)
+    }
 }
 
 fn code_line_with_prefix(
     prefix_segments: &[MarkdownSegment],
-    theme_styles: &ThemeStyles,
-    base_style: Style,
-    line_number: Option<(usize, usize)>,
+    gutter_text: Option<&str>,
+    gutter_style: Style,
 ) -> MarkdownLine {
     let mut line = MarkdownLine::default();
-    append_code_line_prefix(
-        &mut line,
-        prefix_segments,
-        theme_styles,
-        base_style,
-        line_number,
-    );
+    append_prefix_segments(&mut line, prefix_segments);
+    if let Some(text) = gutter_text {
+        line.push_segment(gutter_style, text);
+    }
     line
 }
 
 fn line_number_width(line_count: usize) -> usize {
     let digits = line_count.max(1).to_string().len();
     digits.max(CODE_LINE_NUMBER_MIN_WIDTH)
+}
+
+fn source_line_count(code: &str) -> usize {
+    let mut count = 0usize;
+    for raw_line in LinesWithEndings::from(code) {
+        let trimmed = raw_line.trim_end_matches('\n');
+        count = count.saturating_add(parse_omitted_line_count(trimmed).unwrap_or(1));
+    }
+    if code.ends_with('\n') {
+        count = count.saturating_add(1);
+    }
+    count
+}
+
+/// Parse the number of omitted lines from a condensed line like
+/// `"… [+220 lines omitted; ...]"`.
+fn parse_omitted_line_count(text: &str) -> Option<usize> {
+    let trimmed = text.trim();
+    let after = trimmed.strip_prefix("… [+")?;
+    let end = after.find(' ')?;
+    let count_str = &after[..end];
+    count_str.parse::<usize>().ok()
 }
 
 fn code_block_contains_table(content: &str, language: Option<&str>) -> bool {

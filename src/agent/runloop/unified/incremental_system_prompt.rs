@@ -246,6 +246,10 @@ impl IncrementalSystemPrompt {
             );
         }
 
+        if let Some(editor_context_block) = context.editor_context_block.as_deref() {
+            let _ = writeln!(prompt, "\n{}", editor_context_block);
+        }
+
         let cache_friendly_mode = context.prompt_cache_shaping_mode.is_enabled();
         let mut deferred_runtime_context = String::new();
         if cache_friendly_mode {
@@ -472,6 +476,8 @@ pub(crate) struct SystemPromptContext {
     pub(crate) token_budget_guidance: &'static str,
     /// Runtime context shaping strategy used to improve prompt prefix cache locality.
     pub(crate) prompt_cache_shaping_mode: PromptCacheShapingMode,
+    /// Structured active editor context injected at request time.
+    pub(crate) editor_context_block: Option<String>,
 }
 
 impl SystemPromptContext {
@@ -491,6 +497,7 @@ impl SystemPromptContext {
         self.supports_context_awareness.hash(&mut hasher);
         self.token_budget_guidance.hash(&mut hasher);
         self.prompt_cache_shaping_mode.hash(&mut hasher);
+        self.editor_context_block.hash(&mut hasher);
         // We use skill names and versions for hashing
         for skill in &self.discovered_skills {
             skill.name().hash(&mut hasher);

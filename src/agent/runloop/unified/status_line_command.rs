@@ -204,14 +204,22 @@ impl StatusLineGit {
 mod tests {
     use super::StatusLineCommandPayload;
     use serde_json::Value;
-    use std::fs;
+    use serial_test::serial;
+    use std::{env, fs};
     use tempfile::TempDir;
+    use vtcode_core::ide_context::{IDE_CONTEXT_ENV_VAR, LEGACY_VSCODE_CONTEXT_ENV_VAR};
 
     #[test]
+    #[serial]
     fn payload_includes_dominant_workspace_language() {
         let workspace = TempDir::new().expect("workspace tempdir");
         fs::create_dir_all(workspace.path().join("src")).expect("create src");
         fs::write(workspace.path().join("src/lib.rs"), "fn alpha() {}\n").expect("write rust");
+
+        unsafe {
+            env::remove_var(IDE_CONTEXT_ENV_VAR);
+            env::remove_var(LEGACY_VSCODE_CONTEXT_ENV_VAR);
+        }
 
         let payload =
             StatusLineCommandPayload::new(workspace.path(), "model", "Model", "low", None);
@@ -224,6 +232,97 @@ mod tests {
         assert_eq!(
             value["workspace"]["active_language"],
             Value::String("Rust".to_string())
+        );
+
+        unsafe {
+            env::remove_var(IDE_CONTEXT_ENV_VAR);
+            env::remove_var(LEGACY_VSCODE_CONTEXT_ENV_VAR);
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn payload_prefers_active_editor_language_from_snapshot() {
+        let workspace = TempDir::new().expect("workspace tempdir");
+        fs::create_dir_all(workspace.path().join("src")).expect("create src");
+        fs::write(workspace.path().join("src/lib.rs"), "fn alpha() {}\n").expect("write rust");
+        let snapshot_path = workspace.path().join("snapshot.json");
+        fs::write(
+            &snapshot_path,
+            format!(
+                r#"{{
+                    "version": 1,
+                    "provider_family": "generic",
+                    "workspace_root": "{}",
+                    "active_file": {{
+                        "path": "{}/script.py",
+                        "language_id": "python",
+                        "dirty": false,
+                        "truncated": false
+                    }}
+                }}"#,
+                workspace.path().display(),
+                workspace.path().display()
+            ),
+        )
+        .expect("write snapshot");
+
+        unsafe {
+            env::set_var(IDE_CONTEXT_ENV_VAR, &snapshot_path);
+        }
+
+        let payload =
+            StatusLineCommandPayload::new(workspace.path(), "model", "Model", "low", None);
+        let value = serde_json::to_value(payload).expect("serialize payload");
+
+        assert_eq!(
+            value["workspace"]["active_language"],
+            Value::String("Python".to_string())
+        );
+
+        unsafe {
+            env::remove_var(IDE_CONTEXT_ENV_VAR);
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn payload_prefers_workspace_ide_context_snapshot_without_env() {
+        let workspace = TempDir::new().expect("workspace tempdir");
+        fs::create_dir_all(workspace.path().join("src")).expect("create src");
+        fs::create_dir_all(workspace.path().join(".vtcode")).expect("create .vtcode");
+        fs::write(workspace.path().join("src/lib.rs"), "fn alpha() {}\n").expect("write rust");
+        fs::write(
+            workspace.path().join(".vtcode/ide-context.json"),
+            format!(
+                r#"{{
+                    "version": 1,
+                    "provider_family": "vscode_compatible",
+                    "workspace_root": "{}",
+                    "active_file": {{
+                        "path": "{}/script.py",
+                        "language_id": "python",
+                        "dirty": false,
+                        "truncated": false
+                    }}
+                }}"#,
+                workspace.path().display(),
+                workspace.path().display()
+            ),
+        )
+        .expect("write snapshot");
+
+        unsafe {
+            env::remove_var(IDE_CONTEXT_ENV_VAR);
+        }
+
+        let payload =
+            StatusLineCommandPayload::new(workspace.path(), "model", "Model", "low", None);
+        let value = serde_json::to_value(payload).expect("serialize payload");
+
+        assert_eq!(
+            value["workspace"]["active_language"],
+            Value::String("Python".to_string())
         );
     }
 }

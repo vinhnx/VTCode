@@ -11,7 +11,6 @@ use vtcode_tui::InlineHandle;
 
 use super::status_line_command::run_status_line_command;
 use crate::agent::runloop::git::{GitStatusSummary, git_status_summary};
-use crate::agent::runloop::unified::session_setup::preferred_display_language_for_workspace;
 use vtcode_core::llm::providers::clean_reasoning_text;
 use vtcode_core::terminal_setup::detector::TerminalType;
 
@@ -25,13 +24,13 @@ pub(crate) struct InputStatusState {
     pub(crate) last_git_refresh: Option<Instant>,
     pub(crate) command_value: Option<String>,
     pub(crate) last_command_refresh: Option<Instant>,
-    pub(crate) dominant_language: Option<String>,
     // Context usage metrics
     pub(crate) context_utilization: Option<f64>,
     pub(crate) context_tokens: Option<usize>,
     pub(crate) context_limit_tokens: Option<usize>,
     pub(crate) context_remaining_tokens: Option<usize>,
     pub(crate) is_cancelling: bool,
+    pub(crate) ide_context_source: Option<String>,
     // Dynamic context discovery status
     pub(crate) spooled_files_count: Option<usize>,
 }
@@ -138,11 +137,6 @@ pub(crate) async fn update_input_status_if_changed(
         }
     }
 
-    let preferred_language = preferred_display_language_for_workspace(workspace);
-    if state.dominant_language != preferred_language {
-        state.dominant_language = preferred_language;
-    }
-
     let trimmed_model = model.trim();
     let cleaned_reasoning = clean_reasoning_text(reasoning.trim());
     let trimmed_reasoning = cleaned_reasoning.as_str();
@@ -160,7 +154,7 @@ pub(crate) async fn update_input_status_if_changed(
         }
         StatusLineMode::Auto => {
             let right = build_model_status_with_context_and_spooled(
-                state.dominant_language.as_deref(),
+                state.ide_context_source.as_deref(),
                 trimmed_model,
                 trimmed_reasoning,
                 state.context_utilization,
@@ -216,7 +210,7 @@ pub(crate) async fn update_input_status_if_changed(
                 } else {
                     state.command_value = None;
                     let right = build_model_status_with_context_and_spooled(
-                        state.dominant_language.as_deref(),
+                        state.ide_context_source.as_deref(),
                         trimmed_model,
                         trimmed_reasoning,
                         state.context_utilization,
@@ -229,7 +223,7 @@ pub(crate) async fn update_input_status_if_changed(
             } else {
                 state.command_value = None;
                 let right = build_model_status_with_context_and_spooled(
-                    state.dominant_language.as_deref(),
+                    state.ide_context_source.as_deref(),
                     trimmed_model,
                     trimmed_reasoning,
                     state.context_utilization,
@@ -258,7 +252,7 @@ pub(crate) async fn update_input_status_if_changed(
 /// Build model status with all context indicators including spooled files
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn build_model_status_with_context_and_spooled(
-    dominant_language: Option<&str>,
+    ide_context_source: Option<&str>,
     model: &str,
     reasoning: &str,
     context_utilization: Option<f64>,
@@ -272,11 +266,11 @@ pub(crate) fn build_model_status_with_context_and_spooled(
         parts.push("CANCELLING...".to_string());
     }
 
-    if let Some(language) = dominant_language
+    if let Some(source) = ide_context_source
         .map(str::trim)
         .filter(|value| !value.is_empty())
     {
-        parts.push(language.to_string());
+        parts.push(source.to_string());
     }
 
     parts.push(model.to_string());
@@ -304,6 +298,10 @@ pub(crate) fn update_spooled_files_count(state: &mut InputStatusState, count: us
     state.spooled_files_count = Some(count);
 }
 
+pub(crate) fn update_ide_context_source(state: &mut InputStatusState, source: Option<String>) {
+    state.ide_context_source = source;
+}
+
 #[cfg(test)]
 mod tests {
     use super::build_model_status_with_context_and_spooled;
@@ -311,7 +309,7 @@ mod tests {
     #[test]
     fn status_line_shows_context_left_percent() {
         let status = build_model_status_with_context_and_spooled(
-            Some("Rust"),
+            None,
             "gemini-3-flash-preview",
             "low",
             Some(17.0),
@@ -322,7 +320,7 @@ mod tests {
 
         assert_eq!(
             status.as_deref(),
-            Some("Rust | gemini-3-flash-preview | 17% context left | (low)")
+            Some("gemini-3-flash-preview | 17% context left | (low)")
         );
     }
 
@@ -349,5 +347,23 @@ mod tests {
 
         assert_eq!(high.as_deref(), Some("model | 100% context left"));
         assert_eq!(low.as_deref(), Some("model | 0% context left"));
+    }
+
+    #[test]
+    fn status_line_includes_compact_ide_context_source() {
+        let status = build_model_status_with_context_and_spooled(
+            Some("IDE:.vtcode/ide-context.json"),
+            "model",
+            "",
+            None,
+            None,
+            false,
+            None,
+        );
+
+        assert_eq!(
+            status.as_deref(),
+            Some("IDE:.vtcode/ide-context.json | model")
+        );
     }
 }

@@ -1,6 +1,7 @@
-//! URL-preserving text wrapping.
+//! URL and path-preserving text wrapping.
 //!
-//! Wraps text while keeping URLs as atomic units to preserve terminal link detection.
+//! Wraps text while keeping URLs and file paths as atomic units to preserve
+//! terminal link detection and transcript file hit-testing.
 
 use ratatui::prelude::*;
 use ratatui::widgets::Paragraph;
@@ -8,17 +9,17 @@ use regex::Regex;
 use std::sync::LazyLock;
 use unicode_width::UnicodeWidthStr;
 
-/// URL detection pattern - matches common URL formats.
-static URL_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+/// URL/file token detection pattern - matches common URL formats and path-like tokens.
+static PRESERVED_TOKEN_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r"[a-zA-Z][a-zA-Z0-9+.-]*://[^\s<>\[\]{}|^]+|[a-zA-Z0-9][-a-zA-Z0-9]*\.[a-zA-Z]{2,}(/[^\s<>\[\]{}|^]*)?|localhost:\d+|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?",
+        r#"[a-zA-Z][a-zA-Z0-9+.-]*://[^\s<>\[\]{}|^]+|[a-zA-Z0-9][-a-zA-Z0-9]*\.[a-zA-Z]{2,}(/[^\s<>\[\]{}|^]*)?|localhost:\d+|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?|`(?:file://|~/|/|\./|\.\./|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^`]+`|"(?:file://|~/|/|\./|\.\./|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^"]+"|'(?:file://|~/|/|\./|\.\./|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^']+'|(?:\./|\../|~/|/)[^\s<>\[\]{}|^]+|(?:[A-Za-z]:[\\/][^\s<>\[\]{}|^]+)|(?:[A-Za-z0-9._-]+[\\/][^\s<>\[\]{}|^]+)"#,
     )
     .unwrap()
 });
 
-/// Check if text contains a URL.
-pub fn contains_url(text: &str) -> bool {
-    URL_PATTERN.is_match(text)
+/// Check if text contains a preserved URL/path token.
+pub fn contains_preserved_token(text: &str) -> bool {
+    PRESERVED_TOKEN_PATTERN.is_match(text)
 }
 
 /// Wrap a line, preserving URLs as atomic units.
@@ -34,12 +35,12 @@ pub fn wrap_line_preserving_urls(line: Line<'static>, max_width: usize) -> Vec<L
     let text: String = line.spans.iter().map(|s| s.content.as_ref()).collect();
 
     // No URLs - use standard wrapping (delegates to text_utils)
-    if !contains_url(&text) {
+    if !contains_preserved_token(&text) {
         return super::text_utils::wrap_line(line, max_width);
     }
 
-    // Find all URLs in the text
-    let urls: Vec<_> = URL_PATTERN
+    // Find all preserved tokens in the text
+    let urls: Vec<_> = PRESERVED_TOKEN_PATTERN
         .find_iter(&text)
         .map(|m| (m.start(), m.end(), m.as_str()))
         .collect();
@@ -162,11 +163,22 @@ mod tests {
 
     #[test]
     fn test_url_detection() {
-        assert!(contains_url("https://example.com"));
-        assert!(contains_url("example.com/path"));
-        assert!(contains_url("localhost:8080"));
-        assert!(contains_url("192.168.1.1:8080"));
-        assert!(!contains_url("not a url"));
+        assert!(contains_preserved_token("https://example.com"));
+        assert!(contains_preserved_token("example.com/path"));
+        assert!(contains_preserved_token("localhost:8080"));
+        assert!(contains_preserved_token("192.168.1.1:8080"));
+        assert!(!contains_preserved_token("not a url"));
+    }
+
+    #[test]
+    fn test_file_path_detection() {
+        assert!(contains_preserved_token("src/main.rs"));
+        assert!(contains_preserved_token("./src/main.rs"));
+        assert!(contains_preserved_token("/tmp/example.txt"));
+        assert!(contains_preserved_token("\"./docs/My Notes.md\""));
+        assert!(contains_preserved_token(
+            "`/Users/example/Library/Application Support/Code/User/settings.json`"
+        ));
     }
 
     #[test]
@@ -192,6 +204,18 @@ mod tests {
             .collect();
         assert!(all_text.contains("https://example.com"));
         assert!(all_text.contains("See"));
+    }
+
+    #[test]
+    fn test_quoted_path_with_spaces_is_preserved() {
+        let line = Line::from(Span::raw("Open \"./docs/My Notes.md\" for details"));
+        let wrapped = wrap_line_preserving_urls(line, 18);
+        let all_text: String = wrapped
+            .iter()
+            .flat_map(|line| line.spans.iter().map(|span| span.content.as_ref()))
+            .collect();
+
+        assert!(all_text.contains("\"./docs/My Notes.md\""));
     }
 
     #[test]

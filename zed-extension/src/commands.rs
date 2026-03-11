@@ -3,6 +3,7 @@
 //! This module implements all VT Code commands that are exposed through
 //! Zed's command palette. Uses CommandBuilder for cleaner construction.
 use crate::command_builder::CommandBuilder;
+use crate::context::{EditorContext, IDE_CONTEXT_ENV_VAR};
 
 /// Response from a VT Code command operation
 #[derive(Debug, Clone)]
@@ -32,7 +33,16 @@ impl CommandResponse {
 
 /// Ask the VT Code agent an arbitrary question
 pub fn ask_agent(query: &str) -> CommandResponse {
-    match CommandBuilder::ask(query).execute() {
+    ask_agent_with_context(query, None)
+}
+
+pub fn ask_agent_with_context(query: &str, context: Option<&EditorContext>) -> CommandResponse {
+    let builder = match attach_ide_context(CommandBuilder::ask(query), context) {
+        Ok(builder) => builder,
+        Err(error) => return CommandResponse::err(error),
+    };
+
+    match builder.execute() {
         Ok(result) => {
             if result.is_success() {
                 CommandResponse::ok(result.output())
@@ -46,6 +56,14 @@ pub fn ask_agent(query: &str) -> CommandResponse {
 
 /// Ask about a code selection
 pub fn ask_about_selection(code: &str, language: Option<&str>) -> CommandResponse {
+    ask_about_selection_with_context(code, language, None)
+}
+
+pub fn ask_about_selection_with_context(
+    code: &str,
+    language: Option<&str>,
+    context: Option<&EditorContext>,
+) -> CommandResponse {
     // Construct a query that includes the code and optional language
     let query = format!(
         "Analyze this {} code:\n{}",
@@ -53,12 +71,21 @@ pub fn ask_about_selection(code: &str, language: Option<&str>) -> CommandRespons
         code
     );
 
-    ask_agent(&query)
+    ask_agent_with_context(&query, context)
 }
 
 /// Analyze the entire workspace
 pub fn analyze_workspace() -> CommandResponse {
-    match CommandBuilder::analyze().execute() {
+    analyze_workspace_with_context(None)
+}
+
+pub fn analyze_workspace_with_context(context: Option<&EditorContext>) -> CommandResponse {
+    let builder = match attach_ide_context(CommandBuilder::analyze(), context) {
+        Ok(builder) => builder,
+        Err(error) => return CommandResponse::err(error),
+    };
+
+    match builder.execute() {
         Ok(result) => {
             if result.is_success() {
                 CommandResponse::ok(result.output())
@@ -72,7 +99,16 @@ pub fn analyze_workspace() -> CommandResponse {
 
 /// Launch an interactive chat session
 pub fn launch_chat() -> CommandResponse {
-    match CommandBuilder::chat().execute() {
+    launch_chat_with_context(None)
+}
+
+pub fn launch_chat_with_context(context: Option<&EditorContext>) -> CommandResponse {
+    let builder = match attach_ide_context(CommandBuilder::chat(), context) {
+        Ok(builder) => builder,
+        Err(error) => return CommandResponse::err(error),
+    };
+
+    match builder.execute() {
         Ok(result) => {
             if result.is_success() {
                 CommandResponse::ok(result.output())
@@ -107,12 +143,25 @@ pub fn check_status() -> CommandResponse {
 /// * `pattern` - Fuzzy search pattern (e.g., "main", "component.rs")
 /// * `limit` - Maximum number of results to return
 pub fn find_files(pattern: &str, limit: Option<usize>) -> CommandResponse {
+    find_files_with_context(pattern, limit, None)
+}
+
+pub fn find_files_with_context(
+    pattern: &str,
+    limit: Option<usize>,
+    context: Option<&EditorContext>,
+) -> CommandResponse {
     let mut builder = CommandBuilder::find_files(pattern);
-    
+
     if let Some(l) = limit {
         builder = builder.with_option("limit", l.to_string());
     }
-    
+
+    let builder = match attach_ide_context(builder, context) {
+        Ok(builder) => builder,
+        Err(error) => return CommandResponse::err(error),
+    };
+
     match builder.execute() {
         Ok(result) => {
             if result.is_success() {
@@ -133,12 +182,24 @@ pub fn find_files(pattern: &str, limit: Option<usize>) -> CommandResponse {
 /// # Arguments
 /// * `exclude_patterns` - Optional comma-separated glob patterns to exclude
 pub fn list_files(exclude_patterns: Option<&str>) -> CommandResponse {
+    list_files_with_context(exclude_patterns, None)
+}
+
+pub fn list_files_with_context(
+    exclude_patterns: Option<&str>,
+    context: Option<&EditorContext>,
+) -> CommandResponse {
     let mut builder = CommandBuilder::list_files();
-    
+
     if let Some(patterns) = exclude_patterns {
         builder = builder.with_option("exclude", patterns);
     }
-    
+
+    let builder = match attach_ide_context(builder, context) {
+        Ok(builder) => builder,
+        Err(error) => return CommandResponse::err(error),
+    };
+
     match builder.execute() {
         Ok(result) => {
             if result.is_success() {
@@ -159,7 +220,23 @@ pub fn list_files(exclude_patterns: Option<&str>) -> CommandResponse {
 /// * `pattern` - Fuzzy search pattern
 /// * `exclude` - Comma-separated glob patterns to exclude
 pub fn search_files(pattern: &str, exclude: &str) -> CommandResponse {
-    match CommandBuilder::search_files(pattern, exclude).execute() {
+    search_files_with_context(pattern, exclude, None)
+}
+
+pub fn search_files_with_context(
+    pattern: &str,
+    exclude: &str,
+    context: Option<&EditorContext>,
+) -> CommandResponse {
+    let builder = match attach_ide_context(
+        CommandBuilder::search_files(pattern, exclude),
+        context,
+    ) {
+        Ok(builder) => builder,
+        Err(error) => return CommandResponse::err(error),
+    };
+
+    match builder.execute() {
         Ok(result) => {
             if result.is_success() {
                 CommandResponse::ok(result.output())
@@ -169,6 +246,21 @@ pub fn search_files(pattern: &str, exclude: &str) -> CommandResponse {
         }
         Err(e) => CommandResponse::err(format!("File search error: {}", e)),
     }
+}
+
+fn attach_ide_context(
+    builder: CommandBuilder,
+    context: Option<&EditorContext>,
+) -> Result<CommandBuilder, String> {
+    let Some(context) = context else {
+        return Ok(builder);
+    };
+    let path = context.write_ide_context_snapshot()?;
+
+    Ok(builder.with_env(
+        IDE_CONTEXT_ENV_VAR,
+        path.to_string_lossy().into_owned(),
+    ))
 }
 
 #[cfg(test)]

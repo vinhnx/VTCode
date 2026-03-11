@@ -38,6 +38,7 @@ workspace_trust = "full_auto"
 # Type: `string`
 default_method = "agent"
 
+
 # Zed Tool Bridge
 # Which file tools are exposed to the Zed client.
 [acp.zed.tools]
@@ -51,13 +52,14 @@ list_files = true
 # Type: `boolean`
 read_file = true
 
+
 # Agent Defaults
 # Primary model, prompt, and chat behavior.
 [agent]
 # Environment variable that stores the API key for the active provider
-# Default: "ANTHROPIC_API_KEY"
+# Default: "OPENAI_API_KEY"
 # Type: `string`
-api_key_env = "HF_TOKEN"
+api_key_env = "OLLAMA_API_KEY"
 
 # Enable autonomous mode - auto-approve safe tools with reduced HITL prompts When true, the agent
 # operates with fewer confirmation prompts for safe tools.
@@ -65,6 +67,13 @@ api_key_env = "HF_TOKEN"
 # Type: `boolean`
 autonomous_mode = true
 
+# Preferred storage backend for credentials (OAuth tokens, API keys, etc.) - `keyring`: Use
+# OS-specific secure storage (macOS Keychain, Windows Credential Manager, Linux Secret Service). This
+# is the default as it's the most secure. - `file`: Use AES-256-GCM encrypted file with
+# machine-derived key - `auto`: Try keyring first, fall back to file if unavailable
+# Possible values: etc.
+# Default: "keyring"
+# Type: `string`
 credential_storage_mode = "keyring"
 
 # Default editing mode on startup: "edit" (default) or "plan" Codex-inspired: Encourages structured
@@ -75,9 +84,9 @@ credential_storage_mode = "keyring"
 default_editing_mode = "edit"
 
 # Default model to use
-# Default: "claude-sonnet-4-5"
+# Default: "gpt-5.3-codex"
 # Type: `string`
-default_model = "XiaomiMiMo/MiMo-V2-Flash:novita"
+default_model = "gpt-oss:120b-cloud"
 
 # Enable an extra self-review pass to refine final responses
 # Default: false
@@ -86,9 +95,8 @@ enable_self_review = false
 
 # Enable split tool results for massive token savings (Phase 4) When enabled, tools return
 # dual-channel output: - llm_content: Concise summary sent to LLM (token-optimized, 53-95% reduction)
-# - ui_content: Rich output displayed to user (full details preserved) Applies to: grep_file,
-# list_files, read_file, run_pty_cmd, write_file, edit_file Default: true (opt-out for compatibility),
-# recommended for production use
+# - ui_content: Rich output displayed to user (full details preserved) Applies to: unified_search,
+# unified_file, unified_exec Default: true (opt-out for compatibility), recommended for production use
 # Default: true
 # Type: `boolean`
 enable_split_tool_results = true
@@ -138,14 +146,14 @@ project_doc_max_bytes = 16384
 
 # AI provider for single agent mode (gemini, openai, anthropic, openrouter, zai)
 # Possible values: anthropic, gemini, openai, openrouter, zai
-# Default: "anthropic"
+# Default: "openai"
 # Type: `string`
-provider = "huggingface"
+provider = "ollama"
 
-# Reasoning effort level for models that support it (none, low, medium, high) Applies to: Claude,
-# GPT-5, GPT-5.1, Gemini, Qwen3, DeepSeek with reasoning capability
-# Possible values: high, low, medium, none
-# Default: "medium"
+# Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh) Applies
+# to: Claude, GPT-5 family, Gemini, Qwen3, DeepSeek with reasoning capability
+# Possible values: high, low, medium, minimal, none, xhigh
+# Default: "none"
 # Type: `string`
 reasoning_effort = "low"
 
@@ -201,7 +209,7 @@ temporal_context_use_utc = false
 # UI theme identifier controlling ANSI styling
 # Default: "ciapre"
 # Type: `string`
-theme = "ciapre-blue"
+theme = "mono"
 
 # Enable TODO planning helper mode for structured task management
 # Default: true
@@ -212,7 +220,7 @@ todo_planning_mode = false
 # tokens), progressive (~1.2k), full (~3k current) Progressive: signatures upfront, detailed docs
 # on-demand (recommended) Minimal: signatures only, pi-coding-agent style (power users) Full: all
 # documentation upfront (current behavior, default)
-# Default: "full"
+# Default: "progressive"
 # Type: `string`
 tool_documentation_mode = "minimal"
 
@@ -222,8 +230,8 @@ tool_documentation_mode = "minimal"
 # Type: `string`
 ui_surface = "auto"
 
-# Verbosity level for output text (low, medium, high) Applies to: GPT-5.1 and other models that
-# support verbosity control
+# Verbosity level for output text (low, medium, high) Applies to: GPT-5.4-family Responses workflows
+# and other models that support verbosity control
 # Possible values: high, low, medium
 # Default: "medium"
 # Type: `string`
@@ -246,6 +254,7 @@ max_age_days = 30
 # Default: 50
 # Type: `integer`
 max_snapshots = 50
+
 
 # Circuit Breaker
 # Failure pause thresholds and recovery guardrails.
@@ -276,13 +285,17 @@ pause_on_open = true
 # Type: `integer`
 recovery_cooldown = 60
 
+
 # Harness Limits
 # Per-turn tool call and timing safety limits.
 [agent.harness]
+# Enable automatic context compaction when token pressure crosses threshold. Disabled by default. When
+# disabled, no automatic compaction is triggered.
+# Default: false
+# Type: `boolean`
 auto_compaction_enabled = false
 
-# Maximum number of tool calls allowed per turn
-# Set to 0 to disable the cap and rely on the other turn safeguards instead.
+# Maximum number of tool calls allowed per turn. Set to `0` to disable the cap.
 # Default: 0
 # Type: `integer`
 max_tool_calls_per_turn = 0
@@ -297,6 +310,7 @@ max_tool_retries = 2
 # Default: 600
 # Type: `integer`
 max_tool_wall_clock_secs = 600
+
 
 # Onboarding
 # Welcome message, tips, and first-run guidance.
@@ -358,6 +372,7 @@ usage_tips = [
     "Prefer asking for targeted file reads or diffs before editing.",
 ]
 
+
 # Open Responses
 # Compatibility events and response item mapping.
 [agent.open_responses]
@@ -393,6 +408,7 @@ include_reasoning = true
 # Type: `boolean`
 map_tool_calls = true
 
+
 # Small Model Helpers
 # Low-cost model settings for lightweight side tasks.
 [agent.small_model]
@@ -427,6 +443,7 @@ use_for_large_reads = true
 # Default: true
 # Type: `boolean`
 use_for_web_summary = true
+
 
 # Vibe Coding
 # Loose-input parsing and extra contextual assistance.
@@ -518,10 +535,10 @@ track_value_history = true
 # Type: `boolean`
 track_workspace_state = true
 
+
 # Authentication
 # Provider login and token handling.
 [auth]
-
 # OpenRouter OAuth
 # Browser login flow and token refresh behavior.
 [auth.openrouter]
@@ -548,15 +565,15 @@ flow_timeout_secs = 300
 # Type: `boolean`
 use_oauth = false
 
+
 # Automation
 # Autonomous run controls and safety defaults.
 [automation]
-
 # Full Auto
 # Guardrails for unattended execution.
 [automation.full_auto]
 # Allow-list of tools that may execute automatically.
-# Default: ["read_file", "list_files", "grep_file"]
+# Default: ["read_file", "unified_search"]
 # Type: `array`
 allowed_tools = [
     "read_file",
@@ -579,10 +596,10 @@ max_turns = 30
 # Type: `boolean`
 require_profile_ack = true
 
+
 # Chat Surface
 # Interactive chat features and assistant affordances.
 [chat]
-
 # Ask Questions Tool
 # Inline clarification prompts during chat sessions.
 [chat.askQuestions]
@@ -590,6 +607,7 @@ require_profile_ack = true
 # Default: true
 # Type: `boolean`
 enabled = true
+
 
 # Command Policies
 # Allow and deny rules for shell execution.
@@ -746,6 +764,11 @@ allow_regex = [
     '^(docker|docker-compose)\b',
 ]
 
+# Command prefixes that skip future shell approval prompts when matched
+# Default: []
+# Type: `array`
+approval_prefixes = []
+
 # Glob patterns denied for shell commands
 # Default: []
 # Type: `array`
@@ -851,7 +874,7 @@ extra_path_entries = [
     "$HOME/.asdf/shims",
     "$HOME/go/bin",
 ]
-approval_prefixes = []
+
 
 # Context Budget
 # How much history and workspace context is retained.
@@ -918,6 +941,7 @@ sync_terminals = true
 # Type: `integer`
 tool_output_threshold = 8192
 
+
 # Decision Ledger
 # Important decisions kept across the session.
 [context.ledger]
@@ -940,6 +964,7 @@ max_entries = 12
 # Default: true
 # Type: `boolean`
 preserve_in_compression = true
+
 
 # Debug Logging
 # Tracing and local diagnostics output.
@@ -969,6 +994,7 @@ trace_level = "error"
 # Default: []
 # Type: `array`
 trace_targets = []
+
 
 # Dotfile Protection
 # Extra safeguards for shell and editor dotfiles.
@@ -1052,10 +1078,10 @@ require_secondary_auth_for_whitelist = true
 # Type: `array`
 whitelist = []
 
+
 # Lifecycle Hooks
 # Automations triggered around session events.
 [hooks]
-
 # Lifecycle Events
 # Hook groups for session and tool milestones.
 [hooks.lifecycle]
@@ -1095,6 +1121,65 @@ task_completion = []
 # Default: []
 # Type: `array`
 user_prompt_submit = []
+
+
+# IDE Context
+# Cross-IDE active editor context injected into prompts and inline UI.
+[ide_context]
+# -
+# Default: true
+# Type: `boolean`
+enabled = true
+
+# -
+# Default: true
+# Type: `boolean`
+include_selection_text = true
+
+# -
+# Default: true
+# Type: `boolean`
+inject_into_prompt = true
+
+# -
+# Default: "auto"
+# Type: `string`
+provider_mode = "auto"
+
+# -
+# Default: true
+# Type: `boolean`
+show_in_tui = true
+
+# IDE Providers
+# Per-editor-family enablement for editor context ingestion.
+[ide_context.providers]
+# Generic Bridge
+# Enable file-bridge snapshots from JetBrains and other external adapters.
+[ide_context.providers.generic]
+# -
+# Default: true
+# Type: `boolean`
+enabled = true
+
+
+# VS Code Family
+# Enable context snapshots from VS Code, Cursor, Windsurf, and compatible editors.
+[ide_context.providers.vscode_compatible]
+# -
+# Default: true
+# Type: `boolean`
+enabled = true
+
+
+# Zed Family
+# Enable context snapshots from Zed integrations.
+[ide_context.providers.zed]
+# -
+# Default: true
+# Type: `boolean`
+enabled = true
+
 
 # MCP Servers
 # Model Context Protocol providers and defaults.
@@ -1156,12 +1241,28 @@ enforce = false
 # Fallback allowlist applied to every MCP provider.
 [mcp.allowlist.default]
 
-# Provider-specific allow list rules
-# Default: {}
-
 # Provider Overrides
 # Per-provider MCP allowlist exceptions.
 [mcp.allowlist.providers]
+
+# MCP Requirements
+# Startup checks and required capabilities for MCP providers.
+[mcp.requirements]
+# Allowed HTTP endpoints when enforcement is enabled
+# Default: []
+# Type: `array`
+allowed_http_endpoints = []
+
+# Allowed stdio command names when enforcement is enabled
+# Default: []
+# Type: `array`
+allowed_stdio_commands = []
+
+# Whether requirement checks are enforced
+# Default: false
+# Type: `boolean`
+enforce = false
+
 
 # MCP Security
 # Validation and runtime protection for MCP.
@@ -1184,6 +1285,7 @@ concurrent_requests = 10
 # Type: `integer`
 requests_per_minute = 100
 
+
 # MCP Validation
 # Schema and payload checks for MCP requests.
 [mcp.security.validation]
@@ -1201,6 +1303,7 @@ path_traversal_protection = true
 # Default: true
 # Type: `boolean`
 schema_validation_enabled = true
+
 
 # MCP Server Transport
 # How VT Code hosts its own MCP server.
@@ -1236,9 +1339,10 @@ port = 3000
 transport = "sse"
 
 # Server version
-# Default: "0.79.4"
+# Default: "0.88.0"
 # Type: `string`
 version = "0.72.2"
+
 
 # MCP UI
 # How MCP tools and events appear in the interface.
@@ -1257,9 +1361,6 @@ mode = "compact"
 # Default: true
 # Type: `boolean`
 show_provider_names = true
-
-# Custom renderer profiles for provider-specific output formatting
-# Default: {}
 
 # MCP Renderers
 # Presentation rules for specific MCP tool outputs.
@@ -1283,10 +1384,10 @@ loop_detection_threshold = 2
 # Type: `boolean`
 skip_loop_detection = false
 
+
 # Performance
 # Caching and runtime performance tuning.
 [optimization]
-
 # Agent Execution
 # Concurrency and execution scheduling for agent turns.
 [optimization.agent_execution]
@@ -1336,6 +1437,7 @@ state_history_size = 1000
 # Type: `boolean`
 use_optimized_loop = false
 
+
 # Async Pipeline
 # Background streaming and async pipeline tuning.
 [optimization.async_pipeline]
@@ -1364,6 +1466,7 @@ enable_caching = true
 # Type: `integer`
 max_batch_size = 5
 
+
 # Command Cache
 # Cache repeated shell command results.
 [optimization.command_cache]
@@ -1391,6 +1494,7 @@ max_entries = 128
 # Default: -
 # Type: `integer`
 ttl_ms = 2000
+
 
 # File Read Cache
 # Reuse hot file reads to reduce I/O churn.
@@ -1421,6 +1525,7 @@ min_size_bytes = 262144
 # Default: -
 # Type: `integer`
 ttl_secs = 300
+
 
 # LLM Client
 # HTTP client behavior for model requests.
@@ -1465,6 +1570,7 @@ rate_limit_rps = 10.0
 # Type: `integer`
 response_cache_size = 50
 
+
 # Memory Pool
 # Allocator and buffer reuse settings.
 [optimization.memory_pool]
@@ -1487,6 +1593,7 @@ max_value_pool_size = 32
 # Default: -
 # Type: `integer`
 max_vec_pool_size = 16
+
 
 # Profiling
 # Performance instrumentation and trace sampling.
@@ -1526,6 +1633,7 @@ max_regression_percent = 10.0
 # Type: `integer`
 monitor_interval_ms = 100
 
+
 # Tool Registry
 # Startup and lookup behavior for tool metadata.
 [optimization.tool_registry]
@@ -1549,6 +1657,7 @@ max_concurrent_tools = 4
 # Type: `boolean`
 use_optimized_registry = false
 
+
 # Output Style
 # Formatting and readability preferences.
 [output_style]
@@ -1556,6 +1665,7 @@ use_optimized_registry = false
 # Default: "default"
 # Type: `string`
 active_style = "default"
+
 
 # Permissions
 # Default approval and trust behavior.
@@ -1605,6 +1715,7 @@ log_permission_prompts = true
 # Type: `boolean`
 resolve_commands = true
 
+
 # Prompt Cache
 # Reuse prompts to cut duplicate provider work.
 [prompt_cache]
@@ -1612,6 +1723,12 @@ resolve_commands = true
 # Default: "~/.vtcode/cache/prompts"
 # Type: `string`
 cache_dir = "~/.vtcode/cache/prompts"
+
+# Enable prompt-shaping optimizations that improve provider-side cache locality. When enabled, VT Code
+# keeps volatile runtime context at the end of prompt text.
+# Default: false
+# Type: `boolean`
+cache_friendly_prompt_shaping = false
 
 # Automatically evict stale entries on startup/shutdown
 # Default: true
@@ -1637,12 +1754,10 @@ max_entries = 1000
 # Default: 0.7
 # Type: `number`
 min_quality_threshold = 0.7
-cache_friendly_prompt_shaping = false
 
 # Prompt Cache Providers
 # Provider-specific prompt cache behavior.
 [prompt_cache.providers]
-
 # Anthropic Prompt Cache
 # Provider-specific prompt cache overrides.
 [prompt_cache.providers.anthropic]
@@ -1698,6 +1813,7 @@ min_message_length_for_cache = 256
 # Type: `integer`
 tools_ttl_seconds = 3600
 
+
 # DeepSeek Prompt Cache
 # Provider-specific prompt cache overrides.
 [prompt_cache.providers.deepseek]
@@ -1710,6 +1826,7 @@ enabled = true
 # Default: true
 # Type: `boolean`
 surface_metrics = true
+
 
 # Gemini Prompt Cache
 # Provider-specific prompt cache overrides.
@@ -1734,6 +1851,7 @@ min_prefix_tokens = 1024
 # Type: `string`
 mode = "implicit"
 
+
 # Moonshot Prompt Cache
 # Provider-specific prompt cache overrides.
 [prompt_cache.providers.moonshot]
@@ -1741,6 +1859,7 @@ mode = "implicit"
 # Default: true
 # Type: `boolean`
 enabled = true
+
 
 # OpenAI Prompt Cache
 # Provider-specific prompt cache overrides.
@@ -1760,12 +1879,17 @@ idle_expiration_seconds = 3600
 # Type: `integer`
 min_prefix_tokens = 1024
 
+# Strategy for generating OpenAI `prompt_cache_key`. Session mode derives one stable key per VT Code
+# conversation.
+# Default: "session"
+# Type: `string`
 prompt_cache_key_mode = "session"
 
 # -
 # Default: true
 # Type: `boolean`
 surface_metrics = true
+
 
 # OpenRouter Prompt Cache
 # Provider-specific prompt cache overrides.
@@ -1785,6 +1909,7 @@ propagate_provider_capabilities = true
 # Type: `boolean`
 report_savings = true
 
+
 # Z.AI Prompt Cache
 # Provider-specific prompt cache overrides.
 [prompt_cache.providers.zai]
@@ -1793,10 +1918,10 @@ report_savings = true
 # Type: `boolean`
 enabled = false
 
+
 # Provider Endpoints
 # Network and provider-specific API settings.
 [provider]
-
 # Anthropic
 # Anthropic-specific request settings.
 [provider.anthropic]
@@ -1877,18 +2002,23 @@ enabled = false
 # Type: `integer`
 max_results = 5
 
-# MCP Requirements
-# Startup checks and required capabilities for MCP providers.
-[mcp.requirements]
-enforce = false
-allowed_stdio_commands = []
-allowed_http_endpoints = []
 
 # OpenAI
 # OpenAI-specific request settings.
 [provider.openai]
-websocket_mode = false
+# Optional native OpenAI `service_tier` request parameter. Leave unset to inherit the Project-level
+# default service tier. Options: "priority"
+# Possible values: priority
+# Default: -
+# Type: `OpenAIServiceTier | null`
 service_tier = "priority"
+
+# Enable Responses API WebSocket transport for non-streaming requests. This is an opt-in path designed
+# for long-running, tool-heavy workflows.
+# Default: false
+# Type: `boolean`
+websocket_mode = false
+
 
 # Terminal Sessions
 # PTY limits, buffering, and shell defaults.
@@ -1935,12 +2065,16 @@ max_sessions = 10
 # Type: `integer`
 scrollback_lines = 400
 
+# Feature-gated shell runtime path that routes shell execution through zsh EXEC_WRAPPER hooks.
+# Default: false
+# Type: `boolean`
 shell_zsh_fork = false
 
 # Number of recent PTY output lines to display in the chat transcript
 # Default: 20
 # Type: `integer`
 stdout_tail_lines = 20
+
 
 # Sandboxing
 # Process isolation and filesystem boundaries.
@@ -1951,7 +2085,7 @@ stdout_tail_lines = 20
 default_mode = "read_only"
 
 # Enable sandboxing for command execution
-# Default: true
+# Default: false
 # Type: `boolean`
 enabled = false
 
@@ -1986,6 +2120,7 @@ memory_limit = ""
 # Type: `string`
 network_mode = "none"
 
+
 # MicroVM Sandbox
 # MicroVM-backed isolation settings.
 [sandbox.external.microvm]
@@ -2015,6 +2150,7 @@ vcpus = 1
 # Type: `string`
 vmm = ""
 
+
 # Sandbox Network
 # Outbound network restrictions inside the sandbox.
 [sandbox.network]
@@ -2033,6 +2169,7 @@ allowlist = []
 # Default: false
 # Type: `boolean`
 block_all = false
+
 
 # Resource Limits
 # CPU, memory, and disk ceilings for sandbox runs.
@@ -2067,6 +2204,7 @@ preset = "moderate"
 # Type: `integer`
 timeout_secs = 0
 
+
 # Seccomp Filters
 # Linux syscall restrictions for sandboxed processes.
 [sandbox.seccomp]
@@ -2090,6 +2228,7 @@ log_only = false
 # Type: `string`
 profile = "strict"
 
+
 # Sensitive Paths
 # Protected host paths denied to sandboxed runs.
 [sandbox.sensitive_paths]
@@ -2108,6 +2247,7 @@ exceptions = []
 # Default: true
 # Type: `boolean`
 use_defaults = true
+
 
 # Security Gate
 # Approvals and blocking rules for risky actions.
@@ -2171,6 +2311,7 @@ auto_clear_quarantine = false
 # Type: `boolean`
 warn_on_quarantine = true
 
+
 # Skills
 # Skill discovery, rendering, and loading behavior.
 [skills]
@@ -2206,6 +2347,7 @@ prompt-format = "xml"
 # Type: `string`
 render-mode = "lean"
 
+
 # Syntax Highlighting
 # Language-aware rendering in the transcript.
 [syntax_highlighting]
@@ -2220,7 +2362,7 @@ cache_themes = true
 enabled = true
 
 # Languages to enable syntax highlighting for
-# Default: ["rust", "python", "javascript", "typescript", "go", "java", "cpp", "c", "php", "html", "css", "sql", "csharp", "bash...
+# Default: []
 # Type: `array`
 enabled_languages = [
     "rust",
@@ -2255,6 +2397,7 @@ max_file_size_mb = 10
 # Type: `string`
 theme = "base16-ocean.dark"
 
+
 # Telemetry
 # Local analytics, metrics, and reporting.
 [telemetry]
@@ -2288,6 +2431,7 @@ sample_interval_ms = 1000
 # Default: true
 # Type: `boolean`
 trajectory_enabled = true
+
 
 # Timeouts
 # Global operation time limits.
@@ -2334,6 +2478,7 @@ streaming_ceiling_seconds = 600
 # Type: `integer`
 warning_threshold_percent = 80
 
+
 # Tool Defaults
 # Loop limits and default tool behavior.
 [tools]
@@ -2342,18 +2487,27 @@ warning_threshold_percent = 80
 # Type: `string`
 default_policy = "allow"
 
+# Maximum consecutive blocked tool calls allowed per turn before forcing a turn break. This prevents
+# long blocked-call churn from consuming CPU.
+# Default: 3
+# Type: `integer`
 max_consecutive_blocked_tool_calls_per_turn = 8
 
 # Maximum number of times the same tool invocation can be retried with the identical arguments within
 # a single turn.
-# Default: 3
+# Default: 2
 # Type: `integer`
 max_repeated_tool_calls = 2
 
+# Maximum sequential spool-chunk `read_file` calls allowed per turn before nudging the agent to switch
+# to targeted extraction/summarization.
+# Default: 6
+# Type: `integer`
 max_sequential_spool_chunk_reads = 6
 
-# Maximum inner tool-call loops per user turn.
-# Set to 0 to disable the limit and let other turn safeguards govern termination.
+# Maximum inner tool-call loops per user turn. Set to `0` to disable the limit. Prevents infinite
+# tool-calling cycles in interactive chat. This limits how many back-and-forths the agent will perform
+# executing tools and re-asking the model before returning a final answer.
 # Default: 0
 # Type: `integer`
 max_tool_loops = 0
@@ -2361,16 +2515,21 @@ max_tool_loops = 0
 # External Editor
 # Editor launch command and editor fallback.
 [tools.editor]
+# Enable external editor support for `/edit` and keyboard shortcuts
+# Default: true
+# Type: `boolean`
 enabled = true
 
+# Preferred editor command override (supports arguments, e.g. "code --wait")
+# Default: ""
+# Type: `string`
 preferred_editor = ""
 
+# Suspend the TUI event loop while editor is running
+# Default: true
+# Type: `boolean`
 suspend_tui = true
 
-
-# Tool-specific loop thresholds (Adaptive Loop Detection) Allows setting higher loop limits for
-# read-only tools (e.g., ls, grep) and lower limits for mutating tools.
-# Default: {}
 
 # Loop Thresholds
 # Warn or stop when repeated tool loops are detected.
@@ -2409,9 +2568,6 @@ enabled = true
 # Type: `array`
 manifests = []
 
-
-# Specific tool policies
-# Default: {}
 
 # Tool Policies
 # Per-tool allow, prompt, or deny rules.
@@ -2516,6 +2672,7 @@ web_fetch = "allow"
 
 write_file = "allow"
 
+
 # Web Fetch
 # Remote fetch limits and safety checks.
 [tools.web_fetch]
@@ -2574,6 +2731,7 @@ mode = "restricted"
 # Default: true
 # Type: `boolean`
 strict_https_only = true
+
 
 # Interface
 # Appearance, layout, and transcript behavior.
@@ -2641,13 +2799,13 @@ reasoning_display_mode = "toggle"
 # Type: `boolean`
 reasoning_visible_default = true
 
-# Keep animated progress indicators while `ui.reduce_motion_mode` is enabled.
+# Keep animated progress indicators while reduce_motion_mode is enabled.
 # Default: false
 # Type: `boolean`
 reduce_motion_keep_progress_animation = false
 
 # Reduce motion mode: minimizes shimmer/flashing animations. Can also be enabled via
-# `VTCODE_REDUCE_MOTION=1`.
+# VTCODE_REDUCE_MOTION=1 environment variable.
 # Default: false
 # Type: `boolean`
 reduce_motion_mode = false
@@ -2661,7 +2819,8 @@ reduce_motion_mode = false
 safe_colors_only = false
 
 # Screen reader mode: disables animations, uses plain text indicators, and optimizes output for
-# assistive technology compatibility. Can also be enabled via `VTCODE_SCREEN_READER=1`.
+# assistive technology compatibility. Can also be enabled via VTCODE_SCREEN_READER=1 environment
+# variable.
 # Default: false
 # Type: `boolean`
 screen_reader_mode = false
@@ -2679,6 +2838,9 @@ show_diagnostics_in_transcript = true
 # Type: `boolean`
 show_sidebar = false
 
+# Show per-turn elapsed timer line after completed turns
+# Default: false
+# Type: `boolean`
 show_turn_timer = false
 
 # Maximum number of lines to display in tool output (prevents transcript flooding)
@@ -2730,38 +2892,88 @@ report_alternate_keys = true
 # Type: `boolean`
 report_event_types = true
 
+
 # Notifications
 # Desktop and in-app notification delivery.
 [ui.notifications]
-completion = true
-
-delivery_mode = "hybrid"
-
-enabled = true
-
+# Notify when a shell/command execution fails. If omitted, falls back to `tool_failure` for backward
+# compatibility.
+# Default: null
+# Type: `boolean | null`
 command_failure = false
 
-error = false
+# Legacy master toggle for completion notifications. New installs should prefer `completion_success`
+# and `completion_failure`.
+# Default: true
+# Type: `boolean`
+completion = true
 
-completion_success = false
-
+# Notify when a turn/session is partial, failed, or cancelled. If omitted, falls back to `completion`.
+# Default: null
+# Type: `boolean | null`
 completion_failure = true
 
+# Notify when a turn/session completes successfully. If omitted, falls back to `completion`.
+# Default: null
+# Type: `boolean | null`
+completion_success = false
+
+# Notification transport strategy.
+# Default: "hybrid"
+# Type: `string`
+delivery_mode = "hybrid"
+
+# Master toggle for all runtime notifications.
+# Default: true
+# Type: `boolean`
+enabled = true
+
+# Notify on runtime/system errors.
+# Default: true
+# Type: `boolean`
+error = false
+
+# Notify when human input/approval is required.
+# Default: true
+# Type: `boolean`
 hitl = true
 
+# Maximum identical notifications allowed within the suppression window.
+# Default: 1
+# Type: `integer`
+max_identical_in_window = 1
+
+# Notify when policy approval is required. If omitted, falls back to `hitl` for backward
+# compatibility.
+# Default: null
+# Type: `boolean | null`
 policy_approval = true
 
-request = false
-
-suppress_when_focused = true
-
-tool_failure = false
-
-tool_success = false
-
+# Suppression window for repeated identical notifications.
+# Default: 30
+# Type: `integer`
 repeat_window_seconds = 30
 
-max_identical_in_window = 1
+# Notify on generic request events. If omitted, falls back to `hitl` for backward compatibility.
+# Default: null
+# Type: `boolean | null`
+request = false
+
+# Suppress notifications while terminal focus is active.
+# Default: true
+# Type: `boolean`
+suppress_when_focused = true
+
+# Notify when a tool call fails.
+# Default: false
+# Type: `boolean`
+tool_failure = false
+
+# Notify on successful tool calls.
+# Default: false
+# Type: `boolean`
+tool_success = false
+
 
 # Status Line
 # Bottom status bar content and refresh behavior.
@@ -2780,3 +2992,4 @@ mode = "Auto"
 # Default: 1000
 # Type: `integer`
 refresh_interval_ms = 1000
+

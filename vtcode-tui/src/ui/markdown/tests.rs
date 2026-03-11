@@ -279,6 +279,36 @@ fn test_markdown_code_block_with_language_renders_line_numbers() {
 }
 
 #[test]
+fn test_markdown_code_block_omitted_line_gutter_uses_source_line_numbers() {
+    let markdown = "```rust\n\
+line 1\n\
+line 2\n\
+… [+70 lines omitted; use read_file with offset/limit (1-indexed line numbers) for full content]\n\
+tail line\n\
+```\n";
+    let lines = render_markdown(markdown);
+    let text_lines = lines_to_text(&lines);
+
+    let omitted_line = text_lines
+        .iter()
+        .find(|line| line.contains("lines omitted"))
+        .expect("omitted line exists");
+    assert!(
+        omitted_line.contains("3-72  "),
+        "omitted line should render source range, got: {omitted_line}"
+    );
+
+    let tail_line = text_lines
+        .iter()
+        .find(|line| line.contains("tail line"))
+        .expect("tail line exists");
+    assert!(
+        tail_line.contains("73  "),
+        "tail line should continue from omitted range, got: {tail_line}"
+    );
+}
+
+#[test]
 fn test_markdown_code_block_without_language_skips_line_numbers() {
     let markdown = "```\nfn main() {}\n```\n";
     let lines = render_markdown(markdown);

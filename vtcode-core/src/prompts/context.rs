@@ -1,4 +1,5 @@
 use crate::config::types::CapabilityLevel;
+use crate::ide_context::EditorContextSnapshot;
 use crate::skills::manager::SkillsManager;
 use crate::skills::model::SkillMetadata;
 use crate::tools::search_runtime::snapshot_for_workspace;
@@ -26,6 +27,8 @@ pub struct PromptContext {
     pub capability_level: Option<CapabilityLevel>,
     /// Current working directory (different from workspace root)
     pub current_directory: Option<PathBuf>,
+    /// Active IDE/editor context snapshot when available.
+    pub editor_context: Option<EditorContextSnapshot>,
     /// Skip standard instruction blocks (project docs, user instructions)
     /// Used when these will be provided elsewhere (e.g. unified block in runloop)
     pub skip_standard_instructions: bool,
@@ -120,6 +123,10 @@ impl PromptContext {
         self.current_directory = Some(dir);
     }
 
+    pub fn set_editor_context(&mut self, snapshot: Option<EditorContextSnapshot>) {
+        self.editor_context = snapshot;
+    }
+
     pub fn load_available_skills(&mut self) {
         let home_dir = default_vtcode_home_dir();
         self.load_available_skills_with_home_dir(home_dir.as_deref());
@@ -151,6 +158,10 @@ impl PromptContext {
 
         if let Ok(cwd) = std::env::current_dir() {
             context.set_current_directory(cwd);
+        }
+
+        if let Ok(snapshot) = EditorContextSnapshot::read_from_env() {
+            context.set_editor_context(snapshot);
         }
 
         for language in snapshot_for_workspace(workspace.as_ref()).workspace_languages {

@@ -1,3 +1,4 @@
+use anstyle::Effects;
 use ratatui::prelude::*;
 use unicode_width::UnicodeWidthStr;
 
@@ -37,14 +38,98 @@ pub(super) fn block_chars(border_type: ratatui::widgets::BorderType) -> BlockCha
     }
 }
 
+/// Check if trimmed, ANSI-stripped text starts with a tool summary prefix.
+///
+/// Shared by both `is_tool_summary_line` and `reflow_tool_lines` to avoid
+/// duplicating the prefix list (DRY).
+pub(super) fn has_summary_prefix(text: &str) -> bool {
+    let stripped = super::super::text_utils::strip_ansi_codes(text);
+    let trimmed = stripped.trim_start();
+    trimmed.starts_with("• ") || trimmed.starts_with("└ ") || trimmed.starts_with("│ ")
+}
+
 pub(super) fn is_tool_summary_line(message: &MessageLine) -> bool {
     let text: String = message
         .segments
         .iter()
         .map(|segment| segment.text.as_str())
         .collect();
-    let trimmed = text.trim_start();
-    trimmed.starts_with("• ") || trimmed.starts_with("└ ") || trimmed.starts_with("│ ")
+    has_summary_prefix(&text)
+}
+
+pub(super) fn agent_code_continuation_prefix(message: &MessageLine) -> Option<String> {
+    let first_segment = message
+        .segments
+        .iter()
+        .find(|segment| !segment.text.is_empty())?;
+    if !first_segment.style.effects.contains(Effects::DIMMED) {
+        return None;
+    }
+
+    numbered_code_gutter_prefix(&first_segment.text)
+}
+
+fn numbered_code_gutter_prefix(text: &str) -> Option<String> {
+    let mut chars = text.char_indices().peekable();
+    let mut prefix_end = 0usize;
+
+    while let Some((idx, ch)) = chars.peek().copied() {
+        if ch == ' ' {
+            prefix_end = idx + ch.len_utf8();
+            chars.next();
+        } else {
+            break;
+        }
+    }
+
+    let mut saw_digits = false;
+    while let Some((idx, ch)) = chars.peek().copied() {
+        if ch.is_ascii_digit() {
+            saw_digits = true;
+            prefix_end = idx + ch.len_utf8();
+            chars.next();
+        } else {
+            break;
+        }
+    }
+    if !saw_digits {
+        return None;
+    }
+
+    if let Some((idx, '-')) = chars.peek().copied() {
+        prefix_end = idx + 1;
+        chars.next();
+
+        let mut saw_range_digits = false;
+        while let Some((idx, ch)) = chars.peek().copied() {
+            if ch.is_ascii_digit() {
+                saw_range_digits = true;
+                prefix_end = idx + ch.len_utf8();
+                chars.next();
+            } else {
+                break;
+            }
+        }
+        if !saw_range_digits {
+            return None;
+        }
+    }
+
+    let mut trailing_spaces = 0usize;
+    while let Some((idx, ch)) = chars.peek().copied() {
+        if ch == ' ' {
+            trailing_spaces += 1;
+            prefix_end = idx + ch.len_utf8();
+            chars.next();
+        } else {
+            break;
+        }
+    }
+    if trailing_spaces < 2 {
+        return None;
+    }
+
+    Some(" ".repeat(UnicodeWidthStr::width(&text[..prefix_end])))
 }
 
 pub(super) fn split_tool_spans(spans: Vec<Span<'static>>) -> Vec<Vec<Span<'static>>> {

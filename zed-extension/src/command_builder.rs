@@ -3,13 +3,17 @@
 //! This module provides a builder pattern for constructing complex VT Code
 //! commands with a clean, chainable API for better code readability.
 
-use crate::executor::{execute_command, execute_command_with_timeout, CommandResult};
+use crate::executor::{
+    CommandResult, execute_command, execute_command_with_env, execute_command_with_timeout_and_env,
+};
+use std::collections::HashMap;
 use std::time::Duration;
 
 /// Fluent builder for VT Code commands
 pub struct CommandBuilder {
     command: String,
     args: Vec<String>,
+    env: HashMap<String, String>,
     timeout: Option<Duration>,
 }
 
@@ -19,6 +23,7 @@ impl CommandBuilder {
         Self {
             command: command.into(),
             args: Vec::new(),
+            env: HashMap::new(),
             timeout: None,
         }
     }
@@ -65,6 +70,12 @@ impl CommandBuilder {
         self
     }
 
+    /// Add an environment variable for command execution
+    pub fn with_env(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.env.insert(key.into(), value.into());
+        self
+    }
+
     /// Execute the command
     pub fn execute(self) -> Result<CommandResult, String> {
         // Convert `Vec<String>` into `Vec<&str>` with a single preallocated buffer.
@@ -74,9 +85,16 @@ impl CommandBuilder {
         }
 
         if let Some(timeout) = self.timeout {
-            execute_command_with_timeout(&self.command, &arg_refs, timeout)
-        } else {
+            execute_command_with_timeout_and_env(
+                &self.command,
+                &arg_refs,
+                timeout,
+                (!self.env.is_empty()).then_some(&self.env),
+            )
+        } else if self.env.is_empty() {
             execute_command(&self.command, &arg_refs)
+        } else {
+            execute_command_with_env(&self.command, &arg_refs, &self.env)
         }
     }
 

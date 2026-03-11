@@ -2,7 +2,58 @@
 ///
 /// Provides rich context from the Zed editor for VT Code commands.
 /// Captures selection, file info, workspace structure, and environment.
+use serde::Serialize;
+use std::fs;
 use std::path::PathBuf;
+
+pub const IDE_CONTEXT_ENV_VAR: &str = "VT_IDE_CONTEXT_FILE";
+const IDE_CONTEXT_SNAPSHOT_VERSION: u32 = 1;
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct IdeContextSnapshot {
+    pub version: u32,
+    pub provider_family: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace_root: Option<PathBuf>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_file: Option<IdeContextFileSnapshot>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub visible_editors: Vec<IdeContextFileSnapshot>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct IdeContextFileSnapshot {
+    pub path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub language_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub line_range: Option<IdeContextLineRange>,
+    pub dirty: bool,
+    pub truncated: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selection: Option<IdeContextSelectionSnapshot>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+pub struct IdeContextLineRange {
+    pub start: usize,
+    pub end: usize,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct IdeContextSelectionSnapshot {
+    pub range: IdeContextSelectionRange,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+pub struct IdeContextSelectionRange {
+    pub start_line: usize,
+    pub start_column: usize,
+    pub end_line: usize,
+    pub end_column: usize,
+}
 
 /// Rich context from the editor for a VT Code command
 #[derive(Debug, Clone)]
@@ -78,12 +129,92 @@ impl EditorContext {
             file, lang, selection_size
         )
     }
+
+    pub fn to_ide_context_snapshot(&self) -> IdeContextSnapshot {
+        let active_file = self.active_file.as_ref().map(|path| IdeContextFileSnapshot {
+            path: path.display().to_string(),
+            language_id: self.get_language(),
+            line_range: self.active_line_range(),
+            dirty: false,
+            truncated: false,
+            selection: self.selection_snapshot(),
+        });
+
+        let visible_editors = self
+            .open_files
+            .iter()
+            .filter(|path| self.active_file.as_ref() != Some(*path))
+            .map(|path| IdeContextFileSnapshot {
+                path: path.display().to_string(),
+                language_id: None,
+                line_range: None,
+                dirty: false,
+                truncated: false,
+                selection: None,
+            })
+            .collect();
+
+        IdeContextSnapshot {
+            version: IDE_CONTEXT_SNAPSHOT_VERSION,
+            provider_family: "zed",
+            workspace_root: self.workspace_root.clone(),
+            active_file,
+            visible_editors,
+        }
+    }
+
+    pub fn write_ide_context_snapshot(&self) -> Result<PathBuf, String> {
+        let content = serde_json::to_string_pretty(&self.to_ide_context_snapshot())
+            .map_err(|error| format!("Failed to serialize IDE context snapshot: {}", error))?;
+        let path = ide_context_snapshot_path();
+
+        fs::write(&path, format!("{}\n", content))
+            .map_err(|error| format!("Failed to write IDE context snapshot: {}", error))?;
+
+        Ok(path)
+    }
+
+    fn active_line_range(&self) -> Option<IdeContextLineRange> {
+        self.selection_range
+            .map(|(start_line, _, end_line, _)| IdeContextLineRange {
+                start: start_line + 1,
+                end: end_line + 1,
+            })
+            .or_else(|| {
+                self.cursor_position.map(|(line, _)| IdeContextLineRange {
+                    start: line + 1,
+                    end: line + 1,
+                })
+            })
+    }
+
+    fn selection_snapshot(&self) -> Option<IdeContextSelectionSnapshot> {
+        let (start_line, start_column, end_line, end_column) = self.selection_range?;
+        let text = self.selection.as_ref().filter(|text| !text.is_empty()).cloned();
+
+        Some(IdeContextSelectionSnapshot {
+            range: IdeContextSelectionRange {
+                start_line: start_line + 1,
+                start_column: start_column + 1,
+                end_line: end_line + 1,
+                end_column: end_column + 1,
+            },
+            text,
+        })
+    }
 }
 
 impl Default for EditorContext {
     fn default() -> Self {
         Self::new()
     }
+}
+
+fn ide_context_snapshot_path() -> PathBuf {
+    std::env::temp_dir().join(format!(
+        "vtcode-zed-ide-context-{}.json",
+        std::process::id()
+    ))
 }
 
 /// Diagnostic result from VT Code analysis
@@ -275,6 +406,69 @@ mod tests {
             "Summary should contain '10 bytes': {}",
             summary
         );
+    }
+
+    #[test]
+    fn test_ide_context_snapshot_contains_active_file_and_selection() {
+        let mut ctx = EditorContext::new();
+        ctx.workspace_root = Some(PathBuf::from("/workspace"));
+        ctx.active_file = Some(PathBuf::from("/workspace/src/main.rs"));
+        ctx.language = Some("rust".to_string());
+        ctx.selection = Some("fn main() {}\n".to_string());
+        ctx.selection_range = Some((4, 0, 6, 2));
+        ctx.open_files = vec![
+            PathBuf::from("/workspace/src/main.rs"),
+            PathBuf::from("/workspace/src/lib.rs"),
+        ];
+
+        let snapshot = ctx.to_ide_context_snapshot();
+        let active = snapshot.active_file.expect("active file");
+
+        assert_eq!(snapshot.provider_family, "zed");
+        assert_eq!(active.path, "/workspace/src/main.rs");
+        assert_eq!(active.language_id.as_deref(), Some("rust"));
+        assert_eq!(
+            active.line_range,
+            Some(IdeContextLineRange { start: 5, end: 7 })
+        );
+        assert_eq!(snapshot.visible_editors.len(), 1);
+        assert_eq!(snapshot.visible_editors[0].path, "/workspace/src/lib.rs");
+        assert_eq!(
+            active.selection.expect("selection").range,
+            IdeContextSelectionRange {
+                start_line: 5,
+                start_column: 1,
+                end_line: 7,
+                end_column: 3,
+            }
+        );
+    }
+
+    #[test]
+    fn test_write_ide_context_snapshot_writes_canonical_json() {
+        let mut ctx = EditorContext::new();
+        ctx.active_file = Some(PathBuf::from("/workspace/test.rs"));
+        ctx.language = Some("rust".to_string());
+
+        let path = ctx
+            .write_ide_context_snapshot()
+            .expect("write IDE context snapshot");
+        let content = fs::read_to_string(&path).expect("read snapshot");
+        let value: serde_json::Value =
+            serde_json::from_str(&content).expect("parse snapshot JSON");
+
+        assert_eq!(value["version"], serde_json::Value::from(1));
+        assert_eq!(value["provider_family"], serde_json::Value::from("zed"));
+        assert_eq!(
+            value["active_file"]["path"],
+            serde_json::Value::from("/workspace/test.rs")
+        );
+        assert_eq!(
+            value["active_file"]["language_id"],
+            serde_json::Value::from("rust")
+        );
+
+        let _ = fs::remove_file(path);
     }
 
     #[test]

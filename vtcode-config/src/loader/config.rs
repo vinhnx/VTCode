@@ -13,6 +13,7 @@ use crate::core::{
 use crate::debug::DebugConfig;
 use crate::defaults::{self, ConfigDefaultsProvider};
 use crate::hooks::HooksConfig;
+use crate::ide_context::IdeContextConfig;
 use crate::mcp::McpClientConfig;
 use crate::optimization::OptimizationConfig;
 use crate::output_styles::OutputStyleConfig;
@@ -118,6 +119,10 @@ pub struct VTCodeConfig {
     /// Agent Client Protocol configuration
     #[serde(default)]
     pub acp: AgentClientProtocolConfig,
+
+    /// IDE context configuration
+    #[serde(default)]
+    pub ide_context: IdeContextConfig,
 
     /// Lifecycle hooks configuration
     #[serde(default)]
@@ -760,7 +765,24 @@ workspace_trust = "full_auto"
 
 [acp.zed.tools]
 read_file = true
-list_files = true"#.to_string()
+list_files = true
+
+# Cross-IDE editor context bridge
+[ide_context]
+enabled = true
+inject_into_prompt = true
+show_in_tui = true
+include_selection_text = true
+provider_mode = "auto"
+
+[ide_context.providers.vscode_compatible]
+enabled = true
+
+[ide_context.providers.zed]
+enabled = true
+
+[ide_context.providers.generic]
+enabled = true"#.to_string()
     }
 
     #[cfg(feature = "bootstrap")]

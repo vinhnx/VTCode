@@ -1,4 +1,9 @@
 use super::*;
+use std::path::PathBuf;
+use vtcode_core::{
+    EditorContextSnapshot, EditorFileContext, EditorLineRange, EditorSelectionContext,
+    EditorSelectionRange,
+};
 
 #[test]
 fn normalize_history_for_request_drops_empty_noop_messages() {
@@ -142,6 +147,106 @@ async fn build_system_prompt_with_empty_base_prompt_fails() {
     let result = manager.build_system_prompt(&[], 0, params).await;
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("empty"));
+}
+
+#[tokio::test]
+async fn build_system_prompt_includes_active_editor_context_block() {
+    let workspace = assert_fs::TempDir::new().expect("workspace");
+    let mut manager = ContextManager::new(
+        "System prompt".to_string(),
+        (),
+        Arc::new(RwLock::new(HashMap::new())),
+        None,
+    );
+    manager.set_workspace_root(workspace.path());
+    let snapshot = EditorContextSnapshot {
+        workspace_root: Some(PathBuf::from(workspace.path())),
+        active_file: Some(EditorFileContext {
+            path: workspace.path().join("src/main.rs").display().to_string(),
+            language_id: Some("rust".to_string()),
+            line_range: Some(EditorLineRange { start: 40, end: 64 }),
+            dirty: false,
+            truncated: false,
+            selection: Some(EditorSelectionContext {
+                range: EditorSelectionRange {
+                    start_line: 48,
+                    start_column: 1,
+                    end_line: 52,
+                    end_column: 8,
+                },
+                text: Some("fn main() {}\n".to_string()),
+            }),
+        }),
+        ..EditorContextSnapshot::default()
+    };
+
+    manager.set_editor_context_snapshot(
+        Some(snapshot),
+        Some(&vtcode_config::IdeContextConfig::default()),
+    );
+    let prompt = manager
+        .build_system_prompt(
+            &[],
+            0,
+            SystemPromptParams {
+                full_auto: false,
+                plan_mode: false,
+                context_window_size: None,
+                prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
+            },
+        )
+        .await
+        .expect("system prompt");
+
+    assert!(prompt.contains("## Active Editor Context"));
+    assert!(prompt.contains("- Active file: src/main.rs"));
+    assert!(prompt.contains("- Selection: 48:1-52:8"));
+}
+
+#[tokio::test]
+async fn build_system_prompt_skips_disallowed_provider_family() {
+    let workspace = assert_fs::TempDir::new().expect("workspace");
+    let mut manager = ContextManager::new(
+        "System prompt".to_string(),
+        (),
+        Arc::new(RwLock::new(HashMap::new())),
+        None,
+    );
+    manager.set_workspace_root(workspace.path());
+    let snapshot = EditorContextSnapshot {
+        provider_family: vtcode_config::IdeContextProviderFamily::Zed,
+        workspace_root: Some(PathBuf::from(workspace.path())),
+        active_file: Some(EditorFileContext {
+            path: workspace.path().join("src/main.rs").display().to_string(),
+            language_id: Some("rust".to_string()),
+            line_range: None,
+            dirty: false,
+            truncated: false,
+            selection: None,
+        }),
+        ..EditorContextSnapshot::default()
+    };
+    let config = vtcode_config::IdeContextConfig {
+        provider_mode: vtcode_config::IdeContextProviderMode::VscodeCompatible,
+        ..vtcode_config::IdeContextConfig::default()
+    };
+
+    manager.set_editor_context_snapshot(Some(snapshot), Some(&config));
+    let prompt = manager
+        .build_system_prompt(
+            &[],
+            0,
+            SystemPromptParams {
+                full_auto: false,
+                plan_mode: false,
+                context_window_size: None,
+                prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
+            },
+        )
+        .await
+        .expect("system prompt");
+
+    assert!(!prompt.contains("## Active Editor Context"));
 }
 
 #[test]

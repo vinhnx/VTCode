@@ -143,6 +143,31 @@ static SECTION_HEADINGS: &[(&str, &str, &str)] = &[
         "Hook groups for session and tool milestones.",
     ),
     (
+        "ide_context",
+        "IDE Context",
+        "Cross-IDE active editor context injected into prompts and inline UI.",
+    ),
+    (
+        "ide_context.providers",
+        "IDE Providers",
+        "Per-editor-family enablement for editor context ingestion.",
+    ),
+    (
+        "ide_context.providers.vscode_compatible",
+        "VS Code Family",
+        "Enable context snapshots from VS Code, Cursor, Windsurf, and compatible editors.",
+    ),
+    (
+        "ide_context.providers.zed",
+        "Zed Family",
+        "Enable context snapshots from Zed integrations.",
+    ),
+    (
+        "ide_context.providers.generic",
+        "Generic Bridge",
+        "Enable file-bridge snapshots from JetBrains and other external adapters.",
+    ),
+    (
         "mcp",
         "MCP Servers",
         "Model Context Protocol providers and defaults.",

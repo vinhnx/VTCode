@@ -123,6 +123,45 @@ async fn launch_editor_event_submits_edit_command() {
 }
 
 #[tokio::test]
+async fn open_file_in_editor_event_submits_edit_command_with_path() {
+    let (handle, mut renderer) = renderer_with_handle();
+    let ctrl_c_state = CtrlCState::new();
+    let interrupts = InlineInterruptCoordinator::new(&ctrl_c_state);
+    let mut ctrl_c_notice_displayed = false;
+    let mut model_picker_state: Option<ModelPickerState> = None;
+    let mut palette_state: Option<ActivePalette> = None;
+    let mut config = runtime_config();
+    let mut vt_cfg = None;
+    let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
+    let session_bootstrap = SessionBootstrap::default();
+    let mut context = InlineEventContext::new(
+        &mut renderer,
+        &handle,
+        interrupts,
+        &mut ctrl_c_notice_displayed,
+        &mut model_picker_state,
+        &mut palette_state,
+        &mut config,
+        &mut vt_cfg,
+        &mut provider_client,
+        &session_bootstrap,
+        false,
+    );
+    let mut queued_inputs = VecDeque::new();
+    let mut queue = InlineQueueState::new(&handle, &mut queued_inputs);
+    let path = "/tmp/demo.rs".to_string();
+
+    let action = context
+        .process_event(InlineEvent::OpenFileInEditor(path.clone()), &mut queue)
+        .await
+        .expect("process open file in editor");
+    assert!(matches!(
+        action,
+        InlineLoopAction::Submit(ref command) if command == &format!("/edit {}", path)
+    ));
+}
+
+#[tokio::test]
 async fn toggle_mode_event_submits_mode_command() {
     let (handle, mut renderer) = renderer_with_handle();
     let ctrl_c_state = CtrlCState::new();

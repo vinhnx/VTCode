@@ -176,6 +176,7 @@ fn build_exit_header_context_fast(
         search_tools: Some(crate::agent::runloop::ui::build_search_tools_badge(
             &config.workspace,
         )),
+        editor_context: None,
         git: format!(
             "{}{}",
             ui::HEADER_GIT_PREFIX,
@@ -349,6 +350,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         let mut session = ui_setup.session;
         let handle = ui_setup.handle;
         let mut header_context = ui_setup.header_context;
+        let mut ide_context_bridge = ui_setup.ide_context_bridge;
         let ctrl_c_state = ui_setup.ctrl_c_state;
         let ctrl_c_notify = ui_setup.ctrl_c_notify;
         let checkpoint_manager = ui_setup.checkpoint_manager;
@@ -412,6 +414,17 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         let mut palette_state: Option<ActivePalette> = None;
         let mut last_forced_redraw = Instant::now();
         let mut input_status_state = InputStatusState::default();
+        crate::agent::runloop::unified::status_line::update_ide_context_source(
+            &mut input_status_state,
+            ide_context_bridge.as_ref().and_then(|bridge| {
+                crate::agent::runloop::unified::session_setup::compact_tui_editor_label(
+                    config.workspace.as_path(),
+                    vt_cfg.as_ref().map(|cfg| &cfg.ide_context),
+                    bridge.snapshot(),
+                    bridge.snapshot_source(),
+                )
+            }),
+        );
         let mut queued_inputs: VecDeque<String> = VecDeque::with_capacity(8);
         let mut ctrl_c_notice_displayed = false;
         let mut mcp_catalog_initialized = tool_registry.mcp_client().is_some();
@@ -456,6 +469,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     session: &mut session,
                     handle: &handle,
                     header_context: &mut header_context,
+                    ide_context_bridge: &mut ide_context_bridge,
                     ctrl_c_state: &ctrl_c_state,
                     ctrl_c_notify: &ctrl_c_notify,
                     config: &mut config,

@@ -21,11 +21,17 @@ pub use cache::{
 };
 pub use command_builder::CommandBuilder;
 pub use commands::{
-    analyze_workspace, ask_about_selection, ask_agent, check_status, find_files, launch_chat,
-    list_files, search_files, CommandResponse,
+    CommandResponse, analyze_workspace, analyze_workspace_with_context, ask_about_selection,
+    ask_about_selection_with_context, ask_agent, ask_agent_with_context, check_status, find_files,
+    find_files_with_context, launch_chat, launch_chat_with_context, list_files,
+    list_files_with_context, search_files, search_files_with_context,
 };
-pub use config::{find_config, load_config, Config};
-pub use context::{Diagnostic, DiagnosticSeverity, EditorContext, QuickFix};
+pub use config::{Config, find_config, load_config};
+pub use context::{
+    Diagnostic, DiagnosticSeverity, EditorContext, IDE_CONTEXT_ENV_VAR, IdeContextFileSnapshot,
+    IdeContextLineRange, IdeContextSelectionRange, IdeContextSelectionSnapshot,
+    IdeContextSnapshot, QuickFix,
+};
 pub use editor::{EditorState, StatusIndicator};
 pub use error_handling::{
     ErrorCode, ErrorSeverity, ExtensionError, ExtensionResult, RecoveryStrategy,
@@ -99,7 +105,8 @@ impl VTCodeExtension {
 
     /// Execute "Ask the Agent" command
     pub fn ask_agent_command(&self, query: &str) -> CommandResponse {
-        ask_agent(query)
+        let context = self.editor_state.get_context().ok();
+        ask_agent_with_context(query, context.as_ref())
     }
 
     /// Execute "Ask About Selection" command
@@ -108,17 +115,20 @@ impl VTCodeExtension {
         code: &str,
         language: Option<&str>,
     ) -> CommandResponse {
-        ask_about_selection(code, language)
+        let context = self.editor_state.get_context().ok();
+        ask_about_selection_with_context(code, language, context.as_ref())
     }
 
     /// Execute "Analyze Workspace" command
     pub fn analyze_workspace_command(&self) -> CommandResponse {
-        analyze_workspace()
+        let context = self.editor_state.get_context().ok();
+        analyze_workspace_with_context(context.as_ref())
     }
 
     /// Execute "Launch Chat" command
     pub fn launch_chat_command(&self) -> CommandResponse {
-        launch_chat()
+        let context = self.editor_state.get_context().ok();
+        launch_chat_with_context(context.as_ref())
     }
 
     /// Execute "Check Status" command
@@ -131,21 +141,24 @@ impl VTCodeExtension {
     /// Uses optimized parallel file search for fast results.
     /// Respects .gitignore files automatically.
     pub fn find_files_command(&self, pattern: &str, limit: Option<usize>) -> CommandResponse {
-        find_files(pattern, limit)
+        let context = self.editor_state.get_context().ok();
+        find_files_with_context(pattern, limit, context.as_ref())
     }
 
     /// Execute "List Files" command
     ///
     /// Enumerates all workspace files with optional exclusions.
     pub fn list_files_command(&self, exclude_patterns: Option<&str>) -> CommandResponse {
-        list_files(exclude_patterns)
+        let context = self.editor_state.get_context().ok();
+        list_files_with_context(exclude_patterns, context.as_ref())
     }
 
     /// Execute "Search Files" command with pattern and exclusions
     ///
     /// Combined operation for more advanced file discovery scenarios.
     pub fn search_files_command(&self, pattern: &str, exclude: &str) -> CommandResponse {
-        search_files(pattern, exclude)
+        let context = self.editor_state.get_context().ok();
+        search_files_with_context(pattern, exclude, context.as_ref())
     }
 
     /// Get the output channel
@@ -189,7 +202,8 @@ impl VTCodeExtension {
         self.output_channel.info(format!("Executing: {}", command));
 
         // Execute command
-        let response = ask_agent(query);
+        let context = self.editor_state.get_context().ok();
+        let response = ask_agent_with_context(query, context.as_ref());
 
         // Update status based on result
         if response.success {

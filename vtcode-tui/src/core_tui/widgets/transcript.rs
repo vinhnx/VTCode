@@ -61,6 +61,7 @@ impl<'a> Widget for TranscriptWidget<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         if area.height == 0 || area.width == 0 {
             self.session.set_transcript_area(None);
+            self.session.clear_transcript_file_link_targets();
             return;
         }
 
@@ -74,6 +75,7 @@ impl<'a> Widget for TranscriptWidget<'a> {
 
         if inner.height == 0 || inner.width == 0 {
             self.session.set_transcript_area(None);
+            self.session.clear_transcript_file_link_targets();
             return;
         }
         self.session.set_transcript_area(Some(inner));
@@ -87,6 +89,7 @@ impl<'a> Widget for TranscriptWidget<'a> {
 
         let content_width = effective_width;
         if content_width == 0 {
+            self.session.clear_transcript_file_link_targets();
             return;
         }
         apply_transcript_width(self.session, content_width);
@@ -130,6 +133,9 @@ impl<'a> Widget for TranscriptWidget<'a> {
             // No mutation needed, just clone for Paragraph
             cached_lines.to_vec()
         };
+        let visible_lines = self
+            .session
+            .decorate_visible_transcript_links(visible_lines, scroll_area);
 
         // Only clear if content actually changed, not on viewport-only scroll
         // This is a significant optimization: avoids expensive Clear operation on most scrolls

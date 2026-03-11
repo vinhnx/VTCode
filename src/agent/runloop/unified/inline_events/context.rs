@@ -132,6 +132,9 @@ impl<'a> InlineEventContext<'a> {
                 // Ctrl+E pressed: submit /edit command
                 self.input_processor().submit("/edit".to_string())
             }
+            InlineEvent::OpenFileInEditor(path) => {
+                self.input_processor().submit(format!("/edit {}", path))
+            }
 
             InlineEvent::ScrollLineUp
             | InlineEvent::ScrollLineDown

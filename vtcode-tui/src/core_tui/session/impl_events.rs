@@ -18,6 +18,11 @@ impl Session {
                 }
             }
             CrosstermEvent::Mouse(mouse_event) => match mouse_event.kind {
+                MouseEventKind::Moved => {
+                    if self.update_transcript_file_link_hover(mouse_event.column, mouse_event.row) {
+                        self.mark_dirty();
+                    }
+                }
                 MouseEventKind::ScrollDown => {
                     // Check if history picker is active - delegate scrolling to picker
                     if self.history_picker_state.active {
@@ -39,6 +44,16 @@ impl Session {
                     }
                 }
                 MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
+                    if let Some(outbound) = self.transcript_file_link_event(
+                        mouse_event.column,
+                        mouse_event.row,
+                        mouse_event.modifiers,
+                    ) {
+                        self.mark_dirty();
+                        self.emit_inline_event(&outbound, events, callback);
+                        return;
+                    }
+
                     // Start mouse text selection
                     self.mouse_selection
                         .start_selection(mouse_event.column, mouse_event.row);

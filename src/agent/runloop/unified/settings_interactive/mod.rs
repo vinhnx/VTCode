@@ -371,4 +371,59 @@ mod tests {
             Some(vtcode_config::OpenAIServiceTier::Priority)
         );
     }
+
+    #[test]
+    fn root_settings_include_ide_context_section() {
+        let state = SettingsPaletteState {
+            workspace: PathBuf::from("."),
+            source_path: PathBuf::from("vtcode.toml"),
+            source_label: "test".to_string(),
+            draft: VTCodeConfig::default(),
+            view_path: None,
+        };
+        let draft =
+            TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
+
+        let items = build_settings_items(&state, &draft).expect("settings items");
+        assert!(items.iter().any(|item| item.title == "IDE Context"));
+    }
+
+    #[test]
+    fn ide_context_view_includes_provider_section_navigation() {
+        let state = SettingsPaletteState {
+            workspace: PathBuf::from("."),
+            source_path: PathBuf::from("vtcode.toml"),
+            source_label: "test".to_string(),
+            draft: VTCodeConfig::default(),
+            view_path: Some("ide_context.providers".to_string()),
+        };
+        let draft =
+            TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
+
+        let items = build_settings_items(&state, &draft).expect("settings items");
+        assert!(items.iter().any(|item| item.title == "VS Code Family"));
+        assert!(items.iter().any(|item| item.title == "Zed Family"));
+        assert!(items.iter().any(|item| item.title == "Generic Bridge"));
+    }
+
+    #[test]
+    fn ide_context_toggle_action_persists_to_disk() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let source_path = temp.path().join("vtcode.toml");
+        let mut state = SettingsPaletteState {
+            workspace: temp.path().to_path_buf(),
+            source_path: source_path.clone(),
+            source_label: "test".to_string(),
+            draft: VTCodeConfig::default(),
+            view_path: Some("ide_context".to_string()),
+        };
+
+        apply_settings_action(&mut state, "settings:set:ide_context.enabled:toggle")
+            .expect("toggle ide context");
+
+        assert!(!state.draft.ide_context.enabled);
+        let persisted = std::fs::read_to_string(&source_path).expect("persisted config");
+        assert!(persisted.contains("[ide_context]"));
+        assert!(persisted.contains("enabled = false"));
+    }
 }

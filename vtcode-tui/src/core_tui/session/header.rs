@@ -343,47 +343,49 @@ impl Session {
 
     pub fn header_chain_values(&self) -> Vec<String> {
         let defaults = InlineHeaderContext::default();
-        // Trust is now shown as a badge in header_meta_line, so we skip it here
-        let fields = [
-            (&self.header_context.tools, defaults.tools.clone()),
-            (&self.header_context.git, defaults.git.clone()),
-            // Removed MCP info from header as requested
-        ];
+        let mut values = Vec::new();
 
-        fields
-            .into_iter()
-            .filter_map(|(value, fallback)| {
-                let mut selected = if value.trim().is_empty() {
-                    fallback
-                } else {
-                    value.clone()
-                };
-                let trimmed = selected.trim();
-                if trimmed.is_empty() {
-                    return None;
+        if let Some(editor_context) = self
+            .header_context
+            .editor_context
+            .as_ref()
+            .filter(|value| !value.trim().is_empty())
+        {
+            values.push(editor_context.clone());
+        }
+
+        for (value, fallback) in [
+            (&self.header_context.tools, defaults.tools),
+            (&self.header_context.git, defaults.git),
+        ] {
+            let selected = if value.trim().is_empty() {
+                fallback
+            } else {
+                value.clone()
+            };
+            let trimmed = selected.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+
+            if let Some(body) = trimmed.strip_prefix(ui::HEADER_TOOLS_PREFIX) {
+                let compact_tools = compact_tools_format(body.trim());
+                values.push(format!("Tools: {}", compact_tools));
+                continue;
+            }
+
+            if let Some(body) = trimmed.strip_prefix(ui::HEADER_GIT_PREFIX) {
+                let body = body.trim();
+                if !body.is_empty() {
+                    values.push(body.to_owned());
                 }
+                continue;
+            }
 
-                if let Some(body) = trimmed.strip_prefix(ui::HEADER_TOOLS_PREFIX) {
-                    // Convert "allow X · prompt Y · deny Z" to a more compact format
-                    let formatted_body = body.trim();
-                    // Compact format: change "allow 14 · prompt 12 · deny 0" to "14" (only running tools count)
-                    let compact_tools = compact_tools_format(formatted_body);
-                    selected = format!("Tools: {}", compact_tools);
-                    return Some(selected);
-                }
+            values.push(selected);
+        }
 
-                if let Some(body) = trimmed.strip_prefix(ui::HEADER_GIT_PREFIX) {
-                    let body = body.trim();
-                    if body.is_empty() {
-                        return None;
-                    }
-                    selected = body.to_owned();
-                    return Some(selected);
-                }
-
-                Some(selected)
-            })
-            .collect()
+        values
     }
 
     pub fn header_meta_line(&self) -> Line<'static> {

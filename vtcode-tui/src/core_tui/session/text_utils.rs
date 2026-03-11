@@ -84,12 +84,13 @@ pub fn format_tool_parameters(text: &str) -> String {
 }
 
 pub(super) fn pty_wrapped_continuation_prefix(base_prefix: &str, line_text: &str) -> String {
-    let hang_width = if line_text.starts_with("  └ ")
-        || line_text.starts_with("  │ ")
-        || line_text.starts_with("    ")
+    let stripped = strip_ansi_codes(line_text);
+    let hang_width = if stripped.starts_with("  └ ")
+        || stripped.starts_with("  │ ")
+        || stripped.starts_with("    ")
     {
         4
-    } else if line_text.starts_with("• Ran ") {
+    } else if stripped.starts_with("• Ran ") {
         "• Ran ".chars().count()
     } else {
         0
@@ -103,6 +104,22 @@ pub(super) fn pty_wrapped_continuation_prefix(base_prefix: &str, line_text: &str
 /// For URL-aware wrapping that preserves URLs as atomic units, use
 /// `super::wrapping::adaptive_wrap_line` instead.
 pub fn wrap_line(line: Line<'static>, max_width: usize) -> Vec<Line<'static>> {
+    wrap_line_internal(line, max_width, "")
+}
+
+pub(super) fn wrap_line_with_hanging_prefix(
+    line: Line<'static>,
+    max_width: usize,
+    continuation_prefix: &str,
+) -> Vec<Line<'static>> {
+    wrap_line_internal(line, max_width, continuation_prefix)
+}
+
+fn wrap_line_internal(
+    line: Line<'static>,
+    max_width: usize,
+    continuation_prefix: &str,
+) -> Vec<Line<'static>> {
     if max_width == 0 {
         return vec![Line::default()];
     }
@@ -120,6 +137,10 @@ pub fn wrap_line(line: Line<'static>, max_width: usize) -> Vec<Line<'static>> {
         spans.push(Span::styled(text.to_owned(), *style));
     }
 
+    let continuation_width = UnicodeWidthStr::width(continuation_prefix);
+    let use_continuation_prefix =
+        !continuation_prefix.is_empty() && continuation_width > 0 && continuation_width < max_width;
+
     let mut rows = Vec::new();
     let mut current_spans: Vec<Span<'static>> = Vec::new();
     let mut current_width = 0usize;
@@ -132,6 +153,14 @@ pub fn wrap_line(line: Line<'static>, max_width: usize) -> Vec<Line<'static>> {
             rows.push(Line::from(mem::take(spans)));
         }
     };
+
+    let ensure_continuation_prefix =
+        |spans: &mut Vec<Span<'static>>, current_width: &mut usize, rows: &[Line<'static>]| {
+            if use_continuation_prefix && spans.is_empty() && !rows.is_empty() {
+                push_span(spans, &Style::default(), continuation_prefix);
+                *current_width = continuation_width;
+            }
+        };
 
     for span in line.spans.into_iter() {
         let style = span.style;
@@ -159,12 +188,14 @@ pub fn wrap_line(line: Line<'static>, max_width: usize) -> Vec<Line<'static>> {
 
                     let width = UnicodeWidthStr::width(grapheme);
                     if width == 0 {
+                        ensure_continuation_prefix(&mut current_spans, &mut current_width, &rows);
                         push_span(&mut current_spans, &style, grapheme);
                         continue;
                     }
 
                     let mut attempts = 0usize;
                     loop {
+                        ensure_continuation_prefix(&mut current_spans, &mut current_width, &rows);
                         let line_segment = LineSegment::new(
                             Point::new(current_width as f64, 0.0),
                             Point::new((current_width + width) as f64, 0.0),
@@ -436,6 +467,10 @@ mod tests {
         assert_eq!(
             pty_wrapped_continuation_prefix("  ", "  └ cargo check"),
             "      "
+        );
+        assert_eq!(
+            pty_wrapped_continuation_prefix("  ", "\u{1b}[32m• Ran cargo check -p vtcode\u{1b}[0m",),
+            "        "
         );
         assert_eq!(
             pty_wrapped_continuation_prefix("  ", "• Ran cargo check -p vtcode"),

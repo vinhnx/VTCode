@@ -4,7 +4,9 @@ use crate::agent::runloop::ui::build_inline_header_context;
 use crate::agent::runloop::unified::reasoning::{
     model_supports_reasoning, resolve_reasoning_visibility,
 };
-use crate::agent::runloop::unified::session_setup::ide_context::IdeContextBridge;
+use crate::agent::runloop::unified::session_setup::ide_context::{
+    IdeContextBridge, tui_header_summary,
+};
 use crate::agent::runloop::unified::turn::utils::render_hook_messages;
 use crate::agent::runloop::unified::turn::workspace::load_workspace_files;
 use crate::agent::runloop::unified::{context_manager, palettes, state};
@@ -30,8 +32,8 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::SessionArchive;
 use vtcode_core::utils::transcript;
 use vtcode_tui::{
-    FocusChangeCallback, InlineEvent, InlineEventCallback, SessionOptions,
-    spawn_session_with_options,
+    FocusChangeCallback, InlineEvent, InlineEventCallback, InlineHandle, InlineHeaderContext,
+    SessionOptions, spawn_session_with_options,
 };
 
 pub(crate) async fn initialize_session_ui(
@@ -54,12 +56,13 @@ pub(crate) async fn initialize_session_ui(
         None
     };
 
-    let context_manager = context_manager::ContextManager::new(
+    let mut context_manager = context_manager::ContextManager::new(
         session_state.base_system_prompt.clone(),
         (),
         session_state.loaded_skills.clone(),
         vt_cfg.map(|cfg| cfg.agent.clone()),
     );
+    context_manager.set_workspace_root(config.workspace.as_path());
 
     let active_styles = theme::active_styles();
     let theme_spec = inline_theme_from_core_styles(&active_styles);
@@ -135,7 +138,7 @@ pub(crate) async fn initialize_session_ui(
         .unwrap_or_default();
 
     transcript::set_inline_handle(Arc::new(handle.clone()));
-    let mut ide_context_bridge = IdeContextBridge::from_env();
+    let mut ide_context_bridge = Some(IdeContextBridge::new(config.workspace.clone()));
     let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), highlight_config);
     let supports_reasoning =
         model_supports_reasoning(&*session_state.provider_client, &config.model);
@@ -244,16 +247,6 @@ pub(crate) async fn initialize_session_ui(
         .map(|cfg| cfg.agent.reasoning_effort.as_str().to_string())
         .unwrap_or_else(|| config.reasoning_effort.as_str().to_string());
 
-    if let Some(bridge) = ide_context_bridge.as_mut() {
-        match bridge.snapshot() {
-            Ok(Some(context)) => session_state
-                .conversation_history
-                .push(uni::Message::system(context)),
-            Ok(None) => {}
-            Err(err) => warn!("Failed to update IDE context snapshot: {}", err),
-        }
-    }
-
     let mode_label = match (config.ui_surface, full_auto) {
         (vtcode_core::config::types::UiSurfacePreference::Inline, true) => "auto".to_string(),
         (vtcode_core::config::types::UiSurfacePreference::Inline, false) => "inline".to_string(),
@@ -261,7 +254,7 @@ pub(crate) async fn initialize_session_ui(
         (vtcode_core::config::types::UiSurfacePreference::Auto, true) => "auto".to_string(),
         (vtcode_core::config::types::UiSurfacePreference::Auto, false) => "std".to_string(),
     };
-    let header_context = build_inline_header_context(
+    let mut header_context = build_inline_header_context(
         config,
         &session_state.session_bootstrap,
         header_provider_label,
@@ -270,7 +263,26 @@ pub(crate) async fn initialize_session_ui(
         reasoning_label.clone(),
     )
     .await?;
-    handle.set_header_context(header_context.clone());
+
+    let initial_editor_snapshot = if let Some(bridge) = ide_context_bridge.as_mut() {
+        match bridge.refresh() {
+            Ok((snapshot, _)) => snapshot,
+            Err(err) => {
+                warn!("Failed to refresh IDE context snapshot: {}", err);
+                None
+            }
+        }
+    } else {
+        None
+    };
+    apply_ide_context_snapshot(
+        &mut context_manager,
+        &mut header_context,
+        &handle,
+        config.workspace.as_path(),
+        vt_cfg,
+        initial_editor_snapshot,
+    );
 
     let mut startup_update_notice_rx = None;
     let mut startup_update_task_guard = None;
@@ -313,6 +325,7 @@ pub(crate) async fn initialize_session_ui(
         session,
         handle,
         header_context,
+        ide_context_bridge,
         ctrl_c_state,
         ctrl_c_notify,
         checkpoint_manager,
@@ -328,6 +341,21 @@ pub(crate) async fn initialize_session_ui(
         startup_update_notice_rx,
         startup_update_task_guard,
     })
+}
+
+pub(crate) fn apply_ide_context_snapshot(
+    context_manager: &mut crate::agent::runloop::unified::context_manager::ContextManager,
+    header_context: &mut InlineHeaderContext,
+    handle: &InlineHandle,
+    workspace: &std::path::Path,
+    vt_cfg: Option<&VTCodeConfig>,
+    snapshot: Option<vtcode_core::EditorContextSnapshot>,
+) {
+    let ide_context_config = vt_cfg.map(|cfg| &cfg.ide_context);
+    context_manager.set_editor_context_snapshot(snapshot.clone(), ide_context_config);
+    header_context.editor_context =
+        tui_header_summary(workspace, ide_context_config, snapshot.as_ref());
+    handle.set_header_context(header_context.clone());
 }
 
 fn render_resume_state_if_present(

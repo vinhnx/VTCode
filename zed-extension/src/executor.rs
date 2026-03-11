@@ -3,6 +3,7 @@
 /// Handles execution of VT Code CLI commands and output capture.
 /// This module provides the interface for running VT Code commands
 /// and retrieving their results with timeout support.
+use std::collections::HashMap;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
@@ -48,7 +49,7 @@ pub fn execute_command(command: &str, args: &[&str]) -> Result<CommandResult, St
         "chat" => Duration::from_secs(120),   // Chat/interactive can be longer
         _ => Duration::from_secs(30),         // Default timeout
     };
-    execute_command_with_timeout(command, args, timeout)
+    execute_command_with_timeout_and_env(command, args, timeout, None)
 }
 
 /// Execute a VT Code command with custom timeout
@@ -65,12 +66,33 @@ pub fn execute_command_with_timeout(
     args: &[&str],
     _timeout: Duration,
 ) -> Result<CommandResult, String> {
+    execute_command_with_timeout_and_env(command, args, _timeout, None)
+}
+
+pub fn execute_command_with_env(
+    command: &str,
+    args: &[&str],
+    env: &HashMap<String, String>,
+) -> Result<CommandResult, String> {
+    execute_command_with_timeout_and_env(command, args, Duration::from_secs(30), Some(env))
+}
+
+pub fn execute_command_with_timeout_and_env(
+    command: &str,
+    args: &[&str],
+    _timeout: Duration,
+    env: Option<&HashMap<String, String>>,
+) -> Result<CommandResult, String> {
     // Build the full command
     let mut cmd = Command::new("vtcode");
     cmd.arg(command);
 
     for arg in args {
         cmd.arg(arg);
+    }
+
+    if let Some(env) = env {
+        cmd.envs(env);
     }
 
     // Execute and capture output

@@ -268,6 +268,7 @@ fn render_transcript(
         (*cached_lines).clone()
     };
 
+    let visible_lines = session.decorate_visible_transcript_links(visible_lines, scroll_area);
     let paragraph = Paragraph::new(visible_lines).style(default_style(session));
 
     // Ratatui recreates a fresh frame buffer for every draw call.

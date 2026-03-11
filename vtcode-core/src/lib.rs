@@ -149,6 +149,7 @@ pub mod gemini; // Compatibility facade; canonical internal import path is llm/p
 pub mod git_info; // Git repository information collection
 pub mod hooks;
 pub mod http_client;
+pub mod ide_context;
 pub mod instructions;
 pub mod llm;
 pub mod marketplace;
@@ -197,8 +198,9 @@ pub use config::types::{
 };
 pub use config::{
     AgentClientProtocolConfig, AgentClientProtocolTransport, AgentClientProtocolZedConfig,
-    AgentClientProtocolZedToolsConfig, AgentConfig, PluginRuntimeConfig, PluginTrustLevel,
-    VTCodeConfig, WorkspaceTrustLevel,
+    AgentClientProtocolZedToolsConfig, AgentConfig, IdeContextConfig, IdeContextProviderConfig,
+    IdeContextProviderFamily, IdeContextProviderMode, IdeContextProvidersConfig,
+    PluginRuntimeConfig, PluginTrustLevel, VTCodeConfig, WorkspaceTrustLevel,
 };
 pub use core::agent::core::Agent;
 pub use core::agent::runner::AgentRunner;
@@ -213,6 +215,10 @@ pub use core::threads::{
     SubmissionId, ThreadBootstrap, ThreadEventRecord, ThreadId, ThreadManager, ThreadRuntimeHandle,
     ThreadSnapshot, build_thread_archive_metadata, loaded_skills_from_session_listing,
     messages_from_session_listing,
+};
+pub use ide_context::{
+    EditorContextSnapshot, EditorFileContext, EditorLineRange, EditorSelectionContext,
+    EditorSelectionRange,
 };
 pub use vtcode_bash_runner::BashRunner;
 

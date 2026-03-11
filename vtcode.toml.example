@@ -1131,6 +1131,34 @@ workspace_trust = "full_auto"
 read_file = true
 list_files = true
 
+# Cross-IDE editor context bridge
+[ide_context]
+# Enable editor-context ingestion from supported IDE families
+enabled = true
+
+# Inject active file, language, range, and selection metadata into the system prompt
+inject_into_prompt = true
+
+# Show the current active editor summary in the inline TUI header
+show_in_tui = true
+
+# Include selected text in prompt injection when the editor has an explicit selection
+include_selection_text = true
+
+# Provider routing mode: "auto", "vscode_compatible", "zed", or "generic"
+provider_mode = "auto"
+
+[ide_context.providers.vscode_compatible]
+# Covers VS Code, Cursor, Windsurf, and other compatible adapters
+enabled = true
+
+[ide_context.providers.zed]
+enabled = true
+
+[ide_context.providers.generic]
+# For JetBrains and any external adapter that writes VT_IDE_CONTEXT_FILE snapshots
+enabled = true
+
 # Lifecycle hooks - Execute shell commands in response to agent events
 # For documentation and examples, see: docs/guides/lifecycle-hooks.md
 [hooks.lifecycle]

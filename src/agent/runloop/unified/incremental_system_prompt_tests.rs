@@ -17,6 +17,7 @@ async fn test_incremental_prompt_caching() {
         supports_context_awareness: false,
         token_budget_guidance: "",
         prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
+        editor_context_block: None,
     };
 
     // First call - should build from scratch (includes context section)
@@ -71,6 +72,7 @@ async fn test_incremental_prompt_rebuild() {
         supports_context_awareness: false,
         token_budget_guidance: "",
         prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
+        editor_context_block: None,
     };
     // Build initial prompt
     let _ = prompt_builder
@@ -140,6 +142,7 @@ async fn test_cache_friendly_mode_moves_volatile_context_to_runtime_section() {
         supports_context_awareness: false,
         token_budget_guidance: "",
         prompt_cache_shaping_mode: PromptCacheShapingMode::TrailingRuntimeContext,
+        editor_context_block: None,
     };
     let context_b = SystemPromptContext {
         conversation_length: 14,
@@ -154,6 +157,7 @@ async fn test_cache_friendly_mode_moves_volatile_context_to_runtime_section() {
         supports_context_awareness: false,
         token_budget_guidance: "",
         prompt_cache_shaping_mode: PromptCacheShapingMode::TrailingRuntimeContext,
+        editor_context_block: None,
     };
 
     let prompt_a = prompt_builder
@@ -205,6 +209,7 @@ async fn test_context_awareness_token_budget_warning() {
         supports_context_awareness: true,
         token_budget_guidance: "WARNING: Update progress docs to preserve context.",
         prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
+        editor_context_block: None,
     };
 
     let prompt = prompt_builder
@@ -241,6 +246,7 @@ async fn test_context_awareness_token_budget_high() {
         supports_context_awareness: true,
         token_budget_guidance: "HIGH: Summarize key findings and prepare a handoff.",
         prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
+        editor_context_block: None,
     };
 
     let prompt = prompt_builder
@@ -277,6 +283,7 @@ async fn test_context_awareness_token_budget_critical() {
         supports_context_awareness: true,
         token_budget_guidance: "CRITICAL: Update artifacts and consider a new session.",
         prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
+        editor_context_block: None,
     };
 
     let prompt = prompt_builder
@@ -313,6 +320,7 @@ async fn test_context_awareness_normal_no_guidance() {
         supports_context_awareness: true,
         token_budget_guidance: "",
         prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
+        editor_context_block: None,
     };
 
     let prompt = prompt_builder
@@ -351,6 +359,7 @@ async fn test_non_context_aware_model_no_budget_tags() {
         supports_context_awareness: false,
         token_budget_guidance: "",
         prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
+        editor_context_block: None,
     };
 
     let prompt = prompt_builder
@@ -386,6 +395,7 @@ async fn test_plan_mode_notice_appended() {
         supports_context_awareness: false,
         token_budget_guidance: "",
         prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
+        editor_context_block: None,
     };
 
     let prompt = prompt_builder
@@ -426,6 +436,7 @@ async fn test_full_auto_is_constrained_in_plan_mode() {
         supports_context_awareness: false,
         token_budget_guidance: "",
         prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
+        editor_context_block: None,
     };
 
     let prompt = prompt_builder
@@ -444,4 +455,95 @@ async fn test_full_auto_is_constrained_in_plan_mode() {
         prompt.contains("# FULL-AUTO (PLAN MODE): Work autonomously within Plan Mode constraints.")
     );
     assert!(!prompt.contains("# FULL-AUTO: Complete task autonomously until done or blocked."));
+}
+
+#[tokio::test]
+async fn test_editor_context_block_is_appended() {
+    let prompt_builder = IncrementalSystemPrompt::new();
+    let context = SystemPromptContext {
+        conversation_length: 1,
+        tool_usage_count: 0,
+        error_count: 0,
+        token_usage_ratio: 0.0,
+        full_auto: false,
+        plan_mode: false,
+        discovered_skills: Vec::new(),
+        context_window_size: None,
+        current_token_usage: None,
+        supports_context_awareness: false,
+        token_budget_guidance: "",
+        prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
+        editor_context_block: Some(
+            "## Active Editor Context\n- Active file: src/main.rs\n- Language: Rust".to_string(),
+        ),
+    };
+
+    let prompt = prompt_builder
+        .get_system_prompt(
+            "Base prompt",
+            1,
+            context.hash(),
+            0,
+            PromptAssemblyMode::AppendInstructions,
+            &context,
+            None,
+        )
+        .await;
+
+    assert!(prompt.contains("## Active Editor Context"));
+    assert!(prompt.contains("- Active file: src/main.rs"));
+}
+
+#[tokio::test]
+async fn test_editor_context_changes_invalidate_cached_prompt() {
+    let prompt_builder = IncrementalSystemPrompt::new();
+    let base_prompt = "Base prompt";
+    let context_without_editor = SystemPromptContext {
+        conversation_length: 1,
+        tool_usage_count: 0,
+        error_count: 0,
+        token_usage_ratio: 0.0,
+        full_auto: false,
+        plan_mode: false,
+        discovered_skills: Vec::new(),
+        context_window_size: None,
+        current_token_usage: None,
+        supports_context_awareness: false,
+        token_budget_guidance: "",
+        prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
+        editor_context_block: None,
+    };
+    let context_with_editor = SystemPromptContext {
+        editor_context_block: Some(
+            "## Active Editor Context\n- Active file: src/lib.rs\n- Language: Rust".to_string(),
+        ),
+        ..context_without_editor.clone()
+    };
+
+    let prompt_without_editor = prompt_builder
+        .get_system_prompt(
+            base_prompt,
+            1,
+            context_without_editor.hash(),
+            0,
+            PromptAssemblyMode::AppendInstructions,
+            &context_without_editor,
+            None,
+        )
+        .await;
+    let prompt_with_editor = prompt_builder
+        .get_system_prompt(
+            base_prompt,
+            1,
+            context_with_editor.hash(),
+            0,
+            PromptAssemblyMode::AppendInstructions,
+            &context_with_editor,
+            None,
+        )
+        .await;
+
+    assert_ne!(prompt_without_editor, prompt_with_editor);
+    assert!(!prompt_without_editor.contains("## Active Editor Context"));
+    assert!(prompt_with_editor.contains("## Active Editor Context"));
 }

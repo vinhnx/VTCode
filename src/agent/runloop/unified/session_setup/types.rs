@@ -2,6 +2,7 @@ use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::unified::async_mcp_manager::AsyncMcpManager;
 use crate::agent::runloop::unified::context_manager::ContextManager;
+use crate::agent::runloop::unified::session_setup::IdeContextBridge;
 use crate::agent::runloop::unified::state::CtrlCState;
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
@@ -83,6 +84,7 @@ pub(crate) struct SessionUISetup {
     pub session: InlineSession,
     pub handle: InlineHandle,
     pub header_context: InlineHeaderContext,
+    pub ide_context_bridge: Option<IdeContextBridge>,
     pub ctrl_c_state: Arc<CtrlCState>,
     pub ctrl_c_notify: Arc<Notify>,
     pub checkpoint_manager: Option<vtcode_core::core::agent::snapshots::SnapshotManager>,

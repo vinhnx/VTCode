@@ -301,6 +301,7 @@ pub(crate) async fn build_inline_header_context(
         model: model_value,
         version,
         search_tools: Some(build_search_tools_badge(&config.workspace)),
+        editor_context: None,
         git: git_value,
         mode,
         reasoning,
