@@ -191,6 +191,7 @@ pub(crate) fn handle_start_tag(tag: &Tag<'_>, ctx: &mut MarkdownContext<'_>) {
         Tag::TableHead => {
             if let Some(table) = ctx.active_table.as_mut() {
                 table.in_head = true;
+                table.current_row.clear();
             }
         }
         Tag::TableCell => {
@@ -295,6 +296,9 @@ pub(crate) fn handle_end_tag(tag: TagEnd, ctx: &mut MarkdownContext<'_>) {
         }
         TagEnd::TableHead => {
             if let Some(table) = ctx.active_table.as_mut() {
+                if !table.current_row.is_empty() {
+                    table.headers = std::mem::take(&mut table.current_row);
+                }
                 table.in_head = false;
             }
         }
