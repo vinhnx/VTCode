@@ -87,6 +87,7 @@ impl ModelId {
             | ModelId::OpenRouterMistralaiMistralLarge2512
             | ModelId::OpenRouterNexAgiDeepseekV31NexN1
             | ModelId::OpenRouterStepfunStep35FlashFree
+            | ModelId::OpenRouterNvidiaNemotron3Super120bA12bFree
             | ModelId::OpenRouterZaiGlm5 => Provider::OpenRouter,
         }
     }

@@ -139,6 +139,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Overview, Configuration, Features Available, Troubleshooting, Support
   - **User Questions**: "What can you tell me about Cursor and Windsurf Setup Guide?", "How does Overview work?", "How does Configuration work?"
 
+- **File**: `docs/ide/editor-context-bridge.md`
+  - **Content**: Editor Context Bridge
+  - **Topics**: Contract, Canonical payload, Field notes, Integration checklist
+  - **User Questions**: "What can you tell me about Editor Context Bridge?", "How does Contract work?", "How does Canonical payload work?"
+
 - **File**: `docs/ide/downloads.md`
   - **Content**: VT Code Downloads
   - **Topics**: Available for Your IDE, What is VT Code?, Support and Documentation
@@ -646,7 +651,8 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/project/TODO.md`
   - **Content**: TODO.md
-  - **User Questions**: "What can you tell me about TODO.md?"
+  - **Topics**: **Phase 1: Prefill**, **Phase 2: Decode**, Three numbers to internalize:, **Minute 0: Session Start**, **Minutes 1 to 5: First Commands**
+  - **User Questions**: "What can you tell me about TODO.md?", "How does **Phase 1: Prefill** work?", "How does **Phase 2: Decode** work?"
 
 - **File**: `docs/harness/TECH_DEBT_TRACKER.md`
   - **Content**: Tech Debt Tracker

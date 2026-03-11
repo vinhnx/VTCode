@@ -71,6 +71,7 @@ impl ModelId {
             ModelId::Gemini3FlashPreview
                 | ModelId::Gemini31FlashLitePreview
                 | ModelId::OpenRouterStepfunStep35FlashFree
+                | ModelId::OpenRouterNvidiaNemotron3Super120bA12bFree
                 | ModelId::OllamaGemini3FlashPreviewCloud
                 | ModelId::HuggingFaceStep35Flash
         )
@@ -94,6 +95,7 @@ impl ModelId {
                 | ModelId::DeepSeekReasoner
                 | ModelId::ZaiGlm5
                 | ModelId::OpenRouterStepfunStep35FlashFree
+                | ModelId::OpenRouterNvidiaNemotron3Super120bA12bFree
                 | ModelId::MinimaxM25
                 | ModelId::OllamaGlm5Cloud
                 | ModelId::OllamaMinimaxM25Cloud

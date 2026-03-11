@@ -32,6 +32,15 @@ fn model_picker_lists_new_anthropic_models() {
 }
 
 #[test]
+fn model_picker_lists_new_nvidia_models() {
+    let options = MODEL_OPTIONS.as_slice();
+    assert!(has_model(
+        options,
+        ModelId::OpenRouterNvidiaNemotron3Super120bA12bFree
+    ));
+}
+
+#[test]
 fn model_picker_lists_new_zai_models() {
     let options = MODEL_OPTIONS.as_slice();
     assert!(has_model(options, ModelId::ZaiGlm5));

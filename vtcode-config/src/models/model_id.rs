@@ -187,6 +187,8 @@ pub enum ModelId {
     OpenRouterNexAgiDeepseekV31NexN1,
     /// Step 3.5 Flash (free) - StepFun's most capable open-source reasoning model via OpenRouter
     OpenRouterStepfunStep35FlashFree,
+    /// Nemotron 3 Super (free) - NVIDIA's 120B hybrid MoE model via OpenRouter
+    OpenRouterNvidiaNemotron3Super120bA12bFree,
     /// GLM-5 - Z.AI GLM-5 flagship foundation model via OpenRouter
     OpenRouterZaiGlm5,
     /// MiniMax-M2.5 - MiniMax flagship model via OpenRouter

@@ -66,6 +66,37 @@
         "doc_comment": "Gemini 3.1 Pro Preview - Google Gemini 3.1 Pro model via OpenRouter"
       }
     },
+    "nvidia/nemotron-3-super-120b-a12b:free": {
+      "id": "nvidia/nemotron-3-super-120b-a12b:free",
+      "name": "NVIDIA: Nemotron 3 Super (free)",
+      "description": "NVIDIA Nemotron 3 Super is a 120B-parameter open hybrid MoE model, activating just 12B parameters for maximum compute efficiency and accuracy in complex multi-agent applications. Built on a hybrid Mamba-Transformer Mixture-of-Experts architecture with multi-token prediction (MTP), it delivers over 50% higher token generation compared to leading open models.",
+      "reasoning": true,
+      "tool_call": true,
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "context": 1000000,
+      "cost": {
+        "input": 0,
+        "output": 0
+      },
+      "vtcode": {
+        "variant": "OpenRouterNvidiaNemotron3Super120bA12bFree",
+        "constant": "NVIDIA_NEMOTRON_3_SUPER_120B_A12B_FREE",
+        "vendor": "nvidia",
+        "display": "Nemotron 3 Super (free)",
+        "description": "NVIDIA Nemotron 3 Super (free) model via OpenRouter",
+        "efficient": true,
+        "top_tier": true,
+        "generation": "Nemotron-3",
+        "doc_comment": "Nemotron 3 Super (free) - NVIDIA's 120B hybrid MoE model via OpenRouter"
+      }
+    },
     "stepfun/step-3.5-flash:free": {
       "id": "stepfun/step-3.5-flash:free",
       "name": "Step 3.5 Flash (free)",
