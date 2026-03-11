@@ -42,12 +42,6 @@ Conduct a comprehensive review and enhancement of error handling and recovery me
 
 ---
 
-support litellm provider in vtcode agent harness
-
-https://docs.litellm.ai/llms.txt
-
----
-
 https://claude.ai/chat/bac1e18f-f11a-496d-b260-7de5948faf7a
 
 ---
