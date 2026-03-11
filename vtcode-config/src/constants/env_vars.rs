@@ -12,6 +12,7 @@ pub const LMSTUDIO_BASE_URL: &str = "LMSTUDIO_BASE_URL";
 pub const OLLAMA_BASE_URL: &str = "OLLAMA_BASE_URL";
 pub const MINIMAX_BASE_URL: &str = "MINIMAX_BASE_URL";
 pub const OPENRESPONSES_BASE_URL: &str = "OPENRESPONSES_BASE_URL";
+pub const LITELLM_BASE_URL: &str = "LITELLM_BASE_URL";
 
 /// Environment variable for setting maximum thinking budget tokens
 /// Set to 63999 to get 2x the default thinking budget on 64K output models

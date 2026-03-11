@@ -14,6 +14,7 @@ pub enum BackendKind {
     Moonshot,
     HuggingFace,
     Minimax,
+    LiteLLM,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]

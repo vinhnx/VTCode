@@ -31,6 +31,8 @@ pub enum Provider {
     Minimax,
     /// Hugging Face Inference Providers
     HuggingFace,
+    /// LiteLLM proxy models
+    LiteLLM,
 }
 
 impl Provider {
@@ -48,6 +50,7 @@ impl Provider {
             Provider::ZAI => "ZAI_API_KEY",
             Provider::Minimax => "MINIMAX_API_KEY",
             Provider::HuggingFace => "HF_TOKEN",
+            Provider::LiteLLM => "LITELLM_API_KEY",
         }
     }
 
@@ -65,6 +68,7 @@ impl Provider {
             Provider::LmStudio,
             Provider::Moonshot,
             Provider::ZAI,
+            Provider::LiteLLM,
         ]
     }
 
@@ -82,6 +86,7 @@ impl Provider {
             Provider::ZAI => "Z.AI",
             Provider::Minimax => "MiniMax",
             Provider::HuggingFace => "Hugging Face",
+            Provider::LiteLLM => "LiteLLM",
         }
     }
 
@@ -133,6 +138,7 @@ impl Provider {
             Provider::ZAI => models::zai::REASONING_MODELS.contains(&model),
             Provider::Minimax => model == models::minimax::MINIMAX_M2_5,
             Provider::HuggingFace => models::huggingface::REASONING_MODELS.contains(&model),
+            Provider::LiteLLM => false,
         }
     }
 
@@ -161,6 +167,7 @@ impl fmt::Display for Provider {
             Provider::ZAI => write!(f, "zai"),
             Provider::Minimax => write!(f, "minimax"),
             Provider::HuggingFace => write!(f, "huggingface"),
+            Provider::LiteLLM => write!(f, "litellm"),
         }
     }
 }
@@ -181,6 +188,7 @@ impl FromStr for Provider {
             "zai" => Ok(Provider::ZAI),
             "minimax" => Ok(Provider::Minimax),
             "huggingface" => Ok(Provider::HuggingFace),
+            "litellm" => Ok(Provider::LiteLLM),
             _ => Err(ModelParseError::InvalidProvider(s.to_string())),
         }
     }

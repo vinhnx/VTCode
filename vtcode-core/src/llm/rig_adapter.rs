@@ -62,6 +62,9 @@ pub fn verify_model_with_rig(
             // The rig crate does not yet expose a dedicated Z.AI client.
             // Skip instantiation while still marking the provider as verified.
         }
+        Provider::LiteLLM => {
+            // LiteLLM provides an OpenAI-compatible proxy; rig has no direct client.
+        }
     }
 
     Ok(RigValidationSummary {

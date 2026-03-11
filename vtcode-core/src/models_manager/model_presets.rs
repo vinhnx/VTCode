@@ -161,6 +161,9 @@ pub fn builtin_model_presets() -> Vec<ModelPreset> {
     // LM Studio presets
     presets.extend(lmstudio_presets());
 
+    // LiteLLM presets
+    presets.extend(litellm_presets());
+
     // MiniMax presets
     presets.extend(minimax_presets());
 
@@ -181,6 +184,7 @@ pub fn presets_for_provider(provider: Provider) -> Vec<ModelPreset> {
         Provider::LmStudio => lmstudio_presets(),
         Provider::Moonshot => moonshot_presets(),
         Provider::HuggingFace => huggingface_presets(),
+        Provider::LiteLLM => litellm_presets(),
     }
 }
 
@@ -619,6 +623,26 @@ fn deepseek_presets() -> Vec<ModelPreset> {
             context_window: Some(128_000),
         },
     ]
+}
+
+fn litellm_presets() -> Vec<ModelPreset> {
+    vec![ModelPreset {
+        id: "litellm".to_string(),
+        model: "litellm".to_string(),
+        display_name: "LiteLLM Proxy".to_string(),
+        description: "OpenAI-compatible proxy for 100+ LLM providers".to_string(),
+        provider: Provider::LiteLLM,
+        default_reasoning_effort: ReasoningEffortLevel::Medium,
+        supported_reasoning_efforts: vec![ReasoningEffortPreset {
+            effort: ReasoningEffortLevel::Medium,
+            description: "Default".to_string(),
+        }],
+        is_default: true,
+        upgrade: None,
+        show_in_picker: true,
+        supported_in_api: true,
+        context_window: Some(128_000),
+    }]
 }
 
 fn zai_presets() -> Vec<ModelPreset> {

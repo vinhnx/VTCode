@@ -14,3 +14,4 @@ pub const LMSTUDIO_API_BASE: &str = "http://localhost:1234/v1";
 pub const OLLAMA_API_BASE: &str = "http://localhost:11434";
 pub const OLLAMA_CLOUD_API_BASE: &str = "https://ollama.com";
 pub const OPENRESPONSES_API_BASE: &str = "https://api.openresponses.com/v1";
+pub const LITELLM_API_BASE: &str = "http://localhost:4000";

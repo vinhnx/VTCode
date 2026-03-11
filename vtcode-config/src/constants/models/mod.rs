@@ -2,6 +2,7 @@ pub mod anthropic;
 pub mod deepseek;
 pub mod google;
 pub mod huggingface;
+pub mod litellm;
 pub mod lmstudio;
 pub mod minimax;
 pub mod moonshot;
