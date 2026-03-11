@@ -10,7 +10,6 @@ use crate::agent::runloop::unified::turn::context::{
     TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext,
 };
 
-use super::super::helpers::push_tool_response;
 use super::looping::{shell_run_signature, spool_chunk_read_path, task_tracker_create_signature};
 use super::{ValidationResult, build_failure_error_content};
 
@@ -29,10 +28,7 @@ pub(super) fn enforce_blocked_tool_call_guard(
     tool_name: &str,
     args: &Value,
 ) -> Option<TurnHandlerOutcome> {
-    let streak = {
-        let parts = ctx.parts_mut();
-        parts.state.harness_state.record_blocked_tool_call()
-    };
+    let streak = ctx.record_blocked_tool_call();
     let max_streak = max_consecutive_blocked_tool_calls_per_turn(ctx);
     if streak <= max_streak {
         return None;
@@ -42,25 +38,14 @@ pub(super) fn enforce_blocked_tool_call_guard(
     let block_reason = format!(
         "Consecutive blocked tool calls reached per-turn cap ({max_streak}). Last blocked call: '{display_tool}'. Stopping turn to prevent retry churn."
     );
-    {
-        let parts = ctx.parts_mut();
-        push_tool_response(
-            parts.state.working_history,
-            tool_call_id,
-            build_failure_error_content(
-                format!(
-                    "Consecutive blocked tool calls exceeded cap ({max_streak}) for this turn."
-                ),
-                "blocked_streak",
-            ),
-        );
-        parts
-            .state
-            .working_history
-            .push(vtcode_core::llm::provider::Message::system(
-                block_reason.clone(),
-            ));
-    }
+    ctx.push_tool_response(
+        tool_call_id,
+        build_failure_error_content(
+            format!("Consecutive blocked tool calls exceeded cap ({max_streak}) for this turn."),
+            "blocked_streak",
+        ),
+    );
+    ctx.push_system_message(block_reason.clone());
 
     Some(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
         reason: Some(block_reason),
@@ -110,10 +95,7 @@ pub(super) fn enforce_duplicate_task_tracker_create_guard<'a>(
         "duplicate_task_tracker_create",
     )
     .to_string();
-    {
-        let parts = ctx.parts_mut();
-        push_tool_response(parts.state.working_history, tool_call_id, content);
-    }
+    ctx.push_tool_response(tool_call_id, content);
     let block_reason =
         "Blocked duplicate task_tracker.create in the same turn. Continue with task_tracker.update/list."
             .to_string();
@@ -132,19 +114,12 @@ pub(super) fn enforce_repeated_shell_run_guard(
     args: &Value,
 ) -> Option<ValidationResult> {
     let Some(signature) = shell_run_signature(canonical_tool_name, args) else {
-        let parts = ctx.parts_mut();
-        parts.state.harness_state.reset_shell_command_run_streak();
+        ctx.harness_state.reset_shell_command_run_streak();
         return None;
     };
 
     let max_repeated_runs = max_consecutive_identical_shell_command_runs_per_turn(ctx);
-    let streak = {
-        let parts = ctx.parts_mut();
-        parts
-            .state
-            .harness_state
-            .record_shell_command_run(signature)
-    };
+    let streak = ctx.harness_state.record_shell_command_run(signature);
     if streak <= max_repeated_runs {
         return None;
     }
@@ -154,14 +129,10 @@ pub(super) fn enforce_repeated_shell_run_guard(
         "Repeated shell command guard stopped '{}' after {} identical runs (max {}). Reuse prior output or change the command.",
         display_tool, streak, max_repeated_runs
     );
-    {
-        let parts = ctx.parts_mut();
-        push_tool_response(
-            parts.state.working_history,
-            tool_call_id,
-            build_repeated_shell_run_error_content(max_repeated_runs),
-        );
-    }
+    ctx.push_tool_response(
+        tool_call_id,
+        build_repeated_shell_run_error_content(max_repeated_runs),
+    );
 
     Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
         TurnLoopResult::Blocked {
@@ -200,16 +171,12 @@ pub(super) fn enforce_spool_chunk_read_guard(
     args: &Value,
 ) -> Option<ValidationResult> {
     let Some(spool_path) = spool_chunk_read_path(canonical_tool_name, args) else {
-        let parts = ctx.parts_mut();
-        parts.state.harness_state.reset_spool_chunk_read_streak();
+        ctx.harness_state.reset_spool_chunk_read_streak();
         return None;
     };
 
     let max_reads_per_turn = max_sequential_spool_chunk_reads_per_turn(ctx);
-    let streak = {
-        let parts = ctx.parts_mut();
-        parts.state.harness_state.record_spool_chunk_read()
-    };
+    let streak = ctx.harness_state.record_spool_chunk_read();
     if streak <= max_reads_per_turn {
         return None;
     }
@@ -220,14 +187,10 @@ pub(super) fn enforce_spool_chunk_read_guard(
         display_tool
     );
 
-    {
-        let parts = ctx.parts_mut();
-        push_tool_response(
-            parts.state.working_history,
-            tool_call_id,
-            build_spool_chunk_guard_error_content(spool_path, max_reads_per_turn),
-        );
-    }
+    ctx.push_tool_response(
+        tool_call_id,
+        build_spool_chunk_guard_error_content(spool_path, max_reads_per_turn),
+    );
 
     Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
         TurnLoopResult::Blocked {

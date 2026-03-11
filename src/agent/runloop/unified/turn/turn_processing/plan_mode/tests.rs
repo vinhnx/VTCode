@@ -2,6 +2,18 @@ use super::*;
 use crate::agent::runloop::unified::state::SessionStats;
 use vtcode_core::config::constants::tools;
 
+fn tool_calls_result(
+    tool_calls: Vec<uni::ToolCall>,
+    assistant_text: impl Into<String>,
+) -> TurnProcessingResult {
+    TurnProcessingResult::ToolCalls {
+        tool_calls: prepare_tool_calls(tool_calls),
+        assistant_text: assistant_text.into(),
+        reasoning: Vec::new(),
+        reasoning_details: None,
+    }
+}
+
 #[test]
 fn maybe_force_plan_mode_interview_inserts_tool_call() {
     let mut stats = SessionStats::default();
@@ -31,11 +43,7 @@ fn maybe_force_plan_mode_interview_inserts_tool_call() {
         } => {
             assert_eq!(assistant_text, "Proceeding without explicit questions.");
             assert!(!tool_calls.is_empty());
-            let name = tool_calls
-                .last()
-                .and_then(|call| call.function.as_ref())
-                .map(|func| func.name.as_str())
-                .unwrap_or("");
+            let name = tool_calls.last().map(|call| call.tool_name()).unwrap_or("");
             assert_eq!(name, tools::REQUEST_USER_INPUT);
         }
         _ => panic!("Expected tool calls with forced interview"),
@@ -70,11 +78,9 @@ fn maybe_force_plan_mode_interview_includes_distinct_question_options() {
 
     let args = tool_calls
         .last()
-        .and_then(|call| call.function.as_ref())
-        .map(|func| func.arguments.as_str())
+        .and_then(|call| call.args())
         .expect("expected interview tool arguments");
-    let payload: serde_json::Value =
-        serde_json::from_str(args).expect("interview args should be valid JSON");
+    let payload = args.clone();
     let questions = payload["questions"]
         .as_array()
         .expect("questions array should exist");
@@ -155,11 +161,7 @@ fn maybe_force_plan_mode_interview_marks_shown_when_plan_present() {
 
     match result {
         TurnProcessingResult::ToolCalls { tool_calls, .. } => {
-            let name = tool_calls
-                .last()
-                .and_then(|call| call.function.as_ref())
-                .map(|func| func.name.as_str())
-                .unwrap_or("");
+            let name = tool_calls.last().map(|call| call.tool_name()).unwrap_or("");
             assert_eq!(name, tools::REQUEST_USER_INPUT);
         }
         _ => panic!("Expected tool calls for plan interview"),
@@ -172,16 +174,14 @@ fn maybe_force_plan_mode_interview_does_not_duplicate_existing_interview_when_pl
     stats.record_tool(tools::READ_FILE);
     stats.increment_plan_mode_turns();
 
-    let processing_result = TurnProcessingResult::ToolCalls {
-        tool_calls: vec![uni::ToolCall::function(
+    let processing_result = tool_calls_result(
+        vec![uni::ToolCall::function(
             "call_interview_existing".to_string(),
             tools::REQUEST_USER_INPUT.to_string(),
             "{}".to_string(),
         )],
-        assistant_text: "<proposed_plan>\nPlan content\n</proposed_plan>".to_string(),
-        reasoning: Vec::new(),
-        reasoning_details: None,
-    };
+        "<proposed_plan>\nPlan content\n</proposed_plan>",
+    );
 
     let result = maybe_force_plan_mode_interview(
         processing_result,
@@ -195,13 +195,7 @@ fn maybe_force_plan_mode_interview_does_not_duplicate_existing_interview_when_pl
         TurnProcessingResult::ToolCalls { tool_calls, .. } => {
             let interview_calls = tool_calls
                 .iter()
-                .filter(|call| {
-                    call.function
-                        .as_ref()
-                        .map(|func| func.name.as_str())
-                        .unwrap_or("")
-                        == tools::REQUEST_USER_INPUT
-                })
+                .filter(|call| call.tool_name() == tools::REQUEST_USER_INPUT)
                 .count();
             assert_eq!(interview_calls, 1);
         }
@@ -281,16 +275,14 @@ fn maybe_force_plan_mode_interview_defers_when_tool_calls_present() {
     stats.increment_plan_mode_turns();
     stats.increment_plan_mode_turns();
 
-    let processing_result = TurnProcessingResult::ToolCalls {
-        tool_calls: vec![uni::ToolCall::function(
+    let processing_result = tool_calls_result(
+        vec![uni::ToolCall::function(
             "call_read".to_string(),
             tools::READ_FILE.to_string(),
             "{}".to_string(),
         )],
-        assistant_text: String::new(),
-        reasoning: Vec::new(),
-        reasoning_details: None,
-    };
+        String::new(),
+    );
 
     let result = maybe_force_plan_mode_interview(
         processing_result,
@@ -310,14 +302,46 @@ fn maybe_force_plan_mode_interview_defers_when_tool_calls_present() {
 }
 
 #[test]
+fn inject_plan_mode_interview_preserves_existing_tool_call_when_appending() {
+    let mut stats = SessionStats::default();
+    let processing_result = tool_calls_result(
+        vec![uni::ToolCall::function(
+            "call_read".to_string(),
+            tools::READ_FILE.to_string(),
+            serde_json::json!({"path":"src/main.rs"}).to_string(),
+        )],
+        "Reading first.",
+    );
+
+    let result = inject_plan_mode_interview(
+        processing_result,
+        &mut stats,
+        2,
+        Some("Reading first."),
+        None,
+    );
+
+    match result {
+        TurnProcessingResult::ToolCalls { tool_calls, .. } => {
+            assert_eq!(tool_calls.len(), 2);
+            assert_eq!(tool_calls[0].call_id(), "call_read");
+            assert_eq!(tool_calls[0].tool_name(), tools::READ_FILE);
+            assert_eq!(tool_calls[1].tool_name(), tools::REQUEST_USER_INPUT);
+            assert!(stats.plan_mode_interview_shown());
+        }
+        _ => panic!("Expected tool calls with appended interview"),
+    }
+}
+
+#[test]
 fn maybe_force_plan_mode_interview_strips_interview_from_mixed_tool_calls() {
     let mut stats = SessionStats::default();
     stats.increment_plan_mode_turns();
     stats.increment_plan_mode_turns();
     stats.increment_plan_mode_turns();
 
-    let processing_result = TurnProcessingResult::ToolCalls {
-        tool_calls: vec![
+    let processing_result = tool_calls_result(
+        vec![
             uni::ToolCall::function(
                 "call_read".to_string(),
                 tools::READ_FILE.to_string(),
@@ -329,10 +353,8 @@ fn maybe_force_plan_mode_interview_strips_interview_from_mixed_tool_calls() {
                 "{}".to_string(),
             ),
         ],
-        assistant_text: String::new(),
-        reasoning: Vec::new(),
-        reasoning_details: None,
-    };
+        String::new(),
+    );
 
     let result = maybe_force_plan_mode_interview(
         processing_result,
@@ -347,8 +369,7 @@ fn maybe_force_plan_mode_interview_strips_interview_from_mixed_tool_calls() {
             assert_eq!(tool_calls.len(), 1);
             let name = tool_calls
                 .first()
-                .and_then(|call| call.function.as_ref())
-                .map(|func| func.name.as_str())
+                .map(|call| call.tool_name())
                 .unwrap_or("");
             assert_eq!(name, tools::READ_FILE);
             assert!(stats.plan_mode_interview_pending());
@@ -381,11 +402,7 @@ fn maybe_force_plan_mode_interview_reopens_when_open_decision_markers_exist() {
 
     match result {
         TurnProcessingResult::ToolCalls { tool_calls, .. } => {
-            let name = tool_calls
-                .last()
-                .and_then(|call| call.function.as_ref())
-                .map(|func| func.name.as_str())
-                .unwrap_or("");
+            let name = tool_calls.last().map(|call| call.tool_name()).unwrap_or("");
             assert_eq!(name, tools::REQUEST_USER_INPUT);
         }
         _ => panic!("Expected follow-up interview tool call"),
@@ -430,16 +447,14 @@ fn should_attempt_dynamic_interview_generation_skips_when_interview_already_call
     stats.record_tool(tools::READ_FILE);
     stats.increment_plan_mode_turns();
 
-    let processing_result = TurnProcessingResult::ToolCalls {
-        tool_calls: vec![uni::ToolCall::function(
+    let processing_result = tool_calls_result(
+        vec![uni::ToolCall::function(
             "call_interview".to_string(),
             tools::REQUEST_USER_INPUT.to_string(),
             "{}".to_string(),
         )],
-        assistant_text: String::new(),
-        reasoning: Vec::new(),
-        reasoning_details: None,
-    };
+        String::new(),
+    );
 
     assert!(!should_attempt_dynamic_interview_generation(
         &processing_result,
@@ -522,11 +537,7 @@ fn maybe_force_plan_mode_interview_reprompts_after_cancelled_cycle() {
 
     match result {
         TurnProcessingResult::ToolCalls { tool_calls, .. } => {
-            let name = tool_calls
-                .last()
-                .and_then(|call| call.function.as_ref())
-                .map(|func| func.name.as_str())
-                .unwrap_or("");
+            let name = tool_calls.last().map(|call| call.tool_name()).unwrap_or("");
             assert_eq!(name, tools::REQUEST_USER_INPUT);
         }
         _ => panic!("Expected interview to re-open after cancellation"),

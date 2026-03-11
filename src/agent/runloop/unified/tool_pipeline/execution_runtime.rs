@@ -1,4 +1,5 @@
 use std::sync::{Arc, Mutex as StdMutex};
+use std::time::{Duration, Instant};
 
 use serde_json::Value;
 use tokio::sync::Notify;
@@ -53,42 +54,124 @@ impl Drop for ProgressCallbackGuard<'_> {
 
 #[derive(Default)]
 struct StreamingToolOutput {
-    started: bool,
     output: String,
+    last_emitted_len: usize,
+    last_emit_at: Option<Instant>,
+}
+
+#[derive(Clone)]
+struct StreamingOutputCoalescer {
+    state: Arc<StdMutex<StreamingToolOutput>>,
+    harness_emitter: HarnessEventEmitter,
+    tool_item_id: String,
+}
+
+impl StreamingOutputCoalescer {
+    const MIN_EMIT_BYTES: usize = 4 * 1024;
+    const MAX_EMIT_INTERVAL: Duration = Duration::from_millis(50);
+
+    fn new(harness_emitter: HarnessEventEmitter, tool_item_id: String) -> Self {
+        Self {
+            state: Arc::new(StdMutex::new(StreamingToolOutput::default())),
+            harness_emitter,
+            tool_item_id,
+        }
+    }
+
+    fn on_chunk(&self, chunk: &str) {
+        if let Some(snapshot) = self.snapshot_for_chunk(chunk) {
+            self.emit_snapshot(snapshot);
+        }
+    }
+
+    fn flush(&self) {
+        if let Some(snapshot) = self.snapshot_for_flush() {
+            self.emit_snapshot(snapshot);
+        }
+    }
+
+    fn snapshot_for_chunk(&self, chunk: &str) -> Option<String> {
+        if chunk.is_empty() {
+            return None;
+        }
+
+        let now = Instant::now();
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        self.emit_started_if_needed(&state);
+        state.output.push_str(chunk);
+        if !Self::should_emit_snapshot(&state, chunk, now) {
+            return None;
+        }
+
+        state.last_emitted_len = state.output.len();
+        state.last_emit_at = Some(now);
+        Some(state.output.clone())
+    }
+
+    fn snapshot_for_flush(&self) -> Option<String> {
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if state.output.is_empty() || state.output.len() == state.last_emitted_len {
+            return None;
+        }
+
+        state.last_emitted_len = state.output.len();
+        state.last_emit_at = Some(Instant::now());
+        Some(state.output.clone())
+    }
+
+    fn emit_started_if_needed(&self, state: &StreamingToolOutput) {
+        if state.output.is_empty() {
+            let _ = self
+                .harness_emitter
+                .emit(tool_output_started_event(self.tool_item_id.clone()));
+        }
+    }
+
+    fn emit_snapshot(&self, snapshot: String) {
+        let _ = self
+            .harness_emitter
+            .emit(tool_updated_event(self.tool_item_id.clone(), snapshot));
+    }
+
+    fn should_emit_snapshot(state: &StreamingToolOutput, chunk: &str, now: Instant) -> bool {
+        if state.last_emit_at.is_none() {
+            return true;
+        }
+        if chunk.contains('\n') {
+            return true;
+        }
+        if state.output.len().saturating_sub(state.last_emitted_len) >= Self::MIN_EMIT_BYTES {
+            return true;
+        }
+        state
+            .last_emit_at
+            .is_some_and(|last_emit| now.duration_since(last_emit) >= Self::MAX_EMIT_INTERVAL)
+    }
 }
 
 fn build_streaming_progress_callback(
     base_callback: ToolProgressCallback,
     harness_emitter: Option<HarnessEventEmitter>,
     tool_item_id: &str,
-) -> ToolProgressCallback {
+) -> (ToolProgressCallback, Option<StreamingOutputCoalescer>) {
     let Some(harness_emitter) = harness_emitter else {
-        return base_callback;
+        return (base_callback, None);
     };
 
-    let tool_item_id = tool_item_id.to_string();
-    let state = Arc::new(StdMutex::new(StreamingToolOutput::default()));
+    let coalescer = StreamingOutputCoalescer::new(harness_emitter, tool_item_id.to_string());
+    let callback_coalescer = coalescer.clone();
 
-    Arc::new(move |progress_tool_name, chunk| {
+    let callback: ToolProgressCallback = Arc::new(move |progress_tool_name: &str, chunk: &str| {
         base_callback(progress_tool_name, chunk);
-
-        if chunk.is_empty() {
-            return;
-        }
-
-        let mut state = state
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if !state.started {
-            let _ = harness_emitter.emit(tool_output_started_event(tool_item_id.clone()));
-            state.started = true;
-        }
-        state.output.push_str(chunk);
-        let _ = harness_emitter.emit(tool_updated_event(
-            tool_item_id.clone(),
-            state.output.clone(),
-        ));
-    })
+        callback_coalescer.on_chunk(chunk);
+    });
+    (callback, Some(coalescer))
 }
 
 #[derive(Clone, Copy)]
@@ -163,6 +246,7 @@ pub(super) async fn execute_with_cache_and_streaming(
         tools::RUN_PTY_CMD | tools::UNIFIED_EXEC | tools::SEND_PTY_INPUT
     );
     let mut pty_stream_runtime: Option<PtyStreamRuntime> = None;
+    let mut output_coalescer: Option<StreamingOutputCoalescer> = None;
     let _progress_callback_guard = if should_stream_pty {
         let stream_command = extract_pty_stream_command(name, args_val);
         let tail_limit = resolve_stdout_tail_limit(vt_cfg);
@@ -172,8 +256,10 @@ pub(super) async fn execute_with_cache_and_streaming(
             tail_limit,
             stream_command,
         );
-        let callback = build_streaming_progress_callback(callback, harness_emitter, tool_item_id);
+        let (callback, coalescer) =
+            build_streaming_progress_callback(callback, harness_emitter, tool_item_id);
         pty_stream_runtime = Some(runtime);
+        output_coalescer = coalescer;
         Some(ProgressCallbackGuard::replace(registry, callback))
     } else {
         None
@@ -192,6 +278,9 @@ pub(super) async fn execute_with_cache_and_streaming(
 
     if let Some(runtime) = pty_stream_runtime {
         runtime.shutdown().await;
+    }
+    if let Some(coalescer) = output_coalescer.as_ref() {
+        coalescer.flush();
     }
 
     let outcome = if is_cacheable_tool && is_loop_detection_status(&outcome) {
@@ -342,12 +431,17 @@ async fn lookup_cached_status(
 mod tests {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::{Duration, Instant};
 
     use serde_json::json;
     use vtcode_core::config::constants::tools;
     use vtcode_core::tools::registry::ToolRegistry;
 
-    use super::{ProgressCallbackGuard, extract_pty_stream_command, should_cache_success_output};
+    use super::{
+        ProgressCallbackGuard, StreamingOutputCoalescer, StreamingToolOutput,
+        extract_pty_stream_command, should_cache_success_output,
+    };
+    use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
     use tempfile::TempDir;
 
     #[test]
@@ -459,5 +553,92 @@ mod tests {
         });
 
         assert!(should_cache_success_output("read_file", &output, true));
+    }
+
+    #[test]
+    fn coalescer_emits_started_event_and_final_snapshot_on_flush() {
+        let temp_dir = TempDir::new().expect("create temp dir");
+        let harness_path = temp_dir.path().join("events.jsonl");
+        let emitter = HarnessEventEmitter::new(harness_path.clone()).expect("emitter");
+        let coalescer = StreamingOutputCoalescer::new(emitter, "tool-1".to_string());
+
+        coalescer.on_chunk("abc");
+        coalescer.on_chunk("def");
+        coalescer.flush();
+
+        let content = std::fs::read_to_string(harness_path).expect("read harness events");
+        let lines = content.lines().collect::<Vec<_>>();
+        assert_eq!(lines.len(), 3);
+
+        let first_event: serde_json::Value =
+            serde_json::from_str(lines[0]).expect("parse first event");
+        assert_eq!(first_event["event"]["type"].as_str(), Some("item.started"));
+        assert_eq!(first_event["event"]["item"]["output"].as_str(), Some(""));
+
+        let second_event: serde_json::Value =
+            serde_json::from_str(lines[1]).expect("parse second event");
+        assert_eq!(second_event["event"]["type"].as_str(), Some("item.updated"));
+        assert_eq!(
+            second_event["event"]["item"]["output"].as_str(),
+            Some("abc")
+        );
+
+        let third_event: serde_json::Value =
+            serde_json::from_str(lines[2]).expect("parse third event");
+        assert_eq!(third_event["event"]["type"].as_str(), Some("item.updated"));
+        assert_eq!(
+            third_event["event"]["item"]["output"].as_str(),
+            Some("abcdef")
+        );
+    }
+
+    #[test]
+    fn should_emit_snapshot_respects_thresholds() {
+        let now = Instant::now();
+
+        let first_chunk_state = StreamingToolOutput::default();
+        assert!(StreamingOutputCoalescer::should_emit_snapshot(
+            &first_chunk_state,
+            "abc",
+            now
+        ));
+
+        let buffered_state = StreamingToolOutput {
+            output: "abcdef".to_string(),
+            last_emitted_len: 3,
+            last_emit_at: Some(now),
+        };
+        assert!(!StreamingOutputCoalescer::should_emit_snapshot(
+            &buffered_state,
+            "def",
+            now + Duration::from_millis(10)
+        ));
+        assert!(StreamingOutputCoalescer::should_emit_snapshot(
+            &buffered_state,
+            "def\n",
+            now + Duration::from_millis(10)
+        ));
+
+        let large_state = StreamingToolOutput {
+            output: "x".repeat(StreamingOutputCoalescer::MIN_EMIT_BYTES + 4),
+            last_emitted_len: 1,
+            last_emit_at: Some(now),
+        };
+        assert!(StreamingOutputCoalescer::should_emit_snapshot(
+            &large_state,
+            "tail",
+            now + Duration::from_millis(10)
+        ));
+
+        let timed_state = StreamingToolOutput {
+            output: "abcdef".to_string(),
+            last_emitted_len: 3,
+            last_emit_at: Some(now),
+        };
+        assert!(StreamingOutputCoalescer::should_emit_snapshot(
+            &timed_state,
+            "def",
+            now + StreamingOutputCoalescer::MAX_EMIT_INTERVAL
+        ));
     }
 }

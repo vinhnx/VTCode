@@ -483,13 +483,9 @@ pub(super) fn try_recover_preflight_with_fallback(
 ) -> Option<(String, ToolPreflightOutcome, Value)> {
     let (recovered_tool_name, recovered_args) =
         preflight_validation_fallback(tool_name, args_val, error)?;
-    let preflight_result = {
-        let parts = ctx.parts_mut();
-        parts
-            .tool
-            .tool_registry
-            .preflight_validate_call(&recovered_tool_name, &recovered_args)
-    };
+    let preflight_result = ctx
+        .tool_registry
+        .preflight_validate_call(&recovered_tool_name, &recovered_args);
     match preflight_result {
         Ok(preflight) => Some((recovered_tool_name, preflight, recovered_args)),
         Err(recovery_err) => {

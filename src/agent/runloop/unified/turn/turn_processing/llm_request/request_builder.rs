@@ -7,7 +7,6 @@ use vtcode_core::config::{OpenAIPromptCacheKeyMode, PromptCachingConfig};
 use vtcode_core::core::agent::features::FeatureSet;
 use vtcode_core::llm::provider::{self as uni, ParallelToolConfig};
 use vtcode_core::prompts::upsert_harness_limits_section;
-use vtcode_core::turn_metadata;
 
 use crate::agent::runloop::unified::incremental_system_prompt::PromptCacheShapingMode;
 use crate::agent::runloop::unified::run_loop_context::TurnExecutionSnapshot;
@@ -97,57 +96,30 @@ pub(super) fn capture_turn_request_snapshot(
     ctx: &mut TurnProcessingContext<'_>,
     active_model: &str,
 ) -> TurnRequestSnapshot {
-    let (
-        provider_name,
-        plan_mode,
-        request_user_input_enabled,
-        context_window_size,
-        turn_timeout_secs,
-        openai_prompt_cache_enabled,
-        openai_prompt_cache_key_mode,
-        prompt_cache_shaping_mode,
-        full_auto,
-        capabilities,
-    ) = {
-        let parts = ctx.parts_mut();
-        let prompt_cache_config = &parts.llm.config.prompt_cache;
-        let plan_mode = parts.state.session_stats.is_plan_mode();
-        let provider_name = parts.llm.provider_client.name().to_ascii_lowercase();
-        let openai_prompt_cache_enabled = is_openai_prompt_cache_enabled(
-            &provider_name,
-            prompt_cache_config.enabled,
-            prompt_cache_config.providers.openai.enabled,
-        );
-        let prompt_cache_shaping_mode =
-            resolve_prompt_cache_shaping_mode(&provider_name, prompt_cache_config);
-        let request_user_input_enabled =
-            FeatureSet::from_config(parts.llm.vt_cfg).request_user_input_enabled(plan_mode, true);
-
-        (
-            provider_name,
-            plan_mode,
-            request_user_input_enabled,
-            parts
-                .llm
-                .provider_client
-                .effective_context_size(active_model),
-            parts
-                .llm
-                .vt_cfg
-                .as_ref()
-                .map(|cfg| cfg.optimization.agent_execution.max_execution_time_secs)
-                .unwrap_or(300),
-            openai_prompt_cache_enabled,
-            prompt_cache_config
-                .providers
-                .openai
-                .prompt_cache_key_mode
-                .clone(),
-            prompt_cache_shaping_mode,
-            parts.state.full_auto,
-            uni::get_cached_capabilities(&**parts.llm.provider_client, active_model),
-        )
-    };
+    let prompt_cache_config = &ctx.config.prompt_cache;
+    let plan_mode = ctx.session_stats.is_plan_mode();
+    let provider_name = ctx.provider_client.name().to_ascii_lowercase();
+    let openai_prompt_cache_enabled = is_openai_prompt_cache_enabled(
+        &provider_name,
+        prompt_cache_config.enabled,
+        prompt_cache_config.providers.openai.enabled,
+    );
+    let prompt_cache_shaping_mode =
+        resolve_prompt_cache_shaping_mode(&provider_name, prompt_cache_config);
+    let request_user_input_enabled =
+        FeatureSet::from_config(ctx.vt_cfg).request_user_input_enabled(plan_mode, true);
+    let context_window_size = ctx.provider_client.effective_context_size(active_model);
+    let turn_timeout_secs = ctx
+        .vt_cfg
+        .map(|cfg| cfg.optimization.agent_execution.max_execution_time_secs)
+        .unwrap_or(300);
+    let openai_prompt_cache_key_mode = prompt_cache_config
+        .providers
+        .openai
+        .prompt_cache_key_mode
+        .clone();
+    let full_auto = ctx.full_auto;
+    let capabilities = uni::get_cached_capabilities(&**ctx.provider_client, active_model);
 
     TurnRequestSnapshot {
         provider_name,
@@ -168,23 +140,19 @@ async fn assemble_prompt(
     ctx: &mut TurnProcessingContext<'_>,
     input: PromptAssemblyInput<'_>,
 ) -> Result<PromptAssemblyOutput> {
-    let mut system_prompt = {
-        let parts = ctx.parts_mut();
-        parts
-            .llm
-            .context_manager
-            .build_system_prompt(
-                parts.state.working_history,
-                input.step_count,
-                crate::agent::runloop::unified::context_manager::SystemPromptParams {
-                    full_auto: input.turn.full_auto,
-                    plan_mode: input.turn.plan_mode,
-                    context_window_size: Some(input.turn.context_window_size),
-                    prompt_cache_shaping_mode: input.turn.prompt_cache_shaping_mode,
-                },
-            )
-            .await?
-    };
+    let mut system_prompt = ctx
+        .context_manager
+        .build_system_prompt(
+            ctx.working_history,
+            input.step_count,
+            crate::agent::runloop::unified::context_manager::SystemPromptParams {
+                full_auto: input.turn.full_auto,
+                plan_mode: input.turn.plan_mode,
+                context_window_size: Some(input.turn.context_window_size),
+                prompt_cache_shaping_mode: input.turn.prompt_cache_shaping_mode,
+            },
+        )
+        .await?;
 
     upsert_harness_limits_section(
         &mut system_prompt,
@@ -193,18 +161,14 @@ async fn assemble_prompt(
         input.turn.execution.max_tool_retries,
     );
 
-    let tool_snapshot = {
-        let parts = ctx.parts_mut();
-        parts
-            .tool
-            .tool_catalog
-            .filtered_snapshot_with_stats(
-                parts.tool.tools,
-                input.turn.plan_mode,
-                input.turn.request_user_input_enabled,
-            )
-            .await
-    };
+    let tool_snapshot = ctx
+        .tool_catalog
+        .filtered_snapshot_with_stats(
+            ctx.tools,
+            input.turn.plan_mode,
+            input.turn.request_user_input_enabled,
+        )
+        .await;
     let current_tools = tool_snapshot.snapshot;
     let has_tools = current_tools.is_some();
     emit_tool_catalog_cache_metrics(
@@ -301,16 +265,13 @@ pub(super) async fn build_turn_request(
     )
     .await?;
 
-    let reasoning_effort = {
-        let parts = ctx.parts_mut();
-        parts.llm.vt_cfg.as_ref().and_then(|cfg| {
-            if turn_snapshot.capabilities.reasoning_effort {
-                Some(cfg.agent.reasoning_effort)
-            } else {
-                None
-            }
-        })
-    };
+    let reasoning_effort = ctx.vt_cfg.and_then(|cfg| {
+        if turn_snapshot.capabilities.reasoning_effort {
+            Some(cfg.agent.reasoning_effort)
+        } else {
+            None
+        }
+    });
     let temperature = if reasoning_effort.is_some()
         && matches!(
             turn_snapshot.provider_name.as_str(),
@@ -332,12 +293,7 @@ pub(super) async fn build_turn_request(
         None
     };
 
-    let metadata = match turn_metadata::build_turn_metadata_value_with_timeout(
-        &ctx.config.workspace,
-        std::time::Duration::from_millis(250),
-    )
-    .await
-    {
+    let metadata = match ctx.turn_metadata().await {
         Ok(value) => value,
         Err(err) => {
             tracing::warn!(error = %err, "Turn metadata collection failed");
@@ -356,13 +312,9 @@ pub(super) async fn build_turn_request(
         None
     };
     let context_management = resolve_context_management(ctx, active_model);
-    let normalized_messages = {
-        let parts = ctx.parts_mut();
-        parts
-            .llm
-            .context_manager
-            .normalize_history_for_request(parts.state.working_history)
-    };
+    let normalized_messages = ctx
+        .context_manager
+        .normalize_history_for_request(ctx.working_history);
 
     let request = uni::LLMRequest {
         messages: normalized_messages,

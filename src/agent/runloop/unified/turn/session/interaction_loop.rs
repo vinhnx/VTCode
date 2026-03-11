@@ -72,6 +72,7 @@ pub(crate) struct InteractionLoopContext<'a> {
     pub error_recovery:
         &'a Arc<tokio::sync::RwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>>,
     pub last_forced_redraw: &'a mut std::time::Instant,
+    pub turn_metadata_cache: &'a mut Option<Option<serde_json::Value>>,
     pub harness_config: vtcode_config::core::agent::AgentHarnessConfig,
     pub steering_receiver: &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
     pub startup_update_notice_rx:
@@ -124,6 +125,7 @@ impl<'a> InteractionLoopContext<'a> {
             auto_exit_plan_mode_attempted,
             mcp_panel_state: self.mcp_panel_state,
             working_history: self.conversation_history,
+            turn_metadata_cache: self.turn_metadata_cache,
             full_auto: self.full_auto,
             harness_state,
             harness_emitter: self.harness_emitter,

@@ -14,7 +14,7 @@ use crate::agent::runloop::unified::status_line::InputStatusState;
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
 use crate::agent::runloop::unified::turn::context::{
-    TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext,
+    TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext, TurnProcessingContextParts,
 };
 use crate::agent::runloop::unified::turn::tool_outcomes::helpers::LoopTracker;
 use anyhow::{Result, anyhow};
@@ -30,6 +30,7 @@ use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::types::{
     AgentConfig, ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
 };
+use vtcode_core::core::agent::steering::SteeringMessage;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::llm::provider as uni;
@@ -82,6 +83,215 @@ fn create_headless_session() -> InlineSession {
     InlineSession {
         handle: InlineHandle::new_for_tests(command_tx),
         events: event_rx,
+    }
+}
+
+struct TestContextBacking {
+    _temp: tempfile::TempDir,
+    sample_file: std::path::PathBuf,
+    tool_registry: vtcode_core::tools::ToolRegistry,
+    tools: Arc<RwLock<Vec<uni::ToolDefinition>>>,
+    tool_result_cache: Arc<RwLock<ToolResultCache>>,
+    tool_permission_cache: Arc<RwLock<ToolPermissionCache>>,
+    decision_ledger: Arc<RwLock<DecisionTracker>>,
+    approval_recorder: Arc<ApprovalRecorder>,
+    session_stats: SessionStats,
+    mcp_panel_state: McpPanelState,
+    context_manager: ContextManager,
+    last_forced_redraw: Instant,
+    input_status_state: InputStatusState,
+    session: InlineSession,
+    handle: InlineHandle,
+    renderer: vtcode_core::utils::ansi::AnsiRenderer,
+    ctrl_c_state: Arc<CtrlCState>,
+    ctrl_c_notify: Arc<Notify>,
+    safety_validator: Arc<RwLock<ToolCallSafetyValidator>>,
+    circuit_breaker: Arc<CircuitBreaker>,
+    tool_health_tracker: Arc<ToolHealthTracker>,
+    rate_limiter: Arc<AdaptiveRateLimiter>,
+    telemetry: Arc<vtcode_core::core::telemetry::TelemetryManager>,
+    autonomous_executor: Arc<vtcode_core::tools::autonomous_executor::AutonomousExecutor>,
+    error_recovery: Arc<RwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>>,
+    harness_state: HarnessTurnState,
+    auto_exit_plan_mode_attempted: bool,
+    working_history: Vec<uni::Message>,
+    tool_catalog: Arc<ToolCatalogState>,
+    default_placeholder: Option<String>,
+    steering_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
+    config: AgentConfig,
+    provider_client: Box<dyn uni::LLMProvider>,
+    traj: TrajectoryLogger,
+    turn_metadata_cache: Option<Option<serde_json::Value>>,
+}
+
+impl TestContextBacking {
+    async fn new(max_tool_calls: usize) -> Self {
+        let temp = tempfile::TempDir::new().expect("temp workspace");
+        let workspace = temp.path().to_path_buf();
+        let sample_file = workspace.join("sample.txt");
+        std::fs::write(&sample_file, "hello\n").expect("write sample file");
+
+        let tool_registry = vtcode_core::tools::ToolRegistry::new(workspace.clone()).await;
+        let tools = Arc::new(RwLock::new(Vec::new()));
+        let tool_result_cache = Arc::new(RwLock::new(ToolResultCache::new(8)));
+        let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
+        let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
+        let approval_recorder = Arc::new(ApprovalRecorder::new(workspace.clone()));
+        let session_stats = SessionStats::default();
+        let mcp_panel_state = McpPanelState::default();
+        let loaded_skills = Arc::new(RwLock::new(HashMap::new()));
+        let context_manager = ContextManager::new(String::new(), (), loaded_skills, None);
+        let last_forced_redraw = Instant::now();
+        let input_status_state = InputStatusState::default();
+        let mut session = create_headless_session();
+        session.set_skip_confirmations(true);
+        let handle = session.clone_inline_handle();
+        let renderer = vtcode_core::utils::ansi::AnsiRenderer::with_inline_ui(
+            handle.clone(),
+            Default::default(),
+        );
+        let ctrl_c_state = Arc::new(CtrlCState::new());
+        let ctrl_c_notify = Arc::new(Notify::new());
+        let safety_validator = Arc::new(RwLock::new(ToolCallSafetyValidator::new()));
+        safety_validator.write().await.start_turn().await;
+        let circuit_breaker = Arc::new(CircuitBreaker::default());
+        let tool_health_tracker = Arc::new(ToolHealthTracker::new(3));
+        let rate_limiter = Arc::new(AdaptiveRateLimiter::default());
+        let telemetry = Arc::new(vtcode_core::core::telemetry::TelemetryManager::new());
+        let autonomous_executor =
+            Arc::new(vtcode_core::tools::autonomous_executor::AutonomousExecutor::new());
+        let error_recovery = Arc::new(RwLock::new(
+            vtcode_core::core::agent::error_recovery::ErrorRecoveryState::default(),
+        ));
+        let harness_state = HarnessTurnState::new(
+            TurnRunId("run-test".to_string()),
+            TurnId("turn-test".to_string()),
+            max_tool_calls,
+            60,
+            0,
+        );
+        let auto_exit_plan_mode_attempted = false;
+        let working_history = Vec::new();
+        let tool_catalog = Arc::new(ToolCatalogState::new());
+        let default_placeholder = None;
+        let steering_receiver = None;
+        let config = AgentConfig {
+            model: "noop-model".to_string(),
+            api_key: "test-key".to_string(),
+            provider: "openai".to_string(),
+            api_key_env: "OPENAI_API_KEY".to_string(),
+            workspace,
+            verbose: false,
+            quiet: false,
+            theme: "default".to_string(),
+            reasoning_effort: ReasoningEffortLevel::Medium,
+            ui_surface: UiSurfacePreference::Inline,
+            prompt_cache: PromptCachingConfig::default(),
+            model_source: ModelSelectionSource::WorkspaceConfig,
+            custom_api_keys: BTreeMap::new(),
+            checkpointing_enabled: false,
+            checkpointing_storage_dir: None,
+            checkpointing_max_snapshots: 10,
+            checkpointing_max_age_days: None,
+            max_conversation_turns: 16,
+            model_behavior: None,
+        };
+        let provider_client: Box<dyn uni::LLMProvider> = Box::new(NoopProvider);
+        let traj = TrajectoryLogger::disabled();
+        let turn_metadata_cache = None;
+
+        Self {
+            _temp: temp,
+            sample_file,
+            tool_registry,
+            tools,
+            tool_result_cache,
+            tool_permission_cache,
+            decision_ledger,
+            approval_recorder,
+            session_stats,
+            mcp_panel_state,
+            context_manager,
+            last_forced_redraw,
+            input_status_state,
+            session,
+            handle,
+            renderer,
+            ctrl_c_state,
+            ctrl_c_notify,
+            safety_validator,
+            circuit_breaker,
+            tool_health_tracker,
+            rate_limiter,
+            telemetry,
+            autonomous_executor,
+            error_recovery,
+            harness_state,
+            auto_exit_plan_mode_attempted,
+            working_history,
+            tool_catalog,
+            default_placeholder,
+            steering_receiver,
+            config,
+            provider_client,
+            traj,
+            turn_metadata_cache,
+        }
+    }
+
+    fn turn_processing_context(&mut self) -> TurnProcessingContext<'_> {
+        let tool = crate::agent::runloop::unified::turn::context::ToolContext {
+            tool_result_cache: &self.tool_result_cache,
+            approval_recorder: &self.approval_recorder,
+            tool_registry: &mut self.tool_registry,
+            tools: &self.tools,
+            tool_catalog: &self.tool_catalog,
+            tool_permission_cache: &self.tool_permission_cache,
+            safety_validator: &self.safety_validator,
+            circuit_breaker: &self.circuit_breaker,
+            tool_health_tracker: &self.tool_health_tracker,
+            rate_limiter: &self.rate_limiter,
+            telemetry: &self.telemetry,
+            autonomous_executor: &self.autonomous_executor,
+            error_recovery: &self.error_recovery,
+        };
+        let llm = crate::agent::runloop::unified::turn::context::LLMContext {
+            provider_client: &mut self.provider_client,
+            config: &mut self.config,
+            vt_cfg: None,
+            context_manager: &mut self.context_manager,
+            decision_ledger: &self.decision_ledger,
+            traj: &self.traj,
+        };
+        let ui = crate::agent::runloop::unified::turn::context::UIContext {
+            renderer: &mut self.renderer,
+            handle: &self.handle,
+            session: &mut self.session,
+            ctrl_c_state: &self.ctrl_c_state,
+            ctrl_c_notify: &self.ctrl_c_notify,
+            lifecycle_hooks: None,
+            default_placeholder: &self.default_placeholder,
+            last_forced_redraw: &mut self.last_forced_redraw,
+            input_status_state: &mut self.input_status_state,
+        };
+        let state = crate::agent::runloop::unified::turn::context::TurnProcessingState {
+            session_stats: &mut self.session_stats,
+            auto_exit_plan_mode_attempted: &mut self.auto_exit_plan_mode_attempted,
+            mcp_panel_state: &mut self.mcp_panel_state,
+            working_history: &mut self.working_history,
+            turn_metadata_cache: &mut self.turn_metadata_cache,
+            full_auto: false,
+            harness_state: &mut self.harness_state,
+            harness_emitter: None,
+            steering_receiver: &mut self.steering_receiver,
+        };
+
+        TurnProcessingContext::from_parts(TurnProcessingContextParts {
+            tool,
+            llm,
+            ui,
+            state,
+        })
     }
 }
 
@@ -408,142 +618,122 @@ fn tool_budget_exhausted_reason_mentions_new_instruction_option() {
 }
 
 #[tokio::test]
-async fn end_to_end_blocked_calls_do_not_burn_budget_before_valid_call() {
-    let temp = tempfile::TempDir::new().expect("temp workspace");
-    let workspace = temp.path().to_path_buf();
-    let valid_file = workspace.join("sample.txt");
-    std::fs::write(&valid_file, "hello\n").expect("write sample file");
+async fn blocked_tool_call_guard_emits_tool_and_system_messages() {
+    let mut backing = TestContextBacking::new(4).await;
+    let mut ctx = backing.turn_processing_context();
+    let max_streak = super::max_consecutive_blocked_tool_calls_per_turn(&ctx);
+    let args = json!({"path":"src/main.rs"});
 
-    let mut tool_registry = vtcode_core::tools::ToolRegistry::new(workspace.clone()).await;
-    let tools = Arc::new(RwLock::new(Vec::new()));
-    let tool_result_cache = Arc::new(RwLock::new(ToolResultCache::new(8)));
-    let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
-    {
-        let mut cache = tool_permission_cache.write().await;
-        cache.cache_grant(
-            tool_names::READ_FILE.to_string(),
-            PermissionGrant::Permanent,
+    let mut outcome = None;
+    for idx in 0..=max_streak {
+        outcome = super::enforce_blocked_tool_call_guard(
+            &mut ctx,
+            &format!("blocked_{idx}"),
+            tool_names::READ_FILE,
+            &args,
         );
     }
 
-    let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
-    let approval_recorder = Arc::new(ApprovalRecorder::new(workspace.clone()));
-    let mut session_stats = SessionStats::default();
-    let mut mcp_panel_state = McpPanelState::default();
-    let loaded_skills = Arc::new(RwLock::new(HashMap::new()));
-    let mut context_manager = ContextManager::new(String::new(), (), loaded_skills, None);
-    let mut last_forced_redraw = Instant::now();
-    let mut input_status_state = InputStatusState::default();
-    let mut session = create_headless_session();
-    session.set_skip_confirmations(true);
-    let handle = session.clone_inline_handle();
-    let mut renderer =
-        vtcode_core::utils::ansi::AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
-    let ctrl_c_state = Arc::new(CtrlCState::new());
-    let ctrl_c_notify = Arc::new(Notify::new());
-    let safety_validator = Arc::new(RwLock::new(ToolCallSafetyValidator::new()));
-    safety_validator.write().await.start_turn().await;
-    let circuit_breaker = Arc::new(CircuitBreaker::default());
-    let tool_health_tracker = Arc::new(ToolHealthTracker::new(3));
-    let rate_limiter = Arc::new(AdaptiveRateLimiter::default());
-    let telemetry = Arc::new(vtcode_core::core::telemetry::TelemetryManager::new());
-    let autonomous_executor =
-        Arc::new(vtcode_core::tools::autonomous_executor::AutonomousExecutor::new());
-    let error_recovery = Arc::new(RwLock::new(
-        vtcode_core::core::agent::error_recovery::ErrorRecoveryState::default(),
+    assert!(matches!(
+        outcome,
+        Some(TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. }))
     ));
-    let mut harness_state = HarnessTurnState::new(
-        TurnRunId("run-test".to_string()),
-        TurnId("turn-test".to_string()),
-        1,
-        60,
-        0,
+    assert!(
+        ctx.working_history
+            .iter()
+            .any(|message| message.content.as_text().contains("blocked_streak"))
     );
-    let mut auto_exit_plan_mode_attempted = false;
-    let mut working_history: Vec<uni::Message> = Vec::new();
-    let tool_catalog = Arc::new(ToolCatalogState::new());
-    let default_placeholder: Option<String> = None;
-    let mut steering_receiver = None;
+    assert!(ctx.working_history.iter().any(|message| {
+        message.role == uni::MessageRole::System
+            && message
+                .content
+                .as_text()
+                .contains("Consecutive blocked tool calls reached per-turn cap")
+    }));
+}
 
-    let mut config = AgentConfig {
-        model: "noop-model".to_string(),
-        api_key: "test-key".to_string(),
-        provider: "openai".to_string(),
-        api_key_env: "OPENAI_API_KEY".to_string(),
-        workspace: workspace.clone(),
-        verbose: false,
-        quiet: false,
-        theme: "default".to_string(),
-        reasoning_effort: ReasoningEffortLevel::Medium,
-        ui_surface: UiSurfacePreference::Inline,
-        prompt_cache: PromptCachingConfig::default(),
-        model_source: ModelSelectionSource::WorkspaceConfig,
-        custom_api_keys: BTreeMap::new(),
-        checkpointing_enabled: false,
-        checkpointing_storage_dir: None,
-        checkpointing_max_snapshots: 10,
-        checkpointing_max_age_days: None,
-        max_conversation_turns: 16,
-        model_behavior: None,
+#[tokio::test]
+async fn recovery_skip_step_pushes_structured_tool_message() {
+    let mut backing = TestContextBacking::new(4).await;
+    let mut ctx = backing.turn_processing_context();
+
+    let outcome = super::recovery::apply_recovery_action(
+        &mut ctx,
+        "recovery_call",
+        crate::agent::runloop::unified::turn::recovery_flow::RecoveryAction::SkipStep,
+    )
+    .await
+    .expect("skip-step recovery should succeed");
+
+    assert!(matches!(outcome, Some(super::ValidationResult::Handled)));
+    assert!(
+        ctx.working_history
+            .iter()
+            .any(|message| { message.content.as_text().contains("\"skipped\":true") })
+    );
+}
+
+#[tokio::test]
+async fn denied_tool_permission_emits_policy_response_without_budget_burn() {
+    let mut backing = TestContextBacking::new(2).await;
+    let valid_file = backing.sample_file.clone();
+    let denial_args = json!({"path": valid_file.to_string_lossy()});
+    let normalized_tool_name = backing
+        .tool_registry
+        .preflight_validate_call(tool_names::READ_FILE, &denial_args)
+        .expect("preflight should succeed")
+        .normalized_tool_name;
+    {
+        let mut cache = backing.tool_permission_cache.write().await;
+        cache.cache_grant(normalized_tool_name, PermissionGrant::Denied);
+    }
+
+    let mut repeated_tool_attempts = LoopTracker::new();
+    let mut turn_modified_files = BTreeSet::new();
+    let mut tp_ctx = backing.turn_processing_context();
+    let mut outcome_ctx = ToolOutcomeContext {
+        ctx: &mut tp_ctx,
+        repeated_tool_attempts: &mut repeated_tool_attempts,
+        turn_modified_files: &mut turn_modified_files,
     };
-    let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(NoopProvider);
-    let traj = TrajectoryLogger::disabled();
+
+    let outcome = handle_single_tool_call(
+        &mut outcome_ctx,
+        "denied",
+        tool_names::READ_FILE,
+        denial_args,
+    )
+    .await
+    .expect("denied permission should be handled");
+
+    assert!(outcome.is_none());
+    assert_eq!(outcome_ctx.ctx.harness_state.tool_calls, 0);
+    assert!(outcome_ctx.ctx.working_history.iter().any(|message| {
+        message
+            .content
+            .as_text()
+            .contains("execution denied by policy")
+    }));
+}
+
+#[tokio::test]
+async fn end_to_end_blocked_calls_do_not_burn_budget_before_valid_call() {
+    let mut backing = TestContextBacking::new(1).await;
+    let valid_file = backing.sample_file.clone();
+    let valid_args = json!({"path": valid_file.to_string_lossy()});
+    let normalized_tool_name = backing
+        .tool_registry
+        .preflight_validate_call(tool_names::READ_FILE, &valid_args)
+        .expect("preflight should succeed")
+        .normalized_tool_name;
+    {
+        let mut cache = backing.tool_permission_cache.write().await;
+        cache.cache_grant(normalized_tool_name, PermissionGrant::Permanent);
+    }
+
     let mut turn_modified_files: BTreeSet<std::path::PathBuf> = BTreeSet::new();
     let mut repeated_tool_attempts = LoopTracker::new();
-
-    let tool = crate::agent::runloop::unified::turn::context::ToolContext {
-        tool_result_cache: &tool_result_cache,
-        approval_recorder: &approval_recorder,
-        tool_registry: &mut tool_registry,
-        tools: &tools,
-        tool_catalog: &tool_catalog,
-        tool_permission_cache: &tool_permission_cache,
-        safety_validator: &safety_validator,
-        circuit_breaker: &circuit_breaker,
-        tool_health_tracker: &tool_health_tracker,
-        rate_limiter: &rate_limiter,
-        telemetry: &telemetry,
-        autonomous_executor: &autonomous_executor,
-        error_recovery: &error_recovery,
-    };
-    let llm = crate::agent::runloop::unified::turn::context::LLMContext {
-        provider_client: &mut provider_client,
-        config: &mut config,
-        vt_cfg: None,
-        context_manager: &mut context_manager,
-        decision_ledger: &decision_ledger,
-        traj: &traj,
-    };
-    let ui = crate::agent::runloop::unified::turn::context::UIContext {
-        renderer: &mut renderer,
-        handle: &handle,
-        session: &mut session,
-        ctrl_c_state: &ctrl_c_state,
-        ctrl_c_notify: &ctrl_c_notify,
-        lifecycle_hooks: None,
-        default_placeholder: &default_placeholder,
-        last_forced_redraw: &mut last_forced_redraw,
-        input_status_state: &mut input_status_state,
-    };
-    let state = crate::agent::runloop::unified::turn::context::TurnProcessingState {
-        session_stats: &mut session_stats,
-        auto_exit_plan_mode_attempted: &mut auto_exit_plan_mode_attempted,
-        mcp_panel_state: &mut mcp_panel_state,
-        working_history: &mut working_history,
-        full_auto: false,
-        harness_state: &mut harness_state,
-        harness_emitter: None,
-        steering_receiver: &mut steering_receiver,
-    };
-
-    let mut tp_ctx = TurnProcessingContext::from_parts(
-        crate::agent::runloop::unified::turn::context::TurnProcessingContextParts {
-            tool,
-            llm,
-            ui,
-            state,
-        },
-    );
+    let mut tp_ctx = backing.turn_processing_context();
 
     let mut outcome_ctx = ToolOutcomeContext {
         ctx: &mut tp_ctx,
@@ -574,7 +764,6 @@ async fn end_to_end_blocked_calls_do_not_burn_budget_before_valid_call() {
     assert_eq!(outcome_ctx.ctx.harness_state.tool_calls, 0);
     assert!(!outcome_ctx.ctx.harness_state.tool_budget_exhausted());
 
-    let valid_args = json!({"path": valid_file.to_string_lossy()});
     let third = handle_single_tool_call(
         &mut outcome_ctx,
         "valid_1",

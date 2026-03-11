@@ -18,6 +18,7 @@ pub(crate) enum ValidationResult {
 pub(crate) struct PreparedToolCall {
     pub canonical_name: String,
     pub readonly_classification: bool,
+    pub parallel_safe_after_preflight: bool,
     pub effective_args: Value,
 }
 

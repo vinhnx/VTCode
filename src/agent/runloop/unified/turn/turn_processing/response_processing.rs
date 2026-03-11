@@ -4,7 +4,9 @@ use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::unified::plan_blocks::extract_proposed_plan;
-use crate::agent::runloop::unified::turn::context::TurnProcessingResult;
+use crate::agent::runloop::unified::turn::context::{
+    PreparedAssistantToolCall, TurnProcessingResult,
+};
 use crate::agent::runloop::unified::turn::guards::validate_tool_args_security;
 
 /// Process an LLM response and return a `TurnProcessingResult` describing whether
@@ -26,6 +28,8 @@ pub(crate) fn process_llm_response(
     use vtcode_core::config::constants::tools;
     use vtcode_core::llm::provider as uni;
 
+    let reasoning = split_reasoning_from_text(response.reasoning.as_deref().unwrap_or("")).0;
+    let reasoning_details = response.reasoning_details.clone();
     let mut final_text = response.content.clone();
     let mut proposed_plan: Option<String> = None;
     let mut tool_calls = response.tool_calls.clone().unwrap_or_default();
@@ -127,14 +131,14 @@ pub(crate) fn process_llm_response(
 
     if !tool_calls.is_empty() {
         return Ok(TurnProcessingResult::ToolCalls {
-            tool_calls,
+            tool_calls: prepare_tool_calls(tool_calls),
             assistant_text: if interpreted_textual_call {
                 String::new()
             } else {
                 final_text.unwrap_or_default()
             },
-            reasoning: split_reasoning_from_text(response.reasoning.as_deref().unwrap_or("")).0,
-            reasoning_details: response.reasoning_details.clone(),
+            reasoning,
+            reasoning_details,
         });
     }
 
@@ -143,13 +147,22 @@ pub(crate) fn process_llm_response(
     {
         return Ok(TurnProcessingResult::TextResponse {
             text,
-            reasoning: split_reasoning_from_text(response.reasoning.as_deref().unwrap_or("")).0,
-            reasoning_details: response.reasoning_details.clone(),
+            reasoning,
+            reasoning_details,
             proposed_plan,
         });
     }
 
     Ok(TurnProcessingResult::Empty)
+}
+
+pub(crate) fn prepare_tool_calls(
+    tool_calls: Vec<vtcode_core::llm::provider::ToolCall>,
+) -> Vec<PreparedAssistantToolCall> {
+    tool_calls
+        .into_iter()
+        .map(PreparedAssistantToolCall::new)
+        .collect()
 }
 
 pub(crate) fn build_interview_args_from_text(text: &str) -> Option<serde_json::Value> {
@@ -453,7 +466,64 @@ fn strip_wrapping<'a>(line: &'a str, prefix: &str, suffix: &str) -> Option<&'a s
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vtcode_core::config::constants::tools;
     use vtcode_core::llm::provider::{FinishReason, LLMResponse};
+
+    #[test]
+    fn prepare_tool_calls_reuses_parsed_arguments_and_metadata() {
+        let tool_calls = vec![
+            vtcode_core::llm::provider::ToolCall::function(
+                "call_search".to_string(),
+                tools::UNIFIED_SEARCH.to_string(),
+                r#"{"action":"grep","pattern":"TurnProcessingResult"}"#.to_string(),
+            ),
+            vtcode_core::llm::provider::ToolCall::function(
+                "call_exec".to_string(),
+                tools::UNIFIED_EXEC.to_string(),
+                r#"{"action":"run","command":["cargo","check"]}"#.to_string(),
+            ),
+        ];
+
+        let prepared = prepare_tool_calls(tool_calls);
+
+        assert_eq!(prepared.len(), 2);
+        assert_eq!(prepared[0].call_id(), "call_search");
+        assert_eq!(prepared[0].tool_name(), tools::UNIFIED_SEARCH);
+        assert_eq!(
+            prepared[0].args(),
+            Some(&serde_json::json!({"action":"grep","pattern":"TurnProcessingResult"}))
+        );
+        assert!(prepared[0].is_parallel_safe());
+        assert!(!prepared[0].is_command_execution());
+
+        assert_eq!(prepared[1].call_id(), "call_exec");
+        assert_eq!(prepared[1].tool_name(), tools::UNIFIED_EXEC);
+        assert_eq!(
+            prepared[1].args(),
+            Some(&serde_json::json!({"action":"run","command":["cargo","check"]}))
+        );
+        assert!(!prepared[1].is_parallel_safe());
+        assert!(prepared[1].is_command_execution());
+    }
+
+    #[test]
+    fn prepare_tool_calls_records_invalid_json_without_reparsing() {
+        let tool_calls = vec![vtcode_core::llm::provider::ToolCall::function(
+            "call_invalid".to_string(),
+            tools::UNIFIED_SEARCH.to_string(),
+            "{not-json}".to_string(),
+        )];
+
+        let prepared = prepare_tool_calls(tool_calls);
+
+        assert_eq!(prepared.len(), 1);
+        assert_eq!(prepared[0].call_id(), "call_invalid");
+        assert_eq!(prepared[0].tool_name(), tools::UNIFIED_SEARCH);
+        assert!(prepared[0].args().is_none());
+        assert!(prepared[0].args_error().is_some());
+        assert!(!prepared[0].is_parallel_safe());
+        assert!(!prepared[0].is_command_execution());
+    }
 
     #[test]
     fn extract_interview_questions_from_numbered_lines() {
@@ -722,8 +792,7 @@ Open questions for alignment:
             TurnProcessingResult::ToolCalls { tool_calls, .. } => {
                 let name = tool_calls
                     .first()
-                    .and_then(|call| call.function.as_ref())
-                    .map(|f| f.name.as_str())
+                    .map(|call| call.tool_name())
                     .expect("function name expected");
                 assert_eq!(
                     name,
@@ -762,7 +831,9 @@ Open questions for alignment:
 
         match result {
             TurnProcessingResult::ToolCalls {
-                reasoning_details, ..
+                tool_calls,
+                reasoning_details,
+                ..
             } => {
                 assert_eq!(
                     reasoning_details,
@@ -770,6 +841,10 @@ Open questions for alignment:
                         r#"{"type":"reasoning_content","text":"trace"}"#.to_string()
                     ])
                 );
+                assert_eq!(tool_calls.len(), 1);
+                assert_eq!(tool_calls[0].call_id(), "call_1");
+                assert!(tool_calls[0].is_parallel_safe());
+                assert!(!tool_calls[0].is_command_execution());
             }
             _ => panic!("Expected tool calls"),
         }

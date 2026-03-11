@@ -3,6 +3,7 @@ use std::time::Duration;
 use serde_json::{Value, json};
 use vtcode_core::llm::provider as uni;
 
+use super::response_processing::prepare_tool_calls;
 use crate::agent::runloop::unified::turn::context::TurnProcessingResult;
 use crate::agent::runloop::unified::turn::turn_processing::extract_interview_questions;
 
@@ -898,14 +899,18 @@ fn inject_plan_mode_interview(
 
     match processing_result {
         TurnProcessingResult::ToolCalls {
-            mut tool_calls,
+            tool_calls,
             assistant_text,
             reasoning,
             reasoning_details,
         } => {
-            tool_calls.push(call);
+            let mut raw_tool_calls = tool_calls
+                .into_iter()
+                .map(|tool_call| tool_call.into_raw_call())
+                .collect::<Vec<_>>();
+            raw_tool_calls.push(call);
             TurnProcessingResult::ToolCalls {
-                tool_calls,
+                tool_calls: prepare_tool_calls(raw_tool_calls),
                 assistant_text,
                 reasoning,
                 reasoning_details,
@@ -917,13 +922,13 @@ fn inject_plan_mode_interview(
             reasoning_details,
             proposed_plan: _,
         } => TurnProcessingResult::ToolCalls {
-            tool_calls: vec![call],
+            tool_calls: prepare_tool_calls(vec![call]),
             assistant_text: text,
             reasoning,
             reasoning_details,
         },
         TurnProcessingResult::Empty => TurnProcessingResult::ToolCalls {
-            tool_calls: vec![call],
+            tool_calls: prepare_tool_calls(vec![call]),
             assistant_text: String::new(),
             reasoning: Vec::new(),
             reasoning_details: None,
@@ -937,12 +942,9 @@ fn turn_result_has_interview_tool_call(processing_result: &TurnProcessingResult)
     let TurnProcessingResult::ToolCalls { tool_calls, .. } = processing_result else {
         return false;
     };
-    tool_calls.iter().any(|call| {
-        call.function
-            .as_ref()
-            .map(|func| func.name == tools::REQUEST_USER_INPUT)
-            .unwrap_or(false)
-    })
+    tool_calls
+        .iter()
+        .any(|call| call.tool_name() == tools::REQUEST_USER_INPUT)
 }
 
 struct InterviewToolCallFilter {
@@ -979,11 +981,7 @@ fn filter_interview_tool_calls(
     let mut filtered = Vec::with_capacity(tool_calls.len());
 
     for call in tool_calls {
-        let is_interview = call
-            .function
-            .as_ref()
-            .map(|func| func.name == tools::REQUEST_USER_INPUT)
-            .unwrap_or(false);
+        let is_interview = call.tool_name() == tools::REQUEST_USER_INPUT;
 
         if is_interview {
             had_interview = true;

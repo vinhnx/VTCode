@@ -76,6 +76,7 @@ pub(crate) struct TurnLoopContext<'a> {
     pub harness_emitter: Option<&'a HarnessEventEmitter>,
     pub config: &'a mut AgentConfig,
     pub vt_cfg: Option<&'a VTCodeConfig>,
+    pub turn_metadata_cache: &'a mut Option<Option<serde_json::Value>>,
     pub provider_client: &'a mut Box<dyn uni::LLMProvider>,
     pub traj: &'a TrajectoryLogger,
     pub full_auto: bool,
@@ -118,6 +119,7 @@ impl<'a> TurnLoopContext<'a> {
         harness_emitter: Option<&'a HarnessEventEmitter>,
         config: &'a mut AgentConfig,
         vt_cfg: Option<&'a VTCodeConfig>,
+        turn_metadata_cache: &'a mut Option<Option<serde_json::Value>>,
         provider_client: &'a mut Box<dyn uni::LLMProvider>,
         traj: &'a TrajectoryLogger,
         full_auto: bool,
@@ -155,6 +157,7 @@ impl<'a> TurnLoopContext<'a> {
             harness_emitter,
             config,
             vt_cfg,
+            turn_metadata_cache,
             provider_client,
             traj,
             full_auto,
@@ -227,6 +230,7 @@ impl<'a> TurnLoopContext<'a> {
             auto_exit_plan_mode_attempted: self.auto_exit_plan_mode_attempted,
             mcp_panel_state: self.mcp_panel_state,
             working_history,
+            turn_metadata_cache: self.turn_metadata_cache,
             full_auto: self.full_auto,
             harness_state: self.harness_state,
             harness_emitter: self.harness_emitter,
@@ -241,6 +245,14 @@ impl<'a> TurnLoopContext<'a> {
                 state,
             },
         )
+    }
+
+    pub(crate) fn is_plan_mode(&self) -> bool {
+        self.session_stats.is_plan_mode()
+    }
+
+    pub(crate) fn set_phase(&mut self, phase: TurnPhase) {
+        self.harness_state.set_phase(phase);
     }
 }
 
@@ -316,13 +328,13 @@ pub(crate) async fn run_turn_loop(
     let mut turn_modified_files = BTreeSet::new();
     *ctx.auto_exit_plan_mode_attempted = false;
 
-    ctx.harness_state.set_phase(TurnPhase::Preparing);
+    ctx.set_phase(TurnPhase::Preparing);
     if let Some(Err(e)) = ctx.harness_emitter.map(|e| e.emit(turn_started_event())) {
         tracing::debug!(error = %e, "harness turn_started event emission failed");
     }
 
     // Optimization: Extract all frequently accessed config values once
-    let turn_config = extract_turn_config(ctx.vt_cfg, ctx.session_stats.is_plan_mode());
+    let turn_config = extract_turn_config(ctx.vt_cfg, ctx.is_plan_mode());
 
     let mut step_count = 0;
     let mut current_max_tool_loops = turn_config.max_tool_loops;
@@ -332,7 +344,7 @@ pub(crate) async fn run_turn_loop(
 
     // Reset safety validator for a new turn
     {
-        let max_session_turns = if ctx.session_stats.is_plan_mode() {
+        let max_session_turns = if ctx.is_plan_mode() {
             usize::MAX
         } else {
             turn_config.max_session_turns
@@ -382,13 +394,8 @@ pub(crate) async fn run_turn_loop(
         run_proactive_guards(&mut turn_processing_ctx, step_count).await?;
 
         // Execute the LLM request
-        turn_processing_ctx
-            .harness_state
-            .set_phase(TurnPhase::Requesting);
-        let active_model = {
-            let parts = turn_processing_ctx.parts_mut();
-            parts.llm.config.model.clone()
-        };
+        turn_processing_ctx.set_phase(TurnPhase::Requesting);
+        let active_model = turn_processing_ctx.config.model.clone();
         let (response, response_streamed) = match execute_llm_request(
             &mut turn_processing_ctx,
             step_count,
@@ -401,55 +408,39 @@ pub(crate) async fn run_turn_loop(
             Ok(val) => val,
             Err(err) => {
                 // Record the error in the recovery state for diagnostics
-                {
-                    let mut recovery = {
-                        let parts = turn_processing_ctx.parts_mut();
-                        parts.tool.error_recovery.write().await
-                    };
-                    recovery.record_error("llm_request", format!("{:#}", err), ErrorType::Other);
-                }
+                turn_processing_ctx
+                    .record_recovery_error("llm_request", &err, ErrorType::Other)
+                    .await;
 
                 // execute_llm_request already performs retry/backoff for retryable provider errors.
                 // Avoid a second retry layer here, which can consume turn budget and cause timeouts.
                 // Restore input status on request failure to clear loading/shimmer state.
-                {
-                    let parts = turn_processing_ctx.parts_mut();
-                    parts.ui.handle.set_input_status(
-                        restore_status_left.clone(),
-                        restore_status_right.clone(),
-                    );
-                    parts.ui.input_status_state.left = restore_status_left;
-                    parts.ui.input_status_state.right = restore_status_right;
-                }
+                turn_processing_ctx.restore_input_status(
+                    restore_status_left.clone(),
+                    restore_status_right.clone(),
+                );
 
-                let recovered = {
-                    let parts = turn_processing_ctx.parts_mut();
-                    maybe_recover_after_post_tool_llm_failure(
-                        parts.ui.renderer,
-                        parts.state.working_history,
-                        &err,
-                        step_count,
-                        turn_history_start_len,
-                        "execute_llm_request",
-                    )?
-                };
+                let recovered = maybe_recover_after_post_tool_llm_failure(
+                    turn_processing_ctx.renderer,
+                    turn_processing_ctx.working_history,
+                    &err,
+                    step_count,
+                    turn_history_start_len,
+                    "execute_llm_request",
+                )?;
                 if recovered {
                     result = TurnLoopResult::Completed;
                     break;
                 }
 
-                {
-                    let parts = turn_processing_ctx.parts_mut();
-                    display_error(parts.ui.renderer, "LLM request failed", &err)?;
-                }
+                display_error(turn_processing_ctx.renderer, "LLM request failed", &err)?;
                 // Show recovery hints derived from the canonical error category
                 {
                     let err_cat = vtcode_commons::classify_anyhow_error(&err);
                     let suggestions = err_cat.recovery_suggestions();
                     if !suggestions.is_empty() {
                         let hint = suggestions.join("; ");
-                        let parts = turn_processing_ctx.parts_mut();
-                        parts.ui.renderer.line(
+                        turn_processing_ctx.renderer.line(
                             vtcode_core::utils::ansi::MessageStyle::Info,
                             &format!("Hint: {}", hint),
                         )?;
@@ -469,29 +460,29 @@ pub(crate) async fn run_turn_loop(
         let response_usage = response.usage.clone();
 
         {
-            let parts = turn_processing_ctx.parts_mut();
-            if parts.state.session_stats.is_plan_mode() {
-                parts.state.session_stats.increment_plan_mode_turns();
+            if turn_processing_ctx.is_plan_mode() {
+                turn_processing_ctx
+                    .session_stats
+                    .increment_plan_mode_turns();
             }
         }
 
         // Process the LLM response
         let processing_result_outcome = {
-            let parts = turn_processing_ctx.parts_mut();
-            let allow_plan_interview = parts.state.session_stats.is_plan_mode()
+            let allow_plan_interview = turn_processing_ctx.session_stats.is_plan_mode()
                 && turn_config.request_user_input_enabled
                 && crate::agent::runloop::unified::turn::turn_processing::plan_mode_interview_ready(
-                    parts.state.session_stats,
+                    turn_processing_ctx.session_stats,
                 );
             process_llm_response(
                 &response,
-                parts.ui.renderer,
-                parts.state.working_history.len(),
-                parts.state.session_stats.is_plan_mode(),
+                turn_processing_ctx.renderer,
+                turn_processing_ctx.working_history.len(),
+                turn_processing_ctx.session_stats.is_plan_mode(),
                 allow_plan_interview,
                 turn_config.request_user_input_enabled,
                 Some(&validation_cache),
-                Some(parts.tool.tool_registry),
+                Some(turn_processing_ctx.tool_registry),
             )
         };
         let mut processing_result = match processing_result_outcome {
@@ -508,27 +499,21 @@ pub(crate) async fn run_turn_loop(
                 }
 
                 {
-                    let mut recovery = {
-                        let parts = turn_processing_ctx.parts_mut();
-                        parts.tool.error_recovery.write().await
-                    };
+                    let mut recovery = turn_processing_ctx.error_recovery.write().await;
                     recovery.record_error(
                         "llm_response_parse",
                         format!("{:#}", err),
                         ErrorType::Other,
                     );
                 }
-                let recovered = {
-                    let parts = turn_processing_ctx.parts_mut();
-                    maybe_recover_after_post_tool_llm_failure(
-                        parts.ui.renderer,
-                        parts.state.working_history,
-                        &err,
-                        step_count,
-                        turn_history_start_len,
-                        "process_llm_response",
-                    )?
-                };
+                let recovered = maybe_recover_after_post_tool_llm_failure(
+                    turn_processing_ctx.renderer,
+                    turn_processing_ctx.working_history,
+                    &err,
+                    step_count,
+                    turn_history_start_len,
+                    "process_llm_response",
+                )?;
                 if recovered {
                     result = TurnLoopResult::Completed;
                     break;
@@ -538,35 +523,32 @@ pub(crate) async fn run_turn_loop(
         };
         if turn_config.request_user_input_enabled {
             let should_attempt_synthesis = {
-                let parts = turn_processing_ctx.parts_mut();
-                parts.state.session_stats.is_plan_mode()
+                turn_processing_ctx.is_plan_mode()
                     && should_attempt_dynamic_interview_generation(
                         &processing_result,
                         response.content.as_deref(),
-                        parts.state.session_stats,
+                        turn_processing_ctx.session_stats,
                     )
             };
             let synthesized_interview_args = if should_attempt_synthesis {
-                let parts = turn_processing_ctx.parts_mut();
                 synthesize_plan_mode_interview_args(
-                    parts.llm.provider_client,
+                    turn_processing_ctx.provider_client,
                     &active_model,
-                    parts.state.working_history,
+                    turn_processing_ctx.working_history,
                     response.content.as_deref(),
-                    parts.state.session_stats,
+                    turn_processing_ctx.session_stats,
                 )
                 .await
             } else {
                 None
             };
 
-            let parts = turn_processing_ctx.parts_mut();
-            if parts.state.session_stats.is_plan_mode() {
+            if turn_processing_ctx.is_plan_mode() {
                 processing_result = maybe_force_plan_mode_interview(
                     processing_result,
                     response.content.as_deref(),
-                    parts.state.session_stats,
-                    parts.state.working_history.len(),
+                    turn_processing_ctx.session_stats,
+                    turn_processing_ctx.working_history.len(),
                     synthesized_interview_args,
                 );
             }
@@ -576,23 +558,13 @@ pub(crate) async fn run_turn_loop(
         // This handles the case where defer_restore was set but no tool spinners will take over
         let has_tool_calls = matches!(processing_result, TurnProcessingResult::ToolCalls { .. });
         if !has_tool_calls {
-            // Restore the input status bar to its original state
-            let parts = turn_processing_ctx.parts_mut();
-            parts
-                .ui
-                .handle
-                .set_input_status(restore_status_left, restore_status_right);
+            turn_processing_ctx.restore_input_status(restore_status_left, restore_status_right);
         }
 
         if has_tool_calls {
-            let parts = turn_processing_ctx.parts_mut();
-            parts
-                .state
-                .harness_state
-                .set_phase(TurnPhase::ExecutingTools);
+            turn_processing_ctx.set_phase(TurnPhase::ExecutingTools);
         } else {
-            let parts = turn_processing_ctx.parts_mut();
-            parts.state.harness_state.set_phase(TurnPhase::Finalizing);
+            turn_processing_ctx.set_phase(TurnPhase::Finalizing);
         }
 
         // Handle the turn processing result (dispatch tool calls or finish turn)
@@ -611,8 +583,7 @@ pub(crate) async fn run_turn_loop(
             Ok(outcome) => outcome,
             Err(err) => {
                 // Record result-handler errors for diagnostics (mirrors llm_request recording)
-                let mut recovery = ctx.error_recovery.write().await;
-                recovery.record_error(
+                ctx.error_recovery.write().await.record_error(
                     "turn_result_handler",
                     format!("{:#}", err),
                     ErrorType::ToolExecution,
@@ -650,7 +621,7 @@ pub(crate) async fn run_turn_loop(
         }
     }
 
-    ctx.harness_state.set_phase(TurnPhase::Finalizing);
+    ctx.set_phase(TurnPhase::Finalizing);
     if let Some(emitter) = ctx.harness_emitter {
         // Exit is a graceful user-initiated action, not a failure
         let event = match result {

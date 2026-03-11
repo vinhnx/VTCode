@@ -86,6 +86,20 @@ pub(crate) fn push_tool_response<S>(
     history.push(uni::Message::tool_response(tool_call_id.into(), content));
 }
 
+pub(crate) fn push_invalid_tool_args_response<S>(
+    history: &mut Vec<uni::Message>,
+    tool_call_id: S,
+    tool_name: &str,
+    error: &str,
+) where
+    S: AsRef<str> + Into<String>,
+{
+    let payload = serde_json::json!({
+        "error": format!("Invalid tool arguments for '{}': {}", tool_name, error)
+    });
+    push_tool_response(history, tool_call_id, payload.to_string());
+}
+
 pub(crate) fn build_exit_plan_mode_args(reason: &str) -> serde_json::Value {
     serde_json::json!({
         "reason": reason

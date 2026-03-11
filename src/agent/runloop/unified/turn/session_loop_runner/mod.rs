@@ -29,6 +29,53 @@ use metrics::{
 };
 use plan_seed::load_active_plan_seed;
 
+#[derive(Clone)]
+struct TurnHistoryCheckpoint {
+    baseline_len: usize,
+    #[cfg(debug_assertions)]
+    prefix_fingerprint: u64,
+}
+
+impl TurnHistoryCheckpoint {
+    fn capture(history: &[vtcode_core::llm::provider::Message]) -> Self {
+        Self {
+            baseline_len: history.len(),
+            #[cfg(debug_assertions)]
+            prefix_fingerprint: Self::prefix_fingerprint(history),
+        }
+    }
+
+    fn rollback(&self, history: &mut Vec<vtcode_core::llm::provider::Message>) {
+        #[cfg(debug_assertions)]
+        self.assert_append_only(history);
+        history.truncate(self.baseline_len);
+    }
+
+    #[cfg(debug_assertions)]
+    fn assert_append_only(&self, history: &[vtcode_core::llm::provider::Message]) {
+        debug_assert!(
+            history.len() >= self.baseline_len,
+            "turn history rollback requires append-only growth after checkpoint"
+        );
+        debug_assert_eq!(
+            Self::prefix_fingerprint(&history[..self.baseline_len]),
+            self.prefix_fingerprint,
+            "turn history rollback requires the pre-checkpoint prefix to remain unchanged"
+        );
+    }
+
+    #[cfg(debug_assertions)]
+    fn prefix_fingerprint(history: &[vtcode_core::llm::provider::Message]) -> u64 {
+        use std::hash::{Hash, Hasher};
+
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        serde_json::to_string(history)
+            .unwrap_or_default()
+            .hash(&mut hasher);
+        hasher.finish()
+    }
+}
+
 fn live_reload_preserves_session_config(
     initial_vt_cfg: Option<&VTCodeConfig>,
     runtime_cfg: &CoreAgentConfig,
@@ -400,6 +447,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         if !startup_update_requested_restart {
             loop {
                 let interaction_outcome = {
+                    let mut interaction_turn_metadata_cache = None;
                     let mut interaction_ctx = crate::agent::runloop::unified::turn::session::interaction_loop::InteractionLoopContext {
                     renderer: &mut renderer,
                     session: &mut session,
@@ -440,6 +488,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     autonomous_executor: &autonomous_executor,
                     error_recovery: &error_recovery,
                     last_forced_redraw: &mut last_forced_redraw,
+                    turn_metadata_cache: &mut interaction_turn_metadata_cache,
                     harness_config: harness_config.clone(),
                     steering_receiver,
                     startup_update_notice_rx: &mut startup_update_notice_rx,
@@ -547,8 +596,8 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 let turn_started_at = Instant::now();
                 let mut attempts: usize = 0;
                 let history_snapshot_bytes = estimate_history_bytes(&working_history);
-                let mut turn_history_checkpoint: Option<Vec<vtcode_core::llm::provider::Message>> =
-                    Some(working_history.clone());
+                let turn_history_checkpoint = TurnHistoryCheckpoint::capture(&working_history);
+                let mut turn_metadata_cache = None;
                 let outcome = match loop {
                     let mut auto_exit_plan_mode_attempted = false;
                     let plan_mode_active = session_stats.is_plan_mode();
@@ -597,6 +646,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         harness_emitter.as_ref(),
                         &mut config,
                         vt_cfg.as_ref(),
+                        &mut turn_metadata_cache,
                         &mut provider_client,
                         &traj,
                         full_auto,
@@ -638,9 +688,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                                 } else {
                                     RunLoopTurnLoopResult::Cancelled
                                 };
-                                if let Some(snapshot) = turn_history_checkpoint.take() {
-                                    working_history = snapshot;
-                                }
+                                turn_history_checkpoint.rollback(&mut working_history);
                                 break Ok(TurnLoopOutcome {
                                     result: interrupted_result,
                                     turn_modified_files: std::collections::BTreeSet::new(),
@@ -678,14 +726,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                                     timeout_secs
                                 ));
                             }
-                            let Some(snapshot) = turn_history_checkpoint.take() else {
-                                let checkpoint_error =
-                                    "Turn timeout retry checkpoint unavailable; stopping turn."
-                                        .to_string();
-                                renderer.line(MessageStyle::Error, &checkpoint_error)?;
-                                break Err(anyhow::anyhow!(checkpoint_error));
-                            };
-                            working_history = snapshot;
+                            turn_history_checkpoint.rollback(&mut working_history);
                             renderer.line(
                             MessageStyle::Error,
                             &format!(
@@ -981,9 +1022,10 @@ pub(super) async fn run_single_agent_loop_unified_impl(
 #[cfg(test)]
 mod tests {
     use super::{
-        archive::NextRuntimeArchiveId, archive::next_runtime_archive_id_request,
-        archive::workspace_archive_label, build_partial_timeout_messages,
-        effective_max_tool_calls_for_turn, resolve_effective_turn_timeout_secs,
+        TurnHistoryCheckpoint, archive::NextRuntimeArchiveId,
+        archive::next_runtime_archive_id_request, archive::workspace_archive_label,
+        build_partial_timeout_messages, effective_max_tool_calls_for_turn,
+        resolve_effective_turn_timeout_secs,
     };
     use crate::agent::agents::ResumeSession;
     use crate::agent::runloop::unified::run_loop_context::TurnPhase;
@@ -1073,6 +1115,48 @@ mod tests {
             build_partial_timeout_messages(660, TurnPhase::Requesting, 25, 0, false, true);
         assert!(!timeout_message.contains("Autonomous recovery"));
         assert!(!timeout_error_message.contains("Autonomous recovery"));
+    }
+
+    #[test]
+    fn turn_history_checkpoint_truncates_appended_messages() {
+        let mut history = vec![
+            vtcode_core::llm::provider::Message::user("before".to_string()),
+            vtcode_core::llm::provider::Message::assistant("baseline".to_string()),
+        ];
+        let checkpoint = TurnHistoryCheckpoint::capture(&history);
+
+        history.push(vtcode_core::llm::provider::Message::assistant(
+            "during turn".to_string(),
+        ));
+        history.push(vtcode_core::llm::provider::Message::tool_response(
+            "call-1".to_string(),
+            "{\"ok\":true}".to_string(),
+        ));
+
+        checkpoint.rollback(&mut history);
+
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[0].content.as_text(), "before");
+        assert_eq!(history[1].content.as_text(), "baseline");
+    }
+
+    #[test]
+    fn turn_history_checkpoint_preserves_preexisting_history_prefix() {
+        let mut history = vec![
+            vtcode_core::llm::provider::Message::system("system".to_string()),
+            vtcode_core::llm::provider::Message::user("request".to_string()),
+            vtcode_core::llm::provider::Message::assistant("response".to_string()),
+        ];
+        let expected_prefix = history.clone();
+        let checkpoint = TurnHistoryCheckpoint::capture(&history);
+
+        history.push(vtcode_core::llm::provider::Message::assistant(
+            "retryable append".to_string(),
+        ));
+
+        checkpoint.rollback(&mut history);
+
+        assert_eq!(history, expected_prefix);
     }
 
     #[test]

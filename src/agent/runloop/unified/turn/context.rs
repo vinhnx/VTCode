@@ -39,11 +39,97 @@ pub(crate) enum TurnLoopResult {
     Blocked { reason: Option<String> },
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct PreparedAssistantToolCall {
+    raw_call: uni::ToolCall,
+    parsed_args: Option<serde_json::Value>,
+    args_error: Option<String>,
+    is_parallel_safe: bool,
+    is_command_execution: bool,
+}
+
+impl PreparedAssistantToolCall {
+    pub(crate) fn new(raw_call: uni::ToolCall) -> Self {
+        let tool_name = raw_call
+            .function
+            .as_ref()
+            .map(|function| function.name.as_str())
+            .unwrap_or(raw_call.call_type.as_str());
+
+        let (parsed_args, args_error, is_parallel_safe, is_command_execution) = if raw_call
+            .function
+            .is_none()
+        {
+            (
+                None,
+                Some("tool call missing function details".to_string()),
+                false,
+                false,
+            )
+        } else {
+            match raw_call.parsed_arguments() {
+                Ok(args) => {
+                    let is_parallel_safe =
+                        vtcode_core::tools::tool_intent::is_parallel_safe_call(tool_name, &args);
+                    let is_command_execution =
+                        vtcode_core::tools::tool_intent::is_command_run_tool_call(tool_name, &args);
+                    (Some(args), None, is_parallel_safe, is_command_execution)
+                }
+                Err(err) => (None, Some(err.to_string()), false, false),
+            }
+        };
+
+        Self {
+            raw_call,
+            parsed_args,
+            args_error,
+            is_parallel_safe,
+            is_command_execution,
+        }
+    }
+
+    pub(crate) fn raw_call(&self) -> &uni::ToolCall {
+        &self.raw_call
+    }
+
+    pub(crate) fn into_raw_call(self) -> uni::ToolCall {
+        self.raw_call
+    }
+
+    pub(crate) fn call_id(&self) -> &str {
+        &self.raw_call.id
+    }
+
+    pub(crate) fn tool_name(&self) -> &str {
+        self.raw_call
+            .function
+            .as_ref()
+            .map(|function| function.name.as_str())
+            .unwrap_or(self.raw_call.call_type.as_str())
+    }
+
+    pub(crate) fn args(&self) -> Option<&serde_json::Value> {
+        self.parsed_args.as_ref()
+    }
+
+    pub(crate) fn args_error(&self) -> Option<&str> {
+        self.args_error.as_deref()
+    }
+
+    pub(crate) fn is_parallel_safe(&self) -> bool {
+        self.is_parallel_safe
+    }
+
+    pub(crate) fn is_command_execution(&self) -> bool {
+        self.is_command_execution
+    }
+}
+
 /// Result of processing a single turn
 pub(crate) enum TurnProcessingResult {
     /// Turn resulted in tool calls that need to be executed
     ToolCalls {
-        tool_calls: Vec<uni::ToolCall>,
+        tool_calls: Vec<PreparedAssistantToolCall>,
         assistant_text: String,
         reasoning: Vec<ReasoningSegment>,
         reasoning_details: Option<Vec<String>>,
@@ -125,6 +211,7 @@ pub(crate) struct TurnProcessingState<'a> {
     pub auto_exit_plan_mode_attempted: &'a mut bool,
     pub mcp_panel_state: &'a mut mcp_events::McpPanelState,
     pub working_history: &'a mut Vec<uni::Message>,
+    pub turn_metadata_cache: &'a mut Option<Option<serde_json::Value>>,
     pub full_auto: bool,
     pub harness_state: &'a mut crate::agent::runloop::unified::run_loop_context::HarnessTurnState,
     pub harness_emitter:
@@ -151,6 +238,7 @@ pub(crate) struct TurnProcessingContext<'a> {
     pub decision_ledger:
         &'a Arc<tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
     pub working_history: &'a mut Vec<uni::Message>,
+    pub turn_metadata_cache: &'a mut Option<Option<serde_json::Value>>,
     pub tool_registry: &'a mut vtcode_core::tools::registry::ToolRegistry,
     pub tools: &'a Arc<tokio::sync::RwLock<Vec<uni::ToolDefinition>>>,
     pub tool_catalog: &'a Arc<ToolCatalogState>,
@@ -206,6 +294,7 @@ impl<'a> TurnProcessingContext<'a> {
             approval_recorder: tool.approval_recorder,
             decision_ledger: llm.decision_ledger,
             working_history: state.working_history,
+            turn_metadata_cache: state.turn_metadata_cache,
             tool_registry: tool.tool_registry,
             tools: tool.tools,
             tool_catalog: tool.tool_catalog,
@@ -276,6 +365,7 @@ impl<'a> TurnProcessingContext<'a> {
             auto_exit_plan_mode_attempted: self.auto_exit_plan_mode_attempted,
             mcp_panel_state: self.mcp_panel_state,
             working_history: self.working_history,
+            turn_metadata_cache: self.turn_metadata_cache,
             full_auto: self.full_auto,
             harness_state: self.harness_state,
             harness_emitter: self.harness_emitter,
@@ -334,6 +424,7 @@ impl<'a> TurnProcessingContext<'a> {
             state.harness_emitter,
             llm_ctx.config,
             llm_ctx.vt_cfg,
+            state.turn_metadata_cache,
             llm_ctx.provider_client,
             llm_ctx.traj,
             state.full_auto,
@@ -473,6 +564,71 @@ impl<'a> TurnProcessingContext<'a> {
         }
 
         Ok(())
+    }
+
+    pub(crate) fn is_plan_mode(&self) -> bool {
+        self.session_stats.is_plan_mode()
+    }
+
+    pub(crate) fn set_phase(
+        &mut self,
+        phase: crate::agent::runloop::unified::run_loop_context::TurnPhase,
+    ) {
+        self.harness_state.set_phase(phase);
+    }
+
+    pub(crate) fn restore_input_status(&mut self, left: Option<String>, right: Option<String>) {
+        self.handle.set_input_status(left.clone(), right.clone());
+        self.input_status_state.left = left;
+        self.input_status_state.right = right;
+    }
+
+    pub(crate) fn push_system_message(&mut self, content: impl Into<String>) {
+        self.working_history
+            .push(uni::Message::system(content.into()));
+    }
+
+    pub(crate) fn reset_blocked_tool_call_streak(&mut self) {
+        self.harness_state.reset_blocked_tool_call_streak();
+    }
+
+    pub(crate) fn record_blocked_tool_call(&mut self) -> usize {
+        self.harness_state.record_blocked_tool_call()
+    }
+
+    pub(crate) fn push_tool_response<S>(&mut self, tool_call_id: S, content: String)
+    where
+        S: AsRef<str> + Into<String>,
+    {
+        crate::agent::runloop::unified::turn::tool_outcomes::helpers::push_tool_response(
+            self.working_history,
+            tool_call_id,
+            content,
+        );
+    }
+
+    pub(crate) async fn record_recovery_error(
+        &self,
+        scope: &str,
+        error: &anyhow::Error,
+        error_type: vtcode_core::core::agent::error_recovery::ErrorType,
+    ) {
+        let mut recovery = self.error_recovery.write().await;
+        recovery.record_error(scope, format!("{:#}", error), error_type);
+    }
+
+    pub(crate) async fn turn_metadata(&mut self) -> anyhow::Result<Option<serde_json::Value>> {
+        if let Some(cached) = self.turn_metadata_cache.as_ref() {
+            return Ok(cached.clone());
+        }
+
+        let metadata = vtcode_core::turn_metadata::build_turn_metadata_value_with_timeout(
+            &self.config.workspace,
+            std::time::Duration::from_millis(250),
+        )
+        .await?;
+        *self.turn_metadata_cache = Some(metadata.clone());
+        Ok(metadata)
     }
 
     pub(crate) async fn handle_text_response(

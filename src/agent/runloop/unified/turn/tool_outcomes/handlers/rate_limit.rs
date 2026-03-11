@@ -30,27 +30,17 @@ pub(crate) async fn acquire_adaptive_rate_limit_slot<'a>(
     tool_name: &str,
 ) -> Result<Option<ValidationResult>> {
     for attempt in 0..MAX_RATE_LIMIT_ACQUIRE_ATTEMPTS {
-        let acquire_result = {
-            let parts = ctx.parts_mut();
-            parts.tool.rate_limiter.try_acquire(tool_name)
-        };
+        let acquire_result = ctx.rate_limiter.try_acquire(tool_name);
 
         match acquire_result {
             Ok(_) => return Ok(None),
             Err(wait_time) => {
-                let (is_cancel_requested, is_exit_requested) = {
-                    let parts = ctx.parts_mut();
-                    (
-                        parts.ui.ctrl_c_state.is_cancel_requested(),
-                        parts.ui.ctrl_c_state.is_exit_requested(),
-                    )
-                };
-                if is_cancel_requested {
+                if ctx.ctrl_c_state.is_cancel_requested() {
                     return Ok(Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
                         TurnLoopResult::Cancelled,
                     ))));
                 }
-                if is_exit_requested {
+                if ctx.ctrl_c_state.is_exit_requested() {
                     return Ok(Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
                         TurnLoopResult::Exit,
                     ))));
@@ -65,14 +55,11 @@ pub(crate) async fn acquire_adaptive_rate_limit_slot<'a>(
                         retry_after_ms,
                         "Adaptive rate limiter blocked tool execution after repeated attempts"
                     );
-                    {
-                        let parts = ctx.parts_mut();
-                        push_tool_response(
-                            parts.state.working_history,
-                            tool_call_id,
-                            build_rate_limit_error_content(tool_name, retry_after_ms),
-                        );
-                    }
+                    push_tool_response(
+                        ctx.working_history,
+                        tool_call_id,
+                        build_rate_limit_error_content(tool_name, retry_after_ms),
+                    );
                     return Ok(Some(ValidationResult::Blocked));
                 }
 
@@ -83,23 +70,13 @@ pub(crate) async fn acquire_adaptive_rate_limit_slot<'a>(
 
                 tokio::select! {
                     _ = tokio::time::sleep(bounded_wait) => {},
-                    _ = {
-                        let parts = ctx.parts_mut();
-                        parts.ui.ctrl_c_notify.notified()
-                    } => {
-                        let (is_exit_requested, is_cancel_requested) = {
-                            let parts = ctx.parts_mut();
-                            (
-                                parts.ui.ctrl_c_state.is_exit_requested(),
-                                parts.ui.ctrl_c_state.is_cancel_requested(),
-                            )
-                        };
-                        if is_exit_requested {
+                    _ = ctx.ctrl_c_notify.notified() => {
+                        if ctx.ctrl_c_state.is_exit_requested() {
                             return Ok(Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
                                 TurnLoopResult::Exit,
                             ))));
                         }
-                        if is_cancel_requested {
+                        if ctx.ctrl_c_state.is_cancel_requested() {
                             return Ok(Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
                                 TurnLoopResult::Cancelled,
                             ))));

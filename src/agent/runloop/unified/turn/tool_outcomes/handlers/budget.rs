@@ -16,22 +16,18 @@ pub(crate) fn build_tool_budget_exhausted_reason(used: usize, max: usize) -> Str
 }
 
 pub(crate) fn record_tool_call_budget_usage(ctx: &mut TurnProcessingContext<'_>) {
-    let parts = ctx.parts_mut();
-    parts.state.harness_state.record_tool_call();
-    if parts
-        .state
+    ctx.harness_state.record_tool_call();
+    if ctx
         .harness_state
         .should_emit_tool_budget_warning(TOOL_BUDGET_WARNING_THRESHOLD)
     {
-        let used = parts.state.harness_state.tool_calls;
-        let max = parts.state.harness_state.max_tool_calls;
-        let remaining = parts.state.harness_state.remaining_tool_calls();
-        parts
-            .state
-            .working_history
+        let used = ctx.harness_state.tool_calls;
+        let max = ctx.harness_state.max_tool_calls;
+        let remaining = ctx.harness_state.remaining_tool_calls();
+        ctx.working_history
             .push(uni::Message::system(build_tool_budget_warning_message(
                 used, max, remaining,
             )));
-        parts.state.harness_state.mark_tool_budget_warning_emitted();
+        ctx.harness_state.mark_tool_budget_warning_emitted();
     }
 }

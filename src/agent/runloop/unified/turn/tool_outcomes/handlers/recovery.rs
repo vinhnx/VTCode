@@ -16,9 +16,8 @@ fn circuit_breaker_default_blocked(
     fallback_tool: Option<String>,
     fallback_tool_args: Option<Value>,
 ) -> ValidationResult {
-    let parts = ctx.parts_mut();
     push_tool_response(
-        parts.state.working_history,
+        ctx.working_history,
         tool_call_id,
         build_validation_error_content_with_fallback(
             format!(
@@ -33,6 +32,45 @@ fn circuit_breaker_default_blocked(
     ValidationResult::Blocked
 }
 
+pub(super) async fn apply_recovery_action(
+    ctx: &mut TurnProcessingContext<'_>,
+    tool_call_id: &str,
+    action: crate::agent::runloop::unified::turn::recovery_flow::RecoveryAction,
+) -> Result<Option<ValidationResult>> {
+    use crate::agent::runloop::unified::turn::recovery_flow::RecoveryAction;
+
+    match action {
+        RecoveryAction::ResetAllCircuits => {
+            ctx.circuit_breaker.reset_all();
+            ctx.error_recovery.write().await.clear_circuit_events();
+            tracing::info!("Recovery: user chose Reset All & Retry");
+            Ok(None)
+        }
+        RecoveryAction::Continue => {
+            tracing::info!(action = ?action, "Recovery: user chose to continue");
+            Ok(None)
+        }
+        RecoveryAction::SkipStep => {
+            tracing::info!("Recovery: user chose Skip This Step");
+            ctx.push_tool_response(
+                tool_call_id,
+                serde_json::json!({
+                    "skipped": true,
+                    "reason": "Skipped by user via recovery wizard. Try a different approach."
+                })
+                .to_string(),
+            );
+            Ok(Some(ValidationResult::Handled))
+        }
+        RecoveryAction::SaveAndExit => {
+            tracing::info!("Recovery: user chose Save & Exit");
+            Ok(Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
+                TurnLoopResult::Exit,
+            ))))
+        }
+    }
+}
+
 /// Attempt interactive recovery when a circuit breaker blocks a tool.
 pub(crate) async fn try_interactive_circuit_recovery(
     ctx: &mut TurnProcessingContext<'_>,
@@ -41,7 +79,7 @@ pub(crate) async fn try_interactive_circuit_recovery(
     fallback_tool: Option<String>,
     fallback_tool_args: Option<Value>,
 ) -> Result<Option<ValidationResult>> {
-    use crate::agent::runloop::unified::turn::recovery_flow::{self, RecoveryAction};
+    use crate::agent::runloop::unified::turn::recovery_flow;
 
     if ctx.full_auto || !ctx.error_recovery.read().await.can_prompt_user() {
         return Ok(Some(circuit_breaker_default_blocked(
@@ -85,36 +123,5 @@ pub(crate) async fn try_interactive_circuit_recovery(
         )));
     };
 
-    match action {
-        RecoveryAction::ResetAllCircuits => {
-            ctx.circuit_breaker.reset_all();
-            ctx.error_recovery.write().await.clear_circuit_events();
-            tracing::info!("Recovery: user chose Reset All & Retry");
-            Ok(None)
-        }
-        RecoveryAction::Continue => {
-            tracing::info!(action = ?action, "Recovery: user chose to continue");
-            Ok(None)
-        }
-        RecoveryAction::SkipStep => {
-            tracing::info!("Recovery: user chose Skip This Step");
-            let parts = ctx.parts_mut();
-            push_tool_response(
-                parts.state.working_history,
-                tool_call_id,
-                serde_json::json!({
-                    "skipped": true,
-                    "reason": "Skipped by user via recovery wizard. Try a different approach."
-                })
-                .to_string(),
-            );
-            Ok(Some(ValidationResult::Handled))
-        }
-        RecoveryAction::SaveAndExit => {
-            tracing::info!("Recovery: user chose Save & Exit");
-            Ok(Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
-                TurnLoopResult::Exit,
-            ))))
-        }
-    }
+    apply_recovery_action(ctx, tool_call_id, action).await
 }
