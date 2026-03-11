@@ -694,7 +694,11 @@ fn last_user_message_is_follow_up(history: &[uni::Message]) -> bool {
         .iter()
         .rev()
         .find(|message| message.role == uni::MessageRole::User)
-        .is_some_and(|message| is_follow_up_prompt_like(message.content.as_text().as_ref()))
+        .is_some_and(|message| {
+            crate::agent::runloop::unified::state::is_follow_up_prompt_like(
+                message.content.as_text().as_ref(),
+            )
+        })
 }
 
 fn has_recent_tool_activity(history: &[uni::Message]) -> bool {
@@ -703,32 +707,6 @@ fn has_recent_tool_activity(history: &[uni::Message]) -> bool {
             || message.tool_call_id.is_some()
             || message.tool_calls.is_some()
     })
-}
-
-fn is_follow_up_prompt_like(input: &str) -> bool {
-    let normalized = input
-        .trim()
-        .trim_matches(|c: char| c.is_ascii_whitespace() || c.is_ascii_punctuation())
-        .to_ascii_lowercase();
-    if normalized.starts_with("continue autonomously from the last stalled turn") {
-        return true;
-    }
-    let words: Vec<&str> = normalized.split_whitespace().collect();
-    matches!(
-        words.as_slice(),
-        ["continue"]
-            | ["retry"]
-            | ["proceed"]
-            | ["go", "on"]
-            | ["go", "ahead"]
-            | ["keep", "going"]
-            | ["please", "continue"]
-            | ["continue", "please"]
-            | ["please", "retry"]
-            | ["retry", "please"]
-            | ["continue", "with", "recommendation"]
-            | ["continue", "with", "your", "recommendation"]
-    )
 }
 
 fn is_interim_progress_update(text: &str) -> bool {
@@ -927,14 +905,20 @@ mod tests {
 
     #[test]
     fn follow_up_prompt_detection_accepts_continue_variants() {
-        assert!(is_follow_up_prompt_like("continue"));
-        assert!(is_follow_up_prompt_like("continue."));
-        assert!(is_follow_up_prompt_like("go on"));
-        assert!(is_follow_up_prompt_like("please continue"));
-        assert!(is_follow_up_prompt_like(
-            "Continue autonomously from the last stalled turn. Stall reason: x."
-        ));
-        assert!(!is_follow_up_prompt_like("run cargo clippy and fix"));
+        assert!(crate::agent::runloop::unified::state::is_follow_up_prompt_like("continue"));
+        assert!(crate::agent::runloop::unified::state::is_follow_up_prompt_like("continue."));
+        assert!(crate::agent::runloop::unified::state::is_follow_up_prompt_like("go on"));
+        assert!(crate::agent::runloop::unified::state::is_follow_up_prompt_like("please continue"));
+        assert!(
+            crate::agent::runloop::unified::state::is_follow_up_prompt_like(
+                "Continue autonomously from the last stalled turn. Stall reason: x."
+            )
+        );
+        assert!(
+            !crate::agent::runloop::unified::state::is_follow_up_prompt_like(
+                "run cargo clippy and fix"
+            )
+        );
     }
 
     #[test]

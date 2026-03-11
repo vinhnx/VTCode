@@ -512,6 +512,44 @@ pub fn normalize_unified_search_args(args: &Value) -> Value {
         );
     }
 
+    let action = normalized
+        .get("action")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    let pattern_alias = normalized
+        .get("pattern")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .or_else(|| {
+            normalized
+                .get("query")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_string)
+        })
+        .or_else(|| {
+            if action.eq_ignore_ascii_case("grep") {
+                normalized
+                    .get("keyword")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_string)
+            } else {
+                None
+            }
+        });
+
+    if action.eq_ignore_ascii_case("grep")
+        && !normalized.contains_key("pattern")
+        && let Some(pattern) = pattern_alias
+    {
+        normalized.insert("pattern".to_string(), Value::String(pattern));
+    }
+
     Value::Object(normalized)
 }
 
@@ -787,6 +825,32 @@ mod tests {
         assert_eq!(normalized["lang"], "rust");
         assert_eq!(normalized["debug_query"], "ast");
         assert_eq!(normalized["max_results"], 5);
+    }
+
+    #[test]
+    fn normalize_unified_search_args_maps_keyword_to_pattern_for_grep() {
+        let normalized = normalize_unified_search_args(&json!({
+            "action": "grep",
+            "keyword": "system prompt",
+            "path": "src"
+        }));
+
+        assert_eq!(normalized["action"], "grep");
+        assert_eq!(normalized["pattern"], "system prompt");
+        assert_eq!(normalized["path"], "src");
+    }
+
+    #[test]
+    fn normalize_unified_search_args_maps_query_to_pattern_for_grep() {
+        let normalized = normalize_unified_search_args(&json!({
+            "action": "grep",
+            "query": "Result<",
+            "path": "vtcode-core/src"
+        }));
+
+        assert_eq!(normalized["action"], "grep");
+        assert_eq!(normalized["pattern"], "Result<");
+        assert_eq!(normalized["path"], "vtcode-core/src");
     }
 
     #[test]
