@@ -1,12 +1,14 @@
 use anyhow::Result;
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::path::Path;
+use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::threads::ArchivedSessionIntent;
 use vtcode_core::hooks::SessionEndReason;
 use vtcode_core::llm::provider as uni;
+use vtcode_core::tools::continuation::{PtyContinuationArgs, ReadChunkContinuationArgs};
 use vtcode_core::ui::theme;
 use vtcode_core::ui::{inline_theme_from_core_styles, to_tui_appearance};
 use vtcode_core::utils::ansi::MessageStyle;
@@ -22,6 +24,7 @@ use crate::agent::runloop::unified::inline_events::{
 };
 use crate::agent::runloop::unified::model_selection::finalize_model_selection;
 use crate::agent::runloop::unified::state::ModelPickerTarget;
+use crate::agent::runloop::unified::state::is_follow_up_prompt_like;
 use crate::agent::runloop::unified::turn::session::{
     mcp_lifecycle, slash_command_handler, tool_dispatch,
 };
@@ -29,8 +32,8 @@ use vtcode_config::loader::SimpleConfigWatcher;
 
 use super::interaction_loop::{InteractionLoopContext, InteractionOutcome, InteractionState};
 
-const REPEATED_FOLLOW_UP_DIRECTIVE: &str = "User has asked to continue repeatedly. Do not keep exploring silently. In your next assistant response, provide a concrete status update: completed work, current blocker, and the exact next action. If a recent tool error provides a replacement tool (for example `unified_exec` with `action=\"poll\"`), use it directly instead of retrying the same failing call.";
-const REPEATED_FOLLOW_UP_STALLED_DIRECTIVE: &str = "Previous turn stalled or aborted and the user asked to continue repeatedly. Recover autonomously without asking for more user prompts: identify the likely root cause from recent errors, execute exactly one adjusted strategy, and then provide either a completion summary or a final blocker review with specific next action. If the last tool error includes fallback_tool/fallback_tool_args, use that fallback first. Do not repeat a failing tool call when the error already provides the next tool to use.";
+const REPEATED_FOLLOW_UP_DIRECTIVE: &str = "User has asked to continue repeatedly. Do not keep exploring silently. In your next assistant response, provide a concrete status update: completed work, current blocker, and the exact next action. If a recent tool result or tool error already provides the next tool call, use it directly instead of retrying the same failing call or asking for more follow-up.";
+const REPEATED_FOLLOW_UP_STALLED_DIRECTIVE: &str = "Previous turn stalled or aborted and the user asked to continue repeatedly. Recover autonomously without asking for more user prompts: identify the likely root cause from recent errors, execute exactly one adjusted strategy, and then provide either a completion summary or a final blocker review with specific next action. If the last tool result or tool error includes a concrete follow-up tool call, use it first. Do not repeat a failing tool call when the tool already provided the next step.";
 const FALLBACK_ARGS_PREVIEW_LIMIT: usize = 240;
 
 #[derive(Debug, Deserialize)]
@@ -43,26 +46,83 @@ struct ToolErrorPayloadHint {
     is_recoverable: Option<bool>,
 }
 
-fn extract_recent_fallback_hint(history: &[uni::Message]) -> Option<(String, Value)> {
-    history.iter().rev().take(60).find_map(|message| {
+fn extract_recent_follow_up_hint(history: &[uni::Message]) -> Option<(String, Value)> {
+    let mut saw_trailing_tool = false;
+    for message in history.iter().rev().take(60) {
+        if message.is_tool_response() {
+            saw_trailing_tool = true;
+        } else if message.role == uni::MessageRole::System {
+            continue;
+        } else {
+            break;
+        }
+
         if !message.is_tool_response() {
-            return None;
+            continue;
         }
+
         let content = message.get_text_content();
-        let content_ref: &str = content.as_ref();
-        if !content_ref.contains("\"fallback_tool\"")
-            || !content_ref.contains("\"fallback_tool_args\"")
+        let Some(parsed) = serde_json::from_str::<Value>(content.as_ref()).ok() else {
+            continue;
+        };
+        let Some(obj) = parsed.as_object() else {
+            continue;
+        };
+
+        if let Some(next_continue) = obj
+            .get("next_continue_args")
+            .and_then(PtyContinuationArgs::from_value)
         {
-            return None;
+            return Some((
+                tool_names::UNIFIED_EXEC.to_string(),
+                json!({
+                    "action": "continue",
+                    "session_id": next_continue.session_id
+                }),
+            ));
         }
-        let parsed = serde_json::from_str::<ToolErrorPayloadHint>(content_ref).ok()?;
-        let fallback_tool = parsed.fallback_tool?;
-        let fallback_args = parsed.fallback_tool_args?;
-        if parsed.is_recoverable == Some(false) {
-            return None;
+
+        if let Some(next_read) = obj
+            .get("next_read_args")
+            .and_then(ReadChunkContinuationArgs::from_value)
+        {
+            return Some((
+                tool_names::UNIFIED_FILE.to_string(),
+                json!({
+                    "action": "read",
+                    "path": next_read.path,
+                    "offset": next_read.offset,
+                    "limit": next_read.limit
+                }),
+            ));
         }
-        Some((fallback_tool, fallback_args))
-    })
+
+        let content_ref: &str = content.as_ref();
+        if content_ref.contains("\"fallback_tool\"")
+            && content_ref.contains("\"fallback_tool_args\"")
+        {
+            let Some(parsed) = serde_json::from_str::<ToolErrorPayloadHint>(content_ref).ok()
+            else {
+                continue;
+            };
+            let Some(fallback_tool) = parsed.fallback_tool else {
+                continue;
+            };
+            let Some(fallback_args) = parsed.fallback_tool_args else {
+                continue;
+            };
+            if parsed.is_recoverable == Some(false) {
+                continue;
+            }
+            return Some((fallback_tool, fallback_args));
+        }
+    }
+
+    if saw_trailing_tool {
+        tracing::debug!("No continuation hint found in trailing tool responses");
+    }
+
+    None
 }
 
 fn fallback_args_preview(args: &Value) -> String {
@@ -533,6 +593,27 @@ pub(super) async fn run_interaction_loop_impl(
             }
         }
 
+        if is_follow_up_prompt_like(input_owned.as_str())
+            && let Some((tool_name, tool_args)) =
+                extract_recent_follow_up_hint(ctx.conversation_history)
+        {
+            let mut direct_tool_ctx = tool_dispatch::DirectToolContext {
+                interaction_ctx: ctx,
+                input_status_state: state.input_status_state,
+            };
+            if let Some(outcome) = tool_dispatch::execute_direct_tool_call(
+                input_owned.as_str(),
+                &tool_name,
+                tool_args,
+                false,
+                &mut direct_tool_ctx,
+            )
+            .await?
+            {
+                return Ok(outcome);
+            }
+        }
+
         if ctx
             .session_stats
             .register_follow_up_prompt(input_owned.as_str())
@@ -543,7 +624,7 @@ pub(super) async fn run_interaction_loop_impl(
                     .turn_stall_reason()
                     .unwrap_or("Previous turn stalled without a detailed reason.")
                     .to_string();
-                let fallback_hint = extract_recent_fallback_hint(ctx.conversation_history);
+                let fallback_hint = extract_recent_follow_up_hint(ctx.conversation_history);
                 // Selective reset: only clear the readonly_streak so the agent can
                 // attempt a different strategy, but keep the recent_calls window
                 // and tool_counts intact so the same looping pattern is still
@@ -659,14 +740,14 @@ pub(super) async fn run_interaction_loop_impl(
 mod tests {
     use super::{
         append_file_reference_metadata, build_file_reference_metadata,
-        extract_recent_fallback_hint, fallback_args_preview,
+        extract_recent_follow_up_hint, fallback_args_preview, tool_names,
     };
     use std::fs;
     use tempfile::TempDir;
     use vtcode_core::llm::provider as uni;
 
     #[test]
-    fn extract_recent_fallback_hint_reads_latest_recoverable_tool_payload() {
+    fn extract_recent_follow_up_hint_reads_latest_recoverable_tool_payload() {
         let history = vec![
             uni::Message::tool_response(
                 "call_1".to_string(),
@@ -690,7 +771,7 @@ mod tests {
             ),
         ];
 
-        let hint = extract_recent_fallback_hint(&history);
+        let hint = extract_recent_follow_up_hint(&history);
         assert_eq!(
             hint,
             Some((
@@ -701,7 +782,7 @@ mod tests {
     }
 
     #[test]
-    fn extract_recent_fallback_hint_skips_non_recoverable_payloads() {
+    fn extract_recent_follow_up_hint_skips_non_recoverable_payloads() {
         let history = vec![uni::Message::tool_response(
             "call_1".to_string(),
             serde_json::json!({
@@ -713,36 +794,134 @@ mod tests {
             .to_string(),
         )];
 
-        assert!(extract_recent_fallback_hint(&history).is_none());
+        assert!(extract_recent_follow_up_hint(&history).is_none());
     }
 
     #[test]
-    fn extract_recent_fallback_hint_skips_payloads_without_hint_fields() {
+    fn extract_recent_follow_up_hint_prefers_latest_hint() {
         let history = vec![
             uni::Message::tool_response(
                 "call_1".to_string(),
                 serde_json::json!({
-                    "output": "very long output that should not be parsed for fallback hints"
+                    "next_continue_args": {
+                        "session_id": "run-42"
+                    }
                 })
                 .to_string(),
             ),
             uni::Message::tool_response(
                 "call_2".to_string(),
                 serde_json::json!({
-                    "error": "newer",
-                    "is_recoverable": true,
                     "fallback_tool": "task_tracker",
-                    "fallback_tool_args": {"action":"list"}
+                    "fallback_tool_args": {"action":"list"},
+                    "is_recoverable": true
                 })
                 .to_string(),
             ),
         ];
-        let hint = extract_recent_fallback_hint(&history);
+        let hint = extract_recent_follow_up_hint(&history);
         assert_eq!(
             hint,
             Some((
                 "task_tracker".to_string(),
                 serde_json::json!({"action":"list"})
+            ))
+        );
+    }
+
+    #[test]
+    fn extract_recent_follow_up_hint_skips_stale_tool_hints_after_assistant_reply() {
+        let history = vec![
+            uni::Message::tool_response(
+                "call_1".to_string(),
+                serde_json::json!({
+                    "next_continue_args": {
+                        "session_id": "run-123"
+                    }
+                })
+                .to_string(),
+            ),
+            uni::Message::assistant("All done.".to_string()),
+        ];
+
+        assert!(extract_recent_follow_up_hint(&history).is_none());
+    }
+
+    #[test]
+    fn extract_recent_follow_up_hint_keeps_hint_when_system_note_follows_tool() {
+        let history = vec![
+            uni::Message::tool_response(
+                "call_1".to_string(),
+                serde_json::json!({
+                    "fallback_tool": "task_tracker",
+                    "fallback_tool_args": {"action":"list"},
+                    "is_recoverable": true
+                })
+                .to_string(),
+            ),
+            uni::Message::system("Tool blocked; try fallback.".to_string()),
+        ];
+
+        let hint = extract_recent_follow_up_hint(&history);
+        assert_eq!(
+            hint,
+            Some((
+                "task_tracker".to_string(),
+                serde_json::json!({"action":"list"})
+            ))
+        );
+    }
+
+    #[test]
+    fn extract_recent_follow_up_hint_reads_next_continue_args() {
+        let history = vec![uni::Message::tool_response(
+            "call_1".to_string(),
+            serde_json::json!({
+                "next_continue_args": {
+                    "session_id": "run-123"
+                }
+            })
+            .to_string(),
+        )];
+
+        let hint = extract_recent_follow_up_hint(&history);
+        assert_eq!(
+            hint,
+            Some((
+                tool_names::UNIFIED_EXEC.to_string(),
+                serde_json::json!({
+                    "action": "continue",
+                    "session_id": "run-123"
+                })
+            ))
+        );
+    }
+
+    #[test]
+    fn extract_recent_follow_up_hint_reads_next_read_args() {
+        let history = vec![uni::Message::tool_response(
+            "call_1".to_string(),
+            serde_json::json!({
+                "next_read_args": {
+                    "path": ".vtcode/context/tool_outputs/out.txt",
+                    "offset": 41,
+                    "limit": 40
+                }
+            })
+            .to_string(),
+        )];
+
+        let hint = extract_recent_follow_up_hint(&history);
+        assert_eq!(
+            hint,
+            Some((
+                tool_names::UNIFIED_FILE.to_string(),
+                serde_json::json!({
+                    "action": "read",
+                    "path": ".vtcode/context/tool_outputs/out.txt",
+                    "offset": 41,
+                    "limit": 40
+                })
             ))
         );
     }

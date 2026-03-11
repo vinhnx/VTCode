@@ -156,27 +156,7 @@ impl SessionStats {
 
     pub(crate) fn register_follow_up_prompt(&mut self, input: &str) -> bool {
         let suppression_active = self.consume_follow_up_prompt_suppression();
-
-        let normalized = input
-            .trim()
-            .trim_matches(|c: char| c.is_ascii_whitespace() || c.is_ascii_punctuation())
-            .to_ascii_lowercase();
-        let words: Vec<&str> = normalized.split_whitespace().collect();
-        let is_follow_up = matches!(
-            words.as_slice(),
-            ["continue"]
-                | ["retry"]
-                | ["proceed"]
-                | ["go", "on"]
-                | ["go", "ahead"]
-                | ["keep", "going"]
-                | ["please", "continue"]
-                | ["continue", "please"]
-                | ["please", "retry"]
-                | ["retry", "please"]
-                | ["continue", "with", "recommendation"]
-                | ["continue", "with", "your", "recommendation"]
-        );
+        let is_follow_up = is_follow_up_prompt_like(input);
 
         if is_follow_up {
             if suppression_active {
@@ -250,6 +230,32 @@ impl SessionStats {
         self.previous_response_model = None;
         self.previous_response_id = None;
     }
+}
+
+pub(crate) fn is_follow_up_prompt_like(input: &str) -> bool {
+    let normalized = input
+        .trim()
+        .trim_matches(|c: char| c.is_ascii_whitespace() || c.is_ascii_punctuation())
+        .to_ascii_lowercase();
+    if normalized.starts_with("continue autonomously from the last stalled turn") {
+        return true;
+    }
+    let words: Vec<&str> = normalized.split_whitespace().collect();
+    matches!(
+        words.as_slice(),
+        ["continue"]
+            | ["retry"]
+            | ["proceed"]
+            | ["go", "on"]
+            | ["go", "ahead"]
+            | ["keep", "going"]
+            | ["please", "continue"]
+            | ["continue", "please"]
+            | ["please", "retry"]
+            | ["retry", "please"]
+            | ["continue", "with", "recommendation"]
+            | ["continue", "with", "your", "recommendation"]
+    )
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -338,7 +344,7 @@ impl CtrlCState {
 
 #[cfg(test)]
 mod tests {
-    use super::SessionStats;
+    use super::{SessionStats, is_follow_up_prompt_like};
     use vtcode_core::config::constants::tools;
 
     #[test]
@@ -406,6 +412,17 @@ mod tests {
         assert!(!stats.register_follow_up_prompt("run tests and summarize"));
         assert!(!stats.turn_stalled());
         assert_eq!(stats.turn_stall_reason(), None);
+    }
+
+    #[test]
+    fn helper_detects_follow_up_variants() {
+        assert!(is_follow_up_prompt_like("continue"));
+        assert!(is_follow_up_prompt_like("continue."));
+        assert!(is_follow_up_prompt_like("please continue"));
+        assert!(is_follow_up_prompt_like(
+            "Continue autonomously from the last stalled turn. Stall reason: x."
+        ));
+        assert!(!is_follow_up_prompt_like("run tests and summarize"));
     }
 
     #[test]

@@ -68,6 +68,16 @@ pub(crate) async fn handle_direct_tool_execution(
         }
     };
 
+    execute_direct_tool_call(input, &tool_name_str, args, is_bang_prefix, ctx).await
+}
+
+pub(crate) async fn execute_direct_tool_call(
+    input: &str,
+    tool_name: &str,
+    args: serde_json::Value,
+    is_bang_prefix: bool,
+    ctx: &mut DirectToolContext<'_, '_>,
+) -> Result<Option<InteractionOutcome>> {
     // Construct HarnessTurnState (simplified for direct execution)
     let mut harness_state = HarnessTurnState::new(
         TurnRunId(SessionId::new().0),
@@ -110,14 +120,10 @@ pub(crate) async fn handle_direct_tool_execution(
         .push(uni::Message::user(input.to_string()));
 
     // 2. Inject assistant message with tool call to keep history valid for LLM
-    let tool_call_id = format!(
-        "direct_{}_{}",
-        tool_name_str,
-        t_ctx.ctx.working_history.len()
-    );
+    let tool_call_id = format!("direct_{}_{}", tool_name, t_ctx.ctx.working_history.len());
     let tool_call = uni::ToolCall::function(
         tool_call_id.clone(),
-        tool_name_str.clone(),
+        tool_name.to_string(),
         serde_json::to_string(&args).unwrap_or_default(),
     );
     t_ctx
@@ -129,7 +135,7 @@ pub(crate) async fn handle_direct_tool_execution(
         ));
 
     // 3. Execute through unified pipeline to ensure safety, metrics, and consistent output
-    let outcome = handle_single_tool_call(&mut t_ctx, &tool_call_id, &tool_name_str, args).await?;
+    let outcome = handle_single_tool_call(&mut t_ctx, &tool_call_id, tool_name, args).await?;
 
     // 4. Cleanup UI and return outcome
     t_ctx.ctx.handle.clear_input();
