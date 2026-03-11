@@ -128,6 +128,49 @@ fn test_markdown_table_box_drawing() {
 }
 
 #[test]
+fn test_markdown_table_renders_header_separator_and_rows() {
+    let markdown = "\
+| File | Line | Function |
+|------|------|----------|
+| src/main.rs | 10 | main |
+| src/lib.rs | 20 | init |
+";
+
+    let lines = render_markdown(markdown);
+    let text_lines = lines_to_text(&lines);
+    let non_blank: Vec<&str> = text_lines
+        .iter()
+        .map(String::as_str)
+        .filter(|l| !l.is_empty())
+        .collect();
+
+    assert!(
+        non_blank.len() >= 4,
+        "expected header + separator + 2 rows, got: {non_blank:?}"
+    );
+    assert!(
+        non_blank[0].contains("File") && non_blank[0].contains("Function"),
+        "first line should be the header row: {}",
+        non_blank[0]
+    );
+    assert!(
+        non_blank[1].contains("├") && non_blank[1].contains("┼"),
+        "second line should be the separator: {}",
+        non_blank[1]
+    );
+    assert!(
+        non_blank[2].contains("src/main.rs"),
+        "third line should be first data row: {}",
+        non_blank[2]
+    );
+    assert!(
+        non_blank[3].contains("src/lib.rs"),
+        "fourth line should be second data row: {}",
+        non_blank[3]
+    );
+}
+
+#[test]
 fn test_table_inside_markdown_code_block_renders_as_table() {
     let markdown = "```markdown\n\
         | Module | Purpose |\n\
