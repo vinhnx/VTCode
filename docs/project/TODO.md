@@ -99,3 +99,7 @@ To better support preamble messages with GPT-5.4, the Responses API includes a p
 ```
 
 reference: https://deepwiki.com/search/phase-parameter_d4ba22d4-4932-4445-a732-43942aaf6ca8?mode=fast
+
+==
+
+https://www.reddit.com/r/LocalLLaMA/comments/1rrisqn/i_was_backend_lead_at_manus_after_building_agents/
