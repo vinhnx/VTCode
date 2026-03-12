@@ -18,6 +18,9 @@ use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::constants::tools;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::mcp::McpRendererProfile;
+use vtcode_core::tools::continuation::{
+    NEXT_CONTINUE_PROMPT, NEXT_READ_PROMPT, PtyContinuationArgs, ReadChunkContinuationArgs,
+};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use commands::render_terminal_command_panel;
@@ -31,6 +34,49 @@ use mcp::{
 };
 use streams::render_stream_section;
 use styles::{GitStyles, LsStyles};
+
+fn tool_follow_up_hints(val: &Value) -> Vec<String> {
+    let mut hints = Vec::with_capacity(2);
+    if let Some(path) = val.get("spool_path").and_then(Value::as_str) {
+        hints.push(format!(
+            "Large output was spooled to \"{}\". Use read_file/grep_file to inspect details.",
+            path
+        ));
+    }
+    if val
+        .get("next_continue_args")
+        .and_then(PtyContinuationArgs::from_value)
+        .is_some()
+    {
+        hints.push(NEXT_CONTINUE_PROMPT.to_string());
+    } else if val
+        .get("next_read_args")
+        .and_then(ReadChunkContinuationArgs::from_value)
+        .is_some()
+    {
+        hints.push(NEXT_READ_PROMPT.to_string());
+    }
+    hints
+}
+
+pub(super) fn render_tool_follow_up_hints(
+    renderer: &mut AnsiRenderer,
+    val: &Value,
+    rendered_output: Option<&str>,
+) -> Result<()> {
+    let mut rendered_any = false;
+    for hint in tool_follow_up_hints(val) {
+        if rendered_output.is_some_and(|output| output.contains(hint.as_str())) {
+            continue;
+        }
+        if !rendered_any {
+            renderer.line(MessageStyle::ToolDetail, "")?;
+            rendered_any = true;
+        }
+        renderer.line(MessageStyle::ToolDetail, &hint)?;
+    }
+    Ok(())
+}
 
 pub(crate) async fn render_tool_output(
     renderer: &mut AnsiRenderer,
@@ -54,7 +100,13 @@ pub(crate) async fn render_tool_output(
                 return render_write_file_preview(renderer, val, &git_styles, &ls_styles);
             }
             if val.get("content").is_some() {
-                return render_read_file_output(renderer, val);
+                render_read_file_output(renderer, val)?;
+                render_tool_follow_up_hints(
+                    renderer,
+                    val,
+                    val.get("content").and_then(Value::as_str),
+                )?;
+                return Ok(());
             }
         }
         Some(tools::RUN_PTY_CMD)
@@ -92,14 +144,32 @@ pub(crate) async fn render_tool_output(
             .await;
         }
         Some("web_fetch") => {
-            return render_generic_output(renderer, val);
+            render_generic_output(renderer, val)?;
+            render_tool_follow_up_hints(
+                renderer,
+                val,
+                val.get("output")
+                    .and_then(Value::as_str)
+                    .or_else(|| val.get("content").and_then(Value::as_str)),
+            )?;
+            return Ok(());
         }
         Some("list_files") => {
             let ls_styles = LsStyles::from_env();
-            return render_list_dir_output(renderer, val, &ls_styles);
+            render_list_dir_output(renderer, val, &ls_styles)?;
+            render_tool_follow_up_hints(
+                renderer,
+                val,
+                val.get("output")
+                    .and_then(Value::as_str)
+                    .or_else(|| val.get("content").and_then(Value::as_str)),
+            )?;
+            return Ok(());
         }
         Some(tools::READ_FILE) => {
-            return render_read_file_output(renderer, val);
+            render_read_file_output(renderer, val)?;
+            render_tool_follow_up_hints(renderer, val, val.get("content").and_then(Value::as_str))?;
+            return Ok(());
         }
         Some(tools::EXECUTE_CODE) => {
             let git_styles = GitStyles::new();
@@ -128,20 +198,13 @@ pub(crate) async fn render_tool_output(
         renderer.line(MessageStyle::ToolDetail, notice)?;
     }
 
-    // Render follow-up prompt if present (with double-rendering protection)
-    if let Some(follow_up_prompt) = val.get("follow_up_prompt").and_then(Value::as_str) {
-        // Check if prompt already appears in output to avoid double-rendering
-        let already_rendered = val
-            .get("output")
-            .and_then(|v| v.as_str())
-            .map(|output| output.contains(follow_up_prompt))
-            .unwrap_or(false);
-
-        if !already_rendered {
-            renderer.line(MessageStyle::ToolDetail, "")?; // Add spacing
-            renderer.line(MessageStyle::ToolDetail, follow_up_prompt)?;
-        }
-    }
+    render_tool_follow_up_hints(
+        renderer,
+        val,
+        val.get("output")
+            .and_then(Value::as_str)
+            .or_else(|| val.get("content").and_then(Value::as_str)),
+    )?;
 
     if let Some(tool) = tool_name
         && tool.starts_with("mcp_")
@@ -640,6 +703,60 @@ mod tests {
             !inline_output.contains("└ "),
             "run-command preview prefix should not appear for git diff payload"
         );
+    }
+
+    #[tokio::test]
+    async fn render_tool_output_unified_exec_renders_structured_hints() {
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut renderer =
+            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let payload = json!({
+            "command": "cargo check",
+            "output": "tail preview",
+            "session_id": "run-123",
+            "is_exited": false,
+            "next_continue_args": {
+                "session_id": "run-123"
+            },
+            "spool_path": ".vtcode/context/tool_outputs/run-123.txt"
+        });
+
+        render_tool_output(
+            &mut renderer,
+            Some(vtcode_core::config::constants::tools::UNIFIED_EXEC),
+            &payload,
+            None,
+        )
+        .await
+        .expect("structured hint payload should render");
+
+        let inline_output = collect_inline_output(&mut receiver);
+        assert!(inline_output.contains("Large output was spooled to"));
+        assert!(inline_output.contains("Use `next_continue_args`."));
+    }
+
+    #[tokio::test]
+    async fn render_tool_output_read_file_renders_spool_hint_on_early_return_path() {
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut renderer =
+            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let payload = json!({
+            "path": "README.md",
+            "content": "preview",
+            "spool_path": ".vtcode/context/tool_outputs/readme.txt"
+        });
+
+        render_tool_output(
+            &mut renderer,
+            Some(vtcode_core::config::constants::tools::READ_FILE),
+            &payload,
+            None,
+        )
+        .await
+        .expect("read_file payload should render");
+
+        let inline_output = collect_inline_output(&mut receiver);
+        assert!(inline_output.contains("Large output was spooled to"));
     }
 
     #[test]

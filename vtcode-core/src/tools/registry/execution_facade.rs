@@ -615,10 +615,8 @@ impl ToolRegistry {
                             obj.insert("repeat_count".into(), json!(repeat_count));
                             obj.insert("limit".into(), json!(loop_limit));
                             obj.insert("tool".into(), json!(display_name));
-                            let reused_spooled = obj
-                                .get("spooled_to_file")
-                                .and_then(|v| v.as_bool())
-                                .unwrap_or(false);
+                            let reused_spooled =
+                                obj.get("spool_path").and_then(|v| v.as_str()).is_some();
                             let note = if reused_spooled {
                                 "Loop detected; reusing a recent spooled output for this identical read-only call. Continue from the spool file instead of re-running the tool."
                             } else {

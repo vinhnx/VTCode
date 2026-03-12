@@ -391,10 +391,7 @@ impl ToolExecutionHistory {
             }
 
             if let Ok(result) = &record.result
-                && result
-                    .get("spooled_to_file")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false)
+                && result.get("spool_path").and_then(|v| v.as_str()).is_some()
                 && spool_path_exists(result)
             {
                 return Some(result.clone());
@@ -427,11 +424,7 @@ impl ToolExecutionHistory {
             }
 
             if let Ok(result) = &record.result {
-                if result
-                    .get("spooled_to_file")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false)
-                {
+                if result.get("spool_path").and_then(|v| v.as_str()).is_some() {
                     let Some(spool_path) = result.get("spool_path").and_then(|v| v.as_str()) else {
                         continue;
                     };
@@ -629,7 +622,6 @@ mod tests {
         let spool_path = temp.path().join("spooled-output.txt");
         std::fs::write(&spool_path, "diff output").unwrap();
         let result = json!({
-            "spooled_to_file": true,
             "spool_path": spool_path,
             "success": true
         });
@@ -665,7 +657,7 @@ mod tests {
             false,
             None,
             args.clone(),
-            json!({"content": "small", "spooled_to_file": false}),
+            json!({"content": "small"}),
             make_snapshot(),
             None,
             None,
@@ -686,7 +678,6 @@ mod tests {
         let args = json!({"command": "cargo clippy"});
         let missing_spool_path = tempdir().unwrap().path().join("missing_spool.txt");
         let result = json!({
-            "spooled_to_file": true,
             "spool_path": missing_spool_path,
             "success": true
         });
@@ -717,7 +708,6 @@ mod tests {
         let args = json!({"command": "cargo clippy"});
         let missing_spool_path = tempdir().unwrap().path().join("missing_spool.txt");
         let result = json!({
-            "spooled_to_file": true,
             "spool_path": missing_spool_path,
             "success": true
         });

@@ -6,6 +6,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::commands_processing::{parse_command_tokens, preprocess_terminal_stdout};
+use super::render_tool_follow_up_hints;
 use super::streams::{render_stream_section, resolve_stdout_tail_limit};
 use super::styles::{GitStyles, LsStyles};
 
@@ -63,11 +64,6 @@ pub(crate) async fn render_terminal_command_panel(
         .get("no_spool")
         .and_then(Value::as_bool)
         .unwrap_or(false);
-    let spooled_to_file = unwrapped_payload
-        .get("spooled_to_file")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
-    let spool_path = unwrapped_payload.get("spool_path").and_then(Value::as_str);
 
     // Check for session completion status (is_exited indicates if process is still running)
     let exit_code = unwrapped_payload.get("exit_code").and_then(Value::as_i64);
@@ -212,32 +208,7 @@ pub(crate) async fn render_terminal_command_panel(
         renderer.line(MessageStyle::ToolDetail, &format!("✓ {}", exit_badge))?;
     }
 
-    if spooled_to_file {
-        renderer.line(MessageStyle::ToolDetail, "")?;
-        if let Some(path) = spool_path {
-            renderer.line(
-                MessageStyle::ToolDetail,
-                &format!(
-                    "Large output was spooled to \"{}\". Use read_file/grep_file to inspect details.",
-                    path
-                ),
-            )?;
-        }
-    }
-
-    // Render follow-up prompt if present (with double-rendering protection)
-    if let Some(follow_up_prompt) = unwrapped_payload
-        .get("follow_up_prompt")
-        .and_then(Value::as_str)
-    {
-        // Check if prompt already appears in output to avoid double-rendering
-        let already_rendered = stdout.contains(follow_up_prompt);
-
-        if !already_rendered {
-            renderer.line(MessageStyle::ToolDetail, "")?; // Add spacing
-            renderer.line(MessageStyle::ToolDetail, follow_up_prompt)?;
-        }
-    }
+    render_tool_follow_up_hints(renderer, &unwrapped_payload, Some(stdout.as_ref()))?;
 
     Ok(())
 }
