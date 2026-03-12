@@ -63,6 +63,10 @@ impl OpenRouterProvider {
 
                 if let Some(reasoning_details) = &msg.reasoning_details
                     && !reasoning_details.is_empty()
+                    && (crate::llm::providers::common::is_minimax_m2_model(resolved_model)
+                        || crate::llm::providers::common::is_interleaved_thinking_model(
+                            resolved_model,
+                        ))
                 {
                     let normalized_details = normalize_reasoning_detail_objects(reasoning_details);
                     if !normalized_details.is_empty() {

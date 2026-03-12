@@ -108,20 +108,58 @@ impl LLMProvider for OpenRouterProvider {
                             if let Some(choices) = payload.get("choices").and_then(|v| v.as_array()) {
                                 if let Some(choice) = choices.first() {
                                     if let Some(delta) = choice.get("delta") {
+                                        // Handle dedicated reasoning field (e.g. reasoning_content or reasoning)
+                                        if let Some(reasoning) = delta
+                                            .get("reasoning_content")
+                                            .or_else(|| delta.get("reasoning"))
+                                            .and_then(|v| v.as_str())
+                                        {
+                                            if let Some(delta) = aggregator.handle_reasoning(reasoning) {
+                                                yield LLMStreamEvent::Reasoning { delta };
+                                            }
+                                        }
+
+                                        // Handle standard content field
                                         if let Some(content) = delta.get("content").and_then(|v| v.as_str()) {
                                             for ev in aggregator.handle_content(content) {
                                                 yield ev;
                                             }
                                         }
 
+                                        // Handle structured reasoning_details field
                                         if let Some(reasoning_details) = delta
                                             .get("reasoning_details")
                                             .and_then(|v| v.as_array())
                                         {
+                                            // Extract new reasoning text from structured details
+                                            let prev_reasoning = aggregator.reasoning.clone();
                                             aggregator.set_reasoning_details(reasoning_details);
+
+                                            // If reasoning text grew, yield the delta
+                                            if let Some(new_reasoning) = crate::llm::providers::common::extract_reasoning_text_from_detail_values(reasoning_details) {
+                                                if new_reasoning.len() > prev_reasoning.len() {
+                                                    let delta = new_reasoning[prev_reasoning.len()..].to_string();
+                                                    if !delta.trim().is_empty() {
+                                                        yield LLMStreamEvent::Reasoning { delta };
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        // Handle tool calls in deltas
+                                        if let Some(tool_calls) = delta.get("tool_calls").and_then(|v| v.as_array()) {
+                                            aggregator.handle_tool_calls(tool_calls);
                                         }
                                     }
+
+                                    if let Some(finish_reason) = choice.get("finish_reason").and_then(|v| v.as_str()) {
+                                        aggregator.set_finish_reason(crate::llm::providers::common::map_finish_reason_common(finish_reason));
+                                    }
                                 }
+                            }
+
+                            if let Some(usage) = crate::llm::providers::common::parse_usage_openai_format(&payload, true) {
+                                aggregator.set_usage(usage);
                             }
                         }
                     }
