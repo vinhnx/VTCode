@@ -166,7 +166,7 @@ pub(crate) fn build_messages(
 }
 
 fn build_reasoning_blocks(msg: &Message) -> Vec<AnthropicContentBlock> {
-    let mut blocks = Vec::new();
+    let mut blocks = Vec::with_capacity(msg.reasoning_details.as_ref().map_or(0, |d| d.len()));
 
     if let Some(details) = &msg.reasoning_details {
         for detail in details {
@@ -215,7 +215,11 @@ fn content_blocks_from_message_content(
     cache_control: Option<CacheControl>,
     allow_container_uploads: bool,
 ) -> Vec<AnthropicContentBlock> {
-    let mut blocks = Vec::new();
+    let capacity = match content {
+        MessageContent::Text(_) => 1,
+        MessageContent::Parts(parts) => parts.len(),
+    };
+    let mut blocks = Vec::with_capacity(capacity);
     let mut cache_used = false;
 
     match content {
@@ -292,7 +296,7 @@ fn content_blocks_from_message_content(
 }
 
 fn build_tool_use_blocks(msg: &Message) -> Vec<AnthropicContentBlock> {
-    let mut blocks = Vec::new();
+    let mut blocks = Vec::with_capacity(msg.tool_calls.as_ref().map_or(0, |tc| tc.len()));
 
     if let Some(tool_calls) = &msg.tool_calls {
         for call in tool_calls {

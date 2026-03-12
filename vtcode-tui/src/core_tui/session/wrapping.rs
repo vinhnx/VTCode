@@ -52,19 +52,20 @@ pub fn wrap_line_preserving_urls(line: Line<'static>, max_width: usize) -> Vec<L
     // URL too wide - fall through to wrap it
 
     // Mixed content - split around URLs and wrap each segment
-    wrap_mixed_content(line, max_width, &urls)
+    wrap_mixed_content(line, &text, max_width, &urls)
 }
 
 /// Wrap text that contains URLs, keeping URLs intact.
 fn wrap_mixed_content(
     line: Line<'static>,
+    text: &str,
     max_width: usize,
     urls: &[(usize, usize, &str)],
 ) -> Vec<Line<'static>> {
     use unicode_segmentation::UnicodeSegmentation;
     use unicode_width::UnicodeWidthStr;
 
-    let mut result = Vec::new();
+    let mut result = Vec::with_capacity(urls.len() + 1);
     let mut current_line: Vec<Span<'static>> = Vec::new();
     let mut current_width = 0usize;
     let mut text_pos = 0usize;
@@ -83,11 +84,7 @@ fn wrap_mixed_content(
     for (url_start, url_end, url_text) in urls {
         // Process text before this URL
         if *url_start > text_pos {
-            let before = &line
-                .spans
-                .iter()
-                .map(|s| s.content.as_ref())
-                .collect::<String>()[text_pos..*url_start];
+            let before = &text[text_pos..*url_start];
 
             for grapheme in UnicodeSegmentation::graphemes(before, true) {
                 let gw = grapheme.width();
@@ -113,9 +110,8 @@ fn wrap_mixed_content(
     }
 
     // Process remaining text after last URL
-    if text_pos < line.spans.iter().map(|s| s.content.len()).sum::<usize>() {
-        let full_text: String = line.spans.iter().map(|s| s.content.as_ref()).collect();
-        let remaining = &full_text[text_pos..];
+    if text_pos < text.len() {
+        let remaining = &text[text_pos..];
 
         for grapheme in UnicodeSegmentation::graphemes(remaining, true) {
             let gw = grapheme.width();

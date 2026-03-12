@@ -28,10 +28,11 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
             }
         })?;
 
-    let mut text_parts = Vec::new();
-    let mut reasoning_parts = Vec::new();
+    let block_count = content.len();
+    let mut text_parts = Vec::with_capacity(block_count);
+    let mut reasoning_parts = Vec::with_capacity(block_count);
     let mut tool_calls = Vec::new();
-    let mut reasoning_details_vec = Vec::new();
+    let mut reasoning_details_vec = Vec::with_capacity(block_count);
     let mut tool_references = Vec::new();
 
     for block in content {
@@ -43,8 +44,9 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
             }
             Some("thinking") => {
                 if let Some(thinking) = block.get("thinking").and_then(|t| t.as_str()) {
-                    reasoning_details_vec.push(thinking.to_string());
-                    reasoning_parts.push(thinking.to_string());
+                    let thinking = thinking.to_string();
+                    reasoning_details_vec.push(thinking.clone());
+                    reasoning_parts.push(thinking);
                 }
             }
             Some("redacted_thinking") => {

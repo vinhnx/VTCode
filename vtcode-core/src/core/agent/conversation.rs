@@ -1,7 +1,7 @@
 //! Helpers for composing agent conversations and bridging provider-specific message formats.
 
 use crate::core::agent::task::{ContextItem, Task};
-use crate::llm::provider::{ContentPart, Message, MessageContent, MessageRole};
+use crate::llm::provider::{ContentPart, Message, MessageContent, MessageRole, ToolCall};
 use crate::llm::providers::gemini::wire::{
     Content, FunctionCall, FunctionResponse, InlineData, Part,
 };
@@ -35,24 +35,24 @@ pub fn compose_system_instruction(
 /// Build the initial conversation payload (without the system instruction message).
 pub fn build_conversation(task: &Task, contexts: &[ContextItem]) -> Vec<Content> {
     let mut conversation = Vec::with_capacity(3);
-    conversation.push(Content::user_text(format!(
+    let mut task_content = String::with_capacity(task.title.len() + task.description.len() + 20);
+    let _ = write!(
+        task_content,
         "Task: {}\nDescription: {}",
         task.title, task.description
-    )));
+    );
+    conversation.push(Content::user_text(task_content));
 
     if let Some(instructions) = task.instructions.as_ref() {
         conversation.push(Content::user_text(instructions.clone()));
     }
 
     if !contexts.is_empty() {
-        let context_content: Vec<String> = contexts
-            .iter()
-            .map(|ctx| format!("Context [{}]: {}", ctx.id, ctx.content))
-            .collect();
-        conversation.push(Content::user_text(format!(
-            "Relevant Context:\n{}",
-            context_content.join("\n")
-        )));
+        let mut context_content = String::from("Relevant Context:");
+        for ctx in contexts {
+            let _ = write!(context_content, "\nContext [{}]: {}", ctx.id, ctx.content);
+        }
+        conversation.push(Content::user_text(context_content));
     }
 
     conversation
@@ -62,7 +62,8 @@ pub fn build_conversation(task: &Task, contexts: &[ContextItem]) -> Vec<Content>
 pub fn messages_from_conversation(conversation: &[Content]) -> Vec<Message> {
     let mut messages = Vec::with_capacity(conversation.len());
     for content in conversation {
-        let mut content_parts = Vec::new();
+        let part_count = content.parts.len();
+        let mut content_parts = Vec::with_capacity(part_count);
         let mut tool_calls = Vec::new();
         let mut tool_responses = Vec::new();
 
@@ -90,16 +91,13 @@ pub fn messages_from_conversation(conversation: &[Content]) -> Vec<Message> {
                     function_call,
                     thought_signature,
                 } => {
-                    tool_calls.push(crate::llm::provider::ToolCall {
-                        id: function_call.id.clone().unwrap_or_default(),
-                        call_type: "function".to_string(),
-                        function: Some(crate::llm::provider::FunctionCall {
-                            name: function_call.name.clone(),
-                            arguments: function_call.args.to_string(),
-                        }),
-                        text: None,
-                        thought_signature: thought_signature.clone(),
-                    });
+                    let mut tool_call = ToolCall::function(
+                        function_call.id.clone().unwrap_or_default(),
+                        function_call.name.clone(),
+                        function_call.args.to_string(),
+                    );
+                    tool_call.thought_signature = thought_signature.clone();
+                    tool_calls.push(tool_call);
                 }
                 Part::FunctionResponse {
                     function_response, ..
@@ -175,7 +173,7 @@ fn parts_from_message_content(content: &MessageContent) -> Vec<Part> {
             }
         }
         MessageContent::Parts(parts) => {
-            let mut converted = Vec::new();
+            let mut converted = Vec::with_capacity(parts.len());
             for part in parts {
                 match part {
                     ContentPart::Text { text } => {
@@ -232,8 +230,8 @@ fn tool_response_value(content: &MessageContent) -> Value {
 ///
 /// System messages are skipped because exec regenerates the current system prompt.
 pub fn conversation_from_messages(messages: &[Message]) -> Vec<Content> {
-    let mut conversation = Vec::new();
-    let mut tool_names_by_call_id: HashMap<String, String> = HashMap::new();
+    let mut conversation = Vec::with_capacity(messages.len());
+    let mut tool_names_by_call_id: HashMap<String, String> = HashMap::with_capacity(messages.len());
 
     for message in messages {
         match message.role {

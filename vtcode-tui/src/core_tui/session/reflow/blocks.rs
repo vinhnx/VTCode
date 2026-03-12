@@ -257,8 +257,8 @@ impl Session {
 
         let content = render::render_tool_segments(self, line);
         let split_lines = split_tool_spans(content);
-        let summary_prefix = "    ".to_string();
-        let detail_prefix = summary_prefix.clone();
+        let summary_prefix = "    ";
+        let detail_prefix = summary_prefix;
         let detail_border_style = border_style.add_modifier(Modifier::DIM);
 
         for line_spans in split_lines {
@@ -271,8 +271,8 @@ impl Session {
             if is_summary {
                 // For tool call summaries, preserve inline colors and add padded borders.
                 lines.extend(self.wrap_block_lines(
-                    &summary_prefix,
-                    &summary_prefix,
+                    summary_prefix,
+                    summary_prefix,
                     line_spans,
                     max_width,
                     border_style,
@@ -284,8 +284,8 @@ impl Session {
                     span.style = span.style.add_modifier(Modifier::DIM);
                 }
                 lines.extend(self.wrap_block_lines_no_right_border(
-                    &detail_prefix,
-                    &detail_prefix,
+                    detail_prefix,
+                    detail_prefix,
                     detail_spans,
                     max_width,
                     detail_border_style,

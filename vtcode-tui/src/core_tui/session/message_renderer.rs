@@ -17,7 +17,7 @@ pub(super) fn render_message_spans(
     prefix_style_fn: impl Fn(&MessageLine) -> InlineTextStyle,
     text_fallback_fn: impl Fn(InlineMessageKind) -> Option<anstyle::Color>,
 ) -> Vec<Span<'static>> {
-    let mut spans = Vec::new();
+    let mut spans = Vec::with_capacity(line.segments.len() + 2);
     if line.kind == InlineMessageKind::Agent {
         spans.extend(agent_prefix_spans(line, theme, labels, &prefix_style_fn));
     } else if let Some(prefix) = prefix_text_fn(line.kind) {
@@ -34,7 +34,7 @@ pub(super) fn render_message_spans(
 
     if line.segments.is_empty() {
         if spans.is_empty() {
-            spans.push(Span::raw(String::new()));
+            spans.push(Span::raw(""));
         }
         return spans;
     }
@@ -42,7 +42,7 @@ pub(super) fn render_message_spans(
     if line.kind == InlineMessageKind::Tool {
         let tool_spans = render_tool_segments(line, theme);
         if tool_spans.is_empty() {
-            spans.push(Span::raw(String::new()));
+            spans.push(Span::raw(""));
         } else {
             spans.extend(tool_spans);
         }
@@ -74,7 +74,7 @@ pub(super) fn render_message_spans(
     }
 
     if spans.is_empty() {
-        spans.push(Span::raw(String::new()));
+        spans.push(Span::raw(""));
     }
 
     spans
@@ -87,7 +87,7 @@ fn agent_prefix_spans(
     labels: &MessageLabels,
     prefix_style_fn: &impl Fn(&MessageLine) -> InlineTextStyle,
 ) -> Vec<Span<'static>> {
-    let mut spans = Vec::new();
+    let mut spans = Vec::with_capacity(3);
     let prefix_style = ratatui_style_from_inline(&prefix_style_fn(line), theme.foreground);
     let has_label = labels.agent.as_ref().is_some_and(|label| !label.is_empty());
     let prefix_has_trailing_space = ui::INLINE_AGENT_QUOTE_PREFIX
@@ -95,12 +95,9 @@ fn agent_prefix_spans(
         .last()
         .is_some_and(|ch| ch.is_whitespace());
     if !ui::INLINE_AGENT_QUOTE_PREFIX.is_empty() {
-        spans.push(Span::styled(
-            ui::INLINE_AGENT_QUOTE_PREFIX.to_owned(),
-            prefix_style,
-        ));
+        spans.push(Span::styled(ui::INLINE_AGENT_QUOTE_PREFIX, prefix_style));
         if has_label && !prefix_has_trailing_space {
-            spans.push(Span::styled(" ".to_owned(), prefix_style));
+            spans.push(Span::styled(" ", prefix_style));
         }
     }
 
@@ -117,7 +114,7 @@ fn agent_prefix_spans(
 #[allow(dead_code)]
 fn render_tool_segments(line: &MessageLine, theme: &InlineTheme) -> Vec<Span<'static>> {
     // Render tool output without header decorations - just display segments directly
-    let mut spans = Vec::new();
+    let mut spans = Vec::with_capacity(line.segments.len());
     for segment in &line.segments {
         let style = ratatui_style_from_inline(&segment.style, theme.foreground);
         spans.push(Span::styled(segment.text.clone(), style));
