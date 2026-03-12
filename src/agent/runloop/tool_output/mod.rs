@@ -780,6 +780,35 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn render_tool_output_read_file_long_preview_keeps_preview_limits() {
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut renderer =
+            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let content = (1..=100)
+            .map(|idx| format!("{idx}: line {idx}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let payload = json!({
+            "path": "src/main.rs",
+            "content": content
+        });
+
+        render_tool_output(
+            &mut renderer,
+            Some(vtcode_core::config::constants::tools::READ_FILE),
+            &payload,
+            None,
+        )
+        .await
+        .expect("read_file preview payload should render");
+
+        let inline_output = collect_inline_output(&mut receiver);
+        assert!(inline_output.contains("line 1"));
+        assert!(inline_output.contains("line 12"));
+        assert!(inline_output.contains("88 more lines"));
+    }
+
+    #[tokio::test]
     async fn render_tool_output_renders_loop_recovery_hint_from_structured_fields() {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let mut renderer =

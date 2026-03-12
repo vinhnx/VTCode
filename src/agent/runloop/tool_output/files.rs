@@ -6,7 +6,7 @@ use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::constants::tools;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
-use super::streams::render_diff_content_block;
+use super::streams::{build_markdown_code_block, render_diff_content_block};
 use super::styles::{GitStyles, LsStyles};
 #[path = "files_diff.rs"]
 mod files_diff;
@@ -436,15 +436,8 @@ fn render_content_preview(
 
     renderer.line(MessageStyle::ToolDetail, "")?;
 
-    let language = file_path
-        .and_then(language_hint_from_path)
-        .unwrap_or_default();
-    let mut markdown = format!("```{language}\n");
-    for line in display_lines {
-        markdown.push_str(line);
-        markdown.push('\n');
-    }
-    markdown.push_str("```");
+    let language = file_path.and_then(language_hint_from_path);
+    let markdown = build_markdown_code_block(display_lines, language.as_deref(), false);
     renderer.render_markdown_output(MessageStyle::ToolOutput, &markdown)?;
     if !show_all {
         renderer.line_with_override_style(

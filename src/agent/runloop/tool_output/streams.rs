@@ -59,12 +59,13 @@ use super::files::{
 use super::styles::{GitStyles, LsStyles, select_line_style};
 #[path = "streams_helpers.rs"]
 mod streams_helpers;
-use streams_helpers::{
-    build_markdown_code_block, looks_like_diff_content, select_stream_lines_streaming,
-    should_render_as_code_block, spool_output_if_needed, tail_lines_streaming,
-};
 pub(crate) use streams_helpers::{
-    render_code_fence_blocks, resolve_stdout_tail_limit, strip_ansi_codes,
+    build_markdown_code_block, render_code_fence_blocks, resolve_stdout_tail_limit,
+    strip_ansi_codes,
+};
+use streams_helpers::{
+    looks_like_diff_content, select_stream_lines_streaming, should_render_as_code_block,
+    spool_output_if_needed, tail_lines_streaming,
 };
 
 /// Maximum number of lines to display in inline mode before truncating
@@ -103,6 +104,65 @@ fn format_hidden_lines_summary(hidden: usize) -> String {
     } else {
         format!("… +{} lines", hidden)
     }
+}
+
+enum HiddenLinesNoticeKind {
+    CommandPreview,
+    Generic,
+    TokenBudget,
+}
+
+fn hidden_lines_notice(hidden: usize, kind: HiddenLinesNoticeKind) -> String {
+    match kind {
+        HiddenLinesNoticeKind::CommandPreview => {
+            format!("    {}", format_hidden_lines_summary(hidden))
+        }
+        HiddenLinesNoticeKind::Generic => format!(
+            "[... {} line{} truncated ...]",
+            hidden,
+            if hidden == 1 { "" } else { "s" }
+        ),
+        HiddenLinesNoticeKind::TokenBudget => {
+            "[... content truncated by token budget ...]".to_string()
+        }
+    }
+}
+
+fn render_preview_line(
+    renderer: &mut AnsiRenderer,
+    display_line: &str,
+    rendered_line: Option<&str>,
+    prefix: Option<&str>,
+    truncate_line: bool,
+    fallback_style: MessageStyle,
+    override_style: Option<AnsiStyle>,
+) -> Result<()> {
+    if display_line.is_empty() {
+        return Ok(());
+    }
+
+    let truncated_line = if truncate_line && display_width(display_line) > MAX_LINE_LENGTH {
+        let truncated = truncate_text_safe(display_line, MAX_LINE_LENGTH);
+        Cow::Owned(format!("{truncated}..."))
+    } else {
+        Cow::Borrowed(display_line)
+    };
+
+    let line = rendered_line.unwrap_or(truncated_line.as_ref());
+    let prefixed_line = if let Some(prefix) = prefix {
+        let mut line_with_prefix = String::with_capacity(prefix.len() + line.len());
+        line_with_prefix.push_str(prefix);
+        line_with_prefix.push_str(line);
+        Cow::Owned(line_with_prefix)
+    } else {
+        Cow::Borrowed(line)
+    };
+
+    renderer.line_with_override_style(
+        fallback_style,
+        override_style.unwrap_or(fallback_style.style()),
+        prefixed_line.as_ref(),
+    )
 }
 
 fn split_numbered_diff_line(line: &str) -> Option<(char, &str, &str)> {
@@ -287,37 +347,22 @@ async fn render_run_command_preview(
         return Ok(());
     }
 
-    let mut display_buffer = String::with_capacity(192);
-    let mut prefixed_line = String::with_capacity(200);
     for (idx, line) in preview_lines.iter().enumerate() {
         if hidden > 0 && idx == RUN_COMMAND_HEAD_PREVIEW_LINES {
-            prefixed_line.clear();
-            prefixed_line.push_str("    ");
-            prefixed_line.push_str(&format_hidden_lines_summary(hidden));
-            renderer.line(MessageStyle::ToolDetail, &prefixed_line)?;
+            renderer.line(
+                MessageStyle::ToolDetail,
+                &hidden_lines_notice(hidden, HiddenLinesNoticeKind::CommandPreview),
+            )?;
         }
 
-        if line.is_empty() {
-            continue;
-        }
-
-        display_buffer.clear();
-        if display_width(line) > MAX_LINE_LENGTH {
-            let truncated = truncate_text_safe(line, MAX_LINE_LENGTH);
-            display_buffer.push_str(truncated);
-            display_buffer.push_str("...");
-        } else {
-            display_buffer.push_str(line);
-        }
-
-        prefixed_line.clear();
-        prefixed_line.push_str("  ");
-        prefixed_line.push_str(&display_buffer);
-
-        renderer.line_with_override_style(
+        render_preview_line(
+            renderer,
+            line,
+            None,
+            Some("  "),
+            true,
             fallback_style,
-            fallback_style.style(),
-            &prefixed_line,
+            Some(fallback_style.style()),
         )?;
     }
 
@@ -354,7 +399,7 @@ pub(crate) fn render_diff_content_block(
         if hidden > 0 {
             renderer.line(
                 MessageStyle::ToolDetail,
-                &format!("[... {} lines truncated ...]", hidden),
+                &hidden_lines_notice(hidden, HiddenLinesNoticeKind::Generic),
             )?;
         }
     }
@@ -382,10 +427,14 @@ pub(crate) fn render_diff_content_block(
         if let Some(summary_line) =
             colorize_diff_summary_line(&display_buffer, renderer.capabilities().supports_color())
         {
-            renderer.line_with_override_style(
+            render_preview_line(
+                renderer,
+                &display_buffer,
+                Some(&summary_line),
+                None,
+                false,
                 fallback_style,
-                fallback_style.style(),
-                &summary_line,
+                Some(fallback_style.style()),
             )?;
             continue;
         }
@@ -401,20 +450,15 @@ pub(crate) fn render_diff_content_block(
         } else {
             display_buffer.clone()
         };
-        if rendered != display_buffer {
-            let style = line_style.unwrap_or(fallback_style.style());
-            renderer.line_with_override_style(fallback_style, style, &rendered)?;
-            continue;
-        }
-        if let Some(style) = line_style {
-            renderer.line_with_override_style(fallback_style, style, &display_buffer)?;
-        } else {
-            renderer.line_with_override_style(
-                fallback_style,
-                fallback_style.style(),
-                &display_buffer,
-            )?;
-        }
+        render_preview_line(
+            renderer,
+            &display_buffer,
+            (rendered != display_buffer).then_some(rendered.as_str()),
+            None,
+            false,
+            fallback_style,
+            line_style,
+        )?;
     }
 
     Ok(())
@@ -534,56 +578,47 @@ pub(crate) async fn render_stream_section(
 
         let hidden = total.saturating_sub(tail.len());
         if hidden > 0 {
-            if is_run_command {
-                renderer.line(
-                    MessageStyle::ToolDetail,
-                    &format_hidden_lines_summary(hidden),
-                )?;
-            } else {
-                msg_buffer.clear();
-                msg_buffer.push_str("[... ");
-                msg_buffer.push_str(&hidden.to_string());
-                msg_buffer.push_str(" line");
-                if hidden != 1 {
-                    msg_buffer.push('s');
-                }
-                msg_buffer.push_str(" truncated ...]");
-                renderer.line(MessageStyle::ToolDetail, &msg_buffer)?;
-            }
+            renderer.line(
+                MessageStyle::ToolDetail,
+                &hidden_lines_notice(hidden, HiddenLinesNoticeKind::Generic),
+            )?;
         }
 
         if should_render_as_code_block(fallback_style) && !apply_line_styles {
-            let markdown = build_markdown_code_block(&tail);
+            let markdown = build_markdown_code_block(&tail, None, true);
             renderer.render_markdown_output(fallback_style, &markdown)?;
         } else {
             for line in &tail {
-                // Truncate very long lines to prevent TUI hang
                 let display_line = if display_width(line) > MAX_LINE_LENGTH {
                     let truncated = truncate_text_safe(line, MAX_LINE_LENGTH);
-                    Cow::Owned(format!("{}...", truncated))
+                    Cow::Owned(format!("{truncated}..."))
                 } else {
                     Cow::Borrowed(*line)
                 };
-
-                if display_line.is_empty() {
-                    // Skip empty lines to avoid extra line breaks in TUI rendering
-                    continue;
-                } else {
-                    msg_buffer.clear();
-                    msg_buffer.push_str(&display_line);
-                }
                 if apply_line_styles
                     && let Some(style) =
                         select_line_style(tool_name, &display_line, git_styles, ls_styles)
                 {
-                    renderer.line_with_override_style(fallback_style, style, &msg_buffer)?;
-                    continue;
+                    render_preview_line(
+                        renderer,
+                        display_line.as_ref(),
+                        None,
+                        None,
+                        false,
+                        fallback_style,
+                        Some(style),
+                    )?;
+                } else {
+                    render_preview_line(
+                        renderer,
+                        display_line.as_ref(),
+                        None,
+                        None,
+                        false,
+                        fallback_style,
+                        None,
+                    )?;
                 }
-                renderer.line_with_override_style(
-                    fallback_style,
-                    fallback_style.style(),
-                    &msg_buffer,
-                )?;
             }
         }
         return Ok(());
@@ -641,48 +676,37 @@ pub(crate) async fn render_stream_section(
     };
     if hidden > 0 {
         format_buffer.clear();
-        if was_truncated_by_tokens {
-            format_buffer.push_str("[... content truncated by token budget ...]");
-        } else if is_run_command {
-            format_buffer.push_str(&format_hidden_lines_summary(hidden));
-        } else {
-            format_buffer.push_str("[... ");
-            format_buffer.push_str(&hidden.to_string());
-            format_buffer.push_str(" line");
-            if hidden != 1 {
-                format_buffer.push('s');
-            }
-            format_buffer.push_str(" truncated ...]");
-        }
+        format_buffer.push_str(&hidden_lines_notice(
+            hidden,
+            if was_truncated_by_tokens {
+                HiddenLinesNoticeKind::TokenBudget
+            } else {
+                HiddenLinesNoticeKind::Generic
+            },
+        ));
         renderer.line(MessageStyle::ToolDetail, &format_buffer)?;
     }
 
-    let mut display_buffer = String::with_capacity(128);
-
     if should_render_as_code_block(fallback_style) && !apply_line_styles {
-        let markdown = build_markdown_code_block(&lines_vec);
+        let markdown = build_markdown_code_block(&lines_vec, None, true);
         renderer.render_markdown_output(fallback_style, &markdown)?;
     } else {
         for line in &lines_vec {
-            if line.is_empty() {
-                // Skip empty lines to avoid extra line breaks in TUI rendering
-                continue;
-            } else {
-                display_buffer.clear();
-                display_buffer.push_str(line);
-            }
-
             if apply_line_styles
                 && let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles)
             {
-                renderer.line_with_override_style(fallback_style, style, &display_buffer)?;
-                continue;
+                render_preview_line(
+                    renderer,
+                    line,
+                    None,
+                    None,
+                    true,
+                    fallback_style,
+                    Some(style),
+                )?;
+            } else {
+                render_preview_line(renderer, line, None, None, true, fallback_style, None)?;
             }
-            renderer.line_with_override_style(
-                fallback_style,
-                fallback_style.style(),
-                &display_buffer,
-            )?;
         }
     }
 
@@ -691,13 +715,47 @@ pub(crate) async fn render_stream_section(
 
 #[cfg(test)]
 mod tests {
+    use tokio::sync::mpsc::UnboundedReceiver;
+    use vtcode_core::ui::{InlineCommand, InlineHandle};
+    use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+
     use anstyle::AnsiColor;
 
     use super::{
-        collect_run_command_preview, format_diff_line_with_gutter_and_syntax,
-        language_hint_from_path, numbered_diff_line_width, split_numbered_diff_line,
-        strip_ansi_codes,
+        HiddenLinesNoticeKind, MAX_LINE_LENGTH, collect_run_command_preview,
+        format_diff_line_with_gutter_and_syntax, hidden_lines_notice, language_hint_from_path,
+        numbered_diff_line_width, render_preview_line, split_numbered_diff_line, strip_ansi_codes,
     };
+
+    fn collect_inline_output(receiver: &mut UnboundedReceiver<InlineCommand>) -> String {
+        let mut lines: Vec<String> = Vec::new();
+        while let Ok(command) = receiver.try_recv() {
+            match command {
+                InlineCommand::AppendLine { segments, .. } => {
+                    lines.push(
+                        segments
+                            .into_iter()
+                            .map(|segment| segment.text)
+                            .collect::<String>(),
+                    );
+                }
+                InlineCommand::ReplaceLast {
+                    lines: replacement_lines,
+                    ..
+                } => {
+                    for line in replacement_lines {
+                        lines.push(
+                            line.into_iter()
+                                .map(|segment| segment.text)
+                                .collect::<String>(),
+                        );
+                    }
+                }
+                _ => {}
+            }
+        }
+        lines.join("\n")
+    }
 
     #[test]
     fn run_command_preview_uses_head_tail_three_lines() {
@@ -715,6 +773,45 @@ mod tests {
         assert_eq!(total, 3);
         assert_eq!(hidden, 0);
         assert_eq!(preview.as_slice(), ["l1", "l2", "l3"]);
+    }
+
+    #[test]
+    fn hidden_lines_notice_preserves_existing_variants() {
+        assert_eq!(
+            hidden_lines_notice(2, HiddenLinesNoticeKind::CommandPreview),
+            "    … +2 lines"
+        );
+        assert_eq!(
+            hidden_lines_notice(1, HiddenLinesNoticeKind::Generic),
+            "[... 1 line truncated ...]"
+        );
+        assert_eq!(
+            hidden_lines_notice(3, HiddenLinesNoticeKind::TokenBudget),
+            "[... content truncated by token budget ...]"
+        );
+    }
+
+    #[test]
+    fn render_preview_line_truncates_and_prefixes() {
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut renderer =
+            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let line = "x".repeat(MAX_LINE_LENGTH + 10);
+
+        render_preview_line(
+            &mut renderer,
+            &line,
+            None,
+            Some("  "),
+            true,
+            MessageStyle::ToolOutput,
+            None,
+        )
+        .expect("preview line should render");
+
+        let inline_output = collect_inline_output(&mut receiver);
+        assert!(inline_output.starts_with("  "));
+        assert!(inline_output.ends_with("..."));
     }
 
     #[test]

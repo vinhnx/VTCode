@@ -30,14 +30,9 @@ pub(crate) fn render_code_fence_blocks(
             } else {
                 &block.lines[..]
             };
-
-            let lang = block.language.as_deref().unwrap_or("");
-            let mut markdown = format!("```{lang}\n");
-            for line in display_lines {
-                markdown.push_str(line);
-                markdown.push('\n');
-            }
-            markdown.push_str("```");
+            let display_lines = display_lines.iter().map(String::as_str).collect::<Vec<_>>();
+            let markdown =
+                build_markdown_code_block(&display_lines, block.language.as_deref(), false);
 
             renderer.render_markdown_output(MessageStyle::ToolDetail, &markdown)?;
 
@@ -64,11 +59,17 @@ pub(super) fn should_render_as_code_block(style: MessageStyle) -> bool {
     matches!(style, MessageStyle::ToolOutput | MessageStyle::Output)
 }
 
-pub(super) fn build_markdown_code_block(lines: &[&str]) -> String {
+pub(crate) fn build_markdown_code_block(
+    lines: &[&str],
+    language: Option<&str>,
+    truncate_long_lines: bool,
+) -> String {
     let mut markdown = String::with_capacity(lines.len() * 80 + 16);
-    markdown.push_str("```\n");
+    markdown.push_str("```");
+    markdown.push_str(language.unwrap_or(""));
+    markdown.push('\n');
     for line in lines {
-        let display_line = if display_width(line) > super::MAX_LINE_LENGTH {
+        let display_line = if truncate_long_lines && display_width(line) > super::MAX_LINE_LENGTH {
             let truncated = truncate_text_safe(line, super::MAX_LINE_LENGTH);
             Cow::Owned(format!("{}...", truncated))
         } else {
@@ -216,6 +217,91 @@ pub(super) fn select_stream_lines_streaming(
     let (tail, total) = tail_lines_streaming(content, effective_limit);
     let truncated = total > tail.len();
     (tail, total, truncated)
+}
+
+#[cfg(test)]
+mod markdown_block_tests {
+    use tokio::sync::mpsc::UnboundedReceiver;
+    use vtcode_core::ui::{InlineCommand, InlineHandle};
+
+    use super::*;
+
+    fn collect_inline_output(receiver: &mut UnboundedReceiver<InlineCommand>) -> String {
+        let mut lines: Vec<String> = Vec::new();
+        while let Ok(command) = receiver.try_recv() {
+            match command {
+                InlineCommand::AppendLine { segments, .. } => {
+                    lines.push(
+                        segments
+                            .into_iter()
+                            .map(|segment| segment.text)
+                            .collect::<String>(),
+                    );
+                }
+                InlineCommand::ReplaceLast {
+                    lines: replacement_lines,
+                    ..
+                } => {
+                    for line in replacement_lines {
+                        lines.push(
+                            line.into_iter()
+                                .map(|segment| segment.text)
+                                .collect::<String>(),
+                        );
+                    }
+                }
+                _ => {}
+            }
+        }
+        lines.join("\n")
+    }
+
+    #[test]
+    fn build_markdown_code_block_includes_language_header() {
+        let markdown = build_markdown_code_block(&["fn main() {}"], Some("rs"), false);
+        assert!(markdown.starts_with("```rs\n"));
+        assert!(markdown.contains("fn main() {}"));
+        assert!(markdown.ends_with("```"));
+    }
+
+    #[test]
+    fn build_markdown_code_block_omits_language_header_when_absent() {
+        let markdown = build_markdown_code_block(&["plain"], None, false);
+        assert!(markdown.starts_with("```\n"));
+        assert!(!markdown.starts_with("```plain"));
+    }
+
+    #[test]
+    fn build_markdown_code_block_truncates_only_when_requested() {
+        let long_line = "x".repeat(super::super::MAX_LINE_LENGTH + 5);
+
+        let untruncated = build_markdown_code_block(&[long_line.as_str()], None, false);
+        assert!(untruncated.contains(&long_line));
+
+        let truncated = build_markdown_code_block(&[long_line.as_str()], None, true);
+        assert!(truncated.contains("..."));
+        assert!(!truncated.contains(&long_line));
+    }
+
+    #[test]
+    fn render_code_fence_blocks_keeps_truncation_notice() {
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut renderer =
+            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let lines = (0..=super::super::MAX_CODE_LINES)
+            .map(|idx| format!("line-{idx}"))
+            .collect::<Vec<_>>();
+        let blocks = vec![CodeFenceBlock {
+            language: Some("rust".to_string()),
+            lines,
+        }];
+
+        render_code_fence_blocks(&mut renderer, &blocks).expect("code fence blocks should render");
+
+        let inline_output = collect_inline_output(&mut receiver);
+        assert!(inline_output.contains("line-0"));
+        assert!(inline_output.contains("more lines truncated, view full output in tool logs"));
+    }
 }
 
 pub(crate) fn strip_ansi_codes(input: &str) -> Cow<'_, str> {
