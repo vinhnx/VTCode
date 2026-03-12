@@ -346,7 +346,7 @@ python3 scripts/generate_config_field_reference.py
 | `permissions.log_permission_prompts` | `boolean` | no | `true` | Log permission prompts (when user is asked for confirmation) |
 | `permissions.resolve_commands` | `boolean` | no | `true` | Enable command resolution to actual paths (helps identify suspicious commands) |
 | `prompt_cache.cache_dir` | `string` | no | `"~/.vtcode/cache/prompts"` | Base directory for local prompt cache storage (supports `~` expansion) |
-| `prompt_cache.cache_friendly_prompt_shaping` | `boolean` | no | `false` | Enable prompt-shaping optimizations that improve provider-side cache locality. When enabled, VT Code keeps volatile runtime context at the end of prompt text. |
+| `prompt_cache.cache_friendly_prompt_shaping` | `boolean` | no | `true` | Enable prompt-shaping optimizations that improve provider-side cache locality. When enabled, VT Code keeps volatile runtime context at the end of prompt text. |
 | `prompt_cache.enable_auto_cleanup` | `boolean` | no | `true` | Automatically evict stale entries on startup/shutdown |
 | `prompt_cache.enabled` | `boolean` | no | `true` | Enable prompt caching features globally |
 | `prompt_cache.max_age_days` | `integer` | no | `30` | Maximum age (in days) before cached entries are purged |

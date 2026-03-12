@@ -186,8 +186,9 @@ async fn assemble_prompt(
     {
         let _ = writeln!(
             system_prompt,
-            "\n[Runtime Tool Catalog]\n- version: {}\n- available_tools: {}",
+            "\n[Runtime Tool Catalog]\n- version: {}\n- epoch: {}\n- available_tools: {}",
             ctx.tool_catalog.current_version(),
+            ctx.tool_catalog.current_epoch(),
             defs.len()
         );
     }

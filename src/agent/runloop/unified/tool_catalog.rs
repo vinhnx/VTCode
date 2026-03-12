@@ -1,7 +1,10 @@
+use std::collections::BTreeSet;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use tokio::sync::RwLock;
+use tracing::{debug, info};
 use vtcode_core::core::agent::features::FeatureSet;
 use vtcode_core::llm::provider as uni;
 
@@ -26,6 +29,9 @@ pub(crate) struct FilteredSnapshotResult {
 #[derive(Debug, Default)]
 pub(crate) struct ToolCatalogState {
     version: AtomicU64,
+    cache_epoch: AtomicU64,
+    pending_refresh_reasons: Mutex<BTreeSet<String>>,
+    expanded_tool_names: Mutex<BTreeSet<String>>,
     cached_sorted: RwLock<Option<(u64, Arc<Vec<uni::ToolDefinition>>)>>,
     cached_filtered: RwLock<Vec<FilteredCacheEntry>>,
 }
@@ -41,6 +47,69 @@ impl ToolCatalogState {
 
     pub fn current_version(&self) -> u64 {
         self.version.load(Ordering::Acquire)
+    }
+
+    pub fn current_epoch(&self) -> u64 {
+        self.cache_epoch.load(Ordering::Acquire)
+    }
+
+    pub fn mark_pending_refresh(&self, reason: &str) {
+        let mut pending = self
+            .pending_refresh_reasons
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if pending.insert(reason.to_string()) {
+            debug!(
+                reason,
+                pending_refreshes = pending.len(),
+                "tool catalog refresh queued for next cache epoch"
+            );
+        }
+    }
+
+    pub fn note_explicit_refresh(&self, reason: &str) -> u64 {
+        self.bump_cache_epoch(reason, None)
+    }
+
+    pub async fn note_tool_references(
+        &self,
+        tools: &Arc<RwLock<Vec<uni::ToolDefinition>>>,
+        tool_references: &[String],
+    ) -> Option<u64> {
+        if tool_references.is_empty() {
+            return None;
+        }
+
+        let discoverable: BTreeSet<String> = {
+            let defs = tools.read().await;
+            defs.iter()
+                .filter(|tool| tool.defer_loading == Some(true))
+                .map(|tool| tool.function_name().to_string())
+                .collect()
+        };
+
+        if discoverable.is_empty() {
+            return None;
+        }
+
+        let mut newly_expanded = Vec::new();
+        {
+            let mut expanded = self
+                .expanded_tool_names
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for tool_name in tool_references {
+                if discoverable.contains(tool_name) && expanded.insert(tool_name.clone()) {
+                    newly_expanded.push(tool_name.clone());
+                }
+            }
+        }
+
+        if newly_expanded.is_empty() {
+            None
+        } else {
+            Some(self.bump_cache_epoch("tool_search_expansion", Some(newly_expanded)))
+        }
     }
 
     pub async fn sorted_snapshot(
@@ -63,7 +132,20 @@ impl ToolCatalogState {
             if defs_guard.is_empty() {
                 None
             } else {
-                Some(Arc::new(defs_guard.clone()))
+                let expanded_tool_names = self
+                    .expanded_tool_names
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone();
+                let mut snapshot = defs_guard.clone();
+                if !expanded_tool_names.is_empty() {
+                    for tool in &mut snapshot {
+                        if expanded_tool_names.contains(tool.function_name()) {
+                            tool.defer_loading = None;
+                        }
+                    }
+                }
+                Some(Arc::new(snapshot))
             }
         };
 
@@ -128,14 +210,45 @@ impl ToolCatalogState {
             cache_hit: false,
         }
     }
+
+    #[cfg(test)]
+    fn pending_refresh_reasons(&self) -> Vec<String> {
+        self.pending_refresh_reasons
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .cloned()
+            .collect()
+    }
+
+    fn bump_cache_epoch(&self, reason: &str, expanded_tools: Option<Vec<String>>) -> u64 {
+        let cache_epoch = self.cache_epoch.fetch_add(1, Ordering::AcqRel) + 1;
+        let version = self.bump_version();
+        let pending_refresh_reasons = std::mem::take(
+            &mut *self
+                .pending_refresh_reasons
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        info!(
+            cache_epoch,
+            version,
+            reason,
+            pending_refreshes = pending_refresh_reasons.len(),
+            pending_refresh_reasons = ?pending_refresh_reasons,
+            expanded_tools = ?expanded_tools,
+            "tool catalog cache epoch bumped"
+        );
+        cache_epoch
+    }
 }
 
 pub(crate) fn tool_catalog_change_notifier(
     tool_catalog: &Arc<ToolCatalogState>,
-) -> Arc<dyn Fn() + Send + Sync> {
+) -> Arc<dyn Fn(&'static str) + Send + Sync> {
     let tool_catalog = Arc::clone(tool_catalog);
-    Arc::new(move || {
-        tool_catalog.bump_version();
+    Arc::new(move |reason| {
+        tool_catalog.note_explicit_refresh(reason);
     })
 }
 
@@ -193,8 +306,10 @@ mod tests {
         let notifier = tool_catalog_change_notifier(&tool_catalog);
 
         assert_eq!(tool_catalog.current_version(), 0);
-        notifier();
+        assert_eq!(tool_catalog.current_epoch(), 0);
+        notifier("load_skill");
         assert_eq!(tool_catalog.current_version(), 1);
+        assert_eq!(tool_catalog.current_epoch(), 1);
     }
 
     #[test]
@@ -308,5 +423,82 @@ mod tests {
 
         let cache_guard = state.cached_filtered.read().await;
         assert_eq!(cache_guard.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn background_refresh_keeps_cached_snapshot_until_epoch_bump() {
+        let state = ToolCatalogState::new();
+        let tools = Arc::new(RwLock::new(vec![function_tool(tool_names::UNIFIED_SEARCH)]));
+
+        let first = state.sorted_snapshot(&tools).await.expect("first snapshot");
+        assert_eq!(first.len(), 1);
+
+        {
+            let mut defs = tools.write().await;
+            defs.push(function_tool("mcp_deferred_tool"));
+        }
+        state.mark_pending_refresh("mcp_background_refresh");
+
+        let second = state
+            .sorted_snapshot(&tools)
+            .await
+            .expect("second snapshot");
+        assert!(Arc::ptr_eq(&first, &second));
+        assert_eq!(second.len(), 1);
+
+        state.note_explicit_refresh("mcp_manual_refresh");
+
+        let third = state.sorted_snapshot(&tools).await.expect("third snapshot");
+        assert!(!Arc::ptr_eq(&second, &third));
+        assert_eq!(third.len(), 2);
+    }
+
+    #[test]
+    fn pending_refreshes_wait_for_explicit_epoch() {
+        let state = ToolCatalogState::new();
+
+        state.mark_pending_refresh("mcp_background_refresh");
+        state.mark_pending_refresh("mcp_background_refresh");
+
+        assert_eq!(
+            state.pending_refresh_reasons(),
+            vec!["mcp_background_refresh".to_string()]
+        );
+        assert_eq!(state.current_epoch(), 0);
+
+        state.note_explicit_refresh("mcp_manual_refresh");
+
+        assert!(state.pending_refresh_reasons().is_empty());
+        assert_eq!(state.current_epoch(), 1);
+        assert_eq!(state.current_version(), 1);
+    }
+
+    #[tokio::test]
+    async fn tool_references_expand_deferred_tools_on_next_epoch() {
+        let state = ToolCatalogState::new();
+        let tools = Arc::new(RwLock::new(vec![
+            function_tool(tool_names::UNIFIED_SEARCH),
+            function_tool("deferred_lookup").with_defer_loading(true),
+        ]));
+
+        let before = state.sorted_snapshot(&tools).await.expect("snapshot");
+        let deferred = before
+            .iter()
+            .find(|tool| tool.function_name() == "deferred_lookup")
+            .expect("deferred tool");
+        assert_eq!(deferred.defer_loading, Some(true));
+
+        let epoch = state
+            .note_tool_references(&tools, &["deferred_lookup".to_string()])
+            .await
+            .expect("tool search expansion");
+        assert_eq!(epoch, 1);
+
+        let after = state.sorted_snapshot(&tools).await.expect("snapshot");
+        let expanded = after
+            .iter()
+            .find(|tool| tool.function_name() == "deferred_lookup")
+            .expect("expanded tool");
+        assert!(expanded.defer_loading.is_none());
     }
 }

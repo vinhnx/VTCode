@@ -29,6 +29,7 @@ impl McpToolManager {
                     tool_documentation_mode,
                 )
                 .await;
+                tool_catalog.mark_pending_refresh("mcp_background_refresh");
 
                 // Calculate which tools are newly added by comparing with last known tools
                 let current_tool_keys: Vec<String> = new_mcp_tools
@@ -66,6 +67,7 @@ impl McpToolManager {
             tool_documentation_mode,
         )
         .await;
+        tool_catalog.mark_pending_refresh("mcp_background_refresh");
 
         // Calculate which tools are newly added by comparing with last known tools
         let initial_tool_keys: Vec<String> = mcp_tools

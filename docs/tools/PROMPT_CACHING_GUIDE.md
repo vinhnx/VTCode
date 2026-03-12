@@ -14,7 +14,7 @@ All prompt caching controls live under the `[prompt_cache]` section in `vtcode.t
 | `max_age_days`          | integer | Maximum age of an entry before automatic eviction.                                                        |
 | `enable_auto_cleanup`   | bool    | If `true`, stale entries are purged during startup and shutdown.                                          |
 | `min_quality_threshold` | float   | Minimum quality score a completion must meet before it is cached.                                         |
-| `cache_friendly_prompt_shaping` | bool | Opt-in prompt shaping that keeps volatile runtime context at the end of system prompts for better cache-prefix reuse. |
+| `cache_friendly_prompt_shaping` | bool | Default-on prompt shaping that keeps volatile runtime context at the end of system prompts for better cache-prefix reuse. |
 
 ## Provider Overrides
 
@@ -60,7 +60,7 @@ Prompt caching on Responses-style providers only hits when the new request keeps
 -   Injecting new dynamic context above existing prompt items.
 
 To reduce avoidable misses, VT Code keeps tool ordering deterministic and defers MCP `tools/list_changed` refreshes to turn boundaries so an active turn sees a stable tool catalog.
-When `prompt_cache.cache_friendly_prompt_shaping = true`, VT Code applies provider-aware shaping:
+VT Code enables `prompt_cache.cache_friendly_prompt_shaping = true` by default. When it is enabled, VT Code applies provider-aware shaping:
 
 - OpenAI, Gemini, DeepSeek, OpenRouter, Moonshot, Z.AI: move volatile counters to a trailing `[Runtime Context]` block.
 - Anthropic and MiniMax: same trailing runtime block, plus Anthropic-format system prompt splitting so runtime context is sent as an uncached block.

@@ -656,7 +656,7 @@ profile_path = "automation/full_auto_profile.toml"
 # Prompt caching - Cache model responses for efficiency
 [prompt_cache]
 # Enable prompt caching (reduces API calls for repeated prompts)
-enabled = false
+enabled = true
 
 # Directory for cache storage
 cache_dir = "~/.vtcode/cache/prompts"
@@ -674,8 +674,8 @@ enable_auto_cleanup = true
 min_quality_threshold = 0.7
 
 # Keep volatile runtime counters at the end of system prompts to improve provider-side prefix cache reuse
-# (disabled by default; opt in per workspace)
-cache_friendly_prompt_shaping = false
+# (enabled by default; disable only if you need legacy prompt layout)
+cache_friendly_prompt_shaping = true
 
 # Prompt cache configuration for OpenAI
     [prompt_cache.providers.openai]

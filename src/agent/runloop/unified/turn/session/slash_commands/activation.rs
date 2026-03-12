@@ -4,6 +4,7 @@ use tracing::warn;
 use vtcode_core::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::unified::async_mcp_manager::McpInitStatus;
+use crate::agent::runloop::unified::session_setup::refresh_tool_snapshot;
 
 use super::SlashCommandContext;
 
@@ -49,6 +50,23 @@ pub(super) async fn try_attach_ready_mcp(ctx: &mut SlashCommandContext<'_>) -> R
                 ctx.tool_registry.set_mcp_client(Arc::clone(&client)).await;
                 if let Err(err) = ctx.tool_registry.refresh_mcp_tools().await {
                     warn!("Failed to refresh MCP tools after activation: {}", err);
+                } else {
+                    let tool_documentation_mode = ctx
+                        .vt_cfg
+                        .as_ref()
+                        .as_ref()
+                        .map(|cfg| cfg.agent.tool_documentation_mode)
+                        .unwrap_or_default();
+                    refresh_tool_snapshot(
+                        ctx.tool_registry,
+                        ctx.tools,
+                        ctx.tool_catalog,
+                        ctx.config,
+                        tool_documentation_mode,
+                    )
+                    .await;
+                    ctx.tool_catalog
+                        .mark_pending_refresh("mcp_background_refresh");
                 }
                 sync_mcp_context_files(ctx, &client).await?;
             }

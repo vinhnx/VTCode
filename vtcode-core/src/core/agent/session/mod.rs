@@ -77,7 +77,8 @@ impl SessionStats {
             .total_usage
             .output_tokens
             .saturating_add(usage.completion_tokens as u64);
-        if let Some(cached) = usage.cached_prompt_tokens {
+        let cached = usage.cache_read_tokens_or_fallback();
+        if cached > 0 {
             self.total_usage.cached_input_tokens = self
                 .total_usage
                 .cached_input_tokens

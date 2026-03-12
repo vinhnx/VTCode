@@ -1287,6 +1287,17 @@ mod tests {
     }
 
     #[test]
+    fn session_message_roundtrip_preserves_commentary_phase() {
+        let original =
+            Message::assistant("Working".to_owned()).with_phase(Some(AssistantPhase::Commentary));
+        let stored = SessionMessage::from(&original);
+        let restored = Message::from(&stored);
+
+        assert_eq!(stored.phase, Some(AssistantPhase::Commentary));
+        assert_eq!(restored.phase, Some(AssistantPhase::Commentary));
+    }
+
+    #[test]
     fn session_message_preserves_tool_calls_reasoning_details_and_origin_tool() {
         let mut original = Message::assistant("Calling a tool".to_owned());
         original.reasoning_details = Some(vec![serde_json::json!({

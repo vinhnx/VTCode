@@ -104,3 +104,54 @@ fn build_summary_prompt(history: &[Message], instructions: &str) -> String {
 
     formatted
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{CompactionConfig, compact_history};
+    use crate::llm::provider::{
+        AssistantPhase, LLMError, LLMProvider, LLMRequest, LLMResponse, Message,
+    };
+    use async_trait::async_trait;
+
+    struct StubProvider;
+
+    #[async_trait]
+    impl LLMProvider for StubProvider {
+        fn name(&self) -> &str {
+            "stub"
+        }
+
+        async fn generate(&self, _request: LLMRequest) -> Result<LLMResponse, LLMError> {
+            Ok(LLMResponse::new("stub-model", "summary"))
+        }
+
+        fn supported_models(&self) -> Vec<String> {
+            vec!["stub-model".to_string()]
+        }
+
+        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn compact_history_preserves_assistant_phases_in_kept_tail() {
+        let history = vec![
+            Message::user("one".to_string()),
+            Message::assistant("working".to_string()).with_phase(Some(AssistantPhase::Commentary)),
+            Message::assistant("done".to_string()).with_phase(Some(AssistantPhase::FinalAnswer)),
+        ];
+        let config = CompactionConfig {
+            keep_last_messages: 2,
+            ..CompactionConfig::default()
+        };
+
+        let compacted = compact_history(&StubProvider, "stub-model", &history, &config)
+            .await
+            .expect("compacted history");
+
+        assert_eq!(compacted.len(), 3);
+        assert_eq!(compacted[1].phase, Some(AssistantPhase::Commentary));
+        assert_eq!(compacted[2].phase, Some(AssistantPhase::FinalAnswer));
+    }
+}

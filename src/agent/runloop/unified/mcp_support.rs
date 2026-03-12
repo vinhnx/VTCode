@@ -172,7 +172,7 @@ pub(crate) async fn repair_mcp_runtime(
     async_mcp_manager: Option<&AsyncMcpManager>,
     tool_registry: &mut ToolRegistry,
     vt_cfg: Option<&VTCodeConfig>,
-) -> Result<()> {
+) -> Result<bool> {
     renderer.line(MessageStyle::Status, "Repairing MCP runtime:")?;
 
     if let Some(cfg) = vt_cfg {
@@ -187,7 +187,7 @@ pub(crate) async fn repair_mcp_runtime(
                     MessageStyle::Info,
                     "  Update vtcode.toml and rerun /mcp repair.",
                 )?;
-                return Ok(());
+                return Ok(false);
             }
         }
     } else {
@@ -206,7 +206,7 @@ pub(crate) async fn repair_mcp_runtime(
             MessageStyle::Info,
             "  Enable MCP in vtcode.toml and restart the agent.",
         )?;
-        return Ok(());
+        return Ok(false);
     };
 
     if let McpInitStatus::Disabled = manager.get_status().await {
@@ -214,7 +214,7 @@ pub(crate) async fn repair_mcp_runtime(
             MessageStyle::Info,
             "  MCP is disabled; update vtcode.toml to enable it.",
         )?;
-        return Ok(());
+        return Ok(false);
     }
 
     renderer.line(
@@ -229,7 +229,7 @@ pub(crate) async fn repair_mcp_runtime(
             MessageStyle::Error,
             &format!("  Failed to restart MCP manager: {}", err),
         )?;
-        return Ok(());
+        return Ok(false);
     }
 
     const MAX_ATTEMPTS: usize = 20;
@@ -249,14 +249,14 @@ pub(crate) async fn repair_mcp_runtime(
                     MessageStyle::Error,
                     &format!("  MCP restart error: {}", message),
                 )?;
-                return Ok(());
+                return Ok(false);
             }
             McpInitStatus::Disabled => {
                 renderer.line(
                     MessageStyle::Info,
                     "  MCP disabled during restart; check vtcode.toml settings.",
                 )?;
-                return Ok(());
+                return Ok(false);
             }
             _ => {
                 if attempt == MAX_ATTEMPTS - 1 {
@@ -271,8 +271,9 @@ pub(crate) async fn repair_mcp_runtime(
         }
     }
 
+    let mut refreshed = false;
     if stabilized {
-        refresh_mcp_tools(renderer, tool_registry).await?;
+        refreshed = refresh_mcp_tools(renderer, tool_registry).await?;
     }
 
     renderer.line(
@@ -280,7 +281,7 @@ pub(crate) async fn repair_mcp_runtime(
         "  Repair complete. Use /mcp diagnose for additional checks.",
     )?;
 
-    Ok(())
+    Ok(refreshed)
 }
 
 pub(crate) async fn diagnose_mcp(

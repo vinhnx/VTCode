@@ -149,7 +149,6 @@ pub(crate) async fn initialize_session(
     };
     apply_workspace_trust_prompt_policy(&mut tool_registry, full_auto, workspace_trust_level).await;
     let tool_catalog = Arc::new(ToolCatalogState::new());
-    tool_catalog.bump_version();
 
     let tools = Arc::new(RwLock::new(
         tool_registry
@@ -353,7 +352,7 @@ fn create_provider_client(
 pub(crate) async fn refresh_tool_snapshot(
     tool_registry: &ToolRegistry,
     tools: &Arc<RwLock<Vec<uni::ToolDefinition>>>,
-    tool_catalog: &ToolCatalogState,
+    _tool_catalog: &ToolCatalogState,
     config: &CoreAgentConfig,
     tool_documentation_mode: vtcode_core::config::ToolDocumentationMode,
 ) {
@@ -366,7 +365,6 @@ pub(crate) async fn refresh_tool_snapshot(
         ))
         .await;
     *tools.write().await = next;
-    tool_catalog.bump_version();
 }
 
 async fn maybe_attach_mcp_client(

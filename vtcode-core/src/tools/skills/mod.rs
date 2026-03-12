@@ -27,7 +27,7 @@ use tracing::{debug, warn};
 
 type SkillMap = Arc<RwLock<HashMap<String, Skill>>>;
 type ToolDefList = Arc<RwLock<Vec<ToolDefinition>>>;
-type ToolChangeNotifier = Arc<dyn Fn() + Send + Sync>;
+type ToolChangeNotifier = Arc<dyn Fn(&'static str) + Send + Sync>;
 
 const SKILL_TOOL_PROMPT_PATH: &str = "skills/skill_instructions.md";
 const SKILL_ACTIVATED_STATUS: &str = "Associated tools activated and added to context.";
@@ -80,7 +80,7 @@ impl SkillToolSessionRuntime {
                 .register_tool(build_traditional_skill_tool_registration(&skill))
                 .await
                 .with_context(|| format!("failed to register skill tool '{skill_name}'"))?;
-            self.refresh_tool_snapshot().await;
+            self.refresh_tool_snapshot("load_skill").await;
         }
 
         active_skills.write().await.insert(skill_name, skill);
@@ -95,12 +95,12 @@ impl SkillToolSessionRuntime {
         let removed = active_skills.write().await.remove(skill_name).is_some();
         let unregistered = self.tool_registry.unregister_tool(skill_name).await?;
         if unregistered {
-            self.refresh_tool_snapshot().await;
+            self.refresh_tool_snapshot("unload_skill").await;
         }
         Ok(removed || unregistered)
     }
 
-    async fn refresh_tool_snapshot(&self) {
+    async fn refresh_tool_snapshot(&self, reason: &'static str) {
         if let Some(active_tools) = &self.active_tools {
             let refreshed = self
                 .tool_registry
@@ -115,7 +115,7 @@ impl SkillToolSessionRuntime {
         }
 
         if let Some(notifier) = &self.on_tools_changed {
-            notifier();
+            notifier(reason);
         }
     }
 }
@@ -814,7 +814,7 @@ Use `/rust-skills`.
             Some(Arc::clone(&active_tools)),
             ToolDocumentationMode::Full,
             ToolModelCapabilities::default(),
-            Some(Arc::new(move || {
+            Some(Arc::new(move |_| {
                 notifier_count.fetch_add(1, Ordering::SeqCst);
             })),
         );

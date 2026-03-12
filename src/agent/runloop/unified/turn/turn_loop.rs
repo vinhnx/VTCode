@@ -458,6 +458,12 @@ pub(crate) async fn run_turn_loop(
 
         // Track token usage for context awareness before any borrows occur
         let response_usage = response.usage.clone();
+        if !response.tool_references.is_empty() {
+            turn_processing_ctx
+                .tool_catalog
+                .note_tool_references(turn_processing_ctx.tools, &response.tool_references)
+                .await;
+        }
 
         {
             if turn_processing_ctx.is_plan_mode() {

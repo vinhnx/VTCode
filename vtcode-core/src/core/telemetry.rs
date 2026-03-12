@@ -18,6 +18,8 @@ pub struct ModelUsageStats {
     pub prompt_tokens: u64,
     pub completion_tokens: u64,
     pub cached_prompt_tokens: u64,
+    pub cache_read_tokens: u64,
+    pub cache_creation_tokens: u64,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -94,6 +96,12 @@ impl TelemetryManager {
                 model_stats.cached_prompt_tokens = model_stats
                     .cached_prompt_tokens
                     .saturating_add(usage.cached_prompt_tokens.unwrap_or(0) as u64);
+                model_stats.cache_read_tokens = model_stats
+                    .cache_read_tokens
+                    .saturating_add(usage.cache_read_tokens_or_fallback() as u64);
+                model_stats.cache_creation_tokens = model_stats
+                    .cache_creation_tokens
+                    .saturating_add(usage.cache_creation_tokens_or_zero() as u64);
             }
         });
     }
@@ -151,6 +159,30 @@ mod tests {
         assert_eq!(model.prompt_tokens, 100);
         assert_eq!(model.completion_tokens, 200);
         assert_eq!(model.cached_prompt_tokens, 50);
+        assert_eq!(model.cache_read_tokens, 50);
+        assert_eq!(model.cache_creation_tokens, 0);
         assert_eq!(snapshot.dropped_metric_updates, 0);
+    }
+
+    #[test]
+    fn records_cache_read_fallback_and_creation_tokens() {
+        let telemetry = TelemetryManager::new();
+        telemetry.record_llm_request(
+            "gpt-5",
+            Duration::from_secs(5),
+            Some(&crate::llm::provider::Usage {
+                prompt_tokens: 500,
+                completion_tokens: 100,
+                total_tokens: 600,
+                cached_prompt_tokens: Some(320),
+                cache_creation_tokens: Some(80),
+                cache_read_tokens: None,
+            }),
+        );
+
+        let snapshot = telemetry.get_snapshot().expect("snapshot");
+        let model = snapshot.model_usage.get("gpt-5").expect("model usage");
+        assert_eq!(model.cache_read_tokens, 320);
+        assert_eq!(model.cache_creation_tokens, 80);
     }
 }

@@ -4,7 +4,7 @@ pub const DEFAULT_MAX_ENTRIES: usize = 1_000;
 pub const DEFAULT_MAX_AGE_DAYS: u64 = 30;
 pub const DEFAULT_AUTO_CLEANUP: bool = true;
 pub const DEFAULT_MIN_QUALITY_THRESHOLD: f64 = 0.7;
-pub const DEFAULT_CACHE_FRIENDLY_PROMPT_SHAPING: bool = false;
+pub const DEFAULT_CACHE_FRIENDLY_PROMPT_SHAPING: bool = true;
 
 pub const OPENAI_MIN_PREFIX_TOKENS: u32 = 1_024;
 pub const GEMINI_MIN_PREFIX_TOKENS: u32 = 1_024;

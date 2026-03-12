@@ -246,7 +246,7 @@ impl AgentSessionController {
             usage: crate::exec::events::Usage {
                 input_tokens: final_usage.prompt_tokens as u64,
                 output_tokens: final_usage.completion_tokens as u64,
-                cached_input_tokens: final_usage.cached_prompt_tokens.unwrap_or(0) as u64,
+                cached_input_tokens: final_usage.cache_read_tokens_or_fallback() as u64,
             },
         });
 

@@ -449,16 +449,16 @@ pub(crate) async fn execute_llm_request(
             completion_tokens: u32,
             total_tokens: u32,
             cached_prompt_tokens: u32,
+            cache_read_tokens: u32,
+            cache_creation_tokens: u32,
             cache_hit_ratio: f64,
             ts: i64,
         }
 
         let cached_prompt_tokens = usage.cached_prompt_tokens.unwrap_or(0);
-        let cache_hit_ratio = if usage.prompt_tokens == 0 {
-            0.0
-        } else {
-            cached_prompt_tokens as f64 / usage.prompt_tokens as f64
-        };
+        let cache_read_tokens = usage.cache_read_tokens_or_fallback();
+        let cache_creation_tokens = usage.cache_creation_tokens_or_zero();
+        let cache_hit_ratio = usage.cache_hit_rate().unwrap_or(0.0) / 100.0;
         let record = PromptCacheMetricsRecord {
             kind: "prompt_cache_metrics",
             turn: step_count,
@@ -467,6 +467,8 @@ pub(crate) async fn execute_llm_request(
             completion_tokens: usage.completion_tokens,
             total_tokens: usage.total_tokens,
             cached_prompt_tokens,
+            cache_read_tokens,
+            cache_creation_tokens,
             cache_hit_ratio,
             ts: chrono::Utc::now().timestamp(),
         };

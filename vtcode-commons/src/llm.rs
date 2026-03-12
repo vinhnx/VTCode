@@ -29,9 +29,34 @@ pub struct Usage {
 
 impl Usage {
     #[inline]
+    fn has_cache_read_metric(&self) -> bool {
+        self.cache_read_tokens.is_some() || self.cached_prompt_tokens.is_some()
+    }
+
+    #[inline]
+    fn has_any_cache_metrics(&self) -> bool {
+        self.has_cache_read_metric() || self.cache_creation_tokens.is_some()
+    }
+
+    #[inline]
+    pub fn cache_read_tokens_or_fallback(&self) -> u32 {
+        self.cache_read_tokens
+            .or(self.cached_prompt_tokens)
+            .unwrap_or(0)
+    }
+
+    #[inline]
+    pub fn cache_creation_tokens_or_zero(&self) -> u32 {
+        self.cache_creation_tokens.unwrap_or(0)
+    }
+
+    #[inline]
     pub fn cache_hit_rate(&self) -> Option<f64> {
-        let read = self.cache_read_tokens? as f64;
-        let creation = self.cache_creation_tokens? as f64;
+        if !self.has_any_cache_metrics() {
+            return None;
+        }
+        let read = self.cache_read_tokens_or_fallback() as f64;
+        let creation = self.cache_creation_tokens_or_zero() as f64;
         let total = read + creation;
         if total > 0.0 {
             Some((read / total) * 100.0)
@@ -42,30 +67,79 @@ impl Usage {
 
     #[inline]
     pub fn is_cache_hit(&self) -> Option<bool> {
-        Some(self.cache_read_tokens? > 0)
+        self.has_any_cache_metrics()
+            .then(|| self.cache_read_tokens_or_fallback() > 0)
     }
 
     #[inline]
     pub fn is_cache_miss(&self) -> Option<bool> {
-        Some(self.cache_creation_tokens? > 0 && self.cache_read_tokens? == 0)
+        self.has_any_cache_metrics().then(|| {
+            self.cache_creation_tokens_or_zero() > 0 && self.cache_read_tokens_or_fallback() == 0
+        })
     }
 
     #[inline]
     pub fn total_cache_tokens(&self) -> u32 {
-        let read = self.cache_read_tokens.unwrap_or(0);
-        let creation = self.cache_creation_tokens.unwrap_or(0);
+        let read = self.cache_read_tokens_or_fallback();
+        let creation = self.cache_creation_tokens_or_zero();
         read + creation
     }
 
     #[inline]
     pub fn cache_savings_ratio(&self) -> Option<f64> {
-        let read = self.cache_read_tokens? as f64;
+        if !self.has_cache_read_metric() {
+            return None;
+        }
+        let read = self.cache_read_tokens_or_fallback() as f64;
         let prompt = self.prompt_tokens as f64;
         if prompt > 0.0 {
             Some(read / prompt)
         } else {
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod usage_tests {
+    use super::Usage;
+
+    #[test]
+    fn cache_helpers_fall_back_to_cached_prompt_tokens() {
+        let usage = Usage {
+            prompt_tokens: 1_000,
+            completion_tokens: 200,
+            total_tokens: 1_200,
+            cached_prompt_tokens: Some(600),
+            cache_creation_tokens: Some(150),
+            cache_read_tokens: None,
+        };
+
+        assert_eq!(usage.cache_read_tokens_or_fallback(), 600);
+        assert_eq!(usage.cache_creation_tokens_or_zero(), 150);
+        assert_eq!(usage.total_cache_tokens(), 750);
+        assert_eq!(usage.is_cache_hit(), Some(true));
+        assert_eq!(usage.is_cache_miss(), Some(false));
+        assert_eq!(usage.cache_savings_ratio(), Some(0.6));
+        assert_eq!(usage.cache_hit_rate(), Some(80.0));
+    }
+
+    #[test]
+    fn cache_helpers_preserve_unknown_without_metrics() {
+        let usage = Usage {
+            prompt_tokens: 1_000,
+            completion_tokens: 200,
+            total_tokens: 1_200,
+            cached_prompt_tokens: None,
+            cache_creation_tokens: None,
+            cache_read_tokens: None,
+        };
+
+        assert_eq!(usage.total_cache_tokens(), 0);
+        assert_eq!(usage.is_cache_hit(), None);
+        assert_eq!(usage.is_cache_miss(), None);
+        assert_eq!(usage.cache_savings_ratio(), None);
+        assert_eq!(usage.cache_hit_rate(), None);
     }
 }
 

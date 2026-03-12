@@ -554,6 +554,7 @@ impl PromptCachingConfig {
 mod tests {
     use super::*;
     use assert_fs::TempDir;
+    use std::fs;
 
     #[test]
     fn prompt_caching_defaults_align_with_constants() {
@@ -683,5 +684,51 @@ prompt_cache_key_mode = "off"
         cfg.providers.gemini.enabled = true;
         cfg.providers.gemini.mode = GeminiPromptCacheMode::Off;
         assert!(!cfg.is_provider_enabled("gemini"));
+    }
+
+    #[test]
+    fn bundled_config_templates_match_prompt_cache_defaults() {
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let loader_source = fs::read_to_string(manifest_dir.join("src/loader/config.rs"))
+            .expect("loader config source");
+        assert!(loader_source.contains("[prompt_cache]"));
+        assert!(loader_source.contains("enabled = true"));
+        assert!(loader_source.contains("cache_friendly_prompt_shaping = true"));
+        assert!(loader_source.contains("# prompt_cache_retention = \"24h\""));
+
+        let workspace_root = manifest_dir.parent().expect("workspace root").to_path_buf();
+        let example_config = fs::read_to_string(workspace_root.join("vtcode.toml.example"))
+            .expect("vtcode.toml.example");
+        assert!(example_config.contains("[prompt_cache]"));
+        assert!(example_config.contains("enabled = true"));
+        assert!(example_config.contains("cache_friendly_prompt_shaping = true"));
+        assert!(example_config.contains("# prompt_cache_retention = \"24h\""));
+
+        let embedded_config = fs::read_to_string(workspace_root.join("vtcode-core/vtcode.toml"))
+            .expect("embedded vtcode.toml");
+        assert!(embedded_config.contains("[prompt_cache]"));
+        assert!(embedded_config.contains("enabled = true"));
+        assert!(embedded_config.contains("cache_friendly_prompt_shaping = true"));
+        assert!(embedded_config.contains("# prompt_cache_retention = \"24h\""));
+
+        let prompt_cache_guide =
+            fs::read_to_string(workspace_root.join("docs/tools/PROMPT_CACHING_GUIDE.md"))
+                .expect("prompt caching guide");
+        assert!(prompt_cache_guide.contains(
+            "VT Code enables `prompt_cache.cache_friendly_prompt_shaping = true` by default."
+        ));
+        assert!(prompt_cache_guide.contains(
+            "Default: `None` (opt-in) - VT Code does not set prompt_cache_retention by default;"
+        ));
+
+        let field_reference =
+            fs::read_to_string(workspace_root.join("docs/config/CONFIG_FIELD_REFERENCE.md"))
+                .expect("config field reference");
+        assert!(field_reference.contains(
+            "| `prompt_cache.cache_friendly_prompt_shaping` | `boolean` | no | `true` |"
+        ));
+        assert!(field_reference.contains(
+            "| `prompt_cache.providers.openai.prompt_cache_retention` | `null \\| string` | no | `null` |"
+        ));
     }
 }

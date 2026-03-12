@@ -710,4 +710,53 @@ mod tests {
         );
         assert_eq!(prepared.bootstrap.messages[0].content.as_text(), "hello");
     }
+
+    #[test]
+    fn messages_from_session_listing_preserves_assistant_phases_from_progress() {
+        let listing = SessionListing {
+            path: PathBuf::from("session.json"),
+            snapshot: SessionSnapshot {
+                metadata: SessionArchiveMetadata::new(
+                    "ws", "/tmp/ws", "gpt-5.4", "openai", "theme", "medium",
+                ),
+                started_at: Utc::now(),
+                ended_at: Utc::now(),
+                total_messages: 2,
+                distinct_tools: Vec::new(),
+                transcript: Vec::new(),
+                messages: Vec::new(),
+                progress: Some(SessionProgress {
+                    turn_number: 2,
+                    recent_messages: vec![
+                        SessionMessage::from(
+                            &Message::assistant("Working".to_string())
+                                .with_phase(Some(crate::llm::provider::AssistantPhase::Commentary)),
+                        ),
+                        SessionMessage::from(
+                            &Message::assistant("Done".to_string()).with_phase(Some(
+                                crate::llm::provider::AssistantPhase::FinalAnswer,
+                            )),
+                        ),
+                    ],
+                    tool_summaries: Vec::new(),
+                    token_usage: None,
+                    max_context_tokens: None,
+                    loaded_skills: Vec::new(),
+                }),
+                error_logs: Vec::new(),
+            },
+        };
+
+        let messages = messages_from_session_listing(&listing);
+        assert_eq!(
+            messages
+                .iter()
+                .map(|message| message.phase)
+                .collect::<Vec<_>>(),
+            vec![
+                Some(crate::llm::provider::AssistantPhase::Commentary),
+                Some(crate::llm::provider::AssistantPhase::FinalAnswer),
+            ]
+        );
+    }
 }

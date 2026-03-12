@@ -19,9 +19,10 @@ pub(crate) struct ExitSummaryData {
 }
 
 pub(crate) fn print_exit_summary(data: ExitSummaryData) {
-    let (prompt, completion) = aggregate_tokens(&data.telemetry.model_usage);
+    let (prompt, completion, cache_read, cache_creation) =
+        aggregate_tokens(&data.telemetry.model_usage);
     let diff = data.code_changes.unwrap_or_default();
-    let top_model = top_model(&data.telemetry.model_usage);
+    let models = sorted_models(&data.telemetry.model_usage);
 
     let current_theme = theme::active_theme_id();
     let is_light = theme::is_light_theme(&current_theme);
@@ -44,22 +45,24 @@ pub(crate) fn print_exit_summary(data: ExitSummaryData) {
     }
 
     println!(
-        "{ANSI_DIM}Session {} | API {} | Tokens {} in / {} out | Code +{} / -{}{ANSI_RESET}",
+        "{ANSI_DIM}Session {} | API {} | Tokens {} in / {} out{} | Code +{} / -{}{ANSI_RESET}",
         format_duration(data.total_session_time),
         format_duration(data.telemetry.api_time_spent),
         format_number(prompt),
         format_number(completion),
+        format_cache_fragment(cache_read, cache_creation),
         diff.additions,
         diff.deletions
     );
 
-    if let Some((model, stats)) = top_model {
-        let p = stats.prompt_tokens + stats.cached_prompt_tokens;
+    for (model, stats) in models {
         println!(
-            "{ANSI_DIM}Model: {ANSI_BOLD}\x1b[38;5;{model_color}m{model}{ANSI_RESET}{ANSI_DIM} | {} | {} in / {} out{ANSI_RESET}",
+            "{ANSI_DIM}Model: {ANSI_BOLD}\x1b[38;5;{model_color}m{model}{ANSI_RESET}{ANSI_DIM} | {} | {} in / {} out{}{}{ANSI_RESET}",
             format_duration(stats.api_time),
-            format_number(p),
-            format_number(stats.completion_tokens)
+            format_number(stats.prompt_tokens),
+            format_number(stats.completion_tokens),
+            format_cache_fragment(stats.cache_read_tokens, stats.cache_creation_tokens),
+            format_cache_hit_ratio(stats.cache_read_tokens, stats.cache_creation_tokens),
         );
     }
 
@@ -73,19 +76,23 @@ pub(crate) fn print_exit_summary(data: ExitSummaryData) {
 
 fn aggregate_tokens(
     usage: &hashbrown::HashMap<String, vtcode_core::core::telemetry::ModelUsageStats>,
-) -> (u64, u64) {
-    usage.values().fold((0, 0), |(p, c), s| {
+) -> (u64, u64, u64, u64) {
+    usage.values().fold((0, 0, 0, 0), |(p, c, r, w), s| {
         (
-            p + s.prompt_tokens + s.cached_prompt_tokens,
+            p + s.prompt_tokens,
             c + s.completion_tokens,
+            r + s.cache_read_tokens,
+            w + s.cache_creation_tokens,
         )
     })
 }
 
-fn top_model(
+fn sorted_models(
     usage: &hashbrown::HashMap<String, vtcode_core::core::telemetry::ModelUsageStats>,
-) -> Option<(&String, &vtcode_core::core::telemetry::ModelUsageStats)> {
-    usage.iter().max_by_key(|(_, s)| s.api_time)
+) -> Vec<(&String, &vtcode_core::core::telemetry::ModelUsageStats)> {
+    let mut models: Vec<_> = usage.iter().collect();
+    models.sort_by_key(|(_, stats)| std::cmp::Reverse(stats.api_time));
+    models
 }
 
 fn build_title(ctx: &Option<InlineHeaderContext>) -> String {
@@ -145,6 +152,30 @@ fn format_number(n: u64) -> String {
     }
 }
 
+fn format_cache_fragment(cache_read: u64, cache_creation: u64) -> String {
+    if cache_read == 0 && cache_creation == 0 {
+        String::new()
+    } else {
+        format!(
+            " | Cache {} read / {} write",
+            format_number(cache_read),
+            format_number(cache_creation)
+        )
+    }
+}
+
+fn format_cache_hit_ratio(cache_read: u64, cache_creation: u64) -> String {
+    let total = cache_read + cache_creation;
+    if total == 0 {
+        String::new()
+    } else {
+        format!(
+            " | Hit {:>5.1}%",
+            (cache_read as f64 / total as f64) * 100.0
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -161,5 +192,16 @@ mod tests {
         assert_eq!(format_number(999), "999");
         assert_eq!(format_number(12_345), "12.3k");
         assert_eq!(format_number(8_900_000), "8.9m");
+    }
+
+    #[test]
+    fn formats_cache_metrics() {
+        assert_eq!(format_cache_fragment(0, 0), "");
+        assert_eq!(
+            format_cache_fragment(12_000, 3_000),
+            " | Cache 12.0k read / 3.0k write"
+        );
+        assert_eq!(format_cache_hit_ratio(0, 0), "");
+        assert_eq!(format_cache_hit_ratio(9, 1), " | Hit  90.0%");
     }
 }

@@ -9,6 +9,7 @@ use crate::agent::runloop::unified::mcp_support::{
     display_mcp_tools, refresh_mcp_tools, render_mcp_config_edit_guidance,
     render_mcp_login_guidance, repair_mcp_runtime,
 };
+use crate::agent::runloop::unified::session_setup::refresh_tool_snapshot;
 
 use super::{SlashCommandContext, SlashCommandControl};
 
@@ -73,7 +74,9 @@ async fn execute_mcp_action(
             display_mcp_tools(ctx.renderer, ctx.tool_registry).await?;
         }
         McpCommandAction::RefreshTools => {
-            refresh_mcp_tools(ctx.renderer, ctx.tool_registry).await?;
+            if refresh_mcp_tools(ctx.renderer, ctx.tool_registry).await? {
+                apply_manual_mcp_refresh(ctx, "mcp_manual_refresh").await;
+            }
             sync_mcp_context_files_if_ready(ctx).await?;
         }
         McpCommandAction::ShowConfig => {
@@ -89,13 +92,16 @@ async fn execute_mcp_action(
             render_mcp_config_edit_guidance(ctx.renderer, ctx.config.workspace.as_path()).await?;
         }
         McpCommandAction::Repair => {
-            repair_mcp_runtime(
+            if repair_mcp_runtime(
                 ctx.renderer,
                 manager,
                 ctx.tool_registry,
                 ctx.vt_cfg.as_ref(),
             )
-            .await?;
+            .await?
+            {
+                apply_manual_mcp_refresh(ctx, "mcp_repair_refresh").await;
+            }
             sync_mcp_context_files_if_ready(ctx).await?;
         }
         McpCommandAction::Diagnose => {
@@ -117,6 +123,24 @@ async fn execute_mcp_action(
         }
     }
     Ok(())
+}
+
+async fn apply_manual_mcp_refresh(ctx: &mut SlashCommandContext<'_>, reason: &'static str) {
+    let tool_documentation_mode = ctx
+        .vt_cfg
+        .as_ref()
+        .as_ref()
+        .map(|cfg| cfg.agent.tool_documentation_mode)
+        .unwrap_or_default();
+    refresh_tool_snapshot(
+        ctx.tool_registry,
+        ctx.tools,
+        ctx.tool_catalog,
+        ctx.config,
+        tool_documentation_mode,
+    )
+    .await;
+    ctx.tool_catalog.note_explicit_refresh(reason);
 }
 
 async fn run_interactive_mcp_manager(ctx: &mut SlashCommandContext<'_>) -> Result<()> {

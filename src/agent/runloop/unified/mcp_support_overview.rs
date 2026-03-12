@@ -358,7 +358,7 @@ pub(crate) async fn display_mcp_tools(
 pub(crate) async fn refresh_mcp_tools(
     renderer: &mut AnsiRenderer,
     tool_registry: &mut ToolRegistry,
-) -> Result<()> {
+) -> Result<bool> {
     renderer.line(MessageStyle::Status, "Refreshing MCP tool index…")?;
     match tool_registry.refresh_mcp_tools().await {
         Ok(()) => {
@@ -380,13 +380,14 @@ pub(crate) async fn refresh_mcp_tools(
                 MessageStyle::Info,
                 "Use /mcp tools to inspect the refreshed catalog.",
             )?;
+            Ok(true)
         }
         Err(err) => {
             renderer.line(
                 MessageStyle::Error,
                 &format!("Failed to refresh MCP tools: {}", err),
             )?;
+            Ok(false)
         }
     }
-    Ok(())
 }
