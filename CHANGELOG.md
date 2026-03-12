@@ -2,6 +2,32 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.88.3 - 2026-03-12
+
+### Highlights
+### Other Changes
+#### Other
+
+- Overhaul model picker UI (b0f33444) 
+- Enhance prompt caching and telemetry metrics; update configurations for improved cache handling (3fb970ac) 
+- Update TODO (3ee104de) 
+- Implement task metadata handling and continuation logic in task tracker (96b8362a) 
+- Add effective_exec_events_path function and related tests; enhance harness_exec output normalization (05d86d58) 
+- Update notes (0664f0b9) 
+- Refactor tool output handling to remove follow-up prompts and streamline continuation logic (bd4000aa) 
+- Update note (52cdad90) 
+- Refactor execution result handling to improve metadata management and streamline output processing (a9ada48e) 
+- Add Nemotron-3-Super model support in Ollama provider and constants (2602a7fc) 
+- Enhance loop recovery hints and streamline error handling in tool execution (fabb03ed) 
+- Refactor tool output rendering to improve markdown handling and add hidden lines notice (62f7ad22) 
+- Refactor tool output rendering to streamline follow-up hints and improve output handling (51e754ac) 
+- Add support for Nemotron-3-Super model and improve terminal file path handling (33f04db1) 
+- Add exact terms match function and update default model to Nemotron-3-Super (8df4f93e) 
+- Add tests for file path handling and improve location suffix resolution (71638904) 
+- Add reference link for control sequences in TODO.md (d951810e) 
+- Remove empty code change entries from the changes log (fb89f6c2) 
+### Contributors
+@vinhnx
 ## 0.88.2 - 2026-03-12
 
 ### Highlights
