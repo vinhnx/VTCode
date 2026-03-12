@@ -288,6 +288,10 @@ VT Code only loads plugins from trusted directories:
 - `<project>/.vtcode/plugins/` - Project plugins
 - `<project>/.agents/plugins/` - Agent plugins
 
+Trusted roots, plugin directories, and library files are canonicalized before
+loading. VT Code rejects `..` traversal and symlink escapes that would resolve
+outside a trusted root.
+
 **Never load plugins from untrusted sources!** Native code executes with your user privileges.
 
 ### Plugin Validation
@@ -334,15 +338,18 @@ pub extern "C" fn vtcode_plugin_metadata() -> *const c_char {
 }
 ```
 
-### 3. Thread Safety
+### 3. Concurrency
 
-Plugins should be thread-safe:
+ABI v1 plugins should still avoid unsynchronized global state, but VT Code
+currently executes each loaded plugin instance serially:
 
 ```rust
 use std::sync::Mutex;
 
 static STATE: Mutex<Option<State>> = Mutex::new(None);
 ```
+
+Future parallel execution would require an explicit ABI or capability change.
 
 ### 4. Performance
 

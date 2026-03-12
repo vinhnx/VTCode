@@ -21,8 +21,6 @@ pub async fn handle_init_command(workspace: &Path, force: bool, run: bool) -> Re
     println!("  {:16} {}", "force", force);
     println!("  {:16} {}\n", "run", run);
 
-    super::set_workspace_env(workspace);
-
     ensure_dir_exists(workspace).await?;
 
     // Bootstrap configuration files in the workspace

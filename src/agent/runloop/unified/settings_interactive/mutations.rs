@@ -62,7 +62,8 @@ pub(super) fn reload_state_from_disk(state: &mut SettingsPaletteState) -> Result
         return Ok(());
     }
 
-    let manager = ConfigManager::load().context("Failed to reload runtime defaults")?;
+    let manager = ConfigManager::load_from_workspace(&state.workspace)
+        .context("Failed to reload runtime defaults")?;
     state.draft = manager.config().clone();
     state.source_label = no_config_source_label(&state.workspace);
     Ok(())

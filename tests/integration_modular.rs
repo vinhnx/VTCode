@@ -35,7 +35,7 @@ fn test_config_module_integration() {
     assert_eq!(config.tools.default_policy, ToolPolicy::Prompt);
 
     // Test that we can load configuration (will use defaults if no file)
-    let manager = ConfigManager::load().unwrap();
+    let manager = ConfigManager::load_from_workspace(".").unwrap();
     let loaded_config = manager.config();
     assert!(
         matches!(

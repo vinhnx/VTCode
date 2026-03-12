@@ -345,6 +345,7 @@ cargo check
 - Prevents arbitrary code execution
 - Clear user intent required
 - Matches existing skill loading pattern
+- Canonical path checks reject `..` traversal and symlink escapes
 
 ### 4. C ABI for FFI
 
@@ -434,7 +435,8 @@ cargo check
 
 4. **Single Threaded Execution**
    - One plugin call at a time
-   - No concurrent execution
+   - No concurrent execution per loaded plugin instance
+   - Public trait stays `Send + Sync`, but VT Code serializes ABI v1 FFI calls internally
 
 ## Security Considerations
 

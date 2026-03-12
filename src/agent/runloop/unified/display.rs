@@ -3,6 +3,7 @@ use crate::agent::runloop::unified::shell::{
 };
 use anstyle::{AnsiColor, Color as AnsiColorEnum, Effects, Reset, Style as AnsiStyle};
 use anyhow::{Context, Result};
+use std::path::Path;
 use vtcode_core::command_safety::shell_parser::parse_shell_commands_tree_sitter;
 use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
@@ -10,6 +11,7 @@ use vtcode_core::utils::dot_config::update_theme_preference;
 
 pub(crate) async fn persist_theme_preference(
     renderer: &mut AnsiRenderer,
+    workspace: &Path,
     theme_id: &str,
 ) -> Result<()> {
     if let Err(err) = update_theme_preference(theme_id).await {
@@ -18,7 +20,7 @@ pub(crate) async fn persist_theme_preference(
             &format!("Failed to persist theme preference: {}", err),
         )?;
     }
-    if let Err(err) = persist_theme_config(theme_id) {
+    if let Err(err) = persist_theme_config(workspace, theme_id) {
         renderer.line(
             MessageStyle::Error,
             &format!("Failed to persist theme in vtcode.toml: {}", err),
@@ -27,9 +29,9 @@ pub(crate) async fn persist_theme_preference(
     Ok(())
 }
 
-fn persist_theme_config(theme_id: &str) -> Result<()> {
-    let mut manager =
-        ConfigManager::load().context("Failed to load configuration for theme update")?;
+fn persist_theme_config(workspace: &Path, theme_id: &str) -> Result<()> {
+    let mut manager = ConfigManager::load_from_workspace(workspace)
+        .context("Failed to load configuration for theme update")?;
     let mut config = manager.config().clone();
     if config.agent.theme != theme_id {
         config.agent.theme = theme_id.to_string();

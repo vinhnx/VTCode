@@ -38,7 +38,7 @@ pub(super) enum ServiceTierChoice {
 
 pub(super) enum ExistingKey {
     Environment,
-    WorkspaceDotenv(String),
+    WorkspaceDotenv,
     /// OAuth token from encrypted storage (for OpenRouter)
     OAuthToken,
 }

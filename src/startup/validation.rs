@@ -293,4 +293,16 @@ mod tests {
         }
         Ok(())
     }
+
+    #[test]
+    fn canonicalizes_additional_directories() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let extra_dir = temp_dir.path().join("extra");
+        std::fs::create_dir(&extra_dir)?;
+
+        let validated = validate_additional_directories(std::slice::from_ref(&extra_dir))?;
+
+        assert_eq!(validated, vec![extra_dir.canonicalize()?]);
+        Ok(())
+    }
 }

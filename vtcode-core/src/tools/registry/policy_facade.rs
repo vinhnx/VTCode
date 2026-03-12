@@ -10,6 +10,7 @@ use crate::tools::mcp::{
     is_legacy_mcp_tool_name, legacy_mcp_tool_name, parse_canonical_mcp_tool_name,
 };
 use crate::tools::names::canonical_tool_name;
+use crate::ui::is_tui_mode;
 
 use super::{ToolPermissionDecision, ToolRegistry};
 
@@ -308,7 +309,7 @@ impl ToolRegistry {
         let normalized_name = self.resolve_runtime_policy_name(name);
         let mut gateway = self.policy_gateway.write().await;
         // Allow all when TUI mode is active (approval already captured by modal)
-        if std::env::var("VTCODE_TUI_MODE").is_ok() {
+        if is_tui_mode() {
             gateway.preapprove(&normalized_name);
             tracing::debug!(tool = %normalized_name, "Preapproved tool in TUI mode");
             return;

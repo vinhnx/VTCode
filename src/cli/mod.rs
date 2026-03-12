@@ -12,7 +12,6 @@ mod checkpoints;
 mod config;
 mod create_project;
 mod dispatch;
-mod env;
 mod init;
 mod init_project;
 mod man;
@@ -37,7 +36,6 @@ use action_resolution::ResolvedCliAction;
 use dispatch::{handle_ask_single_command, handle_chat_command, handle_resume_session_command};
 
 pub(crate) use action_resolution::resolve_action;
-pub use env::{set_additional_dirs_env, set_workspace_env};
 
 /// Skills command options
 #[derive(Debug)]
@@ -149,7 +147,6 @@ mod tests {
     fn startup_context() -> StartupContext {
         StartupContext {
             workspace: PathBuf::from("."),
-            additional_dirs: Vec::new(),
             config: VTCodeConfig::default(),
             agent_config: runtime_config(),
             skip_confirmations: false,

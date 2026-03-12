@@ -230,12 +230,6 @@ impl CodeExecutor {
         // Execute code via ProcessRunner with timeout
         let mut env = HashMap::new();
 
-        // Set workspace path for scripts
-        env.insert(
-            OsString::from("VTCODE_WORKSPACE"),
-            OsString::from(&*self.workspace_root.to_string_lossy()),
-        );
-
         // Set IPC directory for tool invocation
         env.insert(
             OsString::from("VTCODE_IPC_DIR"),
@@ -666,6 +660,50 @@ fn sanitize_function_name(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::mcp::{McpClientStatus, McpToolExecutor, McpToolInfo};
+    use async_trait::async_trait;
+    use serde_json::{Value, json};
+    use std::path::PathBuf;
+    use std::sync::Arc;
+
+    struct MockMcpToolExecutor;
+
+    #[async_trait]
+    impl McpToolExecutor for MockMcpToolExecutor {
+        async fn execute_mcp_tool(&self, _tool_name: &str, _args: &Value) -> Result<Value> {
+            Ok(json!({}))
+        }
+
+        async fn list_mcp_tools(&self) -> Result<Vec<McpToolInfo>> {
+            Ok(vec![McpToolInfo {
+                name: "read_file".to_string(),
+                description: "Read a file".to_string(),
+                provider: "test".to_string(),
+                input_schema: json!({}),
+            }])
+        }
+
+        async fn has_mcp_tool(&self, _tool_name: &str) -> Result<bool> {
+            Ok(true)
+        }
+
+        fn get_status(&self) -> McpClientStatus {
+            McpClientStatus {
+                enabled: true,
+                provider_count: 1,
+                active_connections: 1,
+                configured_providers: vec!["test".to_string()],
+            }
+        }
+    }
+
+    fn test_executor(language: Language) -> CodeExecutor {
+        CodeExecutor::new(
+            language,
+            Arc::new(MockMcpToolExecutor),
+            PathBuf::from("/workspace"),
+        )
+    }
 
     #[test]
     fn sanitize_function_name_handles_special_chars() {
@@ -685,5 +723,27 @@ mod tests {
     fn language_interpreter() {
         assert_eq!(Language::Python3.interpreter(), "python3");
         assert_eq!(Language::JavaScript.interpreter(), "node");
+    }
+
+    #[tokio::test]
+    async fn python_sdk_uses_ipc_dir_only() {
+        let sdk = test_executor(Language::Python3)
+            .generate_sdk()
+            .await
+            .expect("python sdk should generate");
+
+        assert!(sdk.contains("VTCODE_IPC_DIR"));
+        assert!(!sdk.contains("VTCODE_WORKSPACE"));
+    }
+
+    #[tokio::test]
+    async fn javascript_sdk_uses_ipc_dir_only() {
+        let sdk = test_executor(Language::JavaScript)
+            .generate_sdk()
+            .await
+            .expect("javascript sdk should generate");
+
+        assert!(sdk.contains("VTCODE_IPC_DIR"));
+        assert!(!sdk.contains("VTCODE_WORKSPACE"));
     }
 }

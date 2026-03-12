@@ -68,7 +68,7 @@ pub(crate) async fn handle_theme_changed(
     ctx: SlashCommandContext<'_>,
     theme_id: String,
 ) -> Result<SlashCommandControl> {
-    persist_theme_preference(ctx.renderer, &theme_id).await?;
+    persist_theme_preference(ctx.renderer, &ctx.config.workspace, &theme_id).await?;
     let styles = theme::active_styles();
     ctx.handle.set_theme(inline_theme_from_core_styles(&styles));
     apply_prompt_style(ctx.handle);

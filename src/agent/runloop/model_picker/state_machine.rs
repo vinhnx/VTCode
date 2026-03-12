@@ -337,12 +337,8 @@ impl ModelPickerState {
                         ),
                     )?;
                 }
-                Ok(Some(ExistingKey::WorkspaceDotenv(value))) => {
+                Ok(Some(ExistingKey::WorkspaceDotenv)) => {
                     selection.requires_api_key = false;
-                    // SAFETY: Keys are sanitized and values come from configuration sources.
-                    unsafe {
-                        std::env::set_var(&selection.env_key, &value);
-                    }
                     renderer.line(
                         MessageStyle::Info,
                         &format!(
@@ -464,13 +460,9 @@ impl ModelPickerState {
                     let result = self.build_result();
                     return Ok(ModelPickerProgress::Completed(result?));
                 }
-                Ok(Some(ExistingKey::WorkspaceDotenv(value))) => {
+                Ok(Some(ExistingKey::WorkspaceDotenv)) => {
                     if self.inline_enabled {
                         renderer.close_modal();
-                    }
-                    // SAFETY: Keys are sanitized and values come from configuration sources.
-                    unsafe {
-                        std::env::set_var(&selection.env_key, &value);
                     }
                     renderer.line(
                         MessageStyle::Info,
@@ -537,7 +529,7 @@ impl ModelPickerState {
             && let Some(value) = read_workspace_env(workspace, env_key)?
             && !value.trim().is_empty()
         {
-            return Ok(Some(ExistingKey::WorkspaceDotenv(value)));
+            return Ok(Some(ExistingKey::WorkspaceDotenv));
         }
 
         Ok(None)

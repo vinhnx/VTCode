@@ -13,7 +13,6 @@ use super::validation::{
 
 pub(super) struct LoadedStartupConfig {
     pub(super) workspace: PathBuf,
-    pub(super) additional_dirs: Vec<PathBuf>,
     pub(super) config: VTCodeConfig,
     pub(super) first_run_occurred: bool,
     pub(super) full_auto_requested: bool,
@@ -32,7 +31,7 @@ pub(super) async fn load_startup_config(args: &Cli) -> Result<LoadedStartupConfi
         validate_path_exists(&workspace, "Workspace")?;
     }
 
-    let additional_dirs = validate_additional_directories(&args.additional_dirs)?;
+    validate_additional_directories(&args.additional_dirs)?;
     let (cli_config_path_override, inline_config_overrides) =
         parse_cli_config_entries(&args.config);
     let env_config_path_override = std::env::var("VTCODE_CONFIG_PATH").ok().and_then(|value| {
@@ -48,9 +47,6 @@ pub(super) async fn load_startup_config(args: &Cli) -> Result<LoadedStartupConfi
     let mut builder = ConfigBuilder::new().workspace(workspace.clone());
     if let Some(path_override) = config_path_override {
         let resolved_path = resolve_config_path(&workspace, &path_override);
-        unsafe {
-            std::env::set_var("VTCODE_CONFIG_PATH", &resolved_path);
-        }
         builder = builder.config_file(resolved_path);
     }
 
@@ -90,10 +86,49 @@ pub(super) async fn load_startup_config(args: &Cli) -> Result<LoadedStartupConfi
 
     Ok(LoadedStartupConfig {
         workspace,
-        additional_dirs,
         config,
         first_run_occurred,
         full_auto_requested,
         automation_prompt,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+    use tempfile::TempDir;
+    use vtcode_core::cli::args::Cli;
+
+    #[tokio::test]
+    async fn cli_config_path_override_loads_requested_file() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let workspace = temp_dir.path().join("workspace");
+        std::fs::create_dir(&workspace).expect("workspace dir");
+        std::fs::create_dir(workspace.join(".vtcode")).expect("workspace dot dir");
+
+        let config_path = temp_dir.path().join("custom-config.toml");
+        std::fs::write(
+            &config_path,
+            r#"
+[debug]
+enable_tracing = true
+"#,
+        )
+        .expect("custom config");
+
+        let args = Cli::parse_from([
+            "vtcode",
+            "--workspace",
+            workspace.to_str().expect("workspace path"),
+            "--config",
+            config_path.to_str().expect("config path"),
+        ]);
+
+        let loaded = load_startup_config(&args)
+            .await
+            .expect("startup config should load");
+
+        assert!(loaded.config.debug.enable_tracing);
+    }
 }

@@ -157,3 +157,28 @@ fn falls_back_to_default_config_when_no_files_found() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+#[serial]
+fn load_uses_current_directory_workspace() -> Result<()> {
+    let workspace = TempDir::new()?;
+    let workspace_root = workspace.path();
+    let config_dir = workspace_root.join(".vtcode");
+    fs::create_dir_all(&config_dir)?;
+
+    let root_config = workspace_root.join("vtcode.toml");
+    write_config(&root_config, "workspace-root")?;
+
+    let original_dir = std::env::current_dir()?;
+    std::env::set_current_dir(workspace_root)?;
+
+    let manager = with_test_defaults(workspace_root, config_dir, Vec::new(), ConfigManager::load);
+
+    std::env::set_current_dir(original_dir)?;
+
+    let manager = manager?;
+    assert_eq!(manager.config().agent.provider, "workspace-root");
+    assert_eq!(manager.config_path(), Some(root_config.as_path()));
+
+    Ok(())
+}

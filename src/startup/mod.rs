@@ -38,7 +38,6 @@ pub(crate) use workspace_trust::{
 #[derive(Debug, Clone)]
 pub(crate) struct StartupContext {
     pub(crate) workspace: PathBuf,
-    pub(crate) additional_dirs: Vec<PathBuf>,
     pub(crate) config: VTCodeConfig,
     pub(crate) agent_config: CoreAgentConfig,
     pub(crate) skip_confirmations: bool,
@@ -173,7 +172,6 @@ impl StartupContext {
 
         Ok(StartupContext {
             workspace: loaded.workspace,
-            additional_dirs: loaded.additional_dirs,
             config,
             agent_config,
             skip_confirmations: args.dangerously_skip_permissions || skip_confirmations,

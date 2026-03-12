@@ -200,7 +200,7 @@ async fn refresh_runtime_config_from_manager(
     session_bootstrap: &SessionBootstrap,
     full_auto: bool,
 ) -> Result<()> {
-    if let Ok(runtime_manager) = ConfigManager::load() {
+    if let Ok(runtime_manager) = ConfigManager::load_from_workspace(&config.workspace) {
         let runtime_config = runtime_manager.config().clone();
         *vt_cfg = Some(runtime_config.clone());
         config.reasoning_effort = runtime_config.agent.reasoning_effort;
@@ -276,7 +276,8 @@ pub(crate) async fn handle_palette_selection(
                                 MessageStyle::Info,
                                 &format!("Theme switched to {}", label),
                             )?;
-                            persist_theme_preference(renderer, &theme_id).await?;
+                            persist_theme_preference(renderer, &config.workspace, &theme_id)
+                                .await?;
                             let styles = theme::active_styles();
                             handle.set_theme(inline_theme_from_core_styles(&styles));
                             apply_prompt_style(handle);

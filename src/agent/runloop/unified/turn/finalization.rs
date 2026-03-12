@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use vtcode_core::hooks::{LifecycleHookEngine, SessionEndReason};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::notifications::set_global_terminal_focused;
+use vtcode_core::ui::set_tui_mode;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::{SessionArchive, SessionMessage};
 use vtcode_core::utils::transcript;
@@ -132,9 +133,7 @@ pub(super) async fn finalize_session(
 
     transcript::clear_inline_handle();
 
-    unsafe {
-        std::env::remove_var("VTCODE_TUI_MODE");
-    }
+    set_tui_mode(false);
 
     // Phase 4 Telemetry: Report Resilience Metrics
     let open_circuits = session_stats.circuit_breaker.get_open_circuits();

@@ -27,6 +27,18 @@ use main_helpers::{
     perform_queued_runtime_relaunch, resolve_runtime_color_policy, resolve_startup_context,
 };
 
+struct PreparedRun {
+    args: Cli,
+    startup: startup::StartupContext,
+    print_mode: Option<String>,
+    potential_prompt: Option<String>,
+}
+
+enum BootstrapOutcome {
+    ExitEarly,
+    Ready(Box<PreparedRun>),
+}
+
 fn main() -> std::process::ExitCode {
     const MAIN_THREAD_STACK_BYTES: usize = 16 * 1024 * 1024;
 
@@ -34,11 +46,16 @@ fn main() -> std::process::ExitCode {
         .name("vtcode-main".to_string())
         .stack_size(MAIN_THREAD_STACK_BYTES)
         .spawn(|| -> Result<()> {
-            let runtime = tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .build()
-                .context("failed to build Tokio runtime")?;
-            runtime.block_on(run())
+            match bootstrap_main()? {
+                BootstrapOutcome::ExitEarly => Ok(()),
+                BootstrapOutcome::Ready(prepared) => {
+                    let runtime = tokio::runtime::Builder::new_multi_thread()
+                        .enable_all()
+                        .build()
+                        .context("failed to build Tokio runtime")?;
+                    runtime.block_on(run(*prepared))
+                }
+            }
         }) {
         Ok(handle) => handle,
         Err(err) => {
@@ -60,7 +77,7 @@ fn main() -> std::process::ExitCode {
     }
 }
 
-async fn run() -> Result<()> {
+fn bootstrap_main() -> Result<BootstrapOutcome> {
     let launch_argv = std::env::args_os().collect::<Vec<_>>();
     let launch_cwd = std::env::current_dir().context("failed to resolve current directory")?;
     configure_runtime_relaunch_context(launch_argv, launch_cwd);
@@ -71,8 +88,8 @@ async fn run() -> Result<()> {
     // which corrupts the TUI display
     #[cfg(target_os = "macos")]
     {
-        // Remove malloc debugging environment variables to prevent system warnings
-        // This is safe to do at startup as we're not in a multi-threaded context yet
+        // SAFETY: this runs on the dedicated main thread before any Tokio runtime or
+        // worker threads exist, so there is no concurrent environment access yet.
         unsafe {
             std::env::remove_var("MallocStackLogging");
             std::env::remove_var("MallocStackLoggingDirectory");
@@ -99,7 +116,7 @@ async fn run() -> Result<()> {
     panic_hook::init_panic_hook();
 
     if vtcode_core::maybe_run_zsh_exec_wrapper_mode()? {
-        return Ok(());
+        return Ok(BootstrapOutcome::ExitEarly);
     }
 
     let matches = build_augmented_cli_command().get_matches();
@@ -133,15 +150,32 @@ async fn run() -> Result<()> {
         GlobalColorChoice::Never.write_global();
     }
 
-    let (startup, potential_prompt) = resolve_startup_context(&args).await?;
+    let startup_runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .context("failed to build startup Tokio runtime")?;
+    let (startup, potential_prompt) = startup_runtime.block_on(resolve_startup_context(&args))?;
+
+    Ok(BootstrapOutcome::Ready(Box::new(PreparedRun {
+        args,
+        startup,
+        print_mode,
+        potential_prompt,
+    })))
+}
+
+async fn run(prepared: PreparedRun) -> Result<()> {
+    let PreparedRun {
+        args,
+        startup,
+        print_mode,
+        potential_prompt,
+    } = prepared;
 
     configure_debug_session_routing(&args, &startup, &print_mode, &potential_prompt).await;
 
     // Initialize tracing based on both RUST_LOG env var and config
     let env_tracing_initialized = initialize_tracing().await.unwrap_or_default();
-
-    cli::set_workspace_env(&startup.workspace);
-    cli::set_additional_dirs_env(&startup.additional_dirs);
 
     if startup.config.debug.enable_tracing
         && !env_tracing_initialized

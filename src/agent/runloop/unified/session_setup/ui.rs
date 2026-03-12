@@ -25,8 +25,8 @@ use vtcode_core::notifications::set_global_terminal_focused;
 use vtcode_core::ui::slash::SLASH_COMMANDS;
 use vtcode_core::ui::theme;
 use vtcode_core::ui::{
-    inline_theme_from_core_styles, to_tui_appearance, to_tui_keyboard_protocol,
-    to_tui_slash_commands, to_tui_surface,
+    inline_theme_from_core_styles, is_tui_mode, set_tui_mode, to_tui_appearance,
+    to_tui_keyboard_protocol, to_tui_slash_commands, to_tui_surface,
 };
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::SessionArchive;
@@ -81,8 +81,8 @@ pub(crate) async fn initialize_session_ui(
         .map(|cfg| cfg.ui.inline_viewport_rows)
         .unwrap_or(ui::DEFAULT_INLINE_VIEWPORT_ROWS);
 
-    unsafe {
-        std::env::set_var("VTCODE_TUI_MODE", "1");
+    if !is_tui_mode() {
+        set_tui_mode(true);
     }
 
     let ctrl_c_state = Arc::new(state::CtrlCState::new());

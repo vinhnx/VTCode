@@ -58,7 +58,8 @@ pub(crate) fn create_settings_palette_state(
     workspace: &Path,
     vt_snapshot: &Option<VTCodeConfig>,
 ) -> Result<SettingsPaletteState> {
-    let manager = ConfigManager::load().context("Failed to load configuration")?;
+    let manager =
+        ConfigManager::load_from_workspace(workspace).context("Failed to load configuration")?;
     let has_config_file = manager.config_path().is_some();
     let source_path = manager
         .config_path()
@@ -425,5 +426,24 @@ mod tests {
         let persisted = std::fs::read_to_string(&source_path).expect("persisted config");
         assert!(persisted.contains("[ide_context]"));
         assert!(persisted.contains("enabled = false"));
+    }
+
+    #[test]
+    fn settings_palette_state_loads_workspace_config_directly() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let source_path = temp.path().join("vtcode.toml");
+        let mut config = VTCodeConfig::default();
+        config.agent.theme = "ansi".to_string();
+        std::fs::write(
+            &source_path,
+            toml::to_string(&config).expect("config should serialize"),
+        )
+        .expect("workspace config should be written");
+
+        let state =
+            create_settings_palette_state(temp.path(), &None).expect("settings state should load");
+
+        assert_eq!(state.source_path, source_path);
+        assert_eq!(state.draft.agent.theme, "ansi");
     }
 }

@@ -3,6 +3,7 @@ use hashbrown::{HashMap, HashSet};
 use std::io::{self, Write};
 use std::path::Path;
 use std::path::PathBuf;
+use vtcode_core::ui::is_tui_mode;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct GitStatusSummary {
@@ -197,7 +198,7 @@ pub(crate) async fn confirm_changes_with_git_diff(
         if !diff.is_empty() {
             // In TUI mode, skip interactive confirmation to avoid corrupting display
             // The TUI has its own confirmation mechanisms
-            if std::env::var("VTCODE_TUI_MODE").is_ok() {
+            if is_tui_mode() {
                 tracing::debug!("Git diff for {}: {} bytes", file, diff.len());
                 continue;
             }

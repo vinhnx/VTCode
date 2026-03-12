@@ -152,7 +152,6 @@ mod tests {
         let args = Cli::default();
         let startup = StartupContext {
             workspace: PathBuf::from("."),
-            additional_dirs: Vec::new(),
             agent_config: startup_agent_config(),
             config: VTCodeConfig::default(),
             skip_confirmations: false,
