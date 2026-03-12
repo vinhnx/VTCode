@@ -11,6 +11,9 @@ use vtcode_core::tools::registry::{ToolErrorType, ToolRegistry, classify_error};
 
 use crate::agent::runloop::unified::progress::ProgressReporter;
 use crate::agent::runloop::unified::state::CtrlCState;
+use crate::agent::runloop::unified::wait_feedback::{
+    WAIT_KEEPALIVE_INITIAL, WAIT_KEEPALIVE_INTERVAL, wait_keepalive_message,
+};
 use vtcode_core::exec::cancellation;
 
 use super::execution_helpers::process_llm_tool_output;
@@ -256,8 +259,13 @@ async fn run_single_tool_attempt(
 ) -> ToolExecutionStatus {
     let start_time = Instant::now();
     let warning_fraction = registry.timeout_policy().warning_fraction();
-    let mut warning_guard =
-        TimeoutWarningGuard::new(name, start_time, tool_timeout, warning_fraction);
+    let mut warning_guard = TimeoutWarningGuard::new(
+        name,
+        start_time,
+        tool_timeout,
+        warning_fraction,
+        Some(progress_reporter.clone()),
+    );
 
     progress_reporter
         .set_message(format!("Preparing {}...", name))
@@ -331,28 +339,50 @@ async fn run_single_tool_attempt(
             Cancelled,
         }
 
-        let control = tokio::select! {
-            biased;
-            _ = ctrl_c_notify.notified() => {
-                if let Err(_e) = ctrl_c_state.check_cancellation() {
-                    token.cancel();
-                    ExecutionControl::Cancelled
-                } else {
-                    token.cancel();
-                    ExecutionControl::Continue
+        let mut exec_future = Box::pin(tokio::time::timeout(tool_timeout, exec_future));
+        let keepalive_started_at = tokio::time::Instant::now();
+        let mut next_keepalive_at = keepalive_started_at + WAIT_KEEPALIVE_INITIAL;
+        let wait_subject = format!("Tool '{}'", name);
+
+        let control = loop {
+            let cancel_notifier = ctrl_c_notify.notified();
+            tokio::pin!(cancel_notifier);
+            let keepalive_sleep = tokio::time::sleep_until(next_keepalive_at);
+            tokio::pin!(keepalive_sleep);
+
+            let control = tokio::select! {
+                biased;
+                _ = &mut cancel_notifier => {
+                    if let Err(_e) = ctrl_c_state.check_cancellation() {
+                        token.cancel();
+                        ExecutionControl::Cancelled
+                    } else {
+                        token.cancel();
+                        ExecutionControl::Continue
+                    }
                 }
-            }
-            result = tokio::time::timeout(tool_timeout, exec_future) => {
-                match result {
-                    Ok(val) => ExecutionControl::Completed(val),
-                    Err(_) => ExecutionControl::TimedOut,
+                result = &mut exec_future => {
+                    match result {
+                        Ok(val) => ExecutionControl::Completed(val),
+                        Err(_) => ExecutionControl::TimedOut,
+                    }
                 }
-            },
+                _ = &mut keepalive_sleep => {
+                    let elapsed = keepalive_started_at.elapsed();
+                    progress_reporter
+                        .set_message(wait_keepalive_message(&wait_subject, elapsed))
+                        .await;
+                    next_keepalive_at += WAIT_KEEPALIVE_INTERVAL;
+                    continue;
+                }
+            };
+            break control;
         };
 
         match control {
             ExecutionControl::Continue => continue,
             ExecutionControl::Cancelled => {
+                terminate_active_exec_sessions(registry, name, "cancelled").await;
                 progress_reporter
                     .set_message(format!("{} cancelled", name))
                     .await;
@@ -378,6 +408,7 @@ async fn run_single_tool_attempt(
             }
             ExecutionControl::TimedOut => {
                 token.cancel();
+                terminate_active_exec_sessions(registry, name, "timed out").await;
                 progress_reporter
                     .set_message(format!("{} timed out", name))
                     .await;
@@ -389,6 +420,18 @@ async fn run_single_tool_attempt(
 
     warning_guard.cancel().await;
     status
+}
+
+async fn terminate_active_exec_sessions(registry: &ToolRegistry, tool_name: &str, reason: &str) {
+    if let Err(err) = registry.terminate_all_exec_sessions_async().await {
+        debug!(
+            target: "vtcode.tool.exec",
+            tool = tool_name,
+            cancel_reason = reason,
+            error = %err,
+            "failed to terminate exec sessions after tool interruption"
+        );
+    }
 }
 
 fn is_retry_safe_tool(registry: &ToolRegistry, name: &str, args: &Value) -> bool {

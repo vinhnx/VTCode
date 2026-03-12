@@ -65,6 +65,8 @@ pub(super) struct TurnRequestSnapshot {
     pub provider_name: String,
     pub plan_mode: bool,
     pub full_auto: bool,
+    pub tool_free_recovery: bool,
+    pub recovery_reason: Option<String>,
     pub request_user_input_enabled: bool,
     pub context_window_size: usize,
     pub turn_timeout_secs: u64,
@@ -95,6 +97,7 @@ pub(super) struct TurnRequestBuildResult {
 pub(super) fn capture_turn_request_snapshot(
     ctx: &mut TurnProcessingContext<'_>,
     active_model: &str,
+    tool_free_recovery: bool,
 ) -> TurnRequestSnapshot {
     let prompt_cache_config = &ctx.config.prompt_cache;
     let plan_mode = ctx.session_stats.is_plan_mode();
@@ -125,6 +128,8 @@ pub(super) fn capture_turn_request_snapshot(
         provider_name,
         plan_mode,
         full_auto,
+        tool_free_recovery,
+        recovery_reason: ctx.recovery_reason().map(str::to_string),
         request_user_input_enabled,
         context_window_size,
         turn_timeout_secs,
@@ -161,25 +166,46 @@ async fn assemble_prompt(
         input.turn.execution.max_tool_retries,
     );
 
-    let tool_snapshot = ctx
-        .tool_catalog
-        .filtered_snapshot_with_stats(
-            ctx.tools,
+    let (current_tools, has_tools) = if input.turn.tool_free_recovery {
+        let _ = writeln!(
+            system_prompt,
+            "\n[Recovery Mode]\n- tools_disabled: true\n- answer_mode: summarize only from evidence already collected in this turn\n- if evidence is incomplete, say so explicitly\n- do_not_request_more_tools: true\n- keep_response_brief: true"
+        );
+        if let Some(reason) = input.turn.recovery_reason.as_deref() {
+            let _ = writeln!(system_prompt, "- recovery_reason: {}", reason);
+        }
+        emit_tool_catalog_cache_metrics(
+            ctx,
+            input.step_count,
+            input.active_model,
+            true,
             input.turn.plan_mode,
             input.turn.request_user_input_enabled,
-        )
-        .await;
-    let current_tools = tool_snapshot.snapshot;
-    let has_tools = current_tools.is_some();
-    emit_tool_catalog_cache_metrics(
-        ctx,
-        input.step_count,
-        input.active_model,
-        tool_snapshot.cache_hit,
-        input.turn.plan_mode,
-        input.turn.request_user_input_enabled,
-        current_tools.as_ref().map_or(0, |defs| defs.len()),
-    );
+            0,
+        );
+        (None, false)
+    } else {
+        let tool_snapshot = ctx
+            .tool_catalog
+            .filtered_snapshot_with_stats(
+                ctx.tools,
+                input.turn.plan_mode,
+                input.turn.request_user_input_enabled,
+            )
+            .await;
+        let current_tools = tool_snapshot.snapshot;
+        let has_tools = current_tools.is_some();
+        emit_tool_catalog_cache_metrics(
+            ctx,
+            input.step_count,
+            input.active_model,
+            tool_snapshot.cache_hit,
+            input.turn.plan_mode,
+            input.turn.request_user_input_enabled,
+            current_tools.as_ref().map_or(0, |defs| defs.len()),
+        );
+        (current_tools, has_tools)
+    };
 
     if let Some(defs) = current_tools.as_ref()
         && !input.turn.prompt_cache_shaping_mode.is_enabled()
@@ -253,6 +279,7 @@ pub(super) async fn build_turn_request(
     step_count: usize,
     active_model: &str,
     turn_snapshot: &TurnRequestSnapshot,
+    max_tokens_opt: Option<u32>,
     parallel_cfg_opt: Option<Box<ParallelToolConfig>>,
     use_streaming: bool,
 ) -> Result<TurnRequestBuildResult> {
@@ -282,13 +309,17 @@ pub(super) async fn build_turn_request(
     } else {
         Some(0.7)
     };
-    let parallel_config =
-        if prompt_output.has_tools && turn_snapshot.capabilities.parallel_tool_config {
-            parallel_cfg_opt
-        } else {
-            None
-        };
-    let tool_choice = if prompt_output.has_tools {
+    let parallel_config = if prompt_output.has_tools
+        && !turn_snapshot.tool_free_recovery
+        && turn_snapshot.capabilities.parallel_tool_config
+    {
+        parallel_cfg_opt
+    } else {
+        None
+    };
+    let tool_choice = if turn_snapshot.tool_free_recovery {
+        Some(uni::ToolChoice::none())
+    } else if prompt_output.has_tools {
         Some(uni::ToolChoice::auto())
     } else {
         None
@@ -322,6 +353,7 @@ pub(super) async fn build_turn_request(
         system_prompt: Some(Arc::new(prompt_output.system_prompt)),
         tools: prompt_output.current_tools,
         model: active_model.to_string(),
+        max_tokens: max_tokens_opt,
         temperature,
         stream: use_streaming,
         tool_choice,
@@ -338,4 +370,57 @@ pub(super) async fn build_turn_request(
         request,
         has_tools: prompt_output.has_tools,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+    use vtcode_core::llm::provider::{self as uni, ToolDefinition};
+
+    use super::{build_turn_request, capture_turn_request_snapshot};
+    use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
+
+    #[tokio::test]
+    async fn recovery_request_omits_tools_and_disables_tool_choice() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        backing
+            .add_tool_definition(ToolDefinition::function(
+                "unified_search".to_string(),
+                "Search project files".to_string(),
+                json!({
+                    "type": "object",
+                    "properties": {
+                        "pattern": { "type": "string" }
+                    }
+                }),
+            ))
+            .await;
+
+        let mut ctx = backing.turn_processing_context();
+        ctx.activate_recovery("loop detector");
+
+        let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", true);
+        let built =
+            build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
+                .await
+                .expect("recovery request should build");
+
+        assert!(!built.has_tools);
+        assert!(built.request.tools.is_none());
+        assert!(matches!(
+            built.request.tool_choice,
+            Some(uni::ToolChoice::None)
+        ));
+        assert_eq!(built.request.max_tokens, Some(320));
+
+        let system_prompt = built
+            .request
+            .system_prompt
+            .as_ref()
+            .expect("system prompt")
+            .as_str();
+        assert!(system_prompt.contains("[Recovery Mode]"));
+        assert!(system_prompt.contains("do_not_request_more_tools: true"));
+        assert!(system_prompt.contains("recovery_reason: loop detector"));
+    }
 }

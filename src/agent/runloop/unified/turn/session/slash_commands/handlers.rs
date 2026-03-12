@@ -16,6 +16,8 @@ use crate::agent::runloop::unified::palettes::ActivePalette;
 use crate::agent::runloop::unified::settings_interactive::{
     create_settings_palette_state, show_settings_palette,
 };
+use crate::agent::runloop::unified::state::CtrlCSignal;
+use crate::agent::runloop::unified::stop_requests::request_local_stop;
 #[path = "activation.rs"]
 mod activation;
 #[path = "apps.rs"]
@@ -126,6 +128,28 @@ pub(super) async fn handle_show_settings(
     }
 
     Ok(SlashCommandControl::Continue)
+}
+
+pub(super) async fn handle_stop_agent(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+    if ctx.tool_registry.active_pty_sessions() == 0
+        && !ctx.ctrl_c_state.is_cancel_requested()
+        && !ctx.ctrl_c_state.is_exit_requested()
+    {
+        ctx.renderer
+            .line(MessageStyle::Info, "No active run to stop.")?;
+        return Ok(SlashCommandControl::Continue);
+    }
+
+    match request_local_stop(ctx.ctrl_c_state, ctx.ctrl_c_notify) {
+        CtrlCSignal::Cancel => {
+            ctx.renderer.line(
+                MessageStyle::Info,
+                "Stop requested. VT Code is cancelling the current turn.",
+            )?;
+            Ok(SlashCommandControl::Continue)
+        }
+        CtrlCSignal::Exit => Ok(SlashCommandControl::BreakWithReason(SessionEndReason::Exit)),
+    }
 }
 
 pub(super) async fn handle_clear_conversation(

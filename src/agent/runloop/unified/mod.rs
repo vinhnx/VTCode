@@ -29,6 +29,7 @@ mod shell;
 pub(crate) mod state;
 mod status_line;
 mod status_line_command;
+pub(crate) mod stop_requests;
 pub(crate) mod tool_catalog;
 mod tool_output_handler;
 mod tool_pipeline;
@@ -43,6 +44,7 @@ mod ui_interaction_stream;
 mod ui_interaction_stream_helpers;
 #[cfg(test)]
 mod ui_interaction_tests;
+mod wait_feedback;
 mod wizard_modal;
 mod workspace_links;
 

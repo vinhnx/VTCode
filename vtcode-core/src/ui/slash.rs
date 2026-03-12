@@ -77,6 +77,10 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             description: "Show model, provider, workspace, and tool status",
         },
         SlashCommandInfo {
+            name: "stop",
+            description: "Stop the active turn immediately",
+        },
+        SlashCommandInfo {
             name: "doctor",
             description: "Run installation and configuration diagnostics (interactive in inline UI; usage: /doctor [--quick|--full])",
         },

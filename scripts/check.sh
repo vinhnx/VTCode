@@ -11,6 +11,26 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 echo "Running VT Code Quality Checks..."
 echo "========================================"
 
+# Check rustfmt availability
+check_rustfmt() {
+    if cargo fmt --version > /dev/null 2>&1; then
+        return 0
+    else
+        print_error "rustfmt is not available. Install it with 'rustup component add rustfmt'."
+        return 1
+    fi
+}
+
+# Check clippy availability
+check_clippy() {
+    if cargo clippy --version > /dev/null 2>&1; then
+        return 0
+    else
+        print_error "clippy is not available. Install it with 'rustup component add clippy'."
+        return 1
+    fi
+}
+
 # Function to run rustfmt check
 run_rustfmt() {
     print_status "Running rustfmt check..."

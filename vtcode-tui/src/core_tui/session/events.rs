@@ -342,21 +342,16 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 None
             } else {
                 let is_double_escape = session.input_manager.check_escape_double_tap();
-                let active_pty_count = session
-                    .active_pty_sessions
-                    .as_ref()
-                    .map(|s| s.load(std::sync::atomic::Ordering::Relaxed))
-                    .unwrap_or(0);
+                let active_pty_count = session.active_pty_session_count();
                 let has_running_activity = session.is_running_activity();
 
-                if is_double_escape && (has_running_activity || active_pty_count > 0) {
-                    // Double-escape while busy: interrupt current work (Ctrl+C equivalent)
+                if has_running_activity || active_pty_count > 0 {
                     session.mark_dirty();
-                    Some(InlineEvent::Interrupt)
-                } else if active_pty_count > 0 {
-                    // Single escape with active PTY sessions: force cancel them
-                    session.mark_dirty();
-                    Some(InlineEvent::ForceCancelPtySession)
+                    if is_double_escape {
+                        Some(InlineEvent::Exit)
+                    } else {
+                        Some(InlineEvent::Interrupt)
+                    }
                 } else if is_double_escape && !has_running_activity {
                     // Double-escape while idle rewinds to the latest checkpoint.
                     session.mark_dirty();
@@ -425,6 +420,10 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                     return Some(InlineEvent::FileSelected(file_path));
                 }
                 return None;
+            }
+
+            if let Some(event) = maybe_handle_busy_stop_command(session) {
+                return Some(event);
             }
 
             if handle_running_slash_command_block(session) {
@@ -724,6 +723,26 @@ fn handle_running_slash_command_block(session: &mut Session) -> bool {
     session.transcript_content_changed = true;
     session.mark_dirty();
     true
+}
+
+fn maybe_handle_busy_stop_command(session: &mut Session) -> Option<InlineEvent> {
+    if !session.is_running_activity() {
+        return None;
+    }
+
+    if !matches!(
+        extract_slash_command_name(session.input_manager.content()),
+        Some("stop")
+    ) {
+        return None;
+    }
+
+    session.input_manager.clear();
+    session.input_compact_mode = false;
+    session.scroll_manager.set_offset(0);
+    slash::update_slash_suggestions(session);
+    session.mark_dirty();
+    Some(InlineEvent::Interrupt)
 }
 
 fn extract_slash_command_name(input: &str) -> Option<&str> {

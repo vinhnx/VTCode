@@ -36,11 +36,11 @@ pub(crate) async fn apply_turn_outcome(
             ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
             ctx.renderer.line(
                 MessageStyle::Info,
-                "Interrupted current task. Press Ctrl+C again to exit.",
+                "Interrupted current task. Press Esc, Ctrl+C, or /stop again to exit.",
             )?;
             ctx.handle.clear_input();
             ctx.handle.set_placeholder(ctx.default_placeholder.clone());
-            ctx.ctrl_c_state.clear_cancel();
+            ctx.ctrl_c_state.mark_cancel_handled();
             *ctx.session_end_reason = vtcode_core::hooks::SessionEndReason::Cancelled;
             Ok(())
         }
@@ -57,7 +57,7 @@ pub(crate) async fn apply_turn_outcome(
                     _ => {}
                 }
             }
-            ctx.ctrl_c_state.clear_cancel();
+            ctx.ctrl_c_state.reset();
             Ok(())
         }
         TurnLoopResult::Blocked { reason } => {
@@ -66,7 +66,7 @@ pub(crate) async fn apply_turn_outcome(
             }
             ctx.handle.clear_input();
             ctx.handle.set_placeholder(ctx.default_placeholder.clone());
-            ctx.ctrl_c_state.clear_cancel();
+            ctx.ctrl_c_state.reset();
             Ok(())
         }
         TurnLoopResult::Completed => {
@@ -110,7 +110,7 @@ pub(crate) async fn apply_turn_outcome(
                     &format!("Worked for {}", format_turn_elapsed_label(ctx.turn_elapsed)),
                 )?;
             }
-            ctx.ctrl_c_state.clear_cancel();
+            ctx.ctrl_c_state.reset();
             Ok(())
         }
     }

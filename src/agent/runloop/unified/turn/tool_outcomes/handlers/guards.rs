@@ -29,20 +29,41 @@ pub(super) fn enforce_blocked_tool_call_guard(
     args: &Value,
 ) -> Option<TurnHandlerOutcome> {
     let streak = ctx.record_blocked_tool_call();
+    let blocked_total = ctx.blocked_tool_calls();
     let max_streak = max_consecutive_blocked_tool_calls_per_turn(ctx);
-    if streak <= max_streak {
+
+    if ctx.is_recovery_active() && !ctx.recovery_pass_used() {
+        return Some(TurnHandlerOutcome::Continue);
+    }
+
+    let recovery_total_fuse_tripped = ctx.is_recovery_active() && blocked_total > max_streak;
+    if streak <= max_streak && !recovery_total_fuse_tripped {
         return None;
     }
 
     let display_tool = tool_action_label(tool_name, args);
-    let block_reason = format!(
-        "Consecutive blocked tool calls reached per-turn cap ({max_streak}). Last blocked call: '{display_tool}'. Stopping turn to prevent retry churn."
-    );
+    let block_reason = if recovery_total_fuse_tripped {
+        format!(
+            "Blocked tool calls reached the recovery-mode cap ({max_streak}) for this turn. Last blocked call: '{display_tool}'. Stopping turn."
+        )
+    } else {
+        format!(
+            "Consecutive blocked tool calls reached per-turn cap ({max_streak}). Last blocked call: '{display_tool}'. Stopping turn to prevent retry churn."
+        )
+    };
     ctx.push_tool_response(
         tool_call_id,
         build_failure_error_content(
-            format!("Consecutive blocked tool calls exceeded cap ({max_streak}) for this turn."),
-            "blocked_streak",
+            if recovery_total_fuse_tripped {
+                format!("Blocked tool calls exceeded the recovery-mode cap ({max_streak}) for this turn.")
+            } else {
+                format!("Consecutive blocked tool calls exceeded cap ({max_streak}) for this turn.")
+            },
+            if recovery_total_fuse_tripped {
+                "blocked_total"
+            } else {
+                "blocked_streak"
+            },
         ),
     );
     ctx.push_system_message(block_reason.clone());
@@ -126,19 +147,17 @@ pub(super) fn enforce_repeated_shell_run_guard(
 
     let display_tool = tool_action_label(canonical_tool_name, args);
     let block_reason = format!(
-        "Repeated shell command guard stopped '{}' after {} identical runs (max {}). Reuse prior output or change the command.",
+        "Repeated shell command guard stopped '{}' after {} identical runs (max {}). Scheduling a final recovery pass without more tools.",
         display_tool, streak, max_repeated_runs
     );
+    ctx.activate_recovery(block_reason.clone());
     ctx.push_tool_response(
         tool_call_id,
         build_repeated_shell_run_error_content(max_repeated_runs),
     );
+    ctx.push_system_message(block_reason);
 
-    Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
-        TurnLoopResult::Blocked {
-            reason: Some(block_reason),
-        },
-    )))
+    Some(ValidationResult::Blocked)
 }
 
 fn max_sequential_spool_chunk_reads_per_turn(ctx: &TurnProcessingContext<'_>) -> usize {
@@ -183,18 +202,16 @@ pub(super) fn enforce_spool_chunk_read_guard(
 
     let display_tool = tool_action_label(canonical_tool_name, args);
     let block_reason = format!(
-        "Spool chunk guard stopped repeated '{}' calls for this turn.\nUse `grep_file` or summarize before more chunk reads.",
+        "Spool chunk guard stopped repeated '{}' calls for this turn. Scheduling a final recovery pass without more tools.",
         display_tool
     );
 
+    ctx.activate_recovery(block_reason.clone());
     ctx.push_tool_response(
         tool_call_id,
         build_spool_chunk_guard_error_content(spool_path, max_reads_per_turn),
     );
+    ctx.push_system_message(block_reason);
 
-    Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
-        TurnLoopResult::Blocked {
-            reason: Some(block_reason),
-        },
-    )))
+    Some(ValidationResult::Blocked)
 }

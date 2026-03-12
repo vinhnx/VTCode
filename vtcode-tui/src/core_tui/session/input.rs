@@ -945,7 +945,8 @@ pub(crate) fn status_requires_shimmer(text: &str) -> bool {
         || text.contains("Running:")
         || text.contains("Running ")
         || text.contains("Executing ")
-        || text.contains("Press Ctrl+C to cancel")
+        || text.contains("Ctrl+C")
+        || text.contains("/stop to stop")
     {
         return true;
     }

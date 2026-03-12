@@ -101,6 +101,15 @@ pub(crate) async fn handle_turn_processing_result<'a>(
             reasoning,
             reasoning_details,
         } => {
+            if params.ctx.is_recovery_active() && params.ctx.recovery_pass_used() {
+                return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
+                    reason: Some(
+                        "Recovery mode requested a final tool-free synthesis pass, but the model attempted more tool calls."
+                            .to_string(),
+                    ),
+                }));
+            }
+
             let assistant_text =
                 if should_suppress_pre_tool_result_claim(&assistant_text, &tool_calls) {
                     String::new()
@@ -165,14 +174,34 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                 )
                 .await
         }
-        TurnProcessingResult::Empty => Ok(TurnHandlerOutcome::Break(TurnLoopResult::Completed)),
+        TurnProcessingResult::Empty => {
+            if params.ctx.is_recovery_active() && params.ctx.recovery_pass_used() {
+                return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
+                    reason: Some(
+                        "Recovery mode requested a final synthesis pass, but the model returned no answer."
+                            .to_string(),
+                    ),
+                }));
+            }
+
+            Ok(TurnHandlerOutcome::Break(TurnLoopResult::Completed))
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{record_assistant_tool_calls, should_suppress_pre_tool_result_claim};
-    use crate::agent::runloop::unified::turn::context::PreparedAssistantToolCall;
+    use std::collections::BTreeSet;
+
+    use super::{
+        HandleTurnProcessingResultParams, handle_turn_processing_result,
+        record_assistant_tool_calls, should_suppress_pre_tool_result_claim,
+    };
+    use crate::agent::runloop::unified::turn::context::{
+        PreparedAssistantToolCall, TurnHandlerOutcome, TurnLoopResult, TurnProcessingResult,
+    };
+    use crate::agent::runloop::unified::turn::tool_outcomes::helpers::LoopTracker;
+    use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
     use vtcode_core::llm::provider as uni;
 
     fn prepared_command_tool_call() -> PreparedAssistantToolCall {
@@ -254,5 +283,75 @@ mod tests {
                 .as_deref(),
             Some("call_1")
         );
+    }
+
+    #[tokio::test]
+    async fn recovery_tool_calls_break_turn_as_blocked() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut ctx = backing.turn_processing_context();
+        ctx.activate_recovery("loop detector");
+        assert!(ctx.consume_recovery_pass());
+
+        let tool_calls = vec![PreparedAssistantToolCall::new(uni::ToolCall::function(
+            "call_1".to_string(),
+            "unified_search".to_string(),
+            r#"{"action":"grep","pattern":"loop"}"#.to_string(),
+        ))];
+        let mut repeated_tool_attempts = LoopTracker::new();
+        let mut turn_modified_files = BTreeSet::new();
+
+        let outcome = handle_turn_processing_result(HandleTurnProcessingResultParams {
+            ctx: &mut ctx,
+            processing_result: TurnProcessingResult::ToolCalls {
+                tool_calls,
+                assistant_text: String::new(),
+                reasoning: Vec::new(),
+                reasoning_details: None,
+            },
+            response_streamed: false,
+            step_count: 1,
+            repeated_tool_attempts: &mut repeated_tool_attempts,
+            turn_modified_files: &mut turn_modified_files,
+            max_tool_loops: 4,
+            tool_repeat_limit: 4,
+        })
+        .await
+        .expect("recovery tool calls should be handled");
+
+        assert!(matches!(
+            outcome,
+            TurnHandlerOutcome::Break(TurnLoopResult::Blocked { reason: Some(reason) })
+            if reason.contains("tool-free synthesis pass")
+        ));
+    }
+
+    #[tokio::test]
+    async fn recovery_empty_response_breaks_turn_as_blocked() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut ctx = backing.turn_processing_context();
+        ctx.activate_recovery("loop detector");
+        assert!(ctx.consume_recovery_pass());
+
+        let mut repeated_tool_attempts = LoopTracker::new();
+        let mut turn_modified_files = BTreeSet::new();
+
+        let outcome = handle_turn_processing_result(HandleTurnProcessingResultParams {
+            ctx: &mut ctx,
+            processing_result: TurnProcessingResult::Empty,
+            response_streamed: false,
+            step_count: 1,
+            repeated_tool_attempts: &mut repeated_tool_attempts,
+            turn_modified_files: &mut turn_modified_files,
+            max_tool_loops: 4,
+            tool_repeat_limit: 4,
+        })
+        .await
+        .expect("recovery empty response should be handled");
+
+        assert!(matches!(
+            outcome,
+            TurnHandlerOutcome::Break(TurnLoopResult::Blocked { reason: Some(reason) })
+            if reason.contains("returned no answer")
+        ));
     }
 }

@@ -779,6 +779,48 @@ async fn blocked_tool_call_guard_emits_tool_and_system_messages() {
 }
 
 #[tokio::test]
+async fn blocked_tool_call_guard_short_circuits_to_recovery_when_active() {
+    let mut backing = TestContextBacking::new(4).await;
+    let mut ctx = backing.turn_processing_context();
+    let args = json!({"path":"src/main.rs"});
+    ctx.activate_recovery("loop detector");
+
+    let outcome = super::enforce_blocked_tool_call_guard(
+        &mut ctx,
+        "blocked_recovery",
+        tool_names::READ_FILE,
+        &args,
+    );
+
+    assert!(matches!(outcome, Some(TurnHandlerOutcome::Continue)));
+}
+
+#[tokio::test]
+async fn repeated_shell_guard_activates_recovery_without_breaking_turn() {
+    let mut backing = TestContextBacking::new(4).await;
+    let mut ctx = backing.turn_processing_context();
+    let max_repeated_runs = ctx
+        .vt_cfg
+        .map(|cfg| cfg.tools.max_repeated_tool_calls)
+        .filter(|value| *value > 0)
+        .unwrap_or(vtcode_core::config::constants::defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS);
+    let args = json!({"action":"run","command":"cargo check"});
+
+    let mut outcome = None;
+    for idx in 0..=max_repeated_runs {
+        outcome = super::enforce_repeated_shell_run_guard(
+            &mut ctx,
+            &format!("shell_{idx}"),
+            tool_names::UNIFIED_EXEC,
+            &args,
+        );
+    }
+
+    assert!(matches!(outcome, Some(super::ValidationResult::Blocked)));
+    assert!(ctx.is_recovery_active());
+}
+
+#[tokio::test]
 async fn recovery_skip_step_pushes_structured_tool_message() {
     let mut backing = TestContextBacking::new(4).await;
     let mut ctx = backing.turn_processing_context();

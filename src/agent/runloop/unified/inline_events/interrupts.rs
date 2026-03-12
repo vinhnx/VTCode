@@ -19,8 +19,7 @@ impl<'a> InlineInterruptCoordinator<'a> {
     }
 
     pub(crate) fn reset_after_user_action(self, notice_displayed: &mut bool) {
-        self.state.disarm_exit();
-        self.state.clear_cancel();
+        self.state.reset();
         *notice_displayed = false;
     }
 
@@ -63,7 +62,7 @@ impl<'a> InlineInterruptCoordinator<'a> {
         renderer.line_if_not_empty(MessageStyle::Output)?;
         renderer.line(
             MessageStyle::Info,
-            "Interrupt received. Stopping task... (Press Ctrl+C again within 2s to exit)",
+            "Interrupt received. Stopping task... (Press Esc, Ctrl+C, or /stop again within 2s to exit)",
         )?;
         handle.clear_input();
         handle.set_placeholder(default_placeholder.clone());

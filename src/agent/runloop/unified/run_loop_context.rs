@@ -75,6 +75,9 @@ pub(crate) struct HarnessTurnState {
     pub replaceable_task_tracker_block: Option<Vec<String>>,
     pub tool_budget_warning_emitted: bool,
     pub tool_budget_exhausted_emitted: bool,
+    pub recovery_reason: Option<String>,
+    pub recovery_active: bool,
+    pub recovery_pass_used: bool,
     pub max_tool_calls: usize,
     pub max_tool_wall_clock: Duration,
     pub max_tool_retries: u32,
@@ -103,6 +106,9 @@ impl HarnessTurnState {
             replaceable_task_tracker_block: None,
             tool_budget_warning_emitted: false,
             tool_budget_exhausted_emitted: false,
+            recovery_reason: None,
+            recovery_active: false,
+            recovery_pass_used: false,
             max_tool_calls,
             max_tool_wall_clock: Duration::from_secs(max_tool_wall_clock_secs),
             max_tool_retries,
@@ -163,6 +169,31 @@ impl HarnessTurnState {
 
     pub(crate) fn mark_tool_budget_exhausted_emitted(&mut self) {
         self.tool_budget_exhausted_emitted = true;
+    }
+
+    pub(crate) fn activate_recovery(&mut self, reason: impl Into<String>) {
+        self.recovery_reason = Some(reason.into());
+        self.recovery_active = true;
+    }
+
+    pub(crate) fn is_recovery_active(&self) -> bool {
+        self.recovery_active
+    }
+
+    pub(crate) fn recovery_reason(&self) -> Option<&str> {
+        self.recovery_reason.as_deref()
+    }
+
+    pub(crate) fn recovery_pass_used(&self) -> bool {
+        self.recovery_pass_used
+    }
+
+    pub(crate) fn consume_recovery_pass(&mut self) -> bool {
+        if !self.recovery_active || self.recovery_pass_used {
+            return false;
+        }
+        self.recovery_pass_used = true;
+        true
     }
 
     pub(crate) fn record_spool_chunk_read(&mut self) -> usize {
@@ -394,6 +425,45 @@ mod tests {
         assert_eq!(state.blocked_tool_calls, 2);
         state.reset_blocked_tool_call_streak();
         assert_eq!(state.consecutive_blocked_tool_calls, 0);
+    }
+
+    #[test]
+    fn harness_state_tracks_recovery_state() {
+        let mut state = HarnessTurnState::new(
+            TurnRunId("run-1".to_string()),
+            TurnId("turn-1".to_string()),
+            4,
+            10,
+            1,
+        );
+
+        assert!(!state.is_recovery_active());
+        assert!(!state.recovery_pass_used());
+
+        state.activate_recovery("loop detector");
+        assert!(state.is_recovery_active());
+        assert_eq!(state.recovery_reason(), Some("loop detector"));
+
+        assert!(state.consume_recovery_pass());
+        assert!(state.recovery_pass_used());
+    }
+
+    #[test]
+    fn harness_state_consumes_recovery_pass_once() {
+        let mut state = HarnessTurnState::new(
+            TurnRunId("run-1".to_string()),
+            TurnId("turn-1".to_string()),
+            4,
+            10,
+            1,
+        );
+
+        assert!(!state.consume_recovery_pass());
+
+        state.activate_recovery("loop detector");
+        assert!(state.consume_recovery_pass());
+        assert!(!state.consume_recovery_pass());
+        assert!(state.recovery_pass_used());
     }
 
     #[test]

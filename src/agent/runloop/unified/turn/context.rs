@@ -596,6 +596,30 @@ impl<'a> TurnProcessingContext<'a> {
         self.harness_state.record_blocked_tool_call()
     }
 
+    pub(crate) fn blocked_tool_calls(&self) -> usize {
+        self.harness_state.blocked_tool_calls
+    }
+
+    pub(crate) fn activate_recovery(&mut self, reason: impl Into<String>) {
+        self.harness_state.activate_recovery(reason);
+    }
+
+    pub(crate) fn is_recovery_active(&self) -> bool {
+        self.harness_state.is_recovery_active()
+    }
+
+    pub(crate) fn recovery_reason(&self) -> Option<&str> {
+        self.harness_state.recovery_reason()
+    }
+
+    pub(crate) fn recovery_pass_used(&self) -> bool {
+        self.harness_state.recovery_pass_used()
+    }
+
+    pub(crate) fn consume_recovery_pass(&mut self) -> bool {
+        self.harness_state.consume_recovery_pass()
+    }
+
     pub(crate) fn push_tool_response<S>(&mut self, tool_call_id: S, content: String)
     where
         S: AsRef<str> + Into<String>,

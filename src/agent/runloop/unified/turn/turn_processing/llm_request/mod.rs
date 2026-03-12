@@ -20,6 +20,10 @@ use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
 use crate::agent::runloop::unified::ui_interaction::{
     StreamProgressEvent, StreamSpinnerOptions, stream_and_render_response_with_options_and_progress,
 };
+use crate::agent::runloop::unified::wait_feedback::{
+    WAIT_KEEPALIVE_INITIAL, WAIT_KEEPALIVE_INTERVAL, resolve_warning_delay, wait_keepalive_message,
+    wait_timeout_warning_message,
+};
 use metrics::emit_llm_retry_metrics;
 #[cfg(test)]
 use request_builder::{
@@ -41,15 +45,18 @@ use retry::{
 };
 use streaming::HarnessStreamingBridge;
 
+const WAIT_TIMEOUT_WARNING_HEADROOM: Duration = Duration::from_secs(15);
+
 /// Execute an LLM request and return the response.
 pub(crate) async fn execute_llm_request(
     ctx: &mut TurnProcessingContext<'_>,
     step_count: usize,
     active_model: &str,
-    _max_tokens_opt: Option<u32>,
+    max_tokens_opt: Option<u32>,
+    tool_free_recovery: bool,
     parallel_cfg_opt: Option<Box<ParallelToolConfig>>,
 ) -> Result<(uni::LLMResponse, bool)> {
-    let turn_snapshot = capture_turn_request_snapshot(ctx, active_model);
+    let turn_snapshot = capture_turn_request_snapshot(ctx, active_model, tool_free_recovery);
     let request_timeout_secs = llm_attempt_timeout_secs(
         turn_snapshot.turn_timeout_secs,
         turn_snapshot.plan_mode,
@@ -67,6 +74,7 @@ pub(crate) async fn execute_llm_request(
         step_count,
         active_model,
         &turn_snapshot,
+        max_tokens_opt,
         parallel_cfg_opt,
         use_streaming,
     )
@@ -226,25 +234,65 @@ pub(crate) async fn execute_llm_request(
                 ctx.provider_client.generate(request.clone()),
             );
             tokio::pin!(generate_future);
-            let cancel_notifier = ctx.ctrl_c_notify.notified();
-            tokio::pin!(cancel_notifier);
+            let keepalive_started_at = tokio::time::Instant::now();
+            let mut next_keepalive_at = keepalive_started_at + WAIT_KEEPALIVE_INITIAL;
+            let timeout_budget = Duration::from_secs(request_timeout_secs);
+            let warning_delay = resolve_warning_delay(
+                timeout_budget,
+                timeout_budget.saturating_sub(WAIT_TIMEOUT_WARNING_HEADROOM),
+                WAIT_TIMEOUT_WARNING_HEADROOM,
+            );
+            let mut timeout_warning_emitted = false;
+            let wait_subject = format!("LLM request for model '{}'", active_model);
 
-            let outcome = tokio::select! {
-                res = &mut generate_future => match res {
-                    Ok(inner) => inner.map_err(anyhow::Error::from),
-                    Err(_) => Err(anyhow::anyhow!(
-                        "LLM request timed out after {} seconds",
-                        request_timeout_secs
-                    )),
-                },
-                _ = &mut cancel_notifier => {
-                    Err(interrupted_provider_error(&turn_snapshot.provider_name))
+            loop {
+                let cancel_notifier = ctx.ctrl_c_notify.notified();
+                tokio::pin!(cancel_notifier);
+                let keepalive_sleep = tokio::time::sleep_until(next_keepalive_at);
+                tokio::pin!(keepalive_sleep);
+
+                let outcome = tokio::select! {
+                    res = &mut generate_future => Some(match res {
+                        Ok(inner) => inner.map_err(anyhow::Error::from),
+                        Err(_) => Err(anyhow::anyhow!(
+                            "LLM request timed out after {} seconds",
+                            request_timeout_secs
+                        )),
+                    }),
+                    _ = &mut cancel_notifier => {
+                        Some(Err(interrupted_provider_error(&turn_snapshot.provider_name)))
+                    }
+                    _ = &mut keepalive_sleep => None,
+                };
+
+                if let Some(outcome) = outcome {
+                    match outcome {
+                        Ok(response) => break Ok((response, false)),
+                        Err(err) => break Err(err),
+                    }
                 }
-            };
 
-            match outcome {
-                Ok(response) => Ok((response, false)),
-                Err(err) => Err(err),
+                let elapsed = keepalive_started_at.elapsed();
+                let keepalive_message = wait_keepalive_message(&wait_subject, elapsed);
+                _spinner.update_message(keepalive_message.clone());
+                crate::agent::runloop::unified::turn::turn_helpers::display_status(
+                    ctx.renderer,
+                    &keepalive_message,
+                )?;
+
+                let remaining = timeout_budget.saturating_sub(elapsed);
+                if !timeout_warning_emitted && warning_delay.is_some_and(|delay| elapsed >= delay) {
+                    timeout_warning_emitted = true;
+                    let warning =
+                        wait_timeout_warning_message(&wait_subject, timeout_budget, remaining);
+                    _spinner.update_message(warning.clone());
+                    crate::agent::runloop::unified::turn::turn_helpers::display_status(
+                        ctx.renderer,
+                        &warning,
+                    )?;
+                }
+
+                next_keepalive_at += WAIT_KEEPALIVE_INTERVAL;
             }
         };
         let attempt_elapsed = attempt_started_at.elapsed();

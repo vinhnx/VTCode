@@ -7,6 +7,7 @@ use vtcode_core::core::interfaces::ui::UiSession;
 use vtcode_tui::{InlineEvent, InlineHandle, OverlayEvent, OverlayRequest, OverlaySubmission};
 
 use super::state::{CtrlCSignal, CtrlCState};
+use super::stop_requests::request_local_stop;
 
 pub(crate) enum OverlayWaitOutcome<T> {
     Submitted(T),
@@ -71,9 +72,8 @@ where
                 } else if ctrl_c_state.is_cancel_requested() {
                     CtrlCSignal::Cancel
                 } else {
-                    ctrl_c_state.register_signal()
+                    request_local_stop(ctrl_c_state, ctrl_c_notify)
                 };
-                ctrl_c_notify.notify_waiters();
                 close_overlay(handle).await;
                 return Ok(match signal {
                     CtrlCSignal::Exit => OverlayWaitOutcome::Exit,
@@ -81,17 +81,17 @@ where
                 });
             }
             InlineEvent::Overlay(OverlayEvent::Submitted(submission)) => {
-                ctrl_c_state.disarm_exit();
+                ctrl_c_state.reset();
                 if let Some(mapped) = map_submission(submission) {
                     return Ok(OverlayWaitOutcome::Submitted(mapped));
                 }
             }
             InlineEvent::Overlay(OverlayEvent::Cancelled) | InlineEvent::Cancel => {
-                ctrl_c_state.disarm_exit();
+                ctrl_c_state.reset();
                 return Ok(OverlayWaitOutcome::Cancelled);
             }
             InlineEvent::Exit => {
-                ctrl_c_state.disarm_exit();
+                ctrl_c_state.reset();
                 close_overlay(handle).await;
                 return Ok(OverlayWaitOutcome::Exit);
             }

@@ -11,6 +11,7 @@ use anyhow::Result;
 use tokio::sync::{Notify, RwLock, mpsc};
 use tokio::task;
 use tokio::time::sleep;
+use vtcode_commons::stop_hints::with_stop_hint;
 
 use vtcode_core::config::loader::layers::ConfigLayerSource;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
@@ -395,11 +396,7 @@ impl PlaceholderSpinner {
         progress_reporter: Option<&ProgressReporter>,
     ) -> Self {
         let base_message = message.into();
-        let message_with_hint = if base_message.is_empty() {
-            "Press Ctrl+C to cancel".to_string()
-        } else {
-            format!("{} (Press Ctrl+C to cancel)", base_message)
-        };
+        let message_with_hint = with_stop_hint(&base_message);
 
         let active = Arc::new(AtomicBool::new(true));
         let spinner_active = active.clone();
@@ -420,11 +417,7 @@ impl PlaceholderSpinner {
             let mut last_display = initial_display;
             while spinner_active.load(Ordering::SeqCst) {
                 while let Ok(new_message) = message_receiver.try_recv() {
-                    current_message = if new_message.is_empty() {
-                        "Press Ctrl+C to cancel".to_string()
-                    } else {
-                        format!("{} (Press Ctrl+C to cancel)", new_message)
-                    };
+                    current_message = with_stop_hint(&new_message);
                 }
 
                 let progress_info = if let Some(progress_reporter) = progress_reporter_arc.as_ref()

@@ -219,9 +219,9 @@ impl Widget for FooterWidget<'_> {
 /// Default keybind hints for different contexts
 pub mod hints {
     pub const IDLE: &str = "? help • / command • @ file";
-    pub const PROCESSING: &str = "Ctrl+C cancel";
+    pub const PROCESSING: &str = vtcode_commons::stop_hints::STOP_HINT_COMPACT;
     pub const MODAL: &str = "↑↓ navigate • Enter select • Esc close";
-    pub const EDITING: &str = "Enter send • Ctrl+C cancel • ↑ history";
+    pub const EDITING: &str = "Enter send • /stop • ↑ history";
 }
 
 #[cfg(test)]

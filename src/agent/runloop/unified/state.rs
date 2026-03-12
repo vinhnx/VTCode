@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use vtcode_tui::EditingMode;
@@ -264,11 +264,37 @@ pub(crate) enum CtrlCSignal {
     Exit,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+enum CtrlCPhase {
+    #[default]
+    Idle = 0,
+    CancelRequested = 1,
+    ExitArmed = 2,
+    ExitRequested = 3,
+}
+
+impl CtrlCPhase {
+    fn from_raw(value: u8) -> Self {
+        match value {
+            1 => Self::CancelRequested,
+            2 => Self::ExitArmed,
+            3 => Self::ExitRequested,
+            _ => Self::Idle,
+        }
+    }
+
+    fn signal(self) -> CtrlCSignal {
+        match self {
+            Self::ExitRequested => CtrlCSignal::Exit,
+            Self::Idle | Self::CancelRequested | Self::ExitArmed => CtrlCSignal::Cancel,
+        }
+    }
+}
+
 #[derive(Default)]
 pub(crate) struct CtrlCState {
-    cancel_requested: AtomicBool,
-    exit_requested: AtomicBool,
-    exit_armed: AtomicBool,
+    phase: AtomicU8,
     last_signal_time: AtomicU64,
 }
 
@@ -279,50 +305,64 @@ impl CtrlCState {
         Self::default()
     }
 
+    fn phase(&self) -> CtrlCPhase {
+        CtrlCPhase::from_raw(self.phase.load(Ordering::SeqCst))
+    }
+
+    fn set_phase(&self, phase: CtrlCPhase) {
+        self.phase.store(phase as u8, Ordering::SeqCst);
+    }
+
     pub(crate) fn register_signal(&self) -> CtrlCSignal {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis() as u64;
         let last = self.last_signal_time.swap(now, Ordering::SeqCst);
+        let current_phase = self.phase();
 
         // Debounce: ignore signals within 200ms of each other
         if last > 0 && now.saturating_sub(last) < 200 {
-            if self.exit_requested.load(Ordering::SeqCst) {
-                return CtrlCSignal::Exit;
-            }
-            if self.cancel_requested.load(Ordering::SeqCst) {
-                return CtrlCSignal::Cancel;
-            }
+            return current_phase.signal();
         }
 
         let window_ms = DOUBLE_CTRL_C_WINDOW.as_millis() as u64;
         let is_within_window = last > 0 && now.saturating_sub(last) <= window_ms;
 
-        if (self.cancel_requested.load(Ordering::SeqCst) || self.exit_armed.load(Ordering::SeqCst))
-            && is_within_window
+        if matches!(
+            current_phase,
+            CtrlCPhase::CancelRequested | CtrlCPhase::ExitArmed
+        ) && is_within_window
         {
-            self.exit_requested.store(true, Ordering::SeqCst);
-            CtrlCSignal::Exit
-        } else {
-            self.cancel_requested.store(true, Ordering::SeqCst);
-            self.exit_armed.store(true, Ordering::SeqCst);
-            CtrlCSignal::Cancel
+            self.set_phase(CtrlCPhase::ExitRequested);
+            return CtrlCSignal::Exit;
+        }
+
+        if matches!(current_phase, CtrlCPhase::ExitRequested) {
+            return CtrlCSignal::Exit;
+        }
+
+        self.set_phase(CtrlCPhase::CancelRequested);
+        CtrlCSignal::Cancel
+    }
+
+    pub(crate) fn reset(&self) {
+        self.set_phase(CtrlCPhase::Idle);
+        self.last_signal_time.store(0, Ordering::SeqCst);
+    }
+
+    pub(crate) fn mark_cancel_handled(&self) {
+        if matches!(self.phase(), CtrlCPhase::CancelRequested) {
+            self.set_phase(CtrlCPhase::ExitArmed);
         }
     }
 
-    pub(crate) fn clear_cancel(&self) {
-        self.cancel_requested.store(false, Ordering::SeqCst);
-        self.exit_requested.store(false, Ordering::SeqCst);
-        self.exit_armed.store(true, Ordering::SeqCst);
-    }
-
     pub(crate) fn is_cancel_requested(&self) -> bool {
-        self.cancel_requested.load(Ordering::Relaxed)
+        matches!(self.phase(), CtrlCPhase::CancelRequested)
     }
 
     pub(crate) fn is_exit_requested(&self) -> bool {
-        self.exit_requested.load(Ordering::Relaxed)
+        matches!(self.phase(), CtrlCPhase::ExitRequested)
     }
 
     /// Check if cancellation or exit has been requested and return an error if so
@@ -335,16 +375,14 @@ impl CtrlCState {
         }
         Ok(())
     }
-
-    pub(crate) fn disarm_exit(&self) {
-        self.exit_armed.store(false, Ordering::SeqCst);
-        self.last_signal_time.store(0, Ordering::SeqCst);
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{SessionStats, is_follow_up_prompt_like};
+    use std::thread;
+    use std::time::Duration;
+
+    use super::{CtrlCSignal, CtrlCState, SessionStats, is_follow_up_prompt_like};
     use vtcode_core::config::constants::tools;
 
     #[test]
@@ -450,5 +488,39 @@ mod tests {
         stats.set_plan_mode(true);
         assert_eq!(stats.plan_mode_interview_cycles_completed(), 0);
         assert!(!stats.plan_mode_last_interview_cancelled());
+    }
+
+    #[test]
+    fn ctrl_c_state_escalates_to_exit_within_window() {
+        let state = CtrlCState::new();
+
+        assert!(matches!(state.register_signal(), CtrlCSignal::Cancel));
+        thread::sleep(Duration::from_millis(250));
+        assert!(matches!(state.register_signal(), CtrlCSignal::Exit));
+    }
+
+    #[test]
+    fn ctrl_c_state_reset_clears_exit_window() {
+        let state = CtrlCState::new();
+
+        assert!(matches!(state.register_signal(), CtrlCSignal::Cancel));
+        state.reset();
+        thread::sleep(Duration::from_millis(250));
+
+        assert!(matches!(state.register_signal(), CtrlCSignal::Cancel));
+        assert!(state.is_cancel_requested());
+        assert!(!state.is_exit_requested());
+    }
+
+    #[test]
+    fn ctrl_c_state_mark_cancel_handled_keeps_exit_window_armed() {
+        let state = CtrlCState::new();
+
+        assert!(matches!(state.register_signal(), CtrlCSignal::Cancel));
+        state.mark_cancel_handled();
+        thread::sleep(Duration::from_millis(250));
+
+        assert!(matches!(state.register_signal(), CtrlCSignal::Exit));
+        assert!(state.is_exit_requested());
     }
 }

@@ -7,6 +7,7 @@ use crate::agent::runloop::unified::reasoning::{
 use crate::agent::runloop::unified::session_setup::ide_context::{
     IdeContextBridge, tui_header_summary,
 };
+use crate::agent::runloop::unified::stop_requests::request_local_stop;
 use crate::agent::runloop::unified::turn::utils::render_hook_messages;
 use crate::agent::runloop::unified::turn::workspace::load_workspace_files;
 use crate::agent::runloop::unified::{context_manager, palettes, state};
@@ -92,8 +93,7 @@ pub(crate) async fn initialize_session_ui(
         let notify = ctrl_c_notify.clone();
         Arc::new(move |event: &InlineEvent| {
             if matches!(event, InlineEvent::Interrupt) {
-                let _ = state.register_signal();
-                notify.notify_waiters();
+                let _ = request_local_stop(&state, &notify);
             }
         })
     };

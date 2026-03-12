@@ -428,7 +428,7 @@ pub(crate) async fn validate_tool_call<'a>(
             tracing::warn!(tool = %loop_tool_key, "Loop detector blocked tool");
             let display_tool = tool_action_label(&canonical_tool_name, args_val);
             let block_reason = format!(
-                "Loop detector stopped repeated '{}' calls for this turn. Switching to autonomous fallback strategy.",
+                "Loop detector stopped repeated '{}' calls for this turn. Scheduling a final recovery pass without more tools.",
                 display_tool
             );
             // Ensure no orphan PTY processes keep running after a hard loop-detection stop.
@@ -440,6 +440,7 @@ pub(crate) async fn validate_tool_call<'a>(
                 );
             }
             ctx.restore_input_status(None, None);
+            ctx.activate_recovery(block_reason.clone());
             let maybe_spooled = tool_registry.find_recent_spooled_output(
                 &canonical_tool_name,
                 &effective_args,
@@ -465,6 +466,7 @@ pub(crate) async fn validate_tool_call<'a>(
                         ),
                     );
                 }
+                ctx.push_system_message(block_reason.clone());
                 ctx.push_tool_response(
                     tool_call_id,
                     super::execution_result::maybe_inline_spooled(&canonical_tool_name, &spooled),
@@ -511,6 +513,7 @@ pub(crate) async fn validate_tool_call<'a>(
                         ),
                     );
                 }
+                ctx.push_system_message(block_reason.clone());
                 ctx.push_tool_response(
                     tool_call_id,
                     super::execution_result::maybe_inline_spooled(&canonical_tool_name, &reused),

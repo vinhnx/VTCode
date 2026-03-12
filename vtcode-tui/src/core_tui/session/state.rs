@@ -144,12 +144,15 @@ impl Session {
                 || left.contains("Running tool:")
                 || left.contains("Running:")
                 || status_requires_shimmer(left));
-        let active_pty = self
-            .active_pty_sessions
-            .as_ref()
-            .map(|counter| counter.load(Ordering::Relaxed) > 0)
-            .unwrap_or(false);
+        let active_pty = self.active_pty_session_count() > 0;
         running_status || active_pty
+    }
+
+    pub(crate) fn active_pty_session_count(&self) -> usize {
+        self.active_pty_sessions
+            .as_ref()
+            .map(|counter| counter.load(Ordering::Relaxed))
+            .unwrap_or(0)
     }
 
     pub(crate) fn has_status_spinner(&self) -> bool {

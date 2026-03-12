@@ -1,5 +1,6 @@
 use crate::agent::runloop::unified::async_mcp_manager::AsyncMcpManager;
 use crate::agent::runloop::unified::state::{CtrlCSignal, CtrlCState};
+use crate::agent::runloop::unified::stop_requests::request_local_stop;
 use std::sync::Arc;
 use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
@@ -35,8 +36,7 @@ pub(crate) fn spawn_signal_handler(
         loop {
             tokio::select! {
                 _ = vtcode_core::shutdown::shutdown_signal() => {
-                    let signal = ctrl_c_state.register_signal();
-                    ctrl_c_notify.notify_waiters();
+                    let signal = request_local_stop(&ctrl_c_state, &ctrl_c_notify);
 
                     if let Some(mcp_manager) = &async_mcp_manager
                         && let Err(e) = mcp_manager.shutdown().await

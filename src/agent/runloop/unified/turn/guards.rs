@@ -364,29 +364,26 @@ pub(crate) async fn handle_turn_balancer(
         max_repeated,
         tool_repeat_limit,
     ) {
+        let recovery_reason =
+            "Turn balancer detected repeated low-signal tool churn. Tools are disabled on the next pass; summarize only from collected evidence.".to_string();
+        ctx.activate_recovery(recovery_reason.clone());
         ctx.renderer
             .line(
                 MessageStyle::Info,
-                "[!] Turn balancer: repeated low-signal calls detected; applying recovery path.",
-            )
-            .unwrap_or(()); // Best effort
-        ctx.renderer
-            .line(
-                MessageStyle::Info,
-                "[!] Turn balancer: recovery mode engaged; continuing this turn.",
+                "[!] Turn balancer: repeated low-signal calls detected; scheduling a final recovery pass.",
             )
             .unwrap_or(());
-        ctx.working_history.push(uni::Message::system(
-            "Turn balancer recovery mode: repeated low-signal calls detected. Continue this turn automatically (do not ask for manual continue), stop repeating the same tool/signature, summarize key findings, and execute one concrete next step (targeted edit or targeted command).".to_string(),
-        ));
+        ctx.working_history
+            .push(uni::Message::system(recovery_reason));
         // Record in ledger
         {
             let mut ledger = ctx.decision_ledger.write().await;
             ledger.record_decision(
                 "Turn balancer: Recovery intervention".to_string(),
                 vtcode_core::core::decision_tracker::Action::Response {
-                    content: "Low-signal churn detected; strategy reset and turn continues."
-                        .to_string(),
+                    content:
+                        "Low-signal churn detected; a final tool-free recovery pass was scheduled."
+                            .to_string(),
                     response_type:
                         vtcode_core::core::decision_tracker::ResponseType::ContextSummary,
                 },

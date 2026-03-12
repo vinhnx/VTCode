@@ -97,6 +97,7 @@ pub(crate) async fn handle_outcome(
             handlers::handle_copy_latest_assistant_reply(ctx).await
         }
         SlashCommandOutcome::ShowStatus => handlers::handle_show_status(ctx).await,
+        SlashCommandOutcome::StopAgent => handlers::handle_stop_agent(ctx).await,
         SlashCommandOutcome::ManageMcp { action } => handlers::handle_manage_mcp(ctx, action).await,
 
         SlashCommandOutcome::StartDoctorInteractive => {

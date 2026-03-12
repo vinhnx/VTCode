@@ -67,6 +67,7 @@ pub(crate) enum SlashCommandOutcome {
     CompactConversation,
     CopyLatestAssistantReply,
     ShowStatus,
+    StopAgent,
     ManageMcp {
         action: McpCommandAction,
     },
@@ -278,6 +279,13 @@ pub(crate) async fn handle_slash_command(
             Ok(SlashCommandOutcome::CopyLatestAssistantReply)
         }
         "status" => Ok(SlashCommandOutcome::ShowStatus),
+        "stop" => {
+            if !args.is_empty() {
+                renderer.line(MessageStyle::Error, "Usage: /stop")?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+            Ok(SlashCommandOutcome::StopAgent)
+        }
         "doctor" => match parse_doctor_args(args, renderer.supports_inline_ui()) {
             Ok(DoctorCommand::Interactive) => Ok(SlashCommandOutcome::StartDoctorInteractive),
             Ok(DoctorCommand::Run { quick }) => Ok(SlashCommandOutcome::RunDoctor { quick }),
@@ -501,7 +509,17 @@ fn parse_doctor_args(
 
 #[cfg(test)]
 mod tests {
-    use super::{DoctorCommand, parse_doctor_args, parse_update_args};
+    use super::{
+        DoctorCommand, SlashCommandOutcome, handle_slash_command, parse_doctor_args,
+        parse_update_args,
+    };
+    use vtcode_core::utils::ansi::AnsiRenderer;
+    use vtcode_tui::InlineHandle;
+
+    fn renderer_for_tests() -> AnsiRenderer {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(tx), Default::default())
+    }
 
     #[test]
     fn parse_doctor_defaults_to_full_mode() {
@@ -537,5 +555,17 @@ mod tests {
     fn parse_update_rejects_conflicting_modes() {
         let err = parse_update_args("check install").expect_err("must reject");
         assert!(err.contains("either 'check' or 'install'"));
+    }
+
+    #[tokio::test]
+    async fn stop_command_returns_local_stop_outcome() {
+        let workspace = std::env::current_dir().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let outcome = handle_slash_command("stop", &mut renderer, &workspace)
+            .await
+            .expect("stop command should parse");
+
+        assert!(matches!(outcome, SlashCommandOutcome::StopAgent));
     }
 }

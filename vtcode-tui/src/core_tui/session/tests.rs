@@ -575,7 +575,7 @@ fn cursor_fake_during_status_shimmer() {
     assert!(!initial.use_fake_cursor);
 
     session.handle_command(InlineCommand::SetInputStatus {
-        left: Some("Loading (Press Ctrl+C to cancel)".to_string()),
+        left: Some("Loading (Esc, Ctrl+C, or /stop to stop)".to_string()),
         right: None,
     });
     let during_shimmer = session.build_input_widget_data(VIEW_WIDTH, 1);
@@ -814,7 +814,7 @@ fn tab_queues_submission() {
 }
 
 #[test]
-fn double_escape_interrupts_when_running_activity() {
+fn busy_escape_interrupts_then_exits() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.handle_command(InlineCommand::SetInputStatus {
         left: Some("Running command: test".to_string()),
@@ -822,15 +822,46 @@ fn double_escape_interrupts_when_running_activity() {
     });
 
     let first = session.process_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    assert!(
-        matches!(
-            first,
-            Some(InlineEvent::Cancel) | Some(InlineEvent::ForceCancelPtySession)
-        ) || first.is_none()
-    );
+    assert!(matches!(first, Some(InlineEvent::Interrupt)));
 
     let second = session.process_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    assert!(matches!(second, Some(InlineEvent::Interrupt)));
+    assert!(matches!(second, Some(InlineEvent::Exit)));
+}
+
+#[test]
+fn busy_stop_command_interrupts_immediately() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.handle_command(InlineCommand::SetInputStatus {
+        left: Some("Running tool: unified_search".to_string()),
+        right: None,
+    });
+    session.set_input("/stop".to_string());
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(matches!(event, Some(InlineEvent::Interrupt)));
+}
+
+#[test]
+fn busy_slash_palette_stop_interrupts_immediately() {
+    let mut session = session_with_slash_palette_commands();
+    session.handle_command(InlineCommand::SetInputStatus {
+        left: Some("Running command: cargo test".to_string()),
+        right: None,
+    });
+
+    for key in [
+        KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('t'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('o'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE),
+    ] {
+        let event = session.process_key(key);
+        assert!(event.is_none());
+    }
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(matches!(event, Some(InlineEvent::Interrupt)));
 }
 
 #[test]

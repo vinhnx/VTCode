@@ -38,6 +38,8 @@ use crate::agent::runloop::unified::turn::turn_helpers::display_error;
 use vtcode_core::config::types::AgentConfig;
 use vtcode_core::core::agent::error_recovery::ErrorType;
 
+const RECOVERY_SYNTHESIS_MAX_TOKENS: u32 = 320;
+
 pub(crate) struct TurnLoopOutcome {
     pub result: TurnLoopResult,
     pub turn_modified_files: BTreeSet<PathBuf>,
@@ -396,11 +398,13 @@ pub(crate) async fn run_turn_loop(
         // Execute the LLM request
         turn_processing_ctx.set_phase(TurnPhase::Requesting);
         let active_model = turn_processing_ctx.config.model.clone();
+        let tool_free_recovery = turn_processing_ctx.consume_recovery_pass();
         let (response, response_streamed) = match execute_llm_request(
             &mut turn_processing_ctx,
             step_count,
             &active_model,
-            None, // max_tokens_opt
+            tool_free_recovery.then_some(RECOVERY_SYNTHESIS_MAX_TOKENS),
+            tool_free_recovery,
             None, // parallel_cfg_opt
         )
         .await
@@ -430,6 +434,16 @@ pub(crate) async fn run_turn_loop(
                 )?;
                 if recovered {
                     result = TurnLoopResult::Completed;
+                    break;
+                }
+
+                if tool_free_recovery {
+                    result = TurnLoopResult::Blocked {
+                        reason: Some(
+                            "Recovery mode could not complete the final synthesis pass."
+                                .to_string(),
+                        ),
+                    };
                     break;
                 }
 
@@ -628,6 +642,11 @@ pub(crate) async fn run_turn_loop(
     }
 
     ctx.set_phase(TurnPhase::Finalizing);
+    if matches!(result, TurnLoopResult::Cancelled | TurnLoopResult::Exit)
+        && let Err(err) = ctx.tool_registry.terminate_all_exec_sessions_async().await
+    {
+        tracing::warn!(error = %err, "Failed to terminate all exec sessions after turn stop");
+    }
     if let Some(emitter) = ctx.harness_emitter {
         // Exit is a graceful user-initiated action, not a failure
         let event = match result {

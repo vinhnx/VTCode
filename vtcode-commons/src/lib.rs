@@ -33,6 +33,7 @@ pub mod reference;
 pub mod sanitizer;
 pub mod serde_helpers;
 pub mod slug;
+pub mod stop_hints;
 pub mod styling;
 pub mod telemetry;
 pub mod tokens;
@@ -53,6 +54,7 @@ pub use paths::{
 };
 pub use project::{ProjectOverview, build_project_overview};
 pub use reference::{MemoryErrorReporter, MemoryTelemetry, StaticWorkspacePaths};
+pub use stop_hints::{STOP_HINT_COMPACT, STOP_HINT_INLINE, with_stop_hint};
 pub use styling::{ColorPalette, DiffColorPalette, render_styled};
 pub use telemetry::{NoopTelemetry, TelemetrySink};
 pub use tokens::{estimate_tokens, truncate_to_tokens};

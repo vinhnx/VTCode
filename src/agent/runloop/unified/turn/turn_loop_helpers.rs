@@ -160,7 +160,10 @@ pub(super) async fn handle_steering_messages(
     if let Some(receiver) = ctx.steering_receiver {
         match receiver.try_recv() {
             Ok(SteeringMessage::SteerStop) => {
-                display_status(ctx.renderer, "Stopped by steering signal.")?;
+                if let Err(err) = ctx.tool_registry.terminate_all_exec_sessions_async().await {
+                    tracing::warn!(error = %err, "Failed to terminate exec sessions after steering stop");
+                }
+                display_status(ctx.renderer, "Stop requested by steering signal.")?;
                 *result = TurnLoopResult::Cancelled;
                 return Ok(true);
             }
@@ -190,6 +193,11 @@ pub(super) async fn handle_steering_messages(
                             break;
                         }
                         Ok(SteeringMessage::SteerStop) => {
+                            if let Err(err) =
+                                ctx.tool_registry.terminate_all_exec_sessions_async().await
+                            {
+                                tracing::warn!(error = %err, "Failed to terminate exec sessions after steering stop");
+                            }
                             *result = TurnLoopResult::Cancelled;
                             break;
                         }
