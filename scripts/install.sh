@@ -6,6 +6,12 @@
 
 set -euo pipefail
 
+# Check for curl existence
+if ! command -v curl >/dev/null 2>&1; then
+    printf '✗ curl is required for installation\n' >&2
+    exit 1
+fi
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -14,16 +20,15 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # Configuration
-REPO="vinhnx/VTCode"
-INSTALL_DIR="${INSTALL_DIR:-.local/bin}"
+REPO="vinhnx/vtcode"
+INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 BIN_NAME="vtcode"
-GITHUB_API="https://api.github.com/repos/$REPO/releases/latest"
+GITHUB_API="https://api.github.com/repos/$REPO/releases?per_page=10"
 GITHUB_RELEASES="https://github.com/$REPO/releases/download"
 WITH_AST_GREP=0
 WITH_SEARCH_TOOLS=1
 
-# Expand ~ to home directory
-INSTALL_DIR="${INSTALL_DIR/#\~/$HOME}"
+# Ensure INSTALL_DIR exists
 mkdir -p "$INSTALL_DIR"
 
 # Hide/show cursor
@@ -65,9 +70,14 @@ show_spinner() {
     local pid=$1
     local msg=$2
     local frames='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
-    local n=${#frames}
+    local n=10
     local i=0
     
+    # Don't show spinner if not in a TTY
+    if [[ ! -t 2 ]]; then
+        return 0
+    fi
+
     hide_cursor
     while kill -0 "$pid" 2>/dev/null; do
         local frame="${frames:i:1}"
@@ -83,11 +93,16 @@ show_spinner() {
 detect_platform() {
     local os
     local arch
+    local uname_s
+    local uname_m
     
-    case "$(uname -s)" in
+    uname_s=$(uname -s)
+    uname_m=$(uname -m)
+    
+    case "$uname_s" in
         Darwin)
             os="apple-darwin"
-            if [[ $(uname -m) == "arm64" ]]; then
+            if [[ "$uname_m" == "arm64" ]]; then
                 arch="aarch64"
             else
                 arch="x86_64"
@@ -95,14 +110,21 @@ detect_platform() {
             ;;
         Linux)
             os="unknown-linux-musl"
-            arch="x86_64"
+            if [[ "$uname_m" == "x86_64" ]]; then
+                arch="x86_64"
+            elif [[ "$uname_m" == "aarch64" || "$uname_m" == "arm64" ]]; then
+                arch="aarch64"
+            else
+                log_error "Unsupported Linux architecture: $uname_m"
+                exit 1
+            fi
             ;;
         MINGW*|MSYS*)
             log_error "Windows native is not supported. Please use WSL or Git Bash."
             exit 1
             ;;
         *)
-            log_error "Unsupported OS: $(uname -s)"
+            log_error "Unsupported OS: $uname_s"
             exit 1
             ;;
     esac
@@ -112,29 +134,38 @@ detect_platform() {
 
 # Candidate platforms by preference for current host
 get_candidate_platforms() {
-    case "$(uname -s)-$(uname -m)" in
+    local uname_s
+    local uname_m
+    uname_s=$(uname -s)
+    uname_m=$(uname -m)
+
+    case "$uname_s-$uname_m" in
         Linux-x86_64)
             # Prefer musl for broad compatibility; fall back to gnu for older releases.
             echo "x86_64-unknown-linux-musl x86_64-unknown-linux-gnu"
             ;;
+        Linux-aarch64|Linux-arm64)
+            echo "aarch64-unknown-linux-musl aarch64-unknown-linux-gnu"
+            ;;
         Darwin-arm64)
-            echo "aarch64-apple-darwin"
+            echo "aarch64-apple-darwin x86_64-apple-darwin"
             ;;
         Darwin-x86_64)
             echo "x86_64-apple-darwin"
             ;;
         *)
-            echo "$(detect_platform)"
+            detect_platform
             ;;
     esac
 }
 
-# Fetch limited releases info from GitHub API (last 5 versions)
+# Fetch recent releases info from GitHub API
 fetch_recent_releases() {
     local response_file
     response_file=$(mktemp)
     
-    (curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=5" > "$response_file" 2>/dev/null) &
+    # Try to fetch releases with a 10s timeout
+    (curl -fsSL --connect-timeout 10 "$GITHUB_API" > "$response_file" 2>/dev/null) &
     local pid=$!
     show_spinner "$pid" "Fetching recent releases..."
     wait "$pid" || true
@@ -143,8 +174,8 @@ fetch_recent_releases() {
     response=$(cat "$response_file")
     rm -f "$response_file"
 
-    if [[ -z "$response" ]]; then
-        log_error "Failed to fetch releases info from GitHub API"
+    if [[ -z "$response" || "$response" == "[]" ]]; then
+        log_error "Failed to fetch releases info from GitHub API or no releases found"
         log_info "Ensure you have internet connection and GitHub is accessible"
         exit 1
     fi
@@ -159,15 +190,13 @@ get_download_url() {
 
     # Determine file extension based on platform
     local file_ext
-    if [[ "$platform" == *"darwin"* ]]; then
-        file_ext="tar.gz"
-    elif [[ "$platform" == *"linux"* ]]; then
+    if [[ "$platform" == *"darwin"* ]] || [[ "$platform" == *"linux"* ]]; then
         file_ext="tar.gz"
     else
         file_ext="zip"
     fi
 
-    # Strip 'v' prefix from tag for filename only (URL path keeps the v prefix)
+    # Strip 'v' prefix from tag for filename only
     local version_tag="${release_tag#v}"
     local filename="vtcode-${version_tag}-${platform}.${file_ext}"
     echo "${GITHUB_RELEASES}/${release_tag}/${filename}"
@@ -181,7 +210,7 @@ check_version_available() {
     local download_url
     download_url=$(get_download_url "$version" "$platform")
 
-    # Use HEAD request to check availability
+    # Use HEAD request to check availability with a timeout
     if curl -fIsL --connect-timeout 5 "$download_url" > /dev/null 2>&1; then
         return 0
     else
@@ -194,11 +223,15 @@ find_latest_release_tag() {
     local all_releases="$1"
     local platform="$2"
 
-    # Extract all tag names - format: "tag_name": "vX.Y.Z" or "tag_name": "X.Y.Z"
+    # Extract all tag names using a more robust pattern
     local tags
-    tags=$(echo "$all_releases" | grep -o '"tag_name": "[^"]*"' | cut -d'"' -f4)
+    tags=$(echo "$all_releases" | grep -oE '"tag_name":\s*"[^"]+"' | cut -d'"' -f4)
 
-    # Iterate through tags to find one with assets (use exact tag name from API)
+    if [[ -z "$tags" ]]; then
+        return 1
+    fi
+
+    # Iterate through tags to find one with assets
     for tag in $tags; do
         if [[ -n "$tag" ]]; then
             if check_version_available "$tag" "$platform"; then
@@ -220,7 +253,7 @@ download_binary() {
     
     # Use curl -# for a simple progress bar
     if ! curl -fSL -# -o "$output_file" "$url"; then
-        log_error "Failed to download binary"
+        log_error "Failed to download binary from $url"
         exit 1
     fi
 }
@@ -309,7 +342,7 @@ extract_binary() {
     
     # Find the binary
     local binary_path
-    binary_path=$(find "$temp_dir" -type f -name "$BIN_NAME" -o -name "$BIN_NAME.exe" | head -1)
+    binary_path=$(find "$temp_dir" -type f \( -name "$BIN_NAME" -o -name "$BIN_NAME.exe" \) | head -1)
     
     if [[ -z "$binary_path" ]]; then
         log_error "Binary not found in archive"
@@ -389,49 +422,51 @@ main() {
     log_info "VT Code Native Installer"
     echo ""
 
-    # Detect preferred platform (or platform fallback list)
-    local platform
-    platform=$(detect_platform)
-    log_info "Detected platform: $platform"
+    # Detect preferred platform
+    local current_platform
+    current_platform=$(detect_platform)
+    log_info "Detected platform: $current_platform"
 
     # Create temporary directory for downloads
     local temp_dir
-    temp_dir=$(mktemp -d)
+    temp_dir=$(mktemp -d 2>/dev/null || mktemp -d -t 'vtcode')
     trap "rm -rf $temp_dir; show_cursor" EXIT INT TERM
 
-    # Fetch recent releases to check for available binaries
+    # Fetch recent releases
     local all_releases
     all_releases=$(fetch_recent_releases)
 
     # Find the most recent release with assets for this platform
     local release_tag=""
     local selected_platform=""
-    local tag_file
     local candidate_platforms
     candidate_platforms=$(get_candidate_platforms)
 
     for candidate in $candidate_platforms; do
-        tag_file=$(mktemp)
-        (find_latest_release_tag "$all_releases" "$candidate" > "$tag_file") &
+        local tag_file
+        tag_file="$temp_dir/tag_$candidate"
+        (find_latest_release_tag "$all_releases" "$candidate" > "$tag_file" 2>/dev/null) &
         local pid=$!
-        show_spinner "$pid" "Checking for compatible binaries..."
-        wait "$pid"
+        show_spinner "$pid" "Checking for compatible binaries for $candidate..."
+        wait "$pid" || true
 
-        release_tag=$(cat "$tag_file")
-        rm -f "$tag_file"
-        if [[ -n "$release_tag" ]]; then
+        local candidate_tag
+        candidate_tag=$(cat "$tag_file" 2>/dev/null || true)
+        if [[ -n "$candidate_tag" ]]; then
+            release_tag="$candidate_tag"
             selected_platform="$candidate"
             break
         fi
     done
 
     if [[ -z "$release_tag" || -z "$selected_platform" ]]; then
-        log_error "No releases with binaries found for platform: $platform"
+        log_error "No releases with compatible binaries found for platform: $current_platform"
+        log_info "Available platforms for this host were: $candidate_platforms"
         exit 1
     fi
 
     platform="$selected_platform"
-    log_success "Found compatible version: $release_tag"
+    log_success "Found compatible version: $release_tag ($platform)"
 
     # Download binary
     local archive_file="$temp_dir/vtcode-binary.tar.gz"
