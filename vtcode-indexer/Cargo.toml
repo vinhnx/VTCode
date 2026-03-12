@@ -24,7 +24,7 @@ hashbrown = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 ignore = { workspace = true }                                     # Respect .gitignore, .ignore, etc.
-vtcode-commons = { path = "../vtcode-commons", version = "0.88.2" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.88.3" }
 
 [dev-dependencies]
 tempfile = { workspace = true }
