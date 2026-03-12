@@ -79,6 +79,7 @@ The `/model` picker now lists the core Ollama catalog so you can choose them wit
 - `glm-4.6:cloud`
 - `glm-4.7:cloud`
 - `minimax-m2.5:cloud`
+- `nemotron-3-super:cloud`
 
 These entries appear beneath the Ollama provider section alongside the "Custom Ollama model" option.
 

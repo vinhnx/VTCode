@@ -14,6 +14,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     GEMINI_3_FLASH_PREVIEW_CLOUD,
     MINIMAX_M2_CLOUD,
     MINIMAX_M25_CLOUD,
+    NEMOTRON_3_SUPER_CLOUD,
 ];
 
 /// Models that emit structured reasoning traces when `think` is enabled
@@ -29,6 +30,7 @@ pub const REASONING_MODELS: &[&str] = &[
     GEMINI_3_FLASH_PREVIEW_CLOUD,
     MINIMAX_M2_CLOUD,
     MINIMAX_M25_CLOUD,
+    NEMOTRON_3_SUPER_CLOUD,
 ];
 
 /// Models that require an explicit reasoning effort level instead of boolean toggle
@@ -40,6 +42,7 @@ pub const REASONING_LEVEL_MODELS: &[&str] = &[
     MINIMAX_M2_CLOUD,
     MINIMAX_M25_CLOUD,
     GEMINI_3_FLASH_PREVIEW_CLOUD,
+    NEMOTRON_3_SUPER_CLOUD,
 ];
 
 pub const GPT_OSS_20B: &str = DEFAULT_LOCAL_MODEL;
@@ -54,3 +57,4 @@ pub const GEMINI_3_1_PRO_PREVIEW_LATEST_CLOUD: &str = "gemini-3.1-pro-preview:la
 pub const GEMINI_3_FLASH_PREVIEW_CLOUD: &str = "gemini-3-flash-preview:cloud";
 pub const MINIMAX_M2_CLOUD: &str = "minimax-m2:cloud";
 pub const MINIMAX_M25_CLOUD: &str = "minimax-m2.5:cloud";
+pub const NEMOTRON_3_SUPER_CLOUD: &str = "nemotron-3-super:cloud";

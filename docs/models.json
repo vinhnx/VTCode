@@ -2057,6 +2057,22 @@
           ]
         },
         "context": 1000000
+      },
+      "nemotron-3-super:cloud": {
+        "id": "nemotron-3-super:cloud",
+        "name": "Nemotron-3-Super (cloud)",
+        "description": "NVIDIA Nemotron™ is a family of open models delivering leading efficiency and accuracy for building specialized AI agents. Nemotron-3-Super (120B) is optimized for collaborative agents and high-volume workloads.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
       }
     }
   },
