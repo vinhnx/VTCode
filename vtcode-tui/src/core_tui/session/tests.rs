@@ -361,7 +361,7 @@ fn modifier_click_emits_open_file_event_for_quoted_path_with_spaces() {
 }
 
 #[test]
-fn ctrl_click_emits_open_file_event_on_macos_fallback() {
+fn meta_click_emits_open_file_event_for_transcript_path() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     let absolute_path = transcript_file_fixture_absolute_path();
     session.push_line(
@@ -377,22 +377,26 @@ fn ctrl_click_emits_open_file_event_on_macos_fallback() {
         .clone();
     let (tx, mut rx) = mpsc::unbounded_channel();
 
-    // Some terminals send CONTROL for Cmd+Click on macOS
+    // Some terminals (Ghostty, iTerm2) report Cmd as META instead of SUPER
     session.handle_event(
         CrosstermEvent::Mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: target.area.x,
             row: target.area.y,
-            modifiers: KeyModifiers::CONTROL,
+            modifiers: KeyModifiers::META,
         }),
         &tx,
         None,
     );
 
+    #[cfg(target_os = "macos")]
     assert!(matches!(
         rx.try_recv(),
         Ok(InlineEvent::OpenFileInEditor(path)) if path == absolute_path
     ));
+
+    #[cfg(not(target_os = "macos"))]
+    assert!(rx.try_recv().is_err());
 }
 
 #[test]
@@ -405,21 +409,20 @@ fn path_with_line_col_suffix_resolves_correctly() {
         vec![make_segment(&format!("Error at {}", path_with_loc))],
     );
 
-    let decorated =
-        session.decorate_visible_transcript_links(
-            vec![Line::from(format!("Error at {}", path_with_loc))],
-            Rect::new(0, 0, 200, 1),
-        );
+    let decorated = session.decorate_visible_transcript_links(
+        vec![Line::from(format!("Error at {}", path_with_loc))],
+        Rect::new(0, 0, 200, 1),
+    );
 
     assert!(!session.transcript_file_link_targets.is_empty());
     let target = &session.transcript_file_link_targets[0];
-    assert_eq!(
-        target.file_path.display().to_string(),
-        absolute_path,
+    assert_eq!(target.file_path.display().to_string(), absolute_path,);
+    assert!(
+        decorated[0]
+            .spans
+            .iter()
+            .any(|span| { span.style.add_modifier.contains(Modifier::UNDERLINED) })
     );
-    assert!(decorated[0].spans.iter().any(|span| {
-        span.style.add_modifier.contains(Modifier::UNDERLINED)
-    }));
 }
 
 #[test]

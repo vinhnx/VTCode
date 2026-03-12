@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
@@ -74,9 +75,9 @@ impl Session {
             }
 
             let mut styled_matches = Vec::with_capacity(matches.len());
-            for link_match in matches {
-                let start_col = UnicodeWidthStr::width(&text[..link_match.start]);
-                let width = UnicodeWidthStr::width(&text[link_match.start..link_match.end]);
+            for FileLinkMatch { start, end, path } in matches {
+                let start_col = UnicodeWidthStr::width(&text[..start]);
+                let width = UnicodeWidthStr::width(&text[start..end]);
                 if width == 0 {
                     continue;
                 }
@@ -93,11 +94,11 @@ impl Session {
 
                 targets.push(TranscriptFileLinkTarget {
                     area: target_area,
-                    file_path: link_match.path.clone(),
+                    file_path: path,
                 });
                 styled_matches.push(StyledFileLinkMatch {
-                    start: link_match.start,
-                    end: link_match.end,
+                    start,
+                    end,
                     hovered,
                 });
             }
@@ -334,7 +335,7 @@ fn trim_transcript_token_bounds(token: &str) -> (usize, usize) {
             ')' | ']' | '}' | '>' | '"' | '\'' | '`' | ',' | ';' | '.' | '!' | '?'
         ) {
             // Preserve trailing ')' when it looks like a location suffix e.g. file.rs(10,5)
-            if ch == ')' && has_location_paren_suffix(&token[start..end]) {
+            if ch == ')' && location_paren_suffix_start(&token[start..end]).is_some() {
                 break;
             }
             end -= ch.len_utf8();
@@ -346,39 +347,45 @@ fn trim_transcript_token_bounds(token: &str) -> (usize, usize) {
     (start, end)
 }
 
-/// Check if token ends with a parenthesized location suffix like `(10)` or `(10,5)`.
-fn has_location_paren_suffix(token: &str) -> bool {
-    let Some(paren_start) = token.rfind('(') else {
-        return false;
-    };
-    let after = &token[paren_start + 1..];
-    after
-        .strip_suffix(')')
-        .is_some_and(|inner| !inner.is_empty() && inner.chars().all(|c| c.is_ascii_digit() || c == ','))
+/// Return the byte offset of a trailing parenthesized location suffix like `(10)` or `(10,5)`.
+fn location_paren_suffix_start(token: &str) -> Option<usize> {
+    let paren_start = token.rfind('(')?;
+    let inner = token[paren_start + 1..].strip_suffix(')')?;
+    // Accept `(digits)` or `(digits,digits)` — reject empty or malformed like `(,)` `(10,,5)`
+    let valid = !inner.is_empty()
+        && !inner.starts_with(',')
+        && !inner.ends_with(',')
+        && !inner.contains(",,")
+        && inner.chars().all(|c| c.is_ascii_digit() || c == ',');
+    valid.then_some(paren_start)
 }
 
 fn resolve_transcript_file_path(token: &str, workspace_root: Option<&Path>) -> Option<PathBuf> {
     let token = token.trim();
-    if token.is_empty() || !looks_like_transcript_path(token) {
+    if token.is_empty() {
         return None;
     }
 
-    let raw_path = strip_location_suffix(strip_file_scheme(token)).trim_end_matches(':');
-    if raw_path.is_empty() {
+    // Strip location suffixes first so heuristic check sees clean paths (e.g. `a.rs` not `a.rs:10`)
+    let stripped = strip_location_suffix(strip_file_scheme(token)).trim_end_matches(':');
+    if stripped.is_empty() || !looks_like_transcript_path(stripped) {
         return None;
     }
 
-    // Normalize Windows backslashes to forward slashes on Unix for cross-platform output
-    #[cfg(not(target_os = "windows"))]
-    let raw_path = &raw_path.replace('\\', "/");
+    // Normalize Windows backslashes on Unix for cross-platform terminal output
+    let raw_path: Cow<'_, str> = if cfg!(not(target_os = "windows")) && stripped.contains('\\') {
+        Cow::Owned(stripped.replace('\\', "/"))
+    } else {
+        Cow::Borrowed(stripped)
+    };
 
-    let path = expand_home_relative_path(raw_path)
+    let path = expand_home_relative_path(&raw_path)
         .or_else(|| {
-            Path::new(raw_path)
+            Path::new(raw_path.as_ref())
                 .is_absolute()
-                .then(|| PathBuf::from(raw_path))
+                .then(|| PathBuf::from(raw_path.as_ref()))
         })
-        .or_else(|| workspace_root.map(|root| root.join(raw_path)))?;
+        .or_else(|| workspace_root.map(|root| root.join(raw_path.as_ref())))?;
 
     path.is_file().then_some(path)
 }
@@ -392,14 +399,8 @@ fn strip_location_suffix(token: &str) -> &str {
     let mut base = without_fragment;
 
     // Strip parenthesized location suffix like (10,5) or (10)
-    if let Some(paren_start) = base.rfind('(') {
-        let after = &base[paren_start + 1..];
-        if after
-            .strip_suffix(')')
-            .is_some_and(|inner| !inner.is_empty() && inner.chars().all(|c| c.is_ascii_digit() || c == ','))
-        {
-            base = &base[..paren_start];
-        }
+    if let Some(paren_start) = location_paren_suffix_start(base) {
+        base = &base[..paren_start];
     }
 
     // Strip colon-separated line:col suffix like :10:5 or :10
@@ -438,27 +439,24 @@ fn looks_like_transcript_path(token: &str) -> bool {
         // Contains path separator
         || token.contains('/')
         || token.contains('\\')
-        // Has a file-like extension (dot followed by 1-12 alphanumeric chars at end),
-        // but reject short tokens that look like abbreviations (e.g., "e.g.", "i.e.")
-        || (token.len() > 4
-            && token
-                .rsplit_once('.')
-                .is_some_and(|(_, ext)| !ext.is_empty() && ext.len() <= 12 && ext.chars().all(|c| c.is_ascii_alphanumeric())))
+        // Has a file-like extension: non-empty stem + dot + 1-12 alphanumeric ext.
+        // Called after suffix stripping so `a.rs` (not `a.rs:10`) is the input.
+        // `path.is_file()` is the final filter, so favor recall here.
+        || token.rsplit_once('.').is_some_and(|(stem, ext)| {
+            !stem.is_empty()
+                && !ext.is_empty()
+                && ext.len() <= 12
+                && ext.chars().all(|c| c.is_ascii_alphanumeric())
+        })
 }
 
 fn is_open_file_modifier_click(modifiers: KeyModifiers) -> bool {
-    #[cfg(target_os = "macos")]
-    {
-        // Command key: crossterm reports as SUPER or META depending on terminal.
-        // Some terminals (e.g. iTerm2, Alacritty) also emit CONTROL for Cmd+Click
-        // mouse events, so accept CONTROL as fallback for mouse-only contexts.
-        modifiers.contains(KeyModifiers::SUPER)
-            || modifiers.contains(KeyModifiers::META)
-            || modifiers.contains(KeyModifiers::CONTROL)
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
+    // On macOS: Cmd+Click. crossterm reports Command as SUPER or META depending on
+    // the terminal emulator (iTerm2, Terminal.app, Ghostty, Alacritty all vary).
+    // On other platforms: Ctrl+Click.
+    if cfg!(target_os = "macos") {
+        modifiers.contains(KeyModifiers::SUPER) || modifiers.contains(KeyModifiers::META)
+    } else {
         modifiers.contains(KeyModifiers::CONTROL)
     }
 }
