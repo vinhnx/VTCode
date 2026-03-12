@@ -77,7 +77,7 @@ fn condense_content_with_limits(content: &str, head_bytes: usize, tail_bytes: us
         .saturating_sub(byte_len - tail_start);
 
     format!(
-        "{}\n\n… [{} bytes omitted — full content in spool file] …\n\n{}",
+        "{}\n\n… [{} bytes omitted] …\n\n{}",
         &content[..head_end],
         omitted,
         &content[tail_start..]
@@ -116,10 +116,7 @@ fn tail_preview_content(content: &str, tail_bytes: usize, max_lines: usize) -> S
         return preview.to_string();
     }
 
-    format!(
-        "… [{} bytes omitted — showing tail preview] …\n{}",
-        omitted, preview
-    )
+    format!("… [{} bytes omitted] …\n{}", omitted, preview)
 }
 
 /// Configuration for the output spooler
@@ -861,7 +858,7 @@ mod tests {
             result
                 .get("output")
                 .and_then(|v| v.as_str())
-                .is_some_and(|s| s.contains("tail preview"))
+                .is_some_and(|s| s.contains("bytes omitted"))
         );
         assert!(result.get("spool_hint").is_none());
     }
@@ -1015,7 +1012,7 @@ mod tests {
             .collect::<Vec<_>>()
             .join("\n");
         let preview = tail_preview_content(&input, 500, 10);
-        assert!(preview.contains("tail preview"));
+        assert!(preview.contains("bytes omitted"));
         assert!(preview.contains("line-199"));
         assert!(!preview.contains("line-1\n"));
     }

@@ -69,20 +69,10 @@ impl ReadChunkContinuationArgs {
 }
 
 pub fn read_chunk_progress_from_result(result: &Value) -> Option<(usize, usize)> {
-    if let Some(next_read_args) = result
+    result
         .get("next_read_args")
         .and_then(ReadChunkContinuationArgs::from_value)
-    {
-        return Some((next_read_args.offset, next_read_args.limit));
-    }
-
-    let next_offset = result.get("next_offset").and_then(value_to_usize)?.max(1);
-    let chunk_limit = result
-        .get("chunk_limit")
-        .and_then(value_to_usize)
-        .unwrap_or(DEFAULT_NEXT_READ_LIMIT)
-        .max(1);
-    Some((next_offset, chunk_limit))
+        .map(|next_read_args| (next_read_args.offset, next_read_args.limit))
 }
 
 fn value_to_usize(value: &Value) -> Option<usize> {
@@ -131,25 +121,23 @@ mod tests {
     }
 
     #[test]
-    fn read_chunk_progress_prefers_canonical_args() {
+    fn read_chunk_progress_reads_canonical_args() {
         let result = json!({
             "next_read_args": {
                 "path": "out.txt",
                 "offset": 81,
                 "limit": 40
-            },
-            "next_offset": 999,
-            "chunk_limit": 999
+            }
         });
         assert_eq!(read_chunk_progress_from_result(&result), Some((81, 40)));
     }
 
     #[test]
-    fn read_chunk_progress_supports_legacy_fields() {
+    fn read_chunk_progress_requires_canonical_args() {
         let result = json!({
             "next_offset": "10",
             "chunk_limit": "0"
         });
-        assert_eq!(read_chunk_progress_from_result(&result), Some((10, 1)));
+        assert_eq!(read_chunk_progress_from_result(&result), None);
     }
 }

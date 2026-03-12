@@ -914,7 +914,7 @@ mod tests {
     }
 
     #[test]
-    fn finds_recent_read_file_spool_progress_from_legacy_top_level_fields() {
+    fn ignores_read_file_spool_progress_without_canonical_args() {
         let history = ToolExecutionHistory::new(10);
         let path = ".vtcode/context/tool_outputs/unified_exec_legacy.txt";
         let args = json!({"path": path});
@@ -942,6 +942,6 @@ mod tests {
         ));
 
         let found = history.find_recent_read_file_spool_progress(path, Duration::from_secs(60));
-        assert_eq!(found, Some((33, 32)));
+        assert_eq!(found, None);
     }
 }
