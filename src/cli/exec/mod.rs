@@ -39,7 +39,10 @@ mod tests {
     use super::event_output::{
         ExecEventProcessor, human_event_line, render_final_tail, serialize_event_line,
     };
-    use super::run::{REVIEW_TASK_ID, resolve_exec_event_log_path, task_instructions, task_spec};
+    use super::run::{
+        REVIEW_TASK_ID, effective_exec_events_path, resolve_exec_event_log_path, task_instructions,
+        task_spec,
+    };
     use tempfile::TempDir;
     use vtcode_core::core::agent::task::{TaskOutcome, TaskResults};
     use vtcode_core::exec::events::{
@@ -213,6 +216,43 @@ mod tests {
             .expect("file name");
         assert!(file_name.starts_with("harness-session-123-"));
         assert!(file_name.ends_with(".jsonl"));
+    }
+
+    #[test]
+    fn effective_exec_events_path_uses_config_when_cli_path_is_absent() {
+        let temp = TempDir::new().expect("tempdir");
+        let configured = temp.path().join("events.jsonl");
+
+        let resolved = effective_exec_events_path(
+            None,
+            Some(configured.to_str().expect("configured path")),
+            "session-123",
+        )
+        .expect("resolved path");
+
+        assert_eq!(resolved, configured);
+    }
+
+    #[test]
+    fn effective_exec_events_path_ignores_empty_config_path() {
+        let resolved = effective_exec_events_path(None, Some(""), "session-123");
+        assert!(resolved.is_none());
+    }
+
+    #[test]
+    fn effective_exec_events_path_prefers_cli_path_over_config() {
+        let temp = TempDir::new().expect("tempdir");
+        let cli = temp.path().join("cli-events.jsonl");
+        let configured = temp.path().join("configured-events.jsonl");
+
+        let resolved = effective_exec_events_path(
+            Some(cli.as_path()),
+            Some(configured.to_str().expect("configured path")),
+            "session-123",
+        )
+        .expect("resolved path");
+
+        assert_eq!(resolved, cli);
     }
 
     #[test]

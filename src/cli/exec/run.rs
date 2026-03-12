@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use chrono::Utc;
 use std::fs::File;
 use std::io::{self, BufWriter};
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use vtcode_core::config::VTCodeConfig;
@@ -63,6 +64,18 @@ pub(super) fn resolve_exec_event_log_path(path: &str, session_id: &str) -> PathB
     base
 }
 
+pub(super) fn effective_exec_events_path(
+    cli_events_path: Option<&Path>,
+    harness_event_log_path: Option<&str>,
+    session_id: &str,
+) -> Option<PathBuf> {
+    cli_events_path.map(Path::to_path_buf).or_else(|| {
+        harness_event_log_path
+            .filter(|path| !path.trim().is_empty())
+            .map(|path| resolve_exec_event_log_path(path, session_id))
+    })
+}
+
 pub(super) async fn handle_exec_command_impl(
     config: &CoreAgentConfig,
     vt_cfg: &VTCodeConfig,
@@ -111,15 +124,11 @@ pub(super) async fn handle_exec_command_impl(
         runner.enable_plan_mode();
     }
     runner.set_quiet(true);
-    let events_path = options.events_path.clone().or_else(|| {
-        run_vt_cfg
-            .agent
-            .harness
-            .event_log_path
-            .as_deref()
-            .filter(|path| !path.trim().is_empty())
-            .map(|path| resolve_exec_event_log_path(path, &event_session_id))
-    });
+    let events_path = effective_exec_events_path(
+        options.events_path.as_deref(),
+        run_vt_cfg.agent.harness.event_log_path.as_deref(),
+        &event_session_id,
+    );
 
     let processor = Arc::new(Mutex::new(ExecEventProcessor::<
         io::Stdout,
