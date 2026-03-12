@@ -651,8 +651,7 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/project/TODO.md`
   - **Content**: TODO.md
-  - **Topics**: Understand GPT-5.4 behavior, Use core prompt patterns, Handle specialized workflows, Tune reasoning and migration, Can Someone Please Define a "Harness"?
-  - **User Questions**: "What can you tell me about TODO.md?", "How does Understand GPT-5.4 behavior work?", "How does Use core prompt patterns work?"
+  - **User Questions**: "What can you tell me about TODO.md?"
 
 - **File**: `docs/harness/TECH_DEBT_TRACKER.md`
   - **Content**: Tech Debt Tracker
