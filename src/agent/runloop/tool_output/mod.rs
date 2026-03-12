@@ -98,6 +98,35 @@ pub(super) fn render_tool_follow_up_hints(
     Ok(())
 }
 
+fn preferred_follow_up_rendered_body(val: &Value) -> Option<&str> {
+    val.get("output")
+        .and_then(Value::as_str)
+        .or_else(|| val.get("content").and_then(Value::as_str))
+}
+
+fn render_tool_follow_up_hints_for_value(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
+    render_tool_follow_up_hints(renderer, val, preferred_follow_up_rendered_body(val))
+}
+
+async fn render_terminal_tool_output(
+    renderer: &mut AnsiRenderer,
+    val: &Value,
+    vt_config: Option<&VTCodeConfig>,
+    allow_tool_ansi: bool,
+) -> Result<()> {
+    let git_styles = GitStyles::new();
+    let ls_styles = LsStyles::from_env();
+    render_terminal_command_panel(
+        renderer,
+        val,
+        &git_styles,
+        &ls_styles,
+        vt_config,
+        allow_tool_ansi,
+    )
+    .await
+}
+
 pub(crate) async fn render_tool_output(
     renderer: &mut AnsiRenderer,
     tool_name: Option<&str>,
@@ -136,54 +165,22 @@ pub(crate) async fn render_tool_output(
         | Some(tools::CLOSE_PTY_SESSION)
         | Some(tools::RESIZE_PTY_SESSION)
         | Some(tools::LIST_PTY_SESSIONS) => {
-            let git_styles = GitStyles::new();
-            let ls_styles = LsStyles::from_env();
-            return render_terminal_command_panel(
-                renderer,
-                val,
-                &git_styles,
-                &ls_styles,
-                vt_config,
-                allow_tool_ansi,
-            )
-            .await;
+            return render_terminal_tool_output(renderer, val, vt_config, allow_tool_ansi).await;
         }
         Some(tools::UNIFIED_EXEC)
             if !is_git_diff_output && should_render_unified_exec_terminal_panel(val) =>
         {
-            let git_styles = GitStyles::new();
-            let ls_styles = LsStyles::from_env();
-            return render_terminal_command_panel(
-                renderer,
-                val,
-                &git_styles,
-                &ls_styles,
-                vt_config,
-                allow_tool_ansi,
-            )
-            .await;
+            return render_terminal_tool_output(renderer, val, vt_config, allow_tool_ansi).await;
         }
         Some("web_fetch") => {
             render_generic_output(renderer, val)?;
-            render_tool_follow_up_hints(
-                renderer,
-                val,
-                val.get("output")
-                    .and_then(Value::as_str)
-                    .or_else(|| val.get("content").and_then(Value::as_str)),
-            )?;
+            render_tool_follow_up_hints_for_value(renderer, val)?;
             return Ok(());
         }
         Some("list_files") => {
             let ls_styles = LsStyles::from_env();
             render_list_dir_output(renderer, val, &ls_styles)?;
-            render_tool_follow_up_hints(
-                renderer,
-                val,
-                val.get("output")
-                    .and_then(Value::as_str)
-                    .or_else(|| val.get("content").and_then(Value::as_str)),
-            )?;
+            render_tool_follow_up_hints_for_value(renderer, val)?;
             return Ok(());
         }
         Some(tools::READ_FILE) => {
@@ -192,17 +189,7 @@ pub(crate) async fn render_tool_output(
             return Ok(());
         }
         Some(tools::EXECUTE_CODE) => {
-            let git_styles = GitStyles::new();
-            let ls_styles = LsStyles::from_env();
-            return render_terminal_command_panel(
-                renderer,
-                val,
-                &git_styles,
-                &ls_styles,
-                vt_config,
-                allow_tool_ansi,
-            )
-            .await;
+            return render_terminal_tool_output(renderer, val, vt_config, allow_tool_ansi).await;
         }
         Some(tools::TASK_TRACKER) | Some(tools::PLAN_TASK_TRACKER) => {
             if render_tracker_view(renderer, val)? {
@@ -218,13 +205,7 @@ pub(crate) async fn render_tool_output(
         renderer.line(MessageStyle::ToolDetail, notice)?;
     }
 
-    render_tool_follow_up_hints(
-        renderer,
-        val,
-        val.get("output")
-            .and_then(Value::as_str)
-            .or_else(|| val.get("content").and_then(Value::as_str)),
-    )?;
+    render_tool_follow_up_hints_for_value(renderer, val)?;
 
     if let Some(tool) = tool_name
         && tool.starts_with("mcp_")
@@ -593,7 +574,8 @@ mod tests {
     use vtcode_core::utils::ansi::AnsiRenderer;
 
     use super::{
-        render_tool_output, should_render_unified_exec_terminal_panel, tracker_summary_lines,
+        preferred_follow_up_rendered_body, render_tool_output,
+        should_render_unified_exec_terminal_panel, tracker_summary_lines,
     };
 
     fn collect_inline_output(receiver: &mut UnboundedReceiver<InlineCommand>) -> String {
@@ -661,6 +643,31 @@ mod tests {
             "content_type": "git_diff"
         });
         assert!(!should_render_unified_exec_terminal_panel(&payload));
+    }
+
+    #[test]
+    fn preferred_follow_up_rendered_body_prefers_output_over_content() {
+        let payload = json!({
+            "output": "stdout body",
+            "content": "content body"
+        });
+
+        assert_eq!(
+            preferred_follow_up_rendered_body(&payload),
+            Some("stdout body")
+        );
+    }
+
+    #[test]
+    fn preferred_follow_up_rendered_body_falls_back_to_content() {
+        let payload = json!({
+            "content": "content body"
+        });
+
+        assert_eq!(
+            preferred_follow_up_rendered_body(&payload),
+            Some("content body")
+        );
     }
 
     #[tokio::test]
@@ -774,6 +781,24 @@ mod tests {
         )
         .await
         .expect("read_file payload should render");
+
+        let inline_output = collect_inline_output(&mut receiver);
+        assert!(inline_output.contains("Large output was spooled to"));
+    }
+
+    #[tokio::test]
+    async fn render_tool_output_web_fetch_content_fallback_renders_follow_up_hint() {
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut renderer =
+            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let payload = json!({
+            "content": "preview",
+            "spool_path": ".vtcode/context/tool_outputs/web.txt"
+        });
+
+        render_tool_output(&mut renderer, Some("web_fetch"), &payload, None)
+            .await
+            .expect("web_fetch payload should render");
 
         let inline_output = collect_inline_output(&mut receiver);
         assert!(inline_output.contains("Large output was spooled to"));
