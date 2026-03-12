@@ -321,8 +321,16 @@ impl CtrlCState {
         let last = self.last_signal_time.swap(now, Ordering::SeqCst);
         let current_phase = self.phase();
 
-        // Debounce: ignore signals within 200ms of each other
+        // Debounce repeated cancel signals, but allow an already-armed stop to
+        // escalate immediately so a quick second press can still exit.
         if last > 0 && now.saturating_sub(last) < 200 {
+            if matches!(
+                current_phase,
+                CtrlCPhase::ExitArmed | CtrlCPhase::ExitRequested
+            ) {
+                self.set_phase(CtrlCPhase::ExitRequested);
+                return CtrlCSignal::Exit;
+            }
             return current_phase.signal();
         }
 
@@ -519,6 +527,17 @@ mod tests {
         assert!(matches!(state.register_signal(), CtrlCSignal::Cancel));
         state.mark_cancel_handled();
         thread::sleep(Duration::from_millis(250));
+
+        assert!(matches!(state.register_signal(), CtrlCSignal::Exit));
+        assert!(state.is_exit_requested());
+    }
+
+    #[test]
+    fn ctrl_c_state_allows_immediate_exit_after_cancel_handled() {
+        let state = CtrlCState::new();
+
+        assert!(matches!(state.register_signal(), CtrlCSignal::Cancel));
+        state.mark_cancel_handled();
 
         assert!(matches!(state.register_signal(), CtrlCSignal::Exit));
         assert!(state.is_exit_requested());

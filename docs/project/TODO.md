@@ -60,7 +60,7 @@ https://defuddle.md/x.com/akshay_pachaar/status/2031021906254766128
 
 ---
 
-Agent runs, human steers. I also apply this philosophy in the VT Code harness.
+Agent runs, human steers. apply this philosophy in the VT Code harness.
 
 ---
 
@@ -441,23 +441,7 @@ Additionally, "no iteration limit" doesn't mean "no safety boundaries." Safety i
 Source code (Go): [github.com/epiral/agent-clip](https://github.com/epiral/agent-clip)
 
 Core files: `internal/tools.go` (command routing), `internal/chain.go` (pipes), `internal/loop.go` (two-layer agentic loop), `internal/fs.go` (binary guard), `internal/clip.go` (stderr handling), `internal/browser.go` (vision auto-attach), `internal/memory.go` (semantic memory).
-
-Happy to discuss — especially if you've tried similar approaches or found cases where CLI breaks down. The command discovery problem (how much to inject vs. let the agent discover) is something I'm still actively exploring.
 ```
-
----
-
-CRITICAL: after some long horizontal running loop. the program is very hard to abort/stop. ->
-
-1. The agent should know when to stop
-2. Make it easy for the user to stop the agent (e.g. a "stop" button in the UI, or a keyboard shortcut) or via /stop command
-3. Make control+c/escape keyboar shortcut work reliably to stop the agent, even during long-running and heavy operations. This may require handling signals properly in the code and ensuring that all threads/processes can be interrupted.
-
-/Users/vinhnguyenxuan/.vtcode/sessions/session-vtcode-20260312T110918Z_256973-49771.json
-
-/Users/vinhnguyenxuan/.vtcode/sessions/debug-cmd-chat-1773313642573-49771.log
-
----
 
 ---
 
@@ -3023,18 +3007,6 @@ fix agent loop reliability and responsiveness issues, especially during long-run
 2026-03-12T11:22:44.105001Z ERROR vtcode_transcript: diagnostic error output style=Error suppressed_in_tui=true LLM request failed: Provider error: \x1b[2m\x1b[36mollama\x1b[0m \x1b[31mInterrupted by user\x1b[0m
 2026-03-12T11:22:44.105246Z ERROR vtcode::agent::runloop::unified::turn::turn_loop: LLM request failed error=Provider error: [2m[36mollama[0m [31mInterrupted by user[0m step=61
 2026-03-12T11:22:44.105580Z  INFO vtcode_core::notifications: Notification: Agent turn ended: failed - Turn aborted
-```
-
----
-
-remove duplicated info in postable program exit
-
-```
-> VT Code (0.88.2)
-Trust: full auto
-Session 13m 34s | API 7m 31s | Tokens 1.3m in / 30.6k out | Code +0 / -0
-Model: nemotron-3-super:cloud | 7m 31s | 1.3m in / 30.6k out
-Resume: vtcode --resume session-vtcode-20260312T110918Z_256973-49771
 ```
 
 ---

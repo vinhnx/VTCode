@@ -44,26 +44,42 @@ pub(crate) fn print_exit_summary(data: ExitSummaryData) {
         println!("{ANSI_DIM}{}{ANSI_RESET}", build_trust_line(ctx));
     }
 
-    println!(
-        "{ANSI_DIM}Session {} | API {} | Tokens {} in / {} out{} | Code +{} / -{}{ANSI_RESET}",
-        format_duration(data.total_session_time),
-        format_duration(data.telemetry.api_time_spent),
-        format_number(prompt),
-        format_number(completion),
-        format_cache_fragment(cache_read, cache_creation),
-        diff.additions,
-        diff.deletions
-    );
-
-    for (model, stats) in models {
+    if models.len() == 1 {
+        // Single model: compact line with model name, no separate Model row
+        let (model, stats) = models[0];
         println!(
-            "{ANSI_DIM}Model: {ANSI_BOLD}\x1b[38;5;{model_color}m{model}{ANSI_RESET}{ANSI_DIM} | {} | {} in / {} out{}{}{ANSI_RESET}",
+            "{ANSI_DIM}Session {} | {ANSI_BOLD}\x1b[38;5;{model_color}m{model}{ANSI_RESET}{ANSI_DIM} | {} | {} in / {} out{}{} | Code +{} / -{}{ANSI_RESET}",
+            format_duration(data.total_session_time),
             format_duration(stats.api_time),
             format_number(stats.prompt_tokens),
             format_number(stats.completion_tokens),
             format_cache_fragment(stats.cache_read_tokens, stats.cache_creation_tokens),
             format_cache_hit_ratio(stats.cache_read_tokens, stats.cache_creation_tokens),
+            diff.additions,
+            diff.deletions
         );
+    } else {
+        // Multi-model: aggregate line + per-model breakdown
+        println!(
+            "{ANSI_DIM}Session {} | API {} | Tokens {} in / {} out{} | Code +{} / -{}{ANSI_RESET}",
+            format_duration(data.total_session_time),
+            format_duration(data.telemetry.api_time_spent),
+            format_number(prompt),
+            format_number(completion),
+            format_cache_fragment(cache_read, cache_creation),
+            diff.additions,
+            diff.deletions
+        );
+        for (model, stats) in models {
+            println!(
+                "{ANSI_DIM}  {ANSI_BOLD}\x1b[38;5;{model_color}m{model}{ANSI_RESET}{ANSI_DIM} | {} | {} in / {} out{}{}{ANSI_RESET}",
+                format_duration(stats.api_time),
+                format_number(stats.prompt_tokens),
+                format_number(stats.completion_tokens),
+                format_cache_fragment(stats.cache_read_tokens, stats.cache_creation_tokens),
+                format_cache_hit_ratio(stats.cache_read_tokens, stats.cache_creation_tokens),
+            );
+        }
     }
 
     if let Some(session_id) = data.resume_identifier {
