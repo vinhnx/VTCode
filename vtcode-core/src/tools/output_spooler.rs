@@ -226,6 +226,9 @@ impl ToolOutputSpooler {
     }
 
     fn estimate_size(&self, value: &Value) -> usize {
+        if let Some(s) = value.get("raw_output").and_then(|v| v.as_str()) {
+            return s.len();
+        }
         if let Some(s) = value.get("content").and_then(|v| v.as_str()) {
             return s.len();
         }
@@ -300,13 +303,25 @@ impl ToolOutputSpooler {
             // Handle two cases:
             // 1. value is an object with "output" field (normal case)
             // 2. value is a string containing JSON (edge case: double-serialized)
-            if let Some(output_content) = value.get("output").and_then(|v| v.as_str()) {
+            if let Some(output_content) = value.get("raw_output").and_then(|v| v.as_str()) {
+                output_content.to_string()
+            } else if let Some(output_content) = value.get("output").and_then(|v| v.as_str()) {
                 output_content.to_string()
             } else if let Some(json_str) = value.as_str() {
                 // Edge case: value might be a JSON string that needs parsing
                 // This can happen if the value was serialized somewhere in the pipeline
                 if let Ok(parsed) = serde_json::from_str::<Value>(json_str) {
-                    if let Some(output_content) = parsed.get("output").and_then(|v| v.as_str()) {
+                    if let Some(output_content) =
+                        parsed.get("raw_output").and_then(|v| v.as_str())
+                    {
+                        debug!(
+                            tool = tool_name,
+                            "PTY spool: recovered raw_output from double-serialized JSON string"
+                        );
+                        output_content.to_string()
+                    } else if let Some(output_content) =
+                        parsed.get("output").and_then(|v| v.as_str())
+                    {
                         debug!(
                             tool = tool_name,
                             "PTY spool: recovered output from double-serialized JSON string"
@@ -463,6 +478,7 @@ impl ToolOutputSpooler {
             obj.remove("stdout");
             obj.remove("follow_up_prompt");
             obj.remove("spooled_to_file");
+            obj.remove("raw_output");
 
             // Replace only the heavy stream field with condensed preview.
             if use_output_field {
@@ -895,6 +911,37 @@ mod tests {
         assert_eq!(spooled_content, command_output);
         assert!(!spooled_content.contains("\"output\""));
         assert!(!spooled_content.contains("\"exit_code\""));
+    }
+
+    #[tokio::test]
+    async fn test_unified_exec_spools_internal_raw_output_over_preview() {
+        let temp = tempdir().unwrap();
+        let config = SpoolerConfig {
+            threshold_bytes: 10,
+            ..Default::default()
+        };
+        let spooler = ToolOutputSpooler::with_config(temp.path(), config);
+
+        let raw_output = "line 1\nline 2\nline 3\nline 4\nline 5\nline 6";
+        let preview_output = "line 1\nline 2\n[Output truncated]";
+        let unified_exec_response = json!({
+            "output": preview_output,
+            "raw_output": raw_output,
+            "truncated": true,
+            "exit_code": 0,
+            "wall_time": 1.234,
+            "success": true
+        });
+
+        let result = spooler
+            .process_output("unified_exec", unified_exec_response, false)
+            .await
+            .unwrap();
+
+        let spooled_path = result.get("spool_path").and_then(|v| v.as_str()).unwrap();
+        let spooled_content = std::fs::read_to_string(temp.path().join(spooled_path)).unwrap();
+        assert_eq!(spooled_content, raw_output);
+        assert_ne!(spooled_content, preview_output);
     }
 
     #[tokio::test]

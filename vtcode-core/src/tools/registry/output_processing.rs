@@ -12,9 +12,10 @@ fn is_pty_output_tool(tool_name: &str) -> bool {
 
 fn output_field_bytes(value: &Value) -> usize {
     value
-        .get("output")
+        .get("raw_output")
         .and_then(|v| v.as_str())
         .map(str::len)
+        .or_else(|| value.get("output").and_then(|v| v.as_str()).map(str::len))
         .or_else(|| value.get("stdout").and_then(|v| v.as_str()).map(str::len))
         .unwrap_or(0)
 }

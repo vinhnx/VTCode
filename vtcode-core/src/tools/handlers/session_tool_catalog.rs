@@ -399,6 +399,7 @@ pub(crate) fn unified_exec_parameters() -> Value {
             },
             "workdir": {"type": "string", "description": "Working directory for new sessions."},
             "cwd": {"type": "string", "description": "Alias for workdir."},
+            "tty": {"type": "boolean", "description": "Run the command in a PTY instead of pipe mode.", "default": false},
             "shell": {"type": "string", "description": "Shell binary."},
             "login": {"type": "boolean", "description": "Use login shell.", "default": false},
             "sandbox_permissions": {
@@ -790,6 +791,8 @@ mod tests {
         assert_eq!(variants[0]["type"], "string");
         assert_eq!(variants[1]["type"], "array");
         assert_eq!(variants[1]["items"]["type"], "string");
+        assert_eq!(params["properties"]["tty"]["type"], "boolean");
+        assert_eq!(params["properties"]["tty"]["default"], false);
     }
 
     #[test]

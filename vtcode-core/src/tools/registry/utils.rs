@@ -40,6 +40,7 @@ pub(super) fn normalize_tool_output(mut val: Value) -> Value {
     {
         *stderr = json!(s.trim_end());
     }
+    obj.remove("raw_output");
     val
 }
 
@@ -133,5 +134,17 @@ mod tests {
 
         assert!(normalized.get("stdout").is_none());
         assert_eq!(normalized["output"], "1: src/main.rs");
+    }
+
+    #[test]
+    fn strips_internal_exec_raw_output_field() {
+        let normalized = normalize_tool_output(json!({
+            "output": "preview",
+            "raw_output": "full output",
+            "command": "cargo check"
+        }));
+
+        assert_eq!(normalized["output"], "preview");
+        assert!(normalized.get("raw_output").is_none());
     }
 }

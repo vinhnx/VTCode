@@ -1032,6 +1032,13 @@ const DEFAULT_INSPECT_TAIL_LINES: usize = 30;
 const DEFAULT_INSPECT_MAX_MATCHES: usize = 200;
 const MIN_EXEC_YIELD_MS: u64 = 250;
 const MAX_EXEC_YIELD_MS: u64 = 30_000;
+const EXEC_OUTPUT_TRUNCATED_SENTINEL: &str = "\n[Output truncated]";
+
+struct ExecOutputPreview {
+    raw_output: String,
+    output: String,
+    truncated: bool,
+}
 
 fn attach_pty_continuation(response: &mut Value, session_id: &str) {
     response["next_continue_args"] = PtyContinuationArgs::new(session_id).to_value();
@@ -1055,15 +1062,107 @@ fn max_output_tokens_from_payload(payload: &serde_json::Map<String, Value>) -> O
         .map(|value| value as usize)
 }
 
-fn truncate_exec_output(output: &mut String, max_tokens: usize) -> bool {
-    let max_output_len = max_tokens.saturating_mul(4);
-    if max_tokens > 0 && output.len() > max_output_len {
-        output.truncate(max_output_len);
-        output.push_str("\n[Output truncated]");
-        true
-    } else {
-        false
+fn floor_exec_char_boundary(text: &str, index: usize) -> usize {
+    if index >= text.len() {
+        return text.len();
     }
+
+    let mut boundary = index;
+    while boundary > 0 && !text.is_char_boundary(boundary) {
+        boundary -= 1;
+    }
+    boundary
+}
+
+fn build_exec_output_preview(raw_output: String, max_tokens: usize) -> ExecOutputPreview {
+    let max_output_len = max_tokens.saturating_mul(4);
+    if max_tokens == 0 || raw_output.len() <= max_output_len {
+        return ExecOutputPreview {
+            output: raw_output.clone(),
+            raw_output,
+            truncated: false,
+        };
+    }
+
+    let preview_end = floor_exec_char_boundary(&raw_output, max_output_len);
+    let mut output = raw_output[..preview_end].to_string();
+    output.push_str(EXEC_OUTPUT_TRUNCATED_SENTINEL);
+
+    ExecOutputPreview {
+        raw_output,
+        output,
+        truncated: true,
+    }
+}
+
+fn first_command_token(command: &str) -> Option<String> {
+    shell_words::split(command)
+        .ok()
+        .and_then(|parts| parts.into_iter().next())
+        .filter(|part| !part.trim().is_empty())
+}
+
+fn attach_exec_recovery_guidance(response: &mut Value, command: &str, exit_code: Option<i32>) {
+    if exit_code != Some(127) {
+        return;
+    }
+
+    let command_name = first_command_token(command).unwrap_or_else(|| "command".to_string());
+    response["critical_note"] = json!(format!(
+        "Command `{command_name}` was not found in PATH."
+    ));
+    response["next_action"] = json!(
+        "Check the command name or install the missing binary, then rerun the command."
+    );
+}
+
+fn build_exec_response(
+    session: &VTCodeExecSession,
+    command: &str,
+    capture: &PtyEphemeralCapture,
+    output_preview: ExecOutputPreview,
+    matched_count: Option<usize>,
+    query_truncated: bool,
+    running_process_id: Option<&str>,
+) -> Value {
+    let ExecOutputPreview {
+        raw_output,
+        output,
+        truncated,
+    } = output_preview;
+    let mut response = json!({
+        "success": true,
+        "output": output,
+        "raw_output": raw_output,
+        "wall_time": capture.duration.as_secs_f64(),
+    });
+    if let Some(count) = matched_count {
+        response["matched_count"] = json!(count);
+        response["query_truncated"] = json!(query_truncated);
+    }
+
+    attach_exec_response_context(
+        &mut response,
+        session,
+        command,
+        capture.exit_code.is_some(),
+    );
+
+    if let Some(code) = capture.exit_code {
+        response["exit_code"] = json!(code);
+    } else if let Some(process_id) = running_process_id {
+        response["process_id"] = json!(process_id);
+    }
+
+    if truncated {
+        response["truncated"] = json!(true);
+    }
+    if truncated || capture.exit_code.is_none() {
+        attach_pty_continuation(&mut response, &session.id);
+    }
+
+    attach_exec_recovery_guidance(&mut response, command, capture.exit_code);
+    response
 }
 
 fn clamp_inspect_lines(value: Option<u64>, default: usize) -> usize {
@@ -1867,48 +1966,35 @@ impl ToolRegistry {
                 true,
             )
             .await;
-        let mut output = filter_pty_output(&strip_ansi(&capture.output));
-        let truncated = truncate_exec_output(&mut output, max_tokens);
-
+        let raw_output = filter_pty_output(&strip_ansi(&capture.output));
         let mut matched_count = None;
         let mut query_truncated = false;
-        if let Some(query) = inspect_query {
+        let filtered_output = if let Some(query) = inspect_query {
             let (filtered, count, truncated_matches) =
-                filter_lines(&output, query, inspect_literal, inspect_max_matches)?;
-            output = filtered;
+                filter_lines(&raw_output, query, inspect_literal, inspect_max_matches)?;
             matched_count = Some(count);
             query_truncated = truncated_matches;
-        }
-
-        let wall_time = capture.duration.as_secs_f64();
-        let mut response = json!({
-            "success": true,
-            "output": output,
-            "wall_time": wall_time,
-        });
-        if let Some(count) = matched_count {
-            response["matched_count"] = json!(count);
-            response["query_truncated"] = json!(query_truncated);
-        }
-        attach_exec_response_context(
-            &mut response,
+            filtered
+        } else {
+            raw_output.clone()
+        };
+        let preview = build_exec_output_preview(filtered_output, max_tokens);
+        let mut response = build_exec_response(
             &session_metadata,
             &requested_command_display,
-            capture.exit_code.is_some(),
+            &capture,
+            ExecOutputPreview {
+                raw_output,
+                output: preview.output,
+                truncated: preview.truncated,
+            },
+            matched_count,
+            query_truncated,
+            Some(&session_id),
         );
 
-        if let Some(code) = capture.exit_code {
-            response["exit_code"] = json!(code);
+        if capture.exit_code.is_some() {
             self.prune_completed_exec_session(&session_id).await?;
-        } else {
-            response["process_id"] = json!(session_id);
-        }
-
-        if truncated {
-            response["truncated"] = json!(true);
-        }
-        if truncated || capture.exit_code.is_none() {
-            attach_pty_continuation(&mut response, &session_id);
         }
         if is_git_diff {
             response["no_spool"] = json!(true);
@@ -2047,49 +2133,35 @@ impl ToolRegistry {
                 true,
             )
             .await;
-        let mut output = filter_pty_output(&strip_ansi(&capture.output));
-        let truncated = truncate_exec_output(&mut output, max_tokens);
-
+        let raw_output = filter_pty_output(&strip_ansi(&capture.output));
         let mut matched_count = None;
         let mut query_truncated = false;
-        if let Some(query) = inspect_query {
+        let filtered_output = if let Some(query) = inspect_query {
             let (filtered, count, truncated_matches) =
-                filter_lines(&output, query, inspect_literal, inspect_max_matches)?;
-            output = filtered;
+                filter_lines(&raw_output, query, inspect_literal, inspect_max_matches)?;
             matched_count = Some(count);
             query_truncated = truncated_matches;
-        }
-
-        let wall_time = capture.duration.as_secs_f64();
-        let mut response = json!({
-            "success": true,
-            "output": output,
-            "wall_time": wall_time,
-        });
-        if let Some(count) = matched_count {
-            response["matched_count"] = json!(count);
-            response["query_truncated"] = json!(query_truncated);
-        }
-
-        attach_exec_response_context(
-            &mut response,
+            filtered
+        } else {
+            raw_output.clone()
+        };
+        let preview = build_exec_output_preview(filtered_output, max_tokens);
+        let mut response = build_exec_response(
             &session_metadata,
             &requested_command_display,
-            capture.exit_code.is_some(),
+            &capture,
+            ExecOutputPreview {
+                raw_output,
+                output: preview.output,
+                truncated: preview.truncated,
+            },
+            matched_count,
+            query_truncated,
+            Some(&session_id),
         );
 
-        if let Some(code) = capture.exit_code {
-            response["exit_code"] = json!(code);
+        if capture.exit_code.is_some() {
             self.prune_completed_exec_session(&session_id).await?;
-        } else {
-            response["process_id"] = json!(session_id);
-        }
-
-        if truncated {
-            response["truncated"] = json!(true);
-        }
-        if truncated || capture.exit_code.is_none() {
-            attach_pty_continuation(&mut response, &session_metadata.id);
         }
         if is_git_diff {
             response["no_spool"] = json!(true);
@@ -2130,32 +2202,24 @@ impl ToolRegistry {
                 true,
             )
             .await;
-
-        let mut output = filter_pty_output(&strip_ansi(&capture.output));
-        let truncated = truncate_exec_output(&mut output, max_tokens);
-
-        let mut response = json!({
-            "success": true,
-            "output": output,
-            "wall_time": capture.duration.as_secs_f64(),
-        });
-        attach_exec_response_context(
-            &mut response,
+        let raw_output = filter_pty_output(&strip_ansi(&capture.output));
+        let preview = build_exec_output_preview(raw_output.clone(), max_tokens);
+        let response = build_exec_response(
             &session_metadata,
             &session_command,
-            capture.exit_code.is_some(),
+            &capture,
+            ExecOutputPreview {
+                raw_output,
+                output: preview.output,
+                truncated: preview.truncated,
+            },
+            None,
+            false,
+            None,
         );
 
-        if let Some(code) = capture.exit_code {
-            response["exit_code"] = json!(code);
+        if capture.exit_code.is_some() {
             self.prune_completed_exec_session(sid).await?;
-        }
-
-        if truncated {
-            response["truncated"] = json!(true);
-        }
-        if truncated || capture.exit_code.is_none() {
-            attach_pty_continuation(&mut response, sid);
         }
 
         Ok(response)
@@ -2184,25 +2248,23 @@ impl ToolRegistry {
             )
             .await;
 
-        let output = filter_pty_output(&strip_ansi(&capture.output));
-
-        let mut response = json!({
-            "success": true,
-            "output": output,
-            "wall_time": capture.duration.as_secs_f64(),
-        });
-        attach_exec_response_context(
-            &mut response,
+        let raw_output = filter_pty_output(&strip_ansi(&capture.output));
+        let response = build_exec_response(
             &session_metadata,
             &session_command,
-            capture.exit_code.is_some(),
+            &capture,
+            ExecOutputPreview {
+                raw_output: raw_output.clone(),
+                output: raw_output,
+                truncated: false,
+            },
+            None,
+            false,
+            None,
         );
 
-        if let Some(code) = capture.exit_code {
-            response["exit_code"] = json!(code);
+        if capture.exit_code.is_some() {
             self.prune_completed_exec_session(sid).await?;
-        } else {
-            attach_pty_continuation(&mut response, sid);
         }
 
         Ok(response)
@@ -3422,12 +3484,16 @@ mod git_diff_tests {
 #[cfg(test)]
 mod unified_action_error_tests {
     use super::{
+        ExecOutputPreview, PtyEphemeralCapture, attach_exec_recovery_guidance,
+        build_exec_output_preview, build_exec_response,
         build_head_tail_preview, clamp_inspect_lines, clamp_max_matches,
         extract_run_session_id_from_read_file_error, extract_run_session_id_from_tool_output_path,
         filter_lines, missing_unified_exec_action_error, missing_unified_search_action_error,
         summarized_arg_keys,
     };
+    use crate::tools::types::VTCodeExecSession;
     use serde_json::json;
+    use std::time::Duration;
 
     #[test]
     fn summarized_arg_keys_reports_shape_for_non_object_payloads() {
@@ -3514,6 +3580,69 @@ mod unified_action_error_tests {
         assert_eq!(matched, 2);
         assert!(truncated);
         assert!(output.contains("1: alpha"));
+    }
+
+    #[test]
+    fn exec_output_preview_truncates_on_utf8_boundaries() {
+        let preview = build_exec_output_preview("a🙂b".to_string(), 1);
+
+        assert!(preview.truncated);
+        assert_eq!(preview.raw_output, "a🙂b");
+        assert_eq!(preview.output, "a\n[Output truncated]");
+        assert!(std::str::from_utf8(preview.output.as_bytes()).is_ok());
+    }
+
+    #[test]
+    fn exec_recovery_guidance_sets_command_not_found_metadata() {
+        let session = VTCodeExecSession {
+            id: "run-123".to_string(),
+            backend: "pipe".to_string(),
+            command: "zsh".to_string(),
+            args: vec!["-c".to_string(), "pip install pymupdf".to_string()],
+            working_dir: Some(".".to_string()),
+            rows: None,
+            cols: None,
+        };
+        let capture = PtyEphemeralCapture {
+            output: String::new(),
+            exit_code: Some(127),
+            duration: Duration::from_millis(42),
+        };
+
+        let response = build_exec_response(
+            &session,
+            "pip install pymupdf",
+            &capture,
+            ExecOutputPreview {
+                raw_output: "bash: pip: command not found".to_string(),
+                output: "bash: pip: command not found".to_string(),
+                truncated: false,
+            },
+            None,
+            false,
+            None,
+        );
+
+        assert_eq!(response["output"], "bash: pip: command not found");
+        assert_eq!(response["exit_code"], 127);
+        assert_eq!(response["session_id"], "run-123");
+        assert_eq!(response["command"], "pip install pymupdf");
+        assert_eq!(
+            response["critical_note"],
+            "Command `pip` was not found in PATH."
+        );
+        assert_eq!(
+            response["next_action"],
+            "Check the command name or install the missing binary, then rerun the command."
+        );
+    }
+
+    #[test]
+    fn exec_recovery_guidance_ignores_non_command_not_found_exit_codes() {
+        let mut response = json!({});
+        attach_exec_recovery_guidance(&mut response, "cargo test", Some(1));
+        assert!(response.get("critical_note").is_none());
+        assert!(response.get("next_action").is_none());
     }
 }
 
