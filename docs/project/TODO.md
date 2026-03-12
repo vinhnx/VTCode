@@ -3036,3 +3036,7 @@ Session 13m 34s | API 7m 31s | Tokens 1.3m in / 30.6k out | Code +0 / -0
 Model: nemotron-3-super:cloud | 7m 31s | 1.3m in / 30.6k out
 Resume: vtcode --resume session-vtcode-20260312T110918Z_256973-49771
 ```
+
+---
+
+https://www.xfree86.org/current/ctlseqs.html
