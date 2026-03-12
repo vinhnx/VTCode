@@ -361,6 +361,101 @@ fn modifier_click_emits_open_file_event_for_quoted_path_with_spaces() {
 }
 
 #[test]
+fn ctrl_click_emits_open_file_event_on_macos_fallback() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let absolute_path = transcript_file_fixture_absolute_path();
+    session.push_line(
+        InlineMessageKind::Agent,
+        vec![make_segment(&format!("Open {}", absolute_path))],
+    );
+
+    let _ = visible_transcript(&mut session);
+    let target = session
+        .transcript_file_link_targets
+        .first()
+        .expect("expected transcript file target")
+        .clone();
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    // Some terminals send CONTROL for Cmd+Click on macOS
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: target.area.x,
+            row: target.area.y,
+            modifiers: KeyModifiers::CONTROL,
+        }),
+        &tx,
+        None,
+    );
+
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(InlineEvent::OpenFileInEditor(path)) if path == absolute_path
+    ));
+}
+
+#[test]
+fn path_with_line_col_suffix_resolves_correctly() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let absolute_path = transcript_file_fixture_absolute_path();
+    let path_with_loc = format!("{}:42:10", absolute_path);
+    session.push_line(
+        InlineMessageKind::Agent,
+        vec![make_segment(&format!("Error at {}", path_with_loc))],
+    );
+
+    let decorated =
+        session.decorate_visible_transcript_links(
+            vec![Line::from(format!("Error at {}", path_with_loc))],
+            Rect::new(0, 0, 200, 1),
+        );
+
+    assert!(!session.transcript_file_link_targets.is_empty());
+    let target = &session.transcript_file_link_targets[0];
+    assert_eq!(
+        target.file_path.display().to_string(),
+        absolute_path,
+    );
+    assert!(decorated[0].spans.iter().any(|span| {
+        span.style.add_modifier.contains(Modifier::UNDERLINED)
+    }));
+}
+
+#[test]
+fn path_with_paren_location_resolves_correctly() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let absolute_path = transcript_file_fixture_absolute_path();
+    let path_with_loc = format!("{}(10,5)", absolute_path);
+
+    let _ = session.decorate_visible_transcript_links(
+        vec![Line::from(format!("Error at {}", path_with_loc))],
+        Rect::new(0, 0, 200, 1),
+    );
+
+    assert!(!session.transcript_file_link_targets.is_empty());
+    assert_eq!(
+        session.transcript_file_link_targets[0]
+            .file_path
+            .display()
+            .to_string(),
+        absolute_path,
+    );
+}
+
+#[test]
+fn abbreviation_tokens_are_not_detected_as_paths() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+
+    let _ = session.decorate_visible_transcript_links(
+        vec![Line::from("e.g. this or i.e. that")],
+        Rect::new(0, 0, 200, 1),
+    );
+
+    assert!(session.transcript_file_link_targets.is_empty());
+}
+
+#[test]
 fn move_left_word_skips_trailing_whitespace() {
     let text = "hello  world";
     let mut session = session_with_input(text, text.len());

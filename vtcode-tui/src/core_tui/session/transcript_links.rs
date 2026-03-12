@@ -333,6 +333,10 @@ fn trim_transcript_token_bounds(token: &str) -> (usize, usize) {
             ch,
             ')' | ']' | '}' | '>' | '"' | '\'' | '`' | ',' | ';' | '.' | '!' | '?'
         ) {
+            // Preserve trailing ')' when it looks like a location suffix e.g. file.rs(10,5)
+            if ch == ')' && has_location_paren_suffix(&token[start..end]) {
+                break;
+            }
             end -= ch.len_utf8();
         } else {
             break;
@@ -340,6 +344,17 @@ fn trim_transcript_token_bounds(token: &str) -> (usize, usize) {
     }
 
     (start, end)
+}
+
+/// Check if token ends with a parenthesized location suffix like `(10)` or `(10,5)`.
+fn has_location_paren_suffix(token: &str) -> bool {
+    let Some(paren_start) = token.rfind('(') else {
+        return false;
+    };
+    let after = &token[paren_start + 1..];
+    after
+        .strip_suffix(')')
+        .is_some_and(|inner| !inner.is_empty() && inner.chars().all(|c| c.is_ascii_digit() || c == ','))
 }
 
 fn resolve_transcript_file_path(token: &str, workspace_root: Option<&Path>) -> Option<PathBuf> {
@@ -352,6 +367,10 @@ fn resolve_transcript_file_path(token: &str, workspace_root: Option<&Path>) -> O
     if raw_path.is_empty() {
         return None;
     }
+
+    // Normalize Windows backslashes to forward slashes on Unix for cross-platform output
+    #[cfg(not(target_os = "windows"))]
+    let raw_path = &raw_path.replace('\\', "/");
 
     let path = expand_home_relative_path(raw_path)
         .or_else(|| {
@@ -372,6 +391,18 @@ fn strip_location_suffix(token: &str) -> &str {
     let without_fragment = token.split('#').next().unwrap_or(token);
     let mut base = without_fragment;
 
+    // Strip parenthesized location suffix like (10,5) or (10)
+    if let Some(paren_start) = base.rfind('(') {
+        let after = &base[paren_start + 1..];
+        if after
+            .strip_suffix(')')
+            .is_some_and(|inner| !inner.is_empty() && inner.chars().all(|c| c.is_ascii_digit() || c == ','))
+        {
+            base = &base[..paren_start];
+        }
+    }
+
+    // Strip colon-separated line:col suffix like :10:5 or :10
     for _ in 0..2 {
         let Some(colon_idx) = base.rfind(':') else {
             break;
@@ -388,24 +419,42 @@ fn strip_location_suffix(token: &str) -> &str {
 
 fn expand_home_relative_path(path: &str) -> Option<PathBuf> {
     let remainder = path.strip_prefix("~/")?;
-    let home = env::var_os("HOME")?;
+    let home = env::var_os("HOME").or_else(|| env::var_os("USERPROFILE"))?;
     Some(PathBuf::from(home).join(remainder))
 }
 
 fn looks_like_transcript_path(token: &str) -> bool {
+    // Explicit path prefixes
     token.starts_with("./")
         || token.starts_with("../")
         || token.starts_with('/')
         || token.starts_with("~/")
+        || token.starts_with("file://")
+        // Windows drive letter (e.g. C:\ or C:/)
+        || (token.len() >= 3
+            && token.as_bytes()[0].is_ascii_alphabetic()
+            && token.as_bytes()[1] == b':'
+            && matches!(token.as_bytes()[2], b'\\' | b'/'))
+        // Contains path separator
         || token.contains('/')
         || token.contains('\\')
-        || token.contains('.')
+        // Has a file-like extension (dot followed by 1-12 alphanumeric chars at end),
+        // but reject short tokens that look like abbreviations (e.g., "e.g.", "i.e.")
+        || (token.len() > 4
+            && token
+                .rsplit_once('.')
+                .is_some_and(|(_, ext)| !ext.is_empty() && ext.len() <= 12 && ext.chars().all(|c| c.is_ascii_alphanumeric())))
 }
 
 fn is_open_file_modifier_click(modifiers: KeyModifiers) -> bool {
     #[cfg(target_os = "macos")]
     {
-        modifiers.contains(KeyModifiers::SUPER) || modifiers.contains(KeyModifiers::META)
+        // Command key: crossterm reports as SUPER or META depending on terminal.
+        // Some terminals (e.g. iTerm2, Alacritty) also emit CONTROL for Cmd+Click
+        // mouse events, so accept CONTROL as fallback for mouse-only contexts.
+        modifiers.contains(KeyModifiers::SUPER)
+            || modifiers.contains(KeyModifiers::META)
+            || modifiers.contains(KeyModifiers::CONTROL)
     }
 
     #[cfg(not(target_os = "macos"))]
