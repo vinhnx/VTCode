@@ -1,5 +1,6 @@
 use anyhow::{Context, Result, anyhow};
-use vtcode_config::write_workspace_env_value;
+use std::path::Path;
+use vtcode_config::{read_workspace_env_value, write_workspace_env_value};
 
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::loader::VTCodeConfig;
@@ -29,35 +30,7 @@ pub(crate) async fn finalize_model_selection(
 ) -> Result<()> {
     let workspace = config.workspace.clone();
 
-    let api_key = if let Some(key) = selection.api_key.as_ref() {
-        write_workspace_env_value(&workspace, &selection.env_key, key)?;
-        unsafe {
-            // SAFETY: we only write ASCII-alphanumeric keys derived from known providers or
-            // sanitized user input, and values are supplied directly by the user.
-            std::env::set_var(&selection.env_key, key);
-        }
-        key.clone()
-    } else if selection.provider_enum.is_some() {
-        let key = get_api_key(&selection.provider, &ApiKeySources::default())
-            .with_context(|| format!("API key not found for provider '{}'", selection.provider))?;
-        unsafe {
-            // SAFETY: see above. Keys are sanitized and values come from configuration sources.
-            std::env::set_var(&selection.env_key, &key);
-        }
-        key
-    } else {
-        match std::env::var(&selection.env_key) {
-            Ok(value) if !value.trim().is_empty() => value,
-            _ if selection.requires_api_key => {
-                return Err(anyhow!(
-                    "API key not found for provider '{}'. Set {} or enter a key to continue.",
-                    selection.provider,
-                    selection.env_key
-                ));
-            }
-            _ => String::new(),
-        }
-    };
+    let api_key = resolve_runtime_api_key(&workspace, &selection)?;
 
     if let Some(provider_enum) = selection.provider_enum
         && let Err(err) = verify_model_with_rig(provider_enum, &selection.model, &api_key)
@@ -176,7 +149,7 @@ pub(crate) async fn finalize_model_selection(
         renderer.line(
             MessageStyle::Info,
             &format!(
-                "API key saved to secure storage (keyring) and environment variable {}. The key will NOT appear in vtcode.toml.",
+                "API key saved to secure storage (keyring) and workspace .env as {}. The key will NOT appear in vtcode.toml.",
                 selection.env_key
             ),
         )?;
@@ -193,6 +166,37 @@ pub(crate) async fn finalize_model_selection(
     Ok(())
 }
 
+fn resolve_runtime_api_key(workspace: &Path, selection: &ModelSelectionResult) -> Result<String> {
+    if let Some(key) = selection.api_key.as_ref() {
+        write_workspace_env_value(workspace, &selection.env_key, key)?;
+        return Ok(key.clone());
+    }
+
+    if let Some(key) = read_workspace_api_key(workspace, &selection.env_key)? {
+        return Ok(key);
+    }
+
+    if selection.provider_enum.is_some() {
+        return get_api_key(&selection.provider, &ApiKeySources::default())
+            .with_context(|| format!("API key not found for provider '{}'", selection.provider));
+    }
+
+    match std::env::var(&selection.env_key) {
+        Ok(value) if !value.trim().is_empty() => Ok(value),
+        _ if selection.requires_api_key => Err(anyhow!(
+            "API key not found for provider '{}'. Set {} or enter a key to continue.",
+            selection.provider,
+            selection.env_key
+        )),
+        _ => Ok(String::new()),
+    }
+}
+
+fn read_workspace_api_key(workspace: &Path, env_key: &str) -> Result<Option<String>> {
+    read_workspace_env_value(workspace, env_key)
+        .with_context(|| format!("Failed to read workspace .env value for {}", env_key))
+}
+
 fn sync_runtime_custom_api_key(config: &mut CoreAgentConfig, selection: &ModelSelectionResult) {
     if selection.api_key.is_some() {
         config
@@ -202,4 +206,89 @@ fn sync_runtime_custom_api_key(config: &mut CoreAgentConfig, selection: &ModelSe
     }
 
     config.custom_api_keys.remove(&selection.provider);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{read_workspace_api_key, resolve_runtime_api_key};
+    use crate::agent::runloop::model_picker::ModelSelectionResult;
+    use tempfile::tempdir;
+    use vtcode_core::config::models::Provider;
+    use vtcode_core::config::types::ReasoningEffortLevel;
+
+    fn selection(
+        provider: &str,
+        provider_enum: Option<Provider>,
+        env_key: &str,
+        api_key: Option<&str>,
+        requires_api_key: bool,
+    ) -> ModelSelectionResult {
+        ModelSelectionResult {
+            provider: provider.to_string(),
+            provider_label: provider.to_string(),
+            provider_enum,
+            model: "test-model".to_string(),
+            model_display: "test-model".to_string(),
+            known_model: false,
+            reasoning_supported: false,
+            reasoning: ReasoningEffortLevel::Medium,
+            reasoning_changed: false,
+            service_tier_supported: false,
+            service_tier: None,
+            service_tier_changed: false,
+            api_key: api_key.map(ToString::to_string),
+            env_key: env_key.to_string(),
+            requires_api_key,
+        }
+    }
+
+    #[test]
+    fn resolve_runtime_api_key_prefers_workspace_env_file() {
+        let dir = tempdir().expect("temp dir");
+        std::fs::write(dir.path().join(".env"), "OPENAI_API_KEY=workspace-key\n")
+            .expect("workspace env");
+        let selection = selection(
+            "openai",
+            Some(Provider::OpenAI),
+            "OPENAI_API_KEY",
+            None,
+            true,
+        );
+
+        let resolved =
+            resolve_runtime_api_key(dir.path(), &selection).expect("workspace env should resolve");
+
+        assert_eq!(resolved, "workspace-key");
+    }
+
+    #[test]
+    fn resolve_runtime_api_key_writes_user_supplied_key_to_workspace_env() {
+        let dir = tempdir().expect("temp dir");
+        let selection = selection(
+            "openai",
+            Some(Provider::OpenAI),
+            "OPENAI_API_KEY",
+            Some("user-key"),
+            true,
+        );
+
+        let resolved =
+            resolve_runtime_api_key(dir.path(), &selection).expect("user key should resolve");
+        let written =
+            read_workspace_api_key(dir.path(), "OPENAI_API_KEY").expect("workspace env read");
+
+        assert_eq!(resolved, "user-key");
+        assert_eq!(written.as_deref(), Some("user-key"));
+    }
+
+    #[test]
+    fn resolve_runtime_api_key_errors_for_missing_custom_provider_key() {
+        let dir = tempdir().expect("temp dir");
+        let selection = selection("custom", None, "CUSTOM_API_KEY", None, true);
+
+        let err = resolve_runtime_api_key(dir.path(), &selection)
+            .expect_err("missing custom provider key should fail");
+
+        assert!(err.to_string().contains("CUSTOM_API_KEY"));
+    }
 }

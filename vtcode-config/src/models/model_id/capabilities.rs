@@ -152,6 +152,9 @@ impl ModelId {
     /// Determine whether the model is a reasoning-capable variant
     pub fn is_reasoning_variant(&self) -> bool {
         if let Some(meta) = self.openrouter_metadata() {
+            if matches!(self, ModelId::OpenRouterNvidiaNemotron3Super120bA12bFree) {
+                return true;
+            }
             return meta.reasoning;
         }
         self.provider().supports_reasoning_effort(self.as_str())

@@ -169,7 +169,10 @@ pub fn is_minimax_m2_model(model: &str) -> bool {
 #[inline]
 fn is_glm_interleaved_thinking_model(model: &str) -> bool {
     let lower = model.to_ascii_lowercase();
-    lower.contains("glm-5") || lower.contains("glm45") || lower.contains("glm-4.5")
+    lower.contains("glm-5")
+        || lower.contains("glm45")
+        || lower.contains("glm-4.5")
+        || lower.contains("nemotron")
 }
 
 /// Returns true when the model family relies on interleaved `<think>...</think>`
