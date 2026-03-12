@@ -604,6 +604,9 @@ If VT Code is not behaving as expected with your configuration:
 For complete field coverage generated from the live `vtcode-config` schema, use
 [`docs/config/CONFIG_FIELD_REFERENCE.md`](./config/CONFIG_FIELD_REFERENCE.md).
 
+For harness behavior, read `agent.harness`, `automation.full_auto`, and `context.dynamic` together: they jointly define continuation,
+turn limits, and context reuse for long-running exec sessions.
+
 | Key                                     | Type / Values                                     | Notes                                                                   |
 | --------------------------------------- | ------------------------------------------------- | ----------------------------------------------------------------------- |
 | `agent.provider`                        | string                                            | Provider to use (e.g., `openai`, `anthropic`, `google`, `ollama`).      |
@@ -629,6 +632,9 @@ For complete field coverage generated from the live `vtcode-config` schema, use
 | `participants.timeout`                  | number                                            | Timeout for participant context (seconds).                              |
 | `automation.full_auto.enabled`          | boolean                                           | Enable full automation mode.                                            |
 | `automation.full_auto.allowed_tools`    | array                                             | Tools allowed in automation mode.                                       |
+| `automation.full_auto.max_turns`        | integer                                           | Upper bound for autonomous turns before exec pauses.                    |
+| `agent.harness.continuation_policy`     | `off` \| `exec_only` \| `all`                     | Controls when the harness may auto-continue after a completion attempt. |
+| `agent.harness.event_log_path`          | string \| null                                    | Optional JSONL sink for harness events in interactive and exec flows.   |
 | `workspace.include_context`             | boolean                                           | Include workspace context.                                              |
 | `workspace.max_context_size`            | number                                            | Max size of workspace context (bytes).                                  |
 | `execution.tool_timeout`                | number                                            | Timeout for tool executions (seconds).                                  |

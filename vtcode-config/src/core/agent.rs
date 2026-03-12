@@ -225,6 +225,52 @@ pub struct AgentConfig {
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(rename_all = "snake_case"))]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ContinuationPolicy {
+    Off,
+    #[default]
+    ExecOnly,
+    All,
+}
+
+impl ContinuationPolicy {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::ExecOnly => "exec_only",
+            Self::All => "all",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        let normalized = value.trim();
+        if normalized.eq_ignore_ascii_case("off") {
+            Some(Self::Off)
+        } else if normalized.eq_ignore_ascii_case("exec_only")
+            || normalized.eq_ignore_ascii_case("exec-only")
+        {
+            Some(Self::ExecOnly)
+        } else if normalized.eq_ignore_ascii_case("all") {
+            Some(Self::All)
+        } else {
+            None
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for ContinuationPolicy {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = String::deserialize(deserializer)?;
+        Ok(Self::parse(&raw).unwrap_or_default())
+    }
+}
+
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AgentHarnessConfig {
     /// Maximum number of tool calls allowed per turn. Set to `0` to disable the cap.
@@ -246,6 +292,9 @@ pub struct AgentHarnessConfig {
     /// When unset, VT Code derives a threshold from the provider context window.
     #[serde(default)]
     pub auto_compaction_threshold_tokens: Option<u64>,
+    /// Controls whether harness-managed continuation loops are enabled.
+    #[serde(default)]
+    pub continuation_policy: ContinuationPolicy,
     /// Optional JSONL event log path for harness events
     #[serde(default)]
     pub event_log_path: Option<String>,
@@ -259,6 +308,7 @@ impl Default for AgentHarnessConfig {
             max_tool_retries: default_harness_max_tool_retries(),
             auto_compaction_enabled: default_harness_auto_compaction_enabled(),
             auto_compaction_threshold_tokens: None,
+            continuation_policy: ContinuationPolicy::default(),
             event_log_path: None,
         }
     }
@@ -1043,6 +1093,35 @@ const fn default_vibe_value_inference() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_continuation_policy_defaults_and_parses() {
+        assert_eq!(ContinuationPolicy::default(), ContinuationPolicy::ExecOnly);
+        assert_eq!(
+            ContinuationPolicy::parse("off"),
+            Some(ContinuationPolicy::Off)
+        );
+        assert_eq!(
+            ContinuationPolicy::parse("exec-only"),
+            Some(ContinuationPolicy::ExecOnly)
+        );
+        assert_eq!(
+            ContinuationPolicy::parse("all"),
+            Some(ContinuationPolicy::All)
+        );
+        assert_eq!(ContinuationPolicy::parse("invalid"), None);
+    }
+
+    #[test]
+    fn test_harness_config_continuation_policy_deserializes_with_fallback() {
+        let parsed: AgentHarnessConfig =
+            toml::from_str("continuation_policy = \"all\"").expect("valid harness config");
+        assert_eq!(parsed.continuation_policy, ContinuationPolicy::All);
+
+        let fallback: AgentHarnessConfig =
+            toml::from_str("continuation_policy = \"unexpected\"").expect("fallback config");
+        assert_eq!(fallback.continuation_policy, ContinuationPolicy::ExecOnly);
+    }
 
     #[test]
     fn test_editing_mode_config_default() {

@@ -379,6 +379,8 @@ pub enum ThreadItemDetails {
     McpToolCall(McpToolCallItem),
     /// Web search event emitted by a registered search provider.
     WebSearch(WebSearchItem),
+    /// Harness-managed continuation or verification lifecycle event.
+    Harness(HarnessEventItem),
     /// General error captured for auditing.
     Error(ErrorItem),
 }
@@ -561,6 +563,33 @@ pub struct WebSearchItem {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum HarnessEventKind {
+    ContinuationStarted,
+    ContinuationSkipped,
+    VerificationStarted,
+    VerificationPassed,
+    VerificationFailed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
+pub struct HarnessEventItem {
+    /// Specific harness event emitted by the runtime.
+    pub event: HarnessEventKind,
+    /// Optional human-readable message associated with the event.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    /// Optional verification command associated with the event.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+    /// Optional exit code associated with verification results.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exit_code: Option<i32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct ErrorItem {
     /// Error message displayed to the user or logs.
     pub message: String,
@@ -630,6 +659,27 @@ mod tests {
                     tool_name: "read_file".to_string(),
                     arguments: Some(serde_json::json!({ "path": "README.md" })),
                     status: ToolCallStatus::Completed,
+                }),
+            },
+        });
+
+        let json = serde_json::to_string(&event)?;
+        let restored: ThreadEvent = serde_json::from_str(&json)?;
+
+        assert_eq!(restored, event);
+        Ok(())
+    }
+
+    #[test]
+    fn harness_item_round_trip() -> Result<(), Box<dyn Error>> {
+        let event = ThreadEvent::ItemCompleted(ItemCompletedEvent {
+            item: ThreadItem {
+                id: "harness_1".to_string(),
+                details: ThreadItemDetails::Harness(HarnessEventItem {
+                    event: HarnessEventKind::VerificationFailed,
+                    message: Some("cargo check failed".to_string()),
+                    command: Some("cargo check".to_string()),
+                    exit_code: Some(101),
                 }),
             },
         });

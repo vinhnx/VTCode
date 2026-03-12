@@ -1,5 +1,8 @@
 use super::AgentRunner;
 use super::constants::IDLE_TURN_LIMIT;
+use super::continuation::{
+    CompletionAssessment, ContinuationController, VerificationResult, is_review_like_task,
+};
 use super::helpers::detect_textual_exec_tool_call;
 use crate::config::constants::tools;
 use crate::config::models::{ModelId, Provider as ModelProvider};
@@ -14,12 +17,14 @@ use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::session::controller::AgentSessionController;
 use crate::core::agent::steering::SteeringMessage;
 use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
+use crate::exec::events::HarnessEventKind;
 use crate::llm::provider::{LLMRequest, Message, ToolCall};
 use crate::llm::providers::gemini::wire::Part;
 use crate::prompts::PromptContext;
 use crate::prompts::system::compose_system_instruction_text;
 use crate::utils::colors::style;
 use anyhow::Result;
+use serde_json::json;
 use std::sync::Arc;
 use tracing::warn;
 
@@ -35,7 +40,79 @@ fn tool_loop_limit_reached(loop_count: usize, max_tool_loops: usize) -> bool {
     max_tool_loops > 0 && loop_count >= max_tool_loops
 }
 
+fn summarize_verification_output(result: &serde_json::Value) -> String {
+    result
+        .get("output")
+        .and_then(serde_json::Value::as_str)
+        .or_else(|| result.get("stderr").and_then(serde_json::Value::as_str))
+        .or_else(|| result.get("stdout").and_then(serde_json::Value::as_str))
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+        .map(|text| {
+            let truncated = text
+                .lines()
+                .take(20)
+                .collect::<Vec<_>>()
+                .join("\n")
+                .trim()
+                .to_string();
+            if truncated.len() < text.len() {
+                format!("{truncated}\n...")
+            } else {
+                truncated
+            }
+        })
+        .unwrap_or_default()
+}
+
 impl AgentRunner {
+    async fn run_verification_commands(
+        &self,
+        commands: &[String],
+        event_recorder: &mut ExecEventRecorder,
+    ) -> Result<Vec<VerificationResult>> {
+        let mut results = Vec::with_capacity(commands.len());
+        for command in commands {
+            let command_event = event_recorder.command_started(command);
+            let payload = json!({
+                "action": "run",
+                "command": command,
+                "workdir": self._workspace.display().to_string(),
+                "yield_time_ms": 1000,
+            });
+            let result = self
+                .tool_registry
+                .execute_harness_unified_exec(payload)
+                .await?;
+            let exit_code = result
+                .get("exit_code")
+                .and_then(serde_json::Value::as_i64)
+                .map(|value| value as i32);
+            let success = exit_code.unwrap_or(0) == 0;
+            let output = summarize_verification_output(&result);
+            event_recorder.command_finished(
+                &command_event,
+                if success {
+                    crate::exec::events::CommandExecutionStatus::Completed
+                } else {
+                    crate::exec::events::CommandExecutionStatus::Failed
+                },
+                exit_code,
+                &output,
+            );
+            results.push(VerificationResult {
+                command: command.clone(),
+                success,
+                exit_code,
+                output,
+            });
+            if !success {
+                break;
+            }
+        }
+        Ok(results)
+    }
+
     /// Execute a task with this agent
     pub async fn execute_task(
         &mut self,
@@ -143,6 +220,19 @@ impl AgentRunner {
                     .warnings
                     .push(format!("Tool registry init failed: {err}"));
             }
+
+            let mut continuation_controller = ContinuationController::new(
+                self._workspace.clone(),
+                self.tool_registry.plan_mode_state(),
+                self.config().agent.harness.continuation_policy.clone(),
+                self.tool_registry
+                    .current_full_auto_allowlist()
+                    .await
+                    .is_some(),
+                self.tool_registry.is_plan_mode(),
+                is_review_like_task(task),
+            );
+            continuation_controller.prepare(task).await?;
 
             // Agent execution loop uses max_turns for conversation flow
             for turn in 0..self.max_turns {
@@ -374,6 +464,7 @@ impl AgentRunner {
                 }
 
                 let mut effective_tool_calls = response.tool_calls.clone();
+                let mut forced_continuation = false;
 
                 // HP-4: Detect textual commands in empty/near-empty responses if no structured tool calls
                 if effective_tool_calls.is_none()
@@ -390,7 +481,12 @@ impl AgentRunner {
 
                 let is_gemini = matches!(provider_kind, ModelProvider::Gemini);
 
-                if !controller.state.is_completed && !response.content_text().is_empty() {
+                if !controller.state.is_completed
+                    && effective_tool_calls
+                        .as_ref()
+                        .is_none_or(|tool_calls| tool_calls.is_empty())
+                    && !response.content_text().is_empty()
+                {
                     if check_for_response_loop(response.content_text(), &mut controller.state) {
                         self.runner_println(format_args!(
                             "[{}] {}",
@@ -414,9 +510,108 @@ impl AgentRunner {
                             self.agent_type,
                             style("Completion indicator detected.").green().bold()
                         ));
-                        controller.state.is_completed = true;
-                        controller.state.outcome = TaskOutcome::Success;
-                        break;
+                        match continuation_controller
+                            .assess_completion(task, &controller.state)
+                            .await?
+                        {
+                            CompletionAssessment::Accept => {
+                                controller.state.is_completed = true;
+                                controller.state.outcome = TaskOutcome::Success;
+                                break;
+                            }
+                            CompletionAssessment::SkipAccept { reason } => {
+                                event_recorder.harness_event(
+                                    HarnessEventKind::ContinuationSkipped,
+                                    Some(reason),
+                                    None,
+                                    None,
+                                );
+                                controller.state.is_completed = true;
+                                controller.state.outcome = TaskOutcome::Success;
+                                break;
+                            }
+                            CompletionAssessment::Continue { reason, prompt } => {
+                                event_recorder.harness_event(
+                                    HarnessEventKind::ContinuationStarted,
+                                    Some(reason),
+                                    None,
+                                    None,
+                                );
+                                controller.state.add_user_message(prompt);
+                                forced_continuation = true;
+                            }
+                            CompletionAssessment::Verify { commands } => {
+                                event_recorder.harness_event(
+                                    HarnessEventKind::VerificationStarted,
+                                    Some(format!("Running verification: {}", commands.join(", "))),
+                                    commands.first().cloned(),
+                                    None,
+                                );
+                                let verification_results = self
+                                    .run_verification_commands(&commands, &mut event_recorder)
+                                    .await?;
+                                if let Some(failure) =
+                                    verification_results.iter().find(|result| !result.success)
+                                {
+                                    event_recorder.harness_event(
+                                        HarnessEventKind::VerificationFailed,
+                                        Some(format!(
+                                            "{}{}",
+                                            match failure.exit_code {
+                                                Some(code) => format!(
+                                                    "Verification failed: {} (exit code {}).",
+                                                    failure.command, code
+                                                ),
+                                                None => format!(
+                                                    "Verification failed: {}.",
+                                                    failure.command
+                                                ),
+                                            },
+                                            if failure.output.trim().is_empty() {
+                                                String::new()
+                                            } else {
+                                                format!("\n{}", failure.output.trim())
+                                            }
+                                        )),
+                                        Some(failure.command.clone()),
+                                        failure.exit_code,
+                                    );
+                                } else {
+                                    event_recorder.harness_event(
+                                        HarnessEventKind::VerificationPassed,
+                                        Some(format!(
+                                            "Verification passed: {}",
+                                            commands.join(", ")
+                                        )),
+                                        commands.last().cloned(),
+                                        Some(0),
+                                    );
+                                }
+
+                                match continuation_controller
+                                    .after_verification(&verification_results)
+                                    .await?
+                                {
+                                    CompletionAssessment::Accept
+                                    | CompletionAssessment::SkipAccept { .. } => {
+                                        controller.state.is_completed = true;
+                                        controller.state.outcome = TaskOutcome::Success;
+                                        break;
+                                    }
+                                    CompletionAssessment::Continue { reason, prompt } => {
+                                        event_recorder.harness_event(
+                                            HarnessEventKind::ContinuationStarted,
+                                            Some(reason),
+                                            None,
+                                            None,
+                                        );
+                                        controller.state.add_user_message(prompt);
+                                        forced_continuation = true;
+                                    }
+                                    CompletionAssessment::Verify { .. } => {}
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -469,7 +664,9 @@ impl AgentRunner {
                     controller.state.consecutive_idle_turns = 0;
                 } else {
                     controller.state.reset_tool_loop_guard();
-                    if !controller.state.is_completed {
+                    if forced_continuation {
+                        controller.state.consecutive_idle_turns = 0;
+                    } else if !controller.state.is_completed {
                         controller.state.consecutive_idle_turns =
                             controller.state.consecutive_idle_turns.saturating_add(1);
                         if controller.state.consecutive_idle_turns >= IDLE_TURN_LIMIT {
@@ -492,7 +689,8 @@ impl AgentRunner {
                     }
                 }
 
-                let should_continue = had_tool_call
+                let should_continue = forced_continuation
+                    || had_tool_call
                     || (!controller.state.is_completed && (turn + 1) < self.max_turns);
 
                 // Record turn duration for the successfully completed turn

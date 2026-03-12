@@ -307,8 +307,11 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             .map(|cfg| cfg.agent.harness.clone())
             .unwrap_or_default();
         let turn_run_id = TurnRunId(thread_handle.thread_id().to_string());
-        let harness_emitter: Option<HarnessEventEmitter> =
-            harness_config.event_log_path.as_ref().and_then(|path| {
+        let harness_emitter: Option<HarnessEventEmitter> = harness_config
+            .event_log_path
+            .as_ref()
+            .filter(|path| !path.trim().is_empty())
+            .and_then(|path| {
                 let resolved = resolve_event_log_path(path, &turn_run_id);
                 HarnessEventEmitter::new(resolved).ok()
             });

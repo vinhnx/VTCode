@@ -28,6 +28,26 @@ vtcode exec --dry-run "identify required code changes for adding OAuth refresh t
 In dry-run mode, VT Code enables plan/read-only enforcement for tool calls. Mutating operations are blocked, and the run reports what
 would be changed rather than applying edits.
 
+## Continuation and verification
+
+Exec mode now uses a harness-managed continuation loop instead of accepting the first completion-sounding assistant message.
+
+- By default, `agent.harness.continuation_policy = "exec_only"` enables continuation only for exec/full-auto runs.
+- Review mode and `vtcode exec --dry-run` stay single-pass and read-only.
+- Interactive TUI sessions keep manual control unless you explicitly set `agent.harness.continuation_policy = "all"`.
+
+When a run starts, VT Code uses `task_tracker` state as the completion contract. If the model has not created a tracker yet, exec mode
+creates an internal three-step scaffold (`analyze`, `change`, `verify`) and persists it through the existing task-tracker files under
+`.vtcode/`.
+
+Completion is accepted only when:
+
+- all tracker steps are completed
+- every step-level `verify` command has passed
+
+Verification commands run sequentially from the workspace root through the existing exec/sandbox stack. The first non-zero exit stops
+verification, records a harness event, and forces a fresh continuation turn with the failure summary.
+
 ## Structured event stream
 
 Use `vtcode exec --json` to emit JSON Lines that match the non-interactive Codex schema:
@@ -45,9 +65,13 @@ Supported item payloads:
 - `file_change` – applied patches grouped by path and change type.
 - `mcp_tool_call` – Model Context Protocol tool runs with tool name, arguments, and status.
 - `web_search` – provider search calls including the query and optional summary.
+- `harness` – continuation and verification lifecycle items such as `continuation_started`, `verification_started`, and `verification_failed`.
 
 These events align with the published Codex non-interactive schema so downstream automation, dashboards, or log shippers can reuse
 existing parsers without modification.
+
+If `--events` is not provided, exec mode also respects `agent.harness.event_log_path`. Relative or absolute file paths write JSONL
+events directly; directory paths get a timestamped `harness-<session>-<timestamp>.jsonl` file.
 
 ## Resuming sessions
 

@@ -4,6 +4,32 @@
 
 VT Code follows a modular, trait-based architecture designed for maintainability, extensibility, and performance.
 
+## Model + Harness
+
+VT Code treats the model as the reasoning engine and the harness as the runtime that makes that reasoning useful. Phase 1 of the
+exec/full-auto runtime is built around that split rather than around a separate agent subsystem.
+
+Harness primitives in VT Code map to the runtime like this:
+
+- **Instruction memory**: AGENTS.md loading, project docs, prompt assembly, onboarding guidance, and session bootstrap live in `vtcode-core/src/prompts/`, `vtcode-core/src/core/agent/`, and the workspace instruction loaders.
+- **Tools**: `vtcode-tools/`, `vtcode-core/src/tools/`, MCP integration, slash commands, and the tool registry expose filesystem, search, edit, exec, and protocol-backed capabilities to the model.
+- **Sandbox / execution environment**: `vtcode-bash-runner/`, unified exec, workspace trust, command policies, and tool allow-lists define where generated code runs and what it can touch.
+- **Dynamic context**: context assembly, instruction merging, task tracker state, history, plan sidecars, and spooled tool outputs let VT Code rehydrate long-running work without keeping every token in the live window.
+- **Compaction / offloading**: split tool results, spool files, archive transcripts, and provider-aware auto-compaction reduce context rot while preserving recoverable state on disk.
+- **Hooks / middleware**: lifecycle hooks, tool middleware, guard rails, duplicate-call protection, and plan-mode enforcement add deterministic control around the model loop.
+- **Continuation**: exec/full-auto now uses a harness-managed continuation controller that accepts completion only when tracker state is complete and verification commands pass.
+- **Traces / archives**: thread events, session archives, checkpoints, Open Responses emission, and optional harness event logs capture what happened for resume, audit, and downstream tooling.
+
+The harness configuration is intentionally split across three existing surfaces instead of a new top-level subsystem:
+
+- `agent.harness` controls continuation, event logging, and per-turn safety limits.
+- `automation.full_auto` controls autonomous execution and turn limits.
+- `context.dynamic` controls how much state and history are reintroduced on each turn.
+
+That split keeps VT Code aligned with the current runtime while making the harness explicit enough to evolve. Multi-agent
+orchestration, dynamic tool assembly, and harness self-analysis remain follow-on work after single-agent long-horizon execution is
+stable.
+
 ### CLI Architecture
 
 The command-line interface is built on specific principles for robustness and interoperability:

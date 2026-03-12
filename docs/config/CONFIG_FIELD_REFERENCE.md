@@ -39,6 +39,7 @@ python3 scripts/generate_config_field_reference.py
 | `agent.enable_split_tool_results` | `boolean` | no | `true` | Enable split tool results for massive token savings (Phase 4) When enabled, tools return dual-channel output: - llm_content: Concise summary sent to LLM (token-optimized, 53-95% reduction) - ui_content: Rich output displayed to user (full details preserved) Applies to: unified_search, unified_file, unified_exec Default: true (opt-out for compatibility), recommended for production use |
 | `agent.harness.auto_compaction_enabled` | `boolean` | no | `false` | Enable automatic context compaction when token pressure crosses threshold. Disabled by default. When disabled, no automatic compaction is triggered. |
 | `agent.harness.auto_compaction_threshold_tokens` | `integer \| null` | no | `null` | Optional absolute compact threshold (tokens) for Responses server-side compaction. When unset, VT Code derives a threshold from the provider context window. |
+| `agent.harness.continuation_policy` | `string` | no | `"exec_only"` | Controls harness-managed continuation loops. Options: `"off"`, `"exec_only"` (default for exec/full-auto), or `"all"` (also allow interactive sessions). |
 | `agent.harness.event_log_path` | `null \| string` | no | `null` | Optional JSONL event log path for harness events |
 | `agent.harness.max_tool_calls_per_turn` | `integer` | no | `0` | Maximum number of tool calls allowed per turn. Set to `0` to disable the cap. |
 | `agent.harness.max_tool_retries` | `integer` | no | `2` | Maximum retries for retryable tool errors |

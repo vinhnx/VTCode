@@ -6,9 +6,10 @@ pub use unified::AgentEvent;
 use crate::core::threads::{SubmissionId, ThreadRuntimeHandle};
 use crate::exec::events::{
     AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, ErrorItem, FileChangeItem,
-    FileUpdateChange, ItemCompletedEvent, ItemStartedEvent, ItemUpdatedEvent, PatchApplyStatus,
-    PatchChangeKind, ReasoningItem, ThreadEvent, ThreadItem, ThreadItemDetails, ThreadStartedEvent,
-    TurnCompletedEvent, TurnFailedEvent, TurnStartedEvent, Usage,
+    FileUpdateChange, HarnessEventItem, HarnessEventKind, ItemCompletedEvent, ItemStartedEvent,
+    ItemUpdatedEvent, PatchApplyStatus, PatchChangeKind, ReasoningItem, ThreadEvent, ThreadItem,
+    ThreadItemDetails, ThreadStartedEvent, TurnCompletedEvent, TurnFailedEvent, TurnStartedEvent,
+    Usage,
 };
 use parking_lot::Mutex;
 use std::sync::Arc;
@@ -329,6 +330,25 @@ impl ExecEventRecorder {
             id: self.next_item_id(),
             details: ThreadItemDetails::Error(ErrorItem {
                 message: message.to_string(),
+            }),
+        };
+        self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
+    }
+
+    pub fn harness_event(
+        &mut self,
+        event: HarnessEventKind,
+        message: Option<String>,
+        command: Option<String>,
+        exit_code: Option<i32>,
+    ) {
+        let item = ThreadItem {
+            id: self.next_item_id(),
+            details: ThreadItemDetails::Harness(HarnessEventItem {
+                event,
+                message,
+                command,
+                exit_code,
             }),
         };
         self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));

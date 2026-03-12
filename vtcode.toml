@@ -295,6 +295,16 @@ recovery_cooldown = 60
 # Type: `boolean`
 auto_compaction_enabled = false
 
+# Controls whether harness-managed continuation loops are enabled.
+# Default: "exec_only"
+# Type: `string`
+continuation_policy = "exec_only"
+
+# Optional JSONL event log path for harness events (leave empty to disable)
+# Default: null
+# Type: `null | string`
+event_log_path = ""
+
 # Maximum number of tool calls allowed per turn. Set to `0` to disable the cap.
 # Default: 0
 # Type: `integer`
@@ -2992,4 +3002,3 @@ mode = "Auto"
 # Default: 1000
 # Type: `integer`
 refresh_interval_ms = 1000
-

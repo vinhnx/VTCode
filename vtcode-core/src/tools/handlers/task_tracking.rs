@@ -3,6 +3,36 @@ use std::str::FromStr;
 use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct TaskStepMetadata {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub files: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub verify: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum TaskItemInput {
+    Text(String),
+    Structured(TaskItemInputObject),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct TaskItemInputObject {
+    pub description: String,
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_string_list")]
+    pub files: Option<Vec<String>>,
+    #[serde(default)]
+    pub outcome: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_string_list")]
+    pub verify: Option<Vec<String>>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskTrackingStatus {
@@ -141,13 +171,94 @@ pub fn append_notes_section(markdown: &mut String, notes: Option<&str>) {
     }
 }
 
-pub fn is_bulk_sync_update(
-    items: Option<&[String]>,
+pub fn is_bulk_sync_update<T>(
+    items: Option<&[T]>,
     index: Option<usize>,
     index_path: Option<&str>,
     status: Option<&str>,
 ) -> bool {
     items.is_some() && ((index.is_none() && index_path.is_none()) || status.is_none())
+}
+
+pub fn deserialize_optional_string_list<'de, D>(
+    deserializer: D,
+) -> std::result::Result<Option<Vec<String>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum OneOrMany {
+        One(String),
+        Many(Vec<String>),
+    }
+
+    let parsed = Option::<OneOrMany>::deserialize(deserializer)?;
+    Ok(parsed.map(|value| match value {
+        OneOrMany::One(item) => vec![item],
+        OneOrMany::Many(items) => items,
+    }))
+}
+
+pub fn normalize_string_items(items: Option<&[String]>) -> Vec<String> {
+    items
+        .unwrap_or(&[])
+        .iter()
+        .map(|item| item.trim())
+        .filter(|item| !item.is_empty())
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
+pub fn normalize_optional_text(value: Option<&str>) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+pub fn append_task_step_metadata(markdown: &mut String, indent: &str, metadata: &TaskStepMetadata) {
+    if !metadata.files.is_empty() {
+        markdown.push_str(indent);
+        markdown.push_str("  files: ");
+        markdown.push_str(&metadata.files.join(", "));
+        markdown.push('\n');
+    }
+
+    if let Some(outcome) = metadata.outcome.as_deref() {
+        markdown.push_str(indent);
+        markdown.push_str("  outcome: ");
+        markdown.push_str(outcome);
+        markdown.push('\n');
+    }
+
+    if metadata.verify.len() == 1 {
+        markdown.push_str(indent);
+        markdown.push_str("  verify: ");
+        markdown.push_str(&metadata.verify[0]);
+        markdown.push('\n');
+    } else if !metadata.verify.is_empty() {
+        markdown.push_str(indent);
+        markdown.push_str("  verify:\n");
+        for command in &metadata.verify {
+            markdown.push_str(indent);
+            markdown.push_str("    - ");
+            markdown.push_str(command);
+            markdown.push('\n');
+        }
+    }
+}
+
+pub fn metadata_from_input(
+    files: Option<&[String]>,
+    outcome: Option<&str>,
+    verify: Option<&[String]>,
+) -> TaskStepMetadata {
+    TaskStepMetadata {
+        files: normalize_string_items(files),
+        outcome: normalize_optional_text(outcome),
+        verify: normalize_string_items(verify),
+    }
 }
 
 #[derive(Default)]

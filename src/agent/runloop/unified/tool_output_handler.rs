@@ -76,6 +76,14 @@ fn is_task_tracker_tool(name: &str) -> bool {
     matches!(name, tools::TASK_TRACKER | tools::PLAN_TASK_TRACKER)
 }
 
+fn task_tracker_item_preview(item: &serde_json::Value) -> Option<String> {
+    item.as_str().map(str::to_string).or_else(|| {
+        item.get("description")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string)
+    })
+}
+
 fn task_tracker_call_lines(args_val: &serde_json::Value) -> Vec<String> {
     let mut lines = vec!["• Task tracker".to_string()];
 
@@ -96,12 +104,37 @@ fn task_tracker_call_lines(args_val: &serde_json::Value) -> Vec<String> {
     if let Some(status) = args_val.get("status").and_then(serde_json::Value::as_str) {
         lines.push(format!("  └ Status: {status}"));
     }
+    if let Some(files) = args_val.get("files").and_then(serde_json::Value::as_array) {
+        let display = files
+            .iter()
+            .filter_map(serde_json::Value::as_str)
+            .collect::<Vec<_>>();
+        if !display.is_empty() {
+            lines.push(format!("  └ Files: {}", display.join(", ")));
+        }
+    }
+    if let Some(outcome) = args_val.get("outcome").and_then(serde_json::Value::as_str) {
+        lines.push(format!("  └ Outcome: {outcome}"));
+    }
+    if let Some(verify) = args_val.get("verify") {
+        let commands = match verify {
+            serde_json::Value::String(command) => vec![command.as_str()],
+            serde_json::Value::Array(values) => values
+                .iter()
+                .filter_map(serde_json::Value::as_str)
+                .collect::<Vec<_>>(),
+            _ => Vec::new(),
+        };
+        if !commands.is_empty() {
+            lines.push(format!("  └ Verify: {}", commands.join(" | ")));
+        }
+    }
     if let Some(items) = args_val.get("items").and_then(serde_json::Value::as_array)
         && !items.is_empty()
     {
         let preview = items
             .iter()
-            .filter_map(serde_json::Value::as_str)
+            .filter_map(task_tracker_item_preview)
             .take(2)
             .collect::<Vec<_>>();
         let suffix = match items.len().saturating_sub(preview.len()) {

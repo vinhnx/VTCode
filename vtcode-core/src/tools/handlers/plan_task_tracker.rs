@@ -6,8 +6,10 @@
 use super::plan_mode::PlanModeState;
 use crate::config::constants::tools;
 use crate::tools::handlers::task_tracking::{
-    TaskCounts, TaskTrackingStatus, append_notes, append_notes_section, is_bulk_sync_update,
-    parse_marked_status_prefix, parse_status_prefix,
+    TaskCounts, TaskItemInput, TaskStepMetadata, TaskTrackingStatus, append_notes,
+    append_notes_section, append_task_step_metadata, is_bulk_sync_update, metadata_from_input,
+    normalize_optional_text, normalize_string_items, parse_marked_status_prefix,
+    parse_status_prefix,
 };
 use crate::tools::traits::Tool;
 use crate::utils::file_utils::{
@@ -26,6 +28,8 @@ type PlanTaskStatus = TaskTrackingStatus;
 struct PlanTaskNode {
     description: String,
     status: PlanTaskStatus,
+    #[serde(default, flatten)]
+    metadata: TaskStepMetadata,
     children: Vec<PlanTaskNode>,
 }
 
@@ -48,7 +52,7 @@ pub struct PlanTaskTrackerArgs {
 
     /// Initial tasks for create
     #[serde(default)]
-    pub items: Option<Vec<String>>,
+    pub items: Option<Vec<TaskItemInput>>,
 
     /// Hierarchical index path (example: "2.1")
     #[serde(default)]
@@ -66,6 +70,21 @@ pub struct PlanTaskTrackerArgs {
     #[serde(default)]
     pub description: Option<String>,
 
+    /// Optional file paths associated with a single add/update step
+    #[serde(default)]
+    pub files: Option<Vec<String>>,
+
+    /// Optional expected outcome associated with a single add/update step
+    #[serde(default)]
+    pub outcome: Option<String>,
+
+    /// Optional verification command or commands associated with a single add/update step
+    #[serde(
+        default,
+        deserialize_with = "crate::tools::handlers::task_tracking::deserialize_optional_string_list"
+    )]
+    pub verify: Option<Vec<String>>,
+
     /// Parent path for add (example: "2")
     #[serde(default)]
     pub parent_index_path: Option<String>,
@@ -80,6 +99,7 @@ struct FlatTaskLine {
     level: usize,
     status: PlanTaskStatus,
     description: String,
+    metadata: TaskStepMetadata,
 }
 
 impl PlanTaskDocument {
@@ -103,6 +123,7 @@ impl PlanTaskDocument {
             "blocked": counts.blocked,
             "progress_percent": counts.progress_percent(),
             "items": flatten_items_json(&self.items),
+            "notes": self.notes.clone(),
         })
     }
 
@@ -133,6 +154,7 @@ fn write_markdown_nodes(nodes: &[PlanTaskNode], level: usize, out: &mut String) 
             node.status.plan_checkbox(),
             node.description
         ));
+        append_task_step_metadata(out, &indent, &node.metadata);
         write_markdown_nodes(&node.children, level + 1, out);
     }
 }
@@ -146,12 +168,13 @@ fn flatten_items_json(nodes: &[PlanTaskNode]) -> Vec<Value> {
 fn flatten_for_global_items(
     nodes: &[PlanTaskNode],
     level: usize,
-    out: &mut Vec<(PlanTaskStatus, String)>,
+    out: &mut Vec<(PlanTaskStatus, String, TaskStepMetadata)>,
 ) {
     for node in nodes {
         out.push((
             node.status.clone(),
             format!("{}{}", "  ".repeat(level), node.description),
+            node.metadata.clone(),
         ));
         flatten_for_global_items(&node.children, level + 1, out);
     }
@@ -174,6 +197,9 @@ fn flatten_items_json_inner(
             "description": node.description,
             "status": node.status.as_str(),
             "level": level,
+            "files": node.metadata.files.clone(),
+            "outcome": node.metadata.outcome.clone(),
+            "verify": node.metadata.verify.clone(),
         }));
         flatten_items_json_inner(&node.children, &index_path, level + 1, out);
     }
@@ -209,7 +235,31 @@ fn build_view_lines(
             "index_path": index_path,
             "status": node.status.as_str(),
             "text": node.description,
+            "files": node.metadata.files.clone(),
+            "outcome": node.metadata.outcome.clone(),
+            "verify": node.metadata.verify.clone(),
         }));
+        if !node.metadata.files.is_empty() {
+            out.push(json!({
+                "display": format!("{next_prefix}files: {}", node.metadata.files.join(", ")),
+                "status": node.status.as_str(),
+                "text": format!("files: {}", node.metadata.files.join(", ")),
+            }));
+        }
+        if let Some(outcome) = node.metadata.outcome.as_deref() {
+            out.push(json!({
+                "display": format!("{next_prefix}outcome: {}", outcome),
+                "status": node.status.as_str(),
+                "text": format!("outcome: {}", outcome),
+            }));
+        }
+        for command in &node.metadata.verify {
+            out.push(json!({
+                "display": format!("{next_prefix}verify: {}", command),
+                "status": node.status.as_str(),
+                "text": format!("verify: {}", command),
+            }));
+        }
         build_view_lines(&node.children, &next_prefix, &index_path, out);
     }
 }
@@ -231,7 +281,59 @@ fn parse_task_line(line: &str) -> Option<FlatTaskLine> {
         level,
         status,
         description: description.trim().to_string(),
+        metadata: TaskStepMetadata::default(),
     })
+}
+
+fn parse_files_metadata(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
+fn apply_flat_line_metadata(
+    line: &mut FlatTaskLine,
+    raw: &str,
+    in_verify_block: &mut bool,
+) -> bool {
+    let trimmed = raw.trim_start();
+
+    if *in_verify_block {
+        if let Some(command) = trimmed
+            .strip_prefix("- ")
+            .or_else(|| trimmed.strip_prefix("* "))
+            .or_else(|| trimmed.strip_prefix("+ "))
+        {
+            if let Some(command) = normalize_optional_text(Some(command)) {
+                line.metadata.verify.push(command);
+            }
+            return true;
+        }
+        *in_verify_block = false;
+    }
+
+    if let Some(rest) = trimmed.strip_prefix("files:") {
+        line.metadata.files = parse_files_metadata(rest);
+        return true;
+    }
+    if let Some(rest) = trimmed.strip_prefix("outcome:") {
+        line.metadata.outcome = normalize_optional_text(Some(rest));
+        return true;
+    }
+    if trimmed == "verify:" {
+        line.metadata.verify.clear();
+        *in_verify_block = true;
+        return true;
+    }
+    if let Some(rest) = trimmed.strip_prefix("verify:") {
+        line.metadata.verify = normalize_string_items(Some(&[rest.to_string()]));
+        return true;
+    }
+
+    false
 }
 
 fn build_tree_from_flat(lines: &[FlatTaskLine]) -> Vec<PlanTaskNode> {
@@ -254,6 +356,7 @@ fn build_tree_from_flat(lines: &[FlatTaskLine]) -> Vec<PlanTaskNode> {
         let node = PlanTaskNode {
             description: line.description.clone(),
             status: line.status.clone(),
+            metadata: line.metadata.clone(),
             children: Vec::new(),
         };
 
@@ -333,6 +436,7 @@ fn parse_document_from_markdown(content: &str) -> Option<PlanTaskDocument> {
     let mut in_notes = false;
     let mut notes_lines = Vec::new();
     let mut task_lines = Vec::<FlatTaskLine>::new();
+    let mut in_verify_block = false;
 
     for raw in content.lines() {
         let trimmed = raw.trim();
@@ -359,8 +463,23 @@ fn parse_document_from_markdown(content: &str) -> Option<PlanTaskDocument> {
             continue;
         }
 
-        if in_plan_section && let Some(line) = parse_task_line(raw) {
-            task_lines.push(line);
+        if in_plan_section {
+            if let Some(line) = parse_task_line(raw) {
+                task_lines.push(line);
+                in_verify_block = false;
+                continue;
+            }
+
+            if let Some(last) = task_lines.last_mut() {
+                let leading_spaces = raw.chars().take_while(|c| *c == ' ').count();
+                let min_indent = (last.level + 1) * 2;
+                if leading_spaces >= min_indent
+                    && apply_flat_line_metadata(last, raw, &mut in_verify_block)
+                {
+                    continue;
+                }
+            }
+            in_verify_block = false;
         }
     }
 
@@ -382,24 +501,57 @@ fn parse_document_from_markdown(content: &str) -> Option<PlanTaskDocument> {
     })
 }
 
-fn build_flat_create_lines(items: &[String]) -> Vec<FlatTaskLine> {
+fn build_flat_create_lines(items: &[TaskItemInput]) -> Result<Vec<FlatTaskLine>> {
     items
         .iter()
-        .filter_map(|raw| {
-            let level = raw.chars().take_while(|c| *c == ' ').count() / 2;
-            let trimmed = raw.trim();
-            if trimmed.is_empty() {
-                return None;
+        .filter_map(|raw| match raw {
+            TaskItemInput::Text(raw) => {
+                let level = raw.chars().take_while(|c| *c == ' ').count() / 2;
+                let trimmed = raw.trim();
+                if trimmed.is_empty() {
+                    return None;
+                }
+                let (status, description) = parse_status_prefix(trimmed);
+                if description.trim().is_empty() {
+                    return None;
+                }
+                Some(Ok(FlatTaskLine {
+                    level,
+                    status,
+                    description: description.trim().to_string(),
+                    metadata: TaskStepMetadata::default(),
+                }))
             }
-            let (status, description) = parse_status_prefix(trimmed);
-            if description.trim().is_empty() {
-                return None;
+            TaskItemInput::Structured(payload) => {
+                let level = payload
+                    .description
+                    .chars()
+                    .take_while(|c| *c == ' ')
+                    .count()
+                    / 2;
+                let (parsed_status, description) = parse_status_prefix(payload.description.trim());
+                let description = description.trim().to_string();
+                if description.is_empty() {
+                    return None;
+                }
+                let status = match payload.status.as_deref() {
+                    Some(value) => match PlanTaskStatus::from_str(value) {
+                        Ok(status) => status,
+                        Err(err) => return Some(Err(err)),
+                    },
+                    None => parsed_status,
+                };
+                Some(Ok(FlatTaskLine {
+                    level,
+                    status,
+                    description,
+                    metadata: metadata_from_input(
+                        payload.files.as_deref(),
+                        payload.outcome.as_deref(),
+                        payload.verify.as_deref(),
+                    ),
+                }))
             }
-            Some(FlatTaskLine {
-                level,
-                status,
-                description: description.trim().to_string(),
-            })
         })
         .collect()
 }
@@ -491,8 +643,9 @@ impl PlanTaskTrackerTool {
         flatten_for_global_items(&document.items, 0, &mut lines);
 
         let mut markdown = format!("# {}\n\n", document.title);
-        for (status, description) in lines {
+        for (status, description, metadata) in lines {
             markdown.push_str(&format!("- {} {}\n", status.flat_checkbox(), description));
+            append_task_step_metadata(&mut markdown, "", &metadata);
         }
         append_notes_section(&mut markdown, document.notes.as_deref());
 
@@ -546,7 +699,7 @@ impl PlanTaskTrackerTool {
             );
         }
 
-        let flat_lines = build_flat_create_lines(items);
+        let flat_lines = build_flat_create_lines(items)?;
         if flat_lines.is_empty() {
             bail!("No valid task items were provided for create");
         }
@@ -582,7 +735,7 @@ impl PlanTaskTrackerTool {
             args.status.as_deref(),
         ) {
             let input_items = args.items.as_deref().unwrap_or(&[]);
-            let flat_lines = build_flat_create_lines(input_items);
+            let flat_lines = build_flat_create_lines(input_items)?;
             if flat_lines.is_empty() {
                 bail!("No valid items provided for checklist sync");
             }
@@ -620,6 +773,15 @@ impl PlanTaskTrackerTool {
                 .with_context(|| format!("No item at index_path '{}'", index_path))?;
             let old_status = node.status.as_str().to_string();
             node.status = new_status;
+            if let Some(files) = args.files.as_deref() {
+                node.metadata.files = normalize_string_items(Some(files));
+            }
+            if args.outcome.is_some() {
+                node.metadata.outcome = normalize_optional_text(args.outcome.as_deref());
+            }
+            if let Some(verify) = args.verify.as_deref() {
+                node.metadata.verify = normalize_string_items(Some(verify));
+            }
             (old_status, node.status.as_str().to_string())
         };
 
@@ -667,6 +829,11 @@ impl PlanTaskTrackerTool {
         let node = PlanTaskNode {
             description: parsed_description.trim().to_string(),
             status,
+            metadata: metadata_from_input(
+                args.files.as_deref(),
+                args.outcome.as_deref(),
+                args.verify.as_deref(),
+            ),
             children: Vec::new(),
         };
         if node.description.is_empty() {
@@ -737,8 +904,37 @@ impl Tool for PlanTaskTrackerTool {
                 },
                 "items": {
                     "type": "array",
-                    "items": { "type": "string" },
-                    "description": "Initial task items (used with create). Leading 2-space indentation indicates nesting."
+                    "items": {
+                        "anyOf": [
+                            { "type": "string" },
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "description": { "type": "string" },
+                                    "status": {
+                                        "type": "string",
+                                        "enum": ["pending", "in_progress", "completed", "blocked"]
+                                    },
+                                    "files": {
+                                        "type": "array",
+                                        "items": { "type": "string" }
+                                    },
+                                    "outcome": { "type": "string" },
+                                    "verify": {
+                                        "anyOf": [
+                                            { "type": "string" },
+                                            {
+                                                "type": "array",
+                                                "items": { "type": "string" }
+                                            }
+                                        ]
+                                    }
+                                },
+                                "required": ["description"]
+                            }
+                        ]
+                    },
+                    "description": "Initial task items (used with create). Leading 2-space indentation in description indicates nesting."
                 },
                 "index_path": {
                     "type": "string",
@@ -756,6 +952,25 @@ impl Tool for PlanTaskTrackerTool {
                 "description": {
                     "type": "string",
                     "description": "Task description for add. Optional prefix like '[x] ' or '[~] ' is supported."
+                },
+                "files": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "Optional file paths associated with a single add/update item."
+                },
+                "outcome": {
+                    "type": "string",
+                    "description": "Optional expected outcome associated with a single add/update item."
+                },
+                "verify": {
+                    "anyOf": [
+                        { "type": "string" },
+                        {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        }
+                    ],
+                    "description": "Optional verification command or commands associated with a single add/update item."
                 },
                 "parent_index_path": {
                     "type": "string",
@@ -859,6 +1074,51 @@ mod tests {
         assert!(!lines.is_empty());
         let first = lines[0]["display"].as_str().unwrap_or_default();
         assert!(first.contains('└') || first.contains('├'));
+    }
+
+    #[tokio::test]
+    async fn create_accepts_metadata_and_verify_string_forms() {
+        let (_temp_dir, _state, tool) = setup_plan_mode().await;
+
+        let created = tool
+            .execute(json!({
+                "action": "create",
+                "title": "Harness plan",
+                "items": [
+                    {
+                        "description": "Analyze",
+                        "files": ["docs/ARCHITECTURE.md"],
+                        "outcome": "Map the harness",
+                        "verify": "cargo check"
+                    },
+                    {
+                        "description": "Implement",
+                        "verify": ["cargo test -p vtcode-core task_tracker", "cargo check -p vtcode"]
+                    }
+                ]
+            }))
+            .await
+            .expect("create tracker");
+
+        assert_eq!(
+            created["checklist"]["items"][0]["files"],
+            json!(["docs/ARCHITECTURE.md"])
+        );
+        assert_eq!(
+            created["checklist"]["items"][0]["outcome"],
+            "Map the harness"
+        );
+        assert_eq!(
+            created["checklist"]["items"][0]["verify"],
+            json!(["cargo check"])
+        );
+        assert_eq!(
+            created["checklist"]["items"][1]["verify"],
+            json!([
+                "cargo test -p vtcode-core task_tracker",
+                "cargo check -p vtcode"
+            ])
+        );
     }
 
     #[tokio::test]

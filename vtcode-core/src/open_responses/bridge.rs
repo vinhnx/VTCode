@@ -507,6 +507,18 @@ impl ResponseBuilder {
                 }),
             }),
 
+            ThreadItemDetails::Harness(event) => OutputItem::Custom(CustomItem {
+                id: item.id.clone(),
+                status,
+                custom_type: "vtcode:harness_event".to_string(),
+                data: json!({
+                    "event": serde_json::to_value(&event.event).unwrap_or(serde_json::Value::Null),
+                    "message": event.message,
+                    "command": event.command,
+                    "exit_code": event.exit_code,
+                }),
+            }),
+
             ThreadItemDetails::Error(err) => {
                 // Errors are represented as custom items
                 OutputItem::Custom(CustomItem {

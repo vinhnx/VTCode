@@ -18,8 +18,10 @@ use std::str::FromStr;
 
 use crate::config::constants::tools;
 use crate::tools::handlers::task_tracking::{
-    TaskCounts, TaskTrackingStatus, append_notes, append_notes_section, is_bulk_sync_update,
-    parse_marked_status_prefix, parse_status_prefix,
+    TaskCounts, TaskItemInput, TaskStepMetadata, TaskTrackingStatus, append_notes,
+    append_notes_section, append_task_step_metadata, is_bulk_sync_update, metadata_from_input,
+    normalize_optional_text, normalize_string_items, parse_marked_status_prefix,
+    parse_status_prefix,
 };
 use crate::utils::file_utils::{
     ensure_dir_exists, read_file_with_context, write_file_with_context,
@@ -42,6 +44,8 @@ pub struct TaskItem {
     pub index: usize,
     pub description: String,
     pub status: TaskStatus,
+    #[serde(default, flatten)]
+    pub metadata: TaskStepMetadata,
 }
 
 /// The full task checklist
@@ -62,6 +66,7 @@ impl TaskChecklist {
                 item.status.flat_checkbox(),
                 item.description
             ));
+            append_task_step_metadata(&mut md, "", &item.metadata);
         }
         append_notes_section(&mut md, self.notes.as_deref());
         md
@@ -78,6 +83,7 @@ impl TaskChecklist {
                 item.status.plan_checkbox(),
                 trimmed
             ));
+            append_task_step_metadata(&mut md, indent, &item.metadata);
         }
         append_notes_section(&mut md, self.notes.as_deref());
         md
@@ -101,27 +107,57 @@ impl TaskChecklist {
                 json!({
                     "index": item.index,
                     "description": item.description,
-                    "status": item.status.to_string()
+                    "status": item.status.to_string(),
+                    "files": item.metadata.files.clone(),
+                    "outcome": item.metadata.outcome.clone(),
+                    "verify": item.metadata.verify.clone(),
                 })
             }).collect::<Vec<_>>()
+            ,
+            "notes": self.notes.clone(),
         })
     }
 
     fn view(&self) -> Value {
-        let lines = self
-            .items
-            .iter()
-            .enumerate()
-            .map(|(idx, item)| {
-                let branch = if idx + 1 == self.items.len() { "└" } else { "├" };
-                json!({
-                    "display": format!("{} {} {}", branch, item.status.view_symbol(), item.description),
+        let mut lines = Vec::new();
+        for (idx, item) in self.items.iter().enumerate() {
+            let branch = if idx + 1 == self.items.len() {
+                "└"
+            } else {
+                "├"
+            };
+            lines.push(json!({
+                "display": format!("{} {} {}", branch, item.status.view_symbol(), item.description),
+                "status": item.status.to_string(),
+                "text": item.description,
+                "index_path": item.index.to_string(),
+                "files": item.metadata.files.clone(),
+                "outcome": item.metadata.outcome.clone(),
+                "verify": item.metadata.verify.clone(),
+            }));
+
+            if !item.metadata.files.is_empty() {
+                lines.push(json!({
+                    "display": format!("  files: {}", item.metadata.files.join(", ")),
                     "status": item.status.to_string(),
-                    "text": item.description,
-                    "index_path": item.index.to_string(),
-                })
-            })
-            .collect::<Vec<_>>();
+                    "text": format!("files: {}", item.metadata.files.join(", ")),
+                }));
+            }
+            if let Some(outcome) = item.metadata.outcome.as_deref() {
+                lines.push(json!({
+                    "display": format!("  outcome: {}", outcome),
+                    "status": item.status.to_string(),
+                    "text": format!("outcome: {}", outcome),
+                }));
+            }
+            for command in &item.metadata.verify {
+                lines.push(json!({
+                    "display": format!("  verify: {}", command),
+                    "status": item.status.to_string(),
+                    "text": format!("verify: {}", command),
+                }));
+            }
+        }
 
         json!({
             "title": self.title,
@@ -130,22 +166,48 @@ impl TaskChecklist {
     }
 }
 
-fn parse_input_items(items: &[String]) -> Vec<TaskItem> {
+fn parse_input_items(items: &[TaskItemInput]) -> Result<Vec<TaskItem>> {
     items
         .iter()
-        .filter_map(|item| {
-            let (status, description) = parse_status_prefix(item);
-            let description = description.trim().to_string();
-            if description.is_empty() {
-                return None;
+        .filter_map(|item| match item {
+            TaskItemInput::Text(raw) => {
+                let (status, description) = parse_status_prefix(raw);
+                let description = description.trim().to_string();
+                if description.is_empty() {
+                    return None;
+                }
+                Some(Ok((status, description, TaskStepMetadata::default())))
             }
-            Some((status, description))
+            TaskItemInput::Structured(payload) => {
+                let (parsed_status, parsed_description) = parse_status_prefix(&payload.description);
+                let description = parsed_description.trim().to_string();
+                if description.is_empty() {
+                    return None;
+                }
+                let status = match payload.status.as_deref() {
+                    Some(raw) => match TaskStatus::from_str(raw) {
+                        Ok(status) => status,
+                        Err(err) => return Some(Err(err)),
+                    },
+                    None => parsed_status,
+                };
+                let metadata = metadata_from_input(
+                    payload.files.as_deref(),
+                    payload.outcome.as_deref(),
+                    payload.verify.as_deref(),
+                );
+                Some(Ok((status, description, metadata)))
+            }
         })
         .enumerate()
-        .map(|(idx, (status, description))| TaskItem {
-            index: idx + 1,
-            description,
-            status,
+        .map(|(idx, item)| {
+            let (status, description, metadata) = item?;
+            Ok(TaskItem {
+                index: idx + 1,
+                description,
+                status,
+                metadata,
+            })
         })
         .collect()
 }
@@ -168,11 +230,62 @@ fn parse_single_index_from_path(index_path: &str) -> Result<usize> {
     Ok(parsed)
 }
 
+fn parse_files_metadata(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
+fn apply_task_metadata_line(item: &mut TaskItem, raw: &str, in_verify_block: &mut bool) -> bool {
+    let trimmed = raw.trim_start();
+
+    if *in_verify_block {
+        if let Some(command) = trimmed
+            .strip_prefix("- ")
+            .or_else(|| trimmed.strip_prefix("* "))
+            .or_else(|| trimmed.strip_prefix("+ "))
+        {
+            if let Some(command) = normalize_optional_text(Some(command)) {
+                item.metadata.verify.push(command);
+            }
+            return true;
+        }
+        *in_verify_block = false;
+    }
+
+    if let Some(rest) = trimmed.strip_prefix("files:") {
+        item.metadata.files = parse_files_metadata(rest);
+        return true;
+    }
+
+    if let Some(rest) = trimmed.strip_prefix("outcome:") {
+        item.metadata.outcome = normalize_optional_text(Some(rest));
+        return true;
+    }
+
+    if trimmed == "verify:" {
+        item.metadata.verify.clear();
+        *in_verify_block = true;
+        return true;
+    }
+
+    if let Some(rest) = trimmed.strip_prefix("verify:") {
+        item.metadata.verify = normalize_string_items(Some(&[rest.to_string()]));
+        return true;
+    }
+
+    false
+}
+
 fn parse_plan_mirror_markdown(content: &str) -> Option<TaskChecklist> {
     let mut title = String::new();
     let mut items = Vec::new();
     let mut notes_lines = Vec::new();
     let mut in_notes = false;
+    let mut in_verify_block = false;
     let mut idx = 1usize;
 
     for raw in content.lines() {
@@ -201,6 +314,14 @@ fn parse_plan_mirror_markdown(content: &str) -> Option<TaskChecklist> {
             continue;
         }
 
+        if let Some(last) = items.last_mut() {
+            let indent = raw.chars().take_while(|c| *c == ' ').count();
+            if indent >= 2 && apply_task_metadata_line(last, raw, &mut in_verify_block) {
+                continue;
+            }
+            in_verify_block = false;
+        }
+
         let Some(rest) = trimmed
             .strip_prefix("- ")
             .or_else(|| trimmed.strip_prefix("* "))
@@ -216,8 +337,10 @@ fn parse_plan_mirror_markdown(content: &str) -> Option<TaskChecklist> {
                 index: idx,
                 description,
                 status,
+                metadata: TaskStepMetadata::default(),
             });
             idx += 1;
+            in_verify_block = false;
         }
     }
 
@@ -291,7 +414,7 @@ pub struct TaskTrackerArgs {
 
     /// List of task descriptions (required for `create`)
     #[serde(default)]
-    pub items: Option<Vec<String>>,
+    pub items: Option<Vec<TaskItemInput>>,
 
     /// Index of item to update (required for `update`, 1-indexed)
     #[serde(default)]
@@ -308,6 +431,21 @@ pub struct TaskTrackerArgs {
     /// Description for a new item (required for `add`)
     #[serde(default)]
     pub description: Option<String>,
+
+    /// Optional file paths associated with a step
+    #[serde(default)]
+    pub files: Option<Vec<String>>,
+
+    /// Optional expected outcome associated with a step
+    #[serde(default)]
+    pub outcome: Option<String>,
+
+    /// Optional verification command or commands associated with a step
+    #[serde(
+        default,
+        deserialize_with = "crate::tools::handlers::task_tracking::deserialize_optional_string_list"
+    )]
+    pub verify: Option<Vec<String>>,
 
     /// Optional parent path for add in Plan Mode (example: "2")
     #[serde(default)]
@@ -408,6 +546,7 @@ impl TaskTrackerTool {
         let mut items = Vec::new();
         let mut notes_lines = Vec::new();
         let mut in_notes = false;
+        let mut in_verify_block = false;
         let mut idx = 1;
 
         for line in content.lines() {
@@ -424,6 +563,13 @@ impl TaskTrackerTool {
                 notes_lines.push(line.to_string());
                 continue;
             }
+            if let Some(last) = items.last_mut() {
+                let indent = line.chars().take_while(|c| *c == ' ').count();
+                if indent >= 2 && apply_task_metadata_line(last, line, &mut in_verify_block) {
+                    continue;
+                }
+                in_verify_block = false;
+            }
             if let Some(rest) = trimmed.strip_prefix("- ")
                 && let Some((status, description)) = parse_marked_status_prefix(rest)
             {
@@ -431,8 +577,10 @@ impl TaskTrackerTool {
                     index: idx,
                     description,
                     status,
+                    metadata: TaskStepMetadata::default(),
                 });
                 idx += 1;
+                in_verify_block = false;
             }
         }
 
@@ -548,6 +696,9 @@ impl TaskTrackerTool {
                 .or_else(|| args.index.map(|value| value.to_string())),
             status: args.status.clone(),
             description: args.description.clone(),
+            files: args.files.clone(),
+            outcome: args.outcome.clone(),
+            verify: args.verify.clone(),
             parent_index_path: args.parent_index_path.clone(),
             notes: args.notes.clone(),
         }
@@ -575,7 +726,7 @@ impl TaskTrackerTool {
             );
         }
 
-        let items = parse_input_items(item_descs);
+        let items = parse_input_items(item_descs)?;
         if items.is_empty() {
             anyhow::bail!("No valid task items were provided for create.");
         }
@@ -598,7 +749,12 @@ impl TaskTrackerTool {
                     .all(|(left, right)| left.description == right.description);
             let requested_has_explicit_status =
                 items.iter().any(|item| item.status != TaskStatus::Pending);
-            if same_structure && !requested_has_explicit_status {
+            let requested_has_step_metadata = items.iter().any(|item| {
+                !item.metadata.files.is_empty()
+                    || item.metadata.outcome.is_some()
+                    || !item.metadata.verify.is_empty()
+            });
+            if same_structure && !requested_has_explicit_status && !requested_has_step_metadata {
                 return Ok(json!({
                     "status": "unchanged",
                     "message": "Checklist already active; preserved current progress.",
@@ -649,7 +805,7 @@ impl TaskTrackerTool {
             args.status.as_deref(),
         ) {
             let input_items = args.items.as_deref().unwrap_or(&[]);
-            let items = parse_input_items(input_items);
+            let items = parse_input_items(input_items)?;
             if items.is_empty() {
                 anyhow::bail!("No valid items provided for checklist sync.");
             }
@@ -713,6 +869,16 @@ impl TaskTrackerTool {
         let old_status = checklist.items[pos].status.to_string();
         checklist.items[pos].status = new_status;
         let new_status_str = checklist.items[pos].status.to_string();
+        if let Some(files) = args.files.as_deref() {
+            checklist.items[pos].metadata.files = normalize_string_items(Some(files));
+        }
+        if args.outcome.is_some() {
+            checklist.items[pos].metadata.outcome =
+                normalize_optional_text(args.outcome.as_deref());
+        }
+        if let Some(verify) = args.verify.as_deref() {
+            checklist.items[pos].metadata.verify = normalize_string_items(Some(verify));
+        }
         checklist.notes = append_notes(checklist.notes.take(), args.notes.as_deref());
 
         let snapshot = checklist.clone();
@@ -763,12 +929,22 @@ impl TaskTrackerTool {
             .description
             .as_deref()
             .context("'description' is required for 'add'")?;
+        let (status, parsed_description) = parse_status_prefix(desc);
+        let description = parsed_description.trim().to_string();
+        if description.is_empty() {
+            bail!("description cannot be empty");
+        }
 
         let new_index = checklist.items.len() + 1;
         checklist.items.push(TaskItem {
             index: new_index,
-            description: desc.to_string(),
-            status: TaskStatus::Pending,
+            description: description.clone(),
+            status,
+            metadata: metadata_from_input(
+                args.files.as_deref(),
+                args.outcome.as_deref(),
+                args.verify.as_deref(),
+            ),
         });
 
         checklist.notes = append_notes(checklist.notes.take(), args.notes.as_deref());
@@ -778,7 +954,7 @@ impl TaskTrackerTool {
 
         Ok(json!({
             "status": "added",
-            "message": format!("Added item {}: {}", new_index, desc),
+            "message": format!("Added item {}: {}", new_index, description),
             "checklist": summary,
             "view": view
         }))
@@ -830,8 +1006,37 @@ impl Tool for TaskTrackerTool {
                 },
                 "items": {
                     "type": "array",
-                    "items": { "type": "string" },
-                    "description": "List of task descriptions (used with 'create'; also supports bulk 'update' sync with optional [x]/[~]/[!]/[ ] prefixes and indentation for hierarchy in Plan Mode)."
+                    "items": {
+                        "anyOf": [
+                            { "type": "string" },
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "description": { "type": "string" },
+                                    "status": {
+                                        "type": "string",
+                                        "enum": ["pending", "in_progress", "completed", "blocked"]
+                                    },
+                                    "files": {
+                                        "type": "array",
+                                        "items": { "type": "string" }
+                                    },
+                                    "outcome": { "type": "string" },
+                                    "verify": {
+                                        "anyOf": [
+                                            { "type": "string" },
+                                            {
+                                                "type": "array",
+                                                "items": { "type": "string" }
+                                            }
+                                        ]
+                                    }
+                                },
+                                "required": ["description"]
+                            }
+                        ]
+                    },
+                    "description": "List of task descriptions or structured task items (used with 'create'; also supports bulk 'update' sync with optional [x]/[~]/[!]/[ ] prefixes and indentation for hierarchy in Plan Mode)."
                 },
                 "index": {
                     "type": "integer",
@@ -849,6 +1054,25 @@ impl Tool for TaskTrackerTool {
                 "description": {
                     "type": "string",
                     "description": "Description for a new item (used with 'add')."
+                },
+                "files": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "Optional file paths associated with a single add/update item."
+                },
+                "outcome": {
+                    "type": "string",
+                    "description": "Optional expected outcome associated with a single add/update item."
+                },
+                "verify": {
+                    "anyOf": [
+                        { "type": "string" },
+                        {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        }
+                    ],
+                    "description": "Optional verification command or commands associated with a single add/update item."
                 },
                 "parent_index_path": {
                     "type": "string",
@@ -934,6 +1158,58 @@ mod tests {
         assert_eq!(result["checklist"]["total"], 3);
         assert_eq!(result["checklist"]["completed"], 0);
         assert_eq!(result["view"]["title"], "Refactor Auth");
+    }
+
+    #[tokio::test]
+    async fn test_create_accepts_metadata_and_verify_string_forms() {
+        let temp = TempDir::new().unwrap();
+        let (_state, tool) = setup_tool(&temp);
+
+        let result = tool
+            .execute(json!({
+                "action": "create",
+                "title": "Harness tracker",
+                "items": [
+                    {
+                        "description": "Analyze current harness",
+                        "files": ["docs/ARCHITECTURE.md"],
+                        "outcome": "Document the harness map",
+                        "verify": "cargo check"
+                    },
+                    {
+                        "description": "Wire continuation",
+                        "verify": ["cargo test -p vtcode-core continuation", "cargo check -p vtcode"]
+                    }
+                ]
+            }))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            result["checklist"]["items"][0]["files"],
+            json!(["docs/ARCHITECTURE.md"])
+        );
+        assert_eq!(
+            result["checklist"]["items"][0]["outcome"],
+            "Document the harness map"
+        );
+        assert_eq!(
+            result["checklist"]["items"][0]["verify"],
+            json!(["cargo check"])
+        );
+        assert_eq!(
+            result["checklist"]["items"][1]["verify"],
+            json!([
+                "cargo test -p vtcode-core continuation",
+                "cargo check -p vtcode"
+            ])
+        );
+
+        let persisted =
+            std::fs::read_to_string(temp.path().join(".vtcode/tasks/current_task.md")).unwrap();
+        assert!(persisted.contains("files: docs/ARCHITECTURE.md"));
+        assert!(persisted.contains("outcome: Document the harness map"));
+        assert!(persisted.contains("verify: cargo check"));
     }
 
     #[tokio::test]

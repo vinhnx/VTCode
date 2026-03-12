@@ -1,6 +1,8 @@
 use anyhow::{Context, Result};
+use chrono::Utc;
 use std::fs::File;
 use std::io::{self, BufWriter};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use vtcode_core::config::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
@@ -52,6 +54,15 @@ pub(super) fn task_spec(command: &ExecCommandKind, dry_run: bool) -> TaskSpec {
     }
 }
 
+pub(super) fn resolve_exec_event_log_path(path: &str, session_id: &str) -> PathBuf {
+    let mut base = PathBuf::from(path);
+    if base.extension().is_none() {
+        let timestamp = Utc::now().format("%Y%m%dT%H%M%SZ");
+        base = base.join(format!("harness-{session_id}-{timestamp}.jsonl"));
+    }
+    base
+}
+
 pub(super) async fn handle_exec_command_impl(
     config: &CoreAgentConfig,
     vt_cfg: &VTCodeConfig,
@@ -68,6 +79,7 @@ pub(super) async fn handle_exec_command_impl(
         thread_bootstrap,
     } = prepared;
     let task_spec = task_spec(&options.command, options.dry_run);
+    let event_session_id = session_id.clone();
 
     let automation_cfg = &run_vt_cfg.automation.full_auto;
     let mut runner = AgentRunner::new_with_thread_bootstrap_and_config(
@@ -99,6 +111,15 @@ pub(super) async fn handle_exec_command_impl(
         runner.enable_plan_mode();
     }
     runner.set_quiet(true);
+    let events_path = options.events_path.clone().or_else(|| {
+        run_vt_cfg
+            .agent
+            .harness
+            .event_log_path
+            .as_deref()
+            .filter(|path| !path.trim().is_empty())
+            .map(|path| resolve_exec_event_log_path(path, &event_session_id))
+    });
 
     let processor = Arc::new(Mutex::new(ExecEventProcessor::<
         io::Stdout,
@@ -108,8 +129,7 @@ pub(super) async fn handle_exec_command_impl(
         options.json,
         !options.json && !run_config.quiet,
         options.json.then(io::stdout),
-        options
-            .events_path
+        events_path
             .as_ref()
             .map(|path| open_events_writer(path.as_path()))
             .transpose()?,

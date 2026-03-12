@@ -158,7 +158,7 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/user-guide/exec-mode.md`
   - **Content**: Exec Mode Automation
-  - **Topics**: Launching exec mode, Dry-run mode, Structured event stream, Resuming sessions
+  - **Topics**: Launching exec mode, Dry-run mode, Continuation and verification, Structured event stream, Resuming sessions
   - **User Questions**: "What can you tell me about Exec Mode Automation?", "How does Launching exec mode work?", "How does Dry-run mode work?"
 
 - **File**: `docs/user-guide/getting-started.md`
@@ -178,8 +178,8 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/ARCHITECTURE.md`
   - **Content**: VT Code Architecture Guide
-  - **Topics**: Overview, Core Architecture, Tool Implementations, Design Principles, Adding New Tools
-  - **User Questions**: "What can you tell me about VT Code Architecture Guide?", "How does Overview work?", "How does Core Architecture work?"
+  - **Topics**: Overview, Model + Harness, Core Architecture, Tool Implementations, Design Principles
+  - **User Questions**: "What can you tell me about VT Code Architecture Guide?", "How does Overview work?", "How does Model + Harness work?"
 
 - **File**: `docs/COMPATIBILITY.md`
   - **Content**: VT Code Platform Compatibility Matrix

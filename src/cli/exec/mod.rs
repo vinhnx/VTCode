@@ -39,12 +39,14 @@ mod tests {
     use super::event_output::{
         ExecEventProcessor, human_event_line, render_final_tail, serialize_event_line,
     };
-    use super::run::{REVIEW_TASK_ID, task_instructions, task_spec};
+    use super::run::{REVIEW_TASK_ID, resolve_exec_event_log_path, task_instructions, task_spec};
+    use tempfile::TempDir;
     use vtcode_core::core::agent::task::{TaskOutcome, TaskResults};
     use vtcode_core::exec::events::{
         AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, ErrorItem,
-        ItemCompletedEvent, ItemStartedEvent, PlanDeltaEvent, ThreadErrorEvent, ThreadEvent,
-        ThreadItem, ThreadItemDetails, ThreadStartedEvent, TurnCompletedEvent, Usage,
+        HarnessEventItem, HarnessEventKind, ItemCompletedEvent, ItemStartedEvent, PlanDeltaEvent,
+        ThreadErrorEvent, ThreadEvent, ThreadItem, ThreadItemDetails, ThreadStartedEvent,
+        TurnCompletedEvent, Usage,
     };
 
     type TestProcessor = ExecEventProcessor<Vec<u8>, Vec<u8>, Vec<u8>>;
@@ -177,6 +179,40 @@ mod tests {
         .expect("error event should render");
         assert!(line.contains("[ERROR]"));
         assert!(line.contains("boom"));
+    }
+
+    #[test]
+    fn human_event_line_formats_harness_verification_events() {
+        let line = human_event_line(&ThreadEvent::ItemCompleted(ItemCompletedEvent {
+            item: ThreadItem {
+                id: "verify-1".to_string(),
+                details: ThreadItemDetails::Harness(HarnessEventItem {
+                    event: HarnessEventKind::VerificationFailed,
+                    message: Some("cargo check failed".to_string()),
+                    command: Some("cargo check".to_string()),
+                    exit_code: Some(101),
+                }),
+            },
+        }))
+        .expect("harness event should render");
+
+        assert!(line.contains("[VERIFY FAILED]"));
+        assert!(line.contains("cargo check failed"));
+    }
+
+    #[test]
+    fn resolve_exec_event_log_path_appends_jsonl_when_given_directory() {
+        let temp = TempDir::new().expect("tempdir");
+        let resolved =
+            resolve_exec_event_log_path(temp.path().to_str().expect("tempdir path"), "session-123");
+
+        assert_eq!(resolved.parent(), Some(temp.path()));
+        let file_name = resolved
+            .file_name()
+            .and_then(|value| value.to_str())
+            .expect("file name");
+        assert!(file_name.starts_with("harness-session-123-"));
+        assert!(file_name.ends_with(".jsonl"));
     }
 
     #[test]

@@ -2,6 +2,9 @@
 
 use std::sync::Arc;
 
+use anyhow::Result;
+use serde_json::Value;
+
 use super::HarnessContextSnapshot;
 use super::ToolRegistry;
 
@@ -39,5 +42,12 @@ impl ToolRegistry {
             .read()
             .ok()
             .and_then(|g| g.clone())
+    }
+
+    /// Execute a harness-owned verification command through the same exec/sandbox
+    /// runtime used by the public `unified_exec` tool while bypassing the
+    /// model-facing full-auto allow-list gate.
+    pub async fn execute_harness_unified_exec(&self, args: Value) -> Result<Value> {
+        self.execute_unified_exec(args).await
     }
 }

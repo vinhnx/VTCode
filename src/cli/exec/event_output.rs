@@ -260,6 +260,31 @@ pub(super) fn human_event_line(event: &ThreadEvent) -> Option<String> {
                     exit_suffix
                 ))
             }
+            ThreadItemDetails::Harness(item) => {
+                let label = match item.event {
+                    vtcode_core::exec::events::HarnessEventKind::ContinuationStarted => {
+                        style("[HARNESS]").cyan().bold()
+                    }
+                    vtcode_core::exec::events::HarnessEventKind::ContinuationSkipped => {
+                        style("[HARNESS]").cyan().bold()
+                    }
+                    vtcode_core::exec::events::HarnessEventKind::VerificationStarted => {
+                        style("[VERIFY]").cyan().bold()
+                    }
+                    vtcode_core::exec::events::HarnessEventKind::VerificationPassed => {
+                        style("[VERIFY]").green().bold()
+                    }
+                    vtcode_core::exec::events::HarnessEventKind::VerificationFailed => {
+                        style("[VERIFY FAILED]").red().bold()
+                    }
+                };
+                let detail = item
+                    .message
+                    .as_deref()
+                    .or(item.command.as_deref())
+                    .unwrap_or("harness event");
+                Some(format!("{} {}", label, detail))
+            }
             ThreadItemDetails::Error(item) => Some(format!(
                 "{} {}",
                 style("[WARNING]").red().bold(),
