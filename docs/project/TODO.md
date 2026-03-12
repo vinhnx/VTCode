@@ -1443,28 +1443,3 @@ https://code.claude.com/docs/en/interactive-mode#side-questions-with-btw
 https://defuddle.md/doc.rust-lang.org/nomicon/print.html
 
 ---
-
-IMPORTANT: improve model picker
-
-1. show provider label
-2. Improve search box UI (currently it is not clear that you can search for models, and it is not clear what the search box does)
-
-Ghostty main✓ gpt-oss:120b-cloud | 100% context left | (low)
-Model
-Current: ollama / gpt-oss:120b-cloud
-• ↑/↓ select • Enter choose • Esc cancel • Type to filter
-Filter: openrouter • Matches 49 of 81
-[Reasoning] Anthropic · Claude Opus 4.6
-claude-opus-4-6
-[Reasoning] Anthropic · Claude Sonnet 4.6
-claude-sonnet-4-6
-[Reasoning] Anthropic · Claude Haiku 4.5
-claude-haiku-4-5
-[Reasoning] Gemini · Gemini 3.1 Pro Preview (Custom Tools)
-gemini-3.1-pro-preview-customtools
-[Reasoning] Hugging Face · GPT-OSS 20B (HF)
-openai/gpt-oss-20b:huggingface
-[Reasoning] Hugging Face · GPT-OSS 120B (HF)
-openai/gpt-oss-120b:huggingface
-[Reasoning] Hugging Face · MiniMax-M2.5 (Novita)
-Search models: openrouter • Esc clears▌
