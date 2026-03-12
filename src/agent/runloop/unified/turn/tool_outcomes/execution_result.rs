@@ -526,7 +526,9 @@ pub(crate) fn compact_model_tool_payload(output: serde_json::Value) -> serde_jso
             .get("content_type")
             .and_then(serde_json::Value::as_str)
             .is_some_and(|content_type| matches!(content_type, "exec_inspect" | "git_diff"));
-    let keep_exec_recovery_guidance = should_keep_exec_recovery_guidance(obj, is_exec_like);
+    let keep_exec_success_critical_note = should_keep_exec_success_critical_note(obj, is_exec_like);
+    let keep_next_action = should_keep_exec_success_next_action(obj, is_exec_like)
+        || should_keep_recoverable_failure_next_action(obj);
     let has_stderr = obj
         .get("stderr")
         .and_then(serde_json::Value::as_str)
@@ -543,7 +545,8 @@ pub(crate) fn compact_model_tool_payload(output: serde_json::Value) -> serde_jso
             "spool_hint" | "spooled_bytes" | "spooled_to_file" => has_spool_path,
             "id" => session_id.is_some_and(|sid| value == sid),
             "working_directory" => is_exec_like,
-            "critical_note" | "next_action" => !keep_exec_recovery_guidance,
+            "critical_note" => !keep_exec_success_critical_note,
+            "next_action" => !keep_next_action,
             "has_more" | "preferred_next_action" => {
                 next_continue_args.is_some() || next_read_args.is_some() || is_false_bool(value)
             }
@@ -640,13 +643,36 @@ fn has_non_empty_string_field(obj: &serde_json::Map<String, serde_json::Value>, 
         .is_some_and(|value| !value.trim().is_empty())
 }
 
-fn should_keep_exec_recovery_guidance(
+fn is_recoverable_failure_payload(obj: &serde_json::Map<String, serde_json::Value>) -> bool {
+    has_non_empty_string_field(obj, "error")
+        && obj
+            .get("is_recoverable")
+            .and_then(serde_json::Value::as_bool)
+            == Some(true)
+}
+
+fn should_keep_exec_success_critical_note(
     obj: &serde_json::Map<String, serde_json::Value>,
     is_exec_like: bool,
 ) -> bool {
     is_exec_like
-        && (has_non_empty_string_field(obj, "critical_note")
-            || has_non_empty_string_field(obj, "next_action"))
+        && !has_non_empty_string_field(obj, "error")
+        && has_non_empty_string_field(obj, "critical_note")
+}
+
+fn should_keep_exec_success_next_action(
+    obj: &serde_json::Map<String, serde_json::Value>,
+    is_exec_like: bool,
+) -> bool {
+    is_exec_like
+        && !has_non_empty_string_field(obj, "error")
+        && has_non_empty_string_field(obj, "next_action")
+}
+
+fn should_keep_recoverable_failure_next_action(
+    obj: &serde_json::Map<String, serde_json::Value>,
+) -> bool {
+    is_recoverable_failure_payload(obj) && has_non_empty_string_field(obj, "next_action")
 }
 
 async fn handle_success<'a>(
@@ -1127,6 +1153,7 @@ mod tests {
             payload.get("is_recoverable").and_then(|v| v.as_bool()),
             Some(false)
         );
+        assert!(payload.get("next_action").is_none());
     }
 
     #[test]
@@ -1151,7 +1178,10 @@ mod tests {
                 .and_then(|v| v.as_str())
                 .is_some()
         );
-        assert!(payload.get("next_action").is_none());
+        assert_eq!(
+            payload.get("next_action").and_then(|v| v.as_str()),
+            Some("Try an alternative tool or narrower scope.")
+        );
     }
 
     #[test]
@@ -1175,7 +1205,10 @@ mod tests {
             payload.get("is_recoverable").and_then(|v| v.as_bool()),
             Some(true)
         );
-        assert!(payload.get("next_action").is_none());
+        assert_eq!(
+            payload.get("next_action").and_then(|v| v.as_str()),
+            Some("Try an alternative tool or narrower scope.")
+        );
     }
 
     #[test]
@@ -1430,6 +1463,47 @@ mod tests {
         assert!(parsed.get("session_id").is_none());
         assert!(parsed.get("process_id").is_none());
         assert!(parsed.get("is_exited").is_none());
+    }
+
+    #[test]
+    fn maybe_inline_spooled_keeps_recoverable_failure_next_action() {
+        let serialized = maybe_inline_spooled(
+            tool_names::READ_FILE,
+            &serde_json::json!({
+                "error": "Tool preflight validation failed: x",
+                "is_recoverable": true,
+                "next_action": "Retry with fallback_tool_args.",
+                "fallback_tool": tool_names::UNIFIED_SEARCH,
+                "fallback_tool_args": {"action":"list","path":"."}
+            }),
+        );
+
+        let parsed: serde_json::Value =
+            serde_json::from_str(&serialized).expect("serialized JSON payload");
+        assert_eq!(
+            parsed.get("next_action"),
+            Some(&serde_json::json!("Retry with fallback_tool_args."))
+        );
+        assert_eq!(
+            parsed.get("fallback_tool"),
+            Some(&serde_json::json!(tool_names::UNIFIED_SEARCH))
+        );
+    }
+
+    #[test]
+    fn maybe_inline_spooled_drops_non_recoverable_failure_next_action() {
+        let serialized = maybe_inline_spooled(
+            tool_names::READ_FILE,
+            &serde_json::json!({
+                "error": "tool permission denied by policy",
+                "is_recoverable": false,
+                "next_action": "Switch to an allowed tool or mode."
+            }),
+        );
+
+        let parsed: serde_json::Value =
+            serde_json::from_str(&serialized).expect("serialized JSON payload");
+        assert!(parsed.get("next_action").is_none());
     }
 
     #[test]

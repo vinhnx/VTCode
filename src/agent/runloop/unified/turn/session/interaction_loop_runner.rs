@@ -979,6 +979,45 @@ mod tests {
     }
 
     #[test]
+    fn extract_recent_follow_up_hint_ignores_next_action_when_fallback_exists() {
+        let history = vec![uni::Message::tool_response(
+            "call_1".to_string(),
+            serde_json::json!({
+                "error": "Tool preflight validation failed: x",
+                "is_recoverable": true,
+                "fallback_tool": "task_tracker",
+                "fallback_tool_args": {"action":"list"},
+                "next_action": "Retry with fallback_tool_args."
+            })
+            .to_string(),
+        )];
+
+        let hint = extract_recent_follow_up_hint(&history);
+        assert_eq!(
+            hint,
+            Some((
+                "task_tracker".to_string(),
+                serde_json::json!({"action":"list"})
+            ))
+        );
+    }
+
+    #[test]
+    fn extract_recent_follow_up_hint_does_not_promote_next_action_only_payload() {
+        let history = vec![uni::Message::tool_response(
+            "call_1".to_string(),
+            serde_json::json!({
+                "error": "boom",
+                "is_recoverable": true,
+                "next_action": "Try an alternative tool or narrower scope."
+            })
+            .to_string(),
+        )];
+
+        assert!(extract_recent_follow_up_hint(&history).is_none());
+    }
+
+    #[test]
     fn extract_recent_follow_up_hint_reads_next_continue_args() {
         let history = vec![uni::Message::tool_response(
             "call_1".to_string(),

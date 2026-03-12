@@ -651,7 +651,10 @@ fn validation_error_payload_includes_fallback_metadata() {
     assert_eq!(parsed["is_recoverable"], true);
     assert_eq!(parsed["fallback_tool"], tool_names::UNIFIED_SEARCH);
     assert_eq!(parsed["fallback_tool_args"]["action"], "grep");
-    assert!(parsed.get("next_action").is_none());
+    assert_eq!(
+        parsed.get("next_action"),
+        Some(&json!("Retry with fallback_tool_args."))
+    );
     assert!(parsed.get("loop_detected").is_none());
 }
 
@@ -668,7 +671,10 @@ fn validation_error_payload_marks_loop_detection_without_prose_hint() {
     assert_eq!(parsed.get("loop_detected"), Some(&json!(true)));
     assert_eq!(parsed["fallback_tool"], tool_names::UNIFIED_SEARCH);
     assert_eq!(parsed["fallback_tool_args"]["action"], "list");
-    assert!(parsed.get("next_action").is_none());
+    assert_eq!(
+        parsed.get("next_action"),
+        Some(&json!("Retry with fallback_tool_args."))
+    );
 }
 
 #[test]

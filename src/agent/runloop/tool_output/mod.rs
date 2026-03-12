@@ -503,7 +503,16 @@ fn should_render_unified_exec_terminal_panel(val: &Value) -> bool {
 }
 
 fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
-    if let Some(error_msg) = val.get("message").and_then(|v| v.as_str()) {
+    if let Some(error_msg) = val
+        .get("message")
+        .and_then(|v| v.as_str())
+        .filter(|msg| !msg.trim().is_empty())
+        .or_else(|| {
+            val.get("error")
+                .and_then(|v| v.as_str())
+                .filter(|msg| !msg.trim().is_empty())
+        })
+    {
         renderer.line(MessageStyle::ToolError, &format!("Error: {}", error_msg))?;
     }
 
@@ -962,6 +971,34 @@ mod tests {
                 .count(),
             1
         );
+    }
+
+    #[tokio::test]
+    async fn render_tool_output_renders_generic_recoverable_failure_guidance() {
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut renderer =
+            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let payload = json!({
+            "error": "Tool preflight validation failed: x",
+            "is_recoverable": true,
+            "next_action": "Retry with fallback_tool_args."
+        });
+
+        render_tool_output(&mut renderer, Some("custom_tool"), &payload, None)
+            .await
+            .expect("generic recoverable failure should render");
+
+        let inline_output = collect_inline_output(&mut receiver);
+        assert!(inline_output.contains("Error: Tool preflight validation failed: x"));
+        assert!(inline_output.contains("Retry with fallback_tool_args."));
+        assert_eq!(
+            inline_output
+                .matches("Retry with fallback_tool_args.")
+                .count(),
+            1
+        );
+        assert!(!inline_output.contains("\"error\""));
+        assert!(!inline_output.contains("\"next_action\""));
     }
 
     #[test]
