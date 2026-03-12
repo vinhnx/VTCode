@@ -1,8 +1,8 @@
 use super::*;
 use crate::ui::tui::session::inline_list::{InlineListRow, selection_padding};
 use crate::ui::tui::session::list_panel::{
-    SharedListPanelSections, SharedListPanelStyles, StaticRowsListPanelModel, fixed_section_rows,
-    render_shared_list_panel, rows_to_u16, split_bottom_list_panel,
+    SharedListPanelSections, SharedListPanelStyles, SharedSearchField, StaticRowsListPanelModel,
+    fixed_section_rows, render_shared_list_panel, rows_to_u16, split_bottom_list_panel,
 };
 
 #[derive(Clone)]
@@ -107,15 +107,14 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: R
         .collect::<Vec<_>>();
 
     let filter = palette.filter_query();
-    let search_line = if filter.is_empty() {
-        "Filter: (type @path in input)".to_owned()
-    } else {
-        format!("Filter: {}", filter)
-    };
     let sections = SharedListPanelSections {
         header: vec![Line::from(Span::styled("Files".to_owned(), default_style))],
         info: instructions,
-        search: Some(Line::from(Span::styled(search_line, default_style))),
+        search: Some(SharedSearchField {
+            label: "Search files".to_owned(),
+            placeholder: Some("filename or path".to_owned()),
+            query: filter.to_owned(),
+        }),
     };
     let mut model = StaticRowsListPanelModel {
         rows: rendered_rows,

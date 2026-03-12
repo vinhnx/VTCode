@@ -240,8 +240,8 @@ pub(crate) async fn execute_recovery_prompt(
         .or_else(|| items.first().and_then(|item| item.selection.clone()));
 
     let search = Some(InlineListSearchConfig {
-        label: "Search".to_string(),
-        placeholder: Some("Filter options...".to_string()),
+        label: "Search options".to_string(),
+        placeholder: Some("title, subtitle, or badge".to_string()),
     });
 
     let outcome = show_overlay_and_wait(

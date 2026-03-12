@@ -59,11 +59,18 @@ fn generate_placeholder_artifacts() {
     ) {
         eprintln!("warning: failed to write placeholder metadata: {error}");
     }
+    if let Err(error) = fs::write(
+        out_dir.join("model_capabilities.rs"),
+        "// Placeholder for docs.rs build\n#[derive(Clone, Copy)]\npub struct Entry {\n    pub provider: &'static str,\n    pub id: &'static str,\n    pub tool_call: bool,\n    pub input_modalities: &'static [&'static str],\n}\n\npub const ENTRIES: &[Entry] = &[];\n\npub fn metadata_for(_provider: &str, _id: &str) -> Option<Entry> { None }\n",
+    ) {
+        eprintln!("warning: failed to write capability metadata: {error}");
+    }
 }
 
 fn generate_artifacts() -> Result<()> {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?);
     let provider = load_provider_metadata(&manifest_dir)?;
+    let capability_entries = load_model_capability_entries(&manifest_dir)?;
 
     let out_dir = PathBuf::from(env::var("OUT_DIR")?);
     let entries = provider.collect_entries()?;
@@ -72,6 +79,7 @@ fn generate_artifacts() -> Result<()> {
     write_constants(&out_dir, &provider, &entries)?;
     write_aliases(&out_dir, &entries)?;
     write_metadata(&out_dir, &entries)?;
+    write_model_capabilities(&out_dir, &capability_entries)?;
 
     Ok(())
 }
@@ -152,6 +160,34 @@ struct EntryData {
     tool_call: bool,
 }
 
+#[derive(Deserialize)]
+struct ProviderCatalog {
+    #[serde(default)]
+    models: IndexMap<String, CapabilityModelSpec>,
+}
+
+#[derive(Deserialize)]
+struct CapabilityModelSpec {
+    id: String,
+    #[serde(default = "default_tool_call_true")]
+    tool_call: bool,
+    #[serde(default)]
+    modalities: CapabilityModalities,
+}
+
+#[derive(Default, Deserialize)]
+struct CapabilityModalities {
+    #[serde(default)]
+    input: Vec<String>,
+}
+
+struct CapabilityEntry {
+    provider: String,
+    id: String,
+    tool_call: bool,
+    input_modalities: Vec<String>,
+}
+
 impl Provider {
     fn collect_entries(&self) -> Result<Vec<EntryData>> {
         let mut seen_constants = HashMap::new();
@@ -207,6 +243,40 @@ impl Provider {
 
         Ok(entries)
     }
+}
+
+fn load_model_capability_entries(manifest_dir: &Path) -> Result<Vec<CapabilityEntry>> {
+    let docs_path = manifest_dir.join("../docs/models.json");
+    if !docs_path.exists() {
+        return Ok(Vec::new());
+    }
+
+    println!("cargo:rerun-if-changed={}", docs_path.display());
+    let models_source = fs::read_to_string(&docs_path)
+        .with_context(|| format!("Failed to read {}", docs_path.display()))?;
+    let providers: IndexMap<String, ProviderCatalog> = serde_json::from_str(&models_source)
+        .context("Failed to deserialize docs/models.json providers")?;
+
+    let mut entries = Vec::new();
+    for (provider_key, provider) in providers {
+        let provider_key = canonical_provider_key(&provider_key);
+        for spec in provider.models.into_values() {
+            entries.push(CapabilityEntry {
+                provider: provider_key.to_string(),
+                id: spec.id,
+                tool_call: spec.tool_call,
+                input_modalities: spec.modalities.input,
+            });
+        }
+    }
+
+    entries.sort_by(|left, right| {
+        left.provider
+            .cmp(&right.provider)
+            .then(left.id.cmp(&right.id))
+    });
+
+    Ok(entries)
 }
 
 fn write_variants(out_dir: &Path, entries: &[EntryData]) -> Result<()> {
@@ -431,6 +501,45 @@ pub fn vendor_groups() -> &'static [VendorModels] {
         .context("Failed to write generated OpenRouter metadata")
 }
 
+fn write_model_capabilities(out_dir: &Path, entries: &[CapabilityEntry]) -> Result<()> {
+    let mut metadata = String::new();
+    metadata.push_str("#[derive(Clone, Copy)]\n");
+    metadata.push_str("pub struct Entry {\n");
+    metadata.push_str("    pub provider: &'static str,\n");
+    metadata.push_str("    pub id: &'static str,\n");
+    metadata.push_str("    pub tool_call: bool,\n");
+    metadata.push_str("    pub input_modalities: &'static [&'static str],\n");
+    metadata.push_str("}\n\n");
+
+    metadata.push_str("pub const ENTRIES: &[Entry] = &[\n");
+    for entry in entries {
+        metadata.push_str("    Entry {\n");
+        metadata.push_str("        provider: \"");
+        metadata.push_str(&escape_rust_string(&entry.provider));
+        metadata.push_str("\",\n");
+        metadata.push_str("        id: \"");
+        metadata.push_str(&escape_rust_string(&entry.id));
+        metadata.push_str("\",\n");
+        metadata.push_str("        tool_call: ");
+        metadata.push_str(if entry.tool_call { "true" } else { "false" });
+        metadata.push_str(",\n");
+        metadata.push_str("        input_modalities: &[\n");
+        for modality in &entry.input_modalities {
+            metadata.push_str("            \"");
+            metadata.push_str(&escape_rust_string(modality));
+            metadata.push_str("\",\n");
+        }
+        metadata.push_str("        ],\n");
+        metadata.push_str("    },\n");
+    }
+    metadata.push_str(
+        "];\n\npub fn metadata_for(provider: &str, id: &str) -> Option<Entry> {\n    ENTRIES\n        .iter()\n        .find(|entry| entry.provider == provider && entry.id == id)\n        .copied()\n}\n",
+    );
+
+    fs::write(out_dir.join("model_capabilities.rs"), metadata)
+        .context("Failed to write generated model capability metadata")
+}
+
 fn sanitize_doc_comment(input: &str) -> String {
     input.replace('\n', " ")
 }
@@ -466,5 +575,12 @@ fn to_module_name(vendor: &str) -> String {
         format!("vendor_{output}")
     } else {
         output
+    }
+}
+
+fn canonical_provider_key(provider: &str) -> &str {
+    match provider {
+        "google" => "gemini",
+        other => other,
     }
 }

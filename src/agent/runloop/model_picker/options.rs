@@ -4,6 +4,7 @@ use vtcode_core::config::models::{ModelId, Provider};
 
 #[derive(Clone, Copy)]
 pub(super) struct ModelOption {
+    pub(super) model: ModelId,
     pub(super) provider: Provider,
     pub(super) id: &'static str,
     pub(super) display: &'static str,
@@ -17,6 +18,7 @@ pub(super) static MODEL_OPTIONS: Lazy<Vec<ModelOption>> = Lazy::new(|| {
     for provider in Provider::all_providers() {
         for model in ModelId::models_for_provider(provider) {
             options.push(ModelOption {
+                model,
                 provider,
                 id: model.as_str(),
                 display: model.display_name(),

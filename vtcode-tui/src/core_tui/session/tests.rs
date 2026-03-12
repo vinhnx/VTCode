@@ -125,6 +125,25 @@ fn visible_transcript(session: &mut Session) -> Vec<String> {
         .collect()
 }
 
+fn rendered_session_lines(session: &mut Session, rows: u16) -> Vec<String> {
+    let backend = TestBackend::new(VIEW_WIDTH, rows);
+    let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
+    terminal
+        .draw(|frame| session.render(frame))
+        .expect("failed to render session");
+
+    let buffer = terminal.backend().buffer();
+    (0..buffer.area.height)
+        .map(|y| {
+            (0..buffer.area.width)
+                .filter_map(|x| buffer.cell((x, y)).map(|cell| cell.symbol().to_string()))
+                .collect::<String>()
+                .trim_end()
+                .to_string()
+        })
+        .collect()
+}
+
 fn line_text(line: &Line<'_>) -> String {
     line.spans
         .iter()
@@ -807,6 +826,77 @@ fn history_picker_trigger_auto_shows_inline_lists() {
     let _ = session.process_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
     assert!(session.inline_lists_visible());
     assert!(session.history_picker_state.active);
+}
+
+#[test]
+fn slash_panel_renders_search_field_above_results() {
+    let mut session = session_with_slash_palette_commands();
+    for key in [
+        KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE),
+    ] {
+        let _ = session.process_key(key);
+    }
+
+    let lines = rendered_session_lines(&mut session, 20);
+    let search_index = lines
+        .iter()
+        .position(|line| line.contains("Search commands: [re"))
+        .expect("search commands field should render");
+    let item_index = lines
+        .iter()
+        .position(|line| line.contains("/review"))
+        .expect("slash result should render");
+
+    assert!(search_index < item_index);
+}
+
+#[test]
+fn history_picker_renders_search_field_above_results() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.set_input("cargo test".to_string());
+    let _ = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    session.set_input("git status".to_string());
+    let _ = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    let _ = session.process_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
+    let _ = session.process_key(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE));
+    let _ = session.process_key(KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE));
+
+    let lines = rendered_session_lines(&mut session, 20);
+    let search_index = lines
+        .iter()
+        .position(|line| line.contains("Search history: [gi"))
+        .expect("search history field should render");
+    let item_index = lines
+        .iter()
+        .position(|line| line.contains("git status"))
+        .expect("history match should render");
+
+    assert!(search_index < item_index);
+}
+
+#[test]
+fn file_palette_renders_search_field_above_results() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.handle_command(InlineCommand::LoadFilePalette {
+        files: vec!["src/main.rs".to_string(), "src/lib.rs".to_string()],
+        workspace: PathBuf::from("."),
+    });
+    session.handle_command(InlineCommand::SetInput("@src".to_string()));
+
+    let lines = rendered_session_lines(&mut session, 20);
+    let search_index = lines
+        .iter()
+        .position(|line| line.contains("Search files: [src"))
+        .expect("search files field should render");
+    let item_index = lines
+        .iter()
+        .position(|line| line.contains("src/main.rs"))
+        .expect("file result should render");
+
+    assert!(search_index < item_index);
 }
 
 #[test]

@@ -3,7 +3,7 @@ use hashbrown::HashMap;
 use anyhow::Result;
 
 use vtcode_core::config::constants::ui;
-use vtcode_core::config::models::Provider;
+use vtcode_core::config::models::{ModelId, Provider};
 use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_core::ui::{InlineListItem, InlineListSearchConfig, InlineListSelection};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
@@ -28,9 +28,10 @@ pub(super) const CUSTOM_PROVIDER_TITLE: &str = "Custom provider + model";
 pub(super) const CUSTOM_PROVIDER_SUBTITLE: &str =
     "Provide the provider name and model identifier manually.";
 const CUSTOM_PROVIDER_BADGE: &str = "Manual";
-const REASONING_BADGE: &str = "Reasoning";
 const REASONING_OFF_BADGE: &str = "No reasoning";
 const CURRENT_BADGE: &str = "Current";
+const TOOLS_LABEL: &str = "Tools";
+const NO_TOOLS_LABEL: &str = "No tools";
 
 pub(super) const KEEP_CURRENT_DESCRIPTION: &str = "Retain the existing reasoning configuration.";
 
@@ -39,6 +40,7 @@ pub(super) fn model_search_value(
     model_display: &str,
     model_id: &str,
     description: Option<&str>,
+    extra_terms: &[String],
 ) -> String {
     let provider_label = provider.label();
     let provider_key = provider.to_string();
@@ -57,7 +59,122 @@ pub(super) fn model_search_value(
         value.push(' ');
         value.push_str(description_text);
     }
+    for term in extra_terms {
+        if !term.trim().is_empty() {
+            value.push(' ');
+            value.push_str(term);
+        }
+    }
     value
+}
+
+fn is_current_model(
+    provider: Provider,
+    model_id: &str,
+    current_provider: &str,
+    current_model: &str,
+) -> bool {
+    provider
+        .to_string()
+        .eq_ignore_ascii_case(current_provider.trim())
+        && model_id.eq_ignore_ascii_case(current_model.trim())
+}
+
+fn input_modalities_label(input_modalities: &[&str]) -> Option<String> {
+    if input_modalities.is_empty() {
+        return None;
+    }
+
+    Some(format!("Input: {}", input_modalities.join(", ")))
+}
+
+fn static_model_capability_segments(model: ModelId, supports_reasoning: bool) -> Vec<String> {
+    let mut segments = Vec::new();
+    if supports_reasoning {
+        segments.push("Reasoning".to_string());
+    }
+
+    segments.push(if model.supports_tool_calls() {
+        TOOLS_LABEL.to_string()
+    } else {
+        NO_TOOLS_LABEL.to_string()
+    });
+
+    if let Some(modalities) = input_modalities_label(model.input_modalities()) {
+        segments.push(modalities);
+    }
+
+    segments
+}
+
+pub(super) fn static_model_search_terms(model: ModelId, supports_reasoning: bool) -> Vec<String> {
+    let mut terms = Vec::new();
+    if supports_reasoning {
+        terms.push("reasoning".to_string());
+    }
+
+    if model.supports_tool_calls() {
+        terms.push("tools".to_string());
+        terms.push("tool_call".to_string());
+        terms.push("toolcall".to_string());
+        terms.push("tool calling".to_string());
+    } else {
+        terms.push("no tools".to_string());
+        terms.push("no-tools".to_string());
+        terms.push("tool_call disabled".to_string());
+    }
+
+    let modalities = model.input_modalities();
+    if !modalities.is_empty() {
+        terms.push(format!("input {}", modalities.join(" ")));
+        terms.push("modalities".to_string());
+        terms.extend(modalities.iter().map(|modality| (*modality).to_string()));
+    }
+
+    terms
+}
+
+fn subtitle_from_segments(model_id: &str, current: bool, segments: Vec<String>) -> String {
+    let mut subtitle = vec![model_id.to_string()];
+    if current {
+        subtitle.push(CURRENT_BADGE.to_string());
+    }
+    subtitle.extend(segments);
+    subtitle.join(" • ")
+}
+
+pub(super) fn static_model_subtitle(
+    option: &ModelOption,
+    current_provider: &str,
+    current_model: &str,
+) -> String {
+    subtitle_from_segments(
+        option.id,
+        is_current_model(option.provider, option.id, current_provider, current_model),
+        static_model_capability_segments(option.model, option.supports_reasoning),
+    )
+}
+
+pub(super) fn dynamic_model_subtitle(
+    provider: Provider,
+    model_id: &str,
+    reasoning_supported: bool,
+    current_provider: &str,
+    current_model: &str,
+) -> String {
+    let mut segments = Vec::new();
+    if provider.is_local() {
+        segments.push("Local".to_string());
+    }
+    if reasoning_supported {
+        segments.push("Reasoning".to_string());
+    }
+
+    subtitle_from_segments(
+        model_id,
+        is_current_model(provider, model_id, current_provider, current_model),
+        segments,
+    )
 }
 
 pub(super) fn render_step_one_inline(
@@ -85,13 +202,14 @@ pub(super) fn render_step_one_inline(
         }
 
         for (idx, option) in &provider_models {
-            let badge = option
-                .supports_reasoning
-                .then(|| REASONING_BADGE.to_string());
             items.push(InlineListItem {
-                title: format!("{} · {}", provider.label(), option.display),
-                subtitle: Some(option.id.to_string()),
-                badge,
+                title: option.display.to_string(),
+                subtitle: Some(static_model_subtitle(
+                    option,
+                    current_provider,
+                    current_model,
+                )),
+                badge: Some(provider.label().to_string()),
                 indent: 0,
                 selection: Some(InlineListSelection::Model(*idx)),
                 search_value: Some(model_search_value(
@@ -99,6 +217,7 @@ pub(super) fn render_step_one_inline(
                     option.display,
                     option.id,
                     Some(option.description),
+                    &static_model_search_terms(option.model, option.supports_reasoning),
                 )),
             });
         }
@@ -106,14 +225,26 @@ pub(super) fn render_step_one_inline(
         if provider.is_dynamic() {
             for entry_index in &dynamic_indexes {
                 if let Some(detail) = dynamic_models.detail(*entry_index) {
+                    let extra_terms = {
+                        let mut terms = Vec::new();
+                        if provider.is_local() {
+                            terms.push("local".to_string());
+                        }
+                        if detail.reasoning_supported {
+                            terms.push("reasoning".to_string());
+                        }
+                        terms
+                    };
                     items.push(InlineListItem {
-                        title: format!("{} · {}", provider.label(), detail.model_display),
-                        subtitle: Some(detail.model_id.clone()),
-                        badge: if provider.is_local() {
-                            Some("Local".to_string())
-                        } else {
-                            None
-                        },
+                        title: detail.model_display.clone(),
+                        subtitle: Some(dynamic_model_subtitle(
+                            provider,
+                            &detail.model_id,
+                            detail.reasoning_supported,
+                            current_provider,
+                            current_model,
+                        )),
+                        badge: Some(provider.label().to_string()),
                         indent: 0,
                         selection: Some(InlineListSelection::DynamicModel(*entry_index)),
                         search_value: Some(model_search_value(
@@ -121,6 +252,7 @@ pub(super) fn render_step_one_inline(
                             &detail.model_display,
                             &detail.model_id,
                             None,
+                            &extra_terms,
                         )),
                     });
                 }
@@ -191,12 +323,12 @@ pub(super) fn render_step_one_inline(
 
     let lines = vec![
         current_line,
-        "↑/↓ select • Enter choose • Esc cancel • Type to filter".to_string(),
+        "↑/↓ select • Enter choose • Esc cancel".to_string(),
     ];
 
     let search = InlineListSearchConfig {
         label: "Search models".to_string(),
-        placeholder: Some("Type provider, model name, or id".to_string()),
+        placeholder: Some("provider, name, id, or capability".to_string()),
     };
     renderer.show_list_modal(STEP_ONE_TITLE, lines, items, selected, Some(search));
 
@@ -240,14 +372,10 @@ pub(super) fn render_step_one_plain(
             renderer.line(MessageStyle::Info, &format!("[{}]", provider.label()))?;
             if let Some(list) = grouped.get(&provider) {
                 for option in list {
-                    let reasoning_marker = if option.supports_reasoning {
-                        " [reasoning]"
-                    } else {
-                        ""
-                    };
+                    renderer.line(MessageStyle::Info, &format!("  {}", option.display))?;
                     renderer.line(
                         MessageStyle::Info,
-                        &format!("  {} • {}{}", option.display, option.id, reasoning_marker),
+                        &format!("      {}", static_model_subtitle(option, "", "")),
                     )?;
                     renderer.line(MessageStyle::Info, &format!("      {}", option.description))?;
                 }
@@ -274,9 +402,20 @@ pub(super) fn render_step_one_plain(
             } else {
                 for entry_index in dynamic_indexes {
                     if let Some(detail) = dynamic_models.detail(entry_index) {
+                        renderer
+                            .line(MessageStyle::Info, &format!("  {}", detail.model_display))?;
                         renderer.line(
                             MessageStyle::Info,
-                            &format!("  {} • {} (dynamic)", detail.model_display, detail.model_id),
+                            &format!(
+                                "      {}",
+                                dynamic_model_subtitle(
+                                    provider,
+                                    &detail.model_id,
+                                    detail.reasoning_supported,
+                                    "",
+                                    "",
+                                )
+                            ),
                         )?;
                         renderer.line(
                             MessageStyle::Info,
@@ -297,14 +436,10 @@ pub(super) fn render_step_one_plain(
             )?;
             if let Some(list) = grouped.get(&provider) {
                 for option in list {
-                    let reasoning_marker = if option.supports_reasoning {
-                        " [reasoning]"
-                    } else {
-                        ""
-                    };
+                    renderer.line(MessageStyle::Info, &format!("  {}", option.display))?;
                     renderer.line(
                         MessageStyle::Info,
-                        &format!("  {} • {}{}", option.display, option.id, reasoning_marker),
+                        &format!("      {}", static_model_subtitle(option, "", "")),
                     )?;
                     renderer.line(MessageStyle::Info, &format!("      {}", option.description))?;
                 }
@@ -319,14 +454,10 @@ pub(super) fn render_step_one_plain(
             first_section = false;
             renderer.line(MessageStyle::Info, &format!("[{}]", provider.label()))?;
             for option in list {
-                let reasoning_marker = if option.supports_reasoning {
-                    " [reasoning]"
-                } else {
-                    ""
-                };
+                renderer.line(MessageStyle::Info, &format!("  {}", option.display))?;
                 renderer.line(
                     MessageStyle::Info,
-                    &format!("  {} • {}{}", option.display, option.id, reasoning_marker),
+                    &format!("      {}", static_model_subtitle(option, "", "")),
                 )?;
                 renderer.line(MessageStyle::Info, &format!("      {}", option.description))?;
             }

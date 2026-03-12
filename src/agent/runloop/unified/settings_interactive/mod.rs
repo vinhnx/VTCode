@@ -27,9 +27,8 @@ pub(crate) use path::parent_view_path;
 use path::{PathToken, parse_path_tokens};
 
 const SETTINGS_TITLE: &str = "VT Code Settings";
-const SETTINGS_HINT: &str =
-    "Enter open/apply • ←/→ adjust • Esc back • Double Esc close • Type to filter";
-const SETTINGS_SEARCH_LABEL: &str = "Filter settings";
+const SETTINGS_HINT: &str = "Enter open/apply • ←/→ adjust • Esc back • Double Esc close";
+const SETTINGS_SEARCH_LABEL: &str = "Search settings";
 const SETTINGS_SEARCH_PLACEHOLDER: &str = "section, setting, or value";
 const ACTION_RELOAD: &str = "settings:reload";
 const ACTION_OPEN_ROOT: &str = "settings:open_root";

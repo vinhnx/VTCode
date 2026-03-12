@@ -1,6 +1,51 @@
+use crate::models::Provider;
+
 use super::ModelId;
 
+#[cfg(not(docsrs))]
+mod capability_generated {
+    include!(concat!(env!("OUT_DIR"), "/model_capabilities.rs"));
+}
+
+#[cfg(docsrs)]
+mod capability_generated {
+    #[derive(Clone, Copy)]
+    pub struct Entry {
+        pub provider: &'static str,
+        pub id: &'static str,
+        pub tool_call: bool,
+        pub input_modalities: &'static [&'static str],
+    }
+
+    pub const ENTRIES: &[Entry] = &[];
+
+    pub fn metadata_for(_provider: &str, _id: &str) -> Option<Entry> {
+        None
+    }
+}
+
+fn capability_provider_key(provider: Provider) -> &'static str {
+    match provider {
+        Provider::Gemini => "gemini",
+        Provider::OpenAI => "openai",
+        Provider::Anthropic => "anthropic",
+        Provider::DeepSeek => "deepseek",
+        Provider::OpenRouter => "openrouter",
+        Provider::Ollama => "ollama",
+        Provider::LmStudio => "lmstudio",
+        Provider::Moonshot => "moonshot",
+        Provider::ZAI => "zai",
+        Provider::Minimax => "minimax",
+        Provider::HuggingFace => "huggingface",
+        Provider::LiteLLM => "litellm",
+    }
+}
+
 impl ModelId {
+    fn generated_capabilities(&self) -> Option<capability_generated::Entry> {
+        capability_generated::metadata_for(capability_provider_key(self.provider()), self.as_str())
+    }
+
     /// Attempt to find a non-reasoning variant for this model.
     pub fn non_reasoning_variant(&self) -> Option<Self> {
         if let Some(meta) = self.openrouter_metadata() {
@@ -159,10 +204,20 @@ impl ModelId {
 
     /// Determine whether the model supports tool calls/function execution
     pub fn supports_tool_calls(&self) -> bool {
+        if let Some(meta) = self.generated_capabilities() {
+            return meta.tool_call;
+        }
         if let Some(meta) = self.openrouter_metadata() {
             return meta.tool_call;
         }
         true
+    }
+
+    /// Ordered list of supported input modalities when VT Code has metadata for this model.
+    pub fn input_modalities(&self) -> &'static [&'static str] {
+        self.generated_capabilities()
+            .map(|meta| meta.input_modalities)
+            .unwrap_or(&[])
     }
 
     /// Get the generation/version string for this model

@@ -6,8 +6,8 @@ use crate::config::constants::ui;
 use super::super::types::InlineTextStyle;
 use super::inline_list::{InlineListRow, selection_padding};
 use super::list_panel::{
-    SharedListPanelSections, SharedListPanelStyles, StaticRowsListPanelModel, fixed_section_rows,
-    render_shared_list_panel, rows_to_u16, split_bottom_list_panel,
+    SharedListPanelSections, SharedListPanelStyles, SharedSearchField, StaticRowsListPanelModel,
+    fixed_section_rows, render_shared_list_panel, rows_to_u16, split_bottom_list_panel,
 };
 use super::{
     Session, ratatui_color_from_ansi, ratatui_style_from_inline,
@@ -105,10 +105,10 @@ pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
     )
     .map(|prefix| {
         let filter = prefix.trim_start_matches('/');
-        if filter.is_empty() {
-            "Filter: (type to narrow commands)".to_owned()
-        } else {
-            format!("Filter: {}", filter)
+        SharedSearchField {
+            label: "Search commands".to_owned(),
+            placeholder: Some("command name or description".to_owned()),
+            query: filter.to_owned(),
         }
     });
     let sections = SharedListPanelSections {
@@ -117,7 +117,7 @@ pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
             default_style,
         ))],
         info: slash_palette_instructions(session),
-        search: search_line.map(|value| Line::from(Span::styled(value, default_style))),
+        search: search_line,
     };
     let mut model = StaticRowsListPanelModel {
         rows: rendered_rows,

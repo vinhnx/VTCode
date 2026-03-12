@@ -23,16 +23,17 @@ use super::display::persist_theme_preference;
 
 const THEME_PALETTE_TITLE: &str = "Theme";
 const THEME_ACTIVE_BADGE: &str = "Active";
-const THEME_SELECT_HINT: &str =
-    "↑/↓ choose • Enter apply • Esc cancel • Type to filter by name or id";
+const THEME_SELECT_HINT: &str = "↑/↓ choose • Enter apply • Esc cancel";
 const THEME_SEARCH_LABEL: &str = "Search themes";
-const THEME_SEARCH_PLACEHOLDER: &str = "Type theme name or id";
+const THEME_SEARCH_PLACEHOLDER: &str = "name, id, or appearance";
 const SESSION_FORK_PALETTE_TITLE: &str = "Fork session";
 const SESSION_RESUME_PALETTE_TITLE: &str = "Resume session";
 const SESSIONS_HINT_PRIMARY: &str = "Use ↑/↓ to browse sessions.";
 const SESSIONS_FORK_HINT_SECONDARY: &str = "Enter to fork session • Esc to close.";
 const SESSIONS_RESUME_HINT_SECONDARY: &str = "Enter to resume session • Esc to close.";
 const SESSIONS_LATEST_BADGE: &str = "Latest";
+const SESSIONS_SEARCH_LABEL: &str = "Search sessions";
+const SESSIONS_SEARCH_PLACEHOLDER: &str = "workspace, provider, model, date";
 
 #[derive(Clone)]
 pub(crate) enum ActivePalette {
@@ -113,6 +114,35 @@ fn theme_search_value(theme_id: &str, theme_label: &str) -> String {
     format!("{theme_label} {theme_id} theme appearance colors")
 }
 
+fn session_search_value(
+    listing: &SessionListing,
+    ended_local: &str,
+    duration_label: &str,
+    tool_count: usize,
+) -> String {
+    let tool_names = if listing.snapshot.distinct_tools.is_empty() {
+        String::new()
+    } else {
+        listing.snapshot.distinct_tools.join(" ")
+    };
+
+    format!(
+        "{} {} {} {} {} {} {} messages {} msgs {} tools {} {} {}",
+        listing.snapshot.metadata.workspace_label,
+        listing.snapshot.metadata.workspace_path,
+        listing.snapshot.metadata.model,
+        listing.snapshot.metadata.provider,
+        ended_local,
+        duration_label,
+        listing.snapshot.total_messages,
+        listing.snapshot.total_messages,
+        tool_count,
+        tool_names,
+        listing.snapshot.metadata.theme,
+        listing.snapshot.metadata.reasoning_effort,
+    )
+}
+
 pub(crate) fn show_sessions_palette(
     renderer: &mut AnsiRenderer,
     mode: SessionPaletteMode,
@@ -137,25 +167,30 @@ pub(crate) fn show_sessions_palette(
             .ended_at
             .signed_duration_since(listing.snapshot.started_at);
         let duration_std = duration.to_std().unwrap_or_else(|_| Duration::from_secs(0));
+        let duration_label = format_duration_label(duration_std);
+        let tool_count = listing.snapshot.distinct_tools.len();
         let detail = format!(
-            "Duration: {} · {} msgs · {} tools",
-            format_duration_label(duration_std),
+            "{} • {} / {} • {} • {} msgs • {} tools",
+            ended_local,
+            listing.snapshot.metadata.provider,
+            listing.snapshot.metadata.model,
+            duration_label,
             listing.snapshot.total_messages,
-            listing.snapshot.distinct_tools.len(),
+            tool_count,
         );
         let badge = (index == 0).then(|| SESSIONS_LATEST_BADGE.to_string());
         items.push(InlineListItem {
-            title: format!(
-                "{} · {} · {}",
-                ended_local,
-                listing.snapshot.metadata.model,
-                listing.snapshot.metadata.workspace_label,
-            ),
+            title: listing.snapshot.metadata.workspace_label.clone(),
             subtitle: Some(detail),
             badge,
             indent: 0,
             selection: Some(InlineListSelection::Session(listing.identifier())),
-            search_value: None,
+            search_value: Some(session_search_value(
+                listing,
+                &ended_local.to_string(),
+                &duration_label,
+                tool_count,
+            )),
         });
     }
 
@@ -186,7 +221,16 @@ pub(crate) fn show_sessions_palette(
     let selected = listings
         .first()
         .map(|listing| InlineListSelection::Session(listing.identifier()));
-    renderer.show_list_modal(title, lines, items, selected, None);
+    renderer.show_list_modal(
+        title,
+        lines,
+        items,
+        selected,
+        Some(InlineListSearchConfig {
+            label: SESSIONS_SEARCH_LABEL.to_string(),
+            placeholder: Some(SESSIONS_SEARCH_PLACEHOLDER.to_string()),
+        }),
+    );
     Ok(true)
 }
 
@@ -493,6 +537,8 @@ pub(crate) fn apply_prompt_style(handle: &InlineHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::{TimeZone, Utc};
+    use vtcode_core::utils::session_archive::{SessionArchiveMetadata, SessionSnapshot};
 
     #[test]
     fn normalize_config_selection_maps_cycle_prev_to_cycle() {
@@ -513,5 +559,38 @@ mod tests {
             normalized,
             InlineListSelection::ConfigAction("context.max_context_tokens:inc".to_string())
         );
+    }
+
+    #[test]
+    fn session_search_value_includes_workspace_model_and_counts() {
+        let listing = SessionListing {
+            path: "/tmp/session.json".into(),
+            snapshot: SessionSnapshot {
+                metadata: SessionArchiveMetadata::new(
+                    "vtcode",
+                    "/workspace/vtcode",
+                    "gpt-5.4",
+                    "openai",
+                    "sunrise",
+                    "medium",
+                ),
+                started_at: Utc.with_ymd_and_hms(2026, 3, 11, 9, 0, 0).unwrap(),
+                ended_at: Utc.with_ymd_and_hms(2026, 3, 11, 9, 5, 0).unwrap(),
+                total_messages: 12,
+                distinct_tools: vec!["unified_exec".to_string(), "unified_search".to_string()],
+                transcript: Vec::new(),
+                messages: Vec::new(),
+                progress: None,
+                error_logs: Vec::new(),
+            },
+        };
+
+        let value = session_search_value(&listing, "2026-03-11 16:05", "5m 0s", 2);
+        assert!(value.contains("vtcode"));
+        assert!(value.contains("gpt-5.4"));
+        assert!(value.contains("2026-03-11 16:05"));
+        assert!(value.contains("5m 0s"));
+        assert!(value.contains("12 messages"));
+        assert!(value.contains("2 tools"));
     }
 }

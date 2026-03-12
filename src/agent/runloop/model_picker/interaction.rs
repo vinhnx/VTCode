@@ -7,7 +7,10 @@ use vtcode_tui::ui::interactive_list::{SelectionEntry, run_interactive_selection
 
 use super::dynamic_models::DynamicModelRegistry;
 use super::options::{ModelOption, picker_provider_order};
-use super::rendering::{CUSTOM_PROVIDER_SUBTITLE, CUSTOM_PROVIDER_TITLE, KEEP_CURRENT_DESCRIPTION};
+use super::rendering::{
+    CUSTOM_PROVIDER_SUBTITLE, CUSTOM_PROVIDER_TITLE, KEEP_CURRENT_DESCRIPTION,
+    dynamic_model_subtitle, static_model_subtitle,
+};
 use super::selection::{
     ReasoningChoice, SelectionDetail, ServiceTierChoice, reasoning_level_description,
     reasoning_level_label, selection_from_option, service_tier_label, supports_xhigh_reasoning,
@@ -51,13 +54,16 @@ pub(super) fn select_model_with_ratatui_list(
             .filter(|option| option.provider == provider)
             .collect();
         for option in &provider_models {
-            let mut title = format!("{} • {}", provider.label(), option.display);
-            if option.supports_reasoning {
-                title.push_str(" [Reasoning]");
-            }
-            let description = format!("ID: {} — {}", option.id, option.description);
+            let description = format!(
+                "{} • {}",
+                provider.label(),
+                static_model_subtitle(option, "", "")
+            );
             choices.push(ModelSelectionChoice {
-                entry: SelectionEntry::new(title, Some(description)),
+                entry: SelectionEntry::new(
+                    option.display.to_string(),
+                    Some(format!("{description}\n{}", option.description)),
+                ),
                 outcome: ModelSelectionChoiceOutcome::Predefined(selection_from_option(option)),
             });
         }
@@ -82,15 +88,25 @@ pub(super) fn select_model_with_ratatui_list(
             } else {
                 for entry_index in dynamic_indexes {
                     if let Some(detail) = dynamic_models.detail(entry_index) {
-                        let title =
-                            format!("{} • {} (dynamic)", provider.label(), detail.model_display);
                         let description = format!(
-                            "ID: {} — Locally available {} model",
-                            detail.model_id,
+                            "{} • {}",
                             provider.label(),
+                            dynamic_model_subtitle(
+                                provider,
+                                &detail.model_id,
+                                detail.reasoning_supported,
+                                "",
+                                "",
+                            ),
                         );
                         choices.push(ModelSelectionChoice {
-                            entry: SelectionEntry::new(title, Some(description)),
+                            entry: SelectionEntry::new(
+                                detail.model_display.clone(),
+                                Some(format!(
+                                    "{description}\nLocally available {} model",
+                                    provider.label(),
+                                )),
+                            ),
                             outcome: ModelSelectionChoiceOutcome::Predefined(detail.clone()),
                         });
                     }
@@ -141,7 +157,9 @@ pub(super) fn select_model_with_ratatui_list(
         .cloned()
         .collect();
 
-    let instructions = "Models marked with [Reasoning] support adjustable reasoning.".to_string();
+    let instructions =
+        "Provider, model id, reasoning, tools, and input modalities are shown in each entry."
+            .to_string();
 
     let selection = run_interactive_selection("Models", &instructions, &entries, 0)?;
     let selected_index = match selection {

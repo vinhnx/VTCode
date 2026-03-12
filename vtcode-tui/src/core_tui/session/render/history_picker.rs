@@ -1,8 +1,8 @@
 use super::*;
 use crate::ui::tui::session::inline_list::InlineListRow;
 use crate::ui::tui::session::list_panel::{
-    SharedListPanelSections, SharedListPanelStyles, SharedListWidgetModel, fixed_section_rows,
-    render_shared_list_panel, rows_to_u16, split_bottom_list_panel,
+    SharedListPanelSections, SharedListPanelStyles, SharedListWidgetModel, SharedSearchField,
+    fixed_section_rows, render_shared_list_panel, rows_to_u16, split_bottom_list_panel,
 };
 
 struct HistoryPickerPanelModel {
@@ -125,11 +125,6 @@ pub fn render_history_picker(session: &mut Session, frame: &mut Frame<'_>, area:
         )
     };
     let default_style = default_style(session);
-    let filter_text = if query.is_empty() {
-        "Filter: (type to search)".to_owned()
-    } else {
-        format!("Filter: {}", query)
-    };
     let sections = SharedListPanelSections {
         header: vec![Line::from(Span::styled(
             "History".to_owned(),
@@ -139,7 +134,11 @@ pub fn render_history_picker(session: &mut Session, frame: &mut Frame<'_>, area:
             "Ctrl+R open • Enter accept • Esc cancel".to_owned(),
             default_style,
         ))],
-        search: Some(Line::from(Span::styled(filter_text, default_style))),
+        search: Some(SharedSearchField {
+            label: "Search history".to_owned(),
+            placeholder: Some("history text".to_owned()),
+            query,
+        }),
     };
 
     let entries = matches

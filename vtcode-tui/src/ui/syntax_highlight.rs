@@ -12,16 +12,17 @@
 //! # Usage
 //!
 //! ```rust
-//! use crate::ui::syntax_highlight::{
-//!     highlight_code_to_segments, get_active_syntax_theme
+//! use vtcode_tui::ui::syntax_highlight::{
+//!     get_active_syntax_theme, highlight_code_to_segments,
 //! };
-//! use crate::ui::theme::active_theme_id;
 //!
 //! // Auto-resolve syntax theme from current UI theme
 //! let syntax_theme = get_active_syntax_theme();
 //!
 //! // Highlight code with proper theme
+//! let code = "fn main() { println!(\"hi\"); }";
 //! let segments = highlight_code_to_segments(code, Some("rust"), syntax_theme);
+//! assert!(!segments.is_empty());
 //! ```
 //!
 //! # Performance

@@ -862,6 +862,7 @@ impl ModalListState {
             .is_some_and(|value| !value.is_empty())
     }
 
+    #[cfg(test)]
     pub(super) fn filter_query(&self) -> Option<&str> {
         self.filter_query.as_deref()
     }

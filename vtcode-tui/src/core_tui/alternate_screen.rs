@@ -28,6 +28,7 @@ struct TerminalState {
 /// # Example
 ///
 /// ```no_run
+/// # fn main() -> anyhow::Result<()> {
 /// use vtcode_tui::core_tui::alternate_screen::AlternateScreenSession;
 ///
 /// // Run a closure in alternate screen with automatic cleanup
@@ -36,6 +37,8 @@ struct TerminalState {
 ///     println!("Running in alternate screen!");
 ///     Ok(())
 /// })?;
+/// # Ok(())
+/// # }
 /// ```
 pub struct AlternateScreenSession {
     /// Terminal state before entering alternate screen

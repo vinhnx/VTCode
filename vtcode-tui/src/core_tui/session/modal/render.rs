@@ -5,7 +5,8 @@ use crate::ui::tui::session::inline_list::{
     selection_padding, selection_padding_width,
 };
 use crate::ui::tui::session::list_panel::{
-    SharedListPanelSections, SharedListPanelStyles, SharedListWidgetModel, render_shared_list_panel,
+    SharedListPanelSections, SharedListPanelStyles, SharedListWidgetModel, SharedSearchField,
+    render_shared_list_panel, render_shared_search_field,
 };
 use crate::ui::tui::types::{InlineListSelection, SecurePromptConfig};
 use ratatui::{
@@ -366,7 +367,7 @@ pub fn render_wizard_modal_body(
             .map(|line| Line::from(Span::styled(line, styles.hint))),
     );
 
-    // Layout: [Header] [Info] [Main content list] [Search?]
+    // Layout: [Header] [Info] [Search?] [Main content list]
     let mut constraints = Vec::new();
     if is_multistep {
         constraints.push(Constraint::Length(
@@ -378,10 +379,10 @@ pub fn render_wizard_modal_body(
     constraints.push(Constraint::Length(
         info_lines.len().max(1).min(u16::MAX as usize) as u16,
     ));
-    constraints.push(Constraint::Min(3));
     if wizard.search.is_some() {
         constraints.push(Constraint::Length(1));
     }
+    constraints.push(Constraint::Min(3));
 
     let chunks = Layout::vertical(constraints).split(area);
 
@@ -400,7 +401,16 @@ pub fn render_wizard_modal_body(
     frame.render_widget(info, text_alignment_fn(chunks[idx]));
     idx += 1;
 
-    if let Some(step) = wizard.steps.get_mut(wizard.current_step) {
+    if let Some(search) = wizard.search.as_ref()
+        && idx < chunks.len()
+    {
+        render_modal_search(frame, text_alignment_fn(chunks[idx]), search, styles);
+        idx += 1;
+    }
+
+    if let Some(step) = wizard.steps.get_mut(wizard.current_step)
+        && idx < chunks.len()
+    {
         render_modal_list(
             frame,
             chunks[idx],
@@ -409,13 +419,6 @@ pub fn render_wizard_modal_body(
             None,
             inline_editor.as_ref(),
         );
-    }
-    idx += 1;
-
-    if let Some(search) = wizard.search.as_ref()
-        && idx < chunks.len()
-    {
-        render_modal_search(frame, text_alignment_fn(chunks[idx]), search, styles);
     }
 }
 
@@ -431,24 +434,9 @@ fn modal_list_summary_line(
     }
 
     let mut spans = Vec::new();
-    if let Some(query) = list.filter_query().filter(|value| !value.is_empty()) {
-        spans.push(Span::styled(
-            format!("{}:", ui::MODAL_LIST_SUMMARY_FILTER_LABEL),
-            styles.detail,
-        ));
-        spans.push(Span::raw(" "));
-        spans.push(Span::styled(query.to_owned(), styles.selectable));
-    }
-
     let matches = list.visible_selectable_count();
     let total = list.total_selectable();
     if matches == 0 {
-        if !spans.is_empty() {
-            spans.push(Span::styled(
-                ui::MODAL_LIST_SUMMARY_SEPARATOR.to_owned(),
-                styles.detail,
-            ));
-        }
         spans.push(Span::styled(
             ui::MODAL_LIST_SUMMARY_NO_MATCHES.to_owned(),
             styles.search_match,
@@ -464,12 +452,6 @@ fn modal_list_summary_line(
             ));
         }
     } else {
-        if !spans.is_empty() {
-            spans.push(Span::styled(
-                ui::MODAL_LIST_SUMMARY_SEPARATOR.to_owned(),
-                styles.detail,
-            ));
-        }
         spans.push(Span::styled(
             format!(
                 "{} {} {} {}",
@@ -505,11 +487,11 @@ pub fn render_modal_body(frame: &mut Frame<'_>, area: Rect, context: ModalBodyCo
     if context.secure_prompt.is_some() {
         sections.push(ModalSection::Prompt);
     }
-    if context.list.is_some() {
-        sections.push(ModalSection::List);
-    }
     if context.search.is_some() {
         sections.push(ModalSection::Search);
+    }
+    if context.list.is_some() {
+        sections.push(ModalSection::List);
     }
 
     if sections.is_empty() {
@@ -720,21 +702,20 @@ fn render_modal_search(
         return;
     }
 
-    let mut line = vec![Span::styled(format!("{}: ", search.label), styles.header)];
-    if search.query.is_empty() {
-        if let Some(placeholder) = &search.placeholder {
-            line.push(Span::styled(
-                placeholder.clone(),
-                styles.detail.add_modifier(Modifier::ITALIC),
-            ));
-        }
-    } else {
-        line.push(Span::styled(search.query.clone(), styles.selectable));
-        line.push(Span::styled(" • Esc clears", styles.hint));
-    }
-    line.push(Span::styled("▌".to_owned(), styles.highlight));
-    let paragraph = Paragraph::new(Line::from(line)).wrap(Wrap { trim: true });
-    frame.render_widget(paragraph, area);
+    let search = SharedSearchField {
+        label: search.label.clone(),
+        placeholder: search.placeholder.clone(),
+        query: search.query.clone(),
+    };
+    render_shared_search_field(
+        frame,
+        area,
+        &search,
+        styles.header,
+        styles.selectable,
+        styles.detail,
+        styles.highlight,
+    );
 }
 
 fn render_secure_prompt(
@@ -997,12 +978,80 @@ fn modal_badge_style(badge: &str, styles: &ModalRenderStyles) -> Style {
 mod tests {
     use super::*;
     use crate::ui::tui::InlineListItem;
+    use ratatui::{Terminal, backend::TestBackend};
 
     fn line_text(line: &Line<'_>) -> String {
         line.spans
             .iter()
             .map(|span| span.content.clone().into_owned())
             .collect::<String>()
+    }
+
+    fn modal_render_styles() -> ModalRenderStyles {
+        ModalRenderStyles {
+            border: Style::default(),
+            highlight: Style::default(),
+            badge: Style::default(),
+            header: Style::default(),
+            selectable: Style::default(),
+            detail: Style::default(),
+            search_match: Style::default(),
+            title: Style::default(),
+            divider: Style::default(),
+            instruction_border: Style::default(),
+            instruction_title: Style::default(),
+            instruction_bullet: Style::default(),
+            instruction_body: Style::default(),
+            hint: Style::default(),
+        }
+    }
+
+    fn render_modal_lines(search: ModalSearchState) -> Vec<String> {
+        let styles = modal_render_styles();
+        let mut list = ModalListState::new(
+            vec![InlineListItem {
+                title: "Alpha".to_string(),
+                subtitle: Some("First item".to_string()),
+                badge: Some("OpenAI".to_string()),
+                indent: 0,
+                selection: Some(InlineListSelection::Model(0)),
+                search_value: Some("alpha".to_string()),
+            }],
+            None,
+        );
+        let instructions = vec!["Choose a model".to_string()];
+        let backend = TestBackend::new(80, 8);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+
+        terminal
+            .draw(|frame| {
+                render_modal_body(
+                    frame,
+                    Rect::new(0, 0, 80, 8),
+                    ModalBodyContext {
+                        instructions: &instructions,
+                        footer_hint: None,
+                        list: Some(&mut list),
+                        styles: &styles,
+                        secure_prompt: None,
+                        search: Some(&search),
+                        input: "",
+                        cursor: 0,
+                    },
+                );
+            })
+            .expect("modal render should succeed");
+
+        let buffer = terminal.backend().buffer();
+        (0..buffer.area.height)
+            .map(|y| {
+                (0..buffer.area.width)
+                    .filter_map(|x| buffer.cell((x, y)).map(|cell| cell.symbol().to_string()))
+                    .collect::<String>()
+                    .trim_end()
+                    .to_string()
+            })
+            .collect()
     }
 
     #[test]
@@ -1128,5 +1177,67 @@ mod tests {
         let area = Rect::new(2, 1, gutter, 2);
         let aligned = modal_text_area_aligned_with_list(area);
         assert_eq!(aligned, area);
+    }
+
+    #[test]
+    fn modal_search_field_renders_placeholder_inside_brackets() {
+        let lines = render_modal_lines(ModalSearchState {
+            label: "Search models".to_string(),
+            placeholder: Some("provider, name, id".to_string()),
+            query: String::new(),
+        });
+
+        let search_line = lines
+            .iter()
+            .find(|line| line.contains("Search models:"))
+            .expect("search line should render");
+        assert!(search_line.contains("[provider, name, id"));
+        assert!(search_line.contains("]"));
+    }
+
+    #[test]
+    fn modal_search_field_renders_query_above_list() {
+        let lines = render_modal_lines(ModalSearchState {
+            label: "Search models".to_string(),
+            placeholder: Some("provider, name, id".to_string()),
+            query: "openrouter".to_string(),
+        });
+
+        let search_index = lines
+            .iter()
+            .position(|line| line.contains("Search models: [openrouter"))
+            .expect("search query should render");
+        let item_index = lines
+            .iter()
+            .position(|line| line.contains("Alpha"))
+            .expect("list item should render");
+
+        assert!(lines[search_index].contains("Esc clears"));
+        assert!(search_index < item_index);
+    }
+
+    #[test]
+    fn filtered_modal_summary_shows_matches_without_repeating_query() {
+        let list = ModalListState::new(
+            vec![InlineListItem {
+                title: "gpt-5".to_string(),
+                subtitle: Some("General reasoning".to_string()),
+                badge: None,
+                indent: 0,
+                selection: Some(InlineListSelection::Model(0)),
+                search_value: Some("gpt-5".to_string()),
+            }],
+            None,
+        );
+        let styles = modal_render_styles();
+        let mut list = list;
+        list.apply_search("gpt");
+
+        let summary = modal_list_summary_line(&list, &styles, None).expect("summary should exist");
+        let text = line_text(&summary);
+
+        assert!(text.contains("Matches 1 of 1"));
+        assert!(!text.contains("gpt"));
+        assert!(!text.contains("Filter:"));
     }
 }

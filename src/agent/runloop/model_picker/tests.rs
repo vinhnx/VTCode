@@ -68,16 +68,67 @@ fn model_picker_lists_new_gemini_models() {
 
 #[test]
 fn model_search_value_includes_provider_model_aliases() {
+    let extra_terms = vec![
+        "reasoning".to_string(),
+        "tools".to_string(),
+        "image".to_string(),
+    ];
     let value = super::rendering::model_search_value(
         Provider::OpenAI,
         "GPT-5.2",
         "gpt-5.2",
         Some("Latest frontier model"),
+        &extra_terms,
     )
     .to_ascii_lowercase();
 
     assert!(value.contains("openai gpt-5.2"));
     assert!(value.contains("openai/gpt-5.2"));
+    assert!(value.contains("reasoning"));
+    assert!(value.contains("tools"));
+    assert!(value.contains("image"));
+}
+
+#[test]
+fn static_model_subtitle_formats_current_capabilities() {
+    let option = MODEL_OPTIONS
+        .iter()
+        .find(|option| option.model == ModelId::GPT54)
+        .expect("gpt-5.4 option should exist");
+
+    let subtitle = super::rendering::static_model_subtitle(option, "openai", "gpt-5.4");
+
+    assert_eq!(
+        subtitle,
+        "gpt-5.4 • Current • Reasoning • Tools • Input: text, image"
+    );
+}
+
+#[test]
+fn static_model_search_terms_include_modalities_and_tool_state() {
+    let terms =
+        super::rendering::static_model_search_terms(ModelId::OpenRouterOpenAIGpt5Chat, false);
+
+    assert!(terms.iter().any(|term| term == "no tools"));
+    assert!(terms.iter().any(|term| term == "no-tools"));
+    assert!(terms.iter().any(|term| term == "tool_call disabled"));
+    assert!(terms.iter().any(|term| term == "modalities"));
+    assert!(terms.iter().any(|term| term == "file"));
+    assert!(terms.iter().any(|term| term == "image"));
+    assert!(terms.iter().any(|term| term == "text"));
+}
+
+#[test]
+fn dynamic_model_subtitle_stays_conservative_for_unknown_local_models() {
+    let subtitle = super::rendering::dynamic_model_subtitle(
+        Provider::Ollama,
+        "custom-local-model",
+        false,
+        "ollama",
+        "custom-local-model",
+    );
+
+    assert_eq!(subtitle, "custom-local-model • Current • Local");
 }
 
 fn base_picker_state(current_provider: &str, current_model: &str) -> ModelPickerState {

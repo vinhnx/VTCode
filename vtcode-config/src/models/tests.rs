@@ -410,6 +410,25 @@ fn test_core_capability_helpers() {
 }
 
 #[test]
+fn test_generated_model_capability_lookup() {
+    assert_eq!(ModelId::GPT54.input_modalities(), &["text", "image"]);
+    assert_eq!(
+        ModelId::Gemini31ProPreview.input_modalities(),
+        &["text", "image", "video", "audio", "pdf"]
+    );
+    assert_eq!(ModelId::ClaudeOpus46.input_modalities(), &["text", "image"]);
+    assert_eq!(
+        ModelId::OpenRouterOpenAIGpt5Chat.input_modalities(),
+        &["file", "image", "text"]
+    );
+
+    assert!(ModelId::GPT54.supports_tool_calls());
+    assert!(ModelId::Gemini31ProPreview.supports_tool_calls());
+    assert!(!ModelId::OpenRouterOpenAIGpt5Chat.supports_tool_calls());
+    assert!(!ModelId::OpenRouterDeepSeekV32Speciale.supports_tool_calls());
+}
+
+#[test]
 fn test_enum_variants_match_all_models_collection() {
     let src = include_str!("model_id.rs");
     let mut in_enum = false;
