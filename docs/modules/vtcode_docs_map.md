@@ -619,6 +619,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: anstyle-git Syntax, anstyle-ls Syntax, Git Config Color Syntax, Vtcode Integration Points, Cheat Sheet: Common Patterns
   - **User Questions**: "What can you tell me about Quick Reference: Anstyle Crates?", "How does anstyle-git Syntax work?", "How does anstyle-ls Syntax work?"
 
+- **File**: `docs/project/TODO.md`
+  - **Content**: README install instructions
+  - **Topics**: Why \*nix, Why a single `run`, Heuristic design: making CLI guide the agent, Two-layer architecture: engineering the heuristic design, Lessons learned: stories from production
+  - **User Questions**: "What can you tell me about README install instructions?", "How does Why \*nix work?", "How does Why a single `run` work?"
+
 - **File**: `docs/features/SHELL_SNAPSHOT.md`
   - **Content**: Shell Environment Snapshot
   - **Topics**: Problem, Solution, Usage, Architecture, Excluded Environment Variables
@@ -648,10 +653,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Content**: Styling Quick Start Guide
   - **Topics**: For CLI Output, For TUI Widgets, Unified Theme, Color Reference, Common Patterns
   - **User Questions**: "What can you tell me about Styling Quick Start Guide?", "How does For CLI Output work?", "How does For TUI Widgets work?"
-
-- **File**: `docs/project/TODO.md`
-  - **Content**: TODO.md
-  - **User Questions**: "What can you tell me about TODO.md?"
 
 - **File**: `docs/harness/TECH_DEBT_TRACKER.md`
   - **Content**: Tech Debt Tracker
