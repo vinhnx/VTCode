@@ -86,7 +86,7 @@ default_editing_mode = "edit"
 # Default model to use
 # Default: "gpt-5.3-codex"
 # Type: `string`
-default_model = "gpt-oss:120b-cloud"
+default_model = "nemotron-3-super:cloud"
 
 # Enable an extra self-review pass to refine final responses
 # Default: false

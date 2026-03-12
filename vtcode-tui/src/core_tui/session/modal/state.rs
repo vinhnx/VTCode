@@ -1,5 +1,5 @@
 use crate::config::constants::ui;
-use crate::ui::search::{fuzzy_match, normalize_query};
+use crate::ui::search::{exact_terms_match, normalize_query};
 use crate::ui::tui::types::{
     InlineEvent, InlineListItem, InlineListSearchConfig, InlineListSelection, OverlayEvent,
     OverlayHotkey, OverlayHotkeyAction, OverlayHotkeyKey, OverlaySelectionChange,
@@ -454,7 +454,7 @@ impl ModalListItem {
         let Some(value) = self.search_value.as_ref() else {
             return false;
         };
-        fuzzy_match(query, value)
+        exact_terms_match(query, value)
     }
 }
 
@@ -592,7 +592,7 @@ impl ModalListState {
             .filter_map(|&idx| self.items.get(idx))
             .filter(|item| item.selection.is_some())
             .filter_map(|item| item.search_value.as_ref())
-            .find(|search_value| fuzzy_match(&normalized_query, search_value))
+            .find(|search_value| exact_terms_match(&normalized_query, search_value))
             .cloned()
     }
 

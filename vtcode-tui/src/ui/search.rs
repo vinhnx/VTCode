@@ -40,6 +40,20 @@ pub fn fuzzy_match(query: &str, candidate: &str) -> bool {
     pattern.score(utf32_candidate, &mut matcher).is_some()
 }
 
+/// Returns true when every whitespace-separated term in `query` appears as a
+/// case-insensitive substring within `candidate`. Both `query` and `candidate`
+/// are expected to be pre-lowered (via [`normalize_query`] and construction-time
+/// lowering respectively), so this function performs zero allocations.
+#[inline]
+pub fn exact_terms_match(query: &str, candidate: &str) -> bool {
+    if query.is_empty() {
+        return true;
+    }
+    query
+        .split_whitespace()
+        .all(|term| candidate.contains(term))
+}
+
 /// Returns true when the characters from `needle` can be found in order within
 /// `haystack` (kept for backward compatibility).
 pub fn fuzzy_subsequence(needle: &str, haystack: &str) -> bool {
@@ -126,5 +140,51 @@ mod tests {
     fn fuzzy_score_returns_none_for_non_matches() {
         // Test that fuzzy scoring returns None for non-matches
         assert!(fuzzy_score("xyz", "src/main.rs").is_none());
+    }
+
+    #[test]
+    fn exact_terms_match_requires_substring() {
+        // Candidates are pre-lowered (as done by ModalListState construction)
+        assert!(exact_terms_match("openai", "openai openai gpt-5.4 gpt-5.4"));
+        assert!(exact_terms_match("gpt", "openai openai gpt-5.4 gpt-5.4"));
+        assert!(!exact_terms_match("anthropic", "openai openai gpt-5.4 gpt-5.4"));
+    }
+
+    #[test]
+    fn exact_terms_match_multi_term_requires_all() {
+        let candidate = "anthropic anthropic claude 4 sonnet claude-4-sonnet";
+        assert!(exact_terms_match("anthropic claude", candidate));
+        assert!(exact_terms_match("sonnet", candidate));
+        assert!(!exact_terms_match("anthropic gpt", candidate));
+    }
+
+    #[test]
+    fn exact_terms_match_empty_query_matches_everything() {
+        assert!(exact_terms_match("", "anything"));
+    }
+
+    #[test]
+    fn exact_terms_match_rejects_fuzzy_subsequences() {
+        assert!(!exact_terms_match("smr", "src/main.rs"));
+    }
+
+    #[test]
+    fn exact_terms_match_provider_filtering() {
+        let openai = "openai openai gpt-5.4 gpt-5.4 reasoning tools image";
+        let anthropic = "anthropic anthropic claude 4 sonnet claude-4-sonnet reasoning tools";
+        let gemini = "gemini gemini gemini 2.5 pro gemini-2.5-pro reasoning tools";
+
+        // Single provider term filters correctly
+        assert!(exact_terms_match("openai", openai));
+        assert!(!exact_terms_match("openai", anthropic));
+        assert!(!exact_terms_match("openai", gemini));
+
+        // Provider + model narrows further
+        assert!(exact_terms_match("openai gpt", openai));
+        assert!(!exact_terms_match("openai claude", openai));
+
+        // Capability filter works across providers
+        assert!(exact_terms_match("reasoning", openai));
+        assert!(exact_terms_match("reasoning", anthropic));
     }
 }
