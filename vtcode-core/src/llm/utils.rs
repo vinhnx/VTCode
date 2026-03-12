@@ -6,60 +6,11 @@
 use anyhow::{Context, Result};
 use serde_json::Value;
 
-use crate::llm::provider::{
-    LLMRequest, LLMResponse, LLMStreamEvent, Message, MessageContent, MessageRole, ToolCall,
-};
+use crate::llm::provider::{LLMRequest, LLMResponse, LLMStreamEvent, ToolCall};
 
 /// Parse chat request from OpenAI-compatible format
 pub fn parse_chat_request_openai_format(value: &Value, default_model: &str) -> Option<LLMRequest> {
-    let messages = value.get("messages")?.as_array()?;
-    let model = value
-        .get("model")
-        .and_then(|m| m.as_str())
-        .unwrap_or(default_model);
-
-    let mut parsed_messages = Vec::with_capacity(messages.len());
-
-    for msg in messages {
-        let role_str = msg.get("role")?.as_str()?;
-        let content = msg.get("content")?.as_str()?;
-
-        let role = match role_str {
-            "system" => MessageRole::System,
-            "user" => MessageRole::User,
-            "assistant" => MessageRole::Assistant,
-            "tool" => MessageRole::Tool,
-            _ => return None, // Invalid role
-        };
-
-        parsed_messages.push(Message {
-            role,
-            content: MessageContent::Text(content.to_string()),
-            reasoning: None,
-            reasoning_details: None,
-            tool_calls: None,
-            tool_call_id: None,
-            phase: None,
-            origin_tool: None,
-        });
-    }
-
-    let temperature = value
-        .get("temperature")
-        .and_then(|t| t.as_f64().map(|f| f as f32));
-    let max_tokens = value
-        .get("max_completion_tokens")
-        .or_else(|| value.get("max_tokens"))
-        .and_then(Value::as_u64)
-        .and_then(|tokens| u32::try_from(tokens).ok());
-
-    Some(LLMRequest {
-        messages: parsed_messages,
-        model: model.to_string(),
-        temperature,
-        max_tokens,
-        ..Default::default()
-    })
+    crate::llm::providers::common::parse_chat_request_openai_format(value, default_model)
 }
 
 /// Parse response from OpenAI-compatible format
@@ -335,6 +286,7 @@ pub fn validate_model_string(model: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::llm::provider::{AssistantPhase, MessageRole};
 
     #[test]
     fn test_parse_chat_request_openai_format() {
@@ -342,7 +294,7 @@ mod tests {
             "model": "gpt-5",
             "messages": [
                 {"role": "user", "content": "Hello"},
-                {"role": "assistant", "content": "Hi there"}
+                {"role": "assistant", "content": "Hi there", "phase": "commentary"}
             ],
             "temperature": 0.7,
             "max_tokens": 100
@@ -353,8 +305,24 @@ mod tests {
         assert_eq!(request.messages.len(), 2);
         assert_eq!(request.messages[0].role, MessageRole::User);
         assert_eq!(request.messages[0].content.as_text(), "Hello");
+        assert_eq!(request.messages[0].phase, None);
+        assert_eq!(request.messages[1].phase, Some(AssistantPhase::Commentary));
         assert_eq!(request.temperature, Some(0.7));
         assert_eq!(request.max_tokens, Some(100));
+    }
+
+    #[test]
+    fn test_parse_chat_request_openai_format_ignores_phase_for_non_assistant_roles() {
+        let json = serde_json::json!({
+            "messages": [
+                {"role": "user", "content": "Hello", "phase": "commentary"},
+                {"role": "tool", "content": "{}", "tool_call_id": "call_1", "phase": "final_answer"}
+            ]
+        });
+
+        let request = parse_chat_request_openai_format(&json, "default-model").unwrap();
+        assert_eq!(request.messages[0].phase, None);
+        assert_eq!(request.messages[1].phase, None);
     }
 
     #[test]

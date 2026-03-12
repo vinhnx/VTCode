@@ -768,7 +768,7 @@ pub fn parse_chat_request_openai_format_with_extractor<F>(
 where
     F: Fn(&Value) -> String,
 {
-    use crate::llm::provider::Message;
+    use crate::llm::provider::{AssistantPhase, Message};
 
     let messages_value = value.get("messages")?.as_array()?;
     let mut system_prompt = value
@@ -786,6 +786,10 @@ where
             .get("content")
             .map(&content_extractor)
             .unwrap_or_default();
+        let assistant_phase = entry
+            .get("phase")
+            .and_then(Value::as_str)
+            .and_then(AssistantPhase::from_wire_str);
 
         match role {
             "system" => {
@@ -806,9 +810,11 @@ where
                     .filter(|calls| !calls.is_empty());
 
                 if let Some(calls) = tool_calls {
-                    messages.push(Message::assistant_with_tools(content, calls));
+                    messages.push(
+                        Message::assistant_with_tools(content, calls).with_phase(assistant_phase),
+                    );
                 } else {
-                    messages.push(Message::assistant(content));
+                    messages.push(Message::assistant(content).with_phase(assistant_phase));
                 }
             }
             "tool" => {
@@ -1187,9 +1193,10 @@ mod tests {
     use super::{
         assistant_interleaved_history_text, extract_reasoning_text_from_detail_values,
         extract_reasoning_text_from_serialized_details, is_interleaved_thinking_model,
-        is_minimax_m2_model, normalize_reasoning_detail_object, parse_response_openai_format,
+        is_minimax_m2_model, normalize_reasoning_detail_object, parse_chat_request_openai_format,
+        parse_response_openai_format,
     };
-    use crate::llm::provider::Message;
+    use crate::llm::provider::{AssistantPhase, Message};
     use serde_json::{Value, json};
 
     #[test]
@@ -1342,5 +1349,24 @@ mod tests {
             extract_reasoning_text_from_serialized_details(&details).as_deref(),
             Some("first\n\nsecond")
         );
+    }
+
+    #[test]
+    fn parse_chat_request_openai_format_preserves_assistant_phase() {
+        let request = parse_chat_request_openai_format(
+            &json!({
+                "messages": [
+                    {"role": "assistant", "content": "Working", "phase": "commentary"},
+                    {"role": "assistant", "content": "Done", "phase": "final_answer"},
+                    {"role": "user", "content": "Continue", "phase": "commentary"}
+                ]
+            }),
+            "default-model",
+        )
+        .expect("request should parse");
+
+        assert_eq!(request.messages[0].phase, Some(AssistantPhase::Commentary));
+        assert_eq!(request.messages[1].phase, Some(AssistantPhase::FinalAnswer));
+        assert_eq!(request.messages[2].phase, None);
     }
 }

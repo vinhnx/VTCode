@@ -62,43 +62,11 @@ https://defuddle.md/x.com/akshay_pachaar/status/2031021906254766128
 
 Agent runs, human steers. apply this philosophy in the VT Code harness.
 
----
-
-https://code.claude.com/docs/en/interactive-mode#side-questions-with-btw
+https://deepwiki.com/search/agent-runs-human-steers_bdeb1567-cd33-46cf-b8bb-1ecfe32e7c28
 
 ---
 
-https://defuddle.md/doc.rust-lang.org/nomicon/print.html
-
----
-
-GPT-5.4 can communicate back to the user while it's working on longer tasks!
-
-We introduced a new "phase" parameter for this to help you identify whether this message is a final response to the user or a "commentary". People have enjoyed these updates in Codex and you can have them in your agents!
-
-If you are building your own agent it's important that you also pass this parameter back to the API on subsequent terms.
-
-https://developers.openai.com/api/docs/guides/prompt-guidance
-
-```
-Use runtime and API integration notes
-
-For long-running or tool-heavy agents, the runtime contract matters as much as the prompt contract.
-
-Phase parameter
-
-To better support preamble messages with GPT-5.4, the Responses API includes a phase field designed to prevent early stopping on longer-running tasks and other misbehaviors.
-
-    phase is optional at the API level, but it is highly recommended. Best-effort inference may exist server-side, but explicit round-tripping of phase is strictly better.
-    Use phase for long-running or tool-heavy agents that may emit commentary before tool calls or before a final answer.
-    Preserve phase when replaying prior assistant items so the model can distinguish working commentary from the completed answer. This matters most in multi-step flows with preambles, tool-related updates, or multiple assistant messages in the same turn.
-    Do not add phase to user messages.
-    If you use previous_response_id, that is usually the simplest path, since OpenAI can often recover prior state without manually replaying assistant items.
-    If you replay assistant history yourself, preserve the original phase values.
-    Missing or dropped phase can cause preambles to be interpreted as final answers and degrade behavior on longer, multi-step tasks.
-```
-
-reference: https://deepwiki.com/search/phase-parameter_d4ba22d4-4932-4445-a732-43942aaf6ca8?mode=fast
+https://code.claude.com/docs/en/interactive-mode
 
 ==
 
