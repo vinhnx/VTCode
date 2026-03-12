@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.50.11] - 2026-03-12
+
 ### Added
 
 -   Support for placing the VT Code view container in VS Code's Secondary Side Bar (VS Code 1.106+). This allows users to move the VT Code container into the secondary side bar for improved workspace layout.
