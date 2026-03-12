@@ -2,6 +2,22 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.88.1 - 2026-03-12
+
+### Highlights
+#### Features
+
+- Add NVIDIA Nemotron 3 Super (free) model support (c3c203a0) 
+- Add live editor context and transcript file links (c330e4b3) 
+### Other Changes
+#### Other
+
+- Add search tools status badge and enhance language detection (7150057d) 
+#### Tests
+
+- Add unit test for markdown table header rendering (db088ed7) 
+### Contributors
+@vinhnx
 ## 0.88.0 - 2026-03-11
 
 ### Highlights
