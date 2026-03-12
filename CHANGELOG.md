@@ -2,6 +2,21 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.88.2 - 2026-03-12
+
+### Highlights
+### Other Changes
+#### Other
+
+- Fix install script (25a0e060) (@vinhnx)
+- Update badge colors and links in README.md (99175a26) (@vinhnx)
+- Update README.md (b433aefb) (@vinhnx)
+- Update TODO (163e9716) 
+- Refactor API key handling and update model reasoning capabilities (db0bdf03) 
+- Refactor reasoning handling in OpenRouterProvider and improve model checks (f237aa93) 
+- Refactor configuration loading to use workspace paths and remove deprecated environment variable handling (352cc9e5) 
+### Contributors
+@vinhnx
 ## 0.88.1 - 2026-03-12
 
 ### Highlights
