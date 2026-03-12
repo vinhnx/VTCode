@@ -1108,12 +1108,9 @@ fn attach_exec_recovery_guidance(response: &mut Value, command: &str, exit_code:
     }
 
     let command_name = first_command_token(command).unwrap_or_else(|| "command".to_string());
-    response["critical_note"] = json!(format!(
-        "Command `{command_name}` was not found in PATH."
-    ));
-    response["next_action"] = json!(
-        "Check the command name or install the missing binary, then rerun the command."
-    );
+    response["critical_note"] = json!(format!("Command `{command_name}` was not found in PATH."));
+    response["next_action"] =
+        json!("Check the command name or install the missing binary, then rerun the command.");
 }
 
 fn build_exec_response(
@@ -1141,12 +1138,7 @@ fn build_exec_response(
         response["query_truncated"] = json!(query_truncated);
     }
 
-    attach_exec_response_context(
-        &mut response,
-        session,
-        command,
-        capture.exit_code.is_some(),
-    );
+    attach_exec_response_context(&mut response, session, command, capture.exit_code.is_some());
 
     if let Some(code) = capture.exit_code {
         response["exit_code"] = json!(code);
@@ -3485,10 +3477,10 @@ mod git_diff_tests {
 mod unified_action_error_tests {
     use super::{
         ExecOutputPreview, PtyEphemeralCapture, attach_exec_recovery_guidance,
-        build_exec_output_preview, build_exec_response,
-        build_head_tail_preview, clamp_inspect_lines, clamp_max_matches,
-        extract_run_session_id_from_read_file_error, extract_run_session_id_from_tool_output_path,
-        filter_lines, missing_unified_exec_action_error, missing_unified_search_action_error,
+        build_exec_output_preview, build_exec_response, build_head_tail_preview,
+        clamp_inspect_lines, clamp_max_matches, extract_run_session_id_from_read_file_error,
+        extract_run_session_id_from_tool_output_path, filter_lines,
+        missing_unified_exec_action_error, missing_unified_search_action_error,
         summarized_arg_keys,
     };
     use crate::tools::types::VTCodeExecSession;

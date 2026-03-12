@@ -52,29 +52,43 @@ fn tool_recovery_hint(val: &Value) -> Option<&'static str> {
     Some("Loop detected; change approach before retrying.")
 }
 
+fn push_tool_follow_up_hint(hints: &mut Vec<String>, hint: impl Into<String>) {
+    let hint = hint.into();
+    if hint.trim().is_empty() || hints.iter().any(|existing| existing == &hint) {
+        return;
+    }
+    hints.push(hint);
+}
+
 fn tool_follow_up_hints(val: &Value) -> Vec<String> {
-    let mut hints = Vec::with_capacity(3);
+    let mut hints = Vec::with_capacity(5);
     if let Some(hint) = tool_recovery_hint(val) {
-        hints.push(hint.to_string());
+        push_tool_follow_up_hint(&mut hints, hint);
+    }
+    if let Some(next_action) = val.get("next_action").and_then(Value::as_str) {
+        push_tool_follow_up_hint(&mut hints, next_action);
     }
     if let Some(path) = val.get("spool_path").and_then(Value::as_str) {
-        hints.push(format!(
-            "Large output was spooled to \"{}\". Use read_file/grep_file to inspect details.",
-            path
-        ));
+        push_tool_follow_up_hint(
+            &mut hints,
+            format!(
+                "Large output was spooled to \"{}\". Use read_file/grep_file to inspect details.",
+                path
+            ),
+        );
     }
     if val
         .get("next_continue_args")
         .and_then(PtyContinuationArgs::from_value)
         .is_some()
     {
-        hints.push(NEXT_CONTINUE_PROMPT.to_string());
+        push_tool_follow_up_hint(&mut hints, NEXT_CONTINUE_PROMPT);
     } else if val
         .get("next_read_args")
         .and_then(ReadChunkContinuationArgs::from_value)
         .is_some()
     {
-        hints.push(NEXT_READ_PROMPT.to_string());
+        push_tool_follow_up_hint(&mut hints, NEXT_READ_PROMPT);
     }
     hints
 }
@@ -903,6 +917,48 @@ mod tests {
         assert_eq!(
             inline_output
                 .matches("Loop detected; fallback is available.")
+                .count(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn render_tool_output_unified_exec_keeps_exit_127_output_and_guidance() {
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut renderer =
+            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let payload = json!({
+            "command": "pip install pymupdf",
+            "output": "bash: pip: command not found",
+            "session_id": "run-127",
+            "is_exited": true,
+            "exit_code": 127,
+            "critical_note": "Command `pip` was not found in PATH.",
+            "next_action": "Check the command name or install the missing binary, then rerun the command."
+        });
+
+        render_tool_output(
+            &mut renderer,
+            Some(vtcode_core::config::constants::tools::UNIFIED_EXEC),
+            &payload,
+            None,
+        )
+        .await
+        .expect("exit 127 payload should render");
+
+        let inline_output = collect_inline_output(&mut receiver);
+        assert!(inline_output.contains("bash: pip: command not found"));
+        assert!(inline_output.contains("Command `pip` was not found in PATH."));
+        assert!(inline_output.contains(
+            "Check the command name or install the missing binary, then rerun the command."
+        ));
+        assert!(inline_output.contains("✓ exit 127"));
+        assert!(!inline_output.contains("Solution:"));
+        assert_eq!(
+            inline_output
+                .matches(
+                    "Check the command name or install the missing binary, then rerun the command."
+                )
                 .count(),
             1
         );

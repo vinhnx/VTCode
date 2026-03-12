@@ -89,6 +89,10 @@ pub(crate) async fn render_terminal_command_panel(
         preprocess_terminal_stdout(command_tokens.as_deref(), stdout_raw)
     };
     let stderr = preprocess_terminal_stdout(command_tokens.as_deref(), stderr_raw);
+    let critical_note = unwrapped_payload
+        .get("critical_note")
+        .and_then(Value::as_str)
+        .filter(|note| !note.trim().is_empty());
 
     let output_mode = vt_config
         .map(|cfg| cfg.ui.tool_output_mode)
@@ -106,46 +110,11 @@ pub(crate) async fn render_terminal_command_panel(
         }
     }
 
-    // Special handling for exit code 127 (command not found) - show critical message prominently
-    if is_completed && exit_code == Some(127) {
-        let critical_note = unwrapped_payload
-            .get("critical_note")
-            .and_then(Value::as_str);
-        let output_msg = unwrapped_payload.get("output").and_then(Value::as_str);
-
-        if let Some(note) = critical_note {
-            renderer.line(
-                MessageStyle::ToolError,
-                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-            )?;
-            renderer.line(
-                MessageStyle::ToolError,
-                "⤫  COMMAND NOT FOUND (EXIT CODE 127)",
-            )?;
-            renderer.line(
-                MessageStyle::ToolError,
-                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-            )?;
-            renderer.line(MessageStyle::ToolError, note)?;
-            renderer.line(MessageStyle::ToolError, "")?;
-        }
-
-        if let Some(msg) = output_msg {
-            renderer.line(MessageStyle::ToolDetail, "Solution:")?;
-            renderer.line(MessageStyle::ToolDetail, msg)?;
-            renderer.line(MessageStyle::ToolDetail, "")?;
-        }
-
-        // For exit code 127, skip showing the raw PTY output that would confuse the agent
-        // Instead, just show the solutions above
-        return Ok(());
-    }
-
     // Keep inline streaming behavior only while the PTY is still running.
     // Once completed, always render the final captured output.
     let inline_streaming = is_pty_session && renderer.prefers_untruncated_output() && !is_completed;
 
-    if stdout.trim().is_empty() && stderr.trim().is_empty() {
+    if stdout.trim().is_empty() && stderr.trim().is_empty() && critical_note.is_none() {
         if !inline_streaming && (!is_pty_session || is_completed) {
             renderer.line(MessageStyle::ToolDetail, "(no output)")?;
         } else if is_pty_session && !is_completed {
@@ -155,7 +124,7 @@ pub(crate) async fn render_terminal_command_panel(
         return Ok(());
     }
 
-    // Render stdout/PTY output (skipped for exit code 127 above)
+    // Render stdout/PTY output.
     if !stdout.trim().is_empty() && !inline_streaming {
         let label = if is_pty_session { "" } else { "stdout" }; // Don't label PTY output as stdout
         render_stream_section(
@@ -194,6 +163,13 @@ pub(crate) async fn render_terminal_command_panel(
         .await?;
     }
 
+    if let Some(note) = critical_note {
+        if !stdout.trim().is_empty() || !stderr.trim().is_empty() {
+            renderer.line(MessageStyle::ToolDetail, "")?;
+        }
+        renderer.line(MessageStyle::ToolError, note)?;
+    }
+
     // Add session completion note if completed
     if is_pty_session && is_completed {
         let exit_badge = if let Some(code) = exit_code {
@@ -208,7 +184,26 @@ pub(crate) async fn render_terminal_command_panel(
         renderer.line(MessageStyle::ToolDetail, &format!("✓ {}", exit_badge))?;
     }
 
-    render_tool_follow_up_hints(renderer, &unwrapped_payload, Some(stdout.as_ref()))?;
+    let rendered_follow_up_body = [
+        (!inline_streaming && !stdout.trim().is_empty()).then_some(stdout.as_ref()),
+        (!inline_streaming && !stderr.trim().is_empty()).then_some(stderr.as_ref()),
+        critical_note,
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>()
+    .join("\n");
+    let rendered_follow_up_body = if rendered_follow_up_body.is_empty() {
+        None
+    } else {
+        Some(rendered_follow_up_body)
+    };
+
+    render_tool_follow_up_hints(
+        renderer,
+        &unwrapped_payload,
+        rendered_follow_up_body.as_deref(),
+    )?;
 
     Ok(())
 }

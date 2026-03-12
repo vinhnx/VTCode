@@ -526,6 +526,7 @@ pub(crate) fn compact_model_tool_payload(output: serde_json::Value) -> serde_jso
             .get("content_type")
             .and_then(serde_json::Value::as_str)
             .is_some_and(|content_type| matches!(content_type, "exec_inspect" | "git_diff"));
+    let keep_exec_recovery_guidance = should_keep_exec_recovery_guidance(obj, is_exec_like);
     let has_stderr = obj
         .get("stderr")
         .and_then(serde_json::Value::as_str)
@@ -542,7 +543,7 @@ pub(crate) fn compact_model_tool_payload(output: serde_json::Value) -> serde_jso
             "spool_hint" | "spooled_bytes" | "spooled_to_file" => has_spool_path,
             "id" => session_id.is_some_and(|sid| value == sid),
             "working_directory" => is_exec_like,
-            "next_action" => true,
+            "critical_note" | "next_action" => !keep_exec_recovery_guidance,
             "has_more" | "preferred_next_action" => {
                 next_continue_args.is_some() || next_read_args.is_some() || is_false_bool(value)
             }
@@ -631,6 +632,21 @@ fn value_matches_usize(value: &serde_json::Value, expected: usize) -> bool {
         .as_u64()
         .and_then(|actual| usize::try_from(actual).ok())
         .is_some_and(|actual| actual == expected)
+}
+
+fn has_non_empty_string_field(obj: &serde_json::Map<String, serde_json::Value>, key: &str) -> bool {
+    obj.get(key)
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|value| !value.trim().is_empty())
+}
+
+fn should_keep_exec_recovery_guidance(
+    obj: &serde_json::Map<String, serde_json::Value>,
+    is_exec_like: bool,
+) -> bool {
+    is_exec_like
+        && (has_non_empty_string_field(obj, "critical_note")
+            || has_non_empty_string_field(obj, "next_action"))
 }
 
 async fn handle_success<'a>(
@@ -1375,6 +1391,63 @@ mod tests {
         assert!(parsed.get("rows").is_none());
         assert!(parsed.get("cols").is_none());
         assert!(parsed.get("wall_time").is_none());
+    }
+
+    #[test]
+    fn maybe_inline_spooled_keeps_exec_recovery_guidance() {
+        let serialized = maybe_inline_spooled(
+            tool_names::UNIFIED_EXEC,
+            &serde_json::json!({
+                "output": "bash: pip: command not found",
+                "command": "pip install pymupdf",
+                "session_id": "run-127",
+                "process_id": "run-127",
+                "is_exited": true,
+                "exit_code": 127,
+                "critical_note": "Command `pip` was not found in PATH.",
+                "next_action": "Check the command name or install the missing binary, then rerun the command."
+            }),
+        );
+
+        let parsed: serde_json::Value =
+            serde_json::from_str(&serialized).expect("serialized JSON payload");
+        assert_eq!(
+            parsed.get("output"),
+            Some(&serde_json::json!("bash: pip: command not found"))
+        );
+        assert_eq!(parsed.get("exit_code"), Some(&serde_json::json!(127)));
+        assert_eq!(
+            parsed.get("critical_note"),
+            Some(&serde_json::json!("Command `pip` was not found in PATH."))
+        );
+        assert_eq!(
+            parsed.get("next_action"),
+            Some(&serde_json::json!(
+                "Check the command name or install the missing binary, then rerun the command."
+            ))
+        );
+        assert!(parsed.get("command").is_none());
+        assert!(parsed.get("session_id").is_none());
+        assert!(parsed.get("process_id").is_none());
+        assert!(parsed.get("is_exited").is_none());
+    }
+
+    #[test]
+    fn maybe_inline_spooled_drops_generic_success_recovery_guidance() {
+        let serialized = maybe_inline_spooled(
+            tool_names::READ_FILE,
+            &serde_json::json!({
+                "output": "ok",
+                "critical_note": "This should not survive for non-exec payloads.",
+                "next_action": "This should stay compacted away."
+            }),
+        );
+
+        let parsed: serde_json::Value =
+            serde_json::from_str(&serialized).expect("serialized JSON payload");
+        assert_eq!(parsed.get("output"), Some(&serde_json::json!("ok")));
+        assert!(parsed.get("critical_note").is_none());
+        assert!(parsed.get("next_action").is_none());
     }
 
     #[test]

@@ -311,8 +311,7 @@ impl ToolOutputSpooler {
                 // Edge case: value might be a JSON string that needs parsing
                 // This can happen if the value was serialized somewhere in the pipeline
                 if let Ok(parsed) = serde_json::from_str::<Value>(json_str) {
-                    if let Some(output_content) =
-                        parsed.get("raw_output").and_then(|v| v.as_str())
+                    if let Some(output_content) = parsed.get("raw_output").and_then(|v| v.as_str())
                     {
                         debug!(
                             tool = tool_name,
