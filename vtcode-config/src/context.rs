@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// This implements Cursor-style dynamic context discovery patterns where
 /// large outputs are written to files instead of being truncated, allowing
-/// agents to retrieve them on demand via read_file/grep_file.
+/// agents to retrieve them on demand via unified_file/unified_search.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct DynamicContextConfig {

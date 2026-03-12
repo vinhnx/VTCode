@@ -27,9 +27,6 @@ use tracing::{debug, info};
 /// for modern context windows.
 pub const DEFAULT_SPOOL_THRESHOLD_BYTES: usize = 200_000;
 
-/// Maximum age for spooled files before cleanup (1 hour)
-const MAX_SPOOL_AGE_SECS: u64 = 3600;
-
 const CONDENSE_HEAD_BYTES: usize = 8_000;
 const CONDENSE_TAIL_BYTES: usize = 4_000;
 const PTY_PREVIEW_TAIL_BYTES: usize = 2_500;
@@ -134,6 +131,10 @@ pub struct SpoolerConfig {
     #[serde(default = "default_max_files")]
     pub max_files: usize,
 
+    /// Maximum age in seconds before cleanup removes a spooled file
+    #[serde(default = "default_max_age_secs")]
+    pub max_age_secs: u64,
+
     /// Whether to include file reference in truncated output
     #[serde(default = "default_include_reference")]
     pub include_file_reference: bool,
@@ -151,6 +152,10 @@ fn default_max_files() -> usize {
     100
 }
 
+fn default_max_age_secs() -> u64 {
+    3600
+}
+
 fn default_include_reference() -> bool {
     true
 }
@@ -161,6 +166,7 @@ impl Default for SpoolerConfig {
             enabled: true,
             threshold_bytes: DEFAULT_SPOOL_THRESHOLD_BYTES,
             max_files: 100,
+            max_age_secs: default_max_age_secs(),
             include_file_reference: true,
         }
     }
@@ -431,6 +437,9 @@ impl ToolOutputSpooler {
         if no_spool {
             return Ok(value);
         }
+        if !self.config.enabled {
+            return Ok(value);
+        }
         if !force_spool && !self.should_spool(&value) {
             return Ok(value);
         }
@@ -516,7 +525,7 @@ impl ToolOutputSpooler {
             if let Ok(metadata) = entry.metadata().await
                 && let Ok(modified) = metadata.modified()
                 && let Ok(age) = now.duration_since(modified)
-                && age.as_secs() > MAX_SPOOL_AGE_SECS
+                && age.as_secs() > self.config.max_age_secs
                 && fs::remove_file(&path).await.is_ok()
             {
                 removed += 1;
@@ -599,6 +608,7 @@ mod tests {
             spooler.config.threshold_bytes,
             DEFAULT_SPOOL_THRESHOLD_BYTES
         );
+        assert_eq!(spooler.config.max_age_secs, default_max_age_secs());
     }
 
     #[tokio::test]
@@ -1097,5 +1107,30 @@ mod tests {
 
         let val = json!({"some_key": 42});
         assert!(spooler.estimate_size(&val) > 0);
+    }
+
+    #[tokio::test]
+    async fn test_cleanup_old_files_respects_configured_max_age() {
+        let temp = tempdir().unwrap();
+        let config = SpoolerConfig {
+            threshold_bytes: 1,
+            max_age_secs: 0,
+            ..Default::default()
+        };
+        let spooler = ToolOutputSpooler::with_config(temp.path(), config);
+        let value = json!({"output": "old output"});
+
+        let result = spooler
+            .spool_output("test_tool", &value, false)
+            .await
+            .unwrap();
+        let full_path = temp.path().join(&result.file_path);
+        assert!(full_path.exists());
+
+        tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
+
+        let removed = spooler.cleanup_old_files().await.unwrap();
+        assert_eq!(removed, 1);
+        assert!(!full_path.exists());
     }
 }

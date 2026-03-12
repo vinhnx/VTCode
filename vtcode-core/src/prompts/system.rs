@@ -57,7 +57,7 @@ const UNIFIED_TOOL_GUIDANCE: &str = r#"**Search & exploration**:
 - If `action='structural'` hits an unsupported language or unknown extension, pivot to workspace-local ast-grep custom-language setup instead of retrying with guesses
 - If the target code is embedded inside another language or uses a non-standard extension, pivot to workspace `sgconfig.yml` `languageInjections` or `languageGlobs`
 - Read a file once; avoid duplicate `read` calls
-- For spooled output (>8KB), use `spool_path` with `unified_file` (action='read') or `unified_search` (action='grep'); advance offsets, don't repeat identical chunk args
+- When a result includes `spool_path`, use `unified_file` (action='read') or `unified_search` (action='grep'); advance offsets, don't repeat identical chunk args
 - If chunk reads stall, switch to targeted `unified_search` and summarize
 
 **Code modification**:
@@ -1345,6 +1345,14 @@ mod tests {
         assert!(
             COMPACT_TOOL_GUIDANCE.contains("prefer `rg` over shell `grep`"),
             "Compact guidance should prefer ripgrep in shell"
+        );
+        assert!(
+            UNIFIED_TOOL_GUIDANCE.contains("When a result includes `spool_path`"),
+            "Unified guidance should key spool guidance off spool_path"
+        );
+        assert!(
+            !UNIFIED_TOOL_GUIDANCE.contains(">8KB"),
+            "Unified guidance should avoid stale hardcoded spool thresholds"
         );
     }
 

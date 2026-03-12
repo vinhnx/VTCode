@@ -20,8 +20,13 @@ fn output_field_bytes(value: &Value) -> usize {
         .unwrap_or(0)
 }
 
-fn should_force_spool(tool_name: &str, value: &Value, is_mcp: bool) -> bool {
-    if is_mcp || !is_pty_output_tool(tool_name) {
+fn should_force_spool(
+    tool_name: &str,
+    value: &Value,
+    is_mcp: bool,
+    spooling_enabled: bool,
+) -> bool {
+    if !spooling_enabled || is_mcp || !is_pty_output_tool(tool_name) {
         return false;
     }
     if value
@@ -162,7 +167,7 @@ impl ToolRegistry {
     /// 2. If spooled, returns a file reference instead of truncated content
     /// 3. Otherwise, applies standard sanitization
     ///
-    /// This is more token-efficient as agents can use read_file/grep_file
+    /// This is more token-efficient as agents can use unified_file/unified_search
     /// to explore large outputs on demand.
     pub(super) async fn process_tool_output(
         &self,
@@ -170,7 +175,8 @@ impl ToolRegistry {
         value: Value,
         is_mcp: bool,
     ) -> Value {
-        let force_spool = should_force_spool(tool_name, &value, is_mcp);
+        let spooling_enabled = self.output_spooler.config().enabled;
+        let force_spool = should_force_spool(tool_name, &value, is_mcp, spooling_enabled);
 
         // Check if output should be spooled to file
         if force_spool || self.output_spooler.should_spool(&value) {
@@ -205,7 +211,7 @@ mod tests {
             "output": "x",
             "truncated": true
         });
-        assert!(should_force_spool("run_pty_cmd", &value, false));
+        assert!(should_force_spool("run_pty_cmd", &value, false, true));
     }
 
     #[test]
@@ -213,7 +219,7 @@ mod tests {
         let value = json!({
             "output": "x".repeat(PTY_FORCE_SPOOL_MIN_BYTES + 1)
         });
-        assert!(should_force_spool("run_pty_cmd", &value, false));
+        assert!(should_force_spool("run_pty_cmd", &value, false, true));
     }
 
     #[test]
@@ -222,11 +228,49 @@ mod tests {
             "output": "x".repeat(PTY_FORCE_SPOOL_MIN_BYTES + 1),
             "no_spool": true
         });
-        assert!(!should_force_spool("run_pty_cmd", &no_spool_value, false));
+        assert!(!should_force_spool(
+            "run_pty_cmd",
+            &no_spool_value,
+            false,
+            true
+        ));
 
         let non_pty_value = json!({
             "output": "x".repeat(PTY_FORCE_SPOOL_MIN_BYTES + 1)
         });
-        assert!(!should_force_spool("grep_file", &non_pty_value, false));
+        assert!(!should_force_spool(
+            "grep_file",
+            &non_pty_value,
+            false,
+            true
+        ));
+        assert!(!should_force_spool(
+            "run_pty_cmd",
+            &non_pty_value,
+            false,
+            false
+        ));
+    }
+
+    #[tokio::test]
+    async fn process_tool_output_skips_force_spool_when_dynamic_context_is_disabled() {
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::write(
+            temp.path().join("vtcode.toml"),
+            "[context.dynamic]\nenabled = false\n",
+        )
+        .unwrap();
+        let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
+        let value = json!({
+            "output": "x".repeat(PTY_FORCE_SPOOL_MIN_BYTES + 1),
+            "truncated": true
+        });
+
+        let result = registry
+            .process_tool_output("run_pty_cmd", value.clone(), false)
+            .await;
+
+        assert!(result.get("spool_path").is_none());
+        assert_eq!(result.get("output"), value.get("output"));
     }
 }

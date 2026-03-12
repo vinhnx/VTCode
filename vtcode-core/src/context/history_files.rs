@@ -2,14 +2,14 @@
 //!
 //! Implements Cursor-style chat history persistence during summarization.
 //! When context window fills up and summarization occurs, the full conversation
-//! is written to `.vtcode/history/` so agents can recover details via grep_file.
+//! is written to `.vtcode/history/` so agents can recover details via `unified_search`.
 //!
 //! ## Design Philosophy
 //!
 //! Instead of losing conversation details during lossy summarization:
 //! 1. Write full conversation to `.vtcode/history/session_{id}_{turn}.jsonl`
 //! 2. Include file reference in summary message
-//! 3. Agent can search history with `grep_file` when details are needed
+//! 3. Agent can search history with `unified_search` when details are needed
 
 use crate::llm::provider::{ContentPart, Message, MessageContent, MessageRole};
 use crate::telemetry::perf::PerfSpan;
@@ -339,7 +339,7 @@ impl HistoryFileManager {
     /// Generate a summary message with file reference
     pub fn format_summary_with_reference(&self, base_summary: &str, history_path: &Path) -> String {
         format!(
-            "{}\n\nFull conversation history saved to: {}\nUse grep_file to search for specific details if needed.",
+            "{}\n\nFull conversation history saved to: {}\nUse `unified_search` (action='grep') or `unified_file` (action='read') to inspect specific details if needed.",
             base_summary,
             history_path.display()
         )
@@ -640,7 +640,7 @@ mod tests {
 
         assert!(summary.contains("Summarized 10 turns"));
         assert!(summary.contains(".vtcode/history/test.jsonl"));
-        assert!(summary.contains("grep_file"));
+        assert!(summary.contains("unified_search"));
     }
 
     #[test]
