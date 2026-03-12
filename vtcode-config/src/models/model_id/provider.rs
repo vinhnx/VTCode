@@ -49,6 +49,7 @@ impl ModelId {
             | ModelId::OllamaGemini3FlashPreviewCloud
             | ModelId::OllamaMinimaxM2Cloud
             | ModelId::OllamaMinimaxM25Cloud
+            | ModelId::OllamaNemotron3SuperCloud
             | ModelId::OllamaGlm5Cloud => Provider::Ollama,
             ModelId::MinimaxM25 => Provider::Minimax,
             ModelId::OpenRouterMinimaxM25 | ModelId::OpenRouterQwen3CoderNext => {

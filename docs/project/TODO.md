@@ -444,3 +444,11 @@ Core files: `internal/tools.go` (command routing), `internal/chain.go` (pipes), 
 
 Happy to discuss — especially if you've tried similar approaches or found cases where CLI breaks down. The command discovery problem (how much to inject vs. let the agent discover) is something I'm still actively exploring.
 ```
+
+---
+
+fix /model fuzzy search, it should filter out provider also.
+
+---
+
+fix command+click on file paths in the terminal output to open the file in the editor. This should work for both absolute and relative paths, and should handle edge cases like paths with spaces or special characters. and system compatibility and command+control keyboard issues (macOS, Windows vs. Unix path formats). This will improve the user experience by allowing quick navigation to files directly from the terminal output. checking existing external editor impl in vtcode and unify the logic for opening files across different contexts (terminal output, file explorer, etc.) to ensure consistency and maintainability.

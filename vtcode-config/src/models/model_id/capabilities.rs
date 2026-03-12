@@ -143,6 +143,7 @@ impl ModelId {
                 | ModelId::OpenRouterNvidiaNemotron3Super120bA12bFree
                 | ModelId::MinimaxM25
                 | ModelId::OllamaGlm5Cloud
+                | ModelId::OllamaNemotron3SuperCloud
                 | ModelId::OllamaMinimaxM25Cloud
                 | ModelId::HuggingFaceQwen3CoderNextNovita
                 | ModelId::HuggingFaceQwen35397BA17BTogether
@@ -257,6 +258,7 @@ impl ModelId {
             ModelId::OllamaMinimaxM2Cloud => "minimax-m2",
             ModelId::OllamaGlm5Cloud => "glm-5",
             ModelId::OllamaMinimaxM25Cloud => "minimax-m2.5",
+            ModelId::OllamaNemotron3SuperCloud => "nemotron-3",
             ModelId::OllamaGemini3FlashPreviewCloud => "gemini-3",
             // MiniMax models
             ModelId::MinimaxM25 => "M2.5",

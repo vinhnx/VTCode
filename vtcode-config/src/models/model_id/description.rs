@@ -95,6 +95,9 @@ impl ModelId {
             ModelId::OllamaGemini3FlashPreviewCloud => {
                 "Gemini 3 Flash offers frontier intelligence built for speed at a fraction of the cost."
             }
+            ModelId::OllamaNemotron3SuperCloud => {
+                "NVIDIA Nemotron™ is a family of open models delivering leading efficiency and accuracy for building specialized AI agents. Nemotron-3-Super (120B) is optimized for collaborative agents and high-volume workloads."
+            }
             ModelId::OllamaMinimaxM2Cloud => {
                 "Cloud-hosted MiniMax-M2 model accessed through Ollama Cloud for reasoning tasks"
             }

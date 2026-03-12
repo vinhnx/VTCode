@@ -51,6 +51,7 @@ impl ModelId {
             ModelId::OllamaGemini3FlashPreviewCloud,
             ModelId::OllamaMinimaxM2Cloud,
             ModelId::OllamaMinimaxM25Cloud,
+            ModelId::OllamaNemotron3SuperCloud,
             // MiniMax models
             ModelId::MinimaxM25,
             // Hugging Face models

@@ -113,6 +113,8 @@ pub enum ModelId {
     OllamaMinimaxM25Cloud,
     /// Gemini 3 Flash Preview Cloud - Google Gemini 3 Flash Preview via Ollama Cloud
     OllamaGemini3FlashPreviewCloud,
+    /// Nemotron 3 Super Cloud - NVIDIA Nemotron 3 Super 120B via Ollama Cloud
+    OllamaNemotron3SuperCloud,
 
     // MiniMax models
     /// MiniMax-M2.5 - Latest MiniMax model with further improvements in reasoning and coding
