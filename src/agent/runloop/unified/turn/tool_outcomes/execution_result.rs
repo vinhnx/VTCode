@@ -509,10 +509,11 @@ pub(super) fn maybe_inline_spooled(_tool_name: &str, output: &serde_json::Value)
             .as_ref()
             .map(|next_continue| next_continue.session_id.as_str())
     });
-    let spooled_to_file = obj
-        .get("spooled_to_file")
-        .and_then(serde_json::Value::as_bool)
-        .unwrap_or(false);
+    let spooled_to_file = obj.contains_key("spool_path")
+        || obj
+            .get("spooled_to_file")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
     let output_value = obj.get("output");
 
     let mut sanitized = serde_json::Map::with_capacity(obj.len());
@@ -1181,7 +1182,6 @@ mod tests {
             tool_names::READ_FILE,
             &serde_json::json!({
                 "path": ".vtcode/context/tool_outputs/unified_exec_1.txt",
-                "spooled_to_file": true,
                 "spool_path": ".vtcode/context/tool_outputs/unified_exec_1.txt",
                 "has_more": true,
                 "next_offset": 81,

@@ -6,9 +6,7 @@ mod segments;
 use crate::telemetry::perf::PerfSpan;
 use crate::tools::builder::ToolResponseBuilder;
 use crate::tools::cache::{FILE_CACHE, file_read_cache_config};
-use crate::tools::continuation::{
-    DEFAULT_NEXT_READ_LIMIT, NEXT_READ_PROMPT, ReadChunkContinuationArgs,
-};
+use crate::tools::continuation::{DEFAULT_NEXT_READ_LIMIT, ReadChunkContinuationArgs};
 use crate::tools::handlers::read_file::{ReadFileArgs, ReadFileHandler};
 use crate::tools::traits::FileTool;
 use crate::tools::types::{Input, PathArgs};
@@ -423,8 +421,6 @@ impl FileOpsTool {
                                     )
                                     .to_value(),
                                 );
-                                builder =
-                                    builder.field("follow_up_prompt", json!(NEXT_READ_PROMPT));
                             }
                         }
 
@@ -893,12 +889,7 @@ mod read_tests {
         assert!(result.get("chunk_limit").is_none());
         assert!(result.get("next_offset").is_none());
         assert!(result.get("preferred_next_action").is_none());
-        assert!(
-            result["follow_up_prompt"]
-                .as_str()
-                .unwrap_or_default()
-                .contains("next_read_args")
-        );
+        assert!(result.get("follow_up_prompt").is_none());
     }
 
     #[tokio::test]

@@ -464,6 +464,8 @@ impl ToolOutputSpooler {
 
         if let Some(obj) = response.as_object_mut() {
             obj.remove("stdout");
+            obj.remove("follow_up_prompt");
+            obj.remove("spooled_to_file");
 
             // Replace only the heavy stream field with condensed preview.
             if use_output_field {
@@ -472,7 +474,6 @@ impl ToolOutputSpooler {
                 obj.insert("content".to_string(), json!(condensed));
             }
 
-            obj.insert("spooled_to_file".to_string(), json!(true));
             obj.insert("spool_path".to_string(), json!(spool_path));
 
             if let Some(src) = source_path
@@ -680,7 +681,8 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(result.get("spooled_to_file").is_some());
+        assert!(result.get("spool_path").is_some());
+        assert!(result.get("spooled_to_file").is_none());
         assert!(result.get("content").is_some());
         assert!(result.get("spool_path").is_some());
         assert!(result.get("file_path").is_none());
@@ -757,7 +759,8 @@ mod tests {
             .unwrap();
 
         // Should return file reference
-        assert!(result.get("spooled_to_file").is_some());
+        assert!(result.get("spool_path").is_some());
+        assert!(result.get("spooled_to_file").is_none());
 
         // Verify spooled file contains raw output, not JSON wrapper
         let spooled_path = result.get("spool_path").and_then(|v| v.as_str()).unwrap();
@@ -789,7 +792,8 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(result.get("spooled_to_file").is_some());
+        assert!(result.get("spool_path").is_some());
+        assert!(result.get("spooled_to_file").is_none());
         let spooled_path = result.get("spool_path").and_then(|v| v.as_str()).unwrap();
         let spooled_content = std::fs::read_to_string(temp.path().join(spooled_path)).unwrap();
         assert_eq!(spooled_content, command_output);
@@ -805,7 +809,8 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(result.get("spooled_to_file").is_some());
+        assert!(result.get("spool_path").is_some());
+        assert!(result.get("spooled_to_file").is_none());
         let spooled_path = result.get("spool_path").and_then(|v| v.as_str()).unwrap();
         let spooled_content = std::fs::read_to_string(temp.path().join(spooled_path)).unwrap();
         assert_eq!(spooled_content, command_output);
@@ -813,7 +818,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_forced_pty_spool_preserves_follow_up_metadata() {
+    async fn test_forced_pty_spool_keeps_structured_continuation_metadata() {
         let temp = tempdir().unwrap();
         let config = SpoolerConfig {
             threshold_bytes: 999_999,
@@ -825,7 +830,9 @@ mod tests {
         let value = json!({
             "output": output,
             "process_id": "run-abc123",
-            "follow_up_prompt": "Read more with unified_exec action=\"poll\" session_id=\"run-abc123\".",
+            "next_continue_args": {
+                "session_id": "run-abc123"
+            },
             "truncated": true
         });
 
@@ -838,20 +845,18 @@ mod tests {
             result.get("process_id").and_then(|v| v.as_str()),
             Some("run-abc123")
         );
-        assert!(
-            result
-                .get("follow_up_prompt")
-                .and_then(|v| v.as_str())
-                .is_some()
+        assert_eq!(
+            result.get("next_continue_args"),
+            Some(&json!({
+                "session_id": "run-abc123"
+            }))
         );
+        assert!(result.get("follow_up_prompt").is_none());
         assert_eq!(
             result.get("truncated").and_then(|v| v.as_bool()),
             Some(true)
         );
-        assert_eq!(
-            result.get("spooled_to_file").and_then(|v| v.as_bool()),
-            Some(true)
-        );
+        assert!(result.get("spooled_to_file").is_none());
         assert!(
             result
                 .get("output")
@@ -885,7 +890,8 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(result.get("spooled_to_file").is_some());
+        assert!(result.get("spool_path").is_some());
+        assert!(result.get("spooled_to_file").is_none());
 
         let spooled_path = result.get("spool_path").and_then(|v| v.as_str()).unwrap();
         let spooled_content = std::fs::read_to_string(temp.path().join(spooled_path)).unwrap();
@@ -919,7 +925,8 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(result.get("spooled_to_file").is_some());
+        assert!(result.get("spool_path").is_some());
+        assert!(result.get("spooled_to_file").is_none());
 
         let spooled_path = result.get("spool_path").and_then(|v| v.as_str()).unwrap();
         let spooled_content = std::fs::read_to_string(temp.path().join(spooled_path)).unwrap();
@@ -949,7 +956,8 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(result.get("spooled_to_file").is_some());
+        assert!(result.get("spool_path").is_some());
+        assert!(result.get("spooled_to_file").is_none());
         let spooled_path = result.get("spool_path").and_then(|v| v.as_str()).unwrap();
         let spooled_content = std::fs::read_to_string(temp.path().join(spooled_path)).unwrap();
         assert_eq!(spooled_content, command_output);
@@ -965,7 +973,8 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(result.get("spooled_to_file").is_some());
+        assert!(result.get("spool_path").is_some());
+        assert!(result.get("spooled_to_file").is_none());
         let spooled_path = result.get("spool_path").and_then(|v| v.as_str()).unwrap();
         let spooled_content = std::fs::read_to_string(temp.path().join(spooled_path)).unwrap();
         assert_eq!(spooled_content, command_output);

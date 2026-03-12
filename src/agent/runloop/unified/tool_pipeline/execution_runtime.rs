@@ -332,14 +332,15 @@ fn should_cache_success_output(name: &str, output: &Value, command_success: bool
         return false;
     }
 
+    if output.get("next_continue_args").is_some() || output.get("next_read_args").is_some() {
+        return false;
+    }
+
     if !is_command_tool(name) {
         return true;
     }
 
     if output.get("has_more").and_then(Value::as_bool) == Some(true) {
-        return false;
-    }
-    if output.get("follow_up_prompt").is_some() {
         return false;
     }
     if output.get("process_id").is_some() {
@@ -531,7 +532,17 @@ mod tests {
             "output": "partial",
             "is_exited": false,
             "process_id": "run-123",
-            "follow_up_prompt": "read more"
+            "next_continue_args": {
+                "session_id": "run-123"
+            }
+        });
+        let chunked = json!({
+            "content": "partial",
+            "next_read_args": {
+                "path": ".vtcode/context/tool_outputs/out.txt",
+                "offset": 41,
+                "limit": 40
+            }
         });
 
         assert!(should_cache_success_output(
@@ -542,6 +553,11 @@ mod tests {
         assert!(!should_cache_success_output(
             tools::RUN_PTY_CMD,
             &partial,
+            true
+        ));
+        assert!(!should_cache_success_output(
+            tools::READ_FILE,
+            &chunked,
             true
         ));
     }
