@@ -651,6 +651,24 @@ fn validation_error_payload_includes_fallback_metadata() {
     assert_eq!(parsed["is_recoverable"], true);
     assert_eq!(parsed["fallback_tool"], tool_names::UNIFIED_SEARCH);
     assert_eq!(parsed["fallback_tool_args"]["action"], "grep");
+    assert!(parsed.get("next_action").is_none());
+    assert!(parsed.get("loop_detected").is_none());
+}
+
+#[test]
+fn validation_error_payload_marks_loop_detection_without_prose_hint() {
+    let payload = build_validation_error_content_with_fallback(
+        "Tool 'read_file' is blocked due to excessive repetition (Loop Detected).".to_string(),
+        "loop_detection",
+        Some(tool_names::UNIFIED_SEARCH.to_string()),
+        Some(json!({"action":"list","path":"."})),
+    );
+    let parsed: serde_json::Value =
+        serde_json::from_str(&payload).expect("validation payload should be json");
+    assert_eq!(parsed.get("loop_detected"), Some(&json!(true)));
+    assert_eq!(parsed["fallback_tool"], tool_names::UNIFIED_SEARCH);
+    assert_eq!(parsed["fallback_tool_args"]["action"], "list");
+    assert!(parsed.get("next_action").is_none());
 }
 
 #[test]
