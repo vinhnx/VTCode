@@ -5,6 +5,7 @@ use vtcode_core::tools::registry::ToolPreflightOutcome;
 use vtcode_core::tools::tool_intent;
 
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
+use crate::agent::runloop::unified::turn::tool_outcomes::execution_result::compact_model_tool_payload;
 
 pub(super) fn recovery_fallback_for_tool(tool_name: &str, args: &Value) -> Option<(String, Value)> {
     match tool_name {
@@ -64,6 +65,7 @@ pub(super) fn build_validation_error_content_with_fallback(
     fallback_tool_args: Option<Value>,
 ) -> String {
     let is_recoverable = fallback_tool.is_some();
+    let loop_detected = validation_stage == "loop_detection";
     let next_action = if is_recoverable {
         "Retry with fallback_tool_args."
     } else {
@@ -76,6 +78,7 @@ pub(super) fn build_validation_error_content_with_fallback(
         "validation_stage": validation_stage,
         "retryable": false,
         "is_recoverable": is_recoverable,
+        "loop_detected": loop_detected,
         "next_action": next_action,
     });
     if let Some(obj) = payload.as_object_mut() {
@@ -86,7 +89,7 @@ pub(super) fn build_validation_error_content_with_fallback(
             obj.insert("fallback_tool_args".to_string(), args);
         }
     }
-    payload.to_string()
+    compact_model_tool_payload(payload).to_string()
 }
 
 pub(super) fn preflight_validation_fallback(

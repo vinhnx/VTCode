@@ -283,7 +283,7 @@ pub(crate) fn build_error_content(
                 inline_full_args,
             );
         }
-        payload
+        compact_model_tool_payload(payload)
     } else {
         let mut payload = serde_json::json!({
             "error": error_text,
@@ -293,7 +293,7 @@ pub(crate) fn build_error_content(
             "next_action": next_action,
         });
         push_error_truncation_flag(&mut payload, error_truncated);
-        payload
+        compact_model_tool_payload(payload)
     }
 }
 
@@ -492,9 +492,9 @@ pub(crate) async fn handle_tool_execution_result<'a>(
     Ok(None)
 }
 
-pub(super) fn maybe_inline_spooled(_tool_name: &str, output: &serde_json::Value) -> String {
+pub(crate) fn compact_model_tool_payload(output: serde_json::Value) -> serde_json::Value {
     let Some(obj) = output.as_object() else {
-        return serialize_output(output);
+        return output;
     };
 
     let next_continue_args = obj
@@ -510,6 +510,10 @@ pub(super) fn maybe_inline_spooled(_tool_name: &str, output: &serde_json::Value)
             .map(|next_continue| next_continue.session_id.as_str())
     });
     let has_spool_path = obj.contains_key("spool_path");
+    let loop_detected = obj
+        .get("loop_detected")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
     let is_exec_like = obj.contains_key("command")
         || obj.contains_key("working_directory")
         || session_id.is_some()
@@ -538,13 +542,17 @@ pub(super) fn maybe_inline_spooled(_tool_name: &str, output: &serde_json::Value)
             "spool_hint" | "spooled_bytes" | "spooled_to_file" => has_spool_path,
             "id" => session_id.is_some_and(|sid| value == sid),
             "working_directory" => is_exec_like,
+            "next_action" => true,
             "has_more" | "preferred_next_action" => {
                 next_continue_args.is_some() || next_read_args.is_some() || is_false_bool(value)
             }
             "session_id" | "command" => is_exec_like,
-            "spool_path" => next_read_args
-                .as_ref()
-                .is_some_and(|next_read| value == next_read.path.as_str()),
+            "spool_path" => {
+                !loop_detected
+                    && next_read_args
+                        .as_ref()
+                        .is_some_and(|next_read| value == next_read.path.as_str())
+            }
             "next_offset" => next_read_args
                 .as_ref()
                 .is_some_and(|next_read| value_matches_usize(value, next_read.offset)),
@@ -552,12 +560,17 @@ pub(super) fn maybe_inline_spooled(_tool_name: &str, output: &serde_json::Value)
                 .as_ref()
                 .is_some_and(|next_read| value_matches_usize(value, next_read.limit)),
             "stderr_preview" => has_stderr,
-            "truncated"
-            | "auto_recovered"
+            "loop_detected_note"
+            | "spool_ref_only"
+            | "result_ref_only"
             | "reused_spooled_output"
             | "reused_recent_result"
-            | "loop_detected"
-            | "query_truncated" => is_false_bool(value),
+            | "repeat_count"
+            | "tool" => loop_detected,
+            "limit" => loop_detected && obj.get("tool").is_some(),
+            "truncated" | "auto_recovered" | "loop_detected" | "query_truncated" => {
+                is_false_bool(value)
+            }
             "stdout" => output_value.is_some_and(|output| output == value),
             "process_id" => is_exec_like || process_session_id.is_some_and(|sid| value == sid),
             "is_exited" => {
@@ -581,7 +594,11 @@ pub(super) fn maybe_inline_spooled(_tool_name: &str, output: &serde_json::Value)
         sanitized.insert(key.clone(), cloned_value);
     }
 
-    serialize_output(&serde_json::Value::Object(sanitized))
+    serde_json::Value::Object(sanitized)
+}
+
+pub(super) fn maybe_inline_spooled(_tool_name: &str, output: &serde_json::Value) -> String {
+    serialize_output(&compact_model_tool_payload(output.clone()))
 }
 
 fn compact_next_continue_args(value: &serde_json::Value) -> serde_json::Value {
@@ -1118,6 +1135,31 @@ mod tests {
                 .and_then(|v| v.as_str())
                 .is_some()
         );
+        assert!(payload.get("next_action").is_none());
+    }
+
+    #[test]
+    fn build_error_content_keeps_structured_fallback_fields_only() {
+        let payload = build_error_content(
+            "boom".to_string(),
+            Some(tool_names::UNIFIED_SEARCH.to_string()),
+            Some(serde_json::json!({"action":"list","path":"."})),
+            "execution",
+        );
+
+        assert_eq!(
+            payload.get("fallback_tool"),
+            Some(&serde_json::json!(tool_names::UNIFIED_SEARCH))
+        );
+        assert_eq!(
+            payload.get("fallback_tool_args"),
+            Some(&serde_json::json!({"action":"list","path":"."}))
+        );
+        assert_eq!(
+            payload.get("is_recoverable").and_then(|v| v.as_bool()),
+            Some(true)
+        );
+        assert!(payload.get("next_action").is_none());
     }
 
     #[test]
@@ -1255,6 +1297,52 @@ mod tests {
                 "cursor": 42
             }))
         );
+    }
+
+    #[test]
+    fn maybe_inline_spooled_keeps_loop_recovery_fields_and_drops_notes() {
+        let serialized = maybe_inline_spooled(
+            tool_names::READ_FILE,
+            &serde_json::json!({
+                "loop_detected": true,
+                "spool_path": ".vtcode/context/tool_outputs/unified_exec_loop.txt",
+                "next_read_args": {
+                    "path": ".vtcode/context/tool_outputs/unified_exec_loop.txt",
+                    "offset": 81,
+                    "limit": 40
+                },
+                "reused_spooled_output": true,
+                "spool_ref_only": true,
+                "loop_detected_note": "Read the spool file instead of re-running this call.",
+                "repeat_count": 4,
+                "limit": 3,
+                "tool": "read_file"
+            }),
+        );
+
+        let parsed: serde_json::Value =
+            serde_json::from_str(&serialized).expect("serialized JSON payload");
+        assert_eq!(parsed.get("loop_detected"), Some(&serde_json::json!(true)));
+        assert_eq!(
+            parsed.get("spool_path"),
+            Some(&serde_json::json!(
+                ".vtcode/context/tool_outputs/unified_exec_loop.txt"
+            ))
+        );
+        assert_eq!(
+            parsed.get("next_read_args"),
+            Some(&serde_json::json!({
+                "path": ".vtcode/context/tool_outputs/unified_exec_loop.txt",
+                "offset": 81,
+                "limit": 40
+            }))
+        );
+        assert!(parsed.get("reused_spooled_output").is_none());
+        assert!(parsed.get("spool_ref_only").is_none());
+        assert!(parsed.get("loop_detected_note").is_none());
+        assert!(parsed.get("repeat_count").is_none());
+        assert!(parsed.get("limit").is_none());
+        assert!(parsed.get("tool").is_none());
     }
 
     #[test]

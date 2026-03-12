@@ -35,8 +35,28 @@ use mcp::{
 use streams::render_stream_section;
 use styles::{GitStyles, LsStyles};
 
+fn tool_recovery_hint(val: &Value) -> Option<&'static str> {
+    if !val
+        .get("loop_detected")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        return None;
+    }
+    if val.get("spool_path").and_then(Value::as_str).is_some() {
+        return Some("Loop detected; continue from spooled output.");
+    }
+    if val.get("fallback_tool").and_then(Value::as_str).is_some() {
+        return Some("Loop detected; fallback is available.");
+    }
+    Some("Loop detected; change approach before retrying.")
+}
+
 fn tool_follow_up_hints(val: &Value) -> Vec<String> {
-    let mut hints = Vec::with_capacity(2);
+    let mut hints = Vec::with_capacity(3);
+    if let Some(hint) = tool_recovery_hint(val) {
+        hints.push(hint.to_string());
+    }
     if let Some(path) = val.get("spool_path").and_then(Value::as_str) {
         hints.push(format!(
             "Large output was spooled to \"{}\". Use read_file/grep_file to inspect details.",
@@ -757,6 +777,81 @@ mod tests {
 
         let inline_output = collect_inline_output(&mut receiver);
         assert!(inline_output.contains("Large output was spooled to"));
+    }
+
+    #[tokio::test]
+    async fn render_tool_output_renders_loop_recovery_hint_from_structured_fields() {
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut renderer =
+            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let payload = json!({
+            "loop_detected": true,
+            "fallback_tool": vtcode_core::config::constants::tools::UNIFIED_SEARCH
+        });
+
+        render_tool_output(
+            &mut renderer,
+            Some(vtcode_core::config::constants::tools::UNIFIED_SEARCH),
+            &payload,
+            None,
+        )
+        .await
+        .expect("loop recovery hint payload should render");
+
+        let inline_output = collect_inline_output(&mut receiver);
+        assert!(inline_output.contains("Loop detected; fallback is available."));
+    }
+
+    #[tokio::test]
+    async fn render_tool_output_renders_spooled_loop_recovery_hint() {
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut renderer =
+            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let payload = json!({
+            "loop_detected": true,
+            "spool_path": ".vtcode/context/tool_outputs/readme.txt",
+            "next_read_args": {
+                "path": ".vtcode/context/tool_outputs/readme.txt",
+                "offset": 81,
+                "limit": 40
+            }
+        });
+
+        render_tool_output(
+            &mut renderer,
+            Some(vtcode_core::config::constants::tools::READ_FILE),
+            &payload,
+            None,
+        )
+        .await
+        .expect("spooled loop recovery hint payload should render");
+
+        let inline_output = collect_inline_output(&mut receiver);
+        assert!(inline_output.contains("Loop detected; continue from spooled output."));
+    }
+
+    #[tokio::test]
+    async fn render_tool_output_does_not_duplicate_loop_recovery_hint() {
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut renderer =
+            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let payload = json!({
+            "loop_detected": true,
+            "fallback_tool": vtcode_core::config::constants::tools::UNIFIED_SEARCH,
+            "output": "Loop detected; fallback is available."
+        });
+
+        render_tool_output(&mut renderer, Some("custom_tool"), &payload, None)
+            .await
+            .expect("duplicate hint payload should render");
+
+        let inline_output = collect_inline_output(&mut receiver);
+        assert_eq!(
+            inline_output
+                .matches("Loop detected; fallback is available.")
+                .count(),
+            1
+        );
     }
 
     #[test]
