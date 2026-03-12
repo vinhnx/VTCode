@@ -5,12 +5,24 @@ use crate::config::models::ModelId;
 use crate::config::types::CapabilityLevel;
 use crate::core::agent::state::TaskRunState;
 use crate::core::agent::state::record_turn_duration;
-use crate::core::agent::task::TaskOutcome;
+use crate::core::agent::task::{Task, TaskOutcome, TaskResults};
 use crate::core::agent::types::AgentType;
 use crate::core::threads::ThreadBootstrap;
+use crate::exec::events::{HarnessEventKind, ItemCompletedEvent, ThreadEvent, ThreadItemDetails};
+use crate::llm::provider::{
+    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, ToolCall,
+};
+use crate::tools::Tool;
+use crate::tools::handlers::{PlanModeState, TaskTrackerTool};
 use crate::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
+use async_trait::async_trait;
+use parking_lot::Mutex;
 use serde_json::json;
+use std::collections::VecDeque;
 use std::fs;
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Arc;
 use tempfile::TempDir;
 
 #[test]
@@ -368,4 +380,321 @@ async fn validate_and_normalize_tool_name_matches_public_registry_resolution() {
         .validate_and_normalize_tool_name("exec_code", &json!({"command": "echo vtcode"}))
         .expect_err("removed alias should stay rejected");
     assert!(err.to_string().contains("Unknown tool"));
+}
+
+#[derive(Clone)]
+struct QueuedProvider {
+    responses: Arc<Mutex<VecDeque<LLMResponse>>>,
+}
+
+impl QueuedProvider {
+    fn new(responses: Vec<LLMResponse>) -> Self {
+        Self {
+            responses: Arc::new(Mutex::new(responses.into())),
+        }
+    }
+}
+
+#[async_trait]
+impl LLMProvider for QueuedProvider {
+    fn name(&self) -> &str {
+        "queued-test-provider"
+    }
+
+    async fn generate(&self, _request: LLMRequest) -> Result<LLMResponse, LLMError> {
+        self.responses
+            .lock()
+            .pop_front()
+            .ok_or(LLMError::InvalidRequest {
+                message: "QueuedProvider has no queued responses".to_string(),
+                metadata: None,
+            })
+    }
+
+    fn supported_models(&self) -> Vec<String> {
+        vec!["gpt-5.3-codex".to_string()]
+    }
+
+    fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+        Ok(())
+    }
+}
+
+fn task(title: &str, id: &str) -> Task {
+    Task {
+        id: id.to_string(),
+        title: title.to_string(),
+        description: title.to_string(),
+        instructions: None,
+    }
+}
+
+fn text_response(text: &str) -> LLMResponse {
+    LLMResponse {
+        content: Some(text.to_string()),
+        model: "gpt-5.3-codex".to_string(),
+        finish_reason: FinishReason::Stop,
+        ..Default::default()
+    }
+}
+
+fn tool_call_response(tool_name: &str, args: serde_json::Value) -> LLMResponse {
+    LLMResponse {
+        content: Some(format!("Calling {tool_name}")),
+        tool_calls: Some(vec![ToolCall::function(
+            "call-1".to_string(),
+            tool_name.to_string(),
+            args.to_string(),
+        )]),
+        model: "gpt-5.3-codex".to_string(),
+        finish_reason: FinishReason::ToolCalls,
+        ..Default::default()
+    }
+}
+
+fn workspace_root(temp: &TempDir) -> PathBuf {
+    temp.path()
+        .canonicalize()
+        .unwrap_or_else(|_| temp.path().to_path_buf())
+}
+
+async fn make_runner(temp: &TempDir, vt_cfg: VTCodeConfig, session_id: &str) -> AgentRunner {
+    let mut runner = AgentRunner::new_with_thread_bootstrap_and_config(
+        AgentType::Single,
+        ModelId::default(),
+        "test-key".to_string(),
+        workspace_root(temp),
+        session_id.to_string(),
+        RunnerSettings {
+            reasoning_effort: None,
+            verbosity: None,
+        },
+        None,
+        ThreadBootstrap::new(None),
+        vt_cfg,
+    )
+    .await
+    .expect("runner");
+    runner.set_quiet(true);
+    runner
+}
+
+async fn seed_tracker(workspace_root: &Path, items: serde_json::Value) {
+    let tool = TaskTrackerTool::new(
+        workspace_root.to_path_buf(),
+        PlanModeState::new(workspace_root.to_path_buf()),
+    );
+    tool.execute(json!({
+        "action": "create",
+        "title": "Harness hardening",
+        "items": items,
+    }))
+    .await
+    .expect("seed tracker");
+}
+
+fn turn_started_count(results: &TaskResults) -> usize {
+    results
+        .thread_events
+        .iter()
+        .filter(|event| matches!(event, ThreadEvent::TurnStarted(_)))
+        .count()
+}
+
+fn harness_events(results: &TaskResults) -> Vec<HarnessEventKind> {
+    results
+        .thread_events
+        .iter()
+        .filter_map(|event| match event {
+            ThreadEvent::ItemCompleted(ItemCompletedEvent { item }) => match &item.details {
+                ThreadItemDetails::Harness(harness) => Some(harness.event.clone()),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn exec_full_auto_continues_until_tracker_is_completed() {
+    let temp = TempDir::new().expect("tempdir");
+    let workspace = workspace_root(&temp);
+    seed_tracker(&workspace, json!(["Finish tracker step"])).await;
+
+    let mut vt_cfg = VTCodeConfig::default();
+    vt_cfg.automation.full_auto.max_turns = 3;
+    let mut runner = make_runner(&temp, vt_cfg, "thread-continuation-success").await;
+    runner
+        .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
+        .await;
+    runner.provider_client = Box::new(QueuedProvider::new(vec![
+        text_response("The task is complete."),
+        tool_call_response(
+            tools::TASK_TRACKER,
+            json!({
+                "action": "update",
+                "index": 1,
+                "status": "completed",
+            }),
+        ),
+        text_response("I have finished all the work."),
+    ]));
+
+    let result = runner
+        .execute_task(&task("Harness continuation", "exec-task"), &[])
+        .await
+        .expect("task result");
+
+    assert_eq!(result.outcome, TaskOutcome::Success);
+    assert!(result.turns_executed > 1);
+    assert!(harness_events(&result).contains(&HarnessEventKind::ContinuationStarted));
+
+    let tracker =
+        fs::read_to_string(workspace.join(".vtcode/tasks/current_task.md")).expect("tracker file");
+    assert!(tracker.contains("- [x] Finish tracker step"));
+}
+
+#[tokio::test]
+async fn exec_full_auto_runs_verification_before_accepting_completion() {
+    let temp = TempDir::new().expect("tempdir");
+    let workspace = workspace_root(&temp);
+    seed_tracker(
+        &workspace,
+        json!([{
+            "description": "Verify harness",
+            "status": "completed",
+            "verify": "pwd",
+        }]),
+    )
+    .await;
+
+    let mut runner = make_runner(
+        &temp,
+        VTCodeConfig::default(),
+        "thread-verification-success",
+    )
+    .await;
+    runner.enable_full_auto(&[]).await;
+    runner.provider_client = Box::new(QueuedProvider::new(vec![text_response(
+        "The task is complete.",
+    )]));
+
+    let result = runner
+        .execute_task(&task("Verification success", "exec-task"), &[])
+        .await
+        .expect("task result");
+
+    assert_eq!(result.outcome, TaskOutcome::Success);
+    assert!(result.turns_executed >= 1);
+    assert_eq!(turn_started_count(&result), 1);
+    let events = harness_events(&result);
+    assert!(events.contains(&HarnessEventKind::VerificationStarted));
+    assert!(events.contains(&HarnessEventKind::VerificationPassed));
+}
+
+#[tokio::test]
+async fn exec_full_auto_retries_after_verification_failure() {
+    let temp = TempDir::new().expect("tempdir");
+    let workspace = workspace_root(&temp);
+    seed_tracker(
+        &workspace,
+        json!([{
+            "description": "Verify harness",
+            "status": "completed",
+            "verify": "cat missing-verification-target",
+        }]),
+    )
+    .await;
+
+    let mut vt_cfg = VTCodeConfig::default();
+    vt_cfg.automation.full_auto.max_turns = 2;
+    let mut runner = make_runner(&temp, vt_cfg, "thread-verification-failure").await;
+    runner.enable_full_auto(&[]).await;
+    runner.provider_client = Box::new(QueuedProvider::new(vec![
+        text_response("The task is complete."),
+        text_response("Task is now complete."),
+    ]));
+
+    let result = runner
+        .execute_task(&task("Verification failure", "exec-task"), &[])
+        .await
+        .expect("task result");
+
+    assert!(matches!(
+        result.outcome,
+        TaskOutcome::TurnLimitReached { .. }
+    ));
+    assert!(result.turns_executed > 1);
+    let events = harness_events(&result);
+    assert!(events.contains(&HarnessEventKind::VerificationStarted));
+    assert!(events.contains(&HarnessEventKind::VerificationFailed));
+    assert!(events.contains(&HarnessEventKind::ContinuationStarted));
+}
+
+#[tokio::test]
+async fn review_runs_skip_continuation_and_finish_single_pass() {
+    let temp = TempDir::new().expect("tempdir");
+    let mut runner = make_runner(&temp, VTCodeConfig::default(), "thread-review-skip").await;
+    runner
+        .enable_full_auto(&[tools::UNIFIED_FILE.to_string()])
+        .await;
+    runner.provider_client = Box::new(QueuedProvider::new(vec![text_response(
+        "The task is complete.",
+    )]));
+
+    let result = runner
+        .execute_task(&task("Review task", "review-task"), &[])
+        .await
+        .expect("task result");
+
+    assert_eq!(result.outcome, TaskOutcome::Success);
+    assert!(result.turns_executed >= 1);
+    assert_eq!(turn_started_count(&result), 1);
+    let events = harness_events(&result);
+    assert!(events.contains(&HarnessEventKind::ContinuationSkipped));
+    assert!(!events.contains(&HarnessEventKind::ContinuationStarted));
+}
+
+#[tokio::test]
+async fn plan_mode_runs_skip_continuation_and_finish_single_pass() {
+    let temp = TempDir::new().expect("tempdir");
+    let mut runner = make_runner(&temp, VTCodeConfig::default(), "thread-plan-mode-skip").await;
+    runner.enable_full_auto(&[]).await;
+    runner.enable_plan_mode();
+    runner.provider_client = Box::new(QueuedProvider::new(vec![text_response(
+        "The task is complete.",
+    )]));
+
+    let result = runner
+        .execute_task(&task("Plan mode task", "exec-task"), &[])
+        .await
+        .expect("task result");
+
+    assert_eq!(result.outcome, TaskOutcome::Success);
+    assert!(result.turns_executed >= 1);
+    assert_eq!(turn_started_count(&result), 1);
+    let events = harness_events(&result);
+    assert!(events.contains(&HarnessEventKind::ContinuationSkipped));
+    assert!(!events.contains(&HarnessEventKind::ContinuationStarted));
+}
+
+#[tokio::test]
+async fn exec_only_policy_skips_when_full_auto_is_disabled() {
+    let temp = TempDir::new().expect("tempdir");
+    let mut runner = make_runner(&temp, VTCodeConfig::default(), "thread-exec-only-skip").await;
+    runner.provider_client = Box::new(QueuedProvider::new(vec![text_response(
+        "The task is complete.",
+    )]));
+
+    let result = runner
+        .execute_task(&task("Exec task", "exec-task"), &[])
+        .await
+        .expect("task result");
+
+    assert_eq!(result.outcome, TaskOutcome::Success);
+    assert!(result.turns_executed >= 1);
+    assert_eq!(turn_started_count(&result), 1);
+    let events = harness_events(&result);
+    assert!(events.contains(&HarnessEventKind::ContinuationSkipped));
+    assert!(!events.contains(&HarnessEventKind::ContinuationStarted));
 }

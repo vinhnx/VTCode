@@ -7,6 +7,7 @@ use serde_json::Value;
 
 use super::HarnessContextSnapshot;
 use super::ToolRegistry;
+use crate::config::constants::tools;
 
 impl ToolRegistry {
     /// Update harness session identifier used for structured tool telemetry
@@ -48,6 +49,10 @@ impl ToolRegistry {
     /// runtime used by the public `unified_exec` tool while bypassing the
     /// model-facing full-auto allow-list gate.
     pub async fn execute_harness_unified_exec(&self, args: Value) -> Result<Value> {
-        self.execute_unified_exec(args).await
+        let value = self.execute_unified_exec(args).await?;
+        let processed = self
+            .process_tool_output(tools::UNIFIED_EXEC, value, false)
+            .await;
+        Ok(super::normalize_tool_output(processed))
     }
 }

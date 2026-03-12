@@ -83,6 +83,7 @@ pub fn check_for_response_loop(response_text: &str, session_state: &mut AgentSes
         .iter()
         .rev()
         .filter(|m| m.role == MessageRole::Assistant)
+        .skip(1)
         .take(2)
         .any(|m| {
             let normalized_prev = m
@@ -109,6 +110,7 @@ pub fn check_for_response_loop(response_text: &str, session_state: &mut AgentSes
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::llm::provider::Message;
 
     #[test]
     fn test_completion_indicators() {
@@ -125,5 +127,30 @@ mod tests {
         ));
         assert!(!check_completion_indicators("Is the task done?"));
         assert!(!check_completion_indicators("random text"));
+    }
+
+    #[test]
+    fn response_loop_ignores_current_assistant_message() {
+        let repeated_response = "The task is complete";
+        let mut state = AgentSessionState::new("session".to_string(), 8, 4, 128_000);
+        state
+            .messages
+            .push(Message::assistant(repeated_response.to_string()));
+
+        assert!(!check_for_response_loop(repeated_response, &mut state));
+    }
+
+    #[test]
+    fn response_loop_still_detects_prior_duplicate_assistant_message() {
+        let repeated_response = "The task is complete";
+        let mut state = AgentSessionState::new("session".to_string(), 8, 4, 128_000);
+        state
+            .messages
+            .push(Message::assistant(repeated_response.to_string()));
+        state
+            .messages
+            .push(Message::assistant(repeated_response.to_string()));
+
+        assert!(check_for_response_loop(repeated_response, &mut state));
     }
 }

@@ -494,6 +494,26 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn harness_exec_reuses_public_output_normalization() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+        let response = registry
+            .execute_harness_unified_exec(json!({
+                "action": "run",
+                "command": "printf vtcode",
+                "tty": false,
+                "yield_time_ms": 1000
+            }))
+            .await?;
+
+        assert_eq!(response["output"].as_str(), Some("vtcode"));
+        assert!(response.get("stdout").is_none());
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn prevalidated_execution_enforces_plan_mode_guards() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
