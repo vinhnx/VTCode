@@ -21,8 +21,8 @@ use crate::agent::runloop::unified::ui_interaction::{
     StreamProgressEvent, StreamSpinnerOptions, stream_and_render_response_with_options_and_progress,
 };
 use crate::agent::runloop::unified::wait_feedback::{
-    WAIT_KEEPALIVE_INITIAL, WAIT_KEEPALIVE_INTERVAL, resolve_warning_delay, wait_keepalive_message,
-    wait_timeout_warning_message,
+    WAIT_KEEPALIVE_INITIAL, WAIT_KEEPALIVE_INTERVAL, resolve_fractional_warning_delay,
+    wait_keepalive_message, wait_timeout_warning_message,
 };
 use metrics::emit_llm_retry_metrics;
 #[cfg(test)]
@@ -46,6 +46,15 @@ use retry::{
 use streaming::HarnessStreamingBridge;
 
 const WAIT_TIMEOUT_WARNING_HEADROOM: Duration = Duration::from_secs(15);
+const WAIT_TIMEOUT_WARNING_FRACTION: f32 = 0.75;
+
+fn llm_timeout_warning_delay(timeout_budget: Duration) -> Option<Duration> {
+    resolve_fractional_warning_delay(
+        timeout_budget,
+        WAIT_TIMEOUT_WARNING_FRACTION,
+        WAIT_TIMEOUT_WARNING_HEADROOM,
+    )
+}
 
 /// Execute an LLM request and return the response.
 pub(crate) async fn execute_llm_request(
@@ -237,11 +246,7 @@ pub(crate) async fn execute_llm_request(
             let keepalive_started_at = tokio::time::Instant::now();
             let mut next_keepalive_at = keepalive_started_at + WAIT_KEEPALIVE_INITIAL;
             let timeout_budget = Duration::from_secs(request_timeout_secs);
-            let warning_delay = resolve_warning_delay(
-                timeout_budget,
-                timeout_budget.saturating_sub(WAIT_TIMEOUT_WARNING_HEADROOM),
-                WAIT_TIMEOUT_WARNING_HEADROOM,
-            );
+            let warning_delay = llm_timeout_warning_delay(timeout_budget);
             let mut timeout_warning_emitted = false;
             let wait_subject = format!("LLM request for model '{}'", active_model);
 
@@ -692,6 +697,14 @@ mod tests {
     #[test]
     fn llm_attempt_timeout_plan_mode_huggingface_uses_higher_floor() {
         assert_eq!(llm_attempt_timeout_secs(150, true, "huggingface"), 90);
+    }
+
+    #[test]
+    fn llm_timeout_warning_delay_targets_three_quarters_of_budget() {
+        assert_eq!(
+            llm_timeout_warning_delay(Duration::from_secs(60)),
+            Some(Duration::from_secs(45))
+        );
     }
 
     #[test]

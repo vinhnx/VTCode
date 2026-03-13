@@ -356,9 +356,6 @@ pub(crate) async fn run_turn_loop(
         validator.start_turn().await;
     }
 
-    // Loop detection warnings are scoped per turn; clear streak state here.
-    ctx.autonomous_executor.reset_turn_loop_detection();
-
     loop {
         if handle_steering_messages(&mut ctx, working_history, &mut result).await? {
             break;
@@ -702,7 +699,11 @@ async fn emit_turn_outcome_notification(result: &TurnLoopResult) {
 
 #[cfg(test)]
 mod tests {
-    use super::has_tool_response_since;
+    use super::{has_tool_response_since, run_turn_loop};
+    use crate::agent::runloop::unified::turn::context::TurnLoopResult;
+    use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
+    use serde_json::json;
+    use vtcode_core::config::constants::tools as tool_names;
     use vtcode_core::llm::provider as uni;
 
     #[test]
@@ -734,5 +735,40 @@ mod tests {
         )];
 
         assert!(!has_tool_response_since(&messages, 10));
+    }
+
+    #[tokio::test]
+    async fn turn_loop_preserves_legacy_loop_detector_state() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let legacy_detector = backing.legacy_loop_detector();
+        {
+            let mut detector = legacy_detector
+                .write()
+                .expect("legacy loop detector should lock");
+            detector.set_tool_limit(tool_names::READ_FILE, 2);
+            let seeded_args = json!({"path":"sample.txt"});
+            assert!(
+                detector
+                    .record_call(tool_names::READ_FILE, &seeded_args)
+                    .is_none()
+            );
+            let _ = detector.record_call(tool_names::READ_FILE, &seeded_args);
+            let warning = detector.record_call(tool_names::READ_FILE, &seeded_args);
+            assert!(warning.is_some());
+            assert!(detector.is_hard_limit_exceeded(tool_names::READ_FILE));
+        }
+
+        let mut history = vec![uni::Message::user("continue".to_string())];
+        let outcome = run_turn_loop(&mut history, backing.turn_loop_context())
+            .await
+            .expect("turn loop should complete");
+
+        assert!(matches!(outcome.result, TurnLoopResult::Completed));
+        assert!(
+            legacy_detector
+                .read()
+                .expect("legacy loop detector should lock")
+                .is_hard_limit_exceeded(tool_names::READ_FILE)
+        );
     }
 }

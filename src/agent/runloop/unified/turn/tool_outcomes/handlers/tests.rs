@@ -3,7 +3,7 @@ use super::fallbacks::{
     recovery_fallback_for_tool,
 };
 use super::looping::{
-    loop_detection_tool_key, shell_run_signature, spool_chunk_read_path,
+    low_signal_family_key, shell_run_signature, spool_chunk_read_path,
     task_tracker_create_signature,
 };
 use super::{
@@ -317,145 +317,17 @@ async fn cache_tool_permission(
 }
 
 #[test]
-fn loop_key_for_unified_file_read_includes_path() {
-    let key = loop_detection_tool_key(
-        tool_names::UNIFIED_FILE,
-        &json!({"action":"read","path":"src/main.rs"}),
-    );
-    assert!(key.contains("unified_file::read::"));
-    assert!(key.contains("src/main.rs"));
-}
-
-#[test]
-fn loop_key_for_unified_file_edit_includes_path() {
-    let key = loop_detection_tool_key(
-        tool_names::UNIFIED_FILE,
-        &json!({"action":"edit","path":"src/main.rs","old_str":"old","new_str":"new"}),
-    );
-    assert!(key.contains("unified_file::edit::"));
-    assert!(key.contains("src/main.rs"));
-}
-
-#[test]
-fn loop_key_for_unified_file_edit_differs_by_target_path() {
-    let first = loop_detection_tool_key(
-        tool_names::UNIFIED_FILE,
-        &json!({"action":"edit","path":"src/main.rs","old_str":"a","new_str":"b"}),
-    );
-    let second = loop_detection_tool_key(
-        tool_names::UNIFIED_FILE,
-        &json!({"action":"edit","path":"src/lib.rs","old_str":"a","new_str":"b"}),
-    );
-    assert_ne!(first, second);
-}
-
-#[test]
-fn loop_key_for_unified_file_move_includes_source_and_destination() {
-    let key = loop_detection_tool_key(
-        tool_names::UNIFIED_FILE,
-        &json!({"action":"move","path":"src/old.rs","destination":"src/new.rs"}),
-    );
-    assert!(key.contains("unified_file::move::"));
-    assert!(key.contains("src/old.rs"));
-    assert!(key.contains("src/new.rs"));
-}
-
-#[test]
-fn loop_key_for_unified_search_grep_differs_by_pattern() {
-    let first = loop_detection_tool_key(
+fn low_signal_family_for_unified_search_normalizes_missing_default_path() {
+    let first = low_signal_family_key(
         tool_names::UNIFIED_SEARCH,
-        &json!({"action":"grep","path":"src","pattern":"Result<"}),
+        &json!({"action":"grep","pattern":"-> Result","globs":["**/*.rs"]}),
     );
-    let second = loop_detection_tool_key(
+    let second = low_signal_family_key(
         tool_names::UNIFIED_SEARCH,
-        &json!({"action":"grep","path":"src","pattern":"anyhow::Result"}),
+        &json!({"action":"grep","path":".","pattern":"Result<","globs":["**/*.rs"]}),
     );
-    assert_ne!(first, second);
-}
 
-#[test]
-fn loop_key_for_unified_search_structural_differs_by_pattern_and_lang() {
-    let first = loop_detection_tool_key(
-        tool_names::UNIFIED_SEARCH,
-        &json!({
-            "action":"structural",
-            "path":"src",
-            "pattern":"fn $NAME() {}",
-            "lang":"rust"
-        }),
-    );
-    let second = loop_detection_tool_key(
-        tool_names::UNIFIED_SEARCH,
-        &json!({
-            "action":"structural",
-            "path":"src",
-            "pattern":"fn $NAME() {}",
-            "lang":"typescript"
-        }),
-    );
-    assert_ne!(first, second);
-}
-
-#[test]
-fn loop_key_for_unified_search_list_includes_path_and_mode() {
-    let key = loop_detection_tool_key(
-        tool_names::UNIFIED_SEARCH,
-        &json!({"action":"list","path":"src","mode":"tree"}),
-    );
-    assert!(key.contains("unified_search::list::src::mode=tree"));
-}
-
-#[test]
-fn loop_key_for_unified_search_identical_payloads_match() {
-    let first = loop_detection_tool_key(
-        tool_names::UNIFIED_SEARCH,
-        &json!({"action":"grep","path":"src","pattern":"Result<","globs":["**/*.rs"]}),
-    );
-    let second = loop_detection_tool_key(
-        tool_names::UNIFIED_SEARCH,
-        &json!({"action":"grep","path":"src","pattern":"Result<","globs":["**/*.rs"]}),
-    );
     assert_eq!(first, second);
-}
-
-#[test]
-fn loop_key_for_unified_exec_poll_includes_session_id() {
-    let key = loop_detection_tool_key(
-        tool_names::UNIFIED_EXEC,
-        &json!({"action":"poll","session_id":"run-abc123"}),
-    );
-    assert!(key.contains("unified_exec::poll::"));
-    assert!(key.contains("run-abc123"));
-}
-
-#[test]
-fn loop_key_for_read_file_includes_path_and_offset() {
-    let key = loop_detection_tool_key(
-        tool_names::READ_FILE,
-        &json!({
-            "path": ".vtcode/context/tool_outputs/unified_exec_123.txt",
-            "offset": 41,
-            "limit": 40
-        }),
-    );
-    assert!(key.contains("read_file::"));
-    assert!(key.contains(".vtcode/context/tool_outputs/unified_exec_123.txt"));
-    assert!(key.contains("offset=41"));
-    assert!(key.contains("limit=40"));
-}
-
-#[test]
-fn loop_key_for_apply_patch_includes_target_and_signature() {
-    let key = loop_detection_tool_key(
-        tool_names::APPLY_PATCH,
-        &json!({
-            "patch": "*** Begin Patch\n*** Update File: src/lib.rs\n@@\n-old\n+new\n*** End Patch\n"
-        }),
-    );
-    assert!(key.contains("apply_patch::"));
-    assert!(key.contains("src/lib.rs"));
-    assert!(key.contains("len"));
-    assert!(key.contains("fnv"));
 }
 
 #[test]
@@ -772,6 +644,26 @@ fn shell_run_signature_handles_unified_exec_run_action() {
 }
 
 #[test]
+fn shell_run_signature_normalizes_trivial_shell_quoting_differences() {
+    let first = shell_run_signature(
+        tool_names::UNIFIED_EXEC,
+        &json!({
+            "action": "run",
+            "command": "grep -n '-> Result' vtcode-tui/src/**/*.rs"
+        }),
+    );
+    let second = shell_run_signature(
+        tool_names::UNIFIED_EXEC,
+        &json!({
+            "action": "run",
+            "command": "grep -n \"-> Result\" vtcode-tui/src/**/*.rs"
+        }),
+    );
+
+    assert_eq!(first, second);
+}
+
+#[test]
 fn shell_run_signature_ignores_non_run_unified_exec_action() {
     let args = json!({
         "action": "poll",
@@ -837,6 +729,71 @@ async fn blocked_tool_call_guard_short_circuits_to_recovery_when_active() {
     );
 
     assert!(matches!(outcome, Some(TurnHandlerOutcome::Continue)));
+}
+
+#[tokio::test]
+async fn unified_validation_ignores_preseeded_legacy_loop_detector_state() {
+    let mut backing = TestContextBacking::new(2).await;
+    let valid_file = backing.sample_file.clone();
+    let valid_args = json!({"path": valid_file.to_string_lossy()});
+    cache_tool_permission(
+        &mut backing,
+        tool_names::READ_FILE,
+        &valid_args,
+        PermissionGrant::Permanent,
+    )
+    .await;
+
+    let legacy_detector = backing.autonomous_executor.loop_detector();
+    {
+        let mut detector = legacy_detector
+            .write()
+            .expect("legacy loop detector should lock");
+        detector.set_tool_limit(tool_names::READ_FILE, 2);
+        let seeded_args = json!({"path": valid_file.to_string_lossy()});
+        assert!(
+            detector
+                .record_call(tool_names::READ_FILE, &seeded_args)
+                .is_none()
+        );
+        let _ = detector.record_call(tool_names::READ_FILE, &seeded_args);
+        let warning = detector.record_call(tool_names::READ_FILE, &seeded_args);
+        assert!(warning.is_some());
+        assert!(detector.is_hard_limit_exceeded(tool_names::READ_FILE));
+    }
+
+    let mut repeated_tool_attempts = LoopTracker::new();
+    let mut turn_modified_files = BTreeSet::new();
+    let mut tp_ctx = backing.turn_processing_context();
+    let mut outcome_ctx = ToolOutcomeContext {
+        ctx: &mut tp_ctx,
+        repeated_tool_attempts: &mut repeated_tool_attempts,
+        turn_modified_files: &mut turn_modified_files,
+    };
+
+    let outcome = handle_single_tool_call(
+        &mut outcome_ctx,
+        "legacy_detector_seeded",
+        tool_names::READ_FILE,
+        valid_args,
+    )
+    .await
+    .expect("unified validation should ignore legacy detector state");
+
+    assert!(outcome.is_none());
+    assert_eq!(outcome_ctx.ctx.harness_state.tool_calls, 1);
+    assert!(!outcome_ctx.ctx.working_history.iter().any(|message| {
+        message
+            .content
+            .as_text()
+            .contains("Loop detector stopped repeated")
+    }));
+    assert!(
+        legacy_detector
+            .read()
+            .expect("legacy loop detector should lock")
+            .is_hard_limit_exceeded(tool_names::READ_FILE)
+    );
 }
 
 #[tokio::test]

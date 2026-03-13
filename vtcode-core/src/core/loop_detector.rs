@@ -1,6 +1,9 @@
 //! Loop detection for agent operations
 //!
 //! Detects when the agent is stuck in repetitive patterns and suggests intervention.
+//! The unified interactive VT Code runloop applies its own richer turn-local
+//! recovery policy; this detector remains the generic safeguard for legacy or
+//! non-unified autonomous execution paths.
 
 use crate::config::constants::{defaults, tools};
 use crate::tools::tool_intent;

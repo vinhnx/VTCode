@@ -620,6 +620,10 @@ impl<'a> TurnProcessingContext<'a> {
         self.harness_state.consume_recovery_pass()
     }
 
+    pub(crate) fn finish_recovery_pass(&mut self) -> bool {
+        self.harness_state.finish_recovery_pass()
+    }
+
     pub(crate) fn push_tool_response<S>(&mut self, tool_call_id: S, content: String)
     where
         S: AsRef<str> + Into<String>,
@@ -663,12 +667,15 @@ impl<'a> TurnProcessingContext<'a> {
         proposed_plan: Option<String>,
         response_streamed: bool,
     ) -> anyhow::Result<TurnHandlerOutcome> {
-        let should_force_continue = should_continue_autonomously_after_interim_text(
-            self.full_auto,
-            self.session_stats.is_plan_mode(),
-            self.working_history,
-            &text,
-        );
+        let recovery_pass_response = self.is_recovery_active() && self.recovery_pass_used();
+        let recovery_progress_only = recovery_pass_response && is_interim_progress_update(&text);
+        let should_force_continue = !recovery_pass_response
+            && should_continue_autonomously_after_interim_text(
+                self.full_auto,
+                self.session_stats.is_plan_mode(),
+                self.working_history,
+                &text,
+            );
         self.handle_assistant_response(
             text,
             reasoning,
@@ -676,6 +683,18 @@ impl<'a> TurnProcessingContext<'a> {
             response_streamed,
             Some(uni::AssistantPhase::FinalAnswer),
         )?;
+
+        if recovery_pass_response {
+            self.finish_recovery_pass();
+            if recovery_progress_only {
+                return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
+                    reason: Some(
+                        "Recovery mode requested a final tool-free synthesis pass, but the model only described another next step."
+                            .to_string(),
+                    ),
+                }));
+            }
+        }
 
         if should_force_continue {
             push_system_directive_once(self.working_history, AUTONOMOUS_CONTINUE_DIRECTIVE);
@@ -1082,6 +1101,7 @@ fn last_user_requested_diff_analysis(history: &[uni::Message]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
 
     #[test]
     fn follow_up_prompt_detection_accepts_continue_variants() {
@@ -1184,6 +1204,31 @@ mod tests {
             &history,
             "Now I need to update the function body to use settings.reasoning_effort and settings.verbosity:"
         ));
+    }
+
+    #[tokio::test]
+    async fn recovery_pass_progress_only_text_breaks_turn_instead_of_continuing() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut ctx = backing.turn_processing_context();
+        ctx.activate_recovery("loop detector");
+        assert!(ctx.consume_recovery_pass());
+
+        let outcome = ctx
+            .handle_text_response(
+                "Let me try a narrower search next.".to_string(),
+                Vec::new(),
+                None,
+                None,
+                false,
+            )
+            .await
+            .expect("recovery response should be handled");
+
+        assert!(matches!(
+            outcome,
+            TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. })
+        ));
+        assert!(!ctx.is_recovery_active());
     }
 
     #[test]

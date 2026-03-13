@@ -2,6 +2,7 @@ use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPip
 use rustc_hash::FxHashMap;
 use std::time::Instant;
 use vtcode_core::llm::provider as uni;
+use vtcode_core::tools::names::canonical_tool_name;
 
 pub(crate) const EXIT_PLAN_MODE_REASON_AUTO_TRIGGER_ON_DENIAL: &str = "auto_trigger_on_plan_denial";
 pub(crate) const EXIT_PLAN_MODE_REASON_USER_REQUESTED_IMPLEMENTATION: &str =
@@ -18,6 +19,7 @@ pub(crate) const NAVIGATION_LOOP_THRESHOLD: usize = 15;
 /// Optimized loop detection with bounded signature keys and exponential backoff.
 pub(crate) struct LoopTracker {
     attempts: FxHashMap<String, (usize, Instant)>,
+    low_signal_attempts: FxHashMap<String, (usize, Instant)>,
     /// Counter for consecutive mutating file operations without execution/verification
     pub consecutive_mutations: usize,
     /// Counter for consecutive read/search operations without action or synthesis
@@ -28,6 +30,7 @@ impl LoopTracker {
     pub(crate) fn new() -> Self {
         Self {
             attempts: FxHashMap::with_capacity_and_hasher(16, Default::default()),
+            low_signal_attempts: FxHashMap::with_capacity_and_hasher(8, Default::default()),
             consecutive_mutations: 0,
             consecutive_navigations: 0,
         }
@@ -37,6 +40,16 @@ impl LoopTracker {
     pub(crate) fn record(&mut self, signature: String) -> usize {
         let entry = self
             .attempts
+            .entry(signature)
+            .or_insert((0, Instant::now()));
+        entry.0 += 1;
+        entry.1 = Instant::now();
+        entry.0
+    }
+
+    fn record_low_signal(&mut self, signature: String) -> usize {
+        let entry = self
+            .low_signal_attempts
             .entry(signature)
             .or_insert((0, Instant::now()));
         entry.0 += 1;
@@ -60,10 +73,98 @@ impl LoopTracker {
             .unwrap_or(0)
     }
 
+    pub(crate) fn max_low_signal_count(&self) -> usize {
+        self.low_signal_attempts
+            .values()
+            .map(|(count, _)| *count)
+            .max()
+            .unwrap_or(0)
+    }
+
+    fn reset_low_signal_attempts(&mut self) {
+        self.low_signal_attempts.clear();
+    }
+
     pub(crate) fn reset_after_balancer_recovery(&mut self) {
         self.attempts.clear();
+        self.low_signal_attempts.clear();
         self.consecutive_mutations = 0;
         self.consecutive_navigations = 0;
+    }
+}
+
+fn output_has_empty_search_matches(output: &serde_json::Value) -> bool {
+    output
+        .get("matches")
+        .and_then(serde_json::Value::as_array)
+        .is_some_and(|matches| matches.is_empty())
+}
+
+fn output_reuses_recent_result(output: &serde_json::Value) -> bool {
+    [
+        "loop_detected",
+        "reused_recent_result",
+        "spool_ref_only",
+        "result_ref_only",
+    ]
+    .iter()
+    .any(|key| output.get(*key).and_then(serde_json::Value::as_bool) == Some(true))
+}
+
+fn looks_like_grep_style_command(command: &str) -> bool {
+    let lower = command.trim().to_ascii_lowercase();
+    lower.starts_with("grep ")
+        || lower.starts_with("rg ")
+        || lower.contains("/grep ")
+        || lower.contains("/rg ")
+}
+
+fn output_is_grep_style_miss(output: &serde_json::Value, command_success: bool) -> bool {
+    if command_success {
+        return false;
+    }
+
+    let exit_code = output.get("exit_code").and_then(serde_json::Value::as_i64);
+    let command = output
+        .get("command")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+    let stdout_empty = output
+        .get("stdout")
+        .or_else(|| output.get("output"))
+        .and_then(serde_json::Value::as_str)
+        .is_none_or(|text| text.trim().is_empty());
+
+    stdout_empty && matches!(exit_code, Some(1 | 2)) && looks_like_grep_style_command(command)
+}
+
+fn error_is_missing_resource(error: &str) -> bool {
+    let lower = error.to_ascii_lowercase();
+    [
+        "not found",
+        "no such file",
+        "resource not found",
+        "spool file not found",
+        "session output file not found",
+    ]
+    .iter()
+    .any(|needle| lower.contains(needle))
+}
+
+fn is_low_signal_outcome(outcome: &ToolPipelineOutcome, canonical_tool_name: &str) -> bool {
+    match &outcome.status {
+        ToolExecutionStatus::Success {
+            output,
+            command_success,
+            ..
+        } => {
+            output_has_empty_search_matches(output)
+                || output_reuses_recent_result(output)
+                || (canonical_tool_name == vtcode_core::config::constants::tools::UNIFIED_EXEC
+                    && output_is_grep_style_miss(output, *command_success))
+        }
+        ToolExecutionStatus::Failure { error } => error_is_missing_resource(&error.to_string()),
+        ToolExecutionStatus::Timeout { .. } | ToolExecutionStatus::Cancelled => false,
     }
 }
 
@@ -237,8 +338,19 @@ pub(crate) fn update_repetition_tracker(
         return;
     }
 
-    let signature_key = signature_key_for(name, args);
+    let canonical_name = canonical_tool_name(name);
+    let canonical_name = canonical_name.as_ref();
+    let signature_key = signature_key_for(canonical_name, args);
     loop_tracker.record(signature_key);
+    let low_signal_family =
+        crate::agent::runloop::unified::turn::tool_outcomes::handlers::low_signal_family_key(
+            canonical_name,
+            args,
+        )
+        .filter(|_| is_low_signal_outcome(outcome, canonical_name));
+    if let Some(low_signal_family) = low_signal_family.as_ref() {
+        loop_tracker.record_low_signal(low_signal_family.clone());
+    }
 
     // Update NL2Repo-Bench metrics based on tool intent.
     //
@@ -250,7 +362,7 @@ pub(crate) fn update_repetition_tracker(
     use vtcode_core::config::constants::tools as tool_names;
 
     let is_execution_tool = matches!(
-        name,
+        canonical_name,
         n if n == tool_names::UNIFIED_EXEC
             || n == tool_names::RUN_PTY_CMD
             || n == tool_names::EXECUTE_CODE
@@ -261,15 +373,21 @@ pub(crate) fn update_repetition_tracker(
         // Execution/verification step resets both counters
         loop_tracker.consecutive_mutations = 0;
         loop_tracker.consecutive_navigations = 0;
-    } else if is_plan_artifact_write(name, args) {
+        if low_signal_family.is_none() {
+            loop_tracker.reset_low_signal_attempts();
+        }
+    } else if is_plan_artifact_write(canonical_name, args) {
         // Plan artifact writes in dedicated plan storage are allowed in Plan Mode and
         // should not trigger anti-blind-editing verification pressure.
         loop_tracker.consecutive_navigations = 0;
     } else {
-        let intent = vtcode_core::tools::tool_intent::classify_tool_intent(name, args);
+        let intent = vtcode_core::tools::tool_intent::classify_tool_intent(canonical_name, args);
         if intent.mutating {
             loop_tracker.consecutive_mutations += 1;
             loop_tracker.consecutive_navigations = 0;
+            if low_signal_family.is_none() {
+                loop_tracker.reset_low_signal_attempts();
+            }
         } else {
             // Read-only / navigation tool
             loop_tracker.consecutive_navigations += 1;
@@ -362,10 +480,12 @@ mod tests {
         tracker.record("unified_search:{\"action\":\"grep\"}".to_string());
         tracker.consecutive_mutations = 2;
         tracker.consecutive_navigations = 4;
+        tracker.record_low_signal("unified_search::grep::src".to_string());
 
         tracker.reset_after_balancer_recovery();
 
         assert_eq!(tracker.max_count_filtered(|_| false), 0);
+        assert_eq!(tracker.max_low_signal_count(), 0);
         assert_eq!(tracker.consecutive_mutations, 0);
         assert_eq!(tracker.consecutive_navigations, 0);
     }
@@ -580,5 +700,90 @@ mod tests {
         assert!(check_is_argument_error(
             "Tool execution failed: 'index' is required for 'update' (1-indexed)"
         ));
+    }
+
+    #[test]
+    fn low_signal_tracker_groups_empty_search_results_by_family() {
+        let mut tracker = LoopTracker::new();
+        let miss = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
+            output: serde_json::json!({"matches":[]}),
+            stdout: None,
+            modified_files: vec![],
+            command_success: true,
+        });
+
+        update_repetition_tracker(
+            &mut tracker,
+            &miss,
+            vtcode_core::config::constants::tools::UNIFIED_SEARCH,
+            &json!({"action":"structural","pattern":"fn $name(...)", "lang":"rust", "globs":["vtcode-tui/**/*.rs"]}),
+        );
+        update_repetition_tracker(
+            &mut tracker,
+            &miss,
+            vtcode_core::config::constants::tools::UNIFIED_SEARCH,
+            &json!({"action":"grep","pattern":"-> Result","path":"vtcode-tui","globs":["vtcode-tui/**/*.rs"]}),
+        );
+        update_repetition_tracker(
+            &mut tracker,
+            &miss,
+            vtcode_core::config::constants::tools::UNIFIED_SEARCH,
+            &json!({"action":"grep","pattern":"Result<","path":"vtcode-tui","globs":["vtcode-tui/**/*.rs"]}),
+        );
+
+        assert_eq!(tracker.max_low_signal_count(), 3);
+    }
+
+    #[test]
+    fn low_signal_tracker_counts_missing_read_failures() {
+        let mut tracker = LoopTracker::new();
+        let miss = ToolPipelineOutcome::from_status(ToolExecutionStatus::Failure {
+            error: anyhow::anyhow!("Resource not found: vtcode-tui/src/main.rs"),
+        });
+
+        update_repetition_tracker(
+            &mut tracker,
+            &miss,
+            vtcode_core::config::constants::tools::UNIFIED_FILE,
+            &json!({"action":"read","path":"vtcode-tui/src/main.rs"}),
+        );
+        update_repetition_tracker(
+            &mut tracker,
+            &miss,
+            vtcode_core::config::constants::tools::UNIFIED_FILE,
+            &json!({"action":"read","path":"vtcode-tui/src/main.rs","offset":40}),
+        );
+
+        assert_eq!(tracker.max_low_signal_count(), 2);
+    }
+
+    #[test]
+    fn low_signal_tracker_counts_grep_style_shell_misses() {
+        let mut tracker = LoopTracker::new();
+        let miss = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
+            output: serde_json::json!({
+                "command": "grep -n '-> Result' vtcode-tui/src/**/*.rs",
+                "exit_code": 2,
+                "output": ""
+            }),
+            stdout: None,
+            modified_files: vec![],
+            command_success: false,
+        });
+
+        update_repetition_tracker(
+            &mut tracker,
+            &miss,
+            vtcode_core::config::constants::tools::UNIFIED_EXEC,
+            &json!({"action":"run","command":"grep -n '-> Result' vtcode-tui/src/**/*.rs"}),
+        );
+        update_repetition_tracker(
+            &mut tracker,
+            &miss,
+            vtcode_core::config::constants::tools::UNIFIED_EXEC,
+            &json!({"action":"run","command":"grep -n \"-> Result\" vtcode-tui/src/**/*.rs"}),
+        );
+
+        assert_eq!(tracker.max_low_signal_count(), 2);
     }
 }

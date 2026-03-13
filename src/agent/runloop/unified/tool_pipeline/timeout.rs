@@ -7,7 +7,7 @@ use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError, ToolTimeou
 
 use crate::agent::runloop::unified::progress::ProgressReporter;
 use crate::agent::runloop::unified::wait_feedback::{
-    resolve_warning_delay, wait_timeout_warning_message,
+    resolve_fractional_warning_delay, wait_timeout_warning_message,
 };
 
 use super::{MIN_TIMEOUT_WARNING_HEADROOM, ToolExecutionStatus};
@@ -82,12 +82,7 @@ pub(super) fn spawn_timeout_warning_task(
     warning_fraction: f32,
     progress_reporter: Option<ProgressReporter>,
 ) -> Option<JoinHandle<()>> {
-    let fraction = warning_fraction.clamp(0.1, 0.95);
-    let warning_delay = resolve_warning_delay(
-        tool_timeout,
-        tool_timeout.mul_f32(fraction),
-        MIN_TIMEOUT_WARNING_HEADROOM,
-    )?;
+    let warning_delay = tool_timeout_warning_delay(tool_timeout, warning_fraction)?;
 
     Some(tokio::spawn(async move {
         tokio::select! {
@@ -118,6 +113,11 @@ pub(super) fn spawn_timeout_warning_task(
             }
         }
     }))
+}
+
+fn tool_timeout_warning_delay(tool_timeout: Duration, warning_fraction: f32) -> Option<Duration> {
+    let fraction = warning_fraction.clamp(0.1, 0.95);
+    resolve_fractional_warning_delay(tool_timeout, fraction, MIN_TIMEOUT_WARNING_HEADROOM)
 }
 
 #[cfg(test)]
@@ -174,6 +174,14 @@ mod tests {
         assert!(progress.message.is_empty());
 
         handle.await.expect("warning task should complete");
+    }
+
+    #[test]
+    fn tool_timeout_warning_delay_targets_fractional_budget() {
+        assert_eq!(
+            tool_timeout_warning_delay(Duration::from_secs(60), 0.75),
+            Some(Duration::from_secs(45))
+        );
     }
 
     async fn wait_for_message(

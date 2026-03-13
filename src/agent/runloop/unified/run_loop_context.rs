@@ -39,6 +39,14 @@ pub(crate) enum TurnExecutionPhase {
     Finalizing,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RecoveryPhase {
+    Inactive,
+    Pending,
+    InPass,
+    Completed,
+}
+
 impl From<TurnPhase> for TurnExecutionPhase {
     fn from(value: TurnPhase) -> Self {
         match value {
@@ -76,8 +84,7 @@ pub(crate) struct HarnessTurnState {
     pub tool_budget_warning_emitted: bool,
     pub tool_budget_exhausted_emitted: bool,
     pub recovery_reason: Option<String>,
-    pub recovery_active: bool,
-    pub recovery_pass_used: bool,
+    recovery_phase: RecoveryPhase,
     pub max_tool_calls: usize,
     pub max_tool_wall_clock: Duration,
     pub max_tool_retries: u32,
@@ -107,8 +114,7 @@ impl HarnessTurnState {
             tool_budget_warning_emitted: false,
             tool_budget_exhausted_emitted: false,
             recovery_reason: None,
-            recovery_active: false,
-            recovery_pass_used: false,
+            recovery_phase: RecoveryPhase::Inactive,
             max_tool_calls,
             max_tool_wall_clock: Duration::from_secs(max_tool_wall_clock_secs),
             max_tool_retries,
@@ -172,12 +178,17 @@ impl HarnessTurnState {
     }
 
     pub(crate) fn activate_recovery(&mut self, reason: impl Into<String>) {
-        self.recovery_reason = Some(reason.into());
-        self.recovery_active = true;
+        if matches!(self.recovery_phase, RecoveryPhase::Inactive) {
+            self.recovery_reason = Some(reason.into());
+            self.recovery_phase = RecoveryPhase::Pending;
+        }
     }
 
     pub(crate) fn is_recovery_active(&self) -> bool {
-        self.recovery_active
+        matches!(
+            self.recovery_phase,
+            RecoveryPhase::Pending | RecoveryPhase::InPass
+        )
     }
 
     pub(crate) fn recovery_reason(&self) -> Option<&str> {
@@ -185,14 +196,25 @@ impl HarnessTurnState {
     }
 
     pub(crate) fn recovery_pass_used(&self) -> bool {
-        self.recovery_pass_used
+        matches!(
+            self.recovery_phase,
+            RecoveryPhase::InPass | RecoveryPhase::Completed
+        )
     }
 
     pub(crate) fn consume_recovery_pass(&mut self) -> bool {
-        if !self.recovery_active || self.recovery_pass_used {
+        if !matches!(self.recovery_phase, RecoveryPhase::Pending) {
             return false;
         }
-        self.recovery_pass_used = true;
+        self.recovery_phase = RecoveryPhase::InPass;
+        true
+    }
+
+    pub(crate) fn finish_recovery_pass(&mut self) -> bool {
+        if !matches!(self.recovery_phase, RecoveryPhase::InPass) {
+            return false;
+        }
+        self.recovery_phase = RecoveryPhase::Completed;
         true
     }
 
@@ -446,6 +468,8 @@ mod tests {
 
         assert!(state.consume_recovery_pass());
         assert!(state.recovery_pass_used());
+        assert!(state.finish_recovery_pass());
+        assert!(!state.is_recovery_active());
     }
 
     #[test]
@@ -464,6 +488,8 @@ mod tests {
         assert!(state.consume_recovery_pass());
         assert!(!state.consume_recovery_pass());
         assert!(state.recovery_pass_used());
+        assert!(state.finish_recovery_pass());
+        assert!(!state.finish_recovery_pass());
     }
 
     #[test]

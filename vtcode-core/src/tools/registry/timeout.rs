@@ -46,7 +46,7 @@ impl Default for ToolTimeoutPolicy {
             default_ceiling: Some(Duration::from_secs(180)),
             pty_ceiling: Some(Duration::from_secs(300)),
             mcp_ceiling: Some(Duration::from_secs(120)),
-            warning_fraction: 0.8,
+            warning_fraction: 0.75,
         }
     }
 }

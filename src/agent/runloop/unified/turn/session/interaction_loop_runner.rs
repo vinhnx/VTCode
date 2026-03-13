@@ -698,17 +698,6 @@ pub(super) async fn run_interaction_loop_impl(
                     .unwrap_or("Previous turn stalled without a detailed reason.")
                     .to_string();
                 let fallback_hint = extract_recent_follow_up_hint(ctx.conversation_history);
-                // Selective reset: only clear the readonly_streak so the agent can
-                // attempt a different strategy, but keep the recent_calls window
-                // and tool_counts intact so the same looping pattern is still
-                // detected if the agent re-enters it.
-                if let Ok(mut detector) = ctx.autonomous_executor.loop_detector().write() {
-                    detector.reset_readonly_streak();
-                } else {
-                    tracing::warn!(
-                        "Failed to reset loop detector during stalled follow-up recovery"
-                    );
-                }
                 ctx.conversation_history.push(uni::Message::system(
                     REPEATED_FOLLOW_UP_STALLED_DIRECTIVE.to_string(),
                 ));

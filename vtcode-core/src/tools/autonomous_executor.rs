@@ -63,7 +63,11 @@ impl ToolStats {
 use crate::tools::circuit_breaker::CircuitBreaker;
 use crate::utils::path::{normalize_path, resolve_workspace_path};
 
-/// Autonomous tool executor with safety checks
+/// Autonomous tool executor with safety checks.
+///
+/// In the unified interactive VT Code runloop, higher-level turn code owns
+/// user-visible loop recovery. The loop detector here remains a generic
+/// safeguard for legacy and non-unified autonomous execution paths.
 pub struct AutonomousExecutor {
     verification_tools: HashSet<String>,
     loop_detector: Arc<RwLock<LoopDetector>>,

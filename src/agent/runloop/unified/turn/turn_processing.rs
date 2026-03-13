@@ -3,7 +3,7 @@ mod plan_mode;
 mod response_processing;
 mod result_handler;
 #[cfg(test)]
-mod test_support;
+pub(crate) mod test_support;
 
 pub(crate) use llm_request::execute_llm_request;
 pub(crate) use plan_mode::{

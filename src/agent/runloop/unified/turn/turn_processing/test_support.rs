@@ -224,6 +224,55 @@ impl TestTurnProcessingBacking {
         self.tools.write().await.push(tool);
     }
 
+    pub(crate) fn legacy_loop_detector(
+        &self,
+    ) -> Arc<std::sync::RwLock<vtcode_core::core::loop_detector::LoopDetector>> {
+        self.autonomous_executor.loop_detector()
+    }
+
+    pub(crate) fn turn_loop_context(
+        &mut self,
+    ) -> crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext<'_> {
+        crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext::new(
+            &mut self.renderer,
+            &self.handle,
+            &mut self.session,
+            &mut self.session_stats,
+            &mut self.auto_exit_plan_mode_attempted,
+            &mut self.mcp_panel_state,
+            &self.tool_result_cache,
+            &self.approval_recorder,
+            &self.decision_ledger,
+            &mut self.tool_registry,
+            &self.tools,
+            &self.tool_catalog,
+            &self.ctrl_c_state,
+            &self.ctrl_c_notify,
+            &mut self.context_manager,
+            &mut self.last_forced_redraw,
+            &mut self.input_status_state,
+            None,
+            &self.default_placeholder,
+            &self.tool_permission_cache,
+            &self.safety_validator,
+            &self.circuit_breaker,
+            &self.tool_health_tracker,
+            &self.rate_limiter,
+            &self.telemetry,
+            &self.autonomous_executor,
+            &self.error_recovery,
+            &mut self.harness_state,
+            None,
+            &mut self.config,
+            None,
+            &mut self.turn_metadata_cache,
+            &mut self.provider_client,
+            &self.traj,
+            false,
+            &mut self.steering_receiver,
+        )
+    }
+
     pub(crate) fn turn_processing_context(&mut self) -> TurnProcessingContext<'_> {
         let tool = ToolContext {
             tool_result_cache: &self.tool_result_cache,

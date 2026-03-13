@@ -369,7 +369,9 @@ pub(crate) async fn handle_turn_balancer(
     }
 
     // Exclude read-only tools from repeated count (they're legitimate exploration)
-    let max_repeated = repeated_tool_attempts.max_count_filtered(is_readonly_signature);
+    let max_repeated = repeated_tool_attempts
+        .max_count_filtered(is_readonly_signature)
+        .max(repeated_tool_attempts.max_low_signal_count());
 
     if crate::agent::runloop::unified::turn::utils::should_trigger_turn_balancer(
         step_count,
@@ -422,8 +424,13 @@ mod tests {
         apply_balancer_recovery, is_readonly_signature, navigation_loop_guidance,
         validate_tool_args_security,
     };
+    use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
     use crate::agent::runloop::unified::turn::context::TurnHandlerOutcome;
-    use crate::agent::runloop::unified::turn::tool_outcomes::helpers::LoopTracker;
+    use crate::agent::runloop::unified::turn::context::TurnLoopResult;
+    use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
+        LoopTracker, update_repetition_tracker,
+    };
+    use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
     use serde_json::json;
     use vtcode_core::config::constants::tools as tool_names;
 
@@ -538,5 +545,97 @@ mod tests {
         assert_eq!(tracker.max_count_filtered(|_| false), 0);
         assert_eq!(tracker.consecutive_mutations, 0);
         assert_eq!(tracker.consecutive_navigations, 0);
+    }
+
+    #[tokio::test]
+    async fn low_signal_search_churn_schedules_recovery_and_progress_only_recovery_text_blocks() {
+        let mut backing = TestTurnProcessingBacking::new(8).await;
+        let legacy_detector = backing.legacy_loop_detector();
+        {
+            let mut detector = legacy_detector
+                .write()
+                .expect("legacy loop detector should lock");
+            detector.set_tool_limit(tool_names::UNIFIED_SEARCH, 2);
+            let seeded_args = json!({"action":"grep","path":"vtcode-tui","pattern":"-> Result"});
+            assert!(
+                detector
+                    .record_call(tool_names::UNIFIED_SEARCH, &seeded_args)
+                    .is_none()
+            );
+            let _ = detector.record_call(tool_names::UNIFIED_SEARCH, &seeded_args);
+            let warning = detector.record_call(tool_names::UNIFIED_SEARCH, &seeded_args);
+            assert!(warning.is_some());
+            assert!(detector.is_hard_limit_exceeded(tool_names::UNIFIED_SEARCH));
+        }
+        let mut ctx = backing.turn_processing_context();
+        let mut tracker = LoopTracker::new();
+        let miss = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
+            output: json!({"matches": []}),
+            stdout: None,
+            modified_files: vec![],
+            command_success: true,
+        });
+
+        update_repetition_tracker(
+            &mut tracker,
+            &miss,
+            tool_names::UNIFIED_SEARCH,
+            &json!({
+                "action": "structural",
+                "pattern": "fn $name(...) -> Result<$T, $E>",
+                "lang": "rust",
+                "globs": ["vtcode-tui/**/*.rs"]
+            }),
+        );
+        update_repetition_tracker(
+            &mut tracker,
+            &miss,
+            tool_names::UNIFIED_SEARCH,
+            &json!({
+                "action": "grep",
+                "pattern": "-> Result",
+                "path": "vtcode-tui",
+                "globs": ["vtcode-tui/**/*.rs"]
+            }),
+        );
+        update_repetition_tracker(
+            &mut tracker,
+            &miss,
+            tool_names::UNIFIED_SEARCH,
+            &json!({
+                "action": "grep",
+                "pattern": "Result<",
+                "path": "vtcode-tui",
+                "globs": ["vtcode-tui/**/*.rs"]
+            }),
+        );
+
+        let balancer_outcome = super::handle_turn_balancer(&mut ctx, 4, &mut tracker, 4, 3).await;
+        assert!(matches!(balancer_outcome, TurnHandlerOutcome::Continue));
+        assert!(ctx.is_recovery_active());
+        assert!(ctx.consume_recovery_pass());
+
+        let recovery_outcome = ctx
+            .handle_text_response(
+                "Let me try a narrower search next.".to_string(),
+                Vec::new(),
+                None,
+                None,
+                false,
+            )
+            .await
+            .expect("recovery response should be handled");
+
+        assert!(matches!(
+            recovery_outcome,
+            TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. })
+        ));
+        assert!(!ctx.is_recovery_active());
+        assert!(
+            legacy_detector
+                .read()
+                .expect("legacy loop detector should lock")
+                .is_hard_limit_exceeded(tool_names::UNIFIED_SEARCH)
+        );
     }
 }

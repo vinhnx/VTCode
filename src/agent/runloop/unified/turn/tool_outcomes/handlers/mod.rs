@@ -1,7 +1,6 @@
 //! Tool outcome handling helpers for turn execution.
 
 use anyhow::Result;
-use std::time::Duration;
 
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::exec_policy::AskForApproval;
@@ -42,7 +41,8 @@ use guards::{
     enforce_repeated_shell_run_guard, enforce_spool_chunk_read_guard,
 };
 pub(crate) use handlers_batch::{execute_and_handle_tool_call, handle_tool_call_batch_prepared};
-use looping::{loop_detection_tool_key, maybe_apply_spool_read_offset_hint};
+pub(crate) use looping::low_signal_family_key;
+use looping::maybe_apply_spool_read_offset_hint;
 use rate_limit::acquire_adaptive_rate_limit_slot;
 use recovery::try_interactive_circuit_recovery;
 pub(crate) use types::{PreparedToolCall, ToolOutcomeContext, ValidationResult};
@@ -51,6 +51,7 @@ fn build_failure_error_content(error: String, failure_kind: &'static str) -> Str
     super::execution_result::build_error_content(error, None, None, failure_kind).to_string()
 }
 
+#[cfg(test)]
 fn apply_reused_read_only_loop_metadata(obj: &mut serde_json::Map<String, serde_json::Value>) {
     obj.remove("output");
     obj.remove("content");
@@ -440,115 +441,9 @@ pub(crate) async fn validate_tool_call<'a>(
         return Ok(outcome);
     }
 
-    // Phase 4 Check: Adaptive Loop Detection
-    let loop_tool_key = loop_detection_tool_key(&canonical_tool_name, &effective_args);
-    let loop_warning = ctx
-        .autonomous_executor
-        .record_tool_call(&loop_tool_key, &effective_args);
-    if let Some(warning) = loop_warning {
-        let should_block = if let Ok(detector) = ctx.autonomous_executor.loop_detector().read() {
-            detector.is_hard_limit_exceeded(&loop_tool_key)
-        } else {
-            false
-        };
-
-        if should_block {
-            tracing::warn!(tool = %loop_tool_key, "Loop detector blocked tool");
-            let display_tool = tool_action_label(&canonical_tool_name, args_val);
-            let block_reason = format!(
-                "Loop detector stopped repeated '{}' calls for this turn. Scheduling a final recovery pass without more tools.",
-                display_tool
-            );
-            // Ensure no orphan PTY processes keep running after a hard loop-detection stop.
-            let tool_registry = ctx.tool_registry.clone();
-            if let Err(err) = tool_registry.terminate_all_exec_sessions_async().await {
-                tracing::warn!(
-                    error = %err,
-                    "Failed to terminate all exec sessions after loop detector block"
-                );
-            }
-            ctx.restore_input_status(None, None);
-            ctx.activate_recovery(block_reason.clone());
-            let maybe_spooled = tool_registry.find_recent_spooled_output(
-                &canonical_tool_name,
-                &effective_args,
-                Duration::from_secs(120),
-            );
-            if let Some(mut spooled) = maybe_spooled {
-                if let Some(obj) = spooled.as_object_mut() {
-                    obj.remove("output");
-                    obj.remove("content");
-                    obj.remove("stdout");
-                    obj.remove("stderr");
-                    obj.remove("stderr_preview");
-                    obj.insert(
-                        "reused_spooled_output".to_string(),
-                        serde_json::Value::Bool(true),
-                    );
-                    obj.insert("loop_detected".to_string(), serde_json::Value::Bool(true));
-                    obj.insert("spool_ref_only".to_string(), serde_json::Value::Bool(true));
-                    obj.insert(
-                        "loop_detected_note".to_string(),
-                        serde_json::Value::String(
-                            "Loop detected; using recent spool reference. Read the spool file instead of re-running this call.".to_string(),
-                        ),
-                    );
-                }
-                ctx.push_system_message(block_reason.clone());
-                ctx.push_tool_response(
-                    tool_call_id,
-                    super::execution_result::maybe_inline_spooled(&canonical_tool_name, &spooled),
-                );
-                return Ok(ValidationResult::Blocked);
-            }
-
-            let maybe_reused = if preflight.readonly_classification {
-                ctx.tool_registry.find_recent_successful_output(
-                    &canonical_tool_name,
-                    &effective_args,
-                    Duration::from_secs(120),
-                )
-            } else {
-                None
-            };
-            if let Some(mut reused) = maybe_reused {
-                if let Some(obj) = reused.as_object_mut() {
-                    // Drop bulky payload fields for repeated read-only reuse to avoid
-                    // flooding context with duplicate content.
-                    apply_reused_read_only_loop_metadata(obj);
-                }
-                ctx.push_system_message(block_reason.clone());
-                ctx.push_tool_response(
-                    tool_call_id,
-                    super::execution_result::maybe_inline_spooled(&canonical_tool_name, &reused),
-                );
-                return Ok(ValidationResult::Blocked);
-            }
-
-            let error_msg = format!(
-                "Tool '{}' is blocked due to excessive repetition (Loop Detected).",
-                display_tool
-            );
-            let (fallback_tool, fallback_tool_args) =
-                recovery_fallback_for_tool(&canonical_tool_name, &effective_args)
-                    .map(|(tool, args)| (Some(tool), Some(args)))
-                    .unwrap_or((None, None));
-            ctx.push_tool_response(
-                tool_call_id,
-                build_validation_error_content_with_fallback(
-                    error_msg,
-                    "loop_detection",
-                    fallback_tool,
-                    fallback_tool_args,
-                ),
-            );
-            ctx.push_system_message(block_reason);
-
-            return Ok(ValidationResult::Blocked);
-        } else {
-            tracing::warn!(tool = %loop_tool_key, warning = %warning, "Loop detector warning");
-        }
-    }
+    // Unified interactive turns own loop/recovery policy via turn-local guards and
+    // the turn balancer. The legacy core loop detector remains available for
+    // non-unified autonomous execution paths only.
 
     if let Some(outcome) =
         run_safety_validation_loop(ctx, tool_call_id, &canonical_tool_name, &effective_args).await?
