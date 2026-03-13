@@ -2,6 +2,17 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.88.5 - 2026-03-13
+
+### Highlights
+#### Features
+
+- Add context awareness support and related tests for Anthropic models (0ff5066e) 
+- Add context window size support to header context and related components (ba2faa13) 
+- Implement effective context window size handling for models (7ab580b4) 
+### Other Changes
+### Contributors
+@vinhnx
 ## 0.88.4 - 2026-03-13
 
 ### Highlights
