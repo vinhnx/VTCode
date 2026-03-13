@@ -29,6 +29,19 @@ use super::execution_runtime::execute_with_cache_and_streaming;
 use super::file_conflict_prompt::resolve_file_conflict_status;
 use super::status::{ToolExecutionStatus, ToolPipelineOutcome};
 
+fn resolve_harness_item_identity(tool_item_id: &str) -> (ToolInvocationId, String) {
+    match ToolInvocationId::parse(tool_item_id) {
+        Ok(invocation_id) => (invocation_id, tool_item_id.to_string()),
+        Err(_) => {
+            let invocation_id = ToolInvocationId::new();
+            (
+                invocation_id,
+                format!("{tool_item_id}:{}", invocation_id.short()),
+            )
+        }
+    }
+}
+
 pub(crate) async fn run_tool_call(
     ctx: &mut RunLoopContext<'_>,
     call: &vtcode_core::llm::provider::ToolCall,
@@ -96,6 +109,8 @@ pub(crate) async fn run_tool_call_with_args(
     prevalidated: bool,
 ) -> Result<ToolPipelineOutcome, anyhow::Error> {
     let mut canonical_name = requested_name.to_string();
+    let tool_call_id = tool_item_id.as_str();
+    let (safety_invocation_id, harness_item_id) = resolve_harness_item_identity(&tool_item_id);
 
     if !prevalidated {
         if let Some(max_tool_calls) = ctx.harness_state.exhausted_tool_call_limit() {
@@ -124,8 +139,6 @@ pub(crate) async fn run_tool_call_with_args(
         }
 
         if let Some(safety_validator) = ctx.safety_validator {
-            let safety_invocation_id =
-                ToolInvocationId::parse(&tool_item_id).unwrap_or_else(|_| ToolInvocationId::new());
             let validation = {
                 let mut validator = safety_validator.write().await;
                 validator
@@ -152,7 +165,12 @@ pub(crate) async fn run_tool_call_with_args(
     let harness_emitter = ctx.harness_emitter;
     let mut tool_started_emitted = false;
     if let Some(emitter) = harness_emitter {
-        let _ = emitter.emit(tool_started_event(tool_item_id.clone(), name, args_val));
+        let _ = emitter.emit(tool_started_event(
+            harness_item_id.clone(),
+            name,
+            args_val,
+            Some(tool_call_id),
+        ));
         tool_started_emitted = true;
     }
     let max_tool_retries = ctx.harness_state.max_tool_retries as usize;
@@ -161,7 +179,8 @@ pub(crate) async fn run_tool_call_with_args(
         emit_tool_completion_for_status(
             harness_emitter,
             tool_started_emitted,
-            &tool_item_id,
+            &harness_item_id,
+            tool_call_id,
             name,
             args_val,
             &outcome.status,
@@ -246,7 +265,8 @@ pub(crate) async fn run_tool_call_with_args(
         emit_tool_completion_for_status(
             harness_emitter,
             tool_started_emitted,
-            &tool_item_id,
+            &harness_item_id,
+            tool_call_id,
             name,
             args_val,
             &outcome.status,
@@ -267,7 +287,8 @@ pub(crate) async fn run_tool_call_with_args(
         emit_tool_completion_for_status(
             harness_emitter,
             tool_started_emitted,
-            &tool_item_id,
+            &harness_item_id,
+            tool_call_id,
             name,
             args_val,
             &outcome.status,
@@ -279,7 +300,8 @@ pub(crate) async fn run_tool_call_with_args(
         ctx.tool_registry,
         ctx.tool_result_cache,
         name,
-        &tool_item_id,
+        &harness_item_id,
+        tool_call_id,
         args_val,
         ctrl_c_state,
         ctrl_c_notify,
@@ -296,7 +318,8 @@ pub(crate) async fn run_tool_call_with_args(
         ctx.session,
         ctx.handle,
         name,
-        &tool_item_id,
+        &harness_item_id,
+        tool_call_id,
         args_val,
         execution,
         ctrl_c_state,
@@ -310,7 +333,8 @@ pub(crate) async fn run_tool_call_with_args(
     let mut pipeline_outcome = ToolPipelineOutcome::from_status(execution_status);
     apply_post_execution_side_effects(
         ctx,
-        &tool_item_id,
+        &harness_item_id,
+        tool_call_id,
         name,
         args_val,
         turn_index,
@@ -324,7 +348,8 @@ pub(crate) async fn run_tool_call_with_args(
     emit_tool_completion_for_status(
         harness_emitter,
         tool_started_emitted,
-        &tool_item_id,
+        &harness_item_id,
+        tool_call_id,
         name,
         args_val,
         &pipeline_outcome.status,
@@ -410,6 +435,7 @@ async fn check_tool_permission(
 async fn apply_post_execution_side_effects(
     ctx: &mut RunLoopContext<'_>,
     tool_item_id: &str,
+    tool_call_id: &str,
     name: &str,
     args_val: &Value,
     turn_index: usize,
@@ -428,6 +454,7 @@ async fn apply_post_execution_side_effects(
                         harness_emitter,
                         tool_started_emitted,
                         tool_item_id,
+                        tool_call_id,
                         name,
                         args_val,
                         ToolCallStatus::Failed,
@@ -461,9 +488,9 @@ async fn apply_post_execution_side_effects(
 
 #[cfg(test)]
 mod tests {
-    use super::should_settle_noninteractive_unified_exec;
+    use super::{resolve_harness_item_identity, should_settle_noninteractive_unified_exec};
     use serde_json::json;
-    use vtcode_core::config::constants::tools;
+    use vtcode_core::{config::constants::tools, tools::ToolInvocationId};
 
     #[test]
     fn settles_prevalidated_noninteractive_run() {
@@ -491,5 +518,24 @@ mod tests {
             tools::UNIFIED_EXEC,
             &json!({"action": "continue", "session_id": "run-1", "input": "y"})
         ));
+    }
+
+    #[test]
+    fn resolve_harness_item_identity_suffixes_non_uuid_ids() {
+        let (invocation_id, harness_id) = resolve_harness_item_identity("tool_call_0");
+
+        assert!(harness_id.starts_with("tool_call_0:"));
+        assert!(harness_id.ends_with(invocation_id.short().as_str()));
+    }
+
+    #[test]
+    fn resolve_harness_item_identity_preserves_uuid_ids() {
+        let invocation_id = ToolInvocationId::new();
+        let raw_id = invocation_id.to_string();
+
+        let (resolved, harness_id) = resolve_harness_item_identity(&raw_id);
+
+        assert_eq!(resolved, invocation_id);
+        assert_eq!(harness_id, raw_id);
     }
 }

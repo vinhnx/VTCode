@@ -88,6 +88,13 @@ fn build_read_handler_args(args: &Value, canonical_path: &Path) -> Value {
         if !obj.contains_key("limit") && obj.contains_key("page_size_lines") {
             obj.insert("limit".to_string(), obj["page_size_lines"].clone());
         }
+
+        if obj.get("offset").and_then(parse_usize_value) == Some(0) {
+            obj.insert("offset".to_string(), json!(1));
+        }
+        if obj.get("limit").and_then(parse_usize_value) == Some(0) {
+            obj.remove("limit");
+        }
     }
 
     handler_args_json
@@ -612,6 +619,22 @@ mod read_tests {
             )),
             None
         );
+    }
+
+    #[test]
+    fn build_read_handler_args_normalizes_zero_bounds() {
+        let canonical = Path::new("/tmp/example.txt");
+        let args = json!({
+            "path": "example.txt",
+            "offset": 0,
+            "limit": 0
+        });
+
+        let built = build_read_handler_args(&args, canonical);
+
+        assert_eq!(built["file_path"], json!("/tmp/example.txt"));
+        assert_eq!(built["offset"], json!(1));
+        assert!(built.get("limit").is_none());
     }
 
     #[test]

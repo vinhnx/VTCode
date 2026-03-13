@@ -74,3 +74,55 @@ https://github.com/search?q=repo%3Aopenai%2Fcodex%20Bazel&type=code
 
 https://deepwiki.com/search/how-codex-use-bazel_34da771c-1bac-42e0-b4c9-2f80d5a6f1d2?mode=fast
 
+---
+
+use /rust-skills and enhance impl. review overall changes again carefully, can you do better? continue with your careful recommendations, proceed with outcome. KISS and DRY, do repeatly until all done, don't stop; make sure vtcode-commons/src/ansi_codes.rs and docs/reference/ansi-in-vtcode.md are use widely in codebase, also refactor vtcode-commons/src/ansi.rs
+
+---
+
+https://randomlabs.ai/blog/slate
+
+---
+
+# Tighten Direct-Command and Test-Failure Recovery
+
+## Summary
+
+- The largest failure was goal drift. After `cargo check` succeeded, the agent should have stopped. Instead it autonomously escalated into `cargo nextest run -p vtcode-core` because the direct-command follow-up policy in [session_loop_runner/mod.rs](/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src/agent/runloop/unified/turn/session_loop_runner/mod.rs) pushes it to emit an “exact next action”.
+- The reasoning channel is far too noisy: the harness logged `761` reasoning update events in one turn. A few single reasoning streams were updated `154`, `115`, and `99` times. That is token burn with almost no new information.
+- Tool usage was redundant. The agent made `9` `unified_exec` calls, `7` `unified_file` calls, and `6` `unified_search` calls. It read [tests.rs](/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/core/agent/runner/tests.rs) `6` times and searched the same symbol `5` times.
+- The missing-target issue was misclassified. `cargo nextest run --test exec_only_policy_skips_when_full_auto_is_disabled -p vtcode-core --no-capture` is wrong for a unit test under `src/...`; `cargo test --lib -- --list` shows it as `core::agent::runner::tests::exec_only_policy_skips_when_full_auto_is_disabled`.
+- The first failing `nextest` run already contained the useful diagnosis: failing fq test name, source line `vtcode-core/src/core/agent/runner/tests.rs:692`, and panic `QueuedProvider has no queued responses`. The agent already had enough signal before the repeated reads and reruns.
+
+## Key Changes
+
+- Change direct-command mode so a successful one-shot command usually terminates the turn. The follow-up should be “no further action” unless the user asked for validation or the command failed.
+- Stop streaming incremental reasoning deltas to the harness. Emit one compact decision summary per step, or none. Hard-cap repeated updates for the same reasoning item.
+- Add structured parsing for `cargo test` and `cargo nextest` output. Return `package`, `binary_kind`, `test_fqname`, `panic`, `source_file`, `source_line`, and `rerun_hint` so the model does not need to reread large logs.
+- Add a rerun selector decision tree:
+    - If the failing test is under `src/**` or appears in `cargo test -p <pkg> --lib -- --list`, treat it as a unit test.
+    - If it is under `tests/<target>.rs`, use `--test <target>`.
+    - If Cargo says `no test target named ...`, classify it as a selector error, not a code failure.
+    - First run a cheap validation command: `cargo nextest list -p vtcode-core exec_only_policy_skips_when_full_auto_is_disabled` or `cargo test -p vtcode-core --lib -- --list | rg exec_only_policy_skips_when_full_auto_is_disabled`.
+    - Then rerun with a correct selector: `cargo nextest run -p vtcode-core exec_only_policy_skips_when_full_auto_is_disabled` or `cargo test -p vtcode-core --lib exec_only_policy_skips_when_full_auto_is_disabled -- --nocapture`.
+- Add redundancy guards:
+    - Do not reread the same file in the same turn unless the offset/range changes materially.
+    - Do not repeat the same grep without a new hypothesis.
+    - Do not run `git status` or `git diff` unless local edits are plausibly relevant to the observed failure.
+- Make post-tool retry idempotent. If a model follow-up fails after a tool result, resume from the last structured result instead of replaying exploration.
+
+## Test Plan
+
+- `run cargo check` ends after reporting success; no autonomous `cargo nextest` branch.
+- A failing suite output containing `core::agent::runner::tests::exec_only_policy_skips_when_full_auto_is_disabled` causes the agent to choose a unit-test rerun path, never `--test <function-name>`.
+- Repeated unchanged `unified_file` and `unified_search` calls are blocked within one turn.
+- A simulated post-tool network failure resumes from cached failure classification and does not duplicate exploration.
+- Harness assertions enforce bounded reasoning updates and bounded identical tool retries.
+
+## Assumptions
+
+- The target fix is agent behavior and context efficiency, not the underlying Rust bug.
+- Internal reasoning can still exist, but it should not be surfaced as hundreds of incremental updates.
+- Cheap selector validation should always happen before rerunning a supposedly “missing” test target.
+
+double check /Users/vinhnguyenxuan/.vtcode/sessions/harness-session-vtcode-20260313T140932Z_426566-50750-20260313T140933Z.jsonl again and again

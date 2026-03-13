@@ -22,6 +22,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::agent::steering::SteeringMessage;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::trajectory::TrajectoryLogger;
+use vtcode_core::exec::events::Usage as HarnessUsage;
 use vtcode_core::hooks::LifecycleHookEngine;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::notifications::{CompletionStatus, NotificationEvent, send_global_notification};
@@ -264,6 +265,26 @@ fn has_tool_response_since(messages: &[uni::Message], baseline_len: usize) -> bo
         .is_some_and(|recent| recent.iter().any(|msg| msg.role == uni::MessageRole::Tool))
 }
 
+fn accumulate_turn_usage(total: &mut HarnessUsage, usage: &Option<uni::Usage>) {
+    let Some(usage) = usage else {
+        return;
+    };
+
+    total.input_tokens = total
+        .input_tokens
+        .saturating_add(usage.prompt_tokens as u64);
+    total.cached_input_tokens = total
+        .cached_input_tokens
+        .saturating_add(usage.cache_read_tokens_or_fallback() as u64);
+    total.output_tokens = total
+        .output_tokens
+        .saturating_add(usage.completion_tokens as u64);
+}
+
+fn has_turn_usage(usage: &HarnessUsage) -> bool {
+    usage.input_tokens > 0 || usage.cached_input_tokens > 0 || usage.output_tokens > 0
+}
+
 const POST_TOOL_RESUME_DIRECTIVE: &str = "Previous turn already completed tool execution. Reuse the latest tool outputs in history instead of rerunning the same exploration. If those tool outputs include `critical_note`, `next_action`, or `rerun_hint`, follow that guidance first.";
 
 fn ensure_post_tool_resume_directive(working_history: &mut Vec<uni::Message>) {
@@ -356,6 +377,7 @@ pub(crate) async fn run_turn_loop(
     let mut step_count = 0;
     let mut current_max_tool_loops = turn_config.max_tool_loops;
     let turn_history_start_len = working_history.len();
+    let mut turn_usage = HarnessUsage::default();
     // Optimization: Interned signatures with exponential backoff for loop detection
     let mut repeated_tool_attempts = LoopTracker::new();
 
@@ -482,8 +504,9 @@ pub(crate) async fn run_turn_loop(
             }
         };
 
-        // Track token usage for context awareness before any borrows occur
+        // Track turn usage and context pressure before later processing borrows `response`.
         let response_usage = response.usage.clone();
+        accumulate_turn_usage(&mut turn_usage, &response_usage);
         if !response.tool_references.is_empty() {
             turn_processing_ctx
                 .tool_catalog
@@ -662,10 +685,21 @@ pub(crate) async fn run_turn_loop(
     if let Some(emitter) = ctx.harness_emitter {
         // Exit is a graceful user-initiated action, not a failure
         let event = match result {
-            TurnLoopResult::Completed | TurnLoopResult::Exit => turn_completed_event(),
-            TurnLoopResult::Aborted => turn_failed_event("turn aborted"),
-            TurnLoopResult::Cancelled => turn_failed_event("turn cancelled"),
-            TurnLoopResult::Blocked { .. } => turn_failed_event("turn blocked"),
+            TurnLoopResult::Completed | TurnLoopResult::Exit => {
+                turn_completed_event(turn_usage.clone())
+            }
+            TurnLoopResult::Aborted => turn_failed_event(
+                "turn aborted",
+                has_turn_usage(&turn_usage).then_some(turn_usage.clone()),
+            ),
+            TurnLoopResult::Cancelled => turn_failed_event(
+                "turn cancelled",
+                has_turn_usage(&turn_usage).then_some(turn_usage.clone()),
+            ),
+            TurnLoopResult::Blocked { .. } => turn_failed_event(
+                "turn blocked",
+                has_turn_usage(&turn_usage).then_some(turn_usage.clone()),
+            ),
         };
         if let Err(e) = emitter.emit(event) {
             tracing::debug!(error = %e, "harness turn outcome event emission failed");
@@ -715,7 +749,8 @@ async fn emit_turn_outcome_notification(result: &TurnLoopResult) {
 #[cfg(test)]
 mod tests {
     use super::{
-        POST_TOOL_RESUME_DIRECTIVE, ensure_post_tool_resume_directive, has_tool_response_since,
+        HarnessUsage, POST_TOOL_RESUME_DIRECTIVE, accumulate_turn_usage,
+        ensure_post_tool_resume_directive, has_tool_response_since, has_turn_usage,
         maybe_recover_after_post_tool_llm_failure, run_turn_loop,
     };
     use crate::agent::runloop::unified::turn::context::TurnLoopResult;
@@ -822,6 +857,39 @@ mod tests {
             })
             .count();
         assert_eq!(directive_count, 1);
+    }
+
+    #[test]
+    fn accumulate_turn_usage_merges_prompt_completion_and_cached_tokens() {
+        let mut total = HarnessUsage::default();
+
+        accumulate_turn_usage(
+            &mut total,
+            &Some(uni::Usage {
+                prompt_tokens: 100,
+                completion_tokens: 20,
+                total_tokens: 120,
+                cached_prompt_tokens: Some(15),
+                cache_creation_tokens: None,
+                cache_read_tokens: Some(15),
+            }),
+        );
+        accumulate_turn_usage(
+            &mut total,
+            &Some(uni::Usage {
+                prompt_tokens: 40,
+                completion_tokens: 10,
+                total_tokens: 50,
+                cached_prompt_tokens: None,
+                cache_creation_tokens: None,
+                cache_read_tokens: None,
+            }),
+        );
+
+        assert_eq!(total.input_tokens, 140);
+        assert_eq!(total.cached_input_tokens, 15);
+        assert_eq!(total.output_tokens, 30);
+        assert!(has_turn_usage(&total));
     }
 
     #[tokio::test]

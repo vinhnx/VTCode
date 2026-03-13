@@ -64,17 +64,23 @@ struct StreamingOutputCoalescer {
     state: Arc<StdMutex<StreamingToolOutput>>,
     harness_emitter: HarnessEventEmitter,
     tool_item_id: String,
+    tool_call_id: String,
 }
 
 impl StreamingOutputCoalescer {
     const MIN_EMIT_BYTES: usize = 4 * 1024;
     const MAX_EMIT_INTERVAL: Duration = Duration::from_millis(50);
 
-    fn new(harness_emitter: HarnessEventEmitter, tool_item_id: String) -> Self {
+    fn new(
+        harness_emitter: HarnessEventEmitter,
+        tool_item_id: String,
+        tool_call_id: String,
+    ) -> Self {
         Self {
             state: Arc::new(StdMutex::new(StreamingToolOutput::default())),
             harness_emitter,
             tool_item_id,
+            tool_call_id,
         }
     }
 
@@ -127,16 +133,19 @@ impl StreamingOutputCoalescer {
 
     fn emit_started_if_needed(&self, state: &StreamingToolOutput) {
         if state.output.is_empty() {
-            let _ = self
-                .harness_emitter
-                .emit(tool_output_started_event(self.tool_item_id.clone()));
+            let _ = self.harness_emitter.emit(tool_output_started_event(
+                self.tool_item_id.clone(),
+                Some(self.tool_call_id.as_str()),
+            ));
         }
     }
 
     fn emit_snapshot(&self, snapshot: String) {
-        let _ = self
-            .harness_emitter
-            .emit(tool_updated_event(self.tool_item_id.clone(), snapshot));
+        let _ = self.harness_emitter.emit(tool_updated_event(
+            self.tool_item_id.clone(),
+            Some(self.tool_call_id.as_str()),
+            snapshot,
+        ));
     }
 
     fn should_emit_snapshot(state: &StreamingToolOutput, chunk: &str, now: Instant) -> bool {
@@ -159,12 +168,17 @@ fn build_streaming_progress_callback(
     base_callback: ToolProgressCallback,
     harness_emitter: Option<HarnessEventEmitter>,
     tool_item_id: &str,
+    tool_call_id: &str,
 ) -> (ToolProgressCallback, Option<StreamingOutputCoalescer>) {
     let Some(harness_emitter) = harness_emitter else {
         return (base_callback, None);
     };
 
-    let coalescer = StreamingOutputCoalescer::new(harness_emitter, tool_item_id.to_string());
+    let coalescer = StreamingOutputCoalescer::new(
+        harness_emitter,
+        tool_item_id.to_string(),
+        tool_call_id.to_string(),
+    );
     let callback_coalescer = coalescer.clone();
 
     let callback: ToolProgressCallback = Arc::new(move |progress_tool_name: &str, chunk: &str| {
@@ -198,6 +212,7 @@ pub(super) async fn execute_with_cache_and_streaming(
     tool_result_cache: &Arc<tokio::sync::RwLock<ToolResultCache>>,
     name: &str,
     tool_item_id: &str,
+    tool_call_id: &str,
     args_val: &Value,
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
@@ -257,8 +272,12 @@ pub(super) async fn execute_with_cache_and_streaming(
             tail_limit,
             stream_command,
         );
-        let (callback, coalescer) =
-            build_streaming_progress_callback(callback, harness_emitter, tool_item_id);
+        let (callback, coalescer) = build_streaming_progress_callback(
+            callback,
+            harness_emitter,
+            tool_item_id,
+            tool_call_id,
+        );
         pty_stream_runtime = Some(runtime);
         output_coalescer = coalescer;
         Some(ProgressCallbackGuard::replace(registry, callback))
@@ -578,7 +597,8 @@ mod tests {
         let temp_dir = TempDir::new().expect("create temp dir");
         let harness_path = temp_dir.path().join("events.jsonl");
         let emitter = HarnessEventEmitter::new(harness_path.clone()).expect("emitter");
-        let coalescer = StreamingOutputCoalescer::new(emitter, "tool-1".to_string());
+        let coalescer =
+            StreamingOutputCoalescer::new(emitter, "tool-1".to_string(), "tool_call_0".to_string());
 
         coalescer.on_chunk("abc");
         coalescer.on_chunk("def");

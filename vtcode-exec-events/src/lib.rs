@@ -17,7 +17,7 @@ use serde_json::Value;
 pub mod trace;
 
 /// Semantic version of the serialized event schema exported by this crate.
-pub const EVENT_SCHEMA_VERSION: &str = "0.2.0";
+pub const EVENT_SCHEMA_VERSION: &str = "0.3.0";
 
 /// Wraps a [`ThreadEvent`] with schema metadata so downstream consumers can
 /// negotiate compatibility before processing an event stream.
@@ -461,6 +461,9 @@ pub struct ToolInvocationItem {
     /// Structured arguments passed to the tool.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub arguments: Option<Value>,
+    /// Raw model-emitted tool call identifier, when available.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
     /// Current lifecycle status of the invocation.
     pub status: ToolCallStatus,
 }
@@ -468,8 +471,11 @@ pub struct ToolInvocationItem {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct ToolOutputItem {
-    /// Identifier of the related invocation item.
+    /// Identifier of the related harness invocation item.
     pub call_id: String,
+    /// Raw model-emitted tool call identifier, when available.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
     /// Aggregated output emitted by the tool.
     #[serde(default)]
     pub output: String,
@@ -658,6 +664,29 @@ mod tests {
                 details: ThreadItemDetails::ToolInvocation(ToolInvocationItem {
                     tool_name: "read_file".to_string(),
                     arguments: Some(serde_json::json!({ "path": "README.md" })),
+                    tool_call_id: Some("tool_call_0".to_string()),
+                    status: ToolCallStatus::Completed,
+                }),
+            },
+        });
+
+        let json = serde_json::to_string(&event)?;
+        let restored: ThreadEvent = serde_json::from_str(&json)?;
+
+        assert_eq!(restored, event);
+        Ok(())
+    }
+
+    #[test]
+    fn tool_output_round_trip_preserves_raw_tool_call_id() -> Result<(), Box<dyn Error>> {
+        let event = ThreadEvent::ItemCompleted(ItemCompletedEvent {
+            item: ThreadItem {
+                id: "tool_1:output".to_string(),
+                details: ThreadItemDetails::ToolOutput(ToolOutputItem {
+                    call_id: "tool_1".to_string(),
+                    tool_call_id: Some("tool_call_0".to_string()),
+                    output: "done".to_string(),
+                    exit_code: Some(0),
                     status: ToolCallStatus::Completed,
                 }),
             },

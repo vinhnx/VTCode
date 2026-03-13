@@ -190,6 +190,7 @@ fn tool_invocation_item(
     item_id: String,
     tool_name: &str,
     args: &Value,
+    tool_call_id: Option<&str>,
     status: ToolCallStatus,
 ) -> ThreadItem {
     ThreadItem {
@@ -197,6 +198,7 @@ fn tool_invocation_item(
         details: ThreadItemDetails::ToolInvocation(ToolInvocationItem {
             tool_name: tool_name.to_string(),
             arguments: Some(args.clone()),
+            tool_call_id: tool_call_id.map(str::to_string),
             status,
         }),
     }
@@ -204,6 +206,7 @@ fn tool_invocation_item(
 
 fn tool_output_item(
     call_item_id: &str,
+    tool_call_id: Option<&str>,
     status: ToolCallStatus,
     exit_code: Option<i32>,
     output: impl Into<String>,
@@ -212,6 +215,7 @@ fn tool_output_item(
         id: tool_output_item_id(call_item_id),
         details: ThreadItemDetails::ToolOutput(ToolOutputItem {
             call_id: call_item_id.to_string(),
+            tool_call_id: tool_call_id.map(str::to_string),
             output: output.into(),
             exit_code,
             status,
@@ -219,9 +223,20 @@ fn tool_output_item(
     }
 }
 
-pub(crate) fn tool_started_event(item_id: String, tool_name: &str, args: &Value) -> ThreadEvent {
+pub(crate) fn tool_started_event(
+    item_id: String,
+    tool_name: &str,
+    args: &Value,
+    tool_call_id: Option<&str>,
+) -> ThreadEvent {
     ThreadEvent::ItemStarted(ItemStartedEvent {
-        item: tool_invocation_item(item_id, tool_name, args, ToolCallStatus::InProgress),
+        item: tool_invocation_item(
+            item_id,
+            tool_name,
+            args,
+            tool_call_id,
+            ToolCallStatus::InProgress,
+        ),
     })
 }
 
@@ -229,17 +244,22 @@ pub(crate) fn tool_invocation_completed_event(
     item_id: String,
     tool_name: &str,
     args: &Value,
+    tool_call_id: Option<&str>,
     status: ToolCallStatus,
 ) -> ThreadEvent {
     ThreadEvent::ItemCompleted(ItemCompletedEvent {
-        item: tool_invocation_item(item_id, tool_name, args, status),
+        item: tool_invocation_item(item_id, tool_name, args, tool_call_id, status),
     })
 }
 
-pub(crate) fn tool_output_started_event(call_item_id: String) -> ThreadEvent {
+pub(crate) fn tool_output_started_event(
+    call_item_id: String,
+    tool_call_id: Option<&str>,
+) -> ThreadEvent {
     ThreadEvent::ItemStarted(ItemStartedEvent {
         item: tool_output_item(
             &call_item_id,
+            tool_call_id,
             ToolCallStatus::InProgress,
             None,
             String::new(),
@@ -249,18 +269,29 @@ pub(crate) fn tool_output_started_event(call_item_id: String) -> ThreadEvent {
 
 pub(crate) fn tool_output_completed_event(
     call_item_id: String,
+    tool_call_id: Option<&str>,
     status: ToolCallStatus,
     exit_code: Option<i32>,
     output: impl Into<String>,
 ) -> ThreadEvent {
     ThreadEvent::ItemCompleted(ItemCompletedEvent {
-        item: tool_output_item(&call_item_id, status, exit_code, output),
+        item: tool_output_item(&call_item_id, tool_call_id, status, exit_code, output),
     })
 }
 
-pub(crate) fn tool_updated_event(call_item_id: String, output: impl Into<String>) -> ThreadEvent {
+pub(crate) fn tool_updated_event(
+    call_item_id: String,
+    tool_call_id: Option<&str>,
+    output: impl Into<String>,
+) -> ThreadEvent {
     ThreadEvent::ItemUpdated(vtcode_core::exec::events::ItemUpdatedEvent {
-        item: tool_output_item(&call_item_id, ToolCallStatus::InProgress, None, output),
+        item: tool_output_item(
+            &call_item_id,
+            tool_call_id,
+            ToolCallStatus::InProgress,
+            None,
+            output,
+        ),
     })
 }
 
@@ -268,16 +299,14 @@ pub(crate) fn turn_started_event() -> ThreadEvent {
     ThreadEvent::TurnStarted(TurnStartedEvent::default())
 }
 
-pub(crate) fn turn_completed_event() -> ThreadEvent {
-    ThreadEvent::TurnCompleted(TurnCompletedEvent {
-        usage: Usage::default(),
-    })
+pub(crate) fn turn_completed_event(usage: Usage) -> ThreadEvent {
+    ThreadEvent::TurnCompleted(TurnCompletedEvent { usage })
 }
 
-pub(crate) fn turn_failed_event(message: impl Into<String>) -> ThreadEvent {
+pub(crate) fn turn_failed_event(message: impl Into<String>, usage: Option<Usage>) -> ThreadEvent {
     ThreadEvent::TurnFailed(TurnFailedEvent {
         message: message.into(),
-        usage: None,
+        usage,
     })
 }
 
@@ -357,7 +386,11 @@ mod tests {
             .expect("emit");
         emitter.emit(turn_started_event()).expect("emit turn");
         emitter
-            .emit(turn_completed_event())
+            .emit(turn_completed_event(Usage {
+                input_tokens: 12,
+                cached_input_tokens: 3,
+                output_tokens: 5,
+            }))
             .expect("emit completed");
         emitter.finish_open_responses();
 
@@ -374,11 +407,29 @@ mod tests {
     }
 
     #[test]
+    fn turn_completed_event_preserves_usage_payload() {
+        let event = turn_completed_event(Usage {
+            input_tokens: 42,
+            cached_input_tokens: 7,
+            output_tokens: 9,
+        });
+
+        let ThreadEvent::TurnCompleted(TurnCompletedEvent { usage }) = event else {
+            panic!("expected turn.completed");
+        };
+
+        assert_eq!(usage.input_tokens, 42);
+        assert_eq!(usage.cached_input_tokens, 7);
+        assert_eq!(usage.output_tokens, 9);
+    }
+
+    #[test]
     fn tool_started_event_captures_arguments() {
         let event = tool_started_event(
             "tool-1".to_string(),
             "read_file",
             &json!({ "path": "README.md" }),
+            Some("tool_call_0"),
         );
 
         let ThreadEvent::ItemStarted(ItemStartedEvent { item }) = event else {
@@ -390,13 +441,38 @@ mod tests {
 
         assert_eq!(details.tool_name, "read_file");
         assert_eq!(details.arguments, Some(json!({ "path": "README.md" })));
+        assert_eq!(details.tool_call_id.as_deref(), Some("tool_call_0"));
         assert_eq!(details.status, ToolCallStatus::InProgress);
+    }
+
+    #[test]
+    fn tool_invocation_completed_event_captures_raw_tool_call_id() {
+        let event = tool_invocation_completed_event(
+            "tool-1".to_string(),
+            "read_file",
+            &json!({ "path": "README.md" }),
+            Some("tool_call_0"),
+            ToolCallStatus::Completed,
+        );
+
+        let ThreadEvent::ItemCompleted(ItemCompletedEvent { item }) = event else {
+            panic!("expected item.completed");
+        };
+        let ThreadItemDetails::ToolInvocation(details) = item.details else {
+            panic!("expected tool invocation item");
+        };
+
+        assert_eq!(details.tool_name, "read_file");
+        assert_eq!(details.arguments, Some(json!({ "path": "README.md" })));
+        assert_eq!(details.tool_call_id.as_deref(), Some("tool_call_0"));
+        assert_eq!(details.status, ToolCallStatus::Completed);
     }
 
     #[test]
     fn tool_output_completed_event_captures_output() {
         let event = tool_output_completed_event(
             "tool-1".to_string(),
+            Some("tool_call_0"),
             ToolCallStatus::Completed,
             Some(0),
             "On branch main",
@@ -411,6 +487,7 @@ mod tests {
         };
 
         assert_eq!(details.call_id, "tool-1");
+        assert_eq!(details.tool_call_id.as_deref(), Some("tool_call_0"));
         assert_eq!(details.output, "On branch main");
         assert_eq!(details.exit_code, Some(0));
         assert_eq!(details.status, ToolCallStatus::Completed);
@@ -418,7 +495,7 @@ mod tests {
 
     #[test]
     fn tool_output_started_event_starts_empty_output_item() {
-        let event = tool_output_started_event("tool-1".to_string());
+        let event = tool_output_started_event("tool-1".to_string(), Some("tool_call_0"));
 
         let ThreadEvent::ItemStarted(ItemStartedEvent { item }) = event else {
             panic!("expected item.started");
@@ -429,13 +506,14 @@ mod tests {
         };
 
         assert_eq!(details.call_id, "tool-1");
+        assert_eq!(details.tool_call_id.as_deref(), Some("tool_call_0"));
         assert!(details.output.is_empty());
         assert_eq!(details.status, ToolCallStatus::InProgress);
     }
 
     #[test]
     fn tool_updated_event_captures_streamed_output() {
-        let event = tool_updated_event("tool-1".to_string(), "On branch main");
+        let event = tool_updated_event("tool-1".to_string(), Some("tool_call_0"), "On branch main");
 
         let ThreadEvent::ItemUpdated(vtcode_core::exec::events::ItemUpdatedEvent { item }) = event
         else {
@@ -447,6 +525,7 @@ mod tests {
         };
 
         assert_eq!(details.call_id, "tool-1");
+        assert_eq!(details.tool_call_id.as_deref(), Some("tool_call_0"));
         assert_eq!(details.output, "On branch main");
         assert_eq!(details.status, ToolCallStatus::InProgress);
     }

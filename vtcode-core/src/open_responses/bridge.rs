@@ -867,6 +867,7 @@ mod tests {
                     "command": ["git", "status"],
                     "yield_time_ms": 1000
                 })),
+                tool_call_id: Some("tool_call_0".to_string()),
                 status: ToolCallStatus::Completed,
             }),
         };
@@ -897,6 +898,7 @@ mod tests {
                     id: "tool_1:output".to_string(),
                     details: ThreadItemDetails::ToolOutput(ToolOutputItem {
                         call_id: "tool_1".to_string(),
+                        tool_call_id: Some("tool_call_0".to_string()),
                         output: String::new(),
                         exit_code: None,
                         status: ToolCallStatus::InProgress,
@@ -911,6 +913,7 @@ mod tests {
                     id: "tool_1:output".to_string(),
                     details: ThreadItemDetails::ToolOutput(ToolOutputItem {
                         call_id: "tool_1".to_string(),
+                        tool_call_id: Some("tool_call_0".to_string()),
                         output: "On branch".to_string(),
                         exit_code: None,
                         status: ToolCallStatus::InProgress,
@@ -925,6 +928,7 @@ mod tests {
                     id: "tool_1:output".to_string(),
                     details: ThreadItemDetails::ToolOutput(ToolOutputItem {
                         call_id: "tool_1".to_string(),
+                        tool_call_id: Some("tool_call_0".to_string()),
                         output: "On branch main".to_string(),
                         exit_code: Some(0),
                         status: ToolCallStatus::Completed,

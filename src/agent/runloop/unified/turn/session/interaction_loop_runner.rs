@@ -146,6 +146,128 @@ fn fallback_args_preview(args: &Value) -> String {
     preview
 }
 
+fn latest_completed_direct_tool_pair(
+    history: &[uni::Message],
+) -> Option<(&uni::Message, &uni::Message)> {
+    let mut non_system_messages = history
+        .iter()
+        .rev()
+        .filter(|message| message.role != uni::MessageRole::System);
+
+    let tool_message = non_system_messages.next()?;
+    if !tool_message.is_tool_response() {
+        return None;
+    }
+
+    let tool_call_id = tool_message
+        .tool_call_id
+        .as_deref()
+        .filter(|id| id.starts_with("direct_"))?;
+
+    let assistant_message = non_system_messages.next()?;
+    (assistant_message.role == uni::MessageRole::Assistant
+        && assistant_message
+            .get_tool_calls()
+            .is_some_and(|calls| calls.iter().any(|call| call.id == tool_call_id)))
+    .then_some((assistant_message, tool_message))
+}
+
+fn direct_tool_call_label(tool_call: &uni::ToolCall) -> String {
+    let Some(function) = tool_call.function.as_ref() else {
+        return "previous direct tool call".to_string();
+    };
+
+    let args = serde_json::from_str::<Value>(&function.arguments).ok();
+    match function.name.as_str() {
+        tool_names::UNIFIED_EXEC => args
+            .as_ref()
+            .and_then(|args| {
+                (args.get("action").and_then(Value::as_str) == Some("run"))
+                    .then(|| args.get("command").and_then(Value::as_str))
+                    .flatten()
+            })
+            .map(str::to_string)
+            .unwrap_or_else(|| "previous direct command".to_string()),
+        tool_names::UNIFIED_FILE => args
+            .as_ref()
+            .and_then(|args| {
+                (args.get("action").and_then(Value::as_str) == Some("read"))
+                    .then(|| args.get("path").and_then(Value::as_str))
+                    .flatten()
+            })
+            .map(|path| format!("read {path}"))
+            .unwrap_or_else(|| function.name.clone()),
+        _ => function.name.clone(),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct DirectToolCompletionPayload {
+    #[serde(default)]
+    exit_code: Option<i64>,
+    #[serde(default)]
+    error: Option<String>,
+}
+
+fn completed_direct_tool_follow_up_text(history: &[uni::Message]) -> Option<String> {
+    let (assistant_message, tool_message) = latest_completed_direct_tool_pair(history)?;
+    let tool_call_id = tool_message.tool_call_id.as_deref()?;
+    let tool_call = assistant_message
+        .get_tool_calls()?
+        .iter()
+        .find(|call| call.id == tool_call_id)?;
+    let label = direct_tool_call_label(tool_call);
+    let payload = serde_json::from_str::<DirectToolCompletionPayload>(
+        tool_message.get_text_content().as_ref(),
+    )
+    .ok();
+
+    let status = match payload {
+        Some(payload)
+            if payload
+                .error
+                .as_deref()
+                .is_some_and(|error| !error.trim().is_empty()) =>
+        {
+            format!("`{label}` already completed with an error.")
+        }
+        Some(payload) if payload.exit_code == Some(0) => {
+            format!("`{label}` already completed successfully.")
+        }
+        Some(payload) => payload
+            .exit_code
+            .map(|code| format!("`{label}` already completed with exit code {code}."))
+            .unwrap_or_else(|| format!("`{label}` already completed.")),
+        None => format!("`{label}` already completed."),
+    };
+
+    Some(format!(
+        "{status} No pending continuation is available. Tell me what to do next."
+    ))
+}
+
+fn handle_completed_direct_tool_follow_up(
+    ctx: &mut InteractionLoopContext<'_>,
+    input: &str,
+) -> Result<Option<InteractionOutcome>> {
+    let Some(reply) = completed_direct_tool_follow_up_text(ctx.conversation_history) else {
+        return Ok(None);
+    };
+
+    display_user_message(ctx.renderer, input)?;
+    ctx.conversation_history
+        .push(uni::Message::user(input.to_string()));
+    ctx.renderer.line(MessageStyle::Response, &reply)?;
+    ctx.conversation_history
+        .push(uni::Message::assistant(reply));
+    ctx.handle.clear_input();
+    if let Some(placeholder) = ctx.default_placeholder.as_ref() {
+        ctx.handle.set_placeholder(Some(placeholder.clone()));
+    }
+
+    Ok(Some(InteractionOutcome::DirectToolHandled))
+}
+
 fn append_file_reference_metadata(
     content: uni::MessageContent,
     input: &str,
@@ -652,10 +774,21 @@ pub(super) async fn run_interaction_loop_impl(
             }
         }
 
+        let recent_follow_up_hint = if is_follow_up_prompt_like(input_owned.as_str()) {
+            extract_recent_follow_up_hint(ctx.conversation_history)
+        } else {
+            None
+        };
+
         if is_follow_up_prompt_like(input_owned.as_str())
-            && let Some((tool_name, tool_args)) =
-                extract_recent_follow_up_hint(ctx.conversation_history)
+            && recent_follow_up_hint.is_none()
+            && let Some(outcome) =
+                handle_completed_direct_tool_follow_up(ctx, input_owned.as_str())?
         {
+            return Ok(outcome);
+        }
+
+        if let Some((tool_name, tool_args)) = recent_follow_up_hint {
             let mut direct_tool_ctx = tool_dispatch::DirectToolContext {
                 interaction_ctx: ctx,
                 input_status_state: state.input_status_state,
@@ -817,8 +950,8 @@ pub(super) async fn run_interaction_loop_impl(
 mod tests {
     use super::{
         append_file_reference_metadata, build_file_reference_metadata,
-        extract_recent_follow_up_hint, fallback_args_preview, refresh_live_ide_context_update,
-        tool_names,
+        completed_direct_tool_follow_up_text, extract_recent_follow_up_hint, fallback_args_preview,
+        refresh_live_ide_context_update, tool_names,
     };
     use crate::agent::runloop::unified::context_manager::ContextManager;
     use crate::agent::runloop::unified::session_setup::{
@@ -1048,6 +1181,62 @@ mod tests {
                 })
             ))
         );
+    }
+
+    #[test]
+    fn completed_direct_tool_follow_up_text_reports_successful_run_command() {
+        let history = vec![
+            uni::Message::assistant_with_tools(
+                String::new(),
+                vec![uni::ToolCall::function(
+                    "direct_unified_exec_1".to_string(),
+                    tool_names::UNIFIED_EXEC.to_string(),
+                    serde_json::json!({"action":"run","command":"cargo check"}).to_string(),
+                )],
+            ),
+            uni::Message::tool_response(
+                "direct_unified_exec_1".to_string(),
+                serde_json::json!({"exit_code":0}).to_string(),
+            ),
+        ];
+
+        let text = completed_direct_tool_follow_up_text(&history).expect("follow-up text");
+        assert!(text.contains("`cargo check` already completed successfully."));
+        assert!(text.contains("No pending continuation is available."));
+    }
+
+    #[test]
+    fn completed_direct_tool_follow_up_text_reports_failed_read_call() {
+        let history = vec![
+            uni::Message::assistant_with_tools(
+                String::new(),
+                vec![uni::ToolCall::function(
+                    "direct_unified_file_1".to_string(),
+                    tool_names::UNIFIED_FILE.to_string(),
+                    serde_json::json!({"action":"read","path":"docs/project/TODO.md"}).to_string(),
+                )],
+            ),
+            uni::Message::tool_response(
+                "direct_unified_file_1".to_string(),
+                serde_json::json!({"error":"limit must be greater than zero"}).to_string(),
+            ),
+        ];
+
+        let text = completed_direct_tool_follow_up_text(&history).expect("follow-up text");
+        assert!(text.contains("`read docs/project/TODO.md` already completed with an error."));
+    }
+
+    #[test]
+    fn completed_direct_tool_follow_up_text_returns_none_without_direct_tool_tail() {
+        let history = vec![
+            uni::Message::tool_response(
+                "direct_unified_exec_1".to_string(),
+                serde_json::json!({"exit_code":0}).to_string(),
+            ),
+            uni::Message::assistant("cargo check completed.".to_string()),
+        ];
+
+        assert!(completed_direct_tool_follow_up_text(&history).is_none());
     }
 
     #[test]
