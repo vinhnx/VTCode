@@ -48,12 +48,22 @@ mod tests {
     }
 
     #[test]
+    fn test_detect_explicit_run_command_accepts_likely_run_typo_for_shell_command() {
+        let result = detect_explicit_run_command("eun cargo check");
+        assert!(result.is_some());
+        let (tool_name, args) = result.expect("command expected");
+        assert_eq!(tool_name, "unified_exec");
+        assert_eq!(args["command"], "cargo check");
+    }
+
+    #[test]
     fn test_detect_explicit_run_command_natural_language_rejected() {
         assert!(detect_explicit_run_command("run the tests").is_none());
         assert!(detect_explicit_run_command("run all unit tests").is_none());
         assert!(detect_explicit_run_command("run some commands").is_none());
         assert!(detect_explicit_run_command("run this script").is_none());
         assert!(detect_explicit_run_command("run a quick check").is_none());
+        assert!(detect_explicit_run_command("eun the tests").is_none());
     }
 
     #[test]

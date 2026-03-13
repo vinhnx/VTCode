@@ -327,6 +327,28 @@ mod tests {
     }
 
     #[test]
+    fn parses_likely_run_typo_as_direct_command() {
+        let parsed = parse_direct_tool_input("eun cargo check").expect("direct tool");
+        match parsed {
+            DirectToolInput::Execute {
+                tool_name,
+                args,
+                is_bang_prefix,
+            } => {
+                assert_eq!(
+                    tool_name,
+                    vtcode_core::config::constants::tools::UNIFIED_EXEC
+                );
+                assert_eq!(args["command"], "cargo check");
+                assert!(!is_bang_prefix);
+            }
+            DirectToolInput::InvalidBang { .. } => {
+                panic!("expected typoed run prefix to parse as direct command");
+            }
+        }
+    }
+
+    #[test]
     fn normalizes_direct_run_file_mentions_before_parsing() {
         let temp_dir = TempDir::new().expect("temp dir");
         let file_path = temp_dir.path().join("src").join("main.rs");
