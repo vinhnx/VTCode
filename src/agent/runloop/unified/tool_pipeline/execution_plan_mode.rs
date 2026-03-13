@@ -39,6 +39,7 @@ pub(super) async fn handle_enter_plan_mode(
         ctrl_c_notify,
         None,
         max_tool_retries,
+        false,
     )
     .await;
 
@@ -91,6 +92,7 @@ pub(super) async fn handle_exit_plan_mode(
         ctrl_c_notify,
         None,
         max_tool_retries,
+        false,
     )
     .await;
 

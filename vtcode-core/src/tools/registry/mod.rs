@@ -513,6 +513,168 @@ mod tests {
         Ok(())
     }
 
+    fn delayed_exec_args(tty: bool, yield_time_ms: u64) -> Value {
+        json!({
+            "action": "run",
+            "command": ["/bin/sh", "-lc", "printf first && sleep 0.2 && printf second"],
+            "shell": "/bin/sh",
+            "tty": tty,
+            "yield_time_ms": yield_time_ms,
+        })
+    }
+
+    fn long_running_exec_args(tty: bool, yield_time_ms: u64) -> Value {
+        json!({
+            "action": "run",
+            "command": [
+                "/bin/sh",
+                "-lc",
+                "sleep 0.4 && printf second && sleep 0.4 && printf third && sleep 0.4 && printf done"
+            ],
+            "shell": "/bin/sh",
+            "tty": tty,
+            "yield_time_ms": yield_time_ms,
+        })
+    }
+
+    #[tokio::test]
+    async fn prevalidated_exec_mode_settles_noninteractive_run() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        registry.allow_all_tools().await?;
+
+        let response = registry
+            .execute_public_tool_ref_prevalidated_with_exec_mode(
+                tools::UNIFIED_EXEC,
+                &delayed_exec_args(false, 50),
+                true,
+            )
+            .await?;
+
+        let output = response["output"]
+            .as_str()
+            .expect("settled exec output should be text");
+        assert!(output.contains("first"));
+        assert!(output.contains("second"));
+        assert_eq!(response["exit_code"], 0);
+        assert!(response.get("next_continue_args").is_none());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn prevalidated_exec_mode_settles_pipe_poll_until_exit() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        registry.allow_all_tools().await?;
+
+        let initial = registry
+            .execute_harness_unified_exec(delayed_exec_args(false, 50))
+            .await?;
+        let session_id = initial["session_id"]
+            .as_str()
+            .expect("partial run should expose session_id")
+            .to_string();
+        assert!(initial.get("next_continue_args").is_some());
+        assert!(initial.get("exit_code").is_none());
+
+        let response = registry
+            .execute_public_tool_ref_prevalidated_with_exec_mode(
+                tools::UNIFIED_EXEC,
+                &json!({
+                    "action": "poll",
+                    "session_id": session_id,
+                    "yield_time_ms": 50,
+                }),
+                true,
+            )
+            .await?;
+
+        assert_eq!(response["exit_code"], 0);
+        assert!(
+            response["output"]
+                .as_str()
+                .expect("settled poll output should be text")
+                .contains("second")
+        );
+        assert!(response.get("next_continue_args").is_none());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn prevalidated_exec_mode_keeps_interactive_runs_manual() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        registry.allow_all_tools().await?;
+
+        let response = registry
+            .execute_public_tool_ref_prevalidated_with_exec_mode(
+                tools::UNIFIED_EXEC,
+                &delayed_exec_args(true, 50),
+                true,
+            )
+            .await?;
+
+        assert!(response.get("next_continue_args").is_some());
+        assert!(response.get("exit_code").is_none());
+
+        let session_id = response["session_id"]
+            .as_str()
+            .expect("interactive run should expose session_id")
+            .to_string();
+        registry
+            .execute_harness_unified_exec(json!({
+                "action": "close",
+                "session_id": session_id,
+            }))
+            .await?;
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn active_exec_continuations_bypass_identical_call_loop_detection() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        registry.allow_all_tools().await?;
+        registry.execution_history.set_loop_detection_limits(5, 2);
+
+        let initial = registry
+            .execute_harness_unified_exec(long_running_exec_args(false, 10))
+            .await?;
+        let session_id = initial["session_id"]
+            .as_str()
+            .expect("partial run should expose session_id")
+            .to_string();
+        let continue_args = json!({
+            "action": "continue",
+            "session_id": session_id,
+            "yield_time_ms": 10,
+        });
+
+        let first = registry
+            .execute_public_tool_ref_prevalidated(tools::UNIFIED_EXEC, &continue_args)
+            .await?;
+        assert_ne!(first.get("loop_detected"), Some(&json!(true)));
+
+        let second = registry
+            .execute_public_tool_ref_prevalidated(tools::UNIFIED_EXEC, &continue_args)
+            .await?;
+        assert_ne!(second.get("loop_detected"), Some(&json!(true)));
+
+        let third = registry
+            .execute_public_tool_ref_prevalidated(tools::UNIFIED_EXEC, &continue_args)
+            .await?;
+        assert_ne!(third.get("loop_detected"), Some(&json!(true)));
+        assert!(
+            third.get("exit_code").is_some() || third.get("next_continue_args").is_some(),
+            "continuation should either remain active or complete cleanly"
+        );
+
+        Ok(())
+    }
+
     #[tokio::test]
     async fn prevalidated_execution_enforces_plan_mode_guards() -> Result<()> {
         let temp_dir = TempDir::new()?;

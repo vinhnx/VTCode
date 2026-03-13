@@ -1149,7 +1149,7 @@ fn build_exec_response(
     if truncated {
         response["truncated"] = json!(true);
     }
-    if truncated || capture.exit_code.is_none() {
+    if capture.exit_code.is_none() {
         attach_pty_continuation(&mut response, &session.id);
     }
 
@@ -1311,6 +1311,14 @@ impl ToolRegistry {
     }
 
     pub(super) async fn execute_unified_exec(&self, args: Value) -> Result<Value> {
+        self.execute_unified_exec_internal(args, false).await
+    }
+
+    pub(super) async fn execute_unified_exec_internal(
+        &self,
+        args: Value,
+        settle_noninteractive_exec: bool,
+    ) -> Result<Value> {
         let args = crate::tools::command_args::normalize_shell_args(&args)
             .map_err(|error| anyhow!(error))?;
 
@@ -1320,10 +1328,19 @@ impl ToolRegistry {
             .with_context(|| format!("Invalid action: {}", action_str))?;
 
         match action {
-            UnifiedExecAction::Run => self.execute_command_session_run(args).await,
+            UnifiedExecAction::Run => {
+                self.execute_command_session_run_internal(args, settle_noninteractive_exec)
+                    .await
+            }
             UnifiedExecAction::Write => self.execute_command_session_write(args).await,
-            UnifiedExecAction::Poll => self.execute_command_session_poll(args).await,
-            UnifiedExecAction::Continue => self.execute_command_session_continue(args).await,
+            UnifiedExecAction::Poll => {
+                self.execute_command_session_poll_internal(args, settle_noninteractive_exec)
+                    .await
+            }
+            UnifiedExecAction::Continue => {
+                self.execute_command_session_continue_internal(args, settle_noninteractive_exec)
+                    .await
+            }
             UnifiedExecAction::Inspect => self.execute_command_session_inspect(args).await,
             UnifiedExecAction::List => self.execute_command_session_list().await,
             UnifiedExecAction::Close => self.execute_command_session_close(args).await,
@@ -1331,12 +1348,17 @@ impl ToolRegistry {
         }
     }
 
-    async fn execute_command_session_run(&self, args: Value) -> Result<Value> {
+    async fn execute_command_session_run_internal(
+        &self,
+        args: Value,
+        settle_noninteractive_exec: bool,
+    ) -> Result<Value> {
         let tty = args.get("tty").and_then(Value::as_bool).unwrap_or(false);
         if tty {
             self.execute_command_session_run_pty(args).await
         } else {
-            self.execute_run_pipe_cmd(args).await
+            self.execute_run_pipe_cmd(args, settle_noninteractive_exec)
+                .await
         }
     }
 
@@ -1996,7 +2018,11 @@ impl ToolRegistry {
         Ok(response)
     }
 
-    async fn execute_run_pipe_cmd(&self, args: Value) -> Result<Value> {
+    async fn execute_run_pipe_cmd(
+        &self,
+        args: Value,
+        settle_noninteractive_exec: bool,
+    ) -> Result<Value> {
         let payload = args
             .as_object()
             .ok_or_else(|| anyhow!("unified_exec run requires a JSON object"))?;
@@ -2118,13 +2144,13 @@ impl ToolRegistry {
             .await?;
 
         let capture = self
-            .wait_for_exec_yield(
+            .capture_exec_session_output(
                 &session_id,
                 yield_duration,
                 Some(crate::config::constants::tools::UNIFIED_EXEC),
-                true,
+                settle_noninteractive_exec,
             )
-            .await;
+            .await?;
         let raw_output = filter_pty_output(&strip_ansi(&capture.output));
         let mut matched_count = None;
         let mut query_truncated = false;
@@ -2218,6 +2244,15 @@ impl ToolRegistry {
     }
 
     async fn execute_command_session_poll(&self, args: Value) -> Result<Value> {
+        self.execute_command_session_poll_internal(args, false)
+            .await
+    }
+
+    async fn execute_command_session_poll_internal(
+        &self,
+        args: Value,
+        settle_noninteractive_exec: bool,
+    ) -> Result<Value> {
         let payload = args
             .as_object()
             .ok_or_else(|| anyhow!("command session read requires a JSON object"))?;
@@ -2232,13 +2267,13 @@ impl ToolRegistry {
             clamp_exec_yield_ms(payload.get("yield_time_ms").and_then(Value::as_u64), 1000);
 
         let capture = self
-            .wait_for_exec_yield(
+            .capture_exec_session_output(
                 sid,
                 Duration::from_millis(yield_time_ms),
                 Some(crate::config::constants::tools::UNIFIED_EXEC),
-                true,
+                settle_noninteractive_exec && session_metadata.backend == "pipe",
             )
-            .await;
+            .await?;
 
         let raw_output = filter_pty_output(&strip_ansi(&capture.output));
         let response = build_exec_response(
@@ -2262,7 +2297,11 @@ impl ToolRegistry {
         Ok(response)
     }
 
-    async fn execute_command_session_continue(&self, args: Value) -> Result<Value> {
+    async fn execute_command_session_continue_internal(
+        &self,
+        args: Value,
+        settle_noninteractive_exec: bool,
+    ) -> Result<Value> {
         if args
             .get("input")
             .or_else(|| args.get("chars"))
@@ -2271,7 +2310,8 @@ impl ToolRegistry {
         {
             self.execute_command_session_write(args).await
         } else {
-            self.execute_command_session_poll(args).await
+            self.execute_command_session_poll_internal(args, settle_noninteractive_exec)
+                .await
         }
     }
 
@@ -2482,7 +2522,7 @@ impl ToolRegistry {
             .await
     }
 
-    async fn exec_session_completed(&self, session_id: &str) -> Result<Option<i32>> {
+    pub(super) async fn exec_session_completed(&self, session_id: &str) -> Result<Option<i32>> {
         self.exec_sessions.is_session_completed(session_id).await
     }
 
@@ -2908,6 +2948,47 @@ impl ToolRegistry {
             }
 
             tokio::time::sleep(poll_interval).await;
+        }
+    }
+
+    async fn capture_exec_session_output(
+        &self,
+        session_id: &str,
+        yield_duration: Duration,
+        tool_name: Option<&str>,
+        settle_until_terminal: bool,
+    ) -> Result<PtyEphemeralCapture> {
+        if !settle_until_terminal {
+            return Ok(self
+                .wait_for_exec_yield(session_id, yield_duration, tool_name, true)
+                .await);
+        }
+
+        let start = Instant::now();
+        let mut output = String::new();
+
+        loop {
+            let capture = self
+                .wait_for_exec_yield(session_id, yield_duration, tool_name, true)
+                .await;
+            output.push_str(&capture.output);
+
+            if let Some(exit_code) = capture.exit_code {
+                return Ok(PtyEphemeralCapture {
+                    output,
+                    exit_code: Some(exit_code),
+                    duration: start.elapsed(),
+                });
+            }
+
+            self.exec_session_metadata(session_id)
+                .await
+                .with_context(|| {
+                    format!(
+                        "exec session '{}' disappeared during settlement",
+                        session_id
+                    )
+                })?;
         }
     }
 
@@ -3358,7 +3439,8 @@ mod pty_output_filter_tests {
 #[cfg(test)]
 mod pty_context_tests {
     use super::{
-        attach_exec_response_context, attach_pty_continuation, build_exec_session_command_display,
+        ExecOutputPreview, PtyEphemeralCapture, attach_exec_response_context,
+        attach_pty_continuation, build_exec_response, build_exec_session_command_display,
     };
     use crate::tools::types::VTCodeExecSession;
     use serde_json::json;
@@ -3435,6 +3517,41 @@ mod pty_context_tests {
             response["next_continue_args"],
             json!({ "session_id": "run-123" })
         );
+    }
+
+    #[test]
+    fn build_exec_response_skips_continuation_after_exit() {
+        let session = VTCodeExecSession {
+            id: "run-123".to_string(),
+            backend: "pipe".to_string(),
+            command: "cargo".to_string(),
+            args: vec!["check".to_string()],
+            working_dir: Some(".".to_string()),
+            rows: None,
+            cols: None,
+        };
+        let capture = PtyEphemeralCapture {
+            output: "first\nsecond\n".to_string(),
+            exit_code: Some(0),
+            duration: std::time::Duration::from_millis(25),
+        };
+
+        let response = build_exec_response(
+            &session,
+            "cargo check",
+            &capture,
+            ExecOutputPreview {
+                raw_output: "first\nsecond\n".to_string(),
+                output: "first\n[Output truncated]".to_string(),
+                truncated: true,
+            },
+            None,
+            false,
+            None,
+        );
+
+        assert_eq!(response["exit_code"], 0);
+        assert!(response.get("next_continue_args").is_none());
     }
 }
 

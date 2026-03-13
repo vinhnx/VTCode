@@ -169,7 +169,11 @@ fn parse_ansi_sequence_bytes(bytes: &[u8]) -> Option<usize> {
                 // ESC % {@ ,G} — character set selection (ISO 2022)
                 // ESC ( C / ESC ) C / ESC * C / ESC + C — G0-G3 designation
                 b' ' | b'#' | b'%' | b'(' | b')' | b'*' | b'+' => {
-                    if bytes.len() > 2 { Some(3) } else { None }
+                    if bytes.len() > 2 {
+                        Some(3)
+                    } else {
+                        None
+                    }
                 }
                 next if next < 128 => Some(2),
                 _ => Some(1),

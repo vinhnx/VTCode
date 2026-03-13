@@ -11,6 +11,7 @@ use tokio::task::Id as TokioTaskId;
 use tracing::{debug, trace, warn};
 use vtcode_commons::ErrorCategory;
 
+use crate::config::constants::tools;
 use crate::core::memory_pool::SizeRecommendation;
 use crate::mcp::McpToolExecutor;
 use crate::tool_policy::ToolExecutionDecision;
@@ -156,6 +157,32 @@ impl Drop for ToolReentrancyGuard {
 }
 
 impl ToolRegistry {
+    async fn should_skip_loop_detection_for_active_exec_continuation(
+        &self,
+        tool_name: &str,
+        args: &Value,
+    ) -> bool {
+        if tool_name != tools::UNIFIED_EXEC {
+            return false;
+        }
+
+        let Some(action) = crate::tools::tool_intent::unified_exec_action(args) else {
+            return false;
+        };
+        let is_continuation = action.eq_ignore_ascii_case("poll")
+            || (action.eq_ignore_ascii_case("continue")
+                && crate::tools::command_args::interactive_input_text(args).is_none());
+        if !is_continuation {
+            return false;
+        }
+
+        let Some(session_id) = crate::tools::command_args::session_id_text(args) else {
+            return false;
+        };
+
+        matches!(self.exec_session_completed(session_id).await, Ok(None))
+    }
+
     async fn public_tool_catalog_for_error(
         &self,
         requested_name: &str,
@@ -214,7 +241,8 @@ impl ToolRegistry {
     /// Reference-taking version of execute_tool to avoid cloning by callers
     /// that already have access to an existing `Value`.
     pub async fn execute_tool_ref(&self, name: &str, args: &Value) -> Result<Value> {
-        self.execute_tool_ref_internal(name, args, false).await
+        self.execute_tool_ref_internal(name, args, false, false)
+            .await
     }
 
     /// Reference-taking execution entrypoint for calls that were already preflight-validated.
@@ -222,7 +250,8 @@ impl ToolRegistry {
     /// This avoids re-running argument/schema/path/command preflight in hot paths
     /// where validation already happened in the runloop.
     pub async fn execute_tool_ref_prevalidated(&self, name: &str, args: &Value) -> Result<Value> {
-        self.execute_tool_ref_internal(name, args, true).await
+        self.execute_tool_ref_internal(name, args, true, false)
+            .await
     }
 
     /// Prevalidated model-originated execution that still routes through the public assembly.
@@ -231,8 +260,24 @@ impl ToolRegistry {
         name: &str,
         args: &Value,
     ) -> Result<Value> {
-        self.execute_public_tool_ref_internal(name, args, true)
+        self.execute_public_tool_ref_prevalidated_with_exec_mode(name, args, false)
             .await
+    }
+
+    #[doc(hidden)]
+    pub async fn execute_public_tool_ref_prevalidated_with_exec_mode(
+        &self,
+        name: &str,
+        args: &Value,
+        settle_noninteractive_exec: bool,
+    ) -> Result<Value> {
+        self.execute_public_tool_ref_internal_with_exec_mode(
+            name,
+            args,
+            true,
+            settle_noninteractive_exec,
+        )
+        .await
     }
 
     async fn execute_public_tool_ref_internal(
@@ -241,12 +286,28 @@ impl ToolRegistry {
         args: &Value,
         prevalidated: bool,
     ) -> Result<Value> {
+        self.execute_public_tool_ref_internal_with_exec_mode(name, args, prevalidated, false)
+            .await
+    }
+
+    async fn execute_public_tool_ref_internal_with_exec_mode(
+        &self,
+        name: &str,
+        args: &Value,
+        prevalidated: bool,
+        settle_noninteractive_exec: bool,
+    ) -> Result<Value> {
         let routed_name = self
             .resolve_public_tool(name)
             .map(|resolution| resolution.registration_name().to_string())
             .map_err(|error| anyhow!(error.to_string()))?;
-        self.execute_tool_ref_internal(routed_name.as_str(), args, prevalidated)
-            .await
+        self.execute_tool_ref_internal(
+            routed_name.as_str(),
+            args,
+            prevalidated,
+            settle_noninteractive_exec,
+        )
+        .await
     }
 
     async fn execute_tool_ref_internal(
@@ -254,6 +315,7 @@ impl ToolRegistry {
         name: &str,
         args: &Value,
         prevalidated: bool,
+        settle_noninteractive_exec: bool,
     ) -> Result<Value> {
         // PERFORMANCE OPTIMIZATION: Use memory pool for string allocations if enabled
         let _pool_guard = if self.optimization_config.memory_pool.enabled {
@@ -579,9 +641,27 @@ impl ToolRegistry {
             }
         }
 
+        let skip_loop_detection = self
+            .should_skip_loop_detection_for_active_exec_continuation(&tool_name, args)
+            .await;
+        if skip_loop_detection {
+            trace!(
+                tool = %tool_name,
+                "Skipping identical-call loop detection for active exec continuation"
+            );
+        }
+
         // LOOP DETECTION: Check if we're calling the same tool repeatedly with identical params
-        let loop_limit = self.execution_history.loop_limit_for(&tool_name, args);
-        let (is_loop, repeat_count, _) = self.execution_history.detect_loop(&tool_name, args);
+        let loop_limit = if skip_loop_detection {
+            0
+        } else {
+            self.execution_history.loop_limit_for(&tool_name, args)
+        };
+        let (is_loop, repeat_count, _) = if skip_loop_detection {
+            (false, 0, String::new())
+        } else {
+            self.execution_history.detect_loop(&tool_name, args)
+        };
         if is_loop && repeat_count > 1 {
             let delay_ms = (25 * repeat_count as u64).min(LOOP_THROTTLE_MAX_MS);
             if delay_ms > 0 {
@@ -1006,6 +1086,15 @@ impl ToolRegistry {
                     .as_deref()
                     .context("MCP tool routing inconsistency: resolved MCP tool name missing")?;
                 self.execute_mcp_tool(mcp_name, args).await
+            } else if settle_noninteractive_exec && tool_name == tools::UNIFIED_EXEC {
+                if self.optimization_config.memory_pool.enabled {
+                    let _execution_guard = self.memory_pool.get_value();
+                    let _string_guard = self.memory_pool.get_string();
+                    let _vec_guard = self.memory_pool.get_vec();
+                    self.execute_unified_exec_internal(args, true).await
+                } else {
+                    self.execute_unified_exec_internal(args, true).await
+                }
             } else if let Some(registration) = self.inventory.registration_for(&tool_name) {
                 // Log deprecation warning if tool is deprecated
                 if registration.is_deprecated() {

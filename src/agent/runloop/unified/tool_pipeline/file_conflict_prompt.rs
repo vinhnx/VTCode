@@ -110,6 +110,7 @@ where
                     harness_emitter.clone(),
                     vt_cfg,
                     max_tool_retries,
+                    false,
                 )
                 .await;
             }

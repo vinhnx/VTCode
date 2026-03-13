@@ -3,6 +3,7 @@ use futures::stream::{FuturesUnordered, StreamExt};
 
 use crate::agent::runloop::unified::progress::ProgressReporter;
 use crate::agent::runloop::unified::tool_pipeline::run_tool_call_with_args;
+use crate::agent::runloop::unified::tool_pipeline::should_settle_noninteractive_unified_exec;
 use crate::agent::runloop::unified::turn::context::{
     PreparedAssistantToolCall, TurnHandlerOutcome, TurnProcessingContext,
 };
@@ -155,6 +156,7 @@ async fn execute_parallel_group<'a, 'b>(
                     &ctrl_c_notify,
                     Some(&reporter),
                     max_retries,
+                    should_settle_noninteractive_unified_exec(true, &name, &args),
                 )
                 .await;
             (call_id, name, args, status, start_time)

@@ -62,6 +62,7 @@ pub(crate) async fn execute_tool_with_timeout_ref(
         progress_reporter,
         max_tool_retries,
         false,
+        false,
     )
     .await
 }
@@ -74,6 +75,7 @@ pub(crate) async fn execute_tool_with_timeout_ref_prevalidated(
     ctrl_c_notify: &Arc<Notify>,
     progress_reporter: Option<&ProgressReporter>,
     max_tool_retries: usize,
+    settle_noninteractive_exec: bool,
 ) -> ToolExecutionStatus {
     execute_tool_with_timeout_ref_mode(
         registry,
@@ -84,6 +86,7 @@ pub(crate) async fn execute_tool_with_timeout_ref_prevalidated(
         progress_reporter,
         max_tool_retries,
         true,
+        settle_noninteractive_exec,
     )
     .await
 }
@@ -97,6 +100,7 @@ async fn execute_tool_with_timeout_ref_mode(
     progress_reporter: Option<&ProgressReporter>,
     max_tool_retries: usize,
     prevalidated: bool,
+    settle_noninteractive_exec: bool,
 ) -> ToolExecutionStatus {
     let created_local_reporter = progress_reporter.is_none();
     let fallback_progress_reporter = ProgressReporter::new();
@@ -129,6 +133,7 @@ async fn execute_tool_with_timeout_ref_mode(
         retry_allowed,
         max_tool_retries,
         prevalidated,
+        settle_noninteractive_exec,
     )
     .await;
 
@@ -150,6 +155,7 @@ async fn execute_tool_with_progress(
     retry_allowed: bool,
     max_tool_retries: usize,
     prevalidated: bool,
+    settle_noninteractive_exec: bool,
 ) -> ToolExecutionStatus {
     let deadline = Instant::now() + tool_timeout;
     let mut attempt = 0usize;
@@ -162,6 +168,7 @@ async fn execute_tool_with_progress(
         progress_reporter,
         deadline.saturating_duration_since(Instant::now()),
         prevalidated,
+        settle_noninteractive_exec,
         attempt,
         None,
     )
@@ -200,6 +207,7 @@ async fn execute_tool_with_progress(
             progress_reporter,
             remaining_timeout,
             prevalidated,
+            settle_noninteractive_exec,
             attempt,
             Some(delay),
         )
@@ -219,6 +227,7 @@ async fn run_attempt_with_logging(
     progress_reporter: &ProgressReporter,
     timeout: Duration,
     prevalidated: bool,
+    settle_noninteractive_exec: bool,
     attempt: usize,
     retry_delay: Option<Duration>,
 ) -> ToolExecutionStatus {
@@ -232,6 +241,7 @@ async fn run_attempt_with_logging(
         progress_reporter,
         timeout,
         prevalidated,
+        settle_noninteractive_exec,
     )
     .await;
 
@@ -256,6 +266,7 @@ async fn run_single_tool_attempt(
     progress_reporter: &ProgressReporter,
     tool_timeout: Duration,
     prevalidated: bool,
+    settle_noninteractive_exec: bool,
 ) -> ToolExecutionStatus {
     let start_time = Instant::now();
     let warning_fraction = registry.timeout_policy().warning_fraction();
@@ -314,7 +325,11 @@ async fn run_single_tool_attempt(
 
             let result = if prevalidated {
                 registry
-                    .execute_public_tool_ref_prevalidated(name, args)
+                    .execute_public_tool_ref_prevalidated_with_exec_mode(
+                        name,
+                        args,
+                        settle_noninteractive_exec,
+                    )
                     .await
             } else {
                 registry.execute_public_tool_ref(name, args).await

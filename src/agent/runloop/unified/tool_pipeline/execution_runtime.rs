@@ -205,6 +205,7 @@ pub(super) async fn execute_with_cache_and_streaming(
     harness_emitter: Option<HarnessEventEmitter>,
     vt_cfg: Option<&VTCodeConfig>,
     max_tool_retries: usize,
+    settle_noninteractive_exec: bool,
 ) -> RuntimeToolExecution {
     let is_cacheable_tool = is_tool_cacheable(name, args_val);
     let cache_target = cache_target_path(name, args_val);
@@ -273,6 +274,7 @@ pub(super) async fn execute_with_cache_and_streaming(
         ctrl_c_notify,
         Some(&progress_reporter),
         max_tool_retries,
+        settle_noninteractive_exec,
     )
     .await;
 
