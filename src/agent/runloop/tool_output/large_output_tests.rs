@@ -89,7 +89,9 @@ fn test_agent_response_format() {
     assert!(agent_response.contains("source of truth"));
     assert!(agent_response.contains("run_pty_cmd"));
     assert!(agent_response.contains("Preview"));
-    assert!(agent_response.contains("read_file"));
+    assert!(agent_response.contains("unified_file"));
+    assert!(agent_response.contains(r#""action":"read""#));
+    assert!(!agent_response.contains("read_file"));
 }
 
 #[test]

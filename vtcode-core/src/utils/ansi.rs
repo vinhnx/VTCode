@@ -271,12 +271,11 @@ impl AnsiRenderer {
         if !self.should_render_style(style) {
             return Ok(());
         }
+        let suppress_transcript = Self::is_diagnostic_error_style(style)
+            && self.sink.is_some()
+            && !self.show_diagnostics_in_transcript;
         if Self::is_diagnostic_error_style(style) {
             Self::log_transcript_error(text, style, self.sink.is_some());
-            if self.sink.is_some() && !self.show_diagnostics_in_transcript {
-                self.last_line_was_empty = text.trim().is_empty();
-                return Ok(());
-            }
         }
         if matches!(style, MessageStyle::Response | MessageStyle::Reasoning) {
             return self.render_markdown(style, text);
@@ -305,7 +304,13 @@ impl AnsiRenderer {
         let dont_split = matches!(style, MessageStyle::Tool | MessageStyle::ToolDetail);
 
         if let Some(sink) = &mut self.sink {
-            sink.write_multiline(style.style(), indent, text, Self::message_kind(style))?;
+            sink.write_multiline_with_transcript(
+                style.style(),
+                indent,
+                text,
+                Self::message_kind(style),
+                !suppress_transcript,
+            )?;
             return Ok(());
         }
 
@@ -378,17 +383,16 @@ impl AnsiRenderer {
         if !self.should_render_style(fallback) {
             return Ok(());
         }
+        let suppress_transcript = Self::is_diagnostic_error_style(fallback)
+            && self.sink.is_some()
+            && !self.show_diagnostics_in_transcript;
         if Self::is_diagnostic_error_style(fallback) {
             Self::log_transcript_error(text, fallback, self.sink.is_some());
-            if self.sink.is_some() && !self.show_diagnostics_in_transcript {
-                self.last_line_was_empty = text.trim().is_empty();
-                return Ok(());
-            }
         }
         let kind = Self::message_kind(fallback);
         let indent = self.indent_for_style(fallback);
         if let Some(sink) = &mut self.sink {
-            sink.write_multiline(style, indent, text, kind)?;
+            sink.write_multiline_with_transcript(style, indent, text, kind, !suppress_transcript)?;
             self.last_line_was_empty = text.trim().is_empty();
             return Ok(());
         }
@@ -1084,6 +1088,23 @@ impl InlineSink {
         text: &str,
         kind: InlineMessageKind,
     ) -> Result<()> {
+        self.write_multiline_with_transcript(
+            style,
+            indent,
+            text,
+            kind,
+            Self::should_record_transcript(kind),
+        )
+    }
+
+    fn write_multiline_with_transcript(
+        &mut self,
+        style: Style,
+        indent: &str,
+        text: &str,
+        kind: InlineMessageKind,
+        record_transcript: bool,
+    ) -> Result<()> {
         let text_storage;
         let text = if kind == InlineMessageKind::Agent {
             text_storage = crate::utils::ansi_parser::strip_ansi(text);
@@ -1100,7 +1121,7 @@ impl InlineSink {
         let fallback = self.resolve_fallback_style(style);
         let fallback_arc = Arc::new(fallback.clone());
         let (converted_lines, plain_lines) = self.convert_plain_lines(text, &fallback);
-        let record_transcript = Self::should_record_transcript(kind);
+        let record_transcript = record_transcript && Self::should_record_transcript(kind);
 
         // Combine multiple lines into a single append for User and Tool to avoid
         // creating a separate inline entry for each line. This prevents the
@@ -1410,24 +1431,36 @@ mod tests {
     }
 
     #[test]
-    fn inline_ui_suppresses_error_lines_when_disabled() {
+    fn inline_ui_shows_error_lines_without_recording_transcript_when_disabled() {
         use crate::ui::InlineCommand;
+        use crate::utils::transcript;
 
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let mut renderer =
             AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
         renderer.set_show_diagnostics_in_transcript(false);
+        transcript::clear();
 
         renderer
-            .line(MessageStyle::Error, "fatal: test failure")
+            .line(MessageStyle::Error, "fatal: hidden transcript failure")
             .unwrap();
 
+        let mut saw_append = false;
         while let Ok(command) = receiver.try_recv() {
-            assert!(
-                !matches!(command, InlineCommand::AppendLine { .. }),
-                "error output should not be appended to TUI transcript"
-            );
+            if matches!(command, InlineCommand::AppendLine { .. }) {
+                saw_append = true;
+            }
         }
+        assert!(
+            saw_append,
+            "error output should still be visible in inline UI"
+        );
+        assert!(
+            !transcript::snapshot()
+                .iter()
+                .any(|line| line.contains("fatal: hidden transcript failure")),
+            "error output should not be recorded in transcript when disabled"
+        );
     }
 
     #[test]

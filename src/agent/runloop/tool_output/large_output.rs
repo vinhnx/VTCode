@@ -219,8 +219,8 @@ Tool: {}
 {}
 --- End Preview ---
 
-To read full content, use: read_file({{"path":"{}","offset_lines":1,"limit":{}}})
-To read specific lines, use: read_file({{"path":"{}","offset_lines":<start>,"limit":<line_count>}})"#,
+To read full content, use: unified_file({{"action":"read","path":"{}","offset":1,"limit":{}}})
+To read specific lines, use: unified_file({{"action":"read","path":"{}","offset":<start>,"limit":<line_count>}})"#,
             self.file_path.display(),
             self.size_bytes,
             self.line_count,

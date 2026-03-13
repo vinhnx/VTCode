@@ -13,6 +13,8 @@ use crate::agent::runloop::unified::turn::context::{
 use super::looping::{shell_run_signature, spool_chunk_read_path, task_tracker_create_signature};
 use super::{ValidationResult, build_failure_error_content};
 
+const SPOOL_CHUNK_GREP_PATTERN: &str = "warning|error|TODO";
+
 pub(crate) fn max_consecutive_blocked_tool_calls_per_turn(
     ctx: &TurnProcessingContext<'_>,
 ) -> usize {
@@ -167,17 +169,22 @@ fn max_sequential_spool_chunk_reads_per_turn(ctx: &TurnProcessingContext<'_>) ->
         .unwrap_or(DEFAULT_MAX_SEQUENTIAL_SPOOL_CHUNK_READS_PER_TURN)
 }
 
+fn spool_chunk_guard_fallback_args(path: &str) -> Value {
+    json!({
+        "action": "grep",
+        "path": path,
+        "pattern": SPOOL_CHUNK_GREP_PATTERN
+    })
+}
+
 fn build_spool_chunk_guard_error_content(path: &str, max_reads_per_turn: usize) -> String {
     super::super::execution_result::build_error_content(
         format!(
             "Spool chunk reads exceeded per-turn cap ({}). Use targeted extraction before reading more from '{}'.",
             max_reads_per_turn, path
         ),
-        Some("grep_file".to_string()),
-        Some(json!({
-            "path": path,
-            "pattern": "warning|error|TODO"
-        })),
+        Some(tool_names::UNIFIED_SEARCH.to_string()),
+        Some(spool_chunk_guard_fallback_args(path)),
         "spool_chunk_guard",
     )
     .to_string()
@@ -214,4 +221,32 @@ pub(super) fn enforce_spool_chunk_read_guard(
     ctx.push_system_message(block_reason);
 
     Some(ValidationResult::Blocked)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn spool_chunk_guard_error_uses_unified_search_fallback() {
+        let payload =
+            build_spool_chunk_guard_error_content(".vtcode/context/tool_outputs/run-1.txt", 3);
+        let parsed: Value =
+            serde_json::from_str(&payload).expect("spool chunk guard payload should be json");
+
+        assert_eq!(
+            parsed.get("fallback_tool").and_then(Value::as_str),
+            Some(tool_names::UNIFIED_SEARCH)
+        );
+        assert_eq!(parsed["fallback_tool_args"]["action"], "grep");
+        assert_eq!(
+            parsed["fallback_tool_args"]["path"],
+            ".vtcode/context/tool_outputs/run-1.txt"
+        );
+        assert_eq!(
+            parsed["fallback_tool_args"]["pattern"],
+            SPOOL_CHUNK_GREP_PATTERN
+        );
+        assert!(parsed.get("next_action").and_then(Value::as_str).is_some());
+    }
 }

@@ -678,6 +678,44 @@ fn validation_error_payload_marks_loop_detection_without_prose_hint() {
 }
 
 #[test]
+fn reused_read_only_result_uses_canonical_guidance() {
+    let mut payload = json!({
+        "output": "preview",
+        "content": "preview",
+        "stdout": "preview",
+        "stderr": "preview",
+        "stderr_preview": "preview"
+    });
+
+    super::apply_reused_read_only_loop_metadata(
+        payload
+            .as_object_mut()
+            .expect("payload should be an object for reuse metadata"),
+    );
+
+    assert_eq!(payload.get("reused_recent_result"), Some(&json!(true)));
+    assert_eq!(payload.get("result_ref_only"), Some(&json!(true)));
+    assert_eq!(payload.get("loop_detected"), Some(&json!(true)));
+    assert_eq!(
+        payload.get("loop_detected_note"),
+        Some(&json!(
+            "Loop detected on repeated read-only call; reusing recent output. Use unified_search (action='grep') or summarize before another read."
+        ))
+    );
+    assert_eq!(
+        payload.get("next_action"),
+        Some(&json!(
+            "Use unified_search (action='grep') or retry unified_file with a narrower offset/limit before reading again."
+        ))
+    );
+    assert!(payload.get("output").is_none());
+    assert!(payload.get("content").is_none());
+    assert!(payload.get("stdout").is_none());
+    assert!(payload.get("stderr").is_none());
+    assert!(payload.get("stderr_preview").is_none());
+}
+
+#[test]
 fn task_tracker_create_signature_matches_identical_payloads() {
     let first = json!({
         "action": "create",

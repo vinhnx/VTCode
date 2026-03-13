@@ -35,6 +35,13 @@ use mcp::{
 use streams::render_stream_section;
 use styles::{GitStyles, LsStyles};
 
+fn spooled_output_hint(path: &str) -> String {
+    format!(
+        "Large output was spooled to \"{}\". Use unified_file (action='read') or unified_search (action='grep') to inspect details.",
+        path
+    )
+}
+
 fn tool_recovery_hint(val: &Value) -> Option<&'static str> {
     if !val
         .get("loop_detected")
@@ -69,13 +76,7 @@ fn tool_follow_up_hints(val: &Value) -> Vec<String> {
         push_tool_follow_up_hint(&mut hints, next_action);
     }
     if let Some(path) = val.get("spool_path").and_then(Value::as_str) {
-        push_tool_follow_up_hint(
-            &mut hints,
-            format!(
-                "Large output was spooled to \"{}\". Use read_file/grep_file to inspect details.",
-                path
-            ),
-        );
+        push_tool_follow_up_hint(&mut hints, spooled_output_hint(path));
     }
     if val
         .get("next_continue_args")
@@ -598,7 +599,7 @@ mod tests {
 
     use super::{
         preferred_follow_up_rendered_body, render_tool_output,
-        should_render_unified_exec_terminal_panel, tracker_summary_lines,
+        should_render_unified_exec_terminal_panel, spooled_output_hint, tracker_summary_lines,
     };
 
     fn collect_inline_output(receiver: &mut UnboundedReceiver<InlineCommand>) -> String {
@@ -782,6 +783,9 @@ mod tests {
 
         let inline_output = collect_inline_output(&mut receiver);
         assert!(inline_output.contains("Large output was spooled to"));
+        assert!(inline_output.contains("unified_file (action='read')"));
+        assert!(inline_output.contains("unified_search (action='grep')"));
+        assert!(!inline_output.contains("read_file/grep_file"));
         assert!(inline_output.contains("Use `next_continue_args`."));
     }
 
@@ -807,6 +811,9 @@ mod tests {
 
         let inline_output = collect_inline_output(&mut receiver);
         assert!(inline_output.contains("Large output was spooled to"));
+        assert!(inline_output.contains("unified_file (action='read')"));
+        assert!(inline_output.contains("unified_search (action='grep')"));
+        assert!(!inline_output.contains("read_file/grep_file"));
     }
 
     #[tokio::test]
@@ -825,6 +832,34 @@ mod tests {
 
         let inline_output = collect_inline_output(&mut receiver);
         assert!(inline_output.contains("Large output was spooled to"));
+        assert!(inline_output.contains("unified_file (action='read')"));
+        assert!(inline_output.contains("unified_search (action='grep')"));
+        assert!(!inline_output.contains("read_file/grep_file"));
+    }
+
+    #[tokio::test]
+    async fn render_tool_output_does_not_duplicate_spooled_output_hint() {
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut renderer =
+            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let spool_path = ".vtcode/context/tool_outputs/web.txt";
+        let hint = spooled_output_hint(spool_path);
+        let payload = json!({
+            "output": hint,
+            "spool_path": spool_path
+        });
+
+        render_tool_output(&mut renderer, Some("custom_tool"), &payload, None)
+            .await
+            .expect("spooled hint payload should render");
+
+        let inline_output = collect_inline_output(&mut receiver);
+        assert_eq!(
+            inline_output.matches("Large output was spooled to").count(),
+            1
+        );
+        assert!(inline_output.contains("unified_file"));
+        assert!(inline_output.contains("unified_search"));
     }
 
     #[tokio::test]
@@ -957,7 +992,7 @@ mod tests {
 
         let inline_output = collect_inline_output(&mut receiver);
         assert!(inline_output.contains("bash: pip: command not found"));
-        assert!(inline_output.contains("Command `pip` was not found in PATH."));
+        assert!(inline_output.contains("not found in PATH."));
         assert!(inline_output.contains(
             "Check the command name or install the missing binary, then rerun the command."
         ));
@@ -989,7 +1024,7 @@ mod tests {
             .expect("generic recoverable failure should render");
 
         let inline_output = collect_inline_output(&mut receiver);
-        assert!(inline_output.contains("Error: Tool preflight validation failed: x"));
+        assert!(inline_output.contains("Tool preflight validation failed: x"));
         assert!(inline_output.contains("Retry with fallback_tool_args."));
         assert_eq!(
             inline_output
@@ -999,6 +1034,33 @@ mod tests {
         );
         assert!(!inline_output.contains("\"error\""));
         assert!(!inline_output.contains("\"next_action\""));
+    }
+
+    #[tokio::test]
+    async fn render_tool_output_write_file_diff_truncation_uses_unified_file_hint() {
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut renderer =
+            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let payload = json!({
+            "diff_preview": {
+                "content": "@@ -1 +1 @@\n-old\n+new\n",
+                "truncated": true,
+                "omitted_line_count": 5
+            }
+        });
+
+        render_tool_output(
+            &mut renderer,
+            Some(vtcode_core::config::constants::tools::WRITE_FILE),
+            &payload,
+            None,
+        )
+        .await
+        .expect("write file diff payload should render");
+
+        let inline_output = collect_inline_output(&mut receiver);
+        assert!(inline_output.contains("use unified_file for full view"));
+        assert!(!inline_output.contains("use read_file for full view"));
     }
 
     #[test]

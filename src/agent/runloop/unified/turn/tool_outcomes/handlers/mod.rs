@@ -51,6 +51,34 @@ fn build_failure_error_content(error: String, failure_kind: &'static str) -> Str
     super::execution_result::build_error_content(error, None, None, failure_kind).to_string()
 }
 
+fn apply_reused_read_only_loop_metadata(obj: &mut serde_json::Map<String, serde_json::Value>) {
+    obj.remove("output");
+    obj.remove("content");
+    obj.remove("stdout");
+    obj.remove("stderr");
+    obj.remove("stderr_preview");
+    obj.insert(
+        "reused_recent_result".to_string(),
+        serde_json::Value::Bool(true),
+    );
+    obj.insert("result_ref_only".to_string(), serde_json::Value::Bool(true));
+    obj.insert("loop_detected".to_string(), serde_json::Value::Bool(true));
+    obj.insert(
+        "loop_detected_note".to_string(),
+        serde_json::Value::String(
+            "Loop detected on repeated read-only call; reusing recent output. Use unified_search (action='grep') or summarize before another read."
+                .to_string(),
+        ),
+    );
+    obj.insert(
+        "next_action".to_string(),
+        serde_json::Value::String(
+            "Use unified_search (action='grep') or retry unified_file with a narrower offset/limit before reading again."
+                .to_string(),
+        ),
+    );
+}
+
 pub(super) enum ValidationTransition {
     Proceed(PreparedToolCall),
     Return(Option<TurnHandlerOutcome>),
@@ -487,31 +515,7 @@ pub(crate) async fn validate_tool_call<'a>(
                 if let Some(obj) = reused.as_object_mut() {
                     // Drop bulky payload fields for repeated read-only reuse to avoid
                     // flooding context with duplicate content.
-                    obj.remove("output");
-                    obj.remove("content");
-                    obj.remove("stdout");
-                    obj.remove("stderr");
-                    obj.remove("stderr_preview");
-                    obj.insert(
-                        "reused_recent_result".to_string(),
-                        serde_json::Value::Bool(true),
-                    );
-                    obj.insert("result_ref_only".to_string(), serde_json::Value::Bool(true));
-                    obj.insert("loop_detected".to_string(), serde_json::Value::Bool(true));
-                    obj.insert(
-                        "loop_detected_note".to_string(),
-                        serde_json::Value::String(
-                            "Loop detected on repeated read-only call; reusing recent output. Use `grep_file` or summarize before another read."
-                                .to_string(),
-                        ),
-                    );
-                    obj.insert(
-                        "next_action".to_string(),
-                        serde_json::Value::String(
-                            "Use grep_file or adjust offset/limit before retrying this read."
-                                .to_string(),
-                        ),
-                    );
+                    apply_reused_read_only_loop_metadata(obj);
                 }
                 ctx.push_system_message(block_reason.clone());
                 ctx.push_tool_response(
