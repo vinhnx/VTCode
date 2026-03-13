@@ -66,12 +66,38 @@ mod capabilities_tests {
 
     #[test]
     fn test_effective_context_size() {
+        assert_eq!(effective_context_size(models::CLAUDE_SONNET_4_6), 1_000_000);
         assert_eq!(
-            effective_context_size("claude-sonnet-4-5-latest"),
+            effective_context_size("claude-opus-4-6-20260303"),
             1_000_000
         );
-        assert_eq!(effective_context_size("claude-haiku-4-5-latest"), 1_000_000);
+        assert_eq!(effective_context_size("claude-sonnet-4-5-latest"), 200_000);
+        assert_eq!(effective_context_size("claude-haiku-4-5-latest"), 200_000);
         assert_eq!(effective_context_size("claude-3-opus"), 200_000);
+    }
+
+    #[test]
+    fn test_supports_context_awareness() {
+        assert!(supports_context_awareness(
+            models::CLAUDE_SONNET_4_6,
+            models::anthropic::DEFAULT_MODEL
+        ));
+        assert!(supports_context_awareness(
+            "claude-sonnet-4-5-20250929",
+            models::anthropic::DEFAULT_MODEL
+        ));
+        assert!(supports_context_awareness(
+            models::CLAUDE_HAIKU_4_5,
+            models::anthropic::DEFAULT_MODEL
+        ));
+        assert!(!supports_context_awareness(
+            models::CLAUDE_OPUS_4_6,
+            models::anthropic::DEFAULT_MODEL
+        ));
+        assert!(!supports_context_awareness(
+            "claude-3-opus",
+            models::anthropic::DEFAULT_MODEL
+        ));
     }
 
     #[test]
