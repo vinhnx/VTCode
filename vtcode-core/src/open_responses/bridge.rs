@@ -402,6 +402,12 @@ impl ResponseBuilder {
         }
     }
 
+    fn tool_call_correlation_id(raw_tool_call_id: Option<&str>, fallback_call_id: &str) -> String {
+        raw_tool_call_id
+            .map(str::to_string)
+            .unwrap_or_else(|| fallback_call_id.to_string())
+    }
+
     fn convert_thread_item(&self, item: &ThreadItem, status: ItemStatus) -> OutputItem {
         match &item.details {
             ThreadItemDetails::AgentMessage(msg) => OutputItem::Message(MessageItem {
@@ -452,7 +458,10 @@ impl ResponseBuilder {
                     status,
                     name: tool_name,
                     arguments: invocation.arguments.clone().unwrap_or(json!({})),
-                    call_id: Some(item.id.clone()),
+                    call_id: Some(Self::tool_call_correlation_id(
+                        invocation.tool_call_id.as_deref(),
+                        &item.id,
+                    )),
                 })
             }
 
@@ -460,7 +469,10 @@ impl ResponseBuilder {
                 OutputItem::FunctionCallOutput(crate::open_responses::FunctionCallOutputItem {
                     id: item.id.clone(),
                     status,
-                    call_id: Some(output.call_id.clone()),
+                    call_id: Some(Self::tool_call_correlation_id(
+                        output.tool_call_id.as_deref(),
+                        &output.call_id,
+                    )),
                     output: output.output.clone(),
                 })
             }
@@ -882,6 +894,7 @@ mod tests {
                 assert_eq!(call.name, "unified_exec");
                 assert_eq!(call.arguments["command"][0], "git");
                 assert_eq!(call.arguments["yield_time_ms"], 1000);
+                assert_eq!(call.call_id.as_deref(), Some("tool_call_0"));
             }
             other => panic!("expected function call, got {other:?}"),
         }
@@ -940,7 +953,7 @@ mod tests {
 
         match &builder.response().output[0] {
             OutputItem::FunctionCallOutput(output) => {
-                assert_eq!(output.call_id.as_deref(), Some("tool_1"));
+                assert_eq!(output.call_id.as_deref(), Some("tool_call_0"));
                 assert_eq!(output.output, "On branch main");
             }
             other => panic!("expected function call output, got {other:?}"),
@@ -962,6 +975,36 @@ mod tests {
             event,
             ResponseStreamEvent::OutputTextDone { text, .. } if text == "On branch main"
         )));
+    }
+
+    #[test]
+    fn test_tool_output_falls_back_to_harness_call_id_without_raw_tool_call_id() {
+        let mut builder = ResponseBuilder::new("gpt-5");
+        let mut emitter = VecStreamEmitter::new();
+
+        builder.process_event(
+            &ThreadEvent::ItemCompleted(ItemCompletedEvent {
+                item: ThreadItem {
+                    id: "tool_1:output".to_string(),
+                    details: ThreadItemDetails::ToolOutput(ToolOutputItem {
+                        call_id: "tool_1".to_string(),
+                        tool_call_id: None,
+                        output: "done".to_string(),
+                        exit_code: Some(0),
+                        status: ToolCallStatus::Completed,
+                    }),
+                },
+            }),
+            &mut emitter,
+        );
+
+        match &builder.response().output[0] {
+            OutputItem::FunctionCallOutput(output) => {
+                assert_eq!(output.call_id.as_deref(), Some("tool_1"));
+                assert_eq!(output.output, "done");
+            }
+            other => panic!("expected function call output, got {other:?}"),
+        }
     }
 
     #[test]
