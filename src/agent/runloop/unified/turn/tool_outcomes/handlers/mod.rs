@@ -38,7 +38,8 @@ use fallbacks::{
 pub(crate) use guards::max_consecutive_blocked_tool_calls_per_turn;
 use guards::{
     enforce_blocked_tool_call_guard, enforce_duplicate_task_tracker_create_guard,
-    enforce_repeated_shell_run_guard, enforce_spool_chunk_read_guard,
+    enforce_repeated_read_only_call_guard, enforce_repeated_shell_run_guard,
+    enforce_spool_chunk_read_guard,
 };
 pub(crate) use handlers_batch::{execute_and_handle_tool_call, handle_tool_call_batch_prepared};
 pub(crate) use looping::low_signal_family_key;
@@ -51,8 +52,9 @@ fn build_failure_error_content(error: String, failure_kind: &'static str) -> Str
     super::execution_result::build_error_content(error, None, None, failure_kind).to_string()
 }
 
-#[cfg(test)]
-fn apply_reused_read_only_loop_metadata(obj: &mut serde_json::Map<String, serde_json::Value>) {
+pub(super) fn apply_reused_read_only_loop_metadata(
+    obj: &mut serde_json::Map<String, serde_json::Value>,
+) {
     obj.remove("output");
     obj.remove("content");
     obj.remove("stdout");
@@ -387,6 +389,16 @@ pub(crate) async fn validate_tool_call<'a>(
         tool_call_id,
         &canonical_tool_name,
         &effective_args,
+    ) {
+        return Ok(outcome);
+    }
+
+    if let Some(outcome) = enforce_repeated_read_only_call_guard(
+        ctx,
+        tool_call_id,
+        &canonical_tool_name,
+        &effective_args,
+        preflight.readonly_classification,
     ) {
         return Ok(outcome);
     }

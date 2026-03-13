@@ -927,6 +927,56 @@ mod tests {
     }
 
     #[test]
+    fn harness_streaming_bridge_throttles_reasoning_update_events() {
+        let tmp = TempDir::new().expect("temp dir");
+        let path = tmp.path().join("harness.jsonl");
+        let emitter =
+            crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter::new(path)
+                .expect("harness emitter");
+
+        let mut bridge = HarnessStreamingBridge::new(Some(&emitter), "turn_789", 2, 1);
+        bridge.on_progress(StreamProgressEvent::ReasoningStage("analysis".to_string()));
+        bridge.on_progress(StreamProgressEvent::ReasoningDelta("seed".to_string()));
+        for _ in 0..12 {
+            bridge.on_progress(StreamProgressEvent::ReasoningDelta("tiny".to_string()));
+        }
+        bridge.on_progress(StreamProgressEvent::ReasoningStage(
+            "diagnosing".to_string(),
+        ));
+        bridge.on_progress(StreamProgressEvent::ReasoningDelta("x".repeat(200)));
+        bridge.on_progress(StreamProgressEvent::ReasoningStage("final".to_string()));
+        bridge.complete_open_items();
+
+        let payload = std::fs::read_to_string(tmp.path().join("harness.jsonl")).expect("log");
+        let reasoning_updates = payload
+            .lines()
+            .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+            .filter(|value| {
+                value
+                    .get("event")
+                    .and_then(|event| event.get("type"))
+                    .and_then(|kind| kind.as_str())
+                    == Some("item.updated")
+                    && value
+                        .get("event")
+                        .and_then(|event| event.get("item"))
+                        .and_then(|item| item.get("type"))
+                        .and_then(|kind| kind.as_str())
+                        == Some("reasoning")
+            })
+            .count();
+
+        assert!(
+            reasoning_updates <= 2,
+            "expected throttled reasoning updates, got {reasoning_updates}"
+        );
+        assert!(
+            reasoning_updates >= 1,
+            "expected at least one meaningful reasoning update, got {reasoning_updates}"
+        );
+    }
+
+    #[test]
     fn harness_streaming_bridge_abort_closes_open_items() {
         let tmp = TempDir::new().expect("temp dir");
         let path = tmp.path().join("harness.jsonl");

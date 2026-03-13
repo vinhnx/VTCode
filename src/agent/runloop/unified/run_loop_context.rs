@@ -79,6 +79,7 @@ pub(crate) struct HarnessTurnState {
     pub consecutive_spool_chunk_reads: usize,
     pub consecutive_same_shell_command_runs: usize,
     pub last_shell_command_signature: Option<String>,
+    seen_successful_readonly_signatures: HashSet<String>,
     pub seen_task_tracker_create_signatures: HashSet<String>,
     pub replaceable_task_tracker_block: Option<Vec<String>>,
     pub tool_budget_warning_emitted: bool,
@@ -109,6 +110,7 @@ impl HarnessTurnState {
             consecutive_spool_chunk_reads: 0,
             consecutive_same_shell_command_runs: 0,
             last_shell_command_signature: None,
+            seen_successful_readonly_signatures: HashSet::new(),
             seen_task_tracker_create_signatures: HashSet::new(),
             replaceable_task_tracker_block: None,
             tool_budget_warning_emitted: false,
@@ -246,6 +248,14 @@ impl HarnessTurnState {
 
     pub(crate) fn record_task_tracker_create_signature(&mut self, signature: String) -> bool {
         self.seen_task_tracker_create_signatures.insert(signature)
+    }
+
+    pub(crate) fn record_successful_readonly_signature(&mut self, signature: String) -> bool {
+        self.seen_successful_readonly_signatures.insert(signature)
+    }
+
+    pub(crate) fn has_successful_readonly_signature(&self, signature: &str) -> bool {
+        self.seen_successful_readonly_signatures.contains(signature)
     }
 
     pub(crate) fn replaceable_task_tracker_count(&self) -> Option<usize> {
@@ -511,6 +521,27 @@ mod tests {
         assert!(state.record_task_tracker_create_signature(
             "task_tracker::create::{\"title\":\"A\",\"items\":[\"y\"]}".to_string()
         ));
+    }
+
+    #[test]
+    fn harness_state_tracks_successful_readonly_signatures() {
+        let mut state = HarnessTurnState::new(
+            TurnRunId("run-1".to_string()),
+            TurnId("turn-1".to_string()),
+            4,
+            10,
+            1,
+        );
+
+        assert!(!state.has_successful_readonly_signature("unified_file:ro:len10-fnv1234"));
+        assert!(
+            state.record_successful_readonly_signature("unified_file:ro:len10-fnv1234".to_string())
+        );
+        assert!(state.has_successful_readonly_signature("unified_file:ro:len10-fnv1234"));
+        assert!(
+            !state
+                .record_successful_readonly_signature("unified_file:ro:len10-fnv1234".to_string())
+        );
     }
 
     #[test]

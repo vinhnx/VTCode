@@ -9,6 +9,7 @@ use vtcode_core::tools::registry::labels::tool_action_label;
 use crate::agent::runloop::unified::turn::context::{
     TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext,
 };
+use crate::agent::runloop::unified::turn::tool_outcomes::helpers::signature_key_for;
 
 use super::looping::{shell_run_signature, spool_chunk_read_path, task_tracker_create_signature};
 use super::{ValidationResult, build_failure_error_content};
@@ -128,6 +129,37 @@ pub(super) fn enforce_duplicate_task_tracker_create_guard<'a>(
             reason: Some(block_reason),
         },
     )))
+}
+
+pub(super) fn enforce_repeated_read_only_call_guard(
+    ctx: &mut TurnProcessingContext<'_>,
+    tool_call_id: &str,
+    canonical_tool_name: &str,
+    effective_args: &Value,
+    readonly_classification: bool,
+) -> Option<ValidationResult> {
+    if !readonly_classification {
+        return None;
+    }
+
+    let signature = signature_key_for(canonical_tool_name, effective_args);
+    if !ctx
+        .harness_state
+        .has_successful_readonly_signature(signature.as_str())
+    {
+        return None;
+    }
+
+    let mut reused_value = ctx.tool_registry.find_recent_successful_output(
+        canonical_tool_name,
+        effective_args,
+        ctx.harness_state.max_tool_wall_clock,
+    )?;
+    let obj = reused_value.as_object_mut()?;
+    super::apply_reused_read_only_loop_metadata(obj);
+    ctx.push_tool_response(tool_call_id, reused_value.to_string());
+
+    Some(ValidationResult::Handled)
 }
 
 pub(super) fn enforce_repeated_shell_run_guard(

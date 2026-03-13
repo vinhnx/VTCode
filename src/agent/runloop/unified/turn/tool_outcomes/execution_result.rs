@@ -16,7 +16,7 @@ use crate::agent::runloop::unified::turn::turn_helpers::display_status;
 
 use super::helpers::{
     EXIT_PLAN_MODE_REASON_AUTO_TRIGGER_ON_DENIAL, build_exit_plan_mode_args,
-    build_exit_plan_mode_call_id, check_is_argument_error, serialize_output,
+    build_exit_plan_mode_call_id, check_is_argument_error, serialize_output, signature_key_for,
 };
 
 use crate::agent::runloop::unified::turn::context::{
@@ -697,6 +697,13 @@ async fn handle_success<'a>(
     t_ctx
         .ctx
         .push_tool_response(tool_call_id, content_for_model);
+    if !vtcode_core::tools::tool_intent::classify_tool_intent(tool_name, args_val).mutating {
+        let signature = signature_key_for(tool_name, args_val);
+        t_ctx
+            .ctx
+            .harness_state
+            .record_successful_readonly_signature(signature);
+    }
     let mut turn_loop_ctx = t_ctx.ctx.as_turn_loop_context();
     let vt_cfg = turn_loop_ctx.vt_cfg;
 

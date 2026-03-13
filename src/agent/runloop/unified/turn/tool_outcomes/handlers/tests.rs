@@ -843,6 +843,62 @@ async fn recovery_skip_step_pushes_structured_tool_message() {
 }
 
 #[tokio::test]
+async fn repeated_identical_readonly_call_in_same_turn_reuses_recent_result() {
+    let mut backing = TestContextBacking::new(4).await;
+    let args = json!({
+        "action": "read",
+        "path": backing.sample_file.to_string_lossy()
+    });
+
+    let mut repeated_tool_attempts = LoopTracker::new();
+    let mut turn_modified_files = BTreeSet::new();
+    let mut tp_ctx = backing.turn_processing_context();
+    let mut outcome_ctx = ToolOutcomeContext {
+        ctx: &mut tp_ctx,
+        repeated_tool_attempts: &mut repeated_tool_attempts,
+        turn_modified_files: &mut turn_modified_files,
+    };
+
+    let first = handle_single_tool_call(
+        &mut outcome_ctx,
+        "read_once",
+        tool_names::UNIFIED_FILE,
+        args.clone(),
+    )
+    .await
+    .expect("first readonly call should succeed");
+
+    assert!(first.is_none());
+    assert_eq!(outcome_ctx.ctx.harness_state.tool_calls, 1);
+    assert_eq!(outcome_ctx.ctx.tool_registry.execution_history_len(), 1);
+
+    let second = handle_single_tool_call(
+        &mut outcome_ctx,
+        "read_twice",
+        tool_names::UNIFIED_FILE,
+        args,
+    )
+    .await
+    .expect("duplicate readonly call should be reused");
+
+    assert!(second.is_none());
+    assert_eq!(outcome_ctx.ctx.harness_state.tool_calls, 1);
+    assert_eq!(outcome_ctx.ctx.tool_registry.execution_history_len(), 1);
+    assert!(outcome_ctx.ctx.working_history.iter().any(|message| {
+        message
+            .content
+            .as_text()
+            .contains("\"reused_recent_result\":true")
+    }));
+    assert!(outcome_ctx.ctx.working_history.iter().any(|message| {
+        message
+            .content
+            .as_text()
+            .contains("\"result_ref_only\":true")
+    }));
+}
+
+#[tokio::test]
 async fn denied_tool_permission_emits_policy_response_without_budget_burn() {
     let mut backing = TestContextBacking::new(2).await;
     let valid_file = backing.sample_file.clone();

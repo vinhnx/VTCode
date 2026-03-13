@@ -13,7 +13,6 @@ use crate::updater::{InlineUpdateOutcome, display_update_notice, run_inline_upda
 use vtcode_config::loader::SimpleConfigWatcher;
 use vtcode_core::core::agent::features::FeatureSet;
 
-const DIRECT_TOOL_FOLLOW_UP_DIRECTIVE: &str = "For this direct shell command follow-up, keep the response concise and action-oriented: 1) one short line summarizing the command result, 2) one short line with the exact next action. Avoid extra explanation unless there is an error.";
 const PLAN_APPROVED_EXECUTION_DIRECTIVE: &str = "Plan was approved. Start implementation immediately: execute the plan step by step beginning with the first pending step. Do not ask for another implementation confirmation.";
 const PLAN_APPROVED_EXECUTION_INPUT: &str = "Implement the approved plan now.";
 use archive::{
@@ -556,18 +555,10 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         break;
                     }
                     InteractionOutcome::DirectToolHandled => {
-                        // Preserve interrupt behavior: when Ctrl+C cancellation is active,
-                        // stop after direct tool execution and wait for the next user input.
-                        if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
-                            continue;
-                        }
-                        conversation_history.push(vtcode_core::llm::provider::Message::system(
-                            DIRECT_TOOL_FOLLOW_UP_DIRECTIVE.to_string(),
-                        ));
-                        // A direct run/! command already updated history with user -> tool call ->
-                        // tool response. Start an immediate assistant turn so users receive
-                        // follow-up analysis without typing an extra "continue".
-                        "__direct_tool_follow_up__".to_string()
+                        // Explicit `run ...` / `!cmd` interactions are direct command mode:
+                        // render the tool output and wait for the next user input instead of
+                        // fabricating an autonomous follow-up turn.
+                        continue;
                     }
                     InteractionOutcome::Continue { input } => input,
                     InteractionOutcome::PlanApproved { auto_accept } => {
@@ -615,7 +606,6 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 if next_turn_input.trim().is_empty() {
                     continue;
                 }
-                let is_direct_tool_follow_up = next_turn_input == "__direct_tool_follow_up__";
                 let mut working_history = std::mem::take(&mut conversation_history);
                 let timeout_secs = resolve_effective_turn_timeout_secs(
                     resolve_timeout(
@@ -773,29 +763,11 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     Err(err) => {
                         handle.set_input_status(None, None);
                         let _ = renderer.line_if_not_empty(MessageStyle::Output);
-                        if is_direct_tool_follow_up {
-                            // The direct command already succeeded; the LLM follow-up is
-                            // optional analysis. Downgrade to a non-fatal warning so the
-                            // user sees the tool output as valid.
-                            tracing::warn!(
-                                "Direct-tool follow-up LLM turn failed (non-fatal): {}",
-                                err
-                            );
-                            let _ = renderer.line(
-                            MessageStyle::Info,
-                            "Command completed. Model follow-up unavailable; output above is valid.",
-                        );
-                            TurnLoopOutcome {
-                                result: RunLoopTurnLoopResult::Completed,
-                                turn_modified_files: std::collections::BTreeSet::new(),
-                            }
-                        } else {
-                            tracing::error!("Turn execution error: {}", err);
-                            let _ = renderer.line(MessageStyle::Error, &format!("Error: {}", err));
-                            TurnLoopOutcome {
-                                result: RunLoopTurnLoopResult::Aborted,
-                                turn_modified_files: std::collections::BTreeSet::new(),
-                            }
+                        tracing::error!("Turn execution error: {}", err);
+                        let _ = renderer.line(MessageStyle::Error, &format!("Error: {}", err));
+                        TurnLoopOutcome {
+                            result: RunLoopTurnLoopResult::Aborted,
+                            turn_modified_files: std::collections::BTreeSet::new(),
                         }
                     }
                 };

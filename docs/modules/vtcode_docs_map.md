@@ -649,14 +649,15 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: For CLI Output, For TUI Widgets, Unified Theme, Color Reference, Common Patterns
   - **User Questions**: "What can you tell me about Styling Quick Start Guide?", "How does For CLI Output work?", "How does For TUI Widgets work?"
 
-- **File**: `docs/project/TODO.md`
-  - **Content**: TODO.md
-  - **User Questions**: "What can you tell me about TODO.md?"
-
 - **File**: `docs/harness/TECH_DEBT_TRACKER.md`
   - **Content**: Tech Debt Tracker
   - **Topics**: Priority Levels, Status Values, Debt Items, How to Add a New Item, How to Resolve an Item
   - **User Questions**: "What can you tell me about Tech Debt Tracker?", "How does Priority Levels work?", "How does Status Values work?"
+
+- **File**: `docs/project/TODO.md`
+  - **Content**: Tighten Direct-Command and Test-Failure Recovery
+  - **Topics**: Summary, Key Changes, Test Plan, Assumptions
+  - **User Questions**: "What can you tell me about Tighten Direct-Command and Test-Failure Recovery?", "How does Summary work?", "How does Key Changes work?"
 
 - **File**: `docs/huggingface/vtcode.md`
   - **Content**: VT Code

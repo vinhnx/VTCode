@@ -5,6 +5,9 @@ use vtcode_core::exec::events::{
 
 use crate::agent::runloop::unified::ui_interaction::StreamProgressEvent;
 
+const MIN_REASONING_UPDATE_BYTES: usize = 256;
+const MAX_REASONING_UPDATE_EVENTS: usize = 2;
+
 #[derive(Default)]
 struct StreamItemBuffer {
     started: bool,
@@ -19,6 +22,8 @@ pub(super) struct HarnessStreamingBridge<'a> {
     assistant: StreamItemBuffer,
     reasoning: StreamItemBuffer,
     reasoning_stage: Option<String>,
+    reasoning_update_events: usize,
+    last_reasoning_emit_len: usize,
 }
 
 impl<'a> HarnessStreamingBridge<'a> {
@@ -37,6 +42,8 @@ impl<'a> HarnessStreamingBridge<'a> {
             assistant: StreamItemBuffer::default(),
             reasoning: StreamItemBuffer::default(),
             reasoning_stage: None,
+            reasoning_update_events: 0,
+            last_reasoning_emit_len: 0,
         }
     }
 
@@ -83,6 +90,7 @@ impl<'a> HarnessStreamingBridge<'a> {
         self.reasoning.text.push_str(delta);
         if !self.reasoning.started {
             self.reasoning.started = true;
+            self.last_reasoning_emit_len = self.reasoning.text.len();
             self.emit_item_started(ThreadItem {
                 id: self.reasoning_item_id.clone(),
                 details: ThreadItemDetails::Reasoning(ReasoningItem {
@@ -93,6 +101,10 @@ impl<'a> HarnessStreamingBridge<'a> {
             return;
         }
 
+        if !self.should_emit_reasoning_update(false) {
+            return;
+        }
+
         self.emit_item_updated(ThreadItem {
             id: self.reasoning_item_id.clone(),
             details: ThreadItemDetails::Reasoning(ReasoningItem {
@@ -100,11 +112,13 @@ impl<'a> HarnessStreamingBridge<'a> {
                 stage: self.reasoning_stage.clone(),
             }),
         });
+        self.record_reasoning_update();
     }
 
     fn update_reasoning_stage(&mut self, stage: String) {
+        let stage_changed = self.reasoning_stage.as_deref() != Some(stage.as_str());
         self.reasoning_stage = Some(stage);
-        if !self.reasoning.started {
+        if !self.reasoning.started || !stage_changed || !self.should_emit_reasoning_update(true) {
             return;
         }
         self.emit_item_updated(ThreadItem {
@@ -114,6 +128,7 @@ impl<'a> HarnessStreamingBridge<'a> {
                 stage: self.reasoning_stage.clone(),
             }),
         });
+        self.record_reasoning_update();
     }
 
     pub(super) fn complete_open_items(&mut self) {
@@ -136,6 +151,25 @@ impl<'a> HarnessStreamingBridge<'a> {
                 }),
             });
         }
+    }
+
+    fn should_emit_reasoning_update(&self, stage_changed: bool) -> bool {
+        if self.reasoning_update_events >= MAX_REASONING_UPDATE_EVENTS {
+            return false;
+        }
+
+        stage_changed
+            || self
+                .reasoning
+                .text
+                .len()
+                .saturating_sub(self.last_reasoning_emit_len)
+                >= MIN_REASONING_UPDATE_BYTES
+    }
+
+    fn record_reasoning_update(&mut self) {
+        self.reasoning_update_events += 1;
+        self.last_reasoning_emit_len = self.reasoning.text.len();
     }
 
     fn emit_item_started(&self, item: ThreadItem) {

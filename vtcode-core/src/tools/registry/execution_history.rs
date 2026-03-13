@@ -162,7 +162,11 @@ impl ToolExecutionRecord {
 /// Default window size for loop detection.
 const DEFAULT_LOOP_DETECT_WINDOW: usize = 5;
 /// Minimum limit for identical readonly operations.
-const MIN_READONLY_IDENTICAL_LIMIT: usize = 5;
+///
+/// Read/search calls are cheap to reuse but can become stale across unrelated
+/// turns, so keep the threshold low enough to stop obvious churn without
+/// blocking a single intentional reread.
+const MIN_READONLY_IDENTICAL_LIMIT: usize = 2;
 
 fn tool_rate_limit_from_env() -> Option<usize> {
     env::var("VTCODE_TOOL_CALLS_PER_MIN")
@@ -943,5 +947,52 @@ mod tests {
 
         let found = history.find_recent_read_file_spool_progress(path, Duration::from_secs(60));
         assert_eq!(found, None);
+    }
+
+    #[test]
+    fn readonly_unified_file_calls_use_lower_identical_limit() {
+        let history = ToolExecutionHistory::new(10);
+        history.set_loop_detection_limits(5, 2);
+
+        let args = json!({
+            "action": "read",
+            "path": "vtcode-core/src/core/agent/runner/tests.rs"
+        });
+
+        assert_eq!(history.loop_limit_for("unified_file", &args), 2);
+    }
+
+    #[test]
+    fn unified_search_exact_repeat_is_detected_after_two_successes() {
+        let history = ToolExecutionHistory::new(10);
+        history.set_loop_detection_limits(5, 2);
+
+        let args = json!({
+            "action": "grep",
+            "pattern": "exec_only_policy",
+            "path": "vtcode-core/src/core/agent/runner/tests.rs"
+        });
+
+        for _ in 0..2 {
+            history.add_record(ToolExecutionRecord::success(
+                "unified_search".to_string(),
+                "unified_search".to_string(),
+                false,
+                None,
+                args.clone(),
+                json!({"matches": []}),
+                make_snapshot(),
+                None,
+                None,
+                None,
+                None,
+                false,
+            ));
+        }
+
+        let (is_loop, repeat_count, tool_name) = history.detect_loop("unified_search", &args);
+        assert!(is_loop);
+        assert_eq!(repeat_count, 2);
+        assert_eq!(tool_name, "unified_search");
     }
 }

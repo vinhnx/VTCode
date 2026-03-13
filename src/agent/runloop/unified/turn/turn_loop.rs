@@ -264,9 +264,23 @@ fn has_tool_response_since(messages: &[uni::Message], baseline_len: usize) -> bo
         .is_some_and(|recent| recent.iter().any(|msg| msg.role == uni::MessageRole::Tool))
 }
 
+const POST_TOOL_RESUME_DIRECTIVE: &str = "Previous turn already completed tool execution. Reuse the latest tool outputs in history instead of rerunning the same exploration. If those tool outputs include `critical_note`, `next_action`, or `rerun_hint`, follow that guidance first.";
+
+fn ensure_post_tool_resume_directive(working_history: &mut Vec<uni::Message>) {
+    let already_present = working_history.iter().rev().take(3).any(|message| {
+        message.role == uni::MessageRole::System
+            && message.content.as_text() == POST_TOOL_RESUME_DIRECTIVE
+    });
+    if already_present {
+        return;
+    }
+
+    working_history.push(uni::Message::system(POST_TOOL_RESUME_DIRECTIVE.to_string()));
+}
+
 fn maybe_recover_after_post_tool_llm_failure(
     renderer: &mut AnsiRenderer,
-    working_history: &[uni::Message],
+    working_history: &mut Vec<uni::Message>,
     err: &anyhow::Error,
     step_count: usize,
     turn_history_start_len: usize,
@@ -299,6 +313,7 @@ fn maybe_recover_after_post_tool_llm_failure(
             "Tip: rerun with a narrower prompt or switch provider/model for the follow-up.",
         )?;
     }
+    ensure_post_tool_resume_directive(working_history);
 
     tracing::warn!(
         error = %err,
@@ -699,12 +714,18 @@ async fn emit_turn_outcome_notification(result: &TurnLoopResult) {
 
 #[cfg(test)]
 mod tests {
-    use super::{has_tool_response_since, run_turn_loop};
+    use super::{
+        POST_TOOL_RESUME_DIRECTIVE, ensure_post_tool_resume_directive, has_tool_response_since,
+        maybe_recover_after_post_tool_llm_failure, run_turn_loop,
+    };
     use crate::agent::runloop::unified::turn::context::TurnLoopResult;
     use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
+    use anyhow::anyhow;
     use serde_json::json;
     use vtcode_core::config::constants::tools as tool_names;
     use vtcode_core::llm::provider as uni;
+    use vtcode_core::utils::ansi::AnsiRenderer;
+    use vtcode_tui::InlineHandle;
 
     #[test]
     fn has_tool_response_since_detects_new_tool_message() {
@@ -735,6 +756,72 @@ mod tests {
         )];
 
         assert!(!has_tool_response_since(&messages, 10));
+    }
+
+    #[test]
+    fn ensure_post_tool_resume_directive_is_idempotent_near_history_tail() {
+        let mut history = vec![
+            uni::Message::user("run cargo nextest".to_string()),
+            uni::Message::tool_response("call_1".to_string(), "{\"success\":false}".to_string()),
+        ];
+
+        ensure_post_tool_resume_directive(&mut history);
+        ensure_post_tool_resume_directive(&mut history);
+
+        let directive_count = history
+            .iter()
+            .filter(|message| {
+                message.role == uni::MessageRole::System
+                    && message.content.as_text() == POST_TOOL_RESUME_DIRECTIVE
+            })
+            .count();
+        assert_eq!(directive_count, 1);
+    }
+
+    #[test]
+    fn recovery_after_post_tool_follow_up_failure_adds_resume_directive_once() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let handle = InlineHandle::new_for_tests(tx);
+        let mut renderer = AnsiRenderer::with_inline_ui(handle, Default::default());
+        let mut history = vec![
+            uni::Message::user("run cargo nextest".to_string()),
+            uni::Message::assistant("".to_string()),
+            uni::Message::tool_response(
+                "call_1".to_string(),
+                "{\"critical_note\":\"reuse output\"}".to_string(),
+            ),
+        ];
+
+        let recovered = maybe_recover_after_post_tool_llm_failure(
+            &mut renderer,
+            &mut history,
+            &anyhow!("Network error"),
+            2,
+            1,
+            "streaming",
+        )
+        .expect("recovery should succeed");
+        assert!(recovered);
+
+        let recovered_again = maybe_recover_after_post_tool_llm_failure(
+            &mut renderer,
+            &mut history,
+            &anyhow!("Network error"),
+            3,
+            1,
+            "streaming",
+        )
+        .expect("repeat recovery should succeed");
+        assert!(recovered_again);
+
+        let directive_count = history
+            .iter()
+            .filter(|message| {
+                message.role == uni::MessageRole::System
+                    && message.content.as_text() == POST_TOOL_RESUME_DIRECTIVE
+            })
+            .count();
+        assert_eq!(directive_count, 1);
     }
 
     #[tokio::test]
