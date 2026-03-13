@@ -422,7 +422,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
 
-            if let Some(event) = maybe_handle_busy_stop_command(session) {
+            if let Some(event) = maybe_handle_busy_steering_command(session) {
                 return Some(event);
             }
 
@@ -478,6 +478,9 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 session.push_queued_input(submitted.clone());
                 session.mark_dirty();
                 Some(InlineEvent::QueueSubmit(submitted))
+            } else if session.is_running_activity() {
+                session.mark_dirty();
+                Some(InlineEvent::Steer(submitted))
             } else {
                 Some(InlineEvent::Submit(submitted))
             }
@@ -725,24 +728,24 @@ fn handle_running_slash_command_block(session: &mut Session) -> bool {
     true
 }
 
-fn maybe_handle_busy_stop_command(session: &mut Session) -> Option<InlineEvent> {
+fn maybe_handle_busy_steering_command(session: &mut Session) -> Option<InlineEvent> {
     if !session.is_running_activity() {
         return None;
     }
 
-    if !matches!(
-        extract_slash_command_name(session.input_manager.content()),
-        Some("stop")
-    ) {
-        return None;
-    }
+    let event = match extract_slash_command_name(session.input_manager.content()) {
+        Some("stop") => InlineEvent::Interrupt,
+        Some("pause") => InlineEvent::Pause,
+        Some("resume") => InlineEvent::Resume,
+        _ => return None,
+    };
 
     session.input_manager.clear();
     session.input_compact_mode = false;
     session.scroll_manager.set_offset(0);
     slash::update_slash_suggestions(session);
     session.mark_dirty();
-    Some(InlineEvent::Interrupt)
+    Some(event)
 }
 
 fn extract_slash_command_name(input: &str) -> Option<&str> {

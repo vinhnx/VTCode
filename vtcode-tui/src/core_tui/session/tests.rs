@@ -842,6 +842,58 @@ fn busy_stop_command_interrupts_immediately() {
 }
 
 #[test]
+fn busy_pause_command_emits_pause_event() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.handle_command(InlineCommand::SetInputStatus {
+        left: Some("Running tool: unified_search".to_string()),
+        right: None,
+    });
+    session.set_input("/pause".to_string());
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(matches!(event, Some(InlineEvent::Pause)));
+}
+
+#[test]
+fn busy_resume_command_emits_resume_event() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.handle_command(InlineCommand::SetInputStatus {
+        left: Some("Running tool: unified_search".to_string()),
+        right: None,
+    });
+    session.set_input("/resume".to_string());
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(matches!(event, Some(InlineEvent::Resume)));
+}
+
+#[test]
+fn busy_plain_enter_steers_active_run() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.handle_command(InlineCommand::SetInputStatus {
+        left: Some("Running tool: unified_search".to_string()),
+        right: None,
+    });
+    session.set_input("keep searching in docs/".to_string());
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(matches!(event, Some(InlineEvent::Steer(value)) if value == "keep searching in docs/"));
+}
+
+#[test]
+fn busy_tab_still_queues_submission() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.handle_command(InlineCommand::SetInputStatus {
+        left: Some("Running tool: unified_search".to_string()),
+        right: None,
+    });
+    session.set_input("queue this next".to_string());
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    assert!(matches!(event, Some(InlineEvent::QueueSubmit(value)) if value == "queue this next"));
+}
+
+#[test]
 fn busy_slash_palette_stop_interrupts_immediately() {
     let mut session = session_with_slash_palette_commands();
     session.handle_command(InlineCommand::SetInputStatus {
@@ -1900,7 +1952,7 @@ fn header_shows_safe_badge_for_tools_policy_trust() {
 fn header_shows_search_tools_status_badge() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.header_context.search_tools = Some(InlineHeaderStatusBadge {
-        text: "Search: rg ready · sg missing".to_string(),
+        text: "Search: ripgrep ready · ast-grep missing".to_string(),
         tone: InlineHeaderStatusTone::Warning,
     });
     session.input_manager.set_content("test".to_string());
@@ -1912,7 +1964,7 @@ fn header_shows_search_tools_status_badge() {
     let badge_span = line
         .spans
         .iter()
-        .find(|span| span.content.as_ref() == "Search: rg ready · sg missing")
+        .find(|span| span.content.as_ref() == "Search: ripgrep ready · ast-grep missing")
         .expect("search tools badge span");
 
     assert_eq!(badge_span.style.fg, Some(Color::Yellow));
@@ -1920,7 +1972,7 @@ fn header_shows_search_tools_status_badge() {
 }
 
 #[test]
-fn header_meta_line_includes_editor_context_summary() {
+fn header_meta_line_excludes_editor_context() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.header_context.editor_context =
         Some("File: src/main.rs · Rust · Sel 120-148".to_string());
@@ -1928,7 +1980,7 @@ fn header_meta_line_includes_editor_context_summary() {
     let line = session.header_meta_line();
     let summary = line_text(&line);
 
-    assert!(summary.contains("File: src/main.rs · Rust · Sel 120-148"));
+    assert!(!summary.contains("File: src/main.rs"));
 }
 
 #[test]

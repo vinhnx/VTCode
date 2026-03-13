@@ -81,6 +81,10 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             description: "Stop the active turn immediately",
         },
         SlashCommandInfo {
+            name: "pause",
+            description: "Pause the active turn at the next safe boundary",
+        },
+        SlashCommandInfo {
             name: "doctor",
             description: "Run installation and configuration diagnostics (interactive in inline UI; usage: /doctor [--quick|--full])",
         },
@@ -96,7 +100,7 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
         // Session management
         SlashCommandInfo {
             name: "resume",
-            description: "List recent archived sessions (usage: /resume [limit] [--all])",
+            description: "List archived sessions when idle; resume the active turn while it is paused",
         },
         SlashCommandInfo {
             name: "fork",

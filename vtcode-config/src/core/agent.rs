@@ -230,8 +230,8 @@ pub struct AgentConfig {
 #[serde(rename_all = "snake_case")]
 pub enum ContinuationPolicy {
     Off,
-    #[default]
     ExecOnly,
+    #[default]
     All,
 }
 
@@ -1096,7 +1096,7 @@ mod tests {
 
     #[test]
     fn test_continuation_policy_defaults_and_parses() {
-        assert_eq!(ContinuationPolicy::default(), ContinuationPolicy::ExecOnly);
+        assert_eq!(ContinuationPolicy::default(), ContinuationPolicy::All);
         assert_eq!(
             ContinuationPolicy::parse("off"),
             Some(ContinuationPolicy::Off)
@@ -1120,7 +1120,7 @@ mod tests {
 
         let fallback: AgentHarnessConfig =
             toml::from_str("continuation_policy = \"unexpected\"").expect("fallback config");
-        assert_eq!(fallback.continuation_policy, ContinuationPolicy::ExecOnly);
+        assert_eq!(fallback.continuation_policy, ContinuationPolicy::All);
     }
 
     #[test]

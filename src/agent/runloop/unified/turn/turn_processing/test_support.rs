@@ -224,6 +224,13 @@ impl TestTurnProcessingBacking {
         self.tools.write().await.push(tool);
     }
 
+    pub(crate) fn set_steering_receiver(
+        &mut self,
+        receiver: tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>,
+    ) {
+        self.steering_receiver = Some(receiver);
+    }
+
     pub(crate) fn legacy_loop_detector(
         &self,
     ) -> Arc<std::sync::RwLock<vtcode_core::core::loop_detector::LoopDetector>> {

@@ -49,6 +49,16 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 | `!` at start of input | Enter Bash mode. | Runs shell commands directly and streams their output. |
 | `@` within input | Open file picker. | Triggers file path autocomplete and picker to quickly reference files in your message. |
 
+## Active Run Steering
+
+When a task is already running, VT Code keeps the active turn alive and lets you steer it:
+
+- `Enter` sends the current input to the active run as steering text.
+- `Tab` still queues the input for the next turn after the current run finishes.
+- `/pause` pauses the active run at the next model/tool/approval boundary.
+- `/resume` resumes a paused run while it is active. When idle, `/resume` still opens archived sessions.
+- `/stop` still cancels the active run immediately.
+
 ## Plan Mode Notes
 
 - Plan Mode is strict read-only (except optional writes under `.vtcode/plans/` for plan artifacts).

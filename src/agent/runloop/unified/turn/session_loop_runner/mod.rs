@@ -28,6 +28,7 @@ use metrics::{
     estimate_history_bytes,
 };
 use plan_seed::load_active_plan_seed;
+use tokio::sync::mpsc;
 
 #[derive(Clone)]
 struct TurnHistoryCheckpoint {
@@ -339,6 +340,13 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 thread_id: turn_run_id.0.clone(),
             }));
         }
+        let steering_sender = if steering_receiver.is_none() {
+            let (sender, receiver) = mpsc::unbounded_channel();
+            *steering_receiver = Some(receiver);
+            Some(sender)
+        } else {
+            None
+        };
         let ui_setup = initialize_session_ui(
             &config,
             vt_cfg.as_ref(),
@@ -347,6 +355,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             session_archive,
             full_auto,
             _skip_confirmations,
+            steering_sender,
         )
         .await?;
         let mut renderer = ui_setup.renderer;

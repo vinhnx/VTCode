@@ -86,6 +86,7 @@ pub(crate) async fn handle_update(
                     ctx.config.workspace.as_path(),
                     &notice,
                 )
+                .await
                 .map(control_for_update_outcome)
             } else {
                 Ok(SlashCommandControl::Continue)

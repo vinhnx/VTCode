@@ -296,9 +296,9 @@ recovery_cooldown = 60
 auto_compaction_enabled = false
 
 # Controls whether harness-managed continuation loops are enabled.
-# Default: "exec_only"
+# Default: "all"
 # Type: `string`
-continuation_policy = "exec_only"
+continuation_policy = "all"
 
 # Optional JSONL event log path for harness events (leave empty to disable)
 # Default: null

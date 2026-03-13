@@ -6,6 +6,7 @@ use crate::agent::runloop::unified::plan_mode_state::{
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use crate::agent::runloop::unified::turn::turn_helpers::{display_error, display_status};
 use crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext;
+use tokio::sync::mpsc::error::TryRecvError;
 use vtcode_core::config::constants::defaults::{
     DEFAULT_MAX_CONVERSATION_TURNS, DEFAULT_MAX_REPEATED_TOOL_CALLS, DEFAULT_MAX_TOOL_LOOPS,
 };
@@ -157,67 +158,149 @@ pub(super) async fn handle_steering_messages(
     working_history: &mut Vec<uni::Message>,
     result: &mut TurnLoopResult,
 ) -> Result<bool> {
-    if let Some(receiver) = ctx.steering_receiver {
-        match receiver.try_recv() {
-            Ok(SteeringMessage::SteerStop) => {
-                if let Err(err) = ctx.tool_registry.terminate_all_exec_sessions_async().await {
+    let renderer = &mut *ctx.renderer;
+    let tool_registry = &mut *ctx.tool_registry;
+    let ctrl_c_state = ctx.ctrl_c_state;
+    let ctrl_c_notify = ctx.ctrl_c_notify;
+
+    if let Some(receiver) = ctx.steering_receiver.as_mut() {
+        loop {
+            let mut pending = Vec::new();
+            while let Ok(message) = receiver.try_recv() {
+                pending.push(message);
+            }
+
+            if pending.is_empty() {
+                break;
+            }
+
+            if pending
+                .iter()
+                .any(|message| matches!(message, SteeringMessage::SteerStop))
+            {
+                if let Err(err) = tool_registry.terminate_all_exec_sessions_async().await {
                     tracing::warn!(error = %err, "Failed to terminate exec sessions after steering stop");
                 }
-                display_status(ctx.renderer, "Stop requested by steering signal.")?;
+                display_status(renderer, "Stop requested by steering signal.")?;
                 *result = TurnLoopResult::Cancelled;
                 return Ok(true);
             }
-            Ok(SteeringMessage::Pause) => {
-                display_status(
-                    ctx.renderer,
-                    "Paused by steering signal. Waiting for Resume...",
-                )?;
-                loop {
-                    tokio::select! {
-                        _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)) => {}
-                        _ = ctx.ctrl_c_notify.notified() => {
-                            if ctx.ctrl_c_state.is_exit_requested() {
-                                *result = TurnLoopResult::Exit;
-                                break;
-                            }
-                            if ctx.ctrl_c_state.is_cancel_requested() {
-                                *result = TurnLoopResult::Cancelled;
-                                break;
-                            }
-                            continue;
-                        }
-                    }
-                    match receiver.try_recv() {
-                        Ok(SteeringMessage::Resume) => {
-                            display_status(ctx.renderer, "Resumed by steering signal.")?;
-                            break;
-                        }
-                        Ok(SteeringMessage::SteerStop) => {
-                            if let Err(err) =
-                                ctx.tool_registry.terminate_all_exec_sessions_async().await
-                            {
-                                tracing::warn!(error = %err, "Failed to terminate exec sessions after steering stop");
-                            }
-                            *result = TurnLoopResult::Cancelled;
-                            break;
-                        }
-                        _ => {}
+
+            if let Some(pause_index) = pending
+                .iter()
+                .position(|message| matches!(message, SteeringMessage::Pause))
+            {
+                for message in pending.drain(..pause_index) {
+                    if let SteeringMessage::FollowUpInput(input) = message {
+                        append_follow_up_input(renderer, working_history, input)?;
                     }
                 }
-                if matches!(*result, TurnLoopResult::Cancelled | TurnLoopResult::Exit) {
+                pending.remove(0);
+                if handle_pause_signal(
+                    renderer,
+                    tool_registry,
+                    ctrl_c_state,
+                    ctrl_c_notify,
+                    receiver,
+                    working_history,
+                    result,
+                    pending,
+                )
+                .await?
+                {
                     return Ok(true);
                 }
+                continue;
             }
-            Ok(SteeringMessage::Resume) => {}
-            Ok(SteeringMessage::FollowUpInput(input)) => {
-                display_status(ctx.renderer, &format!("Follow-up Input: {}", input))?;
-                working_history.push(uni::Message::user(input));
+
+            for message in pending {
+                if let SteeringMessage::FollowUpInput(input) = message {
+                    append_follow_up_input(renderer, working_history, input)?;
+                }
             }
-            Err(_) => {}
         }
     }
 
     Ok(false)
+}
+
+fn append_follow_up_input(
+    renderer: &mut vtcode_core::utils::ansi::AnsiRenderer,
+    working_history: &mut Vec<uni::Message>,
+    input: String,
+) -> Result<()> {
+    display_status(renderer, &format!("Follow-up Input: {}", input))?;
+    working_history.push(uni::Message::user(input));
+    Ok(())
+}
+
+async fn handle_pause_signal(
+    renderer: &mut vtcode_core::utils::ansi::AnsiRenderer,
+    tool_registry: &mut vtcode_core::tools::ToolRegistry,
+    ctrl_c_state: &crate::agent::runloop::unified::state::CtrlCState,
+    ctrl_c_notify: &tokio::sync::Notify,
+    receiver: &mut tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>,
+    working_history: &mut Vec<uni::Message>,
+    result: &mut TurnLoopResult,
+    pending: Vec<SteeringMessage>,
+) -> Result<bool> {
+    display_status(renderer, "Paused by steering signal. Waiting for Resume...")?;
+
+    for message in pending {
+        match message {
+            SteeringMessage::Resume => {
+                display_status(renderer, "Resumed by steering signal.")?;
+                return Ok(false);
+            }
+            SteeringMessage::SteerStop => {
+                if let Err(err) = tool_registry.terminate_all_exec_sessions_async().await {
+                    tracing::warn!(error = %err, "Failed to terminate exec sessions after steering stop");
+                }
+                *result = TurnLoopResult::Cancelled;
+                return Ok(true);
+            }
+            SteeringMessage::FollowUpInput(input) => {
+                append_follow_up_input(renderer, working_history, input)?;
+            }
+            SteeringMessage::Pause => {}
+        }
+    }
+
+    loop {
+        match receiver.try_recv() {
+            Ok(SteeringMessage::Resume) => {
+                display_status(renderer, "Resumed by steering signal.")?;
+                return Ok(false);
+            }
+            Ok(SteeringMessage::SteerStop) => {
+                if let Err(err) = tool_registry.terminate_all_exec_sessions_async().await {
+                    tracing::warn!(error = %err, "Failed to terminate exec sessions after steering stop");
+                }
+                *result = TurnLoopResult::Cancelled;
+                return Ok(true);
+            }
+            Ok(SteeringMessage::FollowUpInput(input)) => {
+                append_follow_up_input(renderer, working_history, input)?;
+            }
+            Ok(SteeringMessage::Pause) => {}
+            Err(TryRecvError::Disconnected) => return Ok(false),
+            Err(TryRecvError::Empty) => {}
+        }
+
+        tokio::select! {
+            _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)) => {}
+            _ = ctrl_c_notify.notified() => {
+                if ctrl_c_state.is_exit_requested() {
+                    *result = TurnLoopResult::Exit;
+                    return Ok(true);
+                }
+                if ctrl_c_state.is_cancel_requested() {
+                    *result = TurnLoopResult::Cancelled;
+                    return Ok(true);
+                }
+            }
+        }
+    }
 }
 
 pub(super) async fn maybe_handle_plan_mode_exit_trigger(
@@ -558,10 +641,15 @@ mod tests {
     use super::{
         PLAN_MODE_EXIT_SWITCHED_CONTINUE_STATUS, PLAN_MODE_EXIT_TRIGGER_STATUS,
         PLAN_MODE_MIN_TOOL_LOOPS, UNLIMITED_TOOL_LOOPS, clamp_tool_loop_increment,
-        extract_turn_config, resolve_tool_loop_limit, should_exit_plan_mode_from_confirmation,
-        should_exit_plan_mode_from_user_text, tool_loop_hard_cap,
+        extract_turn_config, handle_steering_messages, resolve_tool_loop_limit,
+        should_exit_plan_mode_from_confirmation, should_exit_plan_mode_from_user_text,
+        tool_loop_hard_cap,
     };
+    use crate::agent::runloop::unified::turn::context::TurnLoopResult;
+    use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
+    use std::time::Duration;
     use vtcode_core::config::loader::VTCodeConfig;
+    use vtcode_core::core::agent::steering::SteeringMessage;
     use vtcode_core::llm::provider as uni;
 
     #[test]
@@ -731,5 +819,94 @@ mod tests {
 
         let turn_cfg = extract_turn_config(Some(&cfg), true);
         assert!(turn_cfg.request_user_input_enabled);
+    }
+
+    #[tokio::test]
+    async fn steering_follow_up_inputs_append_in_order() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        sender
+            .send(SteeringMessage::FollowUpInput("first".to_string()))
+            .expect("first follow-up");
+        sender.send(SteeringMessage::Resume).expect("stray resume");
+        sender
+            .send(SteeringMessage::FollowUpInput("second".to_string()))
+            .expect("second follow-up");
+        backing.set_steering_receiver(receiver);
+
+        let mut working_history = Vec::new();
+        let mut result = TurnLoopResult::Completed;
+        let handled = {
+            let mut ctx = backing.turn_loop_context();
+            handle_steering_messages(&mut ctx, &mut working_history, &mut result)
+                .await
+                .expect("handle steering")
+        };
+
+        assert!(!handled);
+        assert!(matches!(result, TurnLoopResult::Completed));
+        let inputs: Vec<String> = working_history
+            .iter()
+            .map(|message| message.content.as_text().to_string())
+            .collect();
+        assert_eq!(inputs, vec!["first".to_string(), "second".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn paused_steering_accepts_follow_up_before_resume() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        sender.send(SteeringMessage::Pause).expect("pause");
+        sender
+            .send(SteeringMessage::FollowUpInput("refine search".to_string()))
+            .expect("follow-up");
+        let resume_sender = sender.clone();
+        let resume_task = tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            resume_sender.send(SteeringMessage::Resume).expect("resume");
+        });
+        backing.set_steering_receiver(receiver);
+
+        let mut working_history = Vec::new();
+        let mut result = TurnLoopResult::Completed;
+        let handled = {
+            let mut ctx = backing.turn_loop_context();
+            handle_steering_messages(&mut ctx, &mut working_history, &mut result)
+                .await
+                .expect("handle paused steering")
+        };
+        resume_task.await.expect("resume task");
+
+        assert!(!handled);
+        assert!(matches!(result, TurnLoopResult::Completed));
+        let inputs: Vec<String> = working_history
+            .iter()
+            .map(|message| message.content.as_text().to_string())
+            .collect();
+        assert_eq!(inputs, vec!["refine search".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn steering_stop_beats_queued_follow_up() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        sender
+            .send(SteeringMessage::FollowUpInput("ignore me".to_string()))
+            .expect("follow-up");
+        sender.send(SteeringMessage::SteerStop).expect("stop");
+        backing.set_steering_receiver(receiver);
+
+        let mut working_history = Vec::new();
+        let mut result = TurnLoopResult::Completed;
+        let handled = {
+            let mut ctx = backing.turn_loop_context();
+            handle_steering_messages(&mut ctx, &mut working_history, &mut result)
+                .await
+                .expect("handle stop steering")
+        };
+
+        assert!(handled);
+        assert!(matches!(result, TurnLoopResult::Cancelled));
+        assert!(working_history.is_empty());
     }
 }

@@ -345,15 +345,6 @@ impl Session {
         let defaults = InlineHeaderContext::default();
         let mut values = Vec::new();
 
-        if let Some(editor_context) = self
-            .header_context
-            .editor_context
-            .as_ref()
-            .filter(|value| !value.trim().is_empty())
-        {
-            values.push(editor_context.clone());
-        }
-
         for (value, fallback) in [
             (&self.header_context.tools, defaults.tools),
             (&self.header_context.git, defaults.git),
@@ -448,17 +439,6 @@ impl Session {
         }
 
         let mut first_section = spans.is_empty();
-        let mode_label = self.header_mode_short_label();
-        if !mode_label.trim().is_empty() {
-            let mut mode_style = self.header_primary_style().add_modifier(Modifier::BOLD);
-            if self.header_context.editing_mode == EditingMode::Plan {
-                mode_style = mode_style.fg(Color::Yellow);
-            } else if self.header_context.autonomous_mode {
-                mode_style = mode_style.fg(Color::Green);
-            }
-            spans.push(Span::styled(mode_label, mode_style));
-            first_section = false;
-        }
 
         if let Some(badge) = self
             .header_context

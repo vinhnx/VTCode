@@ -15,11 +15,12 @@ use anyhow::{Context, Result};
 use chrono::Local;
 use hashbrown::HashMap;
 use std::sync::Arc;
-use tokio::sync::Notify;
+use tokio::sync::{Notify, mpsc::UnboundedSender};
 use tracing::warn;
 use vtcode_core::config::constants::ui;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+use vtcode_core::core::agent::steering::SteeringMessage;
 use vtcode_core::hooks::{LifecycleHookEngine, SessionEndReason, SessionStartTrigger};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::notifications::set_global_terminal_focused;
@@ -45,6 +46,7 @@ pub(crate) async fn initialize_session_ui(
     session_archive: Option<SessionArchive>,
     full_auto: bool,
     skip_confirmations: bool,
+    steering_sender: Option<UnboundedSender<SteeringMessage>>,
 ) -> Result<SessionUISetup> {
     let session_trigger = if resume_state.is_some() {
         SessionStartTrigger::Resume
@@ -91,10 +93,27 @@ pub(crate) async fn initialize_session_ui(
     let interrupt_callback: InlineEventCallback = {
         let state = ctrl_c_state.clone();
         let notify = ctrl_c_notify.clone();
-        Arc::new(move |event: &InlineEvent| {
-            if matches!(event, InlineEvent::Interrupt) {
+        let steering_sender = steering_sender.clone();
+        Arc::new(move |event: &InlineEvent| match event {
+            InlineEvent::Interrupt => {
                 let _ = request_local_stop(&state, &notify);
             }
+            InlineEvent::Pause => {
+                if let Some(sender) = steering_sender.as_ref() {
+                    let _ = sender.send(SteeringMessage::Pause);
+                }
+            }
+            InlineEvent::Resume => {
+                if let Some(sender) = steering_sender.as_ref() {
+                    let _ = sender.send(SteeringMessage::Resume);
+                }
+            }
+            InlineEvent::Steer(text) => {
+                if let Some(sender) = steering_sender.as_ref() {
+                    let _ = sender.send(SteeringMessage::FollowUpInput(text.clone()));
+                }
+            }
+            _ => {}
         })
     };
     let focus_callback: FocusChangeCallback = Arc::new(set_global_terminal_focused);

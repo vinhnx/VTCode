@@ -309,3 +309,44 @@ async fn interrupt_event_returns_exit_after_double_ctrl_c() {
         .expect("process interrupt");
     assert!(matches!(action, InlineLoopAction::Exit(_)));
 }
+
+#[tokio::test]
+async fn steering_events_are_passive_in_idle_loop() {
+    let (handle, mut renderer) = renderer_with_handle();
+    let ctrl_c_state = CtrlCState::new();
+    let interrupts = InlineInterruptCoordinator::new(&ctrl_c_state);
+    let mut ctrl_c_notice_displayed = false;
+    let mut model_picker_state: Option<ModelPickerState> = None;
+    let mut palette_state: Option<ActivePalette> = None;
+    let mut config = runtime_config();
+    let mut vt_cfg = None;
+    let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
+    let session_bootstrap = SessionBootstrap::default();
+    let mut context = InlineEventContext::new(
+        &mut renderer,
+        &handle,
+        interrupts,
+        &mut ctrl_c_notice_displayed,
+        &mut model_picker_state,
+        &mut palette_state,
+        &mut config,
+        &mut vt_cfg,
+        &mut provider_client,
+        &session_bootstrap,
+        false,
+    );
+    let mut queued_inputs = VecDeque::new();
+    let mut queue = InlineQueueState::new(&handle, &mut queued_inputs);
+
+    for event in [
+        InlineEvent::Pause,
+        InlineEvent::Resume,
+        InlineEvent::Steer("keep going".to_string()),
+    ] {
+        let action = context
+            .process_event(event, &mut queue)
+            .await
+            .expect("process steering event");
+        assert!(matches!(action, InlineLoopAction::Continue));
+    }
+}

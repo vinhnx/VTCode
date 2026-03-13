@@ -14,7 +14,7 @@ use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_ov
 use crate::agent::runloop::unified::state::CtrlCState;
 use crate::main_helpers::{RelaunchPreference, queue_runtime_relaunch};
 
-use super::{StartupUpdateNotice, UpdateExecutionStrategy, Updater};
+use super::{InstallOutcome, StartupUpdateNotice, UpdateExecutionStrategy, Updater};
 
 const UPDATE_AND_RESTART_ACTION: &str = "update:install_and_restart";
 const STAY_CURRENT_ACTION: &str = "update:stay_current";
@@ -61,8 +61,8 @@ pub(crate) fn append_notice_highlight(
     highlights.push(highlight);
 }
 
-fn format_update_banner(notice: &StartupUpdateNotice, use_unicode: bool) -> String {
-    let lines = vec![
+fn format_update_banner(notice: &StartupUpdateNotice, _use_unicode: bool) -> String {
+    let lines = [
         format!(
             "Update available! {} -> {}",
             notice.current_version, notice.latest_version
@@ -72,38 +72,8 @@ fn format_update_banner(notice: &StartupUpdateNotice, use_unicode: bool) -> Stri
         "See full release notes:".to_string(),
         Updater::release_url(&notice.latest_version),
     ];
-    let width = lines
-        .iter()
-        .map(|line| line.chars().count())
-        .max()
-        .unwrap_or(0);
-    let (top_left, top_right, bottom_left, bottom_right, horizontal, vertical) = if use_unicode {
-        ('╭', '╮', '╰', '╯', '─', '│')
-    } else {
-        ('+', '+', '+', '+', '-', '|')
-    };
 
-    let mut output = String::new();
-    output.push(top_left);
-    output.push_str(&horizontal.to_string().repeat(width + 2));
-    output.push(top_right);
-    output.push('\n');
-
-    for line in lines {
-        let padding = width.saturating_sub(line.chars().count());
-        output.push(vertical);
-        output.push(' ');
-        output.push_str(&line);
-        output.push_str(&" ".repeat(padding));
-        output.push(' ');
-        output.push(vertical);
-        output.push('\n');
-    }
-
-    output.push(bottom_left);
-    output.push_str(&horizontal.to_string().repeat(width + 2));
-    output.push(bottom_right);
-    output
+    lines.join("\n")
 }
 
 pub(crate) fn display_update_notice(
@@ -221,7 +191,7 @@ pub(crate) async fn run_inline_update_prompt(
 
     match outcome {
         OverlayWaitOutcome::Submitted(UpdatePromptChoice::UpdateAndRestart) => {
-            execute_inline_update(renderer, handle, workspace_root, notice)
+            execute_inline_update(renderer, handle, workspace_root, notice).await
         }
         OverlayWaitOutcome::Submitted(UpdatePromptChoice::StayCurrent) => {
             renderer.line(
@@ -236,7 +206,52 @@ pub(crate) async fn run_inline_update_prompt(
     }
 }
 
-pub(crate) fn execute_inline_update(
+pub(crate) async fn execute_inline_update(
+    renderer: &mut AnsiRenderer,
+    handle: &InlineHandle,
+    workspace_root: &Path,
+    notice: &StartupUpdateNotice,
+) -> Result<InlineUpdateOutcome> {
+    if notice.guidance.source.is_managed() {
+        return execute_managed_update(renderer, handle, workspace_root, notice);
+    }
+
+    renderer.line(
+        MessageStyle::Info,
+        &format!(
+            "Updating VT Code {} -> {} ...",
+            notice.current_version, notice.latest_version
+        ),
+    )?;
+
+    let updater = Updater::new(&notice.current_version.to_string())?;
+    match updater.install_update(false).await {
+        Ok(InstallOutcome::Updated(version)) => {
+            queue_runtime_relaunch(relaunch_preference(notice));
+            renderer.line(
+                MessageStyle::Info,
+                &format!("Update installed (v{}). Restarting VT Code...", version),
+            )?;
+            Ok(InlineUpdateOutcome::RestartRequested)
+        }
+        Ok(InstallOutcome::UpToDate(version)) => {
+            renderer.line(
+                MessageStyle::Info,
+                &format!("Already on the latest version (v{}).", version),
+            )?;
+            Ok(InlineUpdateOutcome::Continue)
+        }
+        Err(err) => {
+            renderer.line(
+                MessageStyle::Error,
+                &format!("Failed to update: {}", err),
+            )?;
+            Ok(InlineUpdateOutcome::Continue)
+        }
+    }
+}
+
+fn execute_managed_update(
     renderer: &mut AnsiRenderer,
     handle: &InlineHandle,
     workspace_root: &Path,

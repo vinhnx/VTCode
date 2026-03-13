@@ -60,12 +60,6 @@ https://defuddle.md/x.com/akshay_pachaar/status/2031021906254766128
 
 ---
 
-Agent runs, human steers. apply this philosophy in the VT Code harness.
-
-https://deepwiki.com/search/agent-runs-human-steers_bdeb1567-cd33-46cf-b8bb-1ecfe32e7c28
-
----
-
 https://code.claude.com/docs/en/interactive-mode
 
 ==
@@ -78,20 +72,17 @@ https://www.xfree86.org/current/ctlseqs.html
 
 ---
 
-self-update workflow for agent program launch CLI
+add /ide command to control ide context. ref commit `c330e4b377791bdd51a32b28060fae023e1fb2eb`
 
-```
-  > VT Code update available
+ref codex deepwiki:
 
-  {old_version} -> {new_version}
+- https://deepwiki.com/search/how-does-ide-command-works-and_bf4ab5a2-796e-4c6a-b215-7438903ed555?mode=fast
+- https://deepwiki.com/search/how-does-codex-manage-ide-cont_78965270-0fe9-45e0-bd79-d51e5bad7df2?mode=fast
 
-  Release notes: https://github.com/vinhnx/vtcode/releases/latest
+---
 
-› 1. Update now (runs {command})
-  2. Skip
-  3. Skip until next version
+use bazel build
 
-  Press enter to continue
-```
+https://github.com/search?q=repo%3Aopenai%2Fcodex%20Bazel&type=code
 
-NOTE on 1. ==> command from README.md, eg: `curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash` or `brew install vinhnx/tap/vtcode` or `cargo install vtcode` based on previous PATH installation method. eg: if user installed via brew, the update command should be `brew upgrade vinhnx/tap/vtcode` or local/bin should use curl, or via cargo if installed from cargo. This requires the CLI to track the installation method used for proper update command generation.
+https://deepwiki.com/search/how-codex-use-bazel_34da771c-1bac-42e0-b4c9-2f80d5a6f1d2?mode=fast

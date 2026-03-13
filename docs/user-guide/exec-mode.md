@@ -32,9 +32,9 @@ would be changed rather than applying edits.
 
 Exec mode now uses a harness-managed continuation loop instead of accepting the first completion-sounding assistant message.
 
-- By default, `agent.harness.continuation_policy = "exec_only"` enables continuation only for exec/full-auto runs.
+- By default, `agent.harness.continuation_policy = "all"` enables harness continuation in both interactive and exec/full-auto runs.
 - Review mode and `vtcode exec --dry-run` stay single-pass and read-only.
-- Interactive TUI sessions keep manual control unless you explicitly set `agent.harness.continuation_policy = "all"`.
+- Set `agent.harness.continuation_policy = "exec_only"` if you want interactive TUI sessions to keep manual turn control.
 
 When a run starts, VT Code uses `task_tracker` state as the completion contract. If the model has not created a tracker yet, exec mode
 creates an internal three-step scaffold (`analyze`, `change`, `verify`) and persists it through the existing task-tracker files under

@@ -449,6 +449,7 @@ fn should_submit_immediately_from_palette(session: &Session) -> bool {
         "/files"
             | "/status"
             | "/stop"
+            | "/pause"
             | "/doctor"
             | "/model"
             | "/mcp"
@@ -539,6 +540,9 @@ mod tests {
         assert!(should_submit_immediately_from_palette(&session));
 
         session.set_input("/stop".to_string());
+        assert!(should_submit_immediately_from_palette(&session));
+
+        session.set_input("/pause".to_string());
         assert!(should_submit_immediately_from_palette(&session));
     }
 

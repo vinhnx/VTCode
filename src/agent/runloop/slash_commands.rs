@@ -286,6 +286,14 @@ pub(crate) async fn handle_slash_command(
             }
             Ok(SlashCommandOutcome::StopAgent)
         }
+        "pause" => {
+            if !args.is_empty() {
+                renderer.line(MessageStyle::Error, "Usage: /pause")?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+            renderer.line(MessageStyle::Info, "No active run to pause.")?;
+            Ok(SlashCommandOutcome::Handled)
+        }
         "doctor" => match parse_doctor_args(args, renderer.supports_inline_ui()) {
             Ok(DoctorCommand::Interactive) => Ok(SlashCommandOutcome::StartDoctorInteractive),
             Ok(DoctorCommand::Run { quick }) => Ok(SlashCommandOutcome::RunDoctor { quick }),
@@ -567,5 +575,17 @@ mod tests {
             .expect("stop command should parse");
 
         assert!(matches!(outcome, SlashCommandOutcome::StopAgent));
+    }
+
+    #[tokio::test]
+    async fn pause_command_is_idle_noop() {
+        let workspace = std::env::current_dir().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let outcome = handle_slash_command("pause", &mut renderer, &workspace)
+            .await
+            .expect("pause command should parse");
+
+        assert!(matches!(outcome, SlashCommandOutcome::Handled));
     }
 }

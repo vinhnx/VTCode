@@ -633,7 +633,7 @@ turn limits, and context reuse for long-running exec sessions.
 | `automation.full_auto.enabled`          | boolean                                           | Enable full automation mode.                                            |
 | `automation.full_auto.allowed_tools`    | array                                             | Tools allowed in automation mode.                                       |
 | `automation.full_auto.max_turns`        | integer                                           | Upper bound for autonomous turns before exec pauses.                    |
-| `agent.harness.continuation_policy`     | `off` \| `exec_only` \| `all`                     | Controls when the harness may auto-continue after a completion attempt. |
+| `agent.harness.continuation_policy`     | `off` \| `exec_only` \| `all`                     | Controls when the harness may auto-continue after a completion attempt. Default: `all` in interactive and exec sessions; use `exec_only` to keep interactive sessions manual. |
 | `agent.harness.event_log_path`          | string \| null                                    | Optional JSONL sink for harness events in interactive and exec flows.   |
 | `workspace.include_context`             | boolean                                           | Include workspace context.                                              |
 | `workspace.max_context_size`            | number                                            | Max size of workspace context (bytes).                                  |

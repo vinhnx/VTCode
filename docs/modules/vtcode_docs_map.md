@@ -893,8 +893,8 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/user-guide/interactive-mode.md`
   - **Content**: Interactive Mode Reference
-  - **Topics**: Keyboard Shortcuts, Plan Mode Notes, Vim Editor Mode, Command History, Background Bash Commands
-  - **User Questions**: "What can you tell me about Interactive Mode Reference?", "How does Keyboard Shortcuts work?", "How does Plan Mode Notes work?"
+  - **Topics**: Keyboard Shortcuts, Active Run Steering, Plan Mode Notes, Vim Editor Mode, Command History
+  - **User Questions**: "What can you tell me about Interactive Mode Reference?", "How does Keyboard Shortcuts work?", "How does Active Run Steering work?"
 
 ## Enhanced Trigger Questions
 

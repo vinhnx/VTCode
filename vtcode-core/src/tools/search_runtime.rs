@@ -56,7 +56,7 @@ impl SearchToolBundleStatus {
     #[must_use]
     pub fn header_summary(self) -> String {
         format!(
-            "Search: rg {} · sg {}",
+            "Search: ripgrep {} · ast-grep {}",
             self.ripgrep.label(),
             self.ast_grep.label()
         )

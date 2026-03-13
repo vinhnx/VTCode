@@ -100,12 +100,15 @@ pub enum InlineCommand {
 pub enum InlineEvent {
     Submit(String),
     QueueSubmit(String),
+    Steer(String),
     /// Edit the newest queued input (pop into input buffer)
     EditQueue,
     Overlay(OverlayEvent),
     Cancel,
     Exit,
     Interrupt,
+    Pause,
+    Resume,
     BackgroundOperation,
     ScrollLineUp,
     ScrollLineDown,
