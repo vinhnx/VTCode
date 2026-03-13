@@ -100,7 +100,7 @@ fn static_model_subtitle_formats_current_capabilities() {
 
     assert_eq!(
         subtitle,
-        "gpt-5.4 • Current • Reasoning • Tools • Input: text, image"
+        "gpt-5.4 • Current • Context: 1M • Reasoning • Tools • Input: text, image"
     );
 }
 
@@ -129,6 +129,12 @@ fn dynamic_model_subtitle_stays_conservative_for_unknown_local_models() {
     );
 
     assert_eq!(subtitle, "custom-local-model • Current • Local");
+}
+
+#[test]
+fn current_model_line_shows_effective_anthropic_context_window() {
+    let line = super::rendering::current_model_line("anthropic", "claude-sonnet-4-6");
+    assert_eq!(line, "Current: anthropic / claude-sonnet-4-6 • Context: 1M");
 }
 
 fn base_picker_state(current_provider: &str, current_model: &str) -> ModelPickerState {

@@ -14,7 +14,7 @@
 
 #[cfg(feature = "anthropic-api")]
 pub mod api;
-mod capabilities;
+pub(crate) mod capabilities;
 pub mod compat;
 mod headers;
 mod message_parser;

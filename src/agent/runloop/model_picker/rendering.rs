@@ -5,6 +5,7 @@ use anyhow::Result;
 use vtcode_core::config::constants::ui;
 use vtcode_core::config::models::{ModelId, Provider};
 use vtcode_core::config::types::ReasoningEffortLevel;
+use vtcode_core::config::validation::effective_model_context_window;
 use vtcode_core::ui::{InlineListItem, InlineListSearchConfig, InlineListSelection};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
@@ -30,6 +31,7 @@ pub(super) const CUSTOM_PROVIDER_SUBTITLE: &str =
 const CUSTOM_PROVIDER_BADGE: &str = "Manual";
 const REASONING_OFF_BADGE: &str = "No reasoning";
 const CURRENT_BADGE: &str = "Current";
+const CONTEXT_LABEL: &str = "Context";
 const TOOLS_LABEL: &str = "Tools";
 const NO_TOOLS_LABEL: &str = "No tools";
 
@@ -88,19 +90,48 @@ fn input_modalities_label(input_modalities: &[&str]) -> Option<String> {
     Some(format!("Input: {}", input_modalities.join(", ")))
 }
 
-fn static_model_capability_segments(model: ModelId, supports_reasoning: bool) -> Vec<String> {
+fn compact_context_window_label(context_window_size: usize) -> String {
+    if context_window_size >= 1_000_000 {
+        format!("{}M", context_window_size / 1_000_000)
+    } else if context_window_size >= 1_000 {
+        format!("{}K", context_window_size / 1_000)
+    } else {
+        context_window_size.to_string()
+    }
+}
+
+fn context_window_segment(provider: &str, model_id: &str) -> Option<String> {
+    effective_model_context_window(provider, model_id)
+        .ok()
+        .flatten()
+        .filter(|context_window_size| *context_window_size > 0)
+        .map(|context_window_size| {
+            format!(
+                "{}: {}",
+                CONTEXT_LABEL,
+                compact_context_window_label(context_window_size)
+            )
+        })
+}
+
+fn static_model_capability_segments(option: &ModelOption) -> Vec<String> {
     let mut segments = Vec::new();
-    if supports_reasoning {
+    let provider_key = option.provider.to_string();
+    if let Some(context_window) = context_window_segment(&provider_key, option.id) {
+        segments.push(context_window);
+    }
+
+    if option.supports_reasoning {
         segments.push("Reasoning".to_string());
     }
 
-    segments.push(if model.supports_tool_calls() {
+    segments.push(if option.model.supports_tool_calls() {
         TOOLS_LABEL.to_string()
     } else {
         NO_TOOLS_LABEL.to_string()
     });
 
-    if let Some(modalities) = input_modalities_label(model.input_modalities()) {
+    if let Some(modalities) = input_modalities_label(option.model.input_modalities()) {
         segments.push(modalities);
     }
 
@@ -151,7 +182,7 @@ pub(super) fn static_model_subtitle(
     subtitle_from_segments(
         option.id,
         is_current_model(option.provider, option.id, current_provider, current_model),
-        static_model_capability_segments(option.model, option.supports_reasoning),
+        static_model_capability_segments(option),
     )
 }
 
@@ -163,6 +194,10 @@ pub(super) fn dynamic_model_subtitle(
     current_model: &str,
 ) -> String {
     let mut segments = Vec::new();
+    let provider_key = provider.to_string();
+    if let Some(context_window) = context_window_segment(&provider_key, model_id) {
+        segments.push(context_window);
+    }
     if provider.is_local() {
         segments.push("Local".to_string());
     }
@@ -175,6 +210,19 @@ pub(super) fn dynamic_model_subtitle(
         is_current_model(provider, model_id, current_provider, current_model),
         segments,
     )
+}
+
+pub(super) fn current_model_line(current_provider: &str, current_model: &str) -> String {
+    if current_provider.trim().is_empty() || current_model.trim().is_empty() {
+        return "Pick a model provider and model id.".to_string();
+    }
+
+    let base = format!("Current: {} / {}", current_provider, current_model);
+    if let Some(context_window) = context_window_segment(current_provider, current_model) {
+        format!("{base} • {context_window}")
+    } else {
+        base
+    }
 }
 
 pub(super) fn render_step_one_inline(
@@ -315,14 +363,8 @@ pub(super) fn render_step_one_inline(
         search_value: Some("custom provider".to_string()),
     });
 
-    let current_line = if current_provider.trim().is_empty() || current_model.trim().is_empty() {
-        "Pick a model provider and model id.".to_string()
-    } else {
-        format!("Current: {} / {}", current_provider, current_model)
-    };
-
     let lines = vec![
-        current_line,
+        current_model_line(current_provider, current_model),
         "↑/↓ select • Enter choose • Esc cancel".to_string(),
     ];
 

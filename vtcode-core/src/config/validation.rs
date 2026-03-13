@@ -142,9 +142,18 @@ pub fn validate_model_exists(provider: &str, model: &str) -> Result<()> {
     }
 }
 
-/// Get context window size for a model
-fn get_model_context_window(provider: &str, model: &str) -> Result<Option<usize>> {
+fn provider_catalog_key(provider: &str) -> &str {
+    if provider.eq_ignore_ascii_case("gemini") {
+        "google"
+    } else {
+        provider
+    }
+}
+
+/// Get context window size for a model from the catalog.
+fn catalog_model_context_window(provider: &str, model: &str) -> Result<Option<usize>> {
     let models_json = load_models_json()?;
+    let provider = provider_catalog_key(provider);
 
     if let Some(provider_data) = models_json.get(provider).and_then(|p| p.as_object())
         && let Some(model_data) = provider_data
@@ -158,6 +167,17 @@ fn get_model_context_window(provider: &str, model: &str) -> Result<Option<usize>
     }
 
     Ok(None)
+}
+
+/// Resolve the effective context window size for a model.
+pub fn effective_model_context_window(provider: &str, model: &str) -> Result<Option<usize>> {
+    if provider.eq_ignore_ascii_case("anthropic") {
+        return Ok(Some(
+            crate::llm::providers::anthropic::capabilities::effective_context_size(model),
+        ));
+    }
+
+    catalog_model_context_window(provider, model)
 }
 
 /// Validate full VTCodeConfig at startup
@@ -193,7 +213,7 @@ fn validate_agent_model(provider: &str, model: &str, result: &mut ValidationResu
     match validate_model_exists(provider, model) {
         Ok(_) => {
             // Also check context window
-            if let Ok(Some(context_size)) = get_model_context_window(provider, model) {
+            if let Ok(Some(context_size)) = effective_model_context_window(provider, model) {
                 let display_size = if context_size >= 1_000_000 {
                     format!("{}M", context_size / 1_000_000)
                 } else if context_size >= 1_000 {
@@ -214,7 +234,7 @@ fn validate_context_window(config: &VTCodeConfig, result: &mut ValidationResult)
     let context_window = config.context.max_context_tokens;
     if context_window > 0
         && let Ok(Some(model_context)) =
-            get_model_context_window(&config.agent.provider, &config.agent.default_model)
+            effective_model_context_window(&config.agent.provider, &config.agent.default_model)
         && context_window > model_context
     {
         result.add_warning(format!(
@@ -321,7 +341,7 @@ mod tests {
 
     #[test]
     fn gets_context_window() {
-        let result = get_model_context_window("google", "gemini-3-flash-preview");
+        let result = effective_model_context_window("google", "gemini-3-flash-preview");
         assert!(result.is_ok(), "Should get context window");
 
         let context = result.unwrap();
@@ -329,6 +349,12 @@ mod tests {
             context.is_some() && context.unwrap() > 0,
             "Should have positive context window"
         );
+    }
+
+    #[test]
+    fn anthropic_46_uses_effective_context_window() {
+        let result = effective_model_context_window("anthropic", "claude-sonnet-4-6");
+        assert_eq!(result.unwrap(), Some(1_000_000));
     }
 
     #[test]
