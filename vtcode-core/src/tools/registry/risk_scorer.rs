@@ -1,6 +1,7 @@
 //! Risk scoring system for tool execution
 
 use crate::config::constants::tools;
+use crate::utils::ansi_codes::{FG_GREEN, FG_MAGENTA, FG_RED, FG_YELLOW};
 use serde::{Deserialize, Serialize};
 
 /// Risk level classification for tools
@@ -32,10 +33,10 @@ impl RiskLevel {
 
     pub fn color_code(self) -> &'static str {
         match self {
-            Self::Low => "\x1b[32m",      // green
-            Self::Medium => "\x1b[33m",   // yellow
-            Self::High => "\x1b[31m",     // red
-            Self::Critical => "\x1b[35m", // magenta
+            Self::Low => FG_GREEN,
+            Self::Medium => FG_YELLOW,
+            Self::High => FG_RED,
+            Self::Critical => FG_MAGENTA,
         }
     }
 }

@@ -76,10 +76,6 @@ https://deepwiki.com/search/how-codex-use-bazel_34da771c-1bac-42e0-b4c9-2f80d5a6
 
 ---
 
-use /rust-skills and enhance impl. review overall changes again carefully, can you do better? continue with your careful recommendations, proceed with outcome. KISS and DRY, do repeatly until all done, don't stop; make sure vtcode-commons/src/ansi_codes.rs and docs/reference/ansi-in-vtcode.md are use widely in codebase, also refactor vtcode-commons/src/ansi.rs
-
----
-
 https://randomlabs.ai/blog/slate
 
 ---

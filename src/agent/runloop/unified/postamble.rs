@@ -1,14 +1,11 @@
 use crate::agent::runloop::git::CodeChangeDelta;
 use std::time::Duration;
+use vtcode_commons::ansi_codes::{BOLD, DIM, RESET, fg_256};
 use vtcode_commons::color256_theme::rgb_to_ansi256_for_theme;
 use vtcode_core::config::constants::ui;
 use vtcode_core::core::telemetry::TelemetryStats;
 use vtcode_tui::InlineHeaderContext;
 use vtcode_tui::ui::theme;
-
-const ANSI_RESET: &str = "\x1b[0m";
-const ANSI_BOLD: &str = "\x1b[1m";
-const ANSI_DIM: &str = "\x1b[2m";
 
 pub(crate) struct ExitSummaryData {
     pub total_session_time: Duration,
@@ -35,20 +32,23 @@ pub(crate) fn print_exit_summary(data: ExitSummaryData) {
     let title_color = rgb_to_ansi256_for_theme(TITLE_RGB.0, TITLE_RGB.1, TITLE_RGB.2, is_light);
     let model_color = rgb_to_ansi256_for_theme(MODEL_RGB.0, MODEL_RGB.1, MODEL_RGB.2, is_light);
     let resume_color = rgb_to_ansi256_for_theme(RESUME_RGB.0, RESUME_RGB.1, RESUME_RGB.2, is_light);
+    let title_style = fg_256(title_color);
+    let model_style = fg_256(model_color);
+    let resume_style = fg_256(resume_color);
 
     let title = build_title(&data.header_context);
     println!();
-    println!("{ANSI_BOLD}\x1b[38;5;{title_color}m{title}{ANSI_RESET}");
+    println!("{BOLD}{title_style}{title}{RESET}");
 
     if let Some(ctx) = &data.header_context {
-        println!("{ANSI_DIM}{}{ANSI_RESET}", build_trust_line(ctx));
+        println!("{DIM}{}{RESET}", build_trust_line(ctx));
     }
 
     if models.len() == 1 {
         // Single model: compact line with model name, no separate Model row
         let (model, stats) = models[0];
         println!(
-            "{ANSI_DIM}Session {} | {ANSI_BOLD}\x1b[38;5;{model_color}m{model}{ANSI_RESET}{ANSI_DIM} | {} | {} in / {} out{}{} | Code +{} / -{}{ANSI_RESET}",
+            "{DIM}Session {} | {BOLD}{model_style}{model}{RESET}{DIM} | {} | {} in / {} out{}{} | Code +{} / -{}{RESET}",
             format_duration(data.total_session_time),
             format_duration(stats.api_time),
             format_number(stats.prompt_tokens),
@@ -61,7 +61,7 @@ pub(crate) fn print_exit_summary(data: ExitSummaryData) {
     } else {
         // Multi-model: aggregate line + per-model breakdown
         println!(
-            "{ANSI_DIM}Session {} | API {} | Tokens {} in / {} out{} | Code +{} / -{}{ANSI_RESET}",
+            "{DIM}Session {} | API {} | Tokens {} in / {} out{} | Code +{} / -{}{RESET}",
             format_duration(data.total_session_time),
             format_duration(data.telemetry.api_time_spent),
             format_number(prompt),
@@ -72,7 +72,7 @@ pub(crate) fn print_exit_summary(data: ExitSummaryData) {
         );
         for (model, stats) in models {
             println!(
-                "{ANSI_DIM}  {ANSI_BOLD}\x1b[38;5;{model_color}m{model}{ANSI_RESET}{ANSI_DIM} | {} | {} in / {} out{}{}{ANSI_RESET}",
+                "{DIM}  {BOLD}{model_style}{model}{RESET}{DIM} | {} | {} in / {} out{}{}{RESET}",
                 format_duration(stats.api_time),
                 format_number(stats.prompt_tokens),
                 format_number(stats.completion_tokens),
@@ -83,9 +83,7 @@ pub(crate) fn print_exit_summary(data: ExitSummaryData) {
     }
 
     if let Some(session_id) = data.resume_identifier {
-        println!(
-            "{ANSI_DIM}Resume: \x1b[38;5;{resume_color}mvtcode --resume {session_id}{ANSI_RESET}"
-        );
+        println!("{DIM}Resume: {resume_style}vtcode --resume {session_id}{RESET}");
     }
     println!();
 }

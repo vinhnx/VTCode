@@ -1,10 +1,18 @@
-//! ANSI escape sequence constants and utilities
+//! Shared ANSI escape sequence constants and small builders for VT Code.
+//!
+//! See `docs/reference/ansi-in-vtcode.md` for the cross-crate integration map.
 
 use once_cell::sync::Lazy;
 use ratatui::crossterm::tty::IsTty;
 use std::io::Write;
 
-/// Escape character (ESC = 0x1B = 27)
+/// Escape character as a raw byte (ESC = 0x1B = 27)
+pub const ESC_BYTE: u8 = 0x1b;
+
+/// Escape character as a `char`
+pub const ESC_CHAR: char = '\x1b';
+
+/// Escape character as a string slice
 pub const ESC: &str = "\x1b";
 
 /// Control Sequence Introducer (CSI = ESC[)
@@ -19,7 +27,13 @@ pub const DCS: &str = "\x1bP";
 /// String Terminator (ST = ESC \)
 pub const ST: &str = "\x1b\\";
 
-/// Bell character (BEL = 0x07)
+/// Bell character as a raw byte (BEL = 0x07)
+pub const BEL_BYTE: u8 = 0x07;
+
+/// Bell character as a `char`
+pub const BEL_CHAR: char = '\x07';
+
+/// Bell character as a string slice
 pub const BEL: &str = "\x07";
 
 /// Notification preference (rich OSC vs bell-only)
@@ -469,35 +483,37 @@ pub const CHARSET_DEFAULT: &str = "\x1b%@";
 
 #[inline]
 pub fn cursor_up(n: u16) -> String {
-    format!("\x1b[{}A", n)
+    format!("{CSI}{n}A")
 }
 
 #[inline]
 pub fn cursor_down(n: u16) -> String {
-    format!("\x1b[{}B", n)
+    format!("{CSI}{n}B")
 }
 
 #[inline]
 pub fn cursor_right(n: u16) -> String {
-    format!("\x1b[{}C", n)
+    format!("{CSI}{n}C")
 }
 
 #[inline]
 pub fn cursor_left(n: u16) -> String {
-    format!("\x1b[{}D", n)
+    format!("{CSI}{n}D")
 }
 
 #[inline]
 pub fn cursor_to(row: u16, col: u16) -> String {
-    format!("\x1b[{};{}H", row, col)
+    format!("{CSI}{row};{col}H")
 }
 
 /// Build a portable in-place redraw prefix (`CR` + `EL2`).
 ///
 /// This is the common CLI pattern for one-line progress updates.
+pub const REDRAW_LINE_PREFIX: &str = "\r\x1b[2K";
+
 #[inline]
 pub fn redraw_line_prefix() -> &'static str {
-    "\r\x1b[2K"
+    REDRAW_LINE_PREFIX
 }
 
 /// Format a one-line in-place update payload.
@@ -510,22 +526,22 @@ pub fn format_redraw_line(content: &str) -> String {
 
 #[inline]
 pub fn fg_256(color_id: u8) -> String {
-    format!("\x1b[38;5;{}m", color_id)
+    format!("{CSI}38;5;{color_id}m")
 }
 
 #[inline]
 pub fn bg_256(color_id: u8) -> String {
-    format!("\x1b[48;5;{}m", color_id)
+    format!("{CSI}48;5;{color_id}m")
 }
 
 #[inline]
 pub fn fg_rgb(r: u8, g: u8, b: u8) -> String {
-    format!("\x1b[38;2;{};{};{}m", r, g, b)
+    format!("{CSI}38;2;{r};{g};{b}m")
 }
 
 #[inline]
 pub fn bg_rgb(r: u8, g: u8, b: u8) -> String {
-    format!("\x1b[48;2;{};{};{}m", r, g, b)
+    format!("{CSI}48;2;{r};{g};{b}m")
 }
 
 #[inline]
@@ -577,12 +593,12 @@ pub mod semantic {
 
 #[inline]
 pub fn contains_ansi(text: &str) -> bool {
-    text.contains(ESC)
+    text.contains(ESC_CHAR)
 }
 
 #[inline]
 pub fn starts_with_ansi(text: &str) -> bool {
-    text.starts_with(ESC)
+    text.starts_with(ESC_CHAR)
 }
 
 #[inline]
@@ -649,49 +665,49 @@ pub fn format_styled_into(buffer: &mut String, text: &str, style: &str) {
 /// Set scrolling region (DECSTBM) — top and bottom rows (1-indexed)
 #[inline]
 pub fn set_scroll_region(top: u16, bottom: u16) -> String {
-    format!("\x1b[{};{}r", top, bottom)
+    format!("{CSI}{top};{bottom}r")
 }
 
 /// Insert Ps lines at cursor position
 #[inline]
 pub fn insert_lines(n: u16) -> String {
-    format!("\x1b[{}L", n)
+    format!("{CSI}{n}L")
 }
 
 /// Delete Ps lines at cursor position
 #[inline]
 pub fn delete_lines(n: u16) -> String {
-    format!("\x1b[{}M", n)
+    format!("{CSI}{n}M")
 }
 
 /// Scroll up Ps lines
 #[inline]
 pub fn scroll_up(n: u16) -> String {
-    format!("\x1b[{}S", n)
+    format!("{CSI}{n}S")
 }
 
 /// Scroll down Ps lines
 #[inline]
 pub fn scroll_down(n: u16) -> String {
-    format!("\x1b[{}T", n)
+    format!("{CSI}{n}T")
 }
 
 /// Build an OSC sequence to set the terminal window title
 #[inline]
 pub fn set_window_title(title: &str) -> String {
-    format!("{}2;{}{}", OSC, title, BEL)
+    format!("{OSC_SET_TITLE_PREFIX}{title}{BEL}")
 }
 
 /// Build an OSC 8 hyperlink open sequence
 #[inline]
 pub fn hyperlink_open(url: &str) -> String {
-    format!("{}8;;{}{}", OSC, url, ST)
+    format!("{OSC_HYPERLINK_PREFIX};{url}{ST}")
 }
 
 /// Build an OSC 8 hyperlink close sequence
 #[inline]
 pub fn hyperlink_close() -> String {
-    format!("{}8;;{}", OSC, ST)
+    format!("{OSC_HYPERLINK_PREFIX};{ST}")
 }
 
 #[cfg(test)]

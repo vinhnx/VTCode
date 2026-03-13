@@ -39,6 +39,7 @@ use syntect::highlighting::{FontStyle, Highlighter, Theme, ThemeSet};
 use syntect::parsing::{Scope, SyntaxReference, SyntaxSet};
 use syntect::util::LinesWithEndings;
 use tracing::warn;
+use vtcode_commons::ansi_codes::RESET;
 
 /// Default syntax highlighting theme
 const DEFAULT_THEME_NAME: &str = "base16-ocean.dark";
@@ -404,7 +405,7 @@ pub fn highlight_code_to_ansi(code: &str, language: Option<&str>, theme_name: &s
     for (ansi_style, text) in segments.into_iter().flatten() {
         output.push_str(&ansi_style.to_string());
         output.push_str(&text);
-        output.push_str("\x1b[0m"); // Reset
+        output.push_str(RESET);
     }
 
     output

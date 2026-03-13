@@ -1,9 +1,12 @@
-//! ANSI escape sequence parser and utilities
+//! Shared ANSI escape parser and stripping utilities for VT Code.
+//!
+//! See `docs/reference/ansi-in-vtcode.md` for the workspace usage map.
 
+use crate::ansi_codes::{BEL_BYTE, ESC_BYTE};
 use memchr::memchr;
 
-const ESC: u8 = 0x1b;
-const BEL: u8 = 0x07;
+const ESC: u8 = ESC_BYTE;
+const BEL: u8 = BEL_BYTE;
 const DEL: u8 = 0x7f;
 const C1_ST: u8 = 0x9c;
 const C1_DCS: u8 = 0x90;
@@ -16,6 +19,19 @@ const CAN: u8 = 0x18;
 const SUB: u8 = 0x1a;
 const MAX_STRING_SEQUENCE_BYTES: usize = 4096;
 const MAX_CSI_SEQUENCE_BYTES: usize = 64;
+
+#[derive(Clone, Copy)]
+enum StringSequenceTerminator {
+    StOnly,
+    BelOrSt,
+}
+
+impl StringSequenceTerminator {
+    #[inline]
+    const fn allows_bel(self) -> bool {
+        matches!(self, Self::BelOrSt)
+    }
+}
 
 #[inline]
 fn parse_c1_at(bytes: &[u8], start: usize) -> Option<(u8, usize)> {
@@ -75,7 +91,11 @@ fn parse_csi(bytes: &[u8], start: usize) -> Option<usize> {
 }
 
 #[inline]
-fn parse_osc(bytes: &[u8], start: usize) -> Option<usize> {
+fn parse_string_sequence(
+    bytes: &[u8],
+    start: usize,
+    terminator: StringSequenceTerminator,
+) -> Option<usize> {
     let mut consumed = 0usize;
     for index in start..bytes.len() {
         if bytes[index] == ESC && !(index + 1 < bytes.len() && bytes[index + 1] == b'\\') {
@@ -93,7 +113,7 @@ fn parse_osc(bytes: &[u8], start: usize) -> Option<usize> {
         }
 
         match bytes[index] {
-            BEL | C1_ST => return Some(index + 1),
+            BEL if terminator.allows_bel() => return Some(index + 1),
             ESC if index + 1 < bytes.len() && bytes[index + 1] == b'\\' => return Some(index + 2),
             _ => {}
         }
@@ -108,34 +128,10 @@ fn parse_osc(bytes: &[u8], start: usize) -> Option<usize> {
 }
 
 #[inline]
-fn parse_st_terminated(bytes: &[u8], start: usize) -> Option<usize> {
-    let mut consumed = 0usize;
-    for index in start..bytes.len() {
-        if bytes[index] == ESC && !(index + 1 < bytes.len() && bytes[index + 1] == b'\\') {
-            return Some(index);
-        }
-        if bytes[index] == CAN || bytes[index] == SUB {
-            return Some(index + 1);
-        }
-
-        if let Some((c1, len)) = parse_c1_at(bytes, index)
-            && c1 == C1_ST
-        {
-            return Some(index + len);
-        }
-
-        match bytes[index] {
-            C1_ST => return Some(index + 1),
-            ESC if index + 1 < bytes.len() && bytes[index + 1] == b'\\' => return Some(index + 2),
-            _ => {}
-        }
-
-        consumed += 1;
-        if consumed > MAX_STRING_SEQUENCE_BYTES {
-            return Some(index + 1);
-        }
+fn push_visible_byte(output: &mut Vec<u8>, byte: u8) {
+    if matches!(byte, b'\n' | b'\r' | b'\t') || !(byte < 32 || byte == DEL) {
+        output.push(byte);
     }
-    None
 }
 
 #[inline]
@@ -147,8 +143,10 @@ fn parse_ansi_sequence_bytes(bytes: &[u8]) -> Option<usize> {
     if let Some((c1, c1_len)) = parse_c1_at(bytes, 0) {
         return match c1 {
             C1_CSI => parse_csi(bytes, c1_len),
-            C1_OSC => parse_osc(bytes, c1_len),
-            C1_DCS | C1_SOS | C1_PM | C1_APC => parse_st_terminated(bytes, c1_len),
+            C1_OSC => parse_string_sequence(bytes, c1_len, StringSequenceTerminator::BelOrSt),
+            C1_DCS | C1_SOS | C1_PM | C1_APC => {
+                parse_string_sequence(bytes, c1_len, StringSequenceTerminator::StOnly)
+            }
             _ => Some(c1_len),
         };
     }
@@ -161,8 +159,10 @@ fn parse_ansi_sequence_bytes(bytes: &[u8]) -> Option<usize> {
 
             match bytes[1] {
                 b'[' => parse_csi(bytes, 2),
-                b']' => parse_osc(bytes, 2),
-                b'P' | b'^' | b'_' | b'X' => parse_st_terminated(bytes, 2),
+                b']' => parse_string_sequence(bytes, 2, StringSequenceTerminator::BelOrSt),
+                b'P' | b'^' | b'_' | b'X' => {
+                    parse_string_sequence(bytes, 2, StringSequenceTerminator::StOnly)
+                }
                 // Three-byte sequences: ESC + intermediate + final
                 // ESC SP {F,G,L,M,N} — 7/8-bit controls, ANSI conformance
                 // ESC # {3,4,5,6,8} — DEC line attributes / screen alignment
@@ -192,15 +192,8 @@ pub fn strip_ansi(text: &str) -> String {
     while i < bytes.len() {
         let next_esc = memchr(ESC, &bytes[i..]).map_or(bytes.len(), |offset| i + offset);
         while i < next_esc {
-            if bytes[i] == b'\n' || bytes[i] == b'\r' || bytes[i] == b'\t' {
-                output.push(bytes[i]);
-                i += 1;
-            } else if bytes[i] < 32 || bytes[i] == DEL {
-                i += 1;
-            } else {
-                output.push(bytes[i]);
-                i += 1;
-            }
+            push_visible_byte(&mut output, bytes[i]);
+            i += 1;
         }
 
         if i >= bytes.len() {
@@ -239,15 +232,8 @@ pub fn strip_ansi_bytes(input: &[u8]) -> Vec<u8> {
             break;
         }
 
-        if bytes[i] == b'\n' || bytes[i] == b'\r' || bytes[i] == b'\t' {
-            output.push(bytes[i]);
-            i += 1;
-        } else if bytes[i] < 32 || bytes[i] == DEL {
-            i += 1;
-        } else {
-            output.push(bytes[i]);
-            i += 1;
-        }
+        push_visible_byte(&mut output, bytes[i]);
+        i += 1;
     }
     output
 }
@@ -434,11 +420,11 @@ mod tests {
 
         // ESC SP F = 7-bit controls
         let input3 = "a\x1b Fb";
-        assert_eq!(strip_ansi(&input3), "ab");
+        assert_eq!(strip_ansi(input3), "ab");
 
         // ESC % G = select UTF-8
         let input4 = "a\x1b%Gb";
-        assert_eq!(strip_ansi(&input4), "ab");
+        assert_eq!(strip_ansi(input4), "ab");
     }
 
     #[test]

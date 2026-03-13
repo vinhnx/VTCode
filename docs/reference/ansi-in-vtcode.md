@@ -2,7 +2,7 @@
 
 ## Overview
 
-VT Code extensively uses ANSI escape sequences for terminal control, PTY output processing, and TUI rendering. This document maps the ANSI reference to VT Code's implementation.
+VT Code extensively uses ANSI escape sequences for terminal control, PTY output processing, terminal probing, notifications, and TUI rendering. This document maps the ANSI reference to VT Code's shared implementation.
 
 ## Key Modules
 
@@ -36,7 +36,21 @@ pub fn strip_ansi_bytes(input: &[u8]) -> Vec<u8>
 
 `vtcode-core/src/utils/ansi_parser.rs` and `vtcode-tui/src/utils/ansi_parser.rs` both re-export this shared implementation.
 
-### 2. ANSI Style Utilities (`vtcode-core/src/utils/anstyle_utils.rs`)
+### 2. Shared ANSI Sequences (`vtcode-commons/src/ansi_codes.rs`)
+
+**Purpose**: Centralize reusable ANSI constants, cursor helpers, OSC builders, redraw helpers, and terminal notification helpers.
+
+**Used in**:
+
+-   Exit summary rendering (`src/agent/runloop/unified/postamble.rs`)
+-   Terminal palette probing (`vtcode-core/src/utils/terminal_color_probe.rs`)
+-   Tool risk coloring (`vtcode-core/src/tools/registry/risk_scorer.rs`)
+-   Syntax highlight reset emission (`vtcode-tui/src/ui/syntax_highlight.rs`)
+-   HITL notifications (`vtcode-core/src/notifications/mod.rs`, `src/agent/runloop/mcp_elicitation.rs`)
+
+`vtcode-core/src/utils/ansi_codes.rs` re-exports this shared implementation so downstream crates use one canonical source of escape sequences.
+
+### 3. ANSI Style Utilities (`vtcode-core/src/utils/anstyle_utils.rs`)
 
 **Purpose**: Convert ANSI styles to Ratatui styles for TUI rendering
 
@@ -54,7 +68,7 @@ pub fn ansi_style_to_ratatui_style(style: AnsiStyle) -> Style
 -   256 colors (8-bit)
 -   RGB/Truecolor (24-bit)
 
-### 3. ANSI Renderer (`vtcode-core/src/utils/ansi.rs`)
+### 4. ANSI Renderer (`vtcode-core/src/utils/ansi.rs`)
 
 **Purpose**: Render styled text to terminal
 
@@ -425,6 +439,7 @@ For complete ANSI sequence reference, see:
 
 -   [XFree86 XTerm Control Sequences](https://www.xfree86.org/current/ctlseqs.html) — Canonical xterm spec
 -   `vtcode-commons/src/ansi_codes.rs` — Constants for all supported sequences
+-   `vtcode-core/src/utils/ansi_codes.rs` — Backward-compatible re-export used by runtime callers
 -   `vtcode-commons/src/ansi.rs` — ECMA-48 parser and stripper
 -   `vtcode-core/src/utils/anstyle_utils.rs` — Style conversion
 -   `vtcode-core/src/utils/ansi.rs` — Rendering utilities
@@ -455,6 +470,7 @@ For complete ANSI sequence reference, see:
 VT Code has comprehensive ANSI support:
 
 -   Stripping for clean text processing
+-   Shared builders/constants for notifications, palette probing, and summary output
 -   Parsing for style extraction (including 3-byte ESC sequences per xterm spec)
 -   Conversion to Ratatui styles
 -   Rendering for terminal output

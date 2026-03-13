@@ -1,5 +1,6 @@
 //! Unified message styles and their logical mappings
 
+use crate::ansi_codes::RESET;
 use crate::color_policy;
 use anstyle::{AnsiColor, Color, Effects, RgbColor, Style};
 
@@ -61,7 +62,7 @@ pub fn render_styled(text: &str, color: Color, effects: Option<String>) -> Strin
     if prefix.is_empty() {
         text.to_string()
     } else {
-        format!("{}{}{}", prefix, text, "\x1b[0m")
+        format!("{prefix}{text}{RESET}")
     }
 }
 

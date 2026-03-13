@@ -27,7 +27,12 @@ use std::os::fd::AsFd;
 #[cfg(unix)]
 use vtcode_commons::ansi_capabilities::{ColorScheme, set_color_scheme_override};
 #[cfg(unix)]
+use vtcode_commons::ansi_codes::{DEVICE_ATTRIBUTES_REQUEST, ESC_BYTE, ESC_CHAR, OSC, ST};
+#[cfg(unix)]
 use vtcode_commons::color256_theme::set_harmonious_runtime_hint;
+
+#[cfg(unix)]
+const DA1_RESPONSE_PREFIX: [u8; 3] = [ESC_BYTE, b'[', b'?'];
 
 /// Run OSC probe once at startup and cache results in shared runtime hints.
 pub fn probe_and_cache_terminal_palette_harmony() {
@@ -82,9 +87,9 @@ fn probe_terminal_colors(timeout: Duration) -> Result<ProbeResult> {
     let _raw_guard = RawModeGuard::activate(&tty)?;
 
     for code in ["10", "11", "4;16", "4;231"] {
-        write!(tty, "\x1b]{code};?\x1b\\").context("failed to write OSC query")?;
+        write!(tty, "{OSC}{code};?{ST}").context("failed to write OSC query")?;
     }
-    tty.write_all(b"\x1b[c")
+    tty.write_all(DEVICE_ATTRIBUTES_REQUEST.as_bytes())
         .context("failed to write DA1 sentinel query")?;
     tty.flush().context("failed to flush OSC probe queries")?;
 
@@ -111,7 +116,10 @@ fn read_until_da1(tty: &mut File, timeout: Duration) -> Result<Vec<u8>> {
     let mut buffer = Vec::with_capacity(1024);
 
     loop {
-        if buffer.windows(3).any(|window| window == b"\x1b[?") {
+        if buffer
+            .windows(DA1_RESPONSE_PREFIX.len())
+            .any(|window| window == DA1_RESPONSE_PREFIX)
+        {
             return Ok(buffer);
         }
 
@@ -171,7 +179,7 @@ fn parse_four_colors(response: &[u8]) -> Result<[(u8, u8, u8); 4]> {
 
 #[cfg(unix)]
 fn parse_rgb_part(part: &str) -> Option<(u8, u8, u8)> {
-    let payload = part.split('\x1b').next()?;
+    let payload = part.split(ESC_CHAR).next()?;
     let mut channels = payload.split('/');
 
     Some((
@@ -234,12 +242,14 @@ impl Drop for RawModeGuard {
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
+    use vtcode_commons::ansi_codes::CSI;
 
     #[test]
     fn parse_rgb_handles_16bit_channels() {
-        let response =
-            b"\x1b]10;rgb:dddd/dddd/dddd\x1b\\\x1b]11;rgb:1111/1111/1111\x1b\\\x1b]4;16;rgb:1111/1111/1111\x1b\\\x1b]4;231;rgb:dddd/dddd/dddd\x1b\\\x1b[?62;4c";
-        let [fg, bg, c16, c231] = parse_four_colors(response).expect("valid colors");
+        let response = format!(
+            "{OSC}10;rgb:dddd/dddd/dddd{ST}{OSC}11;rgb:1111/1111/1111{ST}{OSC}4;16;rgb:1111/1111/1111{ST}{OSC}4;231;rgb:dddd/dddd/dddd{ST}{CSI}?62;4c"
+        );
+        let [fg, bg, c16, c231] = parse_four_colors(response.as_bytes()).expect("valid colors");
         assert_eq!(fg, (0xdd, 0xdd, 0xdd));
         assert_eq!(bg, (0x11, 0x11, 0x11));
         assert_eq!(c16, (0x11, 0x11, 0x11));
@@ -248,9 +258,10 @@ mod tests {
 
     #[test]
     fn parse_rgb_handles_single_digit_channels() {
-        let response =
-            b"\x1b]10;rgb:a/b/c\x1b\\\x1b]11;rgb:0/0/0\x1b\\\x1b]4;16;rgb:0/0/0\x1b\\\x1b]4;231;rgb:f/f/f\x1b\\\x1b[?1;2c";
-        let [fg, _, _, c231] = parse_four_colors(response).expect("valid colors");
+        let response = format!(
+            "{OSC}10;rgb:a/b/c{ST}{OSC}11;rgb:0/0/0{ST}{OSC}4;16;rgb:0/0/0{ST}{OSC}4;231;rgb:f/f/f{ST}{CSI}?1;2c"
+        );
+        let [fg, _, _, c231] = parse_four_colors(response.as_bytes()).expect("valid colors");
         assert_eq!(fg, (0xaa, 0xbb, 0xcc));
         assert_eq!(c231, (0xff, 0xff, 0xff));
     }

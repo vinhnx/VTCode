@@ -6,12 +6,13 @@ use line_clipping::{LineSegment, Point, Window};
 use ratatui::prelude::*;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
+use vtcode_commons::ansi_codes::ESC_CHAR;
 
 use crate::utils::ansi_parser::strip_ansi;
 
 /// Strips ANSI escape codes from text to ensure plain text output
 pub fn strip_ansi_codes(text: &str) -> Cow<'_, str> {
-    if !text.contains('\x1b') {
+    if !text.contains(ESC_CHAR) {
         return Cow::Borrowed(text);
     }
     Cow::Owned(strip_ansi(text))

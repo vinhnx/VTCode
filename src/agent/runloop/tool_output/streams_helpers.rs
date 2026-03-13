@@ -9,6 +9,7 @@ use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::constants::defaults;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_core::utils::ansi_codes::ESC_CHAR;
 use vtcode_core::utils::file_utils::ensure_dir_exists_sync;
 
 use super::super::files::{display_width, truncate_text_safe};
@@ -305,7 +306,7 @@ mod markdown_block_tests {
 }
 
 pub(crate) fn strip_ansi_codes(input: &str) -> Cow<'_, str> {
-    if !input.contains('\x1b') {
+    if !input.contains(ESC_CHAR) {
         return Cow::Borrowed(input);
     }
     Cow::Owned(vtcode_core::utils::ansi_parser::strip_ansi(input))
