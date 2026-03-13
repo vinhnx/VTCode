@@ -2,6 +2,38 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.88.4 - 2026-03-13
+
+### Highlights
+### Other Changes
+#### Other
+
+- Add support for tool-free recovery mode and enhance wait feedback mechanisms (8c9f4ca1) 
+- Refactor exit summary display for single and multi-model sessions; improve Ctrl+C signal handling for immediate exit (45558686) 
+- Enhance chat request parsing to preserve assistant phase and streamline message handling (cc3a923b) 
+- Enhance performance by optimizing vector initializations and memory allocations across multiple files (239ac831) 
+- Add 'tty' parameter for PTY execution and enhance output handling in exec responses (049c4382) 
+- Enhance error handling and output guidance for command execution failures (f1cdd4f2) 
+- Enhance error handling and recovery guidance for tool execution failures (1f3445c0) 
+- Refactor output handling to replace read_file and grep_file with unified_file and unified_search (5e094ba7) 
+- Replace read_file and grep_file references with unified_file and unified_search across multiple files (d9794cf4) 
+- Refactor unified_exec argument validation and enhance preflight checks (3d5c56c1) 
+- Refactor loop detection and recovery policies for unified execution (bb764846) 
+- Update continuation policy to default to "all" and implement pause/resume functionality in exec mode (c7b98951) 
+- Add default harness log directory and update event log path documentation (3135c322) 
+- Refactor input handling: update keybindings and queue submission logic (598a2ad5) 
+- Implement session IDE toggle (28c6a858) 
+- Add ANSI escape sequences for scroll region and insert/delete operations (339b6053) 
+- Update TODO (fe850c3d) 
+- Enhance execution flow: add non-interactive settling logic and improve test coverage (f7047954) 
+- Update TODO (45a02148) 
+- Add support for tracking and reusing successful readonly tool signatures (e97063ad) 
+- Add tool_call_id to event items and enhance usage tracking (7ab2319c) 
+- Add tool_call_correlation_id function for fallback handling in output items (134b5691) 
+- Enhance command detection: support likely typos and improve tool call correlation handling (2b64d276) 
+- Refactor ANSI handling: centralize constants, improve documentation, and enhance utility functions (d268d5c9) 
+### Contributors
+@vinhnx
 ## 0.88.3 - 2026-03-12
 
 ### Highlights
