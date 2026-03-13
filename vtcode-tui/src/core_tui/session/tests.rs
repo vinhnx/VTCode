@@ -496,24 +496,26 @@ fn arrow_keys_navigate_input_history() {
 
     session.set_input("first message".to_string());
     let submit_first = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(matches!(submit_first, Some(InlineEvent::Submit(value)) if value == "first message"));
+    assert!(
+        matches!(submit_first, Some(InlineEvent::QueueSubmit(value)) if value == "first message")
+    );
 
     session.set_input("second".to_string());
     let submit_second = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(matches!(submit_second, Some(InlineEvent::Submit(value)) if value == "second"));
+    assert!(matches!(submit_second, Some(InlineEvent::QueueSubmit(value)) if value == "second"));
 
     assert_eq!(session.input_manager.history().len(), 2);
     assert!(session.input_manager.content().is_empty());
 
-    let up_latest = session.process_key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
+    let up_latest = session.process_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     assert!(matches!(up_latest, Some(InlineEvent::HistoryPrevious)));
     assert_eq!(session.input_manager.content(), "second");
 
-    let up_previous = session.process_key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
+    let up_previous = session.process_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     assert!(matches!(up_previous, Some(InlineEvent::HistoryPrevious)));
     assert_eq!(session.input_manager.content(), "first message");
 
-    let down_forward = session.process_key(KeyEvent::new(KeyCode::Down, KeyModifiers::ALT));
+    let down_forward = session.process_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     assert!(matches!(down_forward, Some(InlineEvent::HistoryNext)));
     assert!(session.input_manager.content().is_empty());
     assert!(session.input_manager.history_index().is_none());
@@ -763,13 +765,33 @@ fn non_bang_input_uses_default_padding() {
 }
 
 #[test]
-fn control_enter_queues_submission() {
+fn enter_queues_submission_by_default() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
     session.set_input("queued".to_string());
 
-    let queued = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL));
+    let queued = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(matches!(queued, Some(InlineEvent::QueueSubmit(value)) if value == "queued"));
+}
+
+#[test]
+fn control_enter_submits_current_draft_immediately() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+
+    session.set_input("process now".to_string());
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL));
+    assert!(matches!(event, Some(InlineEvent::Submit(value)) if value == "process now"));
+}
+
+#[test]
+fn idle_control_enter_with_empty_input_processes_latest_queued_message() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.push_queued_input("first queued".to_string());
+    session.push_queued_input("latest queued".to_string());
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL));
+    assert!(matches!(event, Some(InlineEvent::ProcessLatestQueued)));
 }
 
 #[test]
@@ -868,7 +890,7 @@ fn busy_resume_command_emits_resume_event() {
 }
 
 #[test]
-fn busy_plain_enter_steers_active_run() {
+fn busy_plain_enter_queues_submission() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.handle_command(InlineCommand::SetInputStatus {
         left: Some("Running tool: unified_search".to_string()),
@@ -877,6 +899,21 @@ fn busy_plain_enter_steers_active_run() {
     session.set_input("keep searching in docs/".to_string());
 
     let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(
+        matches!(event, Some(InlineEvent::QueueSubmit(value)) if value == "keep searching in docs/")
+    );
+}
+
+#[test]
+fn busy_control_enter_steers_active_run() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.handle_command(InlineCommand::SetInputStatus {
+        left: Some("Running tool: unified_search".to_string()),
+        right: None,
+    });
+    session.set_input("keep searching in docs/".to_string());
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL));
     assert!(matches!(event, Some(InlineEvent::Steer(value)) if value == "keep searching in docs/"));
 }
 
@@ -1114,11 +1151,11 @@ fn consecutive_duplicate_submissions_not_stored_twice() {
 
     session.set_input("repeat".to_string());
     let first = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(matches!(first, Some(InlineEvent::Submit(value)) if value == "repeat"));
+    assert!(matches!(first, Some(InlineEvent::QueueSubmit(value)) if value == "repeat"));
 
     session.set_input("repeat".to_string());
     let second = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(matches!(second, Some(InlineEvent::Submit(value)) if value == "repeat"));
+    assert!(matches!(second, Some(InlineEvent::QueueSubmit(value)) if value == "repeat"));
 
     assert_eq!(session.input_manager.history().len(), 1);
 }

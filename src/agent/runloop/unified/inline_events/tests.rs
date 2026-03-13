@@ -110,7 +110,8 @@ async fn launch_editor_event_submits_edit_command() {
         false,
     );
     let mut queued_inputs = VecDeque::new();
-    let mut queue = InlineQueueState::new(&handle, &mut queued_inputs);
+    let mut prefer_latest_once = false;
+    let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
 
     let action = context
         .process_event(InlineEvent::LaunchEditor, &mut queue)
@@ -148,7 +149,8 @@ async fn open_file_in_editor_event_submits_edit_command_with_path() {
         false,
     );
     let mut queued_inputs = VecDeque::new();
-    let mut queue = InlineQueueState::new(&handle, &mut queued_inputs);
+    let mut prefer_latest_once = false;
+    let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
     let path = "/tmp/demo.rs".to_string();
 
     let action = context
@@ -187,7 +189,8 @@ async fn toggle_mode_event_submits_mode_command() {
         false,
     );
     let mut queued_inputs = VecDeque::new();
-    let mut queue = InlineQueueState::new(&handle, &mut queued_inputs);
+    let mut prefer_latest_once = false;
+    let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
 
     let action = context
         .process_event(InlineEvent::ToggleMode, &mut queue)
@@ -225,7 +228,8 @@ async fn plan_confirmation_events_map_to_expected_actions() {
         false,
     );
     let mut queued_inputs = VecDeque::new();
-    let mut queue = InlineQueueState::new(&handle, &mut queued_inputs);
+    let mut prefer_latest_once = false;
+    let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
 
     let execute = context
         .process_event(
@@ -297,7 +301,8 @@ async fn interrupt_event_returns_exit_after_double_ctrl_c() {
         false,
     );
     let mut queued_inputs = VecDeque::new();
-    let mut queue = InlineQueueState::new(&handle, &mut queued_inputs);
+    let mut prefer_latest_once = false;
+    let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
 
     let _ = ctrl_c_state.register_signal();
     std::thread::sleep(Duration::from_millis(250));
@@ -336,7 +341,8 @@ async fn steering_events_are_passive_in_idle_loop() {
         false,
     );
     let mut queued_inputs = VecDeque::new();
-    let mut queue = InlineQueueState::new(&handle, &mut queued_inputs);
+    let mut prefer_latest_once = false;
+    let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
 
     for event in [
         InlineEvent::Pause,
@@ -349,4 +355,42 @@ async fn steering_events_are_passive_in_idle_loop() {
             .expect("process steering event");
         assert!(matches!(action, InlineLoopAction::Continue));
     }
+}
+
+#[tokio::test]
+async fn process_latest_queued_event_primes_newest_queue_priority() {
+    let (handle, mut renderer) = renderer_with_handle();
+    let ctrl_c_state = CtrlCState::new();
+    let interrupts = InlineInterruptCoordinator::new(&ctrl_c_state);
+    let mut ctrl_c_notice_displayed = false;
+    let mut model_picker_state: Option<ModelPickerState> = None;
+    let mut palette_state: Option<ActivePalette> = None;
+    let mut config = runtime_config();
+    let mut vt_cfg = None;
+    let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
+    let session_bootstrap = SessionBootstrap::default();
+    let mut context = InlineEventContext::new(
+        &mut renderer,
+        &handle,
+        interrupts,
+        &mut ctrl_c_notice_displayed,
+        &mut model_picker_state,
+        &mut palette_state,
+        &mut config,
+        &mut vt_cfg,
+        &mut provider_client,
+        &session_bootstrap,
+        false,
+    );
+    let mut queued_inputs = VecDeque::from(["first".to_string(), "latest".to_string()]);
+    let mut prefer_latest_once = false;
+    let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
+
+    let action = context
+        .process_event(InlineEvent::ProcessLatestQueued, &mut queue)
+        .await
+        .expect("process latest queued");
+
+    assert!(matches!(action, InlineLoopAction::Continue));
+    assert!(prefer_latest_once);
 }

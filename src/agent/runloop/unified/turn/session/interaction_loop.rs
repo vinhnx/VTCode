@@ -148,6 +148,7 @@ impl<'a> InteractionLoopContext<'a> {
 pub(crate) struct InteractionState<'a> {
     pub input_status_state: &'a mut crate::agent::runloop::unified::status_line::InputStatusState,
     pub queued_inputs: &'a mut VecDeque<String>,
+    pub prefer_latest_queued_input_once: &'a mut bool,
     pub model_picker_state: &'a mut Option<ModelPickerState>,
     pub palette_state: &'a mut Option<ActivePalette>,
     pub last_known_mcp_tools: &'a mut Vec<String>,

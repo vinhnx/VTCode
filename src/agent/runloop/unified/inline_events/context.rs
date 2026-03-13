@@ -64,6 +64,11 @@ impl<'a> InlineEventContext<'a> {
         let action = match event {
             InlineEvent::Submit(text) => self.input_processor().submit(text),
             InlineEvent::QueueSubmit(text) => self.input_processor().queue_submit(text, queue),
+            InlineEvent::ProcessLatestQueued => {
+                self.state.reset_interrupt_state();
+                queue.prefer_latest_next();
+                InlineLoopAction::Continue
+            }
             InlineEvent::Steer(_) | InlineEvent::Pause | InlineEvent::Resume => {
                 self.state.reset_interrupt_state();
                 self.input_processor().passive()

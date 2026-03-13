@@ -21,7 +21,7 @@ struct IdleDetectionConfig {
 }
 
 use crate::agent::runloop::unified::inline_events::harness::{
-    HarnessEventEmitter, resolve_event_log_path,
+    HarnessEventEmitter, default_harness_log_dir, resolve_event_log_path,
 };
 use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, TurnId, TurnRunId};
 use chrono::Utc;

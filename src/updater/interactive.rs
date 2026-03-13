@@ -242,10 +242,7 @@ pub(crate) async fn execute_inline_update(
             Ok(InlineUpdateOutcome::Continue)
         }
         Err(err) => {
-            renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to update: {}", err),
-            )?;
+            renderer.line(MessageStyle::Error, &format!("Failed to update: {}", err))?;
             Ok(InlineUpdateOutcome::Continue)
         }
     }

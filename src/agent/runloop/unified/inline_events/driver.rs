@@ -51,6 +51,7 @@ impl<'a> InlineEventLoop<'a> {
             ctrl_c_notice_displayed,
             default_placeholder,
             queued_inputs,
+            prefer_latest_queued_input_once,
             model_picker_state,
             palette_state,
             config,
@@ -69,7 +70,7 @@ impl<'a> InlineEventLoop<'a> {
             interrupts,
             ctrl_c_notice_displayed,
             default_placeholder,
-            queue: InlineQueueState::new(handle, queued_inputs),
+            queue: InlineQueueState::new(handle, queued_inputs, prefer_latest_queued_input_once),
             model_picker_state,
             palette_state,
             config,
@@ -175,7 +176,7 @@ impl<'a> InlineEventLoop<'a> {
     }
 
     fn take_queued_submission(&mut self) -> Option<InlineLoopAction> {
-        self.queue.pop_front().map(|queued| {
+        self.queue.take_next_submission().map(|queued| {
             if queued.is_empty() {
                 InlineLoopAction::Continue
             } else {
@@ -206,6 +207,7 @@ pub(crate) struct InlineEventLoopResources<'a> {
     pub ctrl_c_notice_displayed: &'a mut bool,
     pub default_placeholder: &'a Option<String>,
     pub queued_inputs: &'a mut VecDeque<String>,
+    pub prefer_latest_queued_input_once: &'a mut bool,
     pub model_picker_state: &'a mut Option<ModelPickerState>,
     pub palette_state: &'a mut Option<ActivePalette>,
     pub config: &'a mut CoreAgentConfig,

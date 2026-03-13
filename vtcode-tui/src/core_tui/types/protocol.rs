@@ -101,6 +101,7 @@ pub enum InlineEvent {
     Submit(String),
     QueueSubmit(String),
     Steer(String),
+    ProcessLatestQueued,
     /// Edit the newest queued input (pop into input buffer)
     EditQueue,
     Overlay(OverlayEvent),

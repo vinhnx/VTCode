@@ -39,8 +39,8 @@ VT Code provides multiple options for handling line breaks in the terminal:
 
 ### Keyboard Shortcuts
 
-- `Enter` = Submit the current input
-- `Ctrl+Enter` or `Cmd+Enter` = Queue the input for later processing
+- `Enter` = Queue the current input
+- `Ctrl+Enter` = Process the current draft immediately, or steer the active turn
 - `Shift+Enter` = Insert newline without submitting
 - `Esc` = Cancel current input or close modals
 

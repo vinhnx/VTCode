@@ -25,7 +25,9 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 | `Ctrl+Z` (Unix) | Suspend VT Code to the shell; run `fg` to resume. | Job-control support for terminal workflows. |
 | `Up/Down arrows` | Navigate through command history. | Recall previous prompts or commands. |
 | `Esc` + `Esc` | Rewind the conversation and code to the latest checkpoint. | Idle context only (while no task/PTY is running). |
-| `Tab` | Toggle extended thinking (analysis) mode on and off. | Switch between shorter and more verbose reasoning. |
+| `Enter` | Queue the current input. | Plain input box only. |
+| `Tab` | Queue the current input. | Plain input box only; list and slash UIs keep their existing tab behavior. |
+| `Ctrl+Enter` | Process now or steer now. | Idle: runs the current draft, or the newest queued message if the draft is empty. Active: steers the current turn with the current draft. |
 | `Shift+Tab` or `Alt+M` | Cycle permission modes. | Switches Auto-Accept Mode, Plan Mode, and normal mode. |
 
 ### Multiline Input
@@ -53,8 +55,8 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 
 When a task is already running, VT Code keeps the active turn alive and lets you steer it:
 
-- `Enter` sends the current input to the active run as steering text.
-- `Tab` still queues the input for the next turn after the current run finishes.
+- `Enter` and `Tab` queue the current input for later processing.
+- `Ctrl+Enter` sends the current draft to the active run as steering text.
 - `/pause` pauses the active run at the next model/tool/approval boundary.
 - `/resume` resumes a paused run while it is active. When idle, `/resume` still opens archived sessions.
 - `/stop` still cancels the active run immediately.

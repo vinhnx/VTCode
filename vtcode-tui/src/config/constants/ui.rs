@@ -102,10 +102,9 @@ pub const HEADER_INPUT_LABEL: &str = "Input";
 pub const HEADER_INPUT_ENABLED: &str = "Enabled";
 pub const HEADER_INPUT_DISABLED: &str = "Disabled";
 pub const INLINE_USER_PREFIX: &str = " ";
-pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str = "Type your message, or @files, /commands, Shift+Tab: cycle modes, /stop: stop task, tab: queue messages";
-pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str =
-    "Continue, or @files, /commands, Shift+Tab: cycle modes, /stop: stop task, tab: queue messages";
-pub const HEADER_SHORTCUT_HINT: &str = "Shortcuts: Enter send • Shift+Enter newline • Esc cancel • Ctrl+C interrupt • @ files • / commands";
+pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str = "Type your message, or @files, /commands, Shift+Tab: cycle modes, Enter/Tab: queue, Ctrl+Enter: run/steer now, /stop: stop task";
+pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str = "Continue, or @files, /commands, Shift+Tab: cycle modes, Enter/Tab: queue, Ctrl+Enter: run/steer now, /stop: stop task";
+pub const HEADER_SHORTCUT_HINT: &str = "Shortcuts: Enter/Tab queue • Ctrl+Enter run/steer • Shift+Enter newline • Esc cancel • Ctrl+C interrupt";
 pub const HEADER_META_SEPARATOR: &str = "   ";
 pub const WELCOME_TEXT_WIDTH: usize = 80;
 pub const WELCOME_SHORTCUT_SECTION_TITLE: &str = "Keyboard Shortcuts";

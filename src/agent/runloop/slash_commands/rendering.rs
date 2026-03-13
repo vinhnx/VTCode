@@ -163,6 +163,11 @@ pub(super) fn render_help(
             MessageStyle::Info,
             "  Esc+Esc – Rewind the code/conversation",
         )?;
+        renderer.line(MessageStyle::Info, "  Enter/Tab – Queue the current input")?;
+        renderer.line(
+            MessageStyle::Info,
+            "  Ctrl+Enter – Run now (or steer the active turn)",
+        )?;
         renderer.line(MessageStyle::Info, "  Shift+Tab – Toggle permission modes")?;
         renderer.line(MessageStyle::Info, "")?;
         renderer.line(MessageStyle::Info, "Multiline input:")?;

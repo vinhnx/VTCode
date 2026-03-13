@@ -308,11 +308,14 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             .map(|cfg| cfg.agent.harness.clone())
             .unwrap_or_default();
         let turn_run_id = TurnRunId(thread_handle.thread_id().to_string());
-        let harness_emitter: Option<HarnessEventEmitter> = harness_config
+        let effective_log_path: Option<String> = harness_config
             .event_log_path
             .as_ref()
             .filter(|path| !path.trim().is_empty())
-            .and_then(|path| {
+            .cloned()
+            .or_else(|| default_harness_log_dir().map(|dir| dir.to_string_lossy().into_owned()));
+        let harness_emitter: Option<HarnessEventEmitter> =
+            effective_log_path.as_deref().and_then(|path| {
                 let resolved = resolve_event_log_path(path, &turn_run_id);
                 HarnessEventEmitter::new(resolved).ok()
             });
@@ -323,8 +326,8 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 .unwrap_or_default();
             let features = FeatureSet::from_config(vt_cfg.as_ref());
             if features.open_responses.emit_events {
-                let or_path = harness_config.event_log_path.as_ref().map(|base| {
-                    let parent = std::path::Path::new(base)
+                let or_path = effective_log_path.as_ref().map(|base| {
+                    let parent = std::path::Path::new(base.as_str())
                         .parent()
                         .unwrap_or(std::path::Path::new("."));
                     let timestamp = Utc::now().format("%Y%m%dT%H%M%SZ");
@@ -426,6 +429,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         let mut palette_state: Option<ActivePalette> = None;
         let mut last_forced_redraw = Instant::now();
         let mut input_status_state = InputStatusState::default();
+        let mut prefer_latest_queued_input_once = false;
         crate::agent::runloop::unified::status_line::update_ide_context_source(
             &mut input_status_state,
             ide_context_bridge.as_ref().and_then(|bridge| {
@@ -527,6 +531,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     crate::agent::runloop::unified::turn::session::interaction_loop::InteractionState {
                         input_status_state: &mut input_status_state,
                         queued_inputs: &mut queued_inputs,
+                        prefer_latest_queued_input_once: &mut prefer_latest_queued_input_once,
                         model_picker_state: &mut model_picker_state,
                         palette_state: &mut palette_state,
                         last_known_mcp_tools: &mut last_known_mcp_tools,

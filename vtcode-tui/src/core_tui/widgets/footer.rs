@@ -221,7 +221,7 @@ pub mod hints {
     pub const IDLE: &str = "? help • / command • @ file";
     pub const PROCESSING: &str = vtcode_commons::stop_hints::STOP_HINT_COMPACT;
     pub const MODAL: &str = "↑↓ navigate • Enter select • Esc close";
-    pub const EDITING: &str = "Enter send • /stop • ↑ history";
+    pub const EDITING: &str = "Enter/Tab queue • Ctrl+Enter run/steer • /stop • ↑ history";
 }
 
 #[cfg(test)]

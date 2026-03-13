@@ -422,16 +422,16 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
 
-            if let Some(event) = maybe_handle_busy_steering_command(session) {
+            if !has_control && let Some(event) = maybe_handle_busy_steering_command(session) {
                 return Some(event);
             }
 
-            if handle_running_slash_command_block(session) {
+            if !has_control && handle_running_slash_command_block(session) {
                 return None;
             }
 
             // Check for backslash + Enter quick escape (insert newline without submitting)
-            if session.input_manager.content().ends_with('\\') {
+            if !has_control && session.input_manager.content().ends_with('\\') {
                 // Remove the backslash and insert a newline
                 let mut content = session.input_manager.content().to_string();
                 content.pop(); // Remove the backslash
@@ -441,7 +441,24 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
 
-            let queue_submit = has_control;
+            if has_control {
+                let Some(submitted) = take_submitted_input(session) else {
+                    session.mark_dirty();
+                    return if session.is_running_activity() {
+                        None
+                    } else {
+                        Some(InlineEvent::ProcessLatestQueued)
+                    };
+                };
+                session.mark_dirty();
+
+                return if session.is_running_activity() {
+                    Some(InlineEvent::Steer(submitted))
+                } else {
+                    Some(InlineEvent::Submit(submitted))
+                };
+            }
+
             // Check for multiline input options (Shift/Alt)
             if has_shift || has_alt {
                 // Insert newline for multiline input
@@ -450,40 +467,18 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
 
-            let submitted = session.input_manager.content().to_owned();
-            let submitted_entry = session.input_manager.current_history_entry();
-            session.input_manager.clear();
-            session.input_compact_mode = false;
-            session.scroll_manager.set_offset(0);
-            slash::update_slash_suggestions(session);
-
-            if submitted.trim().is_empty() {
+            let Some(submitted) = take_submitted_input(session) else {
                 session.mark_dirty();
                 return None;
-            }
-
-            session.remember_submitted_input(submitted_entry);
+            };
 
             // Note: The thinking spinner message is no longer added here.
             // Instead, it's added in session_loop.rs after the user message is displayed,
             // ensuring proper message ordering in the transcript (user message first, then spinner).
 
-            // Queue input if streaming final answer to prevent race condition with turn completion.
-            // This prevents the "dead state" issue where prompts entered during final streaming
-            // could be lost, causing the agent to stop handling subsequent prompts normally.
-            // See: https://github.com/openai/codex/pull/12569
-            let should_queue = queue_submit || session.is_streaming_final_answer;
-
-            if should_queue {
-                session.push_queued_input(submitted.clone());
-                session.mark_dirty();
-                Some(InlineEvent::QueueSubmit(submitted))
-            } else if session.is_running_activity() {
-                session.mark_dirty();
-                Some(InlineEvent::Steer(submitted))
-            } else {
-                Some(InlineEvent::Submit(submitted))
-            }
+            session.push_queued_input(submitted.clone());
+            session.mark_dirty();
+            Some(InlineEvent::QueueSubmit(submitted))
         }
         KeyCode::Tab => {
             if !session.input_enabled {
@@ -494,19 +489,10 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
 
-            let submitted = session.input_manager.content().to_owned();
-            let submitted_entry = session.input_manager.current_history_entry();
-            session.input_manager.clear();
-            session.input_compact_mode = false;
-            session.scroll_manager.set_offset(0);
-            slash::update_slash_suggestions(session);
-
-            if submitted.trim().is_empty() {
+            let Some(submitted) = take_submitted_input(session) else {
                 session.mark_dirty();
                 return None;
-            }
-
-            session.remember_submitted_input(submitted_entry);
+            };
             session.push_queued_input(submitted.clone());
             session.mark_dirty();
             Some(InlineEvent::QueueSubmit(submitted))
@@ -599,19 +585,10 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             }
 
             if ch == '\t' {
-                let submitted = session.input_manager.content().to_owned();
-                let submitted_entry = session.input_manager.current_history_entry();
-                session.input_manager.clear();
-                session.input_compact_mode = false;
-                session.scroll_manager.set_offset(0);
-                slash::update_slash_suggestions(session);
-
-                if submitted.trim().is_empty() {
+                let Some(submitted) = take_submitted_input(session) else {
                     session.mark_dirty();
                     return None;
-                }
-
-                session.remember_submitted_input(submitted_entry);
+                };
                 session.push_queued_input(submitted.clone());
                 session.mark_dirty();
                 return Some(InlineEvent::QueueSubmit(submitted));
@@ -693,6 +670,9 @@ fn is_inline_lists_toggle_shortcut(
 
 fn quick_help_lines() -> Vec<String> {
     vec![
+        "Enter / Tab: Queue the current message.".to_string(),
+        "Ctrl+Enter: Run now while idle, or steer the active task.".to_string(),
+        "Shift+Enter: Insert a newline.".to_string(),
         "Ctrl+A / Ctrl+E: Move to start/end of line.".to_string(),
         "Ctrl+W: Delete previous word.".to_string(),
         "Ctrl+U / Ctrl+K: Delete to start/end of line.".to_string(),
@@ -701,6 +681,26 @@ fn quick_help_lines() -> Vec<String> {
         "Ctrl+Z (Unix): Suspend VT Code; use `fg` to resume.".to_string(),
         "Esc: Close this overlay.".to_string(),
     ]
+}
+
+fn take_submitted_input(session: &mut Session) -> Option<String> {
+    let submitted = session.input_manager.content().to_owned();
+    let submitted_entry = session.input_manager.current_history_entry();
+    clear_submitted_input(session);
+
+    if submitted.trim().is_empty() {
+        return None;
+    }
+
+    session.remember_submitted_input(submitted_entry);
+    Some(submitted)
+}
+
+fn clear_submitted_input(session: &mut Session) {
+    session.input_manager.clear();
+    session.input_compact_mode = false;
+    session.scroll_manager.set_offset(0);
+    slash::update_slash_suggestions(session);
 }
 
 fn handle_running_slash_command_block(session: &mut Session) -> bool {
@@ -740,10 +740,7 @@ fn maybe_handle_busy_steering_command(session: &mut Session) -> Option<InlineEve
         _ => return None,
     };
 
-    session.input_manager.clear();
-    session.input_compact_mode = false;
-    session.scroll_manager.set_offset(0);
-    slash::update_slash_suggestions(session);
+    clear_submitted_input(session);
     session.mark_dirty();
     Some(event)
 }
