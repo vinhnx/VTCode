@@ -295,7 +295,8 @@ pub struct AgentHarnessConfig {
     /// Controls whether harness-managed continuation loops are enabled.
     #[serde(default)]
     pub continuation_policy: ContinuationPolicy,
-    /// Optional JSONL event log path for harness events
+    /// Optional JSONL event log path for harness events.
+    /// Defaults to `~/.vtcode/sessions/` when unset.
     #[serde(default)]
     pub event_log_path: Option<String>,
 }

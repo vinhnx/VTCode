@@ -300,7 +300,8 @@ auto_compaction_enabled = false
 # Type: `string`
 continuation_policy = "all"
 
-# Optional JSONL event log path for harness events (leave empty to disable)
+# Optional JSONL event log path for harness events.
+# Defaults to ~/.vtcode/sessions/ when unset or empty.
 # Default: null
 # Type: `null | string`
 event_log_path = ""

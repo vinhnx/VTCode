@@ -38,6 +38,8 @@ GOOGLE_API_KEY
 logs/
 *.log.*
 .vtcode/perf/
+harness-*.jsonl
+open-responses-*.jsonl
 
 # Temporary Files
 *.tmp

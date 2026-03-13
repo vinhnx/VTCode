@@ -87,6 +87,7 @@ max_tool_wall_clock_secs = 600
 max_tool_retries = 2
 auto_compaction_enabled = false
 continuation_policy = "all"
+# Defaults to ~/.vtcode/sessions/ when unset or empty.
 event_log_path = ""
 
 [agent.circuit_breaker]

@@ -70,10 +70,17 @@ pub(super) fn effective_exec_events_path(
     session_id: &str,
 ) -> Option<PathBuf> {
     cli_events_path.map(Path::to_path_buf).or_else(|| {
-        harness_event_log_path
-            .filter(|path| !path.trim().is_empty())
-            .map(|path| resolve_exec_event_log_path(path, session_id))
+        let explicit = harness_event_log_path.filter(|path| !path.trim().is_empty());
+        let effective = explicit
+            .map(String::from)
+            .or_else(|| default_harness_log_dir().map(|d| d.to_string_lossy().into_owned()));
+        effective.map(|path| resolve_exec_event_log_path(&path, session_id))
     })
+}
+
+/// Returns the default harness log directory (`~/.vtcode/sessions/`).
+fn default_harness_log_dir() -> Option<PathBuf> {
+    dirs::home_dir().map(|home| home.join(".vtcode").join("sessions"))
 }
 
 pub(super) async fn handle_exec_command_impl(
