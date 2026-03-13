@@ -23,7 +23,9 @@ use crate::agent::runloop::unified::inline_events::{
     InlineEventLoopResources, InlineInterruptCoordinator, InlineLoopAction, poll_inline_loop_action,
 };
 use crate::agent::runloop::unified::model_selection::finalize_model_selection;
-use crate::agent::runloop::unified::session_setup::apply_ide_context_snapshot;
+use crate::agent::runloop::unified::session_setup::{
+    apply_ide_context_snapshot, ide_context_status_label_from_bridge,
+};
 use crate::agent::runloop::unified::state::ModelPickerTarget;
 use crate::agent::runloop::unified::state::is_follow_up_prompt_like;
 use crate::agent::runloop::unified::turn::session::{
@@ -255,13 +257,10 @@ fn sync_mcp_approval_policy_for_context(ctx: &InteractionLoopContext<'_>) {
 #[derive(Default)]
 struct LiveIdeContextUpdate {
     snapshot: Option<vtcode_core::EditorContextSnapshot>,
-    status_label: Option<String>,
     changed: bool,
 }
 
 fn refresh_live_ide_context_update(
-    workspace: &Path,
-    vt_cfg: Option<&VTCodeConfig>,
     ide_context_bridge: &mut Option<
         crate::agent::runloop::unified::session_setup::IdeContextBridge,
     >,
@@ -270,17 +269,9 @@ fn refresh_live_ide_context_update(
         return LiveIdeContextUpdate::default();
     };
 
-    let ide_context_config = vt_cfg.map(|cfg| &cfg.ide_context);
-
     match bridge.refresh() {
         Ok((snapshot, refresh_state)) => LiveIdeContextUpdate {
             snapshot,
-            status_label: crate::agent::runloop::unified::session_setup::compact_tui_editor_label(
-                workspace,
-                ide_context_config,
-                bridge.snapshot(),
-                bridge.snapshot_source(),
-            ),
             changed: refresh_state.changed,
         },
         Err(err) => {
@@ -290,13 +281,6 @@ fn refresh_live_ide_context_update(
             );
             LiveIdeContextUpdate {
                 snapshot: bridge.snapshot().cloned(),
-                status_label:
-                    crate::agent::runloop::unified::session_setup::compact_tui_editor_label(
-                        workspace,
-                        ide_context_config,
-                        bridge.snapshot(),
-                        bridge.snapshot_source(),
-                    ),
                 changed: false,
             }
         }
@@ -377,11 +361,7 @@ pub(super) async fn run_interaction_loop_impl(
             }
         }
 
-        let live_ide_context = refresh_live_ide_context_update(
-            &ctx.config.workspace,
-            ctx.vt_cfg.as_ref(),
-            ctx.ide_context_bridge,
-        );
+        let live_ide_context = refresh_live_ide_context_update(ctx.ide_context_bridge);
         if live_ide_context.changed || workspace_config_reloaded {
             apply_ide_context_snapshot(
                 ctx.context_manager,
@@ -394,7 +374,12 @@ pub(super) async fn run_interaction_loop_impl(
         }
         crate::agent::runloop::unified::status_line::update_ide_context_source(
             state.input_status_state,
-            live_ide_context.status_label,
+            ide_context_status_label_from_bridge(
+                ctx.context_manager,
+                ctx.config.workspace.as_path(),
+                ctx.vt_cfg.as_ref(),
+                ctx.ide_context_bridge.as_ref(),
+            ),
         );
 
         let spooled_count = ctx.tool_registry.spooled_files_count().await;
@@ -806,14 +791,12 @@ pub(super) async fn run_interaction_loop_impl(
         );
         crate::agent::runloop::unified::status_line::update_ide_context_source(
             state.input_status_state,
-            ctx.ide_context_bridge.as_ref().and_then(|bridge| {
-                crate::agent::runloop::unified::session_setup::compact_tui_editor_label(
-                    ctx.config.workspace.as_path(),
-                    ctx.vt_cfg.as_ref().map(|cfg| &cfg.ide_context),
-                    bridge.snapshot(),
-                    bridge.snapshot_source(),
-                )
-            }),
+            ide_context_status_label_from_bridge(
+                ctx.context_manager,
+                ctx.config.workspace.as_path(),
+                ctx.vt_cfg.as_ref(),
+                ctx.ide_context_bridge.as_ref(),
+            ),
         );
 
         display_user_message(ctx.renderer, input)?;
@@ -837,9 +820,15 @@ mod tests {
         extract_recent_follow_up_hint, fallback_args_preview, refresh_live_ide_context_update,
         tool_names,
     };
-    use crate::agent::runloop::unified::session_setup::IdeContextBridge;
+    use crate::agent::runloop::unified::context_manager::ContextManager;
+    use crate::agent::runloop::unified::session_setup::{
+        IdeContextBridge, ide_context_status_label_from_bridge,
+    };
+    use hashbrown::HashMap;
     use std::fs;
+    use std::sync::Arc;
     use tempfile::TempDir;
+    use tokio::sync::RwLock;
     use vtcode_core::llm::provider as uni;
 
     #[test]
@@ -1127,6 +1116,12 @@ mod tests {
         let temp_dir = TempDir::new().expect("temp dir");
         let workspace = temp_dir.path();
         fs::create_dir_all(workspace.join(".vtcode")).expect("create ide context dir");
+        let context_manager = ContextManager::new(
+            "sys".into(),
+            (),
+            Arc::new(RwLock::new(HashMap::new())),
+            None,
+        );
 
         let snapshot_path = workspace.join(".vtcode/ide-context.json");
         let mut bridge = Some(IdeContextBridge::new(workspace));
@@ -1150,9 +1145,18 @@ mod tests {
         )
         .expect("write alpha snapshot");
 
-        let first = refresh_live_ide_context_update(workspace, None, &mut bridge);
+        let first = refresh_live_ide_context_update(&mut bridge);
         assert!(first.changed);
-        assert_eq!(first.status_label.as_deref(), Some("VS Code:src/alpha.rs"));
+        assert_eq!(
+            ide_context_status_label_from_bridge(
+                &context_manager,
+                workspace,
+                None,
+                bridge.as_ref()
+            )
+            .as_deref(),
+            Some("IDE Context (VS Code): src/alpha.rs")
+        );
 
         fs::write(
             &snapshot_path,
@@ -1173,8 +1177,17 @@ mod tests {
         )
         .expect("write beta snapshot");
 
-        let second = refresh_live_ide_context_update(workspace, None, &mut bridge);
+        let second = refresh_live_ide_context_update(&mut bridge);
         assert!(second.changed);
-        assert_eq!(second.status_label.as_deref(), Some("VS Code:src/beta.rs"));
+        assert_eq!(
+            ide_context_status_label_from_bridge(
+                &context_manager,
+                workspace,
+                None,
+                bridge.as_ref()
+            )
+            .as_deref(),
+            Some("IDE Context (VS Code): src/beta.rs")
+        );
     }
 }

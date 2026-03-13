@@ -55,6 +55,7 @@ pub(super) use skills::handle_manage_skills;
 pub(super) use ui::{
     handle_start_file_browser, handle_start_history_picker, handle_start_model_selection,
     handle_start_session_palette, handle_start_theme_palette, handle_theme_changed,
+    handle_toggle_ide_context,
 };
 pub(super) use update::handle_update;
 pub(super) use workspace::{handle_initialize_workspace, handle_manage_workspace_directories};

@@ -352,7 +352,7 @@ mod tests {
     #[test]
     fn status_line_includes_compact_ide_context_source() {
         let status = build_model_status_with_context_and_spooled(
-            Some("IDE:.vtcode/ide-context.json"),
+            Some("IDE Context (VS Code): vtcode-config/src/core/agent.rs"),
             "model",
             "",
             None,
@@ -363,7 +363,7 @@ mod tests {
 
         assert_eq!(
             status.as_deref(),
-            Some("IDE:.vtcode/ide-context.json | model")
+            Some("IDE Context (VS Code): vtcode-config/src/core/agent.rs | model")
         );
     }
 }

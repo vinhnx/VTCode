@@ -5,7 +5,7 @@ use crate::agent::runloop::unified::reasoning::{
     model_supports_reasoning, resolve_reasoning_visibility,
 };
 use crate::agent::runloop::unified::session_setup::ide_context::{
-    IdeContextBridge, tui_header_summary,
+    IdeContextBridge, status_line_editor_label, tui_header_summary,
 };
 use crate::agent::runloop::unified::stop_requests::request_local_stop;
 use crate::agent::runloop::unified::turn::utils::render_hook_messages;
@@ -372,9 +372,48 @@ pub(crate) fn apply_ide_context_snapshot(
 ) {
     let ide_context_config = vt_cfg.map(|cfg| &cfg.ide_context);
     context_manager.set_editor_context_snapshot(snapshot.clone(), ide_context_config);
-    header_context.editor_context =
-        tui_header_summary(workspace, ide_context_config, snapshot.as_ref());
+    let effective_ide_context_config =
+        context_manager.effective_ide_context_config_with_base(ide_context_config);
+    header_context.editor_context = tui_header_summary(
+        workspace,
+        Some(&effective_ide_context_config),
+        snapshot.as_ref(),
+    );
     handle.set_header_context(header_context.clone());
+}
+
+pub(crate) fn ide_context_status_label(
+    context_manager: &crate::agent::runloop::unified::context_manager::ContextManager,
+    workspace: &std::path::Path,
+    vt_cfg: Option<&VTCodeConfig>,
+    snapshot: Option<&vtcode_core::EditorContextSnapshot>,
+    source: Option<&std::path::Path>,
+) -> Option<String> {
+    let effective_ide_context_config =
+        context_manager.effective_ide_context_config_with_base(vt_cfg.map(|cfg| &cfg.ide_context));
+    status_line_editor_label(
+        workspace,
+        Some(&effective_ide_context_config),
+        snapshot,
+        source,
+    )
+}
+
+pub(crate) fn ide_context_status_label_from_bridge(
+    context_manager: &crate::agent::runloop::unified::context_manager::ContextManager,
+    workspace: &std::path::Path,
+    vt_cfg: Option<&VTCodeConfig>,
+    ide_context_bridge: Option<&IdeContextBridge>,
+) -> Option<String> {
+    ide_context_bridge.and_then(|bridge| {
+        ide_context_status_label(
+            context_manager,
+            workspace,
+            vt_cfg,
+            bridge.snapshot(),
+            bridge.snapshot_source(),
+        )
+    })
 }
 
 fn render_resume_state_if_present(
@@ -685,6 +724,11 @@ fn infer_legacy_line_style(line: &str) -> MessageStyle {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use hashbrown::HashMap;
+    use std::path::PathBuf;
+    use std::sync::Arc;
+    use tokio::sync::RwLock;
+    use vtcode_core::{EditorContextSnapshot, EditorFileContext};
 
     #[test]
     fn structured_resume_lines_preserve_tool_context() {
@@ -766,6 +810,60 @@ mod tests {
             !lines
                 .iter()
                 .any(|line| line.style == MessageStyle::Reasoning)
+        );
+    }
+
+    #[test]
+    fn ide_context_status_label_respects_session_override() {
+        let workspace = assert_fs::TempDir::new().expect("workspace");
+        let mut context_manager =
+            crate::agent::runloop::unified::context_manager::ContextManager::new(
+                "sys".into(),
+                (),
+                Arc::new(RwLock::new(HashMap::new())),
+                None,
+            );
+        context_manager.set_workspace_root(workspace.path());
+
+        let snapshot = EditorContextSnapshot {
+            workspace_root: Some(PathBuf::from(workspace.path())),
+            active_file: Some(EditorFileContext {
+                path: workspace.path().join("src/main.rs").display().to_string(),
+                language_id: Some("rust".to_string()),
+                line_range: None,
+                dirty: false,
+                truncated: false,
+                selection: None,
+            }),
+            ..EditorContextSnapshot::default()
+        };
+        context_manager.set_editor_context_snapshot(
+            Some(snapshot.clone()),
+            Some(&vtcode_config::IdeContextConfig::default()),
+        );
+
+        assert_eq!(
+            ide_context_status_label(
+                &context_manager,
+                workspace.path(),
+                None,
+                Some(&snapshot),
+                None
+            )
+            .as_deref(),
+            Some("IDE Context (IDE): src/main.rs")
+        );
+
+        assert!(!context_manager.toggle_session_ide_context());
+        assert_eq!(
+            ide_context_status_label(
+                &context_manager,
+                workspace.path(),
+                None,
+                Some(&snapshot),
+                None
+            ),
+            None
         );
     }
 }

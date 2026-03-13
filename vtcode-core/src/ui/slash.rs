@@ -35,6 +35,10 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             description: "Launch the interactive model picker",
         },
         SlashCommandInfo {
+            name: "ide",
+            description: "Toggle IDE context for this session",
+        },
+        SlashCommandInfo {
             name: "theme",
             description: "Switch UI theme (usage: /theme <theme-id>)",
         },

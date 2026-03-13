@@ -64,6 +64,8 @@ pub(crate) struct ContextManager {
     editor_context_snapshot: Option<EditorContextSnapshot>,
     /// Prompt/TUI behavior for IDE context injection.
     ide_context_config: IdeContextConfig,
+    /// Session-local override for IDE context enablement.
+    session_ide_context_enabled_override: Option<bool>,
 }
 
 impl ContextManager {
@@ -82,6 +84,7 @@ impl ContextManager {
             workspace_root: None,
             editor_context_snapshot: None,
             ide_context_config: IdeContextConfig::default(),
+            session_ide_context_enabled_override: None,
         }
     }
 
@@ -98,6 +101,34 @@ impl ContextManager {
         if let Some(config) = ide_context_config {
             self.ide_context_config = config.clone();
         }
+    }
+
+    fn with_session_ide_context_override(&self, mut config: IdeContextConfig) -> IdeContextConfig {
+        if let Some(enabled) = self.session_ide_context_enabled_override {
+            config.enabled = enabled;
+        }
+        config
+    }
+
+    pub(crate) fn effective_ide_context_config(&self) -> IdeContextConfig {
+        self.with_session_ide_context_override(self.ide_context_config.clone())
+    }
+
+    pub(crate) fn effective_ide_context_config_with_base(
+        &self,
+        ide_context_config: Option<&IdeContextConfig>,
+    ) -> IdeContextConfig {
+        self.with_session_ide_context_override(
+            ide_context_config
+                .cloned()
+                .unwrap_or_else(|| self.ide_context_config.clone()),
+        )
+    }
+
+    pub(crate) fn toggle_session_ide_context(&mut self) -> bool {
+        let enabled = !self.effective_ide_context_config().enabled;
+        self.session_ide_context_enabled_override = Some(enabled);
+        enabled
     }
 
     fn update_stats(&mut self, history: &[uni::Message]) {
@@ -349,19 +380,17 @@ impl ContextManager {
     }
 
     fn editor_context_prompt_block(&self) -> Option<String> {
-        if !self.ide_context_config.enabled || !self.ide_context_config.inject_into_prompt {
+        let ide_context_config = self.effective_ide_context_config();
+        if !ide_context_config.enabled || !ide_context_config.inject_into_prompt {
             return None;
         }
 
         let workspace = self.workspace_root.as_deref()?;
         self.editor_context_snapshot
             .as_ref()
-            .filter(|snapshot| {
-                self.ide_context_config
-                    .allows_provider_family(snapshot.provider_family)
-            })
+            .filter(|snapshot| ide_context_config.allows_provider_family(snapshot.provider_family))
             .and_then(|snapshot| {
-                snapshot.prompt_block(workspace, self.ide_context_config.include_selection_text)
+                snapshot.prompt_block(workspace, ide_context_config.include_selection_text)
             })
     }
 }

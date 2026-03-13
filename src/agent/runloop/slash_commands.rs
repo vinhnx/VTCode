@@ -50,6 +50,7 @@ pub(crate) enum SlashCommandOutcome {
     NewSession,
     OpenDocs,
     StartModelSelection,
+    ToggleIdeContext,
     StartThemePalette {
         mode: ThemePaletteMode,
     },
@@ -327,6 +328,13 @@ pub(crate) async fn handle_slash_command(
         }
         "mcp" => handle_mcp_command(args, renderer),
         "model" => Ok(SlashCommandOutcome::StartModelSelection),
+        "ide" => {
+            if !args.is_empty() {
+                renderer.line(MessageStyle::Error, "Usage: /ide")?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+            Ok(SlashCommandOutcome::ToggleIdeContext)
+        }
         "command" | "comman" => {
             if args.trim().is_empty() {
                 renderer.line(MessageStyle::Error, "Usage: /command <program> [args...]")?;
@@ -585,6 +593,30 @@ mod tests {
         let outcome = handle_slash_command("pause", &mut renderer, &workspace)
             .await
             .expect("pause command should parse");
+
+        assert!(matches!(outcome, SlashCommandOutcome::Handled));
+    }
+
+    #[tokio::test]
+    async fn ide_command_returns_toggle_outcome() {
+        let workspace = std::env::current_dir().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let outcome = handle_slash_command("ide", &mut renderer, &workspace)
+            .await
+            .expect("ide command should parse");
+
+        assert!(matches!(outcome, SlashCommandOutcome::ToggleIdeContext));
+    }
+
+    #[tokio::test]
+    async fn ide_command_rejects_arguments() {
+        let workspace = std::env::current_dir().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let outcome = handle_slash_command("ide extra", &mut renderer, &workspace)
+            .await
+            .expect("ide command should parse");
 
         assert!(matches!(outcome, SlashCommandOutcome::Handled));
     }

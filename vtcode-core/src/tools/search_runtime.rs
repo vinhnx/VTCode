@@ -55,6 +55,9 @@ impl SearchToolBundleStatus {
 
     #[must_use]
     pub fn header_summary(self) -> String {
+        if self.all_ready() {
+            return "Search: ripgrep · ast-grep".to_string();
+        }
         format!(
             "Search: ripgrep {} · ast-grep {}",
             self.ripgrep.label(),
@@ -231,9 +234,23 @@ mod tests {
             ast_grep: SearchToolReadiness::Missing,
         };
 
-        assert_eq!(status.header_summary(), "Search: rg ready · sg missing");
+        assert_eq!(
+            status.header_summary(),
+            "Search: ripgrep ready · ast-grep missing"
+        );
         assert!(!status.all_ready());
         assert!(!status.all_unavailable());
         assert!(!status.has_errors());
+    }
+
+    #[test]
+    fn search_tool_bundle_header_summary_all_ready() {
+        let status = SearchToolBundleStatus {
+            ripgrep: SearchToolReadiness::Ready,
+            ast_grep: SearchToolReadiness::Ready,
+        };
+
+        assert_eq!(status.header_summary(), "Search: ripgrep · ast-grep");
+        assert!(status.all_ready());
     }
 }

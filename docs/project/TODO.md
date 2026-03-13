@@ -72,15 +72,6 @@ https://www.xfree86.org/current/ctlseqs.html
 
 ---
 
-add /ide command to control ide context. ref commit `c330e4b377791bdd51a32b28060fae023e1fb2eb`
-
-ref codex deepwiki:
-
-- https://deepwiki.com/search/how-does-ide-command-works-and_bf4ab5a2-796e-4c6a-b215-7438903ed555?mode=fast
-- https://deepwiki.com/search/how-does-codex-manage-ide-cont_78965270-0fe9-45e0-bd79-d51e5bad7df2?mode=fast
-
----
-
 use bazel build
 
 https://github.com/search?q=repo%3Aopenai%2Fcodex%20Bazel&type=code

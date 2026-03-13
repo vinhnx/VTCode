@@ -384,22 +384,32 @@ impl Session {
 
         let mut spans = Vec::new();
 
+        let mut first_section = true;
+        let separator_style = self.header_secondary_style();
+
+        let push_badge =
+            |spans: &mut Vec<Span<'static>>, text: String, style: Style, first: &mut bool| {
+                if !*first {
+                    spans.push(Span::styled(
+                        ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
+                        separator_style,
+                    ));
+                }
+                spans.push(Span::styled(text, style));
+                *first = false;
+            };
+
         // Show editing mode badge with color coding
-        match self.header_context.editing_mode {
-            EditingMode::Plan => {
-                // Yellow badge for Plan mode (read-only)
-                let badge_style = Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD);
-                spans.push(Span::styled("Plan mode on".to_string(), badge_style));
-                spans.push(Span::styled(
-                    ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
-                    self.header_secondary_style(),
-                ));
-            }
-            EditingMode::Edit => {
-                // No badge for Edit mode (default)
-            }
+        if self.header_context.editing_mode == EditingMode::Plan {
+            let badge_style = Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD);
+            push_badge(
+                &mut spans,
+                "Plan mode on".to_string(),
+                badge_style,
+                &mut first_section,
+            );
         }
 
         // Show autonomous mode indicator
@@ -407,38 +417,37 @@ impl Session {
             let badge_style = Style::default()
                 .fg(Color::Green)
                 .add_modifier(Modifier::BOLD);
-            spans.push(Span::styled("[AUTO]".to_string(), badge_style));
-            spans.push(Span::styled(
-                ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
-                self.header_secondary_style(),
-            ));
+            push_badge(
+                &mut spans,
+                "[AUTO]".to_string(),
+                badge_style,
+                &mut first_section,
+            );
         }
 
         // Show trust level badge with color coding
         let trust_value = self.header_context.workspace_trust.to_lowercase();
         if trust_value.contains("full auto") || trust_value.contains("full_auto") {
-            // Cyan badge for full auto trust
             let badge_style = Style::default()
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD);
-            spans.push(Span::styled("Accept edits".to_string(), badge_style));
-            spans.push(Span::styled(
-                ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
-                self.header_secondary_style(),
-            ));
+            push_badge(
+                &mut spans,
+                "Accept edits".to_string(),
+                badge_style,
+                &mut first_section,
+            );
         } else if trust_value.contains("tools policy") || trust_value.contains("tools_policy") {
-            // Green badge for tools policy (safeguarded)
             let badge_style = Style::default()
                 .fg(Color::Green)
                 .add_modifier(Modifier::BOLD);
-            spans.push(Span::styled("[SAFE]".to_string(), badge_style));
-            spans.push(Span::styled(
-                ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
-                self.header_secondary_style(),
-            ));
+            push_badge(
+                &mut spans,
+                "[SAFE]".to_string(),
+                badge_style,
+                &mut first_section,
+            );
         }
-
-        let mut first_section = spans.is_empty();
 
         if let Some(badge) = self
             .header_context

@@ -15,6 +15,9 @@ use crate::agent::runloop::unified::overlay_prompt::{
 use crate::agent::runloop::unified::palettes::{
     ActivePalette, apply_prompt_style, show_sessions_palette, show_theme_palette,
 };
+use crate::agent::runloop::unified::session_setup::{
+    apply_ide_context_snapshot, ide_context_status_label_from_bridge,
+};
 use crate::agent::runloop::unified::state::ModelPickerTarget;
 
 use super::{SlashCommandContext, SlashCommandControl};
@@ -174,6 +177,54 @@ pub(crate) async fn handle_start_model_selection(
 ) -> Result<SlashCommandControl> {
     ctx.session_stats.model_picker_target = ModelPickerTarget::Main;
     start_model_picker(ctx).await
+}
+
+pub(crate) async fn handle_toggle_ide_context(
+    ctx: SlashCommandContext<'_>,
+) -> Result<SlashCommandControl> {
+    let enabled = ctx.context_manager.toggle_session_ide_context();
+
+    let latest_editor_snapshot = if let Some(bridge) = ctx.ide_context_bridge.as_mut() {
+        match bridge.refresh() {
+            Ok((snapshot, _)) => snapshot,
+            Err(err) => {
+                tracing::warn!(error = %err, "Failed to refresh IDE context while toggling /ide");
+                bridge.snapshot().cloned()
+            }
+        }
+    } else {
+        None
+    };
+
+    apply_ide_context_snapshot(
+        ctx.context_manager,
+        ctx.header_context,
+        ctx.handle,
+        ctx.config.workspace.as_path(),
+        ctx.vt_cfg.as_ref(),
+        latest_editor_snapshot.clone(),
+    );
+
+    crate::agent::runloop::unified::status_line::update_ide_context_source(
+        ctx.input_status_state,
+        ide_context_status_label_from_bridge(
+            ctx.context_manager,
+            ctx.config.workspace.as_path(),
+            ctx.vt_cfg.as_ref(),
+            ctx.ide_context_bridge.as_ref(),
+        ),
+    );
+
+    let message = match (enabled, latest_editor_snapshot.is_some()) {
+        (true, true) => "IDE context enabled for this session.",
+        (true, false) => {
+            "IDE context enabled for this session. No IDE snapshot is currently available."
+        }
+        (false, _) => "IDE context disabled for this session.",
+    };
+    ctx.renderer.line(MessageStyle::Info, message)?;
+
+    Ok(SlashCommandControl::Continue)
 }
 
 pub(super) async fn start_model_picker(

@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -176,16 +177,14 @@ impl EditorContextSnapshot {
         include_selection_text: bool,
     ) -> Option<String> {
         let file = self.active_file.as_ref()?;
+        let active_path = file.display_path(workspace_root, self.workspace_root.as_deref());
         let mut lines = Vec::new();
         lines.push("## Active Editor Context".to_string());
         lines.push(format!(
             "- IDE family: {}",
             provider_family_label(self.provider_family)
         ));
-        lines.push(format!(
-            "- Active file: {}",
-            file.display_path(workspace_root, self.workspace_root.as_deref())
-        ));
+        lines.push(format!("- Active file: {}", active_path));
 
         if let Some(language) = file.display_language() {
             lines.push(format!("- Language: {}", language));
@@ -229,6 +228,20 @@ impl EditorContextSnapshot {
                 lines.push(text.to_string());
                 lines.push("```".to_string());
             }
+        }
+
+        let mut seen_paths = HashSet::new();
+        let open_files = self
+            .visible_editors
+            .iter()
+            .map(|editor| editor.display_path(workspace_root, self.workspace_root.as_deref()))
+            .filter(|path| !path.trim().is_empty())
+            .filter(|path| path != &active_path)
+            .filter(|path| seen_paths.insert(path.clone()))
+            .collect::<Vec<_>>();
+        if !open_files.is_empty() {
+            lines.push("- Open files:".to_string());
+            lines.extend(open_files.into_iter().map(|path| format!("  - {}", path)));
         }
 
         Some(lines.join("\n"))
@@ -578,7 +591,32 @@ export const value = 1;
                     text: Some("fn main() {}\n".to_string()),
                 }),
             }),
-            visible_editors: Vec::new(),
+            visible_editors: vec![
+                EditorFileContext {
+                    path: "/workspace/src/main.rs".to_string(),
+                    language_id: Some("rust".to_string()),
+                    line_range: Some(EditorLineRange { start: 1, end: 20 }),
+                    dirty: false,
+                    truncated: false,
+                    selection: None,
+                },
+                EditorFileContext {
+                    path: "/workspace/src/lib.rs".to_string(),
+                    language_id: Some("rust".to_string()),
+                    line_range: Some(EditorLineRange { start: 1, end: 80 }),
+                    dirty: false,
+                    truncated: false,
+                    selection: None,
+                },
+                EditorFileContext {
+                    path: "/workspace/src/lib.rs".to_string(),
+                    language_id: Some("rust".to_string()),
+                    line_range: Some(EditorLineRange { start: 1, end: 80 }),
+                    dirty: false,
+                    truncated: false,
+                    selection: None,
+                },
+            ],
         };
 
         let prompt = snapshot
@@ -589,6 +627,10 @@ export const value = 1;
         assert!(prompt.contains("- Active file: src/main.rs"));
         assert!(prompt.contains("- Selection: 4:1-6:2"));
         assert!(prompt.contains("```rust"));
+        assert!(prompt.contains("- Open files:"));
+        assert!(!prompt.contains("  - src/main.rs"));
+        assert!(prompt.contains("  - src/lib.rs"));
+        assert_eq!(prompt.matches("  - src/lib.rs").count(), 1);
     }
 
     #[test]

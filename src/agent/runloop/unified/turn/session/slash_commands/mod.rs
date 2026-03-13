@@ -9,18 +9,21 @@ use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::hooks::SessionEndReason;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::ToolRegistry;
+use vtcode_tui::{InlineHandle, InlineHeaderContext, InlineSession};
 
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::model_picker::ModelPickerState;
 pub(crate) use crate::agent::runloop::slash_commands::SlashCommandOutcome;
 use crate::agent::runloop::unified::async_mcp_manager::AsyncMcpManager;
+use crate::agent::runloop::unified::context_manager::ContextManager;
 use crate::agent::runloop::unified::palettes::ActivePalette;
+use crate::agent::runloop::unified::session_setup::IdeContextBridge;
 use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
+use crate::agent::runloop::unified::status_line::InputStatusState;
 use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
 use crate::agent::runloop::unified::workspace_links::LinkedDirectory;
 use crate::agent::runloop::welcome::SessionBootstrap;
 use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_tui::{InlineHandle, InlineSession};
 
 mod handlers;
 
@@ -34,6 +37,8 @@ pub(crate) struct SlashCommandContext<'a> {
     pub(crate) renderer: &'a mut AnsiRenderer,
     pub(crate) handle: &'a InlineHandle,
     pub(crate) session: &'a mut InlineSession,
+    pub(crate) header_context: &'a mut InlineHeaderContext,
+    pub(crate) ide_context_bridge: &'a mut Option<IdeContextBridge>,
     pub(crate) config: &'a mut CoreAgentConfig,
     pub(crate) vt_cfg: &'a mut Option<VTCodeConfig>,
     pub(crate) provider_client: &'a mut Box<dyn uni::LLMProvider>,
@@ -43,7 +48,9 @@ pub(crate) struct SlashCommandContext<'a> {
     pub(crate) tool_registry: &'a mut ToolRegistry,
     pub(crate) conversation_history: &'a mut Vec<uni::Message>,
     pub(crate) decision_ledger: &'a Arc<RwLock<DecisionTracker>>,
+    pub(crate) context_manager: &'a mut ContextManager,
     pub(crate) session_stats: &'a mut SessionStats,
+    pub(crate) input_status_state: &'a mut InputStatusState,
     pub(crate) tools: &'a Arc<RwLock<Vec<uni::ToolDefinition>>>,
     pub(crate) tool_catalog: &'a Arc<ToolCatalogState>,
     pub(crate) async_mcp_manager: Option<&'a Arc<AsyncMcpManager>>,
@@ -84,6 +91,7 @@ pub(crate) async fn handle_outcome(
         SlashCommandOutcome::StartModelSelection => {
             handlers::handle_start_model_selection(ctx).await
         }
+        SlashCommandOutcome::ToggleIdeContext => handlers::handle_toggle_ide_context(ctx).await,
         SlashCommandOutcome::InitializeWorkspace { force } => {
             handlers::handle_initialize_workspace(ctx, force).await
         }

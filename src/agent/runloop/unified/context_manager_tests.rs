@@ -177,6 +177,14 @@ async fn build_system_prompt_includes_active_editor_context_block() {
                 text: Some("fn main() {}\n".to_string()),
             }),
         }),
+        visible_editors: vec![EditorFileContext {
+            path: workspace.path().join("src/lib.rs").display().to_string(),
+            language_id: Some("rust".to_string()),
+            line_range: Some(EditorLineRange { start: 1, end: 12 }),
+            dirty: false,
+            truncated: false,
+            selection: None,
+        }],
         ..EditorContextSnapshot::default()
     };
 
@@ -201,6 +209,8 @@ async fn build_system_prompt_includes_active_editor_context_block() {
     assert!(prompt.contains("## Active Editor Context"));
     assert!(prompt.contains("- Active file: src/main.rs"));
     assert!(prompt.contains("- Selection: 48:1-52:8"));
+    assert!(prompt.contains("- Open files:"));
+    assert!(prompt.contains("  - src/lib.rs"));
 }
 
 #[tokio::test]
@@ -247,6 +257,82 @@ async fn build_system_prompt_skips_disallowed_provider_family() {
         .expect("system prompt");
 
     assert!(!prompt.contains("## Active Editor Context"));
+}
+
+#[tokio::test]
+async fn build_system_prompt_respects_session_local_ide_toggle() {
+    let workspace = assert_fs::TempDir::new().expect("workspace");
+    let mut manager = ContextManager::new(
+        "System prompt".to_string(),
+        (),
+        Arc::new(RwLock::new(HashMap::new())),
+        None,
+    );
+    manager.set_workspace_root(workspace.path());
+    let snapshot = EditorContextSnapshot {
+        workspace_root: Some(PathBuf::from(workspace.path())),
+        active_file: Some(EditorFileContext {
+            path: workspace.path().join("src/main.rs").display().to_string(),
+            language_id: Some("rust".to_string()),
+            line_range: Some(EditorLineRange { start: 8, end: 16 }),
+            dirty: false,
+            truncated: false,
+            selection: None,
+        }),
+        ..EditorContextSnapshot::default()
+    };
+
+    manager.set_editor_context_snapshot(
+        Some(snapshot),
+        Some(&vtcode_config::IdeContextConfig::default()),
+    );
+
+    let enabled_prompt = manager
+        .build_system_prompt(
+            &[],
+            0,
+            SystemPromptParams {
+                full_auto: false,
+                plan_mode: false,
+                context_window_size: None,
+                prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
+            },
+        )
+        .await
+        .expect("enabled prompt");
+    assert!(enabled_prompt.contains("## Active Editor Context"));
+
+    assert!(!manager.toggle_session_ide_context());
+    let disabled_prompt = manager
+        .build_system_prompt(
+            &[],
+            0,
+            SystemPromptParams {
+                full_auto: false,
+                plan_mode: false,
+                context_window_size: None,
+                prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
+            },
+        )
+        .await
+        .expect("disabled prompt");
+    assert!(!disabled_prompt.contains("## Active Editor Context"));
+
+    assert!(manager.toggle_session_ide_context());
+    let reenabled_prompt = manager
+        .build_system_prompt(
+            &[],
+            0,
+            SystemPromptParams {
+                full_auto: false,
+                plan_mode: false,
+                context_window_size: None,
+                prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
+            },
+        )
+        .await
+        .expect("reenabled prompt");
+    assert!(reenabled_prompt.contains("## Active Editor Context"));
 }
 
 #[test]

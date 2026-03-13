@@ -447,6 +447,7 @@ fn should_submit_immediately_from_palette(session: &Session) -> bool {
     matches!(
         command,
         "/files"
+            | "/ide"
             | "/status"
             | "/stop"
             | "/pause"
@@ -516,6 +517,9 @@ mod tests {
     fn immediate_submit_matcher_accepts_immediate_commands() {
         let mut session = Session::new(InlineTheme::default(), None, 20);
         session.set_input("/files".to_string());
+        assert!(should_submit_immediately_from_palette(&session));
+
+        session.set_input("/ide".to_string());
         assert!(should_submit_immediately_from_palette(&session));
 
         session.set_input("   /status   ".to_string());

@@ -432,14 +432,12 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         let mut prefer_latest_queued_input_once = false;
         crate::agent::runloop::unified::status_line::update_ide_context_source(
             &mut input_status_state,
-            ide_context_bridge.as_ref().and_then(|bridge| {
-                crate::agent::runloop::unified::session_setup::compact_tui_editor_label(
-                    config.workspace.as_path(),
-                    vt_cfg.as_ref().map(|cfg| &cfg.ide_context),
-                    bridge.snapshot(),
-                    bridge.snapshot_source(),
-                )
-            }),
+            crate::agent::runloop::unified::session_setup::ide_context_status_label_from_bridge(
+                &context_manager,
+                config.workspace.as_path(),
+                vt_cfg.as_ref(),
+                ide_context_bridge.as_ref(),
+            ),
         );
         let mut queued_inputs: VecDeque<String> = VecDeque::with_capacity(8);
         let mut ctrl_c_notice_displayed = false;
