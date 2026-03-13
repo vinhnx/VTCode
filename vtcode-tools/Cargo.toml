@@ -21,9 +21,9 @@ policies = []
 examples = []
 
 [dependencies]
-vtcode-commons = { path = "../vtcode-commons", version = "0.88.4" }
-vtcode-core = { path = "../vtcode-core", version = "0.88.4", default-features = false }
-vtcode-acp-client = { path = "../vtcode-acp-client", version = "0.88.4" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.88.5" }
+vtcode-core = { path = "../vtcode-core", version = "0.88.5", default-features = false }
+vtcode-acp-client = { path = "../vtcode-acp-client", version = "0.88.5" }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 hashbrown = { workspace = true }
