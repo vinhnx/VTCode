@@ -163,6 +163,14 @@ fn parse_ansi_sequence_bytes(bytes: &[u8]) -> Option<usize> {
                 b'[' => parse_csi(bytes, 2),
                 b']' => parse_osc(bytes, 2),
                 b'P' | b'^' | b'_' | b'X' => parse_st_terminated(bytes, 2),
+                // Three-byte sequences: ESC + intermediate + final
+                // ESC SP {F,G,L,M,N} — 7/8-bit controls, ANSI conformance
+                // ESC # {3,4,5,6,8} — DEC line attributes / screen alignment
+                // ESC % {@ ,G} — character set selection (ISO 2022)
+                // ESC ( C / ESC ) C / ESC * C / ESC + C — G0-G3 designation
+                b' ' | b'#' | b'%' | b'(' | b')' | b'*' | b'+' => {
+                    if bytes.len() > 2 { Some(3) } else { None }
+                }
                 next if next < 128 => Some(2),
                 _ => Some(1),
             }
@@ -408,5 +416,31 @@ mod tests {
     fn strips_dec_private_mode_csi() {
         let input = "a\x1b[?25lb\x1b[?25hc";
         assert_eq!(strip_ansi(input), "abc");
+    }
+
+    #[test]
+    fn strips_three_byte_esc_sequences() {
+        // ESC # 8 = DEC screen alignment test
+        let input = "a\x1b#8b";
+        assert_eq!(strip_ansi(input), "ab");
+
+        // ESC ( B = designate US ASCII as G0
+        let input2 = "a\x1b(Bb";
+        assert_eq!(strip_ansi(input2), "ab");
+
+        // ESC SP F = 7-bit controls
+        let input3 = "a\x1b Fb";
+        assert_eq!(strip_ansi(&input3), "ab");
+
+        // ESC % G = select UTF-8
+        let input4 = "a\x1b%Gb";
+        assert_eq!(strip_ansi(&input4), "ab");
+    }
+
+    #[test]
+    fn incomplete_three_byte_esc_sequence_drops_tail() {
+        // ESC # at end — incomplete, should not consume past end
+        let input = "text\x1b#";
+        assert_eq!(strip_ansi(input), "text");
     }
 }

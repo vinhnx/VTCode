@@ -335,14 +335,99 @@ if let Ok(s) = std::str::from_utf8(chunk) {
 let s = String::from_utf8(chunk).unwrap(); // May panic
 ```
 
+### Scroll Region & Insert/Delete
+
+| Usage              | ANSI Sequence | VT Code Constant        |
+| ------------------ | ------------- | ----------------------- |
+| Reset scroll region | `ESC[r`      | `SCROLL_REGION_RESET`   |
+| Insert line        | `ESC[L`       | `INSERT_LINE`           |
+| Delete line        | `ESC[M`       | `DELETE_LINE`           |
+| Insert char        | `ESC[@`       | `INSERT_CHAR`           |
+| Delete char        | `ESC[P`       | `DELETE_CHAR`           |
+| Erase char         | `ESC[X`       | `ERASE_CHAR`            |
+| Scroll up          | `ESC[S`       | `SCROLL_UP`             |
+| Scroll down        | `ESC[T`       | `SCROLL_DOWN`           |
+
+### ESC-Level Controls
+
+| Usage             | ANSI Sequence | VT Code Constant       |
+| ----------------- | ------------- | ---------------------- |
+| Index (down+scroll) | `ESC D`     | `INDEX`                |
+| Next Line          | `ESC E`      | `NEXT_LINE`            |
+| Tab Set            | `ESC H`      | `TAB_SET`              |
+| Reverse Index      | `ESC M`      | `REVERSE_INDEX`        |
+| Full Reset         | `ESC c`      | `FULL_RESET`           |
+| App Keypad         | `ESC =`      | `KEYPAD_APPLICATION`   |
+| Numeric Keypad     | `ESC >`      | `KEYPAD_NUMERIC`       |
+
+### Mouse Tracking Modes
+
+| Usage                 | Enable          | Disable         | Mode |
+| --------------------- | --------------- | --------------- | ---- |
+| X10 compat            | `ESC[?9h`       | `ESC[?9l`       | 9    |
+| Normal tracking       | `ESC[?1000h`    | `ESC[?1000l`    | 1000 |
+| Button-event tracking | `ESC[?1002h`    | `ESC[?1002l`    | 1002 |
+| Any-event tracking    | `ESC[?1003h`    | `ESC[?1003l`    | 1003 |
+| SGR extended coords   | `ESC[?1006h`    | `ESC[?1006l`    | 1006 |
+| URXVT extended coords | `ESC[?1015h`    | `ESC[?1015l`    | 1015 |
+
+### Terminal Mode Controls
+
+| Usage                  | Enable         | Disable        | Mode |
+| ---------------------- | -------------- | -------------- | ---- |
+| App Cursor Keys        | `ESC[?1h`      | `ESC[?1l`      | 1    |
+| Origin Mode            | `ESC[?6h`      | `ESC[?6l`      | 6    |
+| Auto-Wrap              | `ESC[?7h`      | `ESC[?7l`      | 7    |
+| Focus Events           | `ESC[?1004h`   | `ESC[?1004l`   | 1004 |
+| Bracketed Paste        | `ESC[?2004h`   | `ESC[?2004l`   | 2004 |
+| Synchronized Output    | `ESC[?2026h`   | `ESC[?2026l`   | 2026 |
+
+### OSC Sequences
+
+| Usage             | Sequence prefix  | VT Code Constant            |
+| ----------------- | ---------------- | --------------------------- |
+| Set title          | `OSC 2 ;`       | `OSC_SET_TITLE_PREFIX`      |
+| Set icon name      | `OSC 1 ;`       | `OSC_SET_ICON_PREFIX`       |
+| Set icon+title     | `OSC 0 ;`       | `OSC_SET_ICON_AND_TITLE_PREFIX` |
+| Foreground color   | `OSC 10 ;`      | `OSC_FG_COLOR_PREFIX`       |
+| Background color   | `OSC 11 ;`      | `OSC_BG_COLOR_PREFIX`       |
+| Cursor color       | `OSC 12 ;`      | `OSC_CURSOR_COLOR_PREFIX`   |
+| Hyperlink          | `OSC 8 ;`       | `OSC_HYPERLINK_PREFIX`      |
+| Clipboard          | `OSC 52 ;`      | `OSC_CLIPBOARD_PREFIX`      |
+
+### Device Status / Attributes
+
+| Usage                    | ANSI Sequence | VT Code Constant            |
+| ------------------------ | ------------- | --------------------------- |
+| Request DA1              | `ESC[c`       | `DEVICE_ATTRIBUTES_REQUEST` |
+| Request cursor position  | `ESC[6n`      | `CURSOR_POSITION_REQUEST`   |
+| Request terminal status  | `ESC[5n`      | `DEVICE_STATUS_REQUEST`     |
+
+### Character Set Designation (ISO 2022)
+
+| Usage          | Sequence  | VT Code Constant   |
+| -------------- | --------- | ------------------- |
+| Select UTF-8   | `ESC % G` | `CHARSET_UTF8`      |
+| Select default | `ESC % @` | `CHARSET_DEFAULT`   |
+
+### ANSI Parser: Three-Byte ESC Sequences
+
+The ANSI stripper correctly handles three-byte ESC sequences per the xterm ctlseqs spec:
+
+-   `ESC SP {F,G,L,M,N}` — 7/8-bit controls, ANSI conformance levels
+-   `ESC # {3,4,5,6,8}` — DEC line attributes, screen alignment test
+-   `ESC % {@ ,G}` — ISO 2022 character set selection
+-   `ESC ( C` / `ESC ) C` / `ESC * C` / `ESC + C` — G0–G3 character set designation
+
 ## Reference Implementation
 
 For complete ANSI sequence reference, see:
 
--   `docs/reference/ansi-escape-sequences.md` - Full ANSI reference
--   `vtcode-core/src/utils/ansi_parser.rs` - Stripping implementation
--   `vtcode-core/src/utils/anstyle_utils.rs` - Style conversion
--   `vtcode-core/src/utils/ansi.rs` - Rendering utilities
+-   [XFree86 XTerm Control Sequences](https://www.xfree86.org/current/ctlseqs.html) — Canonical xterm spec
+-   `vtcode-commons/src/ansi_codes.rs` — Constants for all supported sequences
+-   `vtcode-commons/src/ansi.rs` — ECMA-48 parser and stripper
+-   `vtcode-core/src/utils/anstyle_utils.rs` — Style conversion
+-   `vtcode-core/src/utils/ansi.rs` — Rendering utilities
 
 ## Future Enhancements
 
@@ -370,11 +455,15 @@ For complete ANSI sequence reference, see:
 VT Code has comprehensive ANSI support:
 
 -   Stripping for clean text processing
--   Parsing for style extraction
+-   Parsing for style extraction (including 3-byte ESC sequences per xterm spec)
 -   Conversion to Ratatui styles
 -   Rendering for terminal output
 -   Full color support (8/16/256/RGB)
 -   All standard text effects
--   Cursor and screen control
+-   Cursor, screen, scroll region, and mouse tracking control
+-   OSC sequences (title, colors, hyperlinks, clipboard)
+-   Device status and attribute queries
+-   Mouse tracking modes (X10, normal, button-event, any-event, SGR, URXVT)
+-   Terminal modes (bracketed paste, focus events, synchronized output)
 
 The implementation follows best practices and is well-tested.

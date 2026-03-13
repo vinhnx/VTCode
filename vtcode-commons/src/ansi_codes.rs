@@ -355,6 +355,116 @@ pub const SCREEN_RESTORE: &str = "\x1b[?47l";
 pub const LINE_WRAP_ENABLE: &str = "\x1b[=7h";
 pub const LINE_WRAP_DISABLE: &str = "\x1b[=7l";
 
+// === Scroll Region ===
+/// Set Scrolling Region (DECSTBM) — CSI Ps ; Ps r
+pub const SCROLL_REGION_RESET: &str = "\x1b[r";
+
+// === Insert / Delete ===
+/// Insert Ps Line(s) (default = 1) (IL)
+pub const INSERT_LINE: &str = "\x1b[L";
+/// Delete Ps Line(s) (default = 1) (DL)
+pub const DELETE_LINE: &str = "\x1b[M";
+/// Insert Ps Character(s) (default = 1) (ICH)
+pub const INSERT_CHAR: &str = "\x1b[@";
+/// Delete Ps Character(s) (default = 1) (DCH)
+pub const DELETE_CHAR: &str = "\x1b[P";
+/// Erase Ps Character(s) (default = 1) (ECH)
+pub const ERASE_CHAR: &str = "\x1b[X";
+
+// === Scroll Control ===
+/// Scroll up Ps lines (default = 1) (SU)
+pub const SCROLL_UP: &str = "\x1b[S";
+/// Scroll down Ps lines (default = 1) (SD)
+pub const SCROLL_DOWN: &str = "\x1b[T";
+
+// === ESC-level Controls (C1 equivalents) ===
+/// Index — move cursor down one line, scroll if at bottom (IND)
+pub const INDEX: &str = "\x1bD";
+/// Next Line — move to first position of next line (NEL)
+pub const NEXT_LINE: &str = "\x1bE";
+/// Horizontal Tab Set (HTS)
+pub const TAB_SET: &str = "\x1bH";
+/// Reverse Index — move cursor up one line, scroll if at top (RI)
+pub const REVERSE_INDEX: &str = "\x1bM";
+/// Full Reset (RIS) — reset terminal to initial state
+pub const FULL_RESET: &str = "\x1bc";
+/// Application Keypad (DECPAM)
+pub const KEYPAD_APPLICATION: &str = "\x1b=";
+/// Normal Keypad (DECPNM)
+pub const KEYPAD_NUMERIC: &str = "\x1b>";
+
+// === Mouse Tracking Modes (DECSET/DECRST) ===
+/// X10 mouse reporting — button press only (mode 9)
+pub const MOUSE_X10_ENABLE: &str = "\x1b[?9h";
+pub const MOUSE_X10_DISABLE: &str = "\x1b[?9l";
+/// Normal mouse tracking — press and release (mode 1000)
+pub const MOUSE_NORMAL_ENABLE: &str = "\x1b[?1000h";
+pub const MOUSE_NORMAL_DISABLE: &str = "\x1b[?1000l";
+/// Button-event mouse tracking (mode 1002)
+pub const MOUSE_BUTTON_EVENT_ENABLE: &str = "\x1b[?1002h";
+pub const MOUSE_BUTTON_EVENT_DISABLE: &str = "\x1b[?1002l";
+/// Any-event mouse tracking (mode 1003)
+pub const MOUSE_ANY_EVENT_ENABLE: &str = "\x1b[?1003h";
+pub const MOUSE_ANY_EVENT_DISABLE: &str = "\x1b[?1003l";
+/// SGR extended mouse coordinates (mode 1006)
+pub const MOUSE_SGR_ENABLE: &str = "\x1b[?1006h";
+pub const MOUSE_SGR_DISABLE: &str = "\x1b[?1006l";
+/// URXVT extended mouse coordinates (mode 1015)
+pub const MOUSE_URXVT_ENABLE: &str = "\x1b[?1015h";
+pub const MOUSE_URXVT_DISABLE: &str = "\x1b[?1015l";
+
+// === Terminal Mode Controls (DECSET/DECRST) ===
+/// Bracketed Paste Mode (mode 2004)
+pub const BRACKETED_PASTE_ENABLE: &str = "\x1b[?2004h";
+pub const BRACKETED_PASTE_DISABLE: &str = "\x1b[?2004l";
+/// Focus Event Tracking (mode 1004)
+pub const FOCUS_EVENT_ENABLE: &str = "\x1b[?1004h";
+pub const FOCUS_EVENT_DISABLE: &str = "\x1b[?1004l";
+/// Synchronized Output (mode 2026) — batch rendering
+pub const SYNC_OUTPUT_BEGIN: &str = "\x1b[?2026h";
+pub const SYNC_OUTPUT_END: &str = "\x1b[?2026l";
+/// Application Cursor Keys (DECCKM, mode 1)
+pub const APP_CURSOR_KEYS_ENABLE: &str = "\x1b[?1h";
+pub const APP_CURSOR_KEYS_DISABLE: &str = "\x1b[?1l";
+/// Origin Mode (DECOM, mode 6)
+pub const ORIGIN_MODE_ENABLE: &str = "\x1b[?6h";
+pub const ORIGIN_MODE_DISABLE: &str = "\x1b[?6l";
+/// Auto-Wrap Mode (DECAWM, mode 7)
+pub const AUTO_WRAP_ENABLE: &str = "\x1b[?7h";
+pub const AUTO_WRAP_DISABLE: &str = "\x1b[?7l";
+
+// === Device Status / Attributes ===
+/// Primary Device Attributes (DA1) — request
+pub const DEVICE_ATTRIBUTES_REQUEST: &str = "\x1b[c";
+/// Device Status Report — request cursor position (DSR CPR)
+pub const CURSOR_POSITION_REQUEST: &str = "\x1b[6n";
+/// Device Status Report — request terminal status
+pub const DEVICE_STATUS_REQUEST: &str = "\x1b[5n";
+
+// === OSC Sequences (Operating System Commands) ===
+/// Set window title — OSC 2 ; Pt BEL
+pub const OSC_SET_TITLE_PREFIX: &str = "\x1b]2;";
+/// Set icon name — OSC 1 ; Pt BEL
+pub const OSC_SET_ICON_PREFIX: &str = "\x1b]1;";
+/// Set icon name and title — OSC 0 ; Pt BEL
+pub const OSC_SET_ICON_AND_TITLE_PREFIX: &str = "\x1b]0;";
+/// Query/set foreground color — OSC 10
+pub const OSC_FG_COLOR_PREFIX: &str = "\x1b]10;";
+/// Query/set background color — OSC 11
+pub const OSC_BG_COLOR_PREFIX: &str = "\x1b]11;";
+/// Query/set cursor color — OSC 12
+pub const OSC_CURSOR_COLOR_PREFIX: &str = "\x1b]12;";
+/// Hyperlink — OSC 8
+pub const OSC_HYPERLINK_PREFIX: &str = "\x1b]8;";
+/// Clipboard access — OSC 52
+pub const OSC_CLIPBOARD_PREFIX: &str = "\x1b]52;";
+
+// === Character Set Designation (ISO 2022) ===
+/// Select UTF-8 character set
+pub const CHARSET_UTF8: &str = "\x1b%G";
+/// Select default (ISO 8859-1) character set
+pub const CHARSET_DEFAULT: &str = "\x1b%@";
+
 // === Helper Functions ===
 
 #[inline]
@@ -534,6 +644,54 @@ pub fn format_styled_into(buffer: &mut String, text: &str, style: &str) {
     buffer.push_str(style);
     buffer.push_str(text);
     buffer.push_str(RESET);
+}
+
+/// Set scrolling region (DECSTBM) — top and bottom rows (1-indexed)
+#[inline]
+pub fn set_scroll_region(top: u16, bottom: u16) -> String {
+    format!("\x1b[{};{}r", top, bottom)
+}
+
+/// Insert Ps lines at cursor position
+#[inline]
+pub fn insert_lines(n: u16) -> String {
+    format!("\x1b[{}L", n)
+}
+
+/// Delete Ps lines at cursor position
+#[inline]
+pub fn delete_lines(n: u16) -> String {
+    format!("\x1b[{}M", n)
+}
+
+/// Scroll up Ps lines
+#[inline]
+pub fn scroll_up(n: u16) -> String {
+    format!("\x1b[{}S", n)
+}
+
+/// Scroll down Ps lines
+#[inline]
+pub fn scroll_down(n: u16) -> String {
+    format!("\x1b[{}T", n)
+}
+
+/// Build an OSC sequence to set the terminal window title
+#[inline]
+pub fn set_window_title(title: &str) -> String {
+    format!("{}2;{}{}", OSC, title, BEL)
+}
+
+/// Build an OSC 8 hyperlink open sequence
+#[inline]
+pub fn hyperlink_open(url: &str) -> String {
+    format!("{}8;;{}{}", OSC, url, ST)
+}
+
+/// Build an OSC 8 hyperlink close sequence
+#[inline]
+pub fn hyperlink_close() -> String {
+    format!("{}8;;{}", OSC, ST)
 }
 
 #[cfg(test)]

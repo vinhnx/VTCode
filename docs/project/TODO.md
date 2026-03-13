@@ -68,10 +68,6 @@ https://www.reddit.com/r/LocalLLaMA/comments/1rrisqn/i_was_backend_lead_at_manus
 
 ---
 
-https://www.xfree86.org/current/ctlseqs.html
-
----
-
 use bazel build
 
 https://github.com/search?q=repo%3Aopenai%2Fcodex%20Bazel&type=code
