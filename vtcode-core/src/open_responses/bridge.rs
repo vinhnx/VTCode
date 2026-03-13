@@ -26,6 +26,8 @@ pub struct ResponseBuilder {
     next_output_index: usize,
     item_id_to_index: hashbrown::HashMap<String, usize>,
     active_items: hashbrown::HashMap<String, ActiveItemState>,
+    tool_call_correlation_ids: hashbrown::HashMap<String, String>,
+    used_tool_call_ids: hashbrown::HashSet<String>,
 }
 
 /// State for an active (in-progress) streaming item.
@@ -46,6 +48,8 @@ impl ResponseBuilder {
             next_output_index: 0,
             item_id_to_index: hashbrown::HashMap::new(),
             active_items: hashbrown::HashMap::new(),
+            tool_call_correlation_ids: hashbrown::HashMap::new(),
+            used_tool_call_ids: hashbrown::HashSet::new(),
         }
     }
 
@@ -402,13 +406,27 @@ impl ResponseBuilder {
         }
     }
 
-    fn tool_call_correlation_id(raw_tool_call_id: Option<&str>, fallback_call_id: &str) -> String {
-        raw_tool_call_id
-            .map(str::to_string)
-            .unwrap_or_else(|| fallback_call_id.to_string())
+    fn resolve_tool_call_correlation_id(
+        &mut self,
+        harness_call_id: &str,
+        raw_tool_call_id: Option<&str>,
+    ) -> String {
+        if let Some(existing) = self.tool_call_correlation_ids.get(harness_call_id) {
+            return existing.clone();
+        }
+
+        let correlation_id = match raw_tool_call_id {
+            Some(raw_id) if self.used_tool_call_ids.insert(raw_id.to_string()) => {
+                raw_id.to_string()
+            }
+            _ => harness_call_id.to_string(),
+        };
+        self.tool_call_correlation_ids
+            .insert(harness_call_id.to_string(), correlation_id.clone());
+        correlation_id
     }
 
-    fn convert_thread_item(&self, item: &ThreadItem, status: ItemStatus) -> OutputItem {
+    fn convert_thread_item(&mut self, item: &ThreadItem, status: ItemStatus) -> OutputItem {
         match &item.details {
             ThreadItemDetails::AgentMessage(msg) => OutputItem::Message(MessageItem {
                 id: item.id.clone(),
@@ -458,9 +476,9 @@ impl ResponseBuilder {
                     status,
                     name: tool_name,
                     arguments: invocation.arguments.clone().unwrap_or(json!({})),
-                    call_id: Some(Self::tool_call_correlation_id(
-                        invocation.tool_call_id.as_deref(),
+                    call_id: Some(self.resolve_tool_call_correlation_id(
                         &item.id,
+                        invocation.tool_call_id.as_deref(),
                     )),
                 })
             }
@@ -469,9 +487,9 @@ impl ResponseBuilder {
                 OutputItem::FunctionCallOutput(crate::open_responses::FunctionCallOutputItem {
                     id: item.id.clone(),
                     status,
-                    call_id: Some(Self::tool_call_correlation_id(
-                        output.tool_call_id.as_deref(),
+                    call_id: Some(self.resolve_tool_call_correlation_id(
                         &output.call_id,
+                        output.tool_call_id.as_deref(),
                     )),
                     output: output.output.clone(),
                 })
@@ -1002,6 +1020,69 @@ mod tests {
             OutputItem::FunctionCallOutput(output) => {
                 assert_eq!(output.call_id.as_deref(), Some("tool_1"));
                 assert_eq!(output.output, "done");
+            }
+            other => panic!("expected function call output, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_reused_raw_tool_call_id_falls_back_to_harness_id_for_later_pair() {
+        let mut builder = ResponseBuilder::new("gpt-5");
+        let mut emitter = VecStreamEmitter::new();
+
+        for item in [
+            ThreadItem {
+                id: "tool_1".to_string(),
+                details: ThreadItemDetails::ToolInvocation(ToolInvocationItem {
+                    tool_name: "exec_command".to_string(),
+                    arguments: Some(json!({ "command": ["cargo", "check"] })),
+                    tool_call_id: Some("tool_call_0".to_string()),
+                    status: ToolCallStatus::Completed,
+                }),
+            },
+            ThreadItem {
+                id: "tool_2".to_string(),
+                details: ThreadItemDetails::ToolInvocation(ToolInvocationItem {
+                    tool_name: "exec_command".to_string(),
+                    arguments: Some(json!({ "command": ["cargo", "test"] })),
+                    tool_call_id: Some("tool_call_0".to_string()),
+                    status: ToolCallStatus::Completed,
+                }),
+            },
+            ThreadItem {
+                id: "tool_2:output".to_string(),
+                details: ThreadItemDetails::ToolOutput(ToolOutputItem {
+                    call_id: "tool_2".to_string(),
+                    tool_call_id: Some("tool_call_0".to_string()),
+                    output: "ok".to_string(),
+                    exit_code: Some(0),
+                    status: ToolCallStatus::Completed,
+                }),
+            },
+        ] {
+            builder.process_event(
+                &ThreadEvent::ItemCompleted(ItemCompletedEvent { item }),
+                &mut emitter,
+            );
+        }
+
+        match &builder.response().output[0] {
+            OutputItem::FunctionCall(call) => {
+                assert_eq!(call.call_id.as_deref(), Some("tool_call_0"));
+            }
+            other => panic!("expected function call, got {other:?}"),
+        }
+
+        match &builder.response().output[1] {
+            OutputItem::FunctionCall(call) => {
+                assert_eq!(call.call_id.as_deref(), Some("tool_2"));
+            }
+            other => panic!("expected function call, got {other:?}"),
+        }
+
+        match &builder.response().output[2] {
+            OutputItem::FunctionCallOutput(output) => {
+                assert_eq!(output.call_id.as_deref(), Some("tool_2"));
             }
             other => panic!("expected function call output, got {other:?}"),
         }

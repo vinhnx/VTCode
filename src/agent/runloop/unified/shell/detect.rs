@@ -20,13 +20,8 @@ pub(crate) fn detect_explicit_run_command(input: &str) -> Option<(String, serde_
         ));
     }
 
-    let lower = trimmed.to_lowercase();
-    if !lower.starts_with("run ") {
-        return None;
-    }
-
-    let command_part = trimmed[4..].trim();
-    if command_part.is_empty() {
+    let (prefix, command_part) = split_prefix_and_command(trimmed)?;
+    if !is_explicit_run_prefix(prefix, command_part) {
         return None;
     }
 
@@ -47,6 +42,77 @@ pub(crate) fn detect_explicit_run_command(input: &str) -> Option<(String, serde_
             "command": normalized_command
         }),
     ))
+}
+
+fn split_prefix_and_command(input: &str) -> Option<(&str, &str)> {
+    let mut parts = input.splitn(2, char::is_whitespace);
+    let prefix = parts.next()?;
+    let command = parts.next()?.trim();
+    if command.is_empty() {
+        return None;
+    }
+    Some((prefix, command))
+}
+
+fn is_explicit_run_prefix(prefix: &str, command_part: &str) -> bool {
+    let lower = prefix.to_ascii_lowercase();
+    lower == "run" || is_likely_run_typo(&lower, command_part)
+}
+
+fn is_likely_run_typo(prefix: &str, command_part: &str) -> bool {
+    if prefix.len() != 3 || !prefix.chars().all(|ch| ch.is_ascii_alphabetic()) {
+        return false;
+    }
+
+    let Some(next_token) = command_part.split_whitespace().next() else {
+        return false;
+    };
+    if !is_known_shell_starter(next_token) {
+        return false;
+    }
+
+    let chars: Vec<char> = prefix.chars().collect();
+    let target = ['r', 'u', 'n'];
+    let mismatches = chars
+        .iter()
+        .zip(target.iter())
+        .filter(|(actual, expected)| actual != expected)
+        .count();
+    mismatches == 1 || chars == ['u', 'r', 'n'] || chars == ['r', 'n', 'u']
+}
+
+fn is_known_shell_starter(token: &str) -> bool {
+    matches!(
+        token.to_ascii_lowercase().as_str(),
+        "cargo"
+            | "git"
+            | "npm"
+            | "pnpm"
+            | "pytest"
+            | "python"
+            | "python3"
+            | "node"
+            | "go"
+            | "make"
+            | "cmake"
+            | "docker"
+            | "kubectl"
+            | "ls"
+            | "cat"
+            | "head"
+            | "tail"
+            | "wc"
+            | "du"
+            | "df"
+            | "tree"
+            | "stat"
+            | "file"
+            | "bat"
+            | "less"
+            | "more"
+            | "rg"
+            | "grep"
+    )
 }
 
 fn detect_show_diff_command(input: &str) -> Option<String> {

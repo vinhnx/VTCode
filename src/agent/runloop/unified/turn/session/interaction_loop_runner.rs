@@ -182,7 +182,8 @@ fn direct_tool_call_label(tool_call: &uni::ToolCall) -> String {
         tool_names::UNIFIED_EXEC => args
             .as_ref()
             .and_then(|args| {
-                (args.get("action").and_then(Value::as_str) == Some("run"))
+                let action = args.get("action").and_then(Value::as_str);
+                (action.is_none() || action == Some("run"))
                     .then(|| args.get("command").and_then(Value::as_str))
                     .flatten()
             })
@@ -1203,6 +1204,27 @@ mod tests {
         let text = completed_direct_tool_follow_up_text(&history).expect("follow-up text");
         assert!(text.contains("`cargo check` already completed successfully."));
         assert!(text.contains("No pending continuation is available."));
+    }
+
+    #[test]
+    fn completed_direct_tool_follow_up_text_reports_success_with_implicit_exec_run_action() {
+        let history = vec![
+            uni::Message::assistant_with_tools(
+                String::new(),
+                vec![uni::ToolCall::function(
+                    "direct_unified_exec_1".to_string(),
+                    tool_names::UNIFIED_EXEC.to_string(),
+                    serde_json::json!({"command":"cargo check"}).to_string(),
+                )],
+            ),
+            uni::Message::tool_response(
+                "direct_unified_exec_1".to_string(),
+                serde_json::json!({"exit_code":0}).to_string(),
+            ),
+        ];
+
+        let text = completed_direct_tool_follow_up_text(&history).expect("follow-up text");
+        assert!(text.contains("`cargo check` already completed successfully."));
     }
 
     #[test]
