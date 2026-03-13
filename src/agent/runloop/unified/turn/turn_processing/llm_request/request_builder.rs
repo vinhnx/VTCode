@@ -153,6 +153,7 @@ async fn assemble_prompt(
             crate::agent::runloop::unified::context_manager::SystemPromptParams {
                 full_auto: input.turn.full_auto,
                 plan_mode: input.turn.plan_mode,
+                supports_context_awareness: input.turn.capabilities.context_awareness,
                 context_window_size: Some(input.turn.context_window_size),
                 prompt_cache_shaping_mode: input.turn.prompt_cache_shaping_mode,
             },
@@ -400,6 +401,7 @@ mod tests {
         ctx.activate_recovery("loop detector");
 
         let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", true);
+        assert!(!snapshot.capabilities.context_awareness);
         let built =
             build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
                 .await
@@ -422,5 +424,6 @@ mod tests {
         assert!(system_prompt.contains("[Recovery Mode]"));
         assert!(system_prompt.contains("do_not_request_more_tools: true"));
         assert!(system_prompt.contains("recovery_reason: loop detector"));
+        assert!(!system_prompt.contains("<budget:token_budget>"));
     }
 }

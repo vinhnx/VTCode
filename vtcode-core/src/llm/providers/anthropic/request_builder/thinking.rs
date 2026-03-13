@@ -7,20 +7,16 @@ use crate::llm::rig_adapter::reasoning_parameters_for;
 use serde_json::{Value, json};
 use std::env;
 
-use super::super::capabilities::supports_reasoning_effort;
+use super::super::capabilities::{resolve_model_name, supports_reasoning_effort};
 
 pub(crate) fn build_thinking_config(
     request: &LLMRequest,
     anthropic_config: &AnthropicConfig,
     default_model: &str,
 ) -> (Option<ThinkingConfig>, Option<Value>) {
-    let resolved_model = if request.model.trim().is_empty() {
-        default_model
-    } else {
-        request.model.as_str()
-    };
+    let resolved_model = resolve_model_name(&request.model, default_model);
     let thinking_enabled = anthropic_config.extended_thinking_enabled
-        && supports_reasoning_effort(&request.model, default_model);
+        && supports_reasoning_effort(resolved_model, default_model);
 
     if thinking_enabled {
         if resolved_model == models::anthropic::CLAUDE_OPUS_4_6 {

@@ -21,6 +21,7 @@ use crate::agent::runloop::unified::incremental_system_prompt::{
 pub(crate) struct SystemPromptParams {
     pub full_auto: bool,
     pub plan_mode: bool,
+    pub supports_context_awareness: bool,
     pub context_window_size: Option<usize>,
     pub prompt_cache_shaping_mode: PromptCacheShapingMode,
 }
@@ -290,12 +291,15 @@ impl ContextManager {
             PromptAssemblyMode::BaseIncludesInstructions,
         );
 
-        // Determine if model supports context awareness (Claude 4.5+)
-        let supports_context_awareness = params.context_window_size.is_some();
+        // Determine if the provider/model exposes native context-awareness signals.
+        let supports_context_awareness = params.supports_context_awareness;
 
         // Get token budget guidance if context awareness is supported
         let token_budget_guidance = if supports_context_awareness {
-            self.get_token_budget_guidance(params.context_window_size.unwrap_or(0))
+            params
+                .context_window_size
+                .map(|context_size| self.get_token_budget_guidance(context_size))
+                .unwrap_or("")
         } else {
             ""
         };

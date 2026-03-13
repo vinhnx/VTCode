@@ -14,7 +14,7 @@ use crate::llm::providers::anthropic_types::{
 };
 use serde_json::Value;
 
-use super::capabilities::supports_effort;
+use super::capabilities::{resolve_model_name, supports_effort};
 use super::prompt_cache::{get_messages_cache_ttl, get_tools_cache_ttl};
 use messages::{build_messages, hoist_largest_user_message};
 use system::{SystemPromptBuildResult, build_system_prompt};
@@ -35,6 +35,7 @@ pub fn convert_to_anthropic_format(
     request: &LLMRequest,
     ctx: &RequestBuilderContext,
 ) -> Result<Value, LLMError> {
+    let resolved_model = resolve_model_name(&request.model, ctx.model);
     let tools_ttl = if ctx.prompt_cache_enabled {
         get_tools_cache_ttl(ctx.prompt_cache_settings)
     } else {
@@ -121,11 +122,6 @@ pub fn convert_to_anthropic_format(
 
     let final_tool_choice = build_tool_choice(request, &thinking_val);
 
-    let resolved_model = if request.model.trim().is_empty() {
-        ctx.model
-    } else {
-        request.model.as_str()
-    };
     let adaptive_effort =
         if resolved_model == models::anthropic::CLAUDE_OPUS_4_6 && request.effort.is_none() {
             request
@@ -198,7 +194,7 @@ pub fn convert_to_anthropic_format(
     };
 
     let anthropic_request = AnthropicRequest {
-        model: request.model.clone(),
+        model: resolved_model.to_string(),
         max_tokens: request
             .max_tokens
             .unwrap_or(if thinking_val.is_some() { 16000 } else { 4096 }),

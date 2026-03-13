@@ -389,6 +389,10 @@ impl AnthropicProvider {
         }
     }
 
+    fn resolved_request_model<'a>(&'a self, request: &'a LLMRequest) -> &'a str {
+        capabilities::resolve_model_name(&request.model, &self.model)
+    }
+
     fn effective_betas(&self, request: &LLMRequest) -> Option<Vec<String>> {
         let mut betas = request.betas.clone().unwrap_or_default();
         for beta in self.context_management_betas(request) {
@@ -416,14 +420,14 @@ impl AnthropicProvider {
 
     fn beta_header_for_request(
         &self,
-        _request: &LLMRequest,
+        request: &LLMRequest,
         anthropic_request: &Value,
         include_advanced_tool_use: bool,
         request_betas: Option<&Vec<String>>,
     ) -> Option<String> {
         let beta_config = headers::BetaHeaderConfig {
             config: &self.anthropic_config,
-            model: &self.model,
+            model: self.resolved_request_model(request),
             include_advanced_tool_use,
             request_betas,
             include_effort: anthropic_request
@@ -514,6 +518,10 @@ impl LLMProvider for AnthropicProvider {
         capabilities::supports_parallel_tool_config(model)
     }
 
+    fn supports_context_awareness(&self, model: &str) -> bool {
+        capabilities::supports_context_awareness(model, &self.model)
+    }
+
     fn effective_context_size(&self, model: &str) -> usize {
         capabilities::effective_context_size(model)
     }
@@ -527,6 +535,7 @@ impl LLMProvider for AnthropicProvider {
     }
 
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+        let resolved_model = self.resolved_request_model(&request).to_string();
         let include_advanced_tool_use = self.requires_advanced_tool_use_beta(&request);
         let anthropic_request = self.convert_to_anthropic_format(&request)?;
         let url = format!("{}/messages", self.base_url);
@@ -576,14 +585,14 @@ impl LLMProvider for AnthropicProvider {
             .await
             .map_err(|e| format_parse_error("Anthropic", &e))?;
 
-        let mut llm_response =
-            response_parser::parse_response(anthropic_response, self.model.clone())?;
+        let mut llm_response = response_parser::parse_response(anthropic_response, resolved_model)?;
         llm_response.request_id = request_id;
         llm_response.organization_id = organization_id;
         Ok(llm_response)
     }
 
     async fn stream(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {
+        let resolved_model = self.resolved_request_model(&request).to_string();
         let include_advanced_tool_use = self.requires_advanced_tool_use_beta(&request);
         let mut anthropic_request = self.convert_to_anthropic_format(&request)?;
         let betas = self.effective_betas(&request);
@@ -636,7 +645,7 @@ impl LLMProvider for AnthropicProvider {
 
         Ok(stream_decoder::create_stream(
             response,
-            self.model.clone(),
+            resolved_model,
             request_id,
             organization_id,
         ))
@@ -919,6 +928,69 @@ mod tests {
             .expect("beta header");
 
         assert!(beta_header.contains("advanced-tool-use-2025-11-20"));
+    }
+
+    #[test]
+    fn beta_header_omits_context_1m_for_native_1m_models() {
+        for model in [models::CLAUDE_SONNET_4_6, models::CLAUDE_OPUS_4_6] {
+            let provider = AnthropicProvider::with_model("test-key".to_string(), model.to_string());
+            let request = LLMRequest {
+                model: model.to_string(),
+                messages: vec![Message::user("hello".to_string())],
+                ..Default::default()
+            };
+
+            let payload = provider
+                .convert_to_anthropic_format(&request)
+                .expect("payload conversion");
+            let beta_header = provider
+                .beta_header_for_request(&request, &payload, false, None)
+                .expect("beta header");
+
+            assert!(!beta_header.contains("context-1m-2025-08-07"));
+        }
+    }
+
+    #[test]
+    fn beta_header_uses_request_model_instead_of_provider_default() {
+        let provider = AnthropicProvider::with_model(
+            "test-key".to_string(),
+            models::CLAUDE_OPUS_4_6.to_string(),
+        );
+        let request = LLMRequest {
+            model: models::CLAUDE_SONNET_4_6.to_string(),
+            messages: vec![Message::user("hello".to_string())],
+            effort: Some("medium".to_string()),
+            ..Default::default()
+        };
+
+        let payload = provider
+            .convert_to_anthropic_format(&request)
+            .expect("payload conversion");
+        let beta_header = provider
+            .beta_header_for_request(&request, &payload, false, None)
+            .expect("beta header");
+
+        assert_eq!(payload["model"], models::CLAUDE_SONNET_4_6);
+        assert!(beta_header.contains("interleaved-thinking-2025-05-14"));
+    }
+
+    #[test]
+    fn convert_to_anthropic_format_falls_back_to_provider_default_model() {
+        let provider = AnthropicProvider::with_model(
+            "test-key".to_string(),
+            models::CLAUDE_SONNET_4_6.to_string(),
+        );
+        let request = LLMRequest {
+            messages: vec![Message::user("hello".to_string())],
+            ..Default::default()
+        };
+
+        let payload = provider
+            .convert_to_anthropic_format(&request)
+            .expect("payload conversion");
+
+        assert_eq!(payload["model"], models::CLAUDE_SONNET_4_6);
     }
 
     #[test]

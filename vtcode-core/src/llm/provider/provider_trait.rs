@@ -18,6 +18,7 @@ pub struct ProviderCapabilities {
     pub structured_output: bool,
     pub context_caching: bool,
     pub responses_compaction: bool,
+    pub context_awareness: bool,
     pub vision: bool,
 }
 
@@ -46,6 +47,7 @@ pub fn get_cached_capabilities(provider: &dyn LLMProvider, model: &str) -> Provi
         structured_output: provider.supports_structured_output(model),
         context_caching: provider.supports_context_caching(model),
         responses_compaction: provider.supports_responses_compaction(model),
+        context_awareness: provider.supports_context_awareness(model),
         vision: provider.supports_vision(model),
     };
 
@@ -105,6 +107,11 @@ pub trait LLMProvider: Send + Sync {
 
     /// Whether the provider supports Responses API server-side compaction.
     fn supports_responses_compaction(&self, _model: &str) -> bool {
+        false
+    }
+
+    /// Whether the provider exposes native context-awareness / token-budget prompts.
+    fn supports_context_awareness(&self, _model: &str) -> bool {
         false
     }
 

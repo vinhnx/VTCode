@@ -379,6 +379,43 @@ async fn test_non_context_aware_model_no_budget_tags() {
 }
 
 #[tokio::test]
+async fn test_non_context_aware_model_with_context_window_no_budget_tags() {
+    let prompt_builder = IncrementalSystemPrompt::new();
+    let base_prompt = "You are a helpful assistant.";
+    let context = SystemPromptContext {
+        conversation_length: 10,
+        tool_usage_count: 5,
+        error_count: 0,
+        token_usage_ratio: 0.10,
+        full_auto: false,
+        plan_mode: false,
+        discovered_skills: Vec::new(),
+        context_window_size: Some(1_000_000),
+        current_token_usage: Some(250_000),
+        supports_context_awareness: false,
+        token_budget_guidance: "WARNING: should not be shown",
+        prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
+        editor_context_block: None,
+    };
+
+    let prompt = prompt_builder
+        .get_system_prompt(
+            base_prompt,
+            1,
+            1,
+            0,
+            PromptAssemblyMode::AppendInstructions,
+            &context,
+            None,
+        )
+        .await;
+
+    assert!(!prompt.contains("<budget:token_budget>1000000</budget:token_budget>"));
+    assert!(!prompt.contains("Token usage: 250000/1000000; 750000 remaining"));
+    assert!(!prompt.contains("should not be shown"));
+}
+
+#[tokio::test]
 async fn test_plan_mode_notice_appended() {
     let prompt_builder = IncrementalSystemPrompt::new();
     let base_prompt = "You are a helpful assistant.";
