@@ -271,6 +271,15 @@ pub(super) fn preflight_validate_resolved_call(
             failures.push(format!("Missing required argument: {}", key));
         }
     }
+    if normalized_tool_name == tool_names::UNIFIED_EXEC {
+        failures.extend(
+            crate::tools::command_args::unified_exec_missing_required_args(
+                validation_args.as_ref(),
+            )
+            .into_iter()
+            .map(|key| format!("Missing required argument: {}", key)),
+        );
+    }
 
     if let Some(path) = validation_args
         .as_ref()
@@ -281,16 +290,18 @@ pub(super) fn preflight_validate_resolved_call(
         failures.push(format!("Path security check failed: {}", err));
     }
 
-    let should_validate_command = normalized_tool_name == tool_names::RUN_PTY_CMD
-        || normalized_tool_name == tool_names::CREATE_PTY_SESSION
-        || normalized_tool_name == tool_names::UNIFIED_EXEC
-        || normalized_tool_name == "shell";
+    let should_validate_command = matches!(
+        normalized_tool_name,
+        tool_names::RUN_PTY_CMD | tool_names::CREATE_PTY_SESSION | "shell"
+    ) || (normalized_tool_name == tool_names::UNIFIED_EXEC
+        && crate::tools::command_args::unified_exec_requires_command_safety(
+            validation_args.as_ref(),
+        ));
     if should_validate_command
-        && let Some(command) = validation_args
-            .as_ref()
-            .get("command")
-            .and_then(|v| v.as_str())
-        && let Err(err) = commands::validate_command_safety(command)
+        && let Some(command) = crate::tools::command_args::command_text(validation_args.as_ref())
+            .ok()
+            .flatten()
+        && let Err(err) = commands::validate_command_safety(&command)
     {
         failures.push(format!("Command security check failed: {}", err));
     }
@@ -309,6 +320,14 @@ pub(super) fn preflight_validate_resolved_call(
         ));
     }
 
+    if normalized_tool_name == tool_names::UNIFIED_EXEC
+        && crate::tools::tool_intent::unified_exec_action(validation_args.as_ref()).is_none()
+    {
+        return Err(anyhow!(
+            "Invalid arguments for tool '{}': missing action; provide `action` or inferable exec arguments",
+            normalized_tool_name
+        ));
+    }
     if normalized_tool_name == tool_names::UNIFIED_SEARCH
         && crate::tools::tool_intent::unified_search_action(validation_args.as_ref()).is_none()
     {
@@ -344,8 +363,9 @@ pub(super) fn preflight_validate_resolved_call(
 mod tests {
     use super::super::assembly::public_tool_name_candidates;
     use super::{
-        configured_unified_file_max_payload_bytes, enforce_unified_file_payload_limit,
-        is_missing_required_arg, normalize_tool_args, parse_unified_file_max_payload_bytes,
+        ToolRegistry, configured_unified_file_max_payload_bytes,
+        enforce_unified_file_payload_limit, is_missing_required_arg, normalize_tool_args,
+        parse_unified_file_max_payload_bytes, preflight_validate_resolved_call,
     };
     use crate::config::constants::tools as tool_names;
     use crate::tools::command_args::parse_indexed_command_parts;
@@ -353,6 +373,12 @@ mod tests {
     use crate::tools::traits::Tool;
     use anyhow::Result;
     use serde_json::{Value, json};
+
+    async fn new_test_registry() -> (tempfile::TempDir, ToolRegistry) {
+        let temp = tempfile::tempdir().expect("temp workspace");
+        let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
+        (temp, registry)
+    }
 
     #[test]
     fn patch_action_within_limit_is_allowed() {
@@ -679,6 +705,99 @@ mod tests {
             normalized.get("details").and_then(Value::as_str),
             Some("Keep the real details field.")
         );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn unified_exec_preflight_rejects_run_without_command() {
+        let (_temp, registry) = new_test_registry().await;
+
+        let err = preflight_validate_resolved_call(
+            &registry,
+            tool_names::UNIFIED_EXEC,
+            &json!({"action": "run"}),
+        )
+        .expect_err("missing command should fail preflight");
+
+        assert!(
+            err.to_string()
+                .contains("Missing required argument: command")
+        );
+    }
+
+    #[tokio::test]
+    async fn unified_exec_preflight_rejects_missing_action_without_inferable_args() {
+        let (_temp, registry) = new_test_registry().await;
+
+        let err = preflight_validate_resolved_call(&registry, tool_names::UNIFIED_EXEC, &json!({}))
+            .expect_err("missing action should fail preflight");
+
+        assert!(
+            err.to_string().contains(
+                "Invalid arguments for tool 'unified_exec': missing action; provide `action` or inferable exec arguments"
+            )
+        );
+    }
+
+    #[tokio::test]
+    async fn unified_exec_preflight_rejects_write_without_input() {
+        let (_temp, registry) = new_test_registry().await;
+
+        let err = preflight_validate_resolved_call(
+            &registry,
+            tool_names::UNIFIED_EXEC,
+            &json!({"action": "write", "session_id": "run-1"}),
+        )
+        .expect_err("missing input should fail preflight");
+
+        assert!(
+            err.to_string()
+                .contains("Missing required argument: input or chars or text")
+        );
+    }
+
+    #[tokio::test]
+    async fn unified_exec_preflight_rejects_poll_without_session_id() {
+        let (_temp, registry) = new_test_registry().await;
+
+        let err = preflight_validate_resolved_call(
+            &registry,
+            tool_names::UNIFIED_EXEC,
+            &json!({"action": "poll"}),
+        )
+        .expect_err("missing session_id should fail preflight");
+
+        assert!(
+            err.to_string()
+                .contains("Missing required argument: session_id")
+        );
+    }
+
+    #[tokio::test]
+    async fn unified_exec_preflight_accepts_list_without_extra_args() -> Result<()> {
+        let (_temp, registry) = new_test_registry().await;
+
+        let result = preflight_validate_resolved_call(
+            &registry,
+            tool_names::UNIFIED_EXEC,
+            &json!({"action": "list"}),
+        )?;
+
+        assert_eq!(result.normalized_tool_name, tool_names::UNIFIED_EXEC);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn unified_exec_preflight_accepts_inspect_with_spool_path() -> Result<()> {
+        let (_temp, registry) = new_test_registry().await;
+
+        let result = preflight_validate_resolved_call(
+            &registry,
+            tool_names::UNIFIED_EXEC,
+            &json!({"action": "inspect", "spool_path": ".vtcode/context/tool_outputs/out.log"}),
+        )?;
+
+        assert_eq!(result.normalized_tool_name, tool_names::UNIFIED_EXEC);
         Ok(())
     }
 }

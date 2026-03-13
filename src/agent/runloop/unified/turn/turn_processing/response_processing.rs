@@ -571,6 +571,44 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn process_llm_response_rejects_textual_unified_exec_without_command() {
+        let temp = tempfile::tempdir().expect("temp workspace");
+        let tool_registry = vtcode_core::tools::ToolRegistry::new(temp.path().to_path_buf()).await;
+        let response = LLMResponse {
+            content: Some("run()".to_string()),
+            tool_calls: None,
+            model: "test".to_string(),
+            usage: None,
+            finish_reason: FinishReason::Stop,
+            reasoning: None,
+            reasoning_details: None,
+            tool_references: Vec::new(),
+            request_id: None,
+            organization_id: None,
+        };
+
+        let mut renderer = AnsiRenderer::stdout();
+        let result = process_llm_response(
+            &response,
+            &mut renderer,
+            7,
+            false,
+            false,
+            true,
+            None,
+            Some(&tool_registry),
+        )
+        .expect("processing should succeed");
+
+        match result {
+            TurnProcessingResult::TextResponse { text, .. } => {
+                assert_eq!(text, "run()");
+            }
+            _ => panic!("Expected textual invalid unified_exec to stay a text response"),
+        }
+    }
+
     #[test]
     fn process_llm_response_skips_questions_when_interview_not_ready() {
         let response = LLMResponse {

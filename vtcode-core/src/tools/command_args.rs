@@ -122,6 +122,13 @@ pub fn command_text(args: &Value) -> Result<Option<String>, &'static str> {
     Ok(Some(shell_words::join(parts.iter().map(String::as_str))))
 }
 
+fn has_nonempty_string_field(args: &Value, key: &str) -> bool {
+    args.get(key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .is_some_and(|value| !value.is_empty())
+}
+
 pub fn interactive_input_text(args: &Value) -> Option<&str> {
     args.get("input")
         .and_then(Value::as_str)
@@ -135,6 +142,62 @@ pub fn session_id_text(args: &Value) -> Option<&str> {
         .and_then(Value::as_str)
         .map(str::trim)
         .filter(|value| !value.is_empty())
+}
+
+pub fn unified_exec_missing_required_args(args: &Value) -> Vec<&'static str> {
+    let Some(action) = crate::tools::tool_intent::unified_exec_action(args) else {
+        return Vec::new();
+    };
+
+    let mut missing = Vec::new();
+    match action {
+        action if action.eq_ignore_ascii_case("run") => {
+            if command_text(args).ok().flatten().is_none() {
+                missing.push("command");
+            }
+        }
+        action if action.eq_ignore_ascii_case("write") => {
+            if session_id_text(args).is_none() {
+                missing.push("session_id");
+            }
+            if interactive_input_text(args).is_none() {
+                missing.push("input or chars or text");
+            }
+        }
+        action
+            if action.eq_ignore_ascii_case("poll")
+                || action.eq_ignore_ascii_case("continue")
+                || action.eq_ignore_ascii_case("close") =>
+        {
+            if session_id_text(args).is_none() {
+                missing.push("session_id");
+            }
+        }
+        action if action.eq_ignore_ascii_case("inspect") => {
+            let has_session_id = session_id_text(args).is_some();
+            let has_spool_path = has_nonempty_string_field(args, "spool_path");
+            if !has_session_id && !has_spool_path {
+                missing.push("session_id or spool_path");
+            }
+        }
+        action if action.eq_ignore_ascii_case("code") => {
+            let has_code = has_nonempty_string_field(args, "code")
+                || has_nonempty_string_field(args, "command");
+            if !has_code {
+                missing.push("code or command");
+            }
+        }
+        action if action.eq_ignore_ascii_case("list") => {}
+        _ => {}
+    }
+
+    missing
+}
+
+pub fn unified_exec_requires_command_safety(args: &Value) -> bool {
+    crate::tools::tool_intent::unified_exec_action(args)
+        .map(|action| action.eq_ignore_ascii_case("run"))
+        .unwrap_or(false)
 }
 
 pub fn working_dir_text_from_payload(payload: &serde_json::Map<String, Value>) -> Option<&str> {
@@ -197,8 +260,8 @@ mod tests {
     use super::{
         command_text, command_words, has_indexed_command_parts, interactive_input_text,
         normalize_indexed_command_args, normalize_shell_args, normalized_command_value,
-        parse_indexed_command_parts, session_id_text, working_dir_text,
-        working_dir_text_from_payload,
+        parse_indexed_command_parts, session_id_text, unified_exec_missing_required_args,
+        unified_exec_requires_command_safety, working_dir_text, working_dir_text_from_payload,
     };
     use serde_json::{Value, json};
 
@@ -384,5 +447,34 @@ mod tests {
             normalized.get("max_output_tokens").and_then(Value::as_u64),
             Some(42)
         );
+    }
+
+    #[test]
+    fn unified_exec_missing_required_args_is_action_aware() {
+        assert_eq!(
+            unified_exec_missing_required_args(&json!({"action": "run"})),
+            vec!["command"]
+        );
+        assert_eq!(
+            unified_exec_missing_required_args(&json!({"action": "write", "session_id": "run-1"})),
+            vec!["input or chars or text"]
+        );
+        assert_eq!(
+            unified_exec_missing_required_args(&json!({"action": "inspect"})),
+            vec!["session_id or spool_path"]
+        );
+        assert!(unified_exec_missing_required_args(&json!({"action": "list"})).is_empty());
+    }
+
+    #[test]
+    fn unified_exec_requires_command_safety_only_for_run() {
+        assert!(unified_exec_requires_command_safety(&json!({
+            "action": "run",
+            "command": "cargo check"
+        })));
+        assert!(!unified_exec_requires_command_safety(&json!({
+            "action": "poll",
+            "session_id": "run-1"
+        })));
     }
 }

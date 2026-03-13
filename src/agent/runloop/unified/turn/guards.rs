@@ -122,13 +122,6 @@ pub(crate) fn validate_tool_args_security(
         tool_names::EDIT_FILE => &["path", "old_str", "new_str"],
         "list_files" => &["path"],
         "grep_file" => &["pattern", "path"],
-        tool_names::UNIFIED_EXEC
-            if vtcode_core::tools::tool_intent::unified_exec_action(args)
-                .map(|action| action.eq_ignore_ascii_case("run"))
-                .unwrap_or(false) =>
-        {
-            &["command"]
-        }
         tool_names::RUN_PTY_CMD => &["command"],
         tool_names::APPLY_PATCH => &["patch"],
         _ => EMPTY_REQUIRED,
@@ -146,11 +139,33 @@ pub(crate) fn validate_tool_args_security(
             }
         }
     }
+    if name == tool_names::UNIFIED_EXEC {
+        let exec_failures =
+            vtcode_core::tools::command_args::unified_exec_missing_required_args(args);
+        if !exec_failures.is_empty() {
+            failures
+                .get_or_insert_with(|| Vec::with_capacity(exec_failures.len()))
+                .extend(
+                    exec_failures
+                        .into_iter()
+                        .map(|key| format!("Missing required argument: {}", key)),
+                );
+        }
+    }
 
     // Early return if required args are missing
     if failures.is_some() {
         // Validation failed, no cache update (or cache as invalid if we wanted)
         return failures;
+    }
+
+    if name == tool_names::UNIFIED_EXEC
+        && vtcode_core::tools::tool_intent::unified_exec_action(args).is_none()
+    {
+        return Some(vec![
+            "Invalid arguments: missing action; provide `action` or inferable exec arguments"
+                .to_string(),
+        ]);
     }
 
     // 2. Perform security checks only if required args passed
@@ -166,9 +181,7 @@ pub(crate) fn validate_tool_args_security(
     // Command safety checks
     if (name == tool_names::RUN_PTY_CMD
         || (name == tool_names::UNIFIED_EXEC
-            && vtcode_core::tools::tool_intent::unified_exec_action(args)
-                .map(|action| action.eq_ignore_ascii_case("run"))
-                .unwrap_or(false)))
+            && vtcode_core::tools::command_args::unified_exec_requires_command_safety(args)))
         && let Some(cmd) = vtcode_core::tools::command_args::command_text(args)
             .ok()
             .flatten()
@@ -463,6 +476,37 @@ mod tests {
             validate_tool_args_security(tool_names::EDIT_FILE, &args, None, None).unwrap();
         assert!(failures.iter().any(|msg| msg.contains("old_str")));
         assert!(failures.iter().any(|msg| msg.contains("new_str")));
+    }
+
+    #[test]
+    fn validate_unified_exec_args_without_registry_reports_single_missing_command() {
+        let failures = validate_tool_args_security(
+            tool_names::UNIFIED_EXEC,
+            &json!({"action": "run"}),
+            None,
+            None,
+        )
+        .expect("missing command should fail");
+
+        assert_eq!(
+            failures,
+            vec!["Missing required argument: command".to_string()]
+        );
+    }
+
+    #[test]
+    fn validate_unified_exec_args_without_registry_rejects_missing_action() {
+        let failures =
+            validate_tool_args_security(tool_names::UNIFIED_EXEC, &json!({}), None, None)
+                .expect("missing action should fail");
+
+        assert_eq!(
+            failures,
+            vec![
+                "Invalid arguments: missing action; provide `action` or inferable exec arguments"
+                    .to_string()
+            ]
+        );
     }
 
     #[test]
