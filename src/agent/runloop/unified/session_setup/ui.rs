@@ -278,6 +278,9 @@ pub(crate) async fn initialize_session_ui(
         &session_state.session_bootstrap,
         header_provider_label,
         config.model.clone(),
+        session_state
+            .provider_client
+            .effective_context_size(&config.model),
         mode_label,
         reasoning_label.clone(),
     )

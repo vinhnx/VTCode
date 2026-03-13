@@ -141,6 +141,7 @@ pub(crate) async fn build_inline_header_context(
     session_bootstrap: &SessionBootstrap,
     provider_label: String,
     model_label: String,
+    context_window_size: usize,
     mode_label: String,
     reasoning_label: String,
 ) -> Result<InlineHeaderContext> {
@@ -299,6 +300,7 @@ pub(crate) async fn build_inline_header_context(
         app_name: vtcode_core::config::constants::app::DISPLAY_NAME.to_string(),
         provider: provider_value,
         model: model_value,
+        context_window_size: Some(context_window_size),
         version,
         search_tools: Some(build_search_tools_badge(&config.workspace)),
         editor_context: None,

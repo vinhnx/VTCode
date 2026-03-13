@@ -88,7 +88,7 @@ impl Session {
                 self.invalidate_scroll_metrics();
             }
             InlineCommand::SetHeaderContext { context } => {
-                self.header_context = context;
+                self.header_context = *context;
                 self.needs_redraw = true;
             }
             InlineCommand::SetInputStatus { left, right } => {

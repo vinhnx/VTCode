@@ -40,6 +40,7 @@ fn test_header_context_snapshot() {
         app_name: "VT Code".to_string(),
         provider: "openai".to_string(),
         model: "gpt-oss-20b".to_string(),
+        context_window_size: None,
         reasoning: "creative".to_string(),
         reasoning_stage: None,
         mode: "inline".to_string(),

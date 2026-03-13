@@ -85,6 +85,7 @@ fn test_header_context_rendering() {
         app_name: "VT Code".to_string(),
         provider: "openai".to_string(),
         model: "gpt-oss-20b".to_string(),
+        context_window_size: None,
         version: "0.37.1".to_string(),
         search_tools: None,
         git: "main branch".to_string(),

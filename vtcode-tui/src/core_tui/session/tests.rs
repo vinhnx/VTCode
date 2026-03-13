@@ -2021,6 +2021,23 @@ fn header_meta_line_excludes_editor_context() {
 }
 
 #[test]
+fn header_title_line_shows_model_context_window() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.header_context.provider = format!("{}Anthropic", ui::HEADER_PROVIDER_PREFIX);
+    session.header_context.model = format!("{}claude-sonnet-4-6", ui::HEADER_MODEL_PREFIX);
+    session.header_context.context_window_size = Some(1_000_000);
+
+    let summary = line_text(&session.header_title_line());
+    assert!(summary.contains("claude-sonnet-4-6 (1M)"));
+
+    session.header_context.model = format!("{}claude-haiku-4-5", ui::HEADER_MODEL_PREFIX);
+    session.header_context.context_window_size = Some(200_000);
+
+    let summary = line_text(&session.header_title_line());
+    assert!(summary.contains("claude-haiku-4-5 (200K)"));
+}
+
+#[test]
 fn header_highlights_collapse_to_single_line() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.header_context.highlights = vec![

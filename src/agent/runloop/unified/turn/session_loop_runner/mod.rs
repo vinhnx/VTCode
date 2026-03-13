@@ -138,24 +138,23 @@ async fn force_reload_workspace_config_for_execution(
     Ok(())
 }
 
+struct ExitHeaderDisplay {
+    provider_label: String,
+    reasoning_label: String,
+    context_window_size: usize,
+    mode_label: String,
+    tools_count: usize,
+    editing_mode: vtcode_tui::EditingMode,
+    autonomous_mode: bool,
+    full_auto: bool,
+}
+
 fn build_exit_header_context_fast(
     config: &CoreAgentConfig,
     session_bootstrap: &SessionBootstrap,
-    reasoning_label: String,
-    mode_label: String,
-    tools_count: usize,
-    plan_mode: bool,
-    autonomous_mode: bool,
-    full_auto: bool,
-    provider_name: &str,
+    display: ExitHeaderDisplay,
 ) -> vtcode_tui::InlineHeaderContext {
     use vtcode_core::config::constants::ui;
-
-    let provider_label = if config.provider.trim().is_empty() {
-        provider_name
-    } else {
-        config.provider.as_str()
-    };
 
     let trust_label = match session_bootstrap.acp_workspace_trust {
         Some(vtcode_core::config::AgentClientProtocolZedWorkspaceTrustMode::FullAuto) => {
@@ -164,14 +163,15 @@ fn build_exit_header_context_fast(
         Some(vtcode_core::config::AgentClientProtocolZedWorkspaceTrustMode::ToolsPolicy) => {
             "tools_policy"
         }
-        None if full_auto || autonomous_mode => "full auto",
+        None if display.full_auto || display.autonomous_mode => "full auto",
         None => "tools policy",
     };
 
     vtcode_tui::InlineHeaderContext {
         app_name: vtcode_core::config::constants::app::DISPLAY_NAME.to_string(),
-        provider: format!("{}{}", ui::HEADER_PROVIDER_PREFIX, provider_label),
+        provider: format!("{}{}", ui::HEADER_PROVIDER_PREFIX, display.provider_label),
         model: format!("{}{}", ui::HEADER_MODEL_PREFIX, config.model),
+        context_window_size: Some(display.context_window_size),
         version: env!("CARGO_PKG_VERSION").to_string(),
         search_tools: Some(crate::agent::runloop::ui::build_search_tools_badge(
             &config.workspace,
@@ -182,23 +182,19 @@ fn build_exit_header_context_fast(
             ui::HEADER_GIT_PREFIX,
             ui::HEADER_UNKNOWN_PLACEHOLDER
         ),
-        mode: mode_label,
-        reasoning: format!("{}{}", ui::HEADER_REASONING_PREFIX, reasoning_label),
+        mode: display.mode_label,
+        reasoning: format!("{}{}", ui::HEADER_REASONING_PREFIX, display.reasoning_label),
         reasoning_stage: None,
         workspace_trust: format!("{}{}", ui::HEADER_TRUST_PREFIX, trust_label),
-        tools: format!("{}{}", ui::HEADER_TOOLS_PREFIX, tools_count),
+        tools: format!("{}{}", ui::HEADER_TOOLS_PREFIX, display.tools_count),
         mcp: format!(
             "{}{}",
             ui::HEADER_MCP_PREFIX,
             ui::HEADER_UNKNOWN_PLACEHOLDER
         ),
         highlights: Vec::new(),
-        editing_mode: if plan_mode {
-            vtcode_tui::EditingMode::Plan
-        } else {
-            vtcode_tui::EditingMode::Edit
-        },
-        autonomous_mode,
+        editing_mode: display.editing_mode,
+        autonomous_mode: display.autonomous_mode,
     }
 }
 
@@ -997,16 +993,28 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             (vtcode_core::config::types::UiSurfacePreference::Auto, false) => "std".to_string(),
         };
         let tools_count = tools.read().await.len();
+        let provider_label = if config.provider.trim().is_empty() {
+            provider_name.clone()
+        } else {
+            config.provider.clone()
+        };
         let header_context = Some(build_exit_header_context_fast(
             &config,
             &session_bootstrap,
-            reasoning_label,
-            mode_label,
-            tools_count,
-            session_stats.is_plan_mode(),
-            session_stats.is_autonomous_mode(),
-            full_auto,
-            &provider_name,
+            ExitHeaderDisplay {
+                provider_label,
+                reasoning_label,
+                context_window_size: provider_client.effective_context_size(&config.model),
+                mode_label,
+                tools_count,
+                editing_mode: if session_stats.is_plan_mode() {
+                    vtcode_tui::EditingMode::Plan
+                } else {
+                    vtcode_tui::EditingMode::Edit
+                },
+                autonomous_mode: session_stats.is_autonomous_mode(),
+                full_auto,
+            },
         ));
         if !finalization_succeeded {
             let _ = vtcode_tui::panic_hook::restore_tui();

@@ -102,6 +102,7 @@ pub(crate) async fn finalize_model_selection(
         session_bootstrap,
         selection.provider_label.clone(),
         selection.model.clone(),
+        provider_client.effective_context_size(&selection.model),
         mode_label,
         reasoning_label.clone(),
     )

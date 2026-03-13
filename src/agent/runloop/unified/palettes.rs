@@ -279,6 +279,7 @@ async fn refresh_runtime_config_from_manager(
             session_bootstrap,
             provider_label,
             config.model.clone(),
+            provider_client.effective_context_size(&config.model),
             mode_label,
             reasoning_label,
         )

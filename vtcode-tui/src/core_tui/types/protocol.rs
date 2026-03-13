@@ -53,7 +53,7 @@ pub enum InlineCommand {
         user: Option<String>,
     },
     SetHeaderContext {
-        context: InlineHeaderContext,
+        context: Box<InlineHeaderContext>,
     },
     SetInputStatus {
         left: Option<String>,
@@ -199,7 +199,9 @@ impl InlineHandle {
     }
 
     pub fn set_header_context(&self, context: InlineHeaderContext) {
-        self.send_command(InlineCommand::SetHeaderContext { context });
+        self.send_command(InlineCommand::SetHeaderContext {
+            context: Box::new(context),
+        });
     }
 
     pub fn set_input_status(&self, left: Option<String>, right: Option<String>) {

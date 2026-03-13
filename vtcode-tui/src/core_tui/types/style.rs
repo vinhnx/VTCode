@@ -35,6 +35,7 @@ pub struct InlineHeaderContext {
     pub app_name: String,
     pub provider: String,
     pub model: String,
+    pub context_window_size: Option<usize>,
     pub version: String,
     pub search_tools: Option<InlineHeaderStatusBadge>,
     pub editor_context: Option<String>,
@@ -93,6 +94,7 @@ impl Default for InlineHeaderContext {
                 ui::HEADER_MODEL_PREFIX,
                 ui::HEADER_UNKNOWN_PLACEHOLDER
             ),
+            context_window_size: None,
             version,
             search_tools: None,
             editor_context: None,

@@ -53,6 +53,16 @@ fn compact_tools_format(tools_str: &str) -> String {
     allow_count.to_string()
 }
 
+fn compact_context_window_label(context_window_size: usize) -> String {
+    if context_window_size >= 1_000_000 {
+        format!("{}M", context_window_size / 1_000_000)
+    } else if context_window_size >= 1_000 {
+        format!("{}K", context_window_size / 1_000)
+    } else {
+        context_window_size.to_string()
+    }
+}
+
 fn line_is_empty(spans: &[Span<'static>]) -> bool {
     spans.len() == 1 && spans.first().is_some_and(|span| span.content.is_empty())
 }
@@ -329,9 +339,20 @@ impl Session {
 
     pub fn header_model_short_value(&self) -> String {
         let value = self.header_model_value();
-        Self::strip_prefix(&value, ui::HEADER_MODEL_PREFIX)
+        let model = Self::strip_prefix(&value, ui::HEADER_MODEL_PREFIX)
             .trim()
-            .to_owned()
+            .to_owned();
+
+        match self.header_context.context_window_size {
+            Some(context_window_size) if context_window_size > 0 => {
+                format!(
+                    "{} ({})",
+                    model,
+                    compact_context_window_label(context_window_size)
+                )
+            }
+            _ => model,
+        }
     }
 
     pub fn header_reasoning_short_value(&self) -> String {
