@@ -18,6 +18,9 @@ COPY . .
 # by reducing parallel jobs and disabling incremental compilation
 ENV CARGO_BUILD_JOBS=2
 ENV CARGO_INCREMENTAL=0
+ENV RUSTC_WRAPPER=
+ENV SCCACHE_DIR=
+ENV SCCACHE_CACHE_SIZE=
 
 # Build the project with release profile (more memory efficient than dev with LTO)
 # Use --release to get optimized binary without the aggressive dev LTO settings
