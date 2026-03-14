@@ -24,9 +24,10 @@ use crate::core::agent::types::AgentType;
 use crate::core::context_optimizer::ContextOptimizer;
 use crate::core::loop_detector::LoopDetector;
 use crate::exec::events::ThreadEvent;
-use crate::llm::factory::create_provider_for_model;
+use crate::llm::client::ProviderClientAdapter;
+use crate::llm::factory::{ProviderConfig, create_provider_with_config, infer_provider_from_model};
 use crate::llm::provider as uni_provider;
-use crate::llm::{AnyClient, make_client};
+use crate::llm::AnyClient;
 use crate::prompts::PromptContext;
 use crate::prompts::system::compose_system_instruction_text;
 use crate::tools::ToolRegistry;
@@ -218,14 +219,6 @@ impl AgentRunner {
         bootstrap: ThreadBootstrap,
         vt_cfg: Option<VTCodeConfig>,
     ) -> Result<Self> {
-        // Create client based on model
-        let client: AnyClient = make_client(api_key.clone(), model)?;
-
-        // Create unified provider client for tool calling
-        let provider_client =
-            create_provider_for_model(model.as_str(), api_key.clone(), None, None)
-                .map_err(|e| anyhow!("Failed to create provider client: {}", e))?;
-
         // Load configuration once to seed system prompt and runtime policies
         let session_config = if let Some(vt_cfg) = vt_cfg {
             ResolvedSessionConfig::from_config(vt_cfg)
@@ -241,6 +234,42 @@ impl AgentRunner {
             }
         };
         let session_config = Arc::new(session_config);
+        let provider_name = {
+            let configured = session_config.effective().agent.provider.trim();
+            if configured.is_empty() {
+                infer_provider_from_model(model.as_str())
+                    .map(|provider| provider.to_string())
+                    .ok_or_else(|| anyhow!("Failed to determine provider for model {}", model))?
+            } else {
+                configured.to_lowercase()
+            }
+        };
+        let provider_config = ProviderConfig {
+            api_key: Some(api_key.clone()),
+            base_url: None,
+            model: Some(model.to_string()),
+            prompt_cache: Some(session_config.effective().prompt_cache.clone()),
+            timeouts: None,
+            openai: Some(session_config.effective().provider.openai.clone()),
+            anthropic: Some(session_config.effective().provider.anthropic.clone()),
+            model_behavior: Some(session_config.effective().model.clone()),
+        };
+
+        let client: AnyClient = Box::new(ProviderClientAdapter::new(
+            create_provider_with_config(&provider_name, provider_config.clone())
+                .map_err(|e| anyhow!("Failed to create client provider: {}", e))?,
+            model.to_string(),
+        ));
+        let provider_client = create_provider_with_config(&provider_name, provider_config)
+            .map_err(|e| anyhow!("Failed to create provider client: {}", e))?;
+        if std::env::var_os("VTCODE_DEBUG_PROVIDER").is_some() {
+            eprintln!(
+                "vtcode-debug: runner provider={} client_provider={} model={}",
+                provider_name,
+                provider_client.name(),
+                model
+            );
+        }
         let max_repeated_tool_calls = session_config
             .effective()
             .tools

@@ -336,6 +336,13 @@ impl AgentRunner {
                 ));
 
                 let turn_model = self.get_selected_model();
+                if std::env::var_os("VTCODE_DEBUG_PROVIDER").is_some() {
+                    eprintln!(
+                        "vtcode-debug: turn provider_client={} turn_model={}",
+                        self.provider_client.name(),
+                        turn_model
+                    );
+                }
                 let turn_reasoning = if is_simple_task {
                     Some(ReasoningEffortLevel::Minimal)
                 } else {
