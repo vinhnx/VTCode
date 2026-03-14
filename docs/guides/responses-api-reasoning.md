@@ -24,7 +24,7 @@ VT Code's default OpenAI profile keeps `gpt-5.4` on a compact execution contract
 
 3. **Preserve reasoning items across API calls**: VT Code keeps continuity in two ways. It stores `previous_response_id` for OpenAI/OpenResponses sessions, and it also preserves structured reasoning items in assistant `reasoning_details` so tool loops can replay them when the next request is built. That matches OpenAI’s guidance to pass `previous_response_id` or reinsert reasoning items explicitly.
 
-4. **Use hybrid continuity + server-side compaction**: VT Code keeps Responses-style continuity (`previous_response_id`) for OpenAI/OpenResponses providers and enables compaction via `context_management` on `/responses` requests when `agent.harness.auto_compaction_enabled = true`.
+4. **Use hybrid continuity + server-side compaction**: VT Code keeps Responses-style continuity (`previous_response_id`) for OpenAI/OpenResponses providers and enables compaction via `context_management` on `/responses` requests when `agent.harness.auto_compaction_enabled = true`. This matches OpenAI's recommended stateful path: when you are already chaining with `previous_response_id`, let the API manage context compaction instead of manually pruning request input.
 
 5. **Use encrypted reasoning for ZDR-style compliance**: If you are restricted from storing model state, enable the Responses API flags directly in `vtcode.toml`:
 
@@ -67,7 +67,9 @@ VT Code's default OpenAI profile keeps `gpt-5.4` on a compact execution contract
     auto_compaction_threshold_tokens = 200000
     ```
 
-    VT Code applies this only on compatible Responses providers/endpoints.
+    VT Code applies provider-native server-side compaction on compatible Responses providers/endpoints. On providers without native compaction, the same threshold is reused for VT Code's local fallback summarization path.
+
+11. **Manual `/compact` uses the provider-native endpoint when possible**: VT Code's `/compact` command calls the Responses `/responses/compact` endpoint for compatible providers and keeps the returned canonical output structure as conversation history, including opaque `compaction` items. For providers without native support, VT Code falls back to local summarization.
 
 ## Example workflow
 

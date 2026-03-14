@@ -2,8 +2,8 @@
 //!
 //! Keeps JSON shaping for chat payloads out of the main provider.
 
-use crate::config::models::Provider as ModelProvider;
 use crate::config::core::OpenAIHostedShellConfig;
+use crate::config::models::Provider as ModelProvider;
 use crate::config::types::ReasoningEffortLevel;
 use crate::llm::error_display;
 use crate::llm::provider;

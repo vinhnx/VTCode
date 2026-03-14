@@ -191,6 +191,21 @@ max_snapshots = 50
 # Maximum age of checkpoints to keep (in days)
 max_age_days = 30
 
+# Harness limits
+[agent.harness]
+# Enable automatic context compaction when token pressure crosses threshold.
+auto_compaction_enabled = false
+
+# Optional absolute compact threshold in tokens. Applies to Responses server-side compaction when the
+# provider supports it, and to VT Code's local fallback compaction otherwise.
+# auto_compaction_threshold_tokens = 200000
+
+# Controls harness-managed continuation loops: "off", "exec_only", or "all".
+continuation_policy = "all"
+
+# Optional JSONL event log path for harness events.
+event_log_path = ""
+
 # External editor configuration
 # Uses the editor-command crate to detect and launch the user's preferred editor
 # https://docs.rs/editor-command/latest/editor_command/

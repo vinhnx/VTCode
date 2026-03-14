@@ -1,4 +1,3 @@
-use vtcode_config::constants::context::TOKEN_BUDGET_HIGH_THRESHOLD;
 use vtcode_core::llm::provider as uni;
 
 /// Delegate LLM retryability checks to the canonical [`vtcode_commons::ErrorCategory`] classifier.
@@ -77,26 +76,6 @@ pub(super) fn compact_tool_messages_for_retry(messages: &[uni::Message]) -> Vec<
     } else {
         compacted
     }
-}
-
-pub(crate) fn resolve_compaction_threshold(
-    configured_threshold: Option<u64>,
-    context_size: usize,
-) -> Option<u64> {
-    let configured_threshold = configured_threshold.filter(|threshold| *threshold > 0);
-    let derived_threshold = if context_size > 0 {
-        Some(((context_size as f64) * TOKEN_BUDGET_HIGH_THRESHOLD).round() as u64)
-    } else {
-        None
-    };
-
-    configured_threshold.or(derived_threshold).map(|threshold| {
-        let mut threshold = threshold.max(1);
-        if context_size > 0 {
-            threshold = threshold.min(context_size as u64);
-        }
-        threshold
-    })
 }
 
 pub(super) fn llm_attempt_timeout_secs(

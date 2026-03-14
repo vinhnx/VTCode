@@ -573,7 +573,9 @@ pub fn build_codex_responses_payload(
 
 #[cfg(test)]
 mod tests {
-    use super::{build_codex_responses_payload, build_standard_responses_payload, parse_responses_payload};
+    use super::{
+        build_codex_responses_payload, build_standard_responses_payload, parse_responses_payload,
+    };
     use crate::llm::provider::{LLMRequest, Message, ToolCall};
     use serde_json::json;
 

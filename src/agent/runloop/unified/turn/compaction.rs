@@ -1,4 +1,5 @@
 use anyhow::Result;
+use serde_json::{Value, json};
 use vtcode_config::constants::context::TOKEN_BUDGET_HIGH_THRESHOLD;
 use vtcode_core::compaction::CompactionConfig;
 use vtcode_core::config::loader::VTCodeConfig;
@@ -13,6 +14,38 @@ pub(crate) struct CompactionOutcome {
     pub compacted_len: usize,
 }
 
+pub(crate) fn resolve_compaction_threshold(
+    configured_threshold: Option<u64>,
+    context_size: usize,
+) -> Option<u64> {
+    let configured_threshold = configured_threshold.filter(|threshold| *threshold > 0);
+    let derived_threshold = if context_size > 0 {
+        Some(((context_size as f64) * TOKEN_BUDGET_HIGH_THRESHOLD).round() as u64)
+    } else {
+        None
+    };
+
+    configured_threshold.or(derived_threshold).map(|threshold| {
+        let mut threshold = threshold.max(1);
+        if context_size > 0 {
+            threshold = threshold.min(context_size as u64);
+        }
+        threshold
+    })
+}
+
+pub(crate) fn build_server_compaction_context_management(
+    configured_threshold: Option<u64>,
+    context_size: usize,
+) -> Option<Value> {
+    resolve_compaction_threshold(configured_threshold, context_size).map(|compact_threshold| {
+        json!([{
+            "type": "compaction",
+            "compact_threshold": compact_threshold,
+        }])
+    })
+}
+
 fn configured_compaction_threshold(
     vt_cfg: Option<&VTCodeConfig>,
     provider: &dyn LLMProvider,
@@ -21,23 +54,8 @@ fn configured_compaction_threshold(
     let context_size = provider.effective_context_size(model);
     let configured_threshold =
         vt_cfg.and_then(|cfg| cfg.agent.harness.auto_compaction_threshold_tokens);
-    let configured_threshold = configured_threshold.filter(|threshold| *threshold > 0);
-    let derived_threshold = if context_size > 0 {
-        Some(((context_size as f64) * TOKEN_BUDGET_HIGH_THRESHOLD).round() as u64)
-    } else {
-        None
-    };
 
-    configured_threshold
-        .or(derived_threshold)
-        .map(|threshold| threshold.max(1))
-        .map(|threshold| {
-            if context_size > 0 {
-                threshold.min(context_size as u64)
-            } else {
-                threshold
-            }
-        })
+    resolve_compaction_threshold(configured_threshold, context_size)
         .and_then(|threshold| usize::try_from(threshold).ok())
 }
 
@@ -113,11 +131,15 @@ pub(crate) async fn maybe_auto_compact_history(
 
 #[cfg(test)]
 mod tests {
-    use super::{compact_history_in_place, maybe_auto_compact_history};
+    use super::{
+        build_server_compaction_context_management, compact_history_in_place,
+        maybe_auto_compact_history, resolve_compaction_threshold,
+    };
     use crate::agent::runloop::unified::context_manager::ContextManager;
     use crate::agent::runloop::unified::state::SessionStats;
     use async_trait::async_trait;
     use hashbrown::HashMap;
+    use serde_json::json;
     use tokio::sync::RwLock;
     use vtcode_commons::llm::Usage;
     use vtcode_core::config::loader::VTCodeConfig;
@@ -247,5 +269,39 @@ mod tests {
             None
         );
         assert!(context_manager.current_token_usage() < 700);
+    }
+
+    #[test]
+    fn resolve_compaction_threshold_prefers_configured_value() {
+        assert_eq!(resolve_compaction_threshold(Some(42), 200_000), Some(42));
+    }
+
+    #[test]
+    fn resolve_compaction_threshold_uses_context_ratio_when_unset() {
+        assert_eq!(resolve_compaction_threshold(None, 200_000), Some(180_000));
+    }
+
+    #[test]
+    fn resolve_compaction_threshold_clamps_to_context_size() {
+        assert_eq!(
+            resolve_compaction_threshold(Some(300_000), 200_000),
+            Some(200_000)
+        );
+    }
+
+    #[test]
+    fn resolve_compaction_threshold_requires_context_or_override() {
+        assert_eq!(resolve_compaction_threshold(None, 0), None);
+    }
+
+    #[test]
+    fn build_server_compaction_context_management_creates_openai_payload() {
+        assert_eq!(
+            build_server_compaction_context_management(Some(512), 2_000),
+            Some(json!([{
+                "type": "compaction",
+                "compact_threshold": 512,
+            }]))
+        );
     }
 }

@@ -93,10 +93,7 @@ fn serialize_openai_hosted_shell(config: &OpenAIHostedShellConfig) -> Option<Val
 
     match config.environment {
         OpenAIHostedShellEnvironment::ContainerAuto => {
-            environment.insert(
-                "network_policy".to_string(),
-                json!({ "type": "disabled" }),
-            );
+            environment.insert("network_policy".to_string(), json!({ "type": "disabled" }));
 
             let file_ids: Vec<String> = config
                 .file_ids
@@ -117,7 +114,10 @@ fn serialize_openai_hosted_shell(config: &OpenAIHostedShellConfig) -> Option<Val
             }
         }
         OpenAIHostedShellEnvironment::ContainerReference => {
-            let container_id = config.container_id.as_deref().and_then(trim_non_empty_owned)?;
+            let container_id = config
+                .container_id
+                .as_deref()
+                .and_then(trim_non_empty_owned)?;
             environment.insert("container_id".to_string(), json!(container_id));
         }
     }

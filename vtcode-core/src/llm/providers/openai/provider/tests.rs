@@ -207,7 +207,10 @@ fn responses_payload_uses_hosted_shell_when_enabled() {
     let tool_object = payload["tools"][0]
         .as_object()
         .expect("tool entry should be object");
-    assert_eq!(tool_object.get("type").and_then(Value::as_str), Some("shell"));
+    assert_eq!(
+        tool_object.get("type").and_then(Value::as_str),
+        Some("shell")
+    );
     assert_eq!(
         tool_object["environment"]["type"].as_str(),
         Some("container_auto")
@@ -227,7 +230,11 @@ fn responses_payload_uses_hosted_shell_when_enabled() {
     let output_types = payload["output_types"]
         .as_array()
         .expect("output types should be present");
-    assert!(output_types.iter().any(|value| value.as_str() == Some("shell_call")));
+    assert!(
+        output_types
+            .iter()
+            .any(|value| value.as_str() == Some("shell_call"))
+    );
 }
 
 #[test]
@@ -300,7 +307,10 @@ fn non_native_openai_base_url_keeps_local_shell_tool() {
         tool_object.get("type").and_then(Value::as_str),
         Some("function")
     );
-    assert_eq!(tool_object.get("name").and_then(Value::as_str), Some("shell"));
+    assert_eq!(
+        tool_object.get("name").and_then(Value::as_str),
+        Some("shell")
+    );
     let output_types = payload["output_types"]
         .as_array()
         .expect("output types should be present");
@@ -345,7 +355,10 @@ fn missing_container_reference_id_keeps_local_shell_tool() {
         tool_object.get("type").and_then(Value::as_str),
         Some("function")
     );
-    assert_eq!(tool_object.get("name").and_then(Value::as_str), Some("shell"));
+    assert_eq!(
+        tool_object.get("name").and_then(Value::as_str),
+        Some("shell")
+    );
 }
 
 #[test]
