@@ -14,7 +14,7 @@ use crate::tools::request_user_input::RequestUserInputTool;
 use crate::tools::tool_intent::builtin_tool_behavior;
 
 use super::registration::ToolRegistration;
-use super::{ToolInventory, ToolRegistry};
+use super::{ToolInventory, ToolRegistry, native_cgp_tool_factory};
 
 /// Register all builtin tools into the inventory using the shared plan mode state.
 pub(super) fn register_builtin_tools(inventory: &ToolInventory, plan_mode_state: &PlanModeState) {
@@ -34,6 +34,11 @@ pub(super) fn builtin_tool_registrations(
     let plan_state = plan_mode_state
         .cloned()
         .unwrap_or_else(|| PlanModeState::new(PathBuf::new()));
+    let request_user_input_factory = native_cgp_tool_factory(|| RequestUserInputTool);
+    let enter_plan_state = plan_state.clone();
+    let exit_plan_state = plan_state.clone();
+    let task_tracker_state = plan_state.clone();
+    let plan_task_tracker_state = plan_state.clone();
 
     vec![
         // ============================================================
@@ -43,7 +48,8 @@ pub(super) fn builtin_tool_registrations(
             tools::REQUEST_USER_INPUT,
             CapabilityLevel::Basic,
             RequestUserInputTool,
-        ),
+        )
+        .with_native_cgp_factory(request_user_input_factory),
         // ============================================================
         // PLAN MODE (enter/exit)
         // ============================================================
@@ -52,6 +58,9 @@ pub(super) fn builtin_tool_registrations(
             CapabilityLevel::Basic,
             EnterPlanModeTool::new(plan_state.clone()),
         )
+        .with_native_cgp_factory(native_cgp_tool_factory(move || {
+            EnterPlanModeTool::new(enter_plan_state.clone())
+        }))
         .with_aliases([
             "plan_mode",
             "enter_plan",
@@ -69,6 +78,9 @@ pub(super) fn builtin_tool_registrations(
             CapabilityLevel::Basic,
             ExitPlanModeTool::new(plan_state.clone()),
         )
+        .with_native_cgp_factory(native_cgp_tool_factory(move || {
+            ExitPlanModeTool::new(exit_plan_state.clone())
+        }))
         .with_aliases([
             "exit_plan",
             "plan_exit",
@@ -94,12 +106,21 @@ pub(super) fn builtin_tool_registrations(
                 plan_state.clone(),
             ),
         )
+        .with_native_cgp_factory(native_cgp_tool_factory(move || {
+            TaskTrackerTool::new(
+                task_tracker_state.workspace_root().unwrap_or_else(PathBuf::new),
+                task_tracker_state.clone(),
+            )
+        }))
         .with_aliases(["plan_manager", "track_tasks", "checklist"]),
         ToolRegistration::from_tool_instance(
             tools::PLAN_TASK_TRACKER,
             CapabilityLevel::Basic,
             PlanTaskTrackerTool::new(plan_state.clone()),
         )
+        .with_native_cgp_factory(native_cgp_tool_factory(move || {
+            PlanTaskTrackerTool::new(plan_task_tracker_state.clone())
+        }))
         .with_aliases(["plan_checklist", "plan_tasks"]),
         // ============================================================
         // SEARCH & DISCOVERY (1 tool - unified)
@@ -306,5 +327,39 @@ fn with_builtin_behavior(registration: ToolRegistration) -> ToolRegistration {
         registration.with_behavior(behavior)
     } else {
         registration
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tool_backed_builtins_register_native_cgp_factories() {
+        let plan_state = PlanModeState::new(PathBuf::from("/workspace"));
+        let registrations = builtin_tool_registrations(Some(&plan_state));
+
+        for tool_name in [
+            tools::REQUEST_USER_INPUT,
+            tools::ENTER_PLAN_MODE,
+            tools::EXIT_PLAN_MODE,
+            tools::TASK_TRACKER,
+            tools::PLAN_TASK_TRACKER,
+        ] {
+            let registration = registrations
+                .iter()
+                .find(|registration| registration.name() == tool_name)
+                .expect("builtin registration should exist");
+            assert!(
+                registration.native_cgp_factory().is_some(),
+                "expected native CGP factory for {tool_name}"
+            );
+        }
+
+        let unified_search = registrations
+            .iter()
+            .find(|registration| registration.name() == tools::UNIFIED_SEARCH)
+            .expect("unified_search registration should exist");
+        assert!(unified_search.native_cgp_factory().is_none());
     }
 }

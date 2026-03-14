@@ -148,6 +148,15 @@ pub(crate) async fn initialize_session(
             .context("Failed to determine workspace trust level for tool policy")?,
     };
     apply_workspace_trust_prompt_policy(&mut tool_registry, full_auto, workspace_trust_level).await;
+
+    // CGP Phase 5: Wrap registered tools through the CGP approval → sandbox → middleware pipeline.
+    let cgp_mode = if full_auto {
+        vtcode_core::tools::CgpRuntimeMode::Ci
+    } else {
+        vtcode_core::tools::CgpRuntimeMode::Interactive
+    };
+    tool_registry.enable_cgp_pipeline(cgp_mode).await;
+
     let tool_catalog = Arc::new(ToolCatalogState::new());
 
     let tools = Arc::new(RwLock::new(

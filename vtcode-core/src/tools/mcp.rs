@@ -9,6 +9,7 @@ use sha2::{Digest, Sha256};
 use crate::config::types::CapabilityLevel;
 use crate::mcp::{McpClient, McpToolExecutor, McpToolInfo};
 use crate::tool_policy::ToolPolicy;
+use crate::tools::native_cgp_tool_factory;
 use crate::tools::registry::ToolRegistration;
 use crate::tools::traits::Tool;
 
@@ -92,11 +93,13 @@ pub fn build_mcp_registration(
     };
 
     let aliases = vec![model_visible_mcp_tool_name(provider, &tool.name)];
+    let remote_name = tool.name.clone();
+    let input_schema = tool.input_schema.clone();
 
     let proxy = McpProxyTool {
-        client,
-        remote_name: tool.name.clone(),
-        input_schema: tool.input_schema.clone(),
+        client: Arc::clone(&client),
+        remote_name: remote_name.clone(),
+        input_schema: input_schema.clone(),
     };
 
     let mut metadata = crate::tools::registry::ToolMetadata::default()
@@ -115,6 +118,11 @@ pub fn build_mcp_registration(
         metadata,
     )
     .with_llm_visibility(false)
+    .with_native_cgp_factory(native_cgp_tool_factory(move || McpProxyTool {
+        client: Arc::clone(&client),
+        remote_name: remote_name.clone(),
+        input_schema: input_schema.clone(),
+    }))
 }
 
 struct McpProxyTool {
@@ -153,9 +161,15 @@ impl Tool for McpProxyTool {
 #[cfg(test)]
 mod tests {
     use super::{
-        is_legacy_mcp_tool_name, legacy_mcp_tool_name, model_visible_mcp_tool_name,
-        parse_canonical_mcp_tool_name,
+        build_mcp_registration, is_legacy_mcp_tool_name, legacy_mcp_tool_name,
+        model_visible_mcp_tool_name, parse_canonical_mcp_tool_name,
     };
+    use crate::mcp::{McpClient, McpToolInfo};
+    use crate::tool_policy::ToolPolicy;
+    use crate::tools::CgpRuntimeMode;
+    use serde_json::json;
+    use std::path::PathBuf;
+    use std::sync::Arc;
 
     #[test]
     fn model_visible_name_uses_qualified_prefix() {
@@ -184,5 +198,39 @@ mod tests {
             Some(("context7", "search-docs"))
         );
         assert_eq!(parse_canonical_mcp_tool_name("mcp__context7__search"), None);
+    }
+
+    #[test]
+    fn build_mcp_registration_exposes_native_cgp_factory() {
+        let client = Arc::new(McpClient::new(
+            vtcode_config::mcp::McpClientConfig::default(),
+        ));
+        let tool = McpToolInfo {
+            name: "search-docs".to_string(),
+            description: "Search docs".to_string(),
+            provider: "context7".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "query": { "type": "string" }
+                }
+            }),
+        };
+
+        let registration =
+            build_mcp_registration(client, "context7", &tool, Some("provider hint".to_string()));
+        let native_factory = registration
+            .native_cgp_factory()
+            .expect("MCP registration should expose native CGP factory");
+        let wrapped = native_factory(
+            &registration,
+            PathBuf::from("/tmp/test"),
+            CgpRuntimeMode::Interactive,
+        );
+
+        assert_eq!(wrapped.name(), "mcp::context7::search-docs");
+        assert_eq!(wrapped.description(), "Search docs\nHint: provider hint");
+        assert_eq!(wrapped.parameter_schema(), Some(tool.input_schema.clone()));
+        assert_eq!(wrapped.default_permission(), ToolPolicy::Prompt);
     }
 }

@@ -134,6 +134,7 @@ pub mod code;
 pub mod command_safety; // Command safety detection (Codex patterns)
 pub mod commands;
 pub mod compaction;
+pub mod components; // Context-Generic Programming (CGP) substrate for composable tool runtimes
 pub mod config;
 pub mod constants;
 pub mod context; // Vibe coding support: entity resolution, workspace state, conversation memory

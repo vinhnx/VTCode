@@ -236,9 +236,10 @@ pub use optimized_registry::{OptimizedToolRegistry, ToolMetadata as OptimizedToo
 pub use plugins::{PluginHandle, PluginId, PluginInstaller, PluginManifest, PluginRuntime};
 pub use pty::{PtyCommandRequest, PtyCommandResult, PtyManager};
 pub use registry::{
-    ApprovalPattern, ApprovalRecorder, JustificationExtractor, JustificationManager, RiskLevel,
-    ToolJustification, ToolRegistration, ToolRegistry, ToolRiskContext, ToolRiskScorer, ToolSource,
-    WorkspaceTrust,
+    ApprovalPattern, ApprovalRecorder, CgpRuntimeMode, JustificationExtractor,
+    JustificationManager, RiskLevel, ToolJustification, ToolRegistration, ToolRegistry,
+    ToolRiskContext, ToolRiskScorer, ToolSource, WorkspaceTrust, native_cgp_tool_factory,
+    wrap_registered_native_tool,
 };
 pub use request_response::{ToolCallRequest, ToolCallResponse};
 pub use result::{TokenCounts, ToolMetadata, ToolMetadataBuilder, ToolResult as SplitToolResult};

@@ -383,6 +383,51 @@ impl ToolInventory {
         matches!(name, "file_ops" | "command" | "grep" | "plan")
     }
 
+    /// Replace the handler of an existing tool registration, preserving metadata.
+    ///
+    /// Used by the CGP pipeline to swap a raw `TraitObject` handler with a
+    /// CGP-wrapped facade without changing name, aliases, capability, or metadata.
+    pub fn replace_tool_handler(
+        &self,
+        name: &str,
+        new_handler: super::registration::ToolHandler,
+    ) -> anyhow::Result<()> {
+        let name_lower = name.to_ascii_lowercase();
+        let mut tools = self
+            .tools
+            .write()
+            .map_err(|e| anyhow::anyhow!("tool registry write lock poisoned: {e}"))?;
+
+        let entry = tools
+            .get(&name_lower)
+            .ok_or_else(|| anyhow::anyhow!("tool '{}' not found for handler replacement", name))?;
+
+        let old_reg = &entry.registration;
+        match &new_handler {
+            super::registration::ToolHandler::TraitObject(_) => {}
+            _ => {
+                return Err(anyhow::anyhow!(
+                    "CGP handler replacement requires a TraitObject handler"
+                ));
+            }
+        }
+        let updated = old_reg
+            .clone()
+            .with_handler(new_handler)
+            .with_cgp_wrapped(true);
+
+        tools.insert(
+            name_lower,
+            Arc::new(ToolCacheEntry {
+                registration: updated,
+                last_used: std::sync::RwLock::new(Instant::now()),
+                use_count: std::sync::atomic::AtomicU64::new(0),
+            }),
+        );
+
+        Ok(())
+    }
+
     /// Clean up old cache entries if needed
     fn cleanup_cache_if_needed(&self) {
         const CACHE_CLEANUP_INTERVAL: Duration = Duration::from_secs(300); // 5 minutes

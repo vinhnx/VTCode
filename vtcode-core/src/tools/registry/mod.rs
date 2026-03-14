@@ -7,6 +7,7 @@ mod builder;
 mod builtins;
 mod cache;
 mod catalog_facade;
+mod cgp_facade;
 mod circuit_breaker;
 mod commands_facade;
 mod config_helpers;
@@ -61,6 +62,9 @@ mod utils;
 use std::borrow::Cow;
 
 pub use approval_recorder::ApprovalRecorder;
+pub use cgp_facade::CgpRuntimeMode;
+pub use cgp_facade::native_cgp_tool_factory;
+pub use cgp_facade::wrap_registered_native_tool;
 pub use error::{ToolErrorType, ToolExecutionError, classify_error};
 pub use execution_history::{HarnessContextSnapshot, ToolExecutionHistory, ToolExecutionRecord};
 pub use execution_kernel::ToolPreflightOutcome;
@@ -68,7 +72,9 @@ pub use harness::HarnessContext;
 pub use justification::{ApprovalPattern, JustificationManager, ToolJustification};
 pub use justification_extractor::JustificationExtractor;
 pub use pty::{PtySessionGuard, PtySessionManager};
-pub use registration::{ToolExecutorFn, ToolHandler, ToolMetadata, ToolRegistration};
+pub use registration::{
+    NativeCgpToolFactory, ToolExecutorFn, ToolHandler, ToolMetadata, ToolRegistration,
+};
 pub use resiliency::{ResiliencyContext, ToolFailureTracker};
 pub use risk_scorer::{RiskLevel, ToolRiskContext, ToolRiskScorer, ToolSource, WorkspaceTrust};
 pub use shell_policy::ShellPolicyChecker;
@@ -164,6 +170,8 @@ pub struct ToolRegistry {
 
     /// Shared Plan Mode state (plan file tracking, active flag) for enter/exit tools
     plan_mode_state: PlanModeState,
+    /// Active CGP runtime mode for wrapping registrations added after startup.
+    cgp_runtime_mode: Arc<RwLock<Option<CgpRuntimeMode>>>,
     /// Canonical manifest-driven tool assembly used by routing, catalog projections, and policy sync.
     tool_assembly: Arc<RwLock<ToolAssembly>>,
 }

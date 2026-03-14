@@ -14,7 +14,9 @@ use crate::skills::model::{SkillErrorInfo, SkillLoadOutcome};
 use crate::skills::types::{Skill, SkillVariety};
 use crate::tool_policy::ToolPolicy;
 use crate::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
-use crate::tools::registry::{ToolMetadata, ToolRegistration, ToolRegistry};
+use crate::tools::registry::{
+    ToolMetadata, ToolRegistration, ToolRegistry, native_cgp_tool_factory,
+};
 use crate::tools::traits::Tool;
 use crate::utils::file_utils::read_file_with_context_sync;
 use anyhow::Context;
@@ -25,6 +27,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, warn};
+
+#[cfg(test)]
+use crate::tools::CgpRuntimeMode;
 
 type SkillMap = Arc<RwLock<HashMap<String, Skill>>>;
 type ToolDefList = Arc<RwLock<Vec<ToolDefinition>>>;
@@ -131,6 +136,20 @@ impl SkillToolSessionRuntime {
     }
 }
 
+fn build_skill_tool_adapter(
+    skill: Skill,
+    fork_executor: Option<Arc<dyn ForkSkillExecutor>>,
+) -> SkillToolAdapter {
+    if skill.manifest.context.as_deref() == Some("fork") {
+        match fork_executor {
+            Some(executor) => SkillToolAdapter::with_fork_executor(skill, executor),
+            None => SkillToolAdapter::new(skill),
+        }
+    } else {
+        SkillToolAdapter::new(skill)
+    }
+}
+
 pub fn build_traditional_skill_tool_registration(
     skill: &Skill,
     fork_executor: Option<Arc<dyn ForkSkillExecutor>>,
@@ -141,17 +160,12 @@ pub fn build_traditional_skill_tool_registration(
         .with_permission(ToolPolicy::Prompt)
         .with_prompt_path(SKILL_TOOL_PROMPT_PATH);
 
-    let adapter: Arc<dyn Tool> = if skill.manifest.context.as_deref() == Some("fork") {
-        match fork_executor {
-            Some(executor) => Arc::new(SkillToolAdapter::with_fork_executor(
-                skill.clone(),
-                executor,
-            )),
-            None => Arc::new(SkillToolAdapter::new(skill.clone())),
-        }
-    } else {
-        Arc::new(SkillToolAdapter::new(skill.clone()))
-    };
+    let adapter: Arc<dyn Tool> = Arc::new(build_skill_tool_adapter(
+        skill.clone(),
+        fork_executor.clone(),
+    ));
+    let native_skill = skill.clone();
+    let native_fork_executor = fork_executor;
 
     ToolRegistration::from_tool_with_metadata(
         skill.name().to_string(),
@@ -159,6 +173,9 @@ pub fn build_traditional_skill_tool_registration(
         adapter,
         metadata,
     )
+    .with_native_cgp_factory(native_cgp_tool_factory(move || {
+        build_skill_tool_adapter(native_skill.clone(), native_fork_executor.clone())
+    }))
 }
 
 pub fn build_skill_tool_registration(skill: &Skill) -> ToolRegistration {
@@ -847,6 +864,60 @@ Use `/rust-skills`.
 "#,
         )
         .expect("rust-skills skill file");
+    }
+
+    #[tokio::test]
+    async fn traditional_skill_registration_exposes_native_cgp_factory() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        write_skill_fixture(temp_dir.path(), DEMO_SKILL_TOOL_NAME);
+
+        let mut loader = EnhancedSkillLoader::new(temp_dir.path().to_path_buf());
+        let skill = match loader
+            .get_skill(DEMO_SKILL_TOOL_NAME)
+            .await
+            .expect("discover skill")
+        {
+            EnhancedSkill::Traditional(skill) => *skill,
+            _ => panic!("expected traditional skill"),
+        };
+
+        let registration = build_traditional_skill_tool_registration(&skill, None);
+        assert!(registration.native_cgp_factory().is_some());
+    }
+
+    #[tokio::test]
+    async fn traditional_skill_native_factory_preserves_registration_metadata() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        write_skill_fixture(temp_dir.path(), DEMO_SKILL_TOOL_NAME);
+
+        let mut loader = EnhancedSkillLoader::new(temp_dir.path().to_path_buf());
+        let skill = match loader
+            .get_skill(DEMO_SKILL_TOOL_NAME)
+            .await
+            .expect("discover skill")
+        {
+            EnhancedSkill::Traditional(skill) => *skill,
+            _ => panic!("expected traditional skill"),
+        };
+
+        let registration = build_traditional_skill_tool_registration(&skill, None);
+        let native_factory = registration
+            .native_cgp_factory()
+            .expect("registration should expose native factory");
+        let wrapped = native_factory(
+            &registration,
+            temp_dir.path().to_path_buf(),
+            CgpRuntimeMode::Interactive,
+        );
+
+        assert_eq!(wrapped.name(), DEMO_SKILL_TOOL_NAME);
+        assert_eq!(wrapped.description(), skill.description());
+        assert_eq!(
+            wrapped.prompt_path().as_deref(),
+            Some(SKILL_TOOL_PROMPT_PATH)
+        );
+        assert_eq!(wrapped.default_permission(), ToolPolicy::Prompt);
+        assert!(wrapped.parameter_schema().is_some());
     }
 
     #[tokio::test]

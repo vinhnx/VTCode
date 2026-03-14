@@ -5,10 +5,20 @@ use crate::tools::tool_intent::ToolBehavior;
 use crate::tools::traits::Tool;
 use futures::future::BoxFuture;
 use serde_json::Value;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 pub type ToolExecutorFn =
     for<'a> fn(&'a ToolRegistry, Value) -> BoxFuture<'a, anyhow::Result<Value>>;
+pub type NativeCgpToolFactory = Arc<
+    dyn for<'a> Fn(
+            &'a ToolRegistration,
+            PathBuf,
+            super::cgp_facade::CgpRuntimeMode,
+        ) -> Arc<dyn Tool>
+        + Send
+        + Sync,
+>;
 
 use std::fmt;
 
@@ -143,7 +153,7 @@ impl fmt::Debug for ToolHandler {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ToolRegistration {
     name: Arc<str>,
     capability: CapabilityLevel,
@@ -151,8 +161,27 @@ pub struct ToolRegistration {
     expose_in_llm: bool,
     deprecated: bool,
     deprecation_message: Option<String>,
+    cgp_wrapped: bool,
     handler: ToolHandler,
     metadata: ToolMetadata,
+    native_cgp_factory: Option<NativeCgpToolFactory>,
+}
+
+impl fmt::Debug for ToolRegistration {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ToolRegistration")
+            .field("name", &self.name)
+            .field("capability", &self.capability)
+            .field("uses_pty", &self.uses_pty)
+            .field("expose_in_llm", &self.expose_in_llm)
+            .field("deprecated", &self.deprecated)
+            .field("deprecation_message", &self.deprecation_message)
+            .field("cgp_wrapped", &self.cgp_wrapped)
+            .field("handler", &self.handler)
+            .field("metadata", &self.metadata)
+            .field("has_native_cgp_factory", &self.native_cgp_factory.is_some())
+            .finish()
+    }
 }
 
 impl ToolRegistration {
@@ -169,8 +198,10 @@ impl ToolRegistration {
             expose_in_llm: true,
             deprecated: false,
             deprecation_message: None,
+            cgp_wrapped: false,
             handler: ToolHandler::RegistryFn(executor),
             metadata: ToolMetadata::default(),
+            native_cgp_factory: None,
         }
     }
 
@@ -216,8 +247,10 @@ impl ToolRegistration {
             expose_in_llm: true,
             deprecated: false,
             deprecation_message: None,
+            cgp_wrapped: false,
             handler: ToolHandler::TraitObject(tool),
             metadata,
+            native_cgp_factory: None,
         }
     }
 
@@ -230,6 +263,34 @@ impl ToolRegistration {
         T: Tool + 'static,
     {
         Self::from_tool(name, capability, Arc::new(tool))
+    }
+
+    /// Register a tool wrapped with a CGP runtime context.
+    ///
+    /// Wraps an existing `Arc<dyn Tool>` in a CGP `ToolFacade` with the
+    /// specified runtime context's approval, metadata, sandbox, logging,
+    /// cache, and retry providers.
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// use vtcode_core::components::{InteractiveCtx, ToolBridgeCtx, wrap_tool_interactive};
+    ///
+    /// let tool: Arc<dyn Tool> = Arc::new(MyTool);
+    /// let reg = ToolRegistration::from_cgp_tool(
+    ///     "my_tool",
+    ///     CapabilityLevel::Basic,
+    ///     wrap_tool_interactive(tool, workspace_root),
+    /// );
+    /// ```
+    pub fn from_cgp_tool<Ctx>(
+        name: impl Into<Arc<str>>,
+        capability: CapabilityLevel,
+        facade: crate::components::ToolFacade<Ctx>,
+    ) -> Self
+    where
+        crate::components::ToolFacade<Ctx>: Tool + 'static,
+    {
+        Self::from_tool_instance(name, capability, facade).with_cgp_wrapped(true)
     }
 
     pub fn with_llm_visibility(mut self, expose: bool) -> Self {
@@ -249,6 +310,21 @@ impl ToolRegistration {
 
     pub fn with_deprecation_message(mut self, message: impl Into<String>) -> Self {
         self.deprecation_message = Some(message.into());
+        self
+    }
+
+    pub fn with_cgp_wrapped(mut self, wrapped: bool) -> Self {
+        self.cgp_wrapped = wrapped;
+        self
+    }
+
+    pub fn with_handler(mut self, handler: ToolHandler) -> Self {
+        self.handler = handler;
+        self
+    }
+
+    pub fn with_native_cgp_factory(mut self, factory: NativeCgpToolFactory) -> Self {
+        self.native_cgp_factory = Some(factory);
         self
     }
 
@@ -276,8 +352,16 @@ impl ToolRegistration {
         self.deprecation_message.as_deref()
     }
 
+    pub fn is_cgp_wrapped(&self) -> bool {
+        self.cgp_wrapped
+    }
+
     pub fn handler(&self) -> ToolHandler {
         self.handler.clone()
+    }
+
+    pub fn native_cgp_factory(&self) -> Option<NativeCgpToolFactory> {
+        self.native_cgp_factory.clone()
     }
 
     pub fn metadata(&self) -> &ToolMetadata {

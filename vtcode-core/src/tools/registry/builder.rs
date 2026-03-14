@@ -153,6 +153,7 @@ impl ToolRegistry {
 
             plan_read_only_mode: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             plan_mode_state,
+            cgp_runtime_mode: Arc::new(RwLock::new(None)),
             tool_assembly: Arc::new(RwLock::new(ToolAssembly::empty())),
         };
 

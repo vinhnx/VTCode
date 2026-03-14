@@ -13,6 +13,17 @@ impl ToolRegistry {
     /// # Returns
     /// `Result<()>` indicating success or an error if the tool is already registered
     pub async fn register_tool(&self, registration: ToolRegistration) -> Result<()> {
+        let registration = if let Some(mode) = self.current_cgp_mode() {
+            if registration.is_cgp_wrapped() {
+                registration
+            } else if let Some(handler) = self.cgp_handler_for_registration(&registration, mode) {
+                registration.with_handler(handler).with_cgp_wrapped(true)
+            } else {
+                registration
+            }
+        } else {
+            registration
+        };
         self.inventory.register_tool(registration)?;
         // Invalidate cache
         if let Ok(mut cache) = self.cached_available_tools.write() {
