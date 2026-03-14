@@ -1,3 +1,6 @@
+file_opener = "none"
+project_doc_fallback_filenames = []
+notify = []
 # VT Code Configuration File
 # Saved from /config with readable section headings.
 # Every field includes descriptions, defaults, and known choices where available.
@@ -9,6 +12,9 @@
 # Default: false
 # Type: `boolean`
 enabled = true
+
+[history]
+persistence = "file"
 
 # Zed Integration
 # How VT Code connects commands and trust settings to Zed.
@@ -27,6 +33,8 @@ transport = "stdio"
 # Default: "full_auto"
 # Type: `string`
 workspace_trust = "full_auto"
+
+[tui]
 
 # Zed Authentication
 # Default authentication flow for ACP sessions in Zed.
@@ -59,7 +67,7 @@ read_file = true
 # Environment variable that stores the API key for the active provider
 # Default: "OPENAI_API_KEY"
 # Type: `string`
-api_key_env = "ANTHROPIC_API_KEY"
+api_key_env = "OLLAMA_API_KEY"
 
 # Enable autonomous mode - auto-approve safe tools with reduced HITL prompts When true, the agent
 # operates with fewer confirmation prompts for safe tools.
@@ -86,7 +94,7 @@ default_editing_mode = "edit"
 # Default model to use
 # Default: "gpt-5.3-codex"
 # Type: `string`
-default_model = "claude-sonnet-4-6"
+default_model = "nemotron-3-super:cloud"
 
 # Enable an extra self-review pass to refine final responses
 # Default: false
@@ -148,7 +156,7 @@ project_doc_max_bytes = 16384
 # Possible values: anthropic, gemini, openai, openrouter, zai
 # Default: "openai"
 # Type: `string`
-provider = "anthropic"
+provider = "ollama"
 
 # Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh) Applies
 # to: Claude, GPT-5 family, Gemini, Qwen3, DeepSeek with reasoning capability
@@ -236,6 +244,7 @@ ui_surface = "auto"
 # Default: "medium"
 # Type: `string`
 verbosity = "medium"
+project_doc_fallback_filenames = []
 
 # Checkpoints
 # Automatic turn snapshots and retention limits.
@@ -1139,6 +1148,7 @@ task_completion = []
 # Default: []
 # Type: `array`
 user_prompt_submit = []
+quiet_success_output = false
 
 
 # IDE Context
@@ -2450,6 +2460,10 @@ sample_interval_ms = 1000
 # Type: `boolean`
 trajectory_enabled = true
 
+[provider.openai.hosted_shell]
+enabled = false
+environment = "container_auto"
+
 
 # Timeouts
 # Global operation time limits.
@@ -2552,6 +2566,9 @@ suspend_tui = true
 # Loop Thresholds
 # Warn or stop when repeated tool loops are detected.
 [tools.loop_thresholds]
+
+[skills.bundled]
+enabled = true
 
 # Tool Plugins
 # Plugin loading and trust settings.

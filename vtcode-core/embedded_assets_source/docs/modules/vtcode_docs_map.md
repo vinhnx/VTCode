@@ -52,6 +52,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Configuration, Usage, Integration with Release Process, Commit Message Format, Excluded Commits
   - **User Questions**: "What can you tell me about Changelog Generation with git-cliff?", "How does Configuration work?", "How does Usage work?"
 
+- **File**: `docs/development/CGP_ARCHITECTURE.md`
+  - **Content**: Context-Generic Programming (CGP) in VT Code
+  - **Topics**: Overview, Core Concepts, Architecture, Runtime Contexts, Provider Traits
+  - **User Questions**: "What can you tell me about Context-Generic Programming (CGP) in VT Code?", "How does Overview work?", "How does Core Concepts work?"
+
 - **File**: `docs/development/cross-compilation.md`
   - **Content**: Cross-Compilation Configuration for VT Code
   - **Topics**: Overview, Configuration Details, Usage, Platform-Specific Notes, Integration with Release Process

@@ -42,13 +42,14 @@ pub(crate) fn print_exit_summary(data: ExitSummaryData) {
 
     if let Some(ctx) = &data.header_context {
         println!("{DIM}{}{RESET}", build_trust_line(ctx));
+        print_model_provider_line(ctx, &model_style);
+        print_reasoning_line(ctx);
     }
 
     if models.len() == 1 {
-        // Single model: compact line with model name, no separate Model row
-        let (model, stats) = models[0];
+        let (_model, stats) = models[0];
         println!(
-            "{DIM}Session {} | {BOLD}{model_style}{model}{RESET}{DIM} | {} | {} in / {} out{}{} | Code +{} / -{}{RESET}",
+            "{DIM}Session {} | {} | {} in / {} out{}{} | Code +{} / -{}{RESET}",
             format_duration(data.total_session_time),
             format_duration(stats.api_time),
             format_number(stats.prompt_tokens),
@@ -107,6 +108,35 @@ fn sorted_models(
     let mut models: Vec<_> = usage.iter().collect();
     models.sort_by_key(|(_, stats)| std::cmp::Reverse(stats.api_time));
     models
+}
+
+fn print_model_provider_line(ctx: &InlineHeaderContext, model_style: &str) {
+    let model = ctx.model.trim();
+    let provider = ctx.provider.trim();
+    if !model.is_empty() && !provider.is_empty() {
+        println!("{DIM}Model: {BOLD}{model_style}{model}{RESET}{DIM} via {provider}{RESET}");
+    } else if !model.is_empty() {
+        println!("{DIM}Model: {BOLD}{model_style}{model}{RESET}");
+    } else if !provider.is_empty() {
+        println!("{DIM}Provider: {provider}{RESET}");
+    }
+}
+
+fn print_reasoning_line(ctx: &InlineHeaderContext) {
+    let reasoning = ctx.reasoning.trim();
+    if reasoning.is_empty() {
+        return;
+    }
+    let stage = ctx
+        .reasoning_stage
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    if let Some(stage) = stage {
+        println!("{DIM}Reasoning: {reasoning} ({stage}){RESET}");
+    } else {
+        println!("{DIM}Reasoning: {reasoning}{RESET}");
+    }
 }
 
 fn build_title(ctx: &Option<InlineHeaderContext>) -> String {
