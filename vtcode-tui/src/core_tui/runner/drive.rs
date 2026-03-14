@@ -1,4 +1,5 @@
 use std::io;
+use std::sync::atomic::Ordering;
 
 use anyhow::{Context, Result};
 use ratatui::{
@@ -158,6 +159,48 @@ fn handle_inline_command(
     Ok(())
 }
 
+/// Maximum number of commands to drain per turn to prevent unbounded latency
+/// under load. Ensures input events and redraws are not starved by a flood of
+/// background commands (e.g., during tool execution or PTY output bursts).
+const MAX_COMMANDS_PER_TURN: usize = 16;
+
+/// Render immediately if the session is dirty and the event loop is not paused.
+///
+/// Placing this call right after input processing (same wakeup) eliminates an
+/// extra loop iteration between keypress and screen update — the single highest-
+/// leverage latency improvement per Dan Luu's terminal latency research.
+fn render_if_dirty<B: Backend>(
+    terminal: &mut Terminal<B>,
+    session: &mut Session,
+    event_channels: &EventChannels,
+    cursor_steady: &mut bool,
+) -> Result<()> {
+    if event_channels
+        .rx_paused
+        .load(Ordering::Acquire)
+        || !session.take_redraw()
+    {
+        return Ok(());
+    }
+
+    let desired_steady = session.use_steady_cursor();
+    if desired_steady != *cursor_steady {
+        let style = if desired_steady {
+            SetCursorStyle::SteadyBlock
+        } else {
+            SetCursorStyle::DefaultUserShape
+        };
+        execute!(io::stderr(), style)
+            .context("failed to update cursor style for inline session")?;
+        *cursor_steady = desired_steady;
+    }
+
+    terminal
+        .draw(|frame| session.render(frame))
+        .map_err(|e| anyhow::anyhow!("failed to draw inline session: {}", e))?;
+    Ok(())
+}
+
 pub(super) struct DriveRuntimeOptions {
     pub(super) event_callback: Option<InlineEventCallback>,
     pub(super) focus_callback: Option<FocusChangeCallback>,
@@ -182,8 +225,9 @@ pub(super) async fn drive_terminal<B: Backend>(
 
     let mut cursor_steady = false;
     'main: loop {
-        // Process all pending commands without blocking
-        loop {
+        // Drain a bounded number of pending commands to prevent unbounded latency
+        // under load (e.g., during heavy PTY output or tool execution).
+        for _ in 0..MAX_COMMANDS_PER_TURN {
             match commands.try_recv() {
                 Ok(command) => {
                     handle_inline_command(terminal, session, inputs, &event_channels, command)?;
@@ -206,48 +250,22 @@ pub(super) async fn drive_terminal<B: Backend>(
             event_channels.record_input();
         }
 
-        // Only redraw if not suspended
-        if !event_channels
-            .rx_paused
-            .load(std::sync::atomic::Ordering::Acquire)
-            && session.take_redraw()
-        {
-            let desired_steady = session.use_steady_cursor();
-            if desired_steady != cursor_steady {
-                let style = if desired_steady {
-                    SetCursorStyle::SteadyBlock
-                } else {
-                    SetCursorStyle::DefaultUserShape
-                };
-                execute!(io::stderr(), style)
-                    .context("failed to update cursor style for inline session")?;
-                cursor_steady = desired_steady;
-            }
-            terminal
-                .draw(|frame| session.render(frame))
-                .map_err(|e| anyhow::anyhow!("failed to draw inline session: {}", e))?;
-        }
+        // Render if dirty (catches command-driven changes)
+        render_if_dirty(terminal, session, &event_channels, &mut cursor_steady)?;
 
         if session.should_exit() {
             break 'main;
         }
 
+        // Bias input over commands: when both are ready, prefer user input to
+        // minimize keypress-to-screen latency (Dan Luu's key finding).
         tokio::select! {
-            command = commands.recv() => {
-                match command {
-                    Some(command) => {
-                        handle_inline_command(terminal, session, inputs, &event_channels, command)?;
-                        continue 'main;
-                    }
-                    None => {
-                        session.request_exit();
-                    }
-                }
-            }
+            biased;
+
             result = inputs.recv() => {
                 match result {
                     Some(TerminalEvent::Crossterm(event)) => {
-                        // Record input for adaptive tick rate (switches to 16Hz)
+                        // Record input for adaptive tick rate (switches to active Hz)
                         event_channels.record_input();
                         handle_focus_change_event(&event, runtime_options.focus_callback.as_ref());
 
@@ -267,7 +285,7 @@ pub(super) async fn drive_terminal<B: Backend>(
                         }
 
                         // Skip event processing if the TUI is suspended (e.g., external editor is running)
-                        if !event_channels.rx_paused.load(std::sync::atomic::Ordering::Acquire) {
+                        if !event_channels.rx_paused.load(Ordering::Acquire) {
                             // Only coalesce scroll events when no modal/palette is active
                             // (otherwise Up/Down should navigate the list, not scroll)
                             let can_coalesce_scroll = !has_active_navigation_ui(session);
@@ -328,6 +346,11 @@ pub(super) async fn drive_terminal<B: Backend>(
                                 scroll_accum.apply(session);
                             }
                         }
+
+                        // Render immediately after input batch — same wakeup, no
+                        // extra loop iteration. This is the single highest-leverage
+                        // change for keypress-to-screen latency.
+                        render_if_dirty(terminal, session, &event_channels, &mut cursor_steady)?;
                     }
                     Some(TerminalEvent::Tick) => {
                         session.handle_tick();
@@ -336,6 +359,17 @@ pub(super) async fn drive_terminal<B: Backend>(
                         if commands.is_closed() {
                             break 'main;
                         }
+                    }
+                }
+            }
+            command = commands.recv() => {
+                match command {
+                    Some(command) => {
+                        handle_inline_command(terminal, session, inputs, &event_channels, command)?;
+                        continue 'main;
+                    }
+                    None => {
+                        session.request_exit();
                     }
                 }
             }
