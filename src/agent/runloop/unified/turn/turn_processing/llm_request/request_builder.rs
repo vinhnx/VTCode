@@ -1,5 +1,4 @@
 use anyhow::Result;
-use serde_json::json;
 use std::fmt::Write as _;
 use std::sync::Arc;
 
@@ -10,11 +9,11 @@ use vtcode_core::prompts::upsert_harness_limits_section;
 
 use crate::agent::runloop::unified::incremental_system_prompt::PromptCacheShapingMode;
 use crate::agent::runloop::unified::run_loop_context::TurnExecutionSnapshot;
+use crate::agent::runloop::unified::turn::compaction::build_server_compaction_context_management;
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
 use crate::agent::runloop::unified::turn::turn_helpers::supports_responses_chaining;
 
 use super::metrics::emit_tool_catalog_cache_metrics;
-use super::retry::resolve_compaction_threshold;
 
 pub(super) fn is_openai_prompt_cache_enabled(
     provider_name: &str,
@@ -238,30 +237,14 @@ fn resolve_context_management(
     let features = FeatureSet::from_config(ctx.vt_cfg);
     let configured_threshold = harness_config.and_then(|cfg| cfg.auto_compaction_threshold_tokens);
 
-    build_server_compaction_context_management(
-        &features,
-        supports_server_compaction,
-        configured_threshold,
-        ctx.provider_client.effective_context_size(active_model),
-    )
-}
-
-fn build_server_compaction_context_management(
-    features: &FeatureSet,
-    supports_server_compaction: bool,
-    configured_threshold: Option<u64>,
-    context_size: usize,
-) -> Option<serde_json::Value> {
     if !features.auto_compaction_enabled(supports_server_compaction) {
         return None;
     }
 
-    resolve_compaction_threshold(configured_threshold, context_size).map(|compact_threshold| {
-        json!([{
-            "type": "compaction",
-            "compact_threshold": compact_threshold,
-        }])
-    })
+    build_server_compaction_context_management(
+        configured_threshold,
+        ctx.provider_client.effective_context_size(active_model),
+    )
 }
 
 pub(super) fn interrupted_provider_error(provider_name: &str) -> anyhow::Error {
@@ -391,10 +374,8 @@ mod tests {
     use vtcode_core::config::loader::VTCodeConfig;
     use vtcode_core::llm::provider::{self as uni, ToolDefinition};
 
-    use super::{
-        build_server_compaction_context_management, build_turn_request,
-        capture_turn_request_snapshot,
-    };
+    use super::{build_turn_request, capture_turn_request_snapshot};
+    use crate::agent::runloop::unified::turn::compaction::build_server_compaction_context_management;
     use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
 
     #[tokio::test]
@@ -450,8 +431,6 @@ mod tests {
         cfg.agent.harness.auto_compaction_threshold_tokens = Some(512);
 
         let payload = build_server_compaction_context_management(
-            &vtcode_core::core::agent::features::FeatureSet::from_config(Some(&cfg)),
-            true,
             cfg.agent.harness.auto_compaction_threshold_tokens,
             2_000,
         );

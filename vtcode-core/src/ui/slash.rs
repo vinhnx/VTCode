@@ -120,7 +120,7 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
         },
         SlashCommandInfo {
             name: "compact",
-            description: "Compact current conversation history for compatible Responses providers (usage: /compact)",
+            description: "Compact current conversation history using provider-native or local fallback compaction (usage: /compact)",
         },
         SlashCommandInfo {
             name: "new",

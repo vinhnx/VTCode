@@ -86,6 +86,8 @@ max_tool_calls_per_turn = 0
 max_tool_wall_clock_secs = 600
 max_tool_retries = 2
 auto_compaction_enabled = false
+# Optional absolute compact threshold in tokens for server-side compaction or local fallback compaction.
+# auto_compaction_threshold_tokens = 200000
 continuation_policy = "all"
 # Defaults to ~/.vtcode/sessions/ when unset or empty.
 event_log_path = ""

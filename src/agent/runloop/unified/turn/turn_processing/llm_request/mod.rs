@@ -37,7 +37,7 @@ use request_builder::{
 #[cfg(test)]
 use retry::is_retryable_llm_error;
 #[cfg(test)]
-use retry::{DEFAULT_LLM_RETRY_ATTEMPTS, MAX_LLM_RETRY_ATTEMPTS, resolve_compaction_threshold};
+use retry::{DEFAULT_LLM_RETRY_ATTEMPTS, MAX_LLM_RETRY_ATTEMPTS};
 use retry::{
     classify_llm_error, compact_error_message, compact_tool_messages_for_retry,
     has_recent_tool_responses, is_stream_timeout_error, llm_attempt_timeout_secs,
@@ -641,29 +641,6 @@ mod tests {
     #[test]
     fn llm_retry_attempts_respects_upper_bound() {
         assert_eq!(llm_retry_attempts(Some(16)), MAX_LLM_RETRY_ATTEMPTS);
-    }
-
-    #[test]
-    fn resolve_compaction_threshold_prefers_configured_value() {
-        assert_eq!(resolve_compaction_threshold(Some(42), 200_000), Some(42));
-    }
-
-    #[test]
-    fn resolve_compaction_threshold_uses_context_ratio_when_unset() {
-        assert_eq!(resolve_compaction_threshold(None, 200_000), Some(180_000));
-    }
-
-    #[test]
-    fn resolve_compaction_threshold_clamps_to_context_size() {
-        assert_eq!(
-            resolve_compaction_threshold(Some(300_000), 200_000),
-            Some(200_000)
-        );
-    }
-
-    #[test]
-    fn resolve_compaction_threshold_requires_context_or_override() {
-        assert_eq!(resolve_compaction_threshold(None, 0), None);
     }
 
     #[test]

@@ -295,6 +295,13 @@ recovery_cooldown = 60
 # Type: `boolean`
 auto_compaction_enabled = false
 
+# Optional absolute compact threshold in tokens. Applies to Responses server-side compaction when the
+# provider supports it, and to VT Code's local fallback compaction otherwise. When unset, VT Code
+# derives a threshold from the provider context window.
+# Default: null
+# Type: `null | integer`
+# auto_compaction_threshold_tokens = 200000
+
 # Controls whether harness-managed continuation loops are enabled.
 # Default: "all"
 # Type: `string`
