@@ -4,11 +4,16 @@
 
 VT Code applies the **Context-Generic Programming** pattern from the
 [RustLab 2025 talk](https://contextgeneric.dev/blog/rustlab-2025-coherence/) to
-its tool runtime system. The pattern solves a concrete architectural problem:
-the same tool implementation needs to behave differently (approval policy,
-sandbox enforcement, logging, caching, retry) depending on the execution
-context (interactive session, CI pipeline, benchmarks) — without adapter
-explosion.
+its tool runtime system and LLM provider construction path. The pattern solves
+two concrete architectural problems:
+
+- The same tool implementation needs to behave differently (approval policy,
+  sandbox enforcement, logging, caching, retry) depending on the execution
+  context (interactive session, CI pipeline, benchmarks) without adapter
+  explosion.
+- The same LLM provider metadata and construction rules were duplicated across
+  factory registration, zero-sized provider config types, and the external
+  `vtcode-llm` adapter layer.
 
 ## Core Concepts
 
@@ -258,6 +263,62 @@ tools through the CGP approval → sandbox → logging/cache/retry pipeline.
 Wrapping is idempotent: registrations created via `from_cgp_tool()` /
 `register_cgp_tool()` are marked as already CGP-wrapped, and
 `enable_cgp_pipeline()` skips them instead of nesting another facade layer.
+
+## LLM Provider Construction (Phase 8)
+
+Phase 8 applies the same CGP pattern to provider construction without changing
+the runtime string-keyed lookup model.
+
+### LLM components
+
+| Component                    | Purpose                              |
+|-----------------------------|--------------------------------------|
+| `ProviderMetadataComponent` | Provider key, display name, defaults |
+| `ProviderBuildComponent`    | Build `Box<dyn LLMProvider>`         |
+
+### LLM consumer traits
+
+| Trait                 | Purpose                                       |
+|-----------------------|-----------------------------------------------|
+| `CanDescribeProvider` | Blanket metadata API for provider contexts    |
+| `CanBuildProvider`    | Blanket factory API for provider construction |
+
+### LLM contexts
+
+The zero-sized provider config types in
+`vtcode-core/src/llm/provider_config.rs` are the CGP contexts:
+
+- `GeminiProviderConfig`
+- `OpenAIProviderConfig`
+- `AnthropicProviderConfig`
+- `HuggingFaceProviderConfig`
+- `LiteLLMProviderConfig`
+- `DeepSeekProviderConfig`
+- `MinimaxProviderConfig`
+- `OpenRouterProviderConfig`
+- `OpenResponsesProviderConfig`
+- `MoonshotProviderConfig`
+- `OllamaProviderConfig`
+- `LmStudioProviderConfig`
+- `ZAIProviderConfig`
+
+Each context is wired once in `vtcode-core/src/llm/cgp.rs`, then consumed by:
+
+- `register_builtin_cgp_providers(...)` and `LLMFactory::register_cgp_provider::<Ctx>()`
+  for built-in and custom registration
+- `ProviderBuilder<T>` and the legacy core `ProviderConfig` trait as metadata
+  shims over `CanDescribeProvider`
+- `create_provider_unified(...)` as a compatibility shim over the canonical
+  factory path
+
+This keeps public entrypoints stable while removing the old
+`BuiltinProvider`/`impl_builtin_provider!` registration split.
+The zero-sized provider config types now serve directly as the metadata
+providers too, so there is no extra descriptor-to-metadata adapter layer.
+
+`vtcode-llm` uses the same `HasComponent` substrate for its
+`FactoryConfigProjectionComponent`, so the external config adapter does not
+carry a second parallel lookup trait.
 
 The active CGP mode now persists in `ToolRegistry`. Any later
 `register_tool()` call, including post-startup skill activation, is wrapped

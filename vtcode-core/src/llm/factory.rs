@@ -1,8 +1,4 @@
-use super::providers::{
-    AnthropicProvider, DeepSeekProvider, GeminiProvider, HuggingFaceProvider, LiteLLMProvider,
-    LmStudioProvider, MinimaxProvider, MoonshotProvider, OllamaProvider, OpenAIProvider,
-    OpenResponsesProvider, OpenRouterProvider, ZAIProvider,
-};
+use super::cgp::{CanBuildProvider, CanDescribeProvider, register_builtin_cgp_providers};
 use crate::config::TimeoutsConfig;
 use crate::config::core::{AnthropicConfig, ModelConfig, OpenAIConfig, PromptCachingConfig};
 use crate::config::models::{ModelId, Provider};
@@ -30,50 +26,22 @@ pub struct ProviderConfig {
     pub model_behavior: Option<ModelConfig>,
 }
 
-trait BuiltinProvider: LLMProvider {
-    fn build_from_config(config: ProviderConfig) -> Box<dyn LLMProvider>;
-}
-
-macro_rules! register_providers {
-    ($factory:expr, $( $name:literal => $provider:ty ),+ $(,)?) => {
-        $(
-            $factory.register_builtin::<$provider>($name);
-        )+
-    };
-}
-
 impl LLMFactory {
     pub fn new() -> Self {
         let mut factory = Self {
             providers: HashMap::new(),
         };
 
-        // Register built-in providers using shared adapters
-        register_providers!(
-            factory,
-            "gemini" => GeminiProvider,
-            "openai" => OpenAIProvider,
-            "huggingface" => HuggingFaceProvider,
-            "litellm" => LiteLLMProvider,
-            "anthropic" => AnthropicProvider,
-            "minimax" => MinimaxProvider,
-            "deepseek" => DeepSeekProvider,
-            "openrouter" => OpenRouterProvider,
-            "openresponses" => OpenResponsesProvider,
-            "moonshot" => MoonshotProvider,
-            "ollama" => OllamaProvider,
-            "lmstudio" => LmStudioProvider,
-            "zai" => ZAIProvider,
-        );
+        register_builtin_cgp_providers(&mut factory);
 
         factory
     }
 
-    fn register_builtin<P>(&mut self, name: &str)
+    pub fn register_cgp_provider<Ctx>(&mut self)
     where
-        P: BuiltinProvider + 'static,
+        Ctx: CanDescribeProvider + CanBuildProvider + 'static,
     {
-        self.register_provider(name, Box::new(|config| P::build_from_config(config)));
+        self.register_provider(Ctx::PROVIDER_KEY, Ctx::build_provider);
     }
 
     /// Register a new provider
@@ -294,102 +262,169 @@ pub fn create_provider_with_config(
     factory.create_provider(provider_name, config)
 }
 
-/// Macro to implement BuiltinProvider for providers with standard from_config signature
-macro_rules! impl_builtin_provider {
-    ($($provider:ty),+ $(,)?) => {
-        $(
-            impl BuiltinProvider for $provider {
-                fn build_from_config(config: ProviderConfig) -> Box<dyn LLMProvider> {
-                    let ProviderConfig {
-                        api_key,
-                        base_url,
-                        model,
-                        prompt_cache,
-                        timeouts,
-                        openai: _,
-                        anthropic,
-                        model_behavior,
-                    } = config;
-
-                    Box::new(<$provider>::from_config(
-                        api_key,
-                        model,
-                        base_url,
-                        prompt_cache,
-                        timeouts,
-                        anthropic,
-                        model_behavior,
-                    ))
-                }
-            }
-        )+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::core::{AnthropicConfig, OpenAIConfig};
+    use crate::llm::provider_config::{
+        AnthropicProviderConfig, GeminiProviderConfig, OpenAIProviderConfig,
     };
-}
+    use crate::llm::providers::OllamaProvider;
 
-// Manual implementation for AnthropicProvider to support provider-specific config
-impl BuiltinProvider for AnthropicProvider {
-    fn build_from_config(config: ProviderConfig) -> Box<dyn LLMProvider> {
-        let ProviderConfig {
-            api_key,
-            base_url,
-            model,
-            prompt_cache,
-            timeouts,
-            openai: _,
-            anthropic,
-            model_behavior,
-        } = config;
+    #[test]
+    fn builtin_cgp_registration_exposes_expected_provider_keys() {
+        let factory = LLMFactory::new();
+        let mut providers = factory.list_providers();
+        providers.sort();
 
-        Box::new(AnthropicProvider::from_config(
-            api_key,
-            model,
-            base_url,
-            prompt_cache,
-            timeouts,
-            anthropic,
-            model_behavior,
-        ))
+        assert_eq!(
+            providers,
+            vec![
+                "anthropic",
+                "deepseek",
+                "gemini",
+                "huggingface",
+                "litellm",
+                "lmstudio",
+                "minimax",
+                "moonshot",
+                "ollama",
+                "openai",
+                "openresponses",
+                "openrouter",
+                "zai",
+            ]
+        );
+    }
+
+    #[test]
+    fn standard_provider_builds_through_cgp_registration() {
+        let factory = LLMFactory::new();
+        let provider = factory
+            .create_provider(
+                <GeminiProviderConfig as CanDescribeProvider>::PROVIDER_KEY,
+                ProviderConfig {
+                    api_key: Some("test-key".to_string()),
+                    base_url: None,
+                    model: Some(
+                        crate::config::constants::models::google::GEMINI_3_FLASH_PREVIEW
+                            .to_string(),
+                    ),
+                    prompt_cache: None,
+                    timeouts: None,
+                    openai: None,
+                    anthropic: None,
+                    model_behavior: None,
+                },
+            )
+            .expect("built-in cgp registration should build");
+
+        assert_eq!(provider.name(), "gemini");
+    }
+
+    #[test]
+    fn openai_build_preserves_provider_specific_config_path() {
+        let factory = LLMFactory::new();
+        let provider = factory
+            .create_provider(
+                <OpenAIProviderConfig as CanDescribeProvider>::PROVIDER_KEY,
+                ProviderConfig {
+                    api_key: Some("test-key".to_string()),
+                    base_url: None,
+                    model: Some(
+                        crate::config::constants::models::openai::DEFAULT_MODEL.to_string(),
+                    ),
+                    prompt_cache: None,
+                    timeouts: None,
+                    openai: Some(OpenAIConfig {
+                        websocket_mode: true,
+                        ..OpenAIConfig::default()
+                    }),
+                    anthropic: Some(AnthropicConfig::default()),
+                    model_behavior: None,
+                },
+            )
+            .expect("openai cgp registration should build");
+
+        assert_eq!(provider.name(), "openai");
+    }
+
+    #[test]
+    fn anthropic_build_preserves_provider_specific_config_path() {
+        let factory = LLMFactory::new();
+        let provider = factory
+            .create_provider(
+                <AnthropicProviderConfig as CanDescribeProvider>::PROVIDER_KEY,
+                ProviderConfig {
+                    api_key: Some("test-key".to_string()),
+                    base_url: None,
+                    model: Some(
+                        crate::config::constants::models::anthropic::DEFAULT_MODEL.to_string(),
+                    ),
+                    prompt_cache: None,
+                    timeouts: None,
+                    openai: None,
+                    anthropic: Some(AnthropicConfig {
+                        count_tokens_enabled: true,
+                        ..AnthropicConfig::default()
+                    }),
+                    model_behavior: None,
+                },
+            )
+            .expect("anthropic cgp registration should build");
+
+        assert_eq!(provider.name(), "anthropic");
+    }
+
+    #[test]
+    fn custom_provider_registration_still_coexists_with_cgp_builtins() {
+        let mut factory = LLMFactory::new();
+        factory.register_provider("custom-test", |_config| {
+            Box::new(OllamaProvider::from_config(
+                None,
+                Some("gpt-oss:20b".to_string()),
+                Some("http://localhost:11434".to_string()),
+                None,
+                None,
+                None,
+                None,
+            ))
+        });
+
+        let custom = factory
+            .create_provider(
+                "custom-test",
+                ProviderConfig {
+                    api_key: None,
+                    base_url: None,
+                    model: None,
+                    prompt_cache: None,
+                    timeouts: None,
+                    openai: None,
+                    anthropic: None,
+                    model_behavior: None,
+                },
+            )
+            .expect("custom provider should still register");
+        let builtin = factory
+            .create_provider(
+                "openai",
+                ProviderConfig {
+                    api_key: Some("test-key".to_string()),
+                    base_url: None,
+                    model: Some(
+                        crate::config::constants::models::openai::DEFAULT_MODEL.to_string(),
+                    ),
+                    prompt_cache: None,
+                    timeouts: None,
+                    openai: None,
+                    anthropic: None,
+                    model_behavior: None,
+                },
+            )
+            .expect("builtin provider should still build");
+
+        assert_eq!(custom.name(), "ollama");
+        assert_eq!(builtin.name(), "openai");
     }
 }
-
-impl BuiltinProvider for OpenAIProvider {
-    fn build_from_config(config: ProviderConfig) -> Box<dyn LLMProvider> {
-        let ProviderConfig {
-            api_key,
-            base_url,
-            model,
-            prompt_cache,
-            timeouts,
-            openai,
-            anthropic,
-            model_behavior,
-        } = config;
-
-        Box::new(OpenAIProvider::from_config(
-            api_key,
-            model,
-            base_url,
-            prompt_cache,
-            timeouts,
-            anthropic,
-            openai,
-            model_behavior,
-        ))
-    }
-}
-
-// Implement BuiltinProvider for all standard providers using the macro
-impl_builtin_provider!(
-    GeminiProvider,
-    HuggingFaceProvider,
-    LiteLLMProvider,
-    // AnthropicProvider is manually implemented above
-    MinimaxProvider,
-    DeepSeekProvider,
-    OpenRouterProvider,
-    OpenResponsesProvider,
-    MoonshotProvider,
-    OllamaProvider,
-    LmStudioProvider,
-    ZAIProvider,
-);

@@ -10,6 +10,7 @@ use std::path::PathBuf;
 
 use anyhow::Error;
 use vtcode_commons::{ErrorFormatter, ErrorReporter, PathScope, TelemetrySink, WorkspacePaths};
+use vtcode_core::components::HasComponent;
 use vtcode_core::config::TimeoutsConfig;
 use vtcode_core::config::core::{AnthropicConfig, OpenAIConfig};
 use vtcode_core::config::core::{ModelConfig, PromptCachingConfig};
@@ -62,19 +63,49 @@ pub trait ProviderConfig {
     }
 }
 
+/// Marker component for projecting a borrowed provider config into the owned
+/// config bag consumed by `vtcode-core`.
+pub enum FactoryConfigProjectionComponent {}
+
+trait FactoryConfigProjectionProvider<Ctx> {
+    fn project(ctx: &Ctx) -> vtcode_core::llm::factory::ProviderConfig;
+}
+
+trait CanProjectFactoryConfig {
+    fn project_factory_config(&self) -> vtcode_core::llm::factory::ProviderConfig;
+}
+
+impl<Ctx> CanProjectFactoryConfig for Ctx
+where
+    Ctx: HasComponent<FactoryConfigProjectionComponent>,
+    <Ctx as HasComponent<FactoryConfigProjectionComponent>>::Provider:
+        FactoryConfigProjectionProvider<Ctx>,
+{
+    fn project_factory_config(&self) -> vtcode_core::llm::factory::ProviderConfig {
+        <<Ctx as HasComponent<FactoryConfigProjectionComponent>>::Provider as FactoryConfigProjectionProvider<Ctx>>::project(self)
+    }
+}
+
+struct BorrowedConfigProjectionCtx<'a> {
+    source: &'a dyn ProviderConfig,
+}
+
+struct BorrowedConfigProjection;
+
+impl HasComponent<FactoryConfigProjectionComponent> for BorrowedConfigProjectionCtx<'_> {
+    type Provider = BorrowedConfigProjection;
+}
+
+impl FactoryConfigProjectionProvider<BorrowedConfigProjectionCtx<'_>> for BorrowedConfigProjection {
+    fn project(ctx: &BorrowedConfigProjectionCtx<'_>) -> vtcode_core::llm::factory::ProviderConfig {
+        project_provider_config(ctx.source)
+    }
+}
+
 /// Convert an implementor of [`ProviderConfig`] into the configuration used by
 /// the `vtcode_core` provider factory.
 pub fn as_factory_config(source: &dyn ProviderConfig) -> vtcode_core::llm::factory::ProviderConfig {
-    vtcode_core::llm::factory::ProviderConfig {
-        api_key: source.api_key().map(Cow::into_owned),
-        base_url: source.base_url().map(Cow::into_owned),
-        model: source.model().map(Cow::into_owned),
-        prompt_cache: source.prompt_cache().map(Cow::into_owned),
-        timeouts: source.timeouts().map(Cow::into_owned),
-        openai: source.openai().map(Cow::into_owned),
-        anthropic: source.anthropic().map(Cow::into_owned),
-        model_behavior: source.model_behavior().map(Cow::into_owned),
-    }
+    BorrowedConfigProjectionCtx { source }.project_factory_config()
 }
 
 /// Telemetry event emitted when adapter hooks adjust provider configuration.
@@ -137,11 +168,11 @@ where
         &self,
         source: &dyn ProviderConfig,
     ) -> vtcode_core::llm::factory::ProviderConfig {
-        let mut config = as_factory_config(source);
-        if let Some(prompt_cache) = config.prompt_cache.as_mut() {
-            self.enrich_prompt_cache(prompt_cache);
+        HookedConfigProjectionCtx {
+            source,
+            hooks: self,
         }
-        config
+        .project_factory_config()
     }
 
     fn enrich_prompt_cache(&self, prompt_cache: &mut PromptCachingConfig) {
@@ -196,6 +227,53 @@ where
     }
 }
 
+struct HookedConfigProjectionCtx<'source, 'hooks, Paths, Telemetry, Reporter, Formatter>
+where
+    Paths: WorkspacePaths + ?Sized,
+    Telemetry: TelemetrySink<AdapterEvent> + ?Sized,
+    Reporter: ErrorReporter + ?Sized,
+    Formatter: ErrorFormatter + ?Sized,
+{
+    source: &'source dyn ProviderConfig,
+    hooks: &'hooks AdapterHooks<'hooks, Paths, Telemetry, Reporter, Formatter>,
+}
+
+struct HookedConfigProjection;
+
+impl<'source, 'hooks, Paths, Telemetry, Reporter, Formatter>
+    HasComponent<FactoryConfigProjectionComponent>
+    for HookedConfigProjectionCtx<'source, 'hooks, Paths, Telemetry, Reporter, Formatter>
+where
+    Paths: WorkspacePaths + ?Sized,
+    Telemetry: TelemetrySink<AdapterEvent> + ?Sized,
+    Reporter: ErrorReporter + ?Sized,
+    Formatter: ErrorFormatter + ?Sized,
+{
+    type Provider = HookedConfigProjection;
+}
+
+impl<'source, 'hooks, Paths, Telemetry, Reporter, Formatter>
+    FactoryConfigProjectionProvider<
+        HookedConfigProjectionCtx<'source, 'hooks, Paths, Telemetry, Reporter, Formatter>,
+    > for HookedConfigProjection
+where
+    Paths: WorkspacePaths + ?Sized,
+    Telemetry: TelemetrySink<AdapterEvent> + ?Sized,
+    Reporter: ErrorReporter + ?Sized,
+    Formatter: ErrorFormatter + ?Sized,
+{
+    fn project(
+        ctx: &HookedConfigProjectionCtx<'source, 'hooks, Paths, Telemetry, Reporter, Formatter>,
+    ) -> vtcode_core::llm::factory::ProviderConfig {
+        let mut config =
+            BorrowedConfigProjectionCtx { source: ctx.source }.project_factory_config();
+        if let Some(prompt_cache) = config.prompt_cache.as_mut() {
+            ctx.hooks.enrich_prompt_cache(prompt_cache);
+        }
+        config
+    }
+}
+
 /// Convert a [`ProviderConfig`] into the factory configuration using the
 /// supplied adapter hooks for workspace, telemetry, and error integration.
 pub fn as_factory_config_with_hooks<'a, Paths, Telemetry, Reporter, Formatter>(
@@ -208,7 +286,22 @@ where
     Reporter: ErrorReporter + ?Sized,
     Formatter: ErrorFormatter + ?Sized,
 {
-    hooks.apply_to(source)
+    HookedConfigProjectionCtx { source, hooks }.project_factory_config()
+}
+
+fn project_provider_config(
+    source: &dyn ProviderConfig,
+) -> vtcode_core::llm::factory::ProviderConfig {
+    vtcode_core::llm::factory::ProviderConfig {
+        api_key: source.api_key().map(Cow::into_owned),
+        base_url: source.base_url().map(Cow::into_owned),
+        model: source.model().map(Cow::into_owned),
+        prompt_cache: source.prompt_cache().map(Cow::into_owned),
+        timeouts: source.timeouts().map(Cow::into_owned),
+        openai: source.openai().map(Cow::into_owned),
+        anthropic: source.anthropic().map(Cow::into_owned),
+        model_behavior: source.model_behavior().map(Cow::into_owned),
+    }
 }
 
 fn borrowed_optional_str(value: &Option<String>) -> Option<Cow<'_, str>> {
