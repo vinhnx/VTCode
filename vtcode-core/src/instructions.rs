@@ -1,4 +1,5 @@
 use hashbrown::HashSet;
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use tokio::fs::File;
 use tokio::io::{self, AsyncReadExt};
@@ -63,6 +64,140 @@ impl InstructionBundle {
         }
         output
     }
+
+    pub fn highlights(&self, limit: usize) -> Vec<String> {
+        extract_instruction_highlights(&self.segments, limit)
+    }
+}
+
+pub fn extract_instruction_highlights(
+    segments: &[InstructionSegment],
+    limit: usize,
+) -> Vec<String> {
+    if limit == 0 {
+        return Vec::new();
+    }
+
+    let mut highlights = Vec::with_capacity(limit);
+    for segment in segments {
+        for line in segment.contents.lines() {
+            if highlights.len() >= limit {
+                break;
+            }
+
+            let trimmed = line.trim();
+            if trimmed.starts_with('-') {
+                let highlight = trimmed.trim_start_matches('-').trim();
+                if !highlight.is_empty() {
+                    highlights.push(highlight.to_string());
+                }
+            }
+        }
+
+        if highlights.len() >= limit {
+            break;
+        }
+    }
+
+    highlights
+}
+
+pub fn render_instruction_markdown(
+    title: &str,
+    segments: &[InstructionSegment],
+    truncated: bool,
+    project_root: &Path,
+    home_dir: Option<&Path>,
+    highlight_limit: usize,
+    truncation_note: &str,
+) -> String {
+    let combined_len = segments
+        .iter()
+        .map(|segment| segment.contents.len())
+        .sum::<usize>();
+    let mut section = String::with_capacity(combined_len.saturating_add(512));
+    let _ = writeln!(section, "## {title}\n");
+    section.push_str(
+        "Instructions are listed from lowest to highest precedence. When conflicts exist, defer to the later entries.\n\n",
+    );
+
+    if !segments.is_empty() {
+        section.push_str("### Instruction map\n");
+        for (index, segment) in segments.iter().enumerate() {
+            let _ = writeln!(
+                section,
+                "- {}. {} ({})",
+                index + 1,
+                format_instruction_path(&segment.source.path, project_root, home_dir),
+                instruction_scope_label(&segment.source.scope),
+            );
+        }
+
+        let highlights = extract_instruction_highlights(segments, highlight_limit);
+        if !highlights.is_empty() {
+            section.push_str("\n### Key points\n");
+            for highlight in highlights {
+                let _ = writeln!(section, "- {highlight}");
+            }
+        }
+
+        for (index, segment) in segments.iter().enumerate() {
+            let _ = writeln!(
+                section,
+                "\n### {}. {} ({})\n",
+                index + 1,
+                format_instruction_path(&segment.source.path, project_root, home_dir),
+                instruction_scope_label(&segment.source.scope),
+            );
+            section.push_str(segment.contents.trim());
+            section.push('\n');
+        }
+    }
+
+    if truncated && !truncation_note.is_empty() {
+        let _ = writeln!(section, "\n_{truncation_note}_");
+    }
+
+    section.push('\n');
+    section
+}
+
+pub fn instruction_scope_label(scope: &InstructionScope) -> &'static str {
+    match scope {
+        InstructionScope::Global => "global",
+        InstructionScope::Workspace => "workspace",
+        InstructionScope::Custom => "custom",
+    }
+}
+
+pub fn format_instruction_path(
+    path: &Path,
+    project_root: &Path,
+    home_dir: Option<&Path>,
+) -> String {
+    if let Ok(relative) = path.strip_prefix(project_root) {
+        let display = relative.display().to_string();
+        if !display.is_empty() {
+            return display;
+        }
+
+        if let Some(name) = path.file_name().and_then(|value| value.to_str()) {
+            return name.to_string();
+        }
+    }
+
+    if let Some(home) = home_dir
+        && let Ok(relative) = path.strip_prefix(home)
+    {
+        let display = relative.display().to_string();
+        if display.is_empty() {
+            return "~".to_string();
+        }
+
+        return format!("~/{display}");
+    }
+
+    path.display().to_string()
 }
 
 pub async fn discover_instruction_sources(
@@ -472,5 +607,46 @@ mod tests {
         assert_eq!(bundle.combined_text(), "override content");
 
         Ok(())
+    }
+
+    #[test]
+    fn renders_instruction_markdown_with_map_and_highlights() {
+        let project_root = PathBuf::from("/workspace");
+        let segments = vec![
+            InstructionSegment {
+                source: InstructionSource {
+                    path: project_root.join("AGENTS.md"),
+                    scope: InstructionScope::Workspace,
+                },
+                contents: "- Root summary\n\nRoot details\n".to_owned(),
+            },
+            InstructionSegment {
+                source: InstructionSource {
+                    path: project_root.join("nested/AGENTS.md"),
+                    scope: InstructionScope::Workspace,
+                },
+                contents: "- Nested summary\n\nNested details\n".to_owned(),
+            },
+        ];
+
+        let markdown = render_instruction_markdown(
+            "PROJECT DOCUMENTATION",
+            &segments,
+            false,
+            &project_root,
+            None,
+            2,
+            "instruction content was truncated",
+        );
+
+        assert!(markdown.contains("## PROJECT DOCUMENTATION"));
+        assert!(markdown.contains("### Instruction map"));
+        assert!(markdown.contains("- 1. AGENTS.md (workspace)"));
+        assert!(markdown.contains("- 2. nested/AGENTS.md (workspace)"));
+        assert!(markdown.contains("### Key points"));
+        assert!(markdown.contains("Root summary"));
+        assert!(markdown.contains("Nested summary"));
+        assert!(markdown.contains("### 1. AGENTS.md (workspace)"));
+        assert!(markdown.contains("### 2. nested/AGENTS.md (workspace)"));
     }
 }
