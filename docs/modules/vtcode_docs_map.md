@@ -820,6 +820,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Overview, Benchmark Methodology, Performance Results, Memory Profile, Clone Operation Audit
   - **User Questions**: "What can you tell me about VT Code Performance Benchmarks?", "How does Overview work?", "How does Benchmark Methodology work?"
 
+- **File**: `docs/benchmarks/terminal-bench.md`
+  - **Content**: VT Code on Terminal-Bench
+  - **Topics**: What To Use, Local Smoke Test, Container Build, Harbor Integration, Suggested Tool Allow-List
+  - **User Questions**: "What can you tell me about VT Code on Terminal-Bench?", "How does What To Use work?", "How does Local Smoke Test work?"
+
 - **File**: `docs/benchmarks/BENCHMARK_COMPARISON.md`
   - **Content**: Which Benchmark Should You Use?
   - **Topics**: Quick Answer, Detailed Comparison, HumanEval, MBPP (Mostly Basic Python Problems), SWE-bench (Software Engineering Benchmark)

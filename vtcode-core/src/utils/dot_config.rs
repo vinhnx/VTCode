@@ -2,6 +2,7 @@
 
 pub use crate::config::WorkspaceTrustLevel;
 use crate::config::constants::defaults;
+use crate::config::defaults::get_config_dir;
 use crate::utils::path::canonicalize_workspace;
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
@@ -158,9 +159,7 @@ pub struct DotManager {
 
 impl DotManager {
     pub fn new() -> Result<Self, DotError> {
-        let home_dir = dirs::home_dir().ok_or(DotError::HomeDirNotFound)?;
-
-        let config_dir = home_dir.join(".vtcode");
+        let config_dir = get_config_dir().ok_or(DotError::HomeDirNotFound)?;
         let cache_dir = config_dir.join("cache");
         let config_file = config_dir.join("config.toml");
 
