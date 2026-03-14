@@ -3,7 +3,10 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use serde::Serialize;
 
-use crate::instructions::{InstructionBundle, read_instruction_bundle};
+use crate::instructions::{
+    InstructionBundle, InstructionSegment, extract_instruction_highlights, read_instruction_bundle,
+    render_instruction_markdown,
+};
 use crate::skills::model::SkillMetadata;
 use crate::skills::render::render_skills_section;
 use crate::utils::file_utils::canonicalize_with_context;
@@ -15,30 +18,14 @@ pub const PROJECT_DOC_SEPARATOR: &str = "\n\n--- project-doc ---\n\n";
 pub struct ProjectDocBundle {
     pub contents: String,
     pub sources: Vec<PathBuf>,
+    pub segments: Vec<InstructionSegment>,
     pub truncated: bool,
     pub bytes_read: usize,
 }
 
 impl ProjectDocBundle {
     pub fn highlights(&self, limit: usize) -> Vec<String> {
-        if limit == 0 {
-            return Vec::new();
-        }
-        let mut highlights = Vec::with_capacity(limit);
-        for line in self.contents.lines() {
-            if highlights.len() >= limit {
-                break;
-            }
-            let trimmed = line.trim();
-            if trimmed.starts_with('-') {
-                let highlight = trimmed.trim_start_matches('-').trim();
-                if !highlight.is_empty() {
-                    highlights.push(highlight.to_string());
-                }
-            }
-        }
-
-        highlights
+        extract_instruction_highlights(&self.segments, limit)
     }
 }
 
@@ -94,10 +81,18 @@ pub async fn get_user_instructions(
     cwd: &Path,
     skills: Option<&[SkillMetadata]>,
 ) -> Option<String> {
-    let bundle = read_project_doc(cwd, config.project_doc_max_bytes)
-        .await
-        .ok()
-        .flatten();
+    let project_root = resolve_project_root(cwd).unwrap_or_else(|_| cwd.to_path_buf());
+    let home_dir = dirs::home_dir();
+    let bundle = read_project_doc_with_options(&ProjectDocOptions {
+        current_dir: cwd,
+        project_root: &project_root,
+        home_dir: home_dir.as_deref(),
+        extra_instruction_files: &[],
+        max_bytes: config.project_doc_max_bytes,
+    })
+    .await
+    .ok()
+    .flatten();
 
     let mut section = String::with_capacity(1024);
 
@@ -108,21 +103,15 @@ pub async fn get_user_instructions(
     }
 
     if let Some(bundle) = bundle {
-        section.push_str("## PROJECT DOCUMENTATION\n");
-        section.push_str("Instructions are listed from lowest to highest precedence. When conflicts exist, defer to the later entries.\n\n");
-
-        for (i, segment) in bundle.sources.iter().enumerate() {
-            let display_path = segment.to_string_lossy();
-            let _ = std::fmt::Write::write_fmt(
-                &mut section,
-                format_args!("### {}. {}\n", i + 1, display_path),
-            );
-            // We need the actual content here, but ProjectDocBundle already has it concatenated.
-            // For a single comprehensive block, we can just use the bundle.contents if we don't need per-file headers,
-            // or we could refactor to keep them separate.
-        }
-        section.push_str(&bundle.contents);
-        section.push_str("\n\n");
+        section.push_str(&render_instruction_markdown(
+            "PROJECT DOCUMENTATION",
+            &bundle.segments,
+            bundle.truncated,
+            &project_root,
+            home_dir.as_deref(),
+            3,
+            "project documentation was truncated due to size limits. Review the source files for full details.",
+        ));
     }
 
     if let Some(skills_text) = skills.and_then(render_skills_section) {
@@ -150,8 +139,8 @@ pub fn merge_project_docs_with_skills(
 
 fn convert_bundle(bundle: InstructionBundle) -> ProjectDocBundle {
     let contents = bundle.combined_text();
-    let sources = bundle
-        .segments
+    let segments = bundle.segments;
+    let sources = segments
         .iter()
         .map(|segment| segment.source.path.clone())
         .collect::<Vec<_>>();
@@ -159,6 +148,7 @@ fn convert_bundle(bundle: InstructionBundle) -> ProjectDocBundle {
     ProjectDocBundle {
         contents,
         sources,
+        segments,
         truncated: bundle.truncated,
         bytes_read: bundle.bytes_read,
     }
@@ -194,6 +184,7 @@ fn resolve_project_root(cwd: &Path) -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::instructions::{InstructionScope, InstructionSource};
     use tempfile::tempdir;
 
     fn write_doc(dir: &Path, content: &str) -> Result<()> {
@@ -292,10 +283,49 @@ mod tests {
         let bundle = ProjectDocBundle {
             contents: "- First\n- Second\n".to_owned(),
             sources: Vec::new(),
+            segments: vec![InstructionSegment {
+                source: InstructionSource {
+                    path: PathBuf::from("AGENTS.md"),
+                    scope: InstructionScope::Workspace,
+                },
+                contents: "- First\n- Second\n".to_owned(),
+            }],
             truncated: false,
             bytes_read: 0,
         };
         let highlights = bundle.highlights(1);
         assert_eq!(highlights, vec!["First".to_owned()]);
+    }
+
+    #[tokio::test]
+    async fn renders_instruction_map_and_segment_headers() {
+        let repo = tempdir().expect("failed to unwrap");
+        std::fs::write(repo.path().join(".git"), "gitdir: /tmp/git").expect("failed to unwrap");
+        write_doc(
+            repo.path(),
+            "- Root summary\n\nFollow the repository-level guidance first.\n",
+        )
+        .expect("write doc");
+
+        let nested = repo.path().join("nested/sub");
+        std::fs::create_dir_all(&nested).expect("failed to unwrap");
+        write_doc(
+            &nested,
+            "- Nested summary\n\nFollow the nested guidance last.\n",
+        )
+        .expect("write doc");
+
+        let instructions = get_user_instructions(&AgentConfig::default(), &nested, None)
+            .await
+            .expect("expected instructions");
+
+        assert!(instructions.contains("### Instruction map"));
+        assert!(instructions.contains("- 1. AGENTS.md (workspace)"));
+        assert!(instructions.contains("- 2. nested/sub/AGENTS.md (workspace)"));
+        assert!(instructions.contains("### Key points"));
+        assert!(instructions.contains("### 1. AGENTS.md (workspace)"));
+        assert!(instructions.contains("### 2. nested/sub/AGENTS.md (workspace)"));
+        assert!(instructions.contains("Root summary"));
+        assert!(instructions.contains("Nested summary"));
     }
 }

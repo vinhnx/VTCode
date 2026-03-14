@@ -31,6 +31,7 @@ turns.
 ## Maintaining Effective AGENTS.md Files
 
 - Keep guidance concise and action oriented - bullet lists and short paragraphs are easier for the agent to honor.
+- Put the highest-signal map first: lead with key commands, critical directories, and the exact docs or tools the agent should open next.
 - Link out to full documentation instead of pasting long tutorials; VT Code only guarantees the first `instruction_max_bytes`
   bytes will be loaded.
 - Prefer nested `AGENTS.md` files over massive root documents when teams own distinct subsystems.

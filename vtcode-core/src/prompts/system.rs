@@ -13,7 +13,9 @@ use crate::config::constants::{
     instructions as instruction_constants, project_doc as project_doc_constants,
 };
 use crate::config::types::SystemPromptMode;
-use crate::instructions::{InstructionBundle, InstructionScope, read_instruction_bundle};
+use crate::instructions::{
+    InstructionBundle, read_instruction_bundle, render_instruction_markdown,
+};
 use crate::llm::providers::gemini::wire::Content;
 use crate::project_doc::read_project_doc;
 use crate::prompts::context::PromptContext;
@@ -408,36 +410,16 @@ pub async fn compose_system_instruction_text(
 
     if let Some(bundle) = instruction_bundle {
         let home_ref = home_path.as_deref();
-        instruction.push_str("\n\n## AGENTS.MD INSTRUCTION HIERARCHY\n");
-        instruction.push_str(
-                "Instructions are listed from lowest to highest precedence. When conflicts exist, defer to the later entries.\n\n",
-            );
-
-        for (index, segment) in bundle.segments.iter().enumerate() {
-            let scope = match segment.source.scope {
-                InstructionScope::Global => "global",
-                InstructionScope::Workspace => "workspace",
-                InstructionScope::Custom => "custom",
-            };
-            let display_path =
-                format_instruction_path(&segment.source.path, project_root, home_ref);
-
-            let _ = write!(
-                instruction,
-                "### {}. {} ({})\n\n",
-                index + 1,
-                display_path,
-                scope
-            );
-            instruction.push_str(segment.contents.trim());
-            instruction.push('\n');
-        }
-
-        if bundle.truncated {
-            instruction.push_str(
-                    "\n_Note: instruction content was truncated due to size limits. Review the source files for full details._",
-                );
-        }
+        instruction.push_str("\n\n");
+        instruction.push_str(&render_instruction_markdown(
+            "AGENTS.MD INSTRUCTION HIERARCHY",
+            &bundle.segments,
+            bundle.truncated,
+            project_root,
+            home_ref,
+            3,
+            "instruction content was truncated due to size limits. Review the source files for full details.",
+        ));
     }
 
     // ENHANCEMENT 2: Temporal context (metadata - goes at end)
@@ -580,32 +562,6 @@ async fn read_instruction_hierarchy(
             None
         }
     }
-}
-
-fn format_instruction_path(path: &Path, project_root: &Path, home_dir: Option<&Path>) -> String {
-    if let Ok(relative) = path.strip_prefix(project_root) {
-        let display = relative.display().to_string();
-        if !display.is_empty() {
-            return display;
-        }
-
-        if let Some(name) = path.file_name().and_then(|value| value.to_str()) {
-            return name.to_string();
-        }
-    }
-
-    if let Some(home) = home_dir
-        && let Ok(relative) = path.strip_prefix(home)
-    {
-        let display = relative.display().to_string();
-        if display.is_empty() {
-            return "~".to_string();
-        }
-
-        return format!("~/{display}");
-    }
-
-    path.display().to_string()
 }
 
 fn cache_key(project_root: &Path, vtcode_config: Option<&crate::config::VTCodeConfig>) -> String {
@@ -1150,6 +1106,29 @@ mod tests {
             compose_system_instruction_text(workspace.path(), Some(&config), Some(&ctx)).await;
 
         assert!(!result.contains("## Workspace Language Hints"));
+    }
+
+    #[tokio::test]
+    async fn test_live_prompt_renders_instruction_map_and_key_points() {
+        let workspace = tempfile::TempDir::new().expect("workspace tempdir");
+        std::fs::write(
+            workspace.path().join("AGENTS.md"),
+            "- Root summary\n\nFollow the root guidance.\n",
+        )
+        .expect("write agents");
+
+        let mut config = VTCodeConfig::default();
+        config.agent.include_temporal_context = false;
+        config.agent.include_working_directory = false;
+        config.agent.instruction_max_bytes = 4096;
+
+        let result = compose_system_instruction_text(workspace.path(), Some(&config), None).await;
+
+        assert!(result.contains("## AGENTS.MD INSTRUCTION HIERARCHY"));
+        assert!(result.contains("### Instruction map"));
+        assert!(result.contains("### Key points"));
+        assert!(result.contains("AGENTS.md (workspace)"));
+        assert!(result.contains("Root summary"));
     }
 
     #[tokio::test]
