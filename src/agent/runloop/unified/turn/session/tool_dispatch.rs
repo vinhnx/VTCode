@@ -7,6 +7,9 @@ use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, TurnId,
 use crate::agent::runloop::unified::shell::shell_quote_if_needed;
 use crate::agent::runloop::unified::status_line::InputStatusState;
 use crate::agent::runloop::unified::turn::context::{TurnHandlerOutcome, TurnLoopResult};
+use crate::agent::runloop::unified::turn::session::direct_tool_completion::{
+    ReplyKind, completion_reply_text,
+};
 use crate::agent::runloop::unified::turn::session::interaction_loop::{
     InteractionLoopContext, InteractionOutcome,
 };
@@ -150,6 +153,16 @@ pub(crate) async fn execute_direct_tool_call(
         return Ok(Some(InteractionOutcome::Exit {
             reason: vtcode_core::hooks::SessionEndReason::Exit,
         }));
+    }
+
+    if let Some(reply) = completion_reply_text(t_ctx.ctx.working_history, ReplyKind::Immediate) {
+        t_ctx
+            .ctx
+            .renderer
+            .line(vtcode_core::utils::ansi::MessageStyle::Response, &reply)?;
+        t_ctx.ctx.working_history.push(
+            uni::Message::assistant(reply).with_phase(Some(uni::AssistantPhase::FinalAnswer)),
+        );
     }
 
     // Direct tool paths already executed and rendered output; skip creating an

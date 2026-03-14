@@ -1,3 +1,4 @@
+mod direct_tool_completion;
 pub(crate) mod interaction_loop;
 mod interaction_loop_runner;
 pub(crate) mod mcp_lifecycle;
