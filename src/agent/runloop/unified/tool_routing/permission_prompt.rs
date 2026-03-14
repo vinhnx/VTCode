@@ -17,9 +17,34 @@ use crate::agent::runloop::unified::ui_interaction::PlaceholderGuard;
 
 use super::HitlDecision;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ToolPermissionPromptKind {
+    Standard,
+    Mcp,
+}
+
+fn cancelled_prompt_decision(prompt_kind: ToolPermissionPromptKind) -> HitlDecision {
+    if prompt_kind == ToolPermissionPromptKind::Mcp {
+        HitlDecision::DeniedOnce
+    } else {
+        HitlDecision::Denied
+    }
+}
+
 fn shell_run_args<'a>(tool_name: &str, tool_args: Option<&'a Value>) -> Option<&'a Value> {
     let args = tool_args?;
     vtcode_core::tools::tool_intent::is_command_run_tool_call(tool_name, args).then_some(args)
+}
+
+fn tool_permission_prompt_kind(tool_name: &str) -> ToolPermissionPromptKind {
+    if vtcode_core::tools::mcp::is_legacy_mcp_tool_name(tool_name)
+        || vtcode_core::tools::mcp::parse_canonical_mcp_tool_name(tool_name).is_some()
+        || tool_name.starts_with(vtcode_core::tools::mcp::MCP_QUALIFIED_TOOL_PREFIX)
+    {
+        ToolPermissionPromptKind::Mcp
+    } else {
+        ToolPermissionPromptKind::Standard
+    }
 }
 
 fn normalized_shell_command_value(args: &Value) -> Option<Value> {
@@ -347,6 +372,101 @@ fn tool_args_diff_preview(tool_name: &str, tool_args: Option<&Value>) -> Option<
     Some(preview)
 }
 
+fn build_tool_permission_options(
+    prompt_kind: ToolPermissionPromptKind,
+    persistent_shell_allow_prefix_rule: Option<&[String]>,
+    allow_tool_level_persistent_decisions: bool,
+) -> Vec<vtcode_tui::InlineListItem> {
+    use vtcode_tui::{InlineListItem, InlineListSelection};
+
+    let mut options = vec![
+        InlineListItem {
+            title: "Approve Once".to_string(),
+            subtitle: Some("Allow this tool to execute this time only".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::ToolApproval(true)),
+            search_value: Some("approve yes allow once y 1".to_string()),
+        },
+        InlineListItem {
+            title: if prompt_kind == ToolPermissionPromptKind::Mcp {
+                "Approve this session".to_string()
+            } else {
+                "Allow for Session".to_string()
+            },
+            subtitle: if prompt_kind == ToolPermissionPromptKind::Mcp {
+                Some("Run the tool and remember this choice for this session".to_string())
+            } else {
+                Some("Allow this tool for the current session".to_string())
+            },
+            badge: Some("Session".to_string()),
+            indent: 0,
+            selection: Some(InlineListSelection::ToolApprovalSession),
+            search_value: Some("session temporary temp 2".to_string()),
+        },
+    ];
+
+    if allow_tool_level_persistent_decisions || persistent_shell_allow_prefix_rule.is_some() {
+        let subtitle = persistent_shell_allow_prefix_rule
+            .map(|prefix_rule| {
+                let rendered = shell_words::join(prefix_rule.iter().map(|part| part.as_str()));
+                format!("Permanently allow commands that start with `{}`", rendered)
+            })
+            .unwrap_or_else(|| "Permanently allow this tool (saved to policy)".to_string());
+        options.push(InlineListItem {
+            title: "Always Allow".to_string(),
+            subtitle: Some(subtitle),
+            badge: Some("Permanent".to_string()),
+            indent: 0,
+            selection: Some(InlineListSelection::ToolApprovalPermanent),
+            search_value: Some("always permanent forever save 3".to_string()),
+        });
+    }
+
+    options.push(InlineListItem {
+        title: "".to_string(),
+        subtitle: None,
+        badge: None,
+        indent: 0,
+        selection: None,
+        search_value: None,
+    });
+
+    options.push(InlineListItem {
+        title: if prompt_kind == ToolPermissionPromptKind::Mcp {
+            "Cancel".to_string()
+        } else {
+            "Deny Once".to_string()
+        },
+        subtitle: if prompt_kind == ToolPermissionPromptKind::Mcp {
+            Some("Cancel this tool call".to_string())
+        } else {
+            Some("Reject this tool for now (ask again next time)".to_string())
+        },
+        badge: None,
+        indent: 0,
+        selection: Some(InlineListSelection::ToolApprovalDenyOnce),
+        search_value: Some(if prompt_kind == ToolPermissionPromptKind::Mcp {
+            "cancel stop reject decline 4".to_string()
+        } else {
+            "deny no reject once temporary 4".to_string()
+        }),
+    });
+
+    if allow_tool_level_persistent_decisions && prompt_kind != ToolPermissionPromptKind::Mcp {
+        options.push(InlineListItem {
+            title: "Always Deny".to_string(),
+            subtitle: Some("Block this tool until policy is changed".to_string()),
+            badge: Some("Persistent".to_string()),
+            indent: 0,
+            selection: Some(InlineListSelection::ToolApproval(false)),
+            search_value: Some("deny no reject cancel never always 5".to_string()),
+        });
+    }
+
+    options
+}
+
 pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     display_name: &str,
     tool_name: &str,
@@ -366,8 +486,7 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     approval_recorder: Option<&vtcode_core::tools::ApprovalRecorder>,
     hitl_notification_bell: bool,
 ) -> Result<HitlDecision> {
-    use vtcode_tui::{InlineListItem, InlineListSelection};
-
+    let prompt_kind = tool_permission_prompt_kind(tool_name);
     let mut description_lines = vec![
         format!("Tool: {}", tool_name),
         format!("Action: {}", display_name),
@@ -425,73 +544,19 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
 
     description_lines.push(String::new());
     description_lines.push("Choose how to handle this tool execution:".to_string());
-    description_lines.push("Use ↑↓ or Tab to navigate • Enter to select • Esc to deny".to_string());
-
-    let mut options = vec![
-        InlineListItem {
-            title: "Approve Once".to_string(),
-            subtitle: Some("Allow this tool to execute this time only".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ToolApproval(true)),
-            search_value: Some("approve yes allow once y 1".to_string()),
-        },
-        InlineListItem {
-            title: "Allow for Session".to_string(),
-            subtitle: Some("Allow this tool for the current session".to_string()),
-            badge: Some("Session".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ToolApprovalSession),
-            search_value: Some("session temporary temp 2".to_string()),
-        },
-    ];
-
-    if allow_tool_level_persistent_decisions || persistent_shell_allow_prefix_rule.is_some() {
-        let subtitle = persistent_shell_allow_prefix_rule
-            .map(|prefix_rule| {
-                let rendered = shell_words::join(prefix_rule.iter().map(|part| part.as_str()));
-                format!("Permanently allow commands that start with `{}`", rendered)
-            })
-            .unwrap_or_else(|| "Permanently allow this tool (saved to policy)".to_string());
-        options.push(InlineListItem {
-            title: "Always Allow".to_string(),
-            subtitle: Some(subtitle),
-            badge: Some("Permanent".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ToolApprovalPermanent),
-            search_value: Some("always permanent forever save 3".to_string()),
-        });
-    }
-
-    options.push(InlineListItem {
-        title: "".to_string(),
-        subtitle: None,
-        badge: None,
-        indent: 0,
-        selection: None,
-        search_value: None,
+    description_lines.push(if prompt_kind == ToolPermissionPromptKind::Mcp {
+        "Use ↑↓ or Tab to navigate • Enter to select • Esc to cancel".to_string()
+    } else {
+        "Use ↑↓ or Tab to navigate • Enter to select • Esc to deny".to_string()
     });
 
-    options.push(InlineListItem {
-        title: "Deny Once".to_string(),
-        subtitle: Some("Reject this tool for now (ask again next time)".to_string()),
-        badge: None,
-        indent: 0,
-        selection: Some(InlineListSelection::ToolApprovalDenyOnce),
-        search_value: Some("deny no reject once temporary 4".to_string()),
-    });
+    let options = build_tool_permission_options(
+        prompt_kind,
+        persistent_shell_allow_prefix_rule,
+        allow_tool_level_persistent_decisions,
+    );
 
-    if allow_tool_level_persistent_decisions {
-        options.push(InlineListItem {
-            title: "Always Deny".to_string(),
-            subtitle: Some("Block this tool until policy is changed".to_string()),
-            badge: Some("Persistent".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ToolApproval(false)),
-            search_value: Some("deny no reject cancel never always 5".to_string()),
-        });
-    }
-
+    use vtcode_tui::InlineListSelection;
     let default_selection = InlineListSelection::ToolApproval(true);
     if hitl_notification_bell
         && let Err(err) = send_global_notification(NotificationEvent::HumanInTheLoop {
@@ -541,7 +606,7 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
 
     match outcome {
         OverlayWaitOutcome::Submitted(decision) => Ok(decision),
-        OverlayWaitOutcome::Cancelled => Ok(HitlDecision::Denied),
+        OverlayWaitOutcome::Cancelled => Ok(cancelled_prompt_decision(prompt_kind)),
         OverlayWaitOutcome::Interrupted => Ok(HitlDecision::Interrupt),
         OverlayWaitOutcome::Exit => Ok(HitlDecision::Exit),
     }
@@ -550,11 +615,12 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
 #[cfg(test)]
 mod tests {
     use super::{
+        ToolPermissionPromptKind, build_tool_permission_options, cancelled_prompt_decision,
         extract_shell_approval_command_prefix_words, extract_shell_approval_justification,
         extract_shell_approval_scope_signature, extract_shell_command_text,
         extract_shell_persistent_approval_prefix_rule,
         render_shell_persistent_approval_prefix_entry, shell_allows_persistent_decisions,
-        shell_permission_cache_suffix,
+        shell_permission_cache_suffix, tool_permission_prompt_kind,
     };
     use serde_json::json;
 
@@ -754,6 +820,58 @@ mod tests {
             Some(
                 "cargo test|sandbox_permissions=\"require_escalated\"|additional_permissions=null"
             )
+        );
+    }
+
+    #[test]
+    fn canonical_mcp_tools_use_mcp_prompt_kind() {
+        assert_eq!(
+            tool_permission_prompt_kind("mcp::calendar::list_events"),
+            ToolPermissionPromptKind::Mcp
+        );
+    }
+
+    #[test]
+    fn model_visible_mcp_tools_use_mcp_prompt_kind() {
+        assert_eq!(
+            tool_permission_prompt_kind("mcp__calendar__list_events"),
+            ToolPermissionPromptKind::Mcp
+        );
+    }
+
+    #[test]
+    fn non_mcp_tools_keep_standard_prompt_kind() {
+        assert_eq!(
+            tool_permission_prompt_kind("unified_exec"),
+            ToolPermissionPromptKind::Standard
+        );
+    }
+
+    #[test]
+    fn mcp_prompt_uses_cancel_without_persistent_deny() {
+        let titles = build_tool_permission_options(ToolPermissionPromptKind::Mcp, None, true)
+            .into_iter()
+            .map(|item| item.title)
+            .collect::<Vec<_>>();
+        assert!(titles.iter().any(|title| title == "Cancel"));
+        assert!(!titles.iter().any(|title| title == "Always Deny"));
+    }
+
+    #[test]
+    fn standard_prompt_keeps_persistent_deny() {
+        let titles = build_tool_permission_options(ToolPermissionPromptKind::Standard, None, true)
+            .into_iter()
+            .map(|item| item.title)
+            .collect::<Vec<_>>();
+        assert!(titles.iter().any(|title| title == "Deny Once"));
+        assert!(titles.iter().any(|title| title == "Always Deny"));
+    }
+
+    #[test]
+    fn mcp_prompt_cancellation_is_non_persistent() {
+        assert_eq!(
+            cancelled_prompt_decision(ToolPermissionPromptKind::Mcp),
+            super::HitlDecision::DeniedOnce
         );
     }
 }
