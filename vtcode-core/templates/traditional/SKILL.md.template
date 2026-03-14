@@ -1,62 +1,35 @@
 ---
 name: {{skill_name}}
 description: {{description}}
+when-to-use: Use when the request matches a repeatable workflow with clear inputs and outputs.
+when-not-to-use: Do not use when a simpler edit, search, or one-line unified_exec command is enough.
 version: {{version}}
 author: {{author}}
-category: utility
-tags: general,purpose
 ---
 
 # {{skill_name}}
 
-{{description}}
+## Purpose
 
-## Overview
+Summarize the workflow, expected inputs, and the artifact or outcome this skill should produce.
 
-This skill provides utility functions for [describe the main purpose].
+## Workflow
 
-## Capabilities
+1. Confirm the request matches the routing guidance above.
+2. Keep the core workflow here and move deep detail into bundled resources.
+3. Reuse scripts, templates, or assets instead of retyping large procedures.
+4. Produce the expected result and note any important constraints.
 
-- [List key capabilities]
-- [Describe what the skill can do]
-- [Mention any limitations]
+## Resources
 
-## Usage Examples
+- `scripts/`: deterministic helpers for repeatable or fragile steps
+- `references/`: detailed docs loaded only when needed
+- `templates/` or `assets/`: reusable output skeletons, examples, or supporting files
 
-### Basic Usage
-```
-Use the {{skill_name}} skill to [describe basic usage]
-```
+## Example
 
-### Advanced Usage
-```
-For more complex scenarios, [describe advanced usage]
-```
+Use the {{skill_name}} skill when the user asks for [concrete trigger].
+Do not use it when [nearby case that should route elsewhere].
 
-## Available Tools
-
-When this skill is active, you can use:
-- [List available tools/functions]
-- [Describe what each tool does]
-
-## Best Practices
-
-- [List best practices for using this skill]
-- [Mention any important considerations]
-- [Provide tips for optimal usage]
-
-## Error Handling
-
-This skill handles errors by:
-- [Describe error handling approach]
-- [List common errors and solutions]
-
-## Integration
-
-This skill integrates with:
-- [List related skills or tools]
-- [Describe integration patterns]
-
----
-
-Generated from VT Code skill template v1.0.0
+**Input:** [Describe the request or files]
+**Output/Artifact:** [Describe the result this skill should produce]

@@ -236,20 +236,32 @@ fn resolve_context_management(
         .provider_client
         .supports_responses_compaction(active_model);
     let features = FeatureSet::from_config(ctx.vt_cfg);
-    if features.auto_compaction_enabled(supports_server_compaction) {
-        let context_size = ctx.provider_client.effective_context_size(active_model);
-        let configured_threshold =
-            harness_config.and_then(|cfg| cfg.auto_compaction_threshold_tokens);
+    let configured_threshold = harness_config.and_then(|cfg| cfg.auto_compaction_threshold_tokens);
 
-        resolve_compaction_threshold(configured_threshold, context_size).map(|compact_threshold| {
-            json!([{
-                "type": "compaction",
-                "compact_threshold": compact_threshold,
-            }])
-        })
-    } else {
-        None
+    build_server_compaction_context_management(
+        &features,
+        supports_server_compaction,
+        configured_threshold,
+        ctx.provider_client.effective_context_size(active_model),
+    )
+}
+
+fn build_server_compaction_context_management(
+    features: &FeatureSet,
+    supports_server_compaction: bool,
+    configured_threshold: Option<u64>,
+    context_size: usize,
+) -> Option<serde_json::Value> {
+    if !features.auto_compaction_enabled(supports_server_compaction) {
+        return None;
     }
+
+    resolve_compaction_threshold(configured_threshold, context_size).map(|compact_threshold| {
+        json!([{
+            "type": "compaction",
+            "compact_threshold": compact_threshold,
+        }])
+    })
 }
 
 pub(super) fn interrupted_provider_error(provider_name: &str) -> anyhow::Error {
@@ -376,9 +388,13 @@ pub(super) async fn build_turn_request(
 #[cfg(test)]
 mod tests {
     use serde_json::json;
+    use vtcode_core::config::loader::VTCodeConfig;
     use vtcode_core::llm::provider::{self as uni, ToolDefinition};
 
-    use super::{build_turn_request, capture_turn_request_snapshot};
+    use super::{
+        build_server_compaction_context_management, build_turn_request,
+        capture_turn_request_snapshot,
+    };
     use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
 
     #[tokio::test]
@@ -425,5 +441,27 @@ mod tests {
         assert!(system_prompt.contains("do_not_request_more_tools: true"));
         assert!(system_prompt.contains("recovery_reason: loop detector"));
         assert!(!system_prompt.contains("<budget:token_budget>"));
+    }
+
+    #[test]
+    fn server_supported_request_build_keeps_context_management_payload() {
+        let mut cfg = VTCodeConfig::default();
+        cfg.agent.harness.auto_compaction_enabled = true;
+        cfg.agent.harness.auto_compaction_threshold_tokens = Some(512);
+
+        let payload = build_server_compaction_context_management(
+            &vtcode_core::core::agent::features::FeatureSet::from_config(Some(&cfg)),
+            true,
+            cfg.agent.harness.auto_compaction_threshold_tokens,
+            2_000,
+        );
+
+        assert_eq!(
+            payload,
+            Some(json!([{
+                "type": "compaction",
+                "compact_threshold": 512,
+            }]))
+        );
     }
 }

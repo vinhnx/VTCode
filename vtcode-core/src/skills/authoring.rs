@@ -6,55 +6,10 @@
 //! Based on: https://github.com/anthropics/skills/blob/main/spec/agent-skills-spec.md
 
 use anyhow::{Result, anyhow};
-use hashbrown::HashMap;
-use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info};
-
-/// Skill template following Anthropic's specification
-pub const SKILL_TEMPLATE: &str = r#"---
-name: {skill_name}
-description: [TODO: Complete and informative explanation of what the skill does and when to use it. Include WHEN to use this skill - specific scenarios, file types, or tasks that trigger it.]
-# Optional fields following Agent Skills spec:
-# allowed-tools: "Read Write Bash"  # Space-delimited list
-# argument-hint: "[file] [format]"  # Optional usage hint for slash commands
-# user-invocable: true              # Show in user menu (defaults to true)
-# compatibility: "Designed for VT Code (or similar CLI agents)"
-# context: "fork"                   # Run in a forked context
-# agent: "explore"                  # Optional profile hint when context=fork
-# license: MIT
-# metadata:
-#   author: Your Name
-#   version: "1.0.0"
----
-
-# {skill_title}
-
-## Overview
-
-[TODO: 1-2 sentences explaining what this skill enables]
-
-## Quick Start
-
-[TODO: Provide a simple example of using this skill]
-
-## Resources
-
-This skill includes example resource directories:
-
-### scripts/
-Executable code (Python/Bash/etc.) for deterministic operations.
-
-### references/
-Documentation loaded into context as needed.
-
-### assets/
-Files used in output (templates, icons, fonts, etc.).
-
-Delete unused directories.
-"#;
 
 /// Example Python script template
 pub const EXAMPLE_SCRIPT: &str = r#"#!/usr/bin/env python3
@@ -93,32 +48,8 @@ Reference docs are ideal for:
 Include specific API endpoints, schemas, or detailed instructions here.
 "#;
 
-/// YAML frontmatter for SKILL.md
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SkillFrontmatter {
-    pub name: Option<String>,
-    pub description: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub license: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none", rename = "allowed-tools")]
-    pub allowed_tools: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none", rename = "argument-hint")]
-    pub argument_hint: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none", rename = "user-invocable")]
-    pub user_invocable: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub model: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub context: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub agent: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub hooks: Option<serde_json::Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub compatibility: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<HashMap<String, String>>,
-}
+/// YAML frontmatter for SKILL.md authoring validation.
+pub type SkillFrontmatter = crate::skills::manifest::SkillYaml;
 
 /// Skill authoring operations
 pub struct SkillAuthor {
@@ -154,15 +85,27 @@ impl SkillAuthor {
         info!("Created skill directory: {}", skill_dir.display());
 
         // Create SKILL.md
-        let skill_title = self.title_case_skill_name(skill_name);
-        let skill_content = SKILL_TEMPLATE
-            .replace("{skill_name}", skill_name)
-            .replace("{skill_title}", &skill_title);
+        let skill_content = crate::skills::manifest::generate_skill_template(
+            skill_name,
+            "Describe the workflow, routing triggers, and expected artifact for this skill.",
+        );
 
         fs::write(skill_dir.join("SKILL.md"), skill_content)?;
         info!("Created SKILL.md");
 
         // Create resource directories with examples
+        let skill_title = skill_name
+            .split('-')
+            .filter(|word| !word.is_empty())
+            .map(|word| {
+                let mut chars = word.chars();
+                match chars.next() {
+                    Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+                    None => String::new(),
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
         self.create_scripts_dir(&skill_dir, skill_name)?;
         self.create_references_dir(&skill_dir, &skill_title)?;
         self.create_assets_dir(&skill_dir)?;
@@ -204,43 +147,15 @@ impl SkillAuthor {
         let raw_frontmatter: serde_yaml::Value =
             serde_yaml::from_str(parts[1].trim()).map_err(|e| anyhow!("Invalid YAML: {}", e))?;
         if let serde_yaml::Value::Mapping(map) = raw_frontmatter {
-            let allowed = [
-                "name",
-                "description",
-                "version",
-                "author",
-                "license",
-                "allowed-tools",
-                "allowed_tools",
-                "argument-hint",
-                "argument_hint",
-                "user-invocable",
-                "user_invocable",
-                "model",
-                "context",
-                "agent",
-                "hooks",
-                "mode",
-                "tags",
-                "vtcode-native",
-                "vtcode_native",
-                "disable-model-invocation",
-                "disable_model_invocation",
-                "when-to-use",
-                "when_to_use",
-                "requires-container",
-                "requires_container",
-                "disallow-container",
-                "disallow_container",
-                "compatibility",
-                "metadata",
-            ];
             for key in map.keys() {
-                if let Some(key_str) = key.as_str().filter(|s| !allowed.contains(s)) {
+                if let Some(key_str) = key
+                    .as_str()
+                    .filter(|s| !crate::skills::manifest::SUPPORTED_FRONTMATTER_KEYS.contains(s))
+                {
                     report.errors.push(format!(
                         "Unexpected property '{}' in frontmatter. Allowed: {}",
                         key_str,
-                        allowed.join(", ")
+                        crate::skills::manifest::SUPPORTED_FRONTMATTER_KEYS.join(", ")
                     ));
                 }
             }
@@ -328,6 +243,18 @@ impl SkillAuthor {
                 .push("Description missing; add one for discoverability".to_string()),
         }
 
+        if frontmatter.when_to_use.is_none() {
+            report
+                .warnings
+                .push("Add when-to-use guidance to improve routing".to_string());
+        }
+
+        if frontmatter.when_not_to_use.is_none() {
+            report
+                .warnings
+                .push("Add when-not-to-use guidance to reduce false-positive triggers".to_string());
+        }
+
         // Check body content
         let body = parts[2].trim();
         if body.is_empty() {
@@ -404,19 +331,6 @@ impl SkillAuthor {
             && !name.contains("anthropic")
             && !name.contains("claude")
             && !name.contains("vtcode")
-    }
-
-    fn title_case_skill_name(&self, name: &str) -> String {
-        name.split('-')
-            .map(|word| {
-                let mut chars = word.chars();
-                match chars.next() {
-                    None => String::new(),
-                    Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
-                }
-            })
-            .collect::<Vec<_>>()
-            .join(" ")
     }
 
     fn create_scripts_dir(&self, skill_dir: &Path, skill_name: &str) -> Result<()> {
@@ -632,7 +546,7 @@ pub fn render_skills_lean(skills: &[crate::skills::types::Skill]) -> Option<Stri
   • Python: ALWAYS use `uv pip install` (NOT pip). If uv unavailable, use `pip install` as fallback.
   • JavaScript: ALWAYS use `bun install` or `bun add` (NOT npm/pnpm). If bun unavailable, use npm as fallback.
   • Examples: `uv pip install pandas`, `bun add axios`, `uv run python script.py`, `bun run script.js`
-- Description as trigger: The YAML `description` in `SKILL.md` is the primary trigger signal.
+- Routing hints: Treat YAML `description`, `when-to-use`, and `when-not-to-use` as the primary routing signals. If the user explicitly says `Use the <skill> skill`, treat that as deterministic routing.
 - Context hygiene: Keep context small - summarize long sections, only load extra files when needed, avoid deeply nested references."###.to_string());
 
     Some(lines.join("\n"))
@@ -692,21 +606,6 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn test_title_case_skill_name() -> Result<()> {
-        let tmp = TempDir::new().map_err(|e| {
-            eprintln!("Failed to create TempDir: {e}");
-            e
-        })?;
-        let author = SkillAuthor::new(tmp.path().to_path_buf());
-
-        assert_eq!(author.title_case_skill_name("my-skill"), "My Skill");
-        assert_eq!(author.title_case_skill_name("pdf-analyzer"), "Pdf Analyzer");
-        assert_eq!(author.title_case_skill_name("api-helper"), "Api Helper");
-
-        Ok(())
-    }
-
     #[tokio::test]
     async fn test_create_skill() -> Result<()> {
         let tmp = TempDir::new().map_err(|e| {
@@ -737,8 +636,58 @@ mod tests {
         assert!(skill_md.starts_with("---"));
         assert!(skill_md.contains("name: test-skill"));
         assert!(skill_md.contains("# Test Skill"));
+        assert!(skill_md.contains("when-to-use:"));
+        assert!(skill_md.contains("when-not-to-use:"));
+        assert!(skill_md.contains("Output/Artifact:"));
 
         Ok(())
+    }
+
+    #[test]
+    fn test_validate_skill_accepts_supported_frontmatter_aliases() {
+        let tmp = TempDir::new().unwrap();
+        let author = SkillAuthor::new(tmp.path().to_path_buf());
+        let skill_dir = tmp.path().join("test-skill");
+        fs::create_dir(&skill_dir).unwrap();
+        fs::write(
+            skill_dir.join("SKILL.md"),
+            r#"---
+name: test-skill
+description: A test skill with routing guidance
+when_to_use: Use when the workflow is repeatable.
+when_not_to_use: Do not use for one-line commands.
+default_version: "1.0.0"
+latest_version: "1.1.0"
+network_policy:
+  allowed_domains:
+    - api.example.com
+permission_profile:
+  file_system:
+    write:
+      - outputs
+tools:
+  - unified_exec
+---
+
+# Test Skill
+
+## Workflow
+Use bundled resources when needed.
+"#,
+        )
+        .unwrap();
+
+        let report = author.validate_skill(&skill_dir).unwrap();
+
+        assert!(report.valid, "{}", report.format());
+        assert!(
+            !report
+                .errors
+                .iter()
+                .any(|error| error.contains("Unexpected property")),
+            "{}",
+            report.format()
+        );
     }
 
     #[test]
@@ -793,15 +742,15 @@ mod tests {
         // Update descriptions to be valid
         let skill1_md = skill1_dir.join("SKILL.md");
         let content1 = fs::read_to_string(&skill1_md).unwrap().replace(
-            "[TODO: Complete and informative explanation",
-            "Extract text and tables from PDFs",
+            "description: Describe the workflow, routing triggers, and expected artifact for this skill.",
+            "description: Extract text and tables from PDFs",
         );
         fs::write(skill1_md, content1).unwrap();
 
         let skill2_md = skill2_dir.join("SKILL.md");
         let content2 = fs::read_to_string(&skill2_md).unwrap().replace(
-            "[TODO: Complete and informative explanation",
-            "Create Excel spreadsheets with charts",
+            "description: Describe the workflow, routing triggers, and expected artifact for this skill.",
+            "description: Create Excel spreadsheets with charts",
         );
         fs::write(skill2_md, content2).unwrap();
 
@@ -830,6 +779,8 @@ mod tests {
         assert!(rendered.contains("Package managers"));
         assert!(rendered.contains("uv pip install"));
         assert!(rendered.contains("bun install"));
+        assert!(rendered.contains("Routing hints:"));
+        assert!(rendered.contains("Use the <skill> skill"));
         assert!(rendered.contains("Context hygiene"));
 
         // Verify token efficiency - should be much smaller than full content

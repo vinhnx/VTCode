@@ -26,7 +26,7 @@ Agent: Found 15 skills:
 
 ### 2. Filter Skills
 
-Filter by name or variety:
+Filter by name, description, or routing hints:
 
 ```
 You: list_skills with query="theme"
@@ -74,7 +74,7 @@ Agent:
 List all available skills (agent skills and system utilities).
 
 **Parameters:**
-- `query` (optional): Filter by skill name (case-insensitive)
+- `query` (optional): Filter by skill name, description, `when-to-use`, and `when-not-to-use` (case-insensitive)
 - `variety` (optional): Filter by type: `agent_skill`, `system_utility`, or `built_in`
 
 ### load_skill
@@ -98,6 +98,7 @@ Access specific resources from a loaded skill.
 2. Load only the skills needed for the current task.
 3. Use `load_skill_resource` for targeted files instead of loading everything.
 4. Verify resource paths from `load_skill` output.
+5. For deterministic workflows, say `Use the <skill> skill`.
 
 ## Troubleshooting
 

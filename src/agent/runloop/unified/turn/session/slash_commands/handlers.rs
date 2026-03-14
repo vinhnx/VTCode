@@ -179,27 +179,17 @@ pub(super) async fn handle_compact_conversation(
         return Ok(SlashCommandControl::Continue);
     }
 
-    if !ctx
-        .provider_client
-        .supports_responses_compaction(&ctx.config.model)
-    {
-        ctx.renderer.line(
-            MessageStyle::Warning,
-            "Compaction is unavailable for this provider/endpoint.",
-        )?;
-        return Ok(SlashCommandControl::Continue);
-    }
-
-    let original_len = ctx.conversation_history.len();
-    let compacted = match vtcode_core::compaction::compact_history(
+    let outcome = match crate::agent::runloop::unified::turn::compaction::compact_history_in_place(
         ctx.provider_client.as_ref(),
         &ctx.config.model,
+        ctx.vt_cfg.as_ref(),
         ctx.conversation_history,
-        &vtcode_core::compaction::CompactionConfig::default(),
+        ctx.session_stats,
+        ctx.context_manager,
     )
     .await
     {
-        Ok(history) => history,
+        Ok(outcome) => outcome,
         Err(err) => {
             ctx.renderer
                 .line(MessageStyle::Error, &format!("Compaction failed: {}", err))?;
@@ -207,20 +197,16 @@ pub(super) async fn handle_compact_conversation(
         }
     };
 
-    if compacted == *ctx.conversation_history {
+    let Some(outcome) = outcome else {
         ctx.renderer
             .line(MessageStyle::Info, "Conversation is already compact.")?;
         return Ok(SlashCommandControl::Continue);
-    }
-
-    *ctx.conversation_history = compacted;
-    ctx.session_stats.clear_previous_response_chain();
+    };
     ctx.renderer.line(
         MessageStyle::Info,
         &format!(
             "Compacted conversation history ({} -> {} messages).",
-            original_len,
-            ctx.conversation_history.len()
+            outcome.original_len, outcome.compacted_len
         ),
     )?;
     Ok(SlashCommandControl::Continue)

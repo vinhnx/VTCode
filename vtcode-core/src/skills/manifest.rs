@@ -12,6 +12,50 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 static ALLOWED_TOOLS_ARRAY_WARNED: AtomicBool = AtomicBool::new(false);
 
+/// Supported YAML frontmatter keys for SKILL.md validation.
+pub const SUPPORTED_FRONTMATTER_KEYS: &[&str] = &[
+    "name",
+    "description",
+    "version",
+    "default-version",
+    "default_version",
+    "latest-version",
+    "latest_version",
+    "author",
+    "license",
+    "model",
+    "mode",
+    "tags",
+    "vtcode-native",
+    "vtcode_native",
+    "allowed-tools",
+    "allowed_tools",
+    "disable-model-invocation",
+    "disable_model_invocation",
+    "when-to-use",
+    "when_to_use",
+    "when-not-to-use",
+    "when_not_to_use",
+    "argument-hint",
+    "argument_hint",
+    "user-invocable",
+    "user_invocable",
+    "context",
+    "agent",
+    "hooks",
+    "requires-container",
+    "requires_container",
+    "disallow-container",
+    "disallow_container",
+    "compatibility",
+    "metadata",
+    "tools",
+    "network",
+    "network_policy",
+    "permissions",
+    "permission_profile",
+];
+
 /// YAML frontmatter structure for SKILL.md
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SkillYaml {
@@ -301,25 +345,38 @@ fn normalize_allowed_tools(field: AllowedToolsField) -> anyhow::Result<String> {
 
 /// Generate a skill template with YAML frontmatter
 pub fn generate_skill_template(name: &str, description: &str) -> String {
+    let skill_title = name
+        .split('-')
+        .filter(|word| !word.is_empty())
+        .map(|word| {
+            let mut chars = word.chars();
+            match chars.next() {
+                Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+
     format!(
         r#"---
 name: {}
 description: {}
 version: 0.1.0
 license: MIT
+when-to-use: "Use when the request matches this workflow, the inputs are clear, and the skill should produce a repeatable artifact or outcome."
+when-not-to-use: "Do not use when a simpler edit, search, or one-line unified_exec command is enough."
 # Optional fields (uncomment to use):
 # author: Your Name
-# compatibility: "Requires: tool1, tool2, network access"
+# compatibility: "Designed for VT Code"
 # allowed-tools: "Read Write Bash"  # Space-delimited list per Agent Skills spec
-# argument-hint: "[path] [format]" # Optional slash command hint
-# user-invocable: true             # Hide from menu when false
-# context: "fork"                  # Run in forked context
-# agent: "explore"                 # Optional profile hint when context=fork
+# argument-hint: "[path] [format]"  # Optional slash command hint
+# user-invocable: true              # Hide from menu when false
+# context: "fork"                   # Run in forked context
+# agent: "explore"                  # Optional profile hint when context=fork
 # metadata:
-#   version: "1.0"
-#   author: your-org
-#   custom: "value"
-# when-not-to-use: "Don't use for one-off tasks or live API calls"
+#   team: platform
+#   owner: your-org
 # default-version: "1.0.0"  # Pinned version for production
 # latest-version: "1.1.0"  # Latest available version
 # network:
@@ -330,52 +387,38 @@ license: MIT
 #     write: ["outputs"]
 ---
 
-# {} Skill
+# {}
 
-## Overview
+## Purpose
 
-Brief description of what this skill does and when to use it.
+Summarize the workflow, expected inputs, and the artifact or outcome this skill should produce.
 
-## Instructions
+## Workflow
 
-Provide step-by-step guidance for the agent to follow when this skill is activated.
+1. Confirm the request matches the routing guidance above.
+2. Keep core instructions here; move detailed reference material into bundled files.
+3. Prefer reusable scripts, templates, or assets over re-describing large procedures in prose.
+4. Produce the expected artifact or outcome and note any important constraints.
 
-### Steps:
+## Resources
 
-1. First step
-2. Second step
-3. Third step
+- `scripts/`: deterministic helpers for repeatable or fragile steps
+- `references/`: detailed docs loaded only when needed
+- `templates/` or `assets/`: reusable output skeletons, examples, or supporting files
 
-## Examples
+## Example
 
-### Example 1: Basic Usage
-
-**Input:** Describe what the user might ask
-**Process:** Describe what the skill does
-**Output:** Describe the expected result
-
-### Example 2: Advanced Usage
-
-**Input:** More complex user request
-**Process:** More detailed processing steps
-**Output:** More complex output
+**Use when:** [Describe a concrete trigger or input shape]
+**Don't use when:** [Describe a nearby case that should route elsewhere]
+**Input:** [Describe the request or files]
+**Output/Artifact:** [Describe the result this skill should produce]
 
 ## Notes
 
-- Important considerations
-- Edge cases to watch for
-- Prerequisites or requirements
-
-## File References
-
-You can reference files in your skill using relative paths:
-- Scripts: `scripts/your-script.py`
-- References: `references/reference.md`
-- Assets: `assets/template.json`
-
-Remember to create these files in the appropriate directories.
+- Keep SKILL.md concise; move deep detail into `references/` files.
+- If output needs a fixed shape, store a starter template or asset alongside the skill.
 "#,
-        name, description, name
+        name, description, skill_title
     )
 }
 
@@ -496,7 +539,9 @@ metadata:
         let template = generate_skill_template("my-skill", "Does cool things");
         assert!(template.contains("name: my-skill"));
         assert!(template.contains("description: Does cool things"));
-        assert!(template.contains("---"));
-        assert!(template.contains("## Instructions"));
+        assert!(template.contains("when-to-use:"));
+        assert!(template.contains("when-not-to-use:"));
+        assert!(template.contains("## Workflow"));
+        assert!(template.contains("templates/` or `assets/"));
     }
 }

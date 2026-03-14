@@ -4,12 +4,12 @@
 
 Agent Skills are a simple, open format for giving agents new capabilities and expertise. VT Code implements the [open Agent Skills standard](http://agentskills.io/), allowing you to:
 
-- **Discover** skills from your filesystem or Anthropic's marketplace
+- **Discover** skills from your filesystem or compatible skill collections
 - **Load** skills into your agent sessions
 - **Create** custom skills tailored to your workflow
 - **Execute** skills with full access to VT Code's tools
 
-Skills are modular instruction sets that guide Claude on how to complete specific tasks—whether that's processing documents, analyzing code, or automating workflows.
+Skills are modular instruction sets that guide VT Code on how to complete specific tasks, whether that's processing documents, analyzing code, or automating workflows.
 
 ---
 
@@ -94,15 +94,17 @@ my-skill/
 ```yaml
 ---
 name: my-skill
-description: Brief description of what this skill does and when to use it
+description: Brief description of what this skill does and the artifact or outcome it produces
 version: 1.0.0
 author: Your Name
+when-to-use: Use when the request matches this workflow and the inputs are clear.
+when-not-to-use: Do not use when a simpler edit, search, or one-line unified_exec command is enough.
 ---
 
 # My Skill
 
 ## Instructions
-[Step-by-step guidance for Claude to follow]
+[Step-by-step guidance for VT Code to follow]
 
 ## Examples
 - Example usage 1
@@ -127,17 +129,23 @@ author: Your Name
 **Optional**:
 
 - `version` - Semantic versioning (e.g., "1.0.0")
+- `default-version` / `default_version` - Pinned version for deterministic workflows
+- `latest-version` / `latest_version` - Latest published version metadata
 - `author` - Skill creator name
 - `license` - License name or bundled license file reference
 - `compatibility` - Environment requirements and product compatibility
 - `allowed-tools` - Space- or comma-delimited list of tools allowed for the skill
+- `tools` - Tool dependencies used by the skill
 - `argument-hint` - Usage hint for slash-command style invocation
 - `user-invocable` - Toggle visibility in user menus
 - `disable-model-invocation` - Prevents model invocation when skill is active
 - `when-to-use` - Short guidance for automatic triggering
+- `when-not-to-use` - Negative routing guidance and edge cases
 - `context` - Set to `fork` to run in an isolated context
 - `agent` - Optional profile hint when `context = "fork"`
-- `hooks` - Skill-scoped hook configuration
+- `network` / `network_policy` - Skill-scoped network allowlist and denylist
+- `permissions` / `permission_profile` - File-system and execution permissions
+- `hooks` - Reserved by the spec but currently rejected in VT Code skills
 
 ### Routing Quality Recommendations
 
@@ -150,6 +158,13 @@ For reliable triggering, treat skill metadata as routing rules:
 When running deterministic production workflows, explicitly instruct:
 
 `Use the <skill-name> skill.`
+
+### VT Code Runtime Notes
+
+- Use `unified_exec` as the execution surface for repeatable shell or script work.
+- Keep handoff artifacts in workspace paths, `~/.vtcode/tmp`, or existing A2A artifacts instead of inventing a separate artifact boundary.
+- Use `agent.harness.auto_compaction_enabled` for long-running sessions that need automatic compaction.
+- Keep network access default-deny and narrow it with `sandbox.network.allowlist`, `tools.web_fetch.allowed_domains`, and per-skill `network_policy`.
 
 ### Compliance with Agent Skills Standard
 
@@ -249,6 +264,8 @@ In future updates, you'll be able to use skills directly in chat mode:
 ## Try More Examples
 
 VT Code provides practical examples for using Anthropic's built-in Agent Skills (pptx, xlsx, docx, pdf). These examples demonstrate progressive disclosure and efficient file handling.
+
+In VT Code, the equivalent execution surface is `unified_exec`, and any generated reports or files should be written to workspace outputs, `~/.vtcode/tmp`, or existing A2A artifacts.
 
 ### Create a Spreadsheet
 
@@ -412,7 +429,7 @@ python examples/skills_pdf_generation.py
 
 ### What You'll Learn
 
-1. **Progressive Disclosure**: How Claude loads skill metadata, then full instructions on demand
+1. **Progressive Disclosure**: How VT Code loads skill metadata, then full instructions on demand
 2. **File Handling**: Extracting and downloading generated files using the Files API
 3. **Error Handling**: Properly handling API errors and edge cases
 4. **Integration Patterns**: Combining skills with code execution and other tools
@@ -425,7 +442,7 @@ python examples/skills_pdf_generation.py
 
 **Level 1: Metadata** (~100 tokens)
 
-- Claude knows what skills are available
+- VT Code knows what skills are available
 - Names and brief descriptions only
 - Always included in system prompt
 - No context cost when unused
@@ -683,7 +700,7 @@ Structure instructions with increasing detail:
 
 ### 3. Provide Examples
 
-Show Claude concrete examples of how to use your skill:
+Show VT Code concrete examples of how to use your skill:
 
 ```markdown
 ## Examples

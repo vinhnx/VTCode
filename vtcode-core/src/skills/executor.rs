@@ -15,13 +15,13 @@
 
 use crate::llm::provider::{FinishReason, LLMProvider, LLMRequest, Message, ToolDefinition};
 use crate::sandboxing::{AdditionalPermissions, SandboxPermissions};
-use crate::skills::types::Skill;
+use crate::skills::types::{Skill, SkillNetworkPolicy};
 use crate::tool_policy::ToolPolicy;
 use crate::tools::ToolRegistry;
 use crate::tools::tool_intent;
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
-use serde_json::Value;
+use serde_json::{Map, Value};
 use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -38,11 +38,162 @@ const NETWORK_TOOLS: &[&str] = &[
     "curl",
 ];
 
+fn is_function_network_tool(tool: &ToolDefinition) -> bool {
+    tool.function.as_ref().is_some_and(|function| {
+        let name = function.name.to_ascii_lowercase();
+        NETWORK_TOOLS
+            .iter()
+            .any(|candidate| name.contains(candidate))
+    })
+}
+
+fn is_native_web_search_tool(tool: &ToolDefinition) -> bool {
+    tool.tool_type == "web_search" || tool.tool_type.starts_with("web_search_")
+}
+
+fn is_network_capable_tool(tool: &ToolDefinition) -> bool {
+    is_native_web_search_tool(tool) || is_function_network_tool(tool)
+}
+
+fn json_string_array(config: &Map<String, Value>, key: &str) -> Result<Option<Vec<String>>> {
+    let Some(value) = config.get(key) else {
+        return Ok(None);
+    };
+    let Value::Array(values) = value else {
+        return Err(anyhow!("{key} must be an array of strings"));
+    };
+
+    values
+        .iter()
+        .map(|value| {
+            value
+                .as_str()
+                .map(ToOwned::to_owned)
+                .ok_or_else(|| anyhow!("{key} must contain only strings"))
+        })
+        .collect::<Result<Vec<_>>>()
+        .map(Some)
+}
+
+fn set_json_string_array(config: &mut Map<String, Value>, key: &str, values: Vec<String>) {
+    if values.is_empty() {
+        config.remove(key);
+        return;
+    }
+
+    config.insert(
+        key.to_string(),
+        Value::Array(values.into_iter().map(Value::String).collect()),
+    );
+}
+
+fn intersect_domains(existing: Option<Vec<String>>, requested: &[String]) -> Vec<String> {
+    match existing {
+        Some(existing) => existing
+            .into_iter()
+            .filter(|domain| requested.iter().any(|candidate| candidate == domain))
+            .collect(),
+        None => requested.to_vec(),
+    }
+}
+
+fn union_domains(existing: Option<Vec<String>>, requested: &[String]) -> Vec<String> {
+    let mut merged = existing.unwrap_or_default();
+    for domain in requested {
+        if !merged.iter().any(|candidate| candidate == domain) {
+            merged.push(domain.clone());
+        }
+    }
+    merged
+}
+
+fn apply_web_search_policy(
+    skill: &Skill,
+    tool: &ToolDefinition,
+    policy: &SkillNetworkPolicy,
+) -> Option<ToolDefinition> {
+    let mut updated = tool.clone();
+    let existing_config = match updated.web_search.take() {
+        Some(Value::Object(config)) => config,
+        Some(_) => {
+            warn!(
+                skill = skill.name(),
+                tool_type = %tool.tool_type,
+                "Dropping network tool because web search policy could not be encoded"
+            );
+            return None;
+        }
+        None => Map::new(),
+    };
+
+    let existing_allowed = match json_string_array(&existing_config, "allowed_domains") {
+        Ok(value) => value,
+        Err(error) => {
+            warn!(
+                skill = skill.name(),
+                tool_type = %tool.tool_type,
+                error = %error,
+                "Dropping network tool because web search policy could not be encoded"
+            );
+            return None;
+        }
+    };
+    let existing_blocked = match json_string_array(&existing_config, "blocked_domains") {
+        Ok(value) => value,
+        Err(error) => {
+            warn!(
+                skill = skill.name(),
+                tool_type = %tool.tool_type,
+                error = %error,
+                "Dropping network tool because web search policy could not be encoded"
+            );
+            return None;
+        }
+    };
+    let merged_allowed = if policy.allowed_domains.is_empty() {
+        existing_allowed.unwrap_or_default()
+    } else {
+        intersect_domains(existing_allowed, &policy.allowed_domains)
+    };
+    let merged_blocked = if policy.denied_domains.is_empty() {
+        existing_blocked.unwrap_or_default()
+    } else {
+        union_domains(existing_blocked, &policy.denied_domains)
+    };
+
+    if updated.is_anthropic_web_search() && !merged_allowed.is_empty() && !merged_blocked.is_empty()
+    {
+        warn!(
+            skill = skill.name(),
+            tool_type = %tool.tool_type,
+            "Dropping anthropic web search tool because allowlist and denylist cannot both be enforced"
+        );
+        return None;
+    }
+
+    let mut config = existing_config;
+    set_json_string_array(&mut config, "allowed_domains", merged_allowed);
+    set_json_string_array(&mut config, "blocked_domains", merged_blocked);
+    updated.web_search = Some(Value::Object(config));
+
+    if let Err(error) = updated.validate() {
+        warn!(
+            skill = skill.name(),
+            tool_type = %tool.tool_type,
+            error = %error,
+            "Dropping network tool because the enforced web search policy is invalid"
+        );
+        return None;
+    }
+
+    Some(updated)
+}
+
 /// Filter available tools based on skill's network policy
 ///
 /// - If skill has no network policy: remove network-capable tools
-/// - If skill has allowed_domains: keep network tools but log the constraint
-/// - If skill has denied_domains: keep network tools but log the constraint
+/// - If skill has a network policy: enforce it for native web search tools
+/// - If the policy cannot be encoded safely: remove the tool
 pub fn filter_tools_for_skill(skill: &Skill, tools: Vec<ToolDefinition>) -> Vec<ToolDefinition> {
     let network_policy = &skill.manifest.network_policy;
 
@@ -50,39 +201,36 @@ pub fn filter_tools_for_skill(skill: &Skill, tools: Vec<ToolDefinition>) -> Vec<
         None => tools
             .into_iter()
             .filter(|t| {
-                let name_lower = t
-                    .function
-                    .as_ref()
-                    .map(|f| f.name.to_lowercase())
-                    .unwrap_or_default();
-                let is_network = NETWORK_TOOLS.iter().any(|nt| name_lower.contains(nt));
+                let is_network = is_network_capable_tool(t);
                 if is_network {
                     debug!(
-                        "Filtered network tool '{}' for skill '{}' (no network policy)",
-                        name_lower,
+                        tool = t.function_name(),
+                        "Filtered network tool for skill '{}' (no network policy)",
                         skill.name()
                     );
                 }
                 !is_network
             })
             .collect(),
-        Some(policy) => {
-            if !policy.allowed_domains.is_empty() {
+        Some(policy) => tools
+            .into_iter()
+            .filter_map(|tool| {
+                if !is_network_capable_tool(&tool) {
+                    return Some(tool);
+                }
+
+                if is_native_web_search_tool(&tool) {
+                    return apply_web_search_policy(skill, &tool, policy);
+                }
+
                 info!(
-                    "Skill '{}' has network allowlist: {:?}",
-                    skill.name(),
-                    policy.allowed_domains
+                    skill = skill.name(),
+                    tool = tool.function_name(),
+                    "Dropping network tool because skill policy cannot be enforced for function-style tools"
                 );
-            }
-            if !policy.denied_domains.is_empty() {
-                info!(
-                    "Skill '{}' has network denylist: {:?}",
-                    skill.name(),
-                    policy.denied_domains
-                );
-            }
-            tools
-        }
+                None
+            })
+            .collect(),
     }
 }
 
@@ -594,6 +742,7 @@ mod tests {
                 "Read".to_string(),
                 serde_json::json!({}),
             ),
+            ToolDefinition::web_search(serde_json::json!({})),
             ToolDefinition::function(
                 "web_search".to_string(),
                 "Search".to_string(),
@@ -606,8 +755,38 @@ mod tests {
     }
 
     #[test]
-    fn test_filter_tools_with_network_policy() {
-        use crate::skills::types::SkillNetworkPolicy;
+    fn test_filter_tools_with_network_policy_updates_native_web_search() {
+        let manifest = SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test".to_string(),
+            network_policy: Some(SkillNetworkPolicy {
+                allowed_domains: vec!["api.example.com".to_string()],
+                denied_domains: vec!["blocked.example.com".to_string()],
+            }),
+            vtcode_native: Some(true),
+            ..Default::default()
+        };
+        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "instructions".to_string())
+            .expect("failed to create skill");
+
+        let tools = vec![ToolDefinition::web_search(serde_json::json!({
+            "user_location": "US"
+        }))];
+        let filtered = filter_tools_for_skill(&skill, tools);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].tool_type, "web_search");
+        assert_eq!(
+            filtered[0].web_search.as_ref(),
+            Some(&serde_json::json!({
+                "user_location": "US",
+                "allowed_domains": ["api.example.com"],
+                "blocked_domains": ["blocked.example.com"]
+            }))
+        );
+    }
+
+    #[test]
+    fn test_filter_tools_drops_function_style_network_tools_when_policy_is_present() {
         let manifest = SkillManifest {
             name: "test-skill".to_string(),
             description: "Test".to_string(),
@@ -623,18 +802,43 @@ mod tests {
 
         let tools = vec![
             ToolDefinition::function(
+                "read_web_page".to_string(),
+                "Read web page".to_string(),
+                serde_json::json!({}),
+            ),
+            ToolDefinition::function(
                 "read_file".to_string(),
                 "Read".to_string(),
                 serde_json::json!({}),
             ),
-            ToolDefinition::function(
-                "web_search".to_string(),
-                "Search".to_string(),
-                serde_json::json!({}),
-            ),
         ];
         let filtered = filter_tools_for_skill(&skill, tools);
-        assert_eq!(filtered.len(), 2);
+
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].function_name(), "read_file");
+    }
+
+    #[test]
+    fn test_filter_tools_fails_closed_for_unrepresentable_web_search_policy() {
+        let manifest = SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test".to_string(),
+            network_policy: Some(SkillNetworkPolicy {
+                allowed_domains: vec!["docs.rs".to_string()],
+                denied_domains: vec!["example.com".to_string()],
+            }),
+            vtcode_native: Some(true),
+            ..Default::default()
+        };
+        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "instructions".to_string())
+            .expect("failed to create skill");
+
+        let mut anthropic_web_search = ToolDefinition::web_search(serde_json::json!({}));
+        anthropic_web_search.tool_type = "web_search_20250305".to_string();
+
+        let filtered = filter_tools_for_skill(&skill, vec![anthropic_web_search]);
+
+        assert!(filtered.is_empty());
     }
 
     #[test]
