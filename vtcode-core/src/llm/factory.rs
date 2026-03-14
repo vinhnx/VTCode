@@ -226,13 +226,12 @@ pub fn create_provider_for_model(
         message: ctx_err!("llm factory", "lock poisoned"),
         metadata: None,
     })?;
-    let provider_name =
-        factory
-            .provider_from_model(model)
-            .ok_or_else(|| LLMError::InvalidRequest {
-                message: format!("Cannot determine provider for model: {}", model),
-                metadata: None,
-            })?;
+    let provider_name = infer_provider_from_model(model)
+        .map(|provider| provider.to_string())
+        .ok_or_else(|| LLMError::InvalidRequest {
+            message: format!("Cannot determine provider for model: {}", model),
+            metadata: None,
+        })?;
 
     factory.create_provider(
         &provider_name,
@@ -426,5 +425,13 @@ mod tests {
 
         assert_eq!(custom.name(), "ollama");
         assert_eq!(builtin.name(), "openai");
+    }
+
+    #[test]
+    fn create_provider_for_bare_minimax_model_uses_minimax_provider() {
+        let provider = create_provider_for_model("MiniMax-M2.5", "test-key".to_string(), None, None)
+            .expect("bare minimax model should resolve to minimax provider");
+
+        assert_eq!(provider.name(), "minimax");
     }
 }
