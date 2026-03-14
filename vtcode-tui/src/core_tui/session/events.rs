@@ -467,10 +467,16 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
 
+            let should_submit_now = slash::should_submit_immediately_from_palette(session);
             let Some(submitted) = take_submitted_input(session) else {
                 session.mark_dirty();
                 return None;
             };
+
+            if should_submit_now {
+                session.mark_dirty();
+                return Some(InlineEvent::Submit(submitted));
+            }
 
             // Note: The thinking spinner message is no longer added here.
             // Instead, it's added in session_loop.rs after the user message is displayed,
@@ -527,7 +533,11 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         }
         KeyCode::Left => {
             if session.input_enabled {
-                if has_command {
+                if has_shift && has_command {
+                    session.select_to_start();
+                } else if has_shift {
+                    session.select_left();
+                } else if has_command {
                     session.move_to_start();
                 } else if has_alt {
                     session.move_left_word();
@@ -540,7 +550,11 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         }
         KeyCode::Right => {
             if session.input_enabled {
-                if has_command {
+                if has_shift && has_command {
+                    session.select_to_end();
+                } else if has_shift {
+                    session.select_right();
+                } else if has_command {
                     session.move_to_end();
                 } else if has_alt {
                     session.move_right_word();
@@ -553,14 +567,22 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         }
         KeyCode::Home => {
             if session.input_enabled {
-                session.move_to_start();
+                if has_shift {
+                    session.select_to_start();
+                } else {
+                    session.move_to_start();
+                }
                 session.mark_dirty();
             }
             None
         }
         KeyCode::End => {
             if session.input_enabled {
-                session.move_to_end();
+                if has_shift {
+                    session.select_to_end();
+                } else {
+                    session.move_to_end();
+                }
                 session.mark_dirty();
             }
             None

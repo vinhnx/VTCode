@@ -1,5 +1,6 @@
 use std::io;
 use std::sync::atomic::Ordering;
+use std::time::Instant;
 
 use anyhow::{Context, Result};
 use ratatui::{
@@ -163,6 +164,14 @@ fn handle_inline_command(
 /// under load. Ensures input events and redraws are not starved by a flood of
 /// background commands (e.g., during tool execution or PTY output bursts).
 const MAX_COMMANDS_PER_TURN: usize = 16;
+/// Maximum number of terminal events to process in one wakeup.
+///
+/// This keeps redraw latency bounded when the terminal produces a backlog of
+/// events (mouse movement, scroll bursts, key repeat, stale ticks) instead of
+/// draining the entire queue before painting the latest visible state.
+const MAX_TERMINAL_EVENTS_PER_TURN: usize = 32;
+const INPUT_TO_DRAW_WARN_MS: u128 = 16;
+const DRAW_WARN_MS: u128 = 8;
 
 /// Render immediately if the session is dirty and the event loop is not paused.
 ///
@@ -174,12 +183,9 @@ fn render_if_dirty<B: Backend>(
     session: &mut Session,
     event_channels: &EventChannels,
     cursor_steady: &mut bool,
+    input_started_at: Option<Instant>,
 ) -> Result<()> {
-    if event_channels
-        .rx_paused
-        .load(Ordering::Acquire)
-        || !session.take_redraw()
-    {
+    if event_channels.rx_paused.load(Ordering::Acquire) || !session.take_redraw() {
         return Ok(());
     }
 
@@ -195,9 +201,30 @@ fn render_if_dirty<B: Backend>(
         *cursor_steady = desired_steady;
     }
 
+    let draw_started_at = Instant::now();
     terminal
         .draw(|frame| session.render(frame))
         .map_err(|e| anyhow::anyhow!("failed to draw inline session: {}", e))?;
+    let draw_elapsed = draw_started_at.elapsed();
+    if let Some(input_started_at) = input_started_at {
+        let input_to_draw_elapsed = input_started_at.elapsed();
+        if input_to_draw_elapsed.as_millis() >= INPUT_TO_DRAW_WARN_MS
+            || draw_elapsed.as_millis() >= DRAW_WARN_MS
+        {
+            tracing::debug!(
+                target: "vtcode.tui.latency",
+                input_to_draw_ms = input_to_draw_elapsed.as_millis(),
+                draw_ms = draw_elapsed.as_millis(),
+                "slow input-to-draw path observed"
+            );
+        }
+    } else if draw_elapsed.as_millis() >= DRAW_WARN_MS {
+        tracing::debug!(
+            target: "vtcode.tui.latency",
+            draw_ms = draw_elapsed.as_millis(),
+            "slow draw observed"
+        );
+    }
     Ok(())
 }
 
@@ -251,7 +278,7 @@ pub(super) async fn drive_terminal<B: Backend>(
         }
 
         // Render if dirty (catches command-driven changes)
-        render_if_dirty(terminal, session, &event_channels, &mut cursor_steady)?;
+        render_if_dirty(terminal, session, &event_channels, &mut cursor_steady, None)?;
 
         if session.should_exit() {
             break 'main;
@@ -290,6 +317,9 @@ pub(super) async fn drive_terminal<B: Backend>(
                             // (otherwise Up/Down should navigate the list, not scroll)
                             let can_coalesce_scroll = !has_active_navigation_ui(session);
                             let mut scroll_accum = ScrollAccumulator::default();
+                            let input_started_at = Instant::now();
+                            let mut processed_terminal_events = 1;
+                            let mut saw_tick = false;
 
                             // Try to accumulate the first event as scroll (only if safe)
                             let first_coalesced = can_coalesce_scroll
@@ -307,7 +337,11 @@ pub(super) async fn drive_terminal<B: Backend>(
                             }
 
                             // Process all other pending events, coalescing scroll events when safe
-                            while let Ok(next_event) = inputs.try_recv() {
+                            while processed_terminal_events < MAX_TERMINAL_EVENTS_PER_TURN {
+                                let Ok(next_event) = inputs.try_recv() else {
+                                    break;
+                                };
+                                processed_terminal_events += 1;
                                 match next_event {
                                     TerminalEvent::Crossterm(evt) => {
                                         handle_focus_change_event(
@@ -336,7 +370,7 @@ pub(super) async fn drive_terminal<B: Backend>(
                                         }
                                     }
                                     TerminalEvent::Tick => {
-                                        // Ticks are handled by the main loop's redraw check
+                                        saw_tick = true;
                                     }
                                 }
                             }
@@ -345,12 +379,18 @@ pub(super) async fn drive_terminal<B: Backend>(
                             if scroll_accum.has_scroll() {
                                 scroll_accum.apply(session);
                             }
-                        }
+                            if saw_tick {
+                                session.handle_tick();
+                            }
 
-                        // Render immediately after input batch — same wakeup, no
-                        // extra loop iteration. This is the single highest-leverage
-                        // change for keypress-to-screen latency.
-                        render_if_dirty(terminal, session, &event_channels, &mut cursor_steady)?;
+                            render_if_dirty(
+                                terminal,
+                                session,
+                                &event_channels,
+                                &mut cursor_steady,
+                                Some(input_started_at),
+                            )?;
+                        }
                     }
                     Some(TerminalEvent::Tick) => {
                         session.handle_tick();

@@ -382,6 +382,62 @@ impl ModalState {
             _ => ModalListKeyResult::NotHandled,
         }
     }
+
+    pub fn handle_list_mouse_click(&mut self, visible_index: usize) -> ModalListKeyResult {
+        let Some(list) = self.list.as_mut() else {
+            return ModalListKeyResult::NotHandled;
+        };
+        let Some(&item_index) = list.visible_indices.get(visible_index) else {
+            return ModalListKeyResult::HandledNoRedraw;
+        };
+        if list
+            .items
+            .get(item_index)
+            .and_then(|item| item.selection.as_ref())
+            .is_none()
+        {
+            return ModalListKeyResult::HandledNoRedraw;
+        }
+
+        let previous_selection = list.current_selection();
+        if list.list_state.selected() == Some(visible_index) {
+            if let Some(selection) = list.current_selection() {
+                return ModalListKeyResult::Submit(InlineEvent::Overlay(OverlayEvent::Submitted(
+                    OverlaySubmission::Selection(selection),
+                )));
+            }
+            return ModalListKeyResult::HandledNoRedraw;
+        }
+
+        list.list_state.select(Some(visible_index));
+        if let Some(rows) = list.viewport_rows {
+            list.ensure_visible(rows);
+        }
+        if let Some(event) = selection_change_event(list, previous_selection) {
+            ModalListKeyResult::Emit(event)
+        } else {
+            ModalListKeyResult::Redraw
+        }
+    }
+
+    pub fn handle_list_mouse_scroll(&mut self, down: bool) -> ModalListKeyResult {
+        let Some(list) = self.list.as_mut() else {
+            return ModalListKeyResult::NotHandled;
+        };
+
+        let previous_selection = list.current_selection();
+        if down {
+            list.select_next();
+        } else {
+            list.select_previous();
+        }
+
+        if let Some(event) = selection_change_event(list, previous_selection) {
+            ModalListKeyResult::Emit(event)
+        } else {
+            ModalListKeyResult::Redraw
+        }
+    }
 }
 
 fn selection_change_event(
@@ -1158,6 +1214,53 @@ impl WizardModalState {
                 }
             }
             _ => ModalListKeyResult::NotHandled,
+        }
+    }
+
+    pub fn handle_mouse_click(&mut self, visible_index: usize) -> ModalListKeyResult {
+        let Some(step) = self.steps.get_mut(self.current_step) else {
+            return ModalListKeyResult::NotHandled;
+        };
+        let Some(&item_index) = step.list.visible_indices.get(visible_index) else {
+            return ModalListKeyResult::HandledNoRedraw;
+        };
+        if step
+            .list
+            .items
+            .get(item_index)
+            .and_then(|item| item.selection.as_ref())
+            .is_none()
+        {
+            return ModalListKeyResult::HandledNoRedraw;
+        }
+
+        if step.list.list_state.selected() == Some(visible_index) {
+            return self.submit_current_selection();
+        }
+
+        step.list.list_state.select(Some(visible_index));
+        if let Some(rows) = step.list.viewport_rows {
+            step.list.ensure_visible(rows);
+        }
+        ModalListKeyResult::Redraw
+    }
+
+    pub fn handle_mouse_scroll(&mut self, down: bool) -> ModalListKeyResult {
+        let Some(step) = self.steps.get_mut(self.current_step) else {
+            return ModalListKeyResult::NotHandled;
+        };
+
+        let before = step.list.list_state.selected();
+        if down {
+            step.list.select_next();
+        } else {
+            step.list.select_previous();
+        }
+
+        if step.list.list_state.selected() == before {
+            ModalListKeyResult::HandledNoRedraw
+        } else {
+            ModalListKeyResult::Redraw
         }
     }
 

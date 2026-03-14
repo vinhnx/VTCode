@@ -51,6 +51,8 @@ pub struct InputManager {
     content: String,
     /// Current cursor position in the input
     cursor: usize,
+    /// Selection anchor when the input has an active range selection.
+    selection_anchor: Option<usize>,
     /// Non-text input elements (e.g. image attachments)
     attachments: Vec<ContentPart>,
     /// Command history entries
@@ -70,6 +72,7 @@ impl InputManager {
         Self {
             content: String::new(),
             cursor: 0,
+            selection_anchor: None,
             attachments: Vec::new(),
             history: Vec::new(),
             history_index: None,
@@ -87,6 +90,7 @@ impl InputManager {
     pub fn set_content(&mut self, content: String) {
         self.content = content.clone();
         self.cursor = content.len();
+        self.selection_anchor = None;
         self.reset_history_navigation();
     }
 
@@ -98,10 +102,54 @@ impl InputManager {
     /// Sets the cursor position (clamped to valid range)
     pub fn set_cursor(&mut self, pos: usize) {
         self.cursor = pos.min(self.content.len());
+        self.selection_anchor = None;
+    }
+
+    pub fn set_cursor_with_selection(&mut self, pos: usize) {
+        let next = pos.min(self.content.len());
+        if self.selection_anchor.is_none() {
+            self.selection_anchor = Some(self.cursor);
+        }
+        self.cursor = next;
+    }
+
+    pub fn selection_range(&self) -> Option<(usize, usize)> {
+        let anchor = self.selection_anchor?;
+        if anchor == self.cursor {
+            return None;
+        }
+        Some((anchor.min(self.cursor), anchor.max(self.cursor)))
+    }
+
+    pub fn has_selection(&self) -> bool {
+        self.selection_range().is_some()
+    }
+
+    pub fn clear_selection(&mut self) {
+        self.selection_anchor = None;
+    }
+
+    fn replace_range(&mut self, start: usize, end: usize, replacement: &str) {
+        self.content.replace_range(start..end, replacement);
+        self.cursor = start + replacement.len();
+        self.selection_anchor = None;
+    }
+
+    pub fn delete_selection(&mut self) -> bool {
+        let Some((start, end)) = self.selection_range() else {
+            return false;
+        };
+        self.replace_range(start, end, "");
+        true
     }
 
     /// Moves cursor left by one character (UTF-8 aware)
     pub fn move_cursor_left(&mut self) {
+        if let Some((start, _)) = self.selection_range() {
+            self.cursor = start;
+            self.selection_anchor = None;
+            return;
+        }
         if self.cursor > 0 {
             let mut pos = self.cursor - 1;
             while pos > 0 && !self.content.is_char_boundary(pos) {
@@ -113,6 +161,11 @@ impl InputManager {
 
     /// Moves cursor right by one character (UTF-8 aware)
     pub fn move_cursor_right(&mut self) {
+        if let Some((_, end)) = self.selection_range() {
+            self.cursor = end;
+            self.selection_anchor = None;
+            return;
+        }
         if self.cursor < self.content.len() {
             let mut pos = self.cursor + 1;
             while pos < self.content.len() && !self.content.is_char_boundary(pos) {
@@ -125,27 +178,37 @@ impl InputManager {
     /// Moves cursor to the beginning
     pub fn move_cursor_to_start(&mut self) {
         self.cursor = 0;
+        self.selection_anchor = None;
     }
 
     /// Moves cursor to the end
     pub fn move_cursor_to_end(&mut self) {
         self.cursor = self.content.len();
+        self.selection_anchor = None;
     }
 
     /// Inserts a single character at the current cursor position
     pub fn insert_char(&mut self, ch: char) {
-        self.content.insert(self.cursor, ch);
-        self.cursor += ch.len_utf8();
+        let mut buf = [0_u8; 4];
+        self.insert_text(ch.encode_utf8(&mut buf));
     }
 
     /// Inserts text at the current cursor position
     pub fn insert_text(&mut self, text: &str) {
-        self.content.insert_str(self.cursor, text);
-        self.cursor += text.len();
+        if let Some((start, end)) = self.selection_range() {
+            self.replace_range(start, end, text);
+        } else {
+            self.content.insert_str(self.cursor, text);
+            self.cursor += text.len();
+            self.selection_anchor = None;
+        }
     }
 
     /// Deletes the character before the cursor
     pub fn backspace(&mut self) {
+        if self.delete_selection() {
+            return;
+        }
         if self.cursor > 0 {
             let mut pos = self.cursor - 1;
             while pos > 0 && !self.content.is_char_boundary(pos) {
@@ -158,6 +221,9 @@ impl InputManager {
 
     /// Deletes the character at the cursor
     pub fn delete(&mut self) {
+        if self.delete_selection() {
+            return;
+        }
         if self.cursor < self.content.len() {
             let mut end = self.cursor + 1;
             while end < self.content.len() && !self.content.is_char_boundary(end) {
@@ -169,6 +235,9 @@ impl InputManager {
 
     /// Deletes the word ahead of the cursor
     pub fn delete_word_forward(&mut self) {
+        if self.delete_selection() {
+            return;
+        }
         if self.cursor >= self.content.len() {
             return;
         }
@@ -187,6 +256,7 @@ impl InputManager {
     pub fn clear(&mut self) {
         self.content.clear();
         self.cursor = 0;
+        self.selection_anchor = None;
         self.attachments.clear();
         self.reset_history_navigation();
     }
@@ -303,6 +373,7 @@ impl InputManager {
     pub fn apply_history_entry(&mut self, entry: InputHistoryEntry) {
         self.content = entry.content.clone();
         self.cursor = self.content.len();
+        self.selection_anchor = None;
         self.attachments = entry.attachment_elements();
     }
 
@@ -463,5 +534,46 @@ mod tests {
 
         assert_eq!(manager.content(), "check this");
         assert_eq!(manager.attachments().len(), 1);
+    }
+
+    #[test]
+    fn insert_text_replaces_selection() {
+        let mut manager = InputManager::new();
+        manager.insert_text("hello world");
+        manager.set_cursor(5);
+        manager.set_cursor_with_selection(11);
+
+        manager.insert_text(" there");
+
+        assert_eq!(manager.content(), "hello there");
+        assert_eq!(manager.cursor(), "hello there".len());
+        assert!(!manager.has_selection());
+    }
+
+    #[test]
+    fn backspace_deletes_selected_range() {
+        let mut manager = InputManager::new();
+        manager.insert_text("hello world");
+        manager.set_cursor(0);
+        manager.set_cursor_with_selection(5);
+
+        manager.backspace();
+
+        assert_eq!(manager.content(), " world");
+        assert_eq!(manager.cursor(), 0);
+        assert!(!manager.has_selection());
+    }
+
+    #[test]
+    fn move_cursor_left_collapses_selection_to_start() {
+        let mut manager = InputManager::new();
+        manager.insert_text("hello world");
+        manager.set_cursor(0);
+        manager.set_cursor_with_selection(5);
+
+        manager.move_cursor_left();
+
+        assert_eq!(manager.cursor(), 0);
+        assert!(!manager.has_selection());
     }
 }

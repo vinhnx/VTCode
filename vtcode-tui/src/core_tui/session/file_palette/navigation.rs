@@ -62,6 +62,20 @@ impl FilePalette {
         self.filtered_files.get(self.selected_index)
     }
 
+    pub fn selected_index(&self) -> Option<usize> {
+        (!self.filtered_files.is_empty()).then_some(self.selected_index)
+    }
+
+    pub fn select_index(&mut self, index: usize) -> bool {
+        if index >= self.filtered_files.len() || self.selected_index == index {
+            return false;
+        }
+
+        self.selected_index = index;
+        self.update_page_from_selection();
+        true
+    }
+
     /// Get the best matching file entry based on current filter query
     /// Used for Tab autocomplete - returns the first filtered file if any exist
     #[allow(dead_code)]

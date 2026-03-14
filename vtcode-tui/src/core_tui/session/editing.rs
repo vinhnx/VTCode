@@ -12,6 +12,11 @@ use crate::ui::tui::session::slash;
 use unicode_segmentation::UnicodeSegmentation;
 
 impl Session {
+    fn refresh_input_edit_state(&mut self) {
+        self.input_compact_mode = self.input_compact_placeholder().is_some();
+        slash::update_slash_suggestions(self);
+    }
+
     /// Insert a character at the current cursor position
     pub(super) fn insert_char(&mut self, ch: char) {
         if ch == '\u{7f}' {
@@ -21,8 +26,7 @@ impl Session {
             return;
         }
         self.input_manager.insert_char(ch);
-        self.input_compact_mode = self.input_compact_placeholder().is_some();
-        slash::update_slash_suggestions(self);
+        self.refresh_input_edit_state();
     }
 
     /// Insert pasted text without enforcing the inline newline cap.
@@ -41,8 +45,7 @@ impl Session {
         }
 
         self.input_manager.insert_text(&sanitized);
-        self.input_compact_mode = self.input_compact_placeholder().is_some();
-        slash::update_slash_suggestions(self);
+        self.refresh_input_edit_state();
     }
 
     /// Calculate remaining newline capacity in the input field
@@ -60,19 +63,21 @@ impl Session {
     /// Delete the character before the cursor (backspace)
     pub(super) fn delete_char(&mut self) {
         self.input_manager.backspace();
-        self.input_compact_mode = self.input_compact_placeholder().is_some();
-        slash::update_slash_suggestions(self);
+        self.refresh_input_edit_state();
     }
 
     /// Delete the character at the cursor (forward delete)
     pub(super) fn delete_char_forward(&mut self) {
         self.input_manager.delete();
-        self.input_compact_mode = self.input_compact_placeholder().is_some();
-        slash::update_slash_suggestions(self);
+        self.refresh_input_edit_state();
     }
 
     /// Delete the word before the cursor
     pub(super) fn delete_word_backward(&mut self) {
+        if self.input_manager.delete_selection() {
+            self.refresh_input_edit_state();
+            return;
+        }
         if self.input_manager.cursor() == 0 {
             return;
         }
@@ -124,19 +129,21 @@ impl Session {
 
             self.input_manager.set_content(new_content);
             self.input_manager.set_cursor(delete_start);
-            self.input_compact_mode = self.input_compact_placeholder().is_some();
-            slash::update_slash_suggestions(self);
+            self.refresh_input_edit_state();
         }
     }
 
     #[allow(dead_code)]
     pub(super) fn delete_word_forward(&mut self) {
         self.input_manager.delete_word_forward();
-        self.input_compact_mode = self.input_compact_placeholder().is_some();
-        slash::update_slash_suggestions(self);
+        self.refresh_input_edit_state();
     }
     /// Delete from cursor to start of current line (Command+Backspace on macOS)
     pub(super) fn delete_to_start_of_line(&mut self) {
+        if self.input_manager.delete_selection() {
+            self.refresh_input_edit_state();
+            return;
+        }
         let content = self.input_manager.content();
         let cursor = self.input_manager.cursor();
 
@@ -152,13 +159,16 @@ impl Session {
             let new_content = format!("{}{}", &content[..delete_start], &content[cursor..]);
             self.input_manager.set_content(new_content);
             self.input_manager.set_cursor(delete_start);
-            self.input_compact_mode = self.input_compact_placeholder().is_some();
-            slash::update_slash_suggestions(self);
+            self.refresh_input_edit_state();
         }
     }
 
     /// Delete from cursor to end of current line (Command+Delete on macOS)
     pub(super) fn delete_to_end_of_line(&mut self) {
+        if self.input_manager.delete_selection() {
+            self.refresh_input_edit_state();
+            return;
+        }
         let content = self.input_manager.content();
         let cursor = self.input_manager.cursor();
 
@@ -173,8 +183,7 @@ impl Session {
         if delete_len > 0 {
             let new_content = format!("{}{}", &content[..cursor], &content[cursor + delete_len..]);
             self.input_manager.set_content(new_content);
-            self.input_compact_mode = self.input_compact_placeholder().is_some();
-            slash::update_slash_suggestions(self);
+            self.refresh_input_edit_state();
         }
     }
 
@@ -187,6 +196,38 @@ impl Session {
     /// Move cursor right by one character
     pub(super) fn move_right(&mut self) {
         self.input_manager.move_cursor_right();
+        slash::update_slash_suggestions(self);
+    }
+
+    pub(super) fn select_left(&mut self) {
+        let cursor = self.input_manager.cursor();
+        if cursor == 0 {
+            self.input_manager.set_cursor_with_selection(0);
+            return;
+        }
+
+        let mut pos = cursor - 1;
+        let content = self.input_manager.content();
+        while pos > 0 && !content.is_char_boundary(pos) {
+            pos -= 1;
+        }
+        self.input_manager.set_cursor_with_selection(pos);
+        slash::update_slash_suggestions(self);
+    }
+
+    pub(super) fn select_right(&mut self) {
+        let cursor = self.input_manager.cursor();
+        let content = self.input_manager.content();
+        if cursor >= content.len() {
+            self.input_manager.set_cursor_with_selection(content.len());
+            return;
+        }
+
+        let mut pos = cursor + 1;
+        while pos < content.len() && !content.is_char_boundary(pos) {
+            pos += 1;
+        }
+        self.input_manager.set_cursor_with_selection(pos);
         slash::update_slash_suggestions(self);
     }
 
@@ -298,6 +339,15 @@ impl Session {
     /// Move cursor to the end of the line
     pub(super) fn move_to_end(&mut self) {
         self.input_manager.move_cursor_to_end();
+    }
+
+    pub(super) fn select_to_start(&mut self) {
+        self.input_manager.set_cursor_with_selection(0);
+    }
+
+    pub(super) fn select_to_end(&mut self) {
+        self.input_manager
+            .set_cursor_with_selection(self.input_manager.content().len());
     }
 
     /// Remember submitted input in history

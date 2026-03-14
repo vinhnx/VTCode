@@ -120,6 +120,8 @@ impl Session {
             transcript_view_top: 0,
             transcript_area: None,
             input_area: None,
+            bottom_panel_area: None,
+            modal_list_area: None,
             transcript_file_link_targets: Vec::new(),
             hovered_transcript_file_link: None,
             last_mouse_position: None,
@@ -167,6 +169,7 @@ impl Session {
 
             // --- Mouse Text Selection ---
             mouse_selection: MouseSelectionState::new(),
+            mouse_drag_target: MouseDragTarget::None,
 
             skip_confirmations: false,
 

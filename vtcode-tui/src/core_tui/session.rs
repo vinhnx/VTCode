@@ -179,6 +179,14 @@ impl ActiveOverlay {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum MouseDragTarget {
+    #[default]
+    None,
+    Transcript,
+    Input,
+}
+
 pub struct Session {
     // --- Managers (Phase 2) ---
     /// Manages user input, cursor, and command history
@@ -226,6 +234,8 @@ pub struct Session {
     pub(crate) transcript_view_top: usize,
     transcript_area: Option<Rect>,
     input_area: Option<Rect>,
+    bottom_panel_area: Option<Rect>,
+    modal_list_area: Option<Rect>,
     transcript_file_link_targets: Vec<TranscriptFileLinkTarget>,
     hovered_transcript_file_link: Option<usize>,
     last_mouse_position: Option<(u16, u16)>,
@@ -276,6 +286,7 @@ pub struct Session {
 
     // --- Mouse Text Selection ---
     pub(crate) mouse_selection: MouseSelectionState,
+    pub(crate) mouse_drag_target: MouseDragTarget,
 
     pub(crate) skip_confirmations: bool,
 

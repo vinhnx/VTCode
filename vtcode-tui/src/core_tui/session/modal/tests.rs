@@ -498,6 +498,31 @@ fn list_modal_submit_emits_event() {
 }
 
 #[test]
+fn list_modal_mouse_click_selects_then_submits() {
+    let mut modal = sample_list_modal();
+
+    let select = modal.handle_list_mouse_click(1);
+    match select {
+        ModalListKeyResult::Emit(InlineEvent::Overlay(OverlayEvent::SelectionChanged(
+            OverlaySelectionChange::List(selection),
+        ))) => {
+            assert_eq!(selection, InlineListSelection::Model(1));
+        }
+        other => panic!("unexpected selection result: {:?}", other),
+    }
+
+    let submit = modal.handle_list_mouse_click(1);
+    match submit {
+        ModalListKeyResult::Submit(InlineEvent::Overlay(OverlayEvent::Submitted(
+            OverlaySubmission::Selection(selection),
+        ))) => {
+            assert_eq!(selection, InlineListSelection::Model(1));
+        }
+        other => panic!("unexpected submit result: {:?}", other),
+    }
+}
+
+#[test]
 fn list_modal_space_no_longer_submits_config_action() {
     let mut modal = ModalState {
         title: "Config".to_owned(),

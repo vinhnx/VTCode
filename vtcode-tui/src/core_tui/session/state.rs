@@ -107,6 +107,14 @@ impl Session {
         self.input_area = area;
     }
 
+    pub(crate) fn set_bottom_panel_area(&mut self, area: Option<Rect>) {
+        self.bottom_panel_area = area;
+    }
+
+    pub(crate) fn set_modal_list_area(&mut self, area: Option<Rect>) {
+        self.modal_list_area = area;
+    }
+
     /// Advance animation state on tick and request redraw when a frame changes.
     pub fn handle_tick(&mut self) {
         let motion_reduced = self.appearance.motion_reduced();

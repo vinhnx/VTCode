@@ -64,8 +64,10 @@ impl Session {
         } else {
             render::split_inline_modal_area(self, main_area)
         };
+        self.set_modal_list_area(None);
         let (input_area, bottom_panel_area) =
             split_input_and_bottom_panel_area(input_area, panel.height);
+        self.set_bottom_panel_area(bottom_panel_area);
         let navigation_area = Rect::new(main_area.x, main_area.y, 0, 0); // No navigation area since timeline pane is removed
 
         // Use SessionWidget for buffer-based rendering (header, transcript, overlays)
