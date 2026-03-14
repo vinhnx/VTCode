@@ -44,47 +44,28 @@ vtcode --permission-mode plan
 1. **Start in Plan Mode**: `vtcode --permission-mode plan`
 2. **Describe your goal**: Explain what you want to build or change
 3. **Iterate on the plan**: Ask clarifying questions, explore files, refine the approach
-4. **Review the plan**: The agent emits a structured reasoning + decision log, then one `<proposed_plan>` block
+4. **Review the plan**: The agent captures repository facts, closes any open decisions, then emits one `<proposed_plan>` block
 5. **Choose next action**: Use the implementation prompt to switch to Edit mode or continue planning (fallback: manually switch with `/plan off` or `/mode`, or `Shift+Tab`/`Alt+M`)
 6. **Execute the plan**: If approved, coding proceeds in Edit mode
 
 ## Plan Output Format
 
-When in Plan Mode, the agent should follow this exact structure:
+When in Plan Mode, the agent should keep the output decision-complete but sparse:
 
 ```markdown
-• Scope checkpoint: [what is locked] / [what remains open].
-• Decision needed: [single high-impact choice] and why it affects
-implementation.
+Repository facts checked:
+- [file, symbol, or behavior confirmed from the repo]
+- [existing pattern or constraint verified before planning]
 
-• Questions 1/1 answered
-• [exact question text]
-answer: [selected option label]
-
-• Locked decision: [choice], so implementation will [concrete consequence].
-• Next open decision: [if any], otherwise: "No remaining scope decisions;
-drafting final plan."
+Next open decision: [if any], otherwise: No remaining scope decisions.
 
 <proposed_plan>
-• Proposed Plan
-
-
 # [Task Title]
 
 ## Summary
 [2-4 lines: goal, user impact, what will change, what will not]
 
-## Scope Locked
-1. [Decision A]
-2. [Decision B]
-3. [Decision C]
-
-## Public API / Interface Changes
-1. [Removed/added/changed API, command, config, schema]
-2. [Tooling/runtime behavior changes]
-3. [Compatibility or break behavior]
-
-## Implementation Plan
+## Implementation Steps
 1. [Step] -> files: [paths] -> verify: [check]
 2. [Step] -> files: [paths] -> verify: [check]
 3. [Step] -> files: [paths] -> verify: [check]
@@ -93,7 +74,6 @@ drafting final plan."
 1. Build and lint: [project build and lint command(s) based on detected toolchain]
 2. Tests: [project test command(s) based on detected toolchain]
 3. Targeted behavior checks: [explicit commands/manual checks]
-4. Regression checks: [what must not break]
 
 ## Assumptions and Defaults
 1. [Explicit assumption]
@@ -101,7 +81,7 @@ drafting final plan."
 3. [Out-of-scope items intentionally not changed]
 </proposed_plan>
 
-> Note: Edit this plan directly at `[plan file path]`.
+Only `Next open decision` is used as the explicit reopen marker for follow-up planning.
 ```
 
 ## Plan Review Gate

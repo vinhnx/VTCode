@@ -73,6 +73,7 @@ pub(crate) async fn prepare_session_bootstrap(
             &onboarding_cfg,
             language_summary.as_deref(),
             guideline_highlights.as_deref(),
+            todo_planning_enabled,
         )
     } else {
         None
@@ -331,6 +332,7 @@ fn build_prompt_addendum(
     onboarding_cfg: &AgentOnboardingConfig,
     language_summary: Option<&str>,
     guideline_highlights: Option<&[String]>,
+    todo_planning_enabled: bool,
 ) -> Option<String> {
     let mut lines = Vec::with_capacity(15); // Estimate 15 lines for prompt addendum
     lines.push("## SESSION CONTEXT".to_string());
@@ -350,6 +352,11 @@ fn build_prompt_addendum(
         for item in highlights.iter().take(2) {
             lines.push(format!("- {}", item));
         }
+    }
+
+    if todo_planning_enabled {
+        lines.push("### Workflow Hint".to_string());
+        lines.push("- Start with the goal, use `@file` or IDE context to focus, switch to Plan Mode for research/spec work, and use `task_tracker` for multi-step execution.".to_string());
     }
 
     push_prompt_usage_tips(&mut lines, &onboarding_cfg.usage_tips);

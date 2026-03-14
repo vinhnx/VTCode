@@ -672,43 +672,30 @@ mod tests {
     }
 
     #[test]
-    fn process_llm_response_golden_transcript_requires_kiss_dry_plan_sections() {
+    fn process_llm_response_extracts_sparse_proposed_plan_blocks() {
         let response = LLMResponse {
             content: Some(
                 r#"Intro
+Next open decision: none.
 <proposed_plan>
-• Proposed Plan
-
-# Enforce Plan Mode Blueprint
+# Apply Slate-Style Prompting
 
 ## Summary
-Make Plan Mode output deterministic by enforcing one shared blueprint for reasoning logs and final plans.
+Keep the default runtime prompt sparse and consistent with Plan Mode.
 
-## Scope Locked
-1. Use hard contract enforcement.
-2. Keep the 4-way HITL gate text.
-3. Remove legacy section contract tests.
-
-## Public API / Interface Changes
-1. Update plan prompt contract wording.
-2. Update Plan Mode scaffold template.
-3. Treat old section contract checks as deprecated.
-
-## Implementation Plan
+## Implementation Steps
 1. Update prompt constants -> files: [vtcode-core/src/prompts/system.rs] -> verify: [cargo check]
-2. Update template + docs -> files: [vtcode-core/src/tools/handlers/plan_mode.rs, docs/guides/PLAN_MODE.md] -> verify: [cargo check]
-3. Update tests -> files: [src/agent/runloop/unified/turn/turn_processing/response_processing.rs] -> verify: [cargo test -p vtcode process_llm_response_golden_transcript_requires_kiss_dry_plan_sections -- --nocapture]
+2. Update plan scaffold -> files: [vtcode-core/src/tools/handlers/plan_mode.rs] -> verify: [cargo test -p vtcode-core test_enter_plan_mode -- --nocapture]
+3. Update parser tests -> files: [src/agent/runloop/unified/turn/turn_processing/response_processing.rs] -> verify: [cargo test -p vtcode process_llm_response_extracts_sparse_proposed_plan_blocks -- --nocapture]
 
 ## Test Cases and Validation
 1. Build and lint: [project build and lint command(s) based on detected toolchain]
 2. Tests: [project test command(s) based on detected toolchain]
-3. Targeted behavior checks: plan-mode transcript checks
-4. Regression checks: proposed plan extraction still strips wrapper tags only
+3. Targeted behavior checks: plan-mode transcript extraction
 
 ## Assumptions and Defaults
-1. Title/content can vary, section headers stay fixed.
-2. Reasoning log appears before proposed plan.
-3. Non-plan execution flow remains unchanged.
+1. `Next open decision` remains the only explicit reopen marker.
+2. The proposed plan stays decision-complete without rigid extra sections.
 </proposed_plan>
 Outro"#
                     .to_string(),
@@ -737,11 +724,8 @@ Outro"#
             } => {
                 let plan = proposed_plan.expect("expected extracted proposed plan");
                 for required_section in [
-                    "• Proposed Plan",
                     "## Summary",
-                    "## Scope Locked",
-                    "## Public API / Interface Changes",
-                    "## Implementation Plan",
+                    "## Implementation Steps",
                     "## Test Cases and Validation",
                     "## Assumptions and Defaults",
                 ] {
@@ -750,6 +734,8 @@ Outro"#
                         "proposed_plan missing required section: {required_section}"
                     );
                 }
+                assert!(!plan.contains("## Scope Locked"));
+                assert!(!plan.contains("## Public API / Interface Changes"));
                 assert!(!text.contains("<proposed_plan>"));
                 assert!(text.contains("Intro"));
                 assert!(text.contains("Outro"));

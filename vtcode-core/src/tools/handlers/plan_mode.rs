@@ -359,43 +359,22 @@ impl Tool for EnterPlanModeTool {
             .unwrap_or_else(|| PathBuf::from("."));
         let validation_hints = detect_validation_command_hints(&workspace_root);
 
-        // Create initial plan file using the canonical blueprint structure.
+        // Seed the plan file with a sparse scaffold that matches the runtime prompt contract.
         let initial_content = format!(
-            r#"• Scope checkpoint: [what is locked] / [what remains open].
-• Decision needed: [single high-impact choice] and why it affects
-implementation.
+            r#"Repository facts checked:
+- [file, symbol, or behavior confirmed from the repo]
+- [existing pattern or constraint verified before planning]
 
-• Questions 1/1 answered
-• [exact question text]
-answer: [selected option label]
-
-• Locked decision: [choice], so implementation will [concrete consequence].
-• Next open decision: [if any], otherwise: "No remaining scope decisions;
-drafting final plan."
+Next open decision: [if any], otherwise: No remaining scope decisions.
 
 <proposed_plan>
-• Proposed Plan
-
-
 # {}
 
 ## Summary
 
 {}
 
-## Scope Locked
-
-1. [Decision A]
-2. [Decision B]
-3. [Decision C]
-
-## Public API / Interface Changes
-
-1. [Removed/added/changed API, command, config, schema]
-2. [Tooling/runtime behavior changes]
-3. [Compatibility or break behavior]
-
-## Implementation Plan
+## Implementation Steps
 
 1. [Step] → files: [paths] → verify: [check]
 2. [Step] → files: [paths] → verify: [check]
@@ -448,15 +427,15 @@ drafting final plan."
             "message": "Entered Plan Mode. You are now in read-only mode for exploration and planning.",
             "plan_file": plan_file.display().to_string(),
             "instructions": [
-                "1. Read files and search code to understand the codebase",
-                "2. Lock decisions with concise decision-log entries",
-                "3. Fill the reasoning+decision log and final proposed plan blueprint",
+                "1. Explore files and capture repository facts before drafting the plan",
+                "2. Ask or close only material blocking decisions",
+                "3. Fill one proposed plan with summary, steps, tests, and assumptions",
                 "4. Use exit_plan_mode when ready for the user to review and approve"
             ],
             "workflow_phases": [
-                "Phase A: Decision Log - lock high-impact choices",
-                "Phase B: Final Plan - produce one canonical blueprint",
-                "Phase C: HITL Review - execute or revise"
+                "Phase A: Explore facts",
+                "Phase B: Close open decisions",
+                "Phase C: Draft one proposed plan"
             ]
         }))
     }
@@ -816,7 +795,11 @@ mod tests {
         assert!(plan_file.exists());
 
         let content = std::fs::read_to_string(&plan_file).unwrap();
+        assert!(content.contains("Repository facts checked"));
+        assert!(content.contains("Next open decision"));
+        assert!(content.contains("## Implementation Steps"));
         assert!(content.contains("## Test Cases and Validation"));
+        assert!(content.contains("## Assumptions and Defaults"));
         assert!(content.contains("[project build and lint command(s)]"));
         assert!(content.contains("[project test command(s)]"));
         assert!(content.contains(&format!("> Plan file: `{}`", plan_file.display())));

@@ -449,11 +449,6 @@ pub(crate) fn maybe_force_plan_mode_interview(
 }
 
 fn has_open_decision_markers(text: &str) -> bool {
-    let lowered = text.to_ascii_lowercase();
-    if contains_any(&lowered, &["to be decided", "tbd", "pending decision"]) {
-        return true;
-    }
-
     text.lines().any(line_has_open_decision_marker)
 }
 
@@ -464,15 +459,7 @@ fn line_has_open_decision_marker(line: &str) -> bool {
     }
 
     let lower = trimmed.to_ascii_lowercase();
-    if !contains_any(
-        &lower,
-        &[
-            "decision needed",
-            "next open decision",
-            "open question",
-            "unresolved decision",
-        ],
-    ) {
+    if !lower.contains("next open decision") {
         return false;
     }
 
@@ -480,6 +467,7 @@ fn line_has_open_decision_marker(line: &str) -> bool {
         &lower,
         &[
             "none",
+            "no remaining",
             "no further",
             "resolved",
             "closed",

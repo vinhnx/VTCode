@@ -489,6 +489,20 @@ fn collect_interview_research_context_includes_custom_note_policy() {
 }
 
 #[test]
+fn line_has_open_decision_marker_only_tracks_next_open_decision() {
+    assert!(line_has_open_decision_marker(
+        "Next open decision: validate migration order"
+    ));
+    assert!(!line_has_open_decision_marker(
+        "Decision needed: choose validation scope"
+    ));
+    assert!(!line_has_open_decision_marker("Next open decision: none"));
+    assert!(!line_has_open_decision_marker(
+        "Next open decision: No remaining scope decisions."
+    ));
+}
+
+#[test]
 fn collect_interview_research_context_extracts_recent_paths_and_symbols() {
     let stats = SessionStats::default();
     let context = collect_interview_research_context(

@@ -110,6 +110,10 @@ async fn test_prepare_session_bootstrap_builds_sections() {
 
     let prompt = bootstrap.prompt_addendum.expect("prompt addendum");
     assert!(prompt.contains("## SESSION CONTEXT"));
+    assert!(prompt.contains("Workflow Hint"));
+    assert!(prompt.contains("@file"));
+    assert!(prompt.contains("Plan Mode"));
+    assert!(prompt.contains("task_tracker"));
     assert!(prompt.contains("Suggested Next Actions"));
 
     assert_eq!(bootstrap.placeholder.as_deref(), Some("Type your plan"));
@@ -212,4 +216,9 @@ async fn test_prepare_session_bootstrap_hides_placeholder_when_planning_disabled
 
     let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg), None).await;
     assert!(bootstrap.placeholder.is_none());
+
+    if let Some(prompt) = bootstrap.prompt_addendum.as_deref() {
+        assert!(!prompt.contains("Workflow Hint"));
+        assert!(!prompt.contains("task_tracker"));
+    }
 }
