@@ -191,9 +191,9 @@ pub fn render_modal_list(
     styles: &ModalRenderStyles,
     footer_hint: Option<&str>,
     inline_editor: Option<&ModalInlineEditor>,
-) {
+) -> Rect {
     if area.width == 0 || area.height == 0 {
-        return;
+        return area;
     }
 
     let summary = modal_list_summary_line(list, styles, footer_hint);
@@ -218,6 +218,8 @@ pub fn render_modal_list(
         },
         &mut panel_model,
     );
+
+    area
 }
 
 /// Render wizard tabs header showing steps with completion status
@@ -306,9 +308,9 @@ pub fn render_wizard_modal_body(
     area: Rect,
     wizard: &mut WizardModalState,
     styles: &ModalRenderStyles,
-) {
+) -> Option<Rect> {
     if area.width == 0 || area.height == 0 {
-        return;
+        return None;
     }
 
     let is_multistep = wizard.mode == crate::ui::tui::types::WizardModalMode::MultiStep;
@@ -411,15 +413,17 @@ pub fn render_wizard_modal_body(
     if let Some(step) = wizard.steps.get_mut(wizard.current_step)
         && idx < chunks.len()
     {
-        render_modal_list(
+        return Some(render_modal_list(
             frame,
             chunks[idx],
             &mut step.list,
             styles,
             None,
             inline_editor.as_ref(),
-        );
+        ));
     }
+
+    None
 }
 
 #[allow(clippy::const_is_empty)]
@@ -471,9 +475,13 @@ fn modal_list_summary_line(
     }
 }
 
-pub fn render_modal_body(frame: &mut Frame<'_>, area: Rect, context: ModalBodyContext<'_, '_>) {
+pub fn render_modal_body(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    context: ModalBodyContext<'_, '_>,
+) -> Option<Rect> {
     if area.width == 0 || area.height == 0 {
-        return;
+        return None;
     }
 
     let mut sections = Vec::new();
@@ -495,7 +503,7 @@ pub fn render_modal_body(frame: &mut Frame<'_>, area: Rect, context: ModalBodyCo
     }
 
     if sections.is_empty() {
-        return;
+        return None;
     }
 
     let mut constraints = Vec::new();
@@ -539,18 +547,20 @@ pub fn render_modal_body(frame: &mut Frame<'_>, area: Rect, context: ModalBodyCo
             }
             ModalSection::List => {
                 if let Some(list_state) = list_state.as_deref_mut() {
-                    render_modal_list(
+                    return Some(render_modal_list(
                         frame,
                         *chunk,
                         list_state,
                         context.styles,
                         context.footer_hint,
                         None,
-                    );
+                    ));
                 }
             }
         }
     }
+
+    None
 }
 
 fn render_modal_instructions(

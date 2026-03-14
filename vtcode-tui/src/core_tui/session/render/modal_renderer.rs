@@ -159,6 +159,7 @@ pub fn split_inline_modal_area(session: &Session, area: Rect) -> (Rect, Option<R
 
 pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
     if area.width == 0 || area.height == 0 {
+        session.set_modal_list_area(None);
         return;
     }
 
@@ -178,6 +179,7 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
         session.cursor_visible = modal.restore_cursor;
         session.needs_full_clear = true;
         session.needs_redraw = true;
+        session.set_modal_list_area(None);
         return;
     }
 
@@ -199,23 +201,27 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
     if let Some(wizard) = session.wizard_overlay_mut() {
         frame.render_widget(Clear, body_area);
         if body_area.width == 0 || body_area.height == 0 {
+            session.set_modal_list_area(None);
             return;
         }
-        render_wizard_modal_body(frame, body_area, wizard, &styles);
+        let list_area = render_wizard_modal_body(frame, body_area, wizard, &styles);
+        session.set_modal_list_area(list_area);
         return;
     }
 
     let input = session.input_manager.content().to_owned();
     let cursor = session.input_manager.cursor();
     let Some(modal) = session.modal_state_mut() else {
+        session.set_modal_list_area(None);
         return;
     };
 
     frame.render_widget(Clear, body_area);
     if body_area.width == 0 || body_area.height == 0 {
+        session.set_modal_list_area(None);
         return;
     }
-    render_modal_body(
+    let list_area = render_modal_body(
         frame,
         body_area,
         ModalBodyContext {
@@ -229,9 +235,10 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
             cursor,
         },
     );
+    session.set_modal_list_area(list_area);
 }
 
-fn modal_render_styles(session: &Session) -> ModalRenderStyles {
+pub(crate) fn modal_render_styles(session: &Session) -> ModalRenderStyles {
     ModalRenderStyles {
         border: border_style(session),
         highlight: modal_list_highlight_style(session),

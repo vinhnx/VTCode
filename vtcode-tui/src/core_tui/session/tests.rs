@@ -76,6 +76,37 @@ fn session_with_slash_palette_commands() -> Session {
     )
 }
 
+fn show_basic_list_overlay(session: &mut Session) {
+    session.handle_command(InlineCommand::ShowOverlay {
+        request: Box::new(OverlayRequest::List(ListOverlayRequest {
+            title: "Pick one".to_string(),
+            lines: vec!["Choose an option".to_string()],
+            footer_hint: None,
+            items: vec![
+                InlineListItem {
+                    title: "Option A".to_string(),
+                    subtitle: None,
+                    badge: None,
+                    indent: 0,
+                    selection: Some(InlineListSelection::SlashCommand("a".to_string())),
+                    search_value: None,
+                },
+                InlineListItem {
+                    title: "Option B".to_string(),
+                    subtitle: None,
+                    badge: None,
+                    indent: 0,
+                    selection: Some(InlineListSelection::SlashCommand("b".to_string())),
+                    search_value: None,
+                },
+            ],
+            selected: Some(InlineListSelection::SlashCommand("a".to_string())),
+            search: None,
+            hotkeys: Vec::new(),
+        })),
+    });
+}
+
 fn show_diff_overlay(session: &mut Session, mode: DiffPreviewMode) {
     session.show_overlay(OverlayRequest::Diff(DiffOverlayRequest {
         file_path: "src/main.rs".to_string(),
@@ -1153,10 +1184,298 @@ fn history_picker_renders_search_field_above_results() {
         .expect("search history field should render");
     let item_index = lines
         .iter()
-        .position(|line| line.contains("git status"))
+        .rposition(|line| line.contains("git status"))
         .expect("history match should render");
 
     assert!(search_index < item_index);
+}
+
+#[test]
+fn mouse_wheel_navigates_slash_palette_instead_of_transcript() {
+    let mut session = session_with_slash_palette_commands();
+    let _ = session.process_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+
+    let _ = rendered_session_lines(&mut session, 20);
+    let selected_before = session.slash_palette.selected_index();
+
+    let (event_tx, _event_rx) = mpsc::unbounded_channel();
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            column: session.bottom_panel_area.expect("panel area").x,
+            row: session.bottom_panel_area.expect("panel area").y,
+            modifiers: KeyModifiers::NONE,
+        }),
+        &event_tx,
+        None,
+    );
+
+    assert_ne!(session.slash_palette.selected_index(), selected_before);
+    assert_eq!(session.transcript_view_top, 0);
+}
+
+#[test]
+fn mouse_wheel_navigates_modal_list_instead_of_transcript() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    show_basic_list_overlay(&mut session);
+    let _ = rendered_session_lines(&mut session, 20);
+
+    let selected_before = session
+        .modal_state()
+        .and_then(|modal| modal.list.as_ref())
+        .and_then(|list| list.current_selection());
+
+    let (event_tx, _event_rx) = mpsc::unbounded_channel();
+    let modal_area = session.modal_list_area.expect("modal list area");
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            column: modal_area.x,
+            row: modal_area.y,
+            modifiers: KeyModifiers::NONE,
+        }),
+        &event_tx,
+        None,
+    );
+
+    let selected_after = session
+        .modal_state()
+        .and_then(|modal| modal.list.as_ref())
+        .and_then(|list| list.current_selection());
+
+    assert_ne!(selected_after, selected_before);
+    assert_eq!(session.transcript_view_top, 0);
+}
+
+#[test]
+fn clicking_selected_slash_row_applies_command() {
+    let mut session = session_with_slash_palette_commands();
+    for key in [
+        KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('v'), KeyModifiers::NONE),
+    ] {
+        let _ = session.process_key(key);
+    }
+
+    let _ = rendered_session_lines(&mut session, 20);
+    let panel_area = session.bottom_panel_area.expect("panel area");
+    let (event_tx, _event_rx) = mpsc::unbounded_channel();
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: panel_area.x,
+            row: panel_area.y + 3,
+            modifiers: KeyModifiers::NONE,
+        }),
+        &event_tx,
+        None,
+    );
+
+    assert_eq!(session.input_manager.content(), "/review ");
+    assert!(session.slash_palette.suggestions().is_empty());
+}
+
+#[test]
+fn clicking_selected_file_palette_row_inserts_reference() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let workspace = vtcode_tui_workspace_root();
+    session.load_file_palette(
+        vec![
+            workspace
+                .join("src/core_tui/session.rs")
+                .display()
+                .to_string(),
+        ],
+        workspace.clone(),
+    );
+    session.set_input("@".to_string());
+    session.set_cursor(1);
+
+    let _ = rendered_session_lines(&mut session, 20);
+    let panel_area = session.bottom_panel_area.expect("panel area");
+    let (event_tx, _event_rx) = mpsc::unbounded_channel();
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: panel_area.x,
+            row: panel_area.y + 4,
+            modifiers: KeyModifiers::NONE,
+        }),
+        &event_tx,
+        None,
+    );
+
+    assert_eq!(session.input_manager.content(), "@src/core_tui/session.rs ");
+    assert!(!session.file_palette_active);
+}
+
+#[test]
+fn clicking_selected_history_row_accepts_entry() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.set_input("cargo test".to_string());
+    let _ = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    session.set_input("git status".to_string());
+    let _ = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    let _ = session.process_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
+    let _ = rendered_session_lines(&mut session, 20);
+    let expected = session
+        .history_picker_state
+        .selected_match()
+        .map(|item| item.content.clone())
+        .expect("selected history entry");
+    let panel_area = session.bottom_panel_area.expect("panel area");
+    let (event_tx, _event_rx) = mpsc::unbounded_channel();
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: panel_area.x,
+            row: panel_area.y + 3,
+            modifiers: KeyModifiers::NONE,
+        }),
+        &event_tx,
+        None,
+    );
+
+    assert!(!session.history_picker_state.active);
+    assert_eq!(session.input_manager.content(), expected);
+}
+
+#[test]
+fn clicking_input_moves_cursor_to_clicked_position() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.set_input("hello world".to_string());
+    session.set_cursor(session.input_manager.content().len());
+
+    let _ = rendered_session_lines(&mut session, 20);
+    let input_area = session.input_area.expect("input area");
+    let (event_tx, _event_rx) = mpsc::unbounded_channel();
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: input_area.x + 5,
+            row: input_area.y,
+            modifiers: KeyModifiers::NONE,
+        }),
+        &event_tx,
+        None,
+    );
+
+    assert_eq!(session.input_manager.cursor(), 5);
+}
+
+#[test]
+fn clicking_input_does_not_start_transcript_selection() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.set_input("hello world".to_string());
+    let _ = rendered_session_lines(&mut session, 20);
+
+    let input_area = session.input_area.expect("input area");
+    let (event_tx, _event_rx) = mpsc::unbounded_channel();
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: input_area.x + 3,
+            row: input_area.y,
+            modifiers: KeyModifiers::NONE,
+        }),
+        &event_tx,
+        None,
+    );
+
+    assert_eq!(session.mouse_drag_target, MouseDragTarget::Input);
+    assert!(!session.mouse_selection.is_selecting);
+    assert!(!session.mouse_selection.has_selection);
+}
+
+#[test]
+fn dragging_in_input_creates_input_selection_without_transcript_selection() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.set_input("hello world".to_string());
+    session.set_cursor(0);
+    let _ = rendered_session_lines(&mut session, 20);
+
+    let input_area = session.input_area.expect("input area");
+    let (event_tx, _event_rx) = mpsc::unbounded_channel();
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: input_area.x + 1,
+            row: input_area.y,
+            modifiers: KeyModifiers::NONE,
+        }),
+        &event_tx,
+        None,
+    );
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column: input_area.x + 6,
+            row: input_area.y,
+            modifiers: KeyModifiers::NONE,
+        }),
+        &event_tx,
+        None,
+    );
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Up(MouseButton::Left),
+            column: input_area.x + 6,
+            row: input_area.y,
+            modifiers: KeyModifiers::NONE,
+        }),
+        &event_tx,
+        None,
+    );
+
+    assert_eq!(session.input_manager.cursor(), 6);
+    assert_eq!(session.input_manager.selection_range(), Some((1, 6)));
+    assert_eq!(session.mouse_drag_target, MouseDragTarget::None);
+    assert!(!session.mouse_selection.is_selecting);
+    assert!(!session.mouse_selection.has_selection);
+}
+
+#[test]
+fn shift_left_selects_input_range() {
+    let mut session = session_with_input("hello world", "hello world".len());
+
+    let result = session.process_key(KeyEvent::new(KeyCode::Left, KeyModifiers::SHIFT));
+
+    assert!(result.is_none());
+    assert_eq!(
+        session.input_manager.selection_range(),
+        Some(("hello worl".len(), "hello world".len()))
+    );
+}
+
+#[test]
+fn typing_replaces_selected_input_range() {
+    let mut session = session_with_input("hello world", "hello world".len());
+    let _ = session.process_key(KeyEvent::new(KeyCode::Left, KeyModifiers::SHIFT));
+    let _ = session.process_key(KeyEvent::new(KeyCode::Left, KeyModifiers::SHIFT));
+
+    let result = session.process_key(KeyEvent::new(KeyCode::Char('!'), KeyModifiers::NONE));
+
+    assert!(result.is_none());
+    assert_eq!(session.input_manager.content(), "hello wor!");
+    assert_eq!(session.cursor(), "hello wor!".len());
+    assert_eq!(session.input_manager.selection_range(), None);
+}
+
+#[test]
+fn backspace_deletes_selected_input_range() {
+    let mut session = session_with_input("hello world", "hello world".len());
+    let _ = session.process_key(KeyEvent::new(KeyCode::Left, KeyModifiers::SHIFT));
+    let _ = session.process_key(KeyEvent::new(KeyCode::Left, KeyModifiers::SHIFT));
+
+    let result = session.process_key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
+
+    assert!(result.is_none());
+    assert_eq!(session.input_manager.content(), "hello wor");
+    assert_eq!(session.cursor(), "hello wor".len());
+    assert_eq!(session.input_manager.selection_range(), None);
 }
 
 #[test]

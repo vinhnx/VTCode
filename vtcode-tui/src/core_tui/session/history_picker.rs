@@ -103,6 +103,23 @@ impl HistoryPickerState {
             .and_then(|idx| self.matches.get(idx))
     }
 
+    pub fn selected_index(&self) -> Option<usize> {
+        self.list_state.selected()
+    }
+
+    pub fn scroll_offset(&self) -> usize {
+        self.list_state.offset()
+    }
+
+    pub fn select_index(&mut self, index: usize) -> bool {
+        if index >= self.matches.len() || self.list_state.selected() == Some(index) {
+            return false;
+        }
+
+        self.list_state.select(Some(index));
+        true
+    }
+
     /// Update the search query and filter matches
     pub fn update_search(&mut self, history: &[(String, Vec<ContentPart>)]) {
         self.matches.clear();

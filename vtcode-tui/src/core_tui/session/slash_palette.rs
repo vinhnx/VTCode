@@ -144,6 +144,14 @@ impl SlashPalette {
         &mut self.list_state
     }
 
+    pub fn selected_index(&self) -> Option<usize> {
+        self.list_state.selected()
+    }
+
+    pub fn scroll_offset(&self) -> usize {
+        self.list_state.offset()
+    }
+
     pub fn clear_visible_rows(&mut self) {
         self.visible_rows = 0;
     }
@@ -290,6 +298,14 @@ impl SlashPalette {
         }
 
         self.apply_selection(Some(new_index))
+    }
+
+    pub fn select_index(&mut self, index: usize) -> bool {
+        if index >= self.suggestions.len() {
+            return false;
+        }
+
+        self.apply_selection(Some(index))
     }
 
     #[cfg(test)]

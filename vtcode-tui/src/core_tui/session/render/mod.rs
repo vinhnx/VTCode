@@ -19,6 +19,7 @@ mod palettes;
 mod spans;
 
 pub use history_picker::{render_history_picker, split_inline_history_picker_area};
+pub(crate) use modal_renderer::modal_render_styles;
 pub use modal_renderer::render_modal;
 pub use modal_renderer::split_inline_modal_area;
 pub use palettes::{render_file_palette, split_inline_file_palette_area};

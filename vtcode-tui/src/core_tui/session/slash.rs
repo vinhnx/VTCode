@@ -248,6 +248,11 @@ pub(super) fn handle_slash_selection_change(session: &mut Session, changed: bool
     }
 }
 
+pub(super) fn select_slash_suggestion_index(session: &mut Session, index: usize) -> bool {
+    let changed = session.slash_palette.select_index(index);
+    handle_slash_selection_change(session, changed)
+}
+
 fn preview_selected_slash_suggestion(session: &mut Session) {
     let Some(command) = session.slash_palette.selected_command() else {
         return;
@@ -439,7 +444,7 @@ pub(super) fn try_handle_slash_navigation(
     handled
 }
 
-fn should_submit_immediately_from_palette(session: &Session) -> bool {
+pub(crate) fn should_submit_immediately_from_palette(session: &Session) -> bool {
     let Some(command) = session.input_manager.content().split_whitespace().next() else {
         return false;
     };

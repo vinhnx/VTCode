@@ -213,8 +213,6 @@ impl Session {
             ));
         }
 
-        self.set_input_area(Some(input_area));
-
         let background_style = self.styles.input_background_style();
         let shell_mode_title = self.shell_mode_border_title();
         let mut block = if shell_mode_title.is_some() {
@@ -232,11 +230,13 @@ impl Session {
                 .border_style(self.styles.accent_style().add_modifier(Modifier::BOLD));
         }
         let inner = block.inner(input_area);
+        self.set_input_area(Some(inner));
         let input_render = self.build_input_render(inner.width, inner.height);
         let paragraph = Paragraph::new(input_render.text)
             .style(background_style)
             .wrap(Wrap { trim: false });
         frame.render_widget(paragraph.block(block), input_area);
+        self.apply_input_selection_highlight(frame.buffer_mut(), inner);
 
         if self.cursor_should_be_visible() && inner.width > 0 && inner.height > 0 {
             let cursor_x = input_render
@@ -391,6 +391,20 @@ impl Session {
         }
     }
 
+    fn visible_input_window(&self, width: u16, height: u16) -> (InputLayout, usize, usize) {
+        let prompt_width = UnicodeWidthStr::width(self.prompt_prefix.as_str()) as u16;
+        let prompt_display_width = prompt_width.min(width);
+        let layout = self.input_layout(width, prompt_display_width);
+        let total_lines = layout.buffers.len();
+        let visible_limit = height.max(1).min(ui::INLINE_INPUT_MAX_LINES as u16) as usize;
+        let mut start = total_lines.saturating_sub(visible_limit);
+        if layout.cursor_line_idx < start {
+            start = layout.cursor_line_idx.saturating_sub(visible_limit - 1);
+        }
+        let end = (start + visible_limit).min(total_lines);
+        (layout, start, end)
+    }
+
     fn build_input_render(&self, width: u16, height: u16) -> InputRender {
         if width == 0 || height == 0 {
             return InputRender {
@@ -467,15 +481,8 @@ impl Session {
             .add_modifier(Modifier::UNDERLINED);
         let code_style = accent_style.fg(Color::Green).add_modifier(Modifier::BOLD);
 
-        let layout = self.input_layout(width, prompt_display_width);
+        let (layout, start, end) = self.visible_input_window(width, max_visible_lines as u16);
         let tokens = tokenize_input(self.input_manager.content());
-        let total_lines = layout.buffers.len();
-        let visible_limit = max_visible_lines.max(1);
-        let mut start = total_lines.saturating_sub(visible_limit);
-        if layout.cursor_line_idx < start {
-            start = layout.cursor_line_idx.saturating_sub(visible_limit - 1);
-        }
-        let end = (start + visible_limit).min(total_lines);
         let cursor_y = layout.cursor_line_idx.saturating_sub(start) as u16;
 
         let mut lines = Vec::new();
@@ -529,6 +536,107 @@ impl Session {
             cursor_x: layout.cursor_column,
             cursor_y,
         }
+    }
+
+    fn apply_input_selection_highlight(&self, buf: &mut Buffer, area: Rect) {
+        let Some((selection_start, selection_end)) = self.input_manager.selection_range() else {
+            return;
+        };
+        if area.width == 0 || area.height == 0 || selection_start == selection_end {
+            return;
+        }
+
+        let (layout, start, end) = self.visible_input_window(area.width, area.height);
+        let selection_start_char =
+            byte_index_to_char_index(self.input_manager.content(), selection_start);
+        let selection_end_char =
+            byte_index_to_char_index(self.input_manager.content(), selection_end);
+
+        for (row_offset, buffer) in layout.buffers[start..end].iter().enumerate() {
+            let line_char_start = buffer.char_start;
+            let line_char_end = buffer.char_start + buffer.text.chars().count();
+            let highlight_start = selection_start_char.max(line_char_start);
+            let highlight_end = selection_end_char.min(line_char_end);
+            if highlight_start >= highlight_end {
+                continue;
+            }
+
+            let local_start = highlight_start.saturating_sub(line_char_start);
+            let local_end = highlight_end.saturating_sub(line_char_start);
+            let start_x = area
+                .x
+                .saturating_add(buffer.prefix_width)
+                .saturating_add(display_width_for_char_range(&buffer.text, local_start));
+            let end_x = area
+                .x
+                .saturating_add(buffer.prefix_width)
+                .saturating_add(display_width_for_char_range(&buffer.text, local_end));
+            let y = area.y.saturating_add(row_offset as u16);
+
+            for x in start_x..end_x.min(area.x.saturating_add(area.width)) {
+                if let Some(cell) = buf.cell_mut((x, y)) {
+                    let mut style = cell.style();
+                    style = style.add_modifier(Modifier::REVERSED);
+                    cell.set_style(style);
+                    if cell.symbol().is_empty() {
+                        cell.set_symbol(" ");
+                    }
+                }
+            }
+        }
+    }
+
+    pub(crate) fn cursor_index_for_input_point(&self, column: u16, row: u16) -> Option<usize> {
+        let area = self.input_area?;
+        if row < area.y
+            || row >= area.y.saturating_add(area.height)
+            || column < area.x
+            || column >= area.x.saturating_add(area.width)
+        {
+            return None;
+        }
+
+        if self.input_compact_mode
+            && self.input_manager.cursor() == self.input_manager.content().len()
+            && self.input_compact_placeholder().is_some()
+        {
+            return Some(self.input_manager.content().len());
+        }
+
+        let relative_row = row.saturating_sub(area.y);
+        let relative_column = column.saturating_sub(area.x);
+        let (layout, start, end) = self.visible_input_window(area.width, area.height);
+        if start >= end {
+            return Some(0);
+        }
+
+        let line_index = (start + usize::from(relative_row)).min(end.saturating_sub(1));
+        let buffer = layout.buffers.get(line_index)?;
+        if relative_column <= buffer.prefix_width {
+            return Some(char_index_to_byte_index(
+                self.input_manager.content(),
+                buffer.char_start,
+            ));
+        }
+
+        let target_width = relative_column.saturating_sub(buffer.prefix_width);
+        let mut consumed_width = 0u16;
+        let mut char_offset = 0usize;
+        for ch in buffer.text.chars() {
+            let ch_width = UnicodeWidthChar::width(ch).unwrap_or(0) as u16;
+            let next_width = consumed_width.saturating_add(ch_width);
+            if target_width < next_width {
+                break;
+            }
+            consumed_width = next_width;
+            char_offset += 1;
+        }
+
+        let char_index = buffer.char_start.saturating_add(char_offset);
+        Some(char_index_to_byte_index(
+            self.input_manager.content(),
+            char_index,
+        ))
     }
 
     pub(super) fn input_compact_placeholder(&self) -> Option<String> {
@@ -980,6 +1088,30 @@ fn render_fake_cursor(buf: &mut Buffer, cursor_x: u16, cursor_y: u16) {
             cell.set_symbol(" ");
         }
     }
+}
+
+fn char_index_to_byte_index(content: &str, char_index: usize) -> usize {
+    if char_index == 0 {
+        return 0;
+    }
+
+    content
+        .char_indices()
+        .nth(char_index)
+        .map(|(byte_index, _)| byte_index)
+        .unwrap_or(content.len())
+}
+
+fn byte_index_to_char_index(content: &str, byte_index: usize) -> usize {
+    content[..byte_index.min(content.len())].chars().count()
+}
+
+fn display_width_for_char_range(content: &str, char_count: usize) -> u16 {
+    content
+        .chars()
+        .take(char_count)
+        .map(|ch| UnicodeWidthChar::width(ch).unwrap_or(0) as u16)
+        .fold(0_u16, u16::saturating_add)
 }
 
 #[cfg(test)]

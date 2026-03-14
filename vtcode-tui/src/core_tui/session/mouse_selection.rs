@@ -55,6 +55,7 @@ impl MouseSelectionState {
     pub fn clear(&mut self) {
         self.is_selecting = false;
         self.has_selection = false;
+        self.copied = false;
     }
 
     /// Returns the selection range normalized so that `from` is before `to`.
