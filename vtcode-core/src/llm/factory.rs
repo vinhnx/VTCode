@@ -201,9 +201,19 @@ pub fn infer_provider_from_model(model: &str) -> Option<Provider> {
         return Some(preset.provider);
     }
 
-    // Fall back to ModelFamily detection
+    // Preserve the legacy heuristic mapping for ad-hoc model strings such as
+    // OpenRouter, LM Studio, or Hugging Face repo identifiers.
+    if let Ok(factory) = get_factory().lock()
+        && let Some(provider_name) = factory.provider_from_model(model)
+        && let Ok(provider) = Provider::from_str(&provider_name)
+    {
+        return Some(provider);
+    }
+
+    // Fall back to ModelFamily detection for newer slugs that are not covered
+    // by the historical heuristics.
     let family = crate::models_manager::find_family_for_model(model);
-    Some(family.provider)
+    (family.family != "unknown").then_some(family.provider)
 }
 
 /// Create provider from model name and API key
@@ -222,16 +232,16 @@ pub fn create_provider_for_model(
         );
     }
 
-    let factory = get_factory().lock().map_err(|_| LLMError::Provider {
-        message: ctx_err!("llm factory", "lock poisoned"),
-        metadata: None,
-    })?;
     let provider_name = infer_provider_from_model(model)
         .map(|provider| provider.to_string())
         .ok_or_else(|| LLMError::InvalidRequest {
             message: format!("Cannot determine provider for model: {}", model),
             metadata: None,
         })?;
+    let factory = get_factory().lock().map_err(|_| LLMError::Provider {
+        message: ctx_err!("llm factory", "lock poisoned"),
+        metadata: None,
+    })?;
 
     factory.create_provider(
         &provider_name,
@@ -429,9 +439,38 @@ mod tests {
 
     #[test]
     fn create_provider_for_bare_minimax_model_uses_minimax_provider() {
-        let provider = create_provider_for_model("MiniMax-M2.5", "test-key".to_string(), None, None)
-            .expect("bare minimax model should resolve to minimax provider");
+        let provider =
+            create_provider_for_model("MiniMax-M2.5", "test-key".to_string(), None, None)
+                .expect("bare minimax model should resolve to minimax provider");
 
         assert_eq!(provider.name(), "minimax");
+    }
+
+    #[test]
+    fn create_provider_for_mistral_model_uses_openrouter_provider() {
+        let provider =
+            create_provider_for_model("mistral-large", "test-key".to_string(), None, None)
+                .expect("mistral models should still resolve through openrouter");
+
+        assert_eq!(provider.name(), "openrouter");
+    }
+
+    #[test]
+    fn create_provider_for_huggingface_repo_id_uses_huggingface_provider() {
+        let provider =
+            create_provider_for_model("openai/gpt-oss-20b", "test-key".to_string(), None, None)
+                .expect("repo identifiers should preserve huggingface routing");
+
+        assert_eq!(provider.name(), "huggingface");
+    }
+
+    #[test]
+    fn create_provider_for_unknown_model_returns_error() {
+        match create_provider_for_model("totally-unknown-model", "test-key".to_string(), None, None)
+        {
+            Err(LLMError::InvalidRequest { .. }) => {}
+            Err(error) => panic!("expected invalid request error, got {error:?}"),
+            Ok(_) => panic!("unknown models should remain rejected"),
+        }
     }
 }
