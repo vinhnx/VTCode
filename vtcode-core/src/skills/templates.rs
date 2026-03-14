@@ -921,4 +921,28 @@ mod tests {
         variables.insert("skill_name".to_string(), "Invalid Skill Name!".to_string());
         assert!(engine.validate_variables(template, &variables).is_err());
     }
+
+    #[test]
+    fn test_traditional_template_emits_routing_scaffold() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let engine = TemplateEngine::new();
+        let mut variables = HashMap::new();
+        variables.insert("skill_name".to_string(), "test-skill".to_string());
+        variables.insert(
+            "description".to_string(),
+            "Handles repeatable report generation".to_string(),
+        );
+        variables.insert("author".to_string(), "VT Code User".to_string());
+        variables.insert("version".to_string(), "1.0.0".to_string());
+
+        let skill_dir = engine
+            .generate_skill("traditional", variables, temp_dir.path())
+            .unwrap();
+        let skill_md = std::fs::read_to_string(skill_dir.join("SKILL.md")).unwrap();
+
+        assert!(skill_md.contains("when-to-use:"));
+        assert!(skill_md.contains("when-not-to-use:"));
+        assert!(skill_md.contains("`templates/` or `assets/`"));
+        assert!(skill_md.contains("Output/Artifact:"));
+    }
 }

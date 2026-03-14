@@ -269,6 +269,14 @@ impl ContextManager {
         self.cached_stats.total_token_usage
     }
 
+    /// Cap prompt-pressure tracking after local history compaction.
+    pub(crate) fn cap_token_usage_after_compaction(&mut self, threshold: Option<usize>) {
+        self.cached_stats.total_token_usage = match threshold {
+            Some(limit) if limit > 0 => self.cached_stats.total_token_usage.min(limit - 1),
+            Some(_) | None => 0,
+        };
+    }
+
     pub(crate) async fn build_system_prompt(
         &mut self,
         attempt_history: &[uni::Message],

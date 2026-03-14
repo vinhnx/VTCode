@@ -79,7 +79,7 @@ pub(super) fn compact_tool_messages_for_retry(messages: &[uni::Message]) -> Vec<
     }
 }
 
-pub(super) fn resolve_compaction_threshold(
+pub(crate) fn resolve_compaction_threshold(
     configured_threshold: Option<u64>,
     context_size: usize,
 ) -> Option<u64> {

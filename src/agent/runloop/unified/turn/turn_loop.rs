@@ -415,6 +415,30 @@ pub(crate) async fn run_turn_loop(
             ToolLoopLimitAction::BreakLoop => break,
         }
 
+        let active_model = ctx.config.model.clone();
+        match crate::agent::runloop::unified::turn::compaction::maybe_auto_compact_history(
+            ctx.provider_client.as_ref(),
+            &active_model,
+            ctx.vt_cfg,
+            working_history,
+            ctx.session_stats,
+            ctx.context_manager,
+        )
+        .await
+        {
+            Ok(Some(outcome)) => {
+                tracing::info!(
+                    original_len = outcome.original_len,
+                    compacted_len = outcome.compacted_len,
+                    "Applied local fallback compaction before the next turn request"
+                );
+            }
+            Ok(None) => {}
+            Err(err) => {
+                tracing::warn!(error = %err, "Local fallback compaction failed");
+            }
+        }
+
         // Clone validation cache arc to avoid borrow conflict
         let validation_cache = ctx.session_stats.validation_cache.clone();
 

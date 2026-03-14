@@ -1,6 +1,6 @@
 # Skill Authoring Guide for VT Code
 
-VT Code now includes comprehensive skill authoring capabilities following Anthropic's Agent Skills specification.
+VT Code includes skill authoring capabilities built around the open Agent Skills specification.
 
 ## Overview
 
@@ -40,7 +40,9 @@ Skills are modular packages that extend VT Code's capabilities by providing:
 ```yaml
 ---
 name: my-skill
-description: Complete description of what the skill does and WHEN to use it. Include specific triggers: file types, keywords, tasks that should activate this skill.
+description: Describe the workflow, routing triggers, and expected artifact or outcome.
+when-to-use: Use when the request matches a repeatable workflow with clear inputs and outputs.
+when-not-to-use: Do not use when a simpler edit, search, or one-line unified_exec command is enough.
 ---
 ```
 
@@ -49,17 +51,21 @@ description: Complete description of what the skill does and WHEN to use it. Inc
 ```markdown
 # My Skill
 
-## Overview
+## Purpose
 
-Brief explanation of what this skill enables.
+Summarize the workflow, expected inputs, and the artifact or outcome this skill should produce.
 
-## Quick Start
+## Workflow
 
-Simple example of using this skill.
+1. Confirm the request matches the routing guidance above.
+2. Keep the core workflow here and move deep detail into bundled resources.
+3. Produce the expected artifact or outcome.
 
-## Advanced Usage
+## Resources
 
-Detailed workflows and patterns.
+- `scripts/`: deterministic helpers
+- `references/`: detailed docs loaded only when needed
+- `templates/` or `assets/`: reusable output skeletons and supporting files
 ```
 
 3. **Add resources**:
@@ -105,9 +111,17 @@ Every skill must have a `SKILL.md` file with:
 
 **Optional fields**:
 
--   `license`: License terms
+-   `version`, `default-version`, `latest-version`: version metadata and deterministic pinning
+-   `author`, `license`, `compatibility`: ownership and compatibility metadata
 -   `allowed-tools`: Pre-approved tools (for VT Code compatibility)
--   `metadata`: Custom key-value pairs
+-   `tools`: tool dependencies used by the skill
+-   `argument-hint`, `user-invocable`: invocation and menu hints
+-   `context`, `agent`, `disable-model-invocation`: runtime behavior controls
+-   `when-to-use`, `when-not-to-use`: routing logic and negative examples
+-   `network` / `network_policy`: narrow allowlist or denylist for networked skills
+-   `permissions` / `permission_profile`: file-system and execution permissions
+-   `metadata`: Custom structured metadata
+-   `hooks`: reserved by the spec but currently rejected in VT Code
 
 **Markdown Body**:
 
@@ -151,11 +165,18 @@ my-skill/
 -   Templates, images, icons, fonts
 -   Example: `assets/report_template.docx`
 
+### VT Code Runtime Mapping
+
+-   Use `unified_exec` for repeatable shell or script execution.
+-   Write handoff artifacts to workspace paths, `~/.vtcode/tmp`, or existing A2A artifacts.
+-   Keep network access narrow with `sandbox.network.allowlist`, `tools.web_fetch.allowed_domains`, and per-skill `network_policy`.
+-   Use `agent.harness.auto_compaction_enabled` when long-running sessions need automatic compaction.
+
 ## Best Practices
 
 ### 1. Write Effective Descriptions
 
-The description is **critical** for skill discovery. Claude uses it to decide when to load the skill.
+The description is **critical** for skill discovery. VT Code uses it, together with `when-to-use` and `when-not-to-use`, to decide when to load the skill.
 
 **Good**:
 
@@ -258,7 +279,7 @@ Organize by specificity:
 **Product**: Usage, features → See [references/product.md](references/product.md)
 ```
 
-Claude loads only the relevant reference file (`finance.md` for revenue questions).
+VT Code loads only the relevant reference file (`finance.md` for revenue questions).
 
 ### 5. Avoid Common Mistakes
 

@@ -1,3 +1,4 @@
+pub(crate) mod compaction;
 pub(crate) mod context;
 mod finalization;
 pub(crate) mod guards;

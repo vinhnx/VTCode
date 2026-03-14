@@ -626,8 +626,8 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/skills/SKILL_AUTHORING_GUIDE.md`
   - **Content**: Skill Authoring Guide for VT Code
-  - **Topics**: Overview, Overview, Advanced Usage, Skill Structure, Best Practices
-  - **User Questions**: "What can you tell me about Skill Authoring Guide for VT Code?", "How does Overview work?", "How does Overview work?"
+  - **Topics**: Overview, Purpose, Workflow, Resources, Skill Structure
+  - **User Questions**: "What can you tell me about Skill Authoring Guide for VT Code?", "How does Overview work?", "How does Purpose work?"
 
 - **File**: `docs/skills/CONTAINER_GUIDE.md`
   - **Content**: Skill Container API Guide
