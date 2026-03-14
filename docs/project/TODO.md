@@ -73,3 +73,256 @@ use bazel build
 https://github.com/search?q=repo%3Aopenai%2Fcodex%20Bazel&type=code
 
 https://deepwiki.com/search/how-codex-use-bazel_34da771c-1bac-42e0-b4c9-2f80d5a6f1d2?mode=fast
+
+==
+
+apply
+
+```
+TL;DR
+
+The best CGP target in VT Code is the tool runtime boundary, not the LLM provider macro. Apply a small, manual CGP layer first to approval/sandboxing + Tool/ToolHandler unification, using a HasComponent<Name> wiring trait and a tiny delegate_components! macro; that will remove the highest-friction duplication and let the same tool/request types run under different policies without adapter explosion.
+
+Recommended approach (simple path)
+
+Priority order
+
+Sandboxing / approval runtime — highest impact — L (1–2d)
+Tool / ToolHandler adapter layer — high impact — L (1–2d)
+AsyncMiddleware composition — medium impact — M/L (0.5–1.5d)
+LLM provider factory macro — low/medium impact — S/M (<1d)
+ProviderConfig repeated impls — low impact — S (<1h)
+
+What to build first
+
+A. Add a tiny manual CGP substrate
+Create one internal module, e.g. vtcode-core/src/components.rs:
+
+pub trait HasComponent<Name> {
+    type Provider;
+}
+
+macro_rules! delegate_components {
+    ($ctx:ty { $($name:ty => $provider:ty),* $(,)? }) => {
+        $(impl HasComponent<$name> for $ctx {
+            type Provider = $provider;
+        })*
+    };
+}
+
+Then define a few marker names only:
+
+pub enum ApprovalComponent {}
+pub enum SandboxComponent {}
+pub enum ExecuteComponent {}
+pub enum MetadataComponent {}
+pub enum SessionComponent {}
+pub enum OutputMapComponent {}
+
+Do not try to make a whole framework. One trait + one macro is enough.
+
+---
+
+B. Apply CGP first to sandboxing.rs
+This is the cleanest fit for the RustLab pattern.
+
+Today, Approvable<Req>, Sandboxable, and ToolRuntime<Req, Out> are already hinting at “compose orthogonal capabilities.” Move those capabilities to provider traits with an explicit context:
+
+pub trait ApprovalProvider<Ctx, Req> {
+    async fn approve(ctx: &Ctx, req: &Req) -> anyhow::Result<()>;
+}
+
+pub trait SandboxProvider<Ctx> {
+    fn sandbox_policy(ctx: &Ctx) -> SandboxPolicy;
+}
+
+pub trait ExecuteProvider<Ctx, Req, Out> {
+    async fn execute(ctx: &Ctx, req: Req) -> anyhow::Result<Out>;
+}
+
+Then make one generic runtime impl that delegates through the context wiring:
+
+pub struct ToolRuntime;
+
+impl<Ctx, Req, Out> ExecuteProvider<Ctx, Req, Out> for ToolRuntime
+where
+    Ctx: HasComponent<ApprovalComponent>
+        + HasComponent<SandboxComponent>
+        + HasComponent<ExecuteComponent>,
+    <Ctx as HasComponent<ApprovalComponent>>::Provider: ApprovalProvider<Ctx, Req>,
+    <Ctx as HasComponent<SandboxComponent>>::Provider: SandboxProvider<Ctx>,
+    <Ctx as HasComponent<ExecuteComponent>>::Provider: ExecuteProvider<Ctx, Req, Out>,
+{
+    async fn execute(ctx: &Ctx, req: Req) -> anyhow::Result<Out> {
+        <<Ctx as HasComponent<ApprovalComponent>>::Provider as ApprovalProvider<Ctx, Req>>
+            ::approve(ctx, &req).await?;
+
+        // sandbox policy lookup/use here
+
+        <<Ctx as HasComponent<ExecuteComponent>>::Provider as ExecuteProvider<Ctx, Req, Out>>
+            ::execute(ctx, req).await
+    }
+}
+
+Why this first: the same request/tool can now have different approval/sandbox behavior in InteractiveCtx, CiCtx, TestCtx, etc., with no newtype churn and no policy logic baked into the tool itself.
+
+---
+
+C. Replace adapter.rs with CGP-backed facades, not bidirectional adapters
+HandlerToToolAdapter and ToolToHandlerAdapter are a symptom that execution, metadata, session creation, and output mapping are currently smeared across two surface traits.
+
+Keep both public traits for compatibility, but make them thin facades over shared providers:
+
+MetadataProvider<Ctx> → name, description, schemas
+SessionProvider<Ctx> → builds ToolSession / TurnContext
+InvokeProvider<Ctx> → core execution
+OutputMapProvider<Ctx> → ToolOutput ↔ JSON / dual output
+
+Then expose the same underlying context as either:
+
+ToolFacade<Ctx> implementing Tool
+HandlerFacade<Ctx> implementing ToolHandler
+
+That lets you define a tool once and project it into either API without hand-written adapters.
+
+Most important extraction from traits.rs:
+Tool currently mixes:
+execution
+metadata
+policy hints
+resource hints
+workspace/path helpers
+
+That’s too much for one trait. Don’t rewrite Tool completely yet; just extract the parts needed by the facades.
+
+---
+
+D. Use the same pattern for AsyncMiddleware, but only after B/C
+async_middleware.rs is a good CGP fit, but it is secondary.
+
+The current chain uses:
+Arc<dyn AsyncMiddleware>
+boxed async continuations
+nested closure building
+
+That works, but it’s exactly the kind of plumbing CGP can replace with static composition.
+
+A simple version:
+
+PreExecuteProvider<Ctx, Req>
+ExecuteProvider<Ctx, Req, Out>
+PostExecuteProvider<Ctx, Req, Out>
+
+Or, if you want retry/cache/logging semantics to stay around the call, keep named components:
+
+LoggingComponent
+CachingComponent
+RetryComponent
+InnerExecuteComponent
+
+Then wire a fixed order per context.
+
+This is worthwhile if you have multiple runtime profiles like:
+full app runtime
+tests/no cache
+offline mode
+benchmark mode
+
+If there is only one middleware stack, leave it alone for now.
+
+---
+
+E. Defer LLMFactory and ProviderConfig
+These are real pain points, but they are not the best first CGP targets.
+
+factory.rs
+Yes, impl_builtin_provider! is boilerplate, but the runtime still needs a string-keyed registry because providers are selected from config/model strings. Type-level lookup does not remove that.
+
+A small cleanup is fine later:
+introduce one generic constructor trait for “standard providers”
+keep manual impls only for OpenAI/Anthropic special cases
+
+But this is mostly code-golf unless provider construction rules keep growing.
+
+config.rs
+The repeated impl ProviderConfig for X blocks are repetitive, but this is not a coherence hotspot. A helper macro or borrowed-view helper is enough. Full CGP here would add abstraction with little payoff.
+
+Rationale and trade-offs
+
+Why these are the highest-impact CGP sites
+
+sandboxing.rs / approval is the strongest match for CGP’s explicit-Ctx pattern.
+You want the same request/tool type to behave differently under different environments or policies. That is exactly where “move Self to an explicit generic context” pays off.
+adapter.rs is the clearest architectural smell.
+The existence of two adapters means the system has one conceptual tool model but two incompatible trait surfaces. CGP gives you one internal composition model and two thin outer facades.
+async_middleware.rs benefits because CGP lets you replace boxed runtime chains with statically wired components.
+Bonus: internal provider traits can use native async fn with static dispatch on Rust 1.88, while keeping async_trait only on dyn-facing edge traits.
+
+Why the others are lower priority
+
+LLM factory: mostly constructor boilerplate, not architectural duplication.
+ProviderConfig: mostly accessor boilerplate, not a composition problem.
+
+Risks and guardrails
+
+Do not CGP the whole codebase.
+Keep it to the tool runtime internals first. Public surfaces can remain dyn Tool and dyn ToolHandler.
+Do not explode into dozens of micro-traits.
+Start with 5–6 named components max:
+Approval, Sandbox, Execute, Metadata, Session, OutputMap.
+Do not replace runtime string registries with type-level magic where config is dynamic.
+LLMFactory still needs runtime lookup.
+Keep compatibility shims during migration.
+Introduce ToolFacade<Ctx> / HandlerFacade<Ctx> first; remove old adapters only after parity tests pass.
+Prefer static dispatch internally, dyn at the boundary.
+Internal provider traits can drop async_trait; boundary traits likely still need it.
+Test the CGP value directly.
+Add tests proving:
+one tool/request works under two different approval contexts
+one implementation can be exposed as both Tool and ToolHandler
+middleware stack can be swapped by context without changing tool code
+
+When to consider the advanced path
+
+Move beyond the minimal CGP layer only if you see these signals:
+
+more than 2–3 runtime contexts with different policy/session/middleware wiring
+more adapters/newtypes appearing to express the same tool in different environments
+approval/sandbox policy logic spreading across tools instead of staying in runtime wiring
+middleware variants multiplying (test/runtime/offline/bench/agent/CI)
+repeated need to expose the same implementation through multiple APIs
+
+If those signals don’t appear, stop after the initial runtime/facade refactor.
+
+Optional advanced path
+
+If the first pass works well, the next step is to define a single internal “tool components” context per tool/runtime:
+
+MetadataComponent
+SchemaComponent
+ApprovalComponent
+SandboxComponent
+SessionComponent
+ExecuteComponent
+OutputMapComponent
+
+Then each tool/runtime becomes mostly wiring:
+
+delegate_components!(MyToolCtx {
+    MetadataComponent => GrepMetadata,
+    ApprovalComponent => PromptApproval,
+    SandboxComponent => WorkspaceSandbox,
+    SessionComponent => DefaultSessionProvider,
+    ExecuteComponent => GrepExecutor,
+    OutputMapComponent => JsonToolOutput,
+});
+
+That gets you close to the RustLab model without taking a dependency or importing its full abstraction stack.
+
+Bottom line:
+If you only do one CGP refactor in VT Code, do it around tool runtime composition (sandboxing.rs + adapter.rs/traits.rs), not the LLM factory. That is where CGP solves a real architectural problem rather than just removing macros.
+```
+
+check GCP stash and continue
+
+https://contextgeneric.dev/blog/rustlab-2025-coherence/

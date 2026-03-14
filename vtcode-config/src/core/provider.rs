@@ -41,6 +41,42 @@ impl OpenAIHostedShellEnvironment {
     }
 }
 
+/// Reserved keyword values for hosted skill version selection.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum OpenAIHostedSkillVersionKeyword {
+    #[default]
+    Latest,
+}
+
+/// Hosted skill version selector for OpenAI Responses hosted shell mounts.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum OpenAIHostedSkillVersion {
+    Latest(OpenAIHostedSkillVersionKeyword),
+    Number(u64),
+    String(String),
+}
+
+impl Default for OpenAIHostedSkillVersion {
+    fn default() -> Self {
+        Self::Latest(OpenAIHostedSkillVersionKeyword::Latest)
+    }
+}
+
+impl OpenAIHostedSkillVersion {
+    pub fn validation_error(&self, field_path: &str) -> Option<String> {
+        match self {
+            Self::String(value) if value.trim().is_empty() => {
+                Some(format!("`{field_path}` must not be empty when set."))
+            }
+            _ => None,
+        }
+    }
+}
+
 /// Hosted skill reference mounted into an OpenAI hosted shell environment.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -49,8 +85,8 @@ pub enum OpenAIHostedSkill {
     /// Reference to a pre-registered hosted skill.
     SkillReference {
         skill_id: String,
-        #[serde(default = "default_openai_hosted_skill_version")]
-        version: String,
+        #[serde(default)]
+        version: OpenAIHostedSkillVersion,
     },
     /// Inline base64 zip bundle.
     Inline {
@@ -60,8 +96,33 @@ pub enum OpenAIHostedSkill {
     },
 }
 
-fn default_openai_hosted_skill_version() -> String {
-    "latest".to_string()
+impl OpenAIHostedSkill {
+    pub fn validation_error(&self, index: usize) -> Option<String> {
+        match self {
+            Self::SkillReference { skill_id, version } => {
+                let skill_id_path =
+                    format!("provider.openai.hosted_shell.skills[{index}].skill_id");
+                if skill_id.trim().is_empty() {
+                    return Some(format!(
+                        "`{skill_id_path}` must not be empty when `type = \"skill_reference\"`."
+                    ));
+                }
+
+                let version_path = format!("provider.openai.hosted_shell.skills[{index}].version");
+                version.validation_error(&version_path)
+            }
+            Self::Inline { bundle_b64, .. } => {
+                let bundle_path =
+                    format!("provider.openai.hosted_shell.skills[{index}].bundle_b64");
+                if bundle_b64.trim().is_empty() {
+                    return Some(format!(
+                        "`{bundle_path}` must not be empty when `type = \"inline\"`."
+                    ));
+                }
+                None
+            }
+        }
+    }
 }
 
 /// OpenAI hosted shell configuration.
@@ -101,8 +162,27 @@ impl OpenAIHostedShellConfig {
         self.environment.uses_container_reference()
     }
 
+    pub fn first_invalid_skill_message(&self) -> Option<String> {
+        if self.uses_container_reference() {
+            return None;
+        }
+
+        self.skills
+            .iter()
+            .enumerate()
+            .find_map(|(index, skill)| skill.validation_error(index))
+    }
+
+    pub fn has_valid_skill_mounts(&self) -> bool {
+        self.first_invalid_skill_message().is_none()
+    }
+
     pub fn has_valid_reference_target(&self) -> bool {
         !self.uses_container_reference() || self.container_id_ref().is_some()
+    }
+
+    pub fn is_valid_for_runtime(&self) -> bool {
+        self.has_valid_reference_target() && self.has_valid_skill_mounts()
     }
 }
 
@@ -297,7 +377,7 @@ fn default_effort() -> String {
 mod tests {
     use super::{
         OpenAIConfig, OpenAIHostedShellConfig, OpenAIHostedShellEnvironment, OpenAIHostedSkill,
-        OpenAIServiceTier,
+        OpenAIHostedSkillVersion, OpenAIServiceTier,
     };
 
     #[test]
@@ -375,8 +455,43 @@ skill_id = "skill_123"
             parsed.hosted_shell.skills,
             vec![OpenAIHostedSkill::SkillReference {
                 skill_id: "skill_123".to_string(),
-                version: "latest".to_string(),
+                version: OpenAIHostedSkillVersion::default(),
             }]
+        );
+    }
+
+    #[test]
+    fn openai_config_parses_hosted_shell_pinned_version_and_inline_bundle() {
+        let parsed: OpenAIConfig = toml::from_str(
+            r#"
+[hosted_shell]
+enabled = true
+
+[[hosted_shell.skills]]
+type = "skill_reference"
+skill_id = "skill_123"
+version = 2
+
+[[hosted_shell.skills]]
+type = "inline"
+bundle_b64 = "UEsFBgAAAAAAAA=="
+sha256 = "deadbeef"
+"#,
+        )
+        .expect("config should parse");
+
+        assert_eq!(
+            parsed.hosted_shell.skills,
+            vec![
+                OpenAIHostedSkill::SkillReference {
+                    skill_id: "skill_123".to_string(),
+                    version: OpenAIHostedSkillVersion::Number(2),
+                },
+                OpenAIHostedSkill::Inline {
+                    bundle_b64: "UEsFBgAAAAAAAA==".to_string(),
+                    sha256: Some("deadbeef".to_string()),
+                },
+            ]
         );
     }
 
@@ -392,5 +507,45 @@ skill_id = "skill_123"
 
         assert!(!config.has_valid_reference_target());
         assert!(config.container_id_ref().is_none());
+    }
+
+    #[test]
+    fn hosted_shell_reports_invalid_skill_reference_mounts() {
+        let config = OpenAIHostedShellConfig {
+            enabled: true,
+            environment: OpenAIHostedShellEnvironment::ContainerAuto,
+            container_id: None,
+            file_ids: Vec::new(),
+            skills: vec![OpenAIHostedSkill::SkillReference {
+                skill_id: "   ".to_string(),
+                version: OpenAIHostedSkillVersion::default(),
+            }],
+        };
+
+        let message = config
+            .first_invalid_skill_message()
+            .expect("invalid mount should be reported");
+
+        assert!(message.contains("provider.openai.hosted_shell.skills[0].skill_id"));
+        assert!(!config.has_valid_skill_mounts());
+        assert!(!config.is_valid_for_runtime());
+    }
+
+    #[test]
+    fn hosted_shell_ignores_skill_validation_for_container_reference() {
+        let config = OpenAIHostedShellConfig {
+            enabled: true,
+            environment: OpenAIHostedShellEnvironment::ContainerReference,
+            container_id: Some("cntr_123".to_string()),
+            file_ids: Vec::new(),
+            skills: vec![OpenAIHostedSkill::Inline {
+                bundle_b64: "   ".to_string(),
+                sha256: None,
+            }],
+        };
+
+        assert!(config.first_invalid_skill_message().is_none());
+        assert!(config.has_valid_skill_mounts());
+        assert!(config.is_valid_for_runtime());
     }
 }
