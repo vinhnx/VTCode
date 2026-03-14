@@ -1,3 +1,4 @@
+use crate::config::ConfigManager;
 use crate::config::types::CapabilityLevel;
 use crate::ide_context::EditorContextSnapshot;
 use crate::skills::manager::SkillsManager;
@@ -140,7 +141,13 @@ impl PromptContext {
             return;
         };
 
-        let manager = SkillsManager::new(home_dir.to_path_buf());
+        let bundled_skills_enabled = ConfigManager::load_from_workspace(workspace)
+            .map(|manager| manager.config().skills.bundled.enabled)
+            .unwrap_or(true);
+        let manager = SkillsManager::new_with_bundled_skills_enabled(
+            home_dir.to_path_buf(),
+            bundled_skills_enabled,
+        );
         let outcome = manager.skills_metadata_lightweight(workspace);
         self.add_skill_metadata_entries(outcome.skills);
     }

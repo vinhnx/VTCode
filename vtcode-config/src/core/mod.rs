@@ -37,5 +37,5 @@ pub use sandbox::{
     SandboxConfig, SandboxMode, SeccompConfig, SeccompProfilePreset, SensitivePathsConfig,
 };
 pub use security::{GatekeeperConfig, SecurityConfig};
-pub use skills::{PromptFormat, SkillsConfig, SkillsRenderMode};
+pub use skills::{BundledSkillsConfig, PromptFormat, SkillsConfig, SkillsRenderMode};
 pub use tools::{EditorToolConfig, ToolPolicy, ToolsConfig, WebFetchConfig};

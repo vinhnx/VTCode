@@ -66,6 +66,10 @@ pub(crate) fn install_system_skills(codex_home: &Path) -> Result<(), SystemSkill
     Ok(())
 }
 
+pub(crate) fn uninstall_system_skills(codex_home: &Path) {
+    let _ = fs::remove_dir_all(system_cache_root_dir(codex_home));
+}
+
 fn anyhow_to_io(err: anyhow::Error) -> std::io::Error {
     std::io::Error::other(err.to_string())
 }

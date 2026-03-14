@@ -688,6 +688,7 @@ mod tests {
         let policy = AskForApproval::Reject(RejectConfig {
             sandbox_approval: true,
             rules: false,
+            request_permissions: false,
             mcp_elicitations: false,
         });
 

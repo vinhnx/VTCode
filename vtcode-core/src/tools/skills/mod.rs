@@ -1,3 +1,4 @@
+use crate::config::ConfigManager;
 use crate::config::ToolDocumentationMode;
 use crate::config::types::CapabilityLevel;
 use crate::llm::provider::ToolDefinition;
@@ -238,19 +239,30 @@ fn find_project_root(path: &Path) -> Option<PathBuf> {
     None
 }
 
-fn build_skill_loader_config(workspace_root: &Path, codex_home: &Path) -> SkillLoaderConfig {
+fn build_skill_loader_config(
+    workspace_root: &Path,
+    codex_home: &Path,
+    include_bundled_system_skills: bool,
+) -> SkillLoaderConfig {
     SkillLoaderConfig {
         codex_home: codex_home.to_path_buf(),
         cwd: workspace_root.to_path_buf(),
         project_root: find_project_root(workspace_root)
             .or_else(|| Some(workspace_root.to_path_buf())),
+        include_bundled_system_skills,
     }
 }
 
 fn discover_session_skill_metadata(workspace_root: &Path, codex_home: &Path) -> SkillLoadOutcome {
-    let manager = SkillsManager::new(codex_home.to_path_buf());
+    let bundled_skills_enabled = ConfigManager::load_from_workspace(workspace_root)
+        .map(|manager| manager.config().skills.bundled.enabled)
+        .unwrap_or(true);
+    let manager = SkillsManager::new_with_bundled_skills_enabled(
+        codex_home.to_path_buf(),
+        bundled_skills_enabled,
+    );
     manager.ensure_system_skills_installed();
-    let config = build_skill_loader_config(workspace_root, codex_home);
+    let config = build_skill_loader_config(workspace_root, codex_home, bundled_skills_enabled);
     discover_skill_metadata_lightweight(&config)
 }
 

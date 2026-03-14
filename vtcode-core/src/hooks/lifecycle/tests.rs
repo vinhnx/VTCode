@@ -296,4 +296,133 @@ async fn test_user_prompt_submit_hook_blocks_prompt_with_exit_code_2() {
     assert!(outcome.block_reason.unwrap().contains("Prompt blocked"));
 }
 
+#[tokio::test]
+async fn test_session_start_json_like_stdout_failure_does_not_become_context() {
+    let temp_dir = create_test_workspace();
+    let workspace = temp_dir.path();
+
+    let hooks_config = LifecycleHooksConfig {
+        session_start: vec![HookGroupConfig {
+            matcher: None,
+            hooks: vec![HookCommandConfig {
+                kind: Default::default(),
+                command: r#"printf '{"additional_context":"missing brace"'"#.into(),
+                timeout_seconds: None,
+            }],
+        }],
+        ..Default::default()
+    };
+
+    let config = HooksConfig {
+        lifecycle: hooks_config,
+    };
+
+    let engine = LifecycleHookEngine::new(
+        workspace.to_path_buf(),
+        &config,
+        SessionStartTrigger::Startup,
+    )
+    .expect("Failed to create hook engine")
+    .unwrap();
+
+    let outcome = engine
+        .run_session_start()
+        .await
+        .expect("run session start hook");
+
+    assert!(outcome.additional_context.is_empty());
+    assert!(
+        outcome
+            .messages
+            .iter()
+            .any(|message| { message.text.contains("returned invalid JSON output") })
+    );
+}
+
+#[tokio::test]
+async fn test_user_prompt_submit_block_requires_stderr_feedback() {
+    let temp_dir = create_test_workspace();
+    let workspace = temp_dir.path();
+
+    let hooks_config = LifecycleHooksConfig {
+        user_prompt_submit: vec![HookGroupConfig {
+            matcher: None,
+            hooks: vec![HookCommandConfig {
+                kind: Default::default(),
+                command: "exit 2".into(),
+                timeout_seconds: None,
+            }],
+        }],
+        ..Default::default()
+    };
+
+    let config = HooksConfig {
+        lifecycle: hooks_config,
+    };
+
+    let engine = LifecycleHookEngine::new(
+        workspace.to_path_buf(),
+        &config,
+        SessionStartTrigger::Startup,
+    )
+    .expect("Failed to create hook engine")
+    .unwrap();
+
+    let outcome = engine
+        .run_user_prompt_submit("Test prompt")
+        .await
+        .expect("Failed to run user prompt submit hook");
+
+    assert!(outcome.allow_prompt);
+    assert!(outcome.block_reason.is_none());
+    assert!(outcome.messages.iter().any(|message| {
+        message
+            .text
+            .contains("exited with code 2 without stderr feedback")
+    }));
+}
+
+#[tokio::test]
+async fn test_user_prompt_submit_json_block_requires_reason() {
+    let temp_dir = create_test_workspace();
+    let workspace = temp_dir.path();
+
+    let hooks_config = LifecycleHooksConfig {
+        user_prompt_submit: vec![HookGroupConfig {
+            matcher: None,
+            hooks: vec![HookCommandConfig {
+                kind: Default::default(),
+                command: r#"printf '{"decision":"block"}'"#.into(),
+                timeout_seconds: None,
+            }],
+        }],
+        ..Default::default()
+    };
+
+    let config = HooksConfig {
+        lifecycle: hooks_config,
+    };
+
+    let engine = LifecycleHookEngine::new(
+        workspace.to_path_buf(),
+        &config,
+        SessionStartTrigger::Startup,
+    )
+    .expect("Failed to create hook engine")
+    .unwrap();
+
+    let outcome = engine
+        .run_user_prompt_submit("Test prompt")
+        .await
+        .expect("Failed to run user prompt submit hook");
+
+    assert!(outcome.allow_prompt);
+    assert!(outcome.block_reason.is_none());
+    assert!(outcome.messages.iter().any(|message| {
+        message
+            .text
+            .contains("decision=block without a non-empty reason")
+    }));
+}
+
 mod hook_tooling;

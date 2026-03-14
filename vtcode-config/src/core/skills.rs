@@ -19,11 +19,33 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Bundled skills configuration.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "kebab-case")]
+pub struct BundledSkillsConfig {
+    /// Enable bundled skills shipped with VT Code.
+    #[serde(default = "default_bundled_skills_enabled")]
+    pub enabled: bool,
+}
+
+impl Default for BundledSkillsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_bundled_skills_enabled(),
+        }
+    }
+}
+
 /// Skills system configuration
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 pub struct SkillsConfig {
+    /// Bundled skills configuration
+    #[serde(default)]
+    pub bundled: BundledSkillsConfig,
+
     /// Rendering mode for skills in system prompt
     /// - "lean": Codex-style minimal (name + description + path only, 40-60% token savings)
     /// - "full": Full metadata with version, author, native flags
@@ -56,6 +78,7 @@ pub struct SkillsConfig {
 impl Default for SkillsConfig {
     fn default() -> Self {
         Self {
+            bundled: BundledSkillsConfig::default(),
             render_mode: default_render_mode(),
             prompt_format: default_prompt_format(),
             max_skills_in_prompt: default_max_skills_in_prompt(),
@@ -94,6 +117,10 @@ fn default_render_mode() -> SkillsRenderMode {
     SkillsRenderMode::Lean
 }
 
+fn default_bundled_skills_enabled() -> bool {
+    true
+}
+
 fn default_prompt_format() -> PromptFormat {
     PromptFormat::Xml
 }
@@ -121,6 +148,7 @@ mod tests {
     #[test]
     fn test_default_skills_config() {
         let config = SkillsConfig::default();
+        assert!(config.bundled.enabled);
         assert_eq!(config.render_mode, SkillsRenderMode::Lean);
         assert_eq!(config.prompt_format, PromptFormat::Xml);
         assert_eq!(config.max_skills_in_prompt, 10);
@@ -170,6 +198,7 @@ mod tests {
     #[test]
     fn test_skills_config_serde() {
         let config = SkillsConfig {
+            bundled: BundledSkillsConfig { enabled: false },
             render_mode: SkillsRenderMode::Full,
             prompt_format: PromptFormat::Markdown,
             max_skills_in_prompt: 15,
@@ -181,5 +210,31 @@ mod tests {
         let json = serde_json::to_string_pretty(&config).unwrap();
         let deserialized: SkillsConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(config, deserialized);
+    }
+
+    #[test]
+    fn test_skills_config_toml_parses_bundled_settings() {
+        let config: SkillsConfig = toml::from_str(
+            r#"
+            render-mode = "full"
+            prompt-format = "markdown"
+            max-skills-in-prompt = 15
+            enable-auto-trigger = false
+            enable-description-matching = false
+            min-keyword-matches = 3
+
+            [bundled]
+            enabled = false
+            "#,
+        )
+        .unwrap();
+
+        assert!(!config.bundled.enabled);
+        assert_eq!(config.render_mode, SkillsRenderMode::Full);
+        assert_eq!(config.prompt_format, PromptFormat::Markdown);
+        assert_eq!(config.max_skills_in_prompt, 15);
+        assert!(!config.enable_auto_trigger);
+        assert!(!config.enable_description_matching);
+        assert_eq!(config.min_keyword_matches, 3);
     }
 }

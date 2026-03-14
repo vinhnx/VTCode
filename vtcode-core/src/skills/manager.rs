@@ -1,6 +1,7 @@
 use crate::skills::loader::{SkillLoaderConfig, discover_skill_metadata_lightweight, load_skills};
 use crate::skills::model::SkillLoadOutcome;
 use crate::skills::system::install_system_skills;
+use crate::skills::system::uninstall_system_skills;
 use crate::skills::types::Skill;
 use anyhow::Result;
 use hashbrown::HashMap;
@@ -39,6 +40,7 @@ impl CachedSkillInstruction {
 
 pub struct SkillsManager {
     codex_home: PathBuf,
+    bundled_skills_enabled: bool,
     /// Per-cwd skill loading cache with TTL and max capacity
     cache_by_cwd: RwLock<HashMap<PathBuf, CachedSkillOutcome>>,
     /// Max number of cached workspaces (prevents unbounded growth)
@@ -57,8 +59,16 @@ pub struct SkillsManager {
 
 impl SkillsManager {
     pub fn new(codex_home: PathBuf) -> Self {
-        Self {
+        Self::new_with_bundled_skills_enabled(codex_home, true)
+    }
+
+    pub fn new_with_bundled_skills_enabled(
+        codex_home: PathBuf,
+        bundled_skills_enabled: bool,
+    ) -> Self {
+        let manager = Self {
             codex_home,
+            bundled_skills_enabled,
             cache_by_cwd: RwLock::new(HashMap::new()),
             max_cache_size: 10,
             cache_ttl: Duration::from_secs(5 * 60), // 5 minutes
@@ -66,12 +76,26 @@ impl SkillsManager {
             instruction_cache: RwLock::new(HashMap::new()),
             max_instruction_cache_size: 50, // Cache up to 50 parsed skills
             instruction_cache_ttl: Duration::from_secs(10 * 60), // 10 minutes
+        };
+
+        if !manager.bundled_skills_enabled {
+            uninstall_system_skills(&manager.codex_home);
         }
+
+        manager
+    }
+
+    pub fn bundled_skills_enabled(&self) -> bool {
+        self.bundled_skills_enabled
     }
 
     /// Lazy initialize system skills (non-blocking, can be called async)
     pub fn ensure_system_skills_installed(&self) {
         self.system_skills_initialized.get_or_init(|| {
+            if !self.bundled_skills_enabled {
+                return;
+            }
+
             // Try to install system skills, log error if fails but don't panic
             if let Err(err) = install_system_skills(&self.codex_home) {
                 tracing::warn!("lazy system skills installation failed: {err}");
@@ -105,6 +129,7 @@ impl SkillsManager {
             codex_home: self.codex_home.clone(),
             cwd: cwd.to_path_buf(),
             project_root,
+            include_bundled_system_skills: self.bundled_skills_enabled,
         };
 
         let outcome = load_skills(&config);
@@ -181,6 +206,7 @@ impl SkillsManager {
             codex_home: self.codex_home.clone(),
             cwd: cwd.to_path_buf(),
             project_root,
+            include_bundled_system_skills: self.bundled_skills_enabled,
         };
 
         // Use lightweight discovery (no manifest parsing)
@@ -291,6 +317,7 @@ fn find_git_root(path: &Path) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use tempfile::TempDir;
 
     #[test]
@@ -442,5 +469,49 @@ mod tests {
         // Clear should work
         manager.clear_instruction_cache();
         assert_eq!(manager.instruction_cache_size(), 0);
+    }
+
+    #[test]
+    fn test_disabled_bundled_skills_remove_stale_system_cache() {
+        let temp_home = TempDir::new().unwrap();
+        let stale_skill_dir = temp_home.path().join("skills/.system/stale-skill");
+        fs::create_dir_all(&stale_skill_dir).unwrap();
+        fs::write(stale_skill_dir.join("SKILL.md"), "# stale\n").unwrap();
+
+        let _manager =
+            SkillsManager::new_with_bundled_skills_enabled(temp_home.path().to_path_buf(), false);
+
+        assert!(!temp_home.path().join("skills/.system").exists());
+    }
+
+    #[test]
+    fn test_disabled_bundled_skills_exclude_system_root_even_if_recreated() {
+        let temp_home = TempDir::new().unwrap();
+        let workspace = TempDir::new().unwrap();
+        let bundled_skill_dir = temp_home.path().join("skills/.system/bundled-skill");
+        fs::create_dir_all(&bundled_skill_dir).unwrap();
+        fs::write(
+            bundled_skill_dir.join("SKILL.md"),
+            "---\nname: bundled-skill\ndescription: bundled\n---\n\n# Body\n",
+        )
+        .unwrap();
+
+        let manager =
+            SkillsManager::new_with_bundled_skills_enabled(temp_home.path().to_path_buf(), false);
+
+        fs::create_dir_all(&bundled_skill_dir).unwrap();
+        fs::write(
+            bundled_skill_dir.join("SKILL.md"),
+            "---\nname: bundled-skill\ndescription: bundled\n---\n\n# Body\n",
+        )
+        .unwrap();
+
+        let outcome = manager.skills_for_cwd(workspace.path());
+        assert!(
+            outcome
+                .skills
+                .iter()
+                .all(|skill| skill.name != "bundled-skill")
+        );
     }
 }

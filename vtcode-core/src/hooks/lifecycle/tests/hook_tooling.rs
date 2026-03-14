@@ -96,6 +96,47 @@ async fn test_pre_tool_use_hook_blocks_with_exit_code_2() {
 }
 
 #[tokio::test]
+async fn test_pre_tool_use_hook_exit_code_2_requires_feedback() {
+    let temp_dir = create_test_workspace();
+    let workspace = temp_dir.path();
+
+    let hooks_config = LifecycleHooksConfig {
+        pre_tool_use: vec![HookGroupConfig {
+            matcher: Some("TestTool".into()),
+            hooks: vec![HookCommandConfig {
+                kind: Default::default(),
+                command: "exit 2".into(),
+                timeout_seconds: None,
+            }],
+        }],
+        ..Default::default()
+    };
+
+    let config = HooksConfig {
+        lifecycle: hooks_config,
+    };
+
+    let engine = LifecycleHookEngine::new(
+        workspace.to_path_buf(),
+        &config,
+        SessionStartTrigger::Startup,
+    )
+    .expect("Failed to create hook engine")
+    .unwrap();
+
+    let outcome = engine
+        .run_pre_tool_use("TestTool", Some(&json!({"param": "value"})))
+        .await
+        .expect("Failed to run pre-tool use hook");
+
+    assert!(matches!(outcome.decision, PreToolHookDecision::Continue));
+    assert!(outcome.messages.iter().any(|m| {
+        m.text
+            .contains("exited with code 2 without stderr feedback")
+    }));
+}
+
+#[tokio::test]
 async fn test_pre_tool_use_hook_allows_with_json_response() {
     let temp_dir = create_test_workspace();
     let workspace = temp_dir.path();
@@ -178,6 +219,100 @@ async fn test_post_tool_use_hook_execution() {
     );
     assert!(outcome.additional_context.is_empty());
     assert!(outcome.block_reason.is_none());
+}
+
+#[tokio::test]
+async fn test_post_tool_use_json_like_stdout_failure_is_reported() {
+    let temp_dir = create_test_workspace();
+    let workspace = temp_dir.path();
+
+    let hooks_config = LifecycleHooksConfig {
+        post_tool_use: vec![HookGroupConfig {
+            matcher: Some("TestTool".into()),
+            hooks: vec![HookCommandConfig {
+                kind: Default::default(),
+                command: r#"printf '{"decision":"block"'"#.into(),
+                timeout_seconds: None,
+            }],
+        }],
+        ..Default::default()
+    };
+
+    let config = HooksConfig {
+        lifecycle: hooks_config,
+    };
+
+    let engine = LifecycleHookEngine::new(
+        workspace.to_path_buf(),
+        &config,
+        SessionStartTrigger::Startup,
+    )
+    .expect("Failed to create hook engine")
+    .unwrap();
+
+    let outcome = engine
+        .run_post_tool_use(
+            "TestTool",
+            Some(&json!({"param": "value"})),
+            &json!({"result": "success"}),
+        )
+        .await
+        .expect("Failed to run post-tool use hook");
+
+    assert!(outcome.block_reason.is_none());
+    assert!(
+        outcome
+            .messages
+            .iter()
+            .any(|m| { m.text.contains("returned invalid JSON output") })
+    );
+}
+
+#[tokio::test]
+async fn test_post_tool_use_block_requires_reason() {
+    let temp_dir = create_test_workspace();
+    let workspace = temp_dir.path();
+
+    let hooks_config = LifecycleHooksConfig {
+        post_tool_use: vec![HookGroupConfig {
+            matcher: Some("TestTool".into()),
+            hooks: vec![HookCommandConfig {
+                kind: Default::default(),
+                command: r#"printf '{"decision":"block"}'"#.into(),
+                timeout_seconds: None,
+            }],
+        }],
+        ..Default::default()
+    };
+
+    let config = HooksConfig {
+        lifecycle: hooks_config,
+    };
+
+    let engine = LifecycleHookEngine::new(
+        workspace.to_path_buf(),
+        &config,
+        SessionStartTrigger::Startup,
+    )
+    .expect("Failed to create hook engine")
+    .unwrap();
+
+    let outcome = engine
+        .run_post_tool_use(
+            "TestTool",
+            Some(&json!({"param": "value"})),
+            &json!({"result": "success"}),
+        )
+        .await
+        .expect("Failed to run post-tool use hook");
+
+    assert!(outcome.block_reason.is_none());
+    assert!(
+        outcome
+            .messages
+            .iter()
+            .any(|m| { m.text.contains("decision=block without a non-empty reason") })
+    );
 }
 
 #[tokio::test]

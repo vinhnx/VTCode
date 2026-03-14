@@ -20,6 +20,7 @@ pub struct SkillLoaderConfig {
     pub codex_home: PathBuf,
     pub cwd: PathBuf,
     pub project_root: Option<PathBuf>,
+    pub include_bundled_system_skills: bool,
 }
 
 pub struct SkillRoot {
@@ -182,12 +183,14 @@ fn skill_roots_with_home_dir(
     }
 
     // 3. System roots
-    roots.push(SkillRoot {
-        path: system_cache_root_dir(&config.codex_home),
-        scope: SkillScope::System,
-        is_tool_root: false,
-        is_plugin_root: false,
-    });
+    if config.include_bundled_system_skills {
+        roots.push(SkillRoot {
+            path: system_cache_root_dir(&config.codex_home),
+            scope: SkillScope::System,
+            is_tool_root: false,
+            is_plugin_root: false,
+        });
+    }
 
     roots
 }
@@ -611,6 +614,7 @@ fn discovery_config_for_codex_home(workspace_root: &Path, codex_home: &Path) -> 
         codex_home: codex_home.to_path_buf(),
         cwd: workspace_root.to_path_buf(),
         project_root: Some(workspace_root.to_path_buf()),
+        include_bundled_system_skills: true,
     };
     let roots = skill_roots_with_home_dir(&loader_config, Some(codex_home));
 

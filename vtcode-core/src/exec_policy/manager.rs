@@ -395,6 +395,7 @@ mod tests {
                 default_approval: AskForApproval::Reject(crate::exec_policy::RejectConfig {
                     sandbox_approval: false,
                     rules: true,
+                    request_permissions: false,
                     mcp_elicitations: false,
                 }),
                 ..ExecPolicyConfig::default()
@@ -421,6 +422,7 @@ mod tests {
                 default_approval: AskForApproval::Reject(crate::exec_policy::RejectConfig {
                     sandbox_approval: true,
                     rules: false,
+                    request_permissions: false,
                     mcp_elicitations: false,
                 }),
                 ..ExecPolicyConfig::default()

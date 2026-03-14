@@ -5,7 +5,7 @@ use crate::hooks::lifecycle::types::{HookMessage, UserPromptHookOutcome};
 
 use super::common::{
     HookCommandResult, allow_plain_success_stdout, extract_common_fields, handle_non_zero_exit,
-    handle_timeout, matches_hook_event, parse_json_output, select_message,
+    handle_timeout, looks_like_json, matches_hook_event, parse_json_output, trimmed_non_empty,
 };
 
 pub(crate) fn interpret_user_prompt(
@@ -21,10 +21,16 @@ pub(crate) fn interpret_user_prompt(
 
     if let Some(code) = result.exit_code {
         if code == 2 {
-            outcome.allow_prompt = false;
-            let reason = select_message(result.stderr.trim(), "Prompt blocked by lifecycle hook.");
-            outcome.block_reason = Some(reason.clone());
-            outcome.messages.push(HookMessage::error(reason));
+            if let Some(reason) = trimmed_non_empty(&result.stderr) {
+                outcome.allow_prompt = false;
+                outcome.block_reason = Some(reason.clone());
+                outcome.messages.push(HookMessage::error(reason));
+            } else {
+                outcome.messages.push(HookMessage::error(format!(
+                    "UserPromptSubmit hook `{}` exited with code 2 without stderr feedback",
+                    command.command
+                )));
+            }
             return;
         } else if code != 0 {
             handle_non_zero_exit(command, result, code, &mut outcome.messages, true);
@@ -42,22 +48,38 @@ pub(crate) fn interpret_user_prompt(
     if let Some(json) = parse_json_output(&result.stdout) {
         let common = extract_common_fields(&json, &mut outcome.messages);
         if let Some(false) = common.continue_decision {
-            outcome.allow_prompt = false;
-            outcome.block_reason = common
+            if let Some(reason) = common
                 .stop_reason
                 .clone()
                 .or(common.decision_reason.clone())
-                .or_else(|| Some("Prompt blocked by lifecycle hook.".to_owned()));
+                .and_then(|reason| trimmed_non_empty(&reason))
+            {
+                outcome.allow_prompt = false;
+                outcome.block_reason = Some(reason);
+            } else {
+                outcome.messages.push(HookMessage::error(format!(
+                    "UserPromptSubmit hook `{}` returned continue=false without a non-empty reason",
+                    command.command
+                )));
+            }
         }
 
         if let Some(decision) = common.decision.as_deref()
             && decision.eq_ignore_ascii_case("block")
         {
-            outcome.allow_prompt = false;
-            outcome.block_reason = common
+            if let Some(reason) = common
                 .decision_reason
                 .clone()
-                .or_else(|| Some("Prompt blocked by lifecycle hook.".to_owned()));
+                .and_then(|reason| trimmed_non_empty(&reason))
+            {
+                outcome.allow_prompt = false;
+                outcome.block_reason = Some(reason);
+            } else {
+                outcome.messages.push(HookMessage::error(format!(
+                    "UserPromptSubmit hook `{}` returned decision=block without a non-empty reason",
+                    command.command
+                )));
+            }
         }
 
         if let Some(Value::Object(spec)) = common.hook_specific
@@ -86,11 +108,16 @@ pub(crate) fn interpret_user_prompt(
         {
             outcome.messages.push(HookMessage::error(reason));
         }
-    } else if allow_plain_success_stdout(result, quiet_success_output)
-        && !result.stdout.trim().is_empty()
-    {
-        outcome
-            .additional_context
-            .push(result.stdout.trim().to_owned());
+    } else if !result.stdout.trim().is_empty() {
+        if looks_like_json(&result.stdout) {
+            outcome.messages.push(HookMessage::error(format!(
+                "UserPromptSubmit hook `{}` returned invalid JSON output",
+                command.command
+            )));
+        } else if allow_plain_success_stdout(result, quiet_success_output) {
+            outcome
+                .additional_context
+                .push(result.stdout.trim().to_owned());
+        }
     }
 }

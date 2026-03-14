@@ -21,6 +21,20 @@ pub(crate) fn parse_json_output(stdout: &str) -> Option<Value> {
     serde_json::from_str(trimmed).ok()
 }
 
+pub(crate) fn looks_like_json(stdout: &str) -> bool {
+    let trimmed = stdout.trim_start();
+    trimmed.starts_with('{') || trimmed.starts_with('[')
+}
+
+pub(crate) fn trimmed_non_empty(text: &str) -> Option<String> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_owned())
+    }
+}
+
 pub(crate) fn allow_plain_success_stdout(
     result: &HookCommandResult,
     quiet_success_output: bool,
@@ -124,13 +138,4 @@ pub(crate) fn handle_non_zero_exit(
     };
 
     messages.push(HookMessage { level, text });
-}
-
-pub(crate) fn select_message(stderr: &str, fallback: &str) -> String {
-    let trimmed = stderr.trim();
-    if trimmed.is_empty() {
-        fallback.to_owned()
-    } else {
-        trimmed.to_owned()
-    }
 }

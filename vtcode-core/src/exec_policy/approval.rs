@@ -10,6 +10,8 @@ pub struct RejectConfig {
     pub sandbox_approval: bool,
     /// Reject prompts triggered by policy `prompt` rules.
     pub rules: bool,
+    /// Reject approval prompts related to built-in permission requests.
+    pub request_permissions: bool,
     /// Reject MCP elicitation prompts.
     pub mcp_elicitations: bool,
 }
@@ -21,6 +23,10 @@ impl RejectConfig {
 
     pub const fn rejects_rules_approval(self) -> bool {
         self.rules
+    }
+
+    pub const fn rejects_request_permissions(self) -> bool {
+        self.request_permissions
     }
 
     pub const fn rejects_mcp_elicitations(self) -> bool {
@@ -313,10 +319,12 @@ mod tests {
         let config = RejectConfig {
             sandbox_approval: true,
             rules: false,
+            request_permissions: false,
             mcp_elicitations: true,
         };
         assert!(config.rejects_sandbox_approval());
         assert!(!config.rejects_rules_approval());
+        assert!(!config.rejects_request_permissions());
         assert!(config.rejects_mcp_elicitations());
     }
 
@@ -333,6 +341,7 @@ mod tests {
         let reject_policy = AskForApproval::Reject(RejectConfig {
             sandbox_approval: true,
             rules: false,
+            request_permissions: false,
             mcp_elicitations: true,
         });
         assert!(!reject_policy.rejects_rule_prompt());
@@ -355,6 +364,7 @@ mod tests {
             AskForApproval::Reject(RejectConfig {
                 sandbox_approval: true,
                 rules: false,
+                request_permissions: false,
                 mcp_elicitations: true,
             })
         );
@@ -366,8 +376,31 @@ mod tests {
                 "reject": {
                     "sandbox_approval": true,
                     "rules": false,
+                    "request_permissions": false,
                     "mcp_elicitations": true
                 }
+            })
+        );
+    }
+
+    #[test]
+    fn test_reject_policy_defaults_missing_request_permissions_to_false() {
+        let policy: AskForApproval = serde_json::from_value(json!({
+            "reject": {
+                "sandbox_approval": true,
+                "rules": false,
+                "mcp_elicitations": true
+            }
+        }))
+        .expect("deserialize legacy reject policy");
+
+        assert_eq!(
+            policy,
+            AskForApproval::Reject(RejectConfig {
+                sandbox_approval: true,
+                rules: false,
+                request_permissions: false,
+                mcp_elicitations: true,
             })
         );
     }
@@ -424,6 +457,7 @@ mod tests {
         let policy = AskForApproval::Reject(RejectConfig {
             sandbox_approval: true,
             rules: false,
+            request_permissions: false,
             mcp_elicitations: false,
         });
 
@@ -442,6 +476,7 @@ mod tests {
         let policy = AskForApproval::Reject(RejectConfig {
             sandbox_approval: false,
             rules: true,
+            request_permissions: false,
             mcp_elicitations: true,
         });
 

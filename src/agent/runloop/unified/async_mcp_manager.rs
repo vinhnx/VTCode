@@ -17,6 +17,7 @@ pub(crate) fn approval_policy_from_human_in_the_loop(human_in_the_loop: bool) ->
         AskForApproval::Reject(RejectConfig {
             sandbox_approval: true,
             rules: true,
+            request_permissions: false,
             mcp_elicitations: true,
         })
     }
@@ -455,6 +456,7 @@ mod tests {
             AskForApproval::Reject(RejectConfig {
                 sandbox_approval: true,
                 rules: true,
+                request_permissions: false,
                 mcp_elicitations: true,
             })
         );
