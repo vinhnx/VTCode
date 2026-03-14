@@ -128,6 +128,10 @@ cargo clippy --workspace --all-targets -- -D warnings && cargo fmt --check && ca
 
 **Performance**: Single codegen unit, strict Clippy, no `expect_used`/`unwrap_used`.
 
+**Blocked Handoff Recovery**: When a run writes a blocked handoff, check `.vtcode/tasks/current_blocked.md` (and `.vtcode/tasks/blockers/`) for context, then resume with `vtcode --resume <session_id>`.
+
+**Hooks Noise Control**: Set `hooks.lifecycle.quiet_success_output = true` in `vtcode.toml` to suppress plain stdout for successful lifecycle hooks while retaining structured/failed output.
+
 ## Agent-First CLI Invariants
 
 - Prefer machine-readable output for automation (`vtcode ask --output-format json`, `vtcode exec --json`).
