@@ -16,6 +16,10 @@ pub struct HooksConfig {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct LifecycleHooksConfig {
+    /// Suppress plain stdout from successful hooks unless they emit structured fields
+    #[serde(default)]
+    pub quiet_success_output: bool,
+
     /// Commands to run immediately when an agent session begins
     #[serde(default)]
     pub session_start: Vec<HookGroupConfig>,

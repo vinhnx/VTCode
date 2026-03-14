@@ -181,6 +181,92 @@ async fn test_post_tool_use_hook_execution() {
 }
 
 #[tokio::test]
+async fn test_quiet_success_output_suppresses_plain_stdout() {
+    let temp_dir = create_test_workspace();
+    let workspace = temp_dir.path();
+
+    let hooks_config = LifecycleHooksConfig {
+        quiet_success_output: true,
+        post_tool_use: vec![HookGroupConfig {
+            matcher: Some("TestTool".into()),
+            hooks: vec![HookCommandConfig {
+                kind: Default::default(),
+                command: "echo 'Post-tool processing complete'".into(),
+                timeout_seconds: None,
+            }],
+        }],
+        ..Default::default()
+    };
+
+    let config = HooksConfig {
+        lifecycle: hooks_config,
+    };
+
+    let engine = LifecycleHookEngine::new(
+        workspace.to_path_buf(),
+        &config,
+        SessionStartTrigger::Startup,
+    )
+    .expect("Failed to create hook engine")
+    .unwrap();
+
+    let outcome = engine
+        .run_post_tool_use(
+            "TestTool",
+            Some(&json!({"param": "value"})),
+            &json!({"result": "success"}),
+        )
+        .await
+        .expect("Failed to run post-tool use hook");
+
+    assert!(outcome.messages.is_empty());
+}
+
+#[tokio::test]
+async fn test_quiet_success_output_keeps_structured_context() {
+    let temp_dir = create_test_workspace();
+    let workspace = temp_dir.path();
+
+    let hooks_config = LifecycleHooksConfig {
+        quiet_success_output: true,
+        user_prompt_submit: vec![HookGroupConfig {
+            matcher: Some("Test prompt".into()),
+            hooks: vec![HookCommandConfig {
+                kind: Default::default(),
+                command: r#"printf '{"systemMessage":"Structured note","hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"Added context"}}\n'"#.into(),
+                timeout_seconds: None,
+            }],
+        }],
+        ..Default::default()
+    };
+
+    let config = HooksConfig {
+        lifecycle: hooks_config,
+    };
+
+    let engine = LifecycleHookEngine::new(
+        workspace.to_path_buf(),
+        &config,
+        SessionStartTrigger::Startup,
+    )
+    .expect("Failed to create hook engine")
+    .unwrap();
+
+    let outcome = engine
+        .run_user_prompt_submit("Test prompt")
+        .await
+        .expect("Failed to run user prompt submit hook");
+
+    assert!(
+        outcome
+            .messages
+            .iter()
+            .any(|msg| msg.text == "Structured note")
+    );
+    assert_eq!(outcome.additional_context, vec!["Added context"]);
+}
+
+#[tokio::test]
 async fn test_hook_with_timeout() {
     let temp_dir = create_test_workspace();
     let workspace = temp_dir.path();

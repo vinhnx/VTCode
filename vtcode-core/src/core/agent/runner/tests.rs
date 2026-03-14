@@ -3,6 +3,7 @@ use crate::config::VTCodeConfig;
 use crate::config::constants::tools;
 use crate::config::models::ModelId;
 use crate::config::types::CapabilityLevel;
+use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::state::TaskRunState;
 use crate::core::agent::state::record_turn_duration;
 use crate::core::agent::task::{Task, TaskOutcome, TaskResults};
@@ -220,6 +221,75 @@ async fn build_universal_tools_matches_registry_agent_runner_snapshot() {
         .collect::<Vec<_>>();
 
     assert_eq!(actual, expected);
+}
+
+#[tokio::test]
+async fn build_universal_tools_uses_override_when_present() {
+    let temp = TempDir::new().expect("tempdir");
+    let mut runner = AgentRunner::new_with_thread_bootstrap_and_config(
+        AgentType::Single,
+        ModelId::default(),
+        "test-key".to_string(),
+        temp.path().to_path_buf(),
+        "thread-tool-override".to_string(),
+        RunnerSettings {
+            reasoning_effort: None,
+            verbosity: None,
+        },
+        None,
+        ThreadBootstrap::new(None),
+        VTCodeConfig::default(),
+    )
+    .await
+    .expect("runner");
+
+    runner.set_tool_definitions_override(vec![crate::llm::provider::ToolDefinition::function(
+        "only_tool".to_string(),
+        "Only tool".to_string(),
+        json!({ "type": "object" }),
+    )]);
+
+    let tools = runner.build_universal_tools().await.expect("tool override");
+
+    assert_eq!(tools.len(), 1);
+    assert_eq!(tools[0].function_name(), "only_tool");
+}
+
+#[tokio::test]
+async fn normalize_tool_args_applies_transform_after_defaults() {
+    let temp = TempDir::new().expect("tempdir");
+    let mut runner = AgentRunner::new_with_thread_bootstrap_and_config(
+        AgentType::Single,
+        ModelId::default(),
+        "test-key".to_string(),
+        temp.path().to_path_buf(),
+        "thread-tool-transform".to_string(),
+        RunnerSettings {
+            reasoning_effort: None,
+            verbosity: None,
+        },
+        None,
+        ThreadBootstrap::new(None),
+        VTCodeConfig::default(),
+    )
+    .await
+    .expect("runner");
+    runner.set_tool_arg_transform(Arc::new(|name, value| {
+        let mut obj = value.as_object().cloned().expect("object args");
+        obj.insert("tool_name".to_string(), json!(name));
+        serde_json::Value::Object(obj)
+    }));
+
+    let mut state = AgentSessionState::new("session".to_string(), 5, 5, 10_000);
+    state.last_dir_path = Some(temp.path().display().to_string());
+    let normalized = runner.normalize_tool_args(
+        tools::UNIFIED_SEARCH,
+        &json!({"action": "list"}),
+        &mut state,
+    );
+
+    assert_eq!(normalized["tool_name"], tools::UNIFIED_SEARCH);
+    assert_eq!(normalized["path"], json!(temp.path().display().to_string()));
 }
 
 #[tokio::test]
@@ -515,6 +585,22 @@ fn harness_events(results: &TaskResults) -> Vec<HarnessEventKind> {
         .collect()
 }
 
+fn harness_paths(results: &TaskResults, kind: HarnessEventKind) -> Vec<String> {
+    results
+        .thread_events
+        .iter()
+        .filter_map(|event| match event {
+            ThreadEvent::ItemCompleted(ItemCompletedEvent { item }) => match &item.details {
+                ThreadItemDetails::Harness(harness) if harness.event == kind => {
+                    harness.path.clone()
+                }
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect()
+}
+
 #[tokio::test]
 async fn exec_full_auto_continues_until_tracker_is_completed() {
     let temp = TempDir::new().expect("tempdir");
@@ -697,4 +783,42 @@ async fn exec_only_policy_skips_when_full_auto_is_disabled() {
     let events = harness_events(&result);
     assert!(events.contains(&HarnessEventKind::ContinuationSkipped));
     assert!(!events.contains(&HarnessEventKind::ContinuationStarted));
+}
+
+#[tokio::test]
+async fn tool_loop_limit_writes_blocked_handoff_artifacts() {
+    let temp = TempDir::new().expect("tempdir");
+    let workspace = workspace_root(&temp);
+    seed_tracker(&workspace, json!(["Investigate loop"])).await;
+
+    let mut vt_cfg = VTCodeConfig::default();
+    vt_cfg.automation.full_auto.max_turns = 1;
+    vt_cfg.tools.max_tool_loops = 1;
+    let mut runner = make_runner(&temp, vt_cfg, "thread-tool-loop-blocked").await;
+    runner
+        .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
+        .await;
+    runner.provider_client = Box::new(QueuedProvider::new(vec![tool_call_response(
+        tools::TASK_TRACKER,
+        json!({
+            "action": "list"
+        }),
+    )]));
+
+    let result = runner
+        .execute_task(&task("Loop blocked", "exec-task"), &[])
+        .await
+        .expect("task result");
+
+    assert!(matches!(
+        result.outcome,
+        TaskOutcome::ToolLoopLimitReached { .. }
+    ));
+    let paths = harness_paths(&result, HarnessEventKind::BlockedHandoffWritten);
+    assert_eq!(paths.len(), 2);
+    for path in paths {
+        let content = fs::read_to_string(&path).expect("blocked handoff file");
+        assert!(content.contains("tool_loop_limit_reached"));
+        assert!(content.contains("Stopped after reaching tool loop limit"));
+    }
 }

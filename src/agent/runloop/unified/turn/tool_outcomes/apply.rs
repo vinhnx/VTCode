@@ -2,6 +2,8 @@ use crate::agent::runloop::unified::turn::context::{TurnLoopResult, TurnOutcomeC
 use crate::agent::runloop::unified::turn::turn_loop::TurnLoopOutcome;
 use anyhow::Result;
 use std::time::Duration;
+use vtcode_core::core::agent::blocked_handoff::write_blocked_handoff;
+use vtcode_core::exec::events::HarnessEventKind;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_core::utils::session_archive::SessionMessage;
@@ -63,6 +65,34 @@ pub(crate) async fn apply_turn_outcome(
         TurnLoopResult::Blocked { reason } => {
             if let Some(reason) = reason.as_deref() {
                 let _ = ctx.renderer.line(MessageStyle::Info, reason);
+            }
+            match write_blocked_handoff(
+                ctx.workspace,
+                ctx.session_id,
+                "blocked",
+                reason
+                    .as_deref()
+                    .unwrap_or("Turn blocked due to repeated failing behavior."),
+                &[],
+            ) {
+                Ok(artifacts) => {
+                    for path in [&artifacts.current_path, &artifacts.archive_path] {
+                        let path_text = path.display().to_string();
+                        let _ = ctx
+                            .renderer
+                            .line(MessageStyle::Info, &format!("Blocked handoff: {path_text}"));
+                        if let Some(emitter) = ctx.harness_emitter {
+                            let _ = emitter.emit(
+                                crate::agent::runloop::unified::inline_events::harness::harness_event(
+                                    HarnessEventKind::BlockedHandoffWritten,
+                                    Some("Blocked handoff written".to_string()),
+                                    Some(path_text),
+                                ),
+                            );
+                        }
+                    }
+                }
+                Err(err) => tracing::warn!("Failed to persist blocked handoff: {}", err),
             }
             ctx.handle.clear_input();
             ctx.handle.set_placeholder(ctx.default_placeholder.clone());
@@ -186,6 +216,9 @@ mod tests {
                 session_end_reason: &mut session_end_reason,
                 turn_elapsed: Duration::from_secs(90),
                 show_turn_timer: true,
+                workspace: std::path::Path::new("."),
+                session_id: "session-test",
+                harness_emitter: None,
             },
         )
         .await
@@ -221,6 +254,9 @@ mod tests {
                 session_end_reason: &mut session_end_reason,
                 turn_elapsed: Duration::from_secs(90),
                 show_turn_timer: true,
+                workspace: std::path::Path::new("."),
+                session_id: "session-test",
+                harness_emitter: None,
             },
         )
         .await
@@ -257,6 +293,9 @@ mod tests {
                 session_end_reason: &mut session_end_reason,
                 turn_elapsed: Duration::from_secs(90),
                 show_turn_timer: false,
+                workspace: std::path::Path::new("."),
+                session_id: "session-test",
+                harness_emitter: None,
             },
         )
         .await

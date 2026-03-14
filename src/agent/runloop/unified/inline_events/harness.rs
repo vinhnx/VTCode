@@ -12,9 +12,9 @@ use vtcode_config::OpenResponsesConfig;
 #[cfg(test)]
 use vtcode_core::exec::events::ThreadStartedEvent;
 use vtcode_core::exec::events::{
-    ItemCompletedEvent, ItemStartedEvent, ThreadEvent, ThreadItem, ThreadItemDetails,
-    ToolCallStatus, ToolInvocationItem, ToolOutputItem, TurnCompletedEvent, TurnFailedEvent,
-    TurnStartedEvent, Usage, VersionedThreadEvent,
+    HarnessEventItem, HarnessEventKind, ItemCompletedEvent, ItemStartedEvent, ThreadEvent,
+    ThreadItem, ThreadItemDetails, ToolCallStatus, ToolInvocationItem, ToolOutputItem,
+    TurnCompletedEvent, TurnFailedEvent, TurnStartedEvent, Usage, VersionedThreadEvent,
 };
 use vtcode_core::open_responses::{OpenResponsesIntegration, SequencedEvent};
 use vtcode_core::utils::file_utils::ensure_dir_exists_sync;
@@ -307,6 +307,25 @@ pub(crate) fn turn_failed_event(message: impl Into<String>, usage: Option<Usage>
     ThreadEvent::TurnFailed(TurnFailedEvent {
         message: message.into(),
         usage,
+    })
+}
+
+pub(crate) fn harness_event(
+    event: HarnessEventKind,
+    message: Option<String>,
+    path: Option<String>,
+) -> ThreadEvent {
+    ThreadEvent::ItemCompleted(ItemCompletedEvent {
+        item: ThreadItem {
+            id: format!("harness-{}", Utc::now().timestamp_millis()),
+            details: ThreadItemDetails::Harness(HarnessEventItem {
+                event,
+                message,
+                command: None,
+                path,
+                exit_code: None,
+            }),
+        },
     })
 }
 

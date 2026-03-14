@@ -21,6 +21,21 @@ pub(crate) fn parse_json_output(stdout: &str) -> Option<Value> {
     serde_json::from_str(trimmed).ok()
 }
 
+pub(crate) fn allow_plain_success_stdout(
+    result: &HookCommandResult,
+    quiet_success_output: bool,
+) -> bool {
+    if !quiet_success_output {
+        return true;
+    }
+
+    if result.timed_out {
+        return true;
+    }
+
+    !matches!(result.exit_code, None | Some(0))
+}
+
 pub(crate) struct CommonJsonFields {
     pub(super) continue_decision: Option<bool>,
     pub(super) stop_reason: Option<String>,

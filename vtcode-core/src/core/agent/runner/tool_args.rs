@@ -85,7 +85,11 @@ impl AgentRunner {
             normalized.insert("path".to_string(), Value::String(last_file));
         }
 
-        Value::Object(normalized)
+        let normalized = Value::Object(normalized);
+        if let Some(transform) = &self.tool_arg_transform {
+            return transform(name, normalized);
+        }
+        normalized
     }
 
     pub(super) fn update_last_paths_from_args(

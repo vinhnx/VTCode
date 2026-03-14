@@ -1,5 +1,6 @@
 //! Agent system for intelligent conversation management
 
+pub mod blocked_handoff;
 pub mod bootstrap;
 pub mod chat;
 pub mod completion;

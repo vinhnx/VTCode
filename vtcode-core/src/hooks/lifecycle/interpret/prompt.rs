@@ -4,14 +4,15 @@ use serde_json::Value;
 use crate::hooks::lifecycle::types::{HookMessage, UserPromptHookOutcome};
 
 use super::common::{
-    HookCommandResult, extract_common_fields, handle_non_zero_exit, handle_timeout,
-    matches_hook_event, parse_json_output, select_message,
+    HookCommandResult, allow_plain_success_stdout, extract_common_fields, handle_non_zero_exit,
+    handle_timeout, matches_hook_event, parse_json_output, select_message,
 };
 
 pub(crate) fn interpret_user_prompt(
     command: &HookCommandConfig,
     result: &HookCommandResult,
     outcome: &mut UserPromptHookOutcome,
+    quiet_success_output: bool,
 ) {
     handle_timeout(command, result, &mut outcome.messages);
     if result.timed_out {
@@ -85,7 +86,9 @@ pub(crate) fn interpret_user_prompt(
         {
             outcome.messages.push(HookMessage::error(reason));
         }
-    } else if !result.stdout.trim().is_empty() {
+    } else if allow_plain_success_stdout(result, quiet_success_output)
+        && !result.stdout.trim().is_empty()
+    {
         outcome
             .additional_context
             .push(result.stdout.trim().to_owned());

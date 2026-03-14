@@ -28,7 +28,10 @@ impl AgentRunner {
     }
 
     /// Build universal ToolDefinitions for the current agent.
-    pub(super) async fn build_universal_tools(&self) -> Result<Vec<ToolDefinition>> {
+    pub(crate) async fn build_universal_tools(&self) -> Result<Vec<ToolDefinition>> {
+        if let Some(definitions) = self.tool_definitions_override.read().clone() {
+            return Ok(definitions);
+        }
         self.build_exposed_tool_definitions().await
     }
 

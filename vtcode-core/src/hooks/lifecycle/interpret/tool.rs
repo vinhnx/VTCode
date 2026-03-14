@@ -6,14 +6,15 @@ use crate::hooks::lifecycle::types::{
 };
 
 use super::common::{
-    HookCommandResult, extract_common_fields, handle_non_zero_exit, handle_timeout,
-    matches_hook_event, parse_json_output, select_message,
+    HookCommandResult, allow_plain_success_stdout, extract_common_fields, handle_non_zero_exit,
+    handle_timeout, matches_hook_event, parse_json_output, select_message,
 };
 
 pub(crate) fn interpret_pre_tool(
     command: &HookCommandConfig,
     result: &HookCommandResult,
     outcome: &mut PreToolHookOutcome,
+    quiet_success_output: bool,
 ) {
     handle_timeout(command, result, &mut outcome.messages);
     if result.timed_out {
@@ -87,12 +88,17 @@ pub(crate) fn interpret_pre_tool(
             }
         }
 
-        if !common.suppress_stdout && !result.stdout.trim().is_empty() {
+        if !common.suppress_stdout
+            && allow_plain_success_stdout(result, quiet_success_output)
+            && !result.stdout.trim().is_empty()
+        {
             outcome
                 .messages
                 .push(HookMessage::info(result.stdout.trim().to_owned()));
         }
-    } else if !result.stdout.trim().is_empty() {
+    } else if allow_plain_success_stdout(result, quiet_success_output)
+        && !result.stdout.trim().is_empty()
+    {
         outcome
             .messages
             .push(HookMessage::info(result.stdout.trim().to_owned()));
@@ -103,6 +109,7 @@ pub(crate) fn interpret_post_tool(
     command: &HookCommandConfig,
     result: &HookCommandResult,
     outcome: &mut PostToolHookOutcome,
+    quiet_success_output: bool,
 ) {
     handle_timeout(command, result, &mut outcome.messages);
     if result.timed_out {
@@ -154,7 +161,9 @@ pub(crate) fn interpret_post_tool(
         {
             outcome.additional_context.push(text.trim().to_owned());
         }
-    } else if !result.stdout.trim().is_empty() {
+    } else if allow_plain_success_stdout(result, quiet_success_output)
+        && !result.stdout.trim().is_empty()
+    {
         outcome
             .messages
             .push(HookMessage::info(result.stdout.trim().to_owned()));

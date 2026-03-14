@@ -573,6 +573,7 @@ pub struct WebSearchItem {
 pub enum HarnessEventKind {
     ContinuationStarted,
     ContinuationSkipped,
+    BlockedHandoffWritten,
     VerificationStarted,
     VerificationPassed,
     VerificationFailed,
@@ -589,6 +590,9 @@ pub struct HarnessEventItem {
     /// Optional verification command associated with the event.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub command: Option<String>,
+    /// Optional artifact path associated with the event.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
     /// Optional exit code associated with verification results.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exit_code: Option<i32>,
@@ -708,6 +712,7 @@ mod tests {
                     event: HarnessEventKind::VerificationFailed,
                     message: Some("cargo check failed".to_string()),
                     command: Some("cargo check".to_string()),
+                    path: None,
                     exit_code: Some(101),
                 }),
             },

@@ -193,6 +193,7 @@ mod tests {
                     event: HarnessEventKind::VerificationFailed,
                     message: Some("cargo check failed".to_string()),
                     command: Some("cargo check".to_string()),
+                    path: None,
                     exit_code: Some(101),
                 }),
             },
@@ -201,6 +202,26 @@ mod tests {
 
         assert!(line.contains("[VERIFY FAILED]"));
         assert!(line.contains("cargo check failed"));
+    }
+
+    #[test]
+    fn human_event_line_formats_blocked_handoff_events() {
+        let line = human_event_line(&ThreadEvent::ItemCompleted(ItemCompletedEvent {
+            item: ThreadItem {
+                id: "handoff-1".to_string(),
+                details: ThreadItemDetails::Harness(HarnessEventItem {
+                    event: HarnessEventKind::BlockedHandoffWritten,
+                    message: Some("Blocked handoff written".to_string()),
+                    command: None,
+                    path: Some("/tmp/current_blocked.md".to_string()),
+                    exit_code: None,
+                }),
+            },
+        }))
+        .expect("harness event should render");
+
+        assert!(line.contains("[HANDOFF]"));
+        assert!(line.contains("/tmp/current_blocked.md"));
     }
 
     #[test]
