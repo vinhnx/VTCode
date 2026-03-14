@@ -136,6 +136,14 @@ impl ConfigValidator {
             }
         }
 
+        if let Some(message) = check_openai_hosted_shell_compat(
+            config,
+            &config.agent.default_model,
+            &config.agent.provider,
+        ) {
+            result.warnings.push(message);
+        }
+
         // Check if workspace exists (if specified)
         if let Ok(cwd) = std::env::current_dir() {
             // Basic check only, actual workspace validation happens in StartupContext
@@ -242,6 +250,13 @@ pub fn check_openai_hosted_shell_compat(
             "`provider.openai.hosted_shell.file_ids` and `provider.openai.hosted_shell.skills` are only used with `container_auto`. VT Code will ignore those fields while `container_reference` is selected."
                 .to_string(),
         );
+    }
+
+    if let Some(message) = hosted_shell.first_invalid_skill_message() {
+        return Some(format!(
+            "{} VT Code will ignore hosted shell until the mounted skills are corrected.",
+            message
+        ));
     }
 
     None
@@ -414,5 +429,64 @@ mod tests {
             "openai",
         );
         assert!(msg.is_none());
+    }
+
+    #[test]
+    fn hosted_shell_warning_for_empty_skill_reference_id() {
+        let mut cfg = VTCodeConfig::default();
+        cfg.provider.openai.hosted_shell.enabled = true;
+        cfg.provider.openai.hosted_shell.skills =
+            vec![vtcode_config::core::OpenAIHostedSkill::SkillReference {
+                skill_id: "   ".to_string(),
+                version: vtcode_config::core::OpenAIHostedSkillVersion::default(),
+            }];
+
+        let msg = check_openai_hosted_shell_compat(&cfg, "gpt-5", "openai");
+
+        assert!(
+            msg.as_deref()
+                .unwrap_or_default()
+                .contains("provider.openai.hosted_shell.skills[0].skill_id")
+        );
+    }
+
+    #[test]
+    fn hosted_shell_warning_for_empty_inline_bundle() {
+        let mut cfg = VTCodeConfig::default();
+        cfg.provider.openai.hosted_shell.enabled = true;
+        cfg.provider.openai.hosted_shell.skills =
+            vec![vtcode_config::core::OpenAIHostedSkill::Inline {
+                bundle_b64: " ".to_string(),
+                sha256: None,
+            }];
+
+        let msg = check_openai_hosted_shell_compat(&cfg, "gpt-5", "openai");
+
+        assert!(
+            msg.as_deref()
+                .unwrap_or_default()
+                .contains("provider.openai.hosted_shell.skills[0].bundle_b64")
+        );
+    }
+
+    #[test]
+    fn validate_surfaces_hosted_shell_warning() {
+        let dir = create_test_models_db();
+        let validator = ConfigValidator::new(&dir.path().join("models.json")).unwrap();
+        let mut config = VTCodeConfig::default();
+        config.agent.provider = "openai".to_owned();
+        config.agent.default_model = "gpt-5".to_owned();
+        config.provider.openai.hosted_shell.enabled = true;
+        config.provider.openai.hosted_shell.skills =
+            vec![vtcode_config::core::OpenAIHostedSkill::SkillReference {
+                skill_id: "   ".to_string(),
+                version: vtcode_config::core::OpenAIHostedSkillVersion::default(),
+            }];
+
+        let result = validator.validate(&config).unwrap();
+
+        assert!(result.warnings.iter().any(|warning| {
+            warning.contains("provider.openai.hosted_shell.skills[0].skill_id")
+        }));
     }
 }

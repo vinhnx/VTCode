@@ -19,6 +19,9 @@ This index collects provider-specific guides for configuring VT Code with differ
 -   `file_url` is Responses API only; VT Code rejects `file_url` when a request uses Chat Completions.
 -   Native OpenAI Responses requests now preserve assistant phase metadata for replayed assistant history (`commentary` for preambles/progress updates, `final_answer` for completed answers). VT Code does not send this field to Chat Completions or non-native OpenAI-compatible endpoints.
 -   OpenAI Responses hosted tools currently map through `ToolDefinition` for `web_search`, `file_search`, hosted `tool_search`, and remote `mcp`, with hosted config passed through directly on each tool entry.
+-   OpenAI hosted shell mounts are configured through `provider.openai.hosted_shell` in `vtcode.toml`.
+-   Hosted shell skill mounts support both `skill_reference` and `inline` bundle entries; VT Code forwards them to OpenAI but does not upload/create hosted skills in this path.
+-   This hosted-shell workflow is separate from VT Code's local `SKILL.md` filesystem skills.
 -   For large corpora, prefer File Search/Retrieval instead of sending full files inline.
 -   For spreadsheet-heavy analysis, use Hosted Shell workflows instead of large inline sheet prompts.
 

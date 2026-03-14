@@ -4,6 +4,7 @@
 
 use crate::config::core::{
     OpenAIHostedShellConfig, OpenAIHostedShellEnvironment, OpenAIHostedSkill,
+    OpenAIHostedSkillVersion,
 };
 use crate::llm::provider;
 use hashbrown::HashSet;
@@ -52,6 +53,17 @@ fn trim_non_empty_owned(value: &str) -> Option<String> {
     (!trimmed.is_empty()).then(|| trimmed.to_string())
 }
 
+fn serialize_hosted_skill_version(version: &OpenAIHostedSkillVersion) -> Option<Value> {
+    match version {
+        OpenAIHostedSkillVersion::Latest(_) => None,
+        OpenAIHostedSkillVersion::Number(value) => Some(json!(value)),
+        OpenAIHostedSkillVersion::String(value) => {
+            let version = trim_non_empty_owned(value)?;
+            (!version.eq_ignore_ascii_case("latest")).then_some(Value::String(version))
+        }
+    }
+}
+
 fn serialize_hosted_skill(skill: &OpenAIHostedSkill) -> Option<Value> {
     match skill {
         OpenAIHostedSkill::SkillReference { skill_id, version } => {
@@ -61,10 +73,8 @@ fn serialize_hosted_skill(skill: &OpenAIHostedSkill) -> Option<Value> {
                 ("skill_id".to_string(), json!(skill_id)),
             ]);
 
-            if let Some(version) = trim_non_empty_owned(version)
-                && version != "latest"
-            {
-                payload.insert("version".to_string(), json!(version));
+            if let Some(version) = serialize_hosted_skill_version(version) {
+                payload.insert("version".to_string(), version);
             }
 
             Some(Value::Object(payload))

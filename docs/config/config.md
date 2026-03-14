@@ -127,6 +127,43 @@ temperature = 0.7          # Model temperature (0.0-2.0)
 top_p = 0.9                # Top-P sampling parameter
 ```
 
+### OpenAI hosted shell skills
+
+For native OpenAI Responses models, VT Code can replace the local `shell` tool with OpenAI's hosted shell environment and mount hosted skills into that environment. This path is separate from VT Code's local `SKILL.md` discovery system: VT Code does not upload or manage hosted skills for you in this workflow.
+
+Use a pre-registered hosted skill by ID:
+
+```toml
+[provider.openai.hosted_shell]
+enabled = true
+environment = "container_auto"
+file_ids = ["file_123"]
+
+[[provider.openai.hosted_shell.skills]]
+type = "skill_reference"
+skill_id = "skill_123"
+version = 2
+```
+
+Or mount an inline zip bundle directly:
+
+```toml
+[provider.openai.hosted_shell]
+enabled = true
+environment = "container_auto"
+
+[[provider.openai.hosted_shell.skills]]
+type = "inline"
+bundle_b64 = "UEsFBgAAAAAAAA=="
+sha256 = "deadbeef"
+```
+
+Notes:
+
+- `provider.openai.hosted_shell` is only used for OpenAI Responses-capable models on the native OpenAI endpoint.
+- `environment = "container_reference"` reuses an existing OpenAI container and ignores `file_ids` and `skills`.
+- `version` may be omitted for the default `"latest"` behavior, or set to a pinned integer/string version when your hosted skill deployment requires it.
+
 ## Execution environment
 
 ### workspace.settings

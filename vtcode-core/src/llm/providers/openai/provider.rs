@@ -252,7 +252,7 @@ impl OpenAIProvider {
         (self.base_url.contains("api.openai.com")
             && !matches!(self.responses_api_state(model), ResponsesApiState::Disabled)
             && self.hosted_shell.enabled
-            && self.hosted_shell.has_valid_reference_target())
+            && self.hosted_shell.is_valid_for_runtime())
         .then_some(&self.hosted_shell)
     }
 

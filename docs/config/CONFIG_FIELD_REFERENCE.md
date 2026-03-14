@@ -392,6 +392,17 @@ python3 scripts/generate_config_field_reference.py
 | `provider.anthropic.tool_search.defer_by_default` | `boolean` | no | `true` | Automatically defer loading of all tools except core tools |
 | `provider.anthropic.tool_search.enabled` | `boolean` | no | `false` | Enable tool search feature (requires advanced-tool-use-2025-11-20 beta) |
 | `provider.anthropic.tool_search.max_results` | `integer` | no | `5` | Maximum number of tool search results to return |
+| `provider.openai.hosted_shell.container_id` | `string \| null` | no | `-` | Existing OpenAI container ID to reuse when `provider.openai.hosted_shell.environment = "container_reference"`. |
+| `provider.openai.hosted_shell.enabled` | `boolean` | no | `false` | Enable OpenAI hosted shell instead of VT Code's local shell tool. Only applies to native OpenAI Responses models. |
+| `provider.openai.hosted_shell.environment` | `string` | no | `"container_auto"` | Hosted shell environment mode. Use `"container_auto"` to provision a new container with mounted files/skills, or `"container_reference"` to reuse an existing container ID. |
+| `provider.openai.hosted_shell.file_ids` | `array` | no | `[]` | OpenAI file IDs to mount when using `container_auto`. Ignored for `container_reference`. |
+| `provider.openai.hosted_shell.file_ids[]` | `string` | no | `-` | - |
+| `provider.openai.hosted_shell.skills` | `array` | no | `[]` | Hosted skill mounts for OpenAI hosted shell. Each entry must use `type = "skill_reference"` or `type = "inline"`. VT Code does not create or upload these hosted skills automatically. |
+| `provider.openai.hosted_shell.skills[].bundle_b64` | `string` | no | `-` | Base64-encoded zip bundle for `type = "inline"`. Must be non-empty when set. |
+| `provider.openai.hosted_shell.skills[].sha256` | `string \| null` | no | `-` | Optional SHA-256 digest for `type = "inline"` bundle caching/deduplication. |
+| `provider.openai.hosted_shell.skills[].skill_id` | `string` | no | `-` | Hosted skill identifier for `type = "skill_reference"`. Must be non-empty when set. |
+| `provider.openai.hosted_shell.skills[].type` | `string` | no | `-` | Hosted skill mount type: `"skill_reference"` or `"inline"`. |
+| `provider.openai.hosted_shell.skills[].version` | `integer \| string` | no | `"latest"` | Optional hosted skill version for `type = "skill_reference"`. Omit for latest, or pin an integer/string version explicitly. |
 | `provider.openai.responses_include` | `array` | no | `-` | Optional Responses API `include` selectors. Example: `["reasoning.encrypted_content"]` for encrypted reasoning continuity. |
 | `provider.openai.responses_include[]` | `string` | no | `-` | - |
 | `provider.openai.responses_store` | `boolean \| null` | no | `-` | Optional Responses API `store` flag. Set to `false` to avoid server-side storage when using Responses-compatible models. |

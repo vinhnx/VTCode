@@ -2,7 +2,8 @@ use super::super::tool_serialization;
 use super::*;
 use crate::config::TimeoutsConfig;
 use crate::config::core::{
-    OpenAIHostedShellConfig, OpenAIHostedShellEnvironment, OpenAIHostedSkill, OpenAIServiceTier,
+    OpenAIHostedShellConfig, OpenAIHostedShellEnvironment, OpenAIHostedSkill,
+    OpenAIHostedSkillVersion, OpenAIServiceTier,
 };
 use crate::llm::provider::ParallelToolConfig;
 use futures::StreamExt;
@@ -75,7 +76,7 @@ fn hosted_shell_openai_config() -> OpenAIConfig {
             file_ids: vec!["file_123".to_string()],
             skills: vec![OpenAIHostedSkill::SkillReference {
                 skill_id: "skill_123".to_string(),
-                version: "latest".to_string(),
+                version: OpenAIHostedSkillVersion::default(),
             }],
         },
         ..Default::default()
@@ -227,6 +228,11 @@ fn responses_payload_uses_hosted_shell_when_enabled() {
         tool_object["environment"]["skills"][0]["type"].as_str(),
         Some("skill_reference")
     );
+    assert!(
+        tool_object["environment"]["skills"][0]
+            .get("version")
+            .is_none()
+    );
     let output_types = payload["output_types"]
         .as_array()
         .expect("output types should be present");
@@ -234,6 +240,43 @@ fn responses_payload_uses_hosted_shell_when_enabled() {
         output_types
             .iter()
             .any(|value| value.as_str() == Some("shell_call"))
+    );
+}
+
+#[test]
+fn responses_payload_omits_explicit_latest_string_version() {
+    let provider = OpenAIProvider::from_config(
+        Some(String::new()),
+        Some(models::openai::GPT_5.to_string()),
+        Some("https://api.openai.com/v1".to_string()),
+        None,
+        None,
+        None,
+        Some(OpenAIConfig {
+            hosted_shell: OpenAIHostedShellConfig {
+                enabled: true,
+                environment: OpenAIHostedShellEnvironment::ContainerAuto,
+                container_id: None,
+                file_ids: Vec::new(),
+                skills: vec![OpenAIHostedSkill::SkillReference {
+                    skill_id: "skill_123".to_string(),
+                    version: OpenAIHostedSkillVersion::String(" latest ".to_string()),
+                }],
+            },
+            ..Default::default()
+        }),
+        None,
+    );
+    let request = shell_request(models::openai::GPT_5);
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    assert!(
+        payload["tools"][0]["environment"]["skills"][0]
+            .get("version")
+            .is_none()
     );
 }
 
@@ -254,7 +297,7 @@ fn responses_payload_uses_container_reference_when_configured() {
                 file_ids: vec!["file_ignored".to_string()],
                 skills: vec![OpenAIHostedSkill::SkillReference {
                     skill_id: "skill_ignored".to_string(),
-                    version: "latest".to_string(),
+                    version: OpenAIHostedSkillVersion::default(),
                 }],
             },
             ..Default::default()
@@ -322,6 +365,45 @@ fn non_native_openai_base_url_keeps_local_shell_tool() {
 }
 
 #[test]
+fn responses_payload_serializes_inline_hosted_skill_mount() {
+    let provider = OpenAIProvider::from_config(
+        Some(String::new()),
+        Some(models::openai::GPT_5.to_string()),
+        Some("https://api.openai.com/v1".to_string()),
+        None,
+        None,
+        None,
+        Some(OpenAIConfig {
+            hosted_shell: OpenAIHostedShellConfig {
+                enabled: true,
+                environment: OpenAIHostedShellEnvironment::ContainerAuto,
+                container_id: None,
+                file_ids: Vec::new(),
+                skills: vec![OpenAIHostedSkill::Inline {
+                    bundle_b64: "UEsFBgAAAAAAAA==".to_string(),
+                    sha256: Some("deadbeef".to_string()),
+                }],
+            },
+            ..Default::default()
+        }),
+        None,
+    );
+    let request = shell_request(models::openai::GPT_5);
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    let mounted_skill = &payload["tools"][0]["environment"]["skills"][0];
+    assert_eq!(mounted_skill["type"].as_str(), Some("inline"));
+    assert_eq!(
+        mounted_skill["bundle_b64"].as_str(),
+        Some("UEsFBgAAAAAAAA==")
+    );
+    assert_eq!(mounted_skill["sha256"].as_str(), Some("deadbeef"));
+}
+
+#[test]
 fn missing_container_reference_id_keeps_local_shell_tool() {
     let provider = OpenAIProvider::from_config(
         Some(String::new()),
@@ -337,6 +419,49 @@ fn missing_container_reference_id_keeps_local_shell_tool() {
                 container_id: Some("   ".to_string()),
                 file_ids: Vec::new(),
                 skills: Vec::new(),
+            },
+            ..Default::default()
+        }),
+        None,
+    );
+    let request = shell_request(models::openai::GPT_5);
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    let tool_object = payload["tools"][0]
+        .as_object()
+        .expect("tool entry should be object");
+    assert_eq!(
+        tool_object.get("type").and_then(Value::as_str),
+        Some("function")
+    );
+    assert_eq!(
+        tool_object.get("name").and_then(Value::as_str),
+        Some("shell")
+    );
+}
+
+#[test]
+fn invalid_hosted_skill_mount_keeps_local_shell_tool() {
+    let provider = OpenAIProvider::from_config(
+        Some(String::new()),
+        Some(models::openai::GPT_5.to_string()),
+        Some("https://api.openai.com/v1".to_string()),
+        None,
+        None,
+        None,
+        Some(OpenAIConfig {
+            hosted_shell: OpenAIHostedShellConfig {
+                enabled: true,
+                environment: OpenAIHostedShellEnvironment::ContainerAuto,
+                container_id: None,
+                file_ids: Vec::new(),
+                skills: vec![OpenAIHostedSkill::SkillReference {
+                    skill_id: "   ".to_string(),
+                    version: OpenAIHostedSkillVersion::default(),
+                }],
             },
             ..Default::default()
         }),
