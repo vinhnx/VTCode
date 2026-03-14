@@ -16,6 +16,96 @@ impl OpenAIServiceTier {
     }
 }
 
+/// How VT Code should provision OpenAI hosted shell environments.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum OpenAIHostedShellEnvironment {
+    #[default]
+    ContainerAuto,
+    ContainerReference,
+}
+
+impl OpenAIHostedShellEnvironment {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::ContainerAuto => "container_auto",
+            Self::ContainerReference => "container_reference",
+        }
+    }
+}
+
+impl OpenAIHostedShellEnvironment {
+    pub const fn uses_container_reference(self) -> bool {
+        matches!(self, Self::ContainerReference)
+    }
+}
+
+/// Hosted skill reference mounted into an OpenAI hosted shell environment.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum OpenAIHostedSkill {
+    /// Reference to a pre-registered hosted skill.
+    SkillReference {
+        skill_id: String,
+        #[serde(default = "default_openai_hosted_skill_version")]
+        version: String,
+    },
+    /// Inline base64 zip bundle.
+    Inline {
+        bundle_b64: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        sha256: Option<String>,
+    },
+}
+
+fn default_openai_hosted_skill_version() -> String {
+    "latest".to_string()
+}
+
+/// OpenAI hosted shell configuration.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Default)]
+pub struct OpenAIHostedShellConfig {
+    /// Enable OpenAI hosted shell instead of VT Code's local shell tool.
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// Environment provisioning mode for hosted shell.
+    #[serde(default)]
+    pub environment: OpenAIHostedShellEnvironment,
+
+    /// Existing OpenAI container ID to reuse when `environment = "container_reference"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub container_id: Option<String>,
+
+    /// File IDs to mount when using `container_auto`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub file_ids: Vec<String>,
+
+    /// Hosted skills to mount when using `container_auto`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub skills: Vec<OpenAIHostedSkill>,
+}
+
+impl OpenAIHostedShellConfig {
+    pub fn container_id_ref(&self) -> Option<&str> {
+        self.container_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+    }
+
+    pub const fn uses_container_reference(&self) -> bool {
+        self.environment.uses_container_reference()
+    }
+
+    pub fn has_valid_reference_target(&self) -> bool {
+        !self.uses_container_reference() || self.container_id_ref().is_some()
+    }
+}
+
 /// OpenAI-specific provider configuration
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
@@ -40,6 +130,10 @@ pub struct OpenAIConfig {
     /// Options: "priority"
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub service_tier: Option<OpenAIServiceTier>,
+
+    /// Optional hosted shell configuration for OpenAI native Responses models.
+    #[serde(default)]
+    pub hosted_shell: OpenAIHostedShellConfig,
 }
 
 /// Anthropic-specific provider configuration
@@ -201,7 +295,10 @@ fn default_effort() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{OpenAIConfig, OpenAIServiceTier};
+    use super::{
+        OpenAIConfig, OpenAIHostedShellConfig, OpenAIHostedShellEnvironment, OpenAIHostedSkill,
+        OpenAIServiceTier,
+    };
 
     #[test]
     fn openai_config_defaults_to_websocket_mode_disabled() {
@@ -210,6 +307,7 @@ mod tests {
         assert_eq!(config.responses_store, None);
         assert!(config.responses_include.is_empty());
         assert_eq!(config.service_tier, None);
+        assert_eq!(config.hosted_shell, OpenAIHostedShellConfig::default());
     }
 
     #[test]
@@ -220,6 +318,7 @@ mod tests {
         assert_eq!(parsed.responses_store, None);
         assert!(parsed.responses_include.is_empty());
         assert_eq!(parsed.service_tier, None);
+        assert_eq!(parsed.hosted_shell, OpenAIHostedShellConfig::default());
     }
 
     #[test]
@@ -240,6 +339,7 @@ responses_include = ["reasoning.encrypted_content", "output_text.annotations"]
             ]
         );
         assert_eq!(parsed.service_tier, None);
+        assert_eq!(parsed.hosted_shell, OpenAIHostedShellConfig::default());
     }
 
     #[test]
@@ -247,5 +347,50 @@ responses_include = ["reasoning.encrypted_content", "output_text.annotations"]
         let parsed: OpenAIConfig =
             toml::from_str(r#"service_tier = "priority""#).expect("config should parse");
         assert_eq!(parsed.service_tier, Some(OpenAIServiceTier::Priority));
+    }
+
+    #[test]
+    fn openai_config_parses_hosted_shell() {
+        let parsed: OpenAIConfig = toml::from_str(
+            r#"
+[hosted_shell]
+enabled = true
+environment = "container_auto"
+file_ids = ["file_123"]
+
+[[hosted_shell.skills]]
+type = "skill_reference"
+skill_id = "skill_123"
+"#,
+        )
+        .expect("config should parse");
+
+        assert!(parsed.hosted_shell.enabled);
+        assert_eq!(
+            parsed.hosted_shell.environment,
+            OpenAIHostedShellEnvironment::ContainerAuto
+        );
+        assert_eq!(parsed.hosted_shell.file_ids, vec!["file_123".to_string()]);
+        assert_eq!(
+            parsed.hosted_shell.skills,
+            vec![OpenAIHostedSkill::SkillReference {
+                skill_id: "skill_123".to_string(),
+                version: "latest".to_string(),
+            }]
+        );
+    }
+
+    #[test]
+    fn hosted_shell_container_reference_requires_non_empty_container_id() {
+        let config = OpenAIHostedShellConfig {
+            enabled: true,
+            environment: OpenAIHostedShellEnvironment::ContainerReference,
+            container_id: Some("   ".to_string()),
+            file_ids: Vec::new(),
+            skills: Vec::new(),
+        };
+
+        assert!(!config.has_valid_reference_target());
+        assert!(config.container_id_ref().is_none());
     }
 }

@@ -60,6 +60,7 @@ pub use core::{
     DockerSandboxConfig, EditorToolConfig, ExternalSandboxConfig, ExternalSandboxType,
     FullAutoConfig, GatekeeperConfig, MicroVMSandboxConfig, ModelConfig,
     NetworkAllowlistEntryConfig, NetworkConfig, OpenAIConfig, OpenAIServiceTier,
+    OpenAIHostedShellConfig, OpenAIHostedShellEnvironment, OpenAIHostedSkill,
     OpenResponsesConfig, OpenRouterAuthConfig, PluginRuntimeConfig, PluginTrustLevel,
     PromptCachingConfig, ProviderPromptCachingConfig, ResourceLimitsConfig, ResourceLimitsPreset,
     SandboxConfig, SandboxMode, SeccompConfig, SeccompProfilePreset, SecurityConfig,

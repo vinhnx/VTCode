@@ -1,7 +1,9 @@
 use super::super::tool_serialization;
 use super::*;
 use crate::config::TimeoutsConfig;
-use crate::config::core::OpenAIServiceTier;
+use crate::config::core::{
+    OpenAIHostedShellConfig, OpenAIHostedShellEnvironment, OpenAIHostedSkill, OpenAIServiceTier,
+};
 use crate::llm::provider::ParallelToolConfig;
 use futures::StreamExt;
 use serde_json::{Value, json};
@@ -33,9 +35,49 @@ fn sample_request(model: &str) -> provider::LLMRequest {
     }
 }
 
+fn shell_tool() -> provider::ToolDefinition {
+    provider::ToolDefinition::function(
+        "shell".to_owned(),
+        "Execute a shell command and return its output.".to_owned(),
+        json!({
+            "type": "object",
+            "properties": {
+                "command": {"type": "string"}
+            },
+            "required": ["command"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn shell_request(model: &str) -> provider::LLMRequest {
+    provider::LLMRequest {
+        messages: vec![provider::Message::user("Run pwd".to_owned())],
+        tools: Some(Arc::new(vec![shell_tool()])),
+        model: model.to_string(),
+        ..Default::default()
+    }
+}
+
 fn priority_openai_config() -> OpenAIConfig {
     OpenAIConfig {
         service_tier: Some(OpenAIServiceTier::Priority),
+        ..Default::default()
+    }
+}
+
+fn hosted_shell_openai_config() -> OpenAIConfig {
+    OpenAIConfig {
+        hosted_shell: OpenAIHostedShellConfig {
+            enabled: true,
+            environment: OpenAIHostedShellEnvironment::ContainerAuto,
+            container_id: None,
+            file_ids: vec!["file_123".to_string()],
+            skills: vec![OpenAIHostedSkill::SkillReference {
+                skill_id: "skill_123".to_string(),
+                version: "latest".to_string(),
+            }],
+        },
         ..Default::default()
     }
 }
@@ -142,6 +184,168 @@ fn responses_payload_uses_function_wrapper() {
         Some("search_workspace")
     );
     assert!(tool_object.contains_key("parameters"));
+}
+
+#[test]
+fn responses_payload_uses_hosted_shell_when_enabled() {
+    let provider = OpenAIProvider::from_config(
+        Some(String::new()),
+        Some(models::openai::GPT_5.to_string()),
+        Some("https://api.openai.com/v1".to_string()),
+        None,
+        None,
+        None,
+        Some(hosted_shell_openai_config()),
+        None,
+    );
+    let request = shell_request(models::openai::GPT_5);
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    let tool_object = payload["tools"][0]
+        .as_object()
+        .expect("tool entry should be object");
+    assert_eq!(tool_object.get("type").and_then(Value::as_str), Some("shell"));
+    assert_eq!(
+        tool_object["environment"]["type"].as_str(),
+        Some("container_auto")
+    );
+    assert_eq!(
+        tool_object["environment"]["network_policy"]["type"].as_str(),
+        Some("disabled")
+    );
+    assert_eq!(
+        tool_object["environment"]["file_ids"][0].as_str(),
+        Some("file_123")
+    );
+    assert_eq!(
+        tool_object["environment"]["skills"][0]["type"].as_str(),
+        Some("skill_reference")
+    );
+    let output_types = payload["output_types"]
+        .as_array()
+        .expect("output types should be present");
+    assert!(output_types.iter().any(|value| value.as_str() == Some("shell_call")));
+}
+
+#[test]
+fn responses_payload_uses_container_reference_when_configured() {
+    let provider = OpenAIProvider::from_config(
+        Some(String::new()),
+        Some(models::openai::GPT_5.to_string()),
+        Some("https://api.openai.com/v1".to_string()),
+        None,
+        None,
+        None,
+        Some(OpenAIConfig {
+            hosted_shell: OpenAIHostedShellConfig {
+                enabled: true,
+                environment: OpenAIHostedShellEnvironment::ContainerReference,
+                container_id: Some("cntr_123".to_string()),
+                file_ids: vec!["file_ignored".to_string()],
+                skills: vec![OpenAIHostedSkill::SkillReference {
+                    skill_id: "skill_ignored".to_string(),
+                    version: "latest".to_string(),
+                }],
+            },
+            ..Default::default()
+        }),
+        None,
+    );
+    let request = shell_request(models::openai::GPT_5);
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    let tool_object = payload["tools"][0]
+        .as_object()
+        .expect("tool entry should be object");
+    assert_eq!(
+        tool_object["environment"]["type"].as_str(),
+        Some("container_reference")
+    );
+    assert_eq!(
+        tool_object["environment"]["container_id"].as_str(),
+        Some("cntr_123")
+    );
+    assert!(tool_object["environment"].get("file_ids").is_none());
+    assert!(tool_object["environment"].get("skills").is_none());
+}
+
+#[test]
+fn non_native_openai_base_url_keeps_local_shell_tool() {
+    let provider = OpenAIProvider::from_config(
+        Some(String::new()),
+        Some(models::openai::GPT_5.to_string()),
+        Some("https://example.com/v1".to_string()),
+        None,
+        None,
+        None,
+        Some(hosted_shell_openai_config()),
+        None,
+    );
+    let request = shell_request(models::openai::GPT_5);
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    let tool_object = payload["tools"][0]
+        .as_object()
+        .expect("tool entry should be object");
+    assert_eq!(
+        tool_object.get("type").and_then(Value::as_str),
+        Some("function")
+    );
+    assert_eq!(tool_object.get("name").and_then(Value::as_str), Some("shell"));
+    let output_types = payload["output_types"]
+        .as_array()
+        .expect("output types should be present");
+    assert!(
+        output_types
+            .iter()
+            .all(|value| value.as_str() != Some("shell_call"))
+    );
+}
+
+#[test]
+fn missing_container_reference_id_keeps_local_shell_tool() {
+    let provider = OpenAIProvider::from_config(
+        Some(String::new()),
+        Some(models::openai::GPT_5.to_string()),
+        Some("https://api.openai.com/v1".to_string()),
+        None,
+        None,
+        None,
+        Some(OpenAIConfig {
+            hosted_shell: OpenAIHostedShellConfig {
+                enabled: true,
+                environment: OpenAIHostedShellEnvironment::ContainerReference,
+                container_id: Some("   ".to_string()),
+                file_ids: Vec::new(),
+                skills: Vec::new(),
+            },
+            ..Default::default()
+        }),
+        None,
+    );
+    let request = shell_request(models::openai::GPT_5);
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    let tool_object = payload["tools"][0]
+        .as_object()
+        .expect("tool entry should be object");
+    assert_eq!(
+        tool_object.get("type").and_then(Value::as_str),
+        Some("function")
+    );
+    assert_eq!(tool_object.get("name").and_then(Value::as_str), Some("shell"));
 }
 
 #[test]
@@ -265,7 +469,7 @@ fn responses_tools_dedupes_apply_patch_and_function() {
         json!({"type": "object"}),
     );
     let tools = vec![apply_builtin, apply_function];
-    let serialized = tool_serialization::serialize_tools_for_responses(&tools)
+    let serialized = tool_serialization::serialize_tools_for_responses(&tools, None)
         .expect("responses tools should serialize");
     let arr = serialized.as_array().expect("array");
     assert_eq!(arr.len(), 1, "apply_patch should be deduped");
@@ -293,7 +497,7 @@ fn responses_payload_serializes_hosted_tool_search_and_deferred_function() {
     .with_defer_loading(true);
 
     let tools = vec![hosted_search, deferred];
-    let payload = tool_serialization::serialize_tools_for_responses(&tools)
+    let payload = tool_serialization::serialize_tools_for_responses(&tools, None)
         .expect("tools should serialize for responses");
     let arr = payload.as_array().expect("tool array");
 

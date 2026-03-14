@@ -207,6 +207,46 @@ pub fn check_prompt_cache_retention_compat(
     None
 }
 
+pub fn check_openai_hosted_shell_compat(
+    config: &VTCodeConfig,
+    model: &str,
+    provider: &str,
+) -> Option<String> {
+    if !provider.eq_ignore_ascii_case("openai") {
+        return None;
+    }
+
+    let hosted_shell = &config.provider.openai.hosted_shell;
+    if !hosted_shell.enabled {
+        return None;
+    }
+
+    if !RESPONSES_API_MODELS.contains(&model) {
+        return Some(format!(
+            "`provider.openai.hosted_shell.enabled` is set but the selected model '{}' does not use the OpenAI Responses API. VT Code will ignore hosted shell and keep the local shell tool for this model.",
+            model
+        ));
+    }
+
+    if !hosted_shell.has_valid_reference_target() {
+        return Some(
+            "`provider.openai.hosted_shell.environment = \"container_reference\"` requires a non-empty `provider.openai.hosted_shell.container_id`. VT Code will ignore hosted shell until a container ID is configured."
+                .to_string(),
+        );
+    }
+
+    if hosted_shell.uses_container_reference()
+        && (!hosted_shell.file_ids.is_empty() || !hosted_shell.skills.is_empty())
+    {
+        return Some(
+            "`provider.openai.hosted_shell.file_ids` and `provider.openai.hosted_shell.skills` are only used with `container_auto`. VT Code will ignore those fields while `container_reference` is selected."
+                .to_string(),
+        );
+    }
+
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -315,6 +355,60 @@ mod tests {
         let mut cfg = VTCodeConfig::default();
         cfg.prompt_cache.providers.openai.prompt_cache_retention = Some("24h".to_owned());
         let msg = check_prompt_cache_retention_compat(
+            &cfg,
+            crate::config::constants::models::openai::GPT_5,
+            "openai",
+        );
+        assert!(msg.is_none());
+    }
+
+    #[test]
+    fn hosted_shell_warning_for_non_responses_model() {
+        let mut cfg = VTCodeConfig::default();
+        cfg.provider.openai.hosted_shell.enabled = true;
+
+        let msg = check_openai_hosted_shell_compat(&cfg, "gpt-oss-20b", "openai");
+        assert!(msg.is_some());
+    }
+
+    #[test]
+    fn hosted_shell_warning_for_missing_container_reference_id() {
+        let mut cfg = VTCodeConfig::default();
+        cfg.provider.openai.hosted_shell.enabled = true;
+        cfg.provider.openai.hosted_shell.environment =
+            crate::config::core::OpenAIHostedShellEnvironment::ContainerReference;
+
+        let msg = check_openai_hosted_shell_compat(
+            &cfg,
+            crate::config::constants::models::openai::GPT_5,
+            "openai",
+        );
+        assert!(msg.is_some());
+    }
+
+    #[test]
+    fn hosted_shell_warning_for_auto_only_fields_on_container_reference() {
+        let mut cfg = VTCodeConfig::default();
+        cfg.provider.openai.hosted_shell.enabled = true;
+        cfg.provider.openai.hosted_shell.environment =
+            crate::config::core::OpenAIHostedShellEnvironment::ContainerReference;
+        cfg.provider.openai.hosted_shell.container_id = Some("cntr_123".to_string());
+        cfg.provider.openai.hosted_shell.file_ids = vec!["file_123".to_string()];
+
+        let msg = check_openai_hosted_shell_compat(
+            &cfg,
+            crate::config::constants::models::openai::GPT_5,
+            "openai",
+        );
+        assert!(msg.is_some());
+    }
+
+    #[test]
+    fn hosted_shell_ok_for_valid_responses_config() {
+        let mut cfg = VTCodeConfig::default();
+        cfg.provider.openai.hosted_shell.enabled = true;
+
+        let msg = check_openai_hosted_shell_compat(
             &cfg,
             crate::config::constants::models::openai::GPT_5,
             "openai",

@@ -25,7 +25,9 @@ use vtcode_core::cli::args::Cli;
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
-use vtcode_core::config::validator::check_prompt_cache_retention_compat;
+use vtcode_core::config::validator::{
+    check_openai_hosted_shell_compat, check_prompt_cache_retention_compat,
+};
 use vtcode_core::core::agent::config::{
     api_key_env_var, build_runtime_agent_config, provider_label, resolve_runtime_model_selection,
 };
@@ -160,6 +162,12 @@ impl StartupContext {
             }
         }
 
+        if let Some(msg) =
+            check_openai_hosted_shell_compat(&config, &agent_config.model, &agent_config.provider)
+        {
+            tracing::warn!("{}", msg);
+        }
+
         vtcode_core::telemetry::perf::initialize_perf_telemetry(&config.telemetry);
         vtcode_core::tools::cache::configure_file_cache(&config.optimization.file_read_cache);
         vtcode_core::tools::command_cache::configure_command_cache(
@@ -198,8 +206,7 @@ mod validation_tests {
         cfg.prompt_cache.providers.openai.prompt_cache_retention = Some("24h".to_owned());
         let model = "gpt-oss-20b"; // not in responses API list
         let provider = "openai";
-        let msg = check_prompt_cache_retention_compat(&cfg, model, provider);
-        assert!(msg.is_some());
+        assert!(check_prompt_cache_retention_compat(&cfg, model, provider).is_some());
     }
 
     #[test]
@@ -208,8 +215,16 @@ mod validation_tests {
         cfg.prompt_cache.providers.openai.prompt_cache_retention = Some("24h".to_owned());
         let model = vtcode_core::config::constants::models::openai::GPT_5; // responses model
         let provider = "openai";
-        let msg = check_prompt_cache_retention_compat(&cfg, model, provider);
-        assert!(msg.is_none());
+        assert!(check_prompt_cache_retention_compat(&cfg, model, provider).is_none());
+    }
+
+    #[test]
+    fn hosted_shell_warning_for_non_responses_model() {
+        let mut cfg = VTCodeConfig::default();
+        cfg.provider.openai.hosted_shell.enabled = true;
+
+        let msg = check_openai_hosted_shell_compat(&cfg, "gpt-oss-20b", "openai");
+        assert!(msg.is_some());
     }
 
     #[test]
@@ -326,6 +341,33 @@ mod validation_tests {
             &ctx.agent_config.model,
             &ctx.agent_config.provider,
         );
+
+        assert!(maybe_warning.is_some());
+    }
+
+    #[tokio::test]
+    async fn cli_override_with_hosted_shell_on_non_responses_model_warns() {
+        let temp = TempDir::new().expect("temp dir");
+        let workspace = temp.path().to_path_buf();
+
+        unsafe {
+            std::env::set_var("OPENAI_API_KEY", "test");
+        }
+        let args = Cli::parse_from([
+            "vtcode",
+            "--workspace",
+            workspace.to_str().expect("workspace path"),
+            "--model",
+            "gpt-oss-20b",
+            "--config",
+            "provider.openai.hosted_shell.enabled=true",
+        ]);
+
+        let ctx = StartupContext::from_cli_args(&args)
+            .await
+            .expect("startup success");
+        let maybe_warning =
+            check_openai_hosted_shell_compat(&ctx.config, &ctx.agent_config.model, "openai");
 
         assert!(maybe_warning.is_some());
     }

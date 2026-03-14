@@ -10,8 +10,8 @@
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{
-    AnthropicConfig, ModelConfig, OpenAIConfig, OpenAIPromptCacheSettings, OpenAIServiceTier,
-    PromptCachingConfig,
+    AnthropicConfig, ModelConfig, OpenAIConfig, OpenAIHostedShellConfig,
+    OpenAIPromptCacheSettings, OpenAIServiceTier, PromptCachingConfig,
 };
 use crate::llm::error_display;
 use crate::llm::provider;
@@ -62,6 +62,7 @@ pub struct OpenAIProvider {
     responses_store: Option<bool>,
     responses_include: Vec<String>,
     service_tier: Option<OpenAIServiceTier>,
+    hosted_shell: OpenAIHostedShellConfig,
     websocket_session: AsyncMutex<Option<OpenAIResponsesWebSocketSession>>,
 }
 
@@ -136,6 +137,7 @@ impl OpenAIProvider {
             responses_store: None,
             responses_include: Vec::new(),
             service_tier: None,
+            hosted_shell: OpenAIHostedShellConfig::default(),
             websocket_session: AsyncMutex::new(None),
         }
     }
@@ -207,6 +209,10 @@ impl OpenAIProvider {
             })
             .unwrap_or_default();
         let service_tier = openai.as_ref().and_then(|cfg| cfg.service_tier);
+        let hosted_shell = openai
+            .as_ref()
+            .map(|cfg| cfg.hosted_shell.clone())
+            .unwrap_or_default();
 
         let initial_state = if is_xai || !is_native_openai {
             ResponsesApiState::Disabled
@@ -231,6 +237,7 @@ impl OpenAIProvider {
             responses_store,
             responses_include,
             service_tier,
+            hosted_shell,
             websocket_session: AsyncMutex::new(None),
         }
     }
@@ -239,6 +246,14 @@ impl OpenAIProvider {
         self.websocket_mode
             && self.base_url.contains("api.openai.com")
             && !matches!(self.responses_api_state(model), ResponsesApiState::Disabled)
+    }
+
+    fn hosted_shell_for_model(&self, model: &str) -> Option<&OpenAIHostedShellConfig> {
+        (self.base_url.contains("api.openai.com")
+            && !matches!(self.responses_api_state(model), ResponsesApiState::Disabled)
+            && self.hosted_shell.enabled
+            && self.hosted_shell.has_valid_reference_target())
+        .then_some(&self.hosted_shell)
     }
 
     fn authorize(&self, builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
@@ -340,6 +355,7 @@ impl OpenAIProvider {
             default_response_store: self.responses_store,
             default_responses_include: (!self.responses_include.is_empty())
                 .then_some(self.responses_include.as_slice()),
+            hosted_shell: self.hosted_shell_for_model(&request.model),
         };
 
         request_builder::build_responses_request(request, &ctx)

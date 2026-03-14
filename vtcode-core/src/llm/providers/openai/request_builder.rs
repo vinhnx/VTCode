@@ -3,6 +3,7 @@
 //! Keeps JSON shaping for chat payloads out of the main provider.
 
 use crate::config::models::Provider as ModelProvider;
+use crate::config::core::OpenAIHostedShellConfig;
 use crate::config::types::ReasoningEffortLevel;
 use crate::llm::error_display;
 use crate::llm::provider;
@@ -38,6 +39,7 @@ pub(crate) struct ResponsesRequestContext<'a> {
     pub default_service_tier: Option<&'a str>,
     pub default_response_store: Option<bool>,
     pub default_responses_include: Option<&'a [String]>,
+    pub hosted_shell: Option<&'a OpenAIHostedShellConfig>,
 }
 
 fn strip_non_native_assistant_phase(input: &mut [Value]) {
@@ -269,8 +271,12 @@ pub(crate) fn build_responses_request(
         openai_request[MAX_COMPLETION_TOKENS_FIELD] = json!(max_tokens);
     }
 
-    // 'output_types' is part of the GPT-5 Responses API spec
-    openai_request["output_types"] = json!(["message", "tool_call"]);
+    // `output_types` constrains which native item types GPT-5 may emit.
+    let mut output_types = vec!["message", "tool_call"];
+    if ctx.hosted_shell.is_some() {
+        output_types.push("shell_call");
+    }
+    openai_request["output_types"] = json!(output_types);
 
     if let Some(instructions) = instructions
         && !instructions.trim().is_empty()
@@ -347,7 +353,8 @@ pub(crate) fn build_responses_request(
 
     if ctx.supports_tools
         && let Some(tools) = &request.tools
-        && let Some(serialized) = tool_serialization::serialize_tools_for_responses(tools)
+        && let Some(serialized) =
+            tool_serialization::serialize_tools_for_responses(tools, ctx.hosted_shell)
     {
         openai_request["tools"] = serialized;
 

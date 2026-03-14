@@ -27,7 +27,10 @@ pub use prompt_cache::{
     OpenAIPromptCacheSettings, OpenRouterPromptCacheSettings, PromptCachingConfig,
     ProviderPromptCachingConfig, ZaiPromptCacheSettings,
 };
-pub use provider::{AnthropicConfig, OpenAIConfig, OpenAIServiceTier, ToolSearchConfig};
+pub use provider::{
+    AnthropicConfig, OpenAIConfig, OpenAIHostedShellConfig, OpenAIHostedShellEnvironment,
+    OpenAIHostedSkill, OpenAIServiceTier, ToolSearchConfig,
+};
 pub use sandbox::{
     DockerSandboxConfig, ExternalSandboxConfig, ExternalSandboxType, MicroVMSandboxConfig,
     NetworkAllowlistEntryConfig, NetworkConfig, ResourceLimitsConfig, ResourceLimitsPreset,

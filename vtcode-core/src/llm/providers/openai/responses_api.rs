@@ -573,7 +573,7 @@ pub fn build_codex_responses_payload(
 
 #[cfg(test)]
 mod tests {
-    use super::{build_codex_responses_payload, build_standard_responses_payload};
+    use super::{build_codex_responses_payload, build_standard_responses_payload, parse_responses_payload};
     use crate::llm::provider::{LLMRequest, Message, ToolCall};
     use serde_json::json;
 
@@ -687,5 +687,37 @@ mod tests {
 
         let payload = build_codex_responses_payload(&request).expect("payload should build");
         assert_multimodal_tool_result(payload);
+    }
+
+    #[test]
+    fn parse_responses_payload_ignores_hosted_shell_trace_items() {
+        let response = json!({
+            "output": [
+                {
+                    "type": "shell_call",
+                    "id": "sh_1",
+                    "status": "completed",
+                    "action": { "type": "command", "command": ["pwd"] }
+                },
+                {
+                    "type": "shell_call_output",
+                    "id": "sho_1",
+                    "call_id": "sh_1",
+                    "output": "workspace\n"
+                },
+                {
+                    "type": "message",
+                    "content": [
+                        { "type": "output_text", "text": "Done." }
+                    ]
+                }
+            ]
+        });
+
+        let parsed =
+            parse_responses_payload(response, "gpt-5".to_string(), false).expect("should parse");
+
+        assert_eq!(parsed.content.as_deref(), Some("Done."));
+        assert!(parsed.tool_calls.unwrap_or_default().is_empty());
     }
 }
