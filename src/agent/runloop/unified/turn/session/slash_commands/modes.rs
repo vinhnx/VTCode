@@ -1,6 +1,7 @@
 use anyhow::Result;
+use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::EditingMode as ConfigEditingMode;
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_tui::EditingMode;
 
 use super::{SlashCommandContext, SlashCommandControl};
@@ -74,22 +75,17 @@ pub(crate) async fn handle_toggle_plan_mode(
         )?;
     }
 
-    let persisted_mode = if new_state {
-        ConfigEditingMode::Plan
-    } else {
-        ConfigEditingMode::Edit
-    };
-    if let Err(err) = super::persist_mode_settings(
+    persist_mode_preference(
+        ctx.renderer,
         ctx.config.workspace.as_path(),
         ctx.vt_cfg,
-        Some(persisted_mode),
-        None,
-    ) {
-        ctx.renderer.line(
-            MessageStyle::Error,
-            &format!("Failed to persist plan mode preference: {}", err),
-        )?;
-    }
+        if new_state {
+            ConfigEditingMode::Plan
+        } else {
+            ConfigEditingMode::Edit
+        },
+        "plan mode preference",
+    )?;
 
     Ok(SlashCommandControl::Continue)
 }
@@ -137,21 +133,33 @@ pub(crate) async fn handle_cycle_mode(ctx: SlashCommandContext<'_>) -> Result<Sl
         }
     }
 
-    let persisted_mode = match new_mode {
-        EditingMode::Plan => ConfigEditingMode::Plan,
-        EditingMode::Edit => ConfigEditingMode::Edit,
-    };
-    if let Err(err) = super::persist_mode_settings(
+    persist_mode_preference(
+        ctx.renderer,
         ctx.config.workspace.as_path(),
         ctx.vt_cfg,
-        Some(persisted_mode),
-        None,
-    ) {
-        ctx.renderer.line(
+        match new_mode {
+            EditingMode::Plan => ConfigEditingMode::Plan,
+            EditingMode::Edit => ConfigEditingMode::Edit,
+        },
+        "editing mode preference",
+    )?;
+
+    Ok(SlashCommandControl::Continue)
+}
+
+fn persist_mode_preference(
+    renderer: &mut AnsiRenderer,
+    workspace: &std::path::Path,
+    vt_cfg: &mut Option<VTCodeConfig>,
+    mode: ConfigEditingMode,
+    preference_label: &str,
+) -> Result<()> {
+    if let Err(err) = super::persist_mode_settings(workspace, vt_cfg, Some(mode), None) {
+        renderer.line(
             MessageStyle::Error,
-            &format!("Failed to persist editing mode preference: {}", err),
+            &format!("Failed to persist {preference_label}: {}", err),
         )?;
     }
 
-    Ok(SlashCommandControl::Continue)
+    Ok(())
 }

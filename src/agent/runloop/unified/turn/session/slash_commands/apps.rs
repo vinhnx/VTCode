@@ -1,9 +1,14 @@
+use std::time::Duration;
+
 use anyhow::Result;
 use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui::InlineHandle;
 
 use vtcode_core::hooks::SessionEndReason;
 
 use super::{SlashCommandContext, SlashCommandControl};
+
+const EXTERNAL_APP_EVENT_LOOP_SETTLE_DELAY: Duration = Duration::from_millis(50);
 
 pub(crate) async fn handle_new_session(
     ctx: SlashCommandContext<'_>,
@@ -85,47 +90,29 @@ pub(crate) async fn handle_launch_editor(
         },
     };
 
-    if editor_config.suspend_tui {
-        // Pause event loop to prevent it from reading input while editor is running.
-        // This prevents stdin conflicts between the TUI event loop and the external editor.
-        ctx.handle.suspend_event_loop();
-        // Wait for pause to take effect
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        // Drain any queued key events before editor launch.
-        ctx.handle.clear_input_queue();
-    }
+    let launch_result =
+        run_with_event_loop_suspended(ctx.handle, editor_config.suspend_tui, || {
+            launcher.launch_editor_with_config(file_path, launch_config)
+        })
+        .await;
 
-    match launcher.launch_editor_with_config(file_path, launch_config) {
+    let (message_style, message) = match launch_result {
         Ok(Some(edited_content)) => {
-            // User edited temp file, replace input with edited content
             ctx.handle.set_input(edited_content);
-            ctx.handle.force_redraw(); // Force redraw to clear any artifacts
-            ctx.renderer.line(
+            (
                 MessageStyle::Info,
-                "Editor closed. Input updated with edited content.",
-            )?;
+                "Editor closed. Input updated with edited content.".to_owned(),
+            )
         }
-        Ok(None) => {
-            // User edited existing file
-            ctx.handle.force_redraw(); // Force redraw to clear any artifacts
-            ctx.renderer.line(MessageStyle::Info, "Editor closed.")?;
-        }
-        Err(err) => {
-            ctx.handle.force_redraw(); // Force redraw even on error
-            ctx.renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to launch editor: {}", err),
-            )?;
-        }
-    }
+        Ok(None) => (MessageStyle::Info, "Editor closed.".to_owned()),
+        Err(err) => (
+            MessageStyle::Error,
+            format!("Failed to launch editor: {}", err),
+        ),
+    };
 
-    if editor_config.suspend_tui {
-        // Clear any stale terminal events that might have been buffered around editor exit.
-        ctx.handle.clear_input_queue();
-        // Resume event loop to process input again
-        ctx.handle.resume_event_loop();
-    }
-
+    ctx.handle.force_redraw();
+    ctx.renderer.line(message_style, &message)?;
     ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
     Ok(SlashCommandControl::Continue)
 }
@@ -138,33 +125,43 @@ pub(crate) async fn handle_launch_git(ctx: SlashCommandContext<'_>) -> Result<Sl
     ctx.renderer
         .line(MessageStyle::Info, "Launching git interface (lazygit)...")?;
 
-    // Suspend TUI event loop to prevent input stealing
-    ctx.handle.suspend_event_loop();
-    // Give a small moment for the suspend command to propagate to the TUI thread
-    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-    // Drain any queued key events before launching external UI.
-    ctx.handle.clear_input_queue();
-
-    match launcher.launch_git_interface() {
-        Ok(_) => {
-            ctx.handle.force_redraw(); // Force redraw to clear any artifacts
-            ctx.renderer
-                .line(MessageStyle::Info, "Git interface closed.")?;
-        }
-        Err(err) => {
-            ctx.handle.force_redraw(); // Force redraw even on error
-            ctx.renderer.line(
+    let (message_style, message) =
+        match run_with_event_loop_suspended(ctx.handle, true, || launcher.launch_git_interface())
+            .await
+        {
+            Ok(()) => (MessageStyle::Info, "Git interface closed.".to_owned()),
+            Err(err) => (
                 MessageStyle::Error,
-                &format!("Failed to launch git interface: {}", err),
-            )?;
-        }
-    }
+                format!("Failed to launch git interface: {}", err),
+            ),
+        };
 
-    // Clear any stale terminal events buffered during process exit.
-    ctx.handle.clear_input_queue();
-    // Resume TUI event loop
-    ctx.handle.resume_event_loop();
-
+    ctx.handle.force_redraw();
+    ctx.renderer.line(message_style, &message)?;
     ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
     Ok(SlashCommandControl::Continue)
+}
+
+async fn run_with_event_loop_suspended<T, F>(
+    handle: &InlineHandle,
+    suspend_tui: bool,
+    launch: F,
+) -> T
+where
+    F: FnOnce() -> T,
+{
+    if suspend_tui {
+        handle.suspend_event_loop();
+        tokio::time::sleep(EXTERNAL_APP_EVENT_LOOP_SETTLE_DELAY).await;
+        handle.clear_input_queue();
+    }
+
+    let result = launch();
+
+    if suspend_tui {
+        handle.clear_input_queue();
+        handle.resume_event_loop();
+    }
+
+    result
 }

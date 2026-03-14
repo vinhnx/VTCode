@@ -64,6 +64,7 @@ const UNIFIED_TOOL_GUIDANCE: &str = r#"**Search & exploration**:
 - `unified_file` (action='edit') for surgical changes; action='write' for new or full replacements
 - After a successful patch/edit, continue without redundant re-reads
 - If patch/edit fails repeatedly, stop retrying and re-plan smaller slices
+- Prefer named helpers over flattening logic for imagined call savings; trust the optimizer unless profiling shows a real hotspot
 - Use `git log` and `git blame` for code history context
 - **Never**: `git commit`, `git push`, or branch creation unless explicitly requested
 
@@ -99,6 +100,7 @@ const COMPACT_TOOL_GUIDANCE: &str = r#"**Tools**:
 - If a structural query is a fragment, retry `unified_search` with a larger parseable pattern before switching tools or loading a skill
 - `action='structural'` is syntax-aware only; keep refining `unified_search` first and use `unified_exec` only for raw `sg scan`/`sg test` or rewrite workflows
 - Use `unified_file` for edits/writes and avoid redundant re-reads after successful changes
+- Prefer named helpers over flattening logic for imagined call savings; trust the optimizer unless profiling shows a real hotspot
 - Use `unified_exec` for shell commands; prefer `rg` over shell `grep`; stay in WORKSPACE_DIR and confirm destructive ops
 - Hidden capabilities route through `list_skills` and `load_skill`; check routing hints before loading a skill
 - If a call pattern stalls or repeats twice, pivot instead of retrying identically"#;
@@ -329,15 +331,15 @@ pub fn default_lightweight_prompt() -> &'static str {
 }
 
 pub fn minimal_instruction_text() -> String {
-    MINIMAL_SYSTEM_PROMPT.replace("__UNIFIED_TOOL_GUIDANCE__", COMPACT_TOOL_GUIDANCE)
+    render_prompt_template(MINIMAL_SYSTEM_PROMPT, SystemPromptMode::Minimal)
 }
 
 pub fn lightweight_instruction_text() -> String {
-    DEFAULT_LIGHTWEIGHT_PROMPT.replace("__UNIFIED_TOOL_GUIDANCE__", COMPACT_TOOL_GUIDANCE)
+    render_prompt_template(DEFAULT_LIGHTWEIGHT_PROMPT, SystemPromptMode::Lightweight)
 }
 
 pub fn specialized_instruction_text() -> String {
-    DEFAULT_SPECIALIZED_PROMPT.replace("__UNIFIED_TOOL_GUIDANCE__", UNIFIED_TOOL_GUIDANCE)
+    render_prompt_template(DEFAULT_SPECIALIZED_PROMPT, SystemPromptMode::Specialized)
 }
 
 /// MINIMAL PROMPT (v6.0 - Harness-engineered, Pi-inspired, provider-agnostic, <1K tokens)
@@ -570,14 +572,15 @@ pub async fn compose_system_instruction_text(
         SystemPromptMode::Specialized => (DEFAULT_SPECIALIZED_PROMPT, "specialized"),
         SystemPromptMode::Default => (DEFAULT_SYSTEM_PROMPT, "default"),
     };
+    let rendered_base_prompt = render_prompt_template(base_prompt, prompt_mode);
 
     tracing::debug!(
         mode = mode_name,
-        base_tokens_approx = base_prompt.len() / 4, // rough token estimate
+        base_tokens_approx = rendered_base_prompt.len() / 4, // rough token estimate
         "Selected system prompt mode"
     );
 
-    let base_len = base_prompt.len();
+    let base_len = rendered_base_prompt.len();
     let config_overhead = vtcode_config.map_or(0, |_| 1024);
     let instruction_hierarchy_size = instruction_bundle
         .as_ref()
@@ -591,18 +594,10 @@ pub async fn compose_system_instruction_text(
 
     let estimated_capacity = base_len + config_overhead + instruction_hierarchy_size + 1024; // +512 for enhancements
     let mut instruction = String::with_capacity(estimated_capacity);
-    instruction.push_str(base_prompt);
+    instruction.push_str(&rendered_base_prompt);
     if should_include_structured_reasoning(vtcode_config, prompt_mode) {
         instruction.push_str("\n\n");
         instruction.push_str(STRUCTURED_REASONING_INSTRUCTIONS);
-    }
-
-    // Replace unified tool guidance placeholder with actual constant
-    if instruction.contains("__UNIFIED_TOOL_GUIDANCE__") {
-        instruction = instruction.replace(
-            "__UNIFIED_TOOL_GUIDANCE__",
-            tool_guidance_for_mode(prompt_mode),
-        );
     }
 
     // ENHANCEMENT 1: Dynamic tool-aware guidelines (behavioral - goes early)
@@ -967,6 +962,13 @@ pub fn generate_specialized_instruction() -> Content {
     Content::system_text(specialized_instruction_text())
 }
 
+fn render_prompt_template(prompt_template: &str, prompt_mode: SystemPromptMode) -> String {
+    prompt_template.replace(
+        "__UNIFIED_TOOL_GUIDANCE__",
+        tool_guidance_for_mode(prompt_mode),
+    )
+}
+
 fn tool_guidance_for_mode(prompt_mode: SystemPromptMode) -> &'static str {
     match prompt_mode {
         SystemPromptMode::Minimal | SystemPromptMode::Lightweight => COMPACT_TOOL_GUIDANCE,
@@ -1166,7 +1168,7 @@ mod tests {
     #[test]
     fn test_default_prompt_token_count() {
         let approx_tokens = DEFAULT_SYSTEM_PROMPT.len() / 4;
-        // v6.2 expands planning guidance and retry strategy details
+        // v6.2 expands planning guidance and retry strategy details.
         assert!(
             approx_tokens > 1200 && approx_tokens < 2450,
             "Default prompt should be ~2K tokens (harness v6.2), got ~{}",
@@ -1326,6 +1328,40 @@ mod tests {
             MINIMAL_SYSTEM_PROMPT.contains("uncertain"),
             "Minimal prompt should mention uncertainty"
         );
+    }
+
+    #[tokio::test]
+    async fn test_generated_prompts_prefer_named_extractions_over_imagined_indirection_savings() {
+        let project_root = PathBuf::from(".");
+
+        for (mode_name, mode) in [
+            ("default", SystemPromptMode::Default),
+            ("minimal", SystemPromptMode::Minimal),
+            ("lightweight", SystemPromptMode::Lightweight),
+            ("specialized", SystemPromptMode::Specialized),
+        ] {
+            let mut config = VTCodeConfig::default();
+            config.agent.system_prompt_mode = mode;
+            config.agent.include_temporal_context = false;
+            config.agent.include_working_directory = false;
+            config.agent.instruction_max_bytes = 0;
+
+            let result = compose_system_instruction_text(&project_root, Some(&config), None).await;
+            let normalized = result.to_ascii_lowercase();
+
+            assert!(
+                normalized.contains("named helpers over flattening logic"),
+                "{mode_name} prompt should prefer named helpers over flattening logic"
+            );
+            assert!(
+                normalized.contains("trust the optimizer"),
+                "{mode_name} prompt should trust the optimizer before flattening code"
+            );
+            assert!(
+                normalized.contains("real hotspot"),
+                "{mode_name} prompt should require profiling evidence for indirection tradeoffs"
+            );
+        }
     }
 
     #[test]
@@ -1644,12 +1680,11 @@ mod tests {
         let _lightweight = generate_lightweight_instruction();
         let _specialized = generate_specialized_instruction();
 
-        let minimal_text =
-            MINIMAL_SYSTEM_PROMPT.replace("__UNIFIED_TOOL_GUIDANCE__", COMPACT_TOOL_GUIDANCE);
+        let minimal_text = render_prompt_template(MINIMAL_SYSTEM_PROMPT, SystemPromptMode::Minimal);
         let lightweight_text =
-            DEFAULT_LIGHTWEIGHT_PROMPT.replace("__UNIFIED_TOOL_GUIDANCE__", COMPACT_TOOL_GUIDANCE);
+            render_prompt_template(DEFAULT_LIGHTWEIGHT_PROMPT, SystemPromptMode::Lightweight);
         let specialized_text =
-            DEFAULT_SPECIALIZED_PROMPT.replace("__UNIFIED_TOOL_GUIDANCE__", UNIFIED_TOOL_GUIDANCE);
+            render_prompt_template(DEFAULT_SPECIALIZED_PROMPT, SystemPromptMode::Specialized);
 
         assert!(
             !minimal_text.contains("__UNIFIED_TOOL_GUIDANCE__"),
@@ -1664,8 +1699,7 @@ mod tests {
             "Specialized prompt has uninterpolated placeholder"
         );
         assert!(
-            !DEFAULT_SYSTEM_PROMPT
-                .replace("__UNIFIED_TOOL_GUIDANCE__", UNIFIED_TOOL_GUIDANCE)
+            !render_prompt_template(DEFAULT_SYSTEM_PROMPT, SystemPromptMode::Default)
                 .contains("__UNIFIED_TOOL_GUIDANCE__"),
             "Default prompt has uninterpolated placeholder"
         );

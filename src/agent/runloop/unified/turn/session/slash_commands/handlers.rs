@@ -3,9 +3,10 @@ use vtcode_core::llm::provider::MessageRole;
 
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::types::EditingMode as ConfigEditingMode;
+use vtcode_core::core::agent::snapshots::{CheckpointRestore, RevertScope, SnapshotManager};
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::llm::provider as uni;
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::transcript;
 
 use crate::agent::runloop::unified::state::SessionStats;
@@ -267,7 +268,7 @@ pub(super) async fn handle_copy_latest_assistant_reply(
 
 pub(super) async fn handle_rewind_latest(
     ctx: SlashCommandContext<'_>,
-    scope: vtcode_core::core::agent::snapshots::RevertScope,
+    scope: RevertScope,
 ) -> Result<SlashCommandControl> {
     let Some(manager) = ctx.checkpoint_manager else {
         ctx.renderer.line(
@@ -300,90 +301,135 @@ pub(super) async fn handle_rewind_latest(
 pub(super) async fn handle_rewind_to_turn(
     ctx: SlashCommandContext<'_>,
     turn: usize,
-    scope: vtcode_core::core::agent::snapshots::RevertScope,
+    scope: RevertScope,
 ) -> Result<SlashCommandControl> {
-    // Check if checkpoint manager is available
     if let Some(manager) = ctx.checkpoint_manager {
-        // Attempt to restore the snapshot
-        match manager.restore_snapshot(turn, scope).await {
-            Ok(Some(restored)) => {
-                // Update conversation history if scope includes conversation
-                if scope.includes_conversation() {
-                    *ctx.conversation_history = restored
-                        .conversation
-                        .iter()
-                        .map(uni::Message::from)
-                        .collect();
-                    ctx.renderer.line(
-                        MessageStyle::Info,
-                        &format!(
-                            "Restored conversation history from turn {} ({} messages)",
-                            turn,
-                            restored.conversation.len()
-                        ),
-                    )?;
-                }
-
-                // Report code changes if scope includes code
-                if scope.includes_code() {
-                    ctx.renderer.line(
-                        MessageStyle::Info,
-                        &format!("Applied code changes from turn {}", turn),
-                    )?;
-                }
-
-                ctx.renderer.line(
-                    MessageStyle::Info,
-                    &format!(
-                        "Successfully rewound to turn {} with scope {:?}",
-                        turn, scope
-                    ),
-                )?;
-            }
-            Ok(None) => {
-                ctx.renderer.line(
-                    MessageStyle::Error,
-                    &format!("No checkpoint found for turn {}", turn),
-                )?;
-            }
-            Err(err) => {
-                ctx.renderer.line(
-                    MessageStyle::Error,
-                    &format!("Failed to restore checkpoint for turn {}: {}", turn, err),
-                )?;
-            }
-        }
+        restore_rewind_from_checkpoint(
+            ctx.renderer,
+            ctx.conversation_history,
+            manager,
+            turn,
+            scope,
+        )
+        .await?;
     } else {
-        // Fallback to CLI command guidance if checkpoint manager is not available
-        ctx.renderer.line(
-            MessageStyle::Info,
-            &format!("Rewinding to turn {} with scope {:?}...", turn, scope),
-        )?;
-
-        ctx.renderer.line(
-            MessageStyle::Info,
-            &format!(
-                "Use: `vtcode revert --turn {} --partial {}` from command line",
-                turn,
-                match scope {
-                    vtcode_core::core::agent::snapshots::RevertScope::Conversation =>
-                        "conversation",
-                    vtcode_core::core::agent::snapshots::RevertScope::Code => "code",
-                    vtcode_core::core::agent::snapshots::RevertScope::Both => "both",
-                }
-            ),
-        )?;
-
-        ctx.renderer.line(
-            MessageStyle::Info,
-            "Note: In-chat rewind requires access to the checkpoint manager.",
-        )?;
+        render_rewind_cli_guidance(ctx.renderer, turn, scope)?;
     }
 
     Ok(SlashCommandControl::Continue)
 }
 
+async fn restore_rewind_from_checkpoint(
+    renderer: &mut AnsiRenderer,
+    conversation_history: &mut Vec<uni::Message>,
+    manager: &SnapshotManager,
+    turn: usize,
+    scope: RevertScope,
+) -> Result<()> {
+    match manager.restore_snapshot(turn, scope).await {
+        Ok(Some(restored)) => {
+            render_rewind_restore_success(renderer, conversation_history, turn, scope, restored)
+        }
+        Ok(None) => renderer.line(
+            MessageStyle::Error,
+            &format!("No checkpoint found for turn {}", turn),
+        ),
+        Err(err) => renderer.line(
+            MessageStyle::Error,
+            &format!("Failed to restore checkpoint for turn {}: {}", turn, err),
+        ),
+    }
+}
+
+fn render_rewind_restore_success(
+    renderer: &mut AnsiRenderer,
+    conversation_history: &mut Vec<uni::Message>,
+    turn: usize,
+    scope: RevertScope,
+    restored: CheckpointRestore,
+) -> Result<()> {
+    if scope.includes_conversation() {
+        *conversation_history = restored
+            .conversation
+            .iter()
+            .map(uni::Message::from)
+            .collect();
+        renderer.line(
+            MessageStyle::Info,
+            &format!(
+                "Restored conversation history from turn {} ({} messages)",
+                turn,
+                restored.conversation.len()
+            ),
+        )?;
+    }
+
+    if scope.includes_code() {
+        renderer.line(
+            MessageStyle::Info,
+            &format!("Applied code changes from turn {}", turn),
+        )?;
+    }
+
+    renderer.line(
+        MessageStyle::Info,
+        &format!(
+            "Successfully rewound to turn {} with scope {:?}",
+            turn, scope
+        ),
+    )?;
+    Ok(())
+}
+
+fn render_rewind_cli_guidance(
+    renderer: &mut AnsiRenderer,
+    turn: usize,
+    scope: RevertScope,
+) -> Result<()> {
+    renderer.line(
+        MessageStyle::Info,
+        &format!("Rewinding to turn {} with scope {:?}...", turn, scope),
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        &format!(
+            "Use: `vtcode revert --turn {} --partial {}` from command line",
+            turn,
+            rewind_partial_arg(scope)
+        ),
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "Note: In-chat rewind requires access to the checkpoint manager.",
+    )?;
+    Ok(())
+}
+
+fn rewind_partial_arg(scope: RevertScope) -> &'static str {
+    match scope {
+        RevertScope::Conversation => "conversation",
+        RevertScope::Code => "code",
+        RevertScope::Both => "both",
+    }
+}
+
 pub(super) async fn handle_exit(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     ctx.renderer.line(MessageStyle::Info, "✓")?;
     Ok(SlashCommandControl::BreakWithReason(SessionEndReason::Exit))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::rewind_partial_arg;
+    use vtcode_core::core::agent::snapshots::RevertScope;
+
+    #[test]
+    fn rewind_partial_arg_matches_cli_scope_values() {
+        assert_eq!(
+            rewind_partial_arg(RevertScope::Conversation),
+            "conversation"
+        );
+        assert_eq!(rewind_partial_arg(RevertScope::Code), "code");
+        assert_eq!(rewind_partial_arg(RevertScope::Both), "both");
+    }
 }
