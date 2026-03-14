@@ -31,6 +31,7 @@ pub(crate) const CODE_LINE_NUMBER_MIN_WIDTH: usize = 3;
 pub struct MarkdownSegment {
     pub style: Style,
     pub text: String,
+    pub link_target: Option<String>,
 }
 
 impl MarkdownSegment {
@@ -38,6 +39,19 @@ impl MarkdownSegment {
         Self {
             style,
             text: text.into(),
+            link_target: None,
+        }
+    }
+
+    pub(crate) fn with_link(
+        style: Style,
+        text: impl Into<String>,
+        link_target: Option<String>,
+    ) -> Self {
+        Self {
+            style,
+            text: text.into(),
+            link_target,
         }
     }
 }
@@ -50,16 +64,27 @@ pub struct MarkdownLine {
 
 impl MarkdownLine {
     pub(crate) fn push_segment(&mut self, style: Style, text: &str) {
+        self.push_segment_with_link(style, text, None);
+    }
+
+    pub(crate) fn push_segment_with_link(
+        &mut self,
+        style: Style,
+        text: &str,
+        link_target: Option<String>,
+    ) {
         if text.is_empty() {
             return;
         }
         if let Some(last) = self.segments.last_mut()
             && last.style == style
+            && last.link_target == link_target
         {
             last.text.push_str(text);
             return;
         }
-        self.segments.push(MarkdownSegment::new(style, text));
+        self.segments
+            .push(MarkdownSegment::with_link(style, text, link_target));
     }
 
     pub fn is_empty(&self) -> bool {
@@ -160,8 +185,11 @@ pub fn render_markdown_to_lines_with_options(
             Event::Text(text) => append_text(&text, &mut ctx),
             Event::Code(code) => {
                 ctx.ensure_prefix();
-                ctx.current_line
-                    .push_segment(inline_code_style(theme_styles, base_style), &code);
+                ctx.current_line.push_segment_with_link(
+                    inline_code_style(theme_styles, base_style),
+                    &code,
+                    ctx.active_link_target(),
+                );
             }
             Event::SoftBreak | Event::HardBreak => ctx.flush_line(),
             Event::Rule => {

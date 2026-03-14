@@ -205,12 +205,13 @@ pub async fn discover_instruction_sources(
     project_root: &Path,
     home_dir: Option<&Path>,
     extra_patterns: &[String],
+    fallback_filenames: &[String],
 ) -> Result<Vec<InstructionSource>> {
     let mut sources = Vec::with_capacity(8); // Typical: 2-4 global + 2-4 workspace
     let mut seen_paths = HashSet::new();
 
     if let Some(home) = home_dir {
-        for candidate in global_instruction_candidates(home) {
+        for candidate in global_instruction_candidates(home, fallback_filenames) {
             if instruction_exists(&candidate).await? && seen_paths.insert(candidate.clone()) {
                 sources.push(InstructionSource {
                     path: candidate,
@@ -240,16 +241,7 @@ pub async fn discover_instruction_sources(
 
     let mut workspace_paths = Vec::with_capacity(4); // Typical directory depth
     loop {
-        let override_candidate = cursor.join(AGENTS_OVERRIDE_FILENAME);
-        let agents_candidate = cursor.join(AGENTS_FILENAME);
-
-        let chosen = if instruction_exists(&override_candidate).await? {
-            Some(override_candidate)
-        } else if instruction_exists(&agents_candidate).await? {
-            Some(agents_candidate)
-        } else {
-            None
-        };
+        let chosen = select_workspace_instruction_candidate(&cursor, fallback_filenames).await?;
 
         if let Some(path) = chosen
             && seen_paths.insert(path.clone())
@@ -281,14 +273,21 @@ pub async fn read_instruction_bundle(
     project_root: &Path,
     home_dir: Option<&Path>,
     extra_patterns: &[String],
+    fallback_filenames: &[String],
     max_bytes: usize,
 ) -> Result<Option<InstructionBundle>> {
     if max_bytes == 0 {
         return Ok(None);
     }
 
-    let sources =
-        discover_instruction_sources(current_dir, project_root, home_dir, extra_patterns).await?;
+    let sources = discover_instruction_sources(
+        current_dir,
+        project_root,
+        home_dir,
+        extra_patterns,
+        fallback_filenames,
+    )
+    .await?;
     if sources.is_empty() {
         return Ok(None);
     }
@@ -380,12 +379,46 @@ pub async fn read_instruction_bundle(
     }
 }
 
-fn global_instruction_candidates(home: &Path) -> Vec<PathBuf> {
-    vec![
-        home.join(AGENTS_FILENAME),
-        home.join(".vtcode").join(AGENTS_FILENAME),
-        home.join(GLOBAL_CONFIG_DIRECTORY).join(AGENTS_FILENAME),
-    ]
+fn global_instruction_candidates(home: &Path, fallback_filenames: &[String]) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    let roots = [
+        home.to_path_buf(),
+        home.join(".vtcode"),
+        home.join(GLOBAL_CONFIG_DIRECTORY),
+    ];
+    for root in roots {
+        candidates.extend(instruction_candidates_for_dir(&root, fallback_filenames));
+    }
+    candidates
+}
+
+fn instruction_candidates_for_dir(dir: &Path, fallback_filenames: &[String]) -> Vec<PathBuf> {
+    let mut candidates = Vec::with_capacity(2 + fallback_filenames.len());
+    candidates.push(dir.join(AGENTS_OVERRIDE_FILENAME));
+    candidates.push(dir.join(AGENTS_FILENAME));
+    for name in fallback_filenames {
+        let trimmed = name.trim();
+        if trimmed.is_empty()
+            || trimmed.eq_ignore_ascii_case(AGENTS_FILENAME)
+            || trimmed.eq_ignore_ascii_case(AGENTS_OVERRIDE_FILENAME)
+        {
+            continue;
+        }
+        candidates.push(dir.join(trimmed));
+    }
+    candidates
+}
+
+async fn select_workspace_instruction_candidate(
+    dir: &Path,
+    fallback_filenames: &[String],
+) -> Result<Option<PathBuf>> {
+    for candidate in instruction_candidates_for_dir(dir, fallback_filenames) {
+        if instruction_exists(&candidate).await? {
+            return Ok(Some(candidate));
+        }
+    }
+    Ok(None)
 }
 
 async fn expand_instruction_patterns(
@@ -504,6 +537,7 @@ mod tests {
             project_root,
             Some(global_home.path()),
             &patterns,
+            &[],
         )
         .await?;
         assert_eq!(sources.len(), 4);
@@ -520,6 +554,7 @@ mod tests {
             project_root,
             Some(global_home.path()),
             &patterns,
+            &[],
             16 * 1024,
         )
         .await?
@@ -538,10 +573,11 @@ mod tests {
         let nested = project_root.join("src");
         std::fs::create_dir_all(&nested)?;
 
-        let sources = discover_instruction_sources(&nested, project_root, None, &[]).await?;
+        let sources = discover_instruction_sources(&nested, project_root, None, &[], &[]).await?;
         assert!(sources.is_empty());
 
-        let bundle = read_instruction_bundle(&nested, project_root, None, &[], 4 * 1024).await?;
+        let bundle =
+            read_instruction_bundle(&nested, project_root, None, &[], &[], 4 * 1024).await?;
         assert!(bundle.is_none());
 
         Ok(())
@@ -554,7 +590,7 @@ mod tests {
         let root_rule = project_root.join(AGENTS_FILENAME);
         std::fs::write(&root_rule, "A".repeat(4096))?;
 
-        let bundle = read_instruction_bundle(project_root, project_root, None, &[], 1024)
+        let bundle = read_instruction_bundle(project_root, project_root, None, &[], &[], 1024)
             .await?
             .expect("expected truncated bundle");
         assert!(bundle.truncated);
@@ -576,6 +612,7 @@ mod tests {
             project_root,
             Some(home.path()),
             &["~/notes.md".to_owned()],
+            &[],
         )
         .await?;
         assert_eq!(sources.len(), 1);
@@ -596,15 +633,37 @@ mod tests {
         let override_rule = project_root.join(AGENTS_OVERRIDE_FILENAME);
         std::fs::write(&override_rule, "override content")?;
 
-        let sources = discover_instruction_sources(project_root, project_root, None, &[]).await?;
+        let sources =
+            discover_instruction_sources(project_root, project_root, None, &[], &[]).await?;
         assert_eq!(sources.len(), 1);
         let override_rule_canon = std::fs::canonicalize(&override_rule)?;
         assert_eq!(sources[0].path, override_rule_canon);
 
-        let bundle = read_instruction_bundle(project_root, project_root, None, &[], 1024)
+        let bundle = read_instruction_bundle(project_root, project_root, None, &[], &[], 1024)
             .await?
             .expect("expected bundle");
         assert_eq!(bundle.combined_text(), "override content");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn falls_back_to_compatible_filenames_when_agents_missing() -> Result<()> {
+        let workspace = tempdir()?;
+        let project_root = workspace.path();
+        let fallback = project_root.join("CLAUDE.md");
+        std::fs::write(&fallback, "fallback content")?;
+
+        let sources = discover_instruction_sources(
+            project_root,
+            project_root,
+            None,
+            &[],
+            &["CLAUDE.md".to_string()],
+        )
+        .await?;
+        assert_eq!(sources.len(), 1);
+        assert_eq!(sources[0].path, std::fs::canonicalize(&fallback)?);
 
         Ok(())
     }

@@ -56,13 +56,17 @@ pub(crate) async fn prepare_session_bootstrap(
             onboarding_cfg.guideline_highlight_limit,
             effective_budget,
             &extra_instruction_files,
+            &vt_cfg
+                .map(|cfg| cfg.agent.project_doc_fallback_filenames.clone())
+                .unwrap_or_default(),
         )
         .await
     } else {
         None
     };
 
-    let header_highlights = if onboarding_cfg.enabled {
+    let show_tooltips = vt_cfg.and_then(|cfg| cfg.tui.show_tooltips).unwrap_or(true);
+    let header_highlights = if onboarding_cfg.enabled && show_tooltips {
         build_header_highlights(&onboarding_cfg)
     } else {
         Vec::new()
@@ -281,6 +285,7 @@ async fn extract_guideline_highlights(
     limit: usize,
     max_bytes: usize,
     extra_instruction_files: &[String],
+    fallback_filenames: &[String],
 ) -> Option<Vec<String>> {
     if limit == 0 || max_bytes == 0 {
         return None;
@@ -292,6 +297,7 @@ async fn extract_guideline_highlights(
         project_root: workspace,
         home_dir: home_dir.as_deref(),
         extra_instruction_files,
+        fallback_filenames,
         max_bytes,
     })
     .await

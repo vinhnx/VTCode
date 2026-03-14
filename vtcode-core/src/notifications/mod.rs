@@ -11,7 +11,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use crate::config::loader::VTCodeConfig;
-use vtcode_config::NotificationDeliveryMode;
+use vtcode_config::{
+    NotificationDeliveryMode, TerminalNotificationMethod, TuiNotificationEvent,
+    TuiNotificationsConfig,
+};
 
 /// Types of important events that trigger notifications
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -91,6 +94,8 @@ pub struct NotificationConfig {
     pub suppress_when_focused: bool,
     /// Delivery mode for notifications.
     pub delivery_mode: NotificationDeliveryMode,
+    /// Preferred terminal notification transport.
+    pub notification_method: TerminalNotificationMethod,
     /// Time window for suppressing repeated identical notifications.
     pub repeat_window_seconds: u64,
     /// Maximum identical notifications allowed per suppression window.
@@ -112,6 +117,7 @@ impl Default for NotificationConfig {
             terminal_notifications_enabled: true,
             suppress_when_focused: true,
             delivery_mode: NotificationDeliveryMode::Hybrid,
+            notification_method: TerminalNotificationMethod::Auto,
             repeat_window_seconds: 30,
             max_identical_notifications_in_window: 1,
         }
@@ -122,7 +128,7 @@ impl NotificationConfig {
     /// Build runtime notification config from full VTCodeConfig.
     pub fn from_vtcode_config(config: &VTCodeConfig) -> Self {
         let notifications = &config.ui.notifications;
-        Self {
+        let mut resolved = Self {
             command_failure_notifications: notifications
                 .command_failure
                 .unwrap_or(notifications.tool_failure),
@@ -143,9 +149,35 @@ impl NotificationConfig {
             terminal_notifications_enabled: notifications.enabled,
             suppress_when_focused: notifications.suppress_when_focused,
             delivery_mode: notifications.delivery_mode,
+            notification_method: config.tui.notification_method.unwrap_or_default(),
             repeat_window_seconds: notifications.repeat_window_seconds,
             max_identical_notifications_in_window: notifications.max_identical_in_window,
+        };
+
+        if let Some(tui_notifications) = &config.tui.notifications {
+            match tui_notifications {
+                TuiNotificationsConfig::Enabled(enabled) => {
+                    resolved.terminal_notifications_enabled = *enabled;
+                }
+                TuiNotificationsConfig::Events(events) => {
+                    let turn_complete = events.contains(&TuiNotificationEvent::AgentTurnComplete);
+                    let approval_requested =
+                        events.contains(&TuiNotificationEvent::ApprovalRequested);
+                    resolved.terminal_notifications_enabled = true;
+                    resolved.command_failure_notifications = false;
+                    resolved.tool_failure_notifications = false;
+                    resolved.error_notifications = false;
+                    resolved.tool_success_notifications = false;
+                    resolved.completion_success_notifications = turn_complete;
+                    resolved.completion_failure_notifications = turn_complete;
+                    resolved.policy_approval_notifications = approval_requested;
+                    resolved.hitl_notifications = approval_requested;
+                    resolved.request_notifications = approval_requested;
+                }
+            }
         }
+
+        resolved
     }
 }
 
@@ -434,8 +466,9 @@ impl NotificationManager {
 
     /// Send a terminal bell notification
     async fn send_terminal_bell(&self, message: &str) {
-        use crate::utils::ansi_codes::notify_attention;
-        notify_attention(true, Some(message));
+        use crate::utils::ansi_codes::notify_attention_with_terminal_method;
+        let method = self.config.read().notification_method;
+        notify_attention_with_terminal_method(true, Some(message), method);
     }
 
     /// Send a rich notification (desktop notifications when available)

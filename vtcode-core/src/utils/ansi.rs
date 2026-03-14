@@ -16,9 +16,139 @@ use anstyle::{Ansi256Color, AnsiColor, Color as AnsiColorEnum, Effects, Reset, R
 use anyhow::{Result, anyhow};
 use ratatui::style::{Color as RatColor, Modifier as RatModifier, Style as RatatuiStyle};
 use std::io::{self, Write};
-use std::sync::Arc;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, OnceLock};
+use url::Url;
 use vtcode_commons::color_policy::{self, ColorOutputPolicySource};
 use vtcode_commons::diff_paths::looks_like_diff_content;
+
+static FILE_OPENER: OnceLock<Mutex<vtcode_config::FileOpener>> = OnceLock::new();
+
+pub fn apply_file_opener_config(file_opener: vtcode_config::FileOpener) {
+    let cell = FILE_OPENER.get_or_init(|| Mutex::new(vtcode_config::FileOpener::None));
+    if let Ok(mut guard) = cell.lock() {
+        *guard = file_opener;
+    }
+}
+
+fn current_file_opener() -> vtcode_config::FileOpener {
+    FILE_OPENER
+        .get()
+        .and_then(|cell| cell.lock().ok().map(|guard| *guard))
+        .unwrap_or(vtcode_config::FileOpener::None)
+}
+
+fn make_clickable_target(target: &str) -> Option<String> {
+    let trimmed = target.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+        return Some(trimmed.to_string());
+    }
+
+    let opener = current_file_opener();
+    let scheme = opener.scheme()?;
+    let (path, location) = parse_local_link_target(trimmed)?;
+    let file_url = Url::from_file_path(resolve_clickable_path(path)?).ok()?;
+    let suffix = location.unwrap_or_default();
+    Some(format!(
+        "{scheme}://file{}{}",
+        file_url.as_str().trim_start_matches("file://"),
+        suffix
+    ))
+}
+
+fn parse_local_link_target(raw: &str) -> Option<(PathBuf, Option<String>)> {
+    if raw.starts_with("file://") {
+        let url = Url::parse(raw).ok()?;
+        let location = url
+            .fragment()
+            .and_then(normalize_hash_fragment)
+            .or_else(|| extract_trailing_location(url.path()));
+        let path = url.to_file_path().ok()?;
+        return Some((path, location));
+    }
+
+    if let Some((path_str, fragment)) = raw.split_once('#')
+        && let Some(location) = normalize_hash_fragment(fragment)
+    {
+        if path_str.is_empty() {
+            return None;
+        }
+        return Some((PathBuf::from(path_str), Some(location)));
+    }
+
+    let location = extract_trailing_location(raw);
+    let path_str = match location.as_deref() {
+        Some(suffix) => &raw[..raw.len().saturating_sub(suffix.len())],
+        None => raw,
+    };
+    if path_str.is_empty() {
+        return None;
+    }
+    Some((PathBuf::from(path_str), location))
+}
+
+fn resolve_clickable_path(path: PathBuf) -> Option<PathBuf> {
+    if path.is_absolute() {
+        return Some(path);
+    }
+
+    let cwd = std::env::current_dir().ok()?;
+    Some(join_normalized_path(&cwd, &path))
+}
+
+fn join_normalized_path(base: &Path, path: &Path) -> PathBuf {
+    let mut joined = PathBuf::from(base);
+    for component in path.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                joined.pop();
+            }
+            other => joined.push(other.as_os_str()),
+        }
+    }
+    joined
+}
+
+fn extract_trailing_location(raw: &str) -> Option<String> {
+    let mut hash_parts = raw.rsplitn(2, '#');
+    let fragment = hash_parts.next()?;
+    let base = hash_parts.next();
+    if let Some(base) = base
+        && let Some(location) = normalize_hash_fragment(fragment)
+    {
+        return Some(location).filter(|_| !base.is_empty());
+    }
+
+    let bytes = raw.as_bytes();
+    let mut idx = bytes.len();
+    while idx > 0 && (bytes[idx - 1].is_ascii_digit() || matches!(bytes[idx - 1], b':' | b'-')) {
+        idx -= 1;
+    }
+    if idx >= bytes.len() || bytes.get(idx).copied() != Some(b':') {
+        return None;
+    }
+    let suffix = &raw[idx..];
+    let digits = suffix.chars().filter(|ch| ch.is_ascii_digit()).count();
+    (digits > 0).then(|| suffix.to_string())
+}
+
+fn normalize_hash_fragment(fragment: &str) -> Option<String> {
+    let fragment = fragment.strip_prefix('L')?;
+    let mut normalized = String::from(":");
+    for ch in fragment.chars() {
+        match ch {
+            'L' => {}
+            'C' => normalized.push(':'),
+            '0'..='9' | '-' => normalized.push(ch),
+            _ => return None,
+        }
+    }
+    Some(normalized)
+}
 
 /// Renderer with deferred output buffering
 pub struct AnsiRenderer {
@@ -676,6 +806,7 @@ impl AnsiRenderer {
                 MarkdownSegment {
                     style: style.style(),
                     text: indent.to_string(),
+                    link_target: None,
                 },
             );
         }
@@ -689,18 +820,38 @@ impl AnsiRenderer {
         let mut plain = String::new();
         if self.color {
             for segment in &line.segments {
+                let clickable_target = segment
+                    .link_target
+                    .as_deref()
+                    .and_then(make_clickable_target);
+                if let Some(target) = clickable_target.as_deref() {
+                    write!(self.writer, "\u{1b}]8;;{target}\u{1b}\\")?;
+                }
                 write!(
                     self.writer,
                     "{style}{}{Reset}",
                     segment.text,
                     style = segment.style
                 )?;
+                if clickable_target.is_some() {
+                    write!(self.writer, "\u{1b}]8;;\u{1b}\\")?;
+                }
                 plain.push_str(&segment.text);
             }
             writeln!(self.writer)?;
         } else {
             for segment in &line.segments {
+                let clickable_target = segment
+                    .link_target
+                    .as_deref()
+                    .and_then(make_clickable_target);
+                if let Some(target) = clickable_target.as_deref() {
+                    write!(self.writer, "\u{1b}]8;;{target}\u{1b}\\")?;
+                }
                 write!(self.writer, "{}", segment.text)?;
+                if clickable_target.is_some() {
+                    write!(self.writer, "\u{1b}]8;;\u{1b}\\")?;
+                }
                 plain.push_str(&segment.text);
             }
             writeln!(self.writer)?;
@@ -1281,6 +1432,16 @@ impl InlineSink {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{LazyLock, Mutex};
+
+    static FILE_OPENER_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+    fn lock_file_opener_test_guard() -> std::sync::MutexGuard<'static, ()> {
+        match FILE_OPENER_TEST_LOCK.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        }
+    }
 
     #[test]
     fn test_styles_construct() {
@@ -1482,5 +1643,41 @@ mod tests {
             }
         }
         assert!(saw_append, "error output should be appended when enabled");
+    }
+
+    #[test]
+    fn clickable_targets_resolve_relative_paths_against_current_directory() {
+        let _guard = lock_file_opener_test_guard();
+        let original = current_file_opener();
+        apply_file_opener_config(vtcode_config::FileOpener::Vscode);
+
+        let cwd = std::env::current_dir().expect("current dir");
+        let expected =
+            Url::from_file_path(cwd.join("vtcode-core/src/utils/ansi.rs")).expect("file url");
+        let clickable =
+            make_clickable_target("./vtcode-core/src/utils/ansi.rs:42").expect("clickable target");
+
+        assert_eq!(
+            clickable,
+            format!(
+                "vscode://file{}:42",
+                expected.as_str().trim_start_matches("file://")
+            )
+        );
+
+        apply_file_opener_config(original);
+    }
+
+    #[test]
+    fn clickable_targets_translate_hash_locations_to_editor_suffixes() {
+        let _guard = lock_file_opener_test_guard();
+        let original = current_file_opener();
+        apply_file_opener_config(vtcode_config::FileOpener::Vscode);
+
+        let clickable = make_clickable_target("/tmp/example.rs#L12C3").expect("clickable target");
+
+        assert_eq!(clickable, "vscode://file/tmp/example.rs:12:3");
+
+        apply_file_opener_config(original);
     }
 }

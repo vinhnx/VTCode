@@ -100,7 +100,8 @@ impl ConfigManager {
 
         // If no layers found, use default config
         if layer_stack.layers().is_empty() {
-            let config = VTCodeConfig::default();
+            let mut config = VTCodeConfig::default();
+            config.apply_compat_defaults();
             config
                 .validate()
                 .context("Default configuration failed validation")?;
@@ -126,6 +127,7 @@ impl ConfigManager {
         let mut config: VTCodeConfig = effective_toml
             .try_into()
             .context("Failed to deserialize effective configuration")?;
+        config.apply_compat_defaults();
 
         config
             .validate()
@@ -256,12 +258,13 @@ impl ConfigManager {
         }
 
         let effective_toml = layer_stack.effective_config_without_origins();
-        let config: VTCodeConfig = effective_toml.try_into().with_context(|| {
+        let mut config: VTCodeConfig = effective_toml.try_into().with_context(|| {
             format!(
                 "Failed to parse effective config with file: {}",
                 path.display()
             )
         })?;
+        config.apply_compat_defaults();
 
         config.validate().with_context(|| {
             format!(

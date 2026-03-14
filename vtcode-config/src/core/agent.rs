@@ -122,6 +122,10 @@ pub struct AgentConfig {
     #[serde(default = "default_project_doc_max_bytes")]
     pub project_doc_max_bytes: usize,
 
+    /// Additional filenames to check when AGENTS.md is absent at a directory level.
+    #[serde(default)]
+    pub project_doc_fallback_filenames: Vec<String>,
+
     /// Maximum bytes of instruction content to load from AGENTS.md hierarchy
     #[serde(
         default = "default_instruction_max_bytes",
@@ -444,6 +448,7 @@ impl Default for AgentConfig {
             small_model: AgentSmallModelConfig::default(),
             onboarding: AgentOnboardingConfig::default(),
             project_doc_max_bytes: default_project_doc_max_bytes(),
+            project_doc_fallback_filenames: Vec::new(),
             instruction_max_bytes: default_instruction_max_bytes(),
             instruction_files: Vec::new(),
             custom_api_keys: BTreeMap::new(),

@@ -104,6 +104,32 @@ fn live_reload_preserves_session_config(
     initial_value == reloaded_value
 }
 
+fn prepare_resume_bootstrap_without_archive(
+    resume: &ResumeSession,
+    metadata: vtcode_core::utils::session_archive::SessionArchiveMetadata,
+    reserved_archive_id: Option<String>,
+) -> (vtcode_core::core::threads::ThreadBootstrap, String) {
+    let mut bootstrap =
+        vtcode_core::core::threads::ThreadBootstrap::from_listing(resume.listing().clone());
+    bootstrap.metadata = Some(metadata);
+
+    let thread_id = match resume.intent() {
+        vtcode_core::core::threads::ArchivedSessionIntent::ResumeInPlace => resume.identifier(),
+        vtcode_core::core::threads::ArchivedSessionIntent::ForkNewArchive { .. } => {
+            reserved_archive_id.unwrap_or_else(|| {
+                vtcode_core::utils::session_archive::generate_session_archive_identifier(
+                    &workspace_archive_label(std::path::Path::new(
+                        &resume.snapshot().metadata.workspace_path,
+                    )),
+                    resume.custom_suffix().map(str::to_owned),
+                )
+            })
+        }
+    };
+
+    (bootstrap, thread_id)
+}
+
 async fn force_reload_workspace_config_for_execution(
     workspace: &std::path::Path,
     runtime_cfg: &CoreAgentConfig,
@@ -245,9 +271,10 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 .map(|path| path.to_string_lossy().to_string()),
         );
         let reserved_archive_id = crate::main_helpers::runtime_archive_session_id();
-        let prepared_resume = if let Some(resume) = resume_ref {
-            Some(
-                vtcode_core::core::threads::prepare_archived_session(
+        let history_enabled = vtcode_core::utils::session_archive::history_persistence_enabled();
+        let (thread_handle, session_archive) = if let Some(resume) = resume_ref {
+            if history_enabled {
+                let prepared = vtcode_core::core::threads::prepare_archived_session(
                     resume.listing().clone(),
                     config.workspace.clone(),
                     archive_metadata.clone(),
@@ -258,34 +285,53 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         None
                     },
                 )
-                .await?,
-            )
-        } else {
-            None
-        };
-        let (thread_handle, session_archive) = if let Some(prepared) = prepared_resume {
-            (
-                thread_manager
-                    .start_thread_with_identifier(prepared.thread_id.clone(), prepared.bootstrap),
-                Some(prepared.archive),
-            )
+                .await?;
+                (
+                    thread_manager.start_thread_with_identifier(
+                        prepared.thread_id.clone(),
+                        prepared.bootstrap,
+                    ),
+                    Some(prepared.archive),
+                )
+            } else {
+                let (bootstrap, thread_id) = prepare_resume_bootstrap_without_archive(
+                    resume,
+                    archive_metadata.clone(),
+                    reserved_archive_id.clone(),
+                );
+                (
+                    thread_manager.start_thread_with_identifier(thread_id, bootstrap),
+                    None,
+                )
+            }
         } else {
             let thread_id = if let Some(identifier) = reserved_archive_id.clone() {
                 identifier
-            } else {
+            } else if history_enabled {
                 vtcode_core::utils::session_archive::reserve_session_archive_identifier(
                     &workspace_archive_label(&config.workspace),
                     None,
                 )
                 .await?
+            } else {
+                vtcode_core::utils::session_archive::generate_session_archive_identifier(
+                    &workspace_archive_label(&config.workspace),
+                    None,
+                )
             };
             let bootstrap =
                 vtcode_core::core::threads::ThreadBootstrap::new(Some(archive_metadata.clone()));
-            let archive =
-                create_session_archive(archive_metadata.clone(), Some(thread_id.clone())).await?;
+            let archive = if history_enabled {
+                Some(
+                    create_session_archive(archive_metadata.clone(), Some(thread_id.clone()))
+                        .await?,
+                )
+            } else {
+                None
+            };
             (
                 thread_manager.start_thread_with_identifier(thread_id, bootstrap),
-                Some(archive),
+                archive,
             )
         };
         crate::main_helpers::set_runtime_archive_session_id(Some(
@@ -1041,7 +1087,7 @@ mod tests {
         TurnHistoryCheckpoint, archive::NextRuntimeArchiveId,
         archive::next_runtime_archive_id_request, archive::workspace_archive_label,
         build_partial_timeout_messages, effective_max_tool_calls_for_turn,
-        resolve_effective_turn_timeout_secs,
+        prepare_resume_bootstrap_without_archive, resolve_effective_turn_timeout_secs,
     };
     use crate::agent::agents::ResumeSession;
     use crate::agent::runloop::unified::run_loop_context::TurnPhase;
@@ -1218,5 +1264,52 @@ mod tests {
                 custom_suffix: None,
             }
         );
+    }
+
+    #[test]
+    fn resume_bootstrap_without_archive_reuses_identifier_for_in_place_resume() {
+        let resume = resume_session(ArchivedSessionIntent::ResumeInPlace);
+        let (bootstrap, thread_id) = prepare_resume_bootstrap_without_archive(
+            &resume,
+            SessionArchiveMetadata::new(
+                "workspace",
+                "/tmp/workspace",
+                "model",
+                "provider",
+                "theme",
+                "medium",
+            ),
+            None,
+        );
+
+        assert_eq!(thread_id, "session-source");
+        assert_eq!(
+            bootstrap
+                .metadata
+                .as_ref()
+                .map(|meta| meta.workspace_label.as_str()),
+            Some("workspace")
+        );
+    }
+
+    #[test]
+    fn resume_bootstrap_without_archive_prefers_reserved_identifier_for_forks() {
+        let resume = resume_session(ArchivedSessionIntent::ForkNewArchive {
+            custom_suffix: Some("branch".to_string()),
+        });
+        let (_, thread_id) = prepare_resume_bootstrap_without_archive(
+            &resume,
+            SessionArchiveMetadata::new(
+                "workspace",
+                "/tmp/workspace",
+                "model",
+                "provider",
+                "theme",
+                "medium",
+            ),
+            Some("reserved-session-id".to_string()),
+        );
+
+        assert_eq!(thread_id, "reserved-session-id");
     }
 }

@@ -14,7 +14,9 @@ use vtcode_core::core::threads::{
 };
 use vtcode_core::review::{ReviewSpec, build_review_prompt};
 use vtcode_core::utils::session_archive::{
-    SessionArchive, SessionListing, find_session_by_identifier, reserve_session_archive_identifier,
+    SessionArchive, SessionListing, find_session_by_identifier,
+    generate_session_archive_identifier, history_persistence_enabled,
+    reserve_session_archive_identifier,
 };
 use vtcode_core::utils::tty::TtyExt;
 use vtcode_core::utils::validation::validate_non_empty;
@@ -46,7 +48,7 @@ pub(super) struct ExecPreparedRun {
     pub model_id: ModelId,
     pub prompt: String,
     pub session_id: String,
-    pub archive: SessionArchive,
+    pub archive: Option<SessionArchive>,
     pub thread_bootstrap: ThreadBootstrap,
 }
 
@@ -131,26 +133,48 @@ pub(super) async fn prepare_exec_run(
 
     let metadata =
         build_exec_archive_metadata(run_workspace.as_path(), &model_id, &run_vt_cfg, &run_config);
+    let history_enabled = history_persistence_enabled();
 
     let (session_id, archive, thread_bootstrap) = if let Some(listing) = resume_listing {
-        let prepared = prepare_archived_session(
-            listing,
-            run_workspace.clone(),
-            metadata.clone(),
-            ArchivedSessionIntent::ResumeInPlace,
-            None,
-        )
-        .await
-        .context("Failed to prepare archived exec session")?;
-        (prepared.thread_id, prepared.archive, prepared.bootstrap)
+        if history_enabled {
+            let prepared = prepare_archived_session(
+                listing,
+                run_workspace.clone(),
+                metadata.clone(),
+                ArchivedSessionIntent::ResumeInPlace,
+                None,
+            )
+            .await
+            .context("Failed to prepare archived exec session")?;
+            (
+                prepared.thread_id,
+                Some(prepared.archive),
+                prepared.bootstrap,
+            )
+        } else {
+            let session_id = listing.identifier();
+            let mut bootstrap = ThreadBootstrap::from_listing(listing);
+            bootstrap.metadata = Some(metadata.clone());
+            (session_id, None, bootstrap)
+        }
     } else {
         let workspace_label = exec_workspace_label(run_workspace.as_path());
-        let session_id = reserve_session_archive_identifier(&workspace_label, None)
-            .await
-            .context("Failed to reserve exec session archive identifier")?;
-        let archive = SessionArchive::new_with_identifier(metadata.clone(), session_id.clone())
-            .await
-            .context("Failed to create exec session archive")?;
+        let session_id = if history_enabled {
+            reserve_session_archive_identifier(&workspace_label, None)
+                .await
+                .context("Failed to reserve exec session archive identifier")?
+        } else {
+            generate_session_archive_identifier(&workspace_label, None)
+        };
+        let archive = if history_enabled {
+            Some(
+                SessionArchive::new_with_identifier(metadata.clone(), session_id.clone())
+                    .await
+                    .context("Failed to create exec session archive")?,
+            )
+        } else {
+            None
+        };
         let bootstrap = ThreadBootstrap::new(Some(metadata));
         (session_id, archive, bootstrap)
     };

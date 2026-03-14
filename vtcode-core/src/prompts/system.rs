@@ -532,12 +532,17 @@ async fn read_instruction_hierarchy(
     project_root: &Path,
     vtcode_config: Option<&crate::config::VTCodeConfig>,
 ) -> Option<InstructionBundle> {
-    let (max_bytes, extra_sources) = match vtcode_config {
+    let (max_bytes, extra_sources, fallback_filenames) = match vtcode_config {
         Some(cfg) => (
             cfg.agent.instruction_max_bytes,
             cfg.agent.instruction_files.clone(),
+            cfg.agent.project_doc_fallback_filenames.clone(),
         ),
-        None => (instruction_constants::DEFAULT_MAX_BYTES, Vec::new()),
+        None => (
+            instruction_constants::DEFAULT_MAX_BYTES,
+            Vec::new(),
+            Vec::new(),
+        ),
     };
 
     if max_bytes == 0 {
@@ -551,6 +556,7 @@ async fn read_instruction_hierarchy(
         project_root,
         home.as_deref(),
         &extra_sources,
+        &fallback_filenames,
         max_bytes,
     )
     .await

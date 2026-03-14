@@ -52,6 +52,14 @@ pub enum TerminalNotifyKind {
     Osc777,
 }
 
+/// Explicit terminal notification transport override.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotifyMethodOverride {
+    Auto,
+    Bell,
+    Osc9,
+}
+
 static DETECTED_NOTIFY_KIND: Lazy<TerminalNotifyKind> = Lazy::new(detect_terminal_notify_kind);
 
 /// Play the terminal bell when enabled.
@@ -83,6 +91,15 @@ fn emit_bell() {
 
 #[inline]
 pub fn notify_attention(default_enabled: bool, message: Option<&str>) {
+    notify_attention_with_mode(default_enabled, message, NotifyMethodOverride::Auto);
+}
+
+#[inline]
+pub fn notify_attention_with_mode(
+    default_enabled: bool,
+    message: Option<&str>,
+    method: NotifyMethodOverride,
+) {
     if !is_bell_enabled(default_enabled) {
         return;
     }
@@ -97,7 +114,12 @@ pub fn notify_attention(default_enabled: bool, message: Option<&str>) {
     }
 
     if matches!(mode, HitlNotifyMode::Rich) {
-        match *DETECTED_NOTIFY_KIND {
+        let notify_kind = match method {
+            NotifyMethodOverride::Auto => *DETECTED_NOTIFY_KIND,
+            NotifyMethodOverride::Bell => TerminalNotifyKind::BellOnly,
+            NotifyMethodOverride::Osc9 => TerminalNotifyKind::Osc9,
+        };
+        match notify_kind {
             TerminalNotifyKind::Osc9 => send_osc9_notification(message),
             TerminalNotifyKind::Osc777 => send_osc777_notification(message),
             TerminalNotifyKind::BellOnly => {} // No-op

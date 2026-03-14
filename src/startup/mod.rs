@@ -110,6 +110,8 @@ impl StartupContext {
         let theme_selection = determine_theme(args, &config).await?;
 
         update_theme_preference(&theme_selection).await.ok();
+        vtcode_core::utils::session_archive::apply_session_history_config_from_vtcode(&config);
+        vtcode_core::utils::ansi::apply_file_opener_config(config.file_opener);
 
         // Validate API key AFTER first-run setup so new users can complete setup first
         let api_key = get_api_key(&selection.provider, &ApiKeySources::default())

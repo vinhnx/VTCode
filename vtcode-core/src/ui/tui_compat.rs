@@ -85,6 +85,8 @@ pub fn to_tui_slash_commands(commands: &[SlashCommandInfo]) -> Vec<SlashCommandI
 }
 
 pub fn to_tui_appearance(config: &VTCodeConfig) -> SessionAppearanceConfig {
+    let reduce_motion_mode =
+        config.ui.reduce_motion_mode || matches!(config.tui.animations, Some(false));
     SessionAppearanceConfig {
         theme: config.agent.theme.clone(),
         ui_mode: match config.ui.display_mode {
@@ -136,7 +138,7 @@ pub fn to_tui_appearance(config: &VTCodeConfig) -> SessionAppearanceConfig {
         },
         reasoning_visible_default: config.ui.reasoning_visible_default,
         screen_reader_mode: config.ui.screen_reader_mode,
-        reduce_motion_mode: config.ui.reduce_motion_mode,
+        reduce_motion_mode,
         reduce_motion_keep_progress_animation: config.ui.reduce_motion_keep_progress_animation,
         customization: Default::default(),
     }

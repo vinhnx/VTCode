@@ -1,4 +1,5 @@
 use crate::config::constants::defaults;
+use crate::config::{HistoryPersistence, VTCodeConfig};
 use crate::llm::provider::{AssistantPhase, Message, MessageContent, MessageRole, ToolCall};
 use crate::telemetry::perf::PerfSpan;
 use crate::utils::dot_config::DotManager;
@@ -13,7 +14,7 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const SESSION_FILE_PREFIX: &str = "session";
@@ -27,6 +28,49 @@ const DEFAULT_SESSION_MAX_AGE_DAYS: u64 = 30;
 const DEFAULT_SESSION_MAX_SIZE_MB: u64 = 100;
 const BYTES_PER_MB: u64 = 1024 * 1024;
 const SECONDS_PER_DAY: u64 = 24 * 60 * 60;
+
+#[derive(Debug, Clone, Copy)]
+struct SessionHistorySettings {
+    persistence: HistoryPersistence,
+    max_bytes: Option<usize>,
+}
+
+impl Default for SessionHistorySettings {
+    fn default() -> Self {
+        Self {
+            persistence: HistoryPersistence::File,
+            max_bytes: None,
+        }
+    }
+}
+
+static SESSION_HISTORY_SETTINGS: OnceLock<Mutex<SessionHistorySettings>> = OnceLock::new();
+
+fn session_history_settings() -> SessionHistorySettings {
+    SESSION_HISTORY_SETTINGS
+        .get()
+        .and_then(|settings| settings.lock().ok().map(|guard| *guard))
+        .unwrap_or_default()
+}
+
+pub fn apply_session_history_config_from_vtcode(config: &VTCodeConfig) {
+    let settings = SessionHistorySettings {
+        persistence: config.history.persistence,
+        max_bytes: config.history.max_bytes,
+    };
+    let cell =
+        SESSION_HISTORY_SETTINGS.get_or_init(|| Mutex::new(SessionHistorySettings::default()));
+    if let Ok(mut guard) = cell.lock() {
+        *guard = settings;
+    }
+}
+
+pub fn history_persistence_enabled() -> bool {
+    matches!(
+        session_history_settings().persistence,
+        HistoryPersistence::File
+    )
+}
 
 #[cfg(test)]
 mod test_env_overrides {
@@ -371,12 +415,41 @@ fn generate_unique_archive_path_for_label(
     started_at: DateTime<Utc>,
     custom_suffix: Option<&str>,
 ) -> PathBuf {
+    if custom_suffix.is_some() {
+        return sessions_dir.join(archive_file_name_for_label(
+            workspace_label,
+            started_at,
+            custom_suffix,
+            None,
+        ));
+    }
+
+    let mut attempt = 0u32;
+    loop {
+        let candidate = sessions_dir.join(archive_file_name_for_label(
+            workspace_label,
+            started_at,
+            None,
+            Some(attempt),
+        ));
+        if !candidate.exists() {
+            return candidate;
+        }
+        attempt = attempt.wrapping_add(1);
+    }
+}
+
+fn archive_file_name_for_label(
+    workspace_label: &str,
+    started_at: DateTime<Utc>,
+    custom_suffix: Option<&str>,
+    attempt: Option<u32>,
+) -> String {
     let sanitized_label = sanitize_component(workspace_label);
     let timestamp = started_at.format("%Y%m%dT%H%M%SZ").to_string();
 
     if let Some(suffix) = custom_suffix {
-        // Custom suffix format: session-{label}-{timestamp}-{suffix}.json
-        let file_name = format!(
+        return format!(
             "{}-{}-{}-{}.{}",
             SESSION_FILE_PREFIX,
             sanitized_label,
@@ -384,36 +457,47 @@ fn generate_unique_archive_path_for_label(
             sanitize_component(suffix),
             SESSION_FILE_EXTENSION
         );
-        sessions_dir.join(file_name)
-    } else {
-        // Original format with collision detection: session-{label}-{timestamp}_{micros}-{pid}{-NN}.json
-        let micros = started_at.timestamp_subsec_micros();
-        let pid = process::id();
-        let mut attempt = 0u32;
-
-        loop {
-            let suffix = if attempt == 0 {
-                String::new()
-            } else {
-                format!("-{:02}", attempt)
-            };
-            let file_name = format!(
-                "{}-{}-{}_{:06}-{:05}{}.{}",
-                SESSION_FILE_PREFIX,
-                sanitized_label,
-                timestamp,
-                micros,
-                pid,
-                suffix,
-                SESSION_FILE_EXTENSION
-            );
-            let candidate = sessions_dir.join(file_name);
-            if !candidate.exists() {
-                return candidate;
-            }
-            attempt = attempt.wrapping_add(1);
-        }
     }
+
+    let micros = started_at.timestamp_subsec_micros();
+    let pid = process::id();
+    let attempt_suffix = match attempt.unwrap_or_default() {
+        0 => String::new(),
+        value => format!("-{:02}", value),
+    };
+    format!(
+        "{}-{}-{}_{:06}-{:05}{}.{}",
+        SESSION_FILE_PREFIX,
+        sanitized_label,
+        timestamp,
+        micros,
+        pid,
+        attempt_suffix,
+        SESSION_FILE_EXTENSION
+    )
+}
+
+pub fn generate_session_archive_identifier(
+    workspace_label: &str,
+    custom_suffix: Option<String>,
+) -> String {
+    let file_name = archive_file_name_for_label(
+        workspace_label,
+        Utc::now(),
+        custom_suffix.as_deref(),
+        Some(0),
+    );
+    Path::new(&file_name)
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .map(str::to_owned)
+        .unwrap_or_else(|| {
+            format!(
+                "session-{}-{}",
+                sanitize_component(workspace_label),
+                process::id()
+            )
+        })
 }
 
 fn session_identifier_from_archive_path(path: &Path) -> Result<String> {
@@ -692,12 +776,30 @@ impl SessionArchive {
     }
 
     fn write_snapshot(&self, snapshot: SessionSnapshot) -> Result<PathBuf> {
-        write_json_file_sync(&self.path, &snapshot)?;
+        if !history_persistence_enabled() {
+            return Ok(self.path.clone());
+        }
+
+        if let Some(max_bytes) = session_history_settings().max_bytes {
+            let snapshot = compact_snapshot_to_max_bytes(snapshot, max_bytes)?;
+            write_json_file_sync(&self.path, &snapshot)?;
+        } else {
+            write_json_file_sync(&self.path, &snapshot)?;
+        }
         Ok(self.path.clone())
     }
 
     async fn write_snapshot_async(&self, snapshot: SessionSnapshot) -> Result<PathBuf> {
-        write_json_file(&self.path, &snapshot).await?;
+        if !history_persistence_enabled() {
+            return Ok(self.path.clone());
+        }
+
+        if let Some(max_bytes) = session_history_settings().max_bytes {
+            let snapshot = compact_snapshot_to_max_bytes(snapshot, max_bytes)?;
+            write_json_file(&self.path, &snapshot).await?;
+        } else {
+            write_json_file(&self.path, &snapshot).await?;
+        }
         Ok(self.path.clone())
     }
 
@@ -1171,6 +1273,213 @@ fn truncate_preview(input: &str, max_chars: usize) -> String {
     truncated
 }
 
+fn compact_snapshot_to_max_bytes(
+    mut snapshot: SessionSnapshot,
+    max_bytes: usize,
+) -> Result<SessionSnapshot> {
+    if max_bytes == 0 {
+        minimize_snapshot_payload(&mut snapshot);
+        return Ok(snapshot);
+    }
+
+    while serde_json::to_vec(&snapshot)?.len() > max_bytes {
+        if trim_oldest_snapshot_entries(&mut snapshot) {
+            continue;
+        }
+        if strip_snapshot_overhead(&mut snapshot) {
+            continue;
+        }
+        if shrink_snapshot_strings(&mut snapshot) {
+            continue;
+        }
+        break;
+    }
+
+    Ok(snapshot)
+}
+
+fn minimize_snapshot_payload(snapshot: &mut SessionSnapshot) {
+    snapshot.messages.clear();
+    snapshot.transcript.clear();
+    snapshot.distinct_tools.clear();
+    snapshot.error_logs.clear();
+    if let Some(progress) = snapshot.progress.as_mut() {
+        progress.recent_messages.clear();
+        progress.tool_summaries.clear();
+        progress.token_usage = None;
+        progress.max_context_tokens = None;
+        progress.loaded_skills.clear();
+    }
+}
+
+fn trim_oldest_snapshot_entries(snapshot: &mut SessionSnapshot) -> bool {
+    let mut changed = false;
+
+    if snapshot.messages.len() > 1 {
+        snapshot.messages.remove(0);
+        changed = true;
+    }
+
+    if snapshot.transcript.len() > 1 {
+        snapshot.transcript.remove(0);
+        changed = true;
+    }
+
+    if let Some(progress) = snapshot.progress.as_mut()
+        && progress.recent_messages.len() > 1
+    {
+        progress.recent_messages.remove(0);
+        changed = true;
+    }
+
+    changed
+}
+
+fn strip_snapshot_overhead(snapshot: &mut SessionSnapshot) -> bool {
+    let mut changed = false;
+
+    if !snapshot.transcript.is_empty() {
+        snapshot.transcript.clear();
+        changed = true;
+    }
+    if !snapshot.distinct_tools.is_empty() {
+        snapshot.distinct_tools.clear();
+        changed = true;
+    }
+    if !snapshot.error_logs.is_empty() {
+        snapshot.error_logs.clear();
+        changed = true;
+    }
+
+    if let Some(progress) = snapshot.progress.as_mut() {
+        if !progress.tool_summaries.is_empty() {
+            progress.tool_summaries.clear();
+            changed = true;
+        }
+        if progress.token_usage.take().is_some() {
+            changed = true;
+        }
+        if progress.max_context_tokens.take().is_some() {
+            changed = true;
+        }
+        if !progress.loaded_skills.is_empty() {
+            progress.loaded_skills.clear();
+            changed = true;
+        }
+    }
+
+    changed
+}
+
+fn shrink_snapshot_strings(snapshot: &mut SessionSnapshot) -> bool {
+    let mut changed = false;
+
+    for transcript in &mut snapshot.transcript {
+        changed |= shrink_string(transcript);
+    }
+
+    for message in &mut snapshot.messages {
+        changed |= shrink_session_message(message);
+    }
+
+    for error_log in &mut snapshot.error_logs {
+        changed |= shrink_string(&mut error_log.message);
+    }
+
+    if let Some(progress) = snapshot.progress.as_mut() {
+        for message in &mut progress.recent_messages {
+            changed |= shrink_session_message(message);
+        }
+        if let Some(token_usage) = progress.token_usage.as_mut() {
+            changed |= shrink_string(token_usage);
+        }
+    }
+
+    changed
+}
+
+fn shrink_session_message(message: &mut SessionMessage) -> bool {
+    let mut changed = false;
+    changed |= shrink_message_content(&mut message.content);
+
+    if let Some(reasoning) = message.reasoning.as_mut() {
+        changed |= shrink_string(reasoning);
+    }
+    if let Some(tool_call_id) = message.tool_call_id.as_mut() {
+        changed |= shrink_string(tool_call_id);
+    }
+    if let Some(origin_tool) = message.origin_tool.as_mut() {
+        changed |= shrink_string(origin_tool);
+    }
+    if let Some(tool_calls) = message.tool_calls.as_mut() {
+        for tool_call in tool_calls {
+            changed |= shrink_string(&mut tool_call.id);
+            changed |= shrink_string(&mut tool_call.call_type);
+            if let Some(function) = tool_call.function.as_mut() {
+                changed |= shrink_string(&mut function.name);
+                changed |= shrink_string(&mut function.arguments);
+            }
+            if let Some(text) = tool_call.text.as_mut() {
+                changed |= shrink_string(text);
+            }
+            if let Some(thought_signature) = tool_call.thought_signature.as_mut() {
+                changed |= shrink_string(thought_signature);
+            }
+        }
+    }
+
+    changed
+}
+
+fn shrink_message_content(content: &mut MessageContent) -> bool {
+    match content {
+        MessageContent::Text(text) => shrink_string(text),
+        MessageContent::Parts(parts) => {
+            let mut changed = false;
+            for part in parts {
+                changed |= match part {
+                    crate::llm::provider::ContentPart::Text { text } => shrink_string(text),
+                    crate::llm::provider::ContentPart::Image {
+                        data, mime_type, ..
+                    } => shrink_string(data) | shrink_string(mime_type),
+                    crate::llm::provider::ContentPart::File {
+                        filename,
+                        file_id,
+                        file_data,
+                        file_url,
+                        ..
+                    } => {
+                        shrink_optional_string(filename)
+                            | shrink_optional_string(file_id)
+                            | shrink_optional_string(file_data)
+                            | shrink_optional_string(file_url)
+                    }
+                };
+            }
+            changed
+        }
+    }
+}
+
+fn shrink_optional_string(value: &mut Option<String>) -> bool {
+    value.as_mut().is_some_and(shrink_string)
+}
+
+fn shrink_string(value: &mut String) -> bool {
+    const MIN_RETAINED_CHARS: usize = 8;
+    const TRUNCATION_MARKER: &str = "...";
+
+    if value.len() <= MIN_RETAINED_CHARS + TRUNCATION_MARKER.len() {
+        return false;
+    }
+
+    let keep_len = (value.len() / 2).max(MIN_RETAINED_CHARS);
+    let prefix_len = keep_len.saturating_sub(TRUNCATION_MARKER.len());
+    value.truncate(prefix_len);
+    value.push_str(TRUNCATION_MARKER);
+    true
+}
+
 fn sanitize_component(value: &str) -> String {
     let mut normalized = String::new();
     let mut last_was_separator = false;
@@ -1211,7 +1520,11 @@ mod tests {
     use crate::llm::provider::{ContentPart, ToolCall};
     use anyhow::anyhow;
     use chrono::{TimeZone, Timelike};
+    use std::sync::LazyLock;
     use std::time::Duration;
+
+    static SESSION_HISTORY_TEST_LOCK: LazyLock<tokio::sync::Mutex<()>> =
+        LazyLock::new(|| tokio::sync::Mutex::new(()));
 
     struct EnvGuard {
         key: &'static str,
@@ -1230,8 +1543,38 @@ mod tests {
         }
     }
 
+    struct HistorySettingsGuard {
+        previous: SessionHistorySettings,
+    }
+
+    impl HistorySettingsGuard {
+        fn set(persistence: HistoryPersistence, max_bytes: Option<usize>) -> Self {
+            let previous = session_history_settings();
+            let mut config = VTCodeConfig::default();
+            config.history.persistence = persistence;
+            config.history.max_bytes = max_bytes;
+            apply_session_history_config_from_vtcode(&config);
+            Self { previous }
+        }
+    }
+
+    impl Drop for HistorySettingsGuard {
+        fn drop(&mut self) {
+            let mut config = VTCodeConfig::default();
+            config.history.persistence = self.previous.persistence;
+            config.history.max_bytes = self.previous.max_bytes;
+            apply_session_history_config_from_vtcode(&config);
+        }
+    }
+
+    async fn lock_history_test_guard() -> tokio::sync::MutexGuard<'static, ()> {
+        SESSION_HISTORY_TEST_LOCK.lock().await
+    }
+
     #[tokio::test]
     async fn session_archive_persists_snapshot() -> Result<()> {
+        let _settings_lock = lock_history_test_guard().await;
+        let _history_guard = HistorySettingsGuard::set(HistoryPersistence::File, None);
         let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
         let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
 
@@ -1340,6 +1683,8 @@ mod tests {
 
     #[tokio::test]
     async fn session_progress_persists_budget_and_recent_messages() -> Result<()> {
+        let _settings_lock = lock_history_test_guard().await;
+        let _history_guard = HistorySettingsGuard::set(HistoryPersistence::File, None);
         let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
         let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
 
@@ -1381,6 +1726,8 @@ mod tests {
 
     #[tokio::test]
     async fn session_progress_transcript_skips_tool_noise_and_duplicates() -> Result<()> {
+        let _settings_lock = lock_history_test_guard().await;
+        let _history_guard = HistorySettingsGuard::set(HistoryPersistence::File, None);
         let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
         let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
 
@@ -1430,6 +1777,8 @@ mod tests {
 
     #[tokio::test]
     async fn session_progress_normalizes_exec_tool_aliases_in_summaries() -> Result<()> {
+        let _settings_lock = lock_history_test_guard().await;
+        let _history_guard = HistorySettingsGuard::set(HistoryPersistence::File, None);
         let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
         let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
 
@@ -1487,6 +1836,8 @@ mod tests {
 
     #[tokio::test]
     async fn find_session_by_identifier_returns_match() -> Result<()> {
+        let _settings_lock = lock_history_test_guard().await;
+        let _history_guard = HistorySettingsGuard::set(HistoryPersistence::File, None);
         let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
         let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
 
@@ -1588,6 +1939,8 @@ mod tests {
 
     #[tokio::test]
     async fn reserve_session_identifier_can_be_reused_for_archive() -> Result<()> {
+        let _settings_lock = lock_history_test_guard().await;
+        let _history_guard = HistorySettingsGuard::set(HistoryPersistence::File, None);
         let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
         let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
 
@@ -1630,8 +1983,19 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn generated_session_identifier_includes_workspace_and_custom_suffix() {
+        let generated =
+            generate_session_archive_identifier("Example Workspace", Some("branch".to_string()));
+
+        assert!(generated.starts_with("session-example-workspace-"));
+        assert!(generated.ends_with("-branch"));
+    }
+
     #[tokio::test]
     async fn resume_from_listing_reuses_existing_archive_path() -> Result<()> {
+        let _settings_lock = lock_history_test_guard().await;
+        let _history_guard = HistorySettingsGuard::set(HistoryPersistence::File, None);
         let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
         let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
 
@@ -1682,6 +2046,8 @@ mod tests {
 
     #[tokio::test]
     async fn list_recent_sessions_orders_entries() -> Result<()> {
+        let _settings_lock = lock_history_test_guard().await;
+        let _history_guard = HistorySettingsGuard::set(HistoryPersistence::File, None);
         let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
         let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
 
@@ -1839,6 +2205,8 @@ mod tests {
 
     #[tokio::test]
     async fn search_sessions_finds_keyword() -> Result<()> {
+        let _settings_lock = lock_history_test_guard().await;
+        let _history_guard = HistorySettingsGuard::set(HistoryPersistence::File, None);
         let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
         let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
 
@@ -1860,6 +2228,96 @@ mod tests {
         assert!(results[0].content_snippet.contains("secret key"));
         assert_eq!(results[0].role, MessageRole::Assistant);
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn session_archive_skips_writes_when_history_persistence_is_disabled() -> Result<()> {
+        let _settings_lock = lock_history_test_guard().await;
+        let _history_guard = HistorySettingsGuard::set(HistoryPersistence::None, None);
+        let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
+        let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
+
+        let metadata = SessionArchiveMetadata::new(
+            "NoHistory",
+            "/tmp/no-history",
+            "model-x",
+            "provider-y",
+            "dark",
+            "medium",
+        );
+        let archive = SessionArchive::new(metadata, None).await?;
+        let path = archive.finalize(
+            vec!["line one".to_owned()],
+            1,
+            Vec::new(),
+            vec![SessionMessage::new(MessageRole::User, "hello")],
+        )?;
+
+        assert_eq!(path, archive.path());
+        assert!(
+            !path.exists(),
+            "history disabled should not write archive files"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn snapshot_compaction_shrinks_large_single_message_payloads() -> Result<()> {
+        let snapshot = SessionSnapshot {
+            metadata: SessionArchiveMetadata::new(
+                "Workspace",
+                "/tmp/workspace",
+                "model",
+                "provider",
+                "dark",
+                "medium",
+            ),
+            started_at: Utc::now(),
+            ended_at: Utc::now(),
+            total_messages: 1,
+            distinct_tools: vec!["very-large-tool-name".repeat(20)],
+            transcript: vec!["transcript ".repeat(400)],
+            messages: vec![SessionMessage {
+                role: MessageRole::Assistant,
+                content: MessageContent::Parts(vec![
+                    ContentPart::text("text ".repeat(800)),
+                    ContentPart::image("a".repeat(4000), "image/png".to_string()),
+                ]),
+                reasoning: Some("reasoning ".repeat(300)),
+                reasoning_details: None,
+                tool_calls: Some(vec![ToolCall::function(
+                    "call_1".to_string(),
+                    "unified_exec".to_string(),
+                    "{\"cmd\":\"echo giant payload\"}".repeat(100),
+                )]),
+                tool_call_id: None,
+                phase: None,
+                origin_tool: Some("unified_exec".repeat(50)),
+            }],
+            progress: Some(SessionProgress {
+                turn_number: 1,
+                recent_messages: vec![SessionMessage::new(
+                    MessageRole::Assistant,
+                    "recent ".repeat(500),
+                )],
+                tool_summaries: vec!["summary ".repeat(100)],
+                token_usage: Some("token ".repeat(200)),
+                max_context_tokens: Some(128_000),
+                loaded_skills: vec!["skill ".repeat(50)],
+            }),
+            error_logs: vec![ErrorLogEntry {
+                timestamp: Utc::now().to_rfc3339(),
+                level: "ERROR".to_string(),
+                target: "vtcode_test".to_string(),
+                message: "error ".repeat(400),
+            }],
+        };
+
+        let compacted = compact_snapshot_to_max_bytes(snapshot, 2_048)?;
+
+        assert!(serde_json::to_vec(&compacted)?.len() <= 2_048);
+        assert_eq!(compacted.messages.len(), 1);
         Ok(())
     }
 }

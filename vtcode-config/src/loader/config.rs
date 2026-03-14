@@ -4,6 +4,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::acp::AgentClientProtocolConfig;
+use crate::codex::{FileOpener, HistoryConfig, TuiConfig};
 use crate::context::ContextFeaturesConfig;
 use crate::core::{
     AgentConfig, AnthropicConfig, AuthConfig, AutomationConfig, CommandsConfig,
@@ -40,6 +41,30 @@ pub struct ProviderConfig {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct VTCodeConfig {
+    /// Codex-compatible clickable citation URI scheme.
+    #[serde(default)]
+    pub file_opener: FileOpener,
+
+    /// Codex-compatible project doc byte limit override.
+    #[serde(default)]
+    pub project_doc_max_bytes: Option<usize>,
+
+    /// Codex-compatible fallback filenames for project instructions discovery.
+    #[serde(default)]
+    pub project_doc_fallback_filenames: Vec<String>,
+
+    /// External notification command invoked for supported events.
+    #[serde(default)]
+    pub notify: Vec<String>,
+
+    /// Codex-compatible local history persistence controls.
+    #[serde(default)]
+    pub history: HistoryConfig,
+
+    /// Codex-compatible TUI settings.
+    #[serde(default)]
+    pub tui: TuiConfig,
+
     /// Agent-wide settings
     #[serde(default)]
     pub agent: AgentConfig,
@@ -150,6 +175,16 @@ pub struct VTCodeConfig {
 }
 
 impl VTCodeConfig {
+    pub fn apply_compat_defaults(&mut self) {
+        if let Some(max_bytes) = self.project_doc_max_bytes {
+            self.agent.project_doc_max_bytes = max_bytes;
+        }
+
+        if !self.project_doc_fallback_filenames.is_empty() {
+            self.agent.project_doc_fallback_filenames = self.project_doc_fallback_filenames.clone();
+        }
+    }
+
     pub fn validate(&self) -> Result<()> {
         self.syntax_highlighting
             .validate()
@@ -257,6 +292,39 @@ impl VTCodeConfig {
         r#"# VT Code Configuration File (Example)
 # Getting-started reference; see docs/config/CONFIGURATION_PRECEDENCE.md for override order.
 # Copy this file to vtcode.toml and customize as needed.
+
+# Clickable file citation URI scheme ("vscode", "cursor", "windsurf", "vscode-insiders", "none")
+file_opener = "none"
+
+# Additional fallback filenames to use when AGENTS.md is absent
+project_doc_fallback_filenames = []
+
+# Optional external command invoked after each completed agent turn
+notify = []
+
+[history]
+# Persist local session transcripts to disk
+persistence = "file"
+
+# Optional max size budget for each persisted session snapshot
+# max_bytes = 104857600
+
+[tui]
+# Enable all built-in TUI notifications, disable them, or restrict to specific event types.
+# notifications = true
+# notifications = ["agent-turn-complete", "approval-requested"]
+
+# Notification transport: "auto", "osc9", or "bel"
+# notification_method = "auto"
+
+# Set to false to reduce shimmer/animation effects
+# animations = true
+
+# Alternate-screen override: "always" or "never"
+# alternate_screen = "never"
+
+# Show onboarding hints on the welcome screen
+# show_tooltips = true
 
 # Core agent behavior; see docs/config/CONFIGURATION_PRECEDENCE.md.
 [agent]

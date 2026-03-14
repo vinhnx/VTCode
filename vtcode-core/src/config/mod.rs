@@ -70,6 +70,10 @@ pub use vtcode_config::root::{
     UiConfig, UiDisplayMode,
 };
 pub use vtcode_config::status_line::{StatusLineConfig, StatusLineMode};
+pub use vtcode_config::{
+    FileOpener, HistoryConfig, HistoryPersistence, TerminalNotificationMethod, TuiAlternateScreen,
+    TuiConfig, TuiNotificationEvent, TuiNotificationsConfig,
+};
 pub use vtcode_config::{TimeoutsConfig, resolve_timeout};
 
 /// Convert KeyboardProtocolConfig to KeyboardEnhancementFlags

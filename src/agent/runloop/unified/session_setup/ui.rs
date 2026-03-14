@@ -127,7 +127,17 @@ pub(crate) async fn initialize_session_ui(
         theme_spec.clone(),
         SessionOptions {
             placeholder: default_placeholder.clone(),
-            surface_preference: to_tui_surface(config.ui_surface),
+            surface_preference: vt_cfg
+                .and_then(|cfg| cfg.tui.alternate_screen)
+                .map(|mode| match mode {
+                    vtcode_core::config::TuiAlternateScreen::Always => {
+                        vtcode_tui::SessionSurface::Alternate
+                    }
+                    vtcode_core::config::TuiAlternateScreen::Never => {
+                        vtcode_tui::SessionSurface::Inline
+                    }
+                })
+                .unwrap_or_else(|| to_tui_surface(config.ui_surface)),
             inline_rows,
             event_callback: Some(interrupt_callback),
             focus_callback: Some(focus_callback),

@@ -26,6 +26,7 @@
 pub mod acp;
 pub mod api_keys;
 pub mod auth;
+pub mod codex;
 pub mod constants;
 pub mod context;
 pub mod core;
@@ -118,4 +119,8 @@ pub use workspace_env::{read_workspace_env_value, write_workspace_env_value};
 pub use auth::{
     AuthStatus, OpenRouterOAuthConfig, OpenRouterToken, PkceChallenge, clear_oauth_token,
     generate_pkce_challenge, get_auth_status, get_auth_url, load_oauth_token, save_oauth_token,
+};
+pub use codex::{
+    FileOpener, HistoryConfig, HistoryPersistence, TerminalNotificationMethod, TuiAlternateScreen,
+    TuiConfig, TuiNotificationEvent, TuiNotificationsConfig,
 };

@@ -94,6 +94,12 @@ impl MarkdownContext<'_> {
             self.pending_list_prefix.replace(state.continuation.clone());
         }
     }
+
+    pub(crate) fn active_link_target(&self) -> Option<String> {
+        self.link_state
+            .as_ref()
+            .map(|link| link.destination.clone())
+    }
 }
 
 pub(crate) fn handle_start_tag(tag: &Tag<'_>, ctx: &mut MarkdownContext<'_>) {
@@ -248,10 +254,21 @@ pub(crate) fn handle_end_tag(tag: TagEnd, ctx: &mut MarkdownContext<'_>) {
         TagEnd::Link | TagEnd::Image => {
             if let Some(link) = ctx.link_state.take() {
                 if link.show_destination {
-                    ctx.current_line.push_segment(ctx.current_style(), " (");
-                    ctx.current_line
-                        .push_segment(ctx.current_style(), &link.destination);
-                    ctx.current_line.push_segment(ctx.current_style(), ")");
+                    ctx.current_line.push_segment_with_link(
+                        ctx.current_style(),
+                        " (",
+                        Some(link.destination.clone()),
+                    );
+                    ctx.current_line.push_segment_with_link(
+                        ctx.current_style(),
+                        &link.destination,
+                        Some(link.destination.clone()),
+                    );
+                    ctx.current_line.push_segment_with_link(
+                        ctx.current_style(),
+                        ")",
+                        Some(link.destination.clone()),
+                    );
                 } else if let Some(location_suffix) = link.hidden_location_suffix.as_deref() {
                     let label_segments = ctx
                         .current_line
@@ -260,8 +277,11 @@ pub(crate) fn handle_end_tag(tag: TagEnd, ctx: &mut MarkdownContext<'_>) {
                         .unwrap_or(&[]);
 
                     if !label_segments_have_location_suffix(label_segments) {
-                        ctx.current_line
-                            .push_segment(ctx.current_style(), location_suffix);
+                        ctx.current_line.push_segment_with_link(
+                            ctx.current_style(),
+                            location_suffix,
+                            Some(link.destination.clone()),
+                        );
                     }
                 }
             }
@@ -313,6 +333,7 @@ pub(crate) fn handle_end_tag(tag: TagEnd, ctx: &mut MarkdownContext<'_>) {
 
 pub(crate) fn append_text(text: &str, ctx: &mut MarkdownContext<'_>) {
     let style = ctx.current_style();
+    let link_target = ctx.active_link_target();
     let mut start = 0usize;
     let mut chars = text.char_indices().peekable();
 
@@ -321,7 +342,8 @@ pub(crate) fn append_text(text: &str, ctx: &mut MarkdownContext<'_>) {
             let segment = &text[start..idx];
             if !segment.is_empty() {
                 ctx.ensure_prefix();
-                ctx.current_line.push_segment(style, segment);
+                ctx.current_line
+                    .push_segment_with_link(style, segment, link_target.clone());
             }
             ctx.lines.push(std::mem::take(ctx.current_line));
             start = idx + 1;
@@ -338,7 +360,8 @@ pub(crate) fn append_text(text: &str, ctx: &mut MarkdownContext<'_>) {
         let remaining = &text[start..];
         if !remaining.is_empty() {
             ctx.ensure_prefix();
-            ctx.current_line.push_segment(style, remaining);
+            ctx.current_line
+                .push_segment_with_link(style, remaining, link_target);
         }
     }
 }

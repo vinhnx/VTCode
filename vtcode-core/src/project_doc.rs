@@ -34,6 +34,7 @@ pub struct ProjectDocOptions<'a> {
     pub project_root: &'a Path,
     pub home_dir: Option<&'a Path>,
     pub extra_instruction_files: &'a [String],
+    pub fallback_filenames: &'a [String],
     pub max_bytes: usize,
 }
 
@@ -49,6 +50,7 @@ pub async fn read_project_doc_with_options(
         options.project_root,
         options.home_dir,
         options.extra_instruction_files,
+        options.fallback_filenames,
         options.max_bytes,
     )
     .await?
@@ -71,6 +73,7 @@ pub async fn read_project_doc(cwd: &Path, max_bytes: usize) -> Result<Option<Pro
         project_root: &project_root,
         home_dir: home_dir.as_deref(),
         extra_instruction_files: &[],
+        fallback_filenames: &[],
         max_bytes,
     })
     .await
@@ -88,6 +91,7 @@ pub async fn get_user_instructions(
         project_root: &project_root,
         home_dir: home_dir.as_deref(),
         extra_instruction_files: &[],
+        fallback_filenames: &config.project_doc_fallback_filenames,
         max_bytes: config.project_doc_max_bytes,
     })
     .await
@@ -243,6 +247,7 @@ mod tests {
             project_root: repo.path(),
             home_dir: None,
             extra_instruction_files: &[],
+            fallback_filenames: &[],
             max_bytes: 4096,
         })
         .await
@@ -267,6 +272,7 @@ mod tests {
             project_root: repo.path(),
             home_dir: None,
             extra_instruction_files: &["docs/*.md".to_owned()],
+            fallback_filenames: &[],
             max_bytes: 4096,
         })
         .await

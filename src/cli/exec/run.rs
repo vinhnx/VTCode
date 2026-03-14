@@ -189,14 +189,16 @@ pub(super) async fn handle_exec_command_impl(
     let session_messages = runner.session_messages();
     let session_archive_messages: Vec<SessionMessage> =
         session_messages.iter().map(SessionMessage::from).collect();
-    archive
-        .finalize(
-            exec_archive_transcript(&session_messages),
-            session_archive_messages.len(),
-            result.executed_commands.clone(),
-            session_archive_messages,
-        )
-        .context("Failed to save exec session archive")?;
+    if let Some(archive) = archive {
+        archive
+            .finalize(
+                exec_archive_transcript(&session_messages),
+                session_archive_messages.len(),
+                result.executed_commands.clone(),
+                session_archive_messages,
+            )
+            .context("Failed to save exec session archive")?;
+    }
 
     let mut processor = lock_or_recover(&processor);
     processor
