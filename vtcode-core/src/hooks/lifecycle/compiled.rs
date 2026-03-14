@@ -5,6 +5,7 @@ use crate::config::{HookCommandConfig, HookGroupConfig, LifecycleHooksConfig};
 
 #[derive(Default)]
 pub(super) struct CompiledLifecycleHooks {
+    pub(super) quiet_success_output: bool,
     pub(super) session_start: Vec<CompiledHookGroup>,
     pub(super) session_end: Vec<CompiledHookGroup>,
     pub(super) user_prompt_submit: Vec<CompiledHookGroup>,
@@ -15,6 +16,7 @@ pub(super) struct CompiledLifecycleHooks {
 impl CompiledLifecycleHooks {
     pub(super) fn from_config(config: &LifecycleHooksConfig) -> Result<Self> {
         Ok(Self {
+            quiet_success_output: config.quiet_success_output,
             session_start: compile_groups(&config.session_start)?,
             session_end: compile_groups(&config.session_end)?,
             user_prompt_submit: compile_groups(&config.user_prompt_submit)?,

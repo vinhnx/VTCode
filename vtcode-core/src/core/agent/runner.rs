@@ -32,7 +32,7 @@ use crate::prompts::system::compose_system_instruction_text;
 use crate::tools::ToolRegistry;
 
 use anyhow::{Result, anyhow};
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
@@ -60,6 +60,8 @@ mod validation;
 
 #[cfg(test)]
 mod tests;
+
+type ToolArgTransform = Arc<dyn Fn(&str, serde_json::Value) -> serde_json::Value + Send + Sync>;
 
 /// Individual agent runner for executing specialized agent tasks
 pub struct AgentRunner {
@@ -113,6 +115,10 @@ pub struct AgentRunner {
     last_reasoning_stage: Mutex<Option<String>>,
     /// Receiver for steering messages (e.g., stop, pause)
     steering_receiver: Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>>,
+    /// Optional restricted tool definitions used instead of the default registry projection.
+    tool_definitions_override: RwLock<Option<Vec<uni_provider::ToolDefinition>>>,
+    /// Optional argument transformer applied before tool validation/execution.
+    tool_arg_transform: Option<ToolArgTransform>,
 }
 
 impl AgentRunner {
@@ -343,6 +349,8 @@ impl AgentRunner {
             streaming_last_failure: Mutex::new(None),
             last_reasoning_stage: Mutex::new(None),
             steering_receiver: Mutex::new(steering_receiver),
+            tool_definitions_override: RwLock::new(None),
+            tool_arg_transform: None,
         })
     }
 
@@ -383,6 +391,25 @@ impl AgentRunner {
     /// Remove any previously registered structured event callback.
     pub fn clear_event_handler(&mut self) {
         self.event_sink = None;
+    }
+
+    pub fn set_tool_definitions_override(
+        &mut self,
+        definitions: Vec<uni_provider::ToolDefinition>,
+    ) {
+        *self.tool_definitions_override.write() = Some(definitions);
+    }
+
+    pub fn clear_tool_definitions_override(&mut self) {
+        *self.tool_definitions_override.write() = None;
+    }
+
+    pub fn set_tool_arg_transform(&mut self, transform: ToolArgTransform) {
+        self.tool_arg_transform = Some(transform);
+    }
+
+    pub fn clear_tool_arg_transform(&mut self) {
+        self.tool_arg_transform = None;
     }
 
     /// Enable full-auto execution with the provided allow-list.

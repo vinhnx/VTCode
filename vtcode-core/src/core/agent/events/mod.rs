@@ -340,6 +340,7 @@ impl ExecEventRecorder {
         event: HarnessEventKind,
         message: Option<String>,
         command: Option<String>,
+        path: Option<String>,
         exit_code: Option<i32>,
     ) {
         let item = ThreadItem {
@@ -348,6 +349,7 @@ impl ExecEventRecorder {
                 event,
                 message,
                 command,
+                path,
                 exit_code,
             }),
         };

@@ -545,6 +545,7 @@ impl ResponseBuilder {
                     "event": serde_json::to_value(&event.event).unwrap_or(serde_json::Value::Null),
                     "message": event.message,
                     "command": event.command,
+                    "path": event.path,
                     "exit_code": event.exit_code,
                 }),
             }),

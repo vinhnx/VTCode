@@ -13,20 +13,29 @@
 //! 4. Tool calls are executed and results are fed back
 //! 5. Final response is returned
 
+use crate::config::VTCodeConfig;
+use crate::config::models::ModelId;
+use crate::core::agent::runner::{AgentRunner, RunnerSettings};
+use crate::core::agent::task::{ContextItem, Task};
+use crate::core::agent::types::AgentType;
 use crate::llm::provider::{FinishReason, LLMProvider, LLMRequest, Message, ToolDefinition};
 use crate::sandboxing::{AdditionalPermissions, SandboxPermissions};
 use crate::skills::types::{Skill, SkillNetworkPolicy};
 use crate::tool_policy::ToolPolicy;
 use crate::tools::ToolRegistry;
 use crate::tools::tool_intent;
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
+use chrono::Utc;
 use serde_json::{Map, Value};
 use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 use tracing::{debug, info, warn};
+
+type SkillToolArgTransform = dyn Fn(&str, Value) -> Value + Send + Sync;
 
 /// Network-capable tool names that should be filtered based on skill network policy
 const NETWORK_TOOLS: &[&str] = &[
@@ -345,6 +354,175 @@ fn merge_skill_command_permissions(skill: &Skill, tool_name: &str, tool_args: Va
     Value::Object(args)
 }
 
+#[derive(Debug, Clone)]
+pub struct ForkSkillRuntimeConfig {
+    pub workspace: PathBuf,
+    pub model: String,
+    pub api_key: String,
+    pub vt_cfg: Option<VTCodeConfig>,
+}
+
+#[async_trait]
+pub trait ForkSkillExecutor: Send + Sync {
+    async fn execute(&self, skill: &Skill, user_input: Value) -> Result<Value>;
+}
+
+#[derive(Clone)]
+pub struct ChildAgentSkillExecutor {
+    tool_registry: Arc<ToolRegistry>,
+    runtime: ForkSkillRuntimeConfig,
+}
+
+impl ChildAgentSkillExecutor {
+    pub fn new(tool_registry: Arc<ToolRegistry>, runtime: ForkSkillRuntimeConfig) -> Self {
+        Self {
+            tool_registry,
+            runtime,
+        }
+    }
+}
+
+fn skill_runs_in_fork(skill: &Skill) -> bool {
+    skill.manifest.context.as_deref() == Some("fork")
+}
+
+fn skill_tool_arg_transform(skill: Skill) -> Arc<SkillToolArgTransform> {
+    Arc::new(move |tool_name, tool_args| {
+        merge_skill_command_permissions(&skill, tool_name, tool_args)
+    })
+}
+
+fn fork_agent_type(skill: &Skill) -> AgentType {
+    match skill.manifest.agent.as_deref() {
+        Some("explore") => AgentType::Explore,
+        Some("plan") => AgentType::Plan,
+        Some("general") => AgentType::General,
+        _ => AgentType::General,
+    }
+}
+
+fn format_skill_user_input(user_input: &Value) -> String {
+    match user_input {
+        Value::String(text) => text.clone(),
+        other => other.to_string(),
+    }
+}
+
+fn child_session_id(parent_session_id: &str, skill_name: &str) -> String {
+    format!(
+        "{}-skill-{}-{}",
+        crate::utils::session_debug::sanitize_debug_component(parent_session_id, "session"),
+        crate::utils::session_debug::sanitize_debug_component(skill_name, "skill"),
+        Utc::now().format("%Y%m%dT%H%M%SZ")
+    )
+}
+
+fn blocked_handoff_paths(events: &[crate::exec::events::ThreadEvent]) -> Vec<String> {
+    let mut paths = Vec::new();
+    for event in events {
+        let crate::exec::events::ThreadEvent::ItemCompleted(completed) = event else {
+            continue;
+        };
+        let crate::exec::events::ThreadItemDetails::Harness(harness) = &completed.item.details
+        else {
+            continue;
+        };
+        if harness.event == crate::exec::events::HarnessEventKind::BlockedHandoffWritten
+            && let Some(path) = harness.path.as_ref()
+            && !paths.iter().any(|existing| existing == path)
+        {
+            paths.push(path.clone());
+        }
+    }
+    paths
+}
+
+#[async_trait]
+impl ForkSkillExecutor for ChildAgentSkillExecutor {
+    async fn execute(&self, skill: &Skill, user_input: Value) -> Result<Value> {
+        let parent_session_id = self.tool_registry.harness_context_snapshot().session_id;
+        let session_id = child_session_id(&parent_session_id, skill.name());
+        let model = self
+            .runtime
+            .model
+            .parse::<ModelId>()
+            .with_context(|| format!("invalid model for forked skill '{}'", skill.name()))?;
+
+        let mut runner = if let Some(vt_cfg) = self.runtime.vt_cfg.clone() {
+            AgentRunner::new_with_thread_bootstrap_and_config(
+                fork_agent_type(skill),
+                model,
+                self.runtime.api_key.clone(),
+                self.runtime.workspace.clone(),
+                session_id.clone(),
+                RunnerSettings {
+                    reasoning_effort: None,
+                    verbosity: None,
+                },
+                None,
+                crate::core::threads::ThreadBootstrap::new(None),
+                vt_cfg,
+            )
+            .await?
+        } else {
+            AgentRunner::new_with_thread_bootstrap(
+                fork_agent_type(skill),
+                model,
+                self.runtime.api_key.clone(),
+                self.runtime.workspace.clone(),
+                session_id.clone(),
+                RunnerSettings {
+                    reasoning_effort: None,
+                    verbosity: None,
+                },
+                None,
+                crate::core::threads::ThreadBootstrap::new(None),
+            )
+            .await?
+        };
+        runner.set_quiet(true);
+
+        let restricted_tools = filter_tools_for_skill(skill, runner.build_universal_tools().await?);
+        let allowed_tools = restricted_tools
+            .iter()
+            .map(|tool| tool.function_name().to_string())
+            .collect::<Vec<_>>();
+        runner.set_tool_definitions_override(restricted_tools);
+        runner.set_tool_arg_transform(skill_tool_arg_transform(skill.clone()));
+        runner.enable_full_auto(&allowed_tools).await;
+
+        let mut task = Task::new(
+            format!("fork-skill-{}", skill.name()),
+            format!("Skill {}", skill.name()),
+            format_skill_user_input(&user_input),
+        );
+        task.instructions = Some(skill.instructions.clone());
+
+        let results = runner
+            .execute_task(&task, &Vec::<ContextItem>::new())
+            .await?;
+        let mut artifact_paths = results.modified_files.clone();
+        let handoff_paths = blocked_handoff_paths(&results.thread_events);
+        for path in handoff_paths {
+            if !artifact_paths.iter().any(|existing| existing == &path) {
+                artifact_paths.push(path);
+            }
+        }
+
+        Ok(serde_json::json!({
+            "execution_context": "fork",
+            "status": results.outcome.code(),
+            "summary": if results.summary.trim().is_empty() {
+                results.outcome.description()
+            } else {
+                results.summary
+            },
+            "artifact_paths": artifact_paths,
+            "delegate_session_id": session_id,
+        }))
+    }
+}
+
 /// Execute a skill with LLM sub-call support (Phase 5)
 ///
 /// Creates a sub-conversation where:
@@ -381,11 +559,11 @@ pub async fn execute_skill_with_sub_llm(
     // Create LLM request with skill instructions as system prompt
     let mut request = LLMRequest {
         messages: messages.clone(),
-        system_prompt: Some(std::sync::Arc::new(skill.instructions.clone())),
+        system_prompt: Some(Arc::new(skill.instructions.clone())),
         tools: if available_tools.is_empty() {
             None
         } else {
-            Some(std::sync::Arc::new(available_tools.clone()))
+            Some(Arc::new(available_tools.clone()))
         },
         model: model.clone(),
         max_tokens: Some(4096),
@@ -555,12 +733,23 @@ pub async fn execute_skill_with_sub_llm(
 #[derive(Clone)]
 pub struct SkillToolAdapter {
     skill: Skill,
+    fork_executor: Option<Arc<dyn ForkSkillExecutor>>,
 }
 
 impl SkillToolAdapter {
     /// Create a new skill tool adapter
     pub fn new(skill: Skill) -> Self {
-        SkillToolAdapter { skill }
+        SkillToolAdapter {
+            skill,
+            fork_executor: None,
+        }
+    }
+
+    pub fn with_fork_executor(skill: Skill, fork_executor: Arc<dyn ForkSkillExecutor>) -> Self {
+        SkillToolAdapter {
+            skill,
+            fork_executor: Some(fork_executor),
+        }
     }
 
     /// Get reference to underlying skill
@@ -593,6 +782,14 @@ impl SkillToolAdapter {
             "author": self.skill.manifest.author.clone(),
         }))
     }
+
+    async fn execute_forked_skill(&self, user_input: Value) -> Result<Value> {
+        let executor = self
+            .fork_executor
+            .as_ref()
+            .ok_or_else(|| anyhow!("forked skill execution is not configured for this session"))?;
+        executor.execute(&self.skill, user_input).await
+    }
 }
 
 #[async_trait]
@@ -600,8 +797,11 @@ impl crate::tools::traits::Tool for SkillToolAdapter {
     async fn execute(&self, args: Value) -> Result<Value> {
         info!("Skill tool executing: {}", self.skill.name());
 
-        // Execute skill with LLM
-        let result = self.execute_skill_with_lm(args).await?;
+        let result = if skill_runs_in_fork(&self.skill) {
+            self.execute_forked_skill(args).await?
+        } else {
+            self.execute_skill_with_lm(args).await?
+        };
 
         Ok(result)
     }
@@ -678,6 +878,22 @@ mod tests {
     use crate::tools::traits::Tool;
     use std::path::PathBuf;
 
+    struct FakeForkExecutor;
+
+    #[async_trait]
+    impl ForkSkillExecutor for FakeForkExecutor {
+        async fn execute(&self, skill: &Skill, user_input: Value) -> Result<Value> {
+            Ok(serde_json::json!({
+                "execution_context": "fork",
+                "status": "success",
+                "summary": format!("forked {}", skill.name()),
+                "artifact_paths": [],
+                "delegate_session_id": "child-session",
+                "echo": user_input,
+            }))
+        }
+    }
+
     #[tokio::test]
     async fn test_skill_tool_adapter_exposes_underlying_skill_name() {
         let manifest = SkillManifest {
@@ -722,6 +938,32 @@ mod tests {
         let res = result.unwrap();
         assert_eq!(res["skill_name"], "test-skill");
         assert_eq!(res["status"], "executing");
+    }
+
+    #[tokio::test]
+    async fn test_fork_skill_adapter_uses_fork_executor() {
+        let manifest = SkillManifest {
+            name: "fork-skill".to_string(),
+            description: "Forked skill".to_string(),
+            context: Some("fork".to_string()),
+            vtcode_native: Some(true),
+            ..Default::default()
+        };
+
+        let skill = Skill::new(
+            manifest,
+            PathBuf::from("/tmp"),
+            "# Test Instructions".to_string(),
+        )
+        .expect("failed to create skill");
+
+        let adapter = SkillToolAdapter::with_fork_executor(skill, Arc::new(FakeForkExecutor));
+        let args = serde_json::json!({"task": "value"});
+        let result = adapter.execute(args.clone()).await.expect("fork execution");
+
+        assert_eq!(result["execution_context"], "fork");
+        assert_eq!(result["delegate_session_id"], "child-session");
+        assert_eq!(result["echo"], args);
     }
 
     #[test]

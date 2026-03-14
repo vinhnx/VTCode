@@ -268,6 +268,9 @@ pub(super) fn human_event_line(event: &ThreadEvent) -> Option<String> {
                     vtcode_core::exec::events::HarnessEventKind::ContinuationSkipped => {
                         style("[HARNESS]").cyan().bold()
                     }
+                    vtcode_core::exec::events::HarnessEventKind::BlockedHandoffWritten => {
+                        style("[HANDOFF]").cyan().bold()
+                    }
                     vtcode_core::exec::events::HarnessEventKind::VerificationStarted => {
                         style("[VERIFY]").cyan().bold()
                     }
@@ -278,11 +281,15 @@ pub(super) fn human_event_line(event: &ThreadEvent) -> Option<String> {
                         style("[VERIFY FAILED]").red().bold()
                     }
                 };
-                let detail = item
-                    .message
-                    .as_deref()
-                    .or(item.command.as_deref())
-                    .unwrap_or("harness event");
+                let detail = match (item.message.as_deref(), item.path.as_deref()) {
+                    (Some(message), Some(path)) => format!("{message}: {path}"),
+                    (Some(message), None) => message.to_string(),
+                    (None, Some(path)) => path.to_string(),
+                    (None, None) => item
+                        .command
+                        .clone()
+                        .unwrap_or_else(|| "harness event".to_string()),
+                };
                 Some(format!("{} {}", label, detail))
             }
             ThreadItemDetails::Error(item) => Some(format!(

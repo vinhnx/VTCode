@@ -774,6 +774,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     .as_ref()
                     .map(|cfg| cfg.ui.show_turn_timer)
                     .unwrap_or(true);
+                let harness_snapshot = tool_registry.harness_context_snapshot();
                 if let Err(err) = crate::agent::runloop::unified::turn::apply_turn_outcome(
                     outcome,
                     crate::agent::runloop::unified::turn::TurnOutcomeContext {
@@ -787,6 +788,9 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         session_end_reason: &mut session_end_reason,
                         turn_elapsed,
                         show_turn_timer,
+                        workspace: &config.workspace,
+                        session_id: &harness_snapshot.session_id,
+                        harness_emitter: harness_emitter.as_ref(),
                     },
                 )
                 .await

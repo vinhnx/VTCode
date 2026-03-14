@@ -90,6 +90,7 @@ impl LifecycleHookEngine {
                         &result,
                         &mut messages,
                         &mut additional_context,
+                        self.inner.hooks.quiet_success_output,
                     ),
                     Err(err) => messages.push(HookMessage::error(format!(
                         "SessionStart hook `{}` failed: {err}",
@@ -122,7 +123,12 @@ impl LifecycleHookEngine {
 
             for command in &group.commands {
                 match self.execute_command("SessionEnd", command, &payload).await {
-                    Ok(result) => interpret_session_end(command, &result, &mut messages),
+                    Ok(result) => interpret_session_end(
+                        command,
+                        &result,
+                        &mut messages,
+                        self.inner.hooks.quiet_success_output,
+                    ),
                     Err(err) => messages.push(HookMessage::error(format!(
                         "SessionEnd hook `{}` failed: {err}",
                         command.command
@@ -154,7 +160,12 @@ impl LifecycleHookEngine {
                     .await
                 {
                     Ok(result) => {
-                        interpret_user_prompt(command, &result, &mut outcome);
+                        interpret_user_prompt(
+                            command,
+                            &result,
+                            &mut outcome,
+                            self.inner.hooks.quiet_success_output,
+                        );
                         if !outcome.allow_prompt {
                             return Ok(outcome);
                         }
@@ -191,7 +202,12 @@ impl LifecycleHookEngine {
             for command in &group.commands {
                 match self.execute_command("PreToolUse", command, &payload).await {
                     Ok(result) => {
-                        interpret_pre_tool(command, &result, &mut outcome);
+                        interpret_pre_tool(
+                            command,
+                            &result,
+                            &mut outcome,
+                            self.inner.hooks.quiet_success_output,
+                        );
                         match outcome.decision {
                             PreToolHookDecision::Allow | PreToolHookDecision::Deny => {
                                 return Ok(outcome);
@@ -233,7 +249,12 @@ impl LifecycleHookEngine {
 
             for command in &group.commands {
                 match self.execute_command("PostToolUse", command, &payload).await {
-                    Ok(result) => interpret_post_tool(command, &result, &mut outcome),
+                    Ok(result) => interpret_post_tool(
+                        command,
+                        &result,
+                        &mut outcome,
+                        self.inner.hooks.quiet_success_output,
+                    ),
                     Err(err) => outcome.messages.push(HookMessage::error(format!(
                         "PostToolUse hook `{}` failed: {err}",
                         command.command

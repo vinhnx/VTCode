@@ -7,6 +7,7 @@ use super::helpers::detect_textual_exec_tool_call;
 use crate::config::constants::tools;
 use crate::config::models::{ModelId, Provider as ModelProvider};
 use crate::config::types::{ReasoningEffortLevel, SystemPromptMode, VerbosityLevel};
+use crate::core::agent::blocked_handoff::write_blocked_handoff;
 use crate::core::agent::completion::{check_completion_indicators, check_for_response_loop};
 use crate::core::agent::conversation::{
     build_conversation, build_messages_from_conversation, compose_system_instruction,
@@ -38,6 +39,22 @@ fn record_terminal_turn_event(event_recorder: &mut ExecEventRecorder, outcome: &
 
 fn tool_loop_limit_reached(loop_count: usize, max_tool_loops: usize) -> bool {
     max_tool_loops > 0 && loop_count >= max_tool_loops
+}
+
+fn emit_blocked_handoff_events(
+    event_recorder: &mut ExecEventRecorder,
+    current_path: &std::path::Path,
+    archive_path: &std::path::Path,
+) {
+    for path in [current_path, archive_path] {
+        event_recorder.harness_event(
+            HarnessEventKind::BlockedHandoffWritten,
+            Some("Blocked handoff written".to_string()),
+            None,
+            Some(path.display().to_string()),
+            None,
+        );
+    }
 }
 
 fn summarize_verification_output(result: &serde_json::Value) -> String {
@@ -525,6 +542,7 @@ impl AgentRunner {
                                     Some(reason),
                                     None,
                                     None,
+                                    None,
                                 );
                                 controller.state.is_completed = true;
                                 controller.state.outcome = TaskOutcome::Success;
@@ -536,6 +554,7 @@ impl AgentRunner {
                                     Some(reason),
                                     None,
                                     None,
+                                    None,
                                 );
                                 controller.state.add_user_message(prompt);
                                 forced_continuation = true;
@@ -545,6 +564,7 @@ impl AgentRunner {
                                     HarnessEventKind::VerificationStarted,
                                     Some(format!("Running verification: {}", commands.join(", "))),
                                     commands.first().cloned(),
+                                    None,
                                     None,
                                 );
                                 let verification_results = self
@@ -574,6 +594,7 @@ impl AgentRunner {
                                             }
                                         )),
                                         Some(failure.command.clone()),
+                                        None,
                                         failure.exit_code,
                                     );
                                 } else {
@@ -584,6 +605,7 @@ impl AgentRunner {
                                             commands.join(", ")
                                         )),
                                         commands.last().cloned(),
+                                        None,
                                         Some(0),
                                     );
                                 }
@@ -602,6 +624,7 @@ impl AgentRunner {
                                         event_recorder.harness_event(
                                             HarnessEventKind::ContinuationStarted,
                                             Some(reason),
+                                            None,
                                             None,
                                             None,
                                         );
@@ -758,6 +781,27 @@ impl AgentRunner {
                     style("[Task]").cyan().bold(),
                     summary
                 ));
+            }
+
+            if controller.state.outcome.is_hard_block() {
+                match write_blocked_handoff(
+                    &self._workspace,
+                    &self.session_id,
+                    controller.state.outcome.code(),
+                    &controller.state.outcome.description(),
+                    &[],
+                ) {
+                    Ok(artifacts) => emit_blocked_handoff_events(
+                        &mut event_recorder,
+                        &artifacts.current_path,
+                        &artifacts.archive_path,
+                    ),
+                    Err(err) => warn!(
+                        error = %err,
+                        session_id = %self.session_id,
+                        "Failed to persist blocked handoff"
+                    ),
+                }
             }
 
             record_terminal_turn_event(&mut event_recorder, &controller.state.outcome);

@@ -9,6 +9,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{info, warn};
 use vtcode_config::constants::tools as tool_constants;
+use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::ToolRegistry;
@@ -45,6 +46,7 @@ pub(crate) async fn register_skill_tools(
     tools: &Arc<RwLock<Vec<uni::ToolDefinition>>>,
     tool_catalog: &Arc<ToolCatalogState>,
     config: &CoreAgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
     tool_documentation_mode: vtcode_core::config::ToolDocumentationMode,
     skill_setup: &SkillSetupState,
 ) -> Result<()> {
@@ -54,7 +56,18 @@ pub(crate) async fn register_skill_tools(
         tool_documentation_mode,
         ToolModelCapabilities::for_model_name(&config.model),
         Some(tool_catalog_change_notifier(tool_catalog)),
-    );
+    )
+    .with_fork_executor(Arc::new(
+        vtcode_core::skills::executor::ChildAgentSkillExecutor::new(
+            Arc::new(tool_registry.clone()),
+            vtcode_core::skills::executor::ForkSkillRuntimeConfig {
+                workspace: config.workspace.clone(),
+                model: config.model.clone(),
+                api_key: config.api_key.clone(),
+                vt_cfg: vt_cfg.cloned(),
+            },
+        ),
+    ));
 
     register_list_skills_tool(
         tool_registry,

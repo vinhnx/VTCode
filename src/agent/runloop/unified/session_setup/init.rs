@@ -165,6 +165,7 @@ pub(crate) async fn initialize_session(
         &tools,
         &tool_catalog,
         config,
+        vt_cfg,
         tool_documentation_mode,
         &skill_setup,
     )

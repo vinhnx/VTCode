@@ -161,6 +161,10 @@ pub(crate) struct TurnOutcomeContext<'a> {
     pub session_end_reason: &'a mut SessionEndReason,
     pub turn_elapsed: Duration,
     pub show_turn_timer: bool,
+    pub workspace: &'a std::path::Path,
+    pub session_id: &'a str,
+    pub harness_emitter:
+        Option<&'a crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter>,
 }
 
 pub(crate) struct ToolContext<'a> {

@@ -65,6 +65,10 @@ impl TaskOutcome {
         matches!(self, Self::Success | Self::StoppedNoAction)
     }
 
+    pub fn is_hard_block(&self) -> bool {
+        matches!(self, Self::ToolLoopLimitReached { .. } | Self::LoopDetected)
+    }
+
     pub fn description(&self) -> String {
         match self {
             Self::Success => "Task completed successfully".into(),

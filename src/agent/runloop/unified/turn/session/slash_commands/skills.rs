@@ -172,6 +172,17 @@ fn skill_runtime(
         ToolModelCapabilities::for_model_name(&ctx.config.model),
         Some(tool_catalog_change_notifier(ctx.tool_catalog)),
     )
+    .with_fork_executor(Arc::new(
+        vtcode_core::skills::executor::ChildAgentSkillExecutor::new(
+            Arc::new(ctx.tool_registry.clone()),
+            vtcode_core::skills::executor::ForkSkillRuntimeConfig {
+                workspace: ctx.config.workspace.clone(),
+                model: ctx.config.model.clone(),
+                api_key: ctx.config.api_key.clone(),
+                vt_cfg: ctx.vt_cfg.as_ref().cloned(),
+            },
+        ),
+    ))
 }
 
 async fn execute_skill_action(

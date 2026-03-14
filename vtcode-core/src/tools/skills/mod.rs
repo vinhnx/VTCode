@@ -3,7 +3,7 @@ use crate::config::types::CapabilityLevel;
 use crate::llm::provider::ToolDefinition;
 use crate::skills::cli_bridge::CliToolConfig;
 use crate::skills::discovery::{DiscoveryConfig, SkillDiscovery};
-use crate::skills::executor::SkillToolAdapter;
+use crate::skills::executor::{ForkSkillExecutor, SkillToolAdapter};
 use crate::skills::file_references::FileReferenceValidator;
 use crate::skills::loader::{
     EnhancedSkill, EnhancedSkillLoader, SkillLoaderConfig, discover_skill_metadata_lightweight,
@@ -46,6 +46,7 @@ pub struct SkillToolSessionRuntime {
     tool_documentation_mode: ToolDocumentationMode,
     model_capabilities: ToolModelCapabilities,
     on_tools_changed: Option<ToolChangeNotifier>,
+    fork_executor: Option<Arc<dyn ForkSkillExecutor>>,
 }
 
 impl SkillToolSessionRuntime {
@@ -62,7 +63,13 @@ impl SkillToolSessionRuntime {
             tool_documentation_mode,
             model_capabilities,
             on_tools_changed,
+            fork_executor: None,
         }
+    }
+
+    pub fn with_fork_executor(mut self, fork_executor: Arc<dyn ForkSkillExecutor>) -> Self {
+        self.fork_executor = Some(fork_executor);
+        self
     }
 
     pub async fn activate_skill(
@@ -77,7 +84,10 @@ impl SkillToolSessionRuntime {
 
         if !self.tool_registry.has_tool(skill_name.as_str()).await {
             self.tool_registry
-                .register_tool(build_traditional_skill_tool_registration(&skill))
+                .register_tool(build_traditional_skill_tool_registration(
+                    &skill,
+                    self.fork_executor.clone(),
+                ))
                 .await
                 .with_context(|| format!("failed to register skill tool '{skill_name}'"))?;
             self.refresh_tool_snapshot("load_skill").await;
@@ -120,23 +130,38 @@ impl SkillToolSessionRuntime {
     }
 }
 
-pub fn build_traditional_skill_tool_registration(skill: &Skill) -> ToolRegistration {
+pub fn build_traditional_skill_tool_registration(
+    skill: &Skill,
+    fork_executor: Option<Arc<dyn ForkSkillExecutor>>,
+) -> ToolRegistration {
     let metadata = ToolMetadata::default()
         .with_description(skill.description())
         .with_parameter_schema(skill_tool_parameter_schema())
         .with_permission(ToolPolicy::Prompt)
         .with_prompt_path(SKILL_TOOL_PROMPT_PATH);
 
+    let adapter: Arc<dyn Tool> = if skill.manifest.context.as_deref() == Some("fork") {
+        match fork_executor {
+            Some(executor) => Arc::new(SkillToolAdapter::with_fork_executor(
+                skill.clone(),
+                executor,
+            )),
+            None => Arc::new(SkillToolAdapter::new(skill.clone())),
+        }
+    } else {
+        Arc::new(SkillToolAdapter::new(skill.clone()))
+    };
+
     ToolRegistration::from_tool_with_metadata(
         skill.name().to_string(),
         CapabilityLevel::Basic,
-        Arc::new(SkillToolAdapter::new(skill.clone())),
+        adapter,
         metadata,
     )
 }
 
 pub fn build_skill_tool_registration(skill: &Skill) -> ToolRegistration {
-    build_traditional_skill_tool_registration(skill)
+    build_traditional_skill_tool_registration(skill, None)
 }
 
 fn skill_tool_parameter_schema() -> Value {
