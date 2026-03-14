@@ -1,4 +1,4 @@
-use super::Session;
+use super::{Session, message::TranscriptLine};
 use ratatui::prelude::*;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
@@ -102,7 +102,7 @@ impl Session {
 
     pub(crate) fn overlay_queue_lines(
         &mut self,
-        visible_lines: &mut [Line<'static>],
+        visible_lines: &mut [TranscriptLine],
         content_width: u16,
     ) {
         if visible_lines.is_empty() || content_width == 0 {
@@ -115,7 +115,10 @@ impl Session {
             let slice_start = queue_lines.len().saturating_sub(queue_visible);
             let overlay = &queue_lines[slice_start..];
             for (target, source) in visible_lines[start..].iter_mut().zip(overlay.iter()) {
-                *target = source.clone();
+                *target = TranscriptLine {
+                    line: source.clone(),
+                    explicit_links: Vec::new(),
+                };
             }
         }
     }

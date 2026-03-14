@@ -10,6 +10,7 @@ use std::cmp::min;
 
 use super::super::types::{InlineMessageKind, InlineSegment, InlineTextStyle};
 use super::{Session, message::MessageLine};
+use crate::ui::tui::types::InlineLinkRange;
 
 const USER_PREFIX: &str = "";
 
@@ -113,6 +114,7 @@ impl Session {
         self.lines.push(MessageLine {
             kind,
             segments,
+            link_ranges: Vec::new(),
             revision,
         });
         self.mark_line_dirty(index);
@@ -199,6 +201,7 @@ impl Session {
         count: usize,
         kind: InlineMessageKind,
         lines: Vec<Vec<InlineSegment>>,
+        link_ranges: Option<Vec<Vec<InlineLinkRange>>>,
     ) {
         let previous_max_offset = self.current_max_scroll_offset();
         let remove_count = min(count, self.lines.len());
@@ -209,11 +212,13 @@ impl Session {
         for _ in 0..remove_count {
             self.lines.pop();
         }
+        let mut link_ranges = link_ranges.unwrap_or_default().into_iter();
         for segments in lines {
             let revision = self.next_revision();
             self.lines.push(MessageLine {
                 kind,
                 segments,
+                link_ranges: link_ranges.next().unwrap_or_default(),
                 revision,
             });
         }
@@ -245,6 +250,7 @@ impl Session {
             text: collapsed.full_text,
             style: std::sync::Arc::new(InlineTextStyle::default()),
         }];
+        line.link_ranges.clear();
         line.revision = revision;
         self.mark_line_dirty(collapsed.line_index);
         self.invalidate_scroll_metrics();
@@ -371,6 +377,7 @@ impl Session {
                 text: text.to_owned(),
                 style: std::sync::Arc::new(style.clone()),
             }],
+            link_ranges: Vec::new(),
             revision,
         });
 

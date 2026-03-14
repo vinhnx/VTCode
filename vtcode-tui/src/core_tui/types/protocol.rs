@@ -6,7 +6,9 @@ use super::overlay::{ListOverlayRequest, ModalOverlayRequest, OverlayEvent, Over
 use super::selection::{
     InlineListItem, InlineListSearchConfig, InlineListSelection, SecurePromptConfig,
 };
-use super::style::{EditingMode, InlineHeaderContext, InlineSegment, InlineTextStyle, InlineTheme};
+use super::style::{
+    EditingMode, InlineHeaderContext, InlineLinkRange, InlineSegment, InlineTextStyle, InlineTheme,
+};
 use crate::core_tui::session::config::AppearanceConfig;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -39,6 +41,7 @@ pub enum InlineCommand {
         count: usize,
         kind: InlineMessageKind,
         lines: Vec<Vec<InlineSegment>>,
+        link_ranges: Option<Vec<Vec<InlineLinkRange>>>,
     },
     SetPrompt {
         prefix: String,
@@ -117,6 +120,7 @@ pub enum InlineEvent {
     ScrollPageDown,
     FileSelected(String),
     OpenFileInEditor(String),
+    OpenUrl(String),
     LaunchEditor,
     ForceCancelPtySession,
     /// Toggle editing mode (Shift+Tab cycles through Edit -> Plan -> Edit).
@@ -167,7 +171,27 @@ impl InlineHandle {
         kind: InlineMessageKind,
         lines: Vec<Vec<InlineSegment>>,
     ) {
-        self.send_command(InlineCommand::ReplaceLast { count, kind, lines });
+        self.send_command(InlineCommand::ReplaceLast {
+            count,
+            kind,
+            lines,
+            link_ranges: None,
+        });
+    }
+
+    pub fn replace_last_with_links(
+        &self,
+        count: usize,
+        kind: InlineMessageKind,
+        lines: Vec<Vec<InlineSegment>>,
+        link_ranges: Vec<Vec<InlineLinkRange>>,
+    ) {
+        self.send_command(InlineCommand::ReplaceLast {
+            count,
+            kind,
+            lines,
+            link_ranges: Some(link_ranges),
+        });
     }
 
     pub fn suspend_event_loop(&self) {

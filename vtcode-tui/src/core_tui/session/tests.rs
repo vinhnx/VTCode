@@ -1,12 +1,14 @@
 use super::*;
 use crate::config::constants::ui;
+use crate::ui::tui::session::message::RenderedTranscriptLink;
+use crate::ui::tui::session::transcript_links::TranscriptLinkTarget;
 use crate::ui::tui::style::ratatui_style_from_inline;
 use crate::ui::tui::{
     DiffHunk, DiffOverlayRequest, DiffPreviewMode, DiffPreviewState, InlineHeaderStatusBadge,
-    InlineHeaderStatusTone, InlineListItem, InlineListSearchConfig, InlineListSelection,
-    InlineSegment, InlineTextStyle, InlineTheme, ListOverlayRequest, OverlayEvent, OverlayHotkey,
-    OverlayHotkeyAction, OverlayHotkeyKey, OverlayRequest, OverlaySubmission, SlashCommandItem,
-    WizardModalMode, WizardOverlayRequest, WizardStep,
+    InlineHeaderStatusTone, InlineLinkTarget, InlineListItem, InlineListSearchConfig,
+    InlineListSelection, InlineSegment, InlineTextStyle, InlineTheme, ListOverlayRequest,
+    OverlayEvent, OverlayHotkey, OverlayHotkeyAction, OverlayHotkeyKey, OverlayRequest,
+    OverlaySubmission, SlashCommandItem, WizardModalMode, WizardOverlayRequest, WizardStep,
 };
 use ratatui::crossterm::event::{
     Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
@@ -104,10 +106,18 @@ fn visible_transcript(session: &mut Session) -> Vec<String> {
     let lines = session.reflow_transcript_lines(width);
 
     let start = offset.min(lines.len());
-    let mut visible: Vec<Line<'static>> = lines.into_iter().skip(start).take(viewport).collect();
+    let mut visible: Vec<TranscriptLine> = lines
+        .into_iter()
+        .skip(start)
+        .take(viewport)
+        .map(|line| TranscriptLine {
+            line,
+            explicit_links: Vec::new(),
+        })
+        .collect();
     let filler = viewport.saturating_sub(visible.len());
     if filler > 0 {
-        visible.extend((0..filler).map(|_| Line::default()));
+        visible.extend((0..filler).map(|_| TranscriptLine::default()));
     }
     if !session.queued_inputs.is_empty() {
         session.overlay_queue_lines(&mut visible, width);
@@ -115,7 +125,8 @@ fn visible_transcript(session: &mut Session) -> Vec<String> {
     visible
         .into_iter()
         .map(|line| {
-            line.spans
+            line.line
+                .spans
                 .into_iter()
                 .map(|span| span.content.into_owned())
                 .collect::<String>()
@@ -149,6 +160,13 @@ fn line_text(line: &Line<'_>) -> String {
         .iter()
         .map(|span| span.content.clone().into_owned())
         .collect()
+}
+
+fn transcript_line(text: impl Into<String>) -> TranscriptLine {
+    TranscriptLine {
+        line: Line::from(text.into()),
+        explicit_links: Vec::new(),
+    }
 }
 
 fn text_content(text: &Text<'static>) -> String {
@@ -206,8 +224,13 @@ fn transcript_relative_file_reference_is_underlined() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.set_workspace_root(Some(vtcode_tui_workspace_root()));
 
-    let line = Line::from(format!("See {}", transcript_file_fixture_relative_path()));
-    let decorated = session.decorate_visible_transcript_links(vec![line], Rect::new(0, 0, 120, 1));
+    let decorated = session.decorate_visible_transcript_links(
+        vec![transcript_line(format!(
+            "See {}",
+            transcript_file_fixture_relative_path()
+        ))],
+        Rect::new(0, 0, 120, 1),
+    );
 
     assert_eq!(session.transcript_file_link_targets.len(), 1);
     let linked_span = decorated[0]
@@ -231,7 +254,7 @@ fn hovered_transcript_file_reference_adds_hover_style() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.set_workspace_root(Some(vtcode_tui_workspace_root()));
 
-    let line = Line::from(format!("Open {}", transcript_file_fixture_relative_path()));
+    let line = transcript_line(format!("Open {}", transcript_file_fixture_relative_path()));
     let area = Rect::new(0, 0, 120, 1);
     let _ = session.decorate_visible_transcript_links(vec![line.clone()], area);
     let target = session
@@ -267,7 +290,7 @@ fn mixed_transcript_file_references_are_all_underlined() {
     let temp_file = quoted_transcript_temp_file_path();
     fs::write(&temp_file, "mixed-transcript-link").expect("write mixed transcript temp file");
 
-    let line = Line::from(format!(
+    let line = transcript_line(format!(
         "Open {} and `{}`",
         transcript_file_fixture_relative_path(),
         temp_file.display()
@@ -330,13 +353,13 @@ fn modifier_click_emits_open_file_event_for_quoted_path_with_spaces() {
     fs::write(&temp_file, "transcript-link").expect("write quoted transcript temp file");
     let quoted_path = format!("`{}`", temp_file.display());
     let _ = session.decorate_visible_transcript_links(
-        vec![Line::from(format!("Open {}", quoted_path))],
+        vec![transcript_line(format!("Open {}", quoted_path))],
         Rect::new(0, 0, 200, 1),
     );
     let target = session
         .transcript_file_link_targets
         .iter()
-        .find(|target| target.file_path == temp_file)
+        .find(|target| matches!(&target.target, TranscriptLinkTarget::File(path) if path == &temp_file))
         .expect("expected quoted transcript file target")
         .clone();
     let (tx, mut rx) = mpsc::unbounded_channel();
@@ -358,6 +381,47 @@ fn modifier_click_emits_open_file_event_for_quoted_path_with_spaces() {
     ));
 
     let _ = fs::remove_file(&temp_file);
+}
+
+#[test]
+fn modifier_click_emits_open_url_event_for_explicit_transcript_link() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let url = "https://example.com/docs".to_string();
+    let _ = session.decorate_visible_transcript_links(
+        vec![TranscriptLine {
+            line: Line::from("Open docs"),
+            explicit_links: vec![RenderedTranscriptLink {
+                start: 5,
+                end: 9,
+                start_col: 5,
+                width: 4,
+                target: InlineLinkTarget::Url(url.clone()),
+            }],
+        }],
+        Rect::new(0, 0, 200, 1),
+    );
+    let target = session
+        .transcript_file_link_targets
+        .first()
+        .expect("expected transcript url target")
+        .clone();
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: target.area.x,
+            row: target.area.y,
+            modifiers: open_file_click_modifiers(),
+        }),
+        &tx,
+        None,
+    );
+
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(InlineEvent::OpenUrl(clicked)) if clicked == url
+    ));
 }
 
 #[test]
@@ -410,13 +474,16 @@ fn path_with_line_col_suffix_resolves_correctly() {
     );
 
     let decorated = session.decorate_visible_transcript_links(
-        vec![Line::from(format!("Error at {}", path_with_loc))],
+        vec![transcript_line(format!("Error at {}", path_with_loc))],
         Rect::new(0, 0, 200, 1),
     );
 
     assert!(!session.transcript_file_link_targets.is_empty());
     let target = &session.transcript_file_link_targets[0];
-    assert_eq!(target.file_path.display().to_string(), absolute_path,);
+    assert!(matches!(
+        &target.target,
+        TranscriptLinkTarget::File(path) if path.display().to_string() == absolute_path
+    ));
     assert!(
         decorated[0]
             .spans
@@ -432,18 +499,15 @@ fn path_with_paren_location_resolves_correctly() {
     let path_with_loc = format!("{}(10,5)", absolute_path);
 
     let _ = session.decorate_visible_transcript_links(
-        vec![Line::from(format!("Error at {}", path_with_loc))],
+        vec![transcript_line(format!("Error at {}", path_with_loc))],
         Rect::new(0, 0, 200, 1),
     );
 
     assert!(!session.transcript_file_link_targets.is_empty());
-    assert_eq!(
-        session.transcript_file_link_targets[0]
-            .file_path
-            .display()
-            .to_string(),
-        absolute_path,
-    );
+    assert!(matches!(
+        &session.transcript_file_link_targets[0].target,
+        TranscriptLinkTarget::File(path) if path.display().to_string() == absolute_path
+    ));
 }
 
 #[test]
@@ -451,7 +515,7 @@ fn abbreviation_tokens_are_not_detected_as_paths() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
     let _ = session.decorate_visible_transcript_links(
-        vec![Line::from("e.g. this or i.e. that")],
+        vec![transcript_line("e.g. this or i.e. that")],
         Rect::new(0, 0, 200, 1),
     );
 
@@ -2357,7 +2421,7 @@ fn pty_block_hides_until_output_available() {
     );
 
     let rendered = session.reflow_pty_lines(1, 80);
-    assert!(rendered.iter().any(|line| !line.spans.is_empty()));
+    assert!(rendered.iter().any(|line| !line.line.spans.is_empty()));
 }
 
 #[test]
@@ -2388,8 +2452,8 @@ fn pty_wrapped_lines_keep_hanging_left_padding() {
         rendered.len()
     );
 
-    let first = line_text(&rendered[0]);
-    let second = line_text(&rendered[1]);
+    let first = line_text(&rendered[0].line);
+    let second = line_text(&rendered[1].line);
 
     assert!(first.starts_with("    └ "), "first line was: {first:?}");
     assert!(
@@ -2412,7 +2476,7 @@ fn pty_wrapped_lines_do_not_exceed_viewport_width() {
     let width = 18usize;
     let rendered = session.reflow_pty_lines(0, width as u16);
     for line in rendered {
-        let line_width: usize = line.spans.iter().map(|span| span.width()).sum();
+        let line_width: usize = line.line.spans.iter().map(|span| span.width()).sum();
         assert!(
             line_width <= width,
             "wrapped PTY line exceeded viewport width: {line_width} > {width}",
@@ -2568,7 +2632,7 @@ fn pty_lines_use_subdued_foreground() {
     let rendered = session.reflow_pty_lines(0, 80);
     let body_span = rendered
         .iter()
-        .flat_map(|line| line.spans.iter())
+        .flat_map(|line| line.line.spans.iter())
         .find(|span| span.content.contains("plain pty output"))
         .expect("expected PTY body span");
     assert!(
@@ -2613,7 +2677,7 @@ fn assistant_text_is_brighter_than_pty_output() {
     let pty_rendered = session.reflow_pty_lines(1, 80);
     let pty_body = pty_rendered
         .iter()
-        .flat_map(|line| line.spans.iter())
+        .flat_map(|line| line.line.spans.iter())
         .find(|span| span.content.contains("pty output"))
         .expect("expected PTY body span");
     assert_eq!(pty_body.style.fg, Some(pty_fg));
@@ -2812,9 +2876,9 @@ fn running_activity_not_overlaid_above_queue_lines() {
         right: None,
     });
 
-    let mut visible = vec![Line::default(); 6];
+    let mut visible = vec![TranscriptLine::default(); 6];
     session.overlay_queue_lines(&mut visible, VIEW_WIDTH);
-    let rendered: Vec<String> = visible.iter().map(line_text).collect();
+    let rendered: Vec<String> = visible.iter().map(|line| line_text(&line.line)).collect();
 
     assert!(
         !rendered
@@ -2844,9 +2908,9 @@ fn running_activity_not_overlaid_without_queue() {
         right: None,
     });
 
-    let mut visible = vec![Line::default(); 3];
+    let mut visible = vec![TranscriptLine::default(); 3];
     session.overlay_queue_lines(&mut visible, VIEW_WIDTH);
-    let rendered: Vec<String> = visible.iter().map(line_text).collect();
+    let rendered: Vec<String> = visible.iter().map(|line| line_text(&line.line)).collect();
 
     assert!(
         !rendered
@@ -2861,9 +2925,9 @@ fn pty_busy_state_does_not_overlay_transcript_status() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.active_pty_sessions = Some(Arc::new(AtomicUsize::new(1)));
 
-    let mut visible = vec![Line::default(); 2];
+    let mut visible = vec![TranscriptLine::default(); 2];
     session.overlay_queue_lines(&mut visible, VIEW_WIDTH);
-    let rendered: Vec<String> = visible.iter().map(line_text).collect();
+    let rendered: Vec<String> = visible.iter().map(|line| line_text(&line.line)).collect();
 
     assert!(
         !rendered.iter().any(|line| line.contains("Running...")),

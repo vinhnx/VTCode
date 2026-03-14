@@ -21,12 +21,12 @@ pub use types::{
     ContentPart, DiffHunk, DiffOverlayRequest, DiffPreviewMode, DiffPreviewState, EditingMode,
     FocusChangeCallback, InlineCommand, InlineEvent, InlineEventCallback, InlineHandle,
     InlineHeaderContext, InlineHeaderHighlight, InlineHeaderStatusBadge, InlineHeaderStatusTone,
-    InlineListItem, InlineListSearchConfig, InlineListSelection, InlineMessageKind, InlineSegment,
-    InlineSession, InlineTextStyle, InlineTheme, ListOverlayRequest, ModalOverlayRequest,
-    OverlayEvent, OverlayHotkey, OverlayHotkeyAction, OverlayHotkeyKey, OverlayRequest,
-    OverlaySelectionChange, OverlaySubmission, PlanContent, PlanPhase, PlanStep,
-    SecurePromptConfig, SlashCommandItem, TrustMode, WizardModalMode, WizardOverlayRequest,
-    WizardStep,
+    InlineLinkRange, InlineLinkTarget, InlineListItem, InlineListSearchConfig, InlineListSelection,
+    InlineMessageKind, InlineSegment, InlineSession, InlineTextStyle, InlineTheme,
+    ListOverlayRequest, ModalOverlayRequest, OverlayEvent, OverlayHotkey, OverlayHotkeyAction,
+    OverlayHotkeyKey, OverlayRequest, OverlaySelectionChange, OverlaySubmission, PlanContent,
+    PlanPhase, PlanStep, SecurePromptConfig, SlashCommandItem, TrustMode, WizardModalMode,
+    WizardOverlayRequest, WizardStep,
 };
 
 use runner::{TuiOptions, run_tui};

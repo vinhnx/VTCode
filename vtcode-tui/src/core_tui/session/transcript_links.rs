@@ -11,7 +11,11 @@ use regex::Regex;
 use unicode_width::UnicodeWidthStr;
 
 use super::super::types::InlineEvent;
-use super::Session;
+use super::{
+    Session,
+    message::{RenderedTranscriptLink, TranscriptLine},
+};
+use crate::ui::tui::types::InlineLinkTarget;
 
 static NON_WHITESPACE_TOKEN_PATTERN: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\S+").expect("valid transcript token regex"));
@@ -25,7 +29,13 @@ static QUOTED_PATH_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct TranscriptFileLinkTarget {
     pub(crate) area: Rect,
-    pub(crate) file_path: PathBuf,
+    pub(crate) target: TranscriptLinkTarget,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum TranscriptLinkTarget {
+    File(PathBuf),
+    Url(String),
 }
 
 #[derive(Clone, Debug)]
@@ -50,7 +60,7 @@ impl Session {
 
     pub(crate) fn decorate_visible_transcript_links(
         &mut self,
-        lines: Vec<Line<'static>>,
+        lines: Vec<TranscriptLine>,
         area: Rect,
     ) -> Vec<Line<'static>> {
         let workspace_root = self.workspace_root.as_deref();
@@ -62,19 +72,24 @@ impl Session {
         let mut targets = Vec::new();
         let mut decorated = Vec::with_capacity(lines.len());
 
-        for (row_idx, line) in lines.into_iter().enumerate() {
+        for (row_idx, transcript_line) in lines.into_iter().enumerate() {
+            let line = transcript_line.line;
             let text: String = line
                 .spans
                 .iter()
                 .map(|span| span.content.as_ref())
                 .collect();
             let matches = detect_transcript_file_link_matches(&text, workspace_root);
-            if matches.is_empty() {
-                decorated.push(line);
-                continue;
-            }
-
-            let mut styled_matches = Vec::with_capacity(matches.len());
+            let mut styled_matches =
+                Vec::with_capacity(matches.len() + transcript_line.explicit_links.len());
+            append_explicit_link_matches(
+                &mut targets,
+                &mut styled_matches,
+                transcript_line.explicit_links,
+                row_idx,
+                area,
+                self.last_mouse_position,
+            );
             for FileLinkMatch { start, end, path } in matches {
                 let start_col = UnicodeWidthStr::width(&text[..start]);
                 let width = UnicodeWidthStr::width(&text[start..end]);
@@ -94,7 +109,7 @@ impl Session {
 
                 targets.push(TranscriptFileLinkTarget {
                     area: target_area,
-                    file_path: path,
+                    target: TranscriptLinkTarget::File(path),
                 });
                 styled_matches.push(StyledFileLinkMatch {
                     start,
@@ -146,9 +161,12 @@ impl Session {
             .transcript_link_target_index_at(column, row)
             .and_then(|index| self.transcript_file_link_targets.get(index))?;
 
-        Some(InlineEvent::OpenFileInEditor(
-            target.file_path.display().to_string(),
-        ))
+        Some(match &target.target {
+            TranscriptLinkTarget::File(path) => {
+                InlineEvent::OpenFileInEditor(path.display().to_string())
+            }
+            TranscriptLinkTarget::Url(url) => InlineEvent::OpenUrl(url.clone()),
+        })
     }
 
     fn mouse_hovered_transcript_file_link_index(&self) -> Option<usize> {
@@ -168,6 +186,38 @@ fn point_in_rect(area: Rect, column: u16, row: u16) -> bool {
         && row < area.y.saturating_add(area.height)
         && column >= area.x
         && column < area.x.saturating_add(area.width)
+}
+
+fn append_explicit_link_matches(
+    targets: &mut Vec<TranscriptFileLinkTarget>,
+    styled_matches: &mut Vec<StyledFileLinkMatch>,
+    explicit_links: Vec<RenderedTranscriptLink>,
+    row_idx: usize,
+    area: Rect,
+    last_mouse_position: Option<(u16, u16)>,
+) {
+    for explicit in explicit_links {
+        let target_area = Rect::new(
+            area.x.saturating_add(explicit.start_col as u16),
+            area.y.saturating_add(row_idx as u16),
+            explicit.width as u16,
+            1,
+        );
+        let hovered = last_mouse_position
+            .is_some_and(|(column, row)| point_in_rect(target_area, column, row));
+        let target = match explicit.target {
+            InlineLinkTarget::Url(url) => TranscriptLinkTarget::Url(url),
+        };
+        targets.push(TranscriptFileLinkTarget {
+            area: target_area,
+            target,
+        });
+        styled_matches.push(StyledFileLinkMatch {
+            start: explicit.start,
+            end: explicit.end,
+            hovered,
+        });
+    }
 }
 
 fn style_transcript_file_link_line(

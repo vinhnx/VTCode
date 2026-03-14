@@ -144,6 +144,11 @@ impl<'a> InlineEventContext<'a> {
             InlineEvent::OpenFileInEditor(path) => {
                 self.input_processor().submit(format!("/edit {}", path))
             }
+            InlineEvent::OpenUrl(url) => {
+                self.state.reset_interrupt_state();
+                let _ = webbrowser::open(&url);
+                InlineLoopAction::Continue
+            }
 
             InlineEvent::ScrollLineUp
             | InlineEvent::ScrollLineDown

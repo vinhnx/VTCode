@@ -32,9 +32,15 @@ impl PtyStreamRuntime {
 
         let task = tokio::spawn(async move {
             let mut state = PtyStreamState::new(command_prompt);
-            let (replace_count, segments, _) = state.render_segments("", effective_tail_limit);
+            let (replace_count, segments, link_ranges, _) =
+                state.render_segments("", effective_tail_limit);
             if !segments.is_empty() && worker_active.load(Ordering::Relaxed) {
-                handle.replace_last(replace_count, InlineMessageKind::Pty, segments);
+                handle.replace_last_with_links(
+                    replace_count,
+                    InlineMessageKind::Pty,
+                    segments,
+                    link_ranges,
+                );
             }
 
             while let Some(output) = rx.recv().await {
@@ -45,15 +51,21 @@ impl PtyStreamRuntime {
                     continue;
                 }
 
+                state.apply_chunk(&output, effective_tail_limit);
                 let visible_output = vtcode_core::utils::ansi_parser::strip_ansi(&output);
                 if visible_output.trim().is_empty() {
                     continue;
                 }
 
-                let (replace_count, segments, last_line) =
-                    state.render_segments(&output, effective_tail_limit);
+                let (replace_count, segments, link_ranges, last_line) =
+                    state.render_current_segments(effective_tail_limit);
                 if !segments.is_empty() && worker_active.load(Ordering::Relaxed) {
-                    handle.replace_last(replace_count, InlineMessageKind::Pty, segments);
+                    handle.replace_last_with_links(
+                        replace_count,
+                        InlineMessageKind::Pty,
+                        segments,
+                        link_ranges,
+                    );
                 }
 
                 if let Some(last_line) = last_line {

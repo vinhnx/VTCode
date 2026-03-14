@@ -10,7 +10,7 @@ use unicode_width::UnicodeWidthStr;
 use super::super::style::{ratatui_pty_style_from_inline, ratatui_style_from_inline};
 use super::super::types::{InlineMessageKind, InlineTextStyle};
 use super::terminal_capabilities;
-use super::{Session, file_palette::FilePalette, message::MessageLine, text_utils};
+use super::{Session, TranscriptLine, file_palette::FilePalette, message::MessageLine, text_utils};
 use crate::config::constants::ui;
 
 mod history_picker;
@@ -259,7 +259,7 @@ fn render_transcript(
         let mut lines = (*cached_lines).clone();
         if fill_count > 0 {
             let target_len = lines.len() + fill_count;
-            lines.resize_with(target_len, Line::default);
+            lines.resize_with(target_len, TranscriptLine::default);
         }
         session.overlay_queue_lines(&mut lines, content_width);
         lines
@@ -452,9 +452,9 @@ fn pty_block_has_content(session: &Session, index: usize) -> bool {
     false
 }
 
-fn reflow_pty_lines(session: &Session, index: usize, width: u16) -> Vec<Line<'static>> {
+fn reflow_pty_lines(session: &Session, index: usize, width: u16) -> Vec<TranscriptLine> {
     let Some(line) = session.lines.get(index) else {
-        return vec![Line::default()];
+        return vec![TranscriptLine::default()];
     };
 
     let max_width = if width == 0 {
@@ -481,7 +481,7 @@ fn reflow_pty_lines(session: &Session, index: usize, width: u16) -> Vec<Line<'st
 
     let is_start = !prev_is_pty;
 
-    let mut lines = Vec::new();
+    let mut lines: Vec<Line<'static>> = Vec::new();
 
     let mut combined = String::new();
     for segment in &line.segments {
@@ -547,6 +547,12 @@ fn reflow_pty_lines(session: &Session, index: usize, width: u16) -> Vec<Line<'st
     }
 
     lines
+        .into_iter()
+        .map(|line| TranscriptLine {
+            line,
+            explicit_links: Vec::new(),
+        })
+        .collect()
 }
 
 fn message_divider_line(session: &Session, width: usize, kind: InlineMessageKind) -> Line<'static> {

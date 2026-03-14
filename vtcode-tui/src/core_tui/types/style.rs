@@ -224,6 +224,18 @@ pub struct InlineSegment {
     pub style: std::sync::Arc<InlineTextStyle>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum InlineLinkTarget {
+    Url(String),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct InlineLinkRange {
+    pub start: usize,
+    pub end: usize,
+    pub target: InlineLinkTarget,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct InlineTheme {
     pub foreground: Option<AnsiColorEnum>,

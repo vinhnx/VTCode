@@ -4,7 +4,10 @@ use anstyle::{
     Ansi256Color, AnsiColor, Color as AnsiColorEnum, Effects, RgbColor, Style as AnsiStyle,
 };
 use vtcode_core::ui::theme;
-use vtcode_tui::{InlineSegment, InlineTextStyle, convert_style, ui::syntax_highlight};
+use vtcode_tui::{
+    InlineLinkRange, InlineLinkTarget, InlineSegment, InlineTextStyle, convert_style,
+    ui::syntax_highlight,
+};
 
 pub(super) struct PtyLineStyles {
     pub(super) output: Arc<InlineTextStyle>,
@@ -368,14 +371,33 @@ fn sgr_payload(sequence: &str) -> Option<&str> {
     }
 }
 
-fn ansi_output_segments(text: &str, styles: &PtyLineStyles) -> Option<Vec<InlineSegment>> {
+fn parse_osc8_target(sequence: &str) -> Option<Option<String>> {
+    let payload = sequence.strip_prefix("\u{1b}]8;")?;
+    let payload = payload
+        .strip_suffix("\u{1b}\\")
+        .or_else(|| payload.strip_suffix('\u{7}'))?;
+    let (_, uri) = payload.split_once(';')?;
+    if uri.is_empty() {
+        Some(None)
+    } else {
+        Some(Some(uri.to_string()))
+    }
+}
+
+fn ansi_output_segments(
+    text: &str,
+    styles: &PtyLineStyles,
+) -> Option<(Vec<InlineSegment>, Vec<InlineLinkRange>)> {
     if !text.contains('\u{1b}') {
         return None;
     }
 
     let mut segments = Vec::new();
+    let mut link_ranges = Vec::new();
     let mut current = styles.output.as_ref().clone();
     let fallback = styles.output.as_ref().clone();
+    let mut active_link: Option<String> = None;
+    let mut visible_offset = 0usize;
     let mut index = 0usize;
     let mut text_buffer = String::new();
 
@@ -389,17 +411,29 @@ fn ansi_output_segments(text: &str, styles: &PtyLineStyles) -> Option<Vec<Inline
 
         if *first == 0x1b {
             if !text_buffer.is_empty() {
+                let text = std::mem::take(&mut text_buffer);
+                let end = visible_offset + text.len();
+                if let Some(url) = active_link.clone() {
+                    link_ranges.push(InlineLinkRange {
+                        start: visible_offset,
+                        end,
+                        target: InlineLinkTarget::Url(url),
+                    });
+                }
                 segments.push(InlineSegment {
-                    text: std::mem::take(&mut text_buffer),
+                    text,
                     style: Arc::new(current.clone()),
                 });
+                visible_offset = end;
             }
 
             if let Some(len) = vtcode_core::utils::ansi_parser::parse_ansi_sequence(remaining) {
-                if let Some(sequence) = remaining.get(..len)
-                    && let Some(payload) = sgr_payload(sequence)
-                {
-                    apply_sgr_codes(payload, &mut current, &fallback);
+                if let Some(sequence) = remaining.get(..len) {
+                    if let Some(payload) = sgr_payload(sequence) {
+                        apply_sgr_codes(payload, &mut current, &fallback);
+                    } else if let Some(target) = parse_osc8_target(sequence) {
+                        active_link = target;
+                    }
                 }
                 index += len;
                 continue;
@@ -420,6 +454,14 @@ fn ansi_output_segments(text: &str, styles: &PtyLineStyles) -> Option<Vec<Inline
     }
 
     if !text_buffer.is_empty() {
+        let end = visible_offset + text_buffer.len();
+        if let Some(url) = active_link {
+            link_ranges.push(InlineLinkRange {
+                start: visible_offset,
+                end,
+                target: InlineLinkTarget::Url(url),
+            });
+        }
         segments.push(InlineSegment {
             text: text_buffer,
             style: Arc::new(current),
@@ -429,21 +471,24 @@ fn ansi_output_segments(text: &str, styles: &PtyLineStyles) -> Option<Vec<Inline
     if segments.is_empty() {
         return None;
     }
-    Some(
+    Some((
         segments
             .into_iter()
             .filter(|segment| !segment.text.is_empty())
             .collect(),
-    )
+        link_ranges,
+    ))
 }
 
 fn append_output_segments_with_ansi(
     segments: &mut Vec<InlineSegment>,
+    link_ranges: &mut Vec<InlineLinkRange>,
     text: &str,
     styles: &PtyLineStyles,
 ) {
-    if let Some(mut ansi_segments) = ansi_output_segments(text, styles) {
+    if let Some((mut ansi_segments, ansi_links)) = ansi_output_segments(text, styles) {
         segments.append(&mut ansi_segments);
+        link_ranges.extend(ansi_links);
     } else {
         segments.push(InlineSegment {
             text: text.to_string(),
@@ -452,7 +497,10 @@ fn append_output_segments_with_ansi(
     }
 }
 
-pub(super) fn line_to_segments(line: &str, styles: &PtyLineStyles) -> Vec<InlineSegment> {
+pub(super) fn line_to_segments(
+    line: &str,
+    styles: &PtyLineStyles,
+) -> (Vec<InlineSegment>, Vec<InlineLinkRange>) {
     if let Some(command_text) = line.strip_prefix("• Ran ") {
         let mut segments = vec![
             InlineSegment {
@@ -469,7 +517,7 @@ pub(super) fn line_to_segments(line: &str, styles: &PtyLineStyles) -> Vec<Inline
             },
         ];
         segments.extend(shell_syntax_segments(command_text, styles, true));
-        return segments;
+        return (segments, Vec::new());
     }
 
     if let Some(text) = line.strip_prefix("  │ ") {
@@ -488,7 +536,7 @@ pub(super) fn line_to_segments(line: &str, styles: &PtyLineStyles) -> Vec<Inline
             },
         ];
         segments.extend(shell_syntax_segments(text, styles, false));
-        return segments;
+        return (segments, Vec::new());
     }
 
     if let Some(text) = line.strip_prefix("  └ ") {
@@ -506,15 +554,19 @@ pub(super) fn line_to_segments(line: &str, styles: &PtyLineStyles) -> Vec<Inline
                 style: Arc::clone(&styles.output),
             },
         ];
-        append_output_segments_with_ansi(&mut segments, text, styles);
-        return segments;
+        let mut link_ranges = Vec::new();
+        append_output_segments_with_ansi(&mut segments, &mut link_ranges, text, styles);
+        return (segments, shift_link_ranges(&link_ranges, 4));
     }
 
     if line.trim_start().starts_with('…') {
-        return vec![InlineSegment {
-            text: line.to_string(),
-            style: Arc::clone(&styles.truncation),
-        }];
+        return (
+            vec![InlineSegment {
+                text: line.to_string(),
+                style: Arc::clone(&styles.truncation),
+            }],
+            Vec::new(),
+        );
     }
 
     if let Some(text) = line.strip_prefix("    ") {
@@ -522,12 +574,55 @@ pub(super) fn line_to_segments(line: &str, styles: &PtyLineStyles) -> Vec<Inline
             text: "    ".to_string(),
             style: Arc::clone(&styles.output),
         }];
-        append_output_segments_with_ansi(&mut segments, text, styles);
-        return segments;
+        let mut link_ranges = Vec::new();
+        append_output_segments_with_ansi(&mut segments, &mut link_ranges, text, styles);
+        return (segments, shift_link_ranges(&link_ranges, 4));
     }
 
-    vec![InlineSegment {
-        text: line.to_string(),
-        style: Arc::clone(&styles.output),
-    }]
+    (
+        vec![InlineSegment {
+            text: line.to_string(),
+            style: Arc::clone(&styles.output),
+        }],
+        Vec::new(),
+    )
+}
+
+fn shift_link_ranges(ranges: &[InlineLinkRange], by: usize) -> Vec<InlineLinkRange> {
+    ranges
+        .iter()
+        .cloned()
+        .map(|mut range| {
+            range.start += by;
+            range.end += by;
+            range
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pty_output_extracts_osc8_hyperlinks() {
+        let styles = PtyLineStyles::new();
+        let (segments, link_ranges) = line_to_segments(
+            "  └ Go \u{1b}]8;;https://example.com/docs\u{1b}\\docs\u{1b}]8;;\u{1b}\\ now",
+            &styles,
+        );
+
+        let text = segments
+            .iter()
+            .map(|segment| segment.text.as_str())
+            .collect::<String>();
+        assert_eq!(text, "  └ Go docs now");
+        assert_eq!(link_ranges.len(), 1);
+        assert_eq!(link_ranges[0].start, 7);
+        assert_eq!(link_ranges[0].end, 11);
+        assert!(matches!(
+            &link_ranges[0].target,
+            InlineLinkTarget::Url(url) if url == "https://example.com/docs"
+        ));
+    }
 }

@@ -1,11 +1,19 @@
 use std::collections::VecDeque;
 
+use vtcode_tui::InlineLinkRange;
 use vtcode_tui::InlineSegment;
 
 use super::segments::{PtyLineStyles, line_to_segments};
 
 const LIVE_PREVIEW_HEAD_LINES: usize = 3;
 const LIVE_PREVIEW_TAIL_LINES: usize = 3;
+
+type RenderedPtyPreview = (
+    usize,
+    Vec<Vec<InlineSegment>>,
+    Vec<Vec<InlineLinkRange>>,
+    Option<String>,
+);
 
 pub(super) struct PtyStreamState {
     command_header: Vec<String>,
@@ -149,22 +157,23 @@ impl PtyStreamState {
             .or_else(|| self.head_lines.last().cloned())
     }
 
-    pub(super) fn render_segments(
-        &mut self,
-        chunk: &str,
-        tail_limit: usize,
-    ) -> (usize, Vec<Vec<InlineSegment>>, Option<String>) {
+    pub(super) fn render_segments(&mut self, chunk: &str, tail_limit: usize) -> RenderedPtyPreview {
         self.apply_chunk(chunk, tail_limit);
+        self.render_current_segments(tail_limit)
+    }
+
+    pub(super) fn render_current_segments(&mut self, tail_limit: usize) -> RenderedPtyPreview {
         let rendered = self.render_lines(tail_limit);
         let styles = PtyLineStyles::new();
-        let segments = rendered
+        let rendered_lines = rendered
             .into_iter()
             .map(|line| line_to_segments(&line, &styles))
             .collect::<Vec<_>>();
+        let (segments, link_ranges): (Vec<_>, Vec<_>) = rendered_lines.into_iter().unzip();
         let replace_count = self.displayed_count;
         self.displayed_count = segments.len();
         let last_line = self.last_display_line();
-        (replace_count, segments, last_line)
+        (replace_count, segments, link_ranges, last_line)
     }
 }
 

@@ -3,8 +3,9 @@ use unicode_width::UnicodeWidthStr;
 use vtcode_commons::diff_paths::{is_diff_addition_line, is_diff_deletion_line};
 
 use super::super::super::style::ratatui_pty_style_from_inline;
-use super::super::super::types::InlineMessageKind;
-use super::super::{Session, render, text_utils};
+use super::super::super::types::{InlineLinkRange, InlineMessageKind};
+use super::super::message::RenderedTranscriptLink;
+use super::super::{Session, TranscriptLine, render, text_utils};
 use super::helpers::{has_summary_prefix, is_tool_summary_line, split_tool_spans};
 use crate::config::constants::ui;
 
@@ -362,9 +363,9 @@ impl Session {
 
     /// Reflow PTY output lines with appropriate borders and formatting
     #[allow(dead_code)]
-    pub(crate) fn reflow_pty_lines(&self, index: usize, width: u16) -> Vec<Line<'static>> {
+    pub(crate) fn reflow_pty_lines(&self, index: usize, width: u16) -> Vec<TranscriptLine> {
         let Some(line) = self.lines.get(index) else {
-            return vec![Line::default()];
+            return vec![TranscriptLine::default()];
         };
 
         let max_width = if width == 0 {
@@ -425,6 +426,72 @@ impl Session {
             lines.push(Line::default());
         }
 
-        lines
+        build_pty_transcript_lines(
+            lines,
+            &combined,
+            &line.link_ranges,
+            body_prefix,
+            continuation_prefix.as_str(),
+        )
     }
+}
+
+fn build_pty_transcript_lines(
+    lines: Vec<Line<'static>>,
+    _combined: &str,
+    link_ranges: &[InlineLinkRange],
+    first_prefix: &str,
+    continuation_prefix: &str,
+) -> Vec<TranscriptLine> {
+    let mut combined_offset = 0usize;
+    let mut transcript_lines = Vec::with_capacity(lines.len());
+
+    for (index, line) in lines.into_iter().enumerate() {
+        let prefix = if index == 0 {
+            first_prefix
+        } else {
+            continuation_prefix
+        };
+        let full_text: String = line
+            .spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect();
+        let body_text = full_text.strip_prefix(prefix).unwrap_or(full_text.as_str());
+        let body_end = combined_offset + body_text.len();
+        let mut explicit_links = Vec::new();
+
+        for link in link_ranges {
+            let start = link.start.max(combined_offset);
+            let end = link.end.min(body_end);
+            if start >= end {
+                continue;
+            }
+
+            let local_start = start - combined_offset;
+            let local_end = end - combined_offset;
+            let start_col =
+                UnicodeWidthStr::width(prefix) + UnicodeWidthStr::width(&body_text[..local_start]);
+            let width = UnicodeWidthStr::width(&body_text[local_start..local_end]);
+            if width == 0 {
+                continue;
+            }
+
+            explicit_links.push(RenderedTranscriptLink {
+                start: prefix.len() + local_start,
+                end: prefix.len() + local_end,
+                start_col,
+                width,
+                target: link.target.clone(),
+            });
+        }
+
+        transcript_lines.push(TranscriptLine {
+            line,
+            explicit_links,
+        });
+        combined_offset = body_end;
+    }
+
+    transcript_lines
 }

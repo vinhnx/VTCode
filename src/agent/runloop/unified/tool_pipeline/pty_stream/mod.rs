@@ -168,14 +168,14 @@ mod tests {
     fn line_to_segments_preserves_command_text() {
         let styles = PtyLineStyles::new();
         let line = "• Ran echo \"$HOME\" && cargo check";
-        let segments = line_to_segments(line, &styles);
+        let (segments, _) = line_to_segments(line, &styles);
         assert_eq!(flatten_text(&segments), line);
     }
 
     #[test]
     fn line_to_segments_distinguishes_command_and_args_styles() {
         let styles = PtyLineStyles::new();
-        let segments = line_to_segments("• Ran cargo fmt", &styles);
+        let (segments, _) = line_to_segments("• Ran cargo fmt", &styles);
         assert_eq!(flatten_text(&segments), "• Ran cargo fmt");
         assert!(
             segments
@@ -187,14 +187,14 @@ mod tests {
     #[test]
     fn line_to_segments_handles_invalid_bash_input_without_dropping_text() {
         let styles = PtyLineStyles::new();
-        let segments = line_to_segments("• Ran )(", &styles);
+        let (segments, _) = line_to_segments("• Ran )(", &styles);
         assert_eq!(flatten_text(&segments), "• Ran )(");
     }
 
     #[test]
     fn line_to_segments_preserves_stdout_ansi_styles() {
         let styles = PtyLineStyles::new();
-        let segments = line_to_segments("  └ \u{1b}[31mERR\u{1b}[0m done", &styles);
+        let (segments, _) = line_to_segments("  └ \u{1b}[31mERR\u{1b}[0m done", &styles);
         assert_eq!(flatten_text(&segments), "  └ ERR done");
 
         let err_segment = segments
@@ -210,7 +210,7 @@ mod tests {
     #[test]
     fn line_to_segments_ignores_non_sgr_ansi_sequences_without_dropping_text() {
         let styles = PtyLineStyles::new();
-        let segments = line_to_segments("  └ \u{1b}[2Kclean", &styles);
+        let (segments, _) = line_to_segments("  └ \u{1b}[2Kclean", &styles);
         assert_eq!(flatten_text(&segments), "  └ clean");
         let clean_segment = segments
             .iter()
@@ -222,7 +222,7 @@ mod tests {
     #[test]
     fn line_to_segments_stdout_defaults_to_dimmed_style() {
         let styles = PtyLineStyles::new();
-        let segments = line_to_segments("  └ cargo check done", &styles);
+        let (segments, _) = line_to_segments("  └ cargo check done", &styles);
         let output_segment = segments
             .iter()
             .find(|segment| segment.text.contains("cargo check done"))
@@ -233,13 +233,25 @@ mod tests {
     #[test]
     fn line_to_segments_continuation_line_keeps_first_token_as_arg_style() {
         let styles = PtyLineStyles::new();
-        let segments = line_to_segments("  │ --flag value", &styles);
+        let (segments, _) = line_to_segments("  │ --flag value", &styles);
         assert_eq!(flatten_text(&segments), "  │ --flag value");
         assert!(
             segments
                 .iter()
                 .any(|segment| !segment.text.trim().is_empty() && segment.style.color.is_some())
         );
+    }
+
+    #[test]
+    fn pty_stream_state_preserves_osc8_links_across_control_only_chunks() {
+        let mut state = PtyStreamState::new(None);
+        state.apply_chunk("\u{1b}]8;;https://example.com/docs\u{1b}\\", 5);
+
+        let (_, segments, link_ranges, _) = state.render_segments("docs\u{1b}]8;;\u{1b}\\\n", 5);
+        assert_eq!(segments.len(), 1);
+        assert_eq!(flatten_text(&segments[0]), "  └ docs");
+        assert_eq!(link_ranges.len(), 1);
+        assert_eq!(link_ranges[0].len(), 1);
     }
 
     #[tokio::test]

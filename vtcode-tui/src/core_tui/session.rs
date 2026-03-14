@@ -80,6 +80,7 @@ mod trust;
 use self::file_palette::FilePalette;
 use self::history_picker::HistoryPickerState;
 use self::input_manager::InputManager;
+pub(crate) use self::message::TranscriptLine;
 use self::message::{MessageLabels, MessageLine};
 use self::modal::{ModalState, WizardModalState};
 
@@ -240,7 +241,7 @@ pub struct Session {
     transcript_cache: Option<TranscriptReflowCache>,
     /// Cache of visible lines by (scroll_offset, width) - shared via Arc for zero-copy reads
     /// Avoids expensive clone on cache hits
-    pub(crate) visible_lines_cache: Option<(usize, u16, Arc<Vec<Line<'static>>>)>,
+    pub(crate) visible_lines_cache: Option<(usize, u16, Arc<Vec<TranscriptLine>>)>,
     pub(crate) queued_inputs: Vec<String>,
     queue_overlay_cache: Option<QueueOverlay>,
     queue_overlay_version: u64,

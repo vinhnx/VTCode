@@ -8,7 +8,7 @@ use ratatui::{
 use crate::config::constants::ui;
 use crate::ui::tui::session::terminal_capabilities;
 use crate::ui::tui::session::{
-    Session, render::apply_transcript_rows, render::apply_transcript_width,
+    Session, TranscriptLine, render::apply_transcript_rows, render::apply_transcript_width,
 };
 
 /// Widget for rendering the transcript area with conversation history
@@ -125,7 +125,7 @@ impl<'a> Widget for TranscriptWidget<'a> {
             let mut lines = cached_lines.to_vec();
             if fill_count > 0 {
                 let target_len = lines.len() + fill_count;
-                lines.resize_with(target_len, ratatui::text::Line::default);
+                lines.resize_with(target_len, TranscriptLine::default);
             }
             self.session.overlay_queue_lines(&mut lines, content_width);
             lines

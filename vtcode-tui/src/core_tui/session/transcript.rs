@@ -4,27 +4,25 @@
 //! with performance optimizations for large transcripts.
 
 use hashbrown::HashMap;
-use ratatui::prelude::*;
 use std::sync::Arc;
 
-use super::Session;
+use super::{Session, message::TranscriptLine};
 
 #[derive(Default, Clone)]
 pub struct CachedMessage {
     pub revision: u64,
-    pub lines: Vec<Line<'static>>,
+    pub lines: Vec<TranscriptLine>,
     pub hash: u64, // Added hash for faster comparison
 }
 
 // Simple hash function to identify content changes faster than full comparison
-fn calculate_content_hash(content: &[Line<'static>]) -> u64 {
+fn calculate_content_hash(content: &[TranscriptLine]) -> u64 {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
 
     let mut hasher = DefaultHasher::new();
     for line in content {
-        // Hash content of each line
-        for span in &line.spans {
+        for span in &line.line.spans {
             span.content.hash(&mut hasher);
             span.style.hash(&mut hasher);
         }
@@ -37,7 +35,7 @@ pub struct TranscriptReflowCache {
     pub total_rows: usize,
     pub row_offsets: Vec<usize>, // Precomputed row offsets for faster access
     pub messages: Vec<CachedMessage>,
-    pub width_specific_cache: HashMap<u16, Vec<Vec<Line<'static>>>>, // Cache reflowed content by width
+    pub width_specific_cache: HashMap<u16, Vec<Vec<TranscriptLine>>>, // Cache reflowed content by width
     /// Maximum number of width variations to cache (limits memory growth)
     #[allow(dead_code)]
     max_cached_widths: usize,
@@ -83,7 +81,7 @@ impl TranscriptReflowCache {
     }
 
     /// Updates a cached message with new reflowed content
-    pub fn update_message(&mut self, index: usize, revision: u64, lines: Vec<Line<'static>>) {
+    pub fn update_message(&mut self, index: usize, revision: u64, lines: Vec<TranscriptLine>) {
         // Ensure we have enough space in the messages vector
         while self.messages.len() <= index {
             self.messages.push(CachedMessage::default());
@@ -131,7 +129,7 @@ impl TranscriptReflowCache {
     }
 
     /// Gets a range of visible lines for a given window
-    pub fn get_visible_range(&self, start_row: usize, max_rows: usize) -> Vec<Line<'static>> {
+    pub fn get_visible_range(&self, start_row: usize, max_rows: usize) -> Vec<TranscriptLine> {
         if max_rows == 0 || start_row >= self.total_rows {
             return Vec::new();
         }
@@ -198,7 +196,7 @@ impl TranscriptReflowCache {
     }
 
     /// Stores reflowed content for a width, enforcing cache limits
-    pub fn cache_width_content(&mut self, width: u16, content: Vec<Vec<Line<'static>>>) {
+    pub fn cache_width_content(&mut self, width: u16, content: Vec<Vec<TranscriptLine>>) {
         self.width_specific_cache.insert(width, content);
         self.enforce_width_cache_limit();
     }
@@ -274,7 +272,7 @@ impl Session {
         width: u16,
         start_row: usize,
         max_rows: usize,
-    ) -> Vec<Line<'static>> {
+    ) -> Vec<TranscriptLine> {
         if max_rows == 0 {
             return Vec::new();
         }
@@ -288,7 +286,7 @@ impl Session {
         width: u16,
         start_row: usize,
         max_rows: usize,
-    ) -> Arc<Vec<Line<'static>>> {
+    ) -> Arc<Vec<TranscriptLine>> {
         // Check if we have cached visible lines for this exact position and width
         if let Some((cached_offset, cached_width, cached_lines)) = &self.visible_lines_cache
             && *cached_offset == start_row
@@ -329,6 +327,14 @@ impl Default for TranscriptReflowCache {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ratatui::text::Line;
+
+    fn line(text: impl Into<Line<'static>>) -> TranscriptLine {
+        TranscriptLine {
+            line: text.into(),
+            explicit_links: Vec::new(),
+        }
+    }
 
     #[test]
     fn test_cache_initialization() {
@@ -341,7 +347,7 @@ mod tests {
     #[test]
     fn test_update_message() {
         let mut cache = TranscriptReflowCache::new(80);
-        let test_line = Line::from("Test line");
+        let test_line = line("Test line");
         let lines = vec![test_line];
 
         cache.update_message(0, 1, lines);
@@ -356,12 +362,16 @@ mod tests {
         let mut cache = TranscriptReflowCache::new(80);
 
         // Add three messages: 2 lines, 1 line, 3 lines
-        cache.update_message(0, 1, vec![Line::default(), Line::default()]);
-        cache.update_message(1, 2, vec![Line::default()]);
+        cache.update_message(0, 1, vec![line(Line::default()), line(Line::default())]);
+        cache.update_message(1, 2, vec![line(Line::default())]);
         cache.update_message(
             2,
             3,
-            vec![Line::default(), Line::default(), Line::default()],
+            vec![
+                line(Line::default()),
+                line(Line::default()),
+                line(Line::default()),
+            ],
         );
 
         cache.update_row_offsets_from(0);
@@ -375,8 +385,8 @@ mod tests {
         let mut cache = TranscriptReflowCache::new(80);
 
         // Add two messages
-        cache.update_message(0, 1, vec![Line::from("Line 1"), Line::from("Line 2")]);
-        cache.update_message(1, 2, vec![Line::from("Line 3")]);
+        cache.update_message(0, 1, vec![line("Line 1"), line("Line 2")]);
+        cache.update_message(1, 2, vec![line("Line 3")]);
 
         cache.update_row_offsets_from(0);
 
@@ -398,7 +408,7 @@ mod tests {
 
         // After adding message with same revision, doesn't need reflow
         let mut cache = TranscriptReflowCache::new(80);
-        cache.update_message(0, 1, vec![Line::default()]);
+        cache.update_message(0, 1, vec![line(Line::default())]);
         assert!(!cache.needs_reflow(0, 1));
 
         // But needs reflow with different revision
@@ -417,7 +427,7 @@ mod tests {
     #[test]
     fn test_message_accessors() {
         let mut cache = TranscriptReflowCache::new(80);
-        cache.update_message(0, 1, vec![Line::from("Test"), Line::from("Lines")]);
+        cache.update_message(0, 1, vec![line("Test"), line("Lines")]);
 
         cache.update_row_offsets_from(0);
 
@@ -446,23 +456,23 @@ mod tests {
         let mut cache = TranscriptReflowCache::new(80);
 
         // Add three messages
-        cache.update_message(0, 1, vec![Line::from("M1-L1"), Line::from("M1-L2")]);
-        cache.update_message(1, 2, vec![Line::from("M2-L1")]);
-        cache.update_message(2, 3, vec![Line::from("M3-L1"), Line::from("M3-L2")]);
+        cache.update_message(0, 1, vec![line("M1-L1"), line("M1-L2")]);
+        cache.update_message(1, 2, vec![line("M2-L1")]);
+        cache.update_message(2, 3, vec![line("M3-L1"), line("M3-L2")]);
 
         cache.update_row_offsets_from(0);
         assert_eq!(cache.row_offsets, vec![0, 2, 3]);
         assert_eq!(cache.total_rows(), 5);
 
         // Update second message (index 1)
-        cache.update_message(1, 4, vec![Line::from("M2-L1-New"), Line::from("M2-L2-New")]);
+        cache.update_message(1, 4, vec![line("M2-L1-New"), line("M2-L2-New")]);
         cache.update_row_offsets_from(1);
 
         assert_eq!(cache.row_offsets, vec![0, 2, 4]);
         assert_eq!(cache.total_rows(), 6);
 
         // Add fourth message
-        cache.update_message(3, 5, vec![Line::from("M4-L1")]);
+        cache.update_message(3, 5, vec![line("M4-L1")]);
         cache.update_row_offsets_from(3);
 
         assert_eq!(cache.row_offsets, vec![0, 2, 4, 6]);

@@ -12,7 +12,11 @@ use unicode_width::UnicodeWidthStr;
 use super::super::style::ratatui_style_from_inline;
 use super::super::types::InlineMessageKind;
 use super::wrapping;
-use super::{Session, message::MessageLine, render, terminal_capabilities, text_utils};
+use super::{
+    Session,
+    message::{MessageLine, TranscriptLine},
+    render, terminal_capabilities, text_utils,
+};
 use crate::config::constants::ui;
 
 mod blocks;
@@ -31,7 +35,11 @@ impl Session {
         if width == 0 {
             let mut lines: Vec<Line<'static>> = Vec::new();
             for (index, _) in self.lines.iter().enumerate() {
-                lines.extend(self.reflow_message_lines(index, 0));
+                lines.extend(
+                    self.reflow_message_lines(index, 0)
+                        .into_iter()
+                        .map(|line| line.line),
+                );
             }
             if lines.is_empty() {
                 lines.push(Line::default());
@@ -41,7 +49,11 @@ impl Session {
 
         let mut wrapped_lines = Vec::new();
         for (index, _) in self.lines.iter().enumerate() {
-            wrapped_lines.extend(self.reflow_message_lines(index, width));
+            wrapped_lines.extend(
+                self.reflow_message_lines(index, width)
+                    .into_iter()
+                    .map(|line| line.line),
+            );
         }
 
         if wrapped_lines.is_empty() {
@@ -59,13 +71,13 @@ impl Session {
     /// - Consistent spacing between message blocks
     /// - Tool output grouped with headers
     #[allow(dead_code)]
-    pub(super) fn reflow_message_lines(&self, index: usize, width: u16) -> Vec<Line<'static>> {
+    pub(super) fn reflow_message_lines(&self, index: usize, width: u16) -> Vec<TranscriptLine> {
         let Some(message) = self.lines.get(index) else {
-            return vec![Line::default()];
+            return vec![TranscriptLine::default()];
         };
 
         if message.kind == InlineMessageKind::Tool {
-            return self.reflow_tool_lines(index, width);
+            return into_transcript_lines(self.reflow_tool_lines(index, width));
         }
 
         if message.kind == InlineMessageKind::Pty {
@@ -87,10 +99,13 @@ impl Session {
         let spans = render::render_message_spans(self, index);
         let base_line = Line::from(spans);
         if width == 0 {
-            return vec![base_line];
+            return vec![TranscriptLine {
+                line: base_line,
+                explicit_links: Vec::new(),
+            }];
         }
 
-        let mut wrapped = Vec::new();
+        let mut wrapped: Vec<TranscriptLine> = Vec::new();
         let max_width = width as usize;
 
         // Check if this is the start of a new conversation turn
@@ -111,15 +126,18 @@ impl Session {
         if message.kind == InlineMessageKind::User && is_new_turn && max_width > 0 {
             if prev_kind.is_some() {
                 for _ in 0..spacing {
-                    wrapped.push(Line::default());
+                    wrapped.push(TranscriptLine::default());
                 }
             }
             let divider = self.message_divider_line(max_width, message.kind);
-            wrapped.push(divider);
+            wrapped.push(TranscriptLine {
+                line: divider,
+                explicit_links: Vec::new(),
+            });
         }
 
         let lines = if message.kind == InlineMessageKind::Agent {
-            self.reflow_agent_message_lines(message, max_width, !is_new_turn)
+            into_transcript_lines(self.reflow_agent_message_lines(message, max_width, !is_new_turn))
         } else {
             let mut lines = self.wrap_line(base_line, max_width);
             if !lines.is_empty() {
@@ -128,13 +146,13 @@ impl Session {
             if lines.is_empty() {
                 lines.push(Line::default());
             }
-            lines
+            into_transcript_lines(lines)
         };
 
         wrapped.extend(lines);
 
         if wrapped.is_empty() {
-            wrapped.push(Line::default());
+            wrapped.push(TranscriptLine::default());
         }
 
         // Add spacing after messages for visual grouping (respects message_block_spacing config)
@@ -152,7 +170,7 @@ impl Session {
                     };
                 if !skip_spacing {
                     for _ in 0..spacing {
-                        wrapped.push(Line::default());
+                        wrapped.push(TranscriptLine::default());
                     }
                 }
             }
@@ -160,21 +178,21 @@ impl Session {
                 // No spacing if followed by Agent (reasoning -> content flow)
                 if next_kind != Some(InlineMessageKind::Agent) {
                     for _ in 0..spacing {
-                        wrapped.push(Line::default());
+                        wrapped.push(TranscriptLine::default());
                     }
                 }
             }
             InlineMessageKind::User => {
                 // Blank lines after user message for clean separation
                 for _ in 0..spacing {
-                    wrapped.push(Line::default());
+                    wrapped.push(TranscriptLine::default());
                 }
             }
             InlineMessageKind::Agent => {
                 // Check if next message is a different type (end of agent turn)
                 if next_kind.is_some() && next_kind != Some(InlineMessageKind::Agent) {
                     for _ in 0..spacing {
-                        wrapped.push(Line::default());
+                        wrapped.push(TranscriptLine::default());
                     }
                 }
             }
@@ -190,9 +208,9 @@ impl Session {
         &self,
         index: usize,
         width: u16,
-    ) -> Vec<Line<'static>> {
+    ) -> Vec<TranscriptLine> {
         let Some(line) = self.lines.get(index) else {
-            return vec![Line::default()];
+            return vec![TranscriptLine::default()];
         };
 
         let max_width = if width == 0 {
@@ -223,7 +241,7 @@ impl Session {
         }
 
         if max_width == usize::MAX {
-            return grouped_lines;
+            return into_transcript_lines(grouped_lines);
         }
 
         let border_style = self.styles.dimmed_border_style(true);
@@ -243,7 +261,7 @@ impl Session {
         let content_width = max_width.saturating_sub(prefix_width + border_width);
 
         if content_width == 0 {
-            return grouped_lines;
+            return into_transcript_lines(grouped_lines);
         }
 
         let inner_width = content_width + 1;
@@ -315,7 +333,7 @@ impl Session {
             lines.push(Line::default());
         }
 
-        lines
+        into_transcript_lines(lines)
     }
 
     /// Wrap a line of text to fit within a maximum width.
@@ -426,4 +444,14 @@ impl Session {
 
         lines
     }
+}
+
+fn into_transcript_lines(lines: Vec<Line<'static>>) -> Vec<TranscriptLine> {
+    lines
+        .into_iter()
+        .map(|line| TranscriptLine {
+            line,
+            explicit_links: Vec::new(),
+        })
+        .collect()
 }

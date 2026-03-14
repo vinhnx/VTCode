@@ -68,9 +68,14 @@ impl Session {
                 self.append_inline(kind, segment);
                 self.transcript_content_changed = true;
             }
-            InlineCommand::ReplaceLast { count, kind, lines } => {
+            InlineCommand::ReplaceLast {
+                count,
+                kind,
+                lines,
+                link_ranges,
+            } => {
                 self.clear_thinking_spinner_if_active(kind);
-                self.replace_last(count, kind, lines);
+                self.replace_last(count, kind, lines, link_ranges);
                 self.transcript_content_changed = true;
             }
             InlineCommand::SetPrompt { prefix, style } => {
