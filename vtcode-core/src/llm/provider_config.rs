@@ -1,19 +1,29 @@
 use crate::config::TimeoutsConfig;
 use crate::config::core::{GeminiPromptCacheSettings, PromptCachingConfig};
+use crate::llm::cgp::{CanDescribeProvider, ProviderMetadataProvider};
 use crate::llm::factory::{self, ProviderConfig as FactoryProviderConfig};
 use crate::llm::provider::{LLMError, LLMProvider};
-use crate::llm::provider_builder::ProviderConfig;
+use crate::llm::provider_builder::ProviderConfig as LegacyProviderConfig;
 
 macro_rules! define_provider_config {
     ($name:ident, $key:literal, $display:literal, $default_model:expr, $api_base:expr, $env_var:expr, $prompt_cache_settings:ty) => {
         pub struct $name;
 
-        impl ProviderConfig for $name {
+        impl ProviderMetadataProvider<$name> for $name {
             const PROVIDER_KEY: &'static str = $key;
             const DISPLAY_NAME: &'static str = $display;
             const DEFAULT_MODEL: &'static str = $default_model;
             const API_BASE_URL: &'static str = $api_base;
             const BASE_URL_ENV_VAR: Option<&'static str> = $env_var;
+        }
+
+        impl LegacyProviderConfig for $name {
+            const PROVIDER_KEY: &'static str = <Self as CanDescribeProvider>::PROVIDER_KEY;
+            const DISPLAY_NAME: &'static str = <Self as CanDescribeProvider>::DISPLAY_NAME;
+            const DEFAULT_MODEL: &'static str = <Self as CanDescribeProvider>::DEFAULT_MODEL;
+            const API_BASE_URL: &'static str = <Self as CanDescribeProvider>::API_BASE_URL;
+            const BASE_URL_ENV_VAR: Option<&'static str> =
+                <Self as CanDescribeProvider>::BASE_URL_ENV_VAR;
 
             type PromptCacheSettings = $prompt_cache_settings;
         }
@@ -45,6 +55,24 @@ define_provider_config!(
     crate::config::constants::models::openai::DEFAULT_MODEL,
     crate::config::constants::urls::OPENAI_API_BASE,
     Some(crate::config::constants::env_vars::OPENAI_BASE_URL),
+    ()
+);
+define_provider_config!(
+    HuggingFaceProviderConfig,
+    "huggingface",
+    "HuggingFace",
+    crate::config::constants::models::huggingface::DEFAULT_MODEL,
+    crate::config::constants::urls::HUGGINGFACE_API_BASE,
+    Some(crate::config::constants::env_vars::HUGGINGFACE_BASE_URL),
+    ()
+);
+define_provider_config!(
+    LiteLLMProviderConfig,
+    "litellm",
+    "LiteLLM",
+    crate::config::constants::models::litellm::DEFAULT_MODEL,
+    crate::config::constants::urls::LITELLM_API_BASE,
+    Some(crate::config::constants::env_vars::LITELLM_BASE_URL),
     ()
 );
 define_provider_config!(
@@ -81,6 +109,15 @@ define_provider_config!(
     "openrouter/auto",
     crate::config::constants::urls::OPENROUTER_API_BASE,
     Some(crate::config::constants::env_vars::OPENROUTER_BASE_URL),
+    ()
+);
+define_provider_config!(
+    OpenResponsesProviderConfig,
+    "openresponses",
+    "OpenResponses",
+    crate::config::constants::models::openresponses::DEFAULT_MODEL,
+    crate::config::constants::urls::OPENRESPONSES_API_BASE,
+    Some(crate::config::constants::env_vars::OPENRESPONSES_BASE_URL),
     ()
 );
 define_provider_config!(
@@ -184,6 +221,21 @@ mod tests {
             .model(crate::config::constants::models::openai::DEFAULT_MODEL.to_string())
             .try_build()
             .expect("builder shim should resolve via the factory");
+
+        assert_eq!(provider.name(), "openai");
+    }
+
+    #[test]
+    fn legacy_provider_config_create_provider_routes_through_factory() {
+        let provider =
+            <OpenAIProviderConfig as crate::llm::provider_builder::ProviderConfig>::create_provider(
+                "test-key".to_string(),
+                crate::config::constants::models::openai::DEFAULT_MODEL.to_string(),
+                crate::config::constants::urls::OPENAI_API_BASE.to_string(),
+                false,
+                (),
+                TimeoutsConfig::default(),
+            );
 
         assert_eq!(provider.name(), "openai");
     }

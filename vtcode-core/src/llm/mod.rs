@@ -164,6 +164,7 @@
 //! with provider-specific implementations.
 
 pub mod capabilities;
+pub mod cgp;
 pub mod client;
 pub mod error_display;
 pub mod factory;

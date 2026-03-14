@@ -53,6 +53,12 @@ fn gemini_from_env() -> anyhow::Result<vtcode_core::llm::factory::ProviderConfig
 Because the trait only exposes borrowed data, callers can also point to secrets stored
 in files, KMS-backed fetchers, or other secret managers.
 
+Internally, `vtcode-llm::config::ProviderConfig` is the canonical external
+surface. Both [`config::as_factory_config`](../vtcode-llm/src/config.rs) and
+[`config::as_factory_config_with_hooks`](../vtcode-llm/src/config.rs) now flow
+through the same projection layer, so plain and hook-enriched conversions stay
+behaviorally aligned.
+
 ## Wiring workspace paths and telemetry
 
 When prompt caching is enabled, use
