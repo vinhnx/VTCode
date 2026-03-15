@@ -1094,6 +1094,29 @@ fn responses_payload_includes_previous_response_and_optional_fields() {
 }
 
 #[test]
+fn chatgpt_backend_omits_previous_response_id_from_responses_payload() {
+    let provider = OpenAIProvider::from_config(
+        Some(String::new()),
+        Some(sample_chatgpt_auth_handle()),
+        Some(models::openai::GPT_5_2_CODEX.to_string()),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+    let mut request = sample_request(models::openai::GPT_5_2_CODEX);
+    request.previous_response_id = Some("resp_previous_123".to_string());
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    assert!(payload.get("previous_response_id").is_none());
+}
+
+#[test]
 fn responses_payload_includes_assistant_phase_for_native_openai() {
     let provider = OpenAIProvider::with_model(String::new(), models::openai::GPT_5_4.to_string());
     let request = provider::LLMRequest {
@@ -1855,6 +1878,46 @@ fn chat_completions_uses_max_completion_tokens_field() {
         .expect("max completion tokens should be set");
     assert_eq!(max_tokens_value, 512);
     assert!(payload.get("max_tokens").is_none());
+}
+
+#[test]
+fn responses_payload_uses_max_output_tokens_field() {
+    let provider = OpenAIProvider::with_model(String::new(), models::openai::GPT_5.to_string());
+    let mut request = sample_request(models::openai::GPT_5);
+    request.max_tokens = Some(512);
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    assert_eq!(
+        payload.get("max_output_tokens").and_then(Value::as_u64),
+        Some(512)
+    );
+    assert!(payload.get(MAX_COMPLETION_TOKENS_FIELD).is_none());
+}
+
+#[test]
+fn chatgpt_backend_omits_max_output_tokens_from_responses_payload() {
+    let provider = OpenAIProvider::from_config(
+        Some(String::new()),
+        Some(sample_chatgpt_auth_handle()),
+        Some(models::openai::GPT_5_2_CODEX.to_string()),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+    let mut request = sample_request(models::openai::GPT_5_2_CODEX);
+    request.max_tokens = Some(512);
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    assert!(payload.get("max_output_tokens").is_none());
 }
 
 #[test]

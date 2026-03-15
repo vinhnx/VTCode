@@ -33,6 +33,8 @@ pub(crate) struct ResponsesRequestContext<'a> {
     pub supports_reasoning_effort: bool,
     pub supports_reasoning: bool,
     pub is_responses_api_model: bool,
+    pub include_max_output_tokens: bool,
+    pub include_previous_response_id: bool,
     pub include_output_types: bool,
     pub include_sampling_parameters: bool,
     pub force_response_store_false: bool,
@@ -288,8 +290,10 @@ pub(crate) fn build_responses_request(
         .reasoning_effort
         .or_else(|| default_reasoning_effort_for_model(&request.model));
 
-    if let Some(max_tokens) = request.max_tokens {
-        openai_request[MAX_COMPLETION_TOKENS_FIELD] = json!(max_tokens);
+    if ctx.include_max_output_tokens
+        && let Some(max_tokens) = request.max_tokens
+    {
+        openai_request["max_output_tokens"] = json!(max_tokens);
     }
 
     if ctx.include_output_types {
@@ -307,7 +311,10 @@ pub(crate) fn build_responses_request(
         openai_request["instructions"] = json!(instructions);
     }
 
-    if let Some(previous_response_id) = trimmed_non_empty(request.previous_response_id.as_deref()) {
+    if ctx.include_previous_response_id
+        && let Some(previous_response_id) =
+            trimmed_non_empty(request.previous_response_id.as_deref())
+    {
         openai_request["previous_response_id"] = json!(previous_response_id);
     }
 

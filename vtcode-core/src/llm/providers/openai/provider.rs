@@ -544,6 +544,8 @@ impl OpenAIProvider {
             supports_reasoning_effort: self.supports_reasoning_effort(&request.model),
             supports_reasoning: self.supports_reasoning(&request.model),
             is_responses_api_model: Self::is_responses_api_model(&request.model),
+            include_max_output_tokens: is_native_openai,
+            include_previous_response_id: is_native_openai,
             include_output_types: !self.is_chatgpt_backend(),
             include_sampling_parameters: !self.is_chatgpt_backend(),
             force_response_store_false: self.uses_chatgpt_auth()
