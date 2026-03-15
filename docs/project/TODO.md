@@ -51,3 +51,20 @@ humidapp
 vtchat.io
 
 ---
+
+merge
+
+vtcode-acp
+vtcode-acp-client
+
+module
+
+---
+
+move vtcode-lmstudio module and move its functionality into vtcode-local-llm to reduce fragmentation and improve cohesion. Refactor the codebase to eliminate the vtcode-lmstudio module, integrating its features directly into vtcode-core while ensuring all existing functionality is preserved. Update all references, imports, and documentation to reflect the removal of the vtcode-lmstudio module and the consolidation of its capabilities into vtcode-core. Conduct thorough testing to ensure that the refactored codebase maintains stability, reliability, and performance while simplifying the overall architecture.
+
+then add vtcode-ollama related submodules into vtcode-local-llm as well to further consolidate local LLM functionality and reduce fragmentation. Refactor the vtcode-ollama related code into vtcode-core, ensuring that all features are preserved and properly integrated. Update documentation and references accordingly, and conduct comprehensive testing to validate the refactored codebase.
+
+---
+
+improve and modularize vtcode-tui/src/core_tui, remove duplication, and ensure a clean separation of concerns between core TUI logic and higher-level application logic. Refactor the core TUI components to be more modular and reusable, extracting common functionality into shared modules where appropriate. Remove any duplicated code across different TUI components, ensuring that each piece of logic is implemented in a single location to adhere to the DRY principle. Enhance the maintainability and readability of the TUI codebase by organizing it into well-defined modules with clear responsibilities, while ensuring that all existing functionality is preserved and thoroughly tested.

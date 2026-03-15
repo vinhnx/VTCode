@@ -6690,6 +6690,14 @@ dependencies = [
  "unicode-segmentation",
  "unicode-width 0.2.2",
  "vtcode-commons",
+ "vtcode-vim",
+]
+
+[[package]]
+name = "vtcode-vim"
+version = "0.88.5"
+dependencies = [
+ "crossterm",
 ]
 
 [[package]]

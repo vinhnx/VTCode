@@ -1,6 +1,6 @@
-use super::types::{Motion, TextObjectSpec};
+use crate::types::{Motion, TextObjectSpec};
 
-pub(super) fn next_char_boundary(content: &str, mut pos: usize) -> usize {
+pub(crate) fn next_char_boundary(content: &str, mut pos: usize) -> usize {
     if pos >= content.len() {
         return content.len();
     }
@@ -11,7 +11,7 @@ pub(super) fn next_char_boundary(content: &str, mut pos: usize) -> usize {
     pos
 }
 
-pub(super) fn prev_char_boundary(content: &str, mut pos: usize) -> usize {
+pub(crate) fn prev_char_boundary(content: &str, mut pos: usize) -> usize {
     if pos == 0 {
         return 0;
     }
@@ -22,7 +22,7 @@ pub(super) fn prev_char_boundary(content: &str, mut pos: usize) -> usize {
     pos
 }
 
-pub(super) fn vim_current_line_bounds(content: &str, cursor: usize) -> (usize, usize) {
+pub(crate) fn vim_current_line_bounds(content: &str, cursor: usize) -> (usize, usize) {
     let start = vim_line_start(content, cursor);
     let end = content[start..]
         .find('\n')
@@ -31,14 +31,14 @@ pub(super) fn vim_current_line_bounds(content: &str, cursor: usize) -> (usize, u
     (start, end)
 }
 
-pub(super) fn vim_line_start(content: &str, cursor: usize) -> usize {
+pub(crate) fn vim_line_start(content: &str, cursor: usize) -> usize {
     content[..cursor.min(content.len())]
         .rfind('\n')
         .map(|idx| idx + 1)
         .unwrap_or(0)
 }
 
-pub(super) fn vim_line_end(content: &str, cursor: usize) -> usize {
+pub(crate) fn vim_line_end(content: &str, cursor: usize) -> usize {
     let start = vim_line_start(content, cursor);
     content[start..]
         .find('\n')
@@ -46,7 +46,7 @@ pub(super) fn vim_line_end(content: &str, cursor: usize) -> usize {
         .unwrap_or(content.len())
 }
 
-pub(super) fn vim_line_first_non_ws(content: &str, cursor: usize) -> usize {
+pub(crate) fn vim_line_first_non_ws(content: &str, cursor: usize) -> usize {
     let start = vim_line_start(content, cursor);
     let end = vim_line_end(content, cursor);
     content[start..end]
@@ -55,7 +55,7 @@ pub(super) fn vim_line_first_non_ws(content: &str, cursor: usize) -> usize {
         .unwrap_or(start)
 }
 
-pub(super) fn vim_next_word_start(content: &str, cursor: usize) -> usize {
+pub(crate) fn vim_next_word_start(content: &str, cursor: usize) -> usize {
     if content.is_empty() {
         return 0;
     }
@@ -80,7 +80,7 @@ pub(super) fn vim_next_word_start(content: &str, cursor: usize) -> usize {
     content.len()
 }
 
-pub(super) fn vim_prev_word_start(content: &str, cursor: usize) -> usize {
+pub(crate) fn vim_prev_word_start(content: &str, cursor: usize) -> usize {
     let mut pos = prev_char_boundary(content, cursor.min(content.len()));
     while pos > 0 {
         let ch = content[pos..].chars().next().unwrap_or('\0');
@@ -100,7 +100,7 @@ pub(super) fn vim_prev_word_start(content: &str, cursor: usize) -> usize {
     0
 }
 
-pub(super) fn vim_end_word(content: &str, cursor: usize) -> usize {
+pub(crate) fn vim_end_word(content: &str, cursor: usize) -> usize {
     let cursor = cursor.min(content.len());
     let start = match content[cursor..].chars().next() {
         Some(ch) if vim_is_word_char(ch) => cursor,
@@ -124,7 +124,7 @@ pub(super) fn vim_end_word(content: &str, cursor: usize) -> usize {
     last
 }
 
-pub(super) fn vim_motion_range(
+pub(crate) fn vim_motion_range(
     content: &str,
     cursor: usize,
     motion: Motion,
@@ -143,7 +143,7 @@ pub(super) fn vim_motion_range(
     }
 }
 
-pub(super) fn vim_current_line_full_range(content: &str, cursor: usize) -> (usize, usize) {
+pub(crate) fn vim_current_line_full_range(content: &str, cursor: usize) -> (usize, usize) {
     let start = vim_line_start(content, cursor);
     let line_end = vim_line_end(content, cursor);
     let end = if line_end < content.len() {
@@ -154,12 +154,12 @@ pub(super) fn vim_current_line_full_range(content: &str, cursor: usize) -> (usiz
     (start, end)
 }
 
-pub(super) fn vim_is_linewise_range(content: &str, start: usize, end: usize) -> bool {
+pub(crate) fn vim_is_linewise_range(content: &str, start: usize, end: usize) -> bool {
     start == vim_line_start(content, start)
         && (end == content.len() || content.get(end - 1..end) == Some("\n"))
 }
 
-pub(super) fn vim_find_char(
+pub(crate) fn vim_find_char(
     content: &str,
     cursor: usize,
     ch: char,
@@ -190,7 +190,7 @@ pub(super) fn vim_find_char(
     }
 }
 
-pub(super) fn vim_text_object_range(
+pub(crate) fn vim_text_object_range(
     content: &str,
     cursor: usize,
     object: TextObjectSpec,

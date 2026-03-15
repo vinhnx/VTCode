@@ -1,17 +1,18 @@
+/// Active Vim editing mode.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum VimMode {
+pub enum VimMode {
     Insert,
     Normal,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum ClipboardKind {
+pub(crate) enum ClipboardKind {
     CharWise,
     LineWise,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Operator {
+pub(crate) enum Operator {
     Delete,
     Change,
     Yank,
@@ -20,14 +21,14 @@ pub(super) enum Operator {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Motion {
+pub(crate) enum Motion {
     WordForward,
     EndWord,
     WordBackward,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum TextObjectSpec {
+pub(crate) enum TextObjectSpec {
     Word {
         around: bool,
         big: bool,
@@ -40,7 +41,7 @@ pub(super) enum TextObjectSpec {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum PendingState {
+pub(crate) enum PendingState {
     Operator(Operator),
     TextObject(Operator, bool),
     Find { till: bool, forward: bool },
@@ -48,7 +49,7 @@ pub(super) enum PendingState {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum InsertKind {
+pub(crate) enum InsertKind {
     Insert,
     InsertStart,
     Append,
@@ -58,7 +59,7 @@ pub(super) enum InsertKind {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum ChangeTarget {
+pub(crate) enum ChangeTarget {
     Motion(Motion),
     TextObject(TextObjectSpec),
     Line,
@@ -66,13 +67,13 @@ pub(super) enum ChangeTarget {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum InsertRepeat {
+pub(crate) enum InsertRepeat {
     Insert(InsertKind),
     Change(ChangeTarget),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) enum RepeatableCommand {
+pub(crate) enum RepeatableCommand {
     DeleteChar,
     PasteAfter,
     PasteBefore,
@@ -100,32 +101,34 @@ pub(super) enum RepeatableCommand {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) struct FindState {
-    pub(super) ch: char,
-    pub(super) till: bool,
-    pub(super) forward: bool,
+pub(crate) struct FindState {
+    pub(crate) ch: char,
+    pub(crate) till: bool,
+    pub(crate) forward: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct InsertCapture {
-    pub(super) repeat: InsertRepeat,
-    pub(super) start: usize,
+pub(crate) struct InsertCapture {
+    pub(crate) repeat: InsertRepeat,
+    pub(crate) start: usize,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct VimState {
+pub struct VimState {
     enabled: bool,
     mode: VimMode,
-    pub(super) preferred_column: Option<usize>,
-    pub(super) pending: Option<PendingState>,
-    pub(super) last_find: Option<FindState>,
-    pub(super) last_change: Option<RepeatableCommand>,
-    pub(super) clipboard_kind: ClipboardKind,
-    pub(super) insert_capture: Option<InsertCapture>,
+    pub(crate) preferred_column: Option<usize>,
+    pub(crate) pending: Option<PendingState>,
+    pub(crate) last_find: Option<FindState>,
+    pub(crate) last_change: Option<RepeatableCommand>,
+    pub(crate) clipboard_kind: ClipboardKind,
+    pub(crate) insert_capture: Option<InsertCapture>,
 }
 
 impl VimState {
-    pub(crate) fn new(enabled: bool) -> Self {
+    /// Create a new Vim state container.
+    #[must_use]
+    pub fn new(enabled: bool) -> Self {
         Self {
             enabled,
             mode: VimMode::Insert,
@@ -138,7 +141,7 @@ impl VimState {
         }
     }
 
-    pub(crate) fn set_enabled(&mut self, enabled: bool) {
+    pub fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
         self.mode = VimMode::Insert;
         self.pending = None;
@@ -146,25 +149,29 @@ impl VimState {
         self.insert_capture = None;
     }
 
-    pub(crate) fn enabled(&self) -> bool {
+    #[must_use]
+    pub fn enabled(&self) -> bool {
         self.enabled
     }
 
-    pub(crate) fn mode(&self) -> VimMode {
+    #[must_use]
+    pub fn mode(&self) -> VimMode {
         self.mode
     }
 
-    pub(crate) fn status_label(&self) -> Option<&'static str> {
+    #[must_use]
+    pub fn status_label(&self) -> Option<&'static str> {
         if !self.enabled {
             return None;
         }
+
         Some(match self.mode {
             VimMode::Insert => "INSERT",
             VimMode::Normal => "NORMAL",
         })
     }
 
-    pub(super) fn set_mode(&mut self, mode: VimMode) {
+    pub(crate) fn set_mode(&mut self, mode: VimMode) {
         self.mode = mode;
     }
 }
