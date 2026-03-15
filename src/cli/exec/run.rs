@@ -11,7 +11,7 @@ use vtcode_core::core::agent::runner::{AgentRunner, RunnerSettings};
 use vtcode_core::core::agent::task::{ContextItem, Task};
 use vtcode_core::core::agent::types::AgentType;
 use vtcode_core::utils::file_utils::write_file_with_context;
-use vtcode_core::utils::session_archive::SessionMessage;
+use vtcode_core::utils::session_archive::{SessionMessage, SessionProgressArgs};
 
 use super::event_output::{
     ExecEventProcessor, exec_archive_transcript, lock_or_recover, open_events_writer,
@@ -78,9 +78,29 @@ pub(super) fn effective_exec_events_path(
     })
 }
 
-/// Returns the default harness log directory (`~/.vtcode/sessions/`).
+/// Returns the default harness log directory for the current VT Code data dir.
 fn default_harness_log_dir() -> Option<PathBuf> {
-    dirs::home_dir().map(|home| home.join(".vtcode").join("sessions"))
+    Some(vtcode_core::utils::session_debug::default_sessions_dir())
+}
+
+async fn checkpoint_exec_archive(
+    archive: &vtcode_core::utils::session_archive::SessionArchive,
+    session_messages: &[vtcode_core::llm::provider::Message],
+) -> Result<()> {
+    let recent_messages = session_messages.iter().map(SessionMessage::from).collect();
+    archive
+        .persist_progress_async(SessionProgressArgs {
+            total_messages: session_messages.len(),
+            distinct_tools: Vec::new(),
+            recent_messages,
+            turn_number: 1,
+            token_usage: None,
+            max_context_tokens: None,
+            loaded_skills: None,
+        })
+        .await
+        .context("Failed to checkpoint exec session archive")?;
+    Ok(())
 }
 
 pub(super) async fn handle_exec_command_impl(
@@ -117,6 +137,11 @@ pub(super) async fn handle_exec_command_impl(
         run_vt_cfg.clone(),
     )
     .await?;
+
+    if let Some(archive) = archive.as_ref() {
+        let initial_session_messages = runner.session_messages();
+        checkpoint_exec_archive(archive, &initial_session_messages).await?;
+    }
 
     let allowed_tools = match &options.command {
         ExecCommandKind::Review { .. } => {
@@ -206,4 +231,49 @@ pub(super) async fn handle_exec_command_impl(
         .context("Failed to process exec event output")?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::checkpoint_exec_archive;
+    use anyhow::{Context, Result};
+    use chrono::Utc;
+    use vtcode_core::llm::provider::Message;
+    use vtcode_core::utils::session_archive::{
+        SessionArchive, SessionArchiveMetadata, SessionListing, SessionSnapshot,
+    };
+
+    #[tokio::test]
+    async fn checkpoint_exec_archive_writes_initial_snapshot() -> Result<()> {
+        let temp_dir = tempfile::tempdir().context("tempdir")?;
+        let archive_path = temp_dir.path().join("session-vtcode-test-archive.json");
+        let metadata =
+            SessionArchiveMetadata::new("vtcode", "/tmp/vtcode", "gpt-5", "openai", "mono", "low");
+        let listing = SessionListing {
+            path: archive_path.clone(),
+            snapshot: SessionSnapshot {
+                metadata: metadata.clone(),
+                started_at: Utc::now(),
+                ended_at: Utc::now(),
+                total_messages: 0,
+                distinct_tools: Vec::new(),
+                transcript: Vec::new(),
+                messages: Vec::new(),
+                progress: None,
+                error_logs: Vec::new(),
+            },
+        };
+        let archive = SessionArchive::resume_from_listing(&listing, metadata);
+
+        let messages = vec![Message::user("hello".to_string())];
+        checkpoint_exec_archive(&archive, &messages).await?;
+
+        let snapshot: SessionSnapshot =
+            serde_json::from_str(&std::fs::read_to_string(archive_path)?)?;
+        assert_eq!(snapshot.total_messages, 1);
+        assert_eq!(snapshot.messages.len(), 1);
+        assert!(snapshot.progress.is_some());
+
+        Ok(())
+    }
 }
