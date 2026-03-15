@@ -13,7 +13,6 @@ impl ModelId {
             ModelId::Gemini31FlashLitePreview => "Gemini 3.1 Flash Lite Preview",
             ModelId::Gemini3FlashPreview => "Gemini 3 Flash",
             // OpenAI models
-            ModelId::GPT => "GPT",
             ModelId::GPT5 => "GPT-5",
             ModelId::GPT52 => "GPT-5.2",
             ModelId::GPT52Codex => "GPT-5.2 Codex",

@@ -71,14 +71,6 @@ improve and modularize vtcode-tui/src/core_tui, remove duplication, and ensure a
 
 ---
 
-check chatgpt login subsction. adal can use it.
-
-https://docs.sylph.ai/features/chatgpt-subscription
-
-https://deepwiki.com/search/can-third-partty-coding-harnes_b94358dd-60ee-42fc-9814-b48503f70c67?mode=fast
-
----
-
 https://claude.ai/chat/37d94c2c-a521-44d2-85f3-e15c38864286
 
 ---
@@ -86,55 +78,3 @@ https://claude.ai/chat/37d94c2c-a521-44d2-85f3-e15c38864286
 https://deepwiki.com/search/how-does-pimono-handle-chatgpt_1c9744ad-55f7-49bd-8a40-ad43f4f5a9e7?mode=fast
 
 --
-
-chekc /logout, when i already logged in with chatgpt, it should able to detect and show log me out from chatgpt as well.
-currently it show no stored chatgpt session to remove?
-
-```
-╭> VT Code (0.88.5)────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│OpenAI gpt-5.3-codex (128K) low | Accept edits | Search: ripgrep · ast-grep | PR: gh auth | Tools: 17 | main* | /help · /model  |  ↑↓ Nav · Tab Complete                      │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-  ╭─ Info ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-  │ LLM request failed (Rate limit exceeded), retrying in 1.0s... (attempt 2/3)                                                                                                │
-  │ LLM request failed (Rate limit exceeded), retrying in 2.0s... (attempt 3/3)                                                                                                │
-  ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-
-  ╭─ Error ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-  │ LLM request failed: You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs:                        │
-  │ https://platform.openai.com/docs/guides/error-codes/api-errors.                                                                                                            │
-  ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-
-  ╭─ Info ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-  │ Hint: Wait before retrying the request; Reduce request frequency; Check provider rate limit documentation                                                                  │
-  ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-
-
-
-
-
-╭Logs──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│[2026-03-15T09:44:04Z] WARN  vtcode_core::llm::providers::ollama Failed to connect to Ollama server: reqwest::Error { kind: Request, url: "http://localhost:11434/api/tags",  │
-│source: hyper_util::client::legacy::Error(Connect, ConnectError("tcp connect error", 127.0.0.1:11434, Os { code: 61, kind: ConnectionRefused, message: "Connection refused"   │
-│})) }                                                                                                                                                                         │
-│[2026-03-15T09:44:14Z] DEBUG vtcode_core::llm::providers::openai::provider::generation Dispatching non-streaming OpenAI request target=vtcode::llm::openai model=gpt-5        │
-│responses_api=true messages=1 tools=11                                                                                                                                        │
-│[2026-03-15T09:44:14Z] ERROR vtcode_transcript LLM request failed: [31mOpenAI[0m [31mResponses API error (status 400 Bad Request)                                             │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-
- Continue, or @files, /commands, Shift+Tab: cycle modes, Enter/Tab: queue, Ctrl+Enter: run/steer now, /stop: stop task
-
-Ghostty main*                                     IDE Context (VS Code): vtcode-core/src/llm/providers/openai/provider/generation.rs | gpt-5.3-codex | 100% context left | (low)
-OAuth logout
-Choose an OAuth-capable provider to disconnect.
-• This removes the stored OAuth session for the selected provider.
-Navigation: ↑/↓ select • Space/Enter apply • ←/→ change value • Esc close
- [OAuth] OpenAI ChatGPT
- No stored ChatGPT session to remove.
-
- [OAuth] OpenRouter
- No stored OpenRouter OAuth token to remove.
-
- Back
- Close this dialog
-
-```

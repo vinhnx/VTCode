@@ -10,9 +10,7 @@ use crate::llm::error_display;
 use crate::llm::provider;
 use crate::llm::provider::LLMProvider;
 use crate::llm::providers::error_handling::{is_rate_limit_error, parse_api_error};
-use async_stream::try_stream;
 use serde_json::{Value, json};
-use tracing::debug;
 
 #[inline]
 fn should_prefer_responses_stream(state: ResponsesApiState) -> bool {
@@ -27,8 +25,6 @@ impl OpenAIProvider {
         if request.model.trim().is_empty() {
             request.model = self.model.to_string();
         }
-        let model = request.model.clone();
-
         if !self.supports_parallel_tool_config(&request.model) {
             request.parallel_tool_config = None;
         }
@@ -41,52 +37,40 @@ impl OpenAIProvider {
             return self.stream_chat_completions(&request).await;
         }
 
-        let include_metrics =
-            self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
-
-        let mut openai_request = self.convert_to_openai_responses_format(&request)?;
-
-        openai_request["stream"] = Value::Bool(true);
-        #[cfg(debug_assertions)]
-        let debug_model = Some(request.model.clone());
-        #[cfg(not(debug_assertions))]
-        let debug_model: Option<String> = None;
-        #[cfg(debug_assertions)]
-        let request_timer = Some(std::time::Instant::now());
-        #[cfg(not(debug_assertions))]
-        let request_timer: Option<std::time::Instant> = None;
-        #[cfg(debug_assertions)]
-        {
-            let tool_count = request.tools.as_ref().map_or(0, |tools| tools.len());
-            debug!(
-                target = "vtcode::llm::openai",
-                model = %request.model,
-                stream = true,
-                messages = request.messages.len(),
-                tools = tool_count,
-                "Dispatching streaming Responses request"
-            );
-        }
-
         let url = format!("{}/responses", self.base_url);
-        let client_request_id = Self::new_client_request_id();
+        loop {
+            let model = request.model.clone();
+            let include_metrics =
+                self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
+            let mut openai_request = self.convert_to_openai_responses_format(&request)?;
+            openai_request["stream"] = Value::Bool(true);
+            let client_request_id = Self::new_client_request_id();
 
-        let response = self
-            .send_authorized(|auth| {
-                headers::apply_turn_metadata(
-                    headers::apply_client_request_id(
-                        headers::apply_responses_beta(
-                            self.authorize_with_api_key(self.http_client.post(&url), auth),
+            let response = self
+                .send_authorized(|auth| {
+                    headers::apply_turn_metadata(
+                        headers::apply_client_request_id(
+                            headers::apply_responses_beta(
+                                self.authorize_with_api_key(self.http_client.post(&url), auth),
+                            ),
+                            &client_request_id,
                         ),
-                        &client_request_id,
-                    ),
-                    &request.metadata,
-                )
-                .json(&openai_request)
-            })
-            .await?;
+                        &request.metadata,
+                    )
+                    .json(&openai_request)
+                })
+                .await?;
 
-        if !response.status().is_success() {
+            if response.status().is_success() {
+                return Ok(stream_decoder::create_responses_stream(
+                    response,
+                    model,
+                    include_metrics,
+                    None,
+                    None,
+                ));
+            }
+
             let status = response.status();
             let headers = response.headers().clone();
             let error_text = response.text().await.unwrap_or_default();
@@ -95,21 +79,8 @@ impl OpenAIProvider {
                 if let Some(fallback_model) = fallback_model_if_not_found(&request.model)
                     && fallback_model != request.model
                 {
-                    #[cfg(debug_assertions)]
-                    debug!(
-                        target = "vtcode::llm::openai",
-                        requested = %request.model,
-                        fallback = %fallback_model,
-                        "Model not found while streaming; retrying with fallback"
-                    );
-                    let mut retry_request = request.clone();
-                    retry_request.model = fallback_model;
-                    retry_request.stream = false;
-                    let response = self.generate_request(retry_request).await?;
-                    let stream = try_stream! {
-                        yield provider::LLMStreamEvent::Completed { response: Box::new(response) };
-                    };
-                    return Ok(Box::pin(stream));
+                    request.model = fallback_model;
+                    continue;
                 }
                 let formatted_error = error_display::format_llm_error(
                     "OpenAI",
@@ -131,12 +102,6 @@ impl OpenAIProvider {
                 && is_responses_api_unsupported(status, &error_text)
             {
                 if self.allows_chat_completions_fallback() {
-                    #[cfg(debug_assertions)]
-                    debug!(
-                        target = "vtcode::llm::openai",
-                        model = %request.model,
-                        "Responses API unsupported; falling back to Chat Completions for streaming"
-                    );
                     self.set_responses_api_state(&request.model, ResponsesApiState::Disabled);
                     return self.stream_chat_completions(&request).await;
                 }
@@ -161,41 +126,12 @@ impl OpenAIProvider {
                 metadata: None,
             });
         }
-
-        #[cfg(debug_assertions)]
-        {
-            if let Some(ref debug_model) = debug_model {
-                if let Some(request_timer) = request_timer.as_ref() {
-                    debug!(
-                        target = "vtcode::llm::openai",
-                        model = %debug_model,
-                        status = %response.status(),
-                        handshake_ms = request_timer.elapsed().as_millis(),
-                        "Streaming response headers received"
-                    );
-                }
-            }
-        }
-
-        Ok(stream_decoder::create_responses_stream(
-            response,
-            model,
-            include_metrics,
-            debug_model,
-            request_timer,
-        ))
     }
 
     async fn stream_chat_completions(
         &self,
         request: &provider::LLMRequest,
     ) -> Result<provider::LLMStream, provider::LLMError> {
-        #[cfg(debug_assertions)]
-        debug!(
-            target = "vtcode::llm::openai",
-            model = %request.model,
-            "Using standard Chat Completions for streaming"
-        );
         let model = request.model.clone();
         let mut openai_request = self.convert_to_openai_format(request)?;
         openai_request["stream"] = Value::Bool(true);

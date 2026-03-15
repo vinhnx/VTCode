@@ -12,15 +12,51 @@ use crate::llm::provider;
 use crate::llm::provider::LLMProvider;
 use crate::llm::providers::error_handling::{is_rate_limit_error, parse_api_error};
 use crate::llm::providers::shared::parse_compacted_output_messages;
+use futures::StreamExt;
 use serde_json::{Value, json};
-use tracing::debug;
-
-#[cfg(debug_assertions)]
-use std::time::Instant;
 
 #[inline]
 fn should_attempt_responses_api(state: ResponsesApiState) -> bool {
     !matches!(state, ResponsesApiState::Disabled)
+}
+
+async fn collect_streamed_response(
+    stream: provider::LLMStream,
+) -> Result<provider::LLMResponse, provider::LLMError> {
+    let mut stream = stream;
+    let mut streamed_content = String::new();
+    let mut streamed_reasoning = String::new();
+    let mut completed = None;
+
+    while let Some(event) = stream.next().await {
+        match event? {
+            provider::LLMStreamEvent::Token { delta } => streamed_content.push_str(&delta),
+            provider::LLMStreamEvent::Reasoning { delta } => streamed_reasoning.push_str(&delta),
+            provider::LLMStreamEvent::ReasoningStage { .. } => {}
+            provider::LLMStreamEvent::Completed { response } => {
+                completed = Some(*response);
+                break;
+            }
+        }
+    }
+
+    let mut response = completed.ok_or_else(|| provider::LLMError::Provider {
+        message: error_display::format_llm_error(
+            "OpenAI",
+            "Streaming response ended without a completion event",
+        ),
+        metadata: None,
+    })?;
+
+    if response.content.as_deref().unwrap_or_default().is_empty() && !streamed_content.is_empty() {
+        response.content = Some(streamed_content);
+    }
+
+    if response.reasoning.is_none() && !streamed_reasoning.is_empty() {
+        response.reasoning = Some(streamed_reasoning);
+    }
+
+    Ok(response)
 }
 
 impl OpenAIProvider {
@@ -137,6 +173,13 @@ impl OpenAIProvider {
         if request.model.trim().is_empty() {
             request.model = self.model.to_string();
         }
+
+        if Self::requires_streaming_responses(&request.model) {
+            request.stream = true;
+            let stream = self.stream_request(request).await?;
+            return collect_streamed_response(stream).await;
+        }
+
         let model = request.model.clone();
 
         if !self.supports_parallel_tool_config(&request.model) {
@@ -150,57 +193,18 @@ impl OpenAIProvider {
 
         let responses_state = self.responses_api_state(&request.model);
         let attempt_responses = should_attempt_responses_api(responses_state);
-        #[cfg(debug_assertions)]
-        let request_timer = Instant::now();
-        #[cfg(debug_assertions)]
-        {
-            let tool_count = request.tools.as_ref().map_or(0, |tools| tools.len());
-            debug!(
-                target = "vtcode::llm::openai",
-                model = %request.model,
-                responses_api = attempt_responses,
-                messages = request.messages.len(),
-                tools = tool_count,
-                "Dispatching non-streaming OpenAI request"
-            );
-        }
-
         if attempt_responses {
             if self.websocket_mode_enabled(&request.model) {
                 match self.generate_via_responses_websocket(&request).await {
                     Ok(response) => return Ok(response),
                     Err(err) => {
                         if is_websocket_connection_limit_error(&err) {
-                            #[cfg(debug_assertions)]
-                            debug!(
-                                target = "vtcode::llm::openai",
-                                model = %request.model,
-                                "WebSocket session limit reached; reconnecting and retrying once"
-                            );
-
                             match self.generate_via_responses_websocket(&request).await {
                                 Ok(response) => return Ok(response),
-                                Err(retry_err) => {
-                                    #[cfg(not(debug_assertions))]
-                                    let _ = &retry_err;
-                                    #[cfg(debug_assertions)]
-                                    debug!(
-                                        target = "vtcode::llm::openai",
-                                        model = %request.model,
-                                        error = %retry_err,
-                                        "WebSocket retry failed; falling back to HTTP Responses API"
-                                    );
-                                }
+                                Err(_retry_err) => {}
                             }
-                        } else {
-                            #[cfg(debug_assertions)]
-                            debug!(
-                                target = "vtcode::llm::openai",
-                                model = %request.model,
-                                error = %err,
-                                "WebSocket mode failed; falling back to HTTP Responses API"
-                            );
                         }
+                        let _ = err;
                     }
                 }
             }
@@ -232,13 +236,6 @@ impl OpenAIProvider {
                 if is_model_not_found(status, &error_text) {
                     if let Some(fallback_model) = fallback_model_if_not_found(&request.model) {
                         if fallback_model != request.model {
-                            #[cfg(debug_assertions)]
-                            debug!(
-                                target = "vtcode::llm::openai",
-                                requested = %request.model,
-                                fallback = %fallback_model,
-                                "Model not found; retrying with fallback"
-                            );
                             let mut retry_request = request.clone();
                             retry_request.model = fallback_model;
                             let retry_openai =
@@ -299,12 +296,6 @@ impl OpenAIProvider {
                     && is_responses_api_unsupported(status, &error_text)
                 {
                     if self.allows_chat_completions_fallback() {
-                        #[cfg(debug_assertions)]
-                        debug!(
-                            target = "vtcode::llm::openai",
-                            model = %request.model,
-                            "Responses API unsupported; falling back to Chat Completions"
-                        );
                         self.set_responses_api_state(&request.model, ResponsesApiState::Disabled);
                         return self.generate_chat_completions(&request).await;
                     }
@@ -355,28 +346,8 @@ impl OpenAIProvider {
 
                 let response =
                     self.parse_openai_responses_response(openai_response, model.clone())?;
-                #[cfg(debug_assertions)]
-                {
-                    let content_len = response.content.as_ref().map_or(0, |c| c.len());
-                    debug!(
-                        target = "vtcode::llm::openai",
-                        model = %request.model,
-                        responses_api = true,
-                        elapsed_ms = request_timer.elapsed().as_millis(),
-                        content_len = content_len,
-                        finish_reason = ?response.finish_reason,
-                        "Completed non-streaming OpenAI request"
-                    );
-                }
                 return Ok(response);
             }
-        } else {
-            #[cfg(debug_assertions)]
-            debug!(
-                target = "vtcode::llm::openai",
-                model = %request.model,
-                "Skipping Responses API (disabled); using Chat Completions"
-            );
         }
 
         self.generate_chat_completions(&request).await
@@ -386,8 +357,6 @@ impl OpenAIProvider {
         &self,
         request: &provider::LLMRequest,
     ) -> Result<provider::LLMResponse, provider::LLMError> {
-        #[cfg(debug_assertions)]
-        let request_timer = Instant::now();
         let model = request.model.clone();
         let openai_request = self.convert_to_openai_format(request)?;
         let url = format!("{}/chat/completions", self.base_url);
@@ -443,19 +412,6 @@ impl OpenAIProvider {
         })?;
 
         let response = self.parse_openai_response(openai_response, model.clone())?;
-        #[cfg(debug_assertions)]
-        {
-            let content_len = response.content.as_ref().map_or(0, |c| c.len());
-            debug!(
-                target = "vtcode::llm::openai",
-                model = %request.model,
-                responses_api = false,
-                elapsed_ms = request_timer.elapsed().as_millis(),
-                content_len = content_len,
-                finish_reason = ?response.finish_reason,
-                "Completed non-streaming OpenAI request"
-            );
-        }
         Ok(response)
     }
 }

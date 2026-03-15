@@ -12,25 +12,17 @@ impl provider::LLMProvider for OpenAIProvider {
     }
 
     fn supports_streaming(&self) -> bool {
-        // OpenAI requires ID verification for GPT-5 models, so we must disable streaming
-        if matches!(
-            self.model.as_ref(),
-            models::openai::GPT
-                | models::openai::GPT_5
-                | models::openai::GPT_5_4
-                | models::openai::GPT_5_4_PRO
-                | models::openai::GPT_5_MINI
-                | models::openai::GPT_5_NANO
-        ) {
-            return false;
-        }
-
-        // Even if Responses API is disabled (e.g., Hugging Face router), we can stream via Chat Completions.
         true
     }
 
-    fn supports_non_streaming(&self, _model: &str) -> bool {
-        !self.is_chatgpt_backend()
+    fn supports_non_streaming(&self, model: &str) -> bool {
+        let requested = if model.trim().is_empty() {
+            self.model.as_ref()
+        } else {
+            model
+        };
+
+        !self.is_chatgpt_backend() && !Self::requires_streaming_responses(requested)
     }
 
     fn supports_reasoning(&self, model: &str) -> bool {

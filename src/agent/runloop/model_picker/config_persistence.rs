@@ -7,6 +7,14 @@ use vtcode_core::utils::dot_config::update_model_preference;
 
 use super::ModelSelectionResult;
 
+fn synced_openai_service_tier(
+    selection: &ModelSelectionResult,
+) -> Option<vtcode_config::OpenAIServiceTier> {
+    (selection.provider_enum == Some(Provider::OpenAI) && selection.service_tier_supported)
+        .then_some(selection.service_tier)
+        .flatten()
+}
+
 pub(super) async fn persist_selection(
     workspace: &std::path::Path,
     selection: &ModelSelectionResult,
@@ -22,10 +30,7 @@ pub(super) async fn persist_selection(
     apply_api_key_state(&mut config, selection);
     config.agent.default_model = selection.model.clone();
     config.agent.reasoning_effort = selection.reasoning;
-
-    if selection.provider_enum == Some(Provider::OpenAI) && selection.service_tier_supported {
-        config.provider.openai.service_tier = selection.service_tier;
-    }
+    config.provider.openai.service_tier = synced_openai_service_tier(selection);
 
     manager.save_config(&config)?;
     update_model_preference(&selection.provider, &selection.model)
@@ -93,8 +98,9 @@ fn clear_stored_api_key(config: &mut VTCodeConfig, provider: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_cloud_ollama_model, uses_provider_api_key};
+    use super::{is_cloud_ollama_model, synced_openai_service_tier, uses_provider_api_key};
     use crate::agent::runloop::model_picker::ModelSelectionResult;
+    use vtcode_config::OpenAIServiceTier;
     use vtcode_core::config::models::Provider;
     use vtcode_core::config::types::ReasoningEffortLevel;
 
@@ -155,5 +161,32 @@ mod tests {
             "openai",
             "gpt-5.2"
         )));
+    }
+
+    #[test]
+    fn synced_openai_service_tier_tracks_supported_openai_selection() {
+        let mut selected = selection(Some(Provider::OpenAI), "openai", "gpt-5.4");
+        selected.service_tier_supported = true;
+        selected.service_tier = Some(OpenAIServiceTier::Priority);
+
+        assert_eq!(
+            synced_openai_service_tier(&selected),
+            Some(OpenAIServiceTier::Priority)
+        );
+    }
+
+    #[test]
+    fn synced_openai_service_tier_clears_stale_values_outside_supported_openai() {
+        let mut selected = selection(Some(Provider::Ollama), "ollama", "qwen3-coder");
+        selected.service_tier_supported = true;
+        selected.service_tier = Some(OpenAIServiceTier::Priority);
+
+        assert_eq!(synced_openai_service_tier(&selected), None);
+
+        let mut unsupported_openai = selection(Some(Provider::OpenAI), "openai", "gpt-oss-20b");
+        unsupported_openai.service_tier_supported = false;
+        unsupported_openai.service_tier = Some(OpenAIServiceTier::Priority);
+
+        assert_eq!(synced_openai_service_tier(&unsupported_openai), None);
     }
 }

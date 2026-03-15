@@ -15,7 +15,6 @@ impl ModelId {
             ModelId::Gemini31FlashLitePreview => models::GEMINI_3_1_FLASH_LITE_PREVIEW,
             ModelId::Gemini3FlashPreview => models::GEMINI_3_FLASH_PREVIEW,
             // OpenAI models
-            ModelId::GPT => models::GPT,
             ModelId::GPT5 => models::GPT_5,
             ModelId::GPT52 => models::GPT_5_2,
             ModelId::GPT52Codex => models::openai::GPT_5_2_CODEX,

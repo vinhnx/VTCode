@@ -30,6 +30,16 @@ use crate::agent::runloop::unified::state::CtrlCState;
 
 const AUTONOMOUS_CONTINUE_DIRECTIVE: &str = "Do not stop with intent-only updates. Execute the next concrete action now, then report completion or blocker.";
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct InterimTextContinuationDecision {
+    should_continue: bool,
+    reason: &'static str,
+    is_interim_progress: bool,
+    last_user_follow_up: bool,
+    recent_tool_activity: bool,
+    last_user_requested_exploration: bool,
+}
+
 #[derive(Clone, Debug)]
 pub(crate) enum TurnLoopResult {
     Completed,
@@ -485,6 +495,29 @@ impl<'a> TurnProcessingContext<'a> {
             text.clear();
         }
         let has_visible_text = !text.trim().is_empty();
+        if !reasoning.is_empty()
+            || reasoning_details
+                .as_ref()
+                .is_some_and(|details| !details.is_empty())
+        {
+            tracing::info!(
+                target: "vtcode.turn.metrics",
+                metric = "reasoning_observed",
+                run_id = %self.harness_state.run_id.0,
+                turn_id = %self.harness_state.turn_id.0,
+                phase = match phase {
+                    Some(uni::AssistantPhase::Commentary) => "commentary",
+                    Some(uni::AssistantPhase::FinalAnswer) => "final_answer",
+                    None => "unspecified",
+                },
+                reasoning_segments = reasoning.len(),
+                reasoning_details = reasoning_details.as_ref().map_or(0, Vec::len),
+                has_detail_reasoning = detail_reasoning.is_some(),
+                has_visible_text,
+                response_streamed,
+                "turn metric"
+            );
+        }
 
         if !response_streamed {
             use vtcode_core::utils::ansi::MessageStyle;
@@ -675,13 +708,23 @@ impl<'a> TurnProcessingContext<'a> {
     ) -> anyhow::Result<TurnHandlerOutcome> {
         let recovery_pass_response = self.is_recovery_active() && self.recovery_pass_used();
         let recovery_progress_only = recovery_pass_response && is_interim_progress_update(&text);
-        let should_force_continue = !recovery_pass_response
-            && should_continue_autonomously_after_interim_text(
+        let continuation_decision = if recovery_pass_response {
+            InterimTextContinuationDecision {
+                should_continue: false,
+                reason: "recovery_pass",
+                is_interim_progress: recovery_progress_only,
+                last_user_follow_up: false,
+                recent_tool_activity: false,
+                last_user_requested_exploration: false,
+            }
+        } else {
+            evaluate_interim_text_continuation(
                 self.full_auto,
                 self.session_stats.is_plan_mode(),
                 self.working_history,
                 &text,
-            );
+            )
+        };
         self.handle_assistant_response(
             text,
             reasoning,
@@ -702,7 +745,25 @@ impl<'a> TurnProcessingContext<'a> {
             }
         }
 
-        if should_force_continue {
+        tracing::info!(
+            target: "vtcode.turn.metrics",
+            metric = "text_response_decision",
+            run_id = %self.harness_state.run_id.0,
+            turn_id = %self.harness_state.turn_id.0,
+            should_continue = continuation_decision.should_continue,
+            reason = continuation_decision.reason,
+            is_interim_progress = continuation_decision.is_interim_progress,
+            last_user_follow_up = continuation_decision.last_user_follow_up,
+            recent_tool_activity = continuation_decision.recent_tool_activity,
+            last_user_requested_exploration = continuation_decision.last_user_requested_exploration,
+            recovery_pass_response,
+            plan_mode = self.session_stats.is_plan_mode(),
+            full_auto = self.full_auto,
+            history_len = self.working_history.len(),
+            "turn metric"
+        );
+
+        if continuation_decision.should_continue {
             push_system_directive_once(self.working_history, AUTONOMOUS_CONTINUE_DIRECTIVE);
             return Ok(TurnHandlerOutcome::Continue);
         }
@@ -864,25 +925,84 @@ fn push_assistant_message(history: &mut Vec<uni::Message>, msg: uni::Message) {
     }
 }
 
-fn should_continue_autonomously_after_interim_text(
+fn evaluate_interim_text_continuation(
     full_auto: bool,
     plan_mode: bool,
     history: &[uni::Message],
     text: &str,
-) -> bool {
-    if !full_auto || plan_mode {
-        return false;
+) -> InterimTextContinuationDecision {
+    let is_interim_progress = is_interim_progress_update(text);
+    let last_user_follow_up = last_user_message_is_follow_up(history);
+    let recent_tool_activity = has_recent_tool_activity(history);
+    let last_user_requested_exploration = last_user_requested_exploration(history);
+
+    if plan_mode {
+        return InterimTextContinuationDecision {
+            should_continue: false,
+            reason: "plan_mode",
+            is_interim_progress,
+            last_user_follow_up,
+            recent_tool_activity,
+            last_user_requested_exploration,
+        };
     }
 
-    if !is_interim_progress_update(text) {
-        return false;
+    if !is_interim_progress {
+        return InterimTextContinuationDecision {
+            should_continue: false,
+            reason: "non_interim_text",
+            is_interim_progress,
+            last_user_follow_up,
+            recent_tool_activity,
+            last_user_requested_exploration,
+        };
     }
 
-    if last_user_message_is_follow_up(history) {
-        return true;
+    if full_auto && last_user_follow_up {
+        return InterimTextContinuationDecision {
+            should_continue: true,
+            reason: "follow_up_prompt",
+            is_interim_progress,
+            last_user_follow_up,
+            recent_tool_activity,
+            last_user_requested_exploration,
+        };
     }
 
-    has_recent_tool_activity(history)
+    if full_auto && recent_tool_activity {
+        return InterimTextContinuationDecision {
+            should_continue: true,
+            reason: "recent_tool_activity",
+            is_interim_progress,
+            last_user_follow_up,
+            recent_tool_activity,
+            last_user_requested_exploration,
+        };
+    }
+
+    if last_user_requested_exploration && !recent_tool_activity {
+        return InterimTextContinuationDecision {
+            should_continue: true,
+            reason: "exploration_request",
+            is_interim_progress,
+            last_user_follow_up,
+            recent_tool_activity,
+            last_user_requested_exploration,
+        };
+    }
+
+    InterimTextContinuationDecision {
+        should_continue: false,
+        reason: if full_auto {
+            "awaiting_model_action"
+        } else {
+            "interactive_mode"
+        },
+        is_interim_progress,
+        last_user_follow_up,
+        recent_tool_activity,
+        last_user_requested_exploration,
+    }
 }
 
 fn push_system_directive_once(history: &mut Vec<uni::Message>, directive: &str) {
@@ -912,6 +1032,26 @@ fn has_recent_tool_activity(history: &[uni::Message]) -> bool {
             || message.tool_call_id.is_some()
             || message.tool_calls.is_some()
     })
+}
+
+fn last_user_requested_exploration(history: &[uni::Message]) -> bool {
+    let Some(text) = last_user_message_text(history) else {
+        return false;
+    };
+    [
+        "explore",
+        "inspect",
+        "look into",
+        "investigate",
+        "debug",
+        "trace",
+        "check",
+        "review",
+        "analy",
+        "walk through",
+    ]
+    .iter()
+    .any(|needle| text.contains(needle))
 }
 
 fn is_interim_progress_update(text: &str) -> bool {
@@ -1155,24 +1295,23 @@ mod tests {
     #[test]
     fn autonomous_continue_triggers_for_follow_up_and_interim_text() {
         let history = vec![uni::Message::user("continue".to_string())];
-        assert!(should_continue_autonomously_after_interim_text(
-            true,
-            false,
-            &history,
-            "Let me fix the next issue."
-        ));
-        assert!(!should_continue_autonomously_after_interim_text(
-            true,
-            true,
-            &history,
-            "Let me fix the next issue."
-        ));
-        assert!(!should_continue_autonomously_after_interim_text(
-            false,
-            false,
-            &history,
-            "Let me fix the next issue."
-        ));
+        assert!(
+            evaluate_interim_text_continuation(true, false, &history, "Let me fix the next issue.")
+                .should_continue
+        );
+        assert!(
+            !evaluate_interim_text_continuation(true, true, &history, "Let me fix the next issue.")
+                .should_continue
+        );
+        assert!(
+            !evaluate_interim_text_continuation(
+                false,
+                false,
+                &history,
+                "Let me fix the next issue."
+            )
+            .should_continue
+        );
     }
 
     #[test]
@@ -1189,12 +1328,13 @@ mod tests {
             uni::Message::tool_response("call_1".to_string(), "warning: ...".to_string()),
         ];
 
-        assert!(should_continue_autonomously_after_interim_text(
+        assert!(evaluate_interim_text_continuation(
             true,
             false,
             &history,
             "Now I need to update the function body to use settings.reasoning_effort and settings.verbosity:"
-        ));
+        )
+        .should_continue);
     }
 
     #[test]
@@ -1204,12 +1344,45 @@ mod tests {
             uni::Message::assistant("I will start now.".to_string()),
         ];
 
-        assert!(!should_continue_autonomously_after_interim_text(
+        assert!(!evaluate_interim_text_continuation(
             true,
             false,
             &history,
             "Now I need to update the function body to use settings.reasoning_effort and settings.verbosity:"
-        ));
+        )
+        .should_continue);
+    }
+
+    #[test]
+    fn autonomous_continue_triggers_for_exploration_request_without_full_auto() {
+        let history = vec![
+            uni::Message::user("explore about vtcode core agent loop".to_string()),
+            uni::Message::assistant("I can help.".to_string()),
+        ];
+
+        assert!(evaluate_interim_text_continuation(
+            false,
+            false,
+            &history,
+            "I'll quickly inspect the actual vtcode-core runloop files and then summarize the core agent loop concretely from code."
+        )
+        .should_continue);
+    }
+
+    #[test]
+    fn autonomous_continue_does_not_trigger_for_explanatory_request_without_full_auto() {
+        let history = vec![
+            uni::Message::user("tell me about core agent loop".to_string()),
+            uni::Message::assistant("I can help.".to_string()),
+        ];
+
+        assert!(!evaluate_interim_text_continuation(
+            false,
+            false,
+            &history,
+            "I'll quickly inspect the actual vtcode-core runloop files and then summarize the core agent loop concretely from code."
+        )
+        .should_continue);
     }
 
     #[tokio::test]

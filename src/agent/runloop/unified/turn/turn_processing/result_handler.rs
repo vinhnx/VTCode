@@ -117,6 +117,9 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                 } else {
                     assistant_text
                 };
+            let assistant_text_len = assistant_text.len();
+            let reasoning_segments = reasoning.len();
+            let reasoning_details_count = reasoning_details.as_ref().map_or(0, Vec::len);
             let history_len_before_assistant = params.ctx.working_history.len();
             params.ctx.handle_assistant_response(
                 assistant_text,
@@ -129,6 +132,18 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                 params.ctx.working_history,
                 &tool_calls,
                 history_len_before_assistant,
+            );
+            tracing::info!(
+                target: "vtcode.turn.metrics",
+                metric = "tool_call_turn_start",
+                run_id = %params.ctx.harness_state.run_id.0,
+                turn_id = %params.ctx.harness_state.turn_id.0,
+                tool_calls = tool_calls.len(),
+                assistant_text_len,
+                reasoning_segments,
+                reasoning_details = reasoning_details_count,
+                history_len = params.ctx.working_history.len(),
+                "turn metric"
             );
 
             let outcome = {
@@ -146,17 +161,37 @@ pub(crate) async fn handle_turn_processing_result<'a>(
             };
 
             if let Some(res) = outcome {
+                tracing::info!(
+                    target: "vtcode.turn.metrics",
+                    metric = "tool_call_turn_outcome",
+                    run_id = %params.ctx.harness_state.run_id.0,
+                    turn_id = %params.ctx.harness_state.turn_id.0,
+                    outcome = "direct_break",
+                    "turn metric"
+                );
                 return Ok(res);
             }
 
-            Ok(handle_turn_balancer(
+            let balancer_outcome = handle_turn_balancer(
                 &mut *params.ctx,
                 params.step_count,
                 &mut *params.repeated_tool_attempts,
                 params.max_tool_loops,
                 params.tool_repeat_limit,
             )
-            .await)
+            .await;
+            tracing::info!(
+                target: "vtcode.turn.metrics",
+                metric = "tool_call_turn_outcome",
+                run_id = %params.ctx.harness_state.run_id.0,
+                turn_id = %params.ctx.harness_state.turn_id.0,
+                outcome = match &balancer_outcome {
+                    TurnHandlerOutcome::Continue => "continue",
+                    TurnHandlerOutcome::Break(_) => "break",
+                },
+                "turn metric"
+            );
+            Ok(balancer_outcome)
         }
         TurnProcessingResult::TextResponse {
             text,

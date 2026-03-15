@@ -252,20 +252,6 @@ fn openai_reasoning_efforts(include_none: bool, include_xhigh: bool) -> Vec<Reas
 fn openai_presets() -> Vec<ModelPreset> {
     vec![
         ModelPreset {
-            id: "gpt".to_string(),
-            model: "gpt".to_string(),
-            display_name: "GPT".to_string(),
-            description: "Rolling OpenAI alias for the latest GPT frontier model".to_string(),
-            provider: Provider::OpenAI,
-            default_reasoning_effort: ReasoningEffortLevel::None,
-            supported_reasoning_efforts: openai_reasoning_efforts(true, true),
-            is_default: false,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(1_050_000),
-        },
-        ModelPreset {
             id: "gpt-5.4".to_string(),
             model: "gpt-5.4".to_string(),
             display_name: "GPT-5.4".to_string(),

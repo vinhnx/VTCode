@@ -35,6 +35,8 @@ pub(crate) fn process_llm_response(
     let mut tool_calls = response.tool_calls.clone().unwrap_or_default();
     let mut interpreted_textual_call = false;
     let mut is_harmony = false;
+    let reasoning_segment_count = reasoning.len();
+    let reasoning_details_count = reasoning_details.as_ref().map_or(0, Vec::len);
 
     if let Some(ref text) = final_text
         && (text.contains("<|start|>") || text.contains("<|channel|>") || text.contains("<|call|>"))
@@ -130,6 +132,22 @@ pub(crate) fn process_llm_response(
     }
 
     if !tool_calls.is_empty() {
+        tracing::info!(
+            target: "vtcode.turn.metrics",
+            metric = "llm_response_parsed",
+            kind = "tool_calls",
+            tool_calls = tool_calls.len(),
+            interpreted_textual_call,
+            reasoning_segments = reasoning_segment_count,
+            reasoning_details = reasoning_details_count,
+            content_len = final_text.as_ref().map_or(0, |text| text.len()),
+            is_harmony,
+            plan_mode_active,
+            allow_plan_interview,
+            request_user_input_enabled,
+            proposed_plan = proposed_plan.is_some(),
+            "turn metric"
+        );
         return Ok(TurnProcessingResult::ToolCalls {
             tool_calls: prepare_tool_calls(tool_calls),
             assistant_text: if interpreted_textual_call {
@@ -145,6 +163,22 @@ pub(crate) fn process_llm_response(
     if let Some(text) = final_text
         && (!text.trim().is_empty() || is_harmony || proposed_plan.is_some())
     {
+        tracing::info!(
+            target: "vtcode.turn.metrics",
+            metric = "llm_response_parsed",
+            kind = "text",
+            tool_calls = 0,
+            interpreted_textual_call,
+            reasoning_segments = reasoning_segment_count,
+            reasoning_details = reasoning_details_count,
+            content_len = text.len(),
+            is_harmony,
+            plan_mode_active,
+            allow_plan_interview,
+            request_user_input_enabled,
+            proposed_plan = proposed_plan.is_some(),
+            "turn metric"
+        );
         return Ok(TurnProcessingResult::TextResponse {
             text,
             reasoning,
@@ -152,6 +186,23 @@ pub(crate) fn process_llm_response(
             proposed_plan,
         });
     }
+
+    tracing::info!(
+        target: "vtcode.turn.metrics",
+        metric = "llm_response_parsed",
+        kind = "empty",
+        tool_calls = 0,
+        interpreted_textual_call,
+        reasoning_segments = reasoning_segment_count,
+        reasoning_details = reasoning_details_count,
+        content_len = 0,
+        is_harmony,
+        plan_mode_active,
+        allow_plan_interview,
+        request_user_input_enabled,
+        proposed_plan = proposed_plan.is_some(),
+        "turn metric"
+    );
 
     Ok(TurnProcessingResult::Empty)
 }

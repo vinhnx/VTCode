@@ -245,11 +245,13 @@ fn selection_omits_openai_service_tier_support_for_gpt_oss() {
 
 #[test]
 fn openai_codex_reasoning_helpers_match_supported_variants() {
+    assert!(!selection::supports_gpt5_none_reasoning("gpt"));
     assert!(selection::supports_gpt5_none_reasoning("gpt-5.2-codex"));
     assert!(selection::supports_gpt5_none_reasoning("gpt-5.3-codex"));
     assert!(!selection::supports_gpt5_none_reasoning("gpt-5.1-codex"));
     assert!(!selection::supports_gpt5_none_reasoning("gpt-5-codex"));
 
+    assert!(!selection::supports_xhigh_reasoning("gpt"));
     assert!(selection::supports_xhigh_reasoning("gpt-5.2"));
     assert!(selection::supports_xhigh_reasoning("gpt-5.2-codex"));
     assert!(selection::supports_xhigh_reasoning("gpt-5.3-codex"));

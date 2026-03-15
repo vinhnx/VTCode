@@ -9,8 +9,6 @@ use async_stream::try_stream;
 use futures::StreamExt;
 use serde_json::Value;
 use std::time::Instant;
-#[cfg(debug_assertions)]
-use tracing::debug;
 
 use super::responses_api::parse_responses_payload;
 use super::streaming::OpenAIStreamTelemetry;
@@ -270,18 +268,6 @@ pub(crate) fn create_responses_stream(
 
         if response.reasoning.is_none() {
             response.reasoning = final_aggregator_response.reasoning;
-        }
-
-        #[cfg(debug_assertions)]
-        if let (Some(debug_model), Some(request_timer)) = (_debug_model.as_ref(), _request_timer.as_ref()) {
-            debug!(
-                target = "vtcode::llm::openai",
-                model = %debug_model,
-                elapsed_ms = request_timer.elapsed().as_millis(),
-                events = streamed_events_counter,
-                content_len = response.content.as_ref().map(|c| c.len()).unwrap_or(0),
-                "Completed streaming response"
-            );
         }
 
         let response = strip_reasoning_for_model(&model, response);

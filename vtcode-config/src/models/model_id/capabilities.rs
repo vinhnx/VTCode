@@ -90,7 +90,7 @@ impl ModelId {
             ModelId::Gemini31ProPreview
             | ModelId::Gemini31ProPreviewCustomTools
             | ModelId::Gemini31FlashLitePreview => Some(ModelId::Gemini3FlashPreview),
-            ModelId::GPT | ModelId::GPT52 | ModelId::GPT54 | ModelId::GPT54Pro | ModelId::GPT5 => {
+            ModelId::GPT52 | ModelId::GPT54 | ModelId::GPT54Pro | ModelId::GPT5 => {
                 Some(ModelId::GPT5Mini)
             }
             ModelId::DeepSeekReasoner => Some(ModelId::DeepSeekChat),
@@ -129,7 +129,6 @@ impl ModelId {
             ModelId::Gemini31ProPreview
                 | ModelId::Gemini31ProPreviewCustomTools
                 | ModelId::OpenRouterGoogleGemini31ProPreview
-                | ModelId::GPT
                 | ModelId::GPT5
                 | ModelId::GPT52
                 | ModelId::GPT52Codex
@@ -183,7 +182,6 @@ impl ModelId {
                 | ModelId::OpenRouterGoogleGemini31ProPreview
                 | ModelId::Gemini3FlashPreview
                 | ModelId::Gemini31FlashLitePreview
-                | ModelId::GPT
                 | ModelId::GPT5
                 | ModelId::GPT52
                 | ModelId::GPT52Codex
@@ -240,7 +238,6 @@ impl ModelId {
             ModelId::Gemini31FlashLitePreview => "3.1-lite",
             ModelId::Gemini3FlashPreview => "3",
             // OpenAI generations
-            ModelId::GPT => "5.4",
             ModelId::GPT52 | ModelId::GPT52Codex => "5.2",
             ModelId::GPT54 | ModelId::GPT54Pro => "5.4",
             ModelId::GPT53Codex => "5.3",
@@ -294,8 +291,7 @@ impl ModelId {
     pub fn supports_shell_tool(&self) -> bool {
         matches!(
             self,
-            ModelId::GPT
-                | ModelId::GPT52
+            ModelId::GPT52
                 | ModelId::GPT52Codex
                 | ModelId::GPT54
                 | ModelId::GPT54Pro

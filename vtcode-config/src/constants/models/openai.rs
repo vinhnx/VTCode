@@ -1,6 +1,5 @@
 pub const DEFAULT_MODEL: &str = "gpt-5.4";
 pub const SUPPORTED_MODELS: &[&str] = &[
-    "gpt",
     "gpt-5.4",
     "gpt-5.4-pro",
     "gpt-5.3-codex", // GPT-5.3 Codex optimized for agentic coding with xhigh reasoning support
@@ -20,7 +19,6 @@ pub const SUPPORTED_MODELS: &[&str] = &[
 
 /// Models that require the OpenAI Responses API
 pub const RESPONSES_API_MODELS: &[&str] = &[
-    GPT,
     GPT_5,
     GPT_5_2,
     GPT_5_4,
@@ -38,7 +36,6 @@ pub const RESPONSES_API_MODELS: &[&str] = &[
 
 /// Models that support the OpenAI reasoning parameter payload
 pub const REASONING_MODELS: &[&str] = &[
-    GPT,
     GPT_5,
     GPT_5_2,
     GPT_5_4,

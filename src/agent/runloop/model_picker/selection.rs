@@ -190,14 +190,14 @@ pub(super) fn reasoning_level_label(level: ReasoningEffortLevel) -> &'static str
 }
 
 pub(super) fn supports_gpt5_none_reasoning(model_id: &str) -> bool {
-    matches!(model_id, "gpt" | "gpt-5.2" | "gpt-5.4" | "gpt-5.4-pro")
+    matches!(model_id, "gpt-5.2" | "gpt-5.4" | "gpt-5.4-pro")
         || matches!(model_id, "gpt-5.2-codex" | "gpt-5.3-codex")
 }
 
 pub(super) fn supports_xhigh_reasoning(model_id: &str) -> bool {
     matches!(
         model_id,
-        "gpt" | "gpt-5.2" | "gpt-5.2-codex" | "gpt-5.4" | "gpt-5.4-pro" | "gpt-5.3-codex"
+        "gpt-5.2" | "gpt-5.2-codex" | "gpt-5.4" | "gpt-5.4-pro" | "gpt-5.3-codex"
     )
 }
 

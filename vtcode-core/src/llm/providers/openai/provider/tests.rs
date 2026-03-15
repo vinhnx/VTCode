@@ -69,7 +69,7 @@ fn shell_request(model: &str) -> provider::LLMRequest {
     }
 }
 
-fn schema_keyword_path<'a>(value: &'a Value, keywords: &[&str], path: &str) -> Option<String> {
+fn schema_keyword_path(value: &Value, keywords: &[&str], path: &str) -> Option<String> {
     match value {
         Value::Object(map) => {
             for keyword in keywords {
@@ -2175,8 +2175,7 @@ mod streaming_tests {
     use super::*;
 
     #[test]
-    fn test_gpt5_models_disable_streaming() {
-        // Test that GPT-5 models return false for supports_streaming
+    fn test_openai_models_support_streaming() {
         let test_models = [
             models::openai::GPT,
             models::openai::GPT_5,
@@ -2189,9 +2188,24 @@ mod streaming_tests {
         for &model in &test_models {
             let provider = OpenAIProvider::with_model("test-key".to_owned(), model.to_owned());
             assert!(
-                !provider.supports_streaming(),
-                "Model {} should not support streaming",
+                provider.supports_streaming(),
+                "Model {} should support streaming",
                 model
+            );
+        }
+    }
+
+    #[test]
+    fn native_gpt54_family_disables_non_streaming() {
+        for model in [
+            models::openai::GPT,
+            models::openai::GPT_5_4,
+            models::openai::GPT_5_4_PRO,
+        ] {
+            let provider = OpenAIProvider::with_model("test-key".to_owned(), model.to_owned());
+            assert!(
+                !provider.supports_non_streaming(model),
+                "Model {model} should require streaming"
             );
         }
     }
@@ -2667,4 +2681,44 @@ async fn gpt5_codex_stream_omits_reasoning_events_and_final_reasoning() {
     assert_eq!(response.content.as_deref(), Some("done"));
     assert_eq!(response.reasoning, None);
     assert_eq!(response.reasoning_details, None);
+}
+
+#[tokio::test]
+async fn gpt54_generate_uses_streaming_responses_path() {
+    let server = MockServer::start().await;
+    let provider = test_provider(&server.uri(), models::openai::GPT_5_4);
+
+    Mock::given(method("POST"))
+        .and(path("/responses"))
+        .respond_with(|request: &wiremock::Request| {
+            let payload: Value =
+                serde_json::from_slice(&request.body).expect("request body should be valid json");
+            assert_eq!(payload.get("stream").and_then(Value::as_bool), Some(true));
+
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(
+                    concat!(
+                        "data: {\"type\":\"response.output_text.delta\",\"delta\":\"done\"}\n\n",
+                        "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_gpt54_stream\",\"status\":\"completed\",\"output\":[",
+                        "{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"done\"}]}",
+                        "]}}\n\n",
+                        "data: [DONE]\n\n"
+                    ),
+                )
+        })
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let response = provider
+        .generate(provider::LLMRequest {
+            messages: vec![provider::Message::user("Hello".to_string())],
+            model: models::openai::GPT_5_4.to_string(),
+            ..Default::default()
+        })
+        .await
+        .expect("generation should succeed through streaming");
+
+    assert_eq!(response.content.as_deref(), Some("done"));
 }
