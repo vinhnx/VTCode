@@ -134,6 +134,7 @@ pub(super) async fn prepare_exec_run(
     let metadata =
         build_exec_archive_metadata(run_workspace.as_path(), &model_id, &run_vt_cfg, &run_config);
     let history_enabled = history_persistence_enabled();
+    let reserved_archive_id = crate::main_helpers::runtime_archive_session_id();
 
     let (session_id, archive, thread_bootstrap) = if let Some(listing) = resume_listing {
         if history_enabled {
@@ -158,14 +159,12 @@ pub(super) async fn prepare_exec_run(
             (session_id, None, bootstrap)
         }
     } else {
-        let workspace_label = exec_workspace_label(run_workspace.as_path());
-        let session_id = if history_enabled {
-            reserve_session_archive_identifier(&workspace_label, None)
-                .await
-                .context("Failed to reserve exec session archive identifier")?
-        } else {
-            generate_session_archive_identifier(&workspace_label, None)
-        };
+        let session_id = next_exec_session_id(
+            run_workspace.as_path(),
+            reserved_archive_id,
+            history_enabled,
+        )
+        .await?;
         let archive = if history_enabled {
             Some(
                 SessionArchive::new_with_identifier(metadata.clone(), session_id.clone())
@@ -273,6 +272,29 @@ fn build_exec_archive_metadata(
         &vt_cfg.agent.theme,
         config.reasoning_effort.as_str(),
     )
+    .with_debug_log_path(
+        crate::main_helpers::runtime_debug_log_path()
+            .map(|path| path.to_string_lossy().to_string()),
+    )
+}
+
+async fn next_exec_session_id(
+    workspace: &Path,
+    reserved_archive_id: Option<String>,
+    history_enabled: bool,
+) -> Result<String> {
+    if let Some(identifier) = reserved_archive_id {
+        return Ok(identifier);
+    }
+
+    let workspace_label = exec_workspace_label(workspace);
+    if history_enabled {
+        reserve_session_archive_identifier(&workspace_label, None)
+            .await
+            .context("Failed to reserve exec session archive identifier")
+    } else {
+        Ok(generate_session_archive_identifier(&workspace_label, None))
+    }
 }
 
 async fn load_exec_vt_config(
@@ -332,9 +354,20 @@ async fn resolve_resume_listing(
 
 #[cfg(test)]
 mod tests {
-    use super::{ExecCommandKind, resolve_exec_command, validate_resume_prompt_requirement};
+    use super::{
+        ExecCommandKind, build_exec_archive_metadata, next_exec_session_id, resolve_exec_command,
+        validate_resume_prompt_requirement,
+    };
+    use std::path::{Path, PathBuf};
+    use std::str::FromStr;
     use vtcode_core::cli::args::{ExecResumeArgs, ExecSubcommand};
+    use vtcode_core::config::loader::VTCodeConfig;
+    use vtcode_core::config::models::ModelId;
+    use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
     use vtcode_core::review::{ReviewTarget, build_review_spec};
+    use vtcode_core::utils::session_debug::{
+        configure_runtime_debug_context, runtime_debug_log_path, set_runtime_debug_log_path,
+    };
 
     #[test]
     fn resolve_resume_last_uses_first_positional_as_prompt() {
@@ -405,5 +438,56 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(matches!(spec.target, ReviewTarget::CurrentDiff));
+    }
+
+    #[tokio::test]
+    async fn next_exec_session_id_prefers_reserved_identifier() {
+        let session_id =
+            next_exec_session_id(Path::new("."), Some("session-reserved".to_string()), true)
+                .await
+                .expect("reserved session id should win");
+
+        assert_eq!(session_id, "session-reserved");
+    }
+
+    #[test]
+    fn build_exec_archive_metadata_includes_runtime_debug_log_path() {
+        let mut vt_cfg = VTCodeConfig::default();
+        vt_cfg.agent.provider = "openai".to_string();
+        vt_cfg.agent.theme = "mono".to_string();
+
+        let config = CoreAgentConfig {
+            model: "gpt-5".to_string(),
+            api_key: "test-key".to_string(),
+            provider: "openai".to_string(),
+            api_key_env: "OPENAI_API_KEY".to_string(),
+            workspace: PathBuf::from("."),
+            verbose: false,
+            quiet: false,
+            theme: "mono".to_string(),
+            reasoning_effort: Default::default(),
+            ui_surface: Default::default(),
+            prompt_cache: Default::default(),
+            model_source: Default::default(),
+            custom_api_keys: Default::default(),
+            checkpointing_enabled: true,
+            checkpointing_storage_dir: None,
+            checkpointing_max_snapshots: 50,
+            checkpointing_max_age_days: Some(30),
+            max_conversation_turns: 1000,
+            model_behavior: None,
+        };
+
+        configure_runtime_debug_context("debug-session".to_string(), Some("session-1".to_string()));
+        let path = PathBuf::from("/tmp/debug-session.log");
+        set_runtime_debug_log_path(path.clone());
+        let model_id = ModelId::from_str("gpt-5").expect("model id");
+        let metadata = build_exec_archive_metadata(Path::new("."), &model_id, &vt_cfg, &config);
+
+        assert_eq!(runtime_debug_log_path().as_deref(), Some(path.as_path()));
+        assert_eq!(
+            metadata.debug_log_path.as_deref(),
+            Some("/tmp/debug-session.log")
+        );
     }
 }

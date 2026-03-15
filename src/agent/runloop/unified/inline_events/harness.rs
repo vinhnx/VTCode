@@ -177,9 +177,9 @@ pub(crate) fn resolve_event_log_path(path: &str, run_id: &TurnRunId) -> PathBuf 
     base
 }
 
-/// Returns the default harness log directory (`~/.vtcode/sessions/`).
+/// Returns the default harness log directory for the current VT Code session dir.
 pub(crate) fn default_harness_log_dir() -> Option<PathBuf> {
-    dirs::home_dir().map(|home| home.join(".vtcode").join("sessions"))
+    Some(vtcode_core::utils::session_debug::default_sessions_dir())
 }
 
 fn tool_output_item_id(call_item_id: &str) -> String {

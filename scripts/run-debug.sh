@@ -31,6 +31,10 @@ if [[ -f ".env" ]]; then
   set +a
 fi
 
+# Keep debug-run session artifacts in the legacy ~/.vtcode/sessions location
+# so harness logs, session archives, and debug logs land in one place.
+export VT_SESSION_DIR="${VT_SESSION_DIR:-$HOME/.vtcode/sessions}"
+
 # Check if API key is set for any supported provider
 if [[ -z "$GEMINI_API_KEY" && -z "$GOOGLE_API_KEY" && -z "$OPENAI_API_KEY" && -z "$ANTHROPIC_API_KEY" ]]; then
     echo "Error: API key not found!"

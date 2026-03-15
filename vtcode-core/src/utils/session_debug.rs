@@ -111,7 +111,7 @@ fn debug_log_file_name(session_id: &str) -> String {
     format!("{DEBUG_LOG_FILE_PREFIX}{normalized}.log")
 }
 
-fn default_debug_log_dir() -> PathBuf {
+pub fn default_sessions_dir() -> PathBuf {
     if let Some(custom) = std::env::var_os(SESSION_DIR_ENV) {
         return PathBuf::from(custom);
     }
@@ -235,7 +235,7 @@ pub fn prepare_debug_log_file(
     max_size_mb: u64,
     max_age_days: u32,
 ) -> Result<PathBuf> {
-    let log_dir = configured_dir.unwrap_or_else(default_debug_log_dir);
+    let log_dir = configured_dir.unwrap_or_else(default_sessions_dir);
     fs::create_dir_all(&log_dir)
         .with_context(|| format!("Failed to create debug log directory {}", log_dir.display()))?;
     prune_expired_debug_logs(&log_dir, max_age_days)?;

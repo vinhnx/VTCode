@@ -1,6 +1,10 @@
 use crate::startup::{SessionResumeMode, StartupContext};
-use vtcode_core::cli::args::{Cli, Commands};
+use vtcode_core::cli::args::{Cli, Commands, ExecSubcommand};
 use vtcode_core::core::threads::{SessionQueryScope, list_recent_sessions_in_scope};
+use vtcode_core::utils::session_archive::{
+    generate_session_archive_identifier, history_persistence_enabled,
+    reserve_session_archive_identifier,
+};
 
 use super::{build_command_debug_session_id, configure_runtime_debug_context};
 
@@ -33,7 +37,7 @@ fn resolve_mode_hint(
     }
 }
 
-fn archive_backed_session(
+fn interactive_archive_backed_session(
     args: &Cli,
     startup: &StartupContext,
     print_mode: &Option<String>,
@@ -50,6 +54,84 @@ fn archive_backed_session(
             && startup.automation_prompt.is_none())
 }
 
+fn workspace_archive_label(workspace: &std::path::Path) -> String {
+    workspace
+        .file_name()
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "workspace".to_string())
+}
+
+async fn reserve_fresh_archive_session_id(startup: &StartupContext) -> Option<String> {
+    let workspace_label = workspace_archive_label(startup.workspace.as_path());
+    if history_persistence_enabled() {
+        reserve_session_archive_identifier(&workspace_label, None)
+            .await
+            .ok()
+    } else {
+        Some(generate_session_archive_identifier(&workspace_label, None))
+    }
+}
+
+async fn resolve_archive_session_id(
+    args: &Cli,
+    startup: &StartupContext,
+    print_mode: &Option<String>,
+    potential_prompt: &Option<String>,
+) -> Option<String> {
+    if interactive_archive_backed_session(args, startup, print_mode, potential_prompt) {
+        if let Some(mode) = startup.session_resume.as_ref() {
+            match mode {
+                SessionResumeMode::Specific(identifier) if startup.custom_session_id.is_none() => {
+                    return Some(identifier.clone());
+                }
+                SessionResumeMode::Latest if startup.custom_session_id.is_none() => {
+                    let scope = if startup.resume_show_all {
+                        SessionQueryScope::All
+                    } else {
+                        SessionQueryScope::CurrentWorkspace(startup.workspace.clone())
+                    };
+                    return list_recent_sessions_in_scope(1, &scope)
+                        .await
+                        .ok()
+                        .and_then(|listings| listings.first().map(|listing| listing.identifier()));
+                }
+                SessionResumeMode::Interactive if startup.custom_session_id.is_none() => {
+                    return None;
+                }
+                _ => {}
+            }
+        }
+
+        return reserve_fresh_archive_session_id(startup).await;
+    }
+
+    match &args.command {
+        Some(Commands::Exec {
+            command: Some(ExecSubcommand::Resume(resume)),
+            ..
+        }) => {
+            if resume.last {
+                let scope = if resume.all {
+                    SessionQueryScope::All
+                } else {
+                    SessionQueryScope::CurrentWorkspace(startup.workspace.clone())
+                };
+                list_recent_sessions_in_scope(1, &scope)
+                    .await
+                    .ok()
+                    .and_then(|listings| listings.first().map(|listing| listing.identifier()))
+            } else {
+                resume.session_or_prompt.clone()
+            }
+        }
+        Some(Commands::Exec { .. }) | Some(Commands::Review(_)) => {
+            reserve_fresh_archive_session_id(startup).await
+        }
+        _ => None,
+    }
+}
+
 pub(crate) async fn configure_debug_session_routing(
     args: &Cli,
     startup: &StartupContext,
@@ -63,47 +145,19 @@ pub(crate) async fn configure_debug_session_routing(
         potential_prompt,
     ));
 
-    if !archive_backed_session(args, startup, print_mode, potential_prompt) {
+    if let Some(session_id) =
+        resolve_archive_session_id(args, startup, print_mode, potential_prompt).await
+    {
+        configure_runtime_debug_context(session_id.clone(), Some(session_id));
+    } else {
         configure_runtime_debug_context(command_debug_session_id, None);
-        return;
     }
-
-    if let Some(mode) = startup.session_resume.as_ref() {
-        match mode {
-            SessionResumeMode::Specific(identifier) if startup.custom_session_id.is_none() => {
-                configure_runtime_debug_context(identifier.clone(), Some(identifier.clone()));
-                return;
-            }
-            SessionResumeMode::Latest if startup.custom_session_id.is_none() => {
-                let scope = if startup.resume_show_all {
-                    SessionQueryScope::All
-                } else {
-                    SessionQueryScope::CurrentWorkspace(startup.workspace.clone())
-                };
-                if let Ok(listings) = list_recent_sessions_in_scope(1, &scope).await
-                    && let Some(listing) = listings.first()
-                {
-                    let session_id = listing.identifier();
-                    configure_runtime_debug_context(session_id.clone(), Some(session_id));
-                    return;
-                }
-                configure_runtime_debug_context(command_debug_session_id, None);
-                return;
-            }
-            SessionResumeMode::Interactive if startup.custom_session_id.is_none() => {
-                configure_runtime_debug_context(command_debug_session_id, None);
-                return;
-            }
-            _ => {}
-        }
-    }
-
-    configure_runtime_debug_context(command_debug_session_id, None);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::Parser;
     use std::collections::BTreeMap;
     use std::path::PathBuf;
     use std::sync::{LazyLock, Mutex};
@@ -170,5 +224,34 @@ mod tests {
         ));
 
         assert_eq!(runtime_archive_session_id().as_deref(), Some("session-123"));
+    }
+
+    #[test]
+    fn configure_debug_session_routing_reuses_exec_resume_identifier() {
+        let _guard = DEBUG_ROUTING_TEST_GUARD
+            .lock()
+            .expect("debug routing guard");
+
+        let args = Cli::parse_from(["vtcode", "exec", "resume", "session-456", "continue"]);
+        let startup = StartupContext {
+            workspace: PathBuf::from("."),
+            agent_config: startup_agent_config(),
+            config: VTCodeConfig::default(),
+            skip_confirmations: false,
+            full_auto_requested: false,
+            automation_prompt: None,
+            session_resume: None,
+            resume_show_all: false,
+            custom_session_id: None,
+            plan_mode_requested: false,
+        };
+
+        configure_runtime_debug_context("seed".to_string(), Some("seed".to_string()));
+        let runtime = tokio::runtime::Runtime::new().expect("runtime");
+        runtime.block_on(configure_debug_session_routing(
+            &args, &startup, &None, &None,
+        ));
+
+        assert_eq!(runtime_archive_session_id().as_deref(), Some("session-456"));
     }
 }

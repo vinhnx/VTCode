@@ -130,6 +130,26 @@ fn prepare_resume_bootstrap_without_archive(
     (bootstrap, thread_id)
 }
 
+async fn checkpoint_session_archive_start(
+    archive: &vtcode_core::utils::session_archive::SessionArchive,
+    thread_handle: &vtcode_core::core::threads::ThreadRuntimeHandle,
+) -> Result<()> {
+    let snapshot = thread_handle.snapshot();
+    let recent_messages = snapshot.messages.iter().map(SessionMessage::from).collect();
+    archive
+        .persist_progress_async(SessionProgressArgs {
+            total_messages: snapshot.messages.len(),
+            distinct_tools: Vec::new(),
+            recent_messages,
+            turn_number: 1,
+            token_usage: None,
+            max_context_tokens: None,
+            loaded_skills: Some(snapshot.loaded_skills),
+        })
+        .await?;
+    Ok(())
+}
+
 async fn force_reload_workspace_config_for_execution(
     workspace: &std::path::Path,
     runtime_cfg: &CoreAgentConfig,
@@ -337,6 +357,11 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         crate::main_helpers::set_runtime_archive_session_id(Some(
             thread_handle.thread_id().to_string(),
         ));
+        if let Some(archive) = session_archive.as_ref()
+            && let Err(err) = checkpoint_session_archive_start(archive, &thread_handle).await
+        {
+            tracing::warn!("Failed to checkpoint session archive at startup: {}", err);
+        }
         let _session_trigger = if resume_ref.is_some() {
             SessionStartTrigger::Resume
         } else {
@@ -1086,8 +1111,9 @@ mod tests {
     use super::{
         TurnHistoryCheckpoint, archive::NextRuntimeArchiveId,
         archive::next_runtime_archive_id_request, archive::workspace_archive_label,
-        build_partial_timeout_messages, effective_max_tool_calls_for_turn,
-        prepare_resume_bootstrap_without_archive, resolve_effective_turn_timeout_secs,
+        build_partial_timeout_messages, checkpoint_session_archive_start,
+        effective_max_tool_calls_for_turn, prepare_resume_bootstrap_without_archive,
+        resolve_effective_turn_timeout_secs,
     };
     use crate::agent::agents::ResumeSession;
     use crate::agent::runloop::unified::run_loop_context::TurnPhase;
@@ -1096,7 +1122,7 @@ mod tests {
     use vtcode_core::core::threads::ArchivedSessionIntent;
     use vtcode_core::llm::provider::MessageRole;
     use vtcode_core::utils::session_archive::{
-        SessionArchiveMetadata, SessionListing, SessionMessage, SessionSnapshot,
+        SessionArchive, SessionArchiveMetadata, SessionListing, SessionMessage, SessionSnapshot,
     };
 
     fn resume_session(intent: ArchivedSessionIntent) -> ResumeSession {
@@ -1311,5 +1337,54 @@ mod tests {
         );
 
         assert_eq!(thread_id, "reserved-session-id");
+    }
+
+    #[tokio::test]
+    async fn checkpoint_session_archive_start_writes_initial_snapshot() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let archive_path = temp_dir.path().join("session-vtcode-test-start.json");
+        let metadata = SessionArchiveMetadata::new(
+            "workspace",
+            "/tmp/workspace",
+            "model",
+            "provider",
+            "theme",
+            "medium",
+        );
+        let archive = SessionArchive::resume_from_listing(
+            &SessionListing {
+                path: archive_path.clone(),
+                snapshot: SessionSnapshot {
+                    metadata: metadata.clone(),
+                    started_at: Utc::now(),
+                    ended_at: Utc::now(),
+                    total_messages: 0,
+                    distinct_tools: Vec::new(),
+                    transcript: Vec::new(),
+                    messages: Vec::new(),
+                    progress: None,
+                    error_logs: Vec::new(),
+                },
+            },
+            metadata.clone(),
+        );
+        let thread_manager = vtcode_core::core::threads::ThreadManager::new();
+        let thread_handle = thread_manager.start_thread_with_identifier(
+            "session-vtcode-test-start",
+            vtcode_core::core::threads::ThreadBootstrap::new(Some(metadata)).with_messages(vec![
+                vtcode_core::llm::provider::Message::user("hello".to_string()),
+            ]),
+        );
+
+        checkpoint_session_archive_start(&archive, &thread_handle)
+            .await
+            .expect("startup checkpoint");
+
+        let snapshot: SessionSnapshot =
+            serde_json::from_str(&std::fs::read_to_string(archive_path).expect("read archive"))
+                .expect("parse archive");
+        assert_eq!(snapshot.total_messages, 1);
+        assert_eq!(snapshot.messages.len(), 1);
+        assert!(snapshot.progress.is_some());
     }
 }
