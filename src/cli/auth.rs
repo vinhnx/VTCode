@@ -2,11 +2,11 @@ use anyhow::{Result, anyhow};
 use vtcode_auth::{
     AuthCallbackOutcome, AuthCredentialsStoreMode, AuthStatus, OAuthCallbackPage, OAuthProvider,
     OpenAIChatGptAuthStatus, OpenAIChatGptSession, OpenRouterToken, PkceChallenge,
-    clear_oauth_token, clear_openai_chatgpt_session,
-    exchange_code_for_token, exchange_openai_chatgpt_code_for_tokens, generate_openai_oauth_state,
-    generate_pkce_challenge, get_auth_status_with_mode, get_auth_url,
-    get_openai_chatgpt_auth_status_with_mode, get_openai_chatgpt_auth_url,
-    run_auth_code_callback_server, save_oauth_token_with_mode, save_openai_chatgpt_session_with_mode,
+    clear_oauth_token, clear_openai_chatgpt_session, exchange_code_for_token,
+    exchange_openai_chatgpt_code_for_tokens, generate_openai_oauth_state, generate_pkce_challenge,
+    get_auth_status_with_mode, get_auth_url, get_openai_chatgpt_auth_status_with_mode,
+    get_openai_chatgpt_auth_url, run_auth_code_callback_server, save_oauth_token_with_mode,
+    save_openai_chatgpt_session_with_mode,
 };
 use vtcode_config::VTCodeConfig;
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
@@ -61,9 +61,7 @@ pub(crate) fn prepare_openrouter_login(
     })
 }
 
-pub(crate) async fn complete_openrouter_login(
-    prepared: PreparedOpenRouterLogin,
-) -> Result<String> {
+pub(crate) async fn complete_openrouter_login(prepared: PreparedOpenRouterLogin) -> Result<String> {
     match run_auth_code_callback_server(
         prepared.callback_port,
         prepared.timeout_secs,
@@ -198,10 +196,7 @@ pub(crate) async fn handle_login_command(
     }
 }
 
-pub(crate) fn handle_logout_command(
-    vt_cfg: Option<&VTCodeConfig>,
-    provider: &str,
-) -> Result<()> {
+pub(crate) fn handle_logout_command(vt_cfg: Option<&VTCodeConfig>, provider: &str) -> Result<()> {
     match provider.parse::<OAuthProvider>() {
         Ok(OAuthProvider::OpenRouter) => {
             clear_openrouter_login(vt_cfg)?;
@@ -229,7 +224,9 @@ pub(crate) fn handle_show_auth_command(
 
     match provider.map(str::trim).filter(|value| !value.is_empty()) {
         Some(value) => match value.parse::<OAuthProvider>() {
-            Ok(OAuthProvider::OpenRouter) => render_openrouter_auth_status(openrouter_auth_status(vt_cfg)?),
+            Ok(OAuthProvider::OpenRouter) => {
+                render_openrouter_auth_status(openrouter_auth_status(vt_cfg)?)
+            }
             Ok(OAuthProvider::OpenAi) => render_openai_auth_status(openai_auth_status(vt_cfg)?),
             Err(()) => {
                 return Err(anyhow!(

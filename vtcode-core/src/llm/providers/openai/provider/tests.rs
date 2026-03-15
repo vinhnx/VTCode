@@ -1629,7 +1629,7 @@ mod caching_tests {
         // Initialize provider
         let provider = OpenAIProvider::from_config(
             Some("key".into()),
-        None,
+            None,
             None,
             None,
             Some(config),
@@ -1678,7 +1678,7 @@ mod caching_tests {
 
         let provider = OpenAIProvider::from_config(
             Some("key".into()),
-        None,
+            None,
             None,
             None,
             Some(config),

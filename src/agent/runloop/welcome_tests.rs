@@ -62,7 +62,7 @@ async fn test_prepare_session_bootstrap_builds_sections() {
         quiet: false,
         max_conversation_turns: 1000,
         model_behavior: None,
-            openai_chatgpt_auth: None,
+        openai_chatgpt_auth: None,
     };
 
     let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg), None).await;
@@ -150,7 +150,7 @@ async fn test_welcome_hides_optional_sections_by_default() {
         quiet: false,
         max_conversation_turns: 1000,
         model_behavior: None,
-            openai_chatgpt_auth: None,
+        openai_chatgpt_auth: None,
     };
 
     let vt_cfg = VTCodeConfig::default();
@@ -214,7 +214,7 @@ async fn test_prepare_session_bootstrap_hides_placeholder_when_planning_disabled
         quiet: false,
         max_conversation_turns: 1000,
         model_behavior: None,
-            openai_chatgpt_auth: None,
+        openai_chatgpt_auth: None,
     };
 
     let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg), None).await;

@@ -3,6 +3,7 @@
 use crate::agent::runloop::unified::state::CtrlCState;
 use anyhow::Result;
 use std::time::Duration;
+use vtcode_core::llm::provider::LLMError;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 /// Centralized error display with consistent formatting
@@ -12,7 +13,31 @@ pub(crate) fn display_error(
     error: &anyhow::Error,
 ) -> Result<()> {
     renderer.line_if_not_empty(MessageStyle::Output)?;
-    renderer.line(MessageStyle::Error, &format!("{}: {}", category, error))
+    renderer.line(
+        MessageStyle::Error,
+        &format!("{}: {}", category, error_message_for_user(error)),
+    )
+}
+
+pub(crate) fn error_message_for_user(error: &anyhow::Error) -> String {
+    let message = error
+        .downcast_ref::<LLMError>()
+        .map(llm_error_message_for_user)
+        .unwrap_or_else(|| error.to_string());
+    sanitize_error_for_display(&message)
+}
+
+fn llm_error_message_for_user(error: &LLMError) -> String {
+    match error {
+        LLMError::Authentication { message, .. }
+        | LLMError::InvalidRequest { message, .. }
+        | LLMError::Network { message, .. }
+        | LLMError::Provider { message, .. } => message.clone(),
+        LLMError::RateLimit { metadata } => metadata
+            .as_ref()
+            .and_then(|meta| meta.message.clone())
+            .unwrap_or_else(|| error.to_string()),
+    }
 }
 
 /// Centralized status message display
@@ -146,5 +171,25 @@ mod tests {
         let (msg, _hint) = format_tool_error_for_user("my_tool", "something went wrong");
         assert!(msg.contains("my_tool"));
         assert!(msg.contains("something went wrong"));
+    }
+
+    #[test]
+    fn user_error_message_prefers_llm_rate_limit_metadata() {
+        let error = anyhow::Error::new(LLMError::RateLimit {
+            metadata: Some(vtcode_core::llm::provider::LLMErrorMetadata::new(
+                "OpenAI",
+                Some(429),
+                Some("rate_limit_error".to_string()),
+                Some("req_123".to_string()),
+                None,
+                None,
+                Some("Project rate limit exceeded for model gpt-5.2.".to_string()),
+            )),
+        });
+
+        assert_eq!(
+            error_message_for_user(&error),
+            "Project rate limit exceeded for model gpt-5.2."
+        );
     }
 }

@@ -327,7 +327,10 @@ impl OpenAIProvider {
         handle.current_api_key().map_err(Self::format_auth_error)
     }
 
-    async fn send_authorized<F>(&self, build_request: F) -> Result<reqwest::Response, provider::LLMError>
+    async fn send_authorized<F>(
+        &self,
+        build_request: F,
+    ) -> Result<reqwest::Response, provider::LLMError>
     where
         F: Fn(&str) -> reqwest::RequestBuilder,
     {

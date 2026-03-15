@@ -1,8 +1,6 @@
 use anyhow::{Context, Result, anyhow};
 use std::path::Path;
-use vtcode_config::{
-    read_workspace_env_value, resolve_openai_auth, write_workspace_env_value,
-};
+use vtcode_config::{read_workspace_env_value, resolve_openai_auth, write_workspace_env_value};
 
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::loader::VTCodeConfig;
@@ -164,10 +162,7 @@ pub(crate) async fn finalize_model_selection(
     }
 
     if selection.uses_chatgpt_auth {
-        renderer.line(
-            MessageStyle::Info,
-            "Using ChatGPT subscription for OpenAI.",
-        )?;
+        renderer.line(MessageStyle::Info, "Using ChatGPT subscription for OpenAI.")?;
     } else if selection.api_key.is_some() {
         renderer.line(
             MessageStyle::Info,
@@ -193,18 +188,12 @@ fn resolve_runtime_api_key(
     workspace: &Path,
     vt_cfg: Option<&VTCodeConfig>,
     selection: &ModelSelectionResult,
-) -> Result<(
-    String,
-    Option<vtcode_config::auth::OpenAIChatGptAuthHandle>,
-)> {
+) -> Result<(String, Option<vtcode_config::auth::OpenAIChatGptAuthHandle>)> {
     if selection.provider_enum == Some(Provider::OpenAI) && selection.uses_chatgpt_auth {
         let cfg = vt_cfg.ok_or_else(|| anyhow!("OpenAI configuration not loaded"))?;
         let api_key = get_api_key(&selection.provider, &ApiKeySources::default()).ok();
-        let resolved = resolve_openai_auth(
-            &cfg.auth.openai,
-            cfg.agent.credential_storage_mode,
-            api_key,
-        )?;
+        let resolved =
+            resolve_openai_auth(&cfg.auth.openai, cfg.agent.credential_storage_mode, api_key)?;
         return Ok((resolved.api_key().to_string(), resolved.handle()));
     }
 

@@ -21,6 +21,7 @@ use validation::{
     apply_permission_mode_override, validate_full_auto_configuration,
     validate_startup_configuration,
 };
+use vtcode_config::auth::{OpenAIChatGptAuthHandle, resolve_openai_auth};
 use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::loader::VTCodeConfig;
@@ -33,7 +34,6 @@ use vtcode_core::core::agent::config::{
     resolve_runtime_model_selection,
 };
 use vtcode_core::{initialize_dot_folder, update_theme_preference};
-use vtcode_config::auth::{OpenAIChatGptAuthHandle, resolve_openai_auth};
 pub(crate) use workspace_trust::{
     ensure_full_auto_workspace_trust, require_full_auto_workspace_trust,
 };
@@ -205,10 +205,7 @@ fn resolve_runtime_provider_auth(
     Ok((api_key, None))
 }
 
-fn missing_api_key_message(
-    selection: &RuntimeModelSelection,
-    first_run_occurred: bool,
-) -> String {
+fn missing_api_key_message(selection: &RuntimeModelSelection, first_run_occurred: bool) -> String {
     let provider_name = provider_label(&selection.provider);
     let env_var = api_key_env_var(&selection.provider);
     if selection.provider.eq_ignore_ascii_case("openai") {
@@ -220,8 +217,7 @@ fn missing_api_key_message(
     if first_run_occurred {
         format!(
             "API key not found for {}. To fix:\n  1. Set {} environment variable, or\n  2. Add to .env file, or\n  3. Configure in vtcode.toml\n\nRun `/init` anytime to reconfigure.",
-            provider_name,
-            env_var
+            provider_name, env_var
         )
     } else {
         format!(

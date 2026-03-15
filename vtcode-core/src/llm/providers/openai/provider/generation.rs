@@ -10,7 +10,7 @@ use super::websocket::is_websocket_connection_limit_error;
 use crate::llm::error_display;
 use crate::llm::provider;
 use crate::llm::provider::LLMProvider;
-use crate::llm::providers::error_handling::is_rate_limit_error;
+use crate::llm::providers::error_handling::{is_rate_limit_error, parse_api_error};
 use crate::llm::providers::shared::parse_compacted_output_messages;
 use serde_json::{Value, json};
 use tracing::debug;
@@ -234,12 +234,10 @@ impl OpenAIProvider {
                             let retry_response = self
                                 .send_authorized(|api_key| {
                                     headers::apply_turn_metadata(
-                                        headers::apply_responses_beta(
-                                            self.authorize_with_api_key(
-                                                self.http_client.post(&url),
-                                                api_key,
-                                            ),
-                                        ),
+                                        headers::apply_responses_beta(self.authorize_with_api_key(
+                                            self.http_client.post(&url),
+                                            api_key,
+                                        )),
                                         &request.metadata,
                                     )
                                     .json(&retry_openai)
@@ -285,7 +283,7 @@ impl OpenAIProvider {
                     self.set_responses_api_state(&request.model, ResponsesApiState::Disabled);
                     return self.generate_chat_completions(&request).await;
                 } else if is_rate_limit_error(status.as_u16(), &error_text) {
-                    return Err(provider::LLMError::RateLimit { metadata: None });
+                    return Err(parse_api_error("OpenAI", status, &error_text));
                 } else {
                     let formatted_error = error_display::format_llm_error(
                         "OpenAI",
@@ -362,7 +360,7 @@ impl OpenAIProvider {
             let error_text = response.text().await.unwrap_or_default();
 
             if is_rate_limit_error(status.as_u16(), &error_text) {
-                return Err(provider::LLMError::RateLimit { metadata: None });
+                return Err(parse_api_error("OpenAI", status, &error_text));
             }
 
             let formatted_error = error_display::format_llm_error(

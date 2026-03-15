@@ -251,9 +251,10 @@ async fn fetch_openai_models(
         .await
         .map_err(|err| anyhow!("failed to connect to OpenAI models endpoint: {}", err))?;
 
-    if response.status() == StatusCode::UNAUTHORIZED || response.status() == StatusCode::FORBIDDEN
-    {
-        return Err(anyhow!("OpenAI authentication failed while listing remote models"));
+    if response.status() == StatusCode::UNAUTHORIZED || response.status() == StatusCode::FORBIDDEN {
+        return Err(anyhow!(
+            "OpenAI authentication failed while listing remote models"
+        ));
     }
     if !response.status().is_success() {
         return Err(anyhow!(

@@ -257,7 +257,7 @@ mod tests {
             "ollama",
             FactoryProviderConfig {
                 api_key: None,
-                    openai_chatgpt_auth: None,
+                openai_chatgpt_auth: None,
                 base_url: Some("http://localhost:11434".to_string()),
                 model: Some("gpt-oss:20b".to_string()),
                 prompt_cache: None,

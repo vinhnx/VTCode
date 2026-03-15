@@ -132,9 +132,13 @@ impl ModelId {
                 | ModelId::GPT
                 | ModelId::GPT5
                 | ModelId::GPT52
+                | ModelId::GPT52Codex
                 | ModelId::GPT54
                 | ModelId::GPT54Pro
                 | ModelId::GPT53Codex
+                | ModelId::GPT51Codex
+                | ModelId::GPT51CodexMax
+                | ModelId::GPT5Codex
                 | ModelId::ClaudeOpus46
                 | ModelId::ClaudeSonnet46
                 | ModelId::DeepSeekReasoner
@@ -182,9 +186,13 @@ impl ModelId {
                 | ModelId::GPT
                 | ModelId::GPT5
                 | ModelId::GPT52
+                | ModelId::GPT52Codex
                 | ModelId::GPT54
                 | ModelId::GPT54Pro
                 | ModelId::GPT53Codex
+                | ModelId::GPT51Codex
+                | ModelId::GPT51CodexMax
+                | ModelId::GPT5Codex
                 | ModelId::ClaudeOpus46
                 | ModelId::ClaudeSonnet46
                 | ModelId::DeepSeekReasoner
@@ -233,10 +241,12 @@ impl ModelId {
             ModelId::Gemini3FlashPreview => "3",
             // OpenAI generations
             ModelId::GPT => "5.4",
-            ModelId::GPT52 => "5.2",
+            ModelId::GPT52 | ModelId::GPT52Codex => "5.2",
             ModelId::GPT54 | ModelId::GPT54Pro => "5.4",
             ModelId::GPT53Codex => "5.3",
+            ModelId::GPT51Codex | ModelId::GPT51CodexMax => "5.1",
             ModelId::GPT5
+            | ModelId::GPT5Codex
             | ModelId::GPT5Mini
             | ModelId::GPT5Nano
             | ModelId::OpenAIGptOss20b
@@ -286,9 +296,13 @@ impl ModelId {
             self,
             ModelId::GPT
                 | ModelId::GPT52
+                | ModelId::GPT52Codex
                 | ModelId::GPT54
                 | ModelId::GPT54Pro
                 | ModelId::GPT53Codex
+                | ModelId::GPT51Codex
+                | ModelId::GPT51CodexMax
+                | ModelId::GPT5Codex
         )
     }
 

@@ -669,7 +669,9 @@ pub(super) async fn run_interaction_loop_impl(
         }
 
         if let Some(picker) = state.model_picker_state.as_mut() {
-            let progress = picker.handle_input(ctx.renderer, input_owned.as_str()).await?;
+            let progress = picker
+                .handle_input(ctx.renderer, input_owned.as_str())
+                .await?;
             match progress {
                 ModelPickerProgress::InProgress => continue,
                 ModelPickerProgress::NeedsRefresh => {

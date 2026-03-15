@@ -152,9 +152,7 @@ fn render_auth_usage_status(
             Some(vtcode_config::auth::OpenAIResolvedAuthSource::ChatGpt) => {
                 "using ChatGPT subscription"
             }
-            Some(vtcode_config::auth::OpenAIResolvedAuthSource::ApiKey) => {
-                "using OPENAI_API_KEY"
-            }
+            Some(vtcode_config::auth::OpenAIResolvedAuthSource::ApiKey) => "using OPENAI_API_KEY",
             None => "no active OpenAI credential",
         };
         renderer.line(

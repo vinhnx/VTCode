@@ -184,9 +184,7 @@ impl OpenAIProvider {
                 ws_request.headers_mut().insert(
                     "Authorization",
                     HeaderValue::from_str(&format!("Bearer {}", api_key)).map_err(|err| {
-                        format_provider_error(format!(
-                            "Invalid OpenAI authorization header: {err}"
-                        ))
+                        format_provider_error(format!("Invalid OpenAI authorization header: {err}"))
                     })?,
                 );
                 ws_request.headers_mut().insert(
@@ -207,9 +205,7 @@ impl OpenAIProvider {
             let ws_request = build_request(&api_key)?;
             let socket = match connect_async(ws_request).await {
                 Ok((socket, _)) => socket,
-                Err(err)
-                    if self.uses_chatgpt_auth() && is_websocket_auth_retryable(&err) =>
-                {
+                Err(err) if self.uses_chatgpt_auth() && is_websocket_auth_retryable(&err) => {
                     let retry_api_key = self.refresh_api_key_for_retry().await?;
                     let retry_request = build_request(&retry_api_key)?;
                     let (socket, _) = connect_async(retry_request).await.map_err(|retry_err| {

@@ -35,7 +35,7 @@ use vtcode_tui::{InlineHandle, InlineSession};
 
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::unified::turn::tool_outcomes::helpers::LoopTracker;
-use crate::agent::runloop::unified::turn::turn_helpers::display_error;
+use crate::agent::runloop::unified::turn::turn_helpers::{display_error, error_message_for_user};
 use vtcode_core::config::types::AgentConfig;
 use vtcode_core::core::agent::error_recovery::ErrorType;
 
@@ -523,7 +523,8 @@ pub(crate) async fn run_turn_loop(
                 }
                 // Log error via tracing instead of polluting conversation history
                 // Adding error messages as assistant content can poison future turns
-                tracing::error!(error = %err, step = step_count, "LLM request failed");
+                let error_message = error_message_for_user(&err);
+                tracing::error!(error = %error_message, step = step_count, "LLM request failed");
                 // Do NOT add error message to working_history - this prevents the model
                 // from learning spurious error patterns and keeps the conversation clean
                 result = TurnLoopResult::Aborted;

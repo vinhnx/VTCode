@@ -301,7 +301,8 @@ pub fn resolve_openai_auth(
     match auth_config.preferred_method {
         OpenAIPreferredMethod::Chatgpt => {
             let session = session.ok_or_else(|| anyhow!("Run vtcode login openai"))?;
-            let handle = OpenAIChatGptAuthHandle::new(session.clone(), auth_config.clone(), storage_mode);
+            let handle =
+                OpenAIChatGptAuthHandle::new(session.clone(), auth_config.clone(), storage_mode);
             Ok(OpenAIResolvedAuth::ChatGpt {
                 api_key: active_bearer_token(&session).to_string(),
                 handle,
@@ -313,8 +314,11 @@ pub fn resolve_openai_auth(
         }
         OpenAIPreferredMethod::Auto => {
             if let Some(session) = session {
-                let handle =
-                    OpenAIChatGptAuthHandle::new(session.clone(), auth_config.clone(), storage_mode);
+                let handle = OpenAIChatGptAuthHandle::new(
+                    session.clone(),
+                    auth_config.clone(),
+                    storage_mode,
+                );
                 Ok(OpenAIResolvedAuth::ChatGpt {
                     api_key: active_bearer_token(&session).to_string(),
                     handle,
@@ -340,7 +344,9 @@ pub fn summarize_openai_credentials(
         OpenAIPreferredMethod::Chatgpt => chatgpt_session
             .as_ref()
             .map(|_| OpenAIResolvedAuthSource::ChatGpt),
-        OpenAIPreferredMethod::ApiKey => api_key_available.then_some(OpenAIResolvedAuthSource::ApiKey),
+        OpenAIPreferredMethod::ApiKey => {
+            api_key_available.then_some(OpenAIResolvedAuthSource::ApiKey)
+        }
         OpenAIPreferredMethod::Auto => {
             if chatgpt_session.is_some() {
                 Some(OpenAIResolvedAuthSource::ChatGpt)
@@ -365,7 +371,9 @@ pub fn summarize_openai_credentials(
             Some(OpenAIResolvedAuthSource::ApiKey) => {
                 "Next step: keep the current priority, remove OPENAI_API_KEY if ChatGPT should win, or set [auth.openai].preferred_method = \"chatgpt\"."
             }
-            None => "Next step: choose a single preferred source or set [auth.openai].preferred_method explicitly.",
+            None => {
+                "Next step: choose a single preferred source or set [auth.openai].preferred_method explicitly."
+            }
         };
         (
             Some(format!(
@@ -396,7 +404,8 @@ pub fn save_openai_chatgpt_session_with_mode(
     session: &OpenAIChatGptSession,
     mode: AuthCredentialsStoreMode,
 ) -> Result<()> {
-    let serialized = serde_json::to_string(session).context("failed to serialize openai session")?;
+    let serialized =
+        serde_json::to_string(session).context("failed to serialize openai session")?;
     match mode.effective_mode() {
         AuthCredentialsStoreMode::Keyring => save_session_to_keyring(&serialized)?,
         AuthCredentialsStoreMode::File => save_session_to_file(session)?,
@@ -458,7 +467,9 @@ pub fn get_openai_chatgpt_auth_status_with_mode(
             .or_else(|| session.plan.clone())
             .or_else(|| session.account_id.clone()),
         age_seconds: now.saturating_sub(session.obtained_at),
-        expires_in: session.expires_at.map(|expires_at| expires_at.saturating_sub(now)),
+        expires_in: session
+            .expires_at
+            .map(|expires_at| expires_at.saturating_sub(now)),
     })
 }
 
@@ -505,7 +516,9 @@ async fn build_session_from_token_response(
     let api_key = match exchange_openai_chatgpt_api_key(&token_response.id_token).await {
         Ok(api_key) => api_key,
         Err(err) => {
-            tracing::warn!("openai api-key exchange unavailable, falling back to oauth access token: {err}");
+            tracing::warn!(
+                "openai api-key exchange unavailable, falling back to oauth access token: {err}"
+            );
             String::new()
         }
     };
@@ -520,7 +533,9 @@ async fn build_session_from_token_response(
         plan: claims.plan,
         obtained_at: now,
         refreshed_at: now,
-        expires_at: token_response.expires_in.map(|secs| now.saturating_add(secs)),
+        expires_at: token_response
+            .expires_in
+            .map(|secs| now.saturating_add(secs)),
     })
 }
 
@@ -614,7 +629,10 @@ fn parse_id_token_claims(jwt: &str) -> Result<ParsedIdTokenClaims> {
         email: claims
             .email
             .or_else(|| claims.profile.and_then(|profile| profile.email)),
-        account_id: claims.auth.as_ref().and_then(|auth| auth.chatgpt_account_id.clone()),
+        account_id: claims
+            .auth
+            .as_ref()
+            .and_then(|auth| auth.chatgpt_account_id.clone()),
         plan: claims.auth.and_then(|auth| auth.chatgpt_plan_type),
     })
 }
@@ -665,7 +683,9 @@ fn clear_session_from_keyring() -> Result<()> {
 
     match entry.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-        Err(err) => Err(anyhow!("failed to clear openai session keyring entry: {err}")),
+        Err(err) => Err(anyhow!(
+            "failed to clear openai session keyring entry: {err}"
+        )),
     }
 }
 
@@ -995,7 +1015,10 @@ mod tests {
             Some("api-key".to_string()),
         )
         .expect("overview");
-        assert_eq!(overview.active_source, Some(OpenAIResolvedAuthSource::ApiKey));
+        assert_eq!(
+            overview.active_source,
+            Some(OpenAIResolvedAuthSource::ApiKey)
+        );
         clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File)
             .expect("clear session");
     }

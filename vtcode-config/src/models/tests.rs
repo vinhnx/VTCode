@@ -15,6 +15,13 @@ fn test_model_string_conversion() {
     );
     // OpenAI models
     assert_eq!(ModelId::GPT5.as_str(), models::GPT_5);
+    assert_eq!(ModelId::GPT52Codex.as_str(), models::openai::GPT_5_2_CODEX);
+    assert_eq!(ModelId::GPT51Codex.as_str(), models::openai::GPT_5_1_CODEX);
+    assert_eq!(
+        ModelId::GPT51CodexMax.as_str(),
+        models::openai::GPT_5_1_CODEX_MAX
+    );
+    assert_eq!(ModelId::GPT5Codex.as_str(), models::openai::GPT_5_CODEX);
     assert_eq!(ModelId::GPT5Mini.as_str(), models::GPT_5_MINI);
     assert_eq!(ModelId::GPT5Nano.as_str(), models::GPT_5_NANO);
     // Anthropic models
@@ -52,6 +59,24 @@ fn test_model_from_string() {
     );
     // OpenAI models
     assert_eq!(models::GPT_5.parse::<ModelId>().unwrap(), ModelId::GPT5);
+    assert_eq!(
+        models::openai::GPT_5_2_CODEX.parse::<ModelId>().unwrap(),
+        ModelId::GPT52Codex
+    );
+    assert_eq!(
+        models::openai::GPT_5_1_CODEX.parse::<ModelId>().unwrap(),
+        ModelId::GPT51Codex
+    );
+    assert_eq!(
+        models::openai::GPT_5_1_CODEX_MAX
+            .parse::<ModelId>()
+            .unwrap(),
+        ModelId::GPT51CodexMax
+    );
+    assert_eq!(
+        models::openai::GPT_5_CODEX.parse::<ModelId>().unwrap(),
+        ModelId::GPT5Codex
+    );
     assert_eq!(
         models::GPT_5_MINI.parse::<ModelId>().unwrap(),
         ModelId::GPT5Mini
@@ -219,6 +244,8 @@ fn test_model_variants() {
 
     // Pro variants
     assert!(ModelId::GPT5.is_pro_variant());
+    assert!(ModelId::GPT52Codex.is_pro_variant());
+    assert!(ModelId::GPT51CodexMax.is_pro_variant());
     assert!(ModelId::ClaudeOpus46.is_pro_variant());
     assert!(ModelId::ClaudeSonnet46.is_pro_variant());
     assert!(ModelId::DeepSeekReasoner.is_pro_variant());
@@ -238,6 +265,8 @@ fn test_model_variants() {
 
     // Top tier models
     assert!(ModelId::GPT5.is_top_tier());
+    assert!(ModelId::GPT52Codex.is_top_tier());
+    assert!(ModelId::GPT5Codex.is_top_tier());
     assert!(ModelId::ClaudeOpus46.is_top_tier());
     assert!(ModelId::ClaudeSonnet46.is_top_tier());
     assert!(ModelId::DeepSeekReasoner.is_top_tier());
@@ -257,6 +286,9 @@ fn test_model_generation() {
 
     // OpenAI generations
     assert_eq!(ModelId::GPT5.generation(), "5");
+    assert_eq!(ModelId::GPT52Codex.generation(), "5.2");
+    assert_eq!(ModelId::GPT51Codex.generation(), "5.1");
+    assert_eq!(ModelId::GPT5Codex.generation(), "5");
     assert_eq!(ModelId::GPT5Mini.generation(), "5");
     assert_eq!(ModelId::GPT5Nano.generation(), "5");
 
@@ -285,6 +317,10 @@ fn test_models_for_provider() {
 
     let openai_models = ModelId::models_for_provider(Provider::OpenAI);
     assert!(openai_models.contains(&ModelId::GPT5));
+    assert!(openai_models.contains(&ModelId::GPT52Codex));
+    assert!(openai_models.contains(&ModelId::GPT51Codex));
+    assert!(openai_models.contains(&ModelId::GPT51CodexMax));
+    assert!(openai_models.contains(&ModelId::GPT5Codex));
     assert!(!openai_models.contains(&ModelId::Gemini3FlashPreview));
 
     let anthropic_models = ModelId::models_for_provider(Provider::Anthropic);
@@ -406,12 +442,23 @@ fn test_core_capability_helpers() {
         Some(ModelId::DeepSeekChat)
     );
     assert!(ModelId::GPT52.supports_shell_tool());
+    assert!(ModelId::GPT52Codex.supports_shell_tool());
+    assert!(ModelId::GPT51Codex.supports_shell_tool());
+    assert!(ModelId::GPT51CodexMax.supports_shell_tool());
+    assert!(ModelId::GPT5Codex.supports_shell_tool());
     assert!(!ModelId::GPT53Codex.supports_apply_patch_tool());
 }
 
 #[test]
 fn test_generated_model_capability_lookup() {
     assert_eq!(ModelId::GPT54.input_modalities(), &["text", "image"]);
+    assert_eq!(ModelId::GPT52Codex.input_modalities(), &["text", "image"]);
+    assert_eq!(ModelId::GPT51Codex.input_modalities(), &["text", "image"]);
+    assert_eq!(
+        ModelId::GPT51CodexMax.input_modalities(),
+        &["text", "image"]
+    );
+    assert_eq!(ModelId::GPT5Codex.input_modalities(), &["text", "image"]);
     assert_eq!(
         ModelId::Gemini31ProPreview.input_modalities(),
         &["text", "image", "video", "audio", "pdf"]
@@ -423,6 +470,7 @@ fn test_generated_model_capability_lookup() {
     );
 
     assert!(ModelId::GPT54.supports_tool_calls());
+    assert!(ModelId::GPT52Codex.supports_tool_calls());
     assert!(ModelId::Gemini31ProPreview.supports_tool_calls());
     assert!(!ModelId::OpenRouterOpenAIGpt5Chat.supports_tool_calls());
     assert!(!ModelId::OpenRouterDeepSeekV32Speciale.supports_tool_calls());

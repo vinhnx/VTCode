@@ -205,15 +205,14 @@ pub(crate) async fn initialize_session_ui(
     transcript::clear();
     render_resume_state_if_present(&mut renderer, resume_state, supports_reasoning)?;
 
-    let provider_label = if config.provider.eq_ignore_ascii_case("openai")
-        && config.openai_chatgpt_auth.is_some()
-    {
-        "OpenAI (ChatGPT)".to_string()
-    } else if config.provider.trim().is_empty() {
-        session_state.provider_client.name().to_string()
-    } else {
-        config.provider.clone()
-    };
+    let provider_label =
+        if config.provider.eq_ignore_ascii_case("openai") && config.openai_chatgpt_auth.is_some() {
+            "OpenAI (ChatGPT)".to_string()
+        } else if config.provider.trim().is_empty() {
+            session_state.provider_client.name().to_string()
+        } else {
+            config.provider.clone()
+        };
     let header_provider_label = provider_label.clone();
 
     let mut checkpoint_config =
@@ -408,7 +407,8 @@ fn maybe_render_openai_priority_notice(
         &vtcode_core::config::api_keys::ApiKeySources::default(),
     )
     .ok();
-    let overview = vtcode_config::auth::summarize_openai_credentials(auth_cfg, storage_mode, api_key)?;
+    let overview =
+        vtcode_config::auth::summarize_openai_credentials(auth_cfg, storage_mode, api_key)?;
     let Some(notice) = overview.notice.as_deref() else {
         return Ok(());
     };

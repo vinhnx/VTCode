@@ -228,14 +228,67 @@
         },
         "context": 1050000
       },
-      "gpt-5-codex": {
-        "id": "gpt-5-codex",
-        "name": "GPT-5 Codex",
+      "gpt-5.2-codex": {
+        "id": "gpt-5.2-codex",
+        "name": "GPT-5.2 Codex",
+        "description": "GPT-5.2 Codex model for agentic software engineering and coding tasks.",
         "reasoning": true,
         "tool_call": true,
         "modalities": {
           "input": [
+            "text",
+            "image"
+          ],
+          "output": [
             "text"
+          ]
+        },
+        "context": 400000
+      },
+      "gpt-5.1-codex": {
+        "id": "gpt-5.1-codex",
+        "name": "GPT-5.1 Codex",
+        "description": "GPT-5.1 Codex model for agentic software engineering and coding tasks.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 400000
+      },
+      "gpt-5.1-codex-max": {
+        "id": "gpt-5.1-codex-max",
+        "name": "GPT-5.1 Codex Max",
+        "description": "Higher-compute GPT-5.1 Codex variant optimized for longer-running engineering tasks.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 400000
+      },
+      "gpt-5-codex": {
+        "id": "gpt-5-codex",
+        "name": "GPT-5 Codex",
+        "description": "GPT-5 Codex model for agentic software engineering and coding tasks.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
           ],
           "output": [
             "text"
@@ -321,12 +374,13 @@
       "gpt-5.3-codex": {
         "id": "gpt-5.3-codex",
         "name": "GPT-5.3 Codex",
-        "description": "GPT-5.3 Codex optimized for agentic coding with medium reasoning effort support",
+        "description": "GPT-5.3 Codex model for agentic software engineering with higher reasoning support.",
         "reasoning": true,
         "tool_call": true,
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image"
           ],
           "output": [
             "text"

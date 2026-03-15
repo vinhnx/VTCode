@@ -264,12 +264,7 @@ fn base_html(
         .map(|value| format!(r#"<p class="close-note">{}</p>"#, html_escape(value)))
         .unwrap_or_default();
     let error_html = error
-        .map(|value| {
-            format!(
-                r#"<div class="error">{}</div>"#,
-                html_escape(value)
-            )
-        })
+        .map(|value| format!(r#"<div class="error">{}</div>"#, html_escape(value)))
         .unwrap_or_default();
     let auto_close = if close_note.is_some() {
         r#"<script>setTimeout(() => window.close(), 3000);</script>"#

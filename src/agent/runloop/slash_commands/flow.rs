@@ -9,9 +9,9 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use crate::agent::runloop::unified::palettes::format_duration_label;
 
-use super::{OAuthProviderAction, SessionPaletteMode};
 use super::SlashCommandOutcome;
 use super::parsing::parse_review_spec;
+use super::{OAuthProviderAction, SessionPaletteMode};
 
 fn parse_session_palette_args(
     args: &str,

@@ -31,7 +31,9 @@ pub async fn handle_ask_command(
     let provider_name = if config.provider.trim().is_empty() {
         infer_provider_from_model(&request.model)
             .map(|provider| provider.to_string())
-            .ok_or_else(|| anyhow::anyhow!("Cannot determine provider for model: {}", request.model))?
+            .ok_or_else(|| {
+                anyhow::anyhow!("Cannot determine provider for model: {}", request.model)
+            })?
     } else {
         config.provider.to_lowercase()
     };

@@ -163,7 +163,9 @@ fn create_llm_client(config: &AgentConfig) -> Result<AnyClient> {
     let provider_name = if config.provider.trim().is_empty() {
         infer_provider_from_model(&config.model)
             .map(|provider| provider.to_string())
-            .ok_or_else(|| anyhow::anyhow!("Cannot determine provider for model: {}", config.model))?
+            .ok_or_else(|| {
+                anyhow::anyhow!("Cannot determine provider for model: {}", config.model)
+            })?
     } else {
         config.provider.to_lowercase()
     };

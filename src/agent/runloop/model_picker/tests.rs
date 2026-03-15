@@ -67,6 +67,16 @@ fn model_picker_lists_new_gemini_models() {
 }
 
 #[test]
+fn model_picker_lists_new_openai_codex_models() {
+    let options = MODEL_OPTIONS.as_slice();
+    assert!(has_model(options, ModelId::GPT53Codex));
+    assert!(has_model(options, ModelId::GPT52Codex));
+    assert!(has_model(options, ModelId::GPT51Codex));
+    assert!(has_model(options, ModelId::GPT51CodexMax));
+    assert!(has_model(options, ModelId::GPT5Codex));
+}
+
+#[test]
 fn model_search_value_includes_provider_model_aliases() {
     let extra_terms = vec![
         "reasoning".to_string(),
@@ -231,6 +241,20 @@ fn selection_omits_openai_service_tier_support_for_gpt_oss() {
     );
 
     assert!(!detail.service_tier_supported);
+}
+
+#[test]
+fn openai_codex_reasoning_helpers_match_supported_variants() {
+    assert!(selection::supports_gpt5_none_reasoning("gpt-5.2-codex"));
+    assert!(selection::supports_gpt5_none_reasoning("gpt-5.3-codex"));
+    assert!(!selection::supports_gpt5_none_reasoning("gpt-5.1-codex"));
+    assert!(!selection::supports_gpt5_none_reasoning("gpt-5-codex"));
+
+    assert!(selection::supports_xhigh_reasoning("gpt-5.2"));
+    assert!(selection::supports_xhigh_reasoning("gpt-5.2-codex"));
+    assert!(selection::supports_xhigh_reasoning("gpt-5.3-codex"));
+    assert!(!selection::supports_xhigh_reasoning("gpt-5.1-codex"));
+    assert!(!selection::supports_xhigh_reasoning("gpt-5.1-codex-max"));
 }
 
 #[test]

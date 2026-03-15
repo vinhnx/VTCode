@@ -320,4 +320,23 @@ mod tests {
         assert_eq!(STATUS_BAD_REQUEST, 400);
         assert_eq!(STATUS_TOO_MANY_REQUESTS, 429);
     }
+
+    #[test]
+    fn parse_openai_rate_limit_error_preserves_provider_message() {
+        let error = parse_api_error(
+            "OpenAI",
+            reqwest::StatusCode::TOO_MANY_REQUESTS,
+            r#"{"error":{"message":"Project rate limit exceeded for this model.","type":"rate_limit_error"}}"#,
+        );
+
+        match error {
+            LLMError::RateLimit { metadata } => {
+                assert_eq!(
+                    metadata.as_ref().and_then(|meta| meta.message.as_deref()),
+                    Some("Project rate limit exceeded for this model.")
+                );
+            }
+            other => panic!("expected rate limit error, got {other:?}"),
+        }
+    }
 }

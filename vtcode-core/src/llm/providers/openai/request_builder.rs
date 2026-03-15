@@ -50,11 +50,15 @@ fn strip_non_native_assistant_phase(input: &mut [Value]) {
     }
 }
 
+fn is_gpt5_codex_model(model: &str) -> bool {
+    model == "gpt-5-codex" || (model.starts_with("gpt-5.") && model.contains("codex"))
+}
+
 fn default_reasoning_effort_for_model(model: &str) -> Option<ReasoningEffortLevel> {
     match model {
         "gpt" | "gpt-5.2" | "gpt-5.4" => Some(ReasoningEffortLevel::None),
         "gpt-5" | "gpt-5.4-pro" => Some(ReasoningEffortLevel::Medium),
-        _ if model.starts_with("gpt-5.3") => Some(ReasoningEffortLevel::Medium),
+        _ if is_gpt5_codex_model(model) => Some(ReasoningEffortLevel::Medium),
         _ => None,
     }
 }
@@ -452,7 +456,7 @@ pub(crate) fn build_responses_request(
         && (matches!(
             request.model.as_str(),
             "gpt" | "gpt-5.2" | "gpt-5.4" | "gpt-5.4-pro"
-        ) || request.model.starts_with("gpt-5.3"))
+        ) || is_gpt5_codex_model(&request.model))
     {
         text_format["verbosity"] = json!("medium");
         has_format_options = true;

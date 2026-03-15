@@ -323,10 +323,7 @@ impl ModelPickerState {
                     if matches!(selection.provider_enum, Some(Provider::OpenAI)) {
                         selection.uses_chatgpt_auth = true;
                     }
-                    renderer.line(
-                        MessageStyle::Info,
-                        &oauth_auth_message(&selection),
-                    )?;
+                    renderer.line(MessageStyle::Info, &oauth_auth_message(&selection))?;
                 }
                 Ok(Some(ExistingKey::Environment)) => {
                     selection.requires_api_key = false;
@@ -446,10 +443,7 @@ impl ModelPickerState {
             if self.inline_enabled {
                 renderer.close_modal();
             }
-            renderer.line(
-                MessageStyle::Info,
-                "Using ChatGPT subscription for OpenAI.",
-            )?;
+            renderer.line(MessageStyle::Info, "Using ChatGPT subscription for OpenAI.")?;
             self.pending_api_key = None;
             if let Some(current) = self.selection.as_mut() {
                 current.requires_api_key = false;
@@ -465,10 +459,7 @@ impl ModelPickerState {
                     if self.inline_enabled {
                         renderer.close_modal();
                     }
-                    renderer.line(
-                        MessageStyle::Info,
-                        &oauth_auth_message(selection),
-                    )?;
+                    renderer.line(MessageStyle::Info, &oauth_auth_message(selection))?;
                     self.pending_api_key = None;
                     if let Some(current) = self.selection.as_mut() {
                         current.requires_api_key = false;
@@ -583,6 +574,9 @@ fn oauth_auth_message(selection: &SelectionDetail) -> String {
     if matches!(selection.provider_enum, Some(Provider::OpenAI)) {
         "Using ChatGPT subscription for OpenAI.".to_string()
     } else {
-        format!("Using OAuth authentication for {}.", selection.provider_label)
+        format!(
+            "Using OAuth authentication for {}.",
+            selection.provider_label
+        )
     }
 }

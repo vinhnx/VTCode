@@ -33,7 +33,7 @@ async fn test_prompt_refinement_applies_to_gemini_when_flag_disabled() {
         quiet: false,
         max_conversation_turns: 1000,
         model_behavior: None,
-            openai_chatgpt_auth: None,
+        openai_chatgpt_auth: None,
     };
 
     let mut vt = VTCodeConfig::default();
@@ -275,7 +275,7 @@ async fn test_refine_and_enrich_prompt_disabled() {
         quiet: false,
         max_conversation_turns: 1000,
         model_behavior: None,
-            openai_chatgpt_auth: None,
+        openai_chatgpt_auth: None,
     };
 
     let vt_cfg = VTCodeConfig::default(); // vibe_coding disabled by default
@@ -310,7 +310,7 @@ async fn test_refine_and_enrich_prompt_enabled() {
         quiet: false,
         max_conversation_turns: 1000,
         model_behavior: None,
-            openai_chatgpt_auth: None,
+        openai_chatgpt_auth: None,
     };
 
     let mut vt_cfg = VTCodeConfig::default();
@@ -347,7 +347,7 @@ async fn test_refine_and_enrich_prompt_no_vague_refs() {
         quiet: false,
         max_conversation_turns: 1000,
         model_behavior: None,
-            openai_chatgpt_auth: None,
+        openai_chatgpt_auth: None,
     };
 
     let mut vt_cfg = VTCodeConfig::default();
@@ -387,7 +387,7 @@ async fn test_value_inference_decrease_by_half_milestone() {
         quiet: false,
         max_conversation_turns: 1000,
         model_behavior: None,
-            openai_chatgpt_auth: None,
+        openai_chatgpt_auth: None,
     };
 
     let mut vt_cfg = VTCodeConfig::default();
@@ -447,7 +447,7 @@ async fn test_value_inference_multiple_patterns() {
         quiet: false,
         max_conversation_turns: 1000,
         model_behavior: None,
-            openai_chatgpt_auth: None,
+        openai_chatgpt_auth: None,
     };
 
     let mut vt_cfg = VTCodeConfig::default();

@@ -93,10 +93,8 @@ pub(crate) async fn handle_oauth_login(
             )?;
             let prepared = prepare_openai_login(vt_cfg)?;
             open_browser_with_guidance(ctx.renderer, &prepared.auth_url)?;
-            ctx.renderer.line(
-                MessageStyle::Info,
-                "Waiting for OpenAI OAuth callback...",
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Info, "Waiting for OpenAI OAuth callback...")?;
             let session = complete_openai_login(prepared).await?;
             ctx.renderer.line(
                 MessageStyle::Info,
@@ -259,10 +257,8 @@ fn ensure_supported_provider(
 }
 
 fn open_browser_with_guidance(renderer: &mut AnsiRenderer, auth_url: &str) -> Result<()> {
-    renderer
-        .line(MessageStyle::Info, "Opening browser for authentication...")?;
-    renderer
-        .line(MessageStyle::Output, &format!("URL: {}", auth_url))?;
+    renderer.line(MessageStyle::Info, "Opening browser for authentication...")?;
+    renderer.line(MessageStyle::Output, &format!("URL: {}", auth_url))?;
     if let Err(err) = webbrowser::open(auth_url) {
         renderer.line(
             MessageStyle::Error,
@@ -331,8 +327,7 @@ fn show_oauth_provider_modal(
         items,
         Some(InlineListSelection::ConfigAction(format!(
             "{}{}",
-            OAUTH_PROVIDER_PREFIX,
-            OPENAI_PROVIDER
+            OAUTH_PROVIDER_PREFIX, OPENAI_PROVIDER
         ))),
         None,
     );
@@ -366,10 +361,7 @@ fn oauth_modal_lines(action: OAuthProviderAction) -> Vec<String> {
     }
 }
 
-fn openai_modal_subtitle(
-    action: OAuthProviderAction,
-    status: &OpenAIChatGptAuthStatus,
-) -> String {
+fn openai_modal_subtitle(action: OAuthProviderAction, status: &OpenAIChatGptAuthStatus) -> String {
     match action {
         OAuthProviderAction::Login => match status {
             OpenAIChatGptAuthStatus::Authenticated { label, .. } => format!(
@@ -445,7 +437,9 @@ fn openrouter_modal_subtitle(action: OAuthProviderAction, status: &AuthStatus) -
             AuthStatus::Authenticated { .. } => {
                 "Remove the stored OpenRouter OAuth token.".to_string()
             }
-            AuthStatus::NotAuthenticated => "No stored OpenRouter OAuth token to remove.".to_string(),
+            AuthStatus::NotAuthenticated => {
+                "No stored OpenRouter OAuth token to remove.".to_string()
+            }
         },
         OAuthProviderAction::Refresh => {
             "OpenRouter does not expose a refresh-token flow; reconnect with /login openrouter."
@@ -488,10 +482,7 @@ fn render_openrouter_auth_status(renderer: &mut AnsiRenderer, status: AuthStatus
         }
         AuthStatus::NotAuthenticated => {
             if get_api_key(OPENROUTER_PROVIDER, &ApiKeySources::default()).is_ok() {
-                renderer.line(
-                    MessageStyle::Info,
-                    "OpenRouter: using OPENROUTER_API_KEY",
-                )?;
+                renderer.line(MessageStyle::Info, "OpenRouter: using OPENROUTER_API_KEY")?;
             } else {
                 renderer.line(MessageStyle::Info, "OpenRouter: not authenticated")?;
             }
@@ -527,10 +518,7 @@ fn render_openai_auth_status(
         }
         OpenAIChatGptAuthStatus::NotAuthenticated => {
             if get_api_key(OPENAI_PROVIDER, &ApiKeySources::default()).is_ok() {
-                renderer.line(
-                    MessageStyle::Info,
-                    "OpenAI: using OPENAI_API_KEY",
-                )?;
+                renderer.line(MessageStyle::Info, "OpenAI: using OPENAI_API_KEY")?;
             } else {
                 renderer.line(MessageStyle::Info, "OpenAI: not authenticated")?;
             }

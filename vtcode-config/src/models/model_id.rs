@@ -33,16 +33,24 @@ pub enum ModelId {
     GPT5,
     /// GPT-5.2 - Latest flagship general-purpose OpenAI model (2025-12-11)
     GPT52,
+    /// GPT-5.2 Codex - Code-focused GPT-5.2 variant optimized for agentic coding with xhigh reasoning support
+    GPT52Codex,
     /// GPT-5.4 - Mainline frontier GPT model for general-purpose and coding work
     GPT54,
     /// GPT-5.4 Pro - Higher-compute GPT-5.4 variant for difficult problems
     GPT54Pro,
+    /// GPT-5.3 Codex - Code-focused GPT-5.3 variant optimized for agentic coding with reasoning effort support (low, medium, high, xhigh)
+    GPT53Codex,
+    /// GPT-5.1 Codex - Code-focused GPT-5.1 variant optimized for agentic coding
+    GPT51Codex,
+    /// GPT-5.1 Codex Max - Higher-compute GPT-5.1 Codex variant for longer-running engineering tasks
+    GPT51CodexMax,
     /// GPT-5 Mini - Latest efficient OpenAI model (2025-08-07)
     GPT5Mini,
     /// GPT-5 Nano - Latest most cost-effective OpenAI model (2025-08-07)
     GPT5Nano,
-    /// GPT-5.3 Codex - Code-focused GPT-5.3 variant optimized for agentic coding with reasoning effort support (low, medium, high, xhigh)
-    GPT53Codex,
+    /// GPT-5 Codex - Code-focused GPT-5 variant optimized for agentic coding
+    GPT5Codex,
     /// GPT-OSS 20B - OpenAI's open-source 20B parameter model using harmony
     OpenAIGptOss20b,
     /// GPT-OSS 120B - OpenAI's open-source 120B parameter model using harmony

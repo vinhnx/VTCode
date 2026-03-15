@@ -9,7 +9,7 @@ use super::OpenAIProvider;
 use crate::llm::error_display;
 use crate::llm::provider;
 use crate::llm::provider::LLMProvider;
-use crate::llm::providers::error_handling::is_rate_limit_error;
+use crate::llm::providers::error_handling::{is_rate_limit_error, parse_api_error};
 use async_stream::try_stream;
 use serde_json::{Value, json};
 use tracing::debug;
@@ -131,7 +131,7 @@ impl OpenAIProvider {
             }
 
             if is_rate_limit_error(status.as_u16(), &error_text) {
-                return Err(provider::LLMError::RateLimit { metadata: None });
+                return Err(parse_api_error("OpenAI", status, &error_text));
             }
 
             let formatted_error = error_display::format_llm_error(
@@ -204,7 +204,7 @@ impl OpenAIProvider {
             let error_text = response.text().await.unwrap_or_default();
 
             if is_rate_limit_error(status.as_u16(), &error_text) {
-                return Err(provider::LLMError::RateLimit { metadata: None });
+                return Err(parse_api_error("OpenAI", status, &error_text));
             }
 
             let formatted_error = error_display::format_llm_error(

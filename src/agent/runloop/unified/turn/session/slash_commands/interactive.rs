@@ -107,37 +107,37 @@ pub(crate) async fn handle_show_jobs_panel(
     let selected = items.first().and_then(|item| item.selection.clone());
     ctx.handle
         .show_overlay(OverlayRequest::List(ListOverlayRequest {
-        title: "Jobs".to_string(),
-        lines: vec![
+            title: "Jobs".to_string(),
+            lines: vec![
             "Active/background command sessions.".to_string(),
             "Enter or Ctrl+R focuses the selected job output. Ctrl+P previews. Ctrl+X interrupts."
                 .to_string(),
         ],
-        footer_hint: Some(
-            "ctrl-r focus output · ctrl-p preview snapshot · ctrl-x interrupt selected job"
-                .to_string(),
-        ),
-        items,
-        selected: selected.clone(),
-        search: Some(InlineListSearchConfig {
-            label: "Search jobs".to_string(),
-            placeholder: Some("command, cwd, status".to_string()),
-        }),
-        hotkeys: vec![
-            OverlayHotkey {
-                key: OverlayHotkeyKey::CtrlChar('r'),
-                action: OverlayHotkeyAction::FocusJobOutput,
-            },
-            OverlayHotkey {
-                key: OverlayHotkeyKey::CtrlChar('p'),
-                action: OverlayHotkeyAction::PreviewJobSnapshot,
-            },
-            OverlayHotkey {
-                key: OverlayHotkeyKey::CtrlChar('x'),
-                action: OverlayHotkeyAction::InterruptJob,
-            },
-        ],
-    }));
+            footer_hint: Some(
+                "ctrl-r focus output · ctrl-p preview snapshot · ctrl-x interrupt selected job"
+                    .to_string(),
+            ),
+            items,
+            selected: selected.clone(),
+            search: Some(InlineListSearchConfig {
+                label: "Search jobs".to_string(),
+                placeholder: Some("command, cwd, status".to_string()),
+            }),
+            hotkeys: vec![
+                OverlayHotkey {
+                    key: OverlayHotkeyKey::CtrlChar('r'),
+                    action: OverlayHotkeyAction::FocusJobOutput,
+                },
+                OverlayHotkey {
+                    key: OverlayHotkeyKey::CtrlChar('p'),
+                    action: OverlayHotkeyAction::PreviewJobSnapshot,
+                },
+                OverlayHotkey {
+                    key: OverlayHotkeyKey::CtrlChar('x'),
+                    action: OverlayHotkeyAction::InterruptJob,
+                },
+            ],
+        }));
 
     let Some(action) = wait_for_jobs_modal_action(
         ctx.handle,
