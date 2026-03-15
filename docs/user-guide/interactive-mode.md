@@ -24,7 +24,7 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 | `Ctrl+V` (macOS/Linux) or `Alt+V` (Windows) | Paste an image from the clipboard. | Works with image-enabled sessions. |
 | `Ctrl+Z` (Unix) | Suspend VT Code to the shell; run `fg` to resume. | Job-control support for terminal workflows. |
 | `Up/Down arrows` | Navigate through command history. | Recall previous prompts or commands. |
-| `Esc` + `Esc` | Rewind the conversation and code to the latest checkpoint. | Idle context only (while no task/PTY is running). |
+| `Esc` + `Esc` | Open the rewind picker for checkpoint restore or summarize actions. | Idle context only (while no task/PTY is running). |
 | `Enter` | Queue the current input. | Plain input box only. |
 | `Tab` | Queue the current input. | Plain input box only; list and slash UIs keep their existing tab behavior. |
 | `Ctrl+Enter` | Process now or steer now. | Idle: runs the current draft, or the newest queued message if the draft is empty. Active: steers the current turn with the current draft. |

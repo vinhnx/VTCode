@@ -1,6 +1,15 @@
 use crate::config::types::ReasoningEffortLevel;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RewindAction {
+    RestoreBoth,
+    RestoreConversation,
+    RestoreCode,
+    SummarizeFromHere,
+    NeverMind,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum InlineListSelection {
     Model(usize),
     DynamicModel(usize),
@@ -21,6 +30,8 @@ pub enum InlineListSelection {
     FileConflictViewDiff,
     FileConflictAbort,
     SessionLimitIncrease(usize),
+    RewindCheckpoint(usize),
+    RewindAction(RewindAction),
 
     /// Selection shape used by legacy tabbed HITL flows.
     AskUserChoice {

@@ -20,7 +20,7 @@ pub use protocol::{
     InlineMessageKind, InlineSession,
 };
 pub use selection::{
-    InlineListItem, InlineListSearchConfig, InlineListSelection, SecurePromptConfig,
+    InlineListItem, InlineListSearchConfig, InlineListSelection, RewindAction, SecurePromptConfig,
     WizardModalMode, WizardStep,
 };
 pub use slash::SlashCommandItem;

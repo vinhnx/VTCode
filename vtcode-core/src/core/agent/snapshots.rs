@@ -19,6 +19,11 @@ pub const DEFAULT_CHECKPOINTS_ENABLED: bool = true;
 pub const DEFAULT_MAX_SNAPSHOTS: usize = 50;
 pub const DEFAULT_MAX_AGE_DAYS: u64 = 30;
 
+fn normalized_prompt_text(text: &str) -> Option<&str> {
+    let trimmed = text.trim();
+    (!trimmed.is_empty()).then_some(trimmed)
+}
+
 fn sanitize_relative_path(path: &Path) -> Option<PathBuf> {
     if path.is_absolute() {
         return None;
@@ -50,6 +55,23 @@ pub struct SnapshotMetadata {
     pub description: String,
     pub message_count: usize,
     pub file_count: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt_text: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt_message_index: Option<usize>,
+}
+
+impl SnapshotMetadata {
+    pub fn resolved_prompt_text<'a>(
+        &'a self,
+        conversation: &'a [SessionMessage],
+    ) -> Option<String> {
+        self.prompt_text
+            .as_deref()
+            .and_then(normalized_prompt_text)
+            .map(str::to_string)
+            .or_else(|| SnapshotManager::derive_prompt_metadata(conversation).0)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -233,6 +255,50 @@ impl SnapshotManager {
             .collect()
     }
 
+    fn derive_prompt_metadata(conversation: &[SessionMessage]) -> (Option<String>, Option<usize>) {
+        conversation
+            .iter()
+            .enumerate()
+            .rev()
+            .find_map(|(index, message)| {
+                if message.role != crate::llm::provider::MessageRole::User {
+                    return None;
+                }
+
+                let prompt = message.content.as_text();
+                normalized_prompt_text(prompt.as_ref())
+                    .map(|prompt| (Some(prompt.to_string()), Some(index)))
+            })
+            .unwrap_or((None, None))
+    }
+
+    fn resolve_prompt_metadata(
+        prompt_text: Option<&str>,
+        prompt_message_index: Option<usize>,
+        conversation: &[SessionMessage],
+    ) -> (Option<String>, Option<usize>) {
+        let (derived_prompt_text, derived_prompt_index) =
+            Self::derive_prompt_metadata(conversation);
+        let prompt_text = prompt_text
+            .and_then(normalized_prompt_text)
+            .map(str::to_string)
+            .or(derived_prompt_text);
+        let prompt_message_index = prompt_message_index
+            .filter(|index| *index < conversation.len())
+            .or(derived_prompt_index);
+        (prompt_text, prompt_message_index)
+    }
+
+    fn hydrate_prompt_metadata(stored: &mut StoredSnapshot) {
+        let (prompt_text, prompt_message_index) = Self::resolve_prompt_metadata(
+            stored.metadata.prompt_text.as_deref(),
+            stored.metadata.prompt_message_index,
+            &stored.conversation,
+        );
+        stored.metadata.prompt_text = prompt_text;
+        stored.metadata.prompt_message_index = prompt_message_index;
+    }
+
     fn current_timestamp() -> Result<u64> {
         Ok(SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -256,6 +322,8 @@ impl SnapshotManager {
         description: &str,
         conversation: &[SessionMessage],
         modified_files: &BTreeSet<PathBuf>,
+        prompt_text: Option<&str>,
+        prompt_message_index: Option<usize>,
     ) -> Result<Option<SnapshotMetadata>> {
         if !self.enabled {
             return Ok(None);
@@ -291,13 +359,18 @@ impl SnapshotManager {
             }
         }
 
+        let (prompt_text, prompt_message_index) =
+            Self::resolve_prompt_metadata(prompt_text, prompt_message_index, conversation);
+        let description_source = prompt_text.as_deref().unwrap_or(description);
         let metadata = SnapshotMetadata {
             id: format!("turn_{}", turn_number),
             turn_number,
             created_at: timestamp,
-            description: Self::truncate_description(description),
+            description: Self::truncate_description(description_source),
             message_count: conversation.len(),
             file_count: files.len(),
+            prompt_text,
+            prompt_message_index,
         };
 
         let stored = StoredSnapshot {
@@ -332,12 +405,13 @@ impl SnapshotManager {
         self.cleanup_old_snapshots().await?;
         let snapshot_files = self.read_snapshot_files()?;
         let mut snapshots = Vec::with_capacity(snapshot_files.len());
-        for (_, path) in self.read_snapshot_files()? {
+        for (_, path) in snapshot_files {
             let data = tokio::fs::read(&path)
                 .await
                 .with_context(|| format!("failed to read checkpoint: {}", path.display()))?;
-            let stored: StoredSnapshot = serde_json::from_slice(&data)
+            let mut stored: StoredSnapshot = serde_json::from_slice(&data)
                 .with_context(|| format!("failed to parse checkpoint: {}", path.display()))?;
+            Self::hydrate_prompt_metadata(&mut stored);
             snapshots.push(stored.metadata);
         }
         snapshots.sort_by(|a, b| b.turn_number.cmp(&a.turn_number));
@@ -355,8 +429,9 @@ impl SnapshotManager {
         let data = tokio::fs::read(&path)
             .await
             .with_context(|| format!("failed to read checkpoint: {}", path.display()))?;
-        let stored = serde_json::from_slice(&data)
+        let mut stored = serde_json::from_slice(&data)
             .with_context(|| format!("failed to parse checkpoint: {}", path.display()))?;
+        Self::hydrate_prompt_metadata(&mut stored);
         Ok(Some(stored))
     }
 
@@ -540,7 +615,7 @@ mod tests {
         ));
         let files = BTreeSet::new();
         manager
-            .create_snapshot(1, "First turn", &conversation, &files)
+            .create_snapshot(1, "First turn", &conversation, &files, None, None)
             .await?
             .expect("metadata");
         conversation.push(SessionMessage::new(
@@ -548,7 +623,7 @@ mod tests {
             "Hi",
         ));
         manager
-            .create_snapshot(2, "Second turn", &conversation, &files)
+            .create_snapshot(2, "Second turn", &conversation, &files, None, None)
             .await?
             .expect("metadata");
 
@@ -573,7 +648,7 @@ mod tests {
             "edit example",
         )];
         manager
-            .create_snapshot(1, "save", &conversation, &files)
+            .create_snapshot(1, "save", &conversation, &files, None, None)
             .await?
             .expect("metadata");
 
@@ -601,7 +676,7 @@ mod tests {
             "remove",
         )];
         manager
-            .create_snapshot(1, "save", &conversation, &files)
+            .create_snapshot(1, "save", &conversation, &files, None, None)
             .await?
             .expect("metadata");
 
@@ -627,7 +702,7 @@ mod tests {
 
         for turn in 1..=5 {
             manager
-                .create_snapshot(turn, "turn", &conversation, &files)
+                .create_snapshot(turn, "turn", &conversation, &files, None, None)
                 .await?
                 .expect("metadata");
         }
@@ -659,7 +734,7 @@ mod tests {
         )];
 
         manager
-            .create_snapshot(1, "abs", &conversation, &files)
+            .create_snapshot(1, "abs", &conversation, &files, None, None)
             .await?
             .expect("metadata");
 
@@ -680,7 +755,7 @@ mod tests {
         let files = BTreeSet::new();
 
         manager
-            .create_snapshot(1, "old", &conversation, &files)
+            .create_snapshot(1, "old", &conversation, &files, None, None)
             .await?
             .expect("metadata");
 
@@ -696,6 +771,77 @@ mod tests {
         janitor.cleanup_old_snapshots().await?;
 
         assert!(janitor.load_snapshot(1).await?.is_none());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn snapshot_persists_prompt_metadata() -> Result<()> {
+        let (_dir, manager) = setup_manager();
+        let conversation = vec![
+            SessionMessage::new(
+                crate::llm::provider::MessageRole::User,
+                "Explain checkpointing",
+            ),
+            SessionMessage::new(
+                crate::llm::provider::MessageRole::Assistant,
+                "Working on it",
+            ),
+        ];
+
+        manager
+            .create_snapshot(
+                1,
+                "assistant reply",
+                &conversation,
+                &BTreeSet::new(),
+                Some("Explain checkpointing"),
+                Some(0),
+            )
+            .await?
+            .expect("metadata");
+
+        let stored = manager.load_snapshot(1).await?.expect("stored snapshot");
+        assert_eq!(
+            stored.metadata.prompt_text.as_deref(),
+            Some("Explain checkpointing")
+        );
+        assert_eq!(stored.metadata.prompt_message_index, Some(0));
+        assert_eq!(stored.metadata.description, "Explain checkpointing");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn load_snapshot_hydrates_prompt_metadata_for_legacy_files() -> Result<()> {
+        let (_dir, manager) = setup_manager();
+        let stored = StoredSnapshot {
+            metadata: SnapshotMetadata {
+                id: "turn_1".to_string(),
+                turn_number: 1,
+                created_at: 1,
+                description: "legacy".to_string(),
+                message_count: 2,
+                file_count: 0,
+                prompt_text: None,
+                prompt_message_index: None,
+            },
+            conversation: vec![
+                SessionMessage::new(crate::llm::provider::MessageRole::User, "Legacy prompt"),
+                SessionMessage::new(crate::llm::provider::MessageRole::Assistant, "Legacy reply"),
+            ],
+            files: Vec::new(),
+        };
+        let path = manager.snapshot_path(1);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(path, serde_json::to_vec_pretty(&stored)?)?;
+
+        let loaded = manager.load_snapshot(1).await?.expect("loaded snapshot");
+        assert_eq!(
+            loaded.metadata.prompt_text.as_deref(),
+            Some("Legacy prompt")
+        );
+        assert_eq!(loaded.metadata.prompt_message_index, Some(0));
         Ok(())
     }
 

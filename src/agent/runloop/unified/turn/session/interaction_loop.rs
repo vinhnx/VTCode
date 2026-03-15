@@ -163,6 +163,7 @@ pub(crate) struct InteractionState<'a> {
 pub(crate) enum InteractionOutcome {
     Continue {
         input: String,
+        prompt_message_index: Option<usize>,
     },
     /// A direct tool command (e.g. `!cmd` / `run ...`) was executed and rendered;
     /// no LLM turn should be started for this loop iteration.

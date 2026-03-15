@@ -25,8 +25,8 @@ pub use types::{
     InlineMessageKind, InlineSegment, InlineSession, InlineTextStyle, InlineTheme,
     ListOverlayRequest, ModalOverlayRequest, OverlayEvent, OverlayHotkey, OverlayHotkeyAction,
     OverlayHotkeyKey, OverlayRequest, OverlaySelectionChange, OverlaySubmission, PlanContent,
-    PlanPhase, PlanStep, SecurePromptConfig, SlashCommandItem, TrustMode, WizardModalMode,
-    WizardOverlayRequest, WizardStep,
+    PlanPhase, PlanStep, RewindAction, SecurePromptConfig, SlashCommandItem, TrustMode,
+    WizardModalMode, WizardOverlayRequest, WizardStep,
 };
 
 use runner::{TuiOptions, run_tui};

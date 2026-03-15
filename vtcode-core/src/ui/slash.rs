@@ -149,7 +149,7 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
         },
         SlashCommandInfo {
             name: "rewind",
-            description: "Rewind to latest or specific checkpoint (usage: /rewind [turn] [conversation|code|both])",
+            description: "Open the rewind picker or restore a specific checkpoint (usage: /rewind [turn] [conversation|code|both])",
         },
         SlashCommandInfo {
             name: "plan",

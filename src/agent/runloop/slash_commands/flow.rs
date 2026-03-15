@@ -174,9 +174,13 @@ pub(super) fn handle_rewind_command(
     let tokens: Vec<&str> = args.split_whitespace().collect();
 
     if tokens.is_empty() {
-        return Ok(SlashCommandOutcome::RewindLatest {
-            scope: vtcode_core::core::agent::snapshots::RevertScope::Both,
-        });
+        return if renderer.supports_inline_ui() {
+            Ok(SlashCommandOutcome::OpenRewindPicker)
+        } else {
+            Ok(SlashCommandOutcome::RewindLatest {
+                scope: vtcode_core::core::agent::snapshots::RevertScope::Both,
+            })
+        };
     }
 
     // Parse the arguments
@@ -362,4 +366,37 @@ pub(super) fn handle_auth_command(args: &str) -> SlashCommandOutcome {
         Some(args.trim().to_ascii_lowercase())
     };
     SlashCommandOutcome::ShowAuthStatus { provider }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::sync::mpsc::unbounded_channel;
+    use vtcode_core::utils::ansi::AnsiRenderer;
+    use vtcode_tui::InlineHandle;
+
+    #[test]
+    fn rewind_without_args_opens_picker_in_inline_ui() {
+        let (sender, _receiver) = unbounded_channel();
+        let handle = InlineHandle::new_for_tests(sender);
+        let mut renderer = AnsiRenderer::with_inline_ui(handle, Default::default());
+
+        let outcome = handle_rewind_command("", &mut renderer).expect("rewind outcome");
+
+        assert!(matches!(outcome, SlashCommandOutcome::OpenRewindPicker));
+    }
+
+    #[test]
+    fn rewind_without_args_keeps_latest_rewind_in_plain_ui() {
+        let mut renderer = AnsiRenderer::stdout();
+
+        let outcome = handle_rewind_command("", &mut renderer).expect("rewind outcome");
+
+        assert!(matches!(
+            outcome,
+            SlashCommandOutcome::RewindLatest {
+                scope: vtcode_core::core::agent::snapshots::RevertScope::Both,
+            }
+        ));
+    }
 }

@@ -111,6 +111,7 @@ pub(crate) enum SlashCommandOutcome {
         prompt: String,
     },
     StartTerminalSetup,
+    OpenRewindPicker,
     RewindToTurn {
         turn: usize,
         scope: vtcode_core::core::agent::snapshots::RevertScope,

@@ -428,7 +428,7 @@ recommended_actions = [
 # Checkpointing configuration for session persistence
 [agent.checkpointing]
 # Enable automatic session checkpointing
-enabled = false
+enabled = true
 
 # Maximum number of checkpoints to keep on disk
 max_snapshots = 50

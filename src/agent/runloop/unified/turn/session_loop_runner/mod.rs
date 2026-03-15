@@ -615,65 +615,70 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 ).await?
                 };
                 use crate::agent::runloop::unified::turn::session::interaction_loop::InteractionOutcome;
-                let next_turn_input = match interaction_outcome {
-                    InteractionOutcome::Exit { reason } => {
-                        session_end_reason = reason;
-                        break;
-                    }
-                    InteractionOutcome::Resume { resume_session } => {
-                        resume_state = Some(*resume_session);
-                        session_end_reason = SessionEndReason::Completed;
-                        break;
-                    }
-                    InteractionOutcome::DirectToolHandled => {
-                        // Explicit `run ...` / `!cmd` interactions are direct command mode:
-                        // render the tool output and wait for the next user input instead of
-                        // fabricating an autonomous follow-up turn.
-                        continue;
-                    }
-                    InteractionOutcome::Continue { input } => input,
-                    InteractionOutcome::PlanApproved { auto_accept } => {
-                        let plan_seed = load_active_plan_seed(&tool_registry).await;
-                        crate::agent::runloop::unified::plan_mode_state::transition_to_edit_mode(
+                let (next_turn_input, completed_turn_prompt_message_index) =
+                    match interaction_outcome {
+                        InteractionOutcome::Exit { reason } => {
+                            session_end_reason = reason;
+                            break;
+                        }
+                        InteractionOutcome::Resume { resume_session } => {
+                            resume_state = Some(*resume_session);
+                            session_end_reason = SessionEndReason::Completed;
+                            break;
+                        }
+                        InteractionOutcome::DirectToolHandled => {
+                            // Explicit `run ...` / `!cmd` interactions are direct command mode:
+                            // render the tool output and wait for the next user input instead of
+                            // fabricating an autonomous follow-up turn.
+                            continue;
+                        }
+                        InteractionOutcome::Continue {
+                            input,
+                            prompt_message_index,
+                        } => (input, prompt_message_index),
+                        InteractionOutcome::PlanApproved { auto_accept } => {
+                            let plan_seed = load_active_plan_seed(&tool_registry).await;
+                            crate::agent::runloop::unified::plan_mode_state::transition_to_edit_mode(
                             &tool_registry,
                             &mut session_stats,
                             &handle,
                             true,
                         )
                         .await;
-                        handle.set_skip_confirmations(auto_accept);
-                        renderer.line(MessageStyle::Info, "Executing approved plan...")?;
+                            handle.set_skip_confirmations(auto_accept);
+                            renderer.line(MessageStyle::Info, "Executing approved plan...")?;
 
-                        if let Err(err) = force_reload_workspace_config_for_execution(
-                            config.workspace.as_path(),
-                            &config,
-                            &mut vt_cfg,
-                            &mut tool_registry,
-                            async_mcp_manager.as_deref(),
-                        )
-                        .await
-                        {
-                            tracing::warn!(
-                                "Failed to reload workspace configuration at plan approval: {}",
-                                err
-                            );
-                            renderer.line(
-                                MessageStyle::Error,
-                                &format!("Failed to reload configuration: {}", err),
-                            )?;
-                        }
+                            if let Err(err) = force_reload_workspace_config_for_execution(
+                                config.workspace.as_path(),
+                                &config,
+                                &mut vt_cfg,
+                                &mut tool_registry,
+                                async_mcp_manager.as_deref(),
+                            )
+                            .await
+                            {
+                                tracing::warn!(
+                                    "Failed to reload workspace configuration at plan approval: {}",
+                                    err
+                                );
+                                renderer.line(
+                                    MessageStyle::Error,
+                                    &format!("Failed to reload configuration: {}", err),
+                                )?;
+                            }
 
-                        let mut execution_directive = PLAN_APPROVED_EXECUTION_DIRECTIVE.to_string();
-                        if let Some(seed) = plan_seed {
-                            execution_directive.push_str("\n\nApproved plan context:\n");
-                            execution_directive.push_str(&seed);
+                            let mut execution_directive =
+                                PLAN_APPROVED_EXECUTION_DIRECTIVE.to_string();
+                            if let Some(seed) = plan_seed {
+                                execution_directive.push_str("\n\nApproved plan context:\n");
+                                execution_directive.push_str(&seed);
+                            }
+                            conversation_history.push(vtcode_core::llm::provider::Message::system(
+                                execution_directive,
+                            ));
+                            (PLAN_APPROVED_EXECUTION_INPUT.to_string(), None)
                         }
-                        conversation_history.push(vtcode_core::llm::provider::Message::system(
-                            execution_directive,
-                        ));
-                        PLAN_APPROVED_EXECUTION_INPUT.to_string()
-                    }
-                };
+                    };
                 if next_turn_input.trim().is_empty() {
                     continue;
                 }
@@ -854,6 +859,8 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     outcome,
                     crate::agent::runloop::unified::turn::TurnOutcomeContext {
                         conversation_history: &mut conversation_history,
+                        completed_turn_prompt: Some(next_turn_input.as_str()),
+                        completed_turn_prompt_message_index,
                         renderer: &mut renderer,
                         handle: &handle,
                         ctrl_c_state: &ctrl_c_state,

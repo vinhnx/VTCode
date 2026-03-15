@@ -152,6 +152,8 @@ pub(crate) enum TurnHandlerOutcome {
 
 pub(crate) struct TurnOutcomeContext<'a> {
     pub conversation_history: &'a mut Vec<uni::Message>,
+    pub completed_turn_prompt: Option<&'a str>,
+    pub completed_turn_prompt_message_index: Option<usize>,
     pub renderer: &'a mut AnsiRenderer,
     pub handle: &'a InlineHandle,
     pub ctrl_c_state: &'a Arc<CtrlCState>,

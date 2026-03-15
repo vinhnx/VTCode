@@ -17,6 +17,12 @@ const MEMORY_ENVELOPE_HEADER: &str = "[Session Memory Envelope]";
 const MEMORY_ENVELOPE_SUFFIX: &str = ".memory.json";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MemoryEnvelopePersistence {
+    PersistToDisk,
+    InMemoryOnly,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct CompactionOutcome {
     pub original_len: usize,
     pub compacted_len: usize,
@@ -418,6 +424,11 @@ fn load_latest_memory_envelope(
     Some(envelope)
 }
 
+fn apply_memory_envelope(compacted: &mut Vec<Message>, envelope: &SessionMemoryEnvelope) {
+    strip_existing_memory_envelope(compacted);
+    compacted.insert(0, memory_envelope_message(envelope));
+}
+
 pub(crate) fn inject_latest_memory_envelope(
     workspace_root: &Path,
     session_id: &str,
@@ -439,45 +450,59 @@ fn persist_memory_envelope(
     original_history: &[Message],
     touched_files: &[String],
     compacted: &mut Vec<Message>,
+    persistence: MemoryEnvelopePersistence,
 ) -> Result<Option<SessionMemoryEnvelope>> {
-    if !should_persist_memory_envelope(vt_cfg) || original_history.is_empty() {
+    let should_persist = should_persist_memory_envelope(vt_cfg);
+    if original_history.is_empty()
+        || (!should_persist && persistence == MemoryEnvelopePersistence::PersistToDisk)
+    {
         return Ok(None);
     }
 
     let task_summary = read_task_summary(workspace_root);
-    let mut history_manager = HistoryFileManager::new(workspace_root, session_id);
-    let history_messages = messages_to_history_messages(original_history, 0);
-    let history_result = history_manager
-        .write_history_sync(
-            &history_messages,
-            original_history.len(),
-            "compaction",
-            touched_files,
-            &[],
-        )
-        .context("write compaction history artifact")?;
+    let history_artifact_path =
+        if should_persist && persistence == MemoryEnvelopePersistence::PersistToDisk {
+            let mut history_manager = HistoryFileManager::new(workspace_root, session_id);
+            let history_messages = messages_to_history_messages(original_history, 0);
+            let history_result = history_manager
+                .write_history_sync(
+                    &history_messages,
+                    original_history.len(),
+                    "compaction",
+                    touched_files,
+                    &[],
+                )
+                .context("write compaction history artifact")?;
+            Some(history_result.file_path)
+        } else {
+            None
+        };
     let envelope = SessionMemoryEnvelope {
         session_id: session_id.to_string(),
         summary: extract_compaction_summary(compacted, original_history),
         task_summary,
         grounded_facts: dedup_latest_facts(original_history),
         touched_files: touched_files.to_vec(),
-        history_artifact_path: Some(history_result.file_path.display().to_string()),
+        history_artifact_path: history_artifact_path
+            .as_ref()
+            .map(|path| path.display().to_string()),
         generated_at: Utc::now().to_rfc3339(),
     };
 
-    let envelope_path =
-        memory_envelope_path_from_history_path(workspace_root, &history_result.file_path);
-    if let Some(parent) = envelope_path.parent() {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("create memory envelope directory {}", parent.display()))?;
+    if let Some(history_artifact_path) = history_artifact_path {
+        let envelope_path =
+            memory_envelope_path_from_history_path(workspace_root, &history_artifact_path);
+        if let Some(parent) = envelope_path.parent() {
+            fs::create_dir_all(parent).with_context(|| {
+                format!("create memory envelope directory {}", parent.display())
+            })?;
+        }
+        let serialized = serde_json::to_string_pretty(&envelope)?;
+        fs::write(&envelope_path, serialized)
+            .with_context(|| format!("write memory envelope {}", envelope_path.display()))?;
     }
-    let serialized = serde_json::to_string_pretty(&envelope)?;
-    fs::write(&envelope_path, serialized)
-        .with_context(|| format!("write memory envelope {}", envelope_path.display()))?;
 
-    strip_existing_memory_envelope(compacted);
-    compacted.insert(0, memory_envelope_message(&envelope));
+    apply_memory_envelope(compacted, &envelope);
 
     Ok(Some(envelope))
 }
@@ -491,6 +516,31 @@ pub(crate) async fn compact_history_in_place(
     history: &mut Vec<Message>,
     session_stats: &mut SessionStats,
     context_manager: &mut ContextManager,
+) -> Result<Option<CompactionOutcome>> {
+    compact_history_segment_in_place(
+        provider,
+        model,
+        session_id,
+        workspace_root,
+        vt_cfg,
+        history,
+        session_stats,
+        context_manager,
+        MemoryEnvelopePersistence::PersistToDisk,
+    )
+    .await
+}
+
+async fn compact_history_segment_in_place(
+    provider: &dyn LLMProvider,
+    model: &str,
+    session_id: &str,
+    workspace_root: &Path,
+    vt_cfg: Option<&VTCodeConfig>,
+    history: &mut Vec<Message>,
+    session_stats: &mut SessionStats,
+    context_manager: &mut ContextManager,
+    persistence: MemoryEnvelopePersistence,
 ) -> Result<Option<CompactionOutcome>> {
     strip_existing_memory_envelope(history);
     let original_len = history.len();
@@ -525,6 +575,7 @@ pub(crate) async fn compact_history_in_place(
         &original_history,
         &touched_files,
         &mut compacted,
+        persistence,
     )?;
     *history = compacted;
     session_stats.clear_previous_response_chain();
@@ -558,6 +609,63 @@ pub(crate) async fn compact_history_in_place(
     Ok(Some(CompactionOutcome {
         original_len,
         compacted_len,
+    }))
+}
+
+pub(crate) async fn compact_history_from_index_in_place(
+    provider: &dyn LLMProvider,
+    model: &str,
+    session_id: &str,
+    workspace_root: &Path,
+    vt_cfg: Option<&VTCodeConfig>,
+    history: &mut Vec<Message>,
+    start_index: usize,
+    session_stats: &mut SessionStats,
+    context_manager: &mut ContextManager,
+) -> Result<Option<CompactionOutcome>> {
+    if start_index >= history.len() {
+        return Ok(None);
+    }
+    if start_index == 0 {
+        return compact_history_segment_in_place(
+            provider,
+            model,
+            session_id,
+            workspace_root,
+            vt_cfg,
+            history,
+            session_stats,
+            context_manager,
+            MemoryEnvelopePersistence::InMemoryOnly,
+        )
+        .await;
+    }
+
+    let prefix = history[..start_index].to_vec();
+    let mut suffix = history[start_index..].to_vec();
+    let Some(suffix_outcome) = compact_history_segment_in_place(
+        provider,
+        model,
+        session_id,
+        workspace_root,
+        vt_cfg,
+        &mut suffix,
+        session_stats,
+        context_manager,
+        MemoryEnvelopePersistence::InMemoryOnly,
+    )
+    .await?
+    else {
+        return Ok(None);
+    };
+
+    history.clear();
+    history.extend(prefix);
+    history.extend(suffix);
+
+    Ok(Some(CompactionOutcome {
+        original_len: start_index + suffix_outcome.original_len,
+        compacted_len: start_index + suffix_outcome.compacted_len,
     }))
 }
 
@@ -606,7 +714,8 @@ pub(crate) async fn maybe_auto_compact_history(
 #[cfg(test)]
 mod tests {
     use super::{
-        GroundedFactRecord, build_server_compaction_context_management, compact_history_in_place,
+        GroundedFactRecord, build_server_compaction_context_management,
+        compact_history_from_index_in_place, compact_history_in_place,
         inject_latest_memory_envelope, latest_memory_envelope_path_for_session,
         maybe_auto_compact_history, resolve_compaction_threshold,
     };
@@ -754,6 +863,48 @@ mod tests {
         );
         assert!(context_manager.current_token_usage() < 700);
         assert!(latest_memory_envelope_path_for_session(temp.path(), "session-alpha").is_some());
+    }
+
+    #[tokio::test]
+    async fn targeted_compaction_preserves_prefix_and_replaces_suffix() {
+        let temp = tempdir().expect("tempdir");
+        let provider = LocalCompactionProvider;
+        let mut history = test_history();
+        let preserved_prefix = history[..1].to_vec();
+        let mut session_stats = SessionStats::default();
+        let mut context_manager = test_context_manager();
+        context_manager.update_token_usage(&Some(Usage {
+            prompt_tokens: 900,
+            completion_tokens: 10,
+            total_tokens: 910,
+            ..Usage::default()
+        }));
+
+        let outcome = compact_history_from_index_in_place(
+            &provider,
+            "stub-model",
+            "session-alpha",
+            temp.path(),
+            Some(&VTCodeConfig::default()),
+            &mut history,
+            1,
+            &mut session_stats,
+            &mut context_manager,
+        )
+        .await
+        .expect("targeted compaction succeeds")
+        .expect("history should compact");
+
+        assert_eq!(&history[..1], preserved_prefix.as_slice());
+        assert_eq!(outcome.original_len, 12);
+        assert!(outcome.compacted_len <= outcome.original_len);
+        assert!(
+            history[1]
+                .content
+                .as_text()
+                .contains("[Session Memory Envelope]")
+        );
+        assert!(latest_memory_envelope_path_for_session(temp.path(), "session-alpha").is_none());
     }
 
     #[test]

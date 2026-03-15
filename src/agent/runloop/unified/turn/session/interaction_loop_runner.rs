@@ -18,6 +18,7 @@ use vtcode_core::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::model_picker::ModelPickerProgress;
 use crate::agent::runloop::prompt::refine_and_enrich_prompt;
+use crate::agent::runloop::ui::sync_inline_header_pr_status;
 use crate::agent::runloop::unified::async_mcp_manager::{
     AsyncMcpManager, approval_policy_from_human_in_the_loop,
 };
@@ -31,7 +32,6 @@ use crate::agent::runloop::unified::session_setup::{
 };
 use crate::agent::runloop::unified::state::ModelPickerTarget;
 use crate::agent::runloop::unified::state::is_follow_up_prompt_like;
-use crate::agent::runloop::ui::sync_inline_header_pr_status;
 use crate::agent::runloop::unified::turn::session::direct_tool_completion::{
     ReplyKind, generate_completion_reply_with_suggestions,
 };
@@ -880,9 +880,11 @@ pub(super) async fn run_interaction_loop_impl(
             uni::MessageContent::Parts(parts) => uni::Message::user_with_parts(parts),
         };
 
+        let prompt_message_index = ctx.conversation_history.len();
         ctx.conversation_history.push(user_message);
         return Ok(InteractionOutcome::Continue {
             input: input.to_string(),
+            prompt_message_index: Some(prompt_message_index),
         });
     }
 }

@@ -107,19 +107,14 @@ pub(crate) async fn apply_turn_outcome(
                     .map(SessionMessage::from)
                     .collect();
                 let turn_number = *ctx.next_checkpoint_turn;
-                let description = ctx
-                    .conversation_history
-                    .last()
-                    .map(|msg| msg.content.as_text())
-                    .unwrap_or_default()
-                    .trim()
-                    .to_string();
                 match manager
                     .create_snapshot(
                         turn_number,
-                        description.as_str(),
+                        ctx.completed_turn_prompt.unwrap_or_default(),
                         &conversation_snapshot,
                         &outcome.turn_modified_files,
+                        ctx.completed_turn_prompt,
+                        ctx.completed_turn_prompt_message_index,
                     )
                     .await
                 {
@@ -207,6 +202,8 @@ mod tests {
             outcome,
             TurnOutcomeContext {
                 conversation_history: &mut conversation_history,
+                completed_turn_prompt: None,
+                completed_turn_prompt_message_index: None,
                 renderer: &mut renderer,
                 handle: &handle,
                 ctrl_c_state: &ctrl_c_state,
@@ -245,6 +242,8 @@ mod tests {
             outcome,
             TurnOutcomeContext {
                 conversation_history: &mut conversation_history,
+                completed_turn_prompt: None,
+                completed_turn_prompt_message_index: None,
                 renderer: &mut renderer,
                 handle: &handle,
                 ctrl_c_state: &ctrl_c_state,
@@ -284,6 +283,8 @@ mod tests {
             outcome,
             TurnOutcomeContext {
                 conversation_history: &mut conversation_history,
+                completed_turn_prompt: None,
+                completed_turn_prompt_message_index: None,
                 renderer: &mut renderer,
                 handle: &handle,
                 ctrl_c_state: &ctrl_c_state,

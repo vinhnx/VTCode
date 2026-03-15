@@ -159,10 +159,7 @@ pub(super) fn render_help(
             MessageStyle::Info,
             "  Up/Down arrows – Navigate command history",
         )?;
-        renderer.line(
-            MessageStyle::Info,
-            "  Esc+Esc – Rewind the code/conversation",
-        )?;
+        renderer.line(MessageStyle::Info, "  Esc+Esc – Open the rewind picker")?;
         renderer.line(MessageStyle::Info, "  Enter/Tab – Queue the current input")?;
         renderer.line(
             MessageStyle::Info,
