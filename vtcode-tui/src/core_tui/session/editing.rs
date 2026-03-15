@@ -65,7 +65,6 @@ impl Session {
         self.input_manager
             .set_cursor(self.input_manager.content().len());
         self.suggested_prompt_state.active = true;
-        self.suggested_prompt_state.source = Some("btw".to_string());
         self.input_compact_mode = self.input_compact_placeholder().is_some();
         slash::update_slash_suggestions(self);
         self.mark_dirty();

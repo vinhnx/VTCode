@@ -77,7 +77,7 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             description: "Copy the latest complete assistant reply to clipboard",
         },
         SlashCommandInfo {
-            name: "btw",
+            name: "suggest",
             description: "Suggest follow-up prompts from the current session context",
         },
         SlashCommandInfo {
@@ -378,8 +378,8 @@ mod tests {
 
     #[test]
     fn suggestions_include_new_interactive_mode_commands() {
-        let names = names_for("bt");
-        assert_eq!(names, vec!["btw"]);
+        let names = names_for("sug");
+        assert_eq!(names, vec!["suggest"]);
 
         let names = names_for("task");
         assert_eq!(names, vec!["tasks"]);

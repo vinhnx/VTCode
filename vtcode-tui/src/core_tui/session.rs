@@ -116,7 +116,6 @@ struct CollapsedPaste {
 #[derive(Clone, Debug, Default)]
 pub(crate) struct SuggestedPromptState {
     pub(crate) active: bool,
-    pub(crate) source: Option<String>,
 }
 
 pub(crate) enum ActiveOverlay {

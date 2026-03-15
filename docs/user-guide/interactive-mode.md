@@ -50,7 +50,7 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 | `/` at start of input | Issue a slash command. | Run `/help` or `/slash-commands` in a session to list everything available. |
 | `!` at start of input | Enter Bash mode. | Runs shell commands directly and streams their output. |
 | `@` within input | Open file picker. | Triggers file path autocomplete and picker to quickly reference files in your message. |
-| `Alt+P` / `Option+P` | Open prompt suggestions. | Equivalent to `/btw`; inserts the selected prompt into the composer without auto-submitting. |
+| `Alt+P` / `Option+P` | Open prompt suggestions. | Equivalent to `/suggest`; inserts the selected prompt into the composer without auto-submitting. |
 
 ## Vim Mode
 
@@ -65,8 +65,8 @@ VT Code supports an optional Vim-style prompt editor.
 
 ## Prompt Suggestions, Tasks, and Jobs
 
-- `/btw` opens a prompt-suggestion picker built from recent session context such as task state, active jobs, recent errors, and recent file activity.
-- When `agent.small_model` is enabled, VT Code routes `/btw` generation through that smaller model tier first and falls back to deterministic suggestions if generation fails.
+- `/suggest` opens a prompt-suggestion picker built from recent session context such as task state, active jobs, recent errors, and recent file activity.
+- When `agent.small_model` is enabled, VT Code routes `/suggest` generation through that smaller model tier first and falls back to deterministic suggestions if generation fails.
 - Picking a suggestion inserts it into the composer. Empty drafts are replaced; non-empty drafts keep their content and append the suggestion after a blank line.
 - `/tasks` toggles the dedicated TODO panel. It is fed directly from `task_tracker` and `plan_task_tracker` output and remains independent from the `Ctrl+T` log toggle.
 - `/jobs` opens the active/background jobs picker for PTY-backed command sessions.

@@ -310,9 +310,9 @@ pub(crate) async fn handle_slash_command(
             }
             Ok(SlashCommandOutcome::CopyLatestAssistantReply)
         }
-        "btw" => {
+        "suggest" => {
             if !args.is_empty() {
-                renderer.line(MessageStyle::Error, "Usage: /btw")?;
+                renderer.line(MessageStyle::Error, "Usage: /suggest")?;
                 return Ok(SlashCommandOutcome::Handled);
             }
             Ok(SlashCommandOutcome::TriggerPromptSuggestions)
@@ -728,10 +728,13 @@ mod tests {
         let workspace = std::env::current_dir().expect("workspace");
         let mut renderer = renderer_for_tests();
 
-        let btw = handle_slash_command("btw", &mut renderer, &workspace)
+        let suggest = handle_slash_command("suggest", &mut renderer, &workspace)
             .await
-            .expect("btw should parse");
-        assert!(matches!(btw, SlashCommandOutcome::TriggerPromptSuggestions));
+            .expect("suggest should parse");
+        assert!(matches!(
+            suggest,
+            SlashCommandOutcome::TriggerPromptSuggestions
+        ));
 
         let tasks = handle_slash_command("tasks", &mut renderer, &workspace)
             .await

@@ -68,7 +68,7 @@ impl Session {
     }
 
     pub(crate) fn clear_suggested_prompt_state(&mut self) {
-        if !self.suggested_prompt_state.active && self.suggested_prompt_state.source.is_none() {
+        if !self.suggested_prompt_state.active {
             return;
         }
         self.suggested_prompt_state = SuggestedPromptState::default();

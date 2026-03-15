@@ -3406,16 +3406,15 @@ fn suggested_prompt_state_clears_after_manual_edit() {
     session.insert_char('!');
 
     assert!(!session.suggested_prompt_state.active);
-    assert!(session.suggested_prompt_state.source.is_none());
 }
 
 #[test]
-fn alt_p_submits_btw_command() {
+fn alt_p_submits_suggest_command() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
     let event = session.process_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::ALT));
 
-    assert!(matches!(event, Some(InlineEvent::Submit(ref value)) if value == "/btw"));
+    assert!(matches!(event, Some(InlineEvent::Submit(ref value)) if value == "/suggest"));
 }
 
 #[test]

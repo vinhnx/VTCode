@@ -12,6 +12,8 @@ use crate::agent::runloop::unified::interactive_features::{
 use super::ui::{ensure_selection_ui_available, wait_for_list_modal_selection};
 use super::{SlashCommandContext, SlashCommandControl};
 
+const PROMPT_SUGGESTION_ACTION_PREFIX: &str = "suggest:";
+
 pub(crate) async fn handle_trigger_prompt_suggestions(
     mut ctx: SlashCommandContext<'_>,
 ) -> Result<SlashCommandControl> {
@@ -60,7 +62,7 @@ pub(crate) async fn handle_trigger_prompt_suggestions(
     let InlineListSelection::ConfigAction(action) = selection else {
         return Ok(SlashCommandControl::Continue);
     };
-    let Some(id) = action.strip_prefix("btw:") else {
+    let Some(id) = action.strip_prefix(PROMPT_SUGGESTION_ACTION_PREFIX) else {
         return Ok(SlashCommandControl::Continue);
     };
     if let Some(suggestion) = suggestions.iter().find(|suggestion| suggestion.id == id) {
@@ -335,7 +337,7 @@ fn prompt_suggestion_item(suggestion: &PromptSuggestion) -> InlineListItem {
         badge: suggestion.badge.clone(),
         indent: 0,
         selection: Some(InlineListSelection::ConfigAction(format!(
-            "btw:{}",
+            "{PROMPT_SUGGESTION_ACTION_PREFIX}{}",
             suggestion.id
         ))),
         search_value: Some(format!(

@@ -612,7 +612,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
 
             if has_alt && matches!(ch, 'p' | 'P') {
                 session.mark_dirty();
-                return Some(InlineEvent::Submit("/btw".to_string()));
+                return Some(InlineEvent::Submit("/suggest".to_string()));
             }
 
             if ch == '?'
