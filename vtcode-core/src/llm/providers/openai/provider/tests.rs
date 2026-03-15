@@ -153,6 +153,71 @@ fn sample_chatgpt_auth_handle() -> OpenAIChatGptAuthHandle {
     )
 }
 
+#[tokio::test]
+async fn chatgpt_backend_uses_oauth_access_token_and_account_header() {
+    let server = MockServer::start().await;
+    let provider = OpenAIProvider::new_with_client(
+        "api-key".to_string(),
+        Some(OpenAIChatGptAuthHandle::new(
+            OpenAIChatGptSession {
+                openai_api_key: "exchanged-api-key".to_string(),
+                id_token: "id-token".to_string(),
+                access_token: "oauth-access".to_string(),
+                refresh_token: "refresh-token".to_string(),
+                account_id: Some("acc_123".to_string()),
+                email: Some("test@example.com".to_string()),
+                plan: Some("plus".to_string()),
+                obtained_at: 1,
+                refreshed_at: u64::MAX / 2,
+                expires_at: None,
+            },
+            OpenAIAuthConfig::default(),
+            AuthCredentialsStoreMode::File,
+        )),
+        models::openai::GPT_5.to_string(),
+        reqwest::Client::builder()
+            .no_proxy()
+            .build()
+            .expect("test client should build"),
+        chatgpt_mock_base_url(&server),
+        TimeoutsConfig::default(),
+    );
+
+    let auth = provider.request_auth_from_session(OpenAIChatGptSession {
+        openai_api_key: "exchanged-api-key".to_string(),
+        id_token: "id-token".to_string(),
+        access_token: "oauth-access".to_string(),
+        refresh_token: "refresh-token".to_string(),
+        account_id: Some("acc_123".to_string()),
+        email: Some("test@example.com".to_string()),
+        plan: Some("plus".to_string()),
+        obtained_at: 1,
+        refreshed_at: 1,
+        expires_at: None,
+    });
+    assert_eq!(auth.bearer_token, "oauth-access");
+    assert_eq!(auth.chatgpt_account_id.as_deref(), Some("acc_123"));
+
+    let request = provider
+        .authorize_with_api_key(provider.http_client.get("http://example.com"), &auth)
+        .build()
+        .expect("request should build");
+    assert_eq!(
+        request
+            .headers()
+            .get("authorization")
+            .and_then(|value| value.to_str().ok()),
+        Some("Bearer oauth-access")
+    );
+    assert_eq!(
+        request
+            .headers()
+            .get("ChatGPT-Account-Id")
+            .and_then(|value| value.to_str().ok()),
+        Some("acc_123")
+    );
+}
+
 #[test]
 fn serialize_tools_wraps_function_definition() {
     let tools = vec![sample_tool()];

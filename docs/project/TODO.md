@@ -72,9 +72,3 @@ improve and modularize vtcode-tui/src/core_tui, remove duplication, and ensure a
 ---
 
 https://claude.ai/chat/37d94c2c-a521-44d2-85f3-e15c38864286
-
----
-
-https://deepwiki.com/search/how-does-pimono-handle-chatgpt_1c9744ad-55f7-49bd-8a40-ad43f4f5a9e7?mode=fast
-
---

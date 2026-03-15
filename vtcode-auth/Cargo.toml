@@ -17,6 +17,7 @@ anyhow = { workspace = true }
 axum = "0.8"
 base64 = { workspace = true }
 dirs = { workspace = true }
+fs2 = { workspace = true }
 hostname = "0.4"
 keyring = { workspace = true }
 reqwest = { workspace = true }

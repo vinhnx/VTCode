@@ -4,19 +4,24 @@ use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::types::UiSurfacePreference;
 use vtcode_core::llm::factory::{ProviderConfig, create_provider_with_config};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_tui::{InlineListItem, InlineListSelection};
+use vtcode_tui::{InlineListItem, InlineListSelection, WizardModalMode, WizardStep};
 
 use super::{SlashCommandContext, SlashCommandControl, ui};
 use crate::agent::runloop::slash_commands::OAuthProviderAction;
 use crate::agent::runloop::ui::build_inline_header_context;
+use crate::agent::runloop::unified::wizard_modal::{
+    WizardModalOutcome, show_wizard_modal_and_wait,
+};
 use crate::cli::auth::{
     OPENAI_PROVIDER, OPENROUTER_PROVIDER, clear_openai_login, clear_openrouter_login,
-    complete_openai_login, complete_openrouter_login, openai_auth_status, openrouter_auth_status,
-    prepare_openai_login, prepare_openrouter_login, refresh_openai_login, supports_oauth_provider,
+    complete_openai_login_with_manual_future, complete_openrouter_login, openai_auth_status,
+    openai_manual_placeholder, openrouter_auth_status, prepare_openai_login,
+    prepare_openrouter_login, refresh_openai_login, supports_oauth_provider,
 };
 
 const OAUTH_PROVIDER_PREFIX: &str = "oauth-provider:";
 const OAUTH_PROVIDER_BACK: &str = "oauth-provider:back";
+const OPENAI_MANUAL_PROMPT_ID: &str = "openai_manual_callback";
 
 pub(crate) async fn handle_start_oauth_provider_picker(
     mut ctx: SlashCommandContext<'_>,
@@ -96,9 +101,19 @@ pub(crate) async fn handle_oauth_login(
             )?;
             let prepared = prepare_openai_login(vt_cfg)?;
             open_browser_with_guidance(ctx.renderer, &prepared.auth_url)?;
+            ctx.renderer.line(
+                MessageStyle::Output,
+                "If localhost is unavailable, paste the redirected URL or raw query string into the inline prompt.",
+            )?;
             ctx.renderer
                 .line(MessageStyle::Info, "Waiting for OpenAI OAuth callback...")?;
-            let session = complete_openai_login(prepared).await?;
+            let manual_input =
+                prompt_openai_manual_callback_input(&mut ctx, prepared.callback_port);
+            let login_result =
+                complete_openai_login_with_manual_future(prepared, Some(manual_input)).await;
+            ctx.handle.close_modal();
+            ctx.handle.force_redraw();
+            let session = login_result?;
             sync_openai_runtime_if_active(&mut ctx).await?;
             ctx.renderer.line(
                 MessageStyle::Info,
@@ -297,6 +312,69 @@ fn open_browser_with_guidance(renderer: &mut AnsiRenderer, auth_url: &str) -> Re
         )?;
     }
     Ok(())
+}
+
+async fn prompt_openai_manual_callback_input(
+    ctx: &mut SlashCommandContext<'_>,
+    callback_port: u16,
+) -> Result<Option<String>> {
+    let step = WizardStep {
+        title: "Callback".to_string(),
+        question: "Paste the redirected URL or raw query string while VT Code keeps waiting for the browser callback.".to_string(),
+        items: vec![InlineListItem {
+            title: "Submit".to_string(),
+            subtitle: Some("Press Tab to type text, then Enter to submit.".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::RequestUserInputAnswer {
+                question_id: OPENAI_MANUAL_PROMPT_ID.to_string(),
+                selected: vec![],
+                other: Some(String::new()),
+            }),
+            search_value: Some("submit callback redirect url query string".to_string()),
+        }],
+        completed: false,
+        answer: None,
+        allow_freeform: true,
+        freeform_label: Some("Redirect URL or query".to_string()),
+        freeform_placeholder: Some(openai_manual_placeholder(callback_port)),
+    };
+
+    let outcome = show_wizard_modal_and_wait(
+        ctx.handle,
+        ctx.session,
+        "OpenAI manual callback".to_string(),
+        vec![step],
+        0,
+        None,
+        WizardModalMode::MultiStep,
+        ctx.ctrl_c_state,
+        ctx.ctrl_c_notify,
+    )
+    .await?;
+
+    let value = match outcome {
+        WizardModalOutcome::Submitted(selections) => {
+            selections
+                .into_iter()
+                .find_map(|selection| match selection {
+                    InlineListSelection::RequestUserInputAnswer {
+                        question_id,
+                        selected,
+                        other,
+                    } if question_id == OPENAI_MANUAL_PROMPT_ID => {
+                        other.or_else(|| selected.first().cloned())
+                    }
+                    _ => None,
+                })
+        }
+        WizardModalOutcome::Cancelled { .. } => None,
+    };
+
+    Ok(value.and_then(|value| {
+        let trimmed = value.trim().to_string();
+        (!trimmed.is_empty()).then_some(trimmed)
+    }))
 }
 
 fn show_oauth_provider_modal(

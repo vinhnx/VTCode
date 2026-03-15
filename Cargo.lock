@@ -6343,6 +6343,7 @@ dependencies = [
  "axum",
  "base64",
  "dirs",
+ "fs2",
  "hostname",
  "keyring",
  "nix 0.31.2",

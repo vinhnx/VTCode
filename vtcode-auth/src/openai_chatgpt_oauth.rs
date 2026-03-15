@@ -8,12 +8,14 @@
 
 use anyhow::{Context, Result, anyhow, bail};
 use base64::{Engine, engine::general_purpose::STANDARD, engine::general_purpose::URL_SAFE_NO_PAD};
+use fs2::FileExt;
 use reqwest::Client;
 use ring::aead::{self, Aad, LessSafeKey, NONCE_LEN, Nonce, UnboundKey};
 use ring::rand::{SecureRandom, SystemRandom};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::fs;
+use std::fs::OpenOptions;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -31,6 +33,7 @@ const OPENAI_CALLBACK_PATH: &str = "/auth/callback";
 const OPENAI_STORAGE_SERVICE: &str = "vtcode";
 const OPENAI_STORAGE_USER: &str = "openai_chatgpt_session";
 const OPENAI_SESSION_FILE: &str = "openai_chatgpt.json";
+const OPENAI_REFRESH_LOCK_FILE: &str = "openai_chatgpt.refresh.lock";
 const REFRESH_INTERVAL_SECS: u64 = 8 * 60;
 const REFRESH_SKEW_SECS: u64 = 60;
 
@@ -132,11 +135,8 @@ impl OpenAIChatGptAuthHandle {
 
     pub async fn force_refresh(&self) -> Result<()> {
         let session = self.snapshot()?;
-        let refreshed = refresh_openai_chatgpt_session_from_refresh_token(
-            &session.refresh_token,
-            self.storage_mode,
-        )
-        .await?;
+        let refreshed =
+            refresh_openai_chatgpt_session_from_snapshot(&session, self.storage_mode).await?;
         self.replace_session(refreshed)
     }
 
@@ -258,6 +258,36 @@ pub fn generate_openai_oauth_state() -> Result<String> {
         .fill(&mut state_bytes)
         .map_err(|_| anyhow!("failed to generate openai oauth state"))?;
     Ok(URL_SAFE_NO_PAD.encode(state_bytes))
+}
+
+pub fn parse_openai_chatgpt_manual_callback_input(
+    input: &str,
+    expected_state: &str,
+) -> Result<String> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        bail!("missing authorization callback input");
+    }
+
+    let query = if trimmed.contains("://") {
+        let url = reqwest::Url::parse(trimmed).context("invalid callback url")?;
+        url.query()
+            .ok_or_else(|| anyhow!("callback url did not include a query string"))?
+            .to_string()
+    } else if trimmed.contains('=') {
+        trimmed.trim_start_matches('?').to_string()
+    } else {
+        bail!("paste the full redirect url or query string containing code and state");
+    };
+
+    let code = extract_query_value(&query, "code")
+        .ok_or_else(|| anyhow!("callback input did not include an authorization code"))?;
+    let state = extract_query_value(&query, "state")
+        .ok_or_else(|| anyhow!("callback input did not include state"))?;
+    if state != expected_state {
+        bail!("OAuth error: state mismatch");
+    }
+    Ok(code)
 }
 
 /// Exchange an authorization code for OAuth tokens.
@@ -468,6 +498,35 @@ pub async fn refresh_openai_chatgpt_session_from_refresh_token(
     refresh_token: &str,
     storage_mode: AuthCredentialsStoreMode,
 ) -> Result<OpenAIChatGptSession> {
+    let _lock = acquire_refresh_lock().await?;
+    refresh_openai_chatgpt_session_without_lock(refresh_token, storage_mode).await
+}
+
+pub async fn refresh_openai_chatgpt_session_with_mode(
+    mode: AuthCredentialsStoreMode,
+) -> Result<OpenAIChatGptSession> {
+    let session = load_openai_chatgpt_session_with_mode(mode)?
+        .ok_or_else(|| anyhow!("Run vtcode login openai"))?;
+    refresh_openai_chatgpt_session_from_snapshot(&session, mode).await
+}
+
+async fn refresh_openai_chatgpt_session_from_snapshot(
+    session: &OpenAIChatGptSession,
+    storage_mode: AuthCredentialsStoreMode,
+) -> Result<OpenAIChatGptSession> {
+    let _lock = acquire_refresh_lock().await?;
+    if let Some(current) = load_openai_chatgpt_session_with_mode(storage_mode)?
+        && session_has_newer_refresh_state(&current, session)
+    {
+        return Ok(current);
+    }
+    refresh_openai_chatgpt_session_without_lock(&session.refresh_token, storage_mode).await
+}
+
+async fn refresh_openai_chatgpt_session_without_lock(
+    refresh_token: &str,
+    storage_mode: AuthCredentialsStoreMode,
+) -> Result<OpenAIChatGptSession> {
     let response = Client::new()
         .post(OPENAI_TOKEN_URL)
         .header("Content-Type", "application/x-www-form-urlencoded")
@@ -492,18 +551,11 @@ pub async fn refresh_openai_chatgpt_session_from_refresh_token(
     Ok(session)
 }
 
-pub async fn refresh_openai_chatgpt_session_with_mode(
-    mode: AuthCredentialsStoreMode,
-) -> Result<OpenAIChatGptSession> {
-    let session = load_openai_chatgpt_session_with_mode(mode)?
-        .ok_or_else(|| anyhow!("Run vtcode login openai"))?;
-    refresh_openai_chatgpt_session_from_refresh_token(&session.refresh_token, mode).await
-}
-
 async fn build_session_from_token_response(
     token_response: OpenAITokenResponse,
 ) -> Result<OpenAIChatGptSession> {
-    let claims = parse_id_token_claims(&token_response.id_token)?;
+    let id_claims = parse_jwt_claims(&token_response.id_token)?;
+    let access_claims = parse_jwt_claims(&token_response.access_token).ok();
     let api_key = match exchange_openai_chatgpt_api_key(&token_response.id_token).await {
         Ok(api_key) => api_key,
         Err(err) => {
@@ -519,9 +571,19 @@ async fn build_session_from_token_response(
         id_token: token_response.id_token,
         access_token: token_response.access_token,
         refresh_token: token_response.refresh_token,
-        account_id: claims.account_id,
-        email: claims.email,
-        plan: claims.plan,
+        account_id: access_claims
+            .as_ref()
+            .and_then(|claims| claims.account_id.clone())
+            .or(id_claims.account_id),
+        email: id_claims.email.or_else(|| {
+            access_claims
+                .as_ref()
+                .and_then(|claims| claims.email.clone())
+        }),
+        plan: access_claims
+            .as_ref()
+            .and_then(|claims| claims.plan.clone())
+            .or(id_claims.plan),
         obtained_at: now,
         refreshed_at: now,
         expires_at: token_response
@@ -599,7 +661,7 @@ struct ParsedIdTokenClaims {
     plan: Option<String>,
 }
 
-fn parse_id_token_claims(jwt: &str) -> Result<ParsedIdTokenClaims> {
+fn parse_jwt_claims(jwt: &str) -> Result<ParsedIdTokenClaims> {
     let mut parts = jwt.split('.');
     let (_, payload_b64, _) = match (parts.next(), parts.next(), parts.next()) {
         (Some(header), Some(payload), Some(signature))
@@ -626,6 +688,61 @@ fn parse_id_token_claims(jwt: &str) -> Result<ParsedIdTokenClaims> {
             .and_then(|auth| auth.chatgpt_account_id.clone()),
         plan: claims.auth.and_then(|auth| auth.chatgpt_plan_type),
     })
+}
+
+fn extract_query_value(query: &str, key: &str) -> Option<String> {
+    query
+        .trim_start_matches('?')
+        .split('&')
+        .filter_map(|pair| {
+            let (pair_key, pair_value) = pair.split_once('=')?;
+            (pair_key == key)
+                .then(|| {
+                    urlencoding::decode(pair_value)
+                        .ok()
+                        .map(|value| value.into_owned())
+                })
+                .flatten()
+        })
+        .find(|value| !value.is_empty())
+}
+
+fn session_has_newer_refresh_state(
+    current: &OpenAIChatGptSession,
+    previous: &OpenAIChatGptSession,
+) -> bool {
+    current.refresh_token != previous.refresh_token
+        || current.refreshed_at > previous.refreshed_at
+        || current.obtained_at > previous.obtained_at
+}
+
+struct RefreshLockGuard {
+    file: fs::File,
+}
+
+impl Drop for RefreshLockGuard {
+    fn drop(&mut self) {
+        let _ = FileExt::unlock(&self.file);
+    }
+}
+
+async fn acquire_refresh_lock() -> Result<RefreshLockGuard> {
+    let path = auth_storage_dir()?.join(OPENAI_REFRESH_LOCK_FILE);
+    let file = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .truncate(false)
+        .open(&path)
+        .with_context(|| format!("failed to open openai refresh lock {}", path.display()))?;
+    let file = tokio::task::spawn_blocking(move || {
+        file.lock_exclusive()
+            .context("failed to acquire openai refresh lock")?;
+        Ok::<_, anyhow::Error>(file)
+    })
+    .await
+    .context("openai refresh lock task failed")??;
+    Ok(RefreshLockGuard { file })
 }
 
 fn classify_refresh_error(
@@ -943,8 +1060,8 @@ mod tests {
     }
 
     #[test]
-    fn parse_id_token_claims_extracts_openai_claims() {
-        let claims = parse_id_token_claims(
+    fn parse_jwt_claims_extracts_openai_claims() {
+        let claims = parse_jwt_claims(
             "aGVhZGVy.eyJlbWFpbCI6InRlc3RAZXhhbXBsZS5jb20iLCJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjXzEyMyIsImNoYXRncHRfcGxhbl90eXBlIjoicGx1cyJ9fQ.sig",
         )
         .expect("claims");
@@ -1134,5 +1251,66 @@ mod tests {
         session.openai_api_key.clear();
 
         assert_eq!(active_api_bearer_token(&session), "oauth-access");
+    }
+
+    #[test]
+    fn parse_manual_callback_input_accepts_full_redirect_url() {
+        let code = parse_openai_chatgpt_manual_callback_input(
+            "http://localhost:1455/auth/callback?code=auth-code&state=test-state",
+            "test-state",
+        )
+        .expect("manual input should parse");
+        assert_eq!(code, "auth-code");
+    }
+
+    #[test]
+    fn parse_manual_callback_input_accepts_query_string() {
+        let code = parse_openai_chatgpt_manual_callback_input(
+            "code=auth-code&state=test-state",
+            "test-state",
+        )
+        .expect("manual input should parse");
+        assert_eq!(code, "auth-code");
+    }
+
+    #[test]
+    fn parse_manual_callback_input_rejects_bare_code() {
+        let error = parse_openai_chatgpt_manual_callback_input("auth-code", "test-state")
+            .expect_err("bare code should be rejected");
+        assert!(
+            error
+                .to_string()
+                .contains("full redirect url or query string")
+        );
+    }
+
+    #[test]
+    fn parse_manual_callback_input_rejects_state_mismatch() {
+        let error = parse_openai_chatgpt_manual_callback_input(
+            "code=auth-code&state=wrong-state",
+            "test-state",
+        )
+        .expect_err("state mismatch should fail");
+        assert!(error.to_string().contains("state mismatch"));
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn refresh_lock_serializes_parallel_acquisition() {
+        let _guard = TestAuthDirGuard::new();
+        let first = tokio::spawn(async {
+            let _lock = acquire_refresh_lock().await.expect("first lock");
+            tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+
+        let start = std::time::Instant::now();
+        let second = tokio::spawn(async {
+            let _lock = acquire_refresh_lock().await.expect("second lock");
+        });
+
+        first.await.expect("first task");
+        second.await.expect("second task");
+        assert!(start.elapsed() >= std::time::Duration::from_millis(100));
     }
 }
