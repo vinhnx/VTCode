@@ -29,6 +29,7 @@ use std::time::Duration;
 use std::time::Instant;
 use tokio::sync::Mutex as AsyncMutex;
 use tracing::debug;
+use uuid::Uuid;
 use vtcode_config::auth::{OpenAIChatGptAuthHandle, OpenAIChatGptSession};
 
 // Import from extracted modules
@@ -304,7 +305,7 @@ impl OpenAIProvider {
             builder.bearer_auth(&auth.bearer_token)
         };
 
-        if self.uses_chatgpt_auth() && self.base_url.contains("chatgpt.com") {
+        if self.is_chatgpt_backend() {
             if let Some(account_id) = auth
                 .chatgpt_account_id
                 .as_deref()
@@ -330,8 +331,20 @@ impl OpenAIProvider {
         self.openai_chatgpt_auth.is_some()
     }
 
+    fn is_chatgpt_backend(&self) -> bool {
+        self.uses_chatgpt_auth() && self.base_url.contains("chatgpt.com")
+    }
+
+    fn allows_chat_completions_fallback(&self) -> bool {
+        !self.is_chatgpt_backend()
+    }
+
     fn auth_retryable_status(status: StatusCode) -> bool {
         matches!(status, StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN)
+    }
+
+    fn new_client_request_id() -> String {
+        format!("vtcode-{}", Uuid::new_v4())
     }
 
     fn format_network_error(error: impl std::fmt::Display) -> provider::LLMError {
@@ -364,8 +377,7 @@ impl OpenAIProvider {
     }
 
     fn request_auth_from_session(&self, session: OpenAIChatGptSession) -> OpenAIRequestAuth {
-        let bearer_token = if (self.uses_chatgpt_auth() && self.base_url.contains("chatgpt.com"))
-            || session.openai_api_key.trim().is_empty()
+        let bearer_token = if self.is_chatgpt_backend() || session.openai_api_key.trim().is_empty()
         {
             session.access_token
         } else {
@@ -530,8 +542,12 @@ impl OpenAIProvider {
             supports_reasoning_effort: self.supports_reasoning_effort(&request.model),
             supports_reasoning: self.supports_reasoning(&request.model),
             is_responses_api_model: Self::is_responses_api_model(&request.model),
+            include_output_types: !self.is_chatgpt_backend(),
+            include_sampling_parameters: !self.is_chatgpt_backend(),
+            force_response_store_false: self.uses_chatgpt_auth() && self.base_url.contains("chatgpt.com"),
             include_assistant_phase: is_native_openai,
             prompt_cache_key,
+            include_prompt_cache_retention: !self.is_chatgpt_backend(),
             prompt_cache_retention: self.prompt_cache_settings.prompt_cache_retention.as_deref(),
             default_service_tier,
             default_response_store: self.responses_store,

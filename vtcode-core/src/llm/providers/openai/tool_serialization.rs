@@ -40,12 +40,66 @@ fn serialize_responses_function_tool(
         "type": "function",
         "name": &func.name,
         "description": &func.description,
-        "parameters": &func.parameters
+        "parameters": sanitize_openai_function_parameters(func.parameters.clone())
     });
     if defer_loading && let Some(obj) = value.as_object_mut() {
         obj.insert("defer_loading".to_string(), json!(true));
     }
     value
+}
+
+fn sanitize_openai_function_parameters(value: Value) -> Value {
+    match value {
+        Value::Object(mut map) => {
+            map.remove("default");
+            map.remove("format");
+            map.remove("allOf");
+            map.remove("oneOf");
+            map.remove("if");
+            map.remove("then");
+            map.remove("else");
+
+            if map.get("type").is_none()
+                && let Some(any_of) = map.remove("anyOf")
+                && let Some(replacement) = collapse_supported_any_of(&any_of)
+            {
+                let mut sanitized = sanitize_openai_function_parameters(replacement);
+                if let Value::Object(ref mut replacement_map) = sanitized
+                    && let Some(description) = map.remove("description")
+                {
+                    replacement_map
+                        .entry("description".to_string())
+                        .or_insert(description);
+                }
+                return sanitized;
+            }
+
+            map.remove("anyOf");
+
+            for nested in map.values_mut() {
+                let next = sanitize_openai_function_parameters(nested.clone());
+                *nested = next;
+            }
+
+            Value::Object(map)
+        }
+        Value::Array(items) => Value::Array(
+            items
+                .into_iter()
+                .map(sanitize_openai_function_parameters)
+                .collect(),
+        ),
+        other => other,
+    }
+}
+
+fn collapse_supported_any_of(any_of: &Value) -> Option<Value> {
+    let variants = any_of.as_array()?;
+    variants
+        .iter()
+        .find(|variant| variant.get("type").and_then(Value::as_str) == Some("string"))
+        .cloned()
+        .or_else(|| variants.first().cloned())
 }
 
 fn trim_non_empty_owned(value: &str) -> Option<String> {

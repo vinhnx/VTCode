@@ -69,12 +69,16 @@ impl OpenAIProvider {
         }
 
         let url = format!("{}/responses", self.base_url);
+        let client_request_id = Self::new_client_request_id();
 
         let response = self
             .send_authorized(|auth| {
                 headers::apply_turn_metadata(
-                    headers::apply_responses_beta(
-                        self.authorize_with_api_key(self.http_client.post(&url), auth),
+                    headers::apply_client_request_id(
+                        headers::apply_responses_beta(
+                            self.authorize_with_api_key(self.http_client.post(&url), auth),
+                        ),
+                        &client_request_id,
                     ),
                     &request.metadata,
                 )
@@ -109,7 +113,13 @@ impl OpenAIProvider {
                 }
                 let formatted_error = error_display::format_llm_error(
                     "OpenAI",
-                    &format_openai_error(status, &error_text, &headers, "Model not available"),
+                    &format_openai_error(
+                        status,
+                        &error_text,
+                        &headers,
+                        "Model not available",
+                        Some(&client_request_id),
+                    ),
                 );
                 return Err(provider::LLMError::Provider {
                     message: formatted_error,
@@ -120,14 +130,16 @@ impl OpenAIProvider {
             if matches!(responses_state, ResponsesApiState::Allowed)
                 && is_responses_api_unsupported(status, &error_text)
             {
-                #[cfg(debug_assertions)]
-                debug!(
-                    target = "vtcode::llm::openai",
-                    model = %request.model,
-                    "Responses API unsupported; falling back to Chat Completions for streaming"
-                );
-                self.set_responses_api_state(&request.model, ResponsesApiState::Disabled);
-                return self.stream_chat_completions(&request).await;
+                if self.allows_chat_completions_fallback() {
+                    #[cfg(debug_assertions)]
+                    debug!(
+                        target = "vtcode::llm::openai",
+                        model = %request.model,
+                        "Responses API unsupported; falling back to Chat Completions for streaming"
+                    );
+                    self.set_responses_api_state(&request.model, ResponsesApiState::Disabled);
+                    return self.stream_chat_completions(&request).await;
+                }
             }
 
             if is_rate_limit_error(status.as_u16(), &error_text) {
@@ -136,7 +148,13 @@ impl OpenAIProvider {
 
             let formatted_error = error_display::format_llm_error(
                 "OpenAI",
-                &format_openai_error(status, &error_text, &headers, "Responses API error"),
+                &format_openai_error(
+                    status,
+                    &error_text,
+                    &headers,
+                    "Responses API error",
+                    Some(&client_request_id),
+                ),
             );
             return Err(provider::LLMError::Provider {
                 message: formatted_error,
@@ -188,11 +206,15 @@ impl OpenAIProvider {
             openai_request["stream_options"] = json!({ "include_usage": true });
         }
         let url = format!("{}/chat/completions", self.base_url);
+        let client_request_id = Self::new_client_request_id();
 
         let response = self
             .send_authorized(|auth| {
                 headers::apply_turn_metadata(
-                    self.authorize_with_api_key(self.http_client.post(&url), auth),
+                    headers::apply_client_request_id(
+                        self.authorize_with_api_key(self.http_client.post(&url), auth),
+                        &client_request_id,
+                    ),
                     &request.metadata,
                 )
                 .json(&openai_request)
@@ -201,6 +223,7 @@ impl OpenAIProvider {
 
         if !response.status().is_success() {
             let status = response.status();
+            let headers = response.headers().clone();
             let error_text = response.text().await.unwrap_or_default();
 
             if is_rate_limit_error(status.as_u16(), &error_text) {
@@ -209,7 +232,13 @@ impl OpenAIProvider {
 
             let formatted_error = error_display::format_llm_error(
                 "OpenAI",
-                &format!("HTTP {}: {}", status, error_text),
+                &format_openai_error(
+                    status,
+                    &error_text,
+                    &headers,
+                    "Chat Completions error",
+                    Some(&client_request_id),
+                ),
             );
             return Err(provider::LLMError::Provider {
                 message: formatted_error,

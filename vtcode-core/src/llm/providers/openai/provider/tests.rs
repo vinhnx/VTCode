@@ -6,9 +6,18 @@ use crate::config::core::{
     OpenAIHostedSkillVersion, OpenAIServiceTier,
 };
 use crate::llm::provider::ParallelToolConfig;
+use crate::tools::handlers::plan_mode::PlanModeState;
+use crate::tools::handlers::plan_task_tracker::PlanTaskTrackerTool;
+use crate::tools::handlers::task_tracker::TaskTrackerTool;
+use crate::tools::traits::Tool;
 use futures::StreamExt;
 use serde_json::{Value, json};
+use std::path::PathBuf;
 use std::sync::Mutex;
+use vtcode_config::auth::{
+    AuthCredentialsStoreMode, OpenAIChatGptAuthHandle, OpenAIChatGptSession,
+};
+use vtcode_config::OpenAIAuthConfig;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -60,6 +69,29 @@ fn shell_request(model: &str) -> provider::LLMRequest {
     }
 }
 
+fn schema_keyword_path<'a>(value: &'a Value, keywords: &[&str], path: &str) -> Option<String> {
+    match value {
+        Value::Object(map) => {
+            for keyword in keywords {
+                if map.contains_key(*keyword) {
+                    return Some(format!("{path}.{keyword}"));
+                }
+            }
+            for (key, nested) in map {
+                let nested_path = format!("{path}.{key}");
+                if let Some(found) = schema_keyword_path(nested, keywords, &nested_path) {
+                    return Some(found);
+                }
+            }
+            None
+        }
+        Value::Array(items) => items.iter().enumerate().find_map(|(index, nested)| {
+            schema_keyword_path(nested, keywords, &format!("{path}[{index}]"))
+        }),
+        _ => None,
+    }
+}
+
 fn priority_openai_config() -> OpenAIConfig {
     OpenAIConfig {
         service_tier: Some(OpenAIServiceTier::Priority),
@@ -95,6 +127,29 @@ fn test_provider(base_url: &str, model: &str) -> OpenAIProvider {
         http_client,
         base_url.to_string(),
         TimeoutsConfig::default(),
+    )
+}
+
+fn chatgpt_mock_base_url(server: &MockServer) -> String {
+    server.uri().replacen("http://", "http://chatgpt.com@", 1)
+}
+
+fn sample_chatgpt_auth_handle() -> OpenAIChatGptAuthHandle {
+    OpenAIChatGptAuthHandle::new(
+        OpenAIChatGptSession {
+            openai_api_key: String::new(),
+            id_token: "id-token".to_string(),
+            access_token: "oauth-access".to_string(),
+            refresh_token: "refresh-token".to_string(),
+            account_id: Some("acc_123".to_string()),
+            email: Some("test@example.com".to_string()),
+            plan: Some("plus".to_string()),
+            obtained_at: 1,
+            refreshed_at: u64::MAX / 2,
+            expires_at: None,
+        },
+        OpenAIAuthConfig::default(),
+        AuthCredentialsStoreMode::File,
     )
 }
 
@@ -186,6 +241,71 @@ fn responses_payload_uses_function_wrapper() {
         Some("search_workspace")
     );
     assert!(tool_object.contains_key("parameters"));
+}
+
+#[test]
+fn responses_payload_omits_default_verbosity_for_gpt_5_2_codex() {
+    let provider =
+        OpenAIProvider::with_model(String::new(), models::openai::GPT_5_2_CODEX.to_string());
+    let request = sample_request(models::openai::GPT_5_2_CODEX);
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    assert!(payload.get("text").is_none());
+}
+
+#[test]
+fn responses_payload_ignores_configured_verbosity_for_gpt_5_2_codex() {
+    let provider =
+        OpenAIProvider::with_model(String::new(), models::openai::GPT_5_2_CODEX.to_string());
+    let mut request = sample_request(models::openai::GPT_5_2_CODEX);
+    request.verbosity = Some(crate::config::types::VerbosityLevel::Medium);
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    assert!(payload.get("text").is_none());
+}
+
+#[test]
+fn responses_payload_defaults_low_verbosity_for_gpt_5_3_codex() {
+    let provider =
+        OpenAIProvider::with_model(String::new(), models::openai::GPT_5_3_CODEX.to_string());
+    let request = sample_request(models::openai::GPT_5_3_CODEX);
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    assert_eq!(
+        payload
+            .get("text")
+            .and_then(|text| text.get("verbosity"))
+            .and_then(Value::as_str),
+        Some("low")
+    );
+}
+
+#[test]
+fn responses_payload_keeps_configured_verbosity_for_gpt_5_4() {
+    let provider = OpenAIProvider::with_model(String::new(), models::openai::GPT_5_4.to_string());
+    let mut request = sample_request(models::openai::GPT_5_4);
+    request.verbosity = Some(crate::config::types::VerbosityLevel::High);
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    assert_eq!(
+        payload
+            .get("text")
+            .and_then(|text| text.get("verbosity"))
+            .and_then(Value::as_str),
+        Some("high")
+    );
 }
 
 #[test]
@@ -661,6 +781,110 @@ fn responses_payload_serializes_hosted_tool_search_and_deferred_function() {
 }
 
 #[test]
+fn responses_function_tools_sanitize_openai_incompatible_parameter_keywords() {
+    let provider =
+        OpenAIProvider::with_model(String::new(), models::openai::GPT_5_2_CODEX.to_string());
+    let request = provider::LLMRequest {
+        messages: vec![provider::Message::user("Hello".to_owned())],
+        tools: Some(Arc::new(vec![
+            provider::ToolDefinition::function(
+                "unified_exec".to_owned(),
+                "Execute commands".to_owned(),
+                crate::tools::handlers::session_tool_catalog::unified_exec_parameters(),
+            ),
+            provider::ToolDefinition::function(
+                "unified_search".to_owned(),
+                "Search files".to_owned(),
+                crate::tools::handlers::session_tool_catalog::unified_search_parameters(),
+            ),
+        ])),
+        model: models::openai::GPT_5_2_CODEX.to_string(),
+        ..Default::default()
+    };
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    let tools = payload["tools"].as_array().expect("tool array");
+    let exec_parameters = tools
+        .iter()
+        .find(|tool| tool.get("name").and_then(Value::as_str) == Some("unified_exec"))
+        .and_then(|tool| tool.get("parameters"))
+        .expect("unified_exec parameters should be present");
+    let command = &exec_parameters["properties"]["command"];
+    assert_eq!(command.get("type").and_then(Value::as_str), Some("string"));
+    assert!(command.get("anyOf").is_none());
+    assert!(command.get("default").is_none());
+    assert!(exec_parameters["properties"]["tty"].get("default").is_none());
+
+    let search_parameters = tools
+        .iter()
+        .find(|tool| tool.get("name").and_then(Value::as_str) == Some("unified_search"))
+        .and_then(|tool| tool.get("parameters"))
+        .expect("unified_search parameters should be present");
+    let globs = &search_parameters["properties"]["globs"];
+    assert_eq!(globs.get("type").and_then(Value::as_str), Some("string"));
+    assert!(globs.get("anyOf").is_none());
+    assert!(search_parameters["properties"]["path"].get("default").is_none());
+}
+
+#[test]
+fn responses_function_tools_strip_openai_schema_combinators_from_builtin_tools() {
+    let plan_mode_state = PlanModeState::new(PathBuf::new());
+    let task_tracker_parameters = TaskTrackerTool::new(PathBuf::new(), plan_mode_state.clone())
+        .parameter_schema()
+        .expect("task tracker schema should exist");
+    let plan_task_tracker_parameters = PlanTaskTrackerTool::new(plan_mode_state)
+        .parameter_schema()
+        .expect("plan task tracker schema should exist");
+
+    let provider =
+        OpenAIProvider::with_model(String::new(), models::openai::GPT_5_2_CODEX.to_string());
+    let request = provider::LLMRequest {
+        messages: vec![provider::Message::user("Hello".to_owned())],
+        tools: Some(Arc::new(vec![
+            provider::ToolDefinition::function(
+                "apply_patch".to_owned(),
+                "Apply a patch".to_owned(),
+                crate::tools::apply_patch::parameter_schema("Patch in VT Code format"),
+            ),
+            provider::ToolDefinition::function(
+                "task_tracker".to_owned(),
+                "Track tasks".to_owned(),
+                task_tracker_parameters,
+            ),
+            provider::ToolDefinition::function(
+                "plan_task_tracker".to_owned(),
+                "Track plan tasks".to_owned(),
+                plan_task_tracker_parameters,
+            ),
+        ])),
+        model: models::openai::GPT_5_2_CODEX.to_string(),
+        ..Default::default()
+    };
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    let tools = payload["tools"].as_array().expect("tool array");
+    for tool in tools {
+        let parameters = tool.get("parameters").expect("tool parameters should be present");
+        let found = schema_keyword_path(
+            parameters,
+            &["allOf", "anyOf", "oneOf", "if", "then", "else", "default", "format"],
+            "$",
+        );
+        assert!(
+            found.is_none(),
+            "OpenAI responses tool schema still contains unsupported keyword at {}",
+            found.unwrap_or_default()
+        );
+    }
+}
+
+#[test]
 fn responses_payload_serializes_hosted_web_search_tool() {
     let provider = OpenAIProvider::with_model(String::new(), models::openai::GPT_5.to_string());
     let request = provider::LLMRequest {
@@ -1007,6 +1231,119 @@ fn responses_payload_uses_provider_level_responses_options() {
             .collect::<Vec<_>>(),
         vec!["reasoning.encrypted_content", "output_text.annotations"]
     );
+}
+
+#[test]
+fn chatgpt_backend_forces_store_false_for_responses_payload() {
+    let provider = OpenAIProvider::from_config(
+        Some(String::new()),
+        Some(sample_chatgpt_auth_handle()),
+        Some(models::openai::GPT_5_2.to_string()),
+        None,
+        None,
+        None,
+        None,
+        Some(OpenAIConfig {
+            responses_store: Some(true),
+            ..Default::default()
+        }),
+        None,
+    );
+    let request = sample_request(models::openai::GPT_5_2);
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    assert_eq!(payload.get("store").and_then(Value::as_bool), Some(false));
+}
+
+#[test]
+fn chatgpt_backend_omits_output_types_for_responses_payload() {
+    let provider = OpenAIProvider::from_config(
+        Some(String::new()),
+        Some(sample_chatgpt_auth_handle()),
+        Some(models::openai::GPT_5_2.to_string()),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+    let request = sample_request(models::openai::GPT_5_2);
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    assert!(payload.get("output_types").is_none());
+}
+
+#[test]
+fn chatgpt_backend_omits_sampling_parameters_for_responses_payload() {
+    let provider = OpenAIProvider::from_config(
+        Some(String::new()),
+        Some(sample_chatgpt_auth_handle()),
+        Some(models::openai::GPT_5_2.to_string()),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+    let mut request = sample_request(models::openai::GPT_5_2);
+    request.temperature = Some(0.4);
+    request.top_p = Some(0.8);
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    assert!(payload.get("sampling_parameters").is_none());
+}
+
+#[test]
+fn chatgpt_backend_omits_prompt_cache_retention_for_responses_payload() {
+    let mut pc = PromptCachingConfig::default();
+    pc.providers.openai.prompt_cache_retention = Some("24h".to_owned());
+    let provider = OpenAIProvider::from_config(
+        Some(String::new()),
+        Some(sample_chatgpt_auth_handle()),
+        Some(models::openai::GPT_5_2.to_string()),
+        None,
+        Some(pc),
+        None,
+        None,
+        None,
+        None,
+    );
+    let request = sample_request(models::openai::GPT_5_2);
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    assert!(payload.get("prompt_cache_retention").is_none());
+}
+
+#[test]
+fn chatgpt_backend_disables_chat_completions_fallback() {
+    let provider = OpenAIProvider::from_config(
+        Some(String::new()),
+        Some(sample_chatgpt_auth_handle()),
+        Some(models::openai::GPT_5_2.to_string()),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+
+    assert!(provider.is_chatgpt_backend());
+    assert!(!provider.allows_chat_completions_fallback());
 }
 
 #[test]
@@ -1609,6 +1946,23 @@ mod streaming_tests {
             );
         }
     }
+
+    #[test]
+    fn chatgpt_backend_keeps_streaming_for_codex_models() {
+        let provider = OpenAIProvider::from_config(
+            Some(String::new()),
+            Some(sample_chatgpt_auth_handle()),
+            Some(models::openai::GPT_5_2_CODEX.to_string()),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
+
+        assert!(provider.supports_streaming());
+    }
 }
 
 mod caching_tests {
@@ -1853,4 +2207,96 @@ async fn responses_stream_retries_with_fallback_model_after_not_found() {
             models::openai::GPT_5_MINI.to_string(),
         ]
     );
+}
+
+#[tokio::test]
+async fn chatgpt_stream_does_not_retry_with_non_streaming_responses() {
+    let server = MockServer::start().await;
+    let provider = OpenAIProvider::from_config(
+        Some(String::new()),
+        Some(sample_chatgpt_auth_handle()),
+        Some(models::openai::GPT_5_2_CODEX.to_string()),
+        Some(chatgpt_mock_base_url(&server)),
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+
+    Mock::given(method("POST"))
+        .and(path("/responses"))
+        .respond_with(|request: &wiremock::Request| {
+            let payload: Value =
+                serde_json::from_slice(&request.body).expect("request body should be valid json");
+            assert_eq!(payload.get("stream").and_then(Value::as_bool), Some(true));
+            ResponseTemplate::new(400).set_body_string("invalid api parameter: stream")
+        })
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let stream_result = provider
+        .stream(provider::LLMRequest {
+            messages: vec![provider::Message::user("Hello".to_string())],
+            model: models::openai::GPT_5_2_CODEX.to_string(),
+            ..Default::default()
+        })
+        .await;
+    let error = match stream_result {
+        Ok(_) => panic!("chatgpt streaming request should surface the backend error"),
+        Err(error) => error,
+    };
+
+    let error_text = error.to_string();
+    assert!(error_text.contains("Responses API error"));
+    assert!(error_text.contains("stream"));
+}
+
+#[tokio::test]
+async fn responses_requests_include_client_request_id_and_surface_debug_metadata() {
+    let server = MockServer::start().await;
+    let provider = test_provider(&server.uri(), models::openai::GPT_5);
+
+    Mock::given(method("POST"))
+        .and(path("/responses"))
+        .respond_with(|request: &wiremock::Request| {
+            let client_request_id = request
+                .headers
+                .get("x-client-request-id")
+                .and_then(|value| value.to_str().ok())
+                .expect("request should include x-client-request-id");
+            assert!(client_request_id.starts_with("vtcode-"));
+
+            ResponseTemplate::new(400)
+                .insert_header("x-request-id", "req_123")
+                .insert_header("retry-after", "15")
+                .set_body_string(
+                    r#"{"error":{"message":"Bad request","type":"invalid_request_error","param":"text.verbosity","code":"unsupported_parameter"}}"#,
+                )
+        })
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let result = provider
+        .generate(provider::LLMRequest {
+            messages: vec![provider::Message::user("Hello".to_string())],
+            model: models::openai::GPT_5.to_string(),
+            ..Default::default()
+        })
+        .await;
+
+    let error = match result {
+        Ok(_) => panic!("request should surface the backend error"),
+        Err(error) => error,
+    };
+
+    let error_text = error.to_string();
+    assert!(error_text.contains("request_id=req_123"));
+    assert!(error_text.contains("client_request_id=vtcode-"));
+    assert!(error_text.contains("retry_after=15"));
+    assert!(error_text.contains("type=invalid_request_error"));
+    assert!(error_text.contains("code=unsupported_parameter"));
+    assert!(error_text.contains("param=text.verbosity"));
 }
