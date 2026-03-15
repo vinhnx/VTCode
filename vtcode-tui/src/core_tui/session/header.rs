@@ -487,6 +487,23 @@ impl Session {
             first_section = false;
         }
 
+        if let Some(badge) = self
+            .header_context
+            .pr_review
+            .as_ref()
+            .filter(|badge| !badge.text.trim().is_empty())
+        {
+            if !first_section {
+                spans.push(Span::styled(
+                    ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
+                    self.header_secondary_style(),
+                ));
+            }
+            let style = header_status_badge_style(badge, self.header_primary_style());
+            spans.push(Span::styled(badge.text.clone(), style));
+            first_section = false;
+        }
+
         for value in self.header_chain_values() {
             if !first_section {
                 spans.push(Span::styled(

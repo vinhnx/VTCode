@@ -63,6 +63,9 @@ pub enum OverlayHotkeyKey {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum OverlayHotkeyAction {
     LaunchEditor,
+    FocusJobOutput,
+    InterruptJob,
+    PreviewJobSnapshot,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

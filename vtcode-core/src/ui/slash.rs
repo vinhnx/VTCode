@@ -77,6 +77,18 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             description: "Copy the latest complete assistant reply to clipboard",
         },
         SlashCommandInfo {
+            name: "btw",
+            description: "Suggest follow-up prompts from the current session context",
+        },
+        SlashCommandInfo {
+            name: "tasks",
+            description: "Toggle the dedicated TODO panel fed by task_tracker output",
+        },
+        SlashCommandInfo {
+            name: "jobs",
+            description: "Inspect active/background command sessions",
+        },
+        SlashCommandInfo {
             name: "skills",
             description: "Open interactive skills manager (usage: /skills, /skills manager)",
         },
@@ -362,6 +374,18 @@ mod tests {
     fn prefix_matches_include_review_command() {
         let names = names_for("rev");
         assert_eq!(names, vec!["review"]);
+    }
+
+    #[test]
+    fn suggestions_include_new_interactive_mode_commands() {
+        let names = names_for("bt");
+        assert_eq!(names, vec!["btw"]);
+
+        let names = names_for("task");
+        assert_eq!(names, vec!["tasks"]);
+
+        let names = names_for("job");
+        assert_eq!(names, vec!["jobs"]);
     }
 
     #[test]

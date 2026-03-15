@@ -79,6 +79,9 @@ pub(crate) enum SlashCommandOutcome {
     ClearConversation,
     CompactConversation,
     CopyLatestAssistantReply,
+    TriggerPromptSuggestions,
+    ToggleTasksPanel,
+    ShowJobsPanel,
     ShowStatus,
     StopAgent,
     ManageMcp {
@@ -305,6 +308,27 @@ pub(crate) async fn handle_slash_command(
                 return Ok(SlashCommandOutcome::Handled);
             }
             Ok(SlashCommandOutcome::CopyLatestAssistantReply)
+        }
+        "btw" => {
+            if !args.is_empty() {
+                renderer.line(MessageStyle::Error, "Usage: /btw")?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+            Ok(SlashCommandOutcome::TriggerPromptSuggestions)
+        }
+        "tasks" => {
+            if !args.is_empty() {
+                renderer.line(MessageStyle::Error, "Usage: /tasks")?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+            Ok(SlashCommandOutcome::ToggleTasksPanel)
+        }
+        "jobs" => {
+            if !args.is_empty() {
+                renderer.line(MessageStyle::Error, "Usage: /jobs")?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+            Ok(SlashCommandOutcome::ShowJobsPanel)
         }
         "status" => Ok(SlashCommandOutcome::ShowStatus),
         "stop" => {
@@ -696,5 +720,26 @@ mod tests {
                 instructions: Some(ref text)
             } if text == "show cwd and branch"
         ));
+    }
+
+    #[tokio::test]
+    async fn interactive_mode_commands_parse_to_expected_outcomes() {
+        let workspace = std::env::current_dir().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let btw = handle_slash_command("btw", &mut renderer, &workspace)
+            .await
+            .expect("btw should parse");
+        assert!(matches!(btw, SlashCommandOutcome::TriggerPromptSuggestions));
+
+        let tasks = handle_slash_command("tasks", &mut renderer, &workspace)
+            .await
+            .expect("tasks should parse");
+        assert!(matches!(tasks, SlashCommandOutcome::ToggleTasksPanel));
+
+        let jobs = handle_slash_command("jobs", &mut renderer, &workspace)
+            .await
+            .expect("jobs should parse");
+        assert!(matches!(jobs, SlashCommandOutcome::ShowJobsPanel));
     }
 }

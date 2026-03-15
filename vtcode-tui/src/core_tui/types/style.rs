@@ -38,6 +38,7 @@ pub struct InlineHeaderContext {
     pub context_window_size: Option<usize>,
     pub version: String,
     pub search_tools: Option<InlineHeaderStatusBadge>,
+    pub pr_review: Option<InlineHeaderStatusBadge>,
     pub editor_context: Option<String>,
     pub git: String,
     pub mode: String,
@@ -97,6 +98,7 @@ impl Default for InlineHeaderContext {
             context_window_size: None,
             version,
             search_tools: None,
+            pr_review: None,
             editor_context: None,
             git,
             mode: ui::HEADER_MODE_INLINE.to_string(),
@@ -126,7 +128,7 @@ pub enum InlineHeaderStatusTone {
     Error,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct InlineHeaderHighlight {
     pub title: String,
     pub lines: Vec<String>,

@@ -2493,6 +2493,25 @@ fn header_shows_search_tools_status_badge() {
 }
 
 #[test]
+fn header_shows_pr_review_status_badge() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.header_context.pr_review = Some(InlineHeaderStatusBadge {
+        text: "PR: outdated".to_string(),
+        tone: InlineHeaderStatusTone::Warning,
+    });
+
+    let line = session.header_meta_line();
+    let badge_span = line
+        .spans
+        .iter()
+        .find(|span| span.content.as_ref() == "PR: outdated")
+        .expect("pr review badge span");
+
+    assert_eq!(badge_span.style.fg, Some(Color::Yellow));
+    assert!(badge_span.style.add_modifier.contains(Modifier::BOLD));
+}
+
+#[test]
 fn header_meta_line_excludes_editor_context() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.header_context.editor_context =
@@ -3353,6 +3372,73 @@ fn pty_busy_state_does_not_overlay_transcript_status() {
         !rendered.iter().any(|line| line.contains("Running...")),
         "busy PTY state should not inject transcript status overlay"
     );
+}
+
+#[test]
+fn apply_suggested_prompt_replaces_empty_input() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+
+    session.apply_suggested_prompt("Review the latest diff.".to_string());
+
+    assert_eq!(session.input_manager.content(), "Review the latest diff.");
+    assert!(session.suggested_prompt_state.active);
+}
+
+#[test]
+fn apply_suggested_prompt_appends_to_existing_input() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.set_input("Initial draft".to_string());
+
+    session.apply_suggested_prompt("Review the latest diff.".to_string());
+
+    assert_eq!(
+        session.input_manager.content(),
+        "Initial draft\n\nReview the latest diff."
+    );
+    assert!(session.suggested_prompt_state.active);
+}
+
+#[test]
+fn suggested_prompt_state_clears_after_manual_edit() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.apply_suggested_prompt("Review the latest diff.".to_string());
+
+    session.insert_char('!');
+
+    assert!(!session.suggested_prompt_state.active);
+    assert!(session.suggested_prompt_state.source.is_none());
+}
+
+#[test]
+fn alt_p_submits_btw_command() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::ALT));
+
+    assert!(matches!(event, Some(InlineEvent::Submit(ref value)) if value == "/btw"));
+}
+
+#[test]
+fn empty_enter_with_active_pty_opens_jobs() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.active_pty_sessions = Some(Arc::new(AtomicUsize::new(1)));
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert!(matches!(event, Some(InlineEvent::Submit(ref value)) if value == "/jobs"));
+}
+
+#[test]
+fn task_panel_visibility_is_independent_from_logs() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.set_task_panel_visible(true);
+    let initial_task_panel = session.show_task_panel;
+    let initial_logs = session.show_logs;
+
+    session.toggle_logs();
+
+    assert_eq!(session.show_task_panel, initial_task_panel);
+    assert_ne!(session.show_logs, initial_logs);
 }
 
 #[test]

@@ -222,6 +222,7 @@ fn build_exit_header_context_fast(
         search_tools: Some(crate::agent::runloop::ui::build_search_tools_badge(
             &config.workspace,
         )),
+        pr_review: None,
         editor_context: None,
         git: format!(
             "{}{}",

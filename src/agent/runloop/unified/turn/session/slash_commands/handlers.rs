@@ -25,6 +25,8 @@ mod activation;
 mod apps;
 #[path = "diagnostics.rs"]
 mod diagnostics;
+#[path = "interactive.rs"]
+mod interactive;
 #[path = "mcp.rs"]
 mod mcp;
 #[path = "modes.rs"]
@@ -47,6 +49,9 @@ pub(super) use apps::{
 pub(super) use diagnostics::{
     handle_run_doctor, handle_show_status, handle_start_doctor_interactive,
     handle_start_terminal_setup,
+};
+pub(super) use interactive::{
+    handle_show_jobs_panel, handle_toggle_tasks_panel, handle_trigger_prompt_suggestions,
 };
 pub(super) use mcp::handle_manage_mcp;
 pub(super) use modes::{handle_cycle_mode, handle_toggle_plan_mode};
@@ -161,6 +166,8 @@ pub(super) async fn handle_clear_conversation(
     ctx.conversation_history.clear();
     *ctx.session_stats = SessionStats::default();
     ctx.session_stats.vim_mode_enabled = vim_mode_enabled;
+    ctx.handle.set_task_panel_visible(false);
+    ctx.handle.set_task_panel_lines(Vec::new());
     {
         let mut ledger = ctx.decision_ledger.write().await;
         *ledger = DecisionTracker::new();

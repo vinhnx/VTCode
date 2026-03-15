@@ -13,7 +13,7 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 | `Ctrl+C` | Cancel the current generation or command. Press twice to terminate the session. | Works during prompts, tool execution, and streaming replies. |
 | `Ctrl+D` | Exit VT Code interactive mode. | Sends EOF to the shell integration. |
 | `Ctrl+L` | Clear the terminal screen while keeping the conversation history. | Useful for refreshing when output is cluttered. |
-| `Ctrl+O` | Toggle verbose tool output and diagnostics. | Reveals detailed tool invocation logs. |
+| `Ctrl+T` | Toggle verbose tool output and diagnostics. | Reveals detailed tool invocation logs without affecting the TODO panel. |
 | `Ctrl+A` | Move cursor to start of input line. | UNIX/readline-style editing. |
 | `Ctrl+E` | Move cursor to end of input line (or open external editor when input is empty). | Uses `tools.editor` config, then `VISUAL`/`EDITOR`. |
 | `Ctrl+W` | Delete the previous word. | UNIX/readline-style editing. |
@@ -50,6 +50,7 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 | `/` at start of input | Issue a slash command. | Run `/help` or `/slash-commands` in a session to list everything available. |
 | `!` at start of input | Enter Bash mode. | Runs shell commands directly and streams their output. |
 | `@` within input | Open file picker. | Triggers file path autocomplete and picker to quickly reference files in your message. |
+| `Alt+P` / `Option+P` | Open prompt suggestions. | Equivalent to `/btw`; inserts the selected prompt into the composer without auto-submitting. |
 
 ## Vim Mode
 
@@ -62,6 +63,16 @@ VT Code supports an optional Vim-style prompt editor.
 - VT Code does not implement visual mode, macros, or multiple registers; yanks reuse the single session clipboard.
 - VT Code-specific prompt controls still win when relevant, including `Enter`, `Tab`, `Ctrl+Enter`, `/`, `@`, and `!`.
 
+## Prompt Suggestions, Tasks, and Jobs
+
+- `/btw` opens a prompt-suggestion picker built from recent session context such as task state, active jobs, recent errors, and recent file activity.
+- When `agent.small_model` is enabled, VT Code routes `/btw` generation through that smaller model tier first and falls back to deterministic suggestions if generation fails.
+- Picking a suggestion inserts it into the composer. Empty drafts are replaced; non-empty drafts keep their content and append the suggestion after a blank line.
+- `/tasks` toggles the dedicated TODO panel. It is fed directly from `task_tracker` and `plan_task_tracker` output and remains independent from the `Ctrl+T` log toggle.
+- `/jobs` opens the active/background jobs picker for PTY-backed command sessions.
+- In `/jobs`, `Enter` or `Ctrl+R` focuses the selected job output, `Ctrl+P` previews a snapshot modal, and `Ctrl+X` sends an interrupt to the selected job.
+- Pressing `Enter` on an empty draft opens `/jobs` when active jobs exist; otherwise VT Code keeps the normal empty-enter behavior.
+
 ## Active Run Steering
 
 When a task is already running, VT Code keeps the active turn alive and lets you steer it:
@@ -71,6 +82,14 @@ When a task is already running, VT Code keeps the active turn alive and lets you
 - `/pause` pauses the active run at the next model/tool/approval boundary.
 - `/resume` resumes a paused run while it is active. When idle, `/resume` still opens archived sessions.
 - `/stop` still cancels the active run immediately.
+- `Ctrl+B` still backgrounds the current shell run.
+- Foreground `!` commands keep their status in the input/status area, and `Esc` collapses verbose output without killing the job.
+
+## PR Review Status
+
+- On GitHub-backed repositories, the header can show a PR review badge such as `PR: ready`, `PR: reviewed`, or `PR: outdated`.
+- VT Code uses read-only `gh` inspection for this status. If `gh` is missing or unauthenticated, the header shows the appropriate CTA instead of failing the session.
+- The badge refreshes as branch and HEAD state change, and warnings appear when your review is outdated or you do not have write access.
 
 ## Plan Mode Notes
 

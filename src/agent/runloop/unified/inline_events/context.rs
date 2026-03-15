@@ -124,6 +124,11 @@ impl<'a> InlineEventContext<'a> {
                         OverlayHotkeyAction::LaunchEditor => {
                             self.input_processor().submit("/edit".to_string())
                         }
+                        OverlayHotkeyAction::FocusJobOutput
+                        | OverlayHotkeyAction::InterruptJob
+                        | OverlayHotkeyAction::PreviewJobSnapshot => {
+                            self.input_processor().passive()
+                        }
                     }
                 }
                 OverlayEvent::Cancelled => {
