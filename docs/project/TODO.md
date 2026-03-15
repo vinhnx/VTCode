@@ -68,3 +68,15 @@ then add vtcode-ollama related submodules into vtcode-local-llm as well to furth
 ---
 
 improve and modularize vtcode-tui/src/core_tui, remove duplication, and ensure a clean separation of concerns between core TUI logic and higher-level application logic. Refactor the core TUI components to be more modular and reusable, extracting common functionality into shared modules where appropriate. Remove any duplicated code across different TUI components, ensuring that each piece of logic is implemented in a single location to adhere to the DRY principle. Enhance the maintainability and readability of the TUI codebase by organizing it into well-defined modules with clear responsibilities, while ensuring that all existing functionality is preserved and thoroughly tested.
+
+---
+
+check chatgpt login subsction. adal can use it.
+
+https://docs.sylph.ai/features/chatgpt-subscription
+
+https://deepwiki.com/search/can-third-partty-coding-harnes_b94358dd-60ee-42fc-9814-b48503f70c67?mode=fast
+
+---
+
+https://claude.ai/chat/37d94c2c-a521-44d2-85f3-e15c38864286
