@@ -24,7 +24,7 @@ use vtcode_core::core::agent::steering::SteeringMessage;
 use vtcode_core::hooks::{LifecycleHookEngine, SessionEndReason, SessionStartTrigger};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::notifications::set_global_terminal_focused;
-use vtcode_core::ui::slash::SLASH_COMMANDS;
+use vtcode_core::ui::slash::visible_commands;
 use vtcode_core::ui::theme;
 use vtcode_core::ui::{
     inline_theme_from_core_styles, is_tui_mode, set_tui_mode, to_tui_appearance,
@@ -123,6 +123,8 @@ pub(crate) async fn initialize_session_ui(
         .tool_registry
         .set_active_pty_sessions(pty_counter.clone());
 
+    let visible_slash_commands: Vec<_> = visible_commands().into_iter().copied().collect();
+
     let mut session = spawn_session_with_options(
         theme_spec.clone(),
         SessionOptions {
@@ -146,7 +148,7 @@ pub(crate) async fn initialize_session_ui(
                 .map(|cfg| to_tui_keyboard_protocol(cfg.ui.keyboard_protocol.clone()))
                 .unwrap_or_default(),
             workspace_root: Some(config.workspace.clone()),
-            slash_commands: to_tui_slash_commands(SLASH_COMMANDS.as_slice()),
+            slash_commands: to_tui_slash_commands(visible_slash_commands.as_slice()),
             appearance: vt_cfg.map(to_tui_appearance),
             app_name: "VT Code".to_string(),
             non_interactive_hint: Some(

@@ -35,6 +35,14 @@ pub enum TerminalFeature {
     Notifications,
 }
 
+/// How VT Code should present `/terminal-setup` for a terminal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TerminalSetupAvailability {
+    NativeSupport,
+    Offered,
+    GuidanceOnly,
+}
+
 impl TerminalType {
     /// Detect the current terminal emulator from environment variables
     pub fn detect() -> Result<Self> {
@@ -130,7 +138,7 @@ impl TerminalType {
             (TerminalType::Zed, _) => false,
 
             // Warp: has built-in multiline support, no manual config needed
-            (TerminalType::Warp, TerminalFeature::Multiline) => false, // Built-in
+            (TerminalType::Warp, TerminalFeature::Multiline) => true,
             (TerminalType::Warp, TerminalFeature::Notifications) => true, // Built-in
             (TerminalType::Warp, _) => false,
 
@@ -154,6 +162,46 @@ impl TerminalType {
             // Unknown terminal: no support
             (TerminalType::Unknown, _) => false,
         }
+    }
+
+    /// Whether multiline input works without VT Code modifying terminal config.
+    pub fn has_native_multiline_support(&self) -> bool {
+        matches!(
+            self,
+            TerminalType::Ghostty
+                | TerminalType::Kitty
+                | TerminalType::WezTerm
+                | TerminalType::ITerm2
+                | TerminalType::Warp
+        )
+    }
+
+    /// How VT Code should present `/terminal-setup` for this terminal.
+    pub fn terminal_setup_availability(&self) -> TerminalSetupAvailability {
+        match self {
+            TerminalType::Ghostty
+            | TerminalType::Kitty
+            | TerminalType::WezTerm
+            | TerminalType::ITerm2
+            | TerminalType::Warp => TerminalSetupAvailability::NativeSupport,
+            TerminalType::Alacritty | TerminalType::Zed | TerminalType::VSCode => {
+                TerminalSetupAvailability::Offered
+            }
+            TerminalType::TerminalApp
+            | TerminalType::Xterm
+            | TerminalType::WindowsTerminal
+            | TerminalType::Hyper
+            | TerminalType::Tabby
+            | TerminalType::Unknown => TerminalSetupAvailability::GuidanceOnly,
+        }
+    }
+
+    /// Whether `/terminal-setup` should appear in slash discovery surfaces.
+    pub fn should_offer_terminal_setup(&self) -> bool {
+        matches!(
+            self.terminal_setup_availability(),
+            TerminalSetupAvailability::Offered
+        )
     }
 
     /// Get the configuration file path for this terminal
@@ -337,13 +385,7 @@ impl TerminalType {
 
     /// Check if terminal requires manual setup (vs automatic config)
     pub fn requires_manual_setup(&self) -> bool {
-        matches!(
-            self,
-            TerminalType::ITerm2
-                | TerminalType::VSCode
-                | TerminalType::TerminalApp
-                | TerminalType::Xterm
-        )
+        self.should_offer_terminal_setup()
     }
 }
 
@@ -400,9 +442,29 @@ mod tests {
 
     #[test]
     fn test_manual_setup_detection() {
-        assert!(TerminalType::ITerm2.requires_manual_setup());
         assert!(TerminalType::VSCode.requires_manual_setup());
+        assert!(!TerminalType::ITerm2.requires_manual_setup());
         assert!(!TerminalType::Kitty.requires_manual_setup());
+    }
+
+    #[test]
+    fn native_multiline_terminals_are_not_offered_setup() {
+        assert!(TerminalType::WezTerm.has_native_multiline_support());
+        assert!(!TerminalType::WezTerm.should_offer_terminal_setup());
+        assert!(TerminalType::ITerm2.has_native_multiline_support());
+        assert!(!TerminalType::ITerm2.should_offer_terminal_setup());
+        assert!(TerminalType::Warp.has_native_multiline_support());
+        assert!(!TerminalType::Warp.should_offer_terminal_setup());
+    }
+
+    #[test]
+    fn supported_setup_terminals_are_offered_setup() {
+        assert!(TerminalType::VSCode.should_offer_terminal_setup());
+        assert!(TerminalType::Alacritty.should_offer_terminal_setup());
+        assert!(TerminalType::Zed.should_offer_terminal_setup());
+        assert!(!TerminalType::WindowsTerminal.should_offer_terminal_setup());
+        assert!(!TerminalType::Hyper.should_offer_terminal_setup());
+        assert!(!TerminalType::Tabby.should_offer_terminal_setup());
     }
 
     #[test]

@@ -1,255 +1,147 @@
 # VT Code Terminal Optimization Guide
 
-This guide covers the terminal optimization features available in VT Code, designed to enhance your terminal coding experience with advanced capabilities similar to Claude Code.
+This guide covers the terminal-specific settings that matter most when using VT Code interactively.
 
 ## Table of Contents
 
 - [Theme and Appearance](#theme-and-appearance)
 - [Line Break Options](#line-break-options)
-- [Vim Mode](#vim-mode)
 - [Notification Setup](#notification-setup)
 - [Handling Large Inputs](#handling-large-inputs)
 
 ## Theme and Appearance
 
-VT Code supports configurable themes for optimal visual experience. You can configure the theme in your `vtcode.toml` configuration file:
+VT Code can match its own interface to the way you work in your terminal, but it does not control the terminal application's theme directly.
+
+- Use `/config` to adjust VT Code appearance and related interactive settings.
+- Use `[ui.status_line]` in `vtcode.toml` to customize the bottom status bar.
+- Keep terminal colors and fonts in your terminal app's own settings.
+
+Example status-line configuration:
 
 ```toml
-[agent]
-theme = "vitesse-dark"  # or other available themes
+[ui.status_line]
+mode = "command"
+command = "~/.config/vtcode/statusline.sh"
+refresh_interval_ms = 1000
+command_timeout_ms = 200
 ```
 
-The theme configuration affects the terminal interface, syntax highlighting, and overall visual appearance of the UI.
+See [status-line.md](./status-line.md) for the full status-line payload and examples.
 
 ## Line Break Options
 
-VT Code provides multiple options for handling line breaks in the terminal:
+VT Code supports several multiline input paths:
 
-### Backslash + Enter (Quick Escape)
+### Quick escape
 
-- Type `\` followed by `Enter` to create a newline without submitting the input
-- This is useful for multi-line input without triggering command execution
-- Example: When writing multi-line code snippets or complex commands
+- Type `\` followed by `Enter` to insert a newline without submitting.
+- This works across VT Code terminal sessions without terminal-specific setup.
+
+### Option+Enter on macOS
+
+- `Option+Enter` is the default multiline fallback on macOS terminals.
+- In Terminal.app, enable `Use Option as Meta Key` in Settings -> Profiles -> Keyboard.
+- In iTerm2 or the VS Code terminal, set the left/right Option key to `Esc+` if you rely on Option-based shortcuts.
 
 ### Shift+Enter
 
-- Press `Shift+Enter` to insert a newline character in the input field
-- This allows for multi-line input while staying in the same input context
-- Works in most terminal emulators including iTerm2, VS Code Terminal, Kitty, and others
+- Native terminals: `Ghostty`, `Kitty`, `WezTerm`, `iTerm2`, and `Warp` already handle multiline input without VT Code editing terminal config.
+- Guided setup terminals: run `/terminal-setup` in `VS Code`, `Alacritty`, or `Zed` if you want VT Code's terminal-specific setup flow.
+- Manual terminals: `Terminal.app`, `xterm`, and unknown terminals require terminal-specific keybinding changes outside VT Code.
 
-### Keyboard Shortcuts
+### Core input shortcuts
 
-- `Enter` = Queue the current input
-- `Ctrl+Enter` = Process the current draft immediately, or steer the active turn
-- `Shift+Enter` = Insert newline without submitting
-- `Esc` = Cancel current input or close modals
-
-## Vim Mode
-
-VT Code includes a Vim mode with a subset of Vim keybindings for efficient text editing:
-
-### Mode Switching
-
-- `i`, `a`, `o`, `O`, `A`, `I` → Enter Insert mode
-- `Esc` → Return to Normal mode
-- `/vim` → Toggle Vim mode on/off via slash command
-
-### Navigation (Normal Mode)
-
-- `h`, `j`, `k`, `l` → Move left/down/up/right
-- `w` → Move to next word start
-- `e` → Move to end of current word
-- `b` → Move to previous word start
-- `0` → Move to start of line
-- `$` → Move to end of line
-- `^` → Move to first non-blank character of line
-- `gg` → Move to top of transcript
-- `G` → Move to bottom of transcript
-
-### Editing (Normal Mode)
-
-- `x` → Delete character under cursor
-- `dd` → Delete current line
-- `dw` → Delete word
-- `de` → Delete to end of word
-- `db` → Delete to start of word
-- `D` or `d$` → Delete to end of line
-- `cc` → Change current line
-- `cw` → Change word
-- `ce` → Change to end of word
-- `cb` → Change to start of word
-- `C` or `c$` → Change to end of line
-- `.` → Repeat last command
+- `Enter` queues the current draft.
+- `Ctrl+Enter` runs the draft immediately, or steers the active turn.
+- `Ctrl+J` inserts a literal line feed.
+- `Esc` cancels the current input or closes an active modal.
 
 ## Notification Setup
 
-VT Code provides comprehensive notification support for task completion and important events:
+VT Code has two separate notification paths: terminal-native alerts and lifecycle hooks.
 
-### Task Completion Notifications
+### Terminal-native alerts
 
-- Configure task completion hooks in your `vtcode.toml`:
+- VT Code can emit terminal bell and terminal-notification escape sequences when supported.
+- Configure VT Code-side notification behavior in `vtcode.toml`:
+
+```toml
+[security]
+hitl_notification_bell = true
+
+[ui.notifications]
+enabled = true
+completion_failure = true
+completion_success = false
+```
+
+- Some terminals surface these alerts directly:
+    - `Ghostty` and `Kitty` support native alert flows well.
+    - `iTerm2` can show Notification Center alerts after enabling the relevant profile settings.
+    - Other terminals may only expose bell-based notifications.
+
+### Lifecycle hook notifications
+
+If your terminal does not surface alerts the way you want, use lifecycle hooks to run your own notification command.
 
 ```toml
 [hooks.lifecycle]
 task_completion = [
-  {
-    matcher = ".*",  # Match all tasks
-    hooks = [
-      {
-        command = "echo 'Task completed: $VT_HOOK_EVENT' >> /tmp/vtcode_notifications.log",
-        timeout_seconds = 10
-      }
-    ]
-  }
+  { hooks = [ { command = "osascript -e 'display notification \"VT Code task completed\" with title \"VT Code\"'", timeout_seconds = 5 } ] }
 ]
 ```
 
-### System Notifications
-
-- VT Code supports terminal bell notifications for important events
-- Configure in security settings:
-
-```toml
-[security]
-hitl_notification_bell = true  # Enable bell for human-in-the-loop prompts
-```
-
-### iTerm2 Notifications
-
-For iTerm2 users, you can configure system notifications:
-
-1. Open iTerm2 Preferences
-2. Navigate to Profiles → Terminal
-3. Enable "Silence bell" and "Send escape sequence-generated alerts"
-4. Set your preferred notification delay
-
-### Custom Notification Hooks
-
-You can create custom notification hooks for various lifecycle events:
-
-- `session_start` - When a session begins
-- `session_end` - When a session ends
-- `user_prompt_submit` - When user submits a prompt
-- `pre_tool_use` - Before tools execute
-- `post_tool_use` - After tools execute successfully
-- `task_completion` - When tasks complete (new feature)
+See [lifecycle-hooks.md](./lifecycle-hooks.md) for event payloads, blocking semantics, and more examples.
 
 ## Handling Large Inputs
 
-VT Code provides several methods for handling large inputs efficiently:
+Large pasted inputs are harder to manage than file-based workflows. Prefer referencing files or piping data into VT Code.
 
-### File-Based Workflows
+### File-based workflows
 
-Use the `@` symbol to reference files directly in your input:
+- Use `@path/to/file` inside interactive mode to attach files from the workspace.
+- Quote paths with spaces, for example `@"docs/design notes.md"`.
 
-- `@filename.txt` - Include content from filename.txt
-- `@"file with spaces.txt"` - Include content from files with spaces
-- `@'single quoted file.txt'` - Include content from files with special characters
-
-This allows you to reference large files without pasting content directly into the terminal.
-
-### Piped Input
-
-You can pipe content directly to VT Code:
+### Piped input
 
 ```bash
 cat large_file.txt | vtcode ask "Analyze this content"
 ```
 
-### Large Output Handling
+### Output limits
 
-VT Code automatically handles large tool outputs by:
-
-- Spooling large outputs to log files when they exceed configured thresholds
-- Providing compact output display modes
-- Supporting streaming for real-time processing
-
-Configure large output handling in your `vtcode.toml`:
+VT Code can compact, truncate, or spool large tool output depending on your config:
 
 ```toml
 [ui]
 tool_output_mode = "compact"
 tool_output_max_lines = 50
-tool_output_spool_bytes = 200000  # 200KB threshold for spooling
-```
-
-## Configuration Example
-
-Here's a complete example configuration in `vtcode.toml` with optimization features enabled:
-
-```toml
-[agent]
-provider = "openai"
-default_model = "gpt-5"
-theme = "vitesse-dark"
-
-[security]
-human_in_the_loop = true
-hitl_notification_bell = true
-
-[ui]
-tool_output_mode = "compact"
-tool_output_max_lines = 600
-
-[ui.status_line]
-mode = "auto"
-
-[pty]
-enabled = true
-default_rows = 24
-default_cols = 120
-
-# Lifecycle hooks for notifications
-[hooks.lifecycle]
-task_completion = [
-  {
-    matcher = ".*",
-    hooks = [
-      {
-        command = "osascript -e 'display notification \"VT Code task completed\" with title \"VT Code\"' 2>/dev/null || true",
-        timeout_seconds = 5
-      }
-    ]
-  }
-]
-
-session_start = [
-  {
-    hooks = [
-      {
-        command = "echo 'VT Code session started at $(date)' >> ~/.vtcode/session.log",
-        timeout_seconds = 5
-      }
-    ]
-  }
-]
+tool_output_spool_bytes = 200000
 ```
 
 ## Troubleshooting
 
-### Vim Mode Issues
+### Multiline input
 
-- If Vim mode feels unresponsive, try using `/vim` to toggle it off and on
-- Some key combinations may conflict with terminal shortcuts; adjust as needed
+- If `Shift+Enter` does nothing, check whether your current terminal is one of VT Code's guided setup terminals.
+- If you are on macOS, try `Option+Enter` before changing terminal bindings.
+- If your terminal is not covered by `/terminal-setup`, configure the binding in the terminal app itself.
 
-### Notification Issues
+### Notifications
 
-- On macOS, ensure terminal has notification permissions
-- For iTerm2, check Terminal profile settings for bell configuration
-- Test hooks with simple commands before using complex notification scripts
+- Confirm your terminal has OS notification permissions where applicable.
+- Test bell-based alerts with `printf '\\a'`.
+- Validate hook commands separately before relying on them in `hooks.lifecycle`.
 
-### Large Input Issues
+### Large input handling
 
-- If file references aren't working, ensure the file exists and is accessible
-- Check that the `@` symbol is followed by a valid file path
-- Use quotes for file paths containing spaces or special characters
+- Prefer `@file` references over pasting long transcripts into the terminal.
+- In the VS Code terminal, long pastes are more likely to be truncated than file-based input.
 
 ## Performance Tips
 
-1. Use file references (`@filename`) instead of pasting large content
-2. Configure appropriate output limits to prevent terminal flooding
-3. Use Vim mode for efficient text editing in the terminal
-4. Set up notification hooks for important events to stay informed
-5. Configure terminal-specific settings (Shift+Enter, etc.) for optimal experience
-
-This guide provides the foundation for optimizing your VT Code terminal experience. For more detailed information about specific features, refer to the relevant documentation sections.
+1. Use file references instead of pasting long documents into the terminal.
+2. Keep `tool_output_mode` compact if you work with verbose builds or test output.
+3. Configure notifications with hooks when your terminal does not surface native alerts well.
+4. Use `/config` and `[ui.status_line]` to tune the interactive surface instead of terminal theme hacks.

@@ -36,11 +36,11 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 | :-- | :-- | :-- |
 | Quick escape | `\` + `Enter` | Works across supported terminals. |
 | macOS default | `Option+Enter` | Default multiline binding on macOS terminals. |
-| Terminal setup | `Shift+Enter` | Available after running `/terminal-setup`. |
+| Native or configured | `Shift+Enter` | Works natively in some terminals and is available after `/terminal-setup` in supported terminals. |
 | Control sequence | `Ctrl+J` | Inserts a line feed for multiline editing. |
 | Paste mode | Paste directly | Ideal for code blocks or long transcripts. |
 
-> Tip: Configure the preferred line break behavior in your terminal. Run `/terminal-setup` to install the `Shift+Enter` binding for iTerm2 and VS Code terminals.
+> Tip: `Shift+Enter` works natively in `Ghostty`, `Kitty`, `WezTerm`, `iTerm2`, and `Warp`. Run `/terminal-setup` in supported terminals such as `VS Code`, `Alacritty`, or `Zed` when you want VT Code's guided setup flow.
 
 ### Quick Commands
 
@@ -68,49 +68,6 @@ When a task is already running, VT Code keeps the active turn alive and lets you
 - `task_tracker` works in Plan Mode and mirrors checklist state with plan sidecars; `plan_task_tracker` remains as a compatibility alias.
 - After a plan is emitted, VT Code shows an implementation choice: switch to Edit mode and execute, or continue planning.
 - If automatic Plan->Edit switching fails, manually switch with `/plan off` or `/mode`, or use `Shift+Tab`/`Alt+M`.
-
-## Vim Editor Mode
-
-Enable Vim-style editing by running `/vim` or enabling it via `/config`.
-
-### Mode Switching
-
-| Command | Action | From mode |
-| :-- | :-- | :-- |
-| `Esc` | Enter NORMAL mode. | INSERT |
-| `i` | Insert before the cursor. | NORMAL |
-| `I` | Insert at the beginning of the line. | NORMAL |
-| `a` | Insert after the cursor. | NORMAL |
-| `A` | Insert at the end of the line. | NORMAL |
-| `o` | Open a line below. | NORMAL |
-| `O` | Open a line above. | NORMAL |
-
-### Navigation (NORMAL mode)
-
-| Command | Action |
-| :-- | :-- |
-| `h`/`j`/`k`/`l` | Move left/down/up/right. |
-| `w` | Jump to the next word. |
-| `e` | Jump to the end of the current word. |
-| `b` | Jump to the previous word. |
-| `0` | Move to the beginning of the line. |
-| `$` | Move to the end of the line. |
-| `^` | Jump to the first non-blank character. |
-| `gg` | Go to the beginning of the input. |
-| `G` | Go to the end of the input. |
-
-### Editing (NORMAL mode)
-
-| Command | Action |
-| :-- | :-- |
-| `x` | Delete the character under the cursor. |
-| `dd` | Delete the current line. |
-| `D` | Delete to the end of the line. |
-| `dw` / `de` / `db` | Delete word / to end of word / backward word. |
-| `cc` | Change the current line. |
-| `C` | Change to the end of the line. |
-| `cw` / `ce` / `cb` | Change word / to end of word / backward word. |
-| `.` | Repeat the last change. |
 
 ## Command History
 

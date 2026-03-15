@@ -1,5 +1,6 @@
 use once_cell::sync::Lazy;
 
+use crate::terminal_setup::detector::TerminalType;
 use crate::ui::search::{fuzzy_match, normalize_query};
 
 /// Metadata describing a slash command supported by the chat interface.
@@ -180,17 +181,58 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
     ]
 });
 
-/// Returns slash command metadata that match the provided prefix (case insensitive).
-pub fn suggestions_for(prefix: &str) -> Vec<&'static SlashCommandInfo> {
+fn detected_terminal_for_visibility() -> TerminalType {
+    TerminalType::detect().unwrap_or(TerminalType::Unknown)
+}
+
+fn command_visible_for_terminal(command: &SlashCommandInfo, terminal: TerminalType) -> bool {
+    command.name != "terminal-setup" || terminal.should_offer_terminal_setup()
+}
+
+pub fn visible_commands() -> Vec<&'static SlashCommandInfo> {
+    visible_commands_for_terminal(detected_terminal_for_visibility())
+}
+
+pub fn visible_commands_for_terminal(terminal: TerminalType) -> Vec<&'static SlashCommandInfo> {
+    SLASH_COMMANDS
+        .iter()
+        .filter(|command| command_visible_for_terminal(command, terminal))
+        .collect()
+}
+
+pub fn find_visible_command(name: &str) -> Option<&'static SlashCommandInfo> {
+    let terminal = detected_terminal_for_visibility();
+    SLASH_COMMANDS
+        .iter()
+        .find(|command| command.name == name && command_visible_for_terminal(command, terminal))
+}
+
+pub fn find_command(name: &str) -> Option<&'static SlashCommandInfo> {
+    SLASH_COMMANDS.iter().find(|command| command.name == name)
+}
+
+pub fn suggestions_for_terminal(
+    prefix: &str,
+    terminal: TerminalType,
+) -> Vec<&'static SlashCommandInfo> {
+    let visible = visible_commands_for_terminal(terminal);
+    suggestions_for_commands(prefix, &visible)
+}
+
+fn suggestions_for_commands(
+    prefix: &str,
+    commands: &[&'static SlashCommandInfo],
+) -> Vec<&'static SlashCommandInfo> {
     let trimmed = prefix.trim();
     if trimmed.is_empty() {
-        return SLASH_COMMANDS.iter().collect();
+        return commands.to_vec();
     }
 
     let query = trimmed.to_ascii_lowercase();
 
-    let mut prefix_matches: Vec<&SlashCommandInfo> = SLASH_COMMANDS
+    let mut prefix_matches: Vec<&SlashCommandInfo> = commands
         .iter()
+        .copied()
         .filter(|info| info.name.starts_with(&query))
         .collect();
 
@@ -199,8 +241,9 @@ pub fn suggestions_for(prefix: &str) -> Vec<&'static SlashCommandInfo> {
         return prefix_matches;
     }
 
-    let mut substring_matches: Vec<(&SlashCommandInfo, usize)> = SLASH_COMMANDS
+    let mut substring_matches: Vec<(&SlashCommandInfo, usize)> = commands
         .iter()
+        .copied()
         .filter_map(|info| info.name.find(&query).map(|position| (info, position)))
         .collect();
 
@@ -216,11 +259,12 @@ pub fn suggestions_for(prefix: &str) -> Vec<&'static SlashCommandInfo> {
 
     let normalized_query = normalize_query(&query);
     if normalized_query.is_empty() {
-        return SLASH_COMMANDS.iter().collect();
+        return commands.to_vec();
     }
 
-    let mut scored: Vec<(&SlashCommandInfo, usize, usize)> = SLASH_COMMANDS
+    let mut scored: Vec<(&SlashCommandInfo, usize, usize)> = commands
         .iter()
+        .copied()
         .filter_map(|info| {
             let mut candidate = info.name.to_ascii_lowercase();
             if !info.description.is_empty() {
@@ -248,7 +292,7 @@ pub fn suggestions_for(prefix: &str) -> Vec<&'static SlashCommandInfo> {
         .collect();
 
     if scored.is_empty() {
-        return SLASH_COMMANDS.iter().collect();
+        return commands.to_vec();
     }
 
     scored.sort_by(|(a, name_pos_a, desc_pos_a), (b, name_pos_b, desc_pos_b)| {
@@ -258,6 +302,11 @@ pub fn suggestions_for(prefix: &str) -> Vec<&'static SlashCommandInfo> {
     });
 
     scored.into_iter().map(|(info, _, _)| info).collect()
+}
+
+/// Returns slash command metadata that match the provided prefix (case insensitive).
+pub fn suggestions_for(prefix: &str) -> Vec<&'static SlashCommandInfo> {
+    suggestions_for_terminal(prefix, detected_terminal_for_visibility())
 }
 
 #[cfg(test)]
@@ -305,5 +354,47 @@ mod tests {
     fn prefix_matches_include_review_command() {
         let names = names_for("rev");
         assert_eq!(names, vec!["review"]);
+    }
+
+    #[test]
+    fn terminal_setup_hidden_for_native_terminals() {
+        let names: Vec<&str> = visible_commands_for_terminal(TerminalType::WezTerm)
+            .into_iter()
+            .map(|info| info.name)
+            .collect();
+        assert!(!names.contains(&"terminal-setup"));
+
+        let names: Vec<&str> = visible_commands_for_terminal(TerminalType::ITerm2)
+            .into_iter()
+            .map(|info| info.name)
+            .collect();
+        assert!(!names.contains(&"terminal-setup"));
+
+        let names: Vec<&str> = visible_commands_for_terminal(TerminalType::WindowsTerminal)
+            .into_iter()
+            .map(|info| info.name)
+            .collect();
+        assert!(!names.contains(&"terminal-setup"));
+    }
+
+    #[test]
+    fn terminal_setup_visible_for_supported_setup_terminals() {
+        let names: Vec<&str> = visible_commands_for_terminal(TerminalType::VSCode)
+            .into_iter()
+            .map(|info| info.name)
+            .collect();
+        assert!(names.contains(&"terminal-setup"));
+
+        let names: Vec<&str> = visible_commands_for_terminal(TerminalType::Alacritty)
+            .into_iter()
+            .map(|info| info.name)
+            .collect();
+        assert!(names.contains(&"terminal-setup"));
+
+        let names: Vec<&str> = visible_commands_for_terminal(TerminalType::Zed)
+            .into_iter()
+            .map(|info| info.name)
+            .collect();
+        assert!(names.contains(&"terminal-setup"));
     }
 }

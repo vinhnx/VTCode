@@ -10,7 +10,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::project_doc::{self, ProjectDocOptions};
 use vtcode_core::terminal_setup::detector::{TerminalFeature, TerminalType};
-use vtcode_core::ui::slash::SLASH_COMMANDS;
+use vtcode_core::ui::slash::find_visible_command;
 use vtcode_core::utils::common::summarize_workspace_languages;
 use vtcode_tui::InlineHeaderHighlight;
 
@@ -165,11 +165,12 @@ fn terminal_info_highlight() -> InlineHeaderHighlight {
                 lines.push(format!("Capabilities: {}", supported.join(", ")));
             }
 
-            if term.requires_manual_setup() {
+            if term.should_offer_terminal_setup() {
                 lines.push("Status: Setup Required (Run /terminal-setup)".to_string());
-            } else if term == TerminalType::Ghostty || term == TerminalType::Kitty {
-                // For fully supported terminals, show they are ready
-                lines.push("Status: Optimized for VT Code".to_string());
+            } else if term.has_native_multiline_support() {
+                lines.push("Status: Ready (native multiline support)".to_string());
+            } else {
+                lines.push("Status: Manual terminal guidance available".to_string());
             }
 
             ("Terminal Environment".to_string(), lines)
@@ -228,9 +229,7 @@ fn slash_commands_highlight() -> Option<InlineHeaderHighlight> {
         (format!("{}{{command}}", prefix), String::new()),
         (
             format!("{}help", prefix),
-            SLASH_COMMANDS
-                .iter()
-                .find(|info| info.name == "help")
+            find_visible_command("help")
                 .map(|info| info.description.trim().to_string())
                 .unwrap_or_default(),
         ),

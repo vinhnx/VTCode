@@ -8,7 +8,7 @@ use crate::utils::file_utils::read_file_with_context_sync;
 use anyhow::Result;
 
 use super::backup::ConfigBackupManager;
-use super::detector::{TerminalFeature, TerminalType};
+use super::detector::{TerminalFeature, TerminalSetupAvailability, TerminalType};
 
 /// Run the interactive terminal setup wizard
 pub async fn run_terminal_setup_wizard(
@@ -20,37 +20,10 @@ pub async fn run_terminal_setup_wizard(
 
     let terminal_type = TerminalType::detect()?;
 
-    if terminal_type == TerminalType::Unknown {
-        renderer.line(
-            MessageStyle::Error,
-            "Could not detect your terminal emulator.",
-        )?;
-        renderer.line(MessageStyle::Info, "Supported terminals: Ghostty, Kitty, Alacritty, Zed, Warp, iTerm2, VS Code, Windows Terminal, Hyper, Tabby")?;
-        return Ok(());
-    }
-
     renderer.line(
         MessageStyle::Status,
         &format!("Detected terminal: {}", terminal_type.name()),
     )?;
-
-    // Get config path
-    let config_path = match terminal_type.config_path() {
-        Ok(path) => {
-            renderer.line(
-                MessageStyle::Info,
-                &format!("Config file: {}", path.display()),
-            )?;
-            path
-        }
-        Err(e) => {
-            renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to determine config path: {}", e),
-            )?;
-            return Ok(());
-        }
-    };
 
     // Step 2: Feature Selection (for now, show what will be configured)
     renderer.line_if_not_empty(MessageStyle::Info)?;
@@ -81,26 +54,35 @@ pub async fn run_terminal_setup_wizard(
         )?;
     }
 
-    // Check if terminal requires manual setup
-    if terminal_type.requires_manual_setup() {
-        renderer.line_if_not_empty(MessageStyle::Info)?;
-        renderer.line(
-            MessageStyle::Info,
-            &format!(
-                "{} requires manual configuration. Instructions will be provided.",
-                terminal_type.name()
-            ),
-        )?;
-
-        // For now, just show a placeholder message
-        renderer.line_if_not_empty(MessageStyle::Info)?;
-        renderer.line(
-            MessageStyle::Info,
-            "Manual configuration instructions will be generated in a future update.",
-        )?;
-
-        return Ok(());
+    match terminal_type.terminal_setup_availability() {
+        TerminalSetupAvailability::NativeSupport => {
+            render_guidance_messages(renderer, &native_terminal_setup_messages(terminal_type))?;
+            return Ok(());
+        }
+        TerminalSetupAvailability::GuidanceOnly => {
+            render_guidance_messages(renderer, &guidance_only_messages(terminal_type))?;
+            return Ok(());
+        }
+        TerminalSetupAvailability::Offered => {}
     }
+
+    // Get config path
+    let config_path = match terminal_type.config_path() {
+        Ok(path) => {
+            renderer.line(
+                MessageStyle::Info,
+                &format!("Config file: {}", path.display()),
+            )?;
+            path
+        }
+        Err(e) => {
+            renderer.line(
+                MessageStyle::Error,
+                &format!("Failed to determine config path: {}", e),
+            )?;
+            return Ok(());
+        }
+    };
 
     // Step 3: Backup existing config
     renderer.line_if_not_empty(MessageStyle::Info)?;
@@ -148,85 +130,24 @@ pub async fn run_terminal_setup_wizard(
 
     // Generate terminal-specific configuration
     let new_config = match terminal_type {
-        TerminalType::Ghostty => {
-            crate::terminal_setup::terminals::ghostty::generate_config(&enabled_features)?
-        }
-        TerminalType::Kitty => {
-            crate::terminal_setup::terminals::kitty::generate_config(&enabled_features)?
-        }
+        TerminalType::Ghostty => unreachable!("native-support terminals return before config"),
+        TerminalType::Kitty => unreachable!("native-support terminals return before config"),
         TerminalType::Alacritty => {
             crate::terminal_setup::terminals::alacritty::generate_config(&enabled_features)?
         }
-        TerminalType::WezTerm => {
-            renderer.line_if_not_empty(MessageStyle::Info)?;
-            renderer.line(
-                MessageStyle::Info,
-                "WezTerm detected. Apply settings in ~/.wezterm.lua (manual setup).",
-            )?;
-            for line in
-                crate::terminal_setup::features::notifications::get_notification_instructions(
-                    terminal_type,
-                )
-            {
-                renderer.line(MessageStyle::Info, &line)?;
-            }
-            return Ok(());
-        }
-        TerminalType::TerminalApp => {
-            renderer.line_if_not_empty(MessageStyle::Info)?;
-            renderer.line(
-                MessageStyle::Info,
-                "Terminal.app detected. Configure profile settings manually.",
-            )?;
-            for line in
-                crate::terminal_setup::features::notifications::get_notification_instructions(
-                    terminal_type,
-                )
-            {
-                renderer.line(MessageStyle::Info, &line)?;
-            }
-            return Ok(());
-        }
-        TerminalType::Xterm => {
-            renderer.line_if_not_empty(MessageStyle::Info)?;
-            renderer.line(
-                MessageStyle::Info,
-                "xterm detected. Configure via X resources manually.",
-            )?;
-            for line in
-                crate::terminal_setup::features::notifications::get_notification_instructions(
-                    terminal_type,
-                )
-            {
-                renderer.line(MessageStyle::Info, &line)?;
-            }
-            return Ok(());
-        }
+        TerminalType::WezTerm => unreachable!("native-support terminals return before config"),
+        TerminalType::TerminalApp => unreachable!("guidance-only terminals return before config"),
+        TerminalType::Xterm => unreachable!("guidance-only terminals return before config"),
         TerminalType::Zed => {
             crate::terminal_setup::terminals::zed::generate_config(&enabled_features)?
         }
-        TerminalType::Warp => {
-            crate::terminal_setup::terminals::warp::generate_config(&enabled_features)?
-        }
+        TerminalType::Warp => unreachable!("native-support terminals return before config"),
         TerminalType::WindowsTerminal => {
-            crate::terminal_setup::terminals::windows_terminal::generate_config(&enabled_features)?
+            unreachable!("guidance-only terminals return before config")
         }
-        TerminalType::Hyper => {
-            crate::terminal_setup::terminals::hyper::generate_config(&enabled_features)?
-        }
-        TerminalType::Tabby => {
-            crate::terminal_setup::terminals::tabby::generate_config(&enabled_features)?
-        }
-        TerminalType::ITerm2 => {
-            // iTerm2 requires manual setup - display instructions
-            let instructions =
-                crate::terminal_setup::terminals::iterm2::generate_config(&enabled_features)?;
-            renderer.line_if_not_empty(MessageStyle::Info)?;
-            for line in instructions.lines() {
-                renderer.line(MessageStyle::Info, line)?;
-            }
-            return Ok(());
-        }
+        TerminalType::Hyper => unreachable!("guidance-only terminals return before config"),
+        TerminalType::Tabby => unreachable!("guidance-only terminals return before config"),
+        TerminalType::ITerm2 => unreachable!("native-support terminals return before config"),
         TerminalType::VSCode => {
             // VS Code requires manual setup - display instructions
             let instructions =
@@ -237,13 +158,7 @@ pub async fn run_terminal_setup_wizard(
             }
             return Ok(());
         }
-        TerminalType::Unknown => {
-            renderer.line(
-                MessageStyle::Error,
-                "Cannot generate configuration for unknown terminal.",
-            )?;
-            return Ok(());
-        }
+        TerminalType::Unknown => unreachable!("guidance-only terminals return before config"),
     };
 
     // Read existing config if it exists
@@ -292,10 +207,6 @@ pub async fn run_terminal_setup_wizard(
                 MessageStyle::Info,
                 &format!("Backup saved to: {}", latest_backup.display()),
             )?;
-            renderer.line(
-                MessageStyle::Info,
-                "To restore: Run /terminal-setup --restore (coming soon)",
-            )?;
         }
     }
 
@@ -316,7 +227,7 @@ fn display_welcome(renderer: &mut AnsiRenderer) -> Result<()> {
     renderer.line_if_not_empty(MessageStyle::Info)?;
     renderer.line(
         MessageStyle::Info,
-        "This wizard will configure your terminal for optimal VT Code experience.",
+        "This wizard helps you verify or configure your terminal for VT Code.",
     )?;
     renderer.line_if_not_empty(MessageStyle::Info)?;
     renderer.line(MessageStyle::Info, "Features:")?;
@@ -332,10 +243,125 @@ fn display_welcome(renderer: &mut AnsiRenderer) -> Result<()> {
     Ok(())
 }
 
+fn render_guidance_messages(renderer: &mut AnsiRenderer, messages: &[String]) -> Result<()> {
+    renderer.line_if_not_empty(MessageStyle::Info)?;
+    for line in messages {
+        renderer.line(MessageStyle::Info, line)?;
+    }
+    Ok(())
+}
+
+fn native_terminal_setup_messages(terminal_type: TerminalType) -> Vec<String> {
+    let mut lines = vec![
+        format!(
+            "{} already supports multiline input without VT Code editing your terminal config.",
+            terminal_type.name()
+        ),
+        "Shift+Enter should work natively in this terminal.".to_string(),
+    ];
+
+    match terminal_type {
+        TerminalType::ITerm2 => {
+            lines.push(
+                "Optional macOS shortcut: set Left/Right Option to \"Esc+\" in Profiles -> Keys."
+                    .to_string(),
+            );
+            lines.extend(
+                crate::terminal_setup::features::notifications::get_notification_instructions(
+                    terminal_type,
+                ),
+            );
+        }
+        TerminalType::Ghostty | TerminalType::Kitty | TerminalType::WezTerm => {
+            lines.extend(
+                crate::terminal_setup::features::notifications::get_notification_instructions(
+                    terminal_type,
+                ),
+            );
+        }
+        TerminalType::Warp => {
+            lines.push(
+                "Warp already provides multiline input and terminal notifications.".to_string(),
+            );
+        }
+        _ => {}
+    }
+
+    lines
+}
+
+fn guidance_only_messages(terminal_type: TerminalType) -> Vec<String> {
+    match terminal_type {
+        TerminalType::TerminalApp => vec![
+            "VT Code does not auto-configure Terminal.app.".to_string(),
+            "Use Settings -> Profiles -> Keyboard and enable \"Use Option as Meta Key\" for Option+Enter workflows.".to_string(),
+            "Configure notifications from Terminal -> Settings -> Profiles -> Advanced.".to_string(),
+        ],
+        TerminalType::Xterm => vec![
+            "VT Code does not auto-configure xterm.".to_string(),
+            "Configure Shift+Enter or newline shortcuts through X resources or your window manager.".to_string(),
+            "Use your terminal bell settings if you want completion alerts.".to_string(),
+        ],
+        TerminalType::WindowsTerminal => vec![
+            "VT Code does not currently advertise guided setup for Windows Terminal.".to_string(),
+            "Configure Shift+Enter or multiline bindings in Windows Terminal settings if you need them.".to_string(),
+            "Use the terminal bell or profile alert settings for notifications.".to_string(),
+        ],
+        TerminalType::Hyper => vec![
+            "VT Code does not currently advertise guided setup for Hyper.".to_string(),
+            "Configure multiline bindings or plugins directly in `.hyper.js`.".to_string(),
+            "Use Hyper plugins or bell settings if you want notifications.".to_string(),
+        ],
+        TerminalType::Tabby => vec![
+            "VT Code does not currently advertise guided setup for Tabby.".to_string(),
+            "Configure multiline bindings in Tabby's terminal settings or config file.".to_string(),
+            "Use Tabby's built-in notification or bell settings if needed.".to_string(),
+        ],
+        TerminalType::Unknown => vec![
+            "Could not detect a supported terminal profile for automatic VT Code setup.".to_string(),
+            "Use \\ + Enter for multiline input, or configure your terminal to send a newline on Shift+Enter.".to_string(),
+            "On macOS, Option+Enter is often the simplest fallback once Option is configured as Meta.".to_string(),
+        ],
+        _ => vec![format!(
+            "VT Code does not currently offer guided setup for {}.",
+            terminal_type.name()
+        )],
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use super::{guidance_only_messages, native_terminal_setup_messages};
+    use crate::terminal_setup::detector::TerminalType;
+
     #[test]
     fn test_wizard_module() {
         // Placeholder test - actual wizard tests would need mocked terminal I/O
+    }
+
+    #[test]
+    fn native_setup_messages_are_noop_guidance() {
+        let lines = native_terminal_setup_messages(TerminalType::WezTerm);
+        assert!(
+            lines
+                .iter()
+                .any(|line| line.contains("already supports multiline"))
+        );
+        assert!(lines.iter().any(|line| line.contains("Shift+Enter")));
+    }
+
+    #[test]
+    fn guidance_only_messages_cover_terminal_app() {
+        let lines = guidance_only_messages(TerminalType::TerminalApp);
+        assert!(
+            lines
+                .iter()
+                .any(|line| line.contains("does not auto-configure"))
+        );
+        assert!(
+            lines
+                .iter()
+                .any(|line| line.contains("Use Option as Meta Key"))
+        );
     }
 }

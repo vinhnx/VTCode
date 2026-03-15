@@ -1,6 +1,7 @@
 use anyhow::Result;
 
-use vtcode_core::ui::slash::SLASH_COMMANDS;
+use vtcode_core::terminal_setup::detector::TerminalType;
+use vtcode_core::ui::slash::{find_command, visible_commands};
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
@@ -110,8 +111,7 @@ pub(super) fn render_help(
     specific_command: Option<&str>,
 ) -> Result<()> {
     if let Some(cmd_name) = specific_command {
-        // Look for a specific command
-        if let Some(cmd) = SLASH_COMMANDS.iter().find(|cmd| cmd.name == cmd_name) {
+        if let Some(cmd) = find_command(cmd_name) {
             renderer.line(MessageStyle::Info, &format!("Help for /{}:", cmd.name))?;
             renderer.line(
                 MessageStyle::Info,
@@ -130,7 +130,7 @@ pub(super) fn render_help(
     } else {
         // Show all commands
         renderer.line(MessageStyle::Info, "Available slash commands:")?;
-        for cmd in SLASH_COMMANDS.iter() {
+        for cmd in visible_commands() {
             renderer.line(
                 MessageStyle::Info,
                 &format!("  /{} – {}", cmd.name, cmd.description),
@@ -179,6 +179,30 @@ pub(super) fn render_help(
             MessageStyle::Info,
             "  Shift+Enter – Multiline input (if configured)",
         )?;
+        match TerminalType::detect().unwrap_or(TerminalType::Unknown) {
+            TerminalType::Ghostty
+            | TerminalType::Kitty
+            | TerminalType::WezTerm
+            | TerminalType::ITerm2
+            | TerminalType::Warp => {
+                renderer.line(
+                    MessageStyle::Info,
+                    "  Native support – Shift+Enter works in this terminal without /terminal-setup",
+                )?;
+            }
+            term if term.should_offer_terminal_setup() => {
+                renderer.line(
+                    MessageStyle::Info,
+                    "  /terminal-setup – Install VT Code multiline bindings for this terminal",
+                )?;
+            }
+            _ => {
+                renderer.line(
+                    MessageStyle::Info,
+                    "  Terminal-specific setup – Use Option+Enter on macOS or configure your terminal manually",
+                )?;
+            }
+        }
         renderer.line(
             MessageStyle::Info,
             "  Ctrl+J – Line feed character for multiline",
@@ -189,23 +213,6 @@ pub(super) fn render_help(
             MessageStyle::Info,
             "  !command – Run shell commands directly (e.g., !ls -la)",
         )?;
-        renderer.line(MessageStyle::Info, "")?;
-        renderer.line(MessageStyle::Info, "Vim mode (enable with /vim):")?;
-        renderer.line(
-            MessageStyle::Info,
-            "  i – Insert before cursor (INSERT mode)",
-        )?;
-        renderer.line(
-            MessageStyle::Info,
-            "  a – Insert after cursor (INSERT mode)",
-        )?;
-        renderer.line(MessageStyle::Info, "  o – Open line below (INSERT mode)")?;
-        renderer.line(MessageStyle::Info, "  Esc – Enter NORMAL mode")?;
-        renderer.line(MessageStyle::Info, "  h/j/k/l – Move left/down/up/right")?;
-        renderer.line(MessageStyle::Info, "  w/e/b – Move by words")?;
-        renderer.line(MessageStyle::Info, "  0/$ – Move to beginning/end of line")?;
-        renderer.line(MessageStyle::Info, "  dd/dw – Delete line/word")?;
-        renderer.line(MessageStyle::Info, "  cc/cw – Change line/word")?;
     }
     Ok(())
 }
