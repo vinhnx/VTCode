@@ -2,7 +2,7 @@ use anyhow::{Result, anyhow};
 use vtcode_auth::{
     AuthCallbackOutcome, AuthCredentialsStoreMode, AuthStatus, OAuthCallbackPage, OAuthProvider,
     OpenAIChatGptAuthStatus, OpenAIChatGptSession, OpenRouterToken, PkceChallenge,
-    clear_oauth_token, clear_openai_chatgpt_session, exchange_code_for_token,
+    clear_oauth_token_with_mode, clear_openai_chatgpt_session_with_mode, exchange_code_for_token,
     exchange_openai_chatgpt_code_for_tokens, generate_openai_oauth_state, generate_pkce_challenge,
     get_auth_status_with_mode, get_auth_url, get_openai_chatgpt_auth_status_with_mode,
     get_openai_chatgpt_auth_url, load_openai_chatgpt_session_with_mode,
@@ -140,13 +140,11 @@ pub(crate) async fn complete_openai_login(
 }
 
 pub(crate) fn clear_openrouter_login(vt_cfg: Option<&VTCodeConfig>) -> Result<()> {
-    let _ = vt_cfg;
-    clear_oauth_token()
+    clear_oauth_token_with_mode(credential_storage_mode(vt_cfg))
 }
 
 pub(crate) fn clear_openai_login(vt_cfg: Option<&VTCodeConfig>) -> Result<()> {
-    let _ = vt_cfg;
-    clear_openai_chatgpt_session()
+    clear_openai_chatgpt_session_with_mode(credential_storage_mode(vt_cfg))
 }
 
 pub(crate) fn openrouter_auth_status(vt_cfg: Option<&VTCodeConfig>) -> Result<AuthStatus> {
@@ -257,6 +255,130 @@ fn credential_storage_mode(vt_cfg: Option<&VTCodeConfig>) -> AuthCredentialsStor
     vt_cfg
         .map(|cfg| cfg.agent.credential_storage_mode)
         .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{clear_openai_login, clear_openrouter_login};
+    use serial_test::serial;
+    use vtcode_auth::{
+        AuthCredentialsStoreMode, OpenAIChatGptSession, OpenRouterToken,
+        clear_oauth_token_with_mode, clear_openai_chatgpt_session_with_mode,
+        load_oauth_token_with_mode, load_openai_chatgpt_session_with_mode,
+        save_oauth_token_with_mode, save_openai_chatgpt_session_with_mode,
+    };
+    use vtcode_config::VTCodeConfig;
+
+    fn config_with_storage_mode(mode: AuthCredentialsStoreMode) -> VTCodeConfig {
+        let mut config = VTCodeConfig::default();
+        config.agent.credential_storage_mode = mode;
+        config
+    }
+
+    fn sample_openai_session(api_key: &str) -> OpenAIChatGptSession {
+        OpenAIChatGptSession {
+            openai_api_key: api_key.to_string(),
+            id_token: "id-token".to_string(),
+            access_token: "access-token".to_string(),
+            refresh_token: "refresh-token".to_string(),
+            account_id: Some("account-123".to_string()),
+            email: Some("user@example.com".to_string()),
+            plan: Some("plus".to_string()),
+            obtained_at: 1,
+            refreshed_at: 1,
+            expires_at: Some(2),
+        }
+    }
+
+    fn sample_openrouter_token(api_key: &str) -> OpenRouterToken {
+        OpenRouterToken {
+            api_key: api_key.to_string(),
+            obtained_at: 1,
+            expires_at: Some(2),
+            label: Some("test-token".to_string()),
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn openai_logout_clears_only_configured_storage_mode() {
+        let _ = clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File);
+        let _ = clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::Keyring);
+
+        let file_session = sample_openai_session("file-api-key");
+        let keyring_session = sample_openai_session("keyring-api-key");
+        save_openai_chatgpt_session_with_mode(&file_session, AuthCredentialsStoreMode::File)
+            .expect("save file session");
+
+        if save_openai_chatgpt_session_with_mode(
+            &keyring_session,
+            AuthCredentialsStoreMode::Keyring,
+        )
+        .is_err()
+        {
+            let _ = clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File);
+            return;
+        }
+
+        let config = config_with_storage_mode(AuthCredentialsStoreMode::File);
+        clear_openai_login(Some(&config)).expect("clear openai login");
+
+        assert_eq!(
+            load_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File)
+                .expect("load file session")
+                .expect("keyring session should remain as file-mode fallback")
+                .openai_api_key,
+            "keyring-api-key"
+        );
+        assert_eq!(
+            load_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::Keyring)
+                .expect("load keyring session")
+                .expect("keyring session should remain")
+                .openai_api_key,
+            "keyring-api-key"
+        );
+
+        let _ = clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File);
+        let _ = clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::Keyring);
+    }
+
+    #[test]
+    #[serial]
+    fn openrouter_logout_clears_only_configured_storage_mode() {
+        let _ = clear_oauth_token_with_mode(AuthCredentialsStoreMode::File);
+        let _ = clear_oauth_token_with_mode(AuthCredentialsStoreMode::Keyring);
+
+        let file_token = sample_openrouter_token("file-token");
+        let keyring_token = sample_openrouter_token("keyring-token");
+        save_oauth_token_with_mode(&file_token, AuthCredentialsStoreMode::File)
+            .expect("save file token");
+
+        if save_oauth_token_with_mode(&keyring_token, AuthCredentialsStoreMode::Keyring).is_err() {
+            let _ = clear_oauth_token_with_mode(AuthCredentialsStoreMode::File);
+            return;
+        }
+
+        let config = config_with_storage_mode(AuthCredentialsStoreMode::File);
+        clear_openrouter_login(Some(&config)).expect("clear openrouter login");
+
+        assert_eq!(
+            load_oauth_token_with_mode(AuthCredentialsStoreMode::File)
+                .expect("load file token")
+                .expect("keyring token should remain as file-mode fallback")
+                .api_key,
+            "keyring-token"
+        );
+        assert_eq!(
+            load_oauth_token_with_mode(AuthCredentialsStoreMode::Keyring)
+                .expect("load keyring token")
+                .expect("keyring token should remain")
+                .api_key,
+            "keyring-token"
+        );
+
+        let _ = clear_oauth_token_with_mode(AuthCredentialsStoreMode::File);
+        let _ = clear_oauth_token_with_mode(AuthCredentialsStoreMode::Keyring);
+    }
 }
 
 fn open_browser_or_print_url(url: &str) {
