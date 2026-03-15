@@ -94,7 +94,7 @@ default_editing_mode = "edit"
 # Default model to use
 # Default: "gpt-5.3-codex"
 # Type: `string`
-default_model = "gpt-5.3-codex"
+default_model = "gpt-5.2-codex"
 
 # Enable an extra self-review pass to refine final responses
 # Default: false
@@ -2046,7 +2046,7 @@ max_results = 5
 # Possible values: priority
 # Default: -
 # Type: `OpenAIServiceTier | null`
-service_tier = "priority"
+# service_tier = "priority"
 
 # Enable Responses API WebSocket transport for non-streaming requests. This is an opt-in path designed
 # for long-running, tool-heavy workflows.

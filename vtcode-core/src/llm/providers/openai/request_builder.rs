@@ -4,7 +4,7 @@
 
 use crate::config::core::OpenAIHostedShellConfig;
 use crate::config::models::Provider as ModelProvider;
-use crate::config::types::ReasoningEffortLevel;
+use crate::config::types::{ReasoningEffortLevel, VerbosityLevel};
 use crate::llm::error_display;
 use crate::llm::provider;
 use crate::llm::providers::common::serialize_message_content_openai_for_model;
@@ -33,8 +33,12 @@ pub(crate) struct ResponsesRequestContext<'a> {
     pub supports_reasoning_effort: bool,
     pub supports_reasoning: bool,
     pub is_responses_api_model: bool,
+    pub include_output_types: bool,
+    pub include_sampling_parameters: bool,
+    pub force_response_store_false: bool,
     pub include_assistant_phase: bool,
     pub prompt_cache_key: Option<&'a str>,
+    pub include_prompt_cache_retention: bool,
     pub prompt_cache_retention: Option<&'a str>,
     pub default_service_tier: Option<&'a str>,
     pub default_response_store: Option<bool>,
@@ -59,6 +63,19 @@ fn default_reasoning_effort_for_model(model: &str) -> Option<ReasoningEffortLeve
         "gpt" | "gpt-5.2" | "gpt-5.4" => Some(ReasoningEffortLevel::None),
         "gpt-5" | "gpt-5.4-pro" => Some(ReasoningEffortLevel::Medium),
         _ if is_gpt5_codex_model(model) => Some(ReasoningEffortLevel::Medium),
+        _ => None,
+    }
+}
+
+fn supports_text_verbosity(model: &str) -> bool {
+    default_text_verbosity_for_model(model).is_some()
+}
+
+fn default_text_verbosity_for_model(model: &str) -> Option<VerbosityLevel> {
+    match model {
+        "gpt" | "gpt-5.2" | "gpt-5.4" | "gpt-5.4-pro" | "gpt-5.3-codex" => {
+            Some(VerbosityLevel::Low)
+        }
         _ => None,
     }
 }
@@ -275,12 +292,14 @@ pub(crate) fn build_responses_request(
         openai_request[MAX_COMPLETION_TOKENS_FIELD] = json!(max_tokens);
     }
 
-    // `output_types` constrains which native item types GPT-5 may emit.
-    let mut output_types = vec!["message", "tool_call"];
-    if ctx.hosted_shell.is_some() {
-        output_types.push("shell_call");
+    if ctx.include_output_types {
+        // `output_types` constrains which native item types GPT-5 may emit.
+        let mut output_types = vec!["message", "tool_call"];
+        if ctx.hosted_shell.is_some() {
+            output_types.push("shell_call");
+        }
+        openai_request["output_types"] = json!(output_types);
     }
-    openai_request["output_types"] = json!(output_types);
 
     if let Some(instructions) = instructions
         && !instructions.trim().is_empty()
@@ -299,7 +318,9 @@ pub(crate) fn build_responses_request(
         openai_request["service_tier"] = json!(service_tier);
     }
 
-    if let Some(store) = request.response_store.or(ctx.default_response_store) {
+    if ctx.force_response_store_false {
+        openai_request["store"] = json!(false);
+    } else if let Some(store) = request.response_store.or(ctx.default_response_store) {
         openai_request["store"] = json!(store);
     }
 
@@ -351,7 +372,7 @@ pub(crate) fn build_responses_request(
         has_sampling = true;
     }
 
-    if has_sampling {
+    if ctx.include_sampling_parameters && has_sampling {
         openai_request["sampling_parameters"] = sampling_parameters;
     }
 
@@ -424,7 +445,9 @@ pub(crate) fn build_responses_request(
     let mut text_format = json!({});
     let mut has_format_options = false;
 
-    if let Some(verbosity) = request.verbosity {
+    if supports_text_verbosity(&request.model)
+        && let Some(verbosity) = request.verbosity
+    {
         text_format["verbosity"] = json!(verbosity.as_str());
         has_format_options = true;
     }
@@ -451,14 +474,10 @@ pub(crate) fn build_responses_request(
         }
     }
 
-    // Set default verbosity for GPT-5.2+ models if no format options specified
     if !has_format_options
-        && (matches!(
-            request.model.as_str(),
-            "gpt" | "gpt-5.2" | "gpt-5.4" | "gpt-5.4-pro"
-        ) || is_gpt5_codex_model(&request.model))
+        && let Some(default_verbosity) = default_text_verbosity_for_model(&request.model)
     {
-        text_format["verbosity"] = json!("medium");
+        text_format["verbosity"] = json!(default_verbosity.as_str());
         has_format_options = true;
     }
 
@@ -475,7 +494,8 @@ pub(crate) fn build_responses_request(
     // (e.g., "24h") to increase cache reuse and reduce cost/latency on GPT-5.
     // Only include prompt_cache_retention when both configured and when the selected
     // model uses the OpenAI Responses API.
-    if ctx.is_responses_api_model
+    if ctx.include_prompt_cache_retention
+        && ctx.is_responses_api_model
         && let Some(retention) = ctx.prompt_cache_retention
         && !retention.trim().is_empty()
     {

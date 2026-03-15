@@ -462,6 +462,7 @@ impl OpenAIProvider {
                     &error_text,
                     &headers,
                     "Harmony inference server error",
+                    None,
                 ),
             );
             return Err(provider::LLMError::Provider {

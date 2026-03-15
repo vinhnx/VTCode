@@ -22,3 +22,13 @@ pub(crate) fn apply_turn_metadata(
     }
     builder
 }
+
+pub(crate) fn apply_client_request_id(
+    builder: RequestBuilder,
+    client_request_id: &str,
+) -> RequestBuilder {
+    if client_request_id.trim().is_empty() {
+        return builder;
+    }
+    builder.header("X-Client-Request-Id", client_request_id)
+}

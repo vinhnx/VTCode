@@ -36,6 +36,8 @@ pub(crate) async fn finalize_model_selection(
     let updated_cfg = picker.persist_selection(&workspace, &selection).await?;
     let (api_key, openai_chatgpt_auth) =
         resolve_runtime_api_key(&workspace, Some(&updated_cfg), &selection)?;
+    let using_chatgpt_auth =
+        selection.provider_enum == Some(Provider::OpenAI) && openai_chatgpt_auth.is_some();
     *vt_cfg = Some(updated_cfg);
 
     if let Some(provider_enum) = selection.provider_enum
@@ -107,7 +109,7 @@ pub(crate) async fn finalize_model_selection(
     let next_header_context = build_inline_header_context(
         config,
         session_bootstrap,
-        runtime_provider_label(&selection),
+        runtime_provider_label(&selection, using_chatgpt_auth),
         selection.model.clone(),
         provider_client.effective_context_size(&selection.model),
         mode_label,
@@ -161,7 +163,7 @@ pub(crate) async fn finalize_model_selection(
         renderer.line(MessageStyle::Info, &message)?;
     }
 
-    if selection.uses_chatgpt_auth {
+    if using_chatgpt_auth {
         renderer.line(MessageStyle::Info, "Using ChatGPT subscription for OpenAI.")?;
     } else if selection.api_key.is_some() {
         renderer.line(
@@ -189,17 +191,18 @@ fn resolve_runtime_api_key(
     vt_cfg: Option<&VTCodeConfig>,
     selection: &ModelSelectionResult,
 ) -> Result<(String, Option<vtcode_config::auth::OpenAIChatGptAuthHandle>)> {
-    if selection.provider_enum == Some(Provider::OpenAI) && selection.uses_chatgpt_auth {
-        let cfg = vt_cfg.ok_or_else(|| anyhow!("OpenAI configuration not loaded"))?;
+    if let Some(key) = selection.api_key.as_ref() {
+        write_workspace_env_value(workspace, &selection.env_key, key)?;
+        return Ok((key.clone(), None));
+    }
+
+    if selection.provider_enum == Some(Provider::OpenAI)
+        && let Some(cfg) = vt_cfg
+    {
         let api_key = get_api_key(&selection.provider, &ApiKeySources::default()).ok();
         let resolved =
             resolve_openai_auth(&cfg.auth.openai, cfg.agent.credential_storage_mode, api_key)?;
         return Ok((resolved.api_key().to_string(), resolved.handle()));
-    }
-
-    if let Some(key) = selection.api_key.as_ref() {
-        write_workspace_env_value(workspace, &selection.env_key, key)?;
-        return Ok((key.clone(), None));
     }
 
     if let Some(key) = read_workspace_api_key(workspace, &selection.env_key)? {
@@ -243,8 +246,8 @@ fn sync_runtime_custom_api_key(config: &mut CoreAgentConfig, selection: &ModelSe
     config.custom_api_keys.remove(&selection.provider);
 }
 
-fn runtime_provider_label(selection: &ModelSelectionResult) -> String {
-    if selection.provider_enum == Some(Provider::OpenAI) && selection.uses_chatgpt_auth {
+fn runtime_provider_label(selection: &ModelSelectionResult, using_chatgpt_auth: bool) -> String {
+    if selection.provider_enum == Some(Provider::OpenAI) && using_chatgpt_auth {
         "OpenAI (ChatGPT)".to_string()
     } else {
         selection.provider_label.clone()

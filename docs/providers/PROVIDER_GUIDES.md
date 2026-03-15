@@ -9,6 +9,9 @@ This index collects provider-specific guides for configuring VT Code with differ
 
 ## OpenAI GPT
 
+-   **Official docs:**
+    -   [API reference index](https://developers.openai.com/api/reference/llms.txt)
+    -   [Models catalog](https://developers.openai.com/api/docs/models)
 -   Follow the [Getting Started guide](./user-guide/getting-started.md#configure-your-llm-provider) for API key setup.
 -   See [`vtcode-core/src/config/constants.rs`](../vtcode-core/src/config/constants.rs) for the latest supported models.
 -   GPT-5.2 reference: [Using GPT-5.2](./guides/gpt-5-2.md)

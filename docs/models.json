@@ -112,7 +112,7 @@
     ],
     "api": "https://api.openai.com/v1",
     "name": "OpenAI",
-    "doc": "https://platform.openai.com/docs/models",
+    "doc": "https://developers.openai.com/api/docs/models",
     "models": {
       "gpt": {
         "id": "gpt",

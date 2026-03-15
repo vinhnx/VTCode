@@ -5,8 +5,56 @@
 
 use reqwest::StatusCode;
 use reqwest::header::HeaderMap;
+use serde_json::Value;
 
 use crate::config::constants::models;
+
+#[derive(Debug, Default, PartialEq, Eq)]
+struct OpenAIErrorDetails {
+    message: Option<String>,
+    code: Option<String>,
+    error_type: Option<String>,
+    param: Option<String>,
+}
+
+fn extract_header(headers: &HeaderMap, names: &[&str]) -> Option<String> {
+    names.iter().find_map(|name| {
+        headers
+            .get(*name)
+            .and_then(|value| value.to_str().ok())
+            .map(ToOwned::to_owned)
+    })
+}
+
+fn parse_openai_error_details(body: &str) -> OpenAIErrorDetails {
+    let Ok(json) = serde_json::from_str::<Value>(body) else {
+        return OpenAIErrorDetails::default();
+    };
+
+    let error = json.get("error").unwrap_or(&json);
+    OpenAIErrorDetails {
+        message: error
+            .get("message")
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned)
+            .filter(|value| !value.trim().is_empty()),
+        code: error
+            .get("code")
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned)
+            .filter(|value| !value.trim().is_empty()),
+        error_type: error
+            .get("type")
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned)
+            .filter(|value| !value.trim().is_empty()),
+        param: error
+            .get("param")
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned)
+            .filter(|value| !value.trim().is_empty()),
+    }
+}
 
 /// Detect if an OpenAI API error indicates the model was not found or is inaccessible.
 pub fn is_model_not_found(status: StatusCode, error_text: &str) -> bool {
@@ -39,23 +87,47 @@ pub fn format_openai_error(
     body: &str,
     headers: &HeaderMap,
     context: &str,
+    client_request_id: Option<&str>,
 ) -> String {
-    let request_id = headers
-        .get("x-request-id")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("<none>");
+    let request_id = extract_header(headers, &["x-request-id", "request-id", "openai-request-id"])
+        .unwrap_or_else(|| "<none>".to_string());
+    let effective_client_request_id = client_request_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .or_else(|| extract_header(headers, &["x-client-request-id"]));
+    let organization_id = extract_header(headers, &["openai-organization", "x-organization-id"]);
+    let retry_after = extract_header(headers, &["retry-after"]);
+    let error_details = parse_openai_error_details(body);
     let trimmed_body: String = body.chars().take(2_000).collect();
-    if trimmed_body.is_empty() {
-        format!(
-            "{} (status {}) [request_id={}]",
-            context, status, request_id
-        )
-    } else {
-        format!(
-            "{} (status {}) [request_id={}] Body: {}",
-            context, status, request_id, trimmed_body
-        )
+    let mut metadata_parts = vec![format!("request_id={request_id}")];
+    if let Some(client_request_id) = effective_client_request_id {
+        metadata_parts.push(format!("client_request_id={client_request_id}"));
     }
+    if let Some(code) = error_details.code.as_deref() {
+        metadata_parts.push(format!("code={code}"));
+    }
+    if let Some(error_type) = error_details.error_type.as_deref() {
+        metadata_parts.push(format!("type={error_type}"));
+    }
+    if let Some(param) = error_details.param.as_deref() {
+        metadata_parts.push(format!("param={param}"));
+    }
+    if let Some(retry_after) = retry_after.as_deref() {
+        metadata_parts.push(format!("retry_after={retry_after}"));
+    }
+    if let Some(organization_id) = organization_id.as_deref() {
+        metadata_parts.push(format!("organization={organization_id}"));
+    }
+
+    let mut formatted = format!("{} (status {}) [{}]", context, status, metadata_parts.join(" "));
+    if let Some(message) = error_details.message.as_deref() {
+        formatted.push_str(&format!(" Message: {message}"));
+    }
+    if !trimmed_body.is_empty() && error_details.message.as_deref() != Some(trimmed_body.as_str()) {
+        formatted.push_str(&format!(" Body: {trimmed_body}"));
+    }
+    formatted
 }
 
 /// Detect if an error indicates Responses API is not supported for this model/endpoint.
@@ -74,8 +146,12 @@ pub fn is_responses_api_unsupported(status: StatusCode, body: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_model_not_found, is_responses_api_unsupported};
+    use super::{
+        format_openai_error, is_model_not_found, is_responses_api_unsupported,
+        parse_openai_error_details,
+    };
     use reqwest::StatusCode;
+    use reqwest::header::{HeaderMap, HeaderValue};
 
     #[test]
     fn model_not_found_requires_model_specific_body() {
@@ -98,5 +174,42 @@ mod tests {
             StatusCode::NOT_FOUND,
             "model_not_found"
         ));
+    }
+
+    #[test]
+    fn parse_openai_error_details_extracts_message_and_codes() {
+        let details = parse_openai_error_details(
+            r#"{"error":{"message":"Bad request","type":"invalid_request_error","param":"text.verbosity","code":"unsupported_parameter"}}"#,
+        );
+
+        assert_eq!(details.message.as_deref(), Some("Bad request"));
+        assert_eq!(details.error_type.as_deref(), Some("invalid_request_error"));
+        assert_eq!(details.param.as_deref(), Some("text.verbosity"));
+        assert_eq!(details.code.as_deref(), Some("unsupported_parameter"));
+    }
+
+    #[test]
+    fn format_openai_error_surfaces_debugging_metadata() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-request-id", HeaderValue::from_static("req_123"));
+        headers.insert("retry-after", HeaderValue::from_static("30"));
+        headers.insert("openai-organization", HeaderValue::from_static("org_456"));
+
+        let formatted = format_openai_error(
+            StatusCode::BAD_REQUEST,
+            r#"{"error":{"message":"Bad request","type":"invalid_request_error","param":"text.verbosity","code":"unsupported_parameter"}}"#,
+            &headers,
+            "Responses API error",
+            Some("vtcode-abc"),
+        );
+
+        assert!(formatted.contains("request_id=req_123"));
+        assert!(formatted.contains("client_request_id=vtcode-abc"));
+        assert!(formatted.contains("retry_after=30"));
+        assert!(formatted.contains("organization=org_456"));
+        assert!(formatted.contains("type=invalid_request_error"));
+        assert!(formatted.contains("code=unsupported_parameter"));
+        assert!(formatted.contains("param=text.verbosity"));
+        assert!(formatted.contains("Message: Bad request"));
     }
 }
