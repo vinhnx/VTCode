@@ -1,4 +1,6 @@
 use serde_json::Value;
+use std::fmt::Write;
+use std::sync::{Arc, LazyLock};
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::llm::provider as uni;
 
@@ -13,30 +15,153 @@ struct DirectToolCompletion<'a> {
     payload: Option<Value>,
 }
 
-pub(crate) fn completion_reply_text(
+fn completion_base_text(
     history: &[uni::Message],
     reply_kind: ReplyKind,
-) -> Option<String> {
+) -> Option<(String, DirectToolCompletion<'_>)> {
     let completion = latest_direct_tool_completion(history)?;
     if completion.has_pending_follow_up() {
         return None;
     }
 
     let status = completion.status_text(reply_kind);
-    let mut sections = vec![status];
+    let mut sections = Vec::with_capacity(2);
+    sections.push(status);
     if let Some(observation) = completion.output_observation() {
         sections.push(observation);
     }
 
-    let next_steps = completion.next_steps();
-    if !next_steps.is_empty() {
-        sections.push(format!(
-            "Suggested next steps:\n- {}",
-            next_steps.join("\n- ")
-        ));
+    Some((sections.join("\n\n"), completion))
+}
+
+/// Synchronous variant used by tests to verify fallback next-step logic.
+#[cfg(test)]
+fn completion_reply_text(history: &[uni::Message], reply_kind: ReplyKind) -> Option<String> {
+    let (base, completion) = completion_base_text(history, reply_kind)?;
+    let next_steps = completion.fallback_next_steps();
+    Some(append_next_steps(&base, &next_steps))
+}
+
+/// Generate a completion reply with LLM-powered contextual suggestions.
+///
+/// Falls back to hardcoded suggestions if the LLM call fails or returns empty.
+pub(crate) async fn generate_completion_reply_with_suggestions(
+    history: &[uni::Message],
+    reply_kind: ReplyKind,
+    provider: &dyn uni::LLMProvider,
+    model: &str,
+) -> Option<String> {
+    let (base, completion) = completion_base_text(history, reply_kind)?;
+
+    let label = completion.label();
+    let exit_code = completion.exit_code();
+    let has_error = completion.has_error();
+    let output_snippet = completion.output_snippet();
+
+    let llm_steps = generate_suggestions_via_llm(
+        provider,
+        model,
+        &label,
+        exit_code,
+        has_error,
+        output_snippet.as_deref(),
+    )
+    .await;
+
+    let steps = if llm_steps.is_empty() {
+        completion.fallback_next_steps()
+    } else {
+        llm_steps
+    };
+    Some(append_next_steps(&base, &steps))
+}
+
+fn append_next_steps(base: &str, next_steps: &[String]) -> String {
+    if next_steps.is_empty() {
+        return base.to_string();
+    }
+    let mut out = String::with_capacity(
+        base.len() + 32 + next_steps.iter().map(|s| s.len() + 4).sum::<usize>(),
+    );
+    out.push_str(base);
+    out.push_str("\n\nSuggested next steps:");
+    for step in next_steps {
+        out.push_str("\n- ");
+        out.push_str(step);
+    }
+    out
+}
+
+static SUGGESTION_SYSTEM_PROMPT: LazyLock<Arc<String>> = LazyLock::new(|| {
+    Arc::new(
+        "You are a concise coding assistant. Given information about a tool execution result, \
+         suggest 2-4 short, actionable next steps the user should take. \
+         Each step should be one sentence. Use backticks for commands. \
+         Return ONLY the bullet points, one per line, no numbering, no dashes, no extra text."
+            .to_string(),
+    )
+});
+
+async fn generate_suggestions_via_llm(
+    provider: &dyn uni::LLMProvider,
+    model: &str,
+    tool_label: &str,
+    exit_code: Option<i64>,
+    has_error: bool,
+    output_snippet: Option<&str>,
+) -> Vec<String> {
+    let mut user_msg = String::with_capacity(128);
+    let _ = write!(user_msg, "Tool/command: `{tool_label}`\nResult: ");
+    if has_error {
+        user_msg.push_str("failed with an error");
+    } else {
+        match exit_code {
+            Some(0) => user_msg.push_str("completed successfully (exit code 0)"),
+            Some(code) => {
+                let _ = write!(user_msg, "completed with exit code {code}");
+            }
+            None => user_msg.push_str("completed"),
+        }
+    }
+    if let Some(snippet) = output_snippet {
+        let _ = write!(user_msg, "\nOutput (truncated):\n```\n{snippet}\n```");
     }
 
-    Some(sections.join("\n\n"))
+    let request = uni::LLMRequest {
+        messages: vec![uni::Message::user(user_msg)],
+        system_prompt: Some(Arc::clone(&SUGGESTION_SYSTEM_PROMPT)),
+        model: model.to_string(),
+        max_tokens: Some(256),
+        temperature: Some(0.3),
+        tool_choice: Some(uni::ToolChoice::None),
+        ..Default::default()
+    };
+
+    let response = match provider.generate(request).await {
+        Ok(resp) => resp,
+        Err(err) => {
+            tracing::debug!(error = %err, "LLM suggestion generation failed; using fallback");
+            return Vec::new();
+        }
+    };
+
+    parse_suggestion_lines(response.content.as_deref().unwrap_or_default())
+}
+
+fn parse_suggestion_lines(text: &str) -> Vec<String> {
+    text.lines()
+        .map(|line| {
+            line.trim()
+                .trim_start_matches('-')
+                .trim_start_matches('•')
+                .trim_start_matches(|c: char| c.is_ascii_digit())
+                .trim_start_matches('.')
+                .trim()
+                .to_string()
+        })
+        .filter(|line| !line.is_empty())
+        .take(4)
+        .collect()
 }
 
 fn latest_direct_tool_completion(history: &[uni::Message]) -> Option<DirectToolCompletion<'_>> {
@@ -178,7 +303,21 @@ impl DirectToolCompletion<'_> {
         Some("No terminal output was produced.".to_string())
     }
 
-    fn next_steps(&self) -> Vec<String> {
+    fn output_snippet(&self) -> Option<String> {
+        let payload = self.payload.as_ref()?;
+        for key in ["output", "stdout", "content", "stderr"] {
+            if let Some(text) = payload.get(key).and_then(Value::as_str) {
+                let trimmed = text.trim();
+                if !trimmed.is_empty() {
+                    let truncated: String = trimmed.chars().take(500).collect();
+                    return Some(truncated);
+                }
+            }
+        }
+        None
+    }
+
+    fn fallback_next_steps(&self) -> Vec<String> {
         let Some(function) = self.tool_call.function.as_ref() else {
             return Vec::new();
         };
@@ -369,5 +508,45 @@ mod tests {
 
         let text = completion_reply_text(&history, ReplyKind::FollowUp).expect("follow-up text");
         assert!(text.contains("`cargo fmt` already completed successfully (exit code 0)."));
+    }
+
+    #[test]
+    fn parse_suggestion_lines_strips_bullet_prefixes() {
+        let input = "- Verify the build with `cargo check`.\n• Run tests.\n3. Check clippy.\n  \n";
+        let steps = super::parse_suggestion_lines(input);
+        assert_eq!(steps.len(), 3);
+        assert_eq!(steps[0], "Verify the build with `cargo check`.");
+        assert_eq!(steps[1], "Run tests.");
+        assert_eq!(steps[2], "Check clippy.");
+    }
+
+    #[test]
+    fn parse_suggestion_lines_caps_at_four() {
+        let input = "a\nb\nc\nd\ne\nf\n";
+        let steps = super::parse_suggestion_lines(input);
+        assert_eq!(steps.len(), 4);
+    }
+
+    #[test]
+    fn parse_suggestion_lines_handles_empty_input() {
+        assert!(super::parse_suggestion_lines("").is_empty());
+        assert!(super::parse_suggestion_lines("   \n  \n").is_empty());
+    }
+
+    #[test]
+    fn append_next_steps_empty_returns_base() {
+        let base = "command completed.";
+        assert_eq!(super::append_next_steps(base, &[]), base);
+    }
+
+    #[test]
+    fn append_next_steps_formats_bullets() {
+        let base = "status";
+        let steps = vec!["step one".to_string(), "step two".to_string()];
+        let result = super::append_next_steps(base, &steps);
+        assert_eq!(
+            result,
+            "status\n\nSuggested next steps:\n- step one\n- step two"
+        );
     }
 }

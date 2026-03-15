@@ -29,7 +29,7 @@ use crate::agent::runloop::unified::session_setup::{
 use crate::agent::runloop::unified::state::ModelPickerTarget;
 use crate::agent::runloop::unified::state::is_follow_up_prompt_like;
 use crate::agent::runloop::unified::turn::session::direct_tool_completion::{
-    ReplyKind, completion_reply_text,
+    ReplyKind, generate_completion_reply_with_suggestions,
 };
 use crate::agent::runloop::unified::turn::session::{
     mcp_lifecycle, slash_command_handler, tool_dispatch,
@@ -149,15 +149,18 @@ fn fallback_args_preview(args: &Value) -> String {
     preview
 }
 
-fn completed_direct_tool_follow_up_text(history: &[uni::Message]) -> Option<String> {
-    completion_reply_text(history, ReplyKind::FollowUp)
-}
-
-fn handle_completed_direct_tool_follow_up(
+async fn handle_completed_direct_tool_follow_up(
     ctx: &mut InteractionLoopContext<'_>,
     input: &str,
 ) -> Result<Option<InteractionOutcome>> {
-    let Some(reply) = completed_direct_tool_follow_up_text(ctx.conversation_history) else {
+    let Some(reply) = generate_completion_reply_with_suggestions(
+        ctx.conversation_history,
+        ReplyKind::FollowUp,
+        ctx.provider_client.as_ref(),
+        &ctx.config.model,
+    )
+    .await
+    else {
         return Ok(None);
     };
 
@@ -692,7 +695,7 @@ pub(super) async fn run_interaction_loop_impl(
         if is_follow_up_prompt_like(input_owned.as_str())
             && recent_follow_up_hint.is_none()
             && let Some(outcome) =
-                handle_completed_direct_tool_follow_up(ctx, input_owned.as_str())?
+                handle_completed_direct_tool_follow_up(ctx, input_owned.as_str()).await?
         {
             return Ok(outcome);
         }

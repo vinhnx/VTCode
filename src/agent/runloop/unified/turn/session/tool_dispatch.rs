@@ -8,7 +8,7 @@ use crate::agent::runloop::unified::shell::shell_quote_if_needed;
 use crate::agent::runloop::unified::status_line::InputStatusState;
 use crate::agent::runloop::unified::turn::context::{TurnHandlerOutcome, TurnLoopResult};
 use crate::agent::runloop::unified::turn::session::direct_tool_completion::{
-    ReplyKind, completion_reply_text,
+    ReplyKind, generate_completion_reply_with_suggestions,
 };
 use crate::agent::runloop::unified::turn::session::interaction_loop::{
     InteractionLoopContext, InteractionOutcome,
@@ -155,7 +155,14 @@ pub(crate) async fn execute_direct_tool_call(
         }));
     }
 
-    if let Some(reply) = completion_reply_text(t_ctx.ctx.working_history, ReplyKind::Immediate) {
+    if let Some(reply) = generate_completion_reply_with_suggestions(
+        t_ctx.ctx.working_history,
+        ReplyKind::Immediate,
+        t_ctx.ctx.provider_client.as_ref(),
+        &t_ctx.ctx.config.model,
+    )
+    .await
+    {
         t_ctx
             .ctx
             .renderer
