@@ -434,6 +434,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         let mut ide_context_bridge = ui_setup.ide_context_bridge;
         let ctrl_c_state = ui_setup.ctrl_c_state;
         let ctrl_c_notify = ui_setup.ctrl_c_notify;
+        let input_activity_counter = ui_setup.input_activity_counter;
         let checkpoint_manager = ui_setup.checkpoint_manager;
         let mut session_archive = ui_setup.session_archive;
         let lifecycle_hooks = ui_setup.lifecycle_hooks;
@@ -486,6 +487,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         session_stats.tool_health_tracker = tool_health_tracker.clone();
         session_stats.rate_limiter = rate_limiter.clone();
         session_stats.validation_cache = validation_cache.clone();
+        session_stats.vim_mode_enabled = vt_cfg.as_ref().is_some_and(|cfg| cfg.ui.vim_mode);
         if plan_mode {
             transition_to_plan_mode(&tool_registry, &mut session_stats, &handle, true, true).await;
             render_plan_mode_next_step_hint(&mut renderer)?;
@@ -552,6 +554,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     ide_context_bridge: &mut ide_context_bridge,
                     ctrl_c_state: &ctrl_c_state,
                     ctrl_c_notify: &ctrl_c_notify,
+                    input_activity_counter: &input_activity_counter,
                     config: &mut config,
                     vt_cfg: &mut vt_cfg,
                     provider_client: &mut provider_client,

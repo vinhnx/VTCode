@@ -11,6 +11,7 @@ pub(super) struct CompiledLifecycleHooks {
     pub(super) user_prompt_submit: Vec<CompiledHookGroup>,
     pub(super) pre_tool_use: Vec<CompiledHookGroup>,
     pub(super) post_tool_use: Vec<CompiledHookGroup>,
+    pub(super) notification: Vec<CompiledHookGroup>,
 }
 
 impl CompiledLifecycleHooks {
@@ -22,6 +23,7 @@ impl CompiledLifecycleHooks {
             user_prompt_submit: compile_groups(&config.user_prompt_submit)?,
             pre_tool_use: compile_groups(&config.pre_tool_use)?,
             post_tool_use: compile_groups(&config.post_tool_use)?,
+            notification: compile_groups(&config.notification)?,
         })
     }
 
@@ -31,6 +33,7 @@ impl CompiledLifecycleHooks {
             && self.user_prompt_submit.is_empty()
             && self.pre_tool_use.is_empty()
             && self.post_tool_use.is_empty()
+            && self.notification.is_empty()
     }
 }
 

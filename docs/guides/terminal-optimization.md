@@ -14,6 +14,8 @@ This guide covers the terminal-specific settings that matter most when using VT 
 VT Code can match its own interface to the way you work in your terminal, but it does not control the terminal application's theme directly.
 
 - Use `/config` to adjust VT Code appearance and related interactive settings.
+- Use `/vim` to toggle session-local Vim prompt editing, or persist it with `ui.vim_mode = true`.
+- Use `/statusline` to generate a custom status-line script in the user or workspace config layer.
 - Use `[ui.status_line]` in `vtcode.toml` to customize the bottom status bar.
 - Keep terminal colors and fonts in your terminal app's own settings.
 
@@ -57,6 +59,13 @@ VT Code supports several multiline input paths:
 - `Ctrl+J` inserts a literal line feed.
 - `Esc` cancels the current input or closes an active modal.
 
+### Vim mode
+
+- Set `ui.vim_mode = true` in `vtcode.toml` to enable Vim-style prompt editing by default.
+- Use `/vim`, `/vim on`, or `/vim off` to change Vim mode for the current session only.
+- VT Code currently supports a focused subset with `INSERT` and `NORMAL` modes only.
+- VT Code-specific controls such as `Enter`, `Tab`, `Ctrl+Enter`, `/`, `@`, and `!` still keep their existing behavior.
+
 ## Notification Setup
 
 VT Code has two separate notification paths: terminal-native alerts and lifecycle hooks.
@@ -93,6 +102,8 @@ task_completion = [
 ```
 
 See [lifecycle-hooks.md](./lifecycle-hooks.md) for event payloads, blocking semantics, and more examples.
+
+VT Code also supports `hooks.lifecycle.notification` for notifications that survive runtime gating. Matchers are evaluated against `permission_prompt` and `idle_prompt`.
 
 ## Handling Large Inputs
 

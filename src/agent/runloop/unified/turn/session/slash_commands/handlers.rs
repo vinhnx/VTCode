@@ -55,8 +55,8 @@ pub(super) use share_log::handle_share_log;
 pub(super) use skills::handle_manage_skills;
 pub(super) use ui::{
     handle_start_file_browser, handle_start_history_picker, handle_start_model_selection,
-    handle_start_session_palette, handle_start_theme_palette, handle_theme_changed,
-    handle_toggle_ide_context,
+    handle_start_session_palette, handle_start_statusline_setup, handle_start_theme_palette,
+    handle_theme_changed, handle_toggle_ide_context, handle_toggle_vim_mode,
 };
 pub(super) use update::handle_update;
 pub(super) use workspace::{handle_initialize_workspace, handle_manage_workspace_directories};
@@ -157,8 +157,10 @@ pub(super) async fn handle_stop_agent(ctx: SlashCommandContext<'_>) -> Result<Sl
 pub(super) async fn handle_clear_conversation(
     ctx: SlashCommandContext<'_>,
 ) -> Result<SlashCommandControl> {
+    let vim_mode_enabled = ctx.session_stats.vim_mode_enabled;
     ctx.conversation_history.clear();
     *ctx.session_stats = SessionStats::default();
+    ctx.session_stats.vim_mode_enabled = vim_mode_enabled;
     {
         let mut ledger = ctx.decision_ledger.write().await;
         *ledger = DecisionTracker::new();

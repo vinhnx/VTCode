@@ -12,7 +12,7 @@ use crate::ui::tui::session::slash;
 use unicode_segmentation::UnicodeSegmentation;
 
 impl Session {
-    fn refresh_input_edit_state(&mut self) {
+    pub(super) fn refresh_input_edit_state(&mut self) {
         self.input_compact_mode = self.input_compact_placeholder().is_some();
         slash::update_slash_suggestions(self);
     }

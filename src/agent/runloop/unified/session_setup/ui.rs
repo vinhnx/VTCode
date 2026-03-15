@@ -15,6 +15,7 @@ use anyhow::{Context, Result};
 use chrono::Local;
 use hashbrown::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
 use tokio::sync::{Notify, mpsc::UnboundedSender};
 use tracing::warn;
 use vtcode_core::config::constants::ui;
@@ -23,7 +24,9 @@ use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::steering::SteeringMessage;
 use vtcode_core::hooks::{LifecycleHookEngine, SessionEndReason, SessionStartTrigger};
 use vtcode_core::llm::provider as uni;
-use vtcode_core::notifications::set_global_terminal_focused;
+use vtcode_core::notifications::{
+    set_global_notification_hook_engine, set_global_terminal_focused,
+};
 use vtcode_core::ui::slash::visible_commands;
 use vtcode_core::ui::theme;
 use vtcode_core::ui::{
@@ -58,6 +61,7 @@ pub(crate) async fn initialize_session_ui(
     } else {
         None
     };
+    set_global_notification_hook_engine(lifecycle_hooks.clone());
 
     let mut context_manager = context_manager::ContextManager::new(
         session_state.base_system_prompt.clone(),
@@ -90,6 +94,7 @@ pub(crate) async fn initialize_session_ui(
 
     let ctrl_c_state = Arc::new(state::CtrlCState::new());
     let ctrl_c_notify = Arc::new(Notify::new());
+    let input_activity_counter = Arc::new(AtomicU64::new(0));
     let interrupt_callback: InlineEventCallback = {
         let state = ctrl_c_state.clone();
         let notify = ctrl_c_notify.clone();
@@ -144,6 +149,7 @@ pub(crate) async fn initialize_session_ui(
             event_callback: Some(interrupt_callback),
             focus_callback: Some(focus_callback),
             active_pty_sessions: Some(pty_counter.clone()),
+            input_activity_counter: Some(input_activity_counter.clone()),
             keyboard_protocol: vt_cfg
                 .map(|cfg| to_tui_keyboard_protocol(cfg.ui.keyboard_protocol.clone()))
                 .unwrap_or_default(),
@@ -362,6 +368,7 @@ pub(crate) async fn initialize_session_ui(
         ide_context_bridge,
         ctrl_c_state,
         ctrl_c_notify,
+        input_activity_counter,
         checkpoint_manager,
         session_archive,
         lifecycle_hooks,

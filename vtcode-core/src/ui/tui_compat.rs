@@ -137,6 +137,7 @@ pub fn to_tui_appearance(config: &VTCodeConfig) -> SessionAppearanceConfig {
             }
         },
         reasoning_visible_default: config.ui.reasoning_visible_default,
+        vim_mode: config.ui.vim_mode,
         screen_reader_mode: config.ui.screen_reader_mode,
         reduce_motion_mode,
         reduce_motion_keep_progress_animation: config.ui.reduce_motion_keep_progress_animation,

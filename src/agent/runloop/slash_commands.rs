@@ -33,6 +33,12 @@ pub(crate) enum SessionPaletteMode {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum StatuslineTargetMode {
+    User,
+    Workspace,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum SessionLogExportFormat {
     Json,
     Markdown,
@@ -62,6 +68,12 @@ pub(crate) enum SlashCommandOutcome {
     StartHistoryPicker,
     StartFileBrowser {
         initial_filter: Option<String>,
+    },
+    ToggleVimMode {
+        enable: Option<bool>,
+    },
+    StartStatuslineSetup {
+        instructions: Option<String>,
     },
     ClearScreen,
     ClearConversation,
@@ -257,6 +269,21 @@ pub(crate) async fn handle_slash_command(
             })
         }
         "config" | "settings" | "setttings" => Ok(SlashCommandOutcome::ShowSettings),
+        "vim" => {
+            let enable = match args {
+                "" | "toggle" => None,
+                "on" | "enable" | "enabled" => Some(true),
+                "off" | "disable" | "disabled" => Some(false),
+                _ => {
+                    renderer.line(MessageStyle::Error, "Usage: /vim [on|off|toggle]")?;
+                    return Ok(SlashCommandOutcome::Handled);
+                }
+            };
+            Ok(SlashCommandOutcome::ToggleVimMode { enable })
+        }
+        "statusline" => Ok(SlashCommandOutcome::StartStatuslineSetup {
+            instructions: (!args.trim().is_empty()).then(|| args.trim().to_string()),
+        }),
         "clear" => match args {
             "" => Ok(SlashCommandOutcome::ClearScreen),
             "new" | "--new" | "fresh" | "--fresh" => Ok(SlashCommandOutcome::ClearConversation),
@@ -619,5 +646,55 @@ mod tests {
             .expect("ide command should parse");
 
         assert!(matches!(outcome, SlashCommandOutcome::Handled));
+    }
+
+    #[tokio::test]
+    async fn vim_command_parses_enable_disable_and_toggle() {
+        let workspace = std::env::current_dir().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let toggle = handle_slash_command("vim", &mut renderer, &workspace)
+            .await
+            .expect("vim should parse");
+        assert!(matches!(
+            toggle,
+            SlashCommandOutcome::ToggleVimMode { enable: None }
+        ));
+
+        let enable = handle_slash_command("vim on", &mut renderer, &workspace)
+            .await
+            .expect("vim on should parse");
+        assert!(matches!(
+            enable,
+            SlashCommandOutcome::ToggleVimMode { enable: Some(true) }
+        ));
+
+        let disable = handle_slash_command("vim off", &mut renderer, &workspace)
+            .await
+            .expect("vim off should parse");
+        assert!(matches!(
+            disable,
+            SlashCommandOutcome::ToggleVimMode {
+                enable: Some(false)
+            }
+        ));
+    }
+
+    #[tokio::test]
+    async fn statusline_command_parses_optional_instructions() {
+        let workspace = std::env::current_dir().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let outcome =
+            handle_slash_command("statusline show cwd and branch", &mut renderer, &workspace)
+                .await
+                .expect("statusline should parse");
+
+        assert!(matches!(
+            outcome,
+            SlashCommandOutcome::StartStatuslineSetup {
+                instructions: Some(ref text)
+            } if text == "show cwd and branch"
+        ));
     }
 }

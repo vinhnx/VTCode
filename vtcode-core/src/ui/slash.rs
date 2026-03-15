@@ -32,6 +32,10 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             description: "Browse settings sections in vtcode.toml",
         },
         SlashCommandInfo {
+            name: "vim",
+            description: "Toggle Vim-style prompt editing (usage: /vim [on|off|toggle])",
+        },
+        SlashCommandInfo {
             name: "model",
             description: "Launch the interactive model picker",
         },
@@ -164,6 +168,10 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
         SlashCommandInfo {
             name: "terminal-setup",
             description: "Configure terminal for VT Code (multiline, copy/paste, shell, themes)",
+        },
+        SlashCommandInfo {
+            name: "statusline",
+            description: "Set up a custom status line with target selection (usage: /statusline [instructions...])",
         },
         // OAuth authentication
         SlashCommandInfo {

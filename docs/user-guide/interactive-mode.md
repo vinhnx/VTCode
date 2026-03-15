@@ -51,6 +51,17 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 | `!` at start of input | Enter Bash mode. | Runs shell commands directly and streams their output. |
 | `@` within input | Open file picker. | Triggers file path autocomplete and picker to quickly reference files in your message. |
 
+## Vim Mode
+
+VT Code supports an optional Vim-style prompt editor.
+
+- Set `ui.vim_mode = true` to enable it by default for new sessions.
+- Use `/vim`, `/vim on`, and `/vim off` to change the current session only.
+- Supported modes are `INSERT` and `NORMAL`.
+- Supported subset includes motions, change/delete/yank operators, `f/F/t/T`, text objects, `p/P`, `J`, and repeat with `.`.
+- VT Code does not implement visual mode, macros, or multiple registers; yanks reuse the single session clipboard.
+- VT Code-specific prompt controls still win when relevant, including `Enter`, `Tab`, `Ctrl+Enter`, `/`, `@`, and `!`.
+
 ## Active Run Steering
 
 When a task is already running, VT Code keeps the active turn alive and lets you steer it:

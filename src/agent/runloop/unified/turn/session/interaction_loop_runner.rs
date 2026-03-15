@@ -3,11 +3,14 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::sync::atomic::Ordering;
+use std::time::{Duration, Instant};
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::threads::ArchivedSessionIntent;
 use vtcode_core::hooks::SessionEndReason;
 use vtcode_core::llm::provider as uni;
+use vtcode_core::notifications::{NotificationEvent, send_global_notification};
 use vtcode_core::tools::continuation::{PtyContinuationArgs, ReadChunkContinuationArgs};
 use vtcode_core::ui::theme;
 use vtcode_core::ui::{inline_theme_from_core_styles, to_tui_appearance};
@@ -41,6 +44,7 @@ use super::interaction_loop::{InteractionLoopContext, InteractionOutcome, Intera
 const REPEATED_FOLLOW_UP_DIRECTIVE: &str = "User has asked to continue repeatedly. Do not keep exploring silently. In your next assistant response, provide a concrete status update: completed work, current blocker, and the exact next action. If a recent tool result or tool error already provides the next tool call, use it directly instead of retrying the same failing call or asking for more follow-up.";
 const REPEATED_FOLLOW_UP_STALLED_DIRECTIVE: &str = "Previous turn stalled or aborted and the user asked to continue repeatedly. Recover autonomously without asking for more user prompts: identify the likely root cause from recent errors, execute exactly one adjusted strategy, and then provide either a completion summary or a final blocker review with specific next action. If the last tool result or tool error includes a concrete follow-up tool call, use it first. Do not repeat a failing tool call when the tool already provided the next step.";
 const FALLBACK_ARGS_PREVIEW_LIMIT: usize = 240;
+const IDLE_NOTIFICATION_DELAY: Duration = Duration::from_secs(60);
 
 #[derive(Debug, Deserialize)]
 struct ToolErrorPayloadHint {
@@ -363,6 +367,9 @@ pub(super) async fn run_interaction_loop_impl(
     state: &mut InteractionState<'_>,
 ) -> Result<InteractionOutcome> {
     const MCP_REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
+    let mut idle_started_at = Instant::now();
+    let mut idle_notification_sent = false;
+    let mut last_input_activity = ctx.input_activity_counter.load(Ordering::Relaxed);
     let mut live_reload_watcher = SimpleConfigWatcher::new(ctx.config.workspace.clone());
     live_reload_watcher.set_check_interval(1);
     live_reload_watcher.set_debounce_duration(200);
@@ -495,6 +502,23 @@ pub(super) async fn run_interaction_loop_impl(
         let inline_action =
             poll_inline_loop_action(ctx.session, ctx.ctrl_c_notify, resources).await?;
         sync_mcp_approval_policy_for_context(ctx);
+
+        let current_input_activity = ctx.input_activity_counter.load(Ordering::Relaxed);
+        if current_input_activity != last_input_activity {
+            last_input_activity = current_input_activity;
+            idle_started_at = Instant::now();
+            idle_notification_sent = false;
+        } else if !idle_notification_sent && idle_started_at.elapsed() >= IDLE_NOTIFICATION_DELAY {
+            idle_notification_sent = true;
+            if let Err(err) = send_global_notification(NotificationEvent::IdlePrompt {
+                title: "VT Code waiting for input".to_string(),
+                message: "VT Code has been waiting for your input for 60 seconds.".to_string(),
+            })
+            .await
+            {
+                tracing::debug!(error = %err, "Failed to emit idle notification");
+            }
+        }
 
         let mut input_owned = match inline_action {
             InlineLoopAction::Continue => continue,

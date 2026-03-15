@@ -3,10 +3,10 @@ use vtcode_core::core::threads::{SessionQueryScope, list_recent_sessions_in_scop
 use vtcode_core::ui::inline_theme_from_core_styles;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::MessageStyle;
-use vtcode_tui::{InlineListSelection, OverlaySubmission};
+use vtcode_tui::{InlineListItem, InlineListSelection, OverlaySubmission};
 
 use crate::agent::runloop::model_picker::{ModelPickerStart, ModelPickerState};
-use crate::agent::runloop::slash_commands::SessionPaletteMode;
+use crate::agent::runloop::slash_commands::{SessionPaletteMode, StatuslineTargetMode};
 use crate::agent::runloop::unified::display::persist_theme_preference;
 use crate::agent::runloop::unified::model_selection::finalize_model_selection;
 use crate::agent::runloop::unified::overlay_prompt::{
@@ -170,6 +170,117 @@ pub(crate) async fn handle_start_file_browser(
         ctx.handle.set_input("@".to_string());
     }
     Ok(SlashCommandControl::Continue)
+}
+
+pub(crate) async fn handle_toggle_vim_mode(
+    ctx: SlashCommandContext<'_>,
+    enable: Option<bool>,
+) -> Result<SlashCommandControl> {
+    let current = ctx.session_stats.vim_mode_enabled;
+    let next = enable.unwrap_or(!current);
+    ctx.session_stats.vim_mode_enabled = next;
+    ctx.handle.set_vim_mode_enabled(next);
+    ctx.handle.force_redraw();
+
+    let message = if next {
+        "Vim mode enabled for this session. Use /config to persist ui.vim_mode."
+    } else {
+        "Vim mode disabled for this session."
+    };
+    ctx.renderer.line(MessageStyle::Info, message)?;
+    Ok(SlashCommandControl::Continue)
+}
+
+pub(crate) async fn handle_start_statusline_setup(
+    mut ctx: SlashCommandContext<'_>,
+    instructions: Option<String>,
+) -> Result<SlashCommandControl> {
+    if !ensure_selection_ui_available(&mut ctx, "configuring the status line")? {
+        return Ok(SlashCommandControl::Continue);
+    }
+
+    let lines = vec![
+        "Choose where VT Code should persist the status-line setup.".to_string(),
+        "User writes to your home config and ~/.config/vtcode/statusline.sh.".to_string(),
+        "Workspace writes to the current workspace and .vtcode/statusline.sh.".to_string(),
+    ];
+    let items = vec![
+        InlineListItem {
+            title: "User config".to_string(),
+            subtitle: Some("Personal VT Code setup in your user config layer".to_string()),
+            badge: Some("User".to_string()),
+            indent: 0,
+            selection: Some(InlineListSelection::ConfigAction(
+                "statusline:user".to_string(),
+            )),
+            search_value: Some("statusline user home personal".to_string()),
+        },
+        InlineListItem {
+            title: "Workspace config".to_string(),
+            subtitle: Some("Repo-local setup in the current workspace".to_string()),
+            badge: Some("Workspace".to_string()),
+            indent: 0,
+            selection: Some(InlineListSelection::ConfigAction(
+                "statusline:workspace".to_string(),
+            )),
+            search_value: Some("statusline workspace repo local".to_string()),
+        },
+    ];
+
+    ctx.handle.show_list_modal(
+        "Status line setup".to_string(),
+        lines,
+        items,
+        Some(InlineListSelection::ConfigAction(
+            "statusline:user".to_string(),
+        )),
+        None,
+    );
+
+    let Some(selection) = wait_for_list_modal_selection(&mut ctx).await else {
+        ctx.renderer
+            .line(MessageStyle::Info, "Status line setup cancelled.")?;
+        return Ok(SlashCommandControl::Continue);
+    };
+
+    let target = match selection {
+        InlineListSelection::ConfigAction(action) if action == "statusline:user" => {
+            StatuslineTargetMode::User
+        }
+        InlineListSelection::ConfigAction(action) if action == "statusline:workspace" => {
+            StatuslineTargetMode::Workspace
+        }
+        _ => {
+            ctx.renderer.line(
+                MessageStyle::Error,
+                "Unsupported status line setup selection.",
+            )?;
+            return Ok(SlashCommandControl::Continue);
+        }
+    };
+
+    let (target_label, config_target, script_path) = match target {
+        StatuslineTargetMode::User => (
+            "user",
+            "the user-level VT Code config layer",
+            "~/.config/vtcode/statusline.sh",
+        ),
+        StatuslineTargetMode::Workspace => (
+            "workspace",
+            "the current workspace VT Code config layer",
+            ".vtcode/statusline.sh",
+        ),
+    };
+    let extra = instructions
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| format!(" Additional requirements: {}.", value.trim()))
+        .unwrap_or_default();
+    let prompt = format!(
+        "Set up a VT Code custom status line for the {target_label} target. Create or update the status-line script at `{script_path}` and configure `[ui.status_line]` in {config_target} so `mode = \"command\"` and `command` points to that script. Reuse VT Code config APIs and existing status-line payload behavior. Keep the script concise and shell-compatible.{extra}"
+    );
+
+    Ok(SlashCommandControl::SubmitPrompt(prompt))
 }
 
 pub(crate) async fn handle_start_model_selection(

@@ -47,6 +47,10 @@ pub struct LifecycleHooksConfig {
     /// Commands to run after a task is finalized and session is closed
     #[serde(default)]
     pub task_completed: Vec<HookGroupConfig>,
+
+    /// Commands to run when VT Code emits a runtime notification event
+    #[serde(default)]
+    pub notification: Vec<HookGroupConfig>,
 }
 
 impl LifecycleHooksConfig {
@@ -58,6 +62,7 @@ impl LifecycleHooksConfig {
             && self.post_tool_use.is_empty()
             && self.task_completion.is_empty()
             && self.task_completed.is_empty()
+            && self.notification.is_empty()
     }
 }
 
@@ -119,6 +124,7 @@ impl LifecycleHooksConfig {
         validate_groups(&self.post_tool_use, "post_tool_use")?;
         validate_groups(&self.task_completion, "task_completion")?;
         validate_groups(&self.task_completed, "task_completed")?;
+        validate_groups(&self.notification, "notification")?;
         Ok(())
     }
 }

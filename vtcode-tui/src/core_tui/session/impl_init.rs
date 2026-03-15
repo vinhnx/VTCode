@@ -77,6 +77,7 @@ impl Session {
         let initial_transcript_rows = resolved_rows.saturating_sub(reserved_rows).max(1);
 
         let appearance = appearance.unwrap_or_default();
+        let vim_mode_enabled = appearance.vim_mode;
 
         let mut session = Self {
             // --- Managers (Phase 2) ---
@@ -166,6 +167,7 @@ impl Session {
 
             // --- Clipboard for yank/paste operations ---
             clipboard: String::new(),
+            vim_state: VimState::new(vim_mode_enabled),
 
             // --- Mouse Text Selection ---
             mouse_selection: MouseSelectionState::new(),

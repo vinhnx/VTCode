@@ -115,3 +115,18 @@ impl SessionEndReason {
         }
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotificationHookType {
+    PermissionPrompt,
+    IdlePrompt,
+}
+
+impl NotificationHookType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::PermissionPrompt => "permission_prompt",
+            Self::IdlePrompt => "idle_prompt",
+        }
+    }
+}

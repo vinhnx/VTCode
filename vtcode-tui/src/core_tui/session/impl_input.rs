@@ -117,6 +117,10 @@ impl Session {
                 self.invalidate_transcript_cache();
                 self.invalidate_scroll_metrics();
             }
+            InlineCommand::SetVimModeEnabled(enabled) => {
+                self.vim_state.set_enabled(enabled);
+                self.needs_redraw = true;
+            }
             InlineCommand::SetQueuedInputs { entries } => {
                 self.set_queued_inputs_entries(entries);
                 self.mark_dirty();

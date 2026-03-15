@@ -57,6 +57,8 @@ expressions to detect policies or keywords.
 * **PreToolUse / PostToolUse** – compared against the tool name. Match builtin
 names like `Write`, `Edit`, `Task`, `Bash`, or Model Context Protocol tools such
 as `mcp__filesystem__read_file`.
+* **Notification** – compared against the notification type (`permission_prompt`
+or `idle_prompt`).
 
 The matcher syntax accepts:
 
@@ -155,6 +157,28 @@ supported). Payload:
   "transcript_path": "..." | null
 }
 ```
+
+### Notification
+
+Runs when VT Code emits a notification that survives runtime gating (global
+enablement, focus suppression, event-category toggles, and repeat suppression).
+Payload:
+
+```json
+{
+  "session_id": "...",
+  "cwd": "/path/to/project",
+  "hook_event_name": "Notification",
+  "notification_type": "permission_prompt" | "idle_prompt",
+  "title": "VT Code approval required",
+  "message": "Review the permission prompt for tool `unified_exec`.",
+  "transcript_path": "..." | null
+}
+```
+
+Use `matcher = "permission_prompt"` to react to approval and MCP elicitation
+prompts, or `matcher = "idle_prompt"` to react when VT Code has been waiting for
+user input for 60 seconds.
 
 ## Interpreting Hook Results
 

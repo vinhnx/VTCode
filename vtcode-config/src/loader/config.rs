@@ -602,6 +602,9 @@ refresh_interval_ms = 2000
 # Timeout for command execution in status line (milliseconds)
 command_timeout_ms = 200
 
+# Enable Vim-style prompt editing in interactive mode
+vim_mode = false
+
 # PTY (Pseudo Terminal) configuration - For interactive command execution
 [pty]
 # Enable PTY support for interactive commands

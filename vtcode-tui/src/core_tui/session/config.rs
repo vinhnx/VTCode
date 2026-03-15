@@ -108,6 +108,10 @@ pub struct AppearanceConfig {
     #[serde(default)]
     pub reasoning_visible_default: bool,
 
+    /// Enable Vim-style input editing for the prompt.
+    #[serde(default)]
+    pub vim_mode: bool,
+
     /// Screen reader mode (disables animation-heavy rendering paths)
     #[serde(default)]
     pub screen_reader_mode: bool,
@@ -139,6 +143,7 @@ impl Default for AppearanceConfig {
             layout_mode: LayoutModeOverride::Auto,
             reasoning_display_mode: ReasoningDisplayMode::Toggle,
             reasoning_visible_default: false,
+            vim_mode: false,
             screen_reader_mode: false,
             reduce_motion_mode: false,
             reduce_motion_keep_progress_animation: false,

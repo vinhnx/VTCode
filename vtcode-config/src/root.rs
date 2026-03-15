@@ -196,6 +196,10 @@ pub struct UiConfig {
     #[serde(default = "default_reasoning_visible_default")]
     pub reasoning_visible_default: bool,
 
+    /// Enable Vim-style prompt editing in the interactive terminal UI.
+    #[serde(default = "default_vim_mode")]
+    pub vim_mode: bool,
+
     /// Status line configuration settings
     #[serde(default)]
     pub status_line: StatusLineConfig,
@@ -336,6 +340,10 @@ fn default_show_diagnostics_in_transcript() -> bool {
     false
 }
 
+fn default_vim_mode() -> bool {
+    false
+}
+
 fn default_notifications_enabled() -> bool {
     true
 }
@@ -430,6 +438,7 @@ impl Default for UiConfig {
             inline_viewport_rows: default_inline_viewport_rows(),
             reasoning_display_mode: default_reasoning_display_mode(),
             reasoning_visible_default: default_reasoning_visible_default(),
+            vim_mode: default_vim_mode(),
             status_line: StatusLineConfig::default(),
             keyboard_protocol: KeyboardProtocolConfig::default(),
             layout_mode: LayoutModeOverride::default(),

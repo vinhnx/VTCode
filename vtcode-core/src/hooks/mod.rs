@@ -1,6 +1,6 @@
 pub mod lifecycle;
 
 pub use lifecycle::{
-    HookMessage, HookMessageLevel, LifecycleHookEngine, PreToolHookDecision, SessionEndReason,
-    SessionStartTrigger,
+    HookMessage, HookMessageLevel, LifecycleHookEngine, NotificationHookType, PreToolHookDecision,
+    SessionEndReason, SessionStartTrigger,
 };

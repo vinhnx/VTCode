@@ -76,6 +76,7 @@ mod tests;
 mod tool_renderer;
 mod transcript_links;
 mod trust;
+mod vim;
 
 use self::file_palette::FilePalette;
 use self::history_picker::HistoryPickerState;
@@ -94,6 +95,7 @@ use self::spinner::{ShimmerState, ThinkingSpinner};
 use self::styling::SessionStyles;
 use self::transcript::TranscriptReflowCache;
 use self::transcript_links::TranscriptFileLinkTarget;
+use self::vim::VimState;
 #[cfg(test)]
 use super::types::InlineHeaderHighlight;
 // TaskPlan integration intentionally omitted in this UI crate.
@@ -283,6 +285,7 @@ pub struct Session {
     // --- Clipboard for yank/paste operations ---
     #[allow(dead_code)]
     pub(crate) clipboard: String,
+    pub(crate) vim_state: VimState,
 
     // --- Mouse Text Selection ---
     pub(crate) mouse_selection: MouseSelectionState,

@@ -226,6 +226,10 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         }
     }
 
+    if session.handle_vim_key(&key) {
+        return None;
+    }
+
     if is_inline_lists_toggle_shortcut(&key, has_control, has_alt, has_command) {
         session.toggle_inline_lists_visibility();
         return None;
@@ -695,6 +699,7 @@ fn quick_help_lines() -> Vec<String> {
         "Enter / Tab: Queue the current message.".to_string(),
         "Ctrl+Enter: Run now while idle, or steer the active task.".to_string(),
         "Shift+Enter: Insert a newline.".to_string(),
+        "/vim: Toggle Vim-style prompt editing.".to_string(),
         "Ctrl+A / Ctrl+E: Move to start/end of line.".to_string(),
         "Ctrl+W: Delete previous word.".to_string(),
         "Ctrl+U / Ctrl+K: Delete to start/end of line.".to_string(),

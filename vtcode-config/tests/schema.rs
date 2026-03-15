@@ -27,4 +27,13 @@ fn schema_helpers_produce_consistent_output() {
         .and_then(|value| value.as_str())
         .unwrap_or("");
     assert_eq!(title_from_value, title_from_root);
+
+    assert!(
+        as_string.contains("\"vim_mode\""),
+        "pretty schema output should include ui.vim_mode"
+    );
+    assert!(
+        as_string.contains("\"notification\""),
+        "pretty schema output should include hooks.lifecycle.notification"
+    );
 }

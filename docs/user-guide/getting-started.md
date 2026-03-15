@@ -263,6 +263,19 @@ recommended_actions = [
 
 When enabled, VT Code prints the onboarding message before the first prompt and appends the same context block to the system prompt for the model. Provide `chat_placeholder` only if you want a custom hint above the initial `>` prompt; leaving it unset keeps the input empty by default.
 
+### Terminal parity extras
+
+- Enable Vim-style prompt editing persistently with:
+
+```toml
+[ui]
+vim_mode = true
+```
+
+- Use `/vim` to toggle Vim mode for the current session only.
+- Use `/statusline` to generate a custom status-line command in either your user config or the current workspace.
+- Use `hooks.lifecycle.notification` if you want shell hooks for `permission_prompt` or `idle_prompt` notifications.
+
 ## Usage Examples
 
 ### Basic Chat Session

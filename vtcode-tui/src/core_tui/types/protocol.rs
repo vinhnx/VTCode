@@ -68,6 +68,7 @@ pub enum InlineCommand {
     SetAppearance {
         appearance: AppearanceConfig,
     },
+    SetVimModeEnabled(bool),
     SetQueuedInputs {
         entries: Vec<String>,
     },
@@ -238,6 +239,10 @@ impl InlineHandle {
 
     pub fn set_appearance(&self, appearance: AppearanceConfig) {
         self.send_command(InlineCommand::SetAppearance { appearance });
+    }
+
+    pub fn set_vim_mode_enabled(&self, enabled: bool) {
+        self.send_command(InlineCommand::SetVimModeEnabled(enabled));
     }
 
     pub fn set_queued_inputs(&self, entries: Vec<String>) {

@@ -702,6 +702,12 @@ impl Session {
             });
         }
 
+        let right = match (right, self.vim_state.status_label()) {
+            (Some(existing), Some(vim_label)) => Some(format!("{vim_label} · {existing}")),
+            (None, Some(vim_label)) => Some(vim_label.to_string()),
+            (existing, None) => existing,
+        };
+
         // Build scroll indicator if enabled
         let scroll_indicator = if ui::SCROLL_INDICATOR_ENABLED {
             Some(self.build_scroll_indicator())

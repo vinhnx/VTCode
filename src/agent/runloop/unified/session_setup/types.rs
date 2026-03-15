@@ -9,6 +9,7 @@ use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
 use crate::agent::runloop::welcome::SessionBootstrap;
 use hashbrown::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
 use tokio::sync::{Notify, RwLock};
 use vtcode_core::acp::ToolPermissionCache;
 use vtcode_core::core::decision_tracker::DecisionTracker;
@@ -88,6 +89,7 @@ pub(crate) struct SessionUISetup {
     pub ide_context_bridge: Option<IdeContextBridge>,
     pub ctrl_c_state: Arc<CtrlCState>,
     pub ctrl_c_notify: Arc<Notify>,
+    pub input_activity_counter: Arc<AtomicU64>,
     pub checkpoint_manager: Option<vtcode_core::core::agent::snapshots::SnapshotManager>,
     pub session_archive: Option<SessionArchive>,
     pub lifecycle_hooks: Option<LifecycleHookEngine>,

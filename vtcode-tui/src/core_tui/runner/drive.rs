@@ -231,8 +231,18 @@ fn render_if_dirty<B: Backend>(
 pub(super) struct DriveRuntimeOptions {
     pub(super) event_callback: Option<InlineEventCallback>,
     pub(super) focus_callback: Option<FocusChangeCallback>,
+    pub(super) input_activity_counter: Option<std::sync::Arc<std::sync::atomic::AtomicU64>>,
     pub(super) use_alternate_screen: bool,
     pub(super) keyboard_flags: crossterm::event::KeyboardEnhancementFlags,
+}
+
+fn should_count_as_user_activity(event: &crossterm::event::Event) -> bool {
+    matches!(
+        event,
+        crossterm::event::Event::Key(_)
+            | crossterm::event::Event::Mouse(_)
+            | crossterm::event::Event::Paste(_)
+    )
 }
 
 pub(super) async fn drive_terminal<B: Backend>(
@@ -294,6 +304,11 @@ pub(super) async fn drive_terminal<B: Backend>(
                     Some(TerminalEvent::Crossterm(event)) => {
                         // Record input for adaptive tick rate (switches to active Hz)
                         event_channels.record_input();
+                        if should_count_as_user_activity(&event)
+                            && let Some(counter) = runtime_options.input_activity_counter.as_ref()
+                        {
+                            counter.fetch_add(1, Ordering::Relaxed);
+                        }
                         handle_focus_change_event(&event, runtime_options.focus_callback.as_ref());
 
                         #[cfg(unix)]

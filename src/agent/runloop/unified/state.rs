@@ -28,6 +28,8 @@ pub(crate) struct SessionStats {
     plan_mode_last_interview_cancelled: bool,
     /// Autonomous mode - auto-approve safe tools with reduced HITL prompts
     pub autonomous_mode: bool,
+    /// Whether Vim-style prompt editing is enabled for this session.
+    pub vim_mode_enabled: bool,
     // Phase 4 Integration: Resilient execution components
     pub circuit_breaker: Arc<vtcode_core::tools::circuit_breaker::CircuitBreaker>,
     pub tool_health_tracker: Arc<vtcode_core::tools::health::ToolHealthTracker>,

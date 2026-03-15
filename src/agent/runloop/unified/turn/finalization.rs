@@ -4,7 +4,9 @@ use std::io;
 use std::path::PathBuf;
 use vtcode_core::hooks::{LifecycleHookEngine, SessionEndReason};
 use vtcode_core::llm::provider as uni;
-use vtcode_core::notifications::set_global_terminal_focused;
+use vtcode_core::notifications::{
+    set_global_notification_hook_engine, set_global_terminal_focused,
+};
 use vtcode_core::ui::set_tui_mode;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::{SessionArchive, SessionMessage};
@@ -121,6 +123,7 @@ pub(super) async fn finalize_session(
     }
 
     handle.shutdown();
+    set_global_notification_hook_engine(None);
     set_global_terminal_focused(false);
 
     // Give the TUI a brief moment to shut down cleanly before we forcefully restore

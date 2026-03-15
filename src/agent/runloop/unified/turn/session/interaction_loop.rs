@@ -1,6 +1,7 @@
 use anyhow::Result;
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
 use std::time::Instant;
 use tokio::sync::Notify;
 
@@ -32,6 +33,7 @@ pub(crate) struct InteractionLoopContext<'a> {
     pub ide_context_bridge: &'a mut Option<IdeContextBridge>,
     pub ctrl_c_state: &'a Arc<CtrlCState>,
     pub ctrl_c_notify: &'a Arc<Notify>,
+    pub input_activity_counter: &'a Arc<AtomicU64>,
     pub config: &'a mut AgentConfig,
     pub vt_cfg: &'a mut Option<VTCodeConfig>,
     pub provider_client: &'a mut Box<dyn uni::LLMProvider>,

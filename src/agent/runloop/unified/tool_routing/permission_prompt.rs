@@ -559,9 +559,9 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     use vtcode_tui::InlineListSelection;
     let default_selection = InlineListSelection::ToolApproval(true);
     if hitl_notification_bell
-        && let Err(err) = send_global_notification(NotificationEvent::HumanInTheLoop {
-            prompt: "Tool approval required".to_string(),
-            context: format!("Tool: {}", tool_name),
+        && let Err(err) = send_global_notification(NotificationEvent::PermissionPrompt {
+            title: "VT Code approval required".to_string(),
+            message: format!("Review the permission prompt for tool `{tool_name}`."),
         })
         .await
     {

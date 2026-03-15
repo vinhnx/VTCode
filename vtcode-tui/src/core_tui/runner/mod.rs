@@ -48,6 +48,7 @@ pub struct TuiOptions {
     pub event_callback: Option<InlineEventCallback>,
     pub focus_callback: Option<FocusChangeCallback>,
     pub active_pty_sessions: Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>,
+    pub input_activity_counter: Option<std::sync::Arc<std::sync::atomic::AtomicU64>>,
     pub keyboard_protocol: crate::config::KeyboardProtocolConfig,
     pub workspace_root: Option<std::path::PathBuf>,
     pub slash_commands: Vec<SlashCommandItem>,
@@ -158,6 +159,7 @@ pub async fn run_tui(
             event_callback: options.event_callback,
             focus_callback: options.focus_callback,
             use_alternate_screen: surface.use_alternate(),
+            input_activity_counter: options.input_activity_counter,
             keyboard_flags,
         },
     )

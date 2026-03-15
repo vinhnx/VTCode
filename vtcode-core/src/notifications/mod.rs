@@ -11,6 +11,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use crate::config::loader::VTCodeConfig;
+use crate::hooks::{LifecycleHookEngine, NotificationHookType};
 use vtcode_config::{
     NotificationDeliveryMode, TerminalNotificationMethod, TuiNotificationEvent,
     TuiNotificationsConfig,
@@ -45,6 +46,10 @@ pub enum NotificationEvent {
     PolicyApprovalRequest { action: String, details: String },
     /// Human in the loop interaction required
     HumanInTheLoop { prompt: String, context: String },
+    /// Approval or elicitation prompt that should surface as a permission request
+    PermissionPrompt { title: String, message: String },
+    /// VT Code has been waiting for user input long enough to notify
+    IdlePrompt { title: String, message: String },
     /// Task or operation completed
     Completion {
         task: String,
@@ -258,6 +263,7 @@ impl NotificationManager {
         match self.repeat_decision(&event, &config) {
             RepeatDecision::Deliver => {
                 self.send_notification_impl(&event, &config).await?;
+                self.run_notification_hook_if_configured(&event).await;
             }
             RepeatDecision::Suppress => {
                 return Ok(());
@@ -275,6 +281,10 @@ impl NotificationManager {
             NotificationEvent::Error { .. } => config.error_notifications,
             NotificationEvent::PolicyApprovalRequest { .. } => config.policy_approval_notifications,
             NotificationEvent::HumanInTheLoop { .. } => config.hitl_notifications,
+            NotificationEvent::PermissionPrompt { .. } => {
+                config.policy_approval_notifications || config.hitl_notifications
+            }
+            NotificationEvent::IdlePrompt { .. } => config.request_notifications,
             NotificationEvent::Completion { status, .. } => match status {
                 CompletionStatus::Success => config.completion_success_notifications,
                 CompletionStatus::PartialSuccess
@@ -337,6 +347,27 @@ impl NotificationManager {
         self.send_message(&message, config).await
     }
 
+    async fn run_notification_hook_if_configured(&self, event: &NotificationEvent) {
+        let Some((notification_type, title, message)) = self.notification_hook_payload(event)
+        else {
+            return;
+        };
+        let Some(engine) = get_global_notification_hook_engine() else {
+            return;
+        };
+
+        if let Err(error) = engine
+            .run_notification(notification_type, title.as_str(), message.as_str())
+            .await
+        {
+            tracing::warn!(
+                error = %error,
+                notification_type = notification_type.as_str(),
+                "Failed to run notification lifecycle hook"
+            );
+        }
+    }
+
     async fn send_message(&self, message: &str, config: &NotificationConfig) -> Result<()> {
         match config.delivery_mode {
             NotificationDeliveryMode::Terminal => {
@@ -368,9 +399,11 @@ impl NotificationManager {
             NotificationEvent::ToolSuccess { .. } => "tool_success",
             NotificationEvent::Error { .. } => "error",
             NotificationEvent::Completion { .. } => "completion",
+            NotificationEvent::IdlePrompt { .. } => "idle_prompt",
             NotificationEvent::Request { .. } => "request",
             NotificationEvent::PolicyApprovalRequest { .. }
-            | NotificationEvent::HumanInTheLoop { .. } => {
+            | NotificationEvent::HumanInTheLoop { .. }
+            | NotificationEvent::PermissionPrompt { .. } => {
                 return None;
             }
         };
@@ -433,6 +466,12 @@ impl NotificationManager {
             }
             NotificationEvent::HumanInTheLoop { prompt, context } => {
                 format!("Human input required: {} [Context: {}]", prompt, context)
+            }
+            NotificationEvent::PermissionPrompt { title, message } => {
+                format!("{title}: {message}")
+            }
+            NotificationEvent::IdlePrompt { title, message } => {
+                format!("{title}: {message}")
             }
             NotificationEvent::Completion {
                 task,
@@ -527,6 +566,25 @@ impl NotificationManager {
     pub fn is_terminal_focused(&self) -> bool {
         self.terminal_focused.load(Ordering::Relaxed)
     }
+
+    fn notification_hook_payload(
+        &self,
+        event: &NotificationEvent,
+    ) -> Option<(NotificationHookType, String, String)> {
+        match event {
+            NotificationEvent::PermissionPrompt { title, message } => Some((
+                NotificationHookType::PermissionPrompt,
+                title.clone(),
+                message.clone(),
+            )),
+            NotificationEvent::IdlePrompt { title, message } => Some((
+                NotificationHookType::IdlePrompt,
+                title.clone(),
+                message.clone(),
+            )),
+            _ => None,
+        }
+    }
 }
 
 impl Default for NotificationManager {
@@ -539,6 +597,8 @@ impl Default for NotificationManager {
 use std::sync::OnceLock;
 
 static GLOBAL_NOTIFICATION_MANAGER: OnceLock<NotificationManager> = OnceLock::new();
+static GLOBAL_NOTIFICATION_HOOK_ENGINE: OnceLock<RwLock<Option<LifecycleHookEngine>>> =
+    OnceLock::new();
 
 /// Initialize the global notification manager
 pub fn init_global_notification_manager() -> Result<()> {
@@ -559,6 +619,17 @@ pub fn init_global_notification_manager_with_config(config: NotificationConfig) 
 /// Get a reference to the global notification manager
 pub fn get_global_notification_manager() -> Option<&'static NotificationManager> {
     GLOBAL_NOTIFICATION_MANAGER.get()
+}
+
+pub fn set_global_notification_hook_engine(engine: Option<LifecycleHookEngine>) {
+    let slot = GLOBAL_NOTIFICATION_HOOK_ENGINE.get_or_init(|| RwLock::new(None));
+    *slot.write() = engine;
+}
+
+fn get_global_notification_hook_engine() -> Option<LifecycleHookEngine> {
+    GLOBAL_NOTIFICATION_HOOK_ENGINE
+        .get()
+        .and_then(|slot| slot.read().clone())
 }
 
 /// Ensure the global manager is initialized, then apply updated configuration.

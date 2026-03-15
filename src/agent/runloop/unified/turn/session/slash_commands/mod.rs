@@ -88,6 +88,12 @@ pub(crate) async fn handle_outcome(
         SlashCommandOutcome::StartFileBrowser { initial_filter } => {
             handlers::handle_start_file_browser(ctx, initial_filter).await
         }
+        SlashCommandOutcome::ToggleVimMode { enable } => {
+            handlers::handle_toggle_vim_mode(ctx, enable).await
+        }
+        SlashCommandOutcome::StartStatuslineSetup { instructions } => {
+            handlers::handle_start_statusline_setup(ctx, instructions).await
+        }
         SlashCommandOutcome::StartModelSelection => {
             handlers::handle_start_model_selection(ctx).await
         }

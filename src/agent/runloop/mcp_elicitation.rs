@@ -71,9 +71,9 @@ impl McpElicitationHandler for InteractiveMcpElicitationHandler {
 
         // Notify the user that attention is required
         if self.hitl_notification_bell
-            && let Err(err) = send_global_notification(NotificationEvent::HumanInTheLoop {
-                prompt: "MCP input required".to_string(),
-                context: format!("Provider: {}", provider),
+            && let Err(err) = send_global_notification(NotificationEvent::PermissionPrompt {
+                title: "VT Code input required".to_string(),
+                message: format!("MCP provider `{provider}` is waiting for input."),
             })
             .await
         {

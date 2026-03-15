@@ -183,6 +183,12 @@ python3 scripts/generate_config_field_reference.py
 | `hooks.lifecycle.post_tool_use[].hooks[].timeout_seconds` | `integer \| null` | no | `null` | Optional execution timeout in seconds |
 | `hooks.lifecycle.post_tool_use[].hooks[].type` | `string` | no | `"command"` | Type of hook command (currently only 'command' is supported) |
 | `hooks.lifecycle.post_tool_use[].matcher` | `null \| string` | no | `null` | Optional regex matcher to filter when this group runs. Matched against context strings (e.g. tool name, project path). |
+| `hooks.lifecycle.notification` | `array` | no | `[]` | Commands to run when VT Code emits a runtime notification event |
+| `hooks.lifecycle.notification[].hooks` | `array` | no | `[]` | List of hook commands to execute sequentially in this group |
+| `hooks.lifecycle.notification[].hooks[].command` | `string` | no | `""` | The shell command string to execute |
+| `hooks.lifecycle.notification[].hooks[].timeout_seconds` | `integer \| null` | no | `null` | Optional execution timeout in seconds |
+| `hooks.lifecycle.notification[].hooks[].type` | `string` | no | `"command"` | Type of hook command (currently only 'command' is supported) |
+| `hooks.lifecycle.notification[].matcher` | `null \| string` | no | `null` | Optional regex matcher to filter when this group runs. Matched against `notification_type` values such as `permission_prompt` or `idle_prompt`. |
 | `hooks.lifecycle.pre_tool_use` | `array` | no | `[]` | Commands to run immediately before a tool is executed |
 | `hooks.lifecycle.pre_tool_use[].hooks` | `array` | no | `[]` | List of hook commands to execute sequentially in this group |
 | `hooks.lifecycle.pre_tool_use[].hooks[].command` | `string` | no | `""` | The shell command string to execute |
@@ -559,6 +565,7 @@ python3 scripts/generate_config_field_reference.py
 | `ui.notifications.tool_success` | `boolean` | no | `false` | Notify on successful tool calls. |
 | `ui.reasoning_display_mode` | `string` | no | `"toggle"` | Reasoning display mode for chat UI ("always", "toggle", or "hidden") |
 | `ui.reasoning_visible_default` | `boolean` | no | `false` | Default visibility for reasoning when display mode is "toggle" |
+| `ui.vim_mode` | `boolean` | no | `false` | Enable Vim-style prompt editing for new interactive sessions |
 | `ui.reduce_motion_keep_progress_animation` | `boolean` | no | `false` | Keep animated progress indicators while reduce_motion_mode is enabled. |
 | `ui.reduce_motion_mode` | `boolean` | no | `false` | Reduce motion mode: minimizes shimmer/flashing animations. Can also be enabled via VTCODE_REDUCE_MOTION=1 environment variable. |
 | `ui.safe_colors_only` | `boolean` | no | `false` | Restrict color palette to the 11 "safe" ANSI colors portable across common themes. Safe colors: red, green, yellow, blue, magenta, cyan + brred, brgreen, brmagenta, brcyan Problematic colors avoided: brblack (invisible in Solarized Dark), bryellow (light themes), white/brwhite (light themes), brblue (Basic Dark). See: https://blog.xoria.org/terminal-colors/ |

@@ -18,8 +18,9 @@ use crate::hooks::lifecycle::interpret::{
     interpret_session_start, interpret_user_prompt,
 };
 use crate::hooks::lifecycle::types::{
-    HookMessage, PostToolHookOutcome, PreToolHookDecision, PreToolHookOutcome, SessionEndReason,
-    SessionStartHookOutcome, SessionStartTrigger, UserPromptHookOutcome,
+    HookMessage, NotificationHookType, PostToolHookOutcome, PreToolHookDecision,
+    PreToolHookOutcome, SessionEndReason, SessionStartHookOutcome, SessionStartTrigger,
+    UserPromptHookOutcome,
 };
 use crate::hooks::lifecycle::utils::{generate_session_id, path_to_string};
 
@@ -264,6 +265,50 @@ impl LifecycleHookEngine {
         }
 
         Ok(outcome)
+    }
+
+    pub async fn run_notification(
+        &self,
+        notification_type: NotificationHookType,
+        title: &str,
+        message: &str,
+    ) -> Result<Vec<HookMessage>> {
+        let mut messages = Vec::new();
+
+        if self.inner.hooks.notification.is_empty() {
+            return Ok(messages);
+        }
+
+        let payload = self
+            .build_notification_payload(notification_type, title, message)
+            .await?;
+        let matcher_value = notification_type.as_str().to_owned();
+
+        for group in &self.inner.hooks.notification {
+            if !group.matcher.matches(&matcher_value) {
+                continue;
+            }
+
+            for command in &group.commands {
+                match self
+                    .execute_command("Notification", command, &payload)
+                    .await
+                {
+                    Ok(result) => interpret_session_end(
+                        command,
+                        &result,
+                        &mut messages,
+                        self.inner.hooks.quiet_success_output,
+                    ),
+                    Err(err) => messages.push(HookMessage::error(format!(
+                        "Notification hook `{}` failed: {err}",
+                        command.command
+                    ))),
+                }
+            }
+        }
+
+        Ok(messages)
     }
 
     pub async fn update_transcript_path(&self, path: Option<PathBuf>) {
