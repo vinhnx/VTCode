@@ -141,9 +141,9 @@ pub const STATUS_LINE_COMMAND_TIMEOUT_MS: u64 = 200;
 /// Tick rate (Hz) when user is actively interacting with the TUI
 pub const TUI_ACTIVE_TICK_RATE_HZ: f64 = 60.0;
 /// Tick rate (Hz) when TUI is idle to save CPU
-pub const TUI_IDLE_TICK_RATE_HZ: f64 = 4.0;
+pub const TUI_IDLE_TICK_RATE_HZ: f64 = 10.0;
 /// Duration (ms) to remain in active mode after last input
-pub const TUI_ACTIVE_TIMEOUT_MS: u64 = 500;
+pub const TUI_ACTIVE_TIMEOUT_MS: u64 = 2000;
 /// Shimmer frame interval in milliseconds
 pub const TUI_SHIMMER_FRAME_INTERVAL_MS: u64 = 33;
 /// Shimmer sweep duration in milliseconds

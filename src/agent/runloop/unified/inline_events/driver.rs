@@ -92,7 +92,7 @@ impl<'a> InlineEventLoop<'a> {
         session: &mut InlineSession,
         ctrl_c_notify: &Notify,
     ) -> Result<InlineLoopAction> {
-        const INLINE_EVENT_POLL_TICK: Duration = Duration::from_millis(500);
+        const INLINE_EVENT_POLL_TICK: Duration = Duration::from_millis(50);
 
         if let Some(action) = self.ensure_interrupt_notice()? {
             return Ok(action);
@@ -105,6 +105,7 @@ impl<'a> InlineEventLoop<'a> {
         let maybe_event = tokio::select! {
             biased;
 
+            event = session.next_event() => event,
             notice = recv_startup_update_notice(self.startup_update_notice_rx) => {
                 match notice {
                     StartupUpdateEvent::Notice(notice) => {
@@ -121,7 +122,6 @@ impl<'a> InlineEventLoop<'a> {
             }
             _ = ctrl_c_notify.notified() => None,
             _ = tokio::time::sleep(INLINE_EVENT_POLL_TICK) => None,
-            event = session.next_event() => event,
         };
 
         if let Some(action) = self.exit_action() {

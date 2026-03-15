@@ -294,7 +294,7 @@ async fn handle_pause_signal(
         }
 
         tokio::select! {
-            _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)) => {}
+            _ = tokio::time::sleep(tokio::time::Duration::from_millis(30)) => {}
             _ = ctrl_c_notify.notified() => {
                 if ctrl_c_state.is_exit_requested() {
                     *result = TurnLoopResult::Exit;
