@@ -126,3 +126,25 @@ pub(super) fn switch_to_non_streaming_retry_mode(
     *use_streaming = false;
     *stream_fallback_used = true;
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum PostToolRetryAction {
+    SwitchToNonStreaming,
+    CompactToolContext,
+}
+
+pub(super) fn next_post_tool_retry_action(
+    use_streaming: bool,
+    supports_non_streaming: bool,
+    compacted_tool_retry_used: bool,
+) -> Option<PostToolRetryAction> {
+    if use_streaming && supports_non_streaming {
+        return Some(PostToolRetryAction::SwitchToNonStreaming);
+    }
+
+    if !compacted_tool_retry_used {
+        return Some(PostToolRetryAction::CompactToolContext);
+    }
+
+    None
+}

@@ -39,9 +39,10 @@ use retry::is_retryable_llm_error;
 #[cfg(test)]
 use retry::{DEFAULT_LLM_RETRY_ATTEMPTS, MAX_LLM_RETRY_ATTEMPTS};
 use retry::{
-    classify_llm_error, compact_error_message, compact_tool_messages_for_retry,
-    has_recent_tool_responses, is_stream_timeout_error, llm_attempt_timeout_secs,
-    llm_retry_attempts, supports_streaming_timeout_fallback, switch_to_non_streaming_retry_mode,
+    PostToolRetryAction, classify_llm_error, compact_error_message,
+    compact_tool_messages_for_retry, has_recent_tool_responses, is_stream_timeout_error,
+    llm_attempt_timeout_secs, llm_retry_attempts, next_post_tool_retry_action,
+    supports_streaming_timeout_fallback, switch_to_non_streaming_retry_mode,
 };
 use streaming::HarnessStreamingBridge;
 
@@ -97,6 +98,7 @@ pub(crate) async fn execute_llm_request(
     let action_suggestion = extract_action_from_messages(ctx.working_history);
 
     let max_retries = llm_retry_attempts(ctx.vt_cfg.map(|cfg| cfg.agent.max_task_retries));
+    let supports_non_streaming = ctx.provider_client.supports_non_streaming(active_model);
     let mut llm_result = Err(anyhow::anyhow!("LLM request failed to execute"));
     let mut attempts_made = 0usize;
     let mut stream_fallback_used = false;
@@ -410,38 +412,52 @@ pub(crate) async fn execute_llm_request(
                 }
 
                 // Universal post-tool recovery: when a provider fails after
-                // receiving tool results, try non-streaming first, then compact
-                // the tool messages. Works for all providers, not just MiniMax.
+                // receiving tool results, prefer non-streaming when supported,
+                // otherwise keep streaming and compact the tool messages.
                 if has_post_tool_context && attempt < max_retries - 1 {
-                    if use_streaming {
-                        switch_to_non_streaming_retry_mode(
-                            &mut use_streaming,
-                            &mut stream_fallback_used,
-                        );
-                        crate::agent::runloop::unified::turn::turn_helpers::display_status(
-                            ctx.renderer,
-                            &format!(
-                                "{} post-tool follow-up failed; retrying with non-streaming.",
-                                turn_snapshot.provider_name
-                            ),
-                        )?;
-                        _spinner.finish();
-                        continue;
-                    }
-
-                    if !compacted_tool_retry_used {
-                        let compacted = compact_tool_messages_for_retry(&request.messages);
-                        request.messages = compacted;
-                        compacted_tool_retry_used = true;
-                        crate::agent::runloop::unified::turn::turn_helpers::display_status(
-                            ctx.renderer,
-                            &format!(
-                                "{} follow-up still failed; retrying with compacted tool context.",
-                                turn_snapshot.provider_name
-                            ),
-                        )?;
-                        _spinner.finish();
-                        continue;
+                    match next_post_tool_retry_action(
+                        use_streaming,
+                        supports_non_streaming,
+                        compacted_tool_retry_used,
+                    ) {
+                        Some(PostToolRetryAction::SwitchToNonStreaming) => {
+                            switch_to_non_streaming_retry_mode(
+                                &mut use_streaming,
+                                &mut stream_fallback_used,
+                            );
+                            crate::agent::runloop::unified::turn::turn_helpers::display_status(
+                                ctx.renderer,
+                                &format!(
+                                    "{} post-tool follow-up failed; retrying with non-streaming.",
+                                    turn_snapshot.provider_name
+                                ),
+                            )?;
+                            _spinner.finish();
+                            continue;
+                        }
+                        Some(PostToolRetryAction::CompactToolContext) => {
+                            let status = if use_streaming {
+                                format!(
+                                    "{} post-tool follow-up failed; retrying with compacted tool context.",
+                                    turn_snapshot.provider_name
+                                )
+                            } else {
+                                format!(
+                                    "{} follow-up still failed; retrying with compacted tool context.",
+                                    turn_snapshot.provider_name
+                                )
+                            };
+                            let compacted = compact_tool_messages_for_retry(&request.messages);
+                            request.messages = compacted;
+                            compacted_tool_retry_used = true;
+                            crate::agent::runloop::unified::turn::turn_helpers::display_status(
+                                ctx.renderer,
+                                &status,
+                            )?;
+                            _spinner.finish();
+                            continue;
+                        }
+                        None => {}
                     }
                 }
 
@@ -586,6 +602,22 @@ mod tests {
         assert!(supports_streaming_timeout_fallback("minimax"));
         assert!(supports_streaming_timeout_fallback("HUGGINGFACE"));
         assert!(!supports_streaming_timeout_fallback("openai"));
+    }
+
+    #[test]
+    fn post_tool_retry_uses_non_streaming_before_compaction_when_supported() {
+        assert_eq!(
+            next_post_tool_retry_action(true, true, false),
+            Some(PostToolRetryAction::SwitchToNonStreaming)
+        );
+    }
+
+    #[test]
+    fn post_tool_retry_skips_non_streaming_when_unsupported() {
+        assert_eq!(
+            next_post_tool_retry_action(true, false, false),
+            Some(PostToolRetryAction::CompactToolContext)
+        );
     }
 
     #[test]

@@ -111,6 +111,80 @@ fn assistant_input_item(content_parts: Vec<Value>, phase: Option<AssistantPhase>
     item
 }
 
+fn append_assistant_text_to_instructions(instructions_segments: &mut Vec<String>, text: &str) {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return;
+    }
+
+    instructions_segments.push(format!("Previous assistant response:\n{}", trimmed));
+}
+
+fn append_output_item_text(value: &Value, text: &mut String) {
+    if let Some(part_text) = value.get("text").and_then(|value| value.as_str()) {
+        text.push_str(part_text);
+    }
+    if let Some(part_output) = value.get("output").and_then(|value| value.as_str()) {
+        text.push_str(part_output);
+    }
+    if let Some(refusal) = value.get("refusal").and_then(|value| value.as_str()) {
+        text.push_str(refusal);
+    }
+
+    match value {
+        Value::String(value) => text.push_str(value),
+        Value::Array(parts) => {
+            for part in parts {
+                append_output_item_text(part, text);
+            }
+        }
+        Value::Object(_) => {
+            if let Some(content) = value.get("content") {
+                append_output_item_text(content, text);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn tool_result_history_text(message_content: &MessageContent) -> String {
+    let tool_content = tool_result_content_from_message_content(message_content);
+    if tool_content.is_empty() {
+        return String::new();
+    }
+
+    let mut text = String::new();
+    for item in &tool_content {
+        append_output_item_text(item, &mut text);
+    }
+
+    let trimmed = text.trim();
+    if !trimmed.is_empty() {
+        return trimmed.to_string();
+    }
+
+    Value::Array(tool_content).to_string()
+}
+
+fn append_tool_result_to_instructions(
+    instructions_segments: &mut Vec<String>,
+    tool_call_id: Option<&str>,
+    message_content: &MessageContent,
+) {
+    let text = tool_result_history_text(message_content);
+    if text.is_empty() {
+        return;
+    }
+
+    let heading = match tool_call_id {
+        Some(tool_call_id) if !tool_call_id.is_empty() => {
+            format!("Previous tool result ({tool_call_id}):")
+        }
+        _ => "Previous tool result:".to_string(),
+    };
+    instructions_segments.push(format!("{heading}\n{text}"));
+}
+
 pub fn parse_responses_payload(
     response_json: Value,
     model: String,
@@ -330,6 +404,7 @@ pub fn parse_responses_payload(
 /// Build a standard (non-Codex) Responses API payload.
 pub fn build_standard_responses_payload(
     request: &LLMRequest,
+    include_structured_history_in_input: bool,
 ) -> Result<OpenAIResponsesPayload, LLMError> {
     let mut input = Vec::new();
     let mut active_tool_call_ids: HashSet<String> = HashSet::new();
@@ -364,30 +439,41 @@ pub fn build_standard_responses_payload(
             }
             MessageRole::Assistant => {
                 // Inject any persisted reasoning items from previous turns
-                if let Some(reasoning_details) = &msg.reasoning_details {
+                if include_structured_history_in_input
+                    && let Some(reasoning_details) = &msg.reasoning_details
+                {
                     append_normalized_reasoning_detail_items(&mut input, reasoning_details);
                 }
 
                 let mut content_parts = Vec::new();
                 if !msg.content.is_empty() {
-                    content_parts.push(json!({
-                        "type": "output_text",
-                        "text": msg.content.as_text()
-                    }));
+                    if include_structured_history_in_input {
+                        content_parts.push(json!({
+                            "type": "output_text",
+                            "text": msg.content.as_text()
+                        }));
+                    } else {
+                        append_assistant_text_to_instructions(
+                            &mut instructions_segments,
+                            &msg.content.as_text(),
+                        );
+                    }
                 }
 
                 if let Some(tool_calls) = &msg.tool_calls {
                     for call in tool_calls {
                         if let Some(ref func) = call.function {
                             active_tool_call_ids.insert(call.id.clone());
-                            content_parts.push(json!({
-                                "type": "tool_call",
-                                "id": &call.id,
-                                "function": {
-                                    "name": &func.name,
-                                    "arguments": &func.arguments
-                                }
-                            }));
+                            if include_structured_history_in_input {
+                                content_parts.push(json!({
+                                    "type": "tool_call",
+                                    "id": &call.id,
+                                    "function": {
+                                        "name": &func.name,
+                                        "arguments": &func.arguments
+                                    }
+                                }));
+                            }
                         }
                     }
                 }
@@ -409,6 +495,16 @@ pub fn build_standard_responses_payload(
                 })?;
 
                 if !active_tool_call_ids.contains(tool_call_id) {
+                    continue;
+                }
+
+                if !include_structured_history_in_input {
+                    append_tool_result_to_instructions(
+                        &mut instructions_segments,
+                        Some(tool_call_id),
+                        &msg.content,
+                    );
+                    active_tool_call_ids.remove(tool_call_id);
                     continue;
                 }
 
@@ -616,7 +712,8 @@ mod tests {
             ..Default::default()
         };
 
-        let payload = build_standard_responses_payload(&request).expect("payload should build");
+        let payload =
+            build_standard_responses_payload(&request, true).expect("payload should build");
         assert_eq!(payload.input.len(), 2);
         assert_eq!(payload.input[0]["type"], "compaction");
     }
@@ -661,8 +758,96 @@ mod tests {
             ..Default::default()
         };
 
-        let payload = build_standard_responses_payload(&request).expect("payload should build");
+        let payload =
+            build_standard_responses_payload(&request, true).expect("payload should build");
         assert_multimodal_tool_result(payload);
+    }
+
+    #[test]
+    fn standard_payload_can_move_assistant_text_history_into_instructions() {
+        let request = LLMRequest {
+            model: "gpt-5.2-codex".to_string(),
+            messages: vec![
+                Message::user("What is this project?".to_string()),
+                Message::assistant("VT Code is a Rust Cargo workspace.".to_string()),
+                Message::user("Tell me more.".to_string()),
+            ],
+            ..Default::default()
+        };
+
+        let payload =
+            build_standard_responses_payload(&request, false).expect("payload should build");
+
+        assert_eq!(payload.input.len(), 2);
+        assert_eq!(payload.input[0]["role"], "user");
+        assert_eq!(payload.input[1]["role"], "user");
+        assert_eq!(
+            payload.instructions.as_deref(),
+            Some("Previous assistant response:\nVT Code is a Rust Cargo workspace.")
+        );
+    }
+
+    #[test]
+    fn standard_payload_can_omit_reasoning_details_from_input() {
+        let request = LLMRequest {
+            model: "gpt-5.2-codex".to_string(),
+            messages: vec![
+                Message::assistant("answer".to_string()).with_reasoning_details(Some(vec![
+                    json!({
+                        "type": "reasoning",
+                        "id": "rs_1",
+                        "summary": [{"type":"summary_text","text":"opaque"}]
+                    }),
+                ])),
+                Message::user("next".to_string()),
+            ],
+            ..Default::default()
+        };
+
+        let payload =
+            build_standard_responses_payload(&request, false).expect("payload should build");
+
+        assert_eq!(payload.input.len(), 1);
+        assert_eq!(payload.input[0]["role"], "user");
+    }
+
+    #[test]
+    fn standard_payload_can_move_tool_turn_history_into_instructions() {
+        let request = LLMRequest {
+            model: "gpt-5.2-codex".to_string(),
+            messages: vec![
+                Message::user("run cargo check".to_string()),
+                Message::assistant_with_tools(
+                    String::new(),
+                    vec![ToolCall::function(
+                        "call_1".to_string(),
+                        "unified_exec".to_string(),
+                        "{\"command\":\"cargo check\"}".to_string(),
+                    )],
+                ),
+                Message::tool_response(
+                    "call_1".to_string(),
+                    "{\"output\":\"Finished `dev` profile\",\"exit_code\":0}".to_string(),
+                ),
+                Message::assistant("cargo check completed successfully.".to_string()),
+                Message::user("tell me more".to_string()),
+            ],
+            ..Default::default()
+        };
+
+        let payload =
+            build_standard_responses_payload(&request, false).expect("payload should build");
+
+        assert_eq!(payload.input.len(), 2);
+        assert_eq!(payload.input[0]["role"], "user");
+        assert_eq!(payload.input[1]["role"], "user");
+        let instructions = payload.instructions.expect("instructions should exist");
+        assert!(instructions.contains("Previous tool result (call_1):"));
+        assert!(instructions.contains("Finished `dev` profile"));
+        assert!(
+            instructions
+                .contains("Previous assistant response:\ncargo check completed successfully.")
+        );
     }
 
     #[test]

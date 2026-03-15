@@ -2,6 +2,7 @@ use anyhow::Result;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use vtcode_core::llm::provider as uni;
+use vtcode_core::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::unified::turn::context::{
     PreparedAssistantToolCall, TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext,
@@ -184,7 +185,24 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                 }));
             }
 
-            Ok(TurnHandlerOutcome::Break(TurnLoopResult::Completed))
+            let recovery_reason =
+                "Model returned no answer. Tools are disabled on the next pass; provide a direct textual response from the current context."
+                    .to_string();
+            params.ctx.activate_recovery(recovery_reason.clone());
+            params
+                .ctx
+                .renderer
+                .line(
+                    MessageStyle::Info,
+                    "[!] Empty model response detected; scheduling a final recovery pass.",
+                )
+                .unwrap_or(());
+            params
+                .ctx
+                .working_history
+                .push(uni::Message::system(recovery_reason));
+
+            Ok(TurnHandlerOutcome::Continue)
         }
     }
 }
@@ -353,5 +371,29 @@ mod tests {
             TurnHandlerOutcome::Break(TurnLoopResult::Blocked { reason: Some(reason) })
             if reason.contains("returned no answer")
         ));
+    }
+
+    #[tokio::test]
+    async fn empty_response_schedules_recovery_pass() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut ctx = backing.turn_processing_context();
+
+        let mut repeated_tool_attempts = LoopTracker::new();
+        let mut turn_modified_files = BTreeSet::new();
+
+        let outcome = handle_turn_processing_result(HandleTurnProcessingResultParams {
+            ctx: &mut ctx,
+            processing_result: TurnProcessingResult::Empty,
+            response_streamed: true,
+            step_count: 1,
+            repeated_tool_attempts: &mut repeated_tool_attempts,
+            turn_modified_files: &mut turn_modified_files,
+            max_tool_loops: 4,
+            tool_repeat_limit: 4,
+        })
+        .await
+        .expect("empty response should schedule recovery");
+
+        assert!(matches!(outcome, TurnHandlerOutcome::Continue));
     }
 }

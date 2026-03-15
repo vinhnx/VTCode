@@ -5,7 +5,7 @@ use crate::config::core::{
     OpenAIHostedShellConfig, OpenAIHostedShellEnvironment, OpenAIHostedSkill,
     OpenAIHostedSkillVersion, OpenAIServiceTier,
 };
-use crate::llm::provider::ParallelToolConfig;
+use crate::llm::provider::{LLMProvider, ParallelToolConfig};
 use crate::tools::handlers::plan_mode::PlanModeState;
 use crate::tools::handlers::plan_task_tracker::PlanTaskTrackerTool;
 use crate::tools::handlers::task_tracker::TaskTrackerTool;
@@ -1117,6 +1117,154 @@ fn chatgpt_backend_omits_previous_response_id_from_responses_payload() {
 }
 
 #[test]
+fn chatgpt_backend_moves_plain_assistant_history_to_instructions() {
+    let provider = OpenAIProvider::from_config(
+        Some(String::new()),
+        Some(sample_chatgpt_auth_handle()),
+        Some(models::openai::GPT_5_2_CODEX.to_string()),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+    let request = provider::LLMRequest {
+        messages: vec![
+            provider::Message::user("What is this project?".to_owned()),
+            provider::Message::assistant("VT Code is a Rust Cargo workspace.".to_owned())
+                .with_phase(Some(provider::AssistantPhase::FinalAnswer)),
+            provider::Message::user("Tell me more.".to_owned()),
+        ],
+        model: models::openai::GPT_5_2_CODEX.to_string(),
+        ..Default::default()
+    };
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+    let input = payload
+        .get("input")
+        .and_then(Value::as_array)
+        .expect("input should exist");
+
+    assert_eq!(input.len(), 2);
+    assert_eq!(input[0].get("role").and_then(Value::as_str), Some("user"));
+    assert_eq!(input[1].get("role").and_then(Value::as_str), Some("user"));
+    assert_eq!(
+        payload.get("instructions").and_then(Value::as_str),
+        Some("Previous assistant response:\nVT Code is a Rust Cargo workspace.")
+    );
+}
+
+#[test]
+fn chatgpt_backend_omits_reasoning_detail_items_from_followup_input() {
+    let provider = OpenAIProvider::from_config(
+        Some(String::new()),
+        Some(sample_chatgpt_auth_handle()),
+        Some(models::openai::GPT_5_2_CODEX.to_string()),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+    let request = provider::LLMRequest {
+        messages: vec![
+            provider::Message::assistant("Hello. What would you like me to do?".to_owned())
+                .with_reasoning_details(Some(vec![json!({
+                    "type": "reasoning",
+                    "id": "rs_1",
+                    "summary": [{"type":"summary_text","text":"task prompt"}]
+                })]))
+                .with_phase(Some(provider::AssistantPhase::FinalAnswer)),
+            provider::Message::user("tell me more".to_owned()),
+        ],
+        model: models::openai::GPT_5_2_CODEX.to_string(),
+        ..Default::default()
+    };
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+    let input = payload
+        .get("input")
+        .and_then(Value::as_array)
+        .expect("input should exist");
+
+    assert_eq!(input.len(), 1);
+    assert_eq!(input[0].get("role").and_then(Value::as_str), Some("user"));
+    assert_eq!(
+        payload.get("instructions").and_then(Value::as_str),
+        Some("Previous assistant response:\nHello. What would you like me to do?")
+    );
+}
+
+#[test]
+fn chatgpt_backend_moves_tool_turn_history_to_instructions() {
+    let provider = OpenAIProvider::from_config(
+        Some(String::new()),
+        Some(sample_chatgpt_auth_handle()),
+        Some(models::openai::GPT_5_2_CODEX.to_string()),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+    let request = provider::LLMRequest {
+        messages: vec![
+            provider::Message::user("run cargo check".to_owned()),
+            provider::Message::assistant_with_tools(
+                String::new(),
+                vec![provider::ToolCall::function(
+                    "call_1".to_string(),
+                    "unified_exec".to_string(),
+                    "{\"command\":\"cargo check\"}".to_string(),
+                )],
+            ),
+            provider::Message::tool_response(
+                "call_1".to_string(),
+                "{\"output\":\"Finished `dev` profile\",\"exit_code\":0}".to_string(),
+            ),
+            provider::Message::assistant("cargo check completed successfully.".to_owned())
+                .with_phase(Some(provider::AssistantPhase::FinalAnswer)),
+            provider::Message::user("who are you".to_owned()),
+        ],
+        model: models::openai::GPT_5_2_CODEX.to_string(),
+        ..Default::default()
+    };
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+    let input = payload
+        .get("input")
+        .and_then(Value::as_array)
+        .expect("input should exist");
+
+    assert_eq!(input.len(), 2);
+    assert_eq!(input[0].get("role").and_then(Value::as_str), Some("user"));
+    assert_eq!(input[1].get("role").and_then(Value::as_str), Some("user"));
+    assert!(
+        input
+            .iter()
+            .all(|item| item.get("role").and_then(Value::as_str) != Some("tool"))
+    );
+    let instructions = payload
+        .get("instructions")
+        .and_then(Value::as_str)
+        .expect("instructions should exist");
+    assert!(instructions.contains("Previous tool result (call_1):"));
+    assert!(instructions.contains("Finished `dev` profile"));
+    assert!(
+        instructions.contains("Previous assistant response:\ncargo check completed successfully.")
+    );
+}
+
+#[test]
 fn responses_payload_includes_assistant_phase_for_native_openai() {
     let provider = OpenAIProvider::with_model(String::new(), models::openai::GPT_5_4.to_string());
     let request = provider::LLMRequest {
@@ -1921,6 +2069,32 @@ fn chatgpt_backend_omits_max_output_tokens_from_responses_payload() {
 }
 
 #[test]
+fn codex_responses_payload_maps_minimal_reasoning_to_low() {
+    let provider = OpenAIProvider::from_config(
+        Some(String::new()),
+        Some(sample_chatgpt_auth_handle()),
+        Some(models::openai::GPT_5_2_CODEX.to_string()),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+    let mut request = sample_request(models::openai::GPT_5_2_CODEX);
+    request.reasoning_effort = Some(crate::config::types::ReasoningEffortLevel::Minimal);
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    assert_eq!(
+        payload["reasoning"].get("effort").and_then(Value::as_str),
+        Some("low")
+    );
+}
+
+#[test]
 fn chat_completions_applies_temperature_independent_of_max_tokens() {
     let provider = OpenAIProvider::with_model(String::new(), models::openai::GPT_5_2.to_string());
     let mut request = sample_request(models::openai::GPT_5_2);
@@ -2037,6 +2211,23 @@ mod streaming_tests {
         );
 
         assert!(provider.supports_streaming());
+    }
+
+    #[test]
+    fn chatgpt_backend_disables_non_streaming_for_codex_models() {
+        let provider = OpenAIProvider::from_config(
+            Some(String::new()),
+            Some(sample_chatgpt_auth_handle()),
+            Some(models::openai::GPT_5_2_CODEX.to_string()),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
+
+        assert!(!provider.supports_non_streaming(models::openai::GPT_5_2_CODEX));
     }
 }
 

@@ -46,6 +46,7 @@ pub(crate) struct ResponsesRequestContext<'a> {
     pub default_response_store: Option<bool>,
     pub default_responses_include: Option<&'a [String]>,
     pub hosted_shell: Option<&'a OpenAIHostedShellConfig>,
+    pub include_structured_history_in_input: bool,
 }
 
 fn strip_non_native_assistant_phase(input: &mut [Value]) {
@@ -265,7 +266,8 @@ pub(crate) fn build_responses_request(
     request: &provider::LLMRequest,
     ctx: &ResponsesRequestContext<'_>,
 ) -> Result<Value, provider::LLMError> {
-    let responses_payload = build_standard_responses_payload(request)?;
+    let responses_payload =
+        build_standard_responses_payload(request, ctx.include_structured_history_in_input)?;
     let mut input = responses_payload.input;
     let instructions = responses_payload.instructions;
     if !ctx.include_assistant_phase {

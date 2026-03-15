@@ -40,7 +40,7 @@ impl OpenAIProvider {
             messages: history.to_vec(),
             ..Default::default()
         };
-        let responses_payload = build_standard_responses_payload(&request)?;
+        let responses_payload = build_standard_responses_payload(&request, true)?;
         if responses_payload.input.is_empty() {
             return Ok(history.to_vec());
         }

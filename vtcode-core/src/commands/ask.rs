@@ -3,10 +3,11 @@
 use crate::cli::input_hardening::validate_agent_safe_text;
 use crate::config::types::AgentConfig;
 use crate::llm::factory::{ProviderConfig, create_provider_with_config, infer_provider_from_model};
-use crate::llm::provider::{LLMRequest, Message};
+use crate::llm::provider::{LLMProvider, LLMRequest, LLMResponse, LLMStreamEvent, Message};
 use crate::prompts::system::lightweight_instruction_text;
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use crossterm::tty::IsTty;
+use futures::StreamExt;
 use std::sync::Arc;
 
 /// Handle the ask command - single prompt without tools
@@ -52,7 +53,7 @@ pub async fn handle_ask_command(
         },
     )?;
     let backend_kind = provider.name().to_string();
-    let response = provider.generate(request).await?;
+    let response = collect_single_response(provider.as_ref(), request).await?;
     let response_model = if response.model.is_empty() {
         config.model.clone()
     } else {
@@ -95,6 +96,42 @@ fn is_pipe_output() -> bool {
     !std::io::stdout().is_tty()
 }
 
+async fn collect_single_response(
+    provider: &dyn LLMProvider,
+    request: LLMRequest,
+) -> Result<LLMResponse> {
+    if provider.supports_non_streaming(&request.model) {
+        return Ok(provider.generate(request).await?);
+    }
+
+    let mut stream = provider.stream(request).await?;
+    let mut streamed_content = String::new();
+    let mut streamed_reasoning = String::new();
+    let mut completed = None;
+
+    while let Some(event) = stream.next().await {
+        match event? {
+            LLMStreamEvent::Token { delta } => streamed_content.push_str(&delta),
+            LLMStreamEvent::Reasoning { delta } => streamed_reasoning.push_str(&delta),
+            LLMStreamEvent::ReasoningStage { .. } => {}
+            LLMStreamEvent::Completed { response } => {
+                completed = Some(*response);
+                break;
+            }
+        }
+    }
+
+    let mut response =
+        completed.ok_or_else(|| anyhow!("provider stream ended without a completed response"))?;
+    if response.content.as_deref().unwrap_or_default().is_empty() && !streamed_content.is_empty() {
+        response.content = Some(streamed_content);
+    }
+    if response.reasoning.is_none() && !streamed_reasoning.is_empty() {
+        response.reasoning = Some(streamed_reasoning);
+    }
+    Ok(response)
+}
+
 fn extract_code_only(text: &str) -> Option<String> {
     let blocks = extract_code_fence_blocks(text);
     let block = select_best_code_block(&blocks)?;
@@ -103,6 +140,88 @@ fn extract_code_only(text: &str) -> Option<String> {
         output.push('\n');
     }
     Some(output)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::llm::provider::{FinishReason, LLMError};
+    use async_trait::async_trait;
+    use futures::stream;
+
+    #[derive(Clone)]
+    struct StreamingOnlyProvider;
+
+    #[async_trait]
+    impl LLMProvider for StreamingOnlyProvider {
+        fn name(&self) -> &str {
+            "test"
+        }
+
+        fn supports_streaming(&self) -> bool {
+            true
+        }
+
+        fn supports_non_streaming(&self, _model: &str) -> bool {
+            false
+        }
+
+        async fn generate(&self, _request: LLMRequest) -> Result<LLMResponse, LLMError> {
+            panic!("generate should not be called for streaming-only provider")
+        }
+
+        async fn stream(
+            &self,
+            _request: LLMRequest,
+        ) -> Result<crate::llm::provider::LLMStream, LLMError> {
+            Ok(Box::pin(stream::iter(vec![
+                Ok(LLMStreamEvent::Token {
+                    delta: "hello ".to_string(),
+                }),
+                Ok(LLMStreamEvent::Token {
+                    delta: "world".to_string(),
+                }),
+                Ok(LLMStreamEvent::Completed {
+                    response: Box::new(LLMResponse {
+                        content: None,
+                        model: "gpt-5.2-codex".to_string(),
+                        tool_calls: None,
+                        usage: None,
+                        finish_reason: FinishReason::Stop,
+                        reasoning: None,
+                        reasoning_details: None,
+                        organization_id: None,
+                        request_id: None,
+                        tool_references: Vec::new(),
+                    }),
+                }),
+            ])))
+        }
+
+        fn supported_models(&self) -> Vec<String> {
+            vec!["gpt-5.2-codex".to_string()]
+        }
+
+        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn collect_single_response_uses_stream_when_non_streaming_is_unsupported() {
+        let provider = StreamingOnlyProvider;
+        let response = collect_single_response(
+            &provider,
+            LLMRequest {
+                model: "gpt-5.2-codex".to_string(),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("stream collection should succeed");
+
+        assert_eq!(response.content.as_deref(), Some("hello world"));
+    }
 }
 
 fn extract_code_fence_blocks(text: &str) -> Vec<CodeFenceBlock> {

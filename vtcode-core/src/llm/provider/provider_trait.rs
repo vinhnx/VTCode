@@ -70,6 +70,11 @@ pub trait LLMProvider: Send + Sync {
         false
     }
 
+    /// Whether the provider can service non-streaming generation requests for the model.
+    fn supports_non_streaming(&self, _model: &str) -> bool {
+        true
+    }
+
     /// Whether the provider surfaces structured reasoning traces for the given model
     fn supports_reasoning(&self, _model: &str) -> bool {
         false

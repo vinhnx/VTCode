@@ -95,7 +95,14 @@ impl RigProviderCapabilities {
                 let mut reasoning = openai::responses_api::Reasoning::new();
                 let mapped = match effort {
                     ReasoningEffortLevel::None => return None,
-                    ReasoningEffortLevel::Minimal => return Some(json!({ "effort": "minimal" })),
+                    ReasoningEffortLevel::Minimal => {
+                        let effort = if is_gpt5_codex_model(&self.model) {
+                            "low"
+                        } else {
+                            "minimal"
+                        };
+                        return Some(json!({ "effort": effort }));
+                    }
                     ReasoningEffortLevel::Low => openai::responses_api::ReasoningEffort::Low,
                     ReasoningEffortLevel::Medium => openai::responses_api::ReasoningEffort::Medium,
                     ReasoningEffortLevel::High => openai::responses_api::ReasoningEffort::High,
@@ -157,6 +164,10 @@ impl RigProviderCapabilities {
             _ => None,
         }
     }
+}
+
+fn is_gpt5_codex_model(model: &str) -> bool {
+    model == "gpt-5-codex" || (model.starts_with("gpt-5.") && model.contains("codex"))
 }
 
 #[cfg(test)]

@@ -559,6 +559,7 @@ impl OpenAIProvider {
             default_responses_include: (!self.responses_include.is_empty())
                 .then_some(self.responses_include.as_slice()),
             hosted_shell: self.hosted_shell_for_model(&request.model),
+            include_structured_history_in_input: !self.is_chatgpt_backend(),
         };
 
         request_builder::build_responses_request(request, &ctx)
