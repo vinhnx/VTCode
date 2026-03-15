@@ -14,10 +14,10 @@ use futures::StreamExt;
 use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::sync::Mutex;
+use vtcode_config::OpenAIAuthConfig;
 use vtcode_config::auth::{
     AuthCredentialsStoreMode, OpenAIChatGptAuthHandle, OpenAIChatGptSession,
 };
-use vtcode_config::OpenAIAuthConfig;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -816,7 +816,11 @@ fn responses_function_tools_sanitize_openai_incompatible_parameter_keywords() {
     assert_eq!(command.get("type").and_then(Value::as_str), Some("string"));
     assert!(command.get("anyOf").is_none());
     assert!(command.get("default").is_none());
-    assert!(exec_parameters["properties"]["tty"].get("default").is_none());
+    assert!(
+        exec_parameters["properties"]["tty"]
+            .get("default")
+            .is_none()
+    );
 
     let search_parameters = tools
         .iter()
@@ -826,7 +830,11 @@ fn responses_function_tools_sanitize_openai_incompatible_parameter_keywords() {
     let globs = &search_parameters["properties"]["globs"];
     assert_eq!(globs.get("type").and_then(Value::as_str), Some("string"));
     assert!(globs.get("anyOf").is_none());
-    assert!(search_parameters["properties"]["path"].get("default").is_none());
+    assert!(
+        search_parameters["properties"]["path"]
+            .get("default")
+            .is_none()
+    );
 }
 
 #[test]
@@ -870,10 +878,14 @@ fn responses_function_tools_strip_openai_schema_combinators_from_builtin_tools()
 
     let tools = payload["tools"].as_array().expect("tool array");
     for tool in tools {
-        let parameters = tool.get("parameters").expect("tool parameters should be present");
+        let parameters = tool
+            .get("parameters")
+            .expect("tool parameters should be present");
         let found = schema_keyword_path(
             parameters,
-            &["allOf", "anyOf", "oneOf", "if", "then", "else", "default", "format"],
+            &[
+                "allOf", "anyOf", "oneOf", "if", "then", "else", "default", "format",
+            ],
             "$",
         );
         assert!(

@@ -7,8 +7,8 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_tui::{InlineListItem, InlineListSelection};
 
 use super::{SlashCommandContext, SlashCommandControl, ui};
-use crate::agent::runloop::ui::build_inline_header_context;
 use crate::agent::runloop::slash_commands::OAuthProviderAction;
+use crate::agent::runloop::ui::build_inline_header_context;
 use crate::cli::auth::{
     OPENAI_PROVIDER, OPENROUTER_PROVIDER, clear_openai_login, clear_openrouter_login,
     complete_openai_login, complete_openrouter_login, openai_auth_status, openrouter_auth_status,
@@ -681,7 +681,8 @@ async fn sync_openai_runtime_if_active(ctx: &mut SlashCommandContext<'_>) -> Res
         ctx.session_bootstrap,
         provider_label,
         ctx.config.model.clone(),
-        ctx.provider_client.effective_context_size(&ctx.config.model),
+        ctx.provider_client
+            .effective_context_size(&ctx.config.model),
         mode_label,
         ctx.config.reasoning_effort.as_str().to_string(),
     )

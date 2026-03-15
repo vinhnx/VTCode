@@ -89,8 +89,11 @@ pub fn format_openai_error(
     context: &str,
     client_request_id: Option<&str>,
 ) -> String {
-    let request_id = extract_header(headers, &["x-request-id", "request-id", "openai-request-id"])
-        .unwrap_or_else(|| "<none>".to_string());
+    let request_id = extract_header(
+        headers,
+        &["x-request-id", "request-id", "openai-request-id"],
+    )
+    .unwrap_or_else(|| "<none>".to_string());
     let effective_client_request_id = client_request_id
         .map(str::trim)
         .filter(|value| !value.is_empty())
@@ -120,7 +123,12 @@ pub fn format_openai_error(
         metadata_parts.push(format!("organization={organization_id}"));
     }
 
-    let mut formatted = format!("{} (status {}) [{}]", context, status, metadata_parts.join(" "));
+    let mut formatted = format!(
+        "{} (status {}) [{}]",
+        context,
+        status,
+        metadata_parts.join(" ")
+    );
     if let Some(message) = error_details.message.as_deref() {
         formatted.push_str(&format!(" Message: {message}"));
     }

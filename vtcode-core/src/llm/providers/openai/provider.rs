@@ -406,7 +406,9 @@ impl OpenAIProvider {
         Ok(self.request_auth_from_session(session))
     }
 
-    async fn refresh_request_auth_for_retry(&self) -> Result<OpenAIRequestAuth, provider::LLMError> {
+    async fn refresh_request_auth_for_retry(
+        &self,
+    ) -> Result<OpenAIRequestAuth, provider::LLMError> {
         let Some(handle) = &self.openai_chatgpt_auth else {
             return Ok(OpenAIRequestAuth {
                 bearer_token: self.api_key.to_string(),
@@ -544,7 +546,8 @@ impl OpenAIProvider {
             is_responses_api_model: Self::is_responses_api_model(&request.model),
             include_output_types: !self.is_chatgpt_backend(),
             include_sampling_parameters: !self.is_chatgpt_backend(),
-            force_response_store_false: self.uses_chatgpt_auth() && self.base_url.contains("chatgpt.com"),
+            force_response_store_false: self.uses_chatgpt_auth()
+                && self.base_url.contains("chatgpt.com"),
             include_assistant_phase: is_native_openai,
             prompt_cache_key,
             include_prompt_cache_retention: !self.is_chatgpt_backend(),

@@ -6,7 +6,8 @@ use vtcode_auth::{
     exchange_openai_chatgpt_code_for_tokens, generate_openai_oauth_state, generate_pkce_challenge,
     get_auth_status_with_mode, get_auth_url, get_openai_chatgpt_auth_status_with_mode,
     get_openai_chatgpt_auth_url, load_openai_chatgpt_session_with_mode,
-    run_auth_code_callback_server, save_oauth_token_with_mode, save_openai_chatgpt_session_with_mode,
+    run_auth_code_callback_server, save_oauth_token_with_mode,
+    save_openai_chatgpt_session_with_mode,
 };
 use vtcode_config::VTCodeConfig;
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
