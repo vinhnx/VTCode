@@ -2566,3 +2566,105 @@ async fn responses_requests_include_client_request_id_and_surface_debug_metadata
     assert!(error_text.contains("code=unsupported_parameter"));
     assert!(error_text.contains("param=text.verbosity"));
 }
+
+#[tokio::test]
+async fn gpt5_codex_generate_strips_reasoning_summaries() {
+    let server = MockServer::start().await;
+    let provider = test_provider(&server.uri(), models::openai::GPT_5_2_CODEX);
+
+    Mock::given(method("POST"))
+        .and(path("/responses"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "application/json")
+                .set_body_json(json!({
+                    "id": "resp_reasoning_filtered",
+                    "status": "completed",
+                    "output": [
+                        {
+                            "type": "reasoning",
+                            "id": "rs_1",
+                            "summary": [
+                                {"type": "summary_text", "text": "Confirming approach for task execution"}
+                            ]
+                        },
+                        {
+                            "type": "message",
+                            "role": "assistant",
+                            "content": [
+                                {"type": "output_text", "text": "done"}
+                            ]
+                        }
+                    ]
+                })),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let response = provider
+        .generate(provider::LLMRequest {
+            messages: vec![provider::Message::user("Hello".to_string())],
+            model: models::openai::GPT_5_2_CODEX.to_string(),
+            ..Default::default()
+        })
+        .await
+        .expect("generation should succeed");
+
+    assert_eq!(response.content.as_deref(), Some("done"));
+    assert_eq!(response.reasoning, None);
+    assert_eq!(response.reasoning_details, None);
+}
+
+#[tokio::test]
+async fn gpt5_codex_stream_omits_reasoning_events_and_final_reasoning() {
+    let server = MockServer::start().await;
+    let provider = test_provider(&server.uri(), models::openai::GPT_5_2_CODEX);
+
+    Mock::given(method("POST"))
+        .and(path("/responses"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(
+                    concat!(
+                        "data: {\"type\":\"response.reasoning_summary_text.delta\",\"delta\":\"Notifying about disabled tools\"}\n\n",
+                        "data: {\"type\":\"response.output_text.delta\",\"delta\":\"done\"}\n\n",
+                        "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_stream_reasoning_filtered\",\"status\":\"completed\",\"output\":[",
+                        "{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"Notifying about disabled tools\"}]},",
+                        "{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"done\"}]}",
+                        "]}}\n\n",
+                        "data: [DONE]\n\n"
+                    ),
+                ),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let mut stream = provider
+        .stream(provider::LLMRequest {
+            messages: vec![provider::Message::user("Hello".to_string())],
+            model: models::openai::GPT_5_2_CODEX.to_string(),
+            ..Default::default()
+        })
+        .await
+        .expect("stream should succeed");
+
+    let mut saw_reasoning_event = false;
+    let mut completed = None;
+    while let Some(event) = stream.next().await {
+        match event.expect("stream event should parse") {
+            provider::LLMStreamEvent::Reasoning { .. }
+            | provider::LLMStreamEvent::ReasoningStage { .. } => saw_reasoning_event = true,
+            provider::LLMStreamEvent::Completed { response } => completed = Some(response),
+            provider::LLMStreamEvent::Token { .. } => {}
+        }
+    }
+
+    let response = completed.expect("stream should finish with a completed response");
+    assert!(!saw_reasoning_event);
+    assert_eq!(response.content.as_deref(), Some("done"));
+    assert_eq!(response.reasoning, None);
+    assert_eq!(response.reasoning_details, None);
+}

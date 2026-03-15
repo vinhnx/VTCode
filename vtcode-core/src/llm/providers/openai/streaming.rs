@@ -16,14 +16,7 @@ impl StreamTelemetry for OpenAIStreamTelemetry {
     fn on_content_delta(&self, _delta: &str) {}
 
     #[cfg_attr(not(debug_assertions), allow(unused_variables))]
-    fn on_reasoning_delta(&self, delta: &str) {
-        #[cfg(debug_assertions)]
-        debug!(
-            target = "vtcode::llm::openai::stream",
-            length = delta.len(),
-            "reasoning delta received"
-        );
-    }
+    fn on_reasoning_delta(&self, _delta: &str) {}
 
     fn on_tool_call_delta(&self) {
         #[cfg(debug_assertions)]

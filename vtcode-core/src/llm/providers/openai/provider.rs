@@ -16,6 +16,7 @@ use crate::config::core::{
 use crate::llm::error_display;
 use crate::llm::provider;
 use crate::llm::provider::LLMProvider;
+use crate::models_manager::model_family::find_family_for_model;
 use hashbrown::{HashMap, HashSet};
 use reqwest::Client as HttpClient;
 use reqwest::StatusCode;
@@ -84,6 +85,22 @@ pub struct OpenAIProvider {
 }
 
 impl OpenAIProvider {
+    fn model_supports_reasoning_summaries(model: &str) -> bool {
+        find_family_for_model(model).supports_reasoning_summaries
+    }
+
+    fn normalize_reasoning_output(
+        model: &str,
+        mut response: provider::LLMResponse,
+    ) -> provider::LLMResponse {
+        if !Self::model_supports_reasoning_summaries(model) {
+            response.reasoning = None;
+            response.reasoning_details = None;
+        }
+
+        response
+    }
+
     fn is_responses_api_model(model: &str) -> bool {
         models::openai::RESPONSES_API_MODELS.contains(&model)
     }
@@ -572,7 +589,12 @@ impl OpenAIProvider {
     ) -> Result<provider::LLMResponse, provider::LLMError> {
         let include_cached_prompt_tokens =
             self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
-        response_parser::parse_chat_response(response_json, model, include_cached_prompt_tokens)
+        let response = response_parser::parse_chat_response(
+            response_json,
+            model.clone(),
+            include_cached_prompt_tokens,
+        )?;
+        Ok(Self::normalize_reasoning_output(&model, response))
     }
 
     fn parse_openai_responses_response(
@@ -582,7 +604,8 @@ impl OpenAIProvider {
     ) -> Result<provider::LLMResponse, provider::LLMError> {
         let include_metrics =
             self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
-        parse_responses_payload(response_json, model, include_metrics)
+        let response = parse_responses_payload(response_json, model.clone(), include_metrics)?;
+        Ok(Self::normalize_reasoning_output(&model, response))
     }
 }
 
