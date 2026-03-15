@@ -5,8 +5,8 @@ use vtcode_auth::{
     clear_oauth_token, clear_openai_chatgpt_session, exchange_code_for_token,
     exchange_openai_chatgpt_code_for_tokens, generate_openai_oauth_state, generate_pkce_challenge,
     get_auth_status_with_mode, get_auth_url, get_openai_chatgpt_auth_status_with_mode,
-    get_openai_chatgpt_auth_url, run_auth_code_callback_server, save_oauth_token_with_mode,
-    save_openai_chatgpt_session_with_mode,
+    get_openai_chatgpt_auth_url, load_openai_chatgpt_session_with_mode,
+    run_auth_code_callback_server, save_oauth_token_with_mode, save_openai_chatgpt_session_with_mode,
 };
 use vtcode_config::VTCodeConfig;
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
@@ -120,14 +120,18 @@ pub(crate) async fn complete_openai_login(
     .await?
     {
         AuthCallbackOutcome::Code(code) => {
+            tracing::info!("received openai oauth callback; exchanging tokens");
             let session = exchange_openai_chatgpt_code_for_tokens(
                 &code,
                 &prepared.pkce,
                 prepared.callback_port,
             )
             .await?;
+            tracing::info!("openai oauth token exchange completed; persisting session");
             save_openai_chatgpt_session_with_mode(&session, prepared.storage_mode)?;
-            Ok(session)
+            tracing::info!("openai oauth session persisted; verifying load");
+            load_openai_chatgpt_session_with_mode(prepared.storage_mode)?
+                .ok_or_else(|| anyhow!("OpenAI ChatGPT session was not persisted correctly"))
         }
         AuthCallbackOutcome::Cancelled => Err(anyhow!("OAuth flow was cancelled")),
         AuthCallbackOutcome::Error(error) => Err(anyhow!(error)),

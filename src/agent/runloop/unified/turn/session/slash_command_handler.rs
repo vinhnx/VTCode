@@ -42,10 +42,21 @@ pub(crate) async fn handle_input_commands(
         input if input.starts_with('/') && !is_absolute_image_path_input(input) => {
             if let Some(command_input) = input.strip_prefix('/') {
                 let outcome =
-                    process_slash_command(command_input, ctx.renderer, &ctx.config.workspace)
-                        .await?;
+                    match process_slash_command(command_input, ctx.renderer, &ctx.config.workspace)
+                        .await
+                    {
+                        Ok(outcome) => outcome,
+                        Err(err) => {
+                            tracing::error!("slash command parse/dispatch failed: {err:#}");
+                            ctx.renderer.line(
+                                MessageStyle::Error,
+                                &format!("Slash command failed: {}", err),
+                            )?;
+                            return Ok(CommandProcessingResult::ContinueLoop);
+                        }
+                    };
 
-                let command_result = slash_commands::handle_outcome(
+                let command_result = match slash_commands::handle_outcome(
                     outcome,
                     SlashCommandContext {
                         renderer: ctx.renderer,
@@ -77,7 +88,18 @@ pub(crate) async fn handle_input_commands(
                         checkpoint_manager: ctx.checkpoint_manager,
                     },
                 )
-                .await?;
+                .await
+                {
+                    Ok(result) => result,
+                    Err(err) => {
+                        tracing::error!("slash command execution failed: {err:#}");
+                        ctx.renderer.line(
+                            MessageStyle::Error,
+                            &format!("Slash command failed: {}", err),
+                        )?;
+                        return Ok(CommandProcessingResult::ContinueLoop);
+                    }
+                };
 
                 match command_result {
                     SlashCommandControl::SubmitPrompt(prompt) => {

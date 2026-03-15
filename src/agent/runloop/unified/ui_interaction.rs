@@ -126,11 +126,19 @@ fn render_auth_usage_status(
 ) -> Result<()> {
     let openrouter_status = crate::cli::auth::openrouter_auth_status(ctx.vt_cfg)?;
     let openai_status = crate::cli::auth::openai_auth_status(ctx.vt_cfg)?;
+    let openai_connected = matches!(
+        openai_status,
+        vtcode_auth::OpenAIChatGptAuthStatus::Authenticated { .. }
+    ) || ctx.config.openai_chatgpt_auth.is_some();
     renderer.line(
         MessageStyle::Info,
         &format!(
             "  OAuth: OpenAI {}, OpenRouter {}",
-            short_oauth_status_openai(&openai_status),
+            if openai_connected {
+                "connected"
+            } else {
+                "not connected"
+            },
             short_oauth_status_openrouter(&openrouter_status)
         ),
     )?;
@@ -148,12 +156,18 @@ fn render_auth_usage_status(
         let api_key = get_api_key("openai", &ApiKeySources::default()).ok();
         let overview =
             vtcode_config::auth::summarize_openai_credentials(auth_cfg, storage_mode, api_key)?;
-        let usage_status = match overview.active_source {
-            Some(vtcode_config::auth::OpenAIResolvedAuthSource::ChatGpt) => {
-                "using ChatGPT subscription"
+        let usage_status = if ctx.config.openai_chatgpt_auth.is_some() {
+            "using ChatGPT subscription"
+        } else {
+            match overview.active_source {
+                Some(vtcode_config::auth::OpenAIResolvedAuthSource::ChatGpt) => {
+                    "using ChatGPT subscription"
+                }
+                Some(vtcode_config::auth::OpenAIResolvedAuthSource::ApiKey) => {
+                    "using OPENAI_API_KEY"
+                }
+                None => "no active OpenAI credential",
             }
-            Some(vtcode_config::auth::OpenAIResolvedAuthSource::ApiKey) => "using OPENAI_API_KEY",
-            None => "no active OpenAI credential",
         };
         renderer.line(
             MessageStyle::Info,
@@ -194,13 +208,6 @@ fn short_oauth_status_openrouter(status: &vtcode_auth::AuthStatus) -> &'static s
     match status {
         vtcode_auth::AuthStatus::Authenticated { .. } => "connected",
         vtcode_auth::AuthStatus::NotAuthenticated => "not connected",
-    }
-}
-
-fn short_oauth_status_openai(status: &vtcode_auth::OpenAIChatGptAuthStatus) -> &'static str {
-    match status {
-        vtcode_auth::OpenAIChatGptAuthStatus::Authenticated { .. } => "connected",
-        vtcode_auth::OpenAIChatGptAuthStatus::NotAuthenticated => "not connected",
     }
 }
 

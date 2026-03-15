@@ -1,10 +1,13 @@
 use anyhow::Result;
 use vtcode_auth::{AuthStatus, OpenAIChatGptAuthStatus, OpenAIResolvedAuthSource};
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
+use vtcode_core::config::types::UiSurfacePreference;
+use vtcode_core::llm::factory::{ProviderConfig, create_provider_with_config};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_tui::{InlineListItem, InlineListSelection};
 
 use super::{SlashCommandContext, SlashCommandControl, ui};
+use crate::agent::runloop::ui::build_inline_header_context;
 use crate::agent::runloop::slash_commands::OAuthProviderAction;
 use crate::cli::auth::{
     OPENAI_PROVIDER, OPENROUTER_PROVIDER, clear_openai_login, clear_openrouter_login,
@@ -51,7 +54,7 @@ pub(crate) async fn handle_start_oauth_provider_picker(
 }
 
 pub(crate) async fn handle_oauth_login(
-    ctx: SlashCommandContext<'_>,
+    mut ctx: SlashCommandContext<'_>,
     provider: String,
 ) -> Result<SlashCommandControl> {
     let provider = provider.trim().to_ascii_lowercase();
@@ -96,10 +99,19 @@ pub(crate) async fn handle_oauth_login(
             ctx.renderer
                 .line(MessageStyle::Info, "Waiting for OpenAI OAuth callback...")?;
             let session = complete_openai_login(prepared).await?;
+            sync_openai_runtime_if_active(&mut ctx).await?;
             ctx.renderer.line(
                 MessageStyle::Info,
                 "Successfully authenticated with OpenAI via ChatGPT.",
             )?;
+            if ctx.config.provider.eq_ignore_ascii_case(OPENAI_PROVIDER)
+                && ctx.config.openai_chatgpt_auth.is_some()
+            {
+                ctx.renderer.line(
+                    MessageStyle::Output,
+                    "Switched the current session to OpenAI (ChatGPT).",
+                )?;
+            }
             if let Some(email) = session.email.as_deref() {
                 ctx.renderer
                     .line(MessageStyle::Output, &format!("Account: {}", email))?;
@@ -116,7 +128,7 @@ pub(crate) async fn handle_oauth_login(
 }
 
 pub(crate) async fn handle_oauth_logout(
-    ctx: SlashCommandContext<'_>,
+    mut ctx: SlashCommandContext<'_>,
     provider: String,
 ) -> Result<SlashCommandControl> {
     let provider = provider.trim().to_ascii_lowercase();
@@ -135,10 +147,24 @@ pub(crate) async fn handle_oauth_logout(
         }
         OPENAI_PROVIDER => {
             clear_openai_login(vt_cfg)?;
+            sync_openai_runtime_if_active(&mut ctx).await?;
             ctx.renderer.line(
                 MessageStyle::Info,
                 "OpenAI ChatGPT session cleared successfully.",
             )?;
+            if ctx.config.provider.eq_ignore_ascii_case(OPENAI_PROVIDER) {
+                if ctx.config.api_key.trim().is_empty() {
+                    ctx.renderer.line(
+                        MessageStyle::Output,
+                        "The current OpenAI session no longer has active credentials.",
+                    )?;
+                } else {
+                    ctx.renderer.line(
+                        MessageStyle::Output,
+                        "The current OpenAI session fell back to OPENAI_API_KEY.",
+                    )?;
+                }
+            }
         }
         _ => {}
     }
@@ -147,7 +173,7 @@ pub(crate) async fn handle_oauth_logout(
 }
 
 pub(crate) async fn handle_refresh_oauth(
-    ctx: SlashCommandContext<'_>,
+    mut ctx: SlashCommandContext<'_>,
     provider: String,
 ) -> Result<SlashCommandControl> {
     let provider = provider.trim().to_ascii_lowercase();
@@ -162,6 +188,7 @@ pub(crate) async fn handle_refresh_oauth(
                 "Refreshing the stored OpenAI ChatGPT session...",
             )?;
             let session = refresh_openai_login(ctx.vt_cfg.as_ref()).await?;
+            sync_openai_runtime_if_active(&mut ctx).await?;
             ctx.renderer.line(
                 MessageStyle::Info,
                 "OpenAI ChatGPT session refreshed successfully.",
@@ -599,6 +626,70 @@ fn summarize_current_openai_credentials(
         .unwrap_or_default();
     let api_key = get_api_key(OPENAI_PROVIDER, &ApiKeySources::default()).ok();
     vtcode_config::auth::summarize_openai_credentials(auth_cfg, storage_mode, api_key)
+}
+
+async fn sync_openai_runtime_if_active(ctx: &mut SlashCommandContext<'_>) -> Result<()> {
+    if !ctx.config.provider.eq_ignore_ascii_case(OPENAI_PROVIDER) {
+        return Ok(());
+    }
+
+    let api_key = get_api_key(OPENAI_PROVIDER, &ApiKeySources::default()).ok();
+    let (runtime_api_key, runtime_auth) = match ctx.vt_cfg.as_ref() {
+        Some(cfg) => match vtcode_config::auth::resolve_openai_auth(
+            &cfg.auth.openai,
+            cfg.agent.credential_storage_mode,
+            api_key,
+        ) {
+            Ok(resolved) => (resolved.api_key().to_string(), resolved.handle()),
+            Err(_) => (String::new(), None),
+        },
+        None => (api_key.unwrap_or_default(), None),
+    };
+
+    let provider = create_provider_with_config(
+        OPENAI_PROVIDER,
+        ProviderConfig {
+            api_key: Some(runtime_api_key.clone()),
+            openai_chatgpt_auth: runtime_auth.clone(),
+            base_url: None,
+            model: Some(ctx.config.model.clone()),
+            prompt_cache: Some(ctx.config.prompt_cache.clone()),
+            timeouts: None,
+            openai: ctx.vt_cfg.as_ref().map(|cfg| cfg.provider.openai.clone()),
+            anthropic: None,
+            model_behavior: ctx.config.model_behavior.clone(),
+        },
+    )?;
+    *ctx.provider_client = provider;
+    ctx.config.api_key = runtime_api_key;
+    ctx.config.openai_chatgpt_auth = runtime_auth;
+
+    let provider_label = if ctx.config.openai_chatgpt_auth.is_some() {
+        "OpenAI (ChatGPT)".to_string()
+    } else {
+        "openai".to_string()
+    };
+    let mode_label = match (ctx.config.ui_surface, ctx.full_auto) {
+        (UiSurfacePreference::Inline, true) => "auto".to_string(),
+        (UiSurfacePreference::Inline, false) => "inline".to_string(),
+        (UiSurfacePreference::Alternate, _) => "alt".to_string(),
+        (UiSurfacePreference::Auto, true) => "auto".to_string(),
+        (UiSurfacePreference::Auto, false) => "std".to_string(),
+    };
+    let next_header_context = build_inline_header_context(
+        ctx.config,
+        ctx.session_bootstrap,
+        provider_label,
+        ctx.config.model.clone(),
+        ctx.provider_client.effective_context_size(&ctx.config.model),
+        mode_label,
+        ctx.config.reasoning_effort.as_str().to_string(),
+    )
+    .await?;
+    ctx.header_context.clone_from(&next_header_context);
+    ctx.handle.set_header_context(next_header_context);
+
+    Ok(())
 }
 
 fn format_auth_duration(seconds: u64) -> String {

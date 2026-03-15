@@ -173,6 +173,12 @@ async fn handle_callback(
     State(state): State<Arc<AuthCallbackState>>,
     Query(params): Query<AuthCallbackParams>,
 ) -> Html<String> {
+    tracing::info!(
+        provider = %state.page.provider,
+        has_code = params.code.is_some(),
+        has_error = params.error.is_some(),
+        "received oauth callback"
+    );
     if let Some(expected_state) = state.expected_state.as_deref() {
         match params.state.as_deref() {
             Some(actual_state) if actual_state == expected_state => {}

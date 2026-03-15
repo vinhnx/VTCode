@@ -21,6 +21,7 @@ use reqwest::Client as HttpClient;
 use reqwest::StatusCode;
 use reqwest::header::HeaderMap;
 use serde_json::{Value, json};
+use std::env;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -28,7 +29,7 @@ use std::time::Duration;
 use std::time::Instant;
 use tokio::sync::Mutex as AsyncMutex;
 use tracing::debug;
-use vtcode_config::auth::OpenAIChatGptAuthHandle;
+use vtcode_config::auth::{OpenAIChatGptAuthHandle, OpenAIChatGptSession};
 
 // Import from extracted modules
 use super::harmony;
@@ -49,6 +50,19 @@ use super::super::{
     extract_reasoning_trace,
 };
 use crate::prompts::system::default_system_prompt;
+
+const CHATGPT_CODEX_BASE: &str = "https://chatgpt.com/backend-api/codex";
+const CHATGPT_ACCOUNT_HEADER: &str = "ChatGPT-Account-Id";
+const CHATGPT_ORIGINATOR_HEADER: &str = "originator";
+const CHATGPT_ORIGINATOR_VALUE: &str = "codex_cli_rs";
+const CHATGPT_SESSION_HEADER: &str = "session_id";
+const CHATGPT_USER_AGENT: &str = "VT Code/1.0";
+
+#[derive(Clone, Debug)]
+struct OpenAIRequestAuth {
+    bearer_token: String,
+    chatgpt_account_id: Option<String>,
+}
 
 pub struct OpenAIProvider {
     api_key: Arc<str>,
@@ -191,8 +205,13 @@ impl OpenAIProvider {
             |cfg, provider_settings| cfg.enabled && provider_settings.enabled,
         );
 
+        let using_chatgpt_auth = openai_chatgpt_auth.is_some();
         let resolved_base_url = override_base_url(
-            urls::OPENAI_API_BASE,
+            if using_chatgpt_auth {
+                CHATGPT_CODEX_BASE
+            } else {
+                urls::OPENAI_API_BASE
+            },
             base_url,
             Some(env_vars::OPENAI_BASE_URL),
         );
@@ -200,6 +219,7 @@ impl OpenAIProvider {
         let mut responses_api_modes = HashMap::new();
         let default_state = Self::default_responses_state(&model);
         let is_native_openai = resolved_base_url.contains("api.openai.com");
+        let is_chatgpt_backend = using_chatgpt_auth && resolved_base_url.contains("chatgpt.com");
         let is_xai = resolved_base_url.contains("api.x.ai");
         let websocket_mode = openai
             .as_ref()
@@ -223,7 +243,14 @@ impl OpenAIProvider {
             .map(|cfg| cfg.hosted_shell.clone())
             .unwrap_or_default();
 
-        let initial_state = if is_xai || !is_native_openai {
+        let initial_state = if is_xai {
+            ResponsesApiState::Disabled
+        } else if is_chatgpt_backend {
+            match default_state {
+                ResponsesApiState::Disabled => ResponsesApiState::Allowed,
+                state => state,
+            }
+        } else if !is_native_openai {
             ResponsesApiState::Disabled
         } else {
             default_state
@@ -269,13 +296,34 @@ impl OpenAIProvider {
     fn authorize_with_api_key(
         &self,
         builder: reqwest::RequestBuilder,
-        api_key: &str,
+        auth: &OpenAIRequestAuth,
     ) -> reqwest::RequestBuilder {
-        if api_key.trim().is_empty() {
+        let mut builder = if auth.bearer_token.trim().is_empty() {
             builder
         } else {
-            builder.bearer_auth(api_key)
+            builder.bearer_auth(&auth.bearer_token)
+        };
+
+        if self.uses_chatgpt_auth() && self.base_url.contains("chatgpt.com") {
+            if let Some(account_id) = auth
+                .chatgpt_account_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+            {
+                builder = builder.header(CHATGPT_ACCOUNT_HEADER, account_id);
+            }
+            builder = builder
+                .header(CHATGPT_ORIGINATOR_HEADER, CHATGPT_ORIGINATOR_VALUE)
+                .header("User-Agent", CHATGPT_USER_AGENT);
+            if let Ok(session_id) = env::var("VT_SESSION_ID")
+                && !session_id.trim().is_empty()
+            {
+                builder = builder.header(CHATGPT_SESSION_HEADER, session_id);
+            }
         }
+
+        builder
     }
 
     fn uses_chatgpt_auth(&self) -> bool {
@@ -315,6 +363,53 @@ impl OpenAIProvider {
         handle.current_api_key().map_err(Self::format_auth_error)
     }
 
+    fn request_auth_from_session(&self, session: OpenAIChatGptSession) -> OpenAIRequestAuth {
+        let bearer_token = if (self.uses_chatgpt_auth() && self.base_url.contains("chatgpt.com"))
+            || session.openai_api_key.trim().is_empty()
+        {
+            session.access_token
+        } else {
+            session.openai_api_key
+        };
+
+        OpenAIRequestAuth {
+            bearer_token,
+            chatgpt_account_id: session.account_id,
+        }
+    }
+
+    async fn current_request_auth(&self) -> Result<OpenAIRequestAuth, provider::LLMError> {
+        let Some(handle) = &self.openai_chatgpt_auth else {
+            return Ok(OpenAIRequestAuth {
+                bearer_token: self.api_key.to_string(),
+                chatgpt_account_id: None,
+            });
+        };
+
+        handle
+            .refresh_if_needed()
+            .await
+            .map_err(Self::format_auth_error)?;
+        let session = handle.snapshot().map_err(Self::format_auth_error)?;
+        Ok(self.request_auth_from_session(session))
+    }
+
+    async fn refresh_request_auth_for_retry(&self) -> Result<OpenAIRequestAuth, provider::LLMError> {
+        let Some(handle) = &self.openai_chatgpt_auth else {
+            return Ok(OpenAIRequestAuth {
+                bearer_token: self.api_key.to_string(),
+                chatgpt_account_id: None,
+            });
+        };
+
+        handle
+            .force_refresh()
+            .await
+            .map_err(Self::format_auth_error)?;
+        let session = handle.snapshot().map_err(Self::format_auth_error)?;
+        Ok(self.request_auth_from_session(session))
+    }
+
     async fn refresh_api_key_for_retry(&self) -> Result<String, provider::LLMError> {
         let Some(handle) = &self.openai_chatgpt_auth else {
             return Ok(self.api_key.to_string());
@@ -332,17 +427,17 @@ impl OpenAIProvider {
         build_request: F,
     ) -> Result<reqwest::Response, provider::LLMError>
     where
-        F: Fn(&str) -> reqwest::RequestBuilder,
+        F: Fn(&OpenAIRequestAuth) -> reqwest::RequestBuilder,
     {
-        let api_key = self.current_api_key().await?;
-        let response = build_request(&api_key)
+        let auth = self.current_request_auth().await?;
+        let response = build_request(&auth)
             .send()
             .await
             .map_err(Self::format_network_error)?;
 
         if self.uses_chatgpt_auth() && Self::auth_retryable_status(response.status()) {
-            let retry_api_key = self.refresh_api_key_for_retry().await?;
-            return build_request(&retry_api_key)
+            let retry_auth = self.refresh_request_auth_for_retry().await?;
+            return build_request(&retry_auth)
                 .send()
                 .await
                 .map_err(Self::format_network_error);

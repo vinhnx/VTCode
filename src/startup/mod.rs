@@ -119,7 +119,14 @@ impl StartupContext {
         let (api_key, openai_chatgpt_auth) = if command_skips_provider_auth(args.command.as_ref()) {
             (String::new(), None)
         } else {
-            resolve_runtime_provider_auth(&config, &selection, loaded.first_run_occurred)?
+            match resolve_runtime_provider_auth(&config, &selection, loaded.first_run_occurred) {
+                Ok(auth) => auth,
+                Err(err) if can_start_without_provider_auth(args.command.as_ref()) => {
+                    tracing::warn!("starting VT Code without provider auth: {err}");
+                    (String::new(), None)
+                }
+                Err(err) => return Err(err),
+            }
         };
 
         let mut agent_config = build_runtime_agent_config(
@@ -235,6 +242,10 @@ fn command_skips_provider_auth(command: Option<&Commands>) -> bool {
     )
 }
 
+fn can_start_without_provider_auth(command: Option<&Commands>) -> bool {
+    command.is_none()
+}
+
 #[cfg(test)]
 mod validation_tests {
     use super::*;
@@ -258,6 +269,14 @@ mod validation_tests {
         let model = vtcode_core::config::constants::models::openai::GPT_5; // responses model
         let provider = "openai";
         assert!(check_prompt_cache_retention_compat(&cfg, model, provider).is_none());
+    }
+
+    #[test]
+    fn interactive_sessions_can_start_without_provider_auth() {
+        assert!(can_start_without_provider_auth(None));
+        assert!(!can_start_without_provider_auth(Some(&Commands::Login {
+            provider: "openai".to_string(),
+        })));
     }
 
     #[test]

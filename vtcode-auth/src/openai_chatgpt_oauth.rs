@@ -111,7 +111,7 @@ impl OpenAIChatGptAuthHandle {
 
     pub fn current_api_key(&self) -> Result<String> {
         self.snapshot()
-            .map(|session| active_bearer_token(&session).to_string())
+            .map(|session| active_api_bearer_token(&session).to_string())
     }
 
     pub fn provider_label(&self) -> &'static str {
@@ -182,7 +182,7 @@ impl OpenAIResolvedAuth {
     }
 }
 
-fn active_bearer_token(session: &OpenAIChatGptSession) -> &str {
+fn active_api_bearer_token(session: &OpenAIChatGptSession) -> &str {
     if session.openai_api_key.trim().is_empty() {
         session.access_token.as_str()
     } else {
@@ -304,7 +304,7 @@ pub fn resolve_openai_auth(
             let handle =
                 OpenAIChatGptAuthHandle::new(session.clone(), auth_config.clone(), storage_mode);
             Ok(OpenAIResolvedAuth::ChatGpt {
-                api_key: active_bearer_token(&session).to_string(),
+                api_key: active_api_bearer_token(&session).to_string(),
                 handle,
             })
         }
@@ -320,7 +320,7 @@ pub fn resolve_openai_auth(
                     storage_mode,
                 );
                 Ok(OpenAIResolvedAuth::ChatGpt {
-                    api_key: active_bearer_token(&session).to_string(),
+                    api_key: active_api_bearer_token(&session).to_string(),
                     handle,
                 })
             } else {
@@ -407,7 +407,9 @@ pub fn save_openai_chatgpt_session_with_mode(
     let serialized =
         serde_json::to_string(session).context("failed to serialize openai session")?;
     match mode.effective_mode() {
-        AuthCredentialsStoreMode::Keyring => save_session_to_keyring(&serialized)?,
+        AuthCredentialsStoreMode::Keyring => {
+            persist_session_to_keyring_or_file(session, &serialized)?
+        }
         AuthCredentialsStoreMode::File => save_session_to_file(session)?,
         AuthCredentialsStoreMode::Auto => unreachable!(),
     }
@@ -415,24 +417,13 @@ pub fn save_openai_chatgpt_session_with_mode(
 }
 
 pub fn load_openai_chatgpt_session() -> Result<Option<OpenAIChatGptSession>> {
-    load_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::default())
+    load_preferred_openai_chatgpt_session(AuthCredentialsStoreMode::Keyring)
 }
 
 pub fn load_openai_chatgpt_session_with_mode(
     mode: AuthCredentialsStoreMode,
 ) -> Result<Option<OpenAIChatGptSession>> {
-    match mode.effective_mode() {
-        AuthCredentialsStoreMode::Keyring => {
-            let Some(serialized) = load_session_from_keyring()? else {
-                return Ok(None);
-            };
-            Ok(Some(
-                serde_json::from_str(&serialized).context("failed to decode openai session")?,
-            ))
-        }
-        AuthCredentialsStoreMode::File => load_session_from_file(),
-        AuthCredentialsStoreMode::Auto => unreachable!(),
-    }
+    load_preferred_openai_chatgpt_session(mode.effective_mode())
 }
 
 pub fn clear_openai_chatgpt_session() -> Result<()> {
@@ -662,6 +653,70 @@ fn save_session_to_keyring(serialized: &str) -> Result<()> {
     Ok(())
 }
 
+fn persist_session_to_keyring_or_file(
+    session: &OpenAIChatGptSession,
+    serialized: &str,
+) -> Result<()> {
+    match save_session_to_keyring(serialized) {
+        Ok(()) => match load_session_from_keyring_decoded() {
+            Ok(Some(_)) => Ok(()),
+            Ok(None) => {
+                tracing::warn!(
+                    "openai session keyring write did not round-trip; falling back to encrypted file storage"
+                );
+                save_session_to_file(session)
+            }
+            Err(err) => {
+                tracing::warn!(
+                    "openai session keyring verification failed, falling back to encrypted file storage: {err}"
+                );
+                save_session_to_file(session)
+            }
+        },
+        Err(err) => {
+            tracing::warn!(
+                "failed to persist openai session in keyring, falling back to encrypted file storage: {err}"
+            );
+            save_session_to_file(session)
+                .context("failed to persist openai session after keyring fallback")
+        }
+    }
+}
+
+fn decode_session_from_keyring(serialized: String) -> Result<OpenAIChatGptSession> {
+    serde_json::from_str(&serialized).context("failed to decode openai session")
+}
+
+fn load_session_from_keyring_decoded() -> Result<Option<OpenAIChatGptSession>> {
+    load_session_from_keyring()?
+        .map(decode_session_from_keyring)
+        .transpose()
+}
+
+fn load_preferred_openai_chatgpt_session(
+    mode: AuthCredentialsStoreMode,
+) -> Result<Option<OpenAIChatGptSession>> {
+    match mode {
+        AuthCredentialsStoreMode::Keyring => match load_session_from_keyring_decoded() {
+            Ok(Some(session)) => Ok(Some(session)),
+            Ok(None) => load_session_from_file(),
+            Err(err) => {
+                tracing::warn!(
+                    "failed to load openai session from keyring, falling back to encrypted file: {err}"
+                );
+                load_session_from_file()
+            }
+        },
+        AuthCredentialsStoreMode::File => {
+            if let Some(session) = load_session_from_file()? {
+                return Ok(Some(session));
+            }
+            load_session_from_keyring_decoded()
+        }
+        AuthCredentialsStoreMode::Auto => unreachable!(),
+    }
+}
+
 fn load_session_from_keyring() -> Result<Option<String>> {
     let entry = match keyring::Entry::new(OPENAI_STORAGE_SERVICE, OPENAI_STORAGE_USER) {
         Ok(entry) => entry,
@@ -692,8 +747,14 @@ fn clear_session_from_keyring() -> Result<()> {
 fn save_session_to_file(session: &OpenAIChatGptSession) -> Result<()> {
     let encrypted = encrypt_session(session)?;
     let path = get_session_path()?;
-    fs::write(path, serde_json::to_vec_pretty(&encrypted)?)
+    fs::write(&path, serde_json::to_vec_pretty(&encrypted)?)
         .context("failed to persist openai session file")?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600))
+            .context("failed to set openai session file permissions")?;
+    }
     Ok(())
 }
 
@@ -1034,10 +1095,44 @@ mod tests {
     }
 
     #[test]
-    fn active_bearer_token_falls_back_to_access_token() {
+    #[serial]
+    fn default_loader_falls_back_to_file_session() {
+        let _guard = TestAuthDirGuard::new();
+        let session = sample_session();
+        save_openai_chatgpt_session_with_mode(&session, AuthCredentialsStoreMode::File)
+            .expect("save session");
+
+        let loaded = load_openai_chatgpt_session()
+            .expect("load session")
+            .expect("stored session should be found");
+
+        assert_eq!(loaded.account_id, session.account_id);
+        clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File)
+            .expect("clear session");
+    }
+
+    #[test]
+    #[serial]
+    fn keyring_mode_loader_falls_back_to_file_session() {
+        let _guard = TestAuthDirGuard::new();
+        let session = sample_session();
+        save_openai_chatgpt_session_with_mode(&session, AuthCredentialsStoreMode::File)
+            .expect("save session");
+
+        let loaded = load_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::Keyring)
+            .expect("load session")
+            .expect("stored session should be found");
+
+        assert_eq!(loaded.email, session.email);
+        clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File)
+            .expect("clear session");
+    }
+
+    #[test]
+    fn active_api_bearer_token_falls_back_to_access_token() {
         let mut session = sample_session();
         session.openai_api_key.clear();
 
-        assert_eq!(active_bearer_token(&session), "oauth-access");
+        assert_eq!(active_api_bearer_token(&session), "oauth-access");
     }
 }

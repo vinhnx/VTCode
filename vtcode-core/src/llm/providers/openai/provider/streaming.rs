@@ -71,10 +71,10 @@ impl OpenAIProvider {
         let url = format!("{}/responses", self.base_url);
 
         let response = self
-            .send_authorized(|api_key| {
+            .send_authorized(|auth| {
                 headers::apply_turn_metadata(
                     headers::apply_responses_beta(
-                        self.authorize_with_api_key(self.http_client.post(&url), api_key),
+                        self.authorize_with_api_key(self.http_client.post(&url), auth),
                     ),
                     &request.metadata,
                 )
@@ -190,9 +190,9 @@ impl OpenAIProvider {
         let url = format!("{}/chat/completions", self.base_url);
 
         let response = self
-            .send_authorized(|api_key| {
+            .send_authorized(|auth| {
                 headers::apply_turn_metadata(
-                    self.authorize_with_api_key(self.http_client.post(&url), api_key),
+                    self.authorize_with_api_key(self.http_client.post(&url), auth),
                     &request.metadata,
                 )
                 .json(&openai_request)
