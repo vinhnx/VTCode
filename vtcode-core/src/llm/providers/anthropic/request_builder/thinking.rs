@@ -1,9 +1,10 @@
 use crate::config::constants::{env_vars, models};
 use crate::config::core::AnthropicConfig;
+use crate::config::models::Provider;
 use crate::config::types::ReasoningEffortLevel;
 use crate::llm::provider::LLMRequest;
 use crate::llm::providers::anthropic_types::ThinkingConfig;
-use crate::llm::rig_adapter::reasoning_parameters_for;
+use crate::llm::rig_adapter::RigProviderCapabilities;
 use serde_json::{Value, json};
 use std::env;
 
@@ -55,8 +56,9 @@ pub(crate) fn build_thinking_config(
             );
         }
     } else if let Some(effort) = request.reasoning_effort {
-        use crate::config::models::Provider;
-        if let Some(payload) = reasoning_parameters_for(Provider::Anthropic, effort) {
+        if let Some(payload) = RigProviderCapabilities::new(Provider::Anthropic, &request.model)
+            .reasoning_parameters(effort)
+        {
             return (None, Some(payload));
         } else {
             return (None, Some(json!({ "effort": effort.as_str() })));

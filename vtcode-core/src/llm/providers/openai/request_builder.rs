@@ -8,7 +8,7 @@ use crate::config::types::ReasoningEffortLevel;
 use crate::llm::error_display;
 use crate::llm::provider;
 use crate::llm::providers::common::serialize_message_content_openai_for_model;
-use crate::llm::rig_adapter::reasoning_parameters_for;
+use crate::llm::rig_adapter::RigProviderCapabilities;
 use hashbrown::HashSet;
 use serde_json::{Value, json};
 
@@ -389,7 +389,10 @@ pub(crate) fn build_responses_request(
 
     if ctx.supports_reasoning_effort {
         if let Some(effort) = request.reasoning_effort {
-            if let Some(payload) = reasoning_parameters_for(ModelProvider::OpenAI, effort) {
+            if let Some(payload) =
+                RigProviderCapabilities::new(ModelProvider::OpenAI, &request.model)
+                    .reasoning_parameters(effort)
+            {
                 openai_request["reasoning"] = payload;
             } else {
                 openai_request["reasoning"] = json!({ "effort": effort.as_str() });

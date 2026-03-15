@@ -3,6 +3,7 @@
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
+use crate::config::models::Provider as ModelProvider;
 use crate::llm::error_display;
 use crate::llm::provider::{
     FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
@@ -14,6 +15,7 @@ use crate::llm::providers::common::{
 use crate::llm::providers::shared::{
     function_output_value_from_message_content, parse_compacted_output_messages,
 };
+use crate::llm::rig_adapter::RigProviderCapabilities;
 use anyhow::Result;
 use async_stream::try_stream;
 use async_trait::async_trait;
@@ -667,6 +669,13 @@ impl LLMProvider for OpenResponsesProvider {
                 metadata: None,
             });
         }
+
+        RigProviderCapabilities::new(ModelProvider::OpenAI, &request.model)
+            .validate_model(&self.api_key)
+            .map_err(|err| LLMError::Provider {
+                message: format!("OpenResponses rig validation failed: {err}"),
+                metadata: None,
+            })?;
 
         Ok(())
     }

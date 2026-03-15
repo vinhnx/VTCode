@@ -13,6 +13,7 @@ impl AgentRunner {
         event_recorder: &mut ExecEventRecorder,
         agent_prefix: &str,
         is_gemini: bool,
+        previous_response_chain_present: bool,
     ) -> Result<()> {
         let can_parallelize = tool_calls.len() > 1
             && tool_calls.iter().all(|call| {
@@ -23,6 +24,14 @@ impl AgentRunner {
                         .is_some_and(|args| tool_intent::is_parallel_safe_call(&func.name, args))
                 })
             });
+
+        self.emit_tool_batch(
+            &self.get_selected_model(),
+            session_state.stats.turns_executed,
+            tool_calls.len(),
+            can_parallelize,
+            previous_response_chain_present,
+        );
 
         if can_parallelize {
             self.execute_parallel_tool_calls(

@@ -4,9 +4,147 @@ use super::types::ToolFailureContext;
 use crate::core::agent::events::ExecEventRecorder;
 use crate::core::agent::session::AgentSessionState;
 use crate::exec::events::CommandExecutionStatus;
+use crate::llm::provider::LLMRequest;
 use crate::llm::providers::gemini::wire::{Content, Part};
 use crate::utils::colors::style;
 use crate::utils::error_messages::ERR_TOOL_DENIED;
+use serde::Serialize;
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub(super) struct ObservabilityFields {
+    provider: String,
+    model: String,
+    turn: usize,
+    tool_count: usize,
+    parallelized: bool,
+    compaction_mode: &'static str,
+    grounded_fact_count: usize,
+    previous_response_chain_present: bool,
+}
+
+impl AgentRunner {
+    pub(super) fn observability_fields(
+        &self,
+        model: &str,
+        turn: usize,
+        tool_count: usize,
+        parallelized: bool,
+        compaction_mode: &'static str,
+        grounded_fact_count: usize,
+        previous_response_chain_present: bool,
+    ) -> ObservabilityFields {
+        ObservabilityFields {
+            provider: self.provider_client.name().to_string(),
+            model: model.to_string(),
+            turn,
+            tool_count,
+            parallelized,
+            compaction_mode,
+            grounded_fact_count,
+            previous_response_chain_present,
+        }
+    }
+
+    pub(super) fn emit_llm_request_started(&self, request: &LLMRequest, turn: usize) {
+        let fields = self.observability_fields(
+            &request.model,
+            turn,
+            0,
+            false,
+            "none",
+            0,
+            request.previous_response_id.is_some(),
+        );
+        tracing::info!(
+            provider = %fields.provider,
+            model = %fields.model,
+            turn = fields.turn,
+            tool_count = fields.tool_count,
+            parallelized = fields.parallelized,
+            compaction_mode = fields.compaction_mode,
+            grounded_fact_count = fields.grounded_fact_count,
+            previous_response_chain_present = fields.previous_response_chain_present,
+            "LLM request started"
+        );
+    }
+
+    pub(super) fn emit_llm_request_finished(&self, request: &LLMRequest, turn: usize) {
+        let fields = self.observability_fields(
+            &request.model,
+            turn,
+            0,
+            false,
+            "none",
+            0,
+            request.previous_response_id.is_some(),
+        );
+        tracing::info!(
+            provider = %fields.provider,
+            model = %fields.model,
+            turn = fields.turn,
+            tool_count = fields.tool_count,
+            parallelized = fields.parallelized,
+            compaction_mode = fields.compaction_mode,
+            grounded_fact_count = fields.grounded_fact_count,
+            previous_response_chain_present = fields.previous_response_chain_present,
+            "LLM request finished"
+        );
+    }
+
+    pub(super) fn emit_streaming_fallback(&self, request: &LLMRequest, turn: usize, reason: &str) {
+        let fields = self.observability_fields(
+            &request.model,
+            turn,
+            0,
+            false,
+            "none",
+            0,
+            request.previous_response_id.is_some(),
+        );
+        tracing::warn!(
+            provider = %fields.provider,
+            model = %fields.model,
+            turn = fields.turn,
+            tool_count = fields.tool_count,
+            parallelized = fields.parallelized,
+            compaction_mode = fields.compaction_mode,
+            grounded_fact_count = fields.grounded_fact_count,
+            previous_response_chain_present = fields.previous_response_chain_present,
+            reason = %reason,
+            "LLM streaming fallback triggered"
+        );
+    }
+
+    pub(super) fn emit_tool_batch(
+        &self,
+        model: &str,
+        turn: usize,
+        tool_count: usize,
+        parallelized: bool,
+        previous_response_chain_present: bool,
+    ) {
+        let fields = self.observability_fields(
+            model,
+            turn,
+            tool_count,
+            parallelized,
+            "none",
+            0,
+            previous_response_chain_present,
+        );
+        tracing::info!(
+            provider = %fields.provider,
+            model = %fields.model,
+            turn = fields.turn,
+            tool_count = fields.tool_count,
+            parallelized = fields.parallelized,
+            compaction_mode = fields.compaction_mode,
+            grounded_fact_count = fields.grounded_fact_count,
+            previous_response_chain_present = fields.previous_response_chain_present,
+            "Tool batch execution started"
+        );
+    }
+}
 
 impl AgentRunner {
     pub(super) fn record_warning(
@@ -106,5 +244,34 @@ impl AgentRunner {
         } else {
             event_recorder.warning(&detail);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ObservabilityFields;
+
+    #[test]
+    fn observability_fields_capture_standard_shape() {
+        let fields = ObservabilityFields {
+            provider: "openai".to_string(),
+            model: "gpt-5".to_string(),
+            turn: 4,
+            tool_count: 2,
+            parallelized: true,
+            compaction_mode: "local",
+            grounded_fact_count: 3,
+            previous_response_chain_present: true,
+        };
+
+        let serialized = serde_json::to_value(&fields).expect("serialize fields");
+        assert_eq!(serialized["provider"], "openai");
+        assert_eq!(serialized["model"], "gpt-5");
+        assert_eq!(serialized["turn"], 4);
+        assert_eq!(serialized["tool_count"], 2);
+        assert_eq!(serialized["parallelized"], true);
+        assert_eq!(serialized["compaction_mode"], "local");
+        assert_eq!(serialized["grounded_fact_count"], 3);
+        assert_eq!(serialized["previous_response_chain_present"], true);
     }
 }

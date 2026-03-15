@@ -7,7 +7,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, UiSurfacePreference};
 use vtcode_core::llm::factory::{ProviderConfig, create_provider_with_config};
 use vtcode_core::llm::provider::LLMProvider;
-use vtcode_core::llm::rig_adapter::{reasoning_parameters_for, verify_model_with_rig};
+use vtcode_core::llm::rig_adapter::RigProviderCapabilities;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_tui::InlineHandle;
 
@@ -33,7 +33,8 @@ pub(crate) async fn finalize_model_selection(
     let api_key = resolve_runtime_api_key(&workspace, &selection)?;
 
     if let Some(provider_enum) = selection.provider_enum
-        && let Err(err) = verify_model_with_rig(provider_enum, &selection.model, &api_key)
+        && let Err(err) =
+            RigProviderCapabilities::new(provider_enum, &selection.model).validate_model(&api_key)
     {
         renderer.line(
             MessageStyle::Error,
@@ -81,7 +82,8 @@ pub(crate) async fn finalize_model_selection(
 
     if let Some(provider_enum) = selection.provider_enum
         && selection.reasoning_supported
-        && let Some(payload) = reasoning_parameters_for(provider_enum, selection.reasoning)
+        && let Some(payload) = RigProviderCapabilities::new(provider_enum, &selection.model)
+            .reasoning_parameters(selection.reasoning)
     {
         renderer.line(
             MessageStyle::Info,

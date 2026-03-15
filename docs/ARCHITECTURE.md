@@ -30,6 +30,15 @@ That split keeps VT Code aligned with the current runtime while making the harne
 orchestration, dynamic tool assembly, and harness self-analysis remain follow-on work after single-agent long-horizon execution is
 stable.
 
+### Rig Alignment Boundary
+
+VT Code borrows selected request-shaping patterns from the Rig ecosystem without delegating runtime control to `rig-core` agents.
+
+- Rig-backed usage in VT Code is limited to provider/model validation and provider-specific reasoning payload shaping.
+- The VT Code harness remains the execution engine for turns, tool routing, continuation, compaction, and resume flows.
+- Session continuity stays on VT Code primitives: `.vtcode/history/` artifacts, local/server compaction, and prompt-side memory injection.
+- This keeps VT Code’s existing tool registry, sandboxing, and resume semantics intact while still adopting Rig’s provider-facing patterns where they reduce duplication.
+
 ### CLI Architecture
 
 The command-line interface is built on specific principles for robustness and interoperability:

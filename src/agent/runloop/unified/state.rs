@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -47,6 +48,7 @@ pub(crate) struct SessionStats {
     previous_response_id: Option<String>,
     previous_response_provider: Option<String>,
     previous_response_model: Option<String>,
+    recent_touched_files: VecDeque<String>,
 }
 
 impl SessionStats {
@@ -229,6 +231,37 @@ impl SessionStats {
         self.previous_response_provider = None;
         self.previous_response_model = None;
         self.previous_response_id = None;
+    }
+
+    pub(crate) fn record_touched_files<I, S>(&mut self, files: I)
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        for file in files {
+            let file = file.into();
+            let normalized = file.trim();
+            if normalized.is_empty() {
+                continue;
+            }
+
+            if let Some(existing) = self
+                .recent_touched_files
+                .iter()
+                .position(|entry| entry == normalized)
+            {
+                let _ = self.recent_touched_files.remove(existing);
+            }
+
+            self.recent_touched_files.push_back(normalized.to_string());
+            while self.recent_touched_files.len() > 5 {
+                let _ = self.recent_touched_files.pop_front();
+            }
+        }
+    }
+
+    pub(crate) fn recent_touched_files(&self) -> Vec<String> {
+        self.recent_touched_files.iter().cloned().collect()
     }
 }
 

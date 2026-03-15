@@ -71,3 +71,5 @@ https://github.com/search?q=repo%3Aopenai%2Fcodex%20Bazel&type=code
 https://deepwiki.com/search/how-codex-use-bazel_34da771c-1bac-42e0-b4c9-2f80d5a6f1d2?mode=fast
 
 ==
+
+when user change model mid conversation, add a notice that the performance will be degraded. recommend to start a new conversation for best performance. This is because changing the model mid conversation can cause context loss and token inefficiency, leading to slower response times and increased error rates. By starting a new conversation, the agent can optimize its performance with the new model from the beginning, ensuring a smoother and more efficient interaction.

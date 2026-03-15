@@ -202,8 +202,10 @@ impl ZAIProvider {
             }
 
             use crate::config::models::Provider;
-            use crate::llm::rig_adapter::reasoning_parameters_for;
-            if let Some(reasoning_params) = reasoning_parameters_for(Provider::ZAI, effort)
+            use crate::llm::rig_adapter::RigProviderCapabilities;
+            if let Some(reasoning_params) =
+                RigProviderCapabilities::new(Provider::ZAI, &request.model)
+                    .reasoning_parameters(effort)
                 && let Some(params_obj) = reasoning_params.as_object()
             {
                 for (k, v) in params_obj {

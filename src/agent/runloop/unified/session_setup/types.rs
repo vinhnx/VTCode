@@ -19,6 +19,7 @@ use vtcode_core::tools::ApprovalRecorder;
 use vtcode_core::tools::{ToolRegistry, ToolResultCache};
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::utils::session_archive::SessionArchive;
+use vtcode_core::utils::session_archive::session_workspace_path;
 use vtcode_tui::{InlineHandle, InlineHeaderContext, InlineSession};
 
 use crate::updater::{StartupUpdateCheck, StartupUpdateNotice};
@@ -104,7 +105,18 @@ pub(crate) struct SessionUISetup {
 pub(crate) async fn build_conversation_history_from_resume(
     resume: Option<&ResumeSession>,
 ) -> Vec<uni::Message> {
-    resume
-        .map(|session| session.history().to_vec())
-        .unwrap_or_default()
+    let Some(session) = resume else {
+        return Vec::new();
+    };
+
+    let mut history = session.history().to_vec();
+    if let Some(workspace_root) = session_workspace_path(session.listing()) {
+        crate::agent::runloop::unified::turn::compaction::inject_latest_memory_envelope(
+            &workspace_root,
+            &session.identifier(),
+            &mut history,
+        );
+    }
+
+    history
 }

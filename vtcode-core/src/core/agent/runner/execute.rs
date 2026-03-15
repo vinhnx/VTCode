@@ -444,6 +444,7 @@ impl AgentRunner {
                     verbosity: turn_verbosity,
                     ..Default::default()
                 };
+                let previous_response_chain_present = request.previous_response_id.is_some();
 
                 let mut steering_captured = self.steering_receiver.lock().take();
 
@@ -656,6 +657,7 @@ impl AgentRunner {
                         &mut event_recorder,
                         &agent_prefix,
                         is_gemini,
+                        previous_response_chain_present,
                     )
                     .await?;
                 }

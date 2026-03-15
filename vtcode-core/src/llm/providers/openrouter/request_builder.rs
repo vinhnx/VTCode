@@ -7,7 +7,7 @@ use crate::llm::providers::common::{
     assistant_interleaved_history_text, normalize_reasoning_detail_objects,
     serialize_message_content_openai_for_role,
 };
-use crate::llm::rig_adapter::reasoning_parameters_for;
+use crate::llm::rig_adapter::RigProviderCapabilities;
 
 use super::OpenRouterProvider;
 
@@ -150,7 +150,10 @@ impl OpenRouterProvider {
         if let Some(effort) = request.reasoning_effort
             && self.supports_reasoning_effort(resolved_model)
         {
-            if let Some(payload) = reasoning_parameters_for(Provider::OpenRouter, effort) {
+            if let Some(payload) =
+                RigProviderCapabilities::new(Provider::OpenRouter, resolved_model)
+                    .reasoning_parameters(effort)
+            {
                 provider_request["reasoning"] = payload;
             } else {
                 provider_request["reasoning"] = json!({ "effort": effort.as_str() });

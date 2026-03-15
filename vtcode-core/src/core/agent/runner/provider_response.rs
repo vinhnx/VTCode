@@ -21,6 +21,7 @@ impl AgentRunner {
         // Pre-flight validation: fail fast before API call
         self.validate_llm_request(request)
             .context("LLM request validation failed")?;
+        self.emit_llm_request_started(request, turn_index);
 
         let supports_streaming = self.provider_client.supports_streaming();
         let streaming_deadline = self
@@ -101,6 +102,11 @@ impl AgentRunner {
                                 let warning = format!("Streaming response interrupted: {}", err);
                                 event_recorder.warning(&warning);
                                 warnings.push(warning);
+                                self.emit_streaming_fallback(
+                                    request,
+                                    turn_index,
+                                    "streaming_error",
+                                );
                                 if agent_message_streamed {
                                     event_recorder.agent_message_stream_complete();
                                 }
@@ -125,6 +131,7 @@ impl AgentRunner {
                     let warning = format!("Streaming request failed: {}", err);
                     event_recorder.warning(&warning);
                     warnings.push(warning);
+                    self.emit_streaming_fallback(request, turn_index, "stream_start_failed");
                 }
                 Err(_) => {
                     let mut failures = self.streaming_failures.lock();
@@ -145,12 +152,14 @@ impl AgentRunner {
                     let warning = format!("Streaming request timed out after {}", timeout_display);
                     event_recorder.warning(&warning);
                     warnings.push(warning);
+                    self.emit_streaming_fallback(request, turn_index, "stream_timeout");
                 }
             }
         } else if streaming_disabled {
             let warning = "Skipping streaming after repeated streaming failures";
             warnings.push(warning.to_string());
             event_recorder.warning(warning);
+            self.emit_streaming_fallback(request, turn_index, "streaming_disabled");
         }
 
         if let Some(mut response) = streaming_response {
@@ -184,6 +193,7 @@ impl AgentRunner {
             }
 
             let reasoning = response.reasoning.clone();
+            self.emit_llm_request_finished(request, turn_index);
             return Ok(ProviderResponseSummary {
                 response: *response,
                 content: aggregated_text,
@@ -266,6 +276,7 @@ impl AgentRunner {
 
         let content = response.content.take().unwrap_or_default();
         let reasoning = response.reasoning.clone();
+        self.emit_llm_request_finished(request, turn_index);
 
         // Reset failure tracker on success
         self.failure_tracker.lock().reset();

@@ -720,6 +720,12 @@ async fn handle_success<'a>(
     for f in mod_files {
         t_ctx.turn_modified_files.insert(f);
     }
+    t_ctx.ctx.session_stats.record_touched_files(
+        t_ctx
+            .turn_modified_files
+            .iter()
+            .map(|path| path.display().to_string()),
+    );
 
     // Run post-tool hooks
     run_post_tool_hooks(t_ctx.ctx, tool_name, args_val, output).await?;

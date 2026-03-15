@@ -416,9 +416,12 @@ pub(crate) async fn run_turn_loop(
         }
 
         let active_model = ctx.config.model.clone();
+        let harness_snapshot = ctx.tool_registry.harness_context_snapshot();
         match crate::agent::runloop::unified::turn::compaction::maybe_auto_compact_history(
             ctx.provider_client.as_ref(),
             &active_model,
+            &harness_snapshot.session_id,
+            &ctx.config.workspace,
             ctx.vt_cfg,
             working_history,
             ctx.session_stats,
