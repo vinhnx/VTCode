@@ -6,9 +6,9 @@ pub(crate) mod context_manager;
 mod diagnostics;
 mod display;
 mod incremental_system_prompt;
-pub(crate) mod interactive_features;
 mod inline_events;
 mod intent_extractor;
+pub(crate) mod interactive_features;
 pub(crate) mod overlay_prompt;
 
 mod mcp_support;
