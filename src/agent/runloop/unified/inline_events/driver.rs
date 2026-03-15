@@ -153,6 +153,7 @@ impl<'a> InlineEventLoop<'a> {
             handle,
             interrupts,
             ctrl_c_notice_displayed,
+            &mut *self.header_context,
             model_picker_state,
             palette_state,
             config,

@@ -53,6 +53,13 @@ pub(crate) async fn generate_completion_reply_with_suggestions(
 ) -> Option<String> {
     let (base, completion) = completion_base_text(history, reply_kind)?;
 
+    // Immediate direct-command completions are on the interactive hot path.
+    // Use deterministic fallback suggestions to avoid an extra LLM round-trip
+    // after the command has already finished rendering.
+    if reply_kind == ReplyKind::Immediate {
+        return Some(append_next_steps(&base, &completion.fallback_next_steps()));
+    }
+
     let label = completion.label();
     let exit_code = completion.exit_code();
     let has_error = completion.has_error();
@@ -383,6 +390,28 @@ mod tests {
     use super::{ReplyKind, completion_reply_text};
     use vtcode_core::config::constants::tools as tool_names;
     use vtcode_core::llm::provider as uni;
+    use vtcode_core::llm::provider::{LLMError, LLMRequest, LLMResponse};
+
+    struct PanicProvider;
+
+    #[async_trait::async_trait]
+    impl uni::LLMProvider for PanicProvider {
+        fn name(&self) -> &str {
+            "panic"
+        }
+
+        async fn generate(&self, _request: LLMRequest) -> Result<LLMResponse, LLMError> {
+            panic!("immediate direct tool completion should not call generate");
+        }
+
+        fn supported_models(&self) -> Vec<String> {
+            vec!["panic-model".to_string()]
+        }
+
+        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+            Ok(())
+        }
+    }
 
     #[test]
     fn completion_reply_text_reports_successful_run_command() {
@@ -486,6 +515,36 @@ mod tests {
         assert!(text.contains("No terminal output was produced."));
         assert!(text.contains("cargo check"));
         assert!(text.contains("cargo clippy --workspace --all-targets -- -D warnings"));
+    }
+
+    #[tokio::test]
+    async fn immediate_completion_skips_llm_suggestion_generation() {
+        let history = vec![
+            uni::Message::assistant_with_tools(
+                String::new(),
+                vec![uni::ToolCall::function(
+                    "direct_unified_exec_1".to_string(),
+                    tool_names::UNIFIED_EXEC.to_string(),
+                    serde_json::json!({"action":"run","command":"cargo fmt"}).to_string(),
+                )],
+            ),
+            uni::Message::tool_response(
+                "direct_unified_exec_1".to_string(),
+                serde_json::json!({"exit_code":0,"output":""}).to_string(),
+            ),
+        ];
+
+        let text = super::generate_completion_reply_with_suggestions(
+            &history,
+            ReplyKind::Immediate,
+            &PanicProvider,
+            "panic-model",
+        )
+        .await
+        .expect("direct completion reply");
+
+        assert!(text.contains("`cargo fmt` completed successfully (exit code 0)."));
+        assert!(text.contains("cargo check"));
     }
 
     #[test]

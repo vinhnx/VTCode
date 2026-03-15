@@ -9,7 +9,7 @@ use vtcode_core::llm::factory::{ProviderConfig, create_provider_with_config};
 use vtcode_core::llm::provider::LLMProvider;
 use vtcode_core::llm::rig_adapter::RigProviderCapabilities;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_tui::InlineHandle;
+use vtcode_tui::{InlineHandle, InlineHeaderContext};
 
 use crate::agent::runloop::model_picker::{ModelPickerState, ModelSelectionResult};
 use crate::agent::runloop::welcome::SessionBootstrap;
@@ -26,6 +26,7 @@ pub(crate) async fn finalize_model_selection(
     provider_client: &mut Box<dyn LLMProvider>,
     session_bootstrap: &SessionBootstrap,
     handle: &InlineHandle,
+    header_context: &mut InlineHeaderContext,
     full_auto: bool,
     conversation_history_len: usize,
 ) -> Result<()> {
@@ -100,7 +101,7 @@ pub(crate) async fn finalize_model_selection(
         (UiSurfacePreference::Auto, true) => "auto".to_string(),
         (UiSurfacePreference::Auto, false) => "std".to_string(),
     };
-    let header_context = build_inline_header_context(
+    let next_header_context = build_inline_header_context(
         config,
         session_bootstrap,
         selection.provider_label.clone(),
@@ -110,7 +111,8 @@ pub(crate) async fn finalize_model_selection(
         reasoning_label.clone(),
     )
     .await?;
-    handle.set_header_context(header_context);
+    header_context.clone_from(&next_header_context);
+    handle.set_header_context(next_header_context);
 
     renderer.line(
         MessageStyle::Info,

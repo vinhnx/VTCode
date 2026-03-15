@@ -143,11 +143,11 @@ pub(crate) async fn execute_direct_tool_call(
     // 4. Cleanup UI and return outcome
     t_ctx.ctx.handle.clear_input();
     if let Some(placeholder) = t_ctx.ctx.default_placeholder {
-        t_ctx
-            .ctx
-            .handle
-            .set_placeholder(Some(placeholder.to_string()));
+        t_ctx.ctx.handle.set_placeholder(Some(placeholder.clone()));
     }
+    let restore_left = t_ctx.ctx.input_status_state.left.clone();
+    let restore_right = t_ctx.ctx.input_status_state.right.clone();
+    t_ctx.ctx.restore_input_status(restore_left, restore_right);
 
     if let Some(TurnHandlerOutcome::Break(TurnLoopResult::Exit)) = outcome {
         return Ok(Some(InteractionOutcome::Exit {

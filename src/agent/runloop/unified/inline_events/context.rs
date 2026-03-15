@@ -5,8 +5,8 @@ use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider::{self as uni};
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_tui::{
-    InlineEvent, InlineHandle, OverlayEvent, OverlayHotkeyAction, OverlaySelectionChange,
-    OverlaySubmission,
+    InlineEvent, InlineHandle, InlineHeaderContext, OverlayEvent, OverlayHotkeyAction,
+    OverlaySelectionChange, OverlaySubmission,
 };
 
 use crate::agent::runloop::model_picker::ModelPickerState;
@@ -33,6 +33,7 @@ impl<'a> InlineEventContext<'a> {
         handle: &'a InlineHandle,
         interrupts: InlineInterruptCoordinator<'a>,
         ctrl_c_notice_displayed: &'a mut bool,
+        header_context: &'a mut InlineHeaderContext,
         model_picker_state: &'a mut Option<ModelPickerState>,
         palette_state: &'a mut Option<ActivePalette>,
         config: &'a mut CoreAgentConfig,
@@ -45,6 +46,7 @@ impl<'a> InlineEventContext<'a> {
         let state = InlineEventState::new(renderer, interrupts, ctrl_c_notice_displayed);
         let modal = InlineModalProcessor::new(
             handle,
+            header_context,
             model_picker_state,
             palette_state,
             config,
