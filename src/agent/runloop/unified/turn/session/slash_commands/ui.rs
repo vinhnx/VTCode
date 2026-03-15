@@ -270,6 +270,7 @@ pub(super) async fn start_model_picker(
                 ctx.provider_client,
                 ctx.session_bootstrap,
                 ctx.handle,
+                ctx.header_context,
                 ctx.full_auto,
                 ctx.conversation_history.len(),
             )

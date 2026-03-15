@@ -96,11 +96,13 @@ async fn launch_editor_event_submits_edit_command() {
     let mut vt_cfg = None;
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
+    let mut header_context = vtcode_tui::InlineHeaderContext::default();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
         interrupts,
         &mut ctrl_c_notice_displayed,
+        &mut header_context,
         &mut model_picker_state,
         &mut palette_state,
         &mut config,
@@ -136,11 +138,13 @@ async fn open_file_in_editor_event_submits_edit_command_with_path() {
     let mut vt_cfg = None;
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
+    let mut header_context = vtcode_tui::InlineHeaderContext::default();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
         interrupts,
         &mut ctrl_c_notice_displayed,
+        &mut header_context,
         &mut model_picker_state,
         &mut palette_state,
         &mut config,
@@ -177,11 +181,13 @@ async fn toggle_mode_event_submits_mode_command() {
     let mut vt_cfg = None;
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
+    let mut header_context = vtcode_tui::InlineHeaderContext::default();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
         interrupts,
         &mut ctrl_c_notice_displayed,
+        &mut header_context,
         &mut model_picker_state,
         &mut palette_state,
         &mut config,
@@ -217,11 +223,13 @@ async fn plan_confirmation_events_map_to_expected_actions() {
     let mut vt_cfg = None;
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
+    let mut header_context = vtcode_tui::InlineHeaderContext::default();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
         interrupts,
         &mut ctrl_c_notice_displayed,
+        &mut header_context,
         &mut model_picker_state,
         &mut palette_state,
         &mut config,
@@ -291,11 +299,13 @@ async fn interrupt_event_returns_exit_after_double_ctrl_c() {
     let mut vt_cfg = None;
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
+    let mut header_context = vtcode_tui::InlineHeaderContext::default();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
         interrupts,
         &mut ctrl_c_notice_displayed,
+        &mut header_context,
         &mut model_picker_state,
         &mut palette_state,
         &mut config,
@@ -332,11 +342,13 @@ async fn steering_events_are_passive_in_idle_loop() {
     let mut vt_cfg = None;
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
+    let mut header_context = vtcode_tui::InlineHeaderContext::default();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
         interrupts,
         &mut ctrl_c_notice_displayed,
+        &mut header_context,
         &mut model_picker_state,
         &mut palette_state,
         &mut config,
@@ -375,11 +387,13 @@ async fn process_latest_queued_event_primes_newest_queue_priority() {
     let mut vt_cfg = None;
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
+    let mut header_context = vtcode_tui::InlineHeaderContext::default();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
         interrupts,
         &mut ctrl_c_notice_displayed,
+        &mut header_context,
         &mut model_picker_state,
         &mut palette_state,
         &mut config,

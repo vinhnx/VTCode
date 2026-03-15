@@ -671,6 +671,7 @@ pub(super) async fn run_interaction_loop_impl(
                             ctx.provider_client,
                             ctx.session_bootstrap,
                             ctx.handle,
+                            ctx.header_context,
                             ctx.full_auto,
                             ctx.conversation_history.len(),
                         )

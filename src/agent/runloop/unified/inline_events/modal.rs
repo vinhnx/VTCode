@@ -6,7 +6,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider::{self as uni};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_tui::{InlineHandle, InlineListSelection};
+use vtcode_tui::{InlineHandle, InlineHeaderContext, InlineListSelection};
 
 use crate::agent::runloop::model_picker::{ModelPickerProgress, ModelPickerState};
 use crate::agent::runloop::slash_commands::SessionPaletteMode;
@@ -27,6 +27,7 @@ impl<'a> InlineModalProcessor<'a> {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         handle: &'a InlineHandle,
+        header_context: &'a mut InlineHeaderContext,
         model_picker_state: &'a mut Option<ModelPickerState>,
         palette_state: &'a mut Option<ActivePalette>,
         config: &'a mut CoreAgentConfig,
@@ -38,6 +39,7 @@ impl<'a> InlineModalProcessor<'a> {
     ) -> Self {
         let model_picker = ModelPickerCoordinator {
             state: model_picker_state,
+            header_context,
             config,
             vt_cfg,
             provider_client,
@@ -217,6 +219,7 @@ impl<'a> PaletteCoordinator<'a> {
 
 struct ModelPickerCoordinator<'a> {
     state: &'a mut Option<ModelPickerState>,
+    header_context: &'a mut InlineHeaderContext,
     config: &'a mut CoreAgentConfig,
     vt_cfg: &'a mut Option<VTCodeConfig>,
     provider_client: &'a mut Box<dyn uni::LLMProvider>,
@@ -263,6 +266,7 @@ impl<'a> ModelPickerCoordinator<'a> {
                     self.provider_client,
                     self.session_bootstrap,
                     self.handle,
+                    self.header_context,
                     self.full_auto,
                     self.conversation_history_len,
                 )
