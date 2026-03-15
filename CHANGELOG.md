@@ -2,6 +2,71 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.89.0 - 2026-03-15
+
+### Highlights
+#### Bug Fixes
+
+- Add missing environment variables for Rust compilation in Dockerfile (4a51a588) 
+- Update success message and fallback logic for OpenAI API key (3895d00d) 
+- Enhance OpenAI OAuth handling and improve error reporting (9dd80633) 
+#### Features
+
+- Add OpenAI hosted shell support and validation checks (46031529) 
+- Enhance tool permission handling with new prompt options and decision logic (d8f448ba) 
+- Add OpenAI hosted shell configuration and validation for skills (c0383c1d) 
+- Implement context-generic provider wiring and enhance provider configuration (6c5d1910) 
+- Add prompt metadata to SnapshotMetadata and enhance hydration logic (79ca0b4b) 
+- Enhance OpenAI provider with max output tokens and previous response ID handling (f4e5237e) 
+- Enhance LLM request handling with non-streaming support and structured history integration (4180821a) 
+- Update default model to gpt-5.3-codex and enhance reasoning handling in OpenAI provider (6f8b0c13) 
+- Add manual input support for OpenAI OAuth flow and enhance session handling (ad2107c2) 
+### Other Changes
+#### Other
+
+- Implement auto-compaction for turn loop and enhance skill templates with routing guidance (31aef8a1) 
+- Refactor plan file template for clarity and structure (df3764eb) 
+- Add support for blocked handoff events and quiet success output in hooks (f978598b) 
+- Update AGENTS instructions (b584d382) 
+- Add fallback filenames to ProjectDocOptions and related functions; enhance clickable link handling in ANSI renderer; implement session history persistence settings; introduce new FileOpener and HistoryPersistence enums in config. (3e4f1ea1) 
+- Add request_permissions field to RejectConfig and update related logic (54430912) 
+- Add support for explicit transcript links in the TUI session (31add726) 
+- Enhance exit summary output with model and reasoning details; update configuration for new provider and model (228f5909) 
+- Implement CGP integration facade for ToolRegistry with pipeline support (68bd7f63) 
+- Add direct tool completion handling and refactor related logic (ab246cb8) 
+- Scan commits for potential bugs (c6b7ac99) 
+- Implement mouse selection and interaction for modal lists and input areas (e618c0da) 
+- Enhance observability and model validation for LLM requests and tool executions (fc5c883a) 
+- Update documentation and improve terminal setup handling (6b7b82ea) 
+- Implement Vim mode support with key handling and text operations (e77c61e5) 
+- Implement Vim-style prompt editing engine with core functionality and tests (a722f56b) 
+- Add interactive features for prompt suggestions and job management (89c79954) 
+- Update prompt suggestion docs (aa3aaaae) 
+- Update TODO (d23690fc) 
+- Add OpenAI ChatGPT authentication support and update provider configuration (860a1d65) 
+- Add new GPT-5 Codex models and update related functionality (0cc7a335) 
+- Add client request ID handling and improve responses API integration (fb3220ac) 
+- Scan recent commits for bugs (dbb30d99) 
+- Enhance LLM response processing and metrics logging; update OpenAI model handling (bc8dd6aa) 
+#### Refactors
+
+- Streamline OAuth handling and improve prompt rendering logic (91a3c73d) 
+- Enhance instruction rendering and highlight extraction in project documentation (cf116dac) 
+- Improve compaction handling and documentation across multiple files (fe86c4c5) 
+- Use get_config_dir for configuration directory retrieval in DotManager (28c82ef6) 
+- Replace provider resolution logic with infer_provider_from_model in create_provider_for_model (a8c208e3) 
+- Improve command processing and rendering efficiency in drive_terminal (e33ed10d) 
+- Update provider client creation logic and add debug logging for provider usage (9c947bde) 
+- Enhance conversation handling and user guidance in agent interactions (f16808a8) 
+- Enhance tool completion replies with LLM-generated suggestions and fallback logic (1ad0b3de) 
+- Integrate InlineHeaderContext into event handling and model selection (75c6bbc0) 
+- Consolidate session archive handling and improve debug log directory management (71f0b686) 
+- Reorganize imports and improve code formatting in interactive features (20817b85) 
+- Clean up code formatting and improve readability in multiple files (dffcbdae) 
+- Remove unused content delta handling in OpenAIStreamTelemetry (44da3f56) 
+- Remove PR review status handling and optimize TUI tick rates (737a2c75) 
+### Contributors
+@vinhnx
 ## 0.88.5 - 2026-03-13
 
 ### Highlights
