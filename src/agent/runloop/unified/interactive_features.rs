@@ -1,21 +1,16 @@
 use std::collections::HashMap;
 use std::path::Path;
-use std::process::Command;
 use std::sync::{LazyLock, Mutex};
-use std::time::{Duration, Instant};
 
-use serde_json::Value;
 use vtcode_core::config::constants::model_helpers;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::models::{ModelId, Provider};
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
-use vtcode_core::git_info::{get_git_remote_urls, get_git_repo_root, get_head_commit_hash};
 use vtcode_core::llm::factory::{
     ProviderConfig, create_provider_with_config, infer_provider_from_model,
 };
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::ToolRegistry;
-use vtcode_tui::{InlineHeaderHighlight, InlineHeaderStatusBadge, InlineHeaderStatusTone};
 
 use crate::agent::runloop::unified::state::SessionStats;
 
@@ -36,96 +31,8 @@ pub(crate) struct BackgroundJobSummary {
     pub(crate) status: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum PrReviewStatus {
-    NotApplicable,
-    GhMissing,
-    AuthRequired,
-    NotOnPr,
-    Ready { url: Option<String> },
-    ReviewedCurrent { url: Option<String> },
-    ReviewOutdated { url: Option<String> },
-    ChangesRequested { url: Option<String> },
-    NoWriteAccess { url: Option<String> },
-    Error(String),
-}
-
-impl PrReviewStatus {
-    pub(crate) fn to_badge(&self) -> Option<InlineHeaderStatusBadge> {
-        let (text, tone) = match self {
-            Self::NotApplicable | Self::NotOnPr => return None,
-            Self::GhMissing => (
-                "PR: install gh".to_string(),
-                InlineHeaderStatusTone::Warning,
-            ),
-            Self::AuthRequired => ("PR: gh auth".to_string(), InlineHeaderStatusTone::Warning),
-            Self::Ready { .. } => ("PR: ready".to_string(), InlineHeaderStatusTone::Ready),
-            Self::ReviewedCurrent { .. } => {
-                ("PR: reviewed".to_string(), InlineHeaderStatusTone::Ready)
-            }
-            Self::ReviewOutdated { .. } => {
-                ("PR: outdated".to_string(), InlineHeaderStatusTone::Warning)
-            }
-            Self::ChangesRequested { .. } => {
-                ("PR: changes".to_string(), InlineHeaderStatusTone::Warning)
-            }
-            Self::NoWriteAccess { .. } => {
-                ("PR: read-only".to_string(), InlineHeaderStatusTone::Warning)
-            }
-            Self::Error(_) => ("PR: error".to_string(), InlineHeaderStatusTone::Error),
-        };
-
-        Some(InlineHeaderStatusBadge { text, tone })
-    }
-
-    pub(crate) fn to_highlight(&self) -> Option<InlineHeaderHighlight> {
-        let lines = match self {
-            Self::GhMissing => {
-                vec!["Install GitHub CLI (`gh`) to show PR review status.".to_string()]
-            }
-            Self::AuthRequired => {
-                vec!["Run `gh auth login` to enable PR review status in the header.".to_string()]
-            }
-            Self::ReviewOutdated { url } => vec![match url {
-                Some(url) => format!(
-                    "Your previous review is behind the current PR head. Review the latest commit: {url}"
-                ),
-                None => "Your previous review is behind the current PR head.".to_string(),
-            }],
-            Self::ChangesRequested { url } => vec![match url {
-                Some(url) => format!(
-                    "This PR currently has requested changes. Re-check the discussion: {url}"
-                ),
-                None => "This PR currently has requested changes.".to_string(),
-            }],
-            Self::NoWriteAccess { url } => vec![match url {
-                Some(url) => format!(
-                    "You do not appear to have write access for this PR branch. Open in GitHub: {url}"
-                ),
-                None => "You do not appear to have write access for this PR branch.".to_string(),
-            }],
-            Self::Error(message) => vec![format!("PR status refresh failed: {message}")],
-            _ => return None,
-        };
-
-        Some(InlineHeaderHighlight {
-            title: "PR Review".to_string(),
-            lines,
-        })
-    }
-}
-
-#[derive(Clone, Debug)]
-struct CachedPrStatus {
-    status: PrReviewStatus,
-    stored_at: Instant,
-}
-
-static PR_STATUS_CACHE: LazyLock<Mutex<HashMap<String, CachedPrStatus>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
 static PROMPT_SUGGESTION_CACHE: LazyLock<Mutex<HashMap<String, Vec<PromptSuggestion>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
-const PR_STATUS_CACHE_TTL: Duration = Duration::from_secs(30);
 const PROMPT_SUGGESTION_CACHE_LIMIT: usize = 64;
 const DEFAULT_PROMPT_SUGGESTION_TEMPERATURE: f32 = 0.4;
 
@@ -417,159 +324,6 @@ pub(crate) fn collect_background_jobs(tool_registry: &ToolRegistry) -> Vec<Backg
     jobs
 }
 
-pub(crate) fn detect_pr_review_status(workspace: &Path) -> PrReviewStatus {
-    let remotes = match get_git_remote_urls(workspace) {
-        Ok(remotes) => remotes,
-        Err(_) => return PrReviewStatus::NotApplicable,
-    };
-    if remotes.is_empty()
-        || !remotes
-            .values()
-            .any(|remote| remote.contains("github.com") || remote.contains("git@github.com"))
-    {
-        return PrReviewStatus::NotApplicable;
-    }
-
-    let head = match get_head_commit_hash(workspace) {
-        Ok(Some(head)) => head,
-        Ok(None) => return PrReviewStatus::NotApplicable,
-        Err(_) => return PrReviewStatus::NotApplicable,
-    };
-    let branch = match crate::agent::runloop::git::git_status_summary(workspace) {
-        Ok(Some(summary)) => summary.branch,
-        Ok(None) => "unknown".to_string(),
-        Err(_) => return PrReviewStatus::NotApplicable,
-    };
-    let repo_root = match get_git_repo_root(workspace) {
-        Ok(Some(root)) => root,
-        Ok(None) => workspace.display().to_string(),
-        Err(_) => workspace.display().to_string(),
-    };
-    let cache_key = format!("{repo_root}:{branch}:{head}");
-    if let Some(cached) = PR_STATUS_CACHE.lock().ok().and_then(|cache| {
-        cache
-            .get(&cache_key)
-            .filter(|cached| cached.stored_at.elapsed() < PR_STATUS_CACHE_TTL)
-            .cloned()
-    }) {
-        return cached.status;
-    }
-
-    let status = detect_pr_review_status_uncached(workspace, &head);
-    if let Ok(mut cache) = PR_STATUS_CACHE.lock() {
-        cache.insert(
-            cache_key,
-            CachedPrStatus {
-                status: status.clone(),
-                stored_at: Instant::now(),
-            },
-        );
-    }
-    status
-}
-
-fn detect_pr_review_status_uncached(workspace: &Path, local_head: &str) -> PrReviewStatus {
-    if !command_succeeds("gh", &["--version"], workspace) {
-        return PrReviewStatus::GhMissing;
-    }
-    if !command_succeeds(
-        "gh",
-        &["auth", "status", "--hostname", "github.com"],
-        workspace,
-    ) {
-        return PrReviewStatus::AuthRequired;
-    }
-
-    let viewer = run_command("gh", &["api", "user", "--jq", ".login"], workspace)
-        .ok()
-        .map(|output| output.trim().to_string())
-        .filter(|value| !value.is_empty());
-
-    let pr_json = run_command(
-        "gh",
-        &[
-            "pr",
-            "view",
-            "--json",
-            "reviewDecision,headRefOid,latestReviews,maintainerCanModify,url",
-        ],
-        workspace,
-    )
-    .or_else(|_| {
-        run_command(
-            "gh",
-            &["pr", "view", "--json", "reviewDecision,headRefOid,url"],
-            workspace,
-        )
-    });
-
-    let pr_json = match pr_json {
-        Ok(json) => json,
-        Err(err) => {
-            let lower = err.to_lowercase();
-            if lower.contains("no pull requests found") || lower.contains("not found") {
-                return PrReviewStatus::NotOnPr;
-            }
-            return PrReviewStatus::Error(err);
-        }
-    };
-
-    let Ok(payload) = serde_json::from_str::<Value>(&pr_json) else {
-        return PrReviewStatus::Error("Invalid JSON from `gh pr view`".to_string());
-    };
-    let url = payload
-        .get("url")
-        .and_then(Value::as_str)
-        .map(str::to_string);
-    let head_ref_oid = payload
-        .get("headRefOid")
-        .and_then(Value::as_str)
-        .map(normalize_sha);
-    let review_decision = payload
-        .get("reviewDecision")
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_string();
-    let maintainer_can_modify = payload
-        .get("maintainerCanModify")
-        .and_then(Value::as_bool)
-        .unwrap_or(true);
-
-    if !maintainer_can_modify {
-        return PrReviewStatus::NoWriteAccess { url };
-    }
-
-    if review_decision == "CHANGES_REQUESTED" {
-        return PrReviewStatus::ChangesRequested { url };
-    }
-
-    let reviewed_by_viewer = payload
-        .get("latestReviews")
-        .and_then(Value::as_array)
-        .map(|reviews| {
-            reviews.iter().any(|review| {
-                let author_login = review
-                    .get("author")
-                    .and_then(|author| author.get("login"))
-                    .and_then(Value::as_str);
-                match (&viewer, author_login) {
-                    (Some(viewer), Some(author_login)) => viewer == author_login,
-                    _ => false,
-                }
-            })
-        })
-        .unwrap_or(false);
-
-    if reviewed_by_viewer {
-        if head_ref_oid.as_deref() == Some(normalize_sha(local_head).as_str()) {
-            return PrReviewStatus::ReviewedCurrent { url };
-        }
-        return PrReviewStatus::ReviewOutdated { url };
-    }
-
-    PrReviewStatus::Ready { url }
-}
-
 fn last_error_like_message(message: &uni::Message) -> Option<String> {
     let text = message.content.as_text();
     let lower = text.to_lowercase();
@@ -716,40 +470,12 @@ fn truncate_for_prompt(text: &str, max_chars: usize) -> String {
     truncated
 }
 
-fn normalize_sha(sha: &str) -> String {
-    sha.trim().to_ascii_lowercase()
-}
-
 fn git_status_fragment(workspace: &Path) -> String {
     crate::agent::runloop::git::git_status_summary(workspace)
         .ok()
         .flatten()
         .map(|summary| format!("{}:{}", summary.branch, summary.dirty))
         .unwrap_or_else(|| "no-git".to_string())
-}
-
-fn command_succeeds(program: &str, args: &[&str], workspace: &Path) -> bool {
-    Command::new(program)
-        .args(args)
-        .current_dir(workspace)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(false)
-}
-
-fn run_command(program: &str, args: &[&str], workspace: &Path) -> Result<String, String> {
-    let output = Command::new(program)
-        .args(args)
-        .current_dir(workspace)
-        .output()
-        .map_err(|err| err.to_string())?;
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
-    } else {
-        Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
-    }
 }
 
 #[cfg(test)]
@@ -784,28 +510,6 @@ mod tests {
             model_behavior: None,
             openai_chatgpt_auth: None,
         }
-    }
-
-    #[test]
-    fn detect_pr_status_is_not_applicable_outside_git_repo() {
-        let tempdir = tempfile::tempdir().expect("tempdir");
-        assert_eq!(
-            detect_pr_review_status(tempdir.path()),
-            PrReviewStatus::NotApplicable
-        );
-    }
-
-    #[test]
-    fn pr_review_status_badges_match_expected_tones() {
-        let reviewed = PrReviewStatus::ReviewedCurrent { url: None }
-            .to_badge()
-            .expect("reviewed badge");
-        assert_eq!(reviewed.text, "PR: reviewed");
-        assert_eq!(reviewed.tone, InlineHeaderStatusTone::Ready);
-
-        let auth = PrReviewStatus::AuthRequired.to_badge().expect("auth badge");
-        assert_eq!(auth.text, "PR: gh auth");
-        assert_eq!(auth.tone, InlineHeaderStatusTone::Warning);
     }
 
     #[test]

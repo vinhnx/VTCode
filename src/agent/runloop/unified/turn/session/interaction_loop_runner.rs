@@ -18,7 +18,6 @@ use vtcode_core::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::model_picker::ModelPickerProgress;
 use crate::agent::runloop::prompt::refine_and_enrich_prompt;
-use crate::agent::runloop::ui::sync_inline_header_pr_status;
 use crate::agent::runloop::unified::async_mcp_manager::{
     AsyncMcpManager, approval_policy_from_human_in_the_loop,
 };
@@ -374,10 +373,16 @@ pub(super) async fn run_interaction_loop_impl(
     let mut live_reload_watcher = SimpleConfigWatcher::new(ctx.config.workspace.clone());
     live_reload_watcher.set_check_interval(1);
     live_reload_watcher.set_debounce_duration(200);
+    let mut last_status_refresh = Instant::now() - Duration::from_millis(500);
+    const STATUS_REFRESH_INTERVAL: Duration = Duration::from_millis(200);
 
     loop {
         let mut workspace_config_reloaded = false;
-        if live_reload_watcher.should_reload() {
+        let should_refresh_status = last_status_refresh.elapsed() >= STATUS_REFRESH_INTERVAL;
+        if should_refresh_status {
+            last_status_refresh = Instant::now();
+        }
+        if should_refresh_status && live_reload_watcher.should_reload() {
             if let Err(err) = crate::agent::runloop::unified::turn::workspace::refresh_vt_config(
                 &ctx.config.workspace,
                 ctx.config,
@@ -401,57 +406,77 @@ pub(super) async fn run_interaction_loop_impl(
             }
         }
 
-        let live_ide_context = refresh_live_ide_context_update(ctx.ide_context_bridge);
-        if live_ide_context.changed || workspace_config_reloaded {
-            apply_ide_context_snapshot(
-                ctx.context_manager,
-                ctx.header_context,
-                ctx.handle,
-                ctx.config.workspace.as_path(),
-                ctx.vt_cfg.as_ref(),
-                live_ide_context.snapshot.clone(),
-            );
-        }
-        if sync_inline_header_pr_status(&ctx.config.workspace, ctx.header_context) {
-            ctx.handle.set_header_context(ctx.header_context.clone());
-        }
-        crate::agent::runloop::unified::status_line::update_ide_context_source(
-            state.input_status_state,
-            ide_context_status_label_from_bridge(
-                ctx.context_manager,
-                ctx.config.workspace.as_path(),
-                ctx.vt_cfg.as_ref(),
-                ctx.ide_context_bridge.as_ref(),
-            ),
-        );
-
-        let spooled_count = ctx.tool_registry.spooled_files_count().await;
-        crate::agent::runloop::unified::status_line::update_spooled_files_count(
-            state.input_status_state,
-            spooled_count,
-        );
-        let context_limit_tokens = ctx
-            .provider_client
-            .effective_context_size(&ctx.config.model);
-        let context_used_tokens = ctx.context_manager.current_token_usage();
-        crate::agent::runloop::unified::status_line::update_context_budget(
-            state.input_status_state,
-            context_used_tokens,
-            context_limit_tokens,
-        );
-        if let Err(error) =
-            crate::agent::runloop::unified::status_line::update_input_status_if_changed(
-                ctx.handle,
-                &ctx.config.workspace,
-                &ctx.config.model,
-                ctx.config.reasoning_effort.as_str(),
-                ctx.vt_cfg.as_ref().map(|cfg| &cfg.ui.status_line),
+        if should_refresh_status {
+            let live_ide_context = refresh_live_ide_context_update(ctx.ide_context_bridge);
+            if live_ide_context.changed || workspace_config_reloaded {
+                apply_ide_context_snapshot(
+                    ctx.context_manager,
+                    ctx.header_context,
+                    ctx.handle,
+                    ctx.config.workspace.as_path(),
+                    ctx.vt_cfg.as_ref(),
+                    live_ide_context.snapshot.clone(),
+                );
+            }
+            crate::agent::runloop::unified::status_line::update_ide_context_source(
                 state.input_status_state,
-            )
-            .await
-        {
-            tracing::warn!("Failed to refresh status line: {}", error);
-        }
+                ide_context_status_label_from_bridge(
+                    ctx.context_manager,
+                    ctx.config.workspace.as_path(),
+                    ctx.vt_cfg.as_ref(),
+                    ctx.ide_context_bridge.as_ref(),
+                ),
+            );
+
+            let spooled_count = ctx.tool_registry.spooled_files_count().await;
+            crate::agent::runloop::unified::status_line::update_spooled_files_count(
+                state.input_status_state,
+                spooled_count,
+            );
+            let context_limit_tokens = ctx
+                .provider_client
+                .effective_context_size(&ctx.config.model);
+            let context_used_tokens = ctx.context_manager.current_token_usage();
+            crate::agent::runloop::unified::status_line::update_context_budget(
+                state.input_status_state,
+                context_used_tokens,
+                context_limit_tokens,
+            );
+            if let Err(error) =
+                crate::agent::runloop::unified::status_line::update_input_status_if_changed(
+                    ctx.handle,
+                    &ctx.config.workspace,
+                    &ctx.config.model,
+                    ctx.config.reasoning_effort.as_str(),
+                    ctx.vt_cfg.as_ref().map(|cfg| &cfg.ui.status_line),
+                    state.input_status_state,
+                )
+                .await
+            {
+                tracing::warn!("Failed to refresh status line: {}", error);
+            }
+
+            if let Some(mcp_manager) = ctx.async_mcp_manager {
+                mcp_lifecycle::handle_mcp_updates(
+                    mcp_manager,
+                    ctx.tool_registry,
+                    ctx.tools,
+                    ctx.tool_catalog,
+                    ctx.config,
+                    ctx.vt_cfg
+                        .as_ref()
+                        .map(|cfg| cfg.agent.tool_documentation_mode)
+                        .unwrap_or_default(),
+                    ctx.renderer,
+                    state.mcp_catalog_initialized,
+                    state.last_mcp_refresh,
+                    state.last_known_mcp_tools,
+                    state.pending_mcp_refresh,
+                    MCP_REFRESH_INTERVAL,
+                )
+                .await?;
+            }
+        } // end should_refresh_status
 
         if ctx.ctrl_c_state.is_exit_requested() {
             return Ok(InteractionOutcome::Exit {
@@ -460,27 +485,6 @@ pub(super) async fn run_interaction_loop_impl(
         }
 
         let interrupts = InlineInterruptCoordinator::new(ctx.ctrl_c_state.as_ref());
-        if let Some(mcp_manager) = ctx.async_mcp_manager {
-            mcp_lifecycle::handle_mcp_updates(
-                mcp_manager,
-                ctx.tool_registry,
-                ctx.tools,
-                ctx.tool_catalog,
-                ctx.config,
-                ctx.vt_cfg
-                    .as_ref()
-                    .map(|cfg| cfg.agent.tool_documentation_mode)
-                    .unwrap_or_default(),
-                ctx.renderer,
-                state.mcp_catalog_initialized,
-                state.last_mcp_refresh,
-                state.last_known_mcp_tools,
-                state.pending_mcp_refresh,
-                MCP_REFRESH_INTERVAL,
-            )
-            .await?;
-        }
-
         let use_unicode = ctx.renderer.should_use_unicode_formatting();
         let resources = InlineEventLoopResources {
             renderer: ctx.renderer,
