@@ -360,6 +360,7 @@ pub(super) async fn start_model_picker(
     let workspace_hint = Some(ctx.config.workspace.clone());
     match ModelPickerState::new(
         ctx.renderer,
+        ctx.vt_cfg.clone(),
         reasoning,
         service_tier,
         workspace_hint,

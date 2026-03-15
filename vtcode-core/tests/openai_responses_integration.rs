@@ -35,6 +35,7 @@ async fn mock_responses_api_receives_prompt_cache_retention() {
     let base_url = mock_openai_base_url(&server);
     let provider = OpenAIProvider::from_config(
         Some("testkey".to_string()),
+        None,
         Some("gpt-5".to_string()),
         Some(base_url.to_string()),
         Some(pc),
@@ -89,6 +90,7 @@ async fn mock_responses_api_sampling_parameters_structure() {
     let base_url = mock_openai_base_url(&server);
     let provider = OpenAIProvider::from_config(
         Some("testkey".to_string()),
+        None,
         Some("gpt-5.2".to_string()),
         Some(base_url.to_string()),
         None,
@@ -155,6 +157,7 @@ async fn mock_responses_api_top_level_tool_calls() {
     let base_url = mock_openai_base_url(&server);
     let provider = OpenAIProvider::from_config(
         Some("testkey".to_string()),
+        None,
         Some("gpt-5".to_string()),
         Some(base_url.to_string()),
         None,
@@ -210,6 +213,7 @@ async fn mock_responses_api_minimal_reasoning_effort() {
     let base_url = mock_openai_base_url(&server);
     let provider = OpenAIProvider::from_config(
         Some("testkey".to_string()),
+        None,
         Some("gpt-5".to_string()),
         Some(base_url.to_string()),
         None,
@@ -270,6 +274,7 @@ async fn mock_responses_api_preserves_assistant_phase_history() {
     let base_url = mock_openai_base_url(&server);
     let provider = OpenAIProvider::from_config(
         Some("testkey".to_string()),
+        None,
         Some("gpt-5.4".to_string()),
         Some(base_url.to_string()),
         None,

@@ -205,7 +205,11 @@ pub(crate) async fn initialize_session_ui(
     transcript::clear();
     render_resume_state_if_present(&mut renderer, resume_state, supports_reasoning)?;
 
-    let provider_label = if config.provider.trim().is_empty() {
+    let provider_label = if config.provider.eq_ignore_ascii_case("openai")
+        && config.openai_chatgpt_auth.is_some()
+    {
+        "OpenAI (ChatGPT)".to_string()
+    } else if config.provider.trim().is_empty() {
         session_state.provider_client.name().to_string()
     } else {
         config.provider.clone()
@@ -274,6 +278,7 @@ pub(crate) async fn initialize_session_ui(
     if let Some(notice) = session_state.session_bootstrap.search_tools_notice.as_ref() {
         notice.render(&mut renderer)?;
     }
+    maybe_render_openai_priority_notice(&mut renderer, config, vt_cfg)?;
 
     handle.set_theme(theme_spec.clone());
     palettes::apply_prompt_style(&handle);
@@ -382,6 +387,37 @@ pub(crate) async fn initialize_session_ui(
         startup_update_notice_rx,
         startup_update_task_guard,
     })
+}
+
+fn maybe_render_openai_priority_notice(
+    renderer: &mut AnsiRenderer,
+    config: &CoreAgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
+) -> Result<()> {
+    if !config.provider.eq_ignore_ascii_case("openai") {
+        return Ok(());
+    }
+
+    let default_auth = vtcode_auth::OpenAIAuthConfig::default();
+    let auth_cfg = vt_cfg.map(|cfg| &cfg.auth.openai).unwrap_or(&default_auth);
+    let storage_mode = vt_cfg
+        .map(|cfg| cfg.agent.credential_storage_mode)
+        .unwrap_or_default();
+    let api_key = vtcode_core::config::api_keys::get_api_key(
+        "openai",
+        &vtcode_core::config::api_keys::ApiKeySources::default(),
+    )
+    .ok();
+    let overview = vtcode_config::auth::summarize_openai_credentials(auth_cfg, storage_mode, api_key)?;
+    let Some(notice) = overview.notice.as_deref() else {
+        return Ok(());
+    };
+
+    renderer.line(MessageStyle::Info, notice)?;
+    if let Some(recommendation) = overview.recommendation.as_deref() {
+        renderer.line(MessageStyle::Output, recommendation)?;
+    }
+    Ok(())
 }
 
 pub(crate) fn apply_ide_context_snapshot(

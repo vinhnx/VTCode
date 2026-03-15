@@ -116,6 +116,7 @@ where
     fn build_provider(config: FactoryProviderConfig) -> Box<dyn LLMProvider> {
         let FactoryProviderConfig {
             api_key,
+            openai_chatgpt_auth: _,
             base_url,
             model,
             prompt_cache,
@@ -143,6 +144,7 @@ impl ProviderBuildProvider<AnthropicProviderConfig> for AnthropicProviderBuild {
     fn build_provider(config: FactoryProviderConfig) -> Box<dyn LLMProvider> {
         let FactoryProviderConfig {
             api_key,
+            openai_chatgpt_auth: _,
             base_url,
             model,
             prompt_cache,
@@ -170,6 +172,7 @@ impl ProviderBuildProvider<OpenAIProviderConfig> for OpenAIProviderBuild {
     fn build_provider(config: FactoryProviderConfig) -> Box<dyn LLMProvider> {
         let FactoryProviderConfig {
             api_key,
+            openai_chatgpt_auth,
             base_url,
             model,
             prompt_cache,
@@ -181,6 +184,7 @@ impl ProviderBuildProvider<OpenAIProviderConfig> for OpenAIProviderBuild {
 
         Box::new(OpenAIProvider::from_config(
             api_key,
+            openai_chatgpt_auth,
             model,
             base_url,
             prompt_cache,
@@ -330,6 +334,7 @@ mod tests {
         let provider =
             <GeminiProviderConfig as CanBuildProvider>::build_provider(FactoryProviderConfig {
                 api_key: Some("test-key".to_string()),
+                    openai_chatgpt_auth: None,
                 base_url: None,
                 model: Some(
                     crate::config::constants::models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
@@ -349,6 +354,7 @@ mod tests {
         let provider =
             <OpenAIProviderConfig as CanBuildProvider>::build_provider(FactoryProviderConfig {
                 api_key: Some("test-key".to_string()),
+                    openai_chatgpt_auth: None,
                 base_url: None,
                 model: Some(crate::config::constants::models::openai::DEFAULT_MODEL.to_string()),
                 prompt_cache: None,
@@ -369,6 +375,7 @@ mod tests {
         let provider =
             <AnthropicProviderConfig as CanBuildProvider>::build_provider(FactoryProviderConfig {
                 api_key: Some("test-key".to_string()),
+                    openai_chatgpt_auth: None,
                 base_url: None,
                 model: Some(crate::config::constants::models::anthropic::DEFAULT_MODEL.to_string()),
                 prompt_cache: None,

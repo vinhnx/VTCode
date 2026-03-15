@@ -285,6 +285,7 @@ impl ModelPickerState {
             api_key: self.pending_api_key.clone(),
             env_key: selection.env_key.clone(),
             requires_api_key: selection.requires_api_key,
+            uses_chatgpt_auth: selection.uses_chatgpt_auth,
         })
     }
 
@@ -319,12 +320,12 @@ impl ModelPickerState {
             match self.find_existing_api_key(&selection.env_key) {
                 Ok(Some(ExistingKey::OAuthToken)) => {
                     selection.requires_api_key = false;
+                    if matches!(selection.provider_enum, Some(Provider::OpenAI)) {
+                        selection.uses_chatgpt_auth = true;
+                    }
                     renderer.line(
                         MessageStyle::Info,
-                        &format!(
-                            "Using OAuth authentication for {}.",
-                            selection.provider_label
-                        ),
+                        &oauth_auth_message(&selection),
                     )?;
                 }
                 Ok(Some(ExistingKey::Environment)) => {
@@ -414,7 +415,7 @@ impl ModelPickerState {
         self.finish_after_service_tier(renderer)
     }
 
-    pub(super) fn handle_api_key(
+    pub(super) async fn handle_api_key(
         &mut self,
         renderer: &mut AnsiRenderer,
         input: &str,
@@ -422,6 +423,42 @@ impl ModelPickerState {
         let Some(selection) = self.selection.as_ref() else {
             return Err(anyhow!("API key requested before selecting a model"));
         };
+        if input.eq_ignore_ascii_case("login")
+            && matches!(selection.provider_enum, Some(Provider::OpenAI))
+        {
+            let prepared = crate::cli::auth::prepare_openai_login(self.vt_cfg.as_ref())?;
+            renderer.line(
+                MessageStyle::Info,
+                "Opening browser for OpenAI ChatGPT authentication...",
+            )?;
+            renderer.line(MessageStyle::Output, &format!("URL: {}", prepared.auth_url))?;
+            if let Err(err) = webbrowser::open(&prepared.auth_url) {
+                renderer.line(
+                    MessageStyle::Error,
+                    &format!("Failed to open browser automatically: {}", err),
+                )?;
+                renderer.line(
+                    MessageStyle::Info,
+                    "Please open the URL manually in your browser.",
+                )?;
+            }
+            crate::cli::auth::complete_openai_login(prepared).await?;
+            if self.inline_enabled {
+                renderer.close_modal();
+            }
+            renderer.line(
+                MessageStyle::Info,
+                "Using ChatGPT subscription for OpenAI.",
+            )?;
+            self.pending_api_key = None;
+            if let Some(current) = self.selection.as_mut() {
+                current.requires_api_key = false;
+                current.uses_chatgpt_auth = true;
+            }
+            let result = self.build_result();
+            return Ok(ModelPickerProgress::Completed(result?));
+        }
+
         if input.eq_ignore_ascii_case("skip") {
             match self.find_existing_api_key(&selection.env_key) {
                 Ok(Some(ExistingKey::OAuthToken)) => {
@@ -430,14 +467,14 @@ impl ModelPickerState {
                     }
                     renderer.line(
                         MessageStyle::Info,
-                        &format!(
-                            "Using OAuth authentication for {}.",
-                            selection.provider_label
-                        ),
+                        &oauth_auth_message(selection),
                     )?;
                     self.pending_api_key = None;
                     if let Some(current) = self.selection.as_mut() {
                         current.requires_api_key = false;
+                        if matches!(current.provider_enum, Some(Provider::OpenAI)) {
+                            current.uses_chatgpt_auth = true;
+                        }
                     }
                     let result = self.build_result();
                     return Ok(ModelPickerProgress::Completed(result?));
@@ -519,6 +556,12 @@ impl ModelPickerState {
             return Ok(Some(ExistingKey::OAuthToken));
         }
 
+        if env_key == "OPENAI_API_KEY"
+            && let Ok(Some(_session)) = vtcode_config::auth::load_openai_chatgpt_session()
+        {
+            return Ok(Some(ExistingKey::OAuthToken));
+        }
+
         if let Ok(value) = std::env::var(env_key)
             && !value.trim().is_empty()
         {
@@ -533,5 +576,13 @@ impl ModelPickerState {
         }
 
         Ok(None)
+    }
+}
+
+fn oauth_auth_message(selection: &SelectionDetail) -> String {
+    if matches!(selection.provider_enum, Some(Provider::OpenAI)) {
+        "Using ChatGPT subscription for OpenAI.".to_string()
+    } else {
+        format!("Using OAuth authentication for {}.", selection.provider_label)
     }
 }

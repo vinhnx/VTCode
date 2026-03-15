@@ -63,6 +63,7 @@ async fn handle_list_models(_cli: &Cli) -> Result<()> {
             provider_name,
             ProviderConfig {
                 api_key: Some("dummy".to_owned()),
+                openai_chatgpt_auth: None,
                 base_url: None,
                 model: None,
                 prompt_cache: None,
@@ -278,6 +279,7 @@ async fn handle_test_provider(_cli: &Cli, provider: &str) -> Result<()> {
         provider,
         ProviderConfig {
             api_key,
+            openai_chatgpt_auth: None,
             base_url,
             model: model.clone(),
             prompt_cache: None,

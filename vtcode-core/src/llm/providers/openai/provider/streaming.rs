@@ -70,21 +70,17 @@ impl OpenAIProvider {
 
         let url = format!("{}/responses", self.base_url);
 
-        let response = headers::apply_turn_metadata(
-            headers::apply_responses_beta(self.authorize(self.http_client.post(&url))),
-            &request.metadata,
-        )
-        .json(&openai_request)
-        .send()
-        .await
-        .map_err(|e| {
-            let formatted_error =
-                error_display::format_llm_error("OpenAI", &format!("Network error: {}", e));
-            provider::LLMError::Network {
-                message: formatted_error,
-                metadata: None,
-            }
-        })?;
+        let response = self
+            .send_authorized(|api_key| {
+                headers::apply_turn_metadata(
+                    headers::apply_responses_beta(
+                        self.authorize_with_api_key(self.http_client.post(&url), api_key),
+                    ),
+                    &request.metadata,
+                )
+                .json(&openai_request)
+            })
+            .await?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -193,21 +189,15 @@ impl OpenAIProvider {
         }
         let url = format!("{}/chat/completions", self.base_url);
 
-        let response = headers::apply_turn_metadata(
-            self.authorize(self.http_client.post(&url)),
-            &request.metadata,
-        )
-        .json(&openai_request)
-        .send()
-        .await
-        .map_err(|e| {
-            let formatted_error =
-                error_display::format_llm_error("OpenAI", &format!("Network error: {}", e));
-            provider::LLMError::Network {
-                message: formatted_error,
-                metadata: None,
-            }
-        })?;
+        let response = self
+            .send_authorized(|api_key| {
+                headers::apply_turn_metadata(
+                    self.authorize_with_api_key(self.http_client.post(&url), api_key),
+                    &request.metadata,
+                )
+                .json(&openai_request)
+            })
+            .await?;
 
         if !response.status().is_success() {
             let status = response.status();

@@ -1,75 +1,118 @@
 use anyhow::Result;
+use vtcode_auth::{AuthStatus, OpenAIChatGptAuthStatus, OpenAIResolvedAuthSource};
+use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui::{InlineListItem, InlineListSelection};
 
-use super::{SlashCommandContext, SlashCommandControl};
+use super::{SlashCommandContext, SlashCommandControl, ui};
+use crate::agent::runloop::slash_commands::OAuthProviderAction;
+use crate::cli::auth::{
+    OPENAI_PROVIDER, OPENROUTER_PROVIDER, clear_openai_login, clear_openrouter_login,
+    complete_openai_login, complete_openrouter_login, openai_auth_status, openrouter_auth_status,
+    prepare_openai_login, prepare_openrouter_login, refresh_openai_login, supports_oauth_provider,
+};
 
-const OPENROUTER_PROVIDER: &str = "openrouter";
+const OAUTH_PROVIDER_PREFIX: &str = "oauth-provider:";
+const OAUTH_PROVIDER_BACK: &str = "oauth-provider:back";
+
+pub(crate) async fn handle_start_oauth_provider_picker(
+    mut ctx: SlashCommandContext<'_>,
+    action: OAuthProviderAction,
+) -> Result<SlashCommandControl> {
+    let activity = match action {
+        OAuthProviderAction::Login => "opening OAuth login",
+        OAuthProviderAction::Logout => "opening OAuth logout",
+        OAuthProviderAction::Refresh => "opening OAuth refresh",
+    };
+    if !ui::ensure_selection_ui_available(&mut ctx, activity)? {
+        return Ok(SlashCommandControl::Continue);
+    }
+
+    show_oauth_provider_modal(&mut ctx, action)?;
+    let Some(selection) = ui::wait_for_list_modal_selection(&mut ctx).await else {
+        return Ok(SlashCommandControl::Continue);
+    };
+
+    let InlineListSelection::ConfigAction(action_key) = selection else {
+        return Ok(SlashCommandControl::Continue);
+    };
+    if action_key == OAUTH_PROVIDER_BACK {
+        return Ok(SlashCommandControl::Continue);
+    }
+    let Some(provider) = action_key.strip_prefix(OAUTH_PROVIDER_PREFIX) else {
+        return Ok(SlashCommandControl::Continue);
+    };
+
+    match action {
+        OAuthProviderAction::Login => handle_oauth_login(ctx, provider.to_string()).await,
+        OAuthProviderAction::Logout => handle_oauth_logout(ctx, provider.to_string()).await,
+        OAuthProviderAction::Refresh => handle_refresh_oauth(ctx, provider.to_string()).await,
+    }
+}
 
 pub(crate) async fn handle_oauth_login(
     ctx: SlashCommandContext<'_>,
     provider: String,
 ) -> Result<SlashCommandControl> {
-    if !ensure_openrouter_provider(ctx.renderer, provider.as_str(), "login")? {
+    let provider = provider.trim().to_ascii_lowercase();
+    if !ensure_supported_provider(ctx.renderer, &provider, "login")? {
         return Ok(SlashCommandControl::Continue);
     }
+    let vt_cfg = ctx.vt_cfg.as_ref();
 
-    ctx.renderer.line(
-        MessageStyle::Info,
-        "Starting OpenRouter OAuth authentication...",
-    )?;
-
-    // Get callback port from config or use default
-    let callback_port = ctx
-        .vt_cfg
-        .as_ref()
-        .map(|cfg| cfg.auth.openrouter.callback_port)
-        .unwrap_or(8484);
-
-    // Generate PKCE challenge
-    let pkce = match vtcode_config::auth::generate_pkce_challenge() {
-        Ok(c) => c,
-        Err(err) => {
+    match provider.as_str() {
+        OPENROUTER_PROVIDER => {
             ctx.renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to generate PKCE challenge: {}", err),
+                MessageStyle::Info,
+                "Starting OpenRouter OAuth authentication...",
             )?;
-            return Ok(SlashCommandControl::Continue);
+            let prepared = prepare_openrouter_login(vt_cfg)?;
+            open_browser_with_guidance(ctx.renderer, &prepared.auth_url)?;
+            ctx.renderer.line(
+                MessageStyle::Info,
+                "Waiting for OpenRouter OAuth callback...",
+            )?;
+            let api_key = complete_openrouter_login(prepared).await?;
+            ctx.renderer.line(
+                MessageStyle::Info,
+                "Successfully authenticated with OpenRouter.",
+            )?;
+            ctx.renderer.line(
+                MessageStyle::Output,
+                "Stored the OAuth token using your configured credential storage mode.",
+            )?;
+            ctx.renderer.line(
+                MessageStyle::Output,
+                &format!("Key preview: {}...", &api_key[..api_key.len().min(8)]),
+            )?;
         }
-    };
-
-    // Generate auth URL
-    let auth_url = vtcode_config::auth::get_auth_url(&pkce, callback_port);
-
-    ctx.renderer
-        .line(MessageStyle::Info, "Opening browser for authentication...")?;
-    ctx.renderer
-        .line(MessageStyle::Output, &format!("URL: {}", auth_url))?;
-
-    // Try to open browser
-    if let Err(err) = webbrowser::open(&auth_url) {
-        ctx.renderer.line(
-            MessageStyle::Error,
-            &format!("Failed to open browser: {}", err),
-        )?;
-        ctx.renderer.line(
-            MessageStyle::Info,
-            "Please open the URL manually in your browser.",
-        )?;
+        OPENAI_PROVIDER => {
+            ctx.renderer.line(
+                MessageStyle::Info,
+                "Starting OpenAI ChatGPT authentication...",
+            )?;
+            let prepared = prepare_openai_login(vt_cfg)?;
+            open_browser_with_guidance(ctx.renderer, &prepared.auth_url)?;
+            ctx.renderer.line(
+                MessageStyle::Info,
+                "Waiting for OpenAI OAuth callback...",
+            )?;
+            let session = complete_openai_login(prepared).await?;
+            ctx.renderer.line(
+                MessageStyle::Info,
+                "Successfully authenticated with OpenAI via ChatGPT.",
+            )?;
+            if let Some(email) = session.email.as_deref() {
+                ctx.renderer
+                    .line(MessageStyle::Output, &format!("Account: {}", email))?;
+            }
+            if let Some(plan) = session.plan.as_deref() {
+                ctx.renderer
+                    .line(MessageStyle::Output, &format!("Plan: {}", plan))?;
+            }
+        }
+        _ => {}
     }
-
-    ctx.renderer.line(
-        MessageStyle::Info,
-        &format!("Waiting for callback on port {}...", callback_port),
-    )?;
-
-    // Get timeout from config or use default (5 minutes)
-    let timeout_secs = ctx
-        .vt_cfg
-        .as_ref()
-        .map(|cfg| cfg.auth.openrouter.flow_timeout_secs)
-        .unwrap_or(300);
-
-    run_openrouter_oauth_login(ctx.renderer, pkce, callback_port, timeout_secs).await?;
 
     Ok(SlashCommandControl::Continue)
 }
@@ -78,27 +121,69 @@ pub(crate) async fn handle_oauth_logout(
     ctx: SlashCommandContext<'_>,
     provider: String,
 ) -> Result<SlashCommandControl> {
-    if !ensure_openrouter_provider(ctx.renderer, provider.as_str(), "logout")? {
+    let provider = provider.trim().to_ascii_lowercase();
+    if !ensure_supported_provider(ctx.renderer, &provider, "logout")? {
         return Ok(SlashCommandControl::Continue);
     }
+    let vt_cfg = ctx.vt_cfg.as_ref();
 
-    match vtcode_config::auth::clear_oauth_token() {
-        Ok(()) => {
+    match provider.as_str() {
+        OPENROUTER_PROVIDER => {
+            clear_openrouter_login(vt_cfg)?;
             ctx.renderer.line(
                 MessageStyle::Info,
                 "OpenRouter OAuth token cleared successfully.",
             )?;
+        }
+        OPENAI_PROVIDER => {
+            clear_openai_login(vt_cfg)?;
             ctx.renderer.line(
-                MessageStyle::Output,
-                "You will need to authenticate again to use OAuth.",
+                MessageStyle::Info,
+                "OpenAI ChatGPT session cleared successfully.",
             )?;
         }
-        Err(err) => {
+        _ => {}
+    }
+
+    Ok(SlashCommandControl::Continue)
+}
+
+pub(crate) async fn handle_refresh_oauth(
+    ctx: SlashCommandContext<'_>,
+    provider: String,
+) -> Result<SlashCommandControl> {
+    let provider = provider.trim().to_ascii_lowercase();
+    if !ensure_supported_provider(ctx.renderer, &provider, "refresh")? {
+        return Ok(SlashCommandControl::Continue);
+    }
+
+    match provider.as_str() {
+        OPENAI_PROVIDER => {
             ctx.renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to clear OAuth token: {}", err),
+                MessageStyle::Info,
+                "Refreshing the stored OpenAI ChatGPT session...",
+            )?;
+            let session = refresh_openai_login(ctx.vt_cfg.as_ref()).await?;
+            ctx.renderer.line(
+                MessageStyle::Info,
+                "OpenAI ChatGPT session refreshed successfully.",
+            )?;
+            if let Some(email) = session.email.as_deref() {
+                ctx.renderer
+                    .line(MessageStyle::Output, &format!("Account: {}", email))?;
+            }
+            if let Some(plan) = session.plan.as_deref() {
+                ctx.renderer
+                    .line(MessageStyle::Output, &format!("Plan: {}", plan))?;
+            }
+        }
+        OPENROUTER_PROVIDER => {
+            ctx.renderer.line(
+                MessageStyle::Info,
+                "OpenRouter OAuth does not expose a refresh-token flow. Use /login openrouter to reconnect if needed.",
             )?;
         }
+        _ => {}
     }
 
     Ok(SlashCommandControl::Continue)
@@ -108,134 +193,291 @@ pub(crate) async fn handle_show_auth_status(
     ctx: SlashCommandContext<'_>,
     provider: Option<String>,
 ) -> Result<SlashCommandControl> {
+    let provider = provider.map(|value| value.trim().to_ascii_lowercase());
+    if let Some(provider_name) = provider.as_deref()
+        && !supports_oauth_provider(provider_name)
+    {
+        ctx.renderer.line(
+            MessageStyle::Error,
+            &format!(
+                "OAuth status not supported for provider: {}. Supported providers: openai, openrouter",
+                provider_name
+            ),
+        )?;
+        return Ok(SlashCommandControl::Continue);
+    }
+
     ctx.renderer
         .line(MessageStyle::Info, "Authentication Status")?;
     ctx.renderer.line(MessageStyle::Output, "")?;
+    let vt_cfg = ctx.vt_cfg.as_ref();
 
-    // Show OpenRouter status
     if provider.is_none() || provider.as_deref() == Some(OPENROUTER_PROVIDER) {
-        match vtcode_config::auth::get_auth_status() {
-            Ok(status) => render_openrouter_auth_status(ctx.renderer, status)?,
-            Err(err) => {
-                ctx.renderer.line(
-                    MessageStyle::Error,
-                    &format!("Failed to check auth status: {}", err),
-                )?;
-            }
-        }
+        render_openrouter_auth_status(ctx.renderer, openrouter_auth_status(vt_cfg)?)?;
     }
 
-    // Show other provider status if needed
+    if provider.is_none() {
+        ctx.renderer.line(MessageStyle::Output, "")?;
+    }
+
+    if provider.is_none() || provider.as_deref() == Some(OPENAI_PROVIDER) {
+        render_openai_auth_status(ctx.renderer, openai_auth_status(vt_cfg)?)?;
+        render_openai_credential_overview(
+            ctx.renderer,
+            vt_cfg,
+            ctx.config.provider.eq_ignore_ascii_case(OPENAI_PROVIDER),
+        )?;
+    }
+
     if provider.is_none() {
         ctx.renderer.line(MessageStyle::Output, "")?;
         ctx.renderer.line(
             MessageStyle::Output,
-            "Use /login <provider> to authenticate via OAuth",
-        )?;
-        ctx.renderer.line(
-            MessageStyle::Output,
-            "Use /logout <provider> to clear authentication",
+            "Use /login, /logout, or /refresh-oauth to manage OAuth-backed credentials.",
         )?;
     }
 
     Ok(SlashCommandControl::Continue)
 }
 
-fn ensure_openrouter_provider(
+fn ensure_supported_provider(
     renderer: &mut AnsiRenderer,
     provider: &str,
     action: &str,
 ) -> Result<bool> {
-    if provider == OPENROUTER_PROVIDER {
+    if supports_oauth_provider(provider) {
         return Ok(true);
     }
 
     renderer.line(
         MessageStyle::Error,
-        &format!("OAuth {action} not supported for provider: {provider}"),
+        &format!(
+            "OAuth {action} not supported for provider: {provider}. Supported providers: openai, openrouter"
+        ),
     )?;
     Ok(false)
 }
 
-async fn run_openrouter_oauth_login(
-    renderer: &mut AnsiRenderer,
-    pkce: vtcode_core::auth::PkceChallenge,
-    callback_port: u16,
-    timeout_secs: u64,
-) -> Result<()> {
-    #[cfg(feature = "a2a-server")]
-    {
-        use vtcode_core::auth::OAuthResult;
-
-        match vtcode_core::auth::run_oauth_callback_server(pkce, callback_port, Some(timeout_secs))
-            .await
-        {
-            Ok(OAuthResult::Success(api_key)) => {
-                renderer.line(
-                    MessageStyle::Info,
-                    "Successfully authenticated with OpenRouter!",
-                )?;
-                renderer.line(
-                    MessageStyle::Output,
-                    "Your API key has been securely stored and encrypted.",
-                )?;
-                renderer.line(
-                    MessageStyle::Output,
-                    &format!(
-                        "Key preview: {}...",
-                        &api_key[..std::cmp::min(8, api_key.len())]
-                    ),
-                )?;
-            }
-            Ok(OAuthResult::Cancelled) => {
-                renderer.line(MessageStyle::Info, "OAuth flow was cancelled by user.")?;
-            }
-            Ok(OAuthResult::Error(err)) => {
-                renderer.line(MessageStyle::Error, &format!("OAuth flow failed: {}", err))?;
-            }
-            Err(err) => {
-                renderer.line(MessageStyle::Error, &format!("OAuth server error: {}", err))?;
-            }
-        }
-    }
-
-    #[cfg(not(feature = "a2a-server"))]
-    {
-        let _ = (pkce, callback_port, timeout_secs);
-
+fn open_browser_with_guidance(renderer: &mut AnsiRenderer, auth_url: &str) -> Result<()> {
+    renderer
+        .line(MessageStyle::Info, "Opening browser for authentication...")?;
+    renderer
+        .line(MessageStyle::Output, &format!("URL: {}", auth_url))?;
+    if let Err(err) = webbrowser::open(auth_url) {
         renderer.line(
             MessageStyle::Error,
-            "OAuth login requires the 'a2a-server' feature to be enabled.",
+            &format!("Failed to open browser automatically: {}", err),
         )?;
         renderer.line(
             MessageStyle::Info,
-            "Please rebuild with: cargo build --features a2a-server",
+            "Please open the URL manually in your browser.",
         )?;
     }
-
     Ok(())
 }
 
-fn render_openrouter_auth_status(
-    renderer: &mut AnsiRenderer,
-    status: vtcode_config::auth::AuthStatus,
+fn show_oauth_provider_modal(
+    ctx: &mut SlashCommandContext<'_>,
+    action: OAuthProviderAction,
 ) -> Result<()> {
+    let vt_cfg = ctx.vt_cfg.as_ref();
+    let openrouter_status = openrouter_auth_status(vt_cfg)?;
+    let openai_status = openai_auth_status(vt_cfg)?;
+    let openai_overview = summarize_current_openai_credentials(vt_cfg)?;
+
+    let mut items = vec![
+        InlineListItem {
+            title: "OpenAI ChatGPT".to_string(),
+            subtitle: Some(openai_modal_subtitle(action, &openai_status)),
+            badge: Some(openai_modal_badge(action, &openai_status, &openai_overview)),
+            indent: 0,
+            selection: Some(InlineListSelection::ConfigAction(format!(
+                "{}{}",
+                OAUTH_PROVIDER_PREFIX, OPENAI_PROVIDER
+            ))),
+            search_value: Some("openai chatgpt oauth subscription".to_string()),
+        },
+        InlineListItem {
+            title: "OpenRouter".to_string(),
+            subtitle: Some(openrouter_modal_subtitle(action, &openrouter_status)),
+            badge: Some(openrouter_modal_badge(action, &openrouter_status)),
+            indent: 0,
+            selection: Some(InlineListSelection::ConfigAction(format!(
+                "{}{}",
+                OAUTH_PROVIDER_PREFIX, OPENROUTER_PROVIDER
+            ))),
+            search_value: Some("openrouter oauth".to_string()),
+        },
+        InlineListItem {
+            title: "Back".to_string(),
+            subtitle: Some("Close this dialog".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::ConfigAction(
+                OAUTH_PROVIDER_BACK.to_string(),
+            )),
+            search_value: Some("back close cancel".to_string()),
+        },
+    ];
+
+    if matches!(action, OAuthProviderAction::Refresh) {
+        items[0].badge = Some("Refresh".to_string());
+        items[1].badge = Some("Info".to_string());
+    }
+
+    ctx.renderer.show_list_modal(
+        oauth_modal_title(action),
+        oauth_modal_lines(action),
+        items,
+        Some(InlineListSelection::ConfigAction(format!(
+            "{}{}",
+            OAUTH_PROVIDER_PREFIX,
+            OPENAI_PROVIDER
+        ))),
+        None,
+    );
+    Ok(())
+}
+
+fn oauth_modal_title(action: OAuthProviderAction) -> &'static str {
+    match action {
+        OAuthProviderAction::Login => "OAuth login",
+        OAuthProviderAction::Logout => "OAuth logout",
+        OAuthProviderAction::Refresh => "Refresh OAuth",
+    }
+}
+
+fn oauth_modal_lines(action: OAuthProviderAction) -> Vec<String> {
+    match action {
+        OAuthProviderAction::Login => vec![
+            "Choose an OAuth-capable provider to connect.".to_string(),
+            "VT Code stores credentials securely using your configured credential storage mode."
+                .to_string(),
+        ],
+        OAuthProviderAction::Logout => vec![
+            "Choose an OAuth-capable provider to disconnect.".to_string(),
+            "This removes the stored OAuth session for the selected provider.".to_string(),
+        ],
+        OAuthProviderAction::Refresh => vec![
+            "Choose an OAuth-capable provider to refresh.".to_string(),
+            "OpenAI refreshes the stored ChatGPT session; OpenRouter requires a new login."
+                .to_string(),
+        ],
+    }
+}
+
+fn openai_modal_subtitle(
+    action: OAuthProviderAction,
+    status: &OpenAIChatGptAuthStatus,
+) -> String {
+    match action {
+        OAuthProviderAction::Login => match status {
+            OpenAIChatGptAuthStatus::Authenticated { label, .. } => format!(
+                "Connected{}; re-authenticate to replace the stored ChatGPT session.",
+                label
+                    .as_deref()
+                    .map(|value| format!(" as {}", value))
+                    .unwrap_or_default()
+            ),
+            OpenAIChatGptAuthStatus::NotAuthenticated => {
+                "Sign in with your ChatGPT subscription.".to_string()
+            }
+        },
+        OAuthProviderAction::Logout => match status {
+            OpenAIChatGptAuthStatus::Authenticated { label, .. } => format!(
+                "Remove the stored ChatGPT session{}.",
+                label
+                    .as_deref()
+                    .map(|value| format!(" for {}", value))
+                    .unwrap_or_default()
+            ),
+            OpenAIChatGptAuthStatus::NotAuthenticated => {
+                "No stored ChatGPT session to remove.".to_string()
+            }
+        },
+        OAuthProviderAction::Refresh => match status {
+            OpenAIChatGptAuthStatus::Authenticated { .. } => {
+                "Refresh the stored ChatGPT session using its refresh token.".to_string()
+            }
+            OpenAIChatGptAuthStatus::NotAuthenticated => {
+                "No stored ChatGPT session to refresh yet.".to_string()
+            }
+        },
+    }
+}
+
+fn openai_modal_badge(
+    action: OAuthProviderAction,
+    status: &OpenAIChatGptAuthStatus,
+    overview: &vtcode_config::auth::OpenAICredentialOverview,
+) -> String {
+    if matches!(action, OAuthProviderAction::Refresh) {
+        return if matches!(status, OpenAIChatGptAuthStatus::Authenticated { .. }) {
+            "Refresh".to_string()
+        } else {
+            "Missing".to_string()
+        };
+    }
+
+    if overview.active_source == Some(OpenAIResolvedAuthSource::ChatGpt) {
+        return "Active".to_string();
+    }
+
     match status {
-        vtcode_config::auth::AuthStatus::Authenticated {
+        OpenAIChatGptAuthStatus::Authenticated { .. } => "Connected".to_string(),
+        OpenAIChatGptAuthStatus::NotAuthenticated => "OAuth".to_string(),
+    }
+}
+
+fn openrouter_modal_subtitle(action: OAuthProviderAction, status: &AuthStatus) -> String {
+    match action {
+        OAuthProviderAction::Login => match status {
+            AuthStatus::Authenticated { label, .. } => format!(
+                "Connected{}; re-authenticate to replace the stored OpenRouter token.",
+                label
+                    .as_deref()
+                    .map(|value| format!(" as {}", value))
+                    .unwrap_or_default()
+            ),
+            AuthStatus::NotAuthenticated => "Sign in with OpenRouter OAuth.".to_string(),
+        },
+        OAuthProviderAction::Logout => match status {
+            AuthStatus::Authenticated { .. } => {
+                "Remove the stored OpenRouter OAuth token.".to_string()
+            }
+            AuthStatus::NotAuthenticated => "No stored OpenRouter OAuth token to remove.".to_string(),
+        },
+        OAuthProviderAction::Refresh => {
+            "OpenRouter does not expose a refresh-token flow; reconnect with /login openrouter."
+                .to_string()
+        }
+    }
+}
+
+fn openrouter_modal_badge(action: OAuthProviderAction, status: &AuthStatus) -> String {
+    if matches!(action, OAuthProviderAction::Refresh) {
+        return "Info".to_string();
+    }
+    match status {
+        AuthStatus::Authenticated { .. } => "Connected".to_string(),
+        AuthStatus::NotAuthenticated => "OAuth".to_string(),
+    }
+}
+
+fn render_openrouter_auth_status(renderer: &mut AnsiRenderer, status: AuthStatus) -> Result<()> {
+    match status {
+        AuthStatus::Authenticated {
             label,
             age_seconds,
             expires_in,
         } => {
-            renderer.line(MessageStyle::Info, "OpenRouter: ✓ Authenticated (OAuth)")?;
+            renderer.line(MessageStyle::Info, "OpenRouter: authenticated (OAuth)")?;
             if let Some(label) = label {
                 renderer.line(MessageStyle::Output, &format!("  Label: {}", label))?;
             }
             renderer.line(
                 MessageStyle::Output,
-                &format!(
-                    "  Token obtained: {} ago",
-                    format_auth_duration(age_seconds)
-                ),
+                &format!("  Token obtained: {}", format_auth_duration(age_seconds)),
             )?;
             if let Some(expires_in) = expires_in {
                 renderer.line(
@@ -244,33 +486,141 @@ fn render_openrouter_auth_status(
                 )?;
             }
         }
-        vtcode_config::auth::AuthStatus::NotAuthenticated => {
-            if std::env::var("OPENROUTER_API_KEY").is_ok() {
+        AuthStatus::NotAuthenticated => {
+            if get_api_key(OPENROUTER_PROVIDER, &ApiKeySources::default()).is_ok() {
                 renderer.line(
                     MessageStyle::Info,
-                    "OpenRouter: Using API key from environment",
+                    "OpenRouter: using OPENROUTER_API_KEY",
                 )?;
             } else {
-                renderer.line(MessageStyle::Info, "OpenRouter: Not authenticated")?;
-                renderer.line(
-                    MessageStyle::Output,
-                    "  Use /login openrouter to authenticate via OAuth",
-                )?;
+                renderer.line(MessageStyle::Info, "OpenRouter: not authenticated")?;
             }
         }
     }
-
     Ok(())
+}
+
+fn render_openai_auth_status(
+    renderer: &mut AnsiRenderer,
+    status: OpenAIChatGptAuthStatus,
+) -> Result<()> {
+    match status {
+        OpenAIChatGptAuthStatus::Authenticated {
+            label,
+            age_seconds,
+            expires_in,
+        } => {
+            renderer.line(MessageStyle::Info, "OpenAI: authenticated (ChatGPT)")?;
+            if let Some(label) = label {
+                renderer.line(MessageStyle::Output, &format!("  Label: {}", label))?;
+            }
+            renderer.line(
+                MessageStyle::Output,
+                &format!("  Session obtained: {}", format_auth_duration(age_seconds)),
+            )?;
+            if let Some(expires_in) = expires_in {
+                renderer.line(
+                    MessageStyle::Output,
+                    &format!("  Expires in: {}", format_auth_duration(expires_in)),
+                )?;
+            }
+        }
+        OpenAIChatGptAuthStatus::NotAuthenticated => {
+            if get_api_key(OPENAI_PROVIDER, &ApiKeySources::default()).is_ok() {
+                renderer.line(
+                    MessageStyle::Info,
+                    "OpenAI: using OPENAI_API_KEY",
+                )?;
+            } else {
+                renderer.line(MessageStyle::Info, "OpenAI: not authenticated")?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn render_openai_credential_overview(
+    renderer: &mut AnsiRenderer,
+    vt_cfg: Option<&vtcode_config::VTCodeConfig>,
+    current_provider_is_openai: bool,
+) -> Result<()> {
+    let overview = summarize_current_openai_credentials(vt_cfg)?;
+    renderer.line(
+        MessageStyle::Output,
+        &format!(
+            "  API key: {}",
+            if overview.api_key_available {
+                "available"
+            } else {
+                "not found"
+            }
+        ),
+    )?;
+    renderer.line(
+        MessageStyle::Output,
+        &format!(
+            "  ChatGPT session: {}",
+            if overview.chatgpt_session.is_some() {
+                "connected"
+            } else {
+                "not connected"
+            }
+        ),
+    )?;
+
+    let usage_status = match overview.active_source {
+        Some(OpenAIResolvedAuthSource::ChatGpt) => "using ChatGPT subscription",
+        Some(OpenAIResolvedAuthSource::ApiKey) => "using OPENAI_API_KEY",
+        None => "no active OpenAI credential",
+    };
+    renderer.line(
+        MessageStyle::Output,
+        &format!(
+            "  Usage status: {} (preferred_method = {})",
+            usage_status,
+            overview.preferred_method.as_str()
+        ),
+    )?;
+
+    if current_provider_is_openai {
+        renderer.line(
+            MessageStyle::Output,
+            &format!("  Current session: {}", usage_status),
+        )?;
+    }
+
+    if let Some(notice) = overview.notice.as_deref() {
+        renderer.line(MessageStyle::Info, &format!("  Notice: {}", notice))?;
+    }
+    if let Some(recommendation) = overview.recommendation.as_deref() {
+        renderer.line(
+            MessageStyle::Output,
+            &format!("  Recommendation: {}", recommendation),
+        )?;
+    }
+    Ok(())
+}
+
+fn summarize_current_openai_credentials(
+    vt_cfg: Option<&vtcode_config::VTCodeConfig>,
+) -> Result<vtcode_config::auth::OpenAICredentialOverview> {
+    let default_auth = vtcode_auth::OpenAIAuthConfig::default();
+    let auth_cfg = vt_cfg.map(|cfg| &cfg.auth.openai).unwrap_or(&default_auth);
+    let storage_mode = vt_cfg
+        .map(|cfg| cfg.agent.credential_storage_mode)
+        .unwrap_or_default();
+    let api_key = get_api_key(OPENAI_PROVIDER, &ApiKeySources::default()).ok();
+    vtcode_config::auth::summarize_openai_credentials(auth_cfg, storage_mode, api_key)
 }
 
 fn format_auth_duration(seconds: u64) -> String {
     if seconds < 60 {
-        format!("{}s", seconds)
+        format!("{seconds}s")
     } else if seconds < 3600 {
-        format!("{}m", seconds / 60)
-    } else if seconds < 86400 {
-        format!("{}h", seconds / 3600)
+        format!("{}m {}s", seconds / 60, seconds % 60)
+    } else if seconds < 86_400 {
+        format!("{}h {}m", seconds / 3600, (seconds % 3600) / 60)
     } else {
-        format!("{}d", seconds / 86400)
+        format!("{}d {}h", seconds / 86_400, (seconds % 86_400) / 3600)
     }
 }

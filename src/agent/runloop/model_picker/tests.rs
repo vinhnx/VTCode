@@ -142,6 +142,7 @@ fn base_picker_state(current_provider: &str, current_model: &str) -> ModelPicker
         options: MODEL_OPTIONS.as_slice(),
         step: PickerStep::AwaitModel,
         inline_enabled: true,
+        vt_cfg: None,
         current_reasoning: ReasoningEffortLevel::Medium,
         current_service_tier: None,
         current_provider: current_provider.to_string(),
@@ -247,6 +248,7 @@ fn build_result_uses_selected_service_tier() {
         reasoning_off_model: None,
         service_tier_supported: true,
         requires_api_key: false,
+        uses_chatgpt_auth: false,
         env_key: "OPENAI_API_KEY".to_string(),
     });
     picker.selected_reasoning = Some(ReasoningEffortLevel::Low);

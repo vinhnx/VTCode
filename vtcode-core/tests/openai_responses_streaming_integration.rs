@@ -29,6 +29,7 @@ async fn mock_responses_api_streaming_includes_prompt_cache_retention() {
     let base_url = mock_openai_base_url(&server);
     let provider = OpenAIProvider::from_config(
         Some("key".to_string()),
+        None,
         Some("gpt-5".to_string()),
         Some(base_url.to_string()),
         Some(pc),

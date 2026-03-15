@@ -1079,7 +1079,11 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             (vtcode_core::config::types::UiSurfacePreference::Auto, false) => "std".to_string(),
         };
         let tools_count = tools.read().await.len();
-        let provider_label = if config.provider.trim().is_empty() {
+        let provider_label = if config.provider.eq_ignore_ascii_case("openai")
+            && config.openai_chatgpt_auth.is_some()
+        {
+            "OpenAI (ChatGPT)".to_string()
+        } else if config.provider.trim().is_empty() {
             provider_name.clone()
         } else {
             config.provider.clone()

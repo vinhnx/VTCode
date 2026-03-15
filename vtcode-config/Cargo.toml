@@ -39,6 +39,7 @@ toml_edit = "0.24.0"
 tracing = { workspace = true }
 urlencoding = "2.1"
 vtcode-commons = { path = "../vtcode-commons", version = "0.88.5" }
+vtcode-auth = { path = "../vtcode-auth", version = "0.88.5" }
 dotenvy = { workspace = true }
 tempfile = { workspace = true }
 walkdir = { workspace = true }
@@ -52,7 +53,7 @@ nix = { version = "0.31", features = ["user"] }
 [features]
 default = ["bootstrap"]
 bootstrap = []
-schema = ["dep:schemars"]
+schema = ["dep:schemars", "vtcode-auth/schema"]
 
 [dev-dependencies]
 assert_fs = { workspace = true }

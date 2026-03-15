@@ -194,6 +194,7 @@ mod tests {
             checkpointing_max_age_days: Some(30),
             max_conversation_turns: 1000,
             model_behavior: None,
+            openai_chatgpt_auth: None,
         }
     }
 

@@ -122,7 +122,7 @@ pub(super) async fn handle_exec_command_impl(
     let event_session_id = session_id.clone();
 
     let automation_cfg = &run_vt_cfg.automation.full_auto;
-    let mut runner = AgentRunner::new_with_thread_bootstrap_and_config(
+    let mut runner = AgentRunner::new_with_thread_bootstrap_and_config_with_openai_auth(
         AgentType::Single,
         model_id,
         run_config.api_key.clone(),
@@ -135,6 +135,7 @@ pub(super) async fn handle_exec_command_impl(
         None,
         thread_bootstrap,
         run_vt_cfg.clone(),
+        run_config.openai_chatgpt_auth.clone(),
     )
     .await?;
 

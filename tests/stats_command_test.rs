@@ -38,6 +38,7 @@ async fn test_handle_stats_command_returns_agent_metrics() -> Result<()> {
         quiet: false,
         max_conversation_turns: 1000,
         model_behavior: None,
+            openai_chatgpt_auth: None,
     };
     let mut agent = Agent::new(config).await?;
     agent.update_session_stats(5, 3, 1);

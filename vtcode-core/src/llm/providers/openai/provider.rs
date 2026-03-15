@@ -28,6 +28,7 @@ use std::time::Duration;
 use std::time::Instant;
 use tokio::sync::Mutex as AsyncMutex;
 use tracing::debug;
+use vtcode_config::auth::OpenAIChatGptAuthHandle;
 
 // Import from extracted modules
 use super::harmony;
@@ -51,6 +52,7 @@ use crate::prompts::system::default_system_prompt;
 
 pub struct OpenAIProvider {
     api_key: Arc<str>,
+    openai_chatgpt_auth: Option<OpenAIChatGptAuthHandle>,
     http_client: HttpClient,
     base_url: Arc<str>,
     model: Arc<str>,
@@ -92,6 +94,7 @@ impl OpenAIProvider {
     pub fn new(api_key: String) -> Self {
         Self::with_model_internal(
             api_key,
+            None,
             models::openai::DEFAULT_MODEL.to_string(),
             None,
             None,
@@ -104,6 +107,7 @@ impl OpenAIProvider {
     pub fn with_model(api_key: String, model: String) -> Self {
         Self::with_model_internal(
             api_key,
+            None,
             model,
             None,
             None,
@@ -115,6 +119,7 @@ impl OpenAIProvider {
 
     pub fn new_with_client(
         api_key: String,
+        openai_chatgpt_auth: Option<OpenAIChatGptAuthHandle>,
         model: String,
         http_client: reqwest::Client,
         base_url: String,
@@ -126,6 +131,7 @@ impl OpenAIProvider {
 
         Self {
             api_key: Arc::from(api_key.as_str()),
+            openai_chatgpt_auth,
             http_client,
             base_url: Arc::from(base_url.as_str()),
             model: Arc::from(model.as_str()),
@@ -145,6 +151,7 @@ impl OpenAIProvider {
     #[allow(clippy::too_many_arguments)]
     pub fn from_config(
         api_key: Option<String>,
+        openai_chatgpt_auth: Option<OpenAIChatGptAuthHandle>,
         model: Option<String>,
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
@@ -158,6 +165,7 @@ impl OpenAIProvider {
 
         Self::with_model_internal(
             api_key_value,
+            openai_chatgpt_auth,
             model_value,
             prompt_cache,
             base_url,
@@ -169,6 +177,7 @@ impl OpenAIProvider {
 
     fn with_model_internal(
         api_key: String,
+        openai_chatgpt_auth: Option<OpenAIChatGptAuthHandle>,
         model: String,
         prompt_cache: Option<PromptCachingConfig>,
         base_url: Option<String>,
@@ -226,6 +235,7 @@ impl OpenAIProvider {
 
         Self {
             api_key: Arc::from(api_key.as_str()),
+            openai_chatgpt_auth,
             http_client,
             base_url: Arc::from(resolved_base_url.as_str()),
             model: Arc::from(model.as_str()),
@@ -256,12 +266,86 @@ impl OpenAIProvider {
         .then_some(&self.hosted_shell)
     }
 
-    fn authorize(&self, builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        if self.api_key.trim().is_empty() {
+    fn authorize_with_api_key(
+        &self,
+        builder: reqwest::RequestBuilder,
+        api_key: &str,
+    ) -> reqwest::RequestBuilder {
+        if api_key.trim().is_empty() {
             builder
         } else {
-            builder.bearer_auth(&self.api_key)
+            builder.bearer_auth(api_key)
         }
+    }
+
+    fn uses_chatgpt_auth(&self) -> bool {
+        self.openai_chatgpt_auth.is_some()
+    }
+
+    fn auth_retryable_status(status: StatusCode) -> bool {
+        matches!(status, StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN)
+    }
+
+    fn format_network_error(error: impl std::fmt::Display) -> provider::LLMError {
+        provider::LLMError::Network {
+            message: error_display::format_llm_error("OpenAI", &format!("Network error: {error}")),
+            metadata: None,
+        }
+    }
+
+    fn format_auth_error(error: impl std::fmt::Display) -> provider::LLMError {
+        provider::LLMError::Authentication {
+            message: error_display::format_llm_error(
+                "OpenAI",
+                &format!("Authentication error: {error}"),
+            ),
+            metadata: None,
+        }
+    }
+
+    async fn current_api_key(&self) -> Result<String, provider::LLMError> {
+        let Some(handle) = &self.openai_chatgpt_auth else {
+            return Ok(self.api_key.to_string());
+        };
+
+        handle
+            .refresh_if_needed()
+            .await
+            .map_err(Self::format_auth_error)?;
+        handle.current_api_key().map_err(Self::format_auth_error)
+    }
+
+    async fn refresh_api_key_for_retry(&self) -> Result<String, provider::LLMError> {
+        let Some(handle) = &self.openai_chatgpt_auth else {
+            return Ok(self.api_key.to_string());
+        };
+
+        handle
+            .force_refresh()
+            .await
+            .map_err(Self::format_auth_error)?;
+        handle.current_api_key().map_err(Self::format_auth_error)
+    }
+
+    async fn send_authorized<F>(&self, build_request: F) -> Result<reqwest::Response, provider::LLMError>
+    where
+        F: Fn(&str) -> reqwest::RequestBuilder,
+    {
+        let api_key = self.current_api_key().await?;
+        let response = build_request(&api_key)
+            .send()
+            .await
+            .map_err(Self::format_network_error)?;
+
+        if self.uses_chatgpt_auth() && Self::auth_retryable_status(response.status()) {
+            let retry_api_key = self.refresh_api_key_for_retry().await?;
+            return build_request(&retry_api_key)
+                .send()
+                .await
+                .map_err(Self::format_network_error);
+        }
+
+        Ok(response)
     }
 
     fn supports_temperature_parameter(model: &str) -> bool {

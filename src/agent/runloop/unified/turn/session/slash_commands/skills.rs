@@ -179,6 +179,7 @@ fn skill_runtime(
                 workspace: ctx.config.workspace.clone(),
                 model: ctx.config.model.clone(),
                 api_key: ctx.config.api_key.clone(),
+                openai_chatgpt_auth: ctx.config.openai_chatgpt_auth.clone(),
                 vt_cfg: ctx.vt_cfg.as_ref().cloned(),
             },
         ),

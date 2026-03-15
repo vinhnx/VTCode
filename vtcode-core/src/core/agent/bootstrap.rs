@@ -13,7 +13,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
 
-use crate::config::models::{ModelId, Provider};
+use crate::config::models::Provider;
 use crate::config::types::{AgentConfig, SessionInfo};
 use crate::models_manager::ModelsManager;
 use crate::utils::error_messages::{ERR_CREATE_DIR, ERR_GET_METADATA};
@@ -21,7 +21,8 @@ use crate::utils::error_messages::{ERR_CREATE_DIR, ERR_GET_METADATA};
 use crate::core::decision_tracker::DecisionTracker;
 use crate::core::error_recovery::ErrorRecoveryManager;
 use crate::ctx_err;
-use crate::llm::{AnyClient, make_client};
+use crate::llm::client::{AnyClient, ProviderClientAdapter};
+use crate::llm::factory::{ProviderConfig, create_provider_with_config, infer_provider_from_model};
 use crate::tools::ToolRegistry;
 use tracing::warn;
 
@@ -159,12 +160,34 @@ impl<'config> AgentComponentBuilder<'config> {
 }
 
 fn create_llm_client(config: &AgentConfig) -> Result<AnyClient> {
-    let model_id = config
-        .model
-        .parse::<ModelId>()
-        .with_context(|| format!("Invalid model identifier: {}", config.model))?;
+    let provider_name = if config.provider.trim().is_empty() {
+        infer_provider_from_model(&config.model)
+            .map(|provider| provider.to_string())
+            .ok_or_else(|| anyhow::anyhow!("Cannot determine provider for model: {}", config.model))?
+    } else {
+        config.provider.to_lowercase()
+    };
 
-    Ok(make_client(config.api_key.clone(), model_id)?)
+    let provider = create_provider_with_config(
+        &provider_name,
+        ProviderConfig {
+            api_key: Some(config.api_key.clone()),
+            openai_chatgpt_auth: config.openai_chatgpt_auth.clone(),
+            base_url: None,
+            model: Some(config.model.clone()),
+            prompt_cache: Some(config.prompt_cache.clone()),
+            timeouts: None,
+            openai: None,
+            anthropic: None,
+            model_behavior: config.model_behavior.clone(),
+        },
+    )
+    .with_context(|| format!("Failed to initialize provider '{}'", provider_name))?;
+
+    Ok(Box::new(ProviderClientAdapter::new(
+        provider,
+        config.model.clone(),
+    )))
 }
 
 fn create_session_info() -> Result<SessionInfo> {
@@ -253,6 +276,7 @@ mod tests {
             quiet: false,
             max_conversation_turns: 1000,
             model_behavior: None,
+            openai_chatgpt_auth: None,
         };
 
         let components = AgentComponentBuilder::new(&agent_config)
@@ -288,6 +312,7 @@ mod tests {
             quiet: false,
             max_conversation_turns: 1000,
             model_behavior: None,
+            openai_chatgpt_auth: None,
         };
 
         let custom_session = SessionInfo {
@@ -365,6 +390,7 @@ mod tests {
             quiet: false,
             max_conversation_turns: 1000,
             model_behavior: None,
+            openai_chatgpt_auth: None,
         }
     }
 }

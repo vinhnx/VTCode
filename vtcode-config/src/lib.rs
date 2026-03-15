@@ -61,8 +61,9 @@ pub use core::{
     CommandsConfig, DockerSandboxConfig, EditorToolConfig, ExternalSandboxConfig,
     ExternalSandboxType, FullAutoConfig, GatekeeperConfig, MicroVMSandboxConfig, ModelConfig,
     NetworkAllowlistEntryConfig, NetworkConfig, OpenAIConfig, OpenAIHostedShellConfig,
-    OpenAIHostedShellEnvironment, OpenAIHostedSkill, OpenAIServiceTier, OpenResponsesConfig,
-    OpenRouterAuthConfig, PluginRuntimeConfig, PluginTrustLevel, PromptCachingConfig,
+    OpenAIAuthConfig, OpenAIHostedShellEnvironment, OpenAIHostedSkill, OpenAIServiceTier,
+    OpenAIPreferredMethod, OpenResponsesConfig, OpenRouterAuthConfig, PluginRuntimeConfig,
+    PluginTrustLevel, PromptCachingConfig,
     ProviderPromptCachingConfig, ResourceLimitsConfig, ResourceLimitsPreset, SandboxConfig,
     SandboxMode, SeccompConfig, SeccompProfilePreset, SecurityConfig, SensitivePathsConfig,
     SkillsConfig, SkillsRenderMode, ToolPolicy, ToolsConfig, WebFetchConfig,
@@ -117,8 +118,12 @@ pub use workspace_env::{read_workspace_env_value, write_workspace_env_value};
 
 // Re-export auth module types
 pub use auth::{
-    AuthStatus, OpenRouterOAuthConfig, OpenRouterToken, PkceChallenge, clear_oauth_token,
-    generate_pkce_challenge, get_auth_status, get_auth_url, load_oauth_token, save_oauth_token,
+    AuthStatus, OpenAIChatGptAuthHandle, OpenAIChatGptAuthStatus, OpenAIChatGptSession,
+    OpenRouterOAuthConfig, OpenRouterToken, PkceChallenge, clear_oauth_token,
+    clear_openai_chatgpt_session, generate_pkce_challenge, get_auth_status, get_auth_url,
+    get_openai_chatgpt_auth_status, get_openai_chatgpt_auth_url, load_oauth_token,
+    load_openai_chatgpt_session, resolve_openai_auth, save_oauth_token,
+    save_openai_chatgpt_session,
 };
 pub use codex::{
     FileOpener, HistoryConfig, HistoryPersistence, TerminalNotificationMethod, TuiAlternateScreen,

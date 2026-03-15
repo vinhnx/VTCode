@@ -188,15 +188,19 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
         // OAuth authentication
         SlashCommandInfo {
             name: "login",
-            description: "Authenticate with OpenRouter via OAuth (usage: /login openrouter)",
+            description: "Authenticate with OpenAI or OpenRouter via OAuth (usage: /login [provider])",
         },
         SlashCommandInfo {
             name: "logout",
-            description: "Clear OAuth authentication (usage: /logout openrouter)",
+            description: "Clear stored OAuth authentication (usage: /logout [provider])",
         },
         SlashCommandInfo {
             name: "auth",
             description: "Show authentication status for providers (usage: /auth [provider])",
+        },
+        SlashCommandInfo {
+            name: "refresh-oauth",
+            description: "Refresh stored OAuth credentials when supported (usage: /refresh-oauth [provider])",
         },
     ]
 });

@@ -257,7 +257,11 @@ pub(crate) async fn run_doctor_diagnostics(
         runtime_provider.as_str()
     };
 
-    let api_key_result = if provider_requires_api_key(provider_for_api_check) {
+    let api_key_result = if provider_for_api_check.eq_ignore_ascii_case("openai")
+        && config.openai_chatgpt_auth.is_some()
+    {
+        DoctorCheckOutcome::Pass("ChatGPT subscription active for OpenAI".to_string())
+    } else if provider_requires_api_key(provider_for_api_check) {
         match get_api_key(provider_for_api_check, &ApiKeySources::default()) {
             Ok(_) => DoctorCheckOutcome::Pass(format!(
                 "API key configured for '{}'",

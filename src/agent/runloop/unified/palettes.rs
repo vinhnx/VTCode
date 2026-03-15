@@ -259,7 +259,11 @@ async fn refresh_runtime_config_from_manager(
         handle.set_theme(inline_theme_from_core_styles(&styles));
         handle.set_appearance(to_tui_appearance(&runtime_config));
 
-        let provider_label = if config.provider.trim().is_empty() {
+        let provider_label = if config.provider.eq_ignore_ascii_case("openai")
+            && config.openai_chatgpt_auth.is_some()
+        {
+            "OpenAI (ChatGPT)".to_string()
+        } else if config.provider.trim().is_empty() {
             provider_client.name().to_string()
         } else {
             config.provider.clone()

@@ -523,6 +523,24 @@ pub enum Commands {
         global: bool,
     },
 
+    /// Authenticate with an OAuth-capable provider
+    Login {
+        /// Provider name (`openai` or `openrouter`)
+        provider: String,
+    },
+
+    /// Clear stored OAuth credentials for a provider
+    Logout {
+        /// Provider name (`openai` or `openrouter`)
+        provider: String,
+    },
+
+    /// Show authentication status for one provider or all supported providers
+    Auth {
+        /// Optional provider name (`openai` or `openrouter`)
+        provider: Option<String>,
+    },
+
     /// Manage tool execution policies
     #[command(name = "tool-policy")]
     ToolPolicy {

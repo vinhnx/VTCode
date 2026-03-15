@@ -6,6 +6,7 @@ use vtcode_core::utils::dot_config::{DotConfig, load_user_config};
 
 #[derive(Clone, Default)]
 pub(super) struct ProviderEndpointConfig {
+    openai: Option<String>,
     ollama: Option<String>,
 }
 
@@ -13,12 +14,14 @@ impl ProviderEndpointConfig {
     pub(super) async fn gather(_workspace: Option<&Path>) -> Self {
         let dot_config = load_user_config().await.ok();
         Self {
+            openai: Self::extract_base_url(Provider::OpenAI, dot_config.as_ref()),
             ollama: Self::extract_base_url(Provider::Ollama, dot_config.as_ref()),
         }
     }
 
     pub(super) fn base_url(&self, provider: Provider) -> Option<String> {
         match provider {
+            Provider::OpenAI => self.openai.clone(),
             Provider::Ollama => self.ollama.clone(),
             _ => None,
         }
@@ -31,6 +34,11 @@ impl ProviderEndpointConfig {
 
     fn extract_base_url(provider: Provider, dot_config: Option<&DotConfig>) -> Option<String> {
         let from_config = dot_config.and_then(|cfg| match provider {
+            Provider::OpenAI => cfg
+                .providers
+                .openai
+                .as_ref()
+                .and_then(|c| c.base_url.clone()),
             Provider::Ollama => cfg
                 .providers
                 .ollama
@@ -55,6 +63,7 @@ impl ProviderEndpointConfig {
 
     fn env_override(provider: Provider) -> Option<String> {
         let key = match provider {
+            Provider::OpenAI => env_vars::OPENAI_BASE_URL,
             Provider::Ollama => env_vars::OLLAMA_BASE_URL,
             _ => return None,
         };
@@ -67,6 +76,7 @@ impl ProviderEndpointConfig {
 
 pub(super) fn default_provider_base(provider: Provider) -> &'static str {
     match provider {
+        Provider::OpenAI => urls::OPENAI_API_BASE,
         Provider::Ollama => urls::OLLAMA_API_BASE,
         _ => "",
     }

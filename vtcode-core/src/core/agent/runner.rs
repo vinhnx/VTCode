@@ -38,6 +38,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 use tracing::{info, warn};
+use vtcode_config::auth::OpenAIChatGptAuthHandle;
 
 mod config_helpers;
 mod constants;
@@ -144,7 +145,30 @@ impl AgentRunner {
         settings: RunnerSettings,
         steering_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
     ) -> Result<Self> {
-        Self::new_with_thread_bootstrap(
+        Self::new_with_openai_auth(
+            agent_type,
+            model,
+            api_key,
+            workspace,
+            session_id,
+            settings,
+            steering_receiver,
+            None,
+        )
+        .await
+    }
+
+    pub async fn new_with_openai_auth(
+        agent_type: AgentType,
+        model: ModelId,
+        api_key: String,
+        workspace: PathBuf,
+        session_id: String,
+        settings: RunnerSettings,
+        steering_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
+        openai_chatgpt_auth: Option<OpenAIChatGptAuthHandle>,
+    ) -> Result<Self> {
+        Self::new_with_thread_bootstrap_and_openai_auth(
             agent_type,
             model,
             api_key,
@@ -153,6 +177,7 @@ impl AgentRunner {
             settings,
             steering_receiver,
             ThreadBootstrap::new(None),
+            openai_chatgpt_auth,
         )
         .await
     }
@@ -168,6 +193,32 @@ impl AgentRunner {
         steering_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
         bootstrap: ThreadBootstrap,
     ) -> Result<Self> {
+        Self::new_with_thread_bootstrap_and_openai_auth(
+            agent_type,
+            model,
+            api_key,
+            workspace,
+            session_id,
+            settings,
+            steering_receiver,
+            bootstrap,
+            None,
+        )
+        .await
+    }
+
+    /// Create an agent runner with a prebuilt thread bootstrap (for resumed sessions).
+    pub async fn new_with_thread_bootstrap_and_openai_auth(
+        agent_type: AgentType,
+        model: ModelId,
+        api_key: String,
+        workspace: PathBuf,
+        session_id: String,
+        settings: RunnerSettings,
+        steering_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
+        bootstrap: ThreadBootstrap,
+        openai_chatgpt_auth: Option<OpenAIChatGptAuthHandle>,
+    ) -> Result<Self> {
         Self::new_with_thread_bootstrap_internal(
             agent_type,
             model,
@@ -178,6 +229,7 @@ impl AgentRunner {
             steering_receiver,
             bootstrap,
             None,
+            openai_chatgpt_auth,
         )
         .await
     }
@@ -194,6 +246,35 @@ impl AgentRunner {
         bootstrap: ThreadBootstrap,
         vt_cfg: VTCodeConfig,
     ) -> Result<Self> {
+        Self::new_with_thread_bootstrap_and_config_with_openai_auth(
+            agent_type,
+            model,
+            api_key,
+            workspace,
+            session_id,
+            settings,
+            steering_receiver,
+            bootstrap,
+            vt_cfg,
+            None,
+        )
+        .await
+    }
+
+    /// Create an agent runner with a prebuilt thread bootstrap, preloaded config, and runtime auth.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn new_with_thread_bootstrap_and_config_with_openai_auth(
+        agent_type: AgentType,
+        model: ModelId,
+        api_key: String,
+        workspace: PathBuf,
+        session_id: String,
+        settings: RunnerSettings,
+        steering_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
+        bootstrap: ThreadBootstrap,
+        vt_cfg: VTCodeConfig,
+        openai_chatgpt_auth: Option<OpenAIChatGptAuthHandle>,
+    ) -> Result<Self> {
         Self::new_with_thread_bootstrap_internal(
             agent_type,
             model,
@@ -204,10 +285,12 @@ impl AgentRunner {
             steering_receiver,
             bootstrap,
             Some(vt_cfg),
+            openai_chatgpt_auth,
         )
         .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn new_with_thread_bootstrap_internal(
         agent_type: AgentType,
         model: ModelId,
@@ -218,6 +301,7 @@ impl AgentRunner {
         steering_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
         bootstrap: ThreadBootstrap,
         vt_cfg: Option<VTCodeConfig>,
+        openai_chatgpt_auth: Option<OpenAIChatGptAuthHandle>,
     ) -> Result<Self> {
         // Load configuration once to seed system prompt and runtime policies
         let session_config = if let Some(vt_cfg) = vt_cfg {
@@ -246,6 +330,7 @@ impl AgentRunner {
         };
         let provider_config = ProviderConfig {
             api_key: Some(api_key.clone()),
+            openai_chatgpt_auth: openai_chatgpt_auth.clone(),
             base_url: None,
             model: Some(model.to_string()),
             prompt_cache: Some(session_config.effective().prompt_cache.clone()),

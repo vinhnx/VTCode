@@ -14,7 +14,7 @@ pub mod skills;
 pub mod tools;
 
 pub use agent::{AgentConfig, AgentOnboardingConfig, OpenResponsesConfig};
-pub use auth::{AuthConfig, OpenRouterAuthConfig};
+pub use auth::{AuthConfig, OpenAIAuthConfig, OpenAIPreferredMethod, OpenRouterAuthConfig};
 pub use automation::{AutomationConfig, FullAutoConfig};
 pub use commands::CommandsConfig;
 pub use dotfile_protection::DotfileProtectionConfig;

@@ -83,6 +83,7 @@ pub(crate) async fn refine_user_prompt_if_enabled(
         &provider_name,
         ProviderConfig {
             api_key: Some(cfg.api_key.clone()),
+            openai_chatgpt_auth: cfg.openai_chatgpt_auth.clone(),
             base_url: None,
             model: Some(refiner_model.clone()),
             prompt_cache: Some(cfg.prompt_cache.clone()),

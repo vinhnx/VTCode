@@ -161,8 +161,14 @@ pub(crate) async fn handle_outcome(
         SlashCommandOutcome::OAuthLogin { provider } => {
             handlers::handle_oauth_login(ctx, provider).await
         }
+        SlashCommandOutcome::StartOAuthProviderPicker { action } => {
+            handlers::handle_start_oauth_provider_picker(ctx, action).await
+        }
         SlashCommandOutcome::OAuthLogout { provider } => {
             handlers::handle_oauth_logout(ctx, provider).await
+        }
+        SlashCommandOutcome::RefreshOAuth { provider } => {
+            handlers::handle_refresh_oauth(ctx, provider).await
         }
         SlashCommandOutcome::ShowAuthStatus { provider } => {
             handlers::handle_show_auth_status(ctx, provider).await

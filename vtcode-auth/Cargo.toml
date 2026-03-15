@@ -1,0 +1,44 @@
+[package]
+name = "vtcode-auth"
+version.workspace = true
+edition.workspace = true
+rust-version = "1.88"
+authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
+description = "Authentication and OAuth flows shared across VT Code"
+license.workspace = true
+homepage = "https://github.com/vinhnx/vtcode"
+repository = "https://github.com/vinhnx/vtcode"
+documentation = "https://docs.rs/vtcode-auth"
+keywords = ["auth", "oauth", "vtcode", "keyring"]
+categories = ["authentication", "development-tools"]
+
+[dependencies]
+anyhow = { workspace = true }
+axum = "0.8"
+base64 = { workspace = true }
+dirs = { workspace = true }
+hostname = "0.4"
+keyring = { workspace = true }
+reqwest = { workspace = true }
+ring = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+urlencoding = "2.1"
+schemars = { workspace = true, optional = true, features = ["indexmap2"] }
+
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.31", features = ["user"] }
+
+[features]
+default = []
+schema = ["dep:schemars"]
+
+[dev-dependencies]
+assert_fs = { workspace = true }
+serial_test = { workspace = true }
+
+[lints]
+workspace = true

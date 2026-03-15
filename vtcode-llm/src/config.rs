@@ -294,6 +294,7 @@ fn project_provider_config(
 ) -> vtcode_core::llm::factory::ProviderConfig {
     vtcode_core::llm::factory::ProviderConfig {
         api_key: source.api_key().map(Cow::into_owned),
+        openai_chatgpt_auth: None,
         base_url: source.base_url().map(Cow::into_owned),
         model: source.model().map(Cow::into_owned),
         prompt_cache: source.prompt_cache().map(Cow::into_owned),
@@ -481,6 +482,7 @@ mod tests {
     fn core_provider_config_exposes_borrowed_nested_values() {
         let config = vtcode_core::llm::factory::ProviderConfig {
             api_key: None,
+            openai_chatgpt_auth: None,
             base_url: None,
             model: None,
             prompt_cache: Some(PromptCachingConfig::default()),
@@ -547,6 +549,7 @@ mod tests {
     fn preserves_provider_specific_fields_from_core_config() {
         let source = vtcode_core::llm::factory::ProviderConfig {
             api_key: Some("secret".to_string()),
+            openai_chatgpt_auth: None,
             base_url: Some("https://api.example.com".to_string()),
             model: Some("gpt-5".to_string()),
             prompt_cache: Some(PromptCachingConfig::default()),

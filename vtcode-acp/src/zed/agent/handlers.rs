@@ -122,6 +122,7 @@ impl acp::Agent for ZedAgent {
                 &self.config.provider,
                 ProviderConfig {
                     api_key: Some(self.config.api_key.clone()),
+                    openai_chatgpt_auth: self.config.openai_chatgpt_auth.clone(),
                     base_url: None,
                     model: Some(self.config.model.clone()),
                     prompt_cache: Some(self.config.prompt_cache.clone()),

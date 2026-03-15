@@ -1,9 +1,12 @@
 use anyhow::{Context, Result, anyhow};
 use std::path::Path;
-use vtcode_config::{read_workspace_env_value, write_workspace_env_value};
+use vtcode_config::{
+    read_workspace_env_value, resolve_openai_auth, write_workspace_env_value,
+};
 
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::loader::VTCodeConfig;
+use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, UiSurfacePreference};
 use vtcode_core::llm::factory::{ProviderConfig, create_provider_with_config};
 use vtcode_core::llm::provider::LLMProvider;
@@ -32,7 +35,10 @@ pub(crate) async fn finalize_model_selection(
 ) -> Result<()> {
     let workspace = config.workspace.clone();
 
-    let api_key = resolve_runtime_api_key(&workspace, &selection)?;
+    let updated_cfg = picker.persist_selection(&workspace, &selection).await?;
+    let (api_key, openai_chatgpt_auth) =
+        resolve_runtime_api_key(&workspace, Some(&updated_cfg), &selection)?;
+    *vt_cfg = Some(updated_cfg);
 
     if let Some(provider_enum) = selection.provider_enum
         && let Err(err) =
@@ -47,15 +53,13 @@ pub(crate) async fn finalize_model_selection(
         )?;
     }
 
-    let updated_cfg = picker.persist_selection(&workspace, &selection).await?;
-    *vt_cfg = Some(updated_cfg);
-
     if let Some(provider_enum) = selection.provider_enum {
         let provider_name = selection.provider.clone();
         let new_client = create_provider_with_config(
             &provider_name,
             ProviderConfig {
                 api_key: Some(api_key.clone()),
+                openai_chatgpt_auth: openai_chatgpt_auth.clone(),
                 base_url: None,
                 model: Some(selection.model.clone()),
                 prompt_cache: Some(config.prompt_cache.clone()),
@@ -80,6 +84,7 @@ pub(crate) async fn finalize_model_selection(
     config.api_key = api_key;
     config.reasoning_effort = selection.reasoning;
     config.api_key_env = selection.env_key.clone();
+    config.openai_chatgpt_auth = openai_chatgpt_auth;
     sync_runtime_custom_api_key(config, &selection);
 
     if let Some(provider_enum) = selection.provider_enum
@@ -104,7 +109,7 @@ pub(crate) async fn finalize_model_selection(
     let next_header_context = build_inline_header_context(
         config,
         session_bootstrap,
-        selection.provider_label.clone(),
+        runtime_provider_label(&selection),
         selection.model.clone(),
         provider_client.effective_context_size(&selection.model),
         mode_label,
@@ -158,7 +163,12 @@ pub(crate) async fn finalize_model_selection(
         renderer.line(MessageStyle::Info, &message)?;
     }
 
-    if selection.api_key.is_some() {
+    if selection.uses_chatgpt_auth {
+        renderer.line(
+            MessageStyle::Info,
+            "Using ChatGPT subscription for OpenAI.",
+        )?;
+    } else if selection.api_key.is_some() {
         renderer.line(
             MessageStyle::Info,
             &format!(
@@ -179,29 +189,48 @@ pub(crate) async fn finalize_model_selection(
     Ok(())
 }
 
-fn resolve_runtime_api_key(workspace: &Path, selection: &ModelSelectionResult) -> Result<String> {
+fn resolve_runtime_api_key(
+    workspace: &Path,
+    vt_cfg: Option<&VTCodeConfig>,
+    selection: &ModelSelectionResult,
+) -> Result<(
+    String,
+    Option<vtcode_config::auth::OpenAIChatGptAuthHandle>,
+)> {
+    if selection.provider_enum == Some(Provider::OpenAI) && selection.uses_chatgpt_auth {
+        let cfg = vt_cfg.ok_or_else(|| anyhow!("OpenAI configuration not loaded"))?;
+        let api_key = get_api_key(&selection.provider, &ApiKeySources::default()).ok();
+        let resolved = resolve_openai_auth(
+            &cfg.auth.openai,
+            cfg.agent.credential_storage_mode,
+            api_key,
+        )?;
+        return Ok((resolved.api_key().to_string(), resolved.handle()));
+    }
+
     if let Some(key) = selection.api_key.as_ref() {
         write_workspace_env_value(workspace, &selection.env_key, key)?;
-        return Ok(key.clone());
+        return Ok((key.clone(), None));
     }
 
     if let Some(key) = read_workspace_api_key(workspace, &selection.env_key)? {
-        return Ok(key);
+        return Ok((key, None));
     }
 
     if selection.provider_enum.is_some() {
         return get_api_key(&selection.provider, &ApiKeySources::default())
-            .with_context(|| format!("API key not found for provider '{}'", selection.provider));
+            .with_context(|| format!("API key not found for provider '{}'", selection.provider))
+            .map(|key| (key, None));
     }
 
     match std::env::var(&selection.env_key) {
-        Ok(value) if !value.trim().is_empty() => Ok(value),
+        Ok(value) if !value.trim().is_empty() => Ok((value, None)),
         _ if selection.requires_api_key => Err(anyhow!(
             "API key not found for provider '{}'. Set {} or enter a key to continue.",
             selection.provider,
             selection.env_key
         )),
-        _ => Ok(String::new()),
+        _ => Ok((String::new(), None)),
     }
 }
 
@@ -211,6 +240,10 @@ fn read_workspace_api_key(workspace: &Path, env_key: &str) -> Result<Option<Stri
 }
 
 fn sync_runtime_custom_api_key(config: &mut CoreAgentConfig, selection: &ModelSelectionResult) {
+    if selection.provider_enum == Some(Provider::OpenAI) && selection.uses_chatgpt_auth {
+        return;
+    }
+
     if selection.api_key.is_some() {
         config
             .custom_api_keys
@@ -219,6 +252,14 @@ fn sync_runtime_custom_api_key(config: &mut CoreAgentConfig, selection: &ModelSe
     }
 
     config.custom_api_keys.remove(&selection.provider);
+}
+
+fn runtime_provider_label(selection: &ModelSelectionResult) -> String {
+    if selection.provider_enum == Some(Provider::OpenAI) && selection.uses_chatgpt_auth {
+        "OpenAI (ChatGPT)".to_string()
+    } else {
+        selection.provider_label.clone()
+    }
 }
 
 #[cfg(test)]
@@ -252,6 +293,7 @@ mod tests {
             api_key: api_key.map(ToString::to_string),
             env_key: env_key.to_string(),
             requires_api_key,
+            uses_chatgpt_auth: false,
         }
     }
 
@@ -268,10 +310,10 @@ mod tests {
             true,
         );
 
-        let resolved =
-            resolve_runtime_api_key(dir.path(), &selection).expect("workspace env should resolve");
+        let resolved = resolve_runtime_api_key(dir.path(), None, &selection)
+            .expect("workspace env should resolve");
 
-        assert_eq!(resolved, "workspace-key");
+        assert_eq!(resolved.0, "workspace-key");
     }
 
     #[test]
@@ -286,11 +328,11 @@ mod tests {
         );
 
         let resolved =
-            resolve_runtime_api_key(dir.path(), &selection).expect("user key should resolve");
+            resolve_runtime_api_key(dir.path(), None, &selection).expect("user key should resolve");
         let written =
             read_workspace_api_key(dir.path(), "OPENAI_API_KEY").expect("workspace env read");
 
-        assert_eq!(resolved, "user-key");
+        assert_eq!(resolved.0, "user-key");
         assert_eq!(written.as_deref(), Some("user-key"));
     }
 
@@ -299,7 +341,7 @@ mod tests {
         let dir = tempdir().expect("temp dir");
         let selection = selection("custom", None, "CUSTOM_API_KEY", None, true);
 
-        let err = resolve_runtime_api_key(dir.path(), &selection)
+        let err = resolve_runtime_api_key(dir.path(), None, &selection)
             .expect_err("missing custom provider key should fail");
 
         assert!(err.to_string().contains("CUSTOM_API_KEY"));

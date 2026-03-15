@@ -463,6 +463,7 @@ pub struct AgentConfig {
     pub model: String,
     pub api_key: String,
     pub provider: String,
+    pub openai_chatgpt_auth: Option<crate::auth::OpenAIChatGptAuthHandle>,
     pub api_key_env: String,
     pub workspace: PathBuf,
     pub verbose: bool,

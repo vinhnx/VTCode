@@ -347,6 +347,7 @@ fn create_provider_client(
         &provider_name,
         ProviderConfig {
             api_key: Some(config.api_key.clone()),
+            openai_chatgpt_auth: config.openai_chatgpt_auth.clone(),
             base_url: None,
             model: Some(config.model.clone()),
             prompt_cache: Some(config.prompt_cache.clone()),

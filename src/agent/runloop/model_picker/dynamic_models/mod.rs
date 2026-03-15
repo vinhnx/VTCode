@@ -4,7 +4,11 @@ mod endpoints;
 use hashbrown::{HashMap, HashSet};
 use std::path::Path;
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
+use reqwest::StatusCode;
+use serde::Deserialize;
+use vtcode_config::VTCodeConfig;
+use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::models::Provider;
 use vtcode_core::llm::providers::ollama::fetch_ollama_models;
 
@@ -25,10 +29,28 @@ pub(super) struct DynamicModelRegistry {
 }
 
 impl DynamicModelRegistry {
-    pub(super) async fn load(options: &[ModelOption], workspace: Option<&Path>) -> Self {
+    pub(super) async fn load(
+        options: &[ModelOption],
+        workspace: Option<&Path>,
+        vt_cfg: Option<&VTCodeConfig>,
+    ) -> Self {
         let endpoints = ProviderEndpointConfig::gather(workspace).await;
         let static_index = build_static_model_index(options);
         let mut cache_store = CachedDynamicModelStore::load().await;
+
+        let openai_base_url = endpoints.resolved_base_url(Provider::OpenAI);
+        let openai_auth = resolve_openai_dynamic_auth(vt_cfg);
+        let openai_fetch = if let Some(openai_api_key) = openai_auth {
+            let (result, warning) = cache_store
+                .fetch_with_cache(Provider::OpenAI, endpoints.base_url(Provider::OpenAI), {
+                    let openai_api_key = openai_api_key.clone();
+                    move |base_url| fetch_openai_models(base_url, openai_api_key.clone())
+                })
+                .await;
+            Some((result, warning))
+        } else {
+            None
+        };
 
         let ollama_base_url = endpoints.resolved_base_url(Provider::Ollama);
         let (ollama_result, ollama_warning) = cache_store
@@ -41,6 +63,17 @@ impl DynamicModelRegistry {
         let _ = cache_store.persist().await;
 
         let mut registry = Self::default();
+        if let Some((openai_result, openai_warning)) = openai_fetch {
+            registry.process_fetch(
+                Provider::OpenAI,
+                openai_result,
+                openai_base_url,
+                &static_index,
+            );
+            if let Some(warning) = openai_warning {
+                registry.record_warning(Provider::OpenAI, warning);
+            }
+        }
         registry.process_fetch(
             Provider::Ollama,
             ollama_result,
@@ -176,6 +209,79 @@ fn build_static_model_index(options: &[ModelOption]) -> StaticModelIndex {
             .insert(option.id.to_ascii_lowercase());
     }
     index
+}
+
+fn resolve_openai_dynamic_auth(vt_cfg: Option<&VTCodeConfig>) -> Option<String> {
+    let auth_config = vt_cfg
+        .map(|cfg| cfg.auth.openai.clone())
+        .unwrap_or_default();
+    let storage_mode = vt_cfg
+        .map(|cfg| cfg.agent.credential_storage_mode)
+        .unwrap_or_default();
+    let api_key = get_api_key("openai", &ApiKeySources::default()).ok();
+
+    vtcode_config::resolve_openai_auth(&auth_config, storage_mode, api_key)
+        .ok()
+        .map(|resolved| resolved.api_key().to_string())
+}
+
+async fn fetch_openai_models(
+    base_url: Option<String>,
+    api_key: String,
+) -> Result<Vec<String>, anyhow::Error> {
+    #[derive(Debug, Deserialize)]
+    struct ModelsResponse {
+        data: Vec<ModelEntry>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct ModelEntry {
+        id: String,
+    }
+
+    let resolved_base = base_url
+        .unwrap_or_else(|| endpoints::default_provider_base(Provider::OpenAI).to_string())
+        .trim_end_matches('/')
+        .to_string();
+    let models_url = format!("{}/models", resolved_base);
+    let response = reqwest::Client::new()
+        .get(&models_url)
+        .bearer_auth(api_key)
+        .send()
+        .await
+        .map_err(|err| anyhow!("failed to connect to OpenAI models endpoint: {}", err))?;
+
+    if response.status() == StatusCode::UNAUTHORIZED || response.status() == StatusCode::FORBIDDEN
+    {
+        return Err(anyhow!("OpenAI authentication failed while listing remote models"));
+    }
+    if !response.status().is_success() {
+        return Err(anyhow!(
+            "failed to fetch OpenAI models: HTTP {}",
+            response.status()
+        ));
+    }
+
+    let parsed: ModelsResponse = response
+        .json()
+        .await
+        .map_err(|err| anyhow!("failed to parse OpenAI models response: {}", err))?;
+
+    Ok(parsed
+        .data
+        .into_iter()
+        .map(|entry| entry.id)
+        .filter(|id| is_supported_openai_remote_model(id))
+        .collect())
+}
+
+fn is_supported_openai_remote_model(model_id: &str) -> bool {
+    let lower = model_id.to_ascii_lowercase();
+    lower.starts_with("gpt")
+        || lower.starts_with("o1")
+        || lower.starts_with("o3")
+        || lower.starts_with("o4")
+        || lower.starts_with("codex")
 }
 
 #[cfg(test)]

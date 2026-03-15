@@ -141,6 +141,7 @@ impl LmStudioProvider {
         let resolved_base = Self::resolve_base_url(base_url);
         OpenAIProvider::from_config(
             api_key,
+            None,
             Some(resolved_model),
             Some(resolved_base),
             prompt_cache,
@@ -167,6 +168,7 @@ impl LmStudioProvider {
     ) -> Self {
         let inner = OpenAIProvider::new_with_client(
             "lm-studio".to_string(), // Dummy API key
+            None,
             model,
             http_client,
             base_url,

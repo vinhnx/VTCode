@@ -56,6 +56,7 @@ pub(crate) struct ModelPickerState {
     options: &'static [ModelOption],
     step: PickerStep,
     inline_enabled: bool,
+    vt_cfg: Option<VTCodeConfig>,
     current_reasoning: ReasoningEffortLevel,
     current_service_tier: Option<OpenAIServiceTier>,
     current_provider: String,
@@ -81,6 +82,7 @@ impl ModelPickerState {
     #[allow(clippy::new_ret_no_self)]
     pub(crate) async fn new(
         renderer: &mut AnsiRenderer,
+        vt_cfg: Option<VTCodeConfig>,
         current_reasoning: ReasoningEffortLevel,
         current_service_tier: Option<OpenAIServiceTier>,
         workspace: Option<PathBuf>,
@@ -89,12 +91,14 @@ impl ModelPickerState {
     ) -> Result<ModelPickerStart> {
         let options = MODEL_OPTIONS.as_slice();
         let inline_enabled = renderer.supports_inline_ui();
-        let dynamic_models = DynamicModelRegistry::load(options, workspace.as_deref()).await;
+        let dynamic_models =
+            DynamicModelRegistry::load(options, workspace.as_deref(), vt_cfg.as_ref()).await;
 
         let mut state = Self {
             options,
             step: PickerStep::AwaitModel,
             inline_enabled,
+            vt_cfg,
             current_reasoning,
             current_service_tier,
             current_provider,
@@ -194,8 +198,12 @@ impl ModelPickerState {
     }
 
     pub async fn refresh_dynamic_models(&mut self, renderer: &mut AnsiRenderer) -> Result<()> {
-        self.dynamic_models =
-            DynamicModelRegistry::load(self.options, self.workspace.as_deref()).await;
+        self.dynamic_models = DynamicModelRegistry::load(
+            self.options,
+            self.workspace.as_deref(),
+            self.vt_cfg.as_ref(),
+        )
+        .await;
         self.selection = None;
         self.selected_reasoning = None;
         self.selected_service_tier = None;
@@ -222,7 +230,7 @@ impl ModelPickerState {
         Ok(())
     }
 
-    pub fn handle_input(
+    pub async fn handle_input(
         &mut self,
         renderer: &mut AnsiRenderer,
         input: &str,
@@ -250,7 +258,7 @@ impl ModelPickerState {
             PickerStep::AwaitModel => self.handle_model_selection(renderer, trimmed),
             PickerStep::AwaitReasoning => self.handle_reasoning(renderer, trimmed),
             PickerStep::AwaitServiceTier => self.handle_service_tier(renderer, trimmed),
-            PickerStep::AwaitApiKey => self.handle_api_key(renderer, trimmed),
+            PickerStep::AwaitApiKey => self.handle_api_key(renderer, trimmed).await,
         }
     }
 

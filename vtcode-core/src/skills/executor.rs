@@ -34,6 +34,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::{debug, info, warn};
+use vtcode_config::auth::OpenAIChatGptAuthHandle;
 
 type SkillToolArgTransform = dyn Fn(&str, Value) -> Value + Send + Sync;
 
@@ -359,6 +360,7 @@ pub struct ForkSkillRuntimeConfig {
     pub workspace: PathBuf,
     pub model: String,
     pub api_key: String,
+    pub openai_chatgpt_auth: Option<OpenAIChatGptAuthHandle>,
     pub vt_cfg: Option<VTCodeConfig>,
 }
 
@@ -449,7 +451,7 @@ impl ForkSkillExecutor for ChildAgentSkillExecutor {
             .with_context(|| format!("invalid model for forked skill '{}'", skill.name()))?;
 
         let mut runner = if let Some(vt_cfg) = self.runtime.vt_cfg.clone() {
-            AgentRunner::new_with_thread_bootstrap_and_config(
+            AgentRunner::new_with_thread_bootstrap_and_config_with_openai_auth(
                 fork_agent_type(skill),
                 model,
                 self.runtime.api_key.clone(),
@@ -462,10 +464,11 @@ impl ForkSkillExecutor for ChildAgentSkillExecutor {
                 None,
                 crate::core::threads::ThreadBootstrap::new(None),
                 vt_cfg,
+                self.runtime.openai_chatgpt_auth.clone(),
             )
             .await?
         } else {
-            AgentRunner::new_with_thread_bootstrap(
+            AgentRunner::new_with_thread_bootstrap_and_openai_auth(
                 fork_agent_type(skill),
                 model,
                 self.runtime.api_key.clone(),
@@ -477,6 +480,7 @@ impl ForkSkillExecutor for ChildAgentSkillExecutor {
                 },
                 None,
                 crate::core::threads::ThreadBootstrap::new(None),
+                self.runtime.openai_chatgpt_auth.clone(),
             )
             .await?
         };

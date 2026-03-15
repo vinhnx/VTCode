@@ -21,7 +21,7 @@ use validation::{
     apply_permission_mode_override, validate_full_auto_configuration,
     validate_startup_configuration,
 };
-use vtcode_core::cli::args::Cli;
+use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
@@ -29,9 +29,11 @@ use vtcode_core::config::validator::{
     check_openai_hosted_shell_compat, check_prompt_cache_retention_compat,
 };
 use vtcode_core::core::agent::config::{
-    api_key_env_var, build_runtime_agent_config, provider_label, resolve_runtime_model_selection,
+    RuntimeModelSelection, api_key_env_var, build_runtime_agent_config, provider_label,
+    resolve_runtime_model_selection,
 };
 use vtcode_core::{initialize_dot_folder, update_theme_preference};
+use vtcode_config::auth::{OpenAIChatGptAuthHandle, resolve_openai_auth};
 pub(crate) use workspace_trust::{
     ensure_full_auto_workspace_trust, require_full_auto_workspace_trust,
 };
@@ -114,27 +116,13 @@ impl StartupContext {
         vtcode_core::utils::ansi::apply_file_opener_config(config.file_opener);
 
         // Validate API key AFTER first-run setup so new users can complete setup first
-        let api_key = get_api_key(&selection.provider, &ApiKeySources::default())
-            .with_context(|| {
-                let first_run_occurred = loaded.first_run_occurred;
-                let provider_name = provider_label(&selection.provider);
-                let env_var = api_key_env_var(&selection.provider);
-                if first_run_occurred {
-                    format!(
-                        "API key not found for {}. To fix:\n  1. Set {} environment variable, or\n  2. Add to .env file, or\n  3. Configure in vtcode.toml\n\nRun `/init` anytime to reconfigure.",
-                        provider_name,
-                        env_var
-                    )
-                } else {
-                    format!(
-                        "API key not found for provider '{}'. Set {} environment variable (or add to .env file) or configure in vtcode.toml.",
-                        selection.provider,
-                        api_key_env_var(&selection.provider)
-                    )
-                }
-            })?;
+        let (api_key, openai_chatgpt_auth) = if command_skips_provider_auth(args.command.as_ref()) {
+            (String::new(), None)
+        } else {
+            resolve_runtime_provider_auth(&config, &selection, loaded.first_run_occurred)?
+        };
 
-        let agent_config = build_runtime_agent_config(
+        let mut agent_config = build_runtime_agent_config(
             args,
             &config,
             loaded.workspace.clone(),
@@ -142,6 +130,7 @@ impl StartupContext {
             api_key,
             theme_selection,
         );
+        agent_config.openai_chatgpt_auth = openai_chatgpt_auth;
 
         let skip_confirmations = args.skip_confirmations || loaded.full_auto_requested;
 
@@ -193,6 +182,61 @@ impl StartupContext {
             plan_mode_requested,
         })
     }
+}
+
+fn resolve_runtime_provider_auth(
+    config: &VTCodeConfig,
+    selection: &RuntimeModelSelection,
+    first_run_occurred: bool,
+) -> Result<(String, Option<OpenAIChatGptAuthHandle>)> {
+    if selection.provider.eq_ignore_ascii_case("openai") {
+        let api_key = get_api_key(&selection.provider, &ApiKeySources::default()).ok();
+        let resolved = resolve_openai_auth(
+            &config.auth.openai,
+            config.agent.credential_storage_mode,
+            api_key,
+        )
+        .with_context(|| missing_api_key_message(selection, first_run_occurred))?;
+        return Ok((resolved.api_key().to_string(), resolved.handle()));
+    }
+
+    let api_key = get_api_key(&selection.provider, &ApiKeySources::default())
+        .with_context(|| missing_api_key_message(selection, first_run_occurred))?;
+    Ok((api_key, None))
+}
+
+fn missing_api_key_message(
+    selection: &RuntimeModelSelection,
+    first_run_occurred: bool,
+) -> String {
+    let provider_name = provider_label(&selection.provider);
+    let env_var = api_key_env_var(&selection.provider);
+    if selection.provider.eq_ignore_ascii_case("openai") {
+        return format!(
+            "Authentication not found for OpenAI. Set {env_var}, configure it in vtcode.toml, or run `vtcode login openai`."
+        );
+    }
+
+    if first_run_occurred {
+        format!(
+            "API key not found for {}. To fix:\n  1. Set {} environment variable, or\n  2. Add to .env file, or\n  3. Configure in vtcode.toml\n\nRun `/init` anytime to reconfigure.",
+            provider_name,
+            env_var
+        )
+    } else {
+        format!(
+            "API key not found for provider '{}'. Set {} environment variable (or add to .env file) or configure in vtcode.toml.",
+            selection.provider,
+            api_key_env_var(&selection.provider)
+        )
+    }
+}
+
+fn command_skips_provider_auth(command: Option<&Commands>) -> bool {
+    matches!(
+        command,
+        Some(Commands::Login { .. } | Commands::Logout { .. } | Commands::Auth { .. })
+    )
 }
 
 #[cfg(test)]

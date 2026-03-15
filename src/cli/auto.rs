@@ -52,7 +52,7 @@ pub async fn handle_auto_task_command(
             .as_secs()
     );
 
-    let mut runner = AgentRunner::new(
+    let mut runner = AgentRunner::new_with_openai_auth(
         AgentType::Single,
         model_id,
         config.api_key.clone(),
@@ -63,6 +63,7 @@ pub async fn handle_auto_task_command(
             verbosity: None,
         },
         None,
+        config.openai_chatgpt_auth.clone(),
     )
     .await?;
 

@@ -65,6 +65,7 @@ pub(crate) async fn register_skill_tools(
                 workspace: config.workspace.clone(),
                 model: config.model.clone(),
                 api_key: config.api_key.clone(),
+                openai_chatgpt_auth: config.openai_chatgpt_auth.clone(),
                 vt_cfg: vt_cfg.cloned(),
             },
         ),

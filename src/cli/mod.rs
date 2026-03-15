@@ -7,6 +7,7 @@ mod acp;
 mod action_resolution;
 mod adapters;
 mod anthropic_api;
+pub(crate) mod auth;
 mod auto;
 mod checkpoints;
 mod config;
@@ -137,6 +138,7 @@ mod tests {
             checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
             max_conversation_turns: 1000,
             model_behavior: None,
+            openai_chatgpt_auth: None,
         }
     }
 

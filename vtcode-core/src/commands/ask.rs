@@ -1,9 +1,8 @@
 //! Ask command implementation - single prompt without tools
 
 use crate::cli::input_hardening::validate_agent_safe_text;
-use crate::config::models::ModelId;
 use crate::config::types::AgentConfig;
-use crate::llm::factory::create_provider_for_model;
+use crate::llm::factory::{ProviderConfig, create_provider_with_config, infer_provider_from_model};
 use crate::llm::provider::{LLMRequest, Message};
 use crate::prompts::system::lightweight_instruction_text;
 use anyhow::Result;
@@ -16,10 +15,6 @@ pub async fn handle_ask_command(
     prompt: Vec<String>,
     options: crate::cli::AskCommandOptions,
 ) -> Result<()> {
-    let model_id = config
-        .model
-        .parse::<ModelId>()
-        .map_err(|_| anyhow::anyhow!("Invalid model: {}", config.model))?;
     let prompt_text = prompt.join(" ");
     validate_agent_safe_text("prompt", &prompt_text)?;
 
@@ -30,14 +25,34 @@ pub async fn handle_ask_command(
     let request = LLMRequest {
         messages: vec![Message::user(prompt_text)],
         system_prompt: Some(Arc::new(lightweight_instruction_text())),
-        model: model_id.to_string(),
+        model: config.model.clone(),
         ..Default::default()
     };
-    let provider = create_provider_for_model(&request.model, config.api_key.clone(), None, None)?;
+    let provider_name = if config.provider.trim().is_empty() {
+        infer_provider_from_model(&request.model)
+            .map(|provider| provider.to_string())
+            .ok_or_else(|| anyhow::anyhow!("Cannot determine provider for model: {}", request.model))?
+    } else {
+        config.provider.to_lowercase()
+    };
+    let provider = create_provider_with_config(
+        &provider_name,
+        ProviderConfig {
+            api_key: Some(config.api_key.clone()),
+            openai_chatgpt_auth: config.openai_chatgpt_auth.clone(),
+            base_url: None,
+            model: Some(request.model.clone()),
+            prompt_cache: None,
+            timeouts: None,
+            openai: None,
+            anthropic: None,
+            model_behavior: config.model_behavior.clone(),
+        },
+    )?;
     let backend_kind = provider.name().to_string();
     let response = provider.generate(request).await?;
     let response_model = if response.model.is_empty() {
-        model_id.to_string()
+        config.model.clone()
     } else {
         response.model.clone()
     };

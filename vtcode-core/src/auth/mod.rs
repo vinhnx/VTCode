@@ -8,10 +8,10 @@
 pub mod auth_handler;
 
 #[cfg(feature = "a2a-server")]
-pub mod oauth_server;
-
-#[cfg(feature = "a2a-server")]
-pub use oauth_server::{OAuthResult, run_oauth_callback_server};
+pub use vtcode_auth::{
+    AuthCallbackOutcome as OAuthResult, OAuthCallbackPage, OAuthProvider,
+    run_auth_code_callback_server as run_oauth_callback_server,
+};
 
 pub use auth_handler::AuthHandler;
 

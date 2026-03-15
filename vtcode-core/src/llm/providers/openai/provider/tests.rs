@@ -90,6 +90,7 @@ fn test_provider(base_url: &str, model: &str) -> OpenAIProvider {
         .expect("test client should build");
     OpenAIProvider::new_with_client(
         "test-key".to_string(),
+        None,
         model.to_string(),
         http_client,
         base_url.to_string(),
@@ -191,6 +192,7 @@ fn responses_payload_uses_function_wrapper() {
 fn responses_payload_uses_hosted_shell_when_enabled() {
     let provider = OpenAIProvider::from_config(
         Some(String::new()),
+        None,
         Some(models::openai::GPT_5.to_string()),
         Some("https://api.openai.com/v1".to_string()),
         None,
@@ -247,6 +249,7 @@ fn responses_payload_uses_hosted_shell_when_enabled() {
 fn responses_payload_omits_explicit_latest_string_version() {
     let provider = OpenAIProvider::from_config(
         Some(String::new()),
+        None,
         Some(models::openai::GPT_5.to_string()),
         Some("https://api.openai.com/v1".to_string()),
         None,
@@ -284,6 +287,7 @@ fn responses_payload_omits_explicit_latest_string_version() {
 fn responses_payload_uses_container_reference_when_configured() {
     let provider = OpenAIProvider::from_config(
         Some(String::new()),
+        None,
         Some(models::openai::GPT_5.to_string()),
         Some("https://api.openai.com/v1".to_string()),
         None,
@@ -329,6 +333,7 @@ fn responses_payload_uses_container_reference_when_configured() {
 fn non_native_openai_base_url_keeps_local_shell_tool() {
     let provider = OpenAIProvider::from_config(
         Some(String::new()),
+        None,
         Some(models::openai::GPT_5.to_string()),
         Some("https://example.com/v1".to_string()),
         None,
@@ -368,6 +373,7 @@ fn non_native_openai_base_url_keeps_local_shell_tool() {
 fn responses_payload_serializes_inline_hosted_skill_mount() {
     let provider = OpenAIProvider::from_config(
         Some(String::new()),
+        None,
         Some(models::openai::GPT_5.to_string()),
         Some("https://api.openai.com/v1".to_string()),
         None,
@@ -407,6 +413,7 @@ fn responses_payload_serializes_inline_hosted_skill_mount() {
 fn missing_container_reference_id_keeps_local_shell_tool() {
     let provider = OpenAIProvider::from_config(
         Some(String::new()),
+        None,
         Some(models::openai::GPT_5.to_string()),
         Some("https://api.openai.com/v1".to_string()),
         None,
@@ -447,6 +454,7 @@ fn missing_container_reference_id_keeps_local_shell_tool() {
 fn invalid_hosted_skill_mount_keeps_local_shell_tool() {
     let provider = OpenAIProvider::from_config(
         Some(String::new()),
+        None,
         Some(models::openai::GPT_5.to_string()),
         Some("https://api.openai.com/v1".to_string()),
         None,
@@ -516,6 +524,7 @@ fn supports_responses_compaction_tracks_responses_api_availability() {
 
     let xai = OpenAIProvider::from_config(
         Some(String::new()),
+        None,
         Some(models::openai::GPT_5.to_string()),
         Some("https://api.x.ai/v1".to_string()),
         None,
@@ -930,6 +939,7 @@ fn responses_payload_omits_phase_for_non_assistant_items() {
 fn responses_payload_omits_assistant_phase_for_non_native_openai_endpoints() {
     let provider = OpenAIProvider::from_config(
         Some("key".to_owned()),
+        None,
         Some(models::openai::GPT_5_4.to_string()),
         Some("https://example.local/v1".to_string()),
         None,
@@ -963,6 +973,7 @@ fn responses_payload_omits_assistant_phase_for_non_native_openai_endpoints() {
 fn responses_payload_uses_provider_level_responses_options() {
     let provider = OpenAIProvider::from_config(
         Some("key".to_owned()),
+        None,
         Some(models::openai::O4_MINI.to_string()),
         None,
         None,
@@ -1002,6 +1013,7 @@ fn responses_payload_uses_provider_level_responses_options() {
 fn responses_payload_uses_provider_level_service_tier_for_native_openai() {
     let provider = OpenAIProvider::from_config(
         Some("key".to_owned()),
+        None,
         Some(models::openai::GPT_5_2.to_string()),
         None,
         None,
@@ -1026,6 +1038,7 @@ fn responses_payload_uses_provider_level_service_tier_for_native_openai() {
 fn responses_payload_omits_service_tier_for_models_without_service_tier_support() {
     let provider = OpenAIProvider::from_config(
         Some("key".to_owned()),
+        None,
         Some(models::openai::GPT_OSS_20B.to_string()),
         None,
         None,
@@ -1071,6 +1084,7 @@ fn responses_payload_includes_prompt_cache_retention() {
 
     let provider = OpenAIProvider::from_config(
         Some("key".to_owned()),
+        None,
         Some(models::openai::GPT_5_2.to_string()),
         None,
         Some(pc),
@@ -1097,6 +1111,7 @@ fn responses_payload_includes_prompt_cache_retention() {
 fn responses_payload_includes_prompt_cache_key_for_native_openai() {
     let provider = OpenAIProvider::from_config(
         Some("key".to_owned()),
+        None,
         Some(models::openai::GPT_5_2.to_string()),
         None,
         None,
@@ -1139,6 +1154,7 @@ fn chat_payload_includes_prompt_cache_key_for_native_openai() {
 fn chat_payload_uses_provider_level_service_tier_for_native_openai() {
     let provider = OpenAIProvider::from_config(
         Some("key".to_owned()),
+        None,
         Some(models::openai::DEFAULT_MODEL.to_string()),
         None,
         None,
@@ -1162,6 +1178,7 @@ fn chat_payload_uses_provider_level_service_tier_for_native_openai() {
 fn chat_payload_omits_service_tier_for_models_without_service_tier_support() {
     let provider = OpenAIProvider::from_config(
         Some("key".to_owned()),
+        None,
         Some(models::openai::GPT_OSS_20B.to_string()),
         None,
         None,
@@ -1207,6 +1224,7 @@ fn chat_payload_omits_assistant_phase_metadata() {
 fn responses_payload_omits_prompt_cache_key_for_non_native_openai_base_url() {
     let provider = OpenAIProvider::from_config(
         Some("key".to_owned()),
+        None,
         Some(models::openai::GPT_5_2.to_string()),
         Some("https://example.local/v1".to_string()),
         None,
@@ -1229,6 +1247,7 @@ fn responses_payload_omits_prompt_cache_key_for_non_native_openai_base_url() {
 fn responses_payload_omits_service_tier_for_non_native_openai_base_url() {
     let provider = OpenAIProvider::from_config(
         Some("key".to_owned()),
+        None,
         Some(models::openai::GPT_5_2.to_string()),
         Some("https://example.local/v1".to_string()),
         None,
@@ -1252,6 +1271,7 @@ fn responses_payload_excludes_prompt_cache_retention_when_not_set() {
     pc.providers.openai.prompt_cache_retention = None;
     let provider = OpenAIProvider::from_config(
         Some("key".to_string()),
+        None,
         Some(models::openai::GPT_5_2.to_string()),
         None,
         Some(pc),
@@ -1277,6 +1297,7 @@ fn responses_payload_includes_prompt_cache_retention_streaming() {
 
     let provider = OpenAIProvider::from_config(
         Some("key".to_string()),
+        None,
         Some(models::openai::GPT_5_2.to_string()),
         None,
         Some(pc),
@@ -1307,6 +1328,7 @@ fn responses_payload_excludes_retention_for_non_responses_model() {
 
     let provider = OpenAIProvider::from_config(
         Some("key".to_string()),
+        None,
         Some(models::openai::GPT_OSS_20B.to_string()),
         None,
         Some(pc),
@@ -1330,6 +1352,7 @@ fn provider_from_config_respects_prompt_cache_retention() {
     pc.providers.openai.prompt_cache_retention = Some("72h".to_owned());
     let provider = OpenAIProvider::from_config(
         Some("key".to_string()),
+        None,
         Some(models::openai::GPT_5_2.to_string()),
         None,
         Some(pc.clone()),
@@ -1349,6 +1372,7 @@ fn provider_from_config_respects_prompt_cache_retention() {
 fn provider_from_config_respects_websocket_mode_opt_in() {
     let provider = OpenAIProvider::from_config(
         Some("key".to_string()),
+        None,
         Some(models::openai::GPT_5_2.to_string()),
         None,
         None,
@@ -1368,6 +1392,7 @@ fn provider_from_config_respects_websocket_mode_opt_in() {
 fn provider_from_config_respects_service_tier() {
     let provider = OpenAIProvider::from_config(
         Some("key".to_string()),
+        None,
         Some(models::openai::GPT_5_2.to_string()),
         None,
         None,
@@ -1387,6 +1412,7 @@ fn provider_from_config_respects_service_tier() {
 fn chat_payload_omits_service_tier_for_non_native_openai_base_url() {
     let provider = OpenAIProvider::from_config(
         Some("key".to_owned()),
+        None,
         Some(models::openai::DEFAULT_MODEL.to_string()),
         Some("https://example.local/v1".to_string()),
         None,
@@ -1458,6 +1484,7 @@ fn test_parse_harmony_tool_call_from_text_container_exec() {
 fn chat_completions_uses_max_completion_tokens_field() {
     let provider = OpenAIProvider::from_config(
         Some(String::new()),
+        None,
         Some(models::openai::DEFAULT_MODEL.to_string()),
         Some("https://api.openai.com/v1".to_string()),
         None,
@@ -1602,6 +1629,7 @@ mod caching_tests {
         // Initialize provider
         let provider = OpenAIProvider::from_config(
             Some("key".into()),
+        None,
             None,
             None,
             Some(config),
@@ -1650,6 +1678,7 @@ mod caching_tests {
 
         let provider = OpenAIProvider::from_config(
             Some("key".into()),
+        None,
             None,
             None,
             Some(config),

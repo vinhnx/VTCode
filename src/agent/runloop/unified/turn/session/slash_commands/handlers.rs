@@ -60,7 +60,10 @@ pub(super) use interactive::{
 };
 pub(super) use mcp::handle_manage_mcp;
 pub(super) use modes::{handle_cycle_mode, handle_toggle_plan_mode};
-pub(super) use oauth::{handle_oauth_login, handle_oauth_logout, handle_show_auth_status};
+pub(super) use oauth::{
+    handle_oauth_login, handle_oauth_logout, handle_refresh_oauth,
+    handle_show_auth_status, handle_start_oauth_provider_picker,
+};
 pub(super) use share_log::handle_share_log;
 pub(super) use skills::handle_manage_skills;
 pub(super) use ui::{

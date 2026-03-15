@@ -28,6 +28,20 @@ provider = "openai"
 # Environment variable containing the API key for the provider
 api_key_env = "OPENAI_API_KEY"
 
+# Authentication settings for provider-specific OAuth flows
+[auth.openai]
+# Preferred OpenAI auth method: "auto", "api_key", or "chatgpt"
+preferred_method = "auto"
+
+# Localhost callback server used for `vtcode login openai`
+callback_port = 1455
+
+# Automatically refresh ChatGPT subscription tokens when needed
+auto_refresh = true
+
+# Timeout for completing the OAuth flow in the browser
+flow_timeout_secs = 300
+
 # Default model to use when no specific model is specified
 default_model = "gpt-5.4"
 

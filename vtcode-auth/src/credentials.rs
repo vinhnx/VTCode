@@ -7,7 +7,7 @@
 //! ## Usage
 //!
 //! ```rust
-//! use vtcode_config::auth::credentials::{CredentialStorage, AuthCredentialsStoreMode};
+//! use vtcode_auth::{AuthCredentialsStoreMode, CredentialStorage};
 //!
 //! # fn example() -> anyhow::Result<()> {
 //! // Store a credential using the default mode (keyring)

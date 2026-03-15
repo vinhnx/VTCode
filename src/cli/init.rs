@@ -49,6 +49,7 @@ pub async fn handle_init_command(workspace: &Path, force: bool, run: bool) -> Re
             checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
             max_conversation_turns: 50,
             model_behavior: None,
+            openai_chatgpt_auth: None,
         };
         crate::agent::agents::run_single_agent_loop(&config, None, false, false, false, None)
             .await

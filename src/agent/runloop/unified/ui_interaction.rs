@@ -13,6 +13,7 @@ use tokio::task;
 use tokio::time::sleep;
 use vtcode_commons::stop_hints::with_stop_hint;
 
+use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::loader::layers::ConfigLayerSource;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::mcp::McpTransportConfig;
@@ -60,10 +61,22 @@ pub(crate) async fn display_session_status(
         &format!("  Directory: {}", ctx.config.workspace.display()),
     )?;
     renderer.line(MessageStyle::Info, "")?;
+    let provider_label = if ctx.config.provider.eq_ignore_ascii_case("openai")
+        && ctx.config.openai_chatgpt_auth.is_some()
+    {
+        "OpenAI (ChatGPT)".to_string()
+    } else {
+        ctx.config.provider.clone()
+    };
     renderer.line(
         MessageStyle::Info,
-        &format!("  Model: {} ({})", ctx.config.model, ctx.config.provider),
+        &format!("  Provider: {}", provider_label),
     )?;
+    renderer.line(
+        MessageStyle::Info,
+        &format!("  Model: {}", ctx.config.model),
+    )?;
+    render_auth_usage_status(renderer, &ctx)?;
     renderer.line(MessageStyle::Info, &format!("  IDE: {}", ide_info))?;
     renderer.line(
         MessageStyle::Info,
@@ -105,6 +118,92 @@ pub(crate) async fn display_session_status(
     }
 
     Ok(())
+}
+
+fn render_auth_usage_status(
+    renderer: &mut AnsiRenderer,
+    ctx: &SessionStatusContext<'_>,
+) -> Result<()> {
+    let openrouter_status = crate::cli::auth::openrouter_auth_status(ctx.vt_cfg)?;
+    let openai_status = crate::cli::auth::openai_auth_status(ctx.vt_cfg)?;
+    renderer.line(
+        MessageStyle::Info,
+        &format!(
+            "  OAuth: OpenAI {}, OpenRouter {}",
+            short_oauth_status_openai(&openai_status),
+            short_oauth_status_openrouter(&openrouter_status)
+        ),
+    )?;
+
+    if ctx.config.provider.eq_ignore_ascii_case("openai") {
+        let default_auth = vtcode_auth::OpenAIAuthConfig::default();
+        let auth_cfg = ctx
+            .vt_cfg
+            .map(|cfg| &cfg.auth.openai)
+            .unwrap_or(&default_auth);
+        let storage_mode = ctx
+            .vt_cfg
+            .map(|cfg| cfg.agent.credential_storage_mode)
+            .unwrap_or_default();
+        let api_key = get_api_key("openai", &ApiKeySources::default()).ok();
+        let overview =
+            vtcode_config::auth::summarize_openai_credentials(auth_cfg, storage_mode, api_key)?;
+        let usage_status = match overview.active_source {
+            Some(vtcode_config::auth::OpenAIResolvedAuthSource::ChatGpt) => {
+                "using ChatGPT subscription"
+            }
+            Some(vtcode_config::auth::OpenAIResolvedAuthSource::ApiKey) => {
+                "using OPENAI_API_KEY"
+            }
+            None => "no active OpenAI credential",
+        };
+        renderer.line(
+            MessageStyle::Info,
+            &format!(
+                "  Usage status: {} (preferred_method = {})",
+                usage_status,
+                overview.preferred_method.as_str()
+            ),
+        )?;
+        if let Some(notice) = overview.notice.as_deref() {
+            renderer.line(MessageStyle::Info, &format!("  Notice: {}", notice))?;
+        }
+        if let Some(recommendation) = overview.recommendation.as_deref() {
+            renderer.line(
+                MessageStyle::Info,
+                &format!("  Recommendation: {}", recommendation),
+            )?;
+        }
+    } else if ctx.config.provider.eq_ignore_ascii_case("openrouter") {
+        let api_key = get_api_key("openrouter", &ApiKeySources::default()).ok();
+        let usage_status = match openrouter_status {
+            vtcode_auth::AuthStatus::Authenticated { .. } => "using OpenRouter OAuth",
+            vtcode_auth::AuthStatus::NotAuthenticated if api_key.is_some() => {
+                "using OPENROUTER_API_KEY"
+            }
+            vtcode_auth::AuthStatus::NotAuthenticated => "no active OpenRouter credential",
+        };
+        renderer.line(
+            MessageStyle::Info,
+            &format!("  Usage status: {}", usage_status),
+        )?;
+    }
+
+    Ok(())
+}
+
+fn short_oauth_status_openrouter(status: &vtcode_auth::AuthStatus) -> &'static str {
+    match status {
+        vtcode_auth::AuthStatus::Authenticated { .. } => "connected",
+        vtcode_auth::AuthStatus::NotAuthenticated => "not connected",
+    }
+}
+
+fn short_oauth_status_openai(status: &vtcode_auth::OpenAIChatGptAuthStatus) -> &'static str {
+    match status {
+        vtcode_auth::OpenAIChatGptAuthStatus::Authenticated { .. } => "connected",
+        vtcode_auth::OpenAIChatGptAuthStatus::NotAuthenticated => "not connected",
+    }
 }
 
 fn current_session_id() -> String {

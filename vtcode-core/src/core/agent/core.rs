@@ -375,6 +375,7 @@ impl AgentBuilder {
                 max_conversation_turns:
                     crate::config::constants::defaults::DEFAULT_MAX_CONVERSATION_TURNS,
                 model_behavior: None,
+                openai_chatgpt_auth: None,
             },
         }
     }

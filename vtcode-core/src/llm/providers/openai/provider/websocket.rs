@@ -13,6 +13,7 @@ use tokio_tungstenite::tungstenite::http::HeaderValue;
 type ResponsesSocket = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
 const OPENAI_BETA_RESPONSES_WEBSOCKET_V2: &str = "responses=v2";
 const WEBSOCKET_CONNECTION_LIMIT_REACHED_CODE: &str = "websocket_connection_limit_reached";
+const WEBSOCKET_AUTH_RETRY_STATUSES: [&str; 2] = ["401", "403"];
 
 pub(super) fn is_websocket_connection_limit_error(err: &LLMError) -> bool {
     let message = match err {
@@ -23,6 +24,13 @@ pub(super) fn is_websocket_connection_limit_error(err: &LLMError) -> bool {
     };
 
     message.contains(WEBSOCKET_CONNECTION_LIMIT_REACHED_CODE)
+}
+
+fn is_websocket_auth_retryable(error: &tokio_tungstenite::tungstenite::Error) -> bool {
+    let message = error.to_string();
+    WEBSOCKET_AUTH_RETRY_STATUSES
+        .iter()
+        .any(|status| message.contains(status))
 }
 
 #[derive(Debug)]
@@ -168,30 +176,55 @@ impl OpenAIProvider {
     ) -> Result<&'a mut OpenAIResponsesWebSocketSession, LLMError> {
         if session_guard.is_none() {
             let ws_url = responses_websocket_url(&self.base_url)?;
-            let mut ws_request = ws_url.into_client_request().map_err(|err| {
-                format_provider_error(format!("Invalid OpenAI WebSocket request: {err}"))
-            })?;
+            let build_request = |api_key: &str| -> Result<_, LLMError> {
+                let mut ws_request = ws_url.clone().into_client_request().map_err(|err| {
+                    format_provider_error(format!("Invalid OpenAI WebSocket request: {err}"))
+                })?;
 
-            ws_request.headers_mut().insert(
-                "Authorization",
-                HeaderValue::from_str(&format!("Bearer {}", self.api_key)).map_err(|err| {
-                    format_provider_error(format!("Invalid OpenAI authorization header: {err}"))
-                })?,
-            );
-            ws_request.headers_mut().insert(
-                "OpenAI-Beta",
-                HeaderValue::from_static(OPENAI_BETA_RESPONSES_WEBSOCKET_V2),
-            );
-            if let Some(metadata) = &request.metadata
-                && let Ok(metadata_str) = serde_json::to_string(metadata)
-                && let Ok(value) = HeaderValue::from_str(&metadata_str)
-            {
-                ws_request.headers_mut().insert("X-Turn-Metadata", value);
-            }
+                ws_request.headers_mut().insert(
+                    "Authorization",
+                    HeaderValue::from_str(&format!("Bearer {}", api_key)).map_err(|err| {
+                        format_provider_error(format!(
+                            "Invalid OpenAI authorization header: {err}"
+                        ))
+                    })?,
+                );
+                ws_request.headers_mut().insert(
+                    "OpenAI-Beta",
+                    HeaderValue::from_static(OPENAI_BETA_RESPONSES_WEBSOCKET_V2),
+                );
+                if let Some(metadata) = &request.metadata
+                    && let Ok(metadata_str) = serde_json::to_string(metadata)
+                    && let Ok(value) = HeaderValue::from_str(&metadata_str)
+                {
+                    ws_request.headers_mut().insert("X-Turn-Metadata", value);
+                }
 
-            let (socket, _) = connect_async(ws_request).await.map_err(|err| {
-                format_network_error(format!("Failed to connect OpenAI WebSocket: {err}"))
-            })?;
+                Ok(ws_request)
+            };
+
+            let api_key = self.current_api_key().await?;
+            let ws_request = build_request(&api_key)?;
+            let socket = match connect_async(ws_request).await {
+                Ok((socket, _)) => socket,
+                Err(err)
+                    if self.uses_chatgpt_auth() && is_websocket_auth_retryable(&err) =>
+                {
+                    let retry_api_key = self.refresh_api_key_for_retry().await?;
+                    let retry_request = build_request(&retry_api_key)?;
+                    let (socket, _) = connect_async(retry_request).await.map_err(|retry_err| {
+                        format_network_error(format!(
+                            "Failed to connect OpenAI WebSocket: {retry_err}"
+                        ))
+                    })?;
+                    socket
+                }
+                Err(err) => {
+                    return Err(format_network_error(format!(
+                        "Failed to connect OpenAI WebSocket: {err}"
+                    )));
+                }
+            };
             *session_guard = Some(OpenAIResponsesWebSocketSession::new(socket));
         }
 

@@ -37,6 +37,7 @@ use std::path::PathBuf;
 
 pub use super::credentials::AuthCredentialsStoreMode;
 use super::pkce::PkceChallenge;
+use crate::storage_paths::auth_storage_dir;
 
 /// OpenRouter API endpoints
 const OPENROUTER_AUTH_URL: &str = "https://openrouter.ai/auth";
@@ -47,6 +48,7 @@ pub const DEFAULT_CALLBACK_PORT: u16 = 8484;
 
 /// Configuration for OpenRouter OAuth authentication.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(default)]
 pub struct OpenRouterOAuthConfig {
     /// Whether to use OAuth instead of API key
@@ -55,6 +57,8 @@ pub struct OpenRouterOAuthConfig {
     pub callback_port: u16,
     /// Whether to automatically refresh tokens
     pub auto_refresh: bool,
+    /// Timeout in seconds for completing the OAuth browser flow.
+    pub flow_timeout_secs: u64,
 }
 
 impl Default for OpenRouterOAuthConfig {
@@ -63,6 +67,7 @@ impl Default for OpenRouterOAuthConfig {
             use_oauth: false,
             callback_port: DEFAULT_CALLBACK_PORT,
             auto_refresh: true,
+            flow_timeout_secs: 300,
         }
     }
 }
@@ -192,14 +197,7 @@ pub async fn exchange_code_for_token(code: &str, challenge: &PkceChallenge) -> R
 
 /// Get the path to the token storage file.
 fn get_token_path() -> Result<PathBuf> {
-    let vtcode_dir = dirs::home_dir()
-        .ok_or_else(|| anyhow!("Could not determine home directory"))?
-        .join(".vtcode")
-        .join("auth");
-
-    fs::create_dir_all(&vtcode_dir).context("Failed to create auth directory")?;
-
-    Ok(vtcode_dir.join("openrouter.json"))
+    Ok(auth_storage_dir()?.join("openrouter.json"))
 }
 
 /// Derive encryption key from machine-specific data.
@@ -493,6 +491,18 @@ fn clear_oauth_token_file() -> Result<()> {
 }
 
 /// Clear the stored OAuth token from all storage locations.
+pub fn clear_oauth_token_with_mode(mode: AuthCredentialsStoreMode) -> Result<()> {
+    match mode.effective_mode() {
+        AuthCredentialsStoreMode::Keyring => clear_oauth_token_keyring(),
+        AuthCredentialsStoreMode::File => clear_oauth_token_file(),
+        AuthCredentialsStoreMode::Auto => {
+            let _ = clear_oauth_token_keyring();
+            let _ = clear_oauth_token_file();
+            Ok(())
+        }
+    }
+}
+
 pub fn clear_oauth_token() -> Result<()> {
     // Clear from both keyring and file to ensure complete removal
     let _ = clear_oauth_token_keyring();
@@ -503,6 +513,26 @@ pub fn clear_oauth_token() -> Result<()> {
 }
 
 /// Get the current OAuth authentication status.
+pub fn get_auth_status_with_mode(mode: AuthCredentialsStoreMode) -> Result<AuthStatus> {
+    match load_oauth_token_with_mode(mode)? {
+        Some(token) => {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+
+            let age_seconds = now.saturating_sub(token.obtained_at);
+
+            Ok(AuthStatus::Authenticated {
+                label: token.label,
+                age_seconds,
+                expires_in: token.expires_at.map(|e| e.saturating_sub(now)),
+            })
+        }
+        None => Ok(AuthStatus::NotAuthenticated),
+    }
+}
+
 pub fn get_auth_status() -> Result<AuthStatus> {
     match load_oauth_token()? {
         Some(token) => {

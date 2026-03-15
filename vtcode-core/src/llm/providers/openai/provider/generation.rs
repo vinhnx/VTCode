@@ -56,18 +56,14 @@ impl OpenAIProvider {
         }
         let url = format!("{}/responses/compact", self.base_url);
 
-        let response = headers::apply_responses_beta(self.authorize(self.http_client.post(&url)))
-            .json(&compact_payload)
-            .send()
-            .await
-            .map_err(|e| {
-                let formatted_error =
-                    error_display::format_llm_error("OpenAI", &format!("Network error: {}", e));
-                provider::LLMError::Network {
-                    message: formatted_error,
-                    metadata: None,
-                }
-            })?;
+        let response = self
+            .send_authorized(|api_key| {
+                headers::apply_responses_beta(
+                    self.authorize_with_api_key(self.http_client.post(&url), api_key),
+                )
+                .json(&compact_payload)
+            })
+            .await?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -204,21 +200,17 @@ impl OpenAIProvider {
             let openai_request = self.convert_to_openai_responses_format(&request)?;
             let url = format!("{}/responses", self.base_url);
 
-            let response = headers::apply_turn_metadata(
-                headers::apply_responses_beta(self.authorize(self.http_client.post(&url))),
-                &request.metadata,
-            )
-            .json(&openai_request)
-            .send()
-            .await
-            .map_err(|e| {
-                let formatted_error =
-                    error_display::format_llm_error("OpenAI", &format!("Network error: {}", e));
-                provider::LLMError::Network {
-                    message: formatted_error,
-                    metadata: None,
-                }
-            })?;
+            let response = self
+                .send_authorized(|api_key| {
+                    headers::apply_turn_metadata(
+                        headers::apply_responses_beta(
+                            self.authorize_with_api_key(self.http_client.post(&url), api_key),
+                        ),
+                        &request.metadata,
+                    )
+                    .json(&openai_request)
+                })
+                .await?;
 
             if !response.status().is_success() {
                 let status = response.status();
@@ -239,25 +231,20 @@ impl OpenAIProvider {
                             retry_request.model = fallback_model;
                             let retry_openai =
                                 self.convert_to_openai_responses_format(&retry_request)?;
-                            let retry_response = headers::apply_turn_metadata(
-                                headers::apply_responses_beta(
-                                    self.authorize(self.http_client.post(&url)),
-                                ),
-                                &request.metadata,
-                            )
-                            .json(&retry_openai)
-                            .send()
-                            .await
-                            .map_err(|e| {
-                                let formatted_error = error_display::format_llm_error(
-                                    "OpenAI",
-                                    &format!("Network error: {}", e),
-                                );
-                                provider::LLMError::Network {
-                                    message: formatted_error,
-                                    metadata: None,
-                                }
-                            })?;
+                            let retry_response = self
+                                .send_authorized(|api_key| {
+                                    headers::apply_turn_metadata(
+                                        headers::apply_responses_beta(
+                                            self.authorize_with_api_key(
+                                                self.http_client.post(&url),
+                                                api_key,
+                                            ),
+                                        ),
+                                        &request.metadata,
+                                    )
+                                    .json(&retry_openai)
+                                })
+                                .await?;
                             if retry_response.status().is_success() {
                                 let openai_response: Value =
                                     retry_response.json().await.map_err(|e| {
@@ -360,21 +347,15 @@ impl OpenAIProvider {
         let openai_request = self.convert_to_openai_format(request)?;
         let url = format!("{}/chat/completions", self.base_url);
 
-        let response = headers::apply_turn_metadata(
-            self.authorize(self.http_client.post(&url)),
-            &request.metadata,
-        )
-        .json(&openai_request)
-        .send()
-        .await
-        .map_err(|e| {
-            let formatted_error =
-                error_display::format_llm_error("OpenAI", &format!("Network error: {}", e));
-            provider::LLMError::Network {
-                message: formatted_error,
-                metadata: None,
-            }
-        })?;
+        let response = self
+            .send_authorized(|api_key| {
+                headers::apply_turn_metadata(
+                    self.authorize_with_api_key(self.http_client.post(&url), api_key),
+                    &request.metadata,
+                )
+                .json(&openai_request)
+            })
+            .await?;
 
         if !response.status().is_success() {
             let status = response.status();

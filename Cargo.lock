@@ -6285,6 +6285,7 @@ dependencies = [
  "unicode-width 0.2.2",
  "url",
  "vtcode-acp",
+ "vtcode-auth",
  "vtcode-commons",
  "vtcode-config",
  "vtcode-core",
@@ -6331,6 +6332,30 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "vtcode-auth"
+version = "0.88.5"
+dependencies = [
+ "anyhow",
+ "assert_fs",
+ "axum",
+ "base64",
+ "dirs",
+ "hostname",
+ "keyring",
+ "nix 0.31.2",
+ "reqwest 0.12.28",
+ "ring",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "sha2",
+ "tokio",
+ "tracing",
+ "urlencoding",
 ]
 
 [[package]]
@@ -6415,6 +6440,7 @@ dependencies = [
  "toml_edit 0.24.1+spec-1.1.0",
  "tracing",
  "urlencoding",
+ "vtcode-auth",
  "vtcode-commons",
  "walkdir",
 ]
@@ -6532,6 +6558,7 @@ dependencies = [
  "uuid",
  "vt100",
  "vtcode-acp-client",
+ "vtcode-auth",
  "vtcode-bash-runner",
  "vtcode-commons",
  "vtcode-config",

@@ -39,6 +39,13 @@ pub(crate) enum StatuslineTargetMode {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum OAuthProviderAction {
+    Login,
+    Logout,
+    Refresh,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum SessionLogExportFormat {
     Json,
     Markdown,
@@ -129,8 +136,14 @@ pub(crate) enum SlashCommandOutcome {
     OAuthLogin {
         provider: String,
     },
+    StartOAuthProviderPicker {
+        action: OAuthProviderAction,
+    },
     /// /logout command - Clear OAuth authentication for a provider
     OAuthLogout {
+        provider: String,
+    },
+    RefreshOAuth {
         provider: String,
     },
     /// /auth command - Show authentication status
@@ -481,6 +494,7 @@ pub(crate) async fn handle_slash_command(
         "mode" => handle_mode_command(args, renderer),
         "login" => handle_login_command(args, renderer),
         "logout" => handle_logout_command(args, renderer),
+        "refresh-oauth" => flow::handle_refresh_oauth_command(args, renderer),
         "auth" => Ok(handle_auth_command(args)),
         "help" => {
             let specific_cmd = if args.trim().is_empty() {

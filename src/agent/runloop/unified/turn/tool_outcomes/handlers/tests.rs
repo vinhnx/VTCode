@@ -201,6 +201,7 @@ impl TestContextBacking {
             checkpointing_max_age_days: None,
             max_conversation_turns: 16,
             model_behavior: None,
+            openai_chatgpt_auth: None,
         };
         let provider_client: Box<dyn uni::LLMProvider> = Box::new(NoopProvider);
         let traj = TrajectoryLogger::disabled();

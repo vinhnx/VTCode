@@ -6,6 +6,7 @@ use crate::ctx_err;
 use crate::llm::provider::{LLMError, LLMProvider};
 use hashbrown::HashMap;
 use std::str::FromStr;
+use vtcode_config::auth::OpenAIChatGptAuthHandle;
 
 type ProviderFactory = Box<dyn Fn(ProviderConfig) -> Box<dyn LLMProvider> + Send + Sync>;
 
@@ -17,6 +18,7 @@ pub struct LLMFactory {
 #[derive(Debug, Clone)]
 pub struct ProviderConfig {
     pub api_key: Option<String>,
+    pub openai_chatgpt_auth: Option<OpenAIChatGptAuthHandle>,
     pub base_url: Option<String>,
     pub model: Option<String>,
     pub prompt_cache: Option<PromptCachingConfig>,
@@ -93,6 +95,7 @@ impl LLMFactory {
             || m.starts_with("o1")
             || m.starts_with("o3")
             || m.starts_with("o4")
+            || m.starts_with("codex")
         {
             Some("openai".to_owned())
         } else if m.starts_with("claude-") {
@@ -247,6 +250,7 @@ pub fn create_provider_for_model(
         &provider_name,
         ProviderConfig {
             api_key: Some(api_key),
+            openai_chatgpt_auth: None,
             base_url: None,
             model: Some(model.to_string()),
             prompt_cache,
@@ -314,6 +318,7 @@ mod tests {
                 <GeminiProviderConfig as CanDescribeProvider>::PROVIDER_KEY,
                 ProviderConfig {
                     api_key: Some("test-key".to_string()),
+                    openai_chatgpt_auth: None,
                     base_url: None,
                     model: Some(
                         crate::config::constants::models::google::GEMINI_3_FLASH_PREVIEW
@@ -339,6 +344,7 @@ mod tests {
                 <OpenAIProviderConfig as CanDescribeProvider>::PROVIDER_KEY,
                 ProviderConfig {
                     api_key: Some("test-key".to_string()),
+                    openai_chatgpt_auth: None,
                     base_url: None,
                     model: Some(
                         crate::config::constants::models::openai::DEFAULT_MODEL.to_string(),
@@ -366,6 +372,7 @@ mod tests {
                 <AnthropicProviderConfig as CanDescribeProvider>::PROVIDER_KEY,
                 ProviderConfig {
                     api_key: Some("test-key".to_string()),
+                    openai_chatgpt_auth: None,
                     base_url: None,
                     model: Some(
                         crate::config::constants::models::anthropic::DEFAULT_MODEL.to_string(),
@@ -405,6 +412,7 @@ mod tests {
                 "custom-test",
                 ProviderConfig {
                     api_key: None,
+                    openai_chatgpt_auth: None,
                     base_url: None,
                     model: None,
                     prompt_cache: None,
@@ -420,6 +428,7 @@ mod tests {
                 "openai",
                 ProviderConfig {
                     api_key: Some("test-key".to_string()),
+                    openai_chatgpt_auth: None,
                     base_url: None,
                     model: Some(
                         crate::config::constants::models::openai::DEFAULT_MODEL.to_string(),

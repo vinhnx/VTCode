@@ -21,6 +21,7 @@ pub(super) struct SelectionDetail {
     pub(super) reasoning_off_model: Option<ModelId>,
     pub(super) service_tier_supported: bool,
     pub(super) requires_api_key: bool,
+    pub(super) uses_chatgpt_auth: bool,
     pub(super) env_key: String,
 }
 
@@ -60,6 +61,7 @@ pub(crate) struct ModelSelectionResult {
     pub(crate) api_key: Option<String>,
     pub(crate) env_key: String,
     pub(crate) requires_api_key: bool,
+    pub(crate) uses_chatgpt_auth: bool,
 }
 
 pub(super) fn parse_model_selection(
@@ -131,6 +133,7 @@ pub(super) fn parse_model_selection(
         reasoning_off_model: None,
         service_tier_supported,
         requires_api_key,
+        uses_chatgpt_auth: false,
         env_key,
     })
 }
@@ -150,6 +153,7 @@ pub(super) fn selection_from_option(option: &ModelOption) -> SelectionDetail {
         reasoning_off_model: option.reasoning_alternative,
         service_tier_supported: option.provider.supports_service_tier(option.id),
         requires_api_key,
+        uses_chatgpt_auth: false,
         env_key,
     }
 }
@@ -169,6 +173,7 @@ pub(super) fn selection_from_dynamic(provider: Provider, model_id: &str) -> Sele
         reasoning_off_model: None,
         service_tier_supported: provider.supports_service_tier(model_id),
         requires_api_key,
+        uses_chatgpt_auth: false,
         env_key,
     }
 }
@@ -248,11 +253,16 @@ pub(super) fn provider_requires_api_key(provider: Provider, model_id: &str, env_
         }
     }
 
-    // For OpenRouter, check OAuth token first
+    // OAuth-backed credentials can satisfy provider auth without a pasted API key.
     if provider == Provider::OpenRouter
         && let Ok(Some(_token)) = vtcode_config::auth::load_oauth_token()
     {
-        // OAuth token is available, no need for manual API key entry
+        return false;
+    }
+
+    if provider == Provider::OpenAI
+        && let Ok(Some(_session)) = vtcode_config::auth::load_openai_chatgpt_session()
+    {
         return false;
     }
 

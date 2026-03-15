@@ -37,6 +37,7 @@ async fn build_agent(workspace: &Path) -> ZedAgent {
         checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
         max_conversation_turns: 1000,
         model_behavior: None,
+            openai_chatgpt_auth: None,
     };
 
     let mut zed_config = AgentClientProtocolZedConfig::default();

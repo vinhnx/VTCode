@@ -316,6 +316,7 @@ async fn llm_prompt_suggestions_with_route(
         &route.provider_name,
         ProviderConfig {
             api_key: Some(config.api_key.clone()),
+            openai_chatgpt_auth: config.openai_chatgpt_auth.clone(),
             base_url: None,
             model: Some(route.model.clone()),
             prompt_cache: Some(config.prompt_cache.clone()),
@@ -781,6 +782,7 @@ mod tests {
             checkpointing_max_age_days: None,
             max_conversation_turns: 0,
             model_behavior: None,
+            openai_chatgpt_auth: None,
         }
     }
 

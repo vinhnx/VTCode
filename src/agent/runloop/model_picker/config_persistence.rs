@@ -35,6 +35,12 @@ pub(super) async fn persist_selection(
 }
 
 fn apply_api_key_state(config: &mut VTCodeConfig, selection: &ModelSelectionResult) {
+    if selection.provider_enum == Some(Provider::OpenAI) && selection.uses_chatgpt_auth {
+        config.agent.api_key_env = selection.env_key.clone();
+        config.agent.custom_api_keys.remove(&selection.provider);
+        return;
+    }
+
     if uses_provider_api_key(selection) {
         config.agent.api_key_env = selection.env_key.clone();
         sync_stored_api_key(config, selection);
@@ -54,6 +60,10 @@ fn is_cloud_ollama_model(model: &str) -> bool {
 }
 
 fn sync_stored_api_key(config: &mut VTCodeConfig, selection: &ModelSelectionResult) {
+    if selection.provider_enum == Some(Provider::OpenAI) && selection.uses_chatgpt_auth {
+        return;
+    }
+
     if let Some(api_key) = selection.api_key.as_deref() {
         let storage_mode = config.agent.credential_storage_mode;
         let key_storage = CustomApiKeyStorage::new(&selection.provider);
@@ -109,6 +119,7 @@ mod tests {
             api_key: None,
             env_key: "TEST_API_KEY".to_string(),
             requires_api_key: false,
+            uses_chatgpt_auth: false,
         }
     }
 

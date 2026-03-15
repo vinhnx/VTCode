@@ -185,6 +185,18 @@ pub(crate) fn prompt_api_key_plain(
     selection: &SelectionDetail,
     _workspace: Option<&Path>,
 ) -> Result<()> {
+    if matches!(selection.provider_enum, Some(Provider::OpenAI)) {
+        renderer.line(
+            MessageStyle::Info,
+            "Authentication – type 'login' to sign in with your ChatGPT subscription, paste an API key, or type 'skip' to reuse a stored credential.",
+        )?;
+        renderer.line(
+            MessageStyle::Info,
+            "ChatGPT subscription auth will be stored securely and will not be written to your workspace .env.",
+        )?;
+        return Ok(());
+    }
+
     renderer.line(
         MessageStyle::Info,
         &format!(

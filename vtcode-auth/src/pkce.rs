@@ -44,7 +44,7 @@ impl PkceChallenge {
 ///
 /// # Example
 /// ```
-/// use vtcode_config::auth::pkce::generate_pkce_challenge;
+/// use vtcode_auth::generate_pkce_challenge;
 ///
 /// let challenge = generate_pkce_challenge().unwrap();
 /// println!("Verifier: {}", challenge.code_verifier);

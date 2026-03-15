@@ -38,6 +38,7 @@ GOOGLE_API_KEY
 logs/
 *.log.*
 .vtcode/perf/
+.vtcode/auth/
 harness-*.jsonl
 open-responses-*.jsonl
 

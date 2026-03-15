@@ -180,6 +180,7 @@ impl TestTurnProcessingBacking {
             checkpointing_max_age_days: None,
             max_conversation_turns: 16,
             model_behavior: None,
+            openai_chatgpt_auth: None,
         };
 
         Self {

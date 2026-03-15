@@ -9,7 +9,7 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use crate::agent::runloop::unified::palettes::format_duration_label;
 
-use super::SessionPaletteMode;
+use super::{OAuthProviderAction, SessionPaletteMode};
 use super::SlashCommandOutcome;
 use super::parsing::parse_review_spec;
 
@@ -303,25 +303,25 @@ pub(super) fn handle_login_command(
 ) -> Result<SlashCommandOutcome> {
     let provider = args.trim().to_ascii_lowercase();
     if provider.is_empty() {
-        // Show available OAuth providers
-        renderer.line(MessageStyle::Info, "OAuth Authentication")?;
-        renderer.line(MessageStyle::Output, "")?;
-        renderer.line(MessageStyle::Output, "Available providers:")?;
-        renderer.line(
-            MessageStyle::Output,
-            "  openrouter  - OpenRouter API (OAuth PKCE)",
-        )?;
-        renderer.line(MessageStyle::Output, "")?;
+        if renderer.supports_inline_ui() {
+            return Ok(SlashCommandOutcome::StartOAuthProviderPicker {
+                action: OAuthProviderAction::Login,
+            });
+        }
         renderer.line(MessageStyle::Info, "Usage: /login <provider>")?;
-        renderer.line(MessageStyle::Output, "  Example: /login openrouter")?;
+        renderer.line(MessageStyle::Output, "  openai")?;
+        renderer.line(MessageStyle::Output, "  openrouter")?;
         return Ok(SlashCommandOutcome::Handled);
     }
-    if provider != "openrouter" {
+    if provider != "openrouter" && provider != "openai" {
         renderer.line(
             MessageStyle::Error,
             &format!("Provider '{}' does not support OAuth.", provider),
         )?;
-        renderer.line(MessageStyle::Info, "Supported OAuth providers: openrouter")?;
+        renderer.line(
+            MessageStyle::Info,
+            "Supported OAuth providers: openai, openrouter",
+        )?;
         renderer.line(MessageStyle::Output, "")?;
         renderer.line(
             MessageStyle::Output,
@@ -338,18 +338,17 @@ pub(super) fn handle_logout_command(
 ) -> Result<SlashCommandOutcome> {
     let provider = args.trim().to_ascii_lowercase();
     if provider.is_empty() {
-        renderer.line(MessageStyle::Info, "Clear OAuth Authentication")?;
-        renderer.line(MessageStyle::Output, "")?;
-        renderer.line(MessageStyle::Output, "Usage: /logout <provider>")?;
-        renderer.line(MessageStyle::Output, "  Example: /logout openrouter")?;
-        renderer.line(MessageStyle::Output, "")?;
-        renderer.line(
-            MessageStyle::Info,
-            "Use /auth to check current authentication status.",
-        )?;
+        if renderer.supports_inline_ui() {
+            return Ok(SlashCommandOutcome::StartOAuthProviderPicker {
+                action: OAuthProviderAction::Logout,
+            });
+        }
+        renderer.line(MessageStyle::Info, "Usage: /logout <provider>")?;
+        renderer.line(MessageStyle::Output, "  openai")?;
+        renderer.line(MessageStyle::Output, "  openrouter")?;
         return Ok(SlashCommandOutcome::Handled);
     }
-    if provider != "openrouter" {
+    if provider != "openrouter" && provider != "openai" {
         renderer.line(
             MessageStyle::Error,
             &format!("Provider '{}' does not use OAuth authentication.", provider),
@@ -357,6 +356,31 @@ pub(super) fn handle_logout_command(
         return Ok(SlashCommandOutcome::Handled);
     }
     Ok(SlashCommandOutcome::OAuthLogout { provider })
+}
+
+pub(super) fn handle_refresh_oauth_command(
+    args: &str,
+    renderer: &mut AnsiRenderer,
+) -> Result<SlashCommandOutcome> {
+    let provider = args.trim().to_ascii_lowercase();
+    if provider.is_empty() {
+        if renderer.supports_inline_ui() {
+            return Ok(SlashCommandOutcome::StartOAuthProviderPicker {
+                action: OAuthProviderAction::Refresh,
+            });
+        }
+        renderer.line(MessageStyle::Info, "Usage: /refresh-oauth <provider>")?;
+        renderer.line(MessageStyle::Output, "  openai")?;
+        return Ok(SlashCommandOutcome::Handled);
+    }
+    if provider != "openai" && provider != "openrouter" {
+        renderer.line(
+            MessageStyle::Error,
+            &format!("Provider '{}' does not use OAuth authentication.", provider),
+        )?;
+        return Ok(SlashCommandOutcome::Handled);
+    }
+    Ok(SlashCommandOutcome::RefreshOAuth { provider })
 }
 
 pub(super) fn handle_auth_command(args: &str) -> SlashCommandOutcome {
@@ -384,6 +408,55 @@ mod tests {
         let outcome = handle_rewind_command("", &mut renderer).expect("rewind outcome");
 
         assert!(matches!(outcome, SlashCommandOutcome::OpenRewindPicker));
+    }
+
+    #[test]
+    fn login_without_args_opens_oauth_picker_in_inline_ui() {
+        let (sender, _receiver) = unbounded_channel();
+        let handle = InlineHandle::new_for_tests(sender);
+        let mut renderer = AnsiRenderer::with_inline_ui(handle, Default::default());
+
+        let outcome = handle_login_command("", &mut renderer).expect("login outcome");
+
+        assert!(matches!(
+            outcome,
+            SlashCommandOutcome::StartOAuthProviderPicker {
+                action: OAuthProviderAction::Login
+            }
+        ));
+    }
+
+    #[test]
+    fn logout_without_args_opens_oauth_picker_in_inline_ui() {
+        let (sender, _receiver) = unbounded_channel();
+        let handle = InlineHandle::new_for_tests(sender);
+        let mut renderer = AnsiRenderer::with_inline_ui(handle, Default::default());
+
+        let outcome = handle_logout_command("", &mut renderer).expect("logout outcome");
+
+        assert!(matches!(
+            outcome,
+            SlashCommandOutcome::StartOAuthProviderPicker {
+                action: OAuthProviderAction::Logout
+            }
+        ));
+    }
+
+    #[test]
+    fn refresh_without_args_opens_oauth_picker_in_inline_ui() {
+        let (sender, _receiver) = unbounded_channel();
+        let handle = InlineHandle::new_for_tests(sender);
+        let mut renderer = AnsiRenderer::with_inline_ui(handle, Default::default());
+
+        let outcome =
+            handle_refresh_oauth_command("", &mut renderer).expect("refresh-oauth outcome");
+
+        assert!(matches!(
+            outcome,
+            SlashCommandOutcome::StartOAuthProviderPicker {
+                action: OAuthProviderAction::Refresh
+            }
+        ));
     }
 
     #[test]

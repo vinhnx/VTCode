@@ -67,7 +67,7 @@ read_file = true
 # Environment variable that stores the API key for the active provider
 # Default: "OPENAI_API_KEY"
 # Type: `string`
-api_key_env = "OLLAMA_API_KEY"
+api_key_env = "OPENAI_API_KEY"
 
 # Enable autonomous mode - auto-approve safe tools with reduced HITL prompts When true, the agent
 # operates with fewer confirmation prompts for safe tools.
@@ -94,7 +94,7 @@ default_editing_mode = "edit"
 # Default model to use
 # Default: "gpt-5.3-codex"
 # Type: `string`
-default_model = "gpt-oss:120b-cloud"
+default_model = "gpt-5.4"
 
 # Enable an extra self-review pass to refine final responses
 # Default: false
@@ -156,7 +156,7 @@ project_doc_max_bytes = 16384
 # Possible values: anthropic, gemini, openai, openrouter, zai
 # Default: "openai"
 # Type: `string`
-provider = "ollama"
+provider = "openai"
 
 # Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh) Applies
 # to: Claude, GPT-5 family, Gemini, Qwen3, DeepSeek with reasoning capability
@@ -434,6 +434,12 @@ include_reasoning = true
 # Default: true
 # Type: `boolean`
 map_tool_calls = true
+
+[auth.openai]
+preferred_method = "auto"
+callback_port = 1455
+auto_refresh = true
+flow_timeout_secs = 300
 
 
 # Small Model Helpers
@@ -1149,6 +1155,7 @@ task_completion = []
 # Type: `array`
 user_prompt_submit = []
 quiet_success_output = false
+notification = []
 
 
 # IDE Context
@@ -2892,6 +2899,7 @@ tool_output_mode = "compact"
 # Default: 200000
 # Type: `integer`
 tool_output_spool_bytes = 200000
+vim_mode = false
 
 # Keyboard Protocol
 # Enhanced terminal keyboard reporting.

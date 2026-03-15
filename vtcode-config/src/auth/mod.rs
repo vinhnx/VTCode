@@ -1,25 +1,17 @@
-//! Authentication utilities for VT Code.
-//!
-//! This module provides:
-//! - Generic credential storage with OS keyring and file backends
-//! - OAuth PKCE support for OpenRouter and other providers
-//!
-//! ## Credential Storage
-//!
-//! Credentials are stored using OS-specific secure storage (keyring) by default,
-//! with fallback to AES-256-GCM encrypted files if the keyring is unavailable.
-
-pub mod credentials;
-pub mod openrouter_oauth;
-pub mod pkce;
-
-pub use credentials::{
-    AuthCredentialsStoreMode, CredentialStorage, CustomApiKeyStorage, clear_custom_api_keys,
-    load_custom_api_keys, migrate_custom_api_keys_to_keyring,
+pub use vtcode_auth::{
+    AuthCallbackOutcome, AuthCredentialsStoreMode, AuthStatus, CredentialStorage,
+    CustomApiKeyStorage, OAuthCallbackPage, OAuthProvider, OpenAICredentialOverview,
+    OpenAIChatGptAuthHandle, OpenAIChatGptAuthStatus, OpenAIChatGptSession, OpenAIResolvedAuth,
+    OpenAIResolvedAuthSource, OpenRouterOAuthConfig, OpenRouterToken, PkceChallenge,
+    clear_custom_api_keys, clear_oauth_token, clear_oauth_token_with_mode,
+    clear_openai_chatgpt_session, clear_openai_chatgpt_session_with_mode,
+    exchange_code_for_token, exchange_openai_chatgpt_code_for_tokens, generate_pkce_challenge,
+    get_auth_status, get_auth_status_with_mode, get_auth_url, get_openai_chatgpt_auth_status,
+    get_openai_chatgpt_auth_status_with_mode, get_openai_chatgpt_auth_url,
+    load_custom_api_keys, load_oauth_token, load_oauth_token_with_mode,
+    load_openai_chatgpt_session, load_openai_chatgpt_session_with_mode,
+    migrate_custom_api_keys_to_keyring, refresh_openai_chatgpt_session_with_mode,
+    resolve_openai_auth, run_auth_code_callback_server, save_oauth_token,
+    save_oauth_token_with_mode, save_openai_chatgpt_session,
+    save_openai_chatgpt_session_with_mode, summarize_openai_credentials,
 };
-pub use openrouter_oauth::{
-    AuthStatus, OpenRouterOAuthConfig, OpenRouterToken, clear_oauth_token, exchange_code_for_token,
-    get_auth_status, get_auth_url, load_oauth_token, load_oauth_token_with_mode, save_oauth_token,
-    save_oauth_token_with_mode,
-};
-pub use pkce::{PkceChallenge, generate_pkce_challenge};

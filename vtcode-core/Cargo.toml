@@ -131,6 +131,7 @@ portable-pty = "0.9.0"
 ansi-to-tui = "8.0.1"
 vtcode-commons = { path = "../vtcode-commons", version = "0.88.5" }
 vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.88.5" }
+vtcode-auth = { path = "../vtcode-auth", version = "0.88.5" }
 vtcode-config = { path = "../vtcode-config", version = "0.88.5" }
 vtcode-tui = { path = "../vtcode-tui", version = "0.88.5" }
 vtcode-markdown-store = { path = "../vtcode-markdown-store", version = "0.88.5" }

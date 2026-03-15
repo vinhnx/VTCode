@@ -92,6 +92,7 @@ pub fn build_runtime_agent_config(
         checkpointing_max_age_days: config.agent.checkpointing.max_age_days,
         max_conversation_turns: config.agent.max_conversation_turns,
         model_behavior: Some(config.model.clone()),
+        openai_chatgpt_auth: None,
     }
 }
 
