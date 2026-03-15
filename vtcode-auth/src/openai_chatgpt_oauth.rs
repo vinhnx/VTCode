@@ -37,7 +37,8 @@ const REFRESH_SKEW_SECS: u64 = 60;
 /// Stored OpenAI ChatGPT subscription session.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpenAIChatGptSession {
-    /// Exchanged OpenAI bearer token used for normal API calls.
+    /// Exchanged OpenAI bearer token used for normal API calls when available.
+    /// If unavailable, VT Code falls back to the OAuth access token.
     pub openai_api_key: String,
     /// OAuth ID token from the sign-in flow.
     pub id_token: String,
@@ -109,7 +110,8 @@ impl OpenAIChatGptAuthHandle {
     }
 
     pub fn current_api_key(&self) -> Result<String> {
-        self.snapshot().map(|session| session.openai_api_key)
+        self.snapshot()
+            .map(|session| active_bearer_token(&session).to_string())
     }
 
     pub fn provider_label(&self) -> &'static str {
@@ -177,6 +179,14 @@ impl OpenAIResolvedAuth {
 
     pub fn using_chatgpt(&self) -> bool {
         matches!(self, Self::ChatGpt { .. })
+    }
+}
+
+fn active_bearer_token(session: &OpenAIChatGptSession) -> &str {
+    if session.openai_api_key.trim().is_empty() {
+        session.access_token.as_str()
+    } else {
+        session.openai_api_key.as_str()
     }
 }
 
@@ -293,7 +303,7 @@ pub fn resolve_openai_auth(
             let session = session.ok_or_else(|| anyhow!("Run vtcode login openai"))?;
             let handle = OpenAIChatGptAuthHandle::new(session.clone(), auth_config.clone(), storage_mode);
             Ok(OpenAIResolvedAuth::ChatGpt {
-                api_key: session.openai_api_key,
+                api_key: active_bearer_token(&session).to_string(),
                 handle,
             })
         }
@@ -306,7 +316,7 @@ pub fn resolve_openai_auth(
                 let handle =
                     OpenAIChatGptAuthHandle::new(session.clone(), auth_config.clone(), storage_mode);
                 Ok(OpenAIResolvedAuth::ChatGpt {
-                    api_key: session.openai_api_key,
+                    api_key: active_bearer_token(&session).to_string(),
                     handle,
                 })
             } else {
@@ -492,8 +502,13 @@ async fn build_session_from_token_response(
     token_response: OpenAITokenResponse,
 ) -> Result<OpenAIChatGptSession> {
     let claims = parse_id_token_claims(&token_response.id_token)?;
-    let api_key =
-        exchange_openai_chatgpt_api_key(&token_response.id_token).await?;
+    let api_key = match exchange_openai_chatgpt_api_key(&token_response.id_token).await {
+        Ok(api_key) => api_key,
+        Err(err) => {
+            tracing::warn!("openai api-key exchange unavailable, falling back to oauth access token: {err}");
+            String::new()
+        }
+    };
     let now = now_secs();
     Ok(OpenAIChatGptSession {
         openai_api_key: api_key,
@@ -993,5 +1008,13 @@ mod tests {
         assert_eq!(decrypted.account_id, session.account_id);
         assert_eq!(decrypted.email, session.email);
         assert_eq!(decrypted.plan, session.plan);
+    }
+
+    #[test]
+    fn active_bearer_token_falls_back_to_access_token() {
+        let mut session = sample_session();
+        session.openai_api_key.clear();
+
+        assert_eq!(active_bearer_token(&session), "oauth-access");
     }
 }

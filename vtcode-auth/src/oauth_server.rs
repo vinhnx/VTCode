@@ -223,7 +223,7 @@ fn success_html(provider: OAuthProvider) -> String {
     base_html(
         "Authentication Successful",
         provider.subtitle(),
-        Some("This window will close automatically."),
+        Some("You may now close this window and return to VT Code."),
         "✓",
         "#22c55e",
         None,

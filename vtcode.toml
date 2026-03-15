@@ -94,7 +94,7 @@ default_editing_mode = "edit"
 # Default model to use
 # Default: "gpt-5.3-codex"
 # Type: `string`
-default_model = "gpt-5.4"
+default_model = "gpt-5.2"
 
 # Enable an extra self-review pass to refine final responses
 # Default: false
