@@ -271,6 +271,7 @@ pub(super) async fn start_model_picker(
                 ctx.session_bootstrap,
                 ctx.handle,
                 ctx.full_auto,
+                ctx.conversation_history.len(),
             )
             .await
             {

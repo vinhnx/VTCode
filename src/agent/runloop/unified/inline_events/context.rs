@@ -40,6 +40,7 @@ impl<'a> InlineEventContext<'a> {
         provider_client: &'a mut Box<dyn uni::LLMProvider>,
         session_bootstrap: &'a SessionBootstrap,
         full_auto: bool,
+        conversation_history_len: usize,
     ) -> Self {
         let state = InlineEventState::new(renderer, interrupts, ctrl_c_notice_displayed);
         let modal = InlineModalProcessor::new(
@@ -51,6 +52,7 @@ impl<'a> InlineEventContext<'a> {
             provider_client,
             session_bootstrap,
             full_auto,
+            conversation_history_len,
         );
 
         Self { state, modal }

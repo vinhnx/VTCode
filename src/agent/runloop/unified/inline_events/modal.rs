@@ -34,6 +34,7 @@ impl<'a> InlineModalProcessor<'a> {
         provider_client: &'a mut Box<dyn uni::LLMProvider>,
         session_bootstrap: &'a SessionBootstrap,
         full_auto: bool,
+        conversation_history_len: usize,
     ) -> Self {
         let model_picker = ModelPickerCoordinator {
             state: model_picker_state,
@@ -43,6 +44,7 @@ impl<'a> InlineModalProcessor<'a> {
             session_bootstrap,
             handle,
             full_auto,
+            conversation_history_len,
         };
         let palette = PaletteCoordinator {
             state: palette_state,
@@ -221,6 +223,7 @@ struct ModelPickerCoordinator<'a> {
     session_bootstrap: &'a SessionBootstrap,
     handle: &'a InlineHandle,
     full_auto: bool,
+    conversation_history_len: usize,
 }
 
 impl<'a> ModelPickerCoordinator<'a> {
@@ -261,6 +264,7 @@ impl<'a> ModelPickerCoordinator<'a> {
                     self.session_bootstrap,
                     self.handle,
                     self.full_auto,
+                    self.conversation_history_len,
                 )
                 .await
                 {

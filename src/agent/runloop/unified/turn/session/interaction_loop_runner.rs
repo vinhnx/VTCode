@@ -486,6 +486,7 @@ pub(super) async fn run_interaction_loop_impl(
             startup_update_notice_rx: ctx.startup_update_notice_rx,
             header_context: ctx.header_context,
             use_unicode,
+            conversation_history_len: ctx.conversation_history.len(),
         };
 
         let inline_action =
@@ -668,6 +669,7 @@ pub(super) async fn run_interaction_loop_impl(
                             ctx.session_bootstrap,
                             ctx.handle,
                             ctx.full_auto,
+                            ctx.conversation_history.len(),
                         )
                         .await
                     {

@@ -108,6 +108,7 @@ async fn launch_editor_event_submits_edit_command() {
         &mut provider_client,
         &session_bootstrap,
         false,
+        0,
     );
     let mut queued_inputs = VecDeque::new();
     let mut prefer_latest_once = false;
@@ -147,6 +148,7 @@ async fn open_file_in_editor_event_submits_edit_command_with_path() {
         &mut provider_client,
         &session_bootstrap,
         false,
+        0,
     );
     let mut queued_inputs = VecDeque::new();
     let mut prefer_latest_once = false;
@@ -187,6 +189,7 @@ async fn toggle_mode_event_submits_mode_command() {
         &mut provider_client,
         &session_bootstrap,
         false,
+        0,
     );
     let mut queued_inputs = VecDeque::new();
     let mut prefer_latest_once = false;
@@ -226,6 +229,7 @@ async fn plan_confirmation_events_map_to_expected_actions() {
         &mut provider_client,
         &session_bootstrap,
         false,
+        0,
     );
     let mut queued_inputs = VecDeque::new();
     let mut prefer_latest_once = false;
@@ -299,6 +303,7 @@ async fn interrupt_event_returns_exit_after_double_ctrl_c() {
         &mut provider_client,
         &session_bootstrap,
         false,
+        0,
     );
     let mut queued_inputs = VecDeque::new();
     let mut prefer_latest_once = false;
@@ -339,6 +344,7 @@ async fn steering_events_are_passive_in_idle_loop() {
         &mut provider_client,
         &session_bootstrap,
         false,
+        0,
     );
     let mut queued_inputs = VecDeque::new();
     let mut prefer_latest_once = false;
@@ -381,6 +387,7 @@ async fn process_latest_queued_event_primes_newest_queue_priority() {
         &mut provider_client,
         &session_bootstrap,
         false,
+        0,
     );
     let mut queued_inputs = VecDeque::from(["first".to_string(), "latest".to_string()]);
     let mut prefer_latest_once = false;

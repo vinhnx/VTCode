@@ -35,6 +35,7 @@ struct InlineEventLoop<'a> {
         &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<StartupUpdateNotice>>,
     header_context: &'a mut InlineHeaderContext,
     use_unicode: bool,
+    conversation_history_len: usize,
 }
 
 enum StartupUpdateEvent {
@@ -62,6 +63,7 @@ impl<'a> InlineEventLoop<'a> {
             startup_update_notice_rx,
             header_context,
             use_unicode,
+            conversation_history_len,
         } = resources;
 
         Self {
@@ -81,6 +83,7 @@ impl<'a> InlineEventLoop<'a> {
             startup_update_notice_rx,
             header_context,
             use_unicode,
+            conversation_history_len,
         }
     }
 
@@ -144,6 +147,7 @@ impl<'a> InlineEventLoop<'a> {
         let config = &mut *self.config;
         let vt_cfg = &mut *self.vt_cfg;
         let provider_client = &mut *self.provider_client;
+        let conversation_history_len = self.conversation_history_len;
         let mut context = InlineEventContext::new(
             renderer,
             handle,
@@ -156,6 +160,7 @@ impl<'a> InlineEventLoop<'a> {
             provider_client,
             session_bootstrap,
             full_auto,
+            conversation_history_len,
         );
 
         context.process_event(event, &mut self.queue).await
@@ -219,6 +224,7 @@ pub(crate) struct InlineEventLoopResources<'a> {
         &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<StartupUpdateNotice>>,
     pub header_context: &'a mut InlineHeaderContext,
     pub use_unicode: bool,
+    pub conversation_history_len: usize,
 }
 
 pub(crate) async fn poll_inline_loop_action(

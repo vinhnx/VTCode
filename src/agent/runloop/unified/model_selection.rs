@@ -27,6 +27,7 @@ pub(crate) async fn finalize_model_selection(
     session_bootstrap: &SessionBootstrap,
     handle: &InlineHandle,
     full_auto: bool,
+    conversation_history_len: usize,
 ) -> Result<()> {
     let workspace = config.workspace.clone();
 
@@ -118,6 +119,13 @@ pub(crate) async fn finalize_model_selection(
             selection.model_display, selection.model, selection.provider_label
         ),
     )?;
+
+    if conversation_history_len > 0 {
+        renderer.line(
+            MessageStyle::Warning,
+            "Changing model mid-conversation may degrade performance due to context loss and token inefficiency. For best results, start a new conversation with /clear.",
+        )?;
+    }
 
     if !selection.known_model {
         renderer.line(

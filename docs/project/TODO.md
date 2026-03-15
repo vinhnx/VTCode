@@ -72,4 +72,16 @@ https://deepwiki.com/search/how-codex-use-bazel_34da771c-1bac-42e0-b4c9-2f80d5a6
 
 ==
 
-when user change model mid conversation, add a notice that the performance will be degraded. recommend to start a new conversation for best performance. This is because changing the model mid conversation can cause context loss and token inefficiency, leading to slower response times and increased error rates. By starting a new conversation, the agent can optimize its performance with the new model from the beginning, ensuring a smoother and more efficient interaction.
+```
+run cargo fmt
+  • Ran cargo fmt
+        (no output)
+ •   cargo fmt completed successfully (exit code 0).
+     No terminal output was produced.
+     Suggested next steps:
+     • Verify the build with cargo check.
+     • Run tests with cargo nextest run.
+     • Check lint warnings with cargo clippy --workspace --all-targets -- -D warnings.
+```
+
+change harcoded post tool run commnad call with llm generated prompt for agent to report to user and suggest next steps after tool execution. This will make the agent more user-friendly and provide clearer guidance on what to do next based on the tool results. The prompt can be generated dynamically based on the specific tool used and its output, allowing for more contextual and actionable feedback to the user. fallback to a default prompt if the LLM fails to generate a suitable one, ensuring that the user always receives some form of guidance after tool execution. This enhancement will improve the overall user experience and make the agent more effective in assisting users with their tasks.
