@@ -1,16 +1,16 @@
 use anyhow::Result;
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_tui::{
-    InlineListItem, InlineListSearchConfig, InlineListSelection, ListOverlayRequest,
-    OverlayEvent, OverlayHotkey, OverlayHotkeyAction, OverlayHotkeyKey, OverlayRequest,
-    OverlaySelectionChange, OverlaySubmission,
+    InlineListItem, InlineListSearchConfig, InlineListSelection, ListOverlayRequest, OverlayEvent,
+    OverlayHotkey, OverlayHotkeyAction, OverlayHotkeyKey, OverlayRequest, OverlaySelectionChange,
+    OverlaySubmission,
 };
 
+use super::ui::{ensure_selection_ui_available, wait_for_list_modal_selection};
+use super::{SlashCommandContext, SlashCommandControl};
 use crate::agent::runloop::unified::interactive_features::{
     BackgroundJobSummary, PromptSuggestion, collect_background_jobs, generate_prompt_suggestions,
 };
-use super::ui::{ensure_selection_ui_available, wait_for_list_modal_selection};
-use super::{SlashCommandContext, SlashCommandControl};
 
 const PROMPT_SUGGESTION_ACTION_PREFIX: &str = "suggest:";
 
@@ -32,8 +32,10 @@ pub(crate) async fn handle_trigger_prompt_suggestions(
     )
     .await;
     if suggestions.is_empty() {
-        ctx.renderer
-            .line(MessageStyle::Info, "No prompt suggestions are available yet.")?;
+        ctx.renderer.line(
+            MessageStyle::Info,
+            "No prompt suggestions are available yet.",
+        )?;
         return Ok(SlashCommandControl::Continue);
     }
 
@@ -103,11 +105,13 @@ pub(crate) async fn handle_show_jobs_panel(
 
     let items = jobs.iter().map(background_job_item).collect::<Vec<_>>();
     let selected = items.first().and_then(|item| item.selection.clone());
-    ctx.handle.show_overlay(OverlayRequest::List(ListOverlayRequest {
+    ctx.handle
+        .show_overlay(OverlayRequest::List(ListOverlayRequest {
         title: "Jobs".to_string(),
         lines: vec![
             "Active/background command sessions.".to_string(),
-            "Enter or Ctrl+R focuses the selected job output. Ctrl+P previews. Ctrl+X interrupts.".to_string(),
+            "Enter or Ctrl+R focuses the selected job output. Ctrl+P previews. Ctrl+X interrupts."
+                .to_string(),
         ],
         footer_hint: Some(
             "ctrl-r focus output · ctrl-p preview snapshot · ctrl-x interrupt selected job"
@@ -268,7 +272,9 @@ fn focus_job_output(ctx: &mut SlashCommandContext<'_>, job_id: &str) -> Result<(
         MessageStyle::Output,
         &format!(
             "Working dir: {}",
-            snapshot.working_dir.unwrap_or_else(|| "unknown".to_string())
+            snapshot
+                .working_dir
+                .unwrap_or_else(|| "unknown".to_string())
         ),
     )?;
     for line in truncate_job_output(&output).lines() {
@@ -296,7 +302,9 @@ fn preview_job_snapshot(ctx: &mut SlashCommandContext<'_>, job_id: &str) -> Resu
             format!("Command: {}", snapshot.command),
             format!(
                 "Working dir: {}",
-                snapshot.working_dir.unwrap_or_else(|| "unknown".to_string())
+                snapshot
+                    .working_dir
+                    .unwrap_or_else(|| "unknown".to_string())
             ),
             format!("Preview:\n{}", truncate_job_output(&output)),
         ],
@@ -311,9 +319,10 @@ fn interrupt_job(ctx: &mut SlashCommandContext<'_>, job_id: &str) -> Result<()> 
         .pty_manager()
         .send_input_to_session(job_id, &[3], false)
     {
-        Ok(_) => ctx
-            .renderer
-            .line(MessageStyle::Info, &format!("Sent interrupt to job {job_id}."))?,
+        Ok(_) => ctx.renderer.line(
+            MessageStyle::Info,
+            &format!("Sent interrupt to job {job_id}."),
+        )?,
         Err(err) => ctx.renderer.line(
             MessageStyle::Error,
             &format!("Failed to interrupt job {job_id}: {err}"),
@@ -423,7 +432,9 @@ mod tests {
             &mut session,
             &ctrl_c_state,
             &ctrl_c_notify,
-            Some(InlineListSelection::ConfigAction("job:session-1".to_string())),
+            Some(InlineListSelection::ConfigAction(
+                "job:session-1".to_string(),
+            )),
         )
         .await
         .expect("job action");

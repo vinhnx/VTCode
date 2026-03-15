@@ -10,9 +10,9 @@ use vtcode_tui::{InlineHeaderContext, InlineHeaderStatusBadge, InlineHeaderStatu
 
 use tracing::warn;
 
-use crate::agent::runloop::unified::interactive_features::detect_pr_review_status;
 use super::git::git_status_summary;
 use super::welcome::SessionBootstrap;
+use crate::agent::runloop::unified::interactive_features::detect_pr_review_status;
 use dirs::home_dir;
 
 const PR_REVIEW_HIGHLIGHT_TITLE: &str = "PR Review";

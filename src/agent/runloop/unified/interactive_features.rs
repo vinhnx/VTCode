@@ -10,7 +10,9 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::models::{ModelId, Provider};
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::git_info::{get_git_remote_urls, get_git_repo_root, get_head_commit_hash};
-use vtcode_core::llm::factory::{ProviderConfig, create_provider_with_config, infer_provider_from_model};
+use vtcode_core::llm::factory::{
+    ProviderConfig, create_provider_with_config, infer_provider_from_model,
+};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::ToolRegistry;
 use vtcode_tui::{InlineHeaderHighlight, InlineHeaderStatusBadge, InlineHeaderStatusTone};
@@ -52,7 +54,10 @@ impl PrReviewStatus {
     pub(crate) fn to_badge(&self) -> Option<InlineHeaderStatusBadge> {
         let (text, tone) = match self {
             Self::NotApplicable | Self::NotOnPr => return None,
-            Self::GhMissing => ("PR: install gh".to_string(), InlineHeaderStatusTone::Warning),
+            Self::GhMissing => (
+                "PR: install gh".to_string(),
+                InlineHeaderStatusTone::Warning,
+            ),
             Self::AuthRequired => ("PR: gh auth".to_string(), InlineHeaderStatusTone::Warning),
             Self::Ready { .. } => ("PR: ready".to_string(), InlineHeaderStatusTone::Ready),
             Self::ReviewedCurrent { .. } => {
@@ -75,20 +80,28 @@ impl PrReviewStatus {
 
     pub(crate) fn to_highlight(&self) -> Option<InlineHeaderHighlight> {
         let lines = match self {
-            Self::GhMissing => vec!["Install GitHub CLI (`gh`) to show PR review status.".to_string()],
+            Self::GhMissing => {
+                vec!["Install GitHub CLI (`gh`) to show PR review status.".to_string()]
+            }
             Self::AuthRequired => {
                 vec!["Run `gh auth login` to enable PR review status in the header.".to_string()]
             }
             Self::ReviewOutdated { url } => vec![match url {
-                Some(url) => format!("Your previous review is behind the current PR head. Review the latest commit: {url}"),
+                Some(url) => format!(
+                    "Your previous review is behind the current PR head. Review the latest commit: {url}"
+                ),
                 None => "Your previous review is behind the current PR head.".to_string(),
             }],
             Self::ChangesRequested { url } => vec![match url {
-                Some(url) => format!("This PR currently has requested changes. Re-check the discussion: {url}"),
+                Some(url) => format!(
+                    "This PR currently has requested changes. Re-check the discussion: {url}"
+                ),
                 None => "This PR currently has requested changes.".to_string(),
             }],
             Self::NoWriteAccess { url } => vec![match url {
-                Some(url) => format!("You do not appear to have write access for this PR branch. Open in GitHub: {url}"),
+                Some(url) => format!(
+                    "You do not appear to have write access for this PR branch. Open in GitHub: {url}"
+                ),
                 None => "You do not appear to have write access for this PR branch.".to_string(),
             }],
             Self::Error(message) => vec![format!("PR status refresh failed: {message}")],
@@ -152,7 +165,8 @@ pub(crate) async fn generate_prompt_suggestions(
         return cached;
     }
 
-    let fallback = deterministic_prompt_suggestions(workspace, history, session_stats, tool_registry);
+    let fallback =
+        deterministic_prompt_suggestions(workspace, history, session_stats, tool_registry);
     let llm_generated = llm_prompt_suggestions(provider, config, vt_cfg, &route, history).await;
     let resolved = if llm_generated.is_empty() {
         fallback
@@ -252,7 +266,9 @@ fn deterministic_prompt_suggestions(
     suggestions.push(PromptSuggestion {
         id: "review-diff".to_string(),
         title: "Review the current diff".to_string(),
-        prompt: "Review the current diff, call out the highest-risk issue, and suggest the next change.".to_string(),
+        prompt:
+            "Review the current diff, call out the highest-risk issue, and suggest the next change."
+                .to_string(),
         subtitle: Some("General follow-up for active coding sessions.".to_string()),
         badge: Some("Review".to_string()),
     });
@@ -378,7 +394,10 @@ pub(crate) fn collect_background_jobs(tool_registry: &ToolRegistry) -> Vec<Backg
         .list_sessions()
         .into_iter()
         .map(|session| {
-            let status = match tool_registry.pty_manager().is_session_completed(&session.id) {
+            let status = match tool_registry
+                .pty_manager()
+                .is_session_completed(&session.id)
+            {
                 Ok(Some(0)) => "done".to_string(),
                 Ok(Some(code)) => format!("exit {code}"),
                 Ok(None) => "running".to_string(),
@@ -452,7 +471,11 @@ fn detect_pr_review_status_uncached(workspace: &Path, local_head: &str) -> PrRev
     if !command_succeeds("gh", &["--version"], workspace) {
         return PrReviewStatus::GhMissing;
     }
-    if !command_succeeds("gh", &["auth", "status", "--hostname", "github.com"], workspace) {
+    if !command_succeeds(
+        "gh",
+        &["auth", "status", "--hostname", "github.com"],
+        workspace,
+    ) {
         return PrReviewStatus::AuthRequired;
     }
 
@@ -471,7 +494,13 @@ fn detect_pr_review_status_uncached(workspace: &Path, local_head: &str) -> PrRev
         ],
         workspace,
     )
-    .or_else(|_| run_command("gh", &["pr", "view", "--json", "reviewDecision,headRefOid,url"], workspace));
+    .or_else(|_| {
+        run_command(
+            "gh",
+            &["pr", "view", "--json", "reviewDecision,headRefOid,url"],
+            workspace,
+        )
+    });
 
     let pr_json = match pr_json {
         Ok(json) => json,
@@ -487,7 +516,10 @@ fn detect_pr_review_status_uncached(workspace: &Path, local_head: &str) -> PrRev
     let Ok(payload) = serde_json::from_str::<Value>(&pr_json) else {
         return PrReviewStatus::Error("Invalid JSON from `gh pr view`".to_string());
     };
-    let url = payload.get("url").and_then(Value::as_str).map(str::to_string);
+    let url = payload
+        .get("url")
+        .and_then(Value::as_str)
+        .map(str::to_string);
     let head_ref_oid = payload
         .get("headRefOid")
         .and_then(Value::as_str)
@@ -675,7 +707,10 @@ fn truncate_for_prompt(text: &str, max_chars: usize) -> String {
     if text.chars().count() <= max_chars {
         return text.to_string();
     }
-    let mut truncated = text.chars().take(max_chars.saturating_sub(1)).collect::<String>();
+    let mut truncated = text
+        .chars()
+        .take(max_chars.saturating_sub(1))
+        .collect::<String>();
     truncated.push('…');
     truncated
 }
@@ -720,9 +755,9 @@ fn run_command(program: &str, args: &[&str], workspace: &Path) -> Result<String,
 mod tests {
     use super::*;
     use std::path::PathBuf;
+    use vtcode_core::config::PromptCachingConfig;
     use vtcode_core::config::loader::VTCodeConfig;
     use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
-    use vtcode_core::config::PromptCachingConfig;
     use vtcode_core::config::types::ModelSelectionSource;
 
     fn prompt_config(provider: &str, model: &str) -> CoreAgentConfig {
@@ -766,9 +801,7 @@ mod tests {
         assert_eq!(reviewed.text, "PR: reviewed");
         assert_eq!(reviewed.tone, InlineHeaderStatusTone::Ready);
 
-        let auth = PrReviewStatus::AuthRequired
-            .to_badge()
-            .expect("auth badge");
+        let auth = PrReviewStatus::AuthRequired.to_badge().expect("auth badge");
         assert_eq!(auth.text, "PR: gh auth");
         assert_eq!(auth.tone, InlineHeaderStatusTone::Warning);
     }
