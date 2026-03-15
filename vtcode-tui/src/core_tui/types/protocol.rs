@@ -75,6 +75,9 @@ pub enum InlineCommand {
     SetCursorVisible(bool),
     SetInputEnabled(bool),
     SetInput(String),
+    ApplySuggestedPrompt(String),
+    SetTaskPanelVisible(bool),
+    SetTaskPanelLines(Vec<String>),
     ClearInput,
     ForceRedraw,
     ShowOverlay {
@@ -259,6 +262,18 @@ impl InlineHandle {
 
     pub fn set_input(&self, content: String) {
         self.send_command(InlineCommand::SetInput(content));
+    }
+
+    pub fn apply_suggested_prompt(&self, content: String) {
+        self.send_command(InlineCommand::ApplySuggestedPrompt(content));
+    }
+
+    pub fn set_task_panel_visible(&self, visible: bool) {
+        self.send_command(InlineCommand::SetTaskPanelVisible(visible));
+    }
+
+    pub fn set_task_panel_lines(&self, lines: Vec<String>) {
+        self.send_command(InlineCommand::SetTaskPanelLines(lines));
     }
 
     pub fn clear_input(&self) {

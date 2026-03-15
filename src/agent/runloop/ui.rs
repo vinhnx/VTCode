@@ -10,9 +10,12 @@ use vtcode_tui::{InlineHeaderContext, InlineHeaderStatusBadge, InlineHeaderStatu
 
 use tracing::warn;
 
+use crate::agent::runloop::unified::interactive_features::detect_pr_review_status;
 use super::git::git_status_summary;
 use super::welcome::SessionBootstrap;
 use dirs::home_dir;
+
+const PR_REVIEW_HIGHLIGHT_TITLE: &str = "PR Review";
 
 #[derive(Clone, Debug)]
 enum ToolStatusSummary {
@@ -134,6 +137,31 @@ pub(crate) fn build_search_tools_badge(workspace: &Path) -> InlineHeaderStatusBa
         text: status.header_summary(),
         tone,
     }
+}
+
+pub(crate) fn sync_inline_header_pr_status(
+    workspace: &Path,
+    header_context: &mut InlineHeaderContext,
+) -> bool {
+    let status = detect_pr_review_status(workspace);
+    let next_badge = status.to_badge();
+    let next_highlight = status.to_highlight();
+    let previous_badge = header_context.pr_review.clone();
+    let previous_highlight = header_context
+        .highlights
+        .iter()
+        .find(|highlight| highlight.title == PR_REVIEW_HIGHLIGHT_TITLE)
+        .cloned();
+
+    header_context.pr_review = next_badge.clone();
+    header_context
+        .highlights
+        .retain(|highlight| highlight.title != PR_REVIEW_HIGHLIGHT_TITLE);
+    if let Some(highlight) = next_highlight.clone() {
+        header_context.highlights.push(highlight);
+    }
+
+    previous_badge != next_badge || previous_highlight != next_highlight
 }
 
 pub(crate) async fn build_inline_header_context(
@@ -296,13 +324,14 @@ pub(crate) async fn build_inline_header_context(
         ),
     };
 
-    Ok(InlineHeaderContext {
+    let mut context = InlineHeaderContext {
         app_name: vtcode_core::config::constants::app::DISPLAY_NAME.to_string(),
         provider: provider_value,
         model: model_value,
         context_window_size: Some(context_window_size),
         version,
         search_tools: Some(build_search_tools_badge(&config.workspace)),
+        pr_review: None,
         editor_context: None,
         git: git_value,
         mode,
@@ -314,5 +343,7 @@ pub(crate) async fn build_inline_header_context(
         editing_mode: vtcode_tui::EditingMode::default(),
         autonomous_mode: false,
         reasoning_stage: None,
-    })
+    };
+    sync_inline_header_pr_status(&config.workspace, &mut context);
+    Ok(context)
 }

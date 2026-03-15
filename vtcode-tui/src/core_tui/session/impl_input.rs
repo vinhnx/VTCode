@@ -139,12 +139,24 @@ impl Session {
                     // Add error to transcript instead of input field
                     crate::utils::transcript::display_error(&content);
                 } else {
+                    self.clear_suggested_prompt_state();
                     self.input_manager.set_content(content);
                     self.input_compact_mode = self.input_compact_placeholder().is_some();
                     self.scroll_manager.set_offset(0);
                     slash::update_slash_suggestions(self);
                     self.check_file_reference_trigger();
                 }
+            }
+            InlineCommand::ApplySuggestedPrompt(content) => {
+                self.apply_suggested_prompt(content);
+                self.scroll_manager.set_offset(0);
+                self.check_file_reference_trigger();
+            }
+            InlineCommand::SetTaskPanelVisible(visible) => {
+                self.set_task_panel_visible(visible);
+            }
+            InlineCommand::SetTaskPanelLines(lines) => {
+                self.set_task_panel_lines(lines);
             }
             InlineCommand::ClearInput => {
                 command::clear_input(self);

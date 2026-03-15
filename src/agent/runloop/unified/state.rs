@@ -14,6 +14,7 @@ pub(crate) enum ModelPickerTarget {
 #[derive(Default)]
 pub(crate) struct SessionStats {
     tools: std::collections::BTreeSet<String>,
+    pub task_panel_visible: bool,
     /// Current editing mode: Edit or Plan.
     pub editing_mode: EditingMode,
     /// Whether the plan mode interview has already been shown in this session

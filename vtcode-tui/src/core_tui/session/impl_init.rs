@@ -151,6 +151,9 @@ impl Session {
             file_palette: None,
             file_palette_active: false,
             inline_lists_visible: true,
+            show_task_panel: false,
+            task_panel_lines: Vec::new(),
+            suggested_prompt_state: SuggestedPromptState::default(),
 
             // --- Thinking Indicator ---
             thinking_spinner: ThinkingSpinner::new(),

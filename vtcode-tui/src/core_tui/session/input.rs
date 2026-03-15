@@ -420,6 +420,15 @@ impl Session {
         if prompt_style.color.is_none() {
             prompt_style.color = self.theme.primary.or(self.theme.foreground);
         }
+        if self.suggested_prompt_state.active {
+            prompt_style.color = self
+                .theme
+                .tool_accent
+                .or(self.theme.secondary)
+                .or(self.theme.primary)
+                .or(self.theme.foreground);
+            prompt_style.effects |= Effects::BOLD;
+        }
         let prompt_style = ratatui_style_from_inline(&prompt_style, self.theme.foreground);
         let prompt_width = UnicodeWidthStr::width(self.prompt_prefix.as_str()) as u16;
         let prompt_display_width = prompt_width.min(width);

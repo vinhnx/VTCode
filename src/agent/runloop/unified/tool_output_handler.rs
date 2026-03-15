@@ -290,6 +290,7 @@ async fn handle_success_common(
         record_mcp_success_event(ctx.mcp_panel_state, tool_name, args_val);
     } else if is_task_tracker_tool(name) && ctx.renderer.supports_inline_ui() {
         let block_lines = task_tracker_block_lines(args_val, payload.output);
+        ctx.handle.set_task_panel_lines(block_lines.clone());
         apply_task_tracker_block(ctx.handle, ctx.harness_state, block_lines);
     } else {
         render_tool_output_common(
@@ -710,7 +711,11 @@ mod tests {
             .expect("second tracker render should succeed");
 
         let mut saw_replace = false;
+        let mut saw_task_panel_update = false;
         while let Ok(command) = receiver.try_recv() {
+            if matches!(command, InlineCommand::SetTaskPanelLines(_)) {
+                saw_task_panel_update = true;
+            }
             if matches!(
                 command,
                 InlineCommand::ReplaceLast {
@@ -726,6 +731,10 @@ mod tests {
         assert!(
             saw_replace,
             "expected later tracker update to replace prior block"
+        );
+        assert!(
+            saw_task_panel_update,
+            "expected tracker updates to refresh the dedicated task panel"
         );
         assert_eq!(
             transcript_lines

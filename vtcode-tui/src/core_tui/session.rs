@@ -113,6 +113,12 @@ struct CollapsedPaste {
     full_text: String,
 }
 
+#[derive(Clone, Debug, Default)]
+pub(crate) struct SuggestedPromptState {
+    pub(crate) active: bool,
+    pub(crate) source: Option<String>,
+}
+
 pub(crate) enum ActiveOverlay {
     Modal(Box<ModalState>),
     Wizard(Box<WizardModalState>),
@@ -268,6 +274,9 @@ pub struct Session {
     pub(crate) file_palette: Option<FilePalette>,
     pub(crate) file_palette_active: bool,
     pub(crate) inline_lists_visible: bool,
+    pub(crate) show_task_panel: bool,
+    pub(crate) task_panel_lines: Vec<String>,
+    pub(crate) suggested_prompt_state: SuggestedPromptState,
 
     // --- Thinking Indicator ---
     pub(crate) thinking_spinner: ThinkingSpinner,

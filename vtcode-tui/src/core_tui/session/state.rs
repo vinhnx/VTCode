@@ -20,7 +20,7 @@ use super::super::types::{
 };
 use super::status_requires_shimmer;
 use super::{
-    ActiveOverlay, Session,
+    ActiveOverlay, Session, SuggestedPromptState,
     modal::{ModalListState, ModalSearchState, ModalState, WizardModalState},
 };
 use crate::config::constants::ui;
@@ -48,6 +48,30 @@ impl Session {
                 self.history_picker_state.cancel(&mut self.input_manager);
             }
         }
+        self.mark_dirty();
+    }
+
+    pub(crate) fn set_task_panel_visible(&mut self, visible: bool) {
+        if self.show_task_panel == visible {
+            return;
+        }
+        self.show_task_panel = visible;
+        self.mark_dirty();
+    }
+
+    pub(crate) fn set_task_panel_lines(&mut self, lines: Vec<String>) {
+        if self.task_panel_lines == lines {
+            return;
+        }
+        self.task_panel_lines = lines;
+        self.mark_dirty();
+    }
+
+    pub(crate) fn clear_suggested_prompt_state(&mut self) {
+        if !self.suggested_prompt_state.active && self.suggested_prompt_state.source.is_none() {
+            return;
+        }
+        self.suggested_prompt_state = SuggestedPromptState::default();
         self.mark_dirty();
     }
 

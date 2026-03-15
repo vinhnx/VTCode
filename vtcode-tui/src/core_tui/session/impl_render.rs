@@ -7,6 +7,7 @@ enum BottomPanelKind {
     FilePalette,
     HistoryPicker,
     SlashPalette,
+    TaskPanel,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -105,6 +106,9 @@ impl Session {
                 }
                 BottomPanelKind::SlashPalette => {
                     slash::render_slash_palette(self, frame, panel_area);
+                }
+                BottomPanelKind::TaskPanel => {
+                    render_task_panel(self, frame, panel_area);
                 }
                 BottomPanelKind::None => {
                     frame.render_widget(Clear, panel_area);
@@ -216,6 +220,20 @@ fn resolve_bottom_panel_spec(
         }
     }
 
+    if session.show_task_panel
+        && let Some(panel) = panel_from_split(
+            session,
+            SplitContext {
+                width: viewport.width,
+                max_panel_height,
+            },
+            BottomPanelKind::TaskPanel,
+            split_inline_task_panel_area,
+        )
+    {
+        return panel;
+    }
+
     BottomPanelSpec {
         kind: BottomPanelKind::None,
         height: 0,
@@ -265,6 +283,69 @@ fn modal_eligible_for_inline_bottom(session: &Session) -> bool {
 
 fn split_inline_modal_area_probe(session: &mut Session, area: Rect) -> (Rect, Option<Rect>) {
     render::split_inline_modal_area(session, area)
+}
+
+fn split_inline_task_panel_area(session: &mut Session, area: Rect) -> (Rect, Option<Rect>) {
+    let visible_lines = session.task_panel_lines.len().max(1);
+    let desired_list_rows =
+        list_panel::rows_to_u16(visible_lines.min(ui::INLINE_LIST_MAX_ROWS_MULTILINE));
+    let fixed_rows = list_panel::fixed_section_rows(1, 1, false);
+    list_panel::split_bottom_list_panel(area, fixed_rows, desired_list_rows)
+}
+
+fn render_task_panel(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+
+    let rows = if session.task_panel_lines.is_empty() {
+        vec![(
+            inline_list::InlineListRow::single(
+                ui::PLAN_STATUS_EMPTY.to_string().into(),
+                session.header_secondary_style(),
+            ),
+            1,
+        )]
+    } else {
+        session
+            .task_panel_lines
+            .iter()
+            .map(|line| {
+                (
+                    inline_list::InlineListRow::single(
+                        line.clone().into(),
+                        session.header_secondary_style(),
+                    ),
+                    1,
+                )
+            })
+            .collect()
+    };
+    let item_count = session.task_panel_lines.len();
+    let sections = list_panel::SharedListPanelSections {
+        header: vec![Line::from(vec![Span::styled(
+            ui::PLAN_BLOCK_TITLE.to_string(),
+            session.section_title_style(),
+        )])],
+        info: vec![Line::from(format!(
+            "{} item{}",
+            item_count,
+            if item_count == 1 { "" } else { "s" }
+        ))],
+        search: None,
+    };
+    let styles = list_panel::SharedListPanelStyles {
+        base_style: session.styles.default_style(),
+        selected_style: Some(session.styles.modal_list_highlight_style()),
+        text_style: session.header_secondary_style(),
+    };
+    let mut model = list_panel::StaticRowsListPanelModel {
+        rows,
+        selected: None,
+        offset: 0,
+        visible_rows: area.height as usize,
+    };
+    list_panel::render_shared_list_panel(frame, area, sections, styles, &mut model);
 }
 
 fn probe_panel_height(

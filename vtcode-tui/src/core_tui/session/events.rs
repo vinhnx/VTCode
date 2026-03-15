@@ -434,6 +434,16 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
 
+            if !has_control
+                && !has_shift
+                && !has_alt
+                && session.input_manager.content().trim().is_empty()
+                && session.active_pty_session_count() > 0
+            {
+                session.mark_dirty();
+                return Some(InlineEvent::Submit("/jobs".to_string()));
+            }
+
             // Check for backslash + Enter quick escape (insert newline without submitting)
             if !has_control && session.input_manager.content().ends_with('\\') {
                 // Remove the backslash and insert a newline
@@ -600,6 +610,11 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
 
+            if has_alt && matches!(ch, 'p' | 'P') {
+                session.mark_dirty();
+                return Some(InlineEvent::Submit("/btw".to_string()));
+            }
+
             if ch == '?'
                 && !has_control
                 && !has_alt
@@ -725,6 +740,7 @@ fn take_submitted_input(session: &mut Session) -> Option<String> {
 
 fn clear_submitted_input(session: &mut Session) {
     session.input_manager.clear();
+    session.clear_suggested_prompt_state();
     session.input_compact_mode = false;
     session.scroll_manager.set_offset(0);
     slash::update_slash_suggestions(session);

@@ -51,6 +51,7 @@ fn test_header_context_snapshot() {
         highlights: vec![],
         version: "0.37.1".to_string(),
         search_tools: None,
+        pr_review: None,
         editor_context: None,
         editing_mode: EditingMode::default(),
         autonomous_mode: false,

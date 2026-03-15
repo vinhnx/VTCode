@@ -31,6 +31,7 @@ use crate::agent::runloop::unified::session_setup::{
 };
 use crate::agent::runloop::unified::state::ModelPickerTarget;
 use crate::agent::runloop::unified::state::is_follow_up_prompt_like;
+use crate::agent::runloop::ui::sync_inline_header_pr_status;
 use crate::agent::runloop::unified::turn::session::direct_tool_completion::{
     ReplyKind, generate_completion_reply_with_suggestions,
 };
@@ -410,6 +411,9 @@ pub(super) async fn run_interaction_loop_impl(
                 ctx.vt_cfg.as_ref(),
                 live_ide_context.snapshot.clone(),
             );
+        }
+        if sync_inline_header_pr_status(&ctx.config.workspace, ctx.header_context) {
+            ctx.handle.set_header_context(ctx.header_context.clone());
         }
         crate::agent::runloop::unified::status_line::update_ide_context_source(
             state.input_status_state,

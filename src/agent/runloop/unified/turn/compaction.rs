@@ -334,7 +334,7 @@ fn read_task_summary(workspace_root: &Path) -> Option<String> {
         .lines()
         .filter(|line| line.trim_start().starts_with("- ["))
         .take(5)
-        .map(|line| normalize_whitespace(line))
+        .map(normalize_whitespace)
         .collect::<Vec<_>>();
 
     match (title, checklist.is_empty()) {

@@ -13,6 +13,7 @@ use unicode_segmentation::UnicodeSegmentation;
 
 impl Session {
     pub(super) fn refresh_input_edit_state(&mut self) {
+        self.clear_suggested_prompt_state();
         self.input_compact_mode = self.input_compact_placeholder().is_some();
         slash::update_slash_suggestions(self);
     }
@@ -46,6 +47,28 @@ impl Session {
 
         self.input_manager.insert_text(&sanitized);
         self.refresh_input_edit_state();
+    }
+
+    pub(super) fn apply_suggested_prompt(&mut self, text: String) {
+        let trimmed = text.trim();
+        if trimmed.is_empty() {
+            return;
+        }
+
+        let merged = if self.input_manager.content().trim().is_empty() {
+            trimmed.to_string()
+        } else {
+            format!("{}\n\n{}", self.input_manager.content().trim_end(), trimmed)
+        };
+
+        self.input_manager.set_content(merged);
+        self.input_manager
+            .set_cursor(self.input_manager.content().len());
+        self.suggested_prompt_state.active = true;
+        self.suggested_prompt_state.source = Some("btw".to_string());
+        self.input_compact_mode = self.input_compact_placeholder().is_some();
+        slash::update_slash_suggestions(self);
+        self.mark_dirty();
     }
 
     /// Calculate remaining newline capacity in the input field
