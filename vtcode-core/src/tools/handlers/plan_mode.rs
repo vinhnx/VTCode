@@ -924,37 +924,123 @@ impl Tool for EnterPlanModeTool {
             approved: false,
         });
 
-        // Check if already in plan mode
-        if self.state.is_active() {
-            return Ok(json!({
-                "status": "already_active",
-                "message": "Plan Mode is already active. Continue with your planning workflow.",
-                "plan_file": self.state.get_plan_file().await.map(|p| p.display().to_string())
-            }));
-        }
-
-        // Resolve target plan path. Defaults to .vtcode/plans/, but allows explicit custom location.
-        let plan_name = self.generate_plan_name(args.plan_name.as_deref());
-        let plan_file = if let Some(raw_path) = args.plan_path.as_deref() {
-            let trimmed = raw_path.trim();
-            if Path::new(trimmed).is_absolute() {
-                PathBuf::from(trimmed)
-            } else {
-                self.state
-                    .workspace_root()
-                    .unwrap_or_else(|| PathBuf::from("."))
-                    .join(trimmed)
-            }
-        } else {
-            let plans_dir = self.state.plans_dir();
-            plans_dir.join(format!("{}.md", plan_name))
-        };
         let workspace_root = self
             .state
             .workspace_root()
             .unwrap_or_else(|| PathBuf::from("."));
         let validation_hints = detect_validation_command_hints(&workspace_root);
 
+        // Check if already in plan mode
+        if self.state.is_active() {
+            let fallback_plan_name = self.generate_plan_name(args.plan_name.as_deref());
+            let existing_plan_file = self.state.get_plan_file().await;
+            let existing_plan_file_exists = existing_plan_file
+                .as_ref()
+                .is_some_and(|path| path.exists());
+
+            if existing_plan_file_exists {
+                return Ok(json!({
+                    "status": "already_active",
+                    "message": "Plan Mode is already active. Continue with your planning workflow.",
+                    "plan_file": existing_plan_file.map(|p| p.display().to_string())
+                }));
+            }
+
+            let mut plan_title_seed: Option<String> = None;
+            let plan_file = if let Some(raw_path) = args.plan_path.as_deref() {
+                let trimmed = raw_path.trim();
+                let resolved = if Path::new(trimmed).is_absolute() {
+                    PathBuf::from(trimmed)
+                } else {
+                    workspace_root.join(trimmed)
+                };
+                if plan_title_seed.is_none() {
+                    plan_title_seed = resolved
+                        .file_stem()
+                        .and_then(|stem| stem.to_str())
+                        .map(|stem| stem.to_string());
+                }
+                resolved
+            } else if let Some(existing_path) = existing_plan_file {
+                if plan_title_seed.is_none() {
+                    plan_title_seed = existing_path
+                        .file_stem()
+                        .and_then(|stem| stem.to_str())
+                        .map(|stem| stem.to_string());
+                }
+                existing_path
+            } else {
+                plan_title_seed = Some(fallback_plan_name.clone());
+                self.state
+                    .plans_dir()
+                    .join(format!("{}.md", fallback_plan_name))
+            };
+            let plan_title_seed = plan_title_seed.unwrap_or_else(|| fallback_plan_name.clone());
+            let plan_title = title_from_plan_name(&plan_title_seed);
+
+            if let Some(parent) = plan_file.parent() {
+                ensure_dir_exists(parent).await.with_context(|| {
+                    format!("Failed to create plan directory: {}", parent.display())
+                })?;
+            }
+
+            let mut created_plan_file = false;
+            if !plan_file.exists() {
+                created_plan_file = true;
+                let initial_content = render_initial_plan_file_content(
+                    &plan_title,
+                    args.description.as_deref(),
+                    &plan_file,
+                    &validation_hints,
+                );
+                write_file_with_context(&plan_file, &initial_content, "plan file")
+                    .await
+                    .with_context(|| {
+                        format!("Failed to create plan file: {}", plan_file.display())
+                    })?;
+            }
+
+            self.state.set_plan_file(Some(plan_file.clone())).await;
+            let baseline = tokio::fs::metadata(&plan_file)
+                .await
+                .and_then(|meta| meta.modified())
+                .unwrap_or_else(|_| SystemTime::now());
+            self.state.set_plan_baseline(Some(baseline)).await;
+            self.state.set_phase(PlanLifecyclePhase::ActiveDrafting);
+
+            let message = if created_plan_file {
+                "Plan Mode is already active. Initialized plan file for planning workflow."
+            } else {
+                "Plan Mode is already active. Using existing plan file for planning workflow."
+            };
+
+            return Ok(json!({
+                "status": "already_active",
+                "message": message,
+                "plan_file": plan_file.display().to_string()
+            }));
+        }
+
+        // Resolve target plan path. Defaults to .vtcode/plans/, but allows explicit custom location.
+        let plan_name = self.generate_plan_name(args.plan_name.as_deref());
+        let (plan_file, plan_title_seed) = if let Some(raw_path) = args.plan_path.as_deref() {
+            let trimmed = raw_path.trim();
+            let resolved = if Path::new(trimmed).is_absolute() {
+                PathBuf::from(trimmed)
+            } else {
+                workspace_root.join(trimmed)
+            };
+            let seed = resolved
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .map(|stem| stem.to_string())
+                .unwrap_or_else(|| plan_name.clone());
+            (resolved, seed)
+        } else {
+            let plans_dir = self.state.plans_dir();
+            (plans_dir.join(format!("{}.md", plan_name)), plan_name.clone())
+        };
+        let plan_title = title_from_plan_name(&plan_title_seed);
         if args.require_confirmation && !args.approved {
             self.state
                 .set_phase(PlanLifecyclePhase::EnterPendingApproval);
@@ -963,7 +1049,7 @@ impl Tool for EnterPlanModeTool {
                 "requires_confirmation": true,
                 "message": "Plan Mode entry requires user confirmation.",
                 "plan_file": plan_file.display().to_string(),
-                "plan_title": title_from_plan_name(&plan_name),
+                "plan_title": plan_title.clone(),
                 "description": args.description,
             }));
         }
@@ -979,7 +1065,7 @@ impl Tool for EnterPlanModeTool {
         }
 
         let initial_content = render_initial_plan_file_content(
-            &title_from_plan_name(&plan_name),
+            &plan_title,
             args.description.as_deref(),
             &plan_file,
             &validation_hints,
@@ -1526,11 +1612,43 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let state = PlanModeState::new(temp_dir.path().to_path_buf());
         state.enable();
+        let plans_dir = state.plans_dir();
+        std::fs::create_dir_all(&plans_dir).unwrap();
+        let plan_file = plans_dir.join("test.md");
+        std::fs::write(&plan_file, "# Test Plan\n").unwrap();
+        state.set_plan_file(Some(plan_file)).await;
 
         let tool = EnterPlanModeTool::new(state);
         let result = tool.execute(json!({})).await.unwrap();
 
         assert_eq!(result["status"], "already_active");
+    }
+
+    #[tokio::test]
+    async fn test_already_active_initializes_missing_plan_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let state = PlanModeState::new(temp_dir.path().to_path_buf());
+        state.enable();
+
+        let tool = EnterPlanModeTool::new(state.clone());
+        let result = tool
+            .execute(json!({
+                "plan_name": "missing-plan"
+            }))
+            .await
+            .unwrap();
+
+        assert_eq!(result["status"], "already_active");
+        let plan_file = state
+            .get_plan_file()
+            .await
+            .expect("plan file should be set");
+        assert!(plan_file.exists());
+        assert!(plan_file
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default()
+            .contains("missing-plan"));
     }
 
     #[test]
