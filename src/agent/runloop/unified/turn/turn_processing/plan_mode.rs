@@ -2,8 +2,10 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 use vtcode_core::llm::provider as uni;
+use vtcode_core::tools::handlers::plan_mode::{PlanValidationReport, validate_plan_content};
 
 use super::response_processing::prepare_tool_calls;
+use crate::agent::runloop::unified::plan_blocks::extract_proposed_plan;
 use crate::agent::runloop::unified::turn::context::TurnProcessingResult;
 use crate::agent::runloop::unified::turn::turn_processing::extract_interview_questions;
 
@@ -148,12 +150,16 @@ Return JSON only.",
         Duration::from_secs(INTERVIEW_SYNTHESIS_TIMEOUT_SECS),
         provider_client.generate(request),
     )
-    .await
-    .ok()?
-    .ok()?;
-    let content = response.content?;
-    let payload = parse_interview_payload_from_text(&content)?;
-    sanitize_generated_interview_payload(payload, &context)
+    .await;
+
+    let generated = response
+        .ok()
+        .and_then(Result::ok)
+        .and_then(|response| response.content)
+        .and_then(|content| parse_interview_payload_from_text(&content))
+        .and_then(|payload| sanitize_generated_interview_payload(payload, &context));
+
+    generated.or_else(|| build_adaptive_fallback_interview_args(&context, response_text))
 }
 
 fn collect_interview_research_context(
@@ -805,68 +811,112 @@ fn contains_any(text: &str, needles: &[&str]) -> bool {
     needles.iter().any(|needle| text.contains(needle))
 }
 
-fn default_plan_mode_interview_args() -> serde_json::Value {
-    serde_json::json!({
-        "questions": [
-            {
-                "id": "goal",
-                "header": "Goal",
-                "question": "What user-visible outcome should this change deliver, and what constraints or non-goals must be respected?",
-                "options": [
-                    {
-                        "label": "Single outcome metric (Recommended)",
-                        "description": "Pick one user-visible result and optimize scope to ship that outcome quickly."
-                    },
-                    {
-                        "label": "Outcome plus hard constraints",
-                        "description": "Define the target result and explicitly lock constraints/non-goals up front."
-                    },
-                    {
-                        "label": "MVP scope boundary",
-                        "description": "Choose the smallest useful deliverable that still demonstrates user impact."
-                    }
-                ]
-            },
-            {
-                "id": "constraints",
-                "header": "Plan",
-                "question": "Break the work into 3-7 composable steps. For each step include target file(s) and a concrete expected outcome.",
-                "options": [
-                    {
-                        "label": "Dependency-first slices (Recommended)",
-                        "description": "Order steps by dependency so each slice can be built and validated independently."
-                    },
-                    {
-                        "label": "User-flow slices",
-                        "description": "Split by user journey milestones so each step improves one visible workflow."
-                    },
-                    {
-                        "label": "Risk-isolated slices",
-                        "description": "Separate high-risk changes into dedicated steps to simplify debugging and rollback."
-                    }
-                ]
-            },
-            {
-                "id": "verification",
-                "header": "Verification",
-                "question": "For each step, what exact command or manual check proves it is complete?",
-                "options": [
-                    {
-                        "label": "Command proof per step (Recommended)",
-                        "description": "Attach an explicit command/check for each step to make completion objective."
-                    },
-                    {
-                        "label": "Manual behavior proof",
-                        "description": "Use concrete user-visible manual checks when automated coverage is not available."
-                    },
-                    {
-                        "label": "Hybrid proof strategy",
-                        "description": "Combine automated commands with targeted manual checks for stronger confidence."
-                    }
-                ]
-            }
-        ]
-    })
+fn build_adaptive_fallback_interview_args(
+    context: &InterviewResearchContext,
+    response_text: Option<&str>,
+) -> Option<serde_json::Value> {
+    let validation = extract_plan_validation(response_text);
+    let mut questions = Vec::new();
+
+    let needs_scope = validation.as_ref().is_some_and(|report| {
+        report
+            .missing_sections
+            .iter()
+            .any(|section| section == "Summary")
+            || !report.open_decisions.is_empty()
+    }) || (!context.open_decision_hints.is_empty() && validation.is_none());
+
+    if needs_scope {
+        questions.push(build_fallback_question(
+            "scope",
+            "Scope",
+            "What user-visible outcome should this plan optimize for, and which constraints or non-goals must stay fixed?",
+            context,
+        ));
+    }
+
+    let planning_placeholders = validation.as_ref().is_some_and(|report| {
+        report.placeholder_tokens.iter().any(|token| {
+            token.contains("[step]") || token.contains("[paths]") || token.contains("[check]")
+        })
+    });
+    let needs_planning = validation.as_ref().is_some_and(|report| {
+        report
+            .missing_sections
+            .iter()
+            .any(|section| section == "Implementation Steps")
+            || report.implementation_step_count == 0
+    }) || planning_placeholders
+        || (validation.is_none() && !context.recent_targets.is_empty());
+
+    if needs_planning {
+        questions.push(build_fallback_question(
+            "plan",
+            "Plan",
+            "How should the work be decomposed into concrete implementation steps, including target files or modules for each slice?",
+            context,
+        ));
+    }
+
+    let needs_verification = validation.as_ref().is_some_and(|report| {
+        report
+            .missing_sections
+            .iter()
+            .any(|section| section == "Test Cases and Validation")
+            || report.validation_item_count == 0
+    }) || validation
+        .as_ref()
+        .is_some_and(|report| report.assumption_count == 0)
+        || (validation.is_none() && context.verification_hints.is_empty());
+
+    if needs_verification {
+        questions.push(build_fallback_question(
+            "verification",
+            "Verify",
+            "What exact commands or manual checks should prove the implementation is complete and guard against regressions?",
+            context,
+        ));
+    }
+
+    if questions.is_empty() {
+        return None;
+    }
+
+    Some(json!({ "questions": questions.into_iter().take(3).collect::<Vec<_>>() }))
+}
+
+fn extract_plan_validation(response_text: Option<&str>) -> Option<PlanValidationReport> {
+    let text = response_text?;
+    let extracted = extract_proposed_plan(text);
+    let plan_text = extracted.plan_text?;
+    Some(validate_plan_content(&plan_text))
+}
+
+fn build_fallback_question(
+    id: &str,
+    header: &str,
+    question: &str,
+    context: &InterviewResearchContext,
+) -> Value {
+    let mut payload = serde_json::Map::new();
+    payload.insert("id".to_string(), Value::String(id.to_string()));
+    payload.insert("header".to_string(), Value::String(header.to_string()));
+    payload.insert("question".to_string(), Value::String(question.to_string()));
+    payload.insert(
+        "options".to_string(),
+        Value::Array(fallback_options_for_question(question, context)),
+    );
+    if let Some(focus_area) = infer_focus_area_hint(question, context) {
+        payload.insert("focus_area".to_string(), Value::String(focus_area));
+    }
+    let analysis_hints = build_analysis_hints(context);
+    if !analysis_hints.is_empty() {
+        payload.insert(
+            "analysis_hints".to_string(),
+            Value::Array(analysis_hints.into_iter().map(Value::String).collect()),
+        );
+    }
+    Value::Object(payload)
 }
 
 fn inject_plan_mode_interview(
@@ -878,7 +928,26 @@ fn inject_plan_mode_interview(
 ) -> TurnProcessingResult {
     use vtcode_core::config::constants::tools;
 
-    let args = synthesized_interview_args.unwrap_or_else(default_plan_mode_interview_args);
+    let args = synthesized_interview_args.unwrap_or_else(|| {
+        json!({
+            "questions": [
+                build_fallback_question(
+                    "scope",
+                    "Scope",
+                    "What is the highest-impact planning decision still missing before implementation can start?",
+                    &InterviewResearchContext {
+                        discovery_tools_used: Vec::new(),
+                        recent_targets: Vec::new(),
+                        risk_hints: Vec::new(),
+                        open_decision_hints: Vec::new(),
+                        goal_hints: Vec::new(),
+                        verification_hints: Vec::new(),
+                        custom_note_policy: CUSTOM_NOTE_POLICY.to_string(),
+                    },
+                )
+            ]
+        })
+    });
     let args_json = serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
     let call_id = format!("call_plan_interview_{}", conversation_len);
     let call = uni::ToolCall::function(call_id, tools::REQUEST_USER_INPUT.to_string(), args_json);

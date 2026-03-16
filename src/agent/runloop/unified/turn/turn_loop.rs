@@ -15,7 +15,8 @@ use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use crate::agent::runloop::unified::turn::turn_loop_helpers::{
     ToolLoopLimitAction, extract_turn_config, handle_steering_messages,
-    maybe_handle_plan_mode_exit_trigger, maybe_handle_tool_loop_limit,
+    maybe_handle_plan_mode_enter_trigger, maybe_handle_plan_mode_exit_trigger,
+    maybe_handle_tool_loop_limit,
 };
 use vtcode_core::acp::ToolPermissionCache;
 use vtcode_core::config::loader::VTCodeConfig;
@@ -400,6 +401,12 @@ pub(crate) async fn run_turn_loop(
 
         step_count += 1;
         ctx.telemetry.record_turn();
+
+        if maybe_handle_plan_mode_enter_trigger(&mut ctx, working_history, step_count, &mut result)
+            .await?
+        {
+            break;
+        }
 
         if maybe_handle_plan_mode_exit_trigger(&mut ctx, working_history, step_count, &mut result)
             .await?

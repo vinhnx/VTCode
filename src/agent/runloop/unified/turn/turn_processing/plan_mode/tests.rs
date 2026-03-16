@@ -84,7 +84,7 @@ fn maybe_force_plan_mode_interview_includes_distinct_question_options() {
     let questions = payload["questions"]
         .as_array()
         .expect("questions array should exist");
-    assert_eq!(questions.len(), 3);
+    assert!(!questions.is_empty());
 
     let first_labels = questions
         .iter()
@@ -103,9 +103,8 @@ fn maybe_force_plan_mode_interview_includes_distinct_question_options() {
             .iter()
             .all(|label| label.contains("(Recommended)"))
     );
-    assert_ne!(first_labels[0], first_labels[1]);
-    assert_ne!(first_labels[1], first_labels[2]);
-    assert_ne!(first_labels[0], first_labels[2]);
+    let unique_labels = first_labels.iter().collect::<std::collections::HashSet<_>>();
+    assert_eq!(unique_labels.len(), first_labels.len());
 }
 
 #[test]
@@ -556,4 +555,58 @@ fn maybe_force_plan_mode_interview_reprompts_after_cancelled_cycle() {
         }
         _ => panic!("Expected interview to re-open after cancellation"),
     }
+}
+
+#[test]
+fn adaptive_fallback_interview_targets_only_missing_sections() {
+    let context = InterviewResearchContext {
+        discovery_tools_used: vec![tools::READ_FILE.to_string()],
+        recent_targets: vec![
+            "src/agent/runloop/unified/tool_pipeline/execution_plan_mode.rs".to_string(),
+        ],
+        risk_hints: Vec::new(),
+        open_decision_hints: Vec::new(),
+        goal_hints: Vec::new(),
+        verification_hints: Vec::new(),
+        custom_note_policy: CUSTOM_NOTE_POLICY.to_string(),
+    };
+
+    let payload = build_adaptive_fallback_interview_args(
+        &context,
+        Some(
+            "<proposed_plan>\n# Fix Plan Mode\n\n## Implementation Steps\n1. Add entry gating\n\n## Assumptions and Defaults\n1. Reuse overlays.\n</proposed_plan>",
+        ),
+    )
+    .expect("expected adaptive fallback");
+
+    let questions = payload["questions"].as_array().expect("questions array");
+    assert_eq!(questions.len(), 2);
+    assert_eq!(questions[0]["id"], "scope");
+    assert_eq!(questions[1]["id"], "verification");
+}
+
+#[test]
+fn adaptive_fallback_interview_skips_when_draft_is_complete() {
+    let context = InterviewResearchContext {
+        discovery_tools_used: vec![tools::READ_FILE.to_string()],
+        recent_targets: vec![
+            "src/agent/runloop/unified/tool_pipeline/execution_plan_mode.rs".to_string(),
+        ],
+        risk_hints: Vec::new(),
+        open_decision_hints: Vec::new(),
+        goal_hints: Vec::new(),
+        verification_hints: vec![
+            "cargo test -p vtcode-core test_enter_plan_mode -- --nocapture".to_string(),
+        ],
+        custom_note_policy: CUSTOM_NOTE_POLICY.to_string(),
+    };
+
+    let payload = build_adaptive_fallback_interview_args(
+        &context,
+        Some(
+            "<proposed_plan>\n# Fix Plan Mode\n\n## Summary\nPersist the reviewed plan and gate execution through approval.\n\n## Implementation Steps\n1. Add lifecycle state -> files: [vtcode-core/src/tools/handlers/plan_mode.rs] -> verify: [cargo test]\n\n## Test Cases and Validation\n1. Build and lint: cargo check\n2. Tests: cargo test\n\n## Assumptions and Defaults\n1. Reuse overlays.\n</proposed_plan>",
+        ),
+    );
+
+    assert!(payload.is_none());
 }

@@ -3,7 +3,7 @@
 //! This tracker is intended for Plan Mode only and writes a sidecar markdown
 //! file next to the active plan file (`<plan>.tasks.md`).
 
-use super::plan_mode::PlanModeState;
+use super::plan_mode::{PlanModeState, sync_tracker_into_plan_file};
 use crate::config::constants::tools;
 use crate::tools::handlers::task_tracking::{
     TaskCounts, TaskItemInput, TaskStepMetadata, TaskTrackingStatus, append_notes,
@@ -683,6 +683,11 @@ impl PlanTaskTrackerTool {
     ) -> Result<Value> {
         let tracker_file = self.save_document(document).await?;
         self.mirror_global_task_file(document).await?;
+        if let Some(plan_file) = self.state.get_plan_file().await
+            && plan_file.exists()
+        {
+            sync_tracker_into_plan_file(&plan_file, &document.to_markdown()).await?;
+        }
         Ok(Self::success_payload(
             status,
             message,

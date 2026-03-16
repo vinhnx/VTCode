@@ -1,4 +1,5 @@
 use anyhow::Result;
+use serde_json::json;
 
 use crate::agent::runloop::unified::plan_mode_state::{
     plan_mode_still_active_hint_with_fallback, short_confirmation_hint_with_fallback,
@@ -64,6 +65,7 @@ const PLAN_MODE_MIN_TOOL_LOOPS: usize = 40;
 const PLAN_MODE_MAX_TOOL_LOOP_LIMIT_ABSOLUTE_CAP: usize = 240;
 const PLAN_MODE_TOOL_LOOP_CAP_MULTIPLIER: usize = 6;
 const PLAN_MODE_MAX_TOOL_LOOP_INCREMENT_PER_PROMPT: usize = 80;
+const PLAN_MODE_ENTER_TRIGGER_STATUS: &str = "Plan Mode: explicit planning request detected. Entering read-only planning before continuing this turn.";
 const PLAN_MODE_EXIT_TRIGGER_STATUS: &str = "Plan Mode: implementation intent detected from your message. Running `exit_plan_mode` for plan confirmation; once approved, VT Code will switch to Edit Mode and execute.";
 const PLAN_MODE_EXIT_SWITCHED_CONTINUE_STATUS: &str =
     "Plan Mode disabled. Continuing this turn in Edit Mode to execute your implementation request.";
@@ -392,6 +394,77 @@ pub(super) async fn maybe_handle_plan_mode_exit_trigger(
     }
 }
 
+pub(super) async fn maybe_handle_plan_mode_enter_trigger(
+    ctx: &mut TurnLoopContext<'_>,
+    working_history: &mut [uni::Message],
+    step_count: usize,
+    result: &mut TurnLoopResult,
+) -> Result<bool> {
+    if ctx.session_stats.is_plan_mode() {
+        return Ok(false);
+    }
+
+    let Some(last_user_msg) = working_history
+        .iter()
+        .rev()
+        .find(|msg| msg.role == uni::MessageRole::User)
+    else {
+        return Ok(false);
+    };
+
+    let text = last_user_msg.content.as_text();
+    if !should_enter_plan_mode_from_user_text(&text) {
+        return Ok(false);
+    }
+
+    display_status(ctx.renderer, PLAN_MODE_ENTER_TRIGGER_STATUS)?;
+
+    use crate::agent::runloop::unified::tool_pipeline::run_tool_call;
+    use vtcode_core::llm::provider::ToolCall;
+
+    let call = ToolCall::function(
+        format!("call_{step_count}_enter_plan_mode"),
+        tool_names::ENTER_PLAN_MODE.to_string(),
+        serde_json::to_string(&json!({
+            "description": text,
+            "approved": true
+        }))
+        .unwrap_or_else(|_| "{}".to_string()),
+    );
+    let ctrl_c_state = ctx.ctrl_c_state;
+    let ctrl_c_notify = ctx.ctrl_c_notify;
+    let default_placeholder = ctx.default_placeholder.clone();
+    let lifecycle_hooks = ctx.lifecycle_hooks;
+    let vt_cfg = ctx.vt_cfg;
+    let mut run_ctx = ctx.as_run_loop_context();
+
+    match run_tool_call(
+        &mut run_ctx,
+        &call,
+        ctrl_c_state,
+        ctrl_c_notify,
+        default_placeholder,
+        lifecycle_hooks,
+        true,
+        vt_cfg,
+        step_count,
+        false,
+    )
+    .await
+    {
+        Ok(_) if ctx.session_stats.is_plan_mode() => Ok(false),
+        Ok(_) => {
+            *result = TurnLoopResult::Completed;
+            Ok(true)
+        }
+        Err(err) => {
+            display_error(ctx.renderer, "Failed to enter Plan Mode", &err)?;
+            *result = TurnLoopResult::Completed;
+            Ok(true)
+        }
+    }
+}
+
 fn should_exit_plan_mode_from_user_text(text: &str) -> bool {
     let normalized = normalize_user_intent_text(text);
     let normalized_trimmed = normalized.trim();
@@ -534,6 +607,33 @@ fn assistant_recently_prompted_implementation(working_history: &[uni::Message]) 
     cues.iter().any(|cue| assistant_text.contains(cue))
 }
 
+fn should_enter_plan_mode_from_user_text(text: &str) -> bool {
+    let normalized = normalize_user_intent_text(text);
+    let normalized_trimmed = normalized.trim();
+
+    if normalized_trimmed == "/plan" || normalized_trimmed.starts_with("/plan ") {
+        return true;
+    }
+
+    let explicit_phrases = [
+        "make a plan",
+        "create a plan",
+        "write a plan",
+        "come up with a plan",
+        "plan this",
+        "stay in plan mode",
+        "keep planning",
+        "continue planning",
+        "before you implement make a plan",
+        "before implementing make a plan",
+        "outline the implementation plan",
+    ];
+
+    explicit_phrases
+        .iter()
+        .any(|phrase| normalized.contains(phrase))
+}
+
 fn normalize_user_intent_text(text: &str) -> String {
     text.chars()
         .map(|c| {
@@ -648,8 +748,8 @@ mod tests {
         PLAN_MODE_EXIT_SWITCHED_CONTINUE_STATUS, PLAN_MODE_EXIT_TRIGGER_STATUS,
         PLAN_MODE_MIN_TOOL_LOOPS, UNLIMITED_TOOL_LOOPS, clamp_tool_loop_increment,
         extract_turn_config, handle_steering_messages, resolve_tool_loop_limit,
-        should_exit_plan_mode_from_confirmation, should_exit_plan_mode_from_user_text,
-        tool_loop_hard_cap,
+        should_enter_plan_mode_from_user_text, should_exit_plan_mode_from_confirmation,
+        should_exit_plan_mode_from_user_text, tool_loop_hard_cap,
     };
     use crate::agent::runloop::unified::turn::context::TurnLoopResult;
     use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
@@ -722,6 +822,29 @@ mod tests {
     fn does_not_false_trigger_on_non_intent_implementation_text() {
         assert!(!should_exit_plan_mode_from_user_text(
             "The implementation details are unclear."
+        ));
+    }
+
+    #[test]
+    fn detects_explicit_plan_mode_requests() {
+        assert!(should_enter_plan_mode_from_user_text(
+            "make a plan for this"
+        ));
+        assert!(should_enter_plan_mode_from_user_text(
+            "before implementing, create a plan"
+        ));
+        assert!(should_enter_plan_mode_from_user_text(
+            "outline the implementation plan"
+        ));
+    }
+
+    #[test]
+    fn does_not_enter_plan_mode_for_generic_research_requests() {
+        assert!(!should_enter_plan_mode_from_user_text(
+            "explore and tell me about the core agent loop"
+        ));
+        assert!(!should_enter_plan_mode_from_user_text(
+            "review the runloop and summarize the behavior"
         ));
     }
 
