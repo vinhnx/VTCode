@@ -924,14 +924,13 @@ async fn enter_plan_mode_clears_task_tracker_create_signatures() {
         "title": "Task Checklist",
         "items": ["step 1"]
     });
-    let signature =
-        task_tracker_create_signature(tool_names::TASK_TRACKER, &create_args).expect("signature");
-    ctx.harness_state
-        .record_task_tracker_create_signature(signature);
-    assert!(!ctx
-        .harness_state
-        .seen_task_tracker_create_signatures
-        .is_empty());
+    let first = super::enforce_duplicate_task_tracker_create_guard(
+        &mut ctx,
+        "task_tracker_seed",
+        tool_names::TASK_TRACKER,
+        &create_args,
+    );
+    assert!(first.is_none());
 
     let result = super::validate_tool_call(
         &mut ctx,
@@ -942,10 +941,14 @@ async fn enter_plan_mode_clears_task_tracker_create_signatures() {
     .await
     .expect("validate enter_plan_mode");
     assert!(matches!(result, super::ValidationResult::Proceed(_)));
-    assert!(ctx
-        .harness_state
-        .seen_task_tracker_create_signatures
-        .is_empty());
+
+    let second = super::enforce_duplicate_task_tracker_create_guard(
+        &mut ctx,
+        "task_tracker_after_plan",
+        tool_names::TASK_TRACKER,
+        &create_args,
+    );
+    assert!(second.is_none());
 }
 
 #[tokio::test]
