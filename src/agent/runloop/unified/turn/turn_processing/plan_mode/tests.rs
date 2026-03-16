@@ -240,6 +240,20 @@ fn plan_mode_reminder_includes_manual_switch_fallback() {
 }
 
 #[test]
+fn collect_interview_research_context_extracts_path_from_json() {
+    let stats = SessionStats::default();
+    let line = r#"{"type":"context","data":{"path":{"text":"./docs/modules/vtcode_docs_map.md"},"lines":{"text":"- **Content**: CORE AGENT LOOP OVERVIEW\n"}}}"#;
+    let history = vec![uni::Message::assistant(line.to_string())];
+
+    let context = collect_interview_research_context(&history, None, &stats);
+
+    assert_eq!(
+        context.recent_targets,
+        vec!["./docs/modules/vtcode_docs_map.md".to_string()]
+    );
+}
+
+#[test]
 fn maybe_force_plan_mode_interview_does_not_duplicate_reminder() {
     let mut stats = SessionStats::default();
     let text = format!(
