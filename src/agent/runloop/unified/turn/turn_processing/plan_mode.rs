@@ -191,10 +191,10 @@ fn collect_interview_research_context(
                 continue;
             }
 
-            if is_path_or_symbol_hint(trimmed)
+            if let Some(hint) = extract_path_or_symbol_hint(trimmed)
                 && recent_targets.len() < MAX_RESEARCH_SNIPPETS_PER_BUCKET
             {
-                push_unique_case_insensitive(&mut recent_targets, trimmed.to_string());
+                push_unique_case_insensitive(&mut recent_targets, hint);
             }
             let lower = trimmed.to_ascii_lowercase();
             if contains_any(
@@ -259,12 +259,81 @@ fn collect_interview_research_context(
     }
 }
 
-fn is_path_or_symbol_hint(text: &str) -> bool {
-    text.contains('/')
-        || text.contains("::")
-        || text.contains(".rs")
-        || text.contains(".toml")
-        || text.contains(".md")
+fn extract_path_or_symbol_hint(text: &str) -> Option<String> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let mut rest = trimmed;
+    let needle = "\"text\":\"";
+    while let Some(idx) = rest.find(needle) {
+        let after = &rest[idx + needle.len()..];
+        if let Some((value, remaining)) = parse_json_string(after) {
+            if is_safe_hint(&value) && looks_like_path_or_file(&value) {
+                return Some(value);
+            }
+            rest = remaining;
+        } else {
+            break;
+        }
+    }
+
+    for raw in trimmed.split_whitespace() {
+        let candidate = trim_hint_token(raw);
+        if candidate.is_empty() || !is_safe_hint(candidate) {
+            continue;
+        }
+        if looks_like_path_or_file(candidate) || candidate.contains("::") {
+            return Some(candidate.to_string());
+        }
+    }
+
+    None
+}
+
+fn parse_json_string(input: &str) -> Option<(String, &str)> {
+    let mut out = String::new();
+    let mut chars = input.chars();
+    while let Some(ch) = chars.next() {
+        if ch == '\\' {
+            let escaped = chars.next()?;
+            match escaped {
+                'n' => out.push('\n'),
+                'r' => out.push('\r'),
+                't' => out.push('\t'),
+                '\\' => out.push('\\'),
+                '"' => out.push('"'),
+                other => out.push(other),
+            }
+            continue;
+        }
+
+        if ch == '"' {
+            return Some((out, chars.as_str()));
+        }
+
+        out.push(ch);
+    }
+
+    None
+}
+
+fn looks_like_path_or_file(value: &str) -> bool {
+    value.contains('/')
+        || value.contains(".rs")
+        || value.contains(".toml")
+        || value.contains(".md")
+}
+
+fn is_safe_hint(value: &str) -> bool {
+    !value.contains('{') && !value.contains('}') && !value.contains('"')
+}
+
+fn trim_hint_token(token: &str) -> &str {
+    token.trim_matches(|ch: char| {
+        matches!(ch, ',' | ';' | ')' | ']' | '(' | '[' | '>' | '<' | '\'' | '"')
+    })
 }
 
 fn push_unique_case_insensitive(target: &mut Vec<String>, value: String) {
