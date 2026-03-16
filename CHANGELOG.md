@@ -2,6 +2,25 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.89.1 - 2026-03-16
+
+### Highlights
+#### Features
+
+- Enhance OpenAI Responses API handling and update configuration (5d5d55af) 
+- Enhance error handling by extracting human-readable messages from various JSON formats (b9d46cc2) 
+### Other Changes
+#### Other
+
+- Enhance OpenAI session handling and update UI status display (caa74f23) 
+- Implement recovery modes for empty responses and adjust tool call handling (e09d51c4) 
+- Add clipboard support for selected text and update default model and theme (439d5cd7) 
+- Refactor tool output handling to support spooled output references and improve clipboard functionality (0339abbd) 
+#### Refactors
+
+- Simplify error sanitization logic and preserve full error content (7a3afa95) 
+### Contributors
+@vinhnx
 ## 0.89.0 - 2026-03-15
 
 ### Highlights
