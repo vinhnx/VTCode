@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use super::progress::ProgressReporter;
+use anstyle::Effects;
 
 use anyhow::Result;
 use tokio::sync::{Notify, RwLock, mpsc};
@@ -42,6 +43,17 @@ pub(crate) async fn display_session_status(
     renderer: &mut AnsiRenderer,
     ctx: SessionStatusContext<'_>,
 ) -> Result<()> {
+    let openai_session = match crate::cli::auth::refresh_openai_login_if_available(ctx.vt_cfg).await
+    {
+        Ok(session) => session,
+        Err(err) => {
+            renderer.line(
+                MessageStyle::Warning,
+                &format!("OpenAI OAuth refresh failed during /status: {}", err),
+            )?;
+            crate::cli::auth::load_openai_session(ctx.vt_cfg)?
+        }
+    };
     let session_id = current_session_id();
     let ide_info = detect_ide_info();
     let terminal_info = detect_terminal_info();
@@ -50,7 +62,7 @@ pub(crate) async fn display_session_status(
     let memory_info = summarize_project_memory(&ctx.config.workspace);
     let settings_info = summarize_setting_sources(&ctx.config.workspace);
 
-    renderer.line(MessageStyle::Info, "Session status:")?;
+    render_status_heading(renderer, "Session status")?;
     renderer.line(
         MessageStyle::Info,
         &format!("  Version: {}", env!("CARGO_PKG_VERSION")),
@@ -76,7 +88,7 @@ pub(crate) async fn display_session_status(
         MessageStyle::Info,
         &format!("  Model: {}", ctx.config.model),
     )?;
-    render_auth_usage_status(renderer, &ctx)?;
+    render_auth_usage_status(renderer, &ctx, openai_session.as_ref())?;
     renderer.line(MessageStyle::Info, &format!("  IDE: {}", ide_info))?;
     renderer.line(
         MessageStyle::Info,
@@ -123,6 +135,7 @@ pub(crate) async fn display_session_status(
 fn render_auth_usage_status(
     renderer: &mut AnsiRenderer,
     ctx: &SessionStatusContext<'_>,
+    openai_session: Option<&vtcode_auth::OpenAIChatGptSession>,
 ) -> Result<()> {
     let openrouter_status = crate::cli::auth::openrouter_auth_status(ctx.vt_cfg)?;
     let openai_status = crate::cli::auth::openai_auth_status(ctx.vt_cfg)?;
@@ -130,15 +143,30 @@ fn render_auth_usage_status(
         openai_status,
         vtcode_auth::OpenAIChatGptAuthStatus::Authenticated { .. }
     ) || ctx.config.openai_chatgpt_auth.is_some();
+    render_status_heading(renderer, "OAuth info")?;
     renderer.line(
         MessageStyle::Info,
         &format!(
-            "  OAuth: OpenAI {}, OpenRouter {}",
+            "  OpenAI: {}",
             if openai_connected {
                 "connected"
             } else {
                 "not connected"
-            },
+            }
+        ),
+    )?;
+    if let Some(session) = openai_session {
+        if let Some(email) = session.email.as_deref() {
+            renderer.line(MessageStyle::Info, &format!("    Account: {}", email))?;
+        }
+        if let Some(plan) = session.plan.as_deref() {
+            renderer.line(MessageStyle::Info, &format!("    Plan: {}", plan))?;
+        }
+    }
+    renderer.line(
+        MessageStyle::Info,
+        &format!(
+            "  OpenRouter: {}",
             short_oauth_status_openrouter(&openrouter_status)
         ),
     )?;
@@ -209,6 +237,13 @@ fn short_oauth_status_openrouter(status: &vtcode_auth::AuthStatus) -> &'static s
         vtcode_auth::AuthStatus::Authenticated { .. } => "connected",
         vtcode_auth::AuthStatus::NotAuthenticated => "not connected",
     }
+}
+
+fn render_status_heading(renderer: &mut AnsiRenderer, heading: &str) -> Result<()> {
+    let style = MessageStyle::Info
+        .style()
+        .effects(MessageStyle::Info.style().get_effects() | Effects::BOLD);
+    renderer.line_with_override_style(MessageStyle::Info, style, heading)
 }
 
 fn current_session_id() -> String {

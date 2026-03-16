@@ -232,10 +232,26 @@ pub(crate) fn openai_auth_status(vt_cfg: Option<&VTCodeConfig>) -> Result<OpenAI
     get_openai_chatgpt_auth_status_with_mode(credential_storage_mode(vt_cfg))
 }
 
+pub(crate) fn load_openai_session(
+    vt_cfg: Option<&VTCodeConfig>,
+) -> Result<Option<OpenAIChatGptSession>> {
+    load_openai_chatgpt_session_with_mode(credential_storage_mode(vt_cfg))
+}
+
 pub(crate) async fn refresh_openai_login(
     vt_cfg: Option<&VTCodeConfig>,
 ) -> Result<OpenAIChatGptSession> {
     vtcode_auth::refresh_openai_chatgpt_session_with_mode(credential_storage_mode(vt_cfg)).await
+}
+
+pub(crate) async fn refresh_openai_login_if_available(
+    vt_cfg: Option<&VTCodeConfig>,
+) -> Result<Option<OpenAIChatGptSession>> {
+    if load_openai_session(vt_cfg)?.is_none() {
+        return Ok(None);
+    }
+
+    refresh_openai_login(vt_cfg).await.map(Some)
 }
 
 pub(crate) async fn handle_login_command(

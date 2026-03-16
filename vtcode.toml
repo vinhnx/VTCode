@@ -163,7 +163,7 @@ provider = "openai"
 # Possible values: high, low, medium, minimal, none, xhigh
 # Default: "none"
 # Type: `string`
-reasoning_effort = "medium"
+reasoning_effort = "low"
 
 # Enable prompt refinement pass before sending to LLM
 # Default: false
