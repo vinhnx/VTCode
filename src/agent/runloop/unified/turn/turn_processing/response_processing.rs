@@ -3,7 +3,7 @@ use vtcode_core::llm::providers::split_reasoning_from_text;
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::utils::ansi::MessageStyle;
 
-use crate::agent::runloop::unified::plan_blocks::extract_proposed_plan;
+use crate::agent::runloop::unified::plan_blocks::extract_any_plan;
 use crate::agent::runloop::unified::turn::context::{
     PreparedAssistantToolCall, TurnProcessingResult,
 };
@@ -54,10 +54,12 @@ pub(crate) fn process_llm_response(
         && tool_calls.is_empty()
         && let Some(ref text) = final_text
     {
-        let extraction = extract_proposed_plan(text);
+        let extraction = extract_any_plan(text);
         final_text = Some(
             text.replace("<proposed_plan>", "")
-                .replace("</proposed_plan>", ""),
+                .replace("</proposed_plan>", "")
+                .replace("<plan>", "")
+                .replace("</plan>", ""),
         );
         proposed_plan = extraction.plan_text;
     }
@@ -719,6 +721,36 @@ mod tests {
                 assert_eq!(proposed_plan.as_deref(), Some("- Step 1"));
             }
             _ => panic!("Expected text response with visible proposed plan"),
+        }
+    }
+
+    #[test]
+    fn process_llm_response_extracts_plan_block_in_plan_mode() {
+        let response = LLMResponse {
+            content: Some("Intro\n<plan>\n- Step 1\n</plan>\nOutro".to_string()),
+            tool_calls: None,
+            model: "test".to_string(),
+            usage: None,
+            finish_reason: FinishReason::Stop,
+            reasoning: None,
+            reasoning_details: None,
+            tool_references: Vec::new(),
+            request_id: None,
+            organization_id: None,
+        };
+
+        let mut renderer = AnsiRenderer::stdout();
+        let result =
+            process_llm_response(&response, &mut renderer, 0, true, false, true, None, None)
+                .expect("processing should succeed");
+
+        match result {
+            TurnProcessingResult::TextResponse { text, proposed_plan, .. } => {
+                assert_eq!(proposed_plan.as_deref(), Some("- Step 1"));
+                assert!(!text.contains("<plan>"));
+                assert!(!text.contains("</plan>"));
+            }
+            _ => panic!("Expected text response with extracted <plan> block"),
         }
     }
 

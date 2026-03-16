@@ -120,15 +120,7 @@ pub(super) fn enforce_duplicate_task_tracker_create_guard<'a>(
     )
     .to_string();
     ctx.push_tool_response(tool_call_id, content);
-    let block_reason =
-        "Blocked duplicate task_tracker.create in the same turn. Continue with task_tracker.update/list."
-            .to_string();
-
-    Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
-        TurnLoopResult::Blocked {
-            reason: Some(block_reason),
-        },
-    )))
+    Some(ValidationResult::Blocked)
 }
 
 pub(super) fn enforce_repeated_read_only_call_guard(

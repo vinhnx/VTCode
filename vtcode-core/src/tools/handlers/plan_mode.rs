@@ -1167,6 +1167,10 @@ impl Tool for ExitPlanModeTool {
     async fn execute(&self, args: Value) -> Result<Value> {
         let args: ExitPlanModeArgs =
             serde_json::from_value(args).unwrap_or(ExitPlanModeArgs { reason: None });
+        let auto_trigger = args
+            .reason
+            .as_deref()
+            .is_some_and(|reason| reason == "auto_trigger_on_plan_ready");
 
         // Check if not in plan mode
         if !self.state.is_active() {
@@ -1262,6 +1266,28 @@ impl Tool for ExitPlanModeTool {
                 blockers
                     .push("Plan file has not been updated since entering Plan Mode.".to_string());
             }
+            if auto_trigger {
+                self.state.set_phase(PlanLifecyclePhase::ReviewPending);
+                return Ok(json!({
+                    "status": "pending_confirmation",
+                    "message": "Plan draft is incomplete. Waiting for user confirmation before execution.",
+                    "reason": args.reason,
+                    "plan_file": plan_file.map(|p| p.display().to_string()),
+                    "plan_tracker_file": tracker_file.map(|p| p.display().to_string()),
+                    "plan_content": plan_content,
+                    "validation": {
+                        "missing_sections": plan_validation.missing_sections,
+                        "placeholder_tokens": plan_validation.placeholder_tokens,
+                        "open_decisions": plan_validation.open_decisions,
+                        "implementation_step_count": plan_validation.implementation_step_count,
+                        "validation_item_count": plan_validation.validation_item_count,
+                        "assumption_count": plan_validation.assumption_count,
+                    },
+                    "blockers": blockers,
+                    "requires_confirmation": true,
+                    "draft_incomplete": true
+                }));
+            }
             return Ok(json!({
                 "status": "not_ready",
                 "message": "Plan not ready for confirmation. Persist a concrete plan with complete sections, no template placeholders, and no open decisions, then retry.",
@@ -1331,7 +1357,8 @@ impl Tool for ExitPlanModeTool {
                 "If approved, Plan Mode will be disabled and mutating tools will be enabled",
                 "Execute the plan step by step after approval"
             ],
-            "requires_confirmation": true
+            "requires_confirmation": true,
+            "draft_incomplete": false
         }))
     }
 
@@ -1577,6 +1604,34 @@ mod tests {
                 .iter()
                 .any(|value| value.as_str() == Some("Summary"))
         );
+    }
+
+    #[tokio::test]
+    async fn test_exit_plan_mode_auto_trigger_incomplete() {
+        let temp_dir = TempDir::new().unwrap();
+        let state = PlanModeState::new(temp_dir.path().to_path_buf());
+
+        state.enable();
+        let plans_dir = state.plans_dir();
+        std::fs::create_dir_all(&plans_dir).unwrap();
+        let plan_file = plans_dir.join("draft.md");
+        std::fs::write(
+            &plan_file,
+            "# Test Plan\n\n## Plan of Work\n- Draft step\n",
+        )
+        .unwrap();
+        state.set_plan_file(Some(plan_file)).await;
+
+        let tool = ExitPlanModeTool::new(state.clone());
+        let result = tool
+            .execute(json!({ "reason": "auto_trigger_on_plan_ready" }))
+            .await
+            .unwrap();
+
+        assert_eq!(result["status"], "pending_confirmation");
+        assert_eq!(result["requires_confirmation"], true);
+        assert_eq!(result["draft_incomplete"], true);
+        assert_eq!(state.phase(), PlanLifecyclePhase::ReviewPending);
     }
 
     #[tokio::test]

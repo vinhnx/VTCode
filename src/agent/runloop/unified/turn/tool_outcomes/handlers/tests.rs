@@ -880,6 +880,75 @@ async fn repeated_shell_guard_activates_recovery_without_breaking_turn() {
 }
 
 #[tokio::test]
+async fn duplicate_task_tracker_create_is_blocked_not_breaking() {
+    let mut backing = TestContextBacking::new(4).await;
+    let mut ctx = backing.turn_processing_context();
+    let args = json!({
+        "action": "create",
+        "title": "Task Checklist",
+        "items": ["step 1"]
+    });
+
+    let first = super::enforce_duplicate_task_tracker_create_guard(
+        &mut ctx,
+        "task_tracker_first",
+        tool_names::TASK_TRACKER,
+        &args,
+    );
+    assert!(first.is_none());
+
+    let second = super::enforce_duplicate_task_tracker_create_guard(
+        &mut ctx,
+        "task_tracker_second",
+        tool_names::TASK_TRACKER,
+        &args,
+    );
+    assert!(matches!(second, Some(super::ValidationResult::Blocked)));
+}
+
+#[tokio::test]
+async fn enter_plan_mode_clears_task_tracker_create_signatures() {
+    let mut backing = TestContextBacking::new(4).await;
+    let enter_args = json!({});
+    cache_tool_permission(
+        &mut backing,
+        tool_names::ENTER_PLAN_MODE,
+        &enter_args,
+        PermissionGrant::Permanent,
+    )
+    .await;
+
+    let mut ctx = backing.turn_processing_context();
+    let create_args = json!({
+        "action": "create",
+        "title": "Task Checklist",
+        "items": ["step 1"]
+    });
+    let signature =
+        task_tracker_create_signature(tool_names::TASK_TRACKER, &create_args).expect("signature");
+    ctx.harness_state
+        .record_task_tracker_create_signature(signature);
+    assert!(!ctx
+        .harness_state
+        .seen_task_tracker_create_signatures
+        .is_empty());
+
+    let result = super::validate_tool_call(
+        &mut ctx,
+        "enter_plan_mode_call",
+        tool_names::ENTER_PLAN_MODE,
+        &enter_args,
+    )
+    .await
+    .expect("validate enter_plan_mode");
+    assert!(matches!(result, super::ValidationResult::Proceed(_)));
+    assert!(ctx
+        .harness_state
+        .seen_task_tracker_create_signatures
+        .is_empty());
+}
+
+#[tokio::test]
 async fn recovery_skip_step_pushes_structured_tool_message() {
     let mut backing = TestContextBacking::new(4).await;
     let mut ctx = backing.turn_processing_context();

@@ -74,7 +74,7 @@ fn render_confirmation_prompt(handle: &InlineHandle, plan: &PlanContent) {
     );
 }
 
-fn build_plan_confirmation_request(plan: &PlanContent) -> OverlayRequest {
+fn build_plan_confirmation_request(plan: &PlanContent, draft_incomplete: bool) -> OverlayRequest {
     let mut lines: Vec<String> = plan
         .raw_content
         .lines()
@@ -119,12 +119,18 @@ fn build_plan_confirmation_request(plan: &PlanContent) -> OverlayRequest {
         },
     ];
 
+    let selected = if draft_incomplete {
+        InlineListSelection::PlanApprovalEditPlan
+    } else {
+        InlineListSelection::PlanApprovalAutoAccept
+    };
+
     OverlayRequest::List(ListOverlayRequest {
         title: "Ready to code?".to_string(),
         lines,
         footer_hint,
         items,
-        selected: Some(InlineListSelection::PlanApprovalAutoAccept),
+        selected: Some(selected),
         search: None,
         hotkeys: vec![OverlayHotkey {
             key: OverlayHotkeyKey::CtrlChar('g'),
@@ -140,10 +146,14 @@ pub(crate) async fn execute_plan_confirmation(
     handle: &InlineHandle,
     session: &mut InlineSession,
     plan_content: PlanContent,
+    draft_incomplete: bool,
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
 ) -> Result<PlanConfirmationOutcome> {
-    handle.show_overlay(build_plan_confirmation_request(&plan_content));
+    handle.show_overlay(build_plan_confirmation_request(
+        &plan_content,
+        draft_incomplete,
+    ));
     render_confirmation_prompt(handle, &plan_content);
     let outcome =
         wait_for_overlay_submission(handle, session, ctrl_c_state, ctrl_c_notify, |submission| {

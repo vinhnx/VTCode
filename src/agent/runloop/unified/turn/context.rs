@@ -784,14 +784,11 @@ impl<'a> TurnProcessingContext<'a> {
             && let Some(plan_text) = proposed_plan
         {
             self.emit_plan_events(&plan_text).await;
-            let persisted =
-                persist_plan_draft(&self.tool_registry.plan_mode_state(), &plan_text).await?;
+            persist_plan_draft(&self.tool_registry.plan_mode_state(), &plan_text).await?;
             self.tool_registry
                 .plan_mode_state()
                 .set_phase(PlanLifecyclePhase::DraftReady);
-            if persisted.validation.is_ready()
-                && let Some(outcome) = self.maybe_prompt_plan_confirmation_after_draft().await?
-            {
+            if let Some(outcome) = self.maybe_prompt_plan_confirmation_after_draft().await? {
                 return Ok(outcome);
             }
         }

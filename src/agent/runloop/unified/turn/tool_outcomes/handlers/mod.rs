@@ -473,6 +473,9 @@ pub(crate) async fn validate_tool_call<'a>(
 
     match permission_result {
         Ok(ToolPermissionFlow::Approved) => {
+            if canonical_tool_name == tool_names::ENTER_PLAN_MODE {
+                ctx.harness_state.clear_task_tracker_create_signatures();
+            }
             // Count budget only for calls that pass all validation/permission gates.
             record_tool_call_budget_usage(ctx);
             Ok(ValidationResult::Proceed(PreparedToolCall {

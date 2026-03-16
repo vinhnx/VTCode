@@ -276,6 +276,10 @@ impl HarnessTurnState {
         self.seen_task_tracker_create_signatures.insert(signature)
     }
 
+    pub(crate) fn clear_task_tracker_create_signatures(&mut self) {
+        self.seen_task_tracker_create_signatures.clear();
+    }
+
     pub(crate) fn record_successful_readonly_signature(&mut self, signature: String) -> bool {
         self.seen_successful_readonly_signatures.insert(signature)
     }

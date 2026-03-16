@@ -221,10 +221,15 @@ async fn handle_pending_confirmation(
     ctrl_c_notify: &Arc<Notify>,
 ) -> ToolPipelineOutcome {
     let plan_content = build_plan_content(output);
+    let draft_incomplete = output
+        .get("draft_incomplete")
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false);
     let confirmation_outcome = execute_plan_confirmation(
         ctx.handle,
         ctx.session,
         plan_content,
+        draft_incomplete,
         ctrl_c_state,
         ctrl_c_notify,
     )

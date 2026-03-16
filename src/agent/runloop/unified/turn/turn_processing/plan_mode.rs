@@ -7,7 +7,7 @@ use vtcode_core::tools::handlers::plan_mode::{
 };
 
 use super::response_processing::prepare_tool_calls;
-use crate::agent::runloop::unified::plan_blocks::extract_proposed_plan;
+use crate::agent::runloop::unified::plan_blocks::extract_any_plan;
 use crate::agent::runloop::unified::turn::context::TurnProcessingResult;
 use crate::agent::runloop::unified::turn::turn_processing::extract_interview_questions;
 
@@ -221,7 +221,7 @@ Return JSON only.",
         .and_then(|payload| sanitize_generated_interview_payload(payload, &context));
 
     let response_plan_validation = response_text
-        .and_then(|text| extract_proposed_plan(text).plan_text)
+        .and_then(|text| extract_any_plan(text).plan_text)
         .as_deref()
         .map(validate_plan_content);
     let plan_validation = select_best_plan_validation(
@@ -328,7 +328,7 @@ fn collect_interview_research_context(
     }
 
     let extracted_plan = response_text
-        .and_then(|text| extract_proposed_plan(text).plan_text)
+        .and_then(|text| extract_any_plan(text).plan_text)
         .filter(|text| !text.trim().is_empty());
     let extracted_plan_excerpt = extracted_plan
         .as_deref()
@@ -1262,7 +1262,7 @@ fn build_adaptive_fallback_interview_args(
 
 fn extract_plan_validation(response_text: Option<&str>) -> Option<PlanValidationReport> {
     let text = response_text?;
-    let extracted = extract_proposed_plan(text);
+    let extracted = extract_any_plan(text);
     let plan_text = extracted.plan_text?;
     Some(validate_plan_content(&plan_text))
 }

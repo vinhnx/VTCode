@@ -1,5 +1,7 @@
 const OPEN_TAG: &str = "<proposed_plan>";
 const CLOSE_TAG: &str = "</proposed_plan>";
+const ALT_OPEN_TAG: &str = "<plan>";
+const ALT_CLOSE_TAG: &str = "</plan>";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ProposedPlanExtraction {
@@ -113,6 +115,43 @@ pub(crate) fn extract_proposed_plan(text: &str) -> ProposedPlanExtraction {
     ProposedPlanExtraction {
         stripped_text: stripped,
         plan_text: trailing.plan_text,
+    }
+}
+
+pub(crate) fn extract_any_plan(text: &str) -> ProposedPlanExtraction {
+    let proposed = extract_proposed_plan(text);
+    if proposed.plan_text.is_some() {
+        return proposed;
+    }
+
+    extract_tagged_plan(text, ALT_OPEN_TAG, ALT_CLOSE_TAG)
+}
+
+fn extract_tagged_plan(text: &str, open_tag: &str, close_tag: &str) -> ProposedPlanExtraction {
+    let Some(start) = text.find(open_tag) else {
+        return ProposedPlanExtraction {
+            stripped_text: text.to_string(),
+            plan_text: None,
+        };
+    };
+
+    let after_open = start + open_tag.len();
+    let (plan_body, end_idx) = if let Some(close_rel) = text[after_open..].find(close_tag) {
+        let end = after_open + close_rel;
+        (&text[after_open..end], Some(end + close_tag.len()))
+    } else {
+        (&text[after_open..], None)
+    };
+
+    let mut stripped = String::new();
+    stripped.push_str(&text[..start]);
+    if let Some(end_idx) = end_idx {
+        stripped.push_str(&text[end_idx..]);
+    }
+
+    ProposedPlanExtraction {
+        stripped_text: stripped,
+        plan_text: finalize_plan_text(true, plan_body),
     }
 }
 
