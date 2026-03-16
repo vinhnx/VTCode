@@ -730,6 +730,14 @@ impl ModalListState {
         }
     }
 
+    pub(crate) fn selected_is_last(&self) -> bool {
+        let Some(selected) = self.list_state.selected() else {
+            return false;
+        };
+        self.last_selectable_index()
+            .is_some_and(|last| selected == last)
+    }
+
     pub fn select_nth_selectable(&mut self, target_index: usize) -> bool {
         let mut count = 0usize;
         for (visible_pos, &item_index) in self.visible_indices.iter().enumerate() {
@@ -947,6 +955,9 @@ impl ModalListState {
     }
 
     pub(super) fn non_filter_summary_text(&self, footer_hint: Option<&str>) -> Option<String> {
+        if !self.has_non_filter_summary(footer_hint) {
+            return None;
+        }
         match self.density_behavior {
             ModalListDensityBehavior::FixedComfortable => {
                 Some(CONFIG_LIST_NAVIGATION_HINT.to_owned())
@@ -954,6 +965,23 @@ impl ModalListState {
             ModalListDensityBehavior::Adjustable => footer_hint
                 .filter(|hint| !hint.is_empty())
                 .map(ToOwned::to_owned),
+        }
+    }
+
+    pub(crate) fn summary_line_rows(&self, footer_hint: Option<&str>) -> usize {
+        if self.filter_active() || self.has_non_filter_summary(footer_hint) {
+            1
+        } else {
+            0
+        }
+    }
+
+    fn has_non_filter_summary(&self, footer_hint: Option<&str>) -> bool {
+        match self.density_behavior {
+            ModalListDensityBehavior::FixedComfortable => true,
+            ModalListDensityBehavior::Adjustable => {
+                footer_hint.is_some_and(|hint| !hint.is_empty())
+            }
         }
     }
 

@@ -2163,6 +2163,58 @@ fn show_list_modal_uses_bottom_inline_panel_min_height() {
 }
 
 #[test]
+fn list_modal_keeps_last_selection_when_items_append() {
+    let mut session = Session::new(InlineTheme::default(), None, 30);
+    let make_item = |title: &str, cmd: &str| InlineListItem {
+        title: title.to_string(),
+        subtitle: None,
+        badge: None,
+        indent: 0,
+        selection: Some(InlineListSelection::SlashCommand(cmd.to_string())),
+        search_value: None,
+    };
+
+    let selected = InlineListSelection::SlashCommand("second".to_string());
+    session.handle_command(InlineCommand::ShowOverlay {
+        request: Box::new(OverlayRequest::List(ListOverlayRequest {
+            title: "Pick".to_string(),
+            lines: vec!["Choose".to_string()],
+            footer_hint: None,
+            items: vec![make_item("First", "first"), make_item("Second", "second")],
+            selected: Some(selected.clone()),
+            search: None,
+            hotkeys: Vec::new(),
+        })),
+    });
+    session.handle_command(InlineCommand::CloseOverlay);
+
+    session.handle_command(InlineCommand::ShowOverlay {
+        request: Box::new(OverlayRequest::List(ListOverlayRequest {
+            title: "Pick".to_string(),
+            lines: vec!["Choose".to_string()],
+            footer_hint: None,
+            items: vec![
+                make_item("First", "first"),
+                make_item("Second", "second"),
+                make_item("Third", "third"),
+            ],
+            selected: Some(selected),
+            search: None,
+            hotkeys: Vec::new(),
+        })),
+    });
+
+    let selection = session
+        .modal_state()
+        .and_then(|modal| modal.list.as_ref())
+        .and_then(|list| list.current_selection());
+    assert_eq!(
+        selection,
+        Some(InlineListSelection::SlashCommand("third".to_string()))
+    );
+}
+
+#[test]
 fn render_always_reserves_input_status_row() {
     let mut session = Session::new(InlineTheme::default(), None, 30);
     let input_width = VIEW_WIDTH.saturating_sub(2);
