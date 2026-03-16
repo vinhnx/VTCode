@@ -1,9 +1,12 @@
-file_opener = "none"
-project_doc_fallback_filenames = []
-notify = []
 # VT Code Configuration File
 # Saved from /config with readable section headings.
 # Every field includes descriptions, defaults, and known choices where available.
+
+file_opener = "none"
+
+notify = []
+
+project_doc_fallback_filenames = []
 
 # ACP Bridge
 # IDE and Agent Client Protocol integrations.
@@ -12,9 +15,6 @@ notify = []
 # Default: false
 # Type: `boolean`
 enabled = true
-
-[history]
-persistence = "file"
 
 # Zed Integration
 # How VT Code connects commands and trust settings to Zed.
@@ -33,8 +33,6 @@ transport = "stdio"
 # Default: "full_auto"
 # Type: `string`
 workspace_trust = "full_auto"
-
-[tui]
 
 # Zed Authentication
 # Default authentication flow for ACP sessions in Zed.
@@ -147,6 +145,8 @@ max_review_passes = 1
 # Type: `integer`
 max_task_retries = 2
 
+project_doc_fallback_filenames = []
+
 # Maximum bytes of AGENTS.md content to load from project hierarchy
 # Default: 16384
 # Type: `integer`
@@ -185,7 +185,7 @@ refine_prompts_model = ""
 # Possible values: 0.0-1.0
 # Default: 0.30000001192092896
 # Type: `number`
-refine_temperature = 0.3
+refine_temperature = 0.30000001192092896
 
 # Require user confirmation before executing a plan generated in plan mode When true, exiting plan
 # mode shows the implementation blueprint and requires explicit user approval before enabling edit
@@ -207,7 +207,7 @@ system_prompt_mode = "default"
 # Possible values: 0.0-1.0
 # Default: 0.699999988079071
 # Type: `number`
-temperature = 0.7
+temperature = 0.699999988079071
 
 # Use UTC instead of local time for temporal context in system prompts
 # Default: false
@@ -244,7 +244,6 @@ ui_surface = "auto"
 # Default: "medium"
 # Type: `string`
 verbosity = "medium"
-project_doc_fallback_filenames = []
 
 # Checkpoints
 # Automatic turn snapshots and retention limits.
@@ -304,20 +303,14 @@ recovery_cooldown = 60
 # Type: `boolean`
 auto_compaction_enabled = false
 
-# Optional absolute compact threshold in tokens. Applies to Responses server-side compaction when the
-# provider supports it, and to VT Code's local fallback compaction otherwise. When unset, VT Code
-# derives a threshold from the provider context window.
-# Default: null
-# Type: `null | integer`
-# auto_compaction_threshold_tokens = 200000
-
-# Controls whether harness-managed continuation loops are enabled.
+# Controls harness-managed continuation loops. Options: `"off"`, `"exec_only"` (exec/full-auto only),
+# or `"all"` (default; also allow interactive sessions).
+# Possible values: all, exec_only, off
 # Default: "all"
 # Type: `string`
 continuation_policy = "all"
 
-# Optional JSONL event log path for harness events.
-# Defaults to ~/.vtcode/sessions/ when unset or empty.
+# Optional JSONL event log path for harness events
 # Default: null
 # Type: `null | string`
 event_log_path = ""
@@ -435,12 +428,6 @@ include_reasoning = true
 # Type: `boolean`
 map_tool_calls = true
 
-[auth.openai]
-preferred_method = "auto"
-callback_port = 1455
-auto_refresh = true
-flow_timeout_secs = 300
-
 
 # Small Model Helpers
 # Low-cost model settings for lightweight side tasks.
@@ -460,7 +447,7 @@ model = ""
 # Temperature for small model responses
 # Default: 0.30000001192092896
 # Type: `number`
-temperature = 0.3
+temperature = 0.30000001192092896
 
 # Enable small model for git history processing
 # Default: true
@@ -572,6 +559,17 @@ track_workspace_state = true
 # Authentication
 # Provider login and token handling.
 [auth]
+# OpenAI
+[auth.openai]
+auto_refresh = true
+
+callback_port = 1455
+
+flow_timeout_secs = 300
+
+preferred_method = "auto"
+
+
 # OpenRouter OAuth
 # Browser login flow and token refresh behavior.
 [auth.openrouter]
@@ -929,7 +927,7 @@ preserve_recent_turns = 10
 # no longer used for trimming
 # Default: 60
 # Type: `integer`
-trim_to_percent = 90
+trim_to_percent = 85
 
 # Dynamic Context
 # Spooled outputs and generated workspace context artifacts.
@@ -1112,12 +1110,22 @@ require_secondary_auth_for_whitelist = true
 whitelist = []
 
 
+# History
+[history]
+persistence = "file"
+
+
 # Lifecycle Hooks
 # Automations triggered around session events.
 [hooks]
 # Lifecycle Events
 # Hook groups for session and tool milestones.
 [hooks.lifecycle]
+# Commands to run when VT Code emits a runtime notification event
+# Default: []
+# Type: `array`
+notification = []
+
 # Commands to run immediately after a tool returns its output
 # Default: []
 # Type: `array`
@@ -1127,6 +1135,8 @@ post_tool_use = []
 # Default: []
 # Type: `array`
 pre_tool_use = []
+
+quiet_success_output = false
 
 # Commands to run when an agent session ends
 # Default: []
@@ -1154,8 +1164,6 @@ task_completion = []
 # Default: []
 # Type: `array`
 user_prompt_submit = []
-quiet_success_output = false
-notification = []
 
 
 # IDE Context
@@ -1761,7 +1769,7 @@ cache_dir = "~/.vtcode/cache/prompts"
 
 # Enable prompt-shaping optimizations that improve provider-side cache locality. When enabled, VT Code
 # keeps volatile runtime context at the end of prompt text.
-# Default: false
+# Default: true
 # Type: `boolean`
 cache_friendly_prompt_shaping = false
 
@@ -2041,18 +2049,25 @@ max_results = 5
 # OpenAI
 # OpenAI-specific request settings.
 [provider.openai]
-# Optional native OpenAI `service_tier` request parameter. Leave unset to inherit the Project-level
-# default service tier. Options: "priority"
-# Possible values: priority
-# Default: -
-# Type: `OpenAIServiceTier | null`
-# service_tier = "priority"
-
 # Enable Responses API WebSocket transport for non-streaming requests. This is an opt-in path designed
 # for long-running, tool-heavy workflows.
 # Default: false
 # Type: `boolean`
 websocket_mode = false
+
+# Hosted Shell
+[provider.openai.hosted_shell]
+# Enable OpenAI hosted shell instead of VT Code's local shell tool. Only applies to native OpenAI
+# Responses models.
+# Default: false
+# Type: `boolean`
+enabled = false
+
+# Hosted shell environment mode. Use `"container_auto"` to provision a new container with mounted
+# files/skills, or `"container_reference"` to reuse an existing container ID.
+# Default: "container_auto"
+# Type: `string`
+environment = "container_auto"
 
 
 # Terminal Sessions
@@ -2382,6 +2397,10 @@ prompt-format = "xml"
 # Type: `string`
 render-mode = "lean"
 
+# Bundled
+[skills.bundled]
+enabled = true
+
 
 # Syntax Highlighting
 # Language-aware rendering in the transcript.
@@ -2466,10 +2485,6 @@ sample_interval_ms = 1000
 # Default: true
 # Type: `boolean`
 trajectory_enabled = true
-
-[provider.openai.hosted_shell]
-enabled = false
-environment = "container_auto"
 
 
 # Timeouts
@@ -2574,9 +2589,6 @@ suspend_tui = true
 # Warn or stop when repeated tool loops are detected.
 [tools.loop_thresholds]
 
-[skills.bundled]
-enabled = true
-
 # Tool Plugins
 # Plugin loading and trust settings.
 [tools.plugins]
@@ -2630,7 +2642,17 @@ ask_user_question = "allow"
 
 checklist = "prompt"
 
+close_pty_session = "allow"
+
 coder_mode = "prompt"
+
+create_file = "allow"
+
+create_pty_session = "allow"
+
+delete_file = "prompt"
+
+edit_file = "allow"
 
 enter_plan = "prompt"
 
@@ -2646,7 +2668,13 @@ exit_plan_mode = "allow"
 
 git_diff = "allow"
 
+grep_file = "allow"
+
 implement_plan = "prompt"
+
+list_files = "allow"
+
+list_pty_sessions = "allow"
 
 list_skills = "allow"
 
@@ -2680,7 +2708,13 @@ plan_tasks = "prompt"
 
 planner_mode = "prompt"
 
+read_file = "allow"
+
+read_pty_session = "allow"
+
 request_user_input = "allow"
+
+resize_pty_session = "allow"
 
 resume_edit_mode = "prompt"
 
@@ -2688,7 +2722,15 @@ run_pty_cmd = "allow"
 
 search_file = "allow"
 
+search_replace = "prompt"
+
+search_tools = "allow"
+
 "send_command<|channel|>analysis" = "allow"
+
+send_pty_input = "prompt"
+
+skill = "allow"
 
 start_implementation = "prompt"
 
@@ -2713,21 +2755,6 @@ unified_file = "allow"
 web_fetch = "allow"
 
 write_file = "allow"
-close_pty_session = "allow"
-create_file = "allow"
-create_pty_session = "allow"
-delete_file = "prompt"
-edit_file = "allow"
-grep_file = "allow"
-list_files = "allow"
-list_pty_sessions = "allow"
-read_file = "allow"
-read_pty_session = "allow"
-resize_pty_session = "allow"
-search_replace = "prompt"
-search_tools = "allow"
-send_pty_input = "prompt"
-skill = "allow"
 
 
 # Web Fetch
@@ -2789,6 +2816,9 @@ mode = "restricted"
 # Type: `boolean`
 strict_https_only = true
 
+
+# Tui
+[tui]
 
 # Interface
 # Appearance, layout, and transcript behavior.
@@ -2914,6 +2944,10 @@ tool_output_mode = "compact"
 # Default: 200000
 # Type: `integer`
 tool_output_spool_bytes = 200000
+
+# Enable Vim-style prompt editing for new interactive sessions
+# Default: false
+# Type: `boolean`
 vim_mode = false
 
 # Keyboard Protocol
@@ -2958,7 +2992,7 @@ report_event_types = true
 # compatibility.
 # Default: null
 # Type: `boolean | null`
-command_failure = false
+command_failure = true
 
 # Legacy master toggle for completion notifications. New installs should prefer `completion_success`
 # and `completion_failure`.
@@ -2974,7 +3008,7 @@ completion_failure = true
 # Notify when a turn/session completes successfully. If omitted, falls back to `completion`.
 # Default: null
 # Type: `boolean | null`
-completion_success = false
+completion_success = true
 
 # Notification transport strategy.
 # Default: "hybrid"
@@ -2989,7 +3023,7 @@ enabled = true
 # Notify on runtime/system errors.
 # Default: true
 # Type: `boolean`
-error = false
+error = true
 
 # Notify when human input/approval is required.
 # Default: true
@@ -3015,7 +3049,7 @@ repeat_window_seconds = 30
 # Notify on generic request events. If omitted, falls back to `hitl` for backward compatibility.
 # Default: null
 # Type: `boolean | null`
-request = false
+request = true
 
 # Suppress notifications while terminal focus is active.
 # Default: true
@@ -3025,12 +3059,12 @@ suppress_when_focused = true
 # Notify when a tool call fails.
 # Default: false
 # Type: `boolean`
-tool_failure = false
+tool_failure = true
 
 # Notify on successful tool calls.
 # Default: false
 # Type: `boolean`
-tool_success = false
+tool_success = true
 
 
 # Status Line
@@ -3050,3 +3084,4 @@ mode = "Auto"
 # Default: 1000
 # Type: `integer`
 refresh_interval_ms = 1000
+
