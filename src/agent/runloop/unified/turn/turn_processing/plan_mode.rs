@@ -2,7 +2,9 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 use vtcode_core::llm::provider as uni;
-use vtcode_core::tools::handlers::plan_mode::{PlanValidationReport, validate_plan_content};
+use vtcode_core::tools::handlers::plan_mode::{
+    PlanModeState, PlanValidationReport, tracker_file_for_plan_file, validate_plan_content,
+};
 
 use super::response_processing::prepare_tool_calls;
 use crate::agent::runloop::unified::plan_blocks::extract_proposed_plan;
@@ -15,6 +17,10 @@ const INTERVIEW_SYNTHESIS_TIMEOUT_SECS: u64 = 20;
 const MAX_RESEARCH_SNIPPETS_PER_BUCKET: usize = 6;
 const CUSTOM_NOTE_POLICY: &str =
     "Users can always type custom notes/free-form responses for every question.";
+const MAX_PLAN_DRAFT_CHARS: usize = 2400;
+const MAX_TASK_TRACKER_CHARS: usize = 1400;
+const PLAN_TRACKER_START: &str = "<!-- vtcode:plan-tracker:start -->";
+const PLAN_TRACKER_END: &str = "<!-- vtcode:plan-tracker:end -->";
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub(crate) struct InterviewResearchContext {
@@ -25,6 +31,54 @@ pub(crate) struct InterviewResearchContext {
     goal_hints: Vec<String>,
     verification_hints: Vec<String>,
     custom_note_policy: String,
+    plan_draft_excerpt: Option<String>,
+    plan_draft_path: Option<String>,
+    plan_validation: Option<PlanValidationSnapshot>,
+    task_tracker_excerpt: Option<String>,
+    task_tracker_path: Option<String>,
+    task_tracker_summary: Option<TaskTrackerSummary>,
+}
+
+#[derive(Debug, Clone)]
+struct PlanDraftContext {
+    plan_path: Option<String>,
+    plan_excerpt: Option<String>,
+    plan_validation: Option<PlanValidationReport>,
+    tracker_path: Option<String>,
+    tracker_excerpt: Option<String>,
+    tracker_summary: Option<TaskTrackerSummary>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct PlanValidationSnapshot {
+    missing_sections: Vec<String>,
+    placeholder_tokens: Vec<String>,
+    open_decisions: Vec<String>,
+    implementation_step_count: usize,
+    validation_item_count: usize,
+    assumption_count: usize,
+    summary_present: bool,
+}
+
+impl From<&PlanValidationReport> for PlanValidationSnapshot {
+    fn from(report: &PlanValidationReport) -> Self {
+        Self {
+            missing_sections: report.missing_sections.clone(),
+            placeholder_tokens: report.placeholder_tokens.clone(),
+            open_decisions: report.open_decisions.clone(),
+            implementation_step_count: report.implementation_step_count,
+            validation_item_count: report.validation_item_count,
+            assumption_count: report.assumption_count,
+            summary_present: report.summary_present,
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct TaskTrackerSummary {
+    item_count: usize,
+    has_outcome: bool,
+    has_verify: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -104,8 +158,15 @@ pub(crate) async fn synthesize_plan_mode_interview_args(
     working_history: &[uni::Message],
     response_text: Option<&str>,
     session_stats: &crate::agent::runloop::unified::state::SessionStats,
+    plan_state: Option<PlanModeState>,
 ) -> Option<serde_json::Value> {
-    let context = collect_interview_research_context(working_history, response_text, session_stats);
+    let plan_context = load_plan_draft_context(plan_state).await;
+    let context = collect_interview_research_context(
+        working_history,
+        response_text,
+        session_stats,
+        plan_context.as_ref(),
+    );
     let latest_user_request = working_history
         .iter()
         .rev()
@@ -159,13 +220,28 @@ Return JSON only.",
         .and_then(|content| parse_interview_payload_from_text(&content))
         .and_then(|payload| sanitize_generated_interview_payload(payload, &context));
 
-    generated.or_else(|| build_adaptive_fallback_interview_args(&context, response_text))
+    let plan_validation = plan_context
+        .as_ref()
+        .and_then(|ctx| ctx.plan_validation.clone());
+    let tracker_summary = plan_context
+        .as_ref()
+        .and_then(|ctx| ctx.tracker_summary.clone());
+
+    generated.or_else(|| {
+        build_adaptive_fallback_interview_args(
+            &context,
+            response_text,
+            plan_validation,
+            tracker_summary,
+        )
+    })
 }
 
 fn collect_interview_research_context(
     working_history: &[uni::Message],
     response_text: Option<&str>,
     session_stats: &crate::agent::runloop::unified::state::SessionStats,
+    plan_context: Option<&PlanDraftContext>,
 ) -> InterviewResearchContext {
     let discovery_tools_used = session_stats
         .sorted_tools()
@@ -244,9 +320,35 @@ fn collect_interview_research_context(
         }
     }
 
-    let open_decision_hints = response_text
+    let mut open_decision_hints = response_text
         .map(extract_open_decision_hints)
         .unwrap_or_default();
+    if let Some(plan_validation) = plan_context.and_then(|ctx| ctx.plan_validation.as_ref()) {
+        for decision in plan_validation
+            .open_decisions
+            .iter()
+            .take(MAX_RESEARCH_SNIPPETS_PER_BUCKET)
+        {
+            push_unique_case_insensitive(&mut open_decision_hints, decision.to_string());
+        }
+    }
+
+    let (plan_draft_excerpt, plan_draft_path, plan_validation, task_tracker_excerpt,
+        task_tracker_path, task_tracker_summary) = if let Some(plan_context) = plan_context {
+        (
+            plan_context.plan_excerpt.clone(),
+            plan_context.plan_path.clone(),
+            plan_context
+                .plan_validation
+                .as_ref()
+                .map(PlanValidationSnapshot::from),
+            plan_context.tracker_excerpt.clone(),
+            plan_context.tracker_path.clone(),
+            plan_context.tracker_summary.clone(),
+        )
+    } else {
+        (None, None, None, None, None, None)
+    };
 
     InterviewResearchContext {
         discovery_tools_used,
@@ -256,6 +358,148 @@ fn collect_interview_research_context(
         goal_hints,
         verification_hints,
         custom_note_policy: CUSTOM_NOTE_POLICY.to_string(),
+        plan_draft_excerpt,
+        plan_draft_path,
+        plan_validation,
+        task_tracker_excerpt,
+        task_tracker_path,
+        task_tracker_summary,
+    }
+}
+
+async fn load_plan_draft_context(
+    plan_state: Option<PlanModeState>,
+) -> Option<PlanDraftContext> {
+    let plan_state = plan_state?;
+    let plan_file = plan_state.get_plan_file().await?;
+    let plan_path = Some(plan_file.display().to_string());
+
+    let plan_content = if plan_file.exists() {
+        tokio::fs::read_to_string(&plan_file).await.ok()
+    } else {
+        None
+    };
+
+    let plan_excerpt = plan_content
+        .as_deref()
+        .map(strip_embedded_tracker)
+        .filter(|content| !content.trim().is_empty())
+        .map(|content| truncate_for_context(&content, MAX_PLAN_DRAFT_CHARS));
+    let plan_validation = plan_content
+        .as_deref()
+        .filter(|content| !content.trim().is_empty())
+        .map(validate_plan_content);
+
+    let tracker_path = tracker_file_for_plan_file(&plan_file);
+    let (tracker_path, tracker_content) = match tracker_path {
+        Some(path) if path.exists() => {
+            let content = tokio::fs::read_to_string(&path).await.ok();
+            (Some(path.display().to_string()), content)
+        }
+        Some(path) => {
+            let content = plan_content
+                .as_deref()
+                .and_then(extract_embedded_tracker);
+            (Some(path.display().to_string()), content)
+        }
+        None => {
+            let content = plan_content
+                .as_deref()
+                .and_then(extract_embedded_tracker);
+            (None, content)
+        }
+    };
+
+    let tracker_excerpt = tracker_content
+        .as_deref()
+        .filter(|content| !content.trim().is_empty())
+        .map(|content| truncate_for_context(content, MAX_TASK_TRACKER_CHARS));
+    let tracker_summary = tracker_content
+        .as_deref()
+        .filter(|content| !content.trim().is_empty())
+        .map(summarize_task_tracker);
+
+    Some(PlanDraftContext {
+        plan_path,
+        plan_excerpt,
+        plan_validation,
+        tracker_path,
+        tracker_excerpt,
+        tracker_summary,
+    })
+}
+
+fn truncate_for_context(text: &str, max_chars: usize) -> String {
+    if text.chars().count() <= max_chars {
+        return text.to_string();
+    }
+
+    const MARKER: &str = " ... [truncated] ...";
+    let marker_chars = MARKER.chars().count();
+    if max_chars <= marker_chars {
+        return text.chars().take(max_chars).collect();
+    }
+
+    let take_chars = max_chars.saturating_sub(marker_chars);
+    let mut truncated = text.chars().take(take_chars).collect::<String>();
+    truncated.push_str(MARKER);
+    truncated
+}
+
+fn extract_embedded_tracker(plan_content: &str) -> Option<String> {
+    let start = plan_content.find(PLAN_TRACKER_START)?;
+    let end = plan_content.find(PLAN_TRACKER_END)?;
+    if end <= start {
+        return None;
+    }
+    let content = plan_content[start + PLAN_TRACKER_START.len()..end].trim();
+    if content.is_empty() {
+        None
+    } else {
+        Some(content.to_string())
+    }
+}
+
+fn strip_embedded_tracker(plan_content: &str) -> String {
+    let Some(start) = plan_content.find(PLAN_TRACKER_START) else {
+        return plan_content.trim().to_string();
+    };
+    let end = plan_content[start..]
+        .find(PLAN_TRACKER_END)
+        .map(|offset| start + offset + PLAN_TRACKER_END.len())
+        .unwrap_or(plan_content.len());
+    let mut merged = String::new();
+    merged.push_str(plan_content[..start].trim_end());
+    if !merged.is_empty() && !plan_content[end..].trim().is_empty() {
+        merged.push_str("\n\n");
+    }
+    merged.push_str(plan_content[end..].trim_start());
+    merged.trim().to_string()
+}
+
+fn summarize_task_tracker(content: &str) -> TaskTrackerSummary {
+    let mut item_count = 0;
+    let mut has_outcome = false;
+    let mut has_verify = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("- [") {
+            item_count += 1;
+        }
+        let lower = trimmed.to_ascii_lowercase();
+        if lower.starts_with("outcome:") {
+            has_outcome = true;
+        }
+        if lower.starts_with("verify:") {
+            has_verify = true;
+        }
+    }
+
+    TaskTrackerSummary {
+        item_count,
+        has_outcome,
+        has_verify,
     }
 }
 
@@ -883,9 +1127,14 @@ fn contains_any(text: &str, needles: &[&str]) -> bool {
 fn build_adaptive_fallback_interview_args(
     context: &InterviewResearchContext,
     response_text: Option<&str>,
+    plan_validation: Option<PlanValidationReport>,
+    tracker_summary: Option<TaskTrackerSummary>,
 ) -> Option<serde_json::Value> {
-    let validation = extract_plan_validation(response_text);
+    let validation = plan_validation.or_else(|| extract_plan_validation(response_text));
     let mut questions = Vec::new();
+    let needs_task_metadata = tracker_summary.as_ref().is_some_and(|summary| {
+        summary.item_count > 0 && (!summary.has_outcome || !summary.has_verify)
+    });
 
     let needs_scope = validation.as_ref().is_some_and(|report| {
         report
@@ -936,13 +1185,19 @@ fn build_adaptive_fallback_interview_args(
     }) || validation
         .as_ref()
         .is_some_and(|report| report.assumption_count == 0)
-        || (validation.is_none() && context.verification_hints.is_empty());
+        || (validation.is_none() && context.verification_hints.is_empty())
+        || needs_task_metadata;
 
     if needs_verification {
+        let question = if needs_task_metadata {
+            "What outcomes and verification commands should be added for each task tracker step to prove completion?"
+        } else {
+            "What exact commands or manual checks should prove the implementation is complete and guard against regressions?"
+        };
         questions.push(build_fallback_question(
             "verification",
             "Verify",
-            "What exact commands or manual checks should prove the implementation is complete and guard against regressions?",
+            question,
             context,
         ));
     }
@@ -1012,6 +1267,12 @@ fn inject_plan_mode_interview(
                         goal_hints: Vec::new(),
                         verification_hints: Vec::new(),
                         custom_note_policy: CUSTOM_NOTE_POLICY.to_string(),
+                        plan_draft_excerpt: None,
+                        plan_draft_path: None,
+                        plan_validation: None,
+                        task_tracker_excerpt: None,
+                        task_tracker_path: None,
+                        task_tracker_summary: None,
                     },
                 )
             ]

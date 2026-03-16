@@ -245,7 +245,7 @@ fn collect_interview_research_context_extracts_path_from_json() {
     let line = r#"{"type":"context","data":{"path":{"text":"./docs/modules/vtcode_docs_map.md"},"lines":{"text":"- **Content**: CORE AGENT LOOP OVERVIEW\n"}}}"#;
     let history = vec![uni::Message::assistant(line.to_string())];
 
-    let context = collect_interview_research_context(&history, None, &stats);
+    let context = collect_interview_research_context(&history, None, &stats, None);
 
     assert_eq!(
         context.recent_targets,
@@ -485,6 +485,7 @@ fn collect_interview_research_context_includes_custom_note_policy() {
         )],
         Some("- Next open decision: TBD"),
         &stats,
+        None,
     );
 
     assert!(
@@ -524,6 +525,7 @@ fn collect_interview_research_context_extracts_recent_paths_and_symbols() {
         )],
         None,
         &stats,
+        None,
     );
 
     assert!(
@@ -583,6 +585,12 @@ fn adaptive_fallback_interview_targets_only_missing_sections() {
         goal_hints: Vec::new(),
         verification_hints: Vec::new(),
         custom_note_policy: CUSTOM_NOTE_POLICY.to_string(),
+        plan_draft_excerpt: None,
+        plan_draft_path: None,
+        plan_validation: None,
+        task_tracker_excerpt: None,
+        task_tracker_path: None,
+        task_tracker_summary: None,
     };
 
     let payload = build_adaptive_fallback_interview_args(
@@ -590,6 +598,8 @@ fn adaptive_fallback_interview_targets_only_missing_sections() {
         Some(
             "<proposed_plan>\n# Fix Plan Mode\n\n## Implementation Steps\n1. Add entry gating\n\n## Assumptions and Defaults\n1. Reuse overlays.\n</proposed_plan>",
         ),
+        None,
+        None,
     )
     .expect("expected adaptive fallback");
 
@@ -613,6 +623,12 @@ fn adaptive_fallback_interview_skips_when_draft_is_complete() {
             "cargo test -p vtcode-core test_enter_plan_mode -- --nocapture".to_string(),
         ],
         custom_note_policy: CUSTOM_NOTE_POLICY.to_string(),
+        plan_draft_excerpt: None,
+        plan_draft_path: None,
+        plan_validation: None,
+        task_tracker_excerpt: None,
+        task_tracker_path: None,
+        task_tracker_summary: None,
     };
 
     let payload = build_adaptive_fallback_interview_args(
@@ -620,7 +636,43 @@ fn adaptive_fallback_interview_skips_when_draft_is_complete() {
         Some(
             "<proposed_plan>\n# Fix Plan Mode\n\n## Summary\nPersist the reviewed plan and gate execution through approval.\n\n## Implementation Steps\n1. Add lifecycle state -> files: [vtcode-core/src/tools/handlers/plan_mode.rs] -> verify: [cargo test]\n\n## Test Cases and Validation\n1. Build and lint: cargo check\n2. Tests: cargo test\n\n## Assumptions and Defaults\n1. Reuse overlays.\n</proposed_plan>",
         ),
+        None,
+        None,
     );
 
     assert!(payload.is_none());
+}
+
+#[test]
+fn adaptive_fallback_interview_requests_task_metadata_when_missing() {
+    let context = InterviewResearchContext {
+        discovery_tools_used: vec![tools::READ_FILE.to_string()],
+        recent_targets: Vec::new(),
+        risk_hints: Vec::new(),
+        open_decision_hints: Vec::new(),
+        goal_hints: Vec::new(),
+        verification_hints: Vec::new(),
+        custom_note_policy: CUSTOM_NOTE_POLICY.to_string(),
+        plan_draft_excerpt: None,
+        plan_draft_path: None,
+        plan_validation: None,
+        task_tracker_excerpt: None,
+        task_tracker_path: None,
+        task_tracker_summary: None,
+    };
+
+    let tracker_summary = TaskTrackerSummary {
+        item_count: 2,
+        has_outcome: false,
+        has_verify: false,
+    };
+
+    let payload = build_adaptive_fallback_interview_args(&context, None, None, Some(tracker_summary))
+        .expect("expected adaptive fallback");
+
+    let questions = payload["questions"].as_array().expect("questions array");
+    assert_eq!(questions.len(), 1);
+    assert_eq!(questions[0]["id"], "verification");
+    let question_text = questions[0]["question"].as_str().unwrap_or("");
+    assert!(question_text.to_ascii_lowercase().contains("task tracker"));
 }

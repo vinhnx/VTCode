@@ -628,6 +628,7 @@ pub(crate) async fn run_turn_loop(
                     turn_processing_ctx.working_history,
                     response.content.as_deref(),
                     turn_processing_ctx.session_stats,
+                    Some(turn_processing_ctx.tool_registry.plan_mode_state()),
                 )
                 .await
             } else {
