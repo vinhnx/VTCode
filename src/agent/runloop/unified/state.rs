@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use vtcode_core::core::interfaces::session::PlanModeEntrySource;
 use vtcode_tui::EditingMode;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -27,6 +28,8 @@ pub(crate) struct SessionStats {
     plan_mode_interview_cycles_completed: usize,
     /// Whether the latest plan-mode interview cycle was cancelled/incomplete
     plan_mode_last_interview_cancelled: bool,
+    /// Source that triggered plan mode entry.
+    plan_mode_entry_source: Option<PlanModeEntrySource>,
     /// Autonomous mode - auto-approve safe tools with reduced HITL prompts
     pub autonomous_mode: bool,
     /// Whether Vim-style prompt editing is enabled for this session.
@@ -95,6 +98,13 @@ impl SessionStats {
             self.tools.clear();
             self.clear_previous_response_chain();
         }
+        if !enabled {
+            self.plan_mode_entry_source = None;
+        }
+    }
+
+    pub(crate) fn set_plan_mode_entry_source(&mut self, source: PlanModeEntrySource) {
+        self.plan_mode_entry_source = Some(source);
     }
 
     /// Cycle to the next mode: Edit → Plan → Edit

@@ -82,30 +82,59 @@ fn build_read_handler_args(args: &Value, canonical_path: &Path) -> Value {
             json!(canonical_path.to_string_lossy()),
         );
 
+        if let Some(mode_value) = obj.get("mode").cloned() {
+            let normalized_mode = match mode_value {
+                Value::Null => None,
+                Value::String(raw) => {
+                    let trimmed = raw.trim();
+                    if trimmed.eq_ignore_ascii_case("indentation") {
+                        Some("indentation".to_string())
+                    } else {
+                        Some("slice".to_string())
+                    }
+                }
+                _ => Some("slice".to_string()),
+            };
+
+            if let Some(mode) = normalized_mode {
+                obj.insert("mode".to_string(), json!(mode));
+            } else {
+                obj.remove("mode");
+            }
+        }
+
         if let Some(indentation_value) = obj.get("indentation").cloned() {
             match indentation_value {
                 Value::Bool(true) => {
-                    if !obj.contains_key("mode") {
-                        obj.insert("mode".to_string(), json!("indentation"));
-                    }
+                    obj.insert("mode".to_string(), json!("indentation"));
                     obj.insert("indentation".to_string(), json!({}));
                 }
                 Value::Bool(false) | Value::Null => {
                     obj.remove("indentation");
+                    if obj
+                        .get("mode")
+                        .and_then(Value::as_str)
+                        .is_some_and(|mode| mode.eq_ignore_ascii_case("indentation"))
+                    {
+                        obj.insert("mode".to_string(), json!("slice"));
+                    }
                 }
                 Value::String(text) if text.eq_ignore_ascii_case("true") => {
-                    if !obj.contains_key("mode") {
-                        obj.insert("mode".to_string(), json!("indentation"));
-                    }
+                    obj.insert("mode".to_string(), json!("indentation"));
                     obj.insert("indentation".to_string(), json!({}));
                 }
                 Value::String(text) if text.eq_ignore_ascii_case("false") => {
                     obj.remove("indentation");
+                    if obj
+                        .get("mode")
+                        .and_then(Value::as_str)
+                        .is_some_and(|mode| mode.eq_ignore_ascii_case("indentation"))
+                    {
+                        obj.insert("mode".to_string(), json!("slice"));
+                    }
                 }
                 Value::Object(_) => {
-                    if !obj.contains_key("mode") {
-                        obj.insert("mode".to_string(), json!("indentation"));
-                    }
+                    obj.insert("mode".to_string(), json!("indentation"));
                 }
                 _ => {}
             }
@@ -687,6 +716,15 @@ mod read_tests {
         assert!(built_false.get("indentation").is_none());
         assert_eq!(built_false["mode"], json!("slice"));
 
+        let args_false_indent_mode = json!({
+            "path": "example.txt",
+            "indentation": false,
+            "mode": "indentation"
+        });
+        let built_false_indent_mode = build_read_handler_args(&args_false_indent_mode, canonical);
+        assert!(built_false_indent_mode.get("indentation").is_none());
+        assert_eq!(built_false_indent_mode["mode"], json!("slice"));
+
         let args_obj = json!({
             "path": "example.txt",
             "indentation": { "max_levels": 2 }
@@ -709,6 +747,39 @@ mod read_tests {
         });
         let built_false_str = build_read_handler_args(&args_false_str, canonical);
         assert!(built_false_str.get("indentation").is_none());
+    }
+
+    #[test]
+    fn build_read_handler_args_normalizes_mode() {
+        let canonical = Path::new("/tmp/example.txt");
+
+        let args_empty = json!({
+            "path": "example.txt",
+            "mode": ""
+        });
+        let built_empty = build_read_handler_args(&args_empty, canonical);
+        assert_eq!(built_empty["mode"], json!("slice"));
+
+        let args_whitespace = json!({
+            "path": "example.txt",
+            "mode": "   "
+        });
+        let built_whitespace = build_read_handler_args(&args_whitespace, canonical);
+        assert_eq!(built_whitespace["mode"], json!("slice"));
+
+        let args_unknown = json!({
+            "path": "example.txt",
+            "mode": "unknown"
+        });
+        let built_unknown = build_read_handler_args(&args_unknown, canonical);
+        assert_eq!(built_unknown["mode"], json!("slice"));
+
+        let args_indent = json!({
+            "path": "example.txt",
+            "mode": "Indentation"
+        });
+        let built_indent = build_read_handler_args(&args_indent, canonical);
+        assert_eq!(built_indent["mode"], json!("indentation"));
     }
 
     #[test]

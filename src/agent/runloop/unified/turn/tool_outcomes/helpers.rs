@@ -7,7 +7,6 @@ use vtcode_core::tools::names::canonical_tool_name;
 pub(crate) const EXIT_PLAN_MODE_REASON_AUTO_TRIGGER_ON_DENIAL: &str = "auto_trigger_on_plan_denial";
 pub(crate) const EXIT_PLAN_MODE_REASON_USER_REQUESTED_IMPLEMENTATION: &str =
     "user_requested_implementation";
-pub(crate) const EXIT_PLAN_MODE_REASON_PLAN_DRAFT_READY: &str = "auto_trigger_on_plan_ready";
 
 /// Threshold: number of consecutive file mutations before the Anti-Blind-Editing
 /// warning fires. NL2Repo-Bench recommends verifying after every few edits.

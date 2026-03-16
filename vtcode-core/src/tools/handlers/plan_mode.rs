@@ -38,13 +38,16 @@ const REQUIRED_PLAN_SECTIONS: [&str; 4] = [
     "Assumptions and Defaults",
 ];
 
-const PLACEHOLDER_TOKENS: [&str; 11] = [
+const PLACEHOLDER_TOKENS: [&str; 14] = [
     "[step]",
     "[paths]",
     "[check]",
     "[explicit assumption]",
     "[default chosen when user did not specify]",
     "[out-of-scope items intentionally not changed]",
+    "[file, symbol, or behavior confirmed from the repo]",
+    "[existing pattern or constraint verified before planning]",
+    "[if any], otherwise: no remaining scope decisions",
     "[project build and lint command",
     "[project test command",
     "[2-4 lines: goal, user impact, what will change, what will not]",
@@ -734,12 +737,18 @@ pub async fn persist_plan_draft(
         && existing_tracker
             .as_deref()
             .is_some_and(|tracker| !tracker_has_progress_or_notes(tracker));
-    let tracker_to_persist = if should_refresh_embedded {
-        generate_tracker_markdown_from_plan(plan_markdown).or(existing_tracker.clone())
+    let validation = validate_plan_content(plan_markdown);
+    let allow_tracker_generation =
+        validation.implementation_step_count > 0 && validation.placeholder_tokens.is_empty();
+    let generated_tracker = if allow_tracker_generation {
+        generate_tracker_markdown_from_plan(plan_markdown)
     } else {
-        existing_tracker
-            .clone()
-            .or_else(|| generate_tracker_markdown_from_plan(plan_markdown))
+        None
+    };
+    let tracker_to_persist = if should_refresh_embedded {
+        generated_tracker.or(existing_tracker.clone())
+    } else {
+        existing_tracker.clone().or(generated_tracker)
     };
     let canonical_plan = render_plan_with_tracker(plan_markdown, tracker_to_persist.as_deref());
     write_file_with_context(&plan_file, &canonical_plan, "plan file")
@@ -767,7 +776,7 @@ pub async fn persist_plan_draft(
     Ok(PersistedPlanDraft {
         plan_file,
         tracker_file,
-        validation: validate_plan_content(plan_markdown),
+        validation,
     })
 }
 
@@ -1711,6 +1720,11 @@ mod tests {
         let report = validate_plan_content(
             r#"# Test Plan
 
+Repository facts checked:
+- [file, symbol, or behavior confirmed from the repo]
+
+Next open decision: [if any], otherwise: No remaining scope decisions.
+
 ## Summary
 [2-4 lines: goal, user impact, what will change, what will not]
 
@@ -1727,6 +1741,10 @@ mod tests {
 
         assert!(!report.is_ready());
         assert!(!report.placeholder_tokens.is_empty());
+        assert!(report
+            .placeholder_tokens
+            .iter()
+            .any(|token| token.contains("file, symbol")));
     }
 
     #[test]

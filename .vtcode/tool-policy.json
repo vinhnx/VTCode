@@ -15,15 +15,15 @@
     "unified_search"
   ],
   "policies": {
-    "apply_patch": "allow",
+    "apply_patch": "prompt",
     "unified_exec": "allow",
     "unified_file": "allow",
     "unified_search": "allow",
-    "enter_plan_mode": "allow",
-    "exit_plan_mode": "allow",
+    "enter_plan_mode": "prompt",
+    "exit_plan_mode": "prompt",
     "request_user_input": "allow",
-    "plan_task_tracker": "allow",
-    "task_tracker": "allow",
+    "plan_task_tracker": "prompt",
+    "task_tracker": "prompt",
     "list_skills": "allow",
     "load_skill_resource": "allow",
     "load_skill": "allow"

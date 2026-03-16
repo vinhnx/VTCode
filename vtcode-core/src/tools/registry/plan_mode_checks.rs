@@ -141,7 +141,8 @@ impl ToolRegistry {
     }
 
     /// Check if a unified tool call represents a read-only action.
-    /// Allows `unified_file` with action "read" and `unified_exec` with actions "poll", "list", or "inspect".
+    /// Allows `unified_file` with action "read" and `unified_exec` with read-only actions
+    /// (poll/list/inspect/continue without input) plus allowlisted run commands or `--dry-run`.
     #[allow(dead_code)]
     pub(super) fn is_readonly_unified_action(&self, tool_name: &str, args: &Value) -> bool {
         crate::tools::tool_intent::classify_tool_intent(tool_name, args).readonly_unified_action
@@ -209,6 +210,28 @@ mod tests {
         assert!(
             registry.is_plan_mode_allowed(tools::PLAN_TASK_TRACKER, &json!({"action": "list"}))
         );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn plan_mode_allows_readonly_unified_exec_runs() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        registry.enable_plan_mode();
+
+        assert!(registry.is_plan_mode_allowed(
+            tools::UNIFIED_EXEC,
+            &json!({"action": "run", "command": "ls -la"})
+        ));
+        assert!(registry.is_plan_mode_allowed(
+            tools::UNIFIED_EXEC,
+            &json!({"action": "run", "command": "npm install --dry-run"})
+        ));
+        assert!(!registry.is_plan_mode_allowed(
+            tools::UNIFIED_EXEC,
+            &json!({"action": "run", "command": "echo hi"})
+        ));
 
         Ok(())
     }

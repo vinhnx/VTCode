@@ -8,10 +8,11 @@ In Plan Mode, the agent can:
 - **Read files** - explore the codebase structure
 - **Search code** - use grep, structural search, and other read-only search tools
 - **Analyze patterns** - understand architecture and design decisions
+- **Run safe commands/tests** - allowlisted, non-mutating `unified_exec` runs (e.g., `rg`, `ls`, `cat`, `git status`, `cargo check`, `cargo test`, `npm test`, `pnpm test`, `yarn test`) or commands that include `--dry-run`
 
 In Plan Mode, the agent **cannot**:
 - Edit files or apply patches
-- Run shell commands or tests
+- Run commands outside the allowlist or without `--dry-run`
 - Execute any mutating operations
 
 `task_tracker` is available in Plan Mode and mirrors checklist state between `.vtcode/tasks/current_task.md` and active plan sidecar files under `.vtcode/plans/`. `plan_task_tracker` remains available as a compatibility alias. Plan output should use `<proposed_plan>...</proposed_plan>`.
@@ -31,6 +32,8 @@ In Plan Mode, the agent **cannot**:
 vtcode --permission-mode plan
 ```
 
+If `default_editing_mode = "plan"` is set in `vtcode.toml`, VT Code will prompt once at session start to confirm whether to enter Plan Mode. Declining starts in Edit mode.
+
 ### Toggling Plan Mode in a session
 
 ```
@@ -45,7 +48,7 @@ vtcode --permission-mode plan
 2. **Describe your goal**: Explain what you want to build or change
 3. **Iterate on the plan**: Ask clarifying questions, explore files, refine the approach
 4. **Review the plan**: The agent captures repository facts, closes any open decisions, then emits one `<proposed_plan>` block
-5. **Choose next action**: Use the implementation prompt to switch to Edit mode or continue planning (fallback: manually switch with `/plan off` or `/mode`, or `Shift+Tab`/`Alt+M`)
+5. **Choose next action**: Use the implementation prompt to switch to Edit mode or continue planning (fallback: manually switch with `/plan off` or `/mode`, or `Shift+Tab`/`Alt+M`). Plan Mode exits only on explicit intent (`implement`, `exit_plan_mode`, `/plan off`).
 6. **Execute the plan**: If approved, coding proceeds in Edit mode
 
 ## Plan Output Format
@@ -86,12 +89,11 @@ Only `Next open decision` is used as the explicit reopen marker for follow-up pl
 
 ## Plan Review Gate
 
-After a plan is ready, the execution confirmation should use this 4-way gate:
+After a plan is ready, the execution confirmation should use this 3-way gate:
 
-1. Yes, clear context and auto-accept edits (Recommended)
-2. Yes, auto-accept edits
-3. Yes, manually approve edits
-4. Type feedback to revise the plan
+1. Yes, auto-accept edits (Recommended)
+2. Yes, manually approve edits
+3. Type feedback to revise the plan
 
 ## Best Practices
 

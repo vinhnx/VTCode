@@ -1,6 +1,7 @@
 use anyhow::Result;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::EditingMode as ConfigEditingMode;
+use vtcode_core::core::interfaces::session::PlanModeEntrySource;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_tui::EditingMode;
 
@@ -33,6 +34,7 @@ pub(crate) async fn handle_toggle_plan_mode(
             ctx.tool_registry,
             ctx.session_stats,
             ctx.handle,
+            PlanModeEntrySource::UserRequest,
             true,
             true,
         )
@@ -97,6 +99,7 @@ pub(crate) async fn handle_cycle_mode(ctx: SlashCommandContext<'_>) -> Result<Sl
             ctx.tool_registry,
             ctx.session_stats,
             ctx.handle,
+            PlanModeEntrySource::UserRequest,
             false,
             false,
         )

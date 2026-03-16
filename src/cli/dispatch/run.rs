@@ -3,6 +3,7 @@ use anyhow::Result;
 use vtcode_core::cli::args::AskCommandOptions;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+use vtcode_core::core::interfaces::session::PlanModeEntrySource;
 
 use crate::cli::{analyze, sessions};
 
@@ -20,14 +21,14 @@ pub(crate) async fn handle_chat_command(
     vt_cfg: VTCodeConfig,
     skip_confirmations: bool,
     full_auto_requested: bool,
-    plan_mode: bool,
+    plan_mode_entry_source: PlanModeEntrySource,
 ) -> Result<()> {
     crate::agent::agents::run_single_agent_loop(
         &core_cfg,
         Some(vt_cfg),
         skip_confirmations,
         full_auto_requested,
-        plan_mode,
+        plan_mode_entry_source,
         None,
     )
     .await

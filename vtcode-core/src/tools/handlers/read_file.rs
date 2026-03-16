@@ -51,6 +51,9 @@ pub struct ReadFileArgs {
     /// Optional token limit for response
     #[serde(default, deserialize_with = "deserialize_opt_maybe_quoted")]
     pub max_tokens: Option<usize>,
+    /// Whether to condense long outputs to head/tail.
+    #[serde(default = "defaults::condense", deserialize_with = "deserialize_maybe_quoted")]
+    pub condense: bool,
 }
 
 /// Batch read request for reading multiple files or ranges in parallel.
@@ -439,6 +442,7 @@ impl ReadFileHandler {
             mode,
             indentation,
             max_tokens,
+            condense,
         } = args;
 
         anyhow::ensure!(offset > 0, "offset must be a 1-indexed line number");
@@ -462,8 +466,10 @@ impl ReadFileHandler {
             }
         };
 
-        // Condense large outputs (>100 lines) to head + tail
-        condense_collected_lines(&mut collected);
+        if condense {
+            // Condense large outputs (>100 lines) to head + tail
+            condense_collected_lines(&mut collected);
+        }
 
         Ok(collected.join("\n"))
     }
@@ -566,6 +572,11 @@ impl Tool for ReadFileHandler {
                 "max_tokens": {
                     "type": "integer",
                     "description": "Optional token limit for response (approximate)"
+                },
+                "condense": {
+                    "type": "boolean",
+                    "description": "Condense long outputs to head/tail (default: true)",
+                    "default": true
                 },
                 "reads": {
                     "type": "array",
@@ -984,6 +995,10 @@ mod defaults {
     pub fn include_header() -> bool {
         true
     }
+
+    pub fn condense() -> bool {
+        true
+    }
 }
 
 #[cfg(test)]
@@ -1042,6 +1057,30 @@ mod tests {
 
         let parsed: ReadFileArgs = serde_json::from_value(args).unwrap();
         assert!(matches!(parsed.mode, ReadMode::Slice));
+    }
+
+    #[tokio::test]
+    async fn read_file_handler_skips_condense_when_disabled() -> Result<()> {
+        let mut temp = NamedTempFile::new()?;
+        for idx in 0..60 {
+            writeln!(temp, "line-{idx}")?;
+        }
+
+        let args = ReadFileArgs {
+            file_path: temp.path().to_string_lossy().to_string(),
+            offset: 1,
+            limit: 2000,
+            mode: ReadMode::Slice,
+            indentation: None,
+            max_tokens: None,
+            condense: false,
+        };
+        let handler = ReadFileHandler;
+        let content = handler.handle(args).await?;
+
+        assert!(!content.contains("lines omitted"));
+        assert_eq!(content.lines().count(), 60);
+        Ok(())
     }
 
     #[tokio::test]

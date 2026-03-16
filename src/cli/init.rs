@@ -7,6 +7,7 @@ use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::{
     AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
 };
+use vtcode_core::core::interfaces::session::PlanModeEntrySource;
 use vtcode_core::core::agent::snapshots::{
     DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
 };
@@ -51,7 +52,14 @@ pub async fn handle_init_command(workspace: &Path, force: bool, run: bool) -> Re
             model_behavior: None,
             openai_chatgpt_auth: None,
         };
-        crate::agent::agents::run_single_agent_loop(&config, None, false, false, false, None)
+        crate::agent::agents::run_single_agent_loop(
+            &config,
+            None,
+            false,
+            false,
+            PlanModeEntrySource::None,
+            None,
+        )
             .await
             .with_context(|| "failed to start chat session")?;
     }

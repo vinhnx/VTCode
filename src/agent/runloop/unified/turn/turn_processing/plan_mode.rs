@@ -112,7 +112,10 @@ pub(crate) fn should_attempt_dynamic_interview_generation(
     response_text: Option<&str>,
     session_stats: &crate::agent::runloop::unified::state::SessionStats,
 ) -> bool {
-    if !plan_mode_interview_ready(session_stats) {
+    let response_has_plan = response_text
+        .map(|text| text.contains("<proposed_plan>"))
+        .unwrap_or(false);
+    if !plan_mode_interview_ready(session_stats) && !response_has_plan {
         return false;
     }
 
@@ -1338,7 +1341,8 @@ fn build_fallback_question(
     let mut payload = serde_json::Map::new();
     payload.insert("id".to_string(), Value::String(id.to_string()));
     payload.insert("header".to_string(), Value::String(header.to_string()));
-    payload.insert("question".to_string(), Value::String(question.to_string()));
+    let question_text = append_context_hint(question, context);
+    payload.insert("question".to_string(), Value::String(question_text));
     payload.insert(
         "options".to_string(),
         Value::Array(fallback_options_for_question(question, context)),
@@ -1354,6 +1358,30 @@ fn build_fallback_question(
         );
     }
     Value::Object(payload)
+}
+
+fn append_context_hint(question: &str, context: &InterviewResearchContext) -> String {
+    let base = question.to_string();
+    let hint = context
+        .open_decision_hints
+        .first()
+        .or_else(|| context.recent_targets.first())
+        .map(|value| single_line(value))
+        .map(|value| truncate_hint(&value, 72));
+    match hint {
+        Some(value) if !value.is_empty() => format!("{base} (Focus: {value})"),
+        _ => base,
+    }
+}
+
+fn truncate_hint(value: &str, max_len: usize) -> String {
+    let trimmed = value.trim();
+    if trimmed.len() <= max_len {
+        return trimmed.to_string();
+    }
+    let mut out = trimmed.chars().take(max_len.saturating_sub(3)).collect::<String>();
+    out.push_str("...");
+    out
 }
 
 fn inject_plan_mode_interview(

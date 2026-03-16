@@ -178,6 +178,14 @@ pub(crate) async fn execute_direct_tool_call(
 }
 
 fn parse_direct_tool_input(input: &str) -> Option<DirectToolInput> {
+    if let Some(args) = detect_direct_unified_file_read(input) {
+        return Some(DirectToolInput::Execute {
+            tool_name: tools::UNIFIED_FILE.to_string(),
+            args,
+            is_bang_prefix: false,
+        });
+    }
+
     // Check for shell mode with '!' prefix or explicit 'run' command
     let trimmed = input.trim_start();
     if let Some(rest) = trimmed.strip_prefix('!') {
@@ -205,6 +213,100 @@ fn parse_direct_tool_input(input: &str) -> Option<DirectToolInput> {
             is_bang_prefix: false,
         },
     )
+}
+
+fn detect_direct_unified_file_read(input: &str) -> Option<serde_json::Value> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let without_run = strip_prefix_case_insensitive(trimmed, "run ")
+        .unwrap_or(trimmed)
+        .trim_start();
+    let tool_prefix = strip_prefix_case_insensitive(without_run, "unified_file")?;
+    let after_tool = tool_prefix.trim_start();
+    let after_read = strip_prefix_case_insensitive(after_tool, "read")?.trim_start();
+    if after_read.is_empty() {
+        return None;
+    }
+
+    let (path_part, _) = split_path_and_suffix(after_read);
+    let path = normalize_unified_file_path(path_part);
+    if path.is_empty() {
+        return None;
+    }
+
+    Some(serde_json::json!({
+        "action": "read",
+        "path": path,
+        "condense": false
+    }))
+}
+
+fn split_path_and_suffix(input: &str) -> (&str, &str) {
+    let lower = input.to_ascii_lowercase();
+    if let Some(idx) = lower.find(" with ") {
+        return (&input[..idx], &input[idx + 1..]);
+    }
+    if let Some(idx) = lower.find(" mode omitted") {
+        return (&input[..idx], &input[idx..]);
+    }
+    (input, "")
+}
+
+fn strip_prefix_case_insensitive<'a>(input: &'a str, prefix: &str) -> Option<&'a str> {
+    let prefix_len = prefix.len();
+    if input.len() < prefix_len {
+        return None;
+    }
+    let head = &input[..prefix_len];
+    if head.eq_ignore_ascii_case(prefix) {
+        Some(input[prefix_len..].trim_start())
+    } else {
+        None
+    }
+}
+
+fn normalize_unified_file_path(input: &str) -> String {
+    let mut normalized = input.trim();
+    normalized = strip_optional_word_prefix(normalized, "on");
+    normalized = strip_optional_word_prefix(normalized, "from");
+    normalized = normalized.strip_prefix('@').unwrap_or(normalized);
+    trim_wrapping_quotes_and_punctuation(normalized).to_string()
+}
+
+fn strip_optional_word_prefix<'a>(input: &'a str, word: &str) -> &'a str {
+    let Some(prefix) = input.get(..word.len()) else {
+        return input;
+    };
+    if !prefix.eq_ignore_ascii_case(word) {
+        return input;
+    }
+    let remainder = &input[word.len()..];
+    if remainder.chars().next().is_some_and(char::is_whitespace) {
+        remainder.trim_start()
+    } else {
+        input
+    }
+}
+
+fn trim_wrapping_quotes_and_punctuation(target: &str) -> &str {
+    let mut normalized = target.trim();
+    loop {
+        let previous = normalized;
+        normalized = normalized.trim();
+        normalized = normalized.strip_prefix('"').unwrap_or(normalized);
+        normalized = normalized.strip_suffix('"').unwrap_or(normalized);
+        normalized = normalized.strip_prefix('\'').unwrap_or(normalized);
+        normalized = normalized.strip_suffix('\'').unwrap_or(normalized);
+        normalized = normalized
+            .trim_end_matches(['.', ',', ';', '!', '?'])
+            .trim();
+        if normalized == previous {
+            return normalized;
+        }
+    }
 }
 
 fn normalize_direct_tool_mentions(input: &str, workspace_root: &Path) -> String {
@@ -417,5 +519,48 @@ mod tests {
         let temp_dir = TempDir::new().expect("temp dir");
         let normalized = normalize_direct_tool_mentions("run npm i @types/node", temp_dir.path());
         assert_eq!(normalized, "run npm i @types/node");
+    }
+
+    #[test]
+    fn parses_direct_unified_file_read_with_mode_omitted() {
+        let parsed = parse_direct_tool_input(
+            "unified_file read on /tmp/example.md with mode omitted",
+        )
+        .expect("direct unified_file");
+        match parsed {
+            DirectToolInput::Execute { tool_name, args, .. } => {
+                assert_eq!(
+                    tool_name,
+                    vtcode_core::config::constants::tools::UNIFIED_FILE
+                );
+                assert_eq!(args["action"], "read");
+                assert_eq!(args["path"], "/tmp/example.md");
+                assert_eq!(args["condense"], false);
+            }
+            DirectToolInput::InvalidBang { .. } => {
+                panic!("expected unified_file read to parse");
+            }
+        }
+    }
+
+    #[test]
+    fn parses_run_prefixed_unified_file_read() {
+        let parsed =
+            parse_direct_tool_input("run unified_file read /tmp/example.md")
+                .expect("direct unified_file");
+        match parsed {
+            DirectToolInput::Execute { tool_name, args, .. } => {
+                assert_eq!(
+                    tool_name,
+                    vtcode_core::config::constants::tools::UNIFIED_FILE
+                );
+                assert_eq!(args["action"], "read");
+                assert_eq!(args["path"], "/tmp/example.md");
+                assert_eq!(args["condense"], false);
+            }
+            DirectToolInput::InvalidBang { .. } => {
+                panic!("expected unified_file read to parse");
+            }
+        }
     }
 }

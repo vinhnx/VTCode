@@ -33,6 +33,26 @@ impl SessionMode {
     }
 }
 
+/// Source that triggered plan mode entry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PlanModeEntrySource {
+    #[default]
+    None,
+    CliFlag,
+    ConfigDefault,
+    UserRequest,
+}
+
+impl PlanModeEntrySource {
+    pub const fn should_auto_enter(self) -> bool {
+        matches!(self, Self::CliFlag)
+    }
+
+    pub const fn requires_startup_prompt(self) -> bool {
+        matches!(self, Self::ConfigDefault)
+    }
+}
+
 /// Parameters passed to a [`SessionRuntime`] implementation for executing an interactive session.
 #[derive(Debug)]
 pub struct SessionRuntimeParams<'a, Resume> {
@@ -40,7 +60,7 @@ pub struct SessionRuntimeParams<'a, Resume> {
     pub vt_config: Option<VTCodeConfig>,
     pub skip_confirmations: bool,
     pub full_auto: bool,
-    pub plan_mode: bool,
+    pub plan_mode_entry_source: PlanModeEntrySource,
     pub resume: Option<Resume>,
     pub steering_receiver: &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
 }
@@ -52,7 +72,7 @@ impl<'a, Resume> SessionRuntimeParams<'a, Resume> {
         vt_config: Option<VTCodeConfig>,
         skip_confirmations: bool,
         full_auto: bool,
-        plan_mode: bool,
+        plan_mode_entry_source: PlanModeEntrySource,
         resume: Option<Resume>,
         steering_receiver: &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
     ) -> Self {
@@ -61,7 +81,7 @@ impl<'a, Resume> SessionRuntimeParams<'a, Resume> {
             vt_config,
             skip_confirmations,
             full_auto,
-            plan_mode,
+            plan_mode_entry_source,
             resume,
             steering_receiver,
         }

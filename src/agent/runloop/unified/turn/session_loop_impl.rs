@@ -9,6 +9,7 @@ use tokio::time::{Duration, sleep, timeout};
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::resolve_timeout;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+use vtcode_core::core::interfaces::session::PlanModeEntrySource;
 use vtcode_core::hooks::{SessionEndReason, SessionStartTrigger};
 
 /// Optimization: Pre-computed idle detection thresholds to avoid repeated config lookups
@@ -78,7 +79,7 @@ pub(crate) async fn run_single_agent_loop_unified(
     _vt_cfg: Option<VTCodeConfig>,
     _skip_confirmations: bool,
     full_auto: bool,
-    plan_mode: bool,
+    plan_mode_entry_source: PlanModeEntrySource,
     resume: Option<ResumeSession>,
     mut steering_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
 ) -> Result<()> {
@@ -87,7 +88,7 @@ pub(crate) async fn run_single_agent_loop_unified(
         _vt_cfg,
         _skip_confirmations,
         full_auto,
-        plan_mode,
+        plan_mode_entry_source,
         resume,
         &mut steering_receiver,
     )

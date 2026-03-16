@@ -458,9 +458,10 @@ pub(crate) fn unified_file_parameters() -> Value {
             "end_line": {"type": "integer", "description": "End line for 'read' action (inclusive)."},
             "offset": {"type": "integer", "description": "Alias for start_line."},
             "limit": {"type": "integer", "description": "Number of lines to read."},
-            "mode": {"type": "string", "description": "Mode for 'read' ('slice' or 'indentation') or 'write' (e.g., 'fail_if_exists')."},
+            "mode": {"type": "string", "description": "Mode for 'read' ('slice' or 'indentation') or 'write' (e.g., 'fail_if_exists').", "default": "slice"},
+            "condense": {"type": "boolean", "description": "Condense long outputs to head/tail (default: true).", "default": true},
             "indentation": {
-                "description": "Indentation-aware read configuration. `true` enables indentation mode with defaults; `false` disables it.",
+                "description": "Indentation-aware read configuration. `true` enables indentation mode with defaults; omit when not using indentation mode.",
                 "anyOf": [
                     {"type": "boolean"},
                     {

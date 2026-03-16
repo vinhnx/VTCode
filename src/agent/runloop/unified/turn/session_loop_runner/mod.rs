@@ -5,16 +5,27 @@ mod plan_seed;
 
 use super::*;
 use crate::agent::runloop::git::compute_session_code_change_delta;
+use crate::agent::runloop::unified::overlay_prompt::{
+    OverlayWaitOutcome, show_overlay_and_wait,
+};
 use crate::agent::runloop::unified::plan_mode_state::render_plan_mode_next_step_hint;
 use crate::agent::runloop::unified::postamble::{ExitSummaryData, print_exit_summary};
 use crate::agent::runloop::unified::turn::turn_loop::TurnLoopOutcome;
 use crate::agent::runloop::welcome::SessionBootstrap;
 use crate::updater::{InlineUpdateOutcome, display_update_notice, run_inline_update_prompt};
+use std::sync::Arc;
 use vtcode_config::loader::SimpleConfigWatcher;
 use vtcode_core::core::agent::features::FeatureSet;
+use vtcode_core::core::interfaces::session::PlanModeEntrySource;
+use vtcode_tui::{
+    InlineHandle, InlineListItem, InlineListSelection, InlineSession, ListOverlayRequest,
+    OverlayRequest, OverlaySubmission,
+};
 
 const PLAN_APPROVED_EXECUTION_DIRECTIVE: &str = "Plan was approved. Start implementation immediately: execute the plan step by step beginning with the first pending step. Do not ask for another implementation confirmation.";
 const PLAN_APPROVED_EXECUTION_INPUT: &str = "Implement the approved plan now.";
+const STARTUP_PLAN_MODE_ENTER_ACTION: &str = "plan_mode:start_enter";
+const STARTUP_PLAN_MODE_STAY_ACTION: &str = "plan_mode:start_stay";
 use archive::{
     create_session_archive, refresh_runtime_debug_context_for_next_session, workspace_archive_label,
 };
@@ -27,7 +38,7 @@ use metrics::{
     estimate_history_bytes,
 };
 use plan_seed::load_active_plan_seed;
-use tokio::sync::mpsc;
+use tokio::sync::{Notify, mpsc};
 
 #[derive(Clone)]
 struct TurnHistoryCheckpoint {
@@ -245,13 +256,81 @@ fn build_exit_header_context_fast(
     }
 }
 
+async fn prompt_startup_plan_mode(
+    handle: &InlineHandle,
+    session: &mut InlineSession,
+    ctrl_c_state: &Arc<crate::agent::runloop::unified::state::CtrlCState>,
+    ctrl_c_notify: &Arc<Notify>,
+) -> Result<bool> {
+    let overlay = OverlayRequest::List(ListOverlayRequest {
+        title: "Enter Plan Mode?".to_string(),
+        lines: vec![
+            "Your configuration sets default editing mode to Plan.".to_string(),
+            "Plan Mode is read-only and blocks mutating tools.".to_string(),
+        ],
+        footer_hint: Some("You can toggle later with `/plan`.".to_string()),
+        items: vec![
+            InlineListItem {
+                title: "Enter Plan Mode".to_string(),
+                subtitle: Some("Switch to read-only planning.".to_string()),
+                badge: Some("Recommended".to_string()),
+                indent: 0,
+                selection: Some(InlineListSelection::ConfigAction(
+                    STARTUP_PLAN_MODE_ENTER_ACTION.to_string(),
+                )),
+                search_value: None,
+            },
+            InlineListItem {
+                title: "Stay in Edit Mode".to_string(),
+                subtitle: Some("Continue in edit mode.".to_string()),
+                badge: None,
+                indent: 0,
+                selection: Some(InlineListSelection::ConfigAction(
+                    STARTUP_PLAN_MODE_STAY_ACTION.to_string(),
+                )),
+                search_value: None,
+            },
+        ],
+        selected: Some(InlineListSelection::ConfigAction(
+            STARTUP_PLAN_MODE_ENTER_ACTION.to_string(),
+        )),
+        search: None,
+        hotkeys: Vec::new(),
+    });
+
+    let outcome = show_overlay_and_wait(
+        handle,
+        session,
+        overlay,
+        ctrl_c_state,
+        ctrl_c_notify,
+        |submission| match submission {
+            OverlaySubmission::Selection(InlineListSelection::ConfigAction(action))
+                if action == STARTUP_PLAN_MODE_ENTER_ACTION =>
+            {
+                Some(true)
+            }
+            OverlaySubmission::Selection(InlineListSelection::ConfigAction(action))
+                if action == STARTUP_PLAN_MODE_STAY_ACTION =>
+            {
+                Some(false)
+            }
+            OverlaySubmission::Selection(_) => Some(false),
+            _ => None,
+        },
+    )
+    .await?;
+
+    Ok(matches!(outcome, OverlayWaitOutcome::Submitted(true)))
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn run_single_agent_loop_unified_impl(
     config: &CoreAgentConfig,
     initial_vt_cfg: Option<VTCodeConfig>,
     _skip_confirmations: bool,
     full_auto: bool,
-    plan_mode: bool,
+    plan_mode_entry_source: PlanModeEntrySource,
     resume: Option<ResumeSession>,
     steering_receiver: &mut Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
 ) -> Result<()> {
@@ -489,9 +568,33 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         session_stats.rate_limiter = rate_limiter.clone();
         session_stats.validation_cache = validation_cache.clone();
         session_stats.vim_mode_enabled = vt_cfg.as_ref().is_some_and(|cfg| cfg.ui.vim_mode);
-        if plan_mode {
-            transition_to_plan_mode(&tool_registry, &mut session_stats, &handle, true, true).await;
+        if plan_mode_entry_source.should_auto_enter() {
+            transition_to_plan_mode(
+                &tool_registry,
+                &mut session_stats,
+                &handle,
+                plan_mode_entry_source,
+                true,
+                true,
+            )
+            .await;
             render_plan_mode_next_step_hint(&mut renderer)?;
+        } else if plan_mode_entry_source.requires_startup_prompt() && resume_ref.is_none() {
+            let should_enter =
+                prompt_startup_plan_mode(&handle, &mut session, &ctrl_c_state, &ctrl_c_notify)
+                    .await?;
+            if should_enter {
+                transition_to_plan_mode(
+                    &tool_registry,
+                    &mut session_stats,
+                    &handle,
+                    plan_mode_entry_source,
+                    true,
+                    true,
+                )
+                .await;
+                render_plan_mode_next_step_hint(&mut renderer)?;
+            }
         }
         let mut linked_directories: Vec<LinkedDirectory> = Vec::with_capacity(4);
         let mut model_picker_state: Option<ModelPickerState> = None;
@@ -805,7 +908,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                                         timed_out_phase,
                                         attempted_tool_calls,
                                         active_pty_sessions_before_cancel,
-                                        plan_mode,
+                                        session_stats.is_plan_mode(),
                                         had_tool_activity,
                                     );
                                 renderer.line(MessageStyle::Error, &timeout_message)?;

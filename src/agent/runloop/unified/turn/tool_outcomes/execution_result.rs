@@ -9,14 +9,11 @@ use vtcode_core::tools::registry::labels::tool_action_label;
 use vtcode_core::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::mcp_events;
-use crate::agent::runloop::unified::plan_mode_state::plan_mode_still_active_hint_with_fallback;
 use crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_from_turn_ctx;
 use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
-use crate::agent::runloop::unified::turn::turn_helpers::display_status;
 
 use super::helpers::{
-    EXIT_PLAN_MODE_REASON_AUTO_TRIGGER_ON_DENIAL, build_exit_plan_mode_args,
-    build_exit_plan_mode_call_id, check_is_argument_error, serialize_output, signature_key_for,
+    check_is_argument_error, serialize_output, signature_key_for,
 };
 
 use crate::agent::runloop::unified::turn::context::{
@@ -418,7 +415,6 @@ fn fallback_from_error(tool_name: &str, error_msg: &str) -> Option<(String, serd
 /// - Pushing tool responses to conversation history
 /// - Handling pipeline output (printing to UI)
 /// - Running post-tool-use hooks
-/// - Handling specific logic like "Plan Mode" auto-exit
 /// - Dispatching MCP events
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn handle_tool_execution_result<'a>(
@@ -459,15 +455,8 @@ pub(crate) async fn handle_tool_execution_result<'a>(
             .await?;
         }
         ToolExecutionStatus::Failure { error } => {
-            if let Some(outcome) = handle_failure(
-                t_ctx,
-                tool_call_id,
-                tool_name,
-                args_val,
-                error,
-                tool_start_time,
-            )
-            .await?
+            if let Some(outcome) =
+                handle_failure(t_ctx, tool_call_id, tool_name, args_val, error).await?
             {
                 return Ok(Some(outcome));
             }
@@ -794,7 +783,6 @@ async fn handle_failure<'a>(
     tool_name: &str,
     args_val: &serde_json::Value,
     error: &anyhow::Error,
-    tool_start_time: std::time::Instant,
 ) -> Result<Option<TurnHandlerOutcome>> {
     let error_str = error.to_string();
     if let Err(err) = notify_tool_failure(tool_name, &error_str, None).await {
@@ -807,13 +795,6 @@ async fn handle_failure<'a>(
 
     let is_plan_mode_denial = agent_execution::is_plan_mode_denial(&error_str);
     let blocked_or_denied_failure = is_blocked_or_denied_failure(&error_str);
-    let should_auto_exit = is_plan_mode_denial
-        && t_ctx.ctx.session_stats.is_plan_mode()
-        && !t_ctx
-            .ctx
-            .tool_registry
-            .is_plan_mode_allowed(tool_name, args_val);
-
     let (user_msg, hint) =
         crate::agent::runloop::unified::turn::turn_helpers::format_tool_error_for_user(
             tool_name, &error_str,
@@ -851,13 +832,6 @@ async fn handle_failure<'a>(
     push_tool_error_response(t_ctx, tool_call_id, tool_name, error_msg, "execution").await;
 
     record_request_user_input_interview_result(t_ctx.ctx, tool_name, None);
-
-    // Handle auto-exit from Plan Mode if applicable
-    if should_auto_exit
-        && let Some(outcome) = handle_plan_mode_auto_exit(t_ctx, tool_start_time).await?
-    {
-        return Ok(Some(outcome));
-    }
 
     if blocked_or_denied_failure {
         let streak = t_ctx.ctx.record_blocked_tool_call();
@@ -1002,45 +976,6 @@ async fn run_post_tool_hooks<'a>(
         }
     }
     Ok(())
-}
-
-async fn handle_plan_mode_auto_exit<'a, 'b>(
-    t_ctx: &mut super::handlers::ToolOutcomeContext<'a, 'b>,
-    trigger_start_time: std::time::Instant,
-) -> Result<Option<TurnHandlerOutcome>> {
-    let auto_exit_already_attempted = *t_ctx.ctx.auto_exit_plan_mode_attempted;
-
-    if auto_exit_already_attempted {
-        display_status(
-            t_ctx.ctx.renderer,
-            &plan_mode_still_active_hint_with_fallback(),
-        )?;
-        return Ok(None);
-    }
-
-    *t_ctx.ctx.auto_exit_plan_mode_attempted = true;
-
-    let exit_args = build_exit_plan_mode_args(EXIT_PLAN_MODE_REASON_AUTO_TRIGGER_ON_DENIAL);
-
-    // Generate a unique ID for the injected call
-    let exit_call_id = build_exit_plan_mode_call_id(
-        "call_auto_exit_plan_mode",
-        trigger_start_time.elapsed().as_millis(),
-    );
-
-    // HP-6: Use the unified execute_and_handle_tool_call so that recording and side-effects happen correctly
-    let outcome = super::handlers::execute_and_handle_tool_call(
-        t_ctx.ctx,
-        t_ctx.repeated_tool_attempts,
-        t_ctx.turn_modified_files,
-        exit_call_id,
-        tool_names::EXIT_PLAN_MODE,
-        exit_args,
-        None,
-    )
-    .await?;
-
-    Ok(outcome)
 }
 
 /// Record MCP tool execution event for the UI panel.

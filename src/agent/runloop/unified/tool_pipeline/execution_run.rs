@@ -270,6 +270,7 @@ pub(crate) async fn run_tool_call_with_args(
         ctrl_c_state,
         ctrl_c_notify,
         max_tool_retries,
+        prevalidated,
     )
     .await
     {

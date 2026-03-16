@@ -4,6 +4,7 @@ use serde_json::{Value, json};
 use tokio::sync::Notify;
 use vtcode_core::config::constants::tools;
 use vtcode_core::config::loader::VTCodeConfig;
+use vtcode_core::core::interfaces::session::PlanModeEntrySource;
 use vtcode_core::tools::handlers::plan_mode::PlanLifecyclePhase;
 use vtcode_tui::PlanContent;
 use vtcode_tui::{
@@ -63,12 +64,14 @@ pub(super) async fn handle_enter_plan_mode(
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
     max_tool_retries: usize,
+    allow_preapproved: bool,
 ) -> Option<ToolPipelineOutcome> {
     if name != tools::ENTER_PLAN_MODE {
         return None;
     }
 
-    let already_approved = args_val
+    let already_approved = allow_preapproved
+        && args_val
         .get("approved")
         .and_then(Value::as_bool)
         .unwrap_or(false);
@@ -120,6 +123,7 @@ pub(super) async fn handle_enter_plan_mode(
                 ctx.tool_registry,
                 ctx.session_stats,
                 ctx.handle,
+                PlanModeEntrySource::UserRequest,
                 false,
                 false,
             )
@@ -424,6 +428,7 @@ async fn handle_enter_pending_confirmation(
                 ctx.tool_registry,
                 ctx.session_stats,
                 ctx.handle,
+                PlanModeEntrySource::UserRequest,
                 false,
                 false,
             )

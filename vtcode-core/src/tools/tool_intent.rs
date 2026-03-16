@@ -297,10 +297,14 @@ fn unified_exec_intent(args: &Value) -> ToolIntent {
     let has_exec_input = unified_exec_has_input(args);
     let readonly_unified_action = unified_exec_action(args)
         .map(|action| {
-            action.eq_ignore_ascii_case("poll")
-                || action.eq_ignore_ascii_case("list")
-                || action.eq_ignore_ascii_case("inspect")
-                || (action.eq_ignore_ascii_case("continue") && !has_exec_input)
+            if action.eq_ignore_ascii_case("run") {
+                is_readonly_unified_exec_command(args)
+            } else {
+                action.eq_ignore_ascii_case("poll")
+                    || action.eq_ignore_ascii_case("list")
+                    || action.eq_ignore_ascii_case("inspect")
+                    || (action.eq_ignore_ascii_case("continue") && !has_exec_input)
+            }
         })
         .unwrap_or(false);
 
@@ -308,6 +312,32 @@ fn unified_exec_intent(args: &Value) -> ToolIntent {
         ToolIntent::read_only_unified_action()
     } else {
         ToolIntent::mutating()
+    }
+}
+
+fn is_readonly_unified_exec_command(args: &Value) -> bool {
+    let Ok(Some(parts)) = crate::tools::command_args::command_words(args) else {
+        return false;
+    };
+
+    if parts.iter().any(|part| part == "--dry-run") {
+        return true;
+    }
+
+    let Some(command) = parts.first().map(String::as_str) else {
+        return false;
+    };
+
+    match command {
+        "rg" | "ls" | "cat" => true,
+        "git" => matches!(parts.get(1).map(String::as_str), Some("status")),
+        "cargo" => matches!(parts.get(1).map(String::as_str), Some("check" | "test")),
+        "npm" | "pnpm" | "yarn" => match parts.get(1).map(String::as_str) {
+            Some("test") => true,
+            Some("run") => matches!(parts.get(2).map(String::as_str), Some("test")),
+            _ => false,
+        },
+        _ => false,
     }
 }
 
@@ -681,11 +711,33 @@ mod tests {
     fn unified_exec_run_is_mutating_and_destructive() {
         let intent = classify_tool_intent(
             tools::UNIFIED_EXEC,
-            &json!({"action": "run", "command": "ls"}),
+            &json!({"action": "run", "command": "echo hi"}),
         );
         assert!(intent.mutating);
         assert!(intent.destructive);
         assert!(!intent.retry_safe);
+    }
+
+    #[test]
+    fn unified_exec_run_allowlisted_is_read_only() {
+        let intent = classify_tool_intent(
+            tools::UNIFIED_EXEC,
+            &json!({"action": "run", "command": "rg plan_mode src"}),
+        );
+        assert!(!intent.mutating);
+        assert!(intent.readonly_unified_action);
+        assert!(intent.retry_safe);
+    }
+
+    #[test]
+    fn unified_exec_run_dry_run_is_read_only() {
+        let intent = classify_tool_intent(
+            tools::UNIFIED_EXEC,
+            &json!({"action": "run", "command": "npm install --dry-run"}),
+        );
+        assert!(!intent.mutating);
+        assert!(intent.readonly_unified_action);
+        assert!(intent.retry_safe);
     }
 
     #[test]
@@ -707,7 +759,7 @@ mod tests {
 
     #[test]
     fn unified_exec_cmd_alias_infers_run() {
-        let intent = classify_tool_intent(tools::UNIFIED_EXEC, &json!({"cmd": "ls -la"}));
+        let intent = classify_tool_intent(tools::UNIFIED_EXEC, &json!({"cmd": "echo hi"}));
         assert!(intent.mutating);
         assert!(intent.destructive);
         assert!(!intent.readonly_unified_action);

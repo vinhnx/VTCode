@@ -1,5 +1,6 @@
 use crate::agent::runloop::unified::state::SessionStats;
 use anyhow::Result;
+use vtcode_core::core::interfaces::session::PlanModeEntrySource;
 use vtcode_core::tools::handlers::plan_mode::PlanLifecyclePhase;
 use vtcode_core::tools::registry::ToolRegistry;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
@@ -38,6 +39,7 @@ pub(crate) async fn transition_to_plan_mode(
     tool_registry: &ToolRegistry,
     session_stats: &mut SessionStats,
     handle: &InlineHandle,
+    entry_source: PlanModeEntrySource,
     reset_plan_file: bool,
     reset_plan_baseline: bool,
 ) {
@@ -53,6 +55,7 @@ pub(crate) async fn transition_to_plan_mode(
     }
 
     session_stats.set_plan_mode(true);
+    session_stats.set_plan_mode_entry_source(entry_source);
     handle.set_editing_mode(EditingMode::Plan);
 }
 

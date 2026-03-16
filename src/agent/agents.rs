@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, ModelSelectionSource};
 use vtcode_core::core::interfaces::{SessionRuntime, SessionRuntimeParams};
+use vtcode_core::core::interfaces::session::PlanModeEntrySource;
 use vtcode_core::core::threads::{
     ArchivedSessionIntent, loaded_skills_from_session_listing, messages_from_session_listing,
 };
@@ -90,7 +91,7 @@ pub(crate) async fn run_single_agent_loop(
     initial_vt_cfg: Option<VTCodeConfig>,
     skip_confirmations: bool,
     full_auto: bool,
-    plan_mode: bool,
+    plan_mode_entry_source: PlanModeEntrySource,
     resume: Option<SessionContinuation>,
 ) -> Result<()> {
     let vt_cfg = prepare_session_vt_config(initial_vt_cfg, config);
@@ -102,7 +103,7 @@ pub(crate) async fn run_single_agent_loop(
         vt_cfg,
         skip_confirmations,
         full_auto,
-        plan_mode,
+        plan_mode_entry_source,
         resume,
         &mut steering_receiver,
     );
