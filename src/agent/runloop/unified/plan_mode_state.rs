@@ -1,5 +1,6 @@
 use crate::agent::runloop::unified::state::SessionStats;
 use anyhow::Result;
+use vtcode_core::tools::handlers::plan_mode::PlanLifecyclePhase;
 use vtcode_core::tools::registry::ToolRegistry;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_tui::{EditingMode, InlineHandle};
@@ -43,6 +44,7 @@ pub(crate) async fn transition_to_plan_mode(
     tool_registry.enable_plan_mode();
     let plan_state = tool_registry.plan_mode_state();
     plan_state.enable();
+    plan_state.set_phase(PlanLifecyclePhase::ActiveDrafting);
     if reset_plan_file {
         plan_state.set_plan_file(None).await;
     }

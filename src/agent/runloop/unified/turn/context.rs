@@ -1,8 +1,4 @@
 use crate::agent::runloop::mcp_events;
-use crate::agent::runloop::unified::plan_confirmation::{
-    PlanConfirmationOutcome, execute_plan_confirmation,
-};
-use crate::agent::runloop::unified::plan_mode_state::transition_to_edit_mode;
 use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
 use std::sync::Arc;
@@ -22,9 +18,9 @@ use vtcode_core::exec::events::{
 use vtcode_core::hooks::{LifecycleHookEngine, SessionEndReason};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::llm::providers::ReasoningSegment;
+use vtcode_core::tools::handlers::plan_mode::{PlanLifecyclePhase, persist_plan_draft};
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_tui::InlineHandle;
-use vtcode_tui::PlanContent;
 
 use crate::agent::runloop::unified::run_loop_context::RecoveryMode;
 use crate::agent::runloop::unified::state::CtrlCState;
@@ -788,7 +784,10 @@ impl<'a> TurnProcessingContext<'a> {
             && let Some(plan_text) = proposed_plan
         {
             self.emit_plan_events(&plan_text).await;
-            self.maybe_prompt_plan_implementation(plan_text).await?;
+            persist_plan_draft(&self.tool_registry.plan_mode_state(), &plan_text).await?;
+            self.tool_registry
+                .plan_mode_state()
+                .set_phase(PlanLifecyclePhase::DraftReady);
         }
 
         Ok(TurnHandlerOutcome::Break(TurnLoopResult::Completed))
@@ -829,51 +828,6 @@ impl<'a> TurnProcessingContext<'a> {
         let _ = emitter.emit(ThreadEvent::ItemCompleted(ItemCompletedEvent {
             item: completed_item,
         }));
-    }
-
-    async fn maybe_prompt_plan_implementation(&mut self, plan_text: String) -> anyhow::Result<()> {
-        let require_confirmation = self
-            .vt_cfg
-            .map(|cfg| cfg.agent.require_plan_confirmation)
-            .unwrap_or(true);
-
-        if !require_confirmation {
-            transition_to_edit_mode(self.tool_registry, self.session_stats, self.handle, true)
-                .await;
-            return Ok(());
-        }
-
-        let plan_file = self
-            .tool_registry
-            .plan_mode_state()
-            .get_plan_file()
-            .await
-            .map(|path| path.to_string_lossy().to_string());
-        let plan =
-            PlanContent::from_markdown("Implementation Plan".to_string(), &plan_text, plan_file);
-
-        let confirmation = execute_plan_confirmation(
-            self.handle,
-            self.session,
-            plan,
-            self.ctrl_c_state,
-            self.ctrl_c_notify,
-        )
-        .await?;
-
-        if matches!(
-            confirmation,
-            PlanConfirmationOutcome::Execute | PlanConfirmationOutcome::AutoAccept
-        ) {
-            self.handle.set_skip_confirmations(matches!(
-                confirmation,
-                PlanConfirmationOutcome::AutoAccept
-            ));
-            transition_to_edit_mode(self.tool_registry, self.session_stats, self.handle, true)
-                .await;
-        }
-
-        Ok(())
     }
 }
 

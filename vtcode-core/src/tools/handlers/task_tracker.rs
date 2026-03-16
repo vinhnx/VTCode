@@ -12,7 +12,7 @@
 //! - `list`: Show the current task checklist and its status
 //! - `add`: Add a new item to an existing checklist
 
-use super::plan_mode::PlanModeState;
+use super::plan_mode::{PlanModeState, plan_file_for_tracker_file, sync_tracker_into_plan_file};
 use super::plan_task_tracker::{PlanTaskTrackerArgs, PlanTaskTrackerTool};
 use std::str::FromStr;
 
@@ -523,6 +523,11 @@ impl TaskTrackerTool {
                 tracker_file.display()
             )
         })?;
+        if let Some(plan_file) = plan_file_for_tracker_file(tracker_file)
+            && plan_file.exists()
+        {
+            sync_tracker_into_plan_file(&plan_file, &checklist.to_plan_markdown()).await?;
+        }
         Ok(())
     }
 
