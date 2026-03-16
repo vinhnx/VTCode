@@ -6,7 +6,11 @@ use std::time::Duration;
 use vtcode_core::llm::provider::LLMError;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
-/// Centralized error display with consistent formatting
+/// Centralized error display with consistent formatting.
+///
+/// Shows two lines for LLM errors:
+/// 1. Human-friendly error message (extracted from the JSON body)
+/// 2. Full JSON response body for debugging
 pub(crate) fn display_error(
     renderer: &mut AnsiRenderer,
     category: &str,
@@ -16,28 +20,83 @@ pub(crate) fn display_error(
     renderer.line(
         MessageStyle::Error,
         &format!("{}: {}", category, error_message_for_user(error)),
-    )
+    )?;
+    // Show full JSON body for LLM errors when available and different from the message
+    if let Some(llm_err) = error.downcast_ref::<LLMError>() {
+        if let Some(raw_body) = llm_error_raw_body(llm_err) {
+            let human = llm_error_human_message(llm_err);
+            if raw_body != human {
+                renderer.line(
+                    MessageStyle::Error,
+                    &format!("Full response: {}", raw_body),
+                )?;
+            }
+        }
+    }
+    Ok(())
 }
 
 pub(crate) fn error_message_for_user(error: &anyhow::Error) -> String {
     let message = error
         .downcast_ref::<LLMError>()
-        .map(llm_error_message_for_user)
+        .map(llm_error_human_message)
         .unwrap_or_else(|| error.to_string());
     sanitize_error_for_display(&message)
 }
 
-fn llm_error_message_for_user(error: &LLMError) -> String {
+/// Extract the human-friendly error message from an LLMError.
+///
+/// For errors with metadata containing a raw body, this tries to parse a
+/// human-readable message from the JSON. For errors that already have a
+/// formatted `message` field, it returns that directly.
+fn llm_error_human_message(error: &LLMError) -> String {
     match error {
-        LLMError::Authentication { message, .. }
-        | LLMError::InvalidRequest { message, .. }
-        | LLMError::Network { message, .. }
-        | LLMError::Provider { message, .. } => message.clone(),
+        LLMError::Authentication { metadata, .. }
+        | LLMError::InvalidRequest { metadata, .. }
+        | LLMError::Network { metadata, .. }
+        | LLMError::Provider { metadata, .. } => {
+            // Try to extract a clean message from the raw body stored in metadata
+            if let Some(meta) = metadata {
+                if let Some(raw) = &meta.message {
+                    let human =
+                        vtcode_core::llm::providers::error_handling::extract_human_error_message(
+                            raw,
+                        );
+                    if human != *raw {
+                        return human;
+                    }
+                }
+            }
+            // Fall back to the formatted message field
+            match error {
+                LLMError::Authentication { message, .. }
+                | LLMError::InvalidRequest { message, .. }
+                | LLMError::Network { message, .. }
+                | LLMError::Provider { message, .. } => message.clone(),
+                _ => error.to_string(),
+            }
+        }
         LLMError::RateLimit { metadata } => metadata
             .as_ref()
-            .and_then(|meta| meta.message.clone())
+            .and_then(|meta| {
+                meta.message.as_ref().map(|raw| {
+                    vtcode_core::llm::providers::error_handling::extract_human_error_message(raw)
+                })
+            })
             .unwrap_or_else(|| error.to_string()),
     }
+}
+
+/// Extract the raw body string from LLMError metadata, if available.
+fn llm_error_raw_body(error: &LLMError) -> Option<String> {
+    let metadata = match error {
+        LLMError::Authentication { metadata, .. }
+        | LLMError::InvalidRequest { metadata, .. }
+        | LLMError::Network { metadata, .. }
+        | LLMError::Provider { metadata, .. }
+        | LLMError::RateLimit { metadata, .. } => metadata.as_ref(),
+    };
+    metadata.and_then(|meta| meta.message.clone())
 }
 
 /// Centralized status message display
@@ -180,5 +239,75 @@ mod tests {
             error_message_for_user(&error),
             "Project rate limit exceeded for model gpt-5.2."
         );
+    }
+
+    #[test]
+    fn user_error_extracts_detail_field_from_json_body() {
+        let body = r#"{"detail":"The 'gpt-5.4' model is not supported with this method."}"#;
+        let error = anyhow::Error::new(LLMError::InvalidRequest {
+            message: "Invalid request".to_string(),
+            metadata: Some(vtcode_core::llm::provider::LLMErrorMetadata::new(
+                "OpenAI",
+                Some(400),
+                Some("invalid_request".to_string()),
+                None,
+                None,
+                None,
+                Some(body.to_string()),
+            )),
+        });
+
+        assert_eq!(
+            error_message_for_user(&error),
+            "The 'gpt-5.4' model is not supported with this method."
+        );
+    }
+
+    #[test]
+    fn user_error_extracts_nested_error_message_from_json_body() {
+        let body = r#"{"error":{"message":"Model not found","type":"invalid_request_error","code":"model_not_found"}}"#;
+        let error = anyhow::Error::new(LLMError::Provider {
+            message: "Provider error".to_string(),
+            metadata: Some(vtcode_core::llm::provider::LLMErrorMetadata::new(
+                "OpenAI",
+                Some(404),
+                None,
+                None,
+                None,
+                None,
+                Some(body.to_string()),
+            )),
+        });
+
+        assert_eq!(error_message_for_user(&error), "Model not found");
+    }
+
+    #[test]
+    fn raw_body_extracted_from_metadata() {
+        let body = r#"{"detail":"Some error detail"}"#;
+        let llm_err = LLMError::InvalidRequest {
+            message: "Invalid request".to_string(),
+            metadata: Some(vtcode_core::llm::provider::LLMErrorMetadata::new(
+                "OpenAI",
+                Some(400),
+                None,
+                None,
+                None,
+                None,
+                Some(body.to_string()),
+            )),
+        };
+
+        let raw = llm_error_raw_body(&llm_err);
+        assert_eq!(raw.as_deref(), Some(body));
+    }
+
+    #[test]
+    fn raw_body_none_when_no_metadata() {
+        let llm_err = LLMError::Provider {
+            message: "some error".to_string(),
+            metadata: None,
+        };
+        assert!(llm_error_raw_body(&llm_err).is_none());
     }
 }

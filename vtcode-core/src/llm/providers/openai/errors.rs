@@ -37,7 +37,14 @@ fn parse_openai_error_details(body: &str) -> OpenAIErrorDetails {
             .get("message")
             .and_then(Value::as_str)
             .map(ToOwned::to_owned)
-            .filter(|value| !value.trim().is_empty()),
+            .filter(|value| !value.trim().is_empty())
+            .or_else(|| {
+                // FastAPI / alternate: {"detail": "..."}
+                json.get("detail")
+                    .and_then(Value::as_str)
+                    .map(ToOwned::to_owned)
+                    .filter(|value| !value.trim().is_empty())
+            }),
         code: error
             .get("code")
             .and_then(Value::as_str)

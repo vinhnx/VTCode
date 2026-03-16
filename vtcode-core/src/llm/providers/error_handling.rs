@@ -168,34 +168,7 @@ fn parse_api_error_with_metadata(
     response_metadata: ApiResponseMetadata,
 ) -> LLMError {
     // Try to extract a meaningful error message from JSON
-    let error_message = if let Ok(json) = serde_json::from_str::<Value>(body) {
-        // OpenAI/DeepSeek/ZAI/Anthropic format: {"error": {"message": "..."}}
-        if let Some(msg) = json
-            .get("error")
-            .and_then(|e| e.get("message"))
-            .and_then(|m| m.as_str())
-        {
-            msg.to_string()
-        }
-        // HuggingFace simple format: {"error": "..."}
-        else if let Some(msg) = json.get("error").and_then(|e| e.as_str()) {
-            msg.to_string()
-        }
-        // Gemini alternate format: {"error": {"status": "...", "code": ...}}
-        else if let Some(status_msg) = json
-            .get("error")
-            .and_then(|e| e.get("status"))
-            .and_then(|s| s.as_str())
-        {
-            status_msg.to_string()
-        }
-        // Fallback to raw body
-        else {
-            body.to_string()
-        }
-    } else {
-        body.to_string()
-    };
+    let error_message = extract_human_error_message(body);
 
     // Categorize by status code
     let status_code = status.as_u16();
@@ -271,6 +244,67 @@ fn parse_api_error_with_metadata(
     }
 }
 
+/// Extract the most human-readable error message from a provider's JSON error body.
+///
+/// Handles all known provider response schemas:
+/// - OpenAI/DeepSeek/ZAI/Anthropic: `{"error": {"message": "..."}}`
+/// - HuggingFace: `{"error": "..."}`
+/// - Gemini: `{"error": {"status": "..."}}`
+/// - FastAPI / OpenAI alternate: `{"detail": "..."}`
+/// - Generic: `{"message": "..."}`
+///
+/// Falls back to the raw body if no known field is found.
+pub fn extract_human_error_message(body: &str) -> String {
+    let Ok(json) = serde_json::from_str::<Value>(body) else {
+        return body.to_string();
+    };
+
+    // OpenAI/DeepSeek/ZAI/Anthropic: {"error": {"message": "..."}}
+    if let Some(msg) = json
+        .get("error")
+        .and_then(|e| e.get("message"))
+        .and_then(|m| m.as_str())
+        .filter(|s| !s.trim().is_empty())
+    {
+        return msg.to_string();
+    }
+    // HuggingFace simple: {"error": "..."}
+    if let Some(msg) = json
+        .get("error")
+        .and_then(|e| e.as_str())
+        .filter(|s| !s.trim().is_empty())
+    {
+        return msg.to_string();
+    }
+    // FastAPI / OpenAI alternate: {"detail": "..."}
+    if let Some(msg) = json
+        .get("detail")
+        .and_then(|d| d.as_str())
+        .filter(|s| !s.trim().is_empty())
+    {
+        return msg.to_string();
+    }
+    // Gemini: {"error": {"status": "..."}}
+    if let Some(msg) = json
+        .get("error")
+        .and_then(|e| e.get("status"))
+        .and_then(|s| s.as_str())
+        .filter(|s| !s.trim().is_empty())
+    {
+        return msg.to_string();
+    }
+    // Top-level message: {"message": "..."}
+    if let Some(msg) = json
+        .get("message")
+        .and_then(|m| m.as_str())
+        .filter(|s| !s.trim().is_empty())
+    {
+        return msg.to_string();
+    }
+
+    body.to_string()
+}
+
 fn extract_response_metadata(response: &Response) -> ApiResponseMetadata {
     ApiResponseMetadata {
         request_id: extract_header(
@@ -338,5 +372,59 @@ mod tests {
             }
             other => panic!("expected rate limit error, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn extract_openai_error_message() {
+        let body = r#"{"error":{"message":"Model not found","type":"invalid_request_error"}}"#;
+        assert_eq!(extract_human_error_message(body), "Model not found");
+    }
+
+    #[test]
+    fn extract_detail_field() {
+        let body = r#"{"detail":"The 'gpt-5.4' model is not supported with this method."}"#;
+        assert_eq!(
+            extract_human_error_message(body),
+            "The 'gpt-5.4' model is not supported with this method."
+        );
+    }
+
+    #[test]
+    fn extract_huggingface_error_string() {
+        let body = r#"{"error":"Model is currently loading"}"#;
+        assert_eq!(
+            extract_human_error_message(body),
+            "Model is currently loading"
+        );
+    }
+
+    #[test]
+    fn extract_top_level_message() {
+        let body = r#"{"message":"Unauthorized access"}"#;
+        assert_eq!(
+            extract_human_error_message(body),
+            "Unauthorized access"
+        );
+    }
+
+    #[test]
+    fn extract_gemini_status() {
+        let body = r#"{"error":{"status":"PERMISSION_DENIED","code":403}}"#;
+        assert_eq!(
+            extract_human_error_message(body),
+            "PERMISSION_DENIED"
+        );
+    }
+
+    #[test]
+    fn extract_falls_back_to_raw_body() {
+        let body = "Internal Server Error";
+        assert_eq!(extract_human_error_message(body), body);
+    }
+
+    #[test]
+    fn extract_falls_back_for_unknown_json_schema() {
+        let body = r#"{"code":500,"status":"error"}"#;
+        assert_eq!(extract_human_error_message(body), body);
     }
 }
