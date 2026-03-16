@@ -142,6 +142,8 @@ impl Session {
             queue_overlay_version: 0,
             active_overlay: None,
             overlay_queue: VecDeque::new(),
+            last_overlay_list_selection: None,
+            last_overlay_list_was_last: false,
             header_rows: initial_header_rows,
             line_revision_counter: 0,
             first_dirty_line: None,

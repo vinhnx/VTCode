@@ -91,12 +91,18 @@ pub fn split_inline_modal_area(session: &Session, area: Rect) -> (Rect, Option<R
             lines = lines.saturating_add(1);
         }
         lines = lines.saturating_add(2); // question and spacing
-        let list_rows = wizard
+        let (list_rows, summary_rows) = wizard
             .steps
             .get(wizard.current_step)
-            .map(|step| list_desired_rows(&step.list))
-            .unwrap_or(1);
+            .map(|step| {
+                (
+                    list_desired_rows(&step.list),
+                    step.list.summary_line_rows(None),
+                )
+            })
+            .unwrap_or((1, 0));
         lines = lines.saturating_add(list_rows);
+        lines = lines.saturating_add(summary_rows);
         if wizard
             .steps
             .get(wizard.current_step)
@@ -125,6 +131,7 @@ pub fn split_inline_modal_area(session: &Session, area: Rect) -> (Rect, Option<R
         }
         if let Some(list) = modal.list.as_ref() {
             lines = lines.saturating_add(list_desired_rows(list));
+            lines = lines.saturating_add(list.summary_line_rows(modal.footer_hint.as_deref()));
         } else {
             lines = lines.saturating_add(1);
         }

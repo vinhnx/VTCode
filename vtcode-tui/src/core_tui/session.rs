@@ -18,8 +18,8 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use super::{
     style::{measure_text_width, ratatui_color_from_ansi, ratatui_style_from_inline},
     types::{
-        DiffPreviewState, InlineCommand, InlineEvent, InlineHeaderContext, InlineMessageKind,
-        InlineTextStyle, InlineTheme, OverlayRequest,
+        DiffPreviewState, InlineCommand, InlineEvent, InlineHeaderContext, InlineListSelection,
+        InlineMessageKind, InlineTextStyle, InlineTheme, OverlayRequest,
     },
 };
 use crate::config::constants::ui;
@@ -264,6 +264,8 @@ pub struct Session {
     queue_overlay_version: u64,
     active_overlay: Option<ActiveOverlay>,
     overlay_queue: VecDeque<OverlayRequest>,
+    last_overlay_list_selection: Option<InlineListSelection>,
+    last_overlay_list_was_last: bool,
     line_revision_counter: u64,
     /// Track the first line that needs reflow/update to avoid O(N) scans
     first_dirty_line: Option<usize>,

@@ -15,8 +15,8 @@ use ratatui::layout::Rect;
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::super::types::{
-    DiffOverlayRequest, DiffPreviewState, InlineEvent, ListOverlayRequest, ModalOverlayRequest,
-    OverlayRequest, WizardOverlayRequest,
+    DiffOverlayRequest, DiffPreviewState, InlineEvent, InlineListSelection, ListOverlayRequest,
+    ModalOverlayRequest, OverlayRequest, WizardOverlayRequest,
 };
 use super::status_requires_shimmer;
 use super::{
@@ -339,10 +339,19 @@ impl Session {
 
     fn activate_overlay(&mut self, request: OverlayRequest) {
         match request {
-            OverlayRequest::Modal(request) => self.activate_modal_overlay(request),
+            OverlayRequest::Modal(request) => {
+                self.clear_last_overlay_list_cache();
+                self.activate_modal_overlay(request);
+            }
             OverlayRequest::List(request) => self.activate_list_overlay(request),
-            OverlayRequest::Wizard(request) => self.activate_wizard_overlay(request),
-            OverlayRequest::Diff(request) => self.activate_diff_overlay(request),
+            OverlayRequest::Wizard(request) => {
+                self.clear_last_overlay_list_cache();
+                self.activate_wizard_overlay(request);
+            }
+            OverlayRequest::Diff(request) => {
+                self.clear_last_overlay_list_cache();
+                self.activate_diff_overlay(request);
+            }
         }
     }
 
@@ -351,6 +360,7 @@ impl Session {
             return;
         };
 
+        self.cache_last_overlay_list_state(&state);
         self.input_enabled = state.restore_input();
         self.cursor_visible = state.restore_cursor();
 
@@ -384,11 +394,16 @@ impl Session {
 
     fn activate_list_overlay(&mut self, request: ListOverlayRequest) {
         self.ensure_inline_lists_visible_for_trigger();
+        let anchor_to_bottom = self.should_anchor_list_to_bottom(request.selected.as_ref());
         let mut list_state = ModalListState::new(request.items, request.selected.clone());
         let search_state = request.search.map(ModalSearchState::from);
         if let Some(search) = &search_state {
             list_state.apply_search_with_preference(&search.query, request.selected);
         }
+        if anchor_to_bottom {
+            list_state.select_last();
+        }
+        self.clear_last_overlay_list_cache();
         let state = ModalState {
             title: request.title,
             lines: request.lines,
@@ -404,6 +419,32 @@ impl Session {
         self.cursor_visible = false;
         self.active_overlay = Some(ActiveOverlay::Modal(Box::new(state)));
         self.mark_dirty();
+    }
+
+    fn cache_last_overlay_list_state(&mut self, overlay: &ActiveOverlay) {
+        if let ActiveOverlay::Modal(state) = overlay
+            && let Some(list) = state.list.as_ref()
+        {
+            self.last_overlay_list_selection = list.current_selection();
+            self.last_overlay_list_was_last = list.selected_is_last();
+            return;
+        }
+
+        self.last_overlay_list_selection = None;
+        self.last_overlay_list_was_last = false;
+    }
+
+    fn should_anchor_list_to_bottom(
+        &self,
+        preferred: Option<&InlineListSelection>,
+    ) -> bool {
+        self.last_overlay_list_was_last
+            && self.last_overlay_list_selection.as_ref() == preferred
+    }
+
+    fn clear_last_overlay_list_cache(&mut self) {
+        self.last_overlay_list_selection = None;
+        self.last_overlay_list_was_last = false;
     }
 
     fn activate_wizard_overlay(&mut self, request: WizardOverlayRequest) {
