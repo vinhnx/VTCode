@@ -266,6 +266,20 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
 
     match key.code {
         KeyCode::Char('c') | KeyCode::Char('C') if has_control => {
+            // Copy selected text to clipboard if there's an active input selection
+            if session.input_enabled {
+                if let Some(text) = session.input_manager.selected_text() {
+                    MouseSelectionState::copy_to_clipboard(text);
+                    session.input_manager.clear_selection();
+                    session.mark_dirty();
+                    return None;
+                }
+            }
+            // Also check mouse selection in transcript
+            if session.mouse_selection.has_selection {
+                session.mark_dirty();
+                return None;
+            }
             session.mark_dirty();
             Some(InlineEvent::Interrupt)
         }
@@ -637,6 +651,14 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
 
             if has_command {
                 match ch {
+                    'c' | 'C' => {
+                        if let Some(text) = session.input_manager.selected_text() {
+                            MouseSelectionState::copy_to_clipboard(text);
+                            session.input_manager.clear_selection();
+                            session.mark_dirty();
+                        }
+                        return None;
+                    }
                     'a' | 'A' => {
                         session.move_to_start();
                         session.mark_dirty();

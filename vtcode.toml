@@ -94,7 +94,7 @@ default_editing_mode = "edit"
 # Default model to use
 # Default: "gpt-5.3-codex"
 # Type: `string`
-default_model = "gpt-5.1-codex"
+default_model = "gpt-5.4"
 
 # Enable an extra self-review pass to refine final responses
 # Default: false
@@ -217,7 +217,7 @@ temporal_context_use_utc = false
 # UI theme identifier controlling ANSI styling
 # Default: "ciapre"
 # Type: `string`
-theme = "ciapre"
+theme = "ciapre-blue"
 
 # Enable TODO planning helper mode for structured task management
 # Default: true

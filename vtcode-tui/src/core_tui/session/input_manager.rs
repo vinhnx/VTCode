@@ -125,6 +125,12 @@ impl InputManager {
         self.selection_range().is_some()
     }
 
+    /// Returns the currently selected text, if any.
+    pub fn selected_text(&self) -> Option<&str> {
+        let (start, end) = self.selection_range()?;
+        Some(&self.content[start..end])
+    }
+
     pub fn clear_selection(&mut self) {
         self.selection_anchor = None;
     }
