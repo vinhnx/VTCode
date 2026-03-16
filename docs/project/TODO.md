@@ -80,6 +80,9 @@ check and fix plan mode
 1. the agent auto switch to plan mode wihtout asking user
 2. the plan file is placeholder not real plan.
 3. double check /codex wiki and improve plan / collab mode
+4. improve questionair, it should use model llm to generate. with fallback of predefined questionair but shhould adhere to current context and scope of work. and also should be able to generate questionair based on the plan and task, not just a fixed questionair.
+
+=> read and apply to vtcode sytem https://deepwiki.com/search/1-how-does-codex-do-plan-colla_20886394-36a5-490b-abb2-e51108bb8d19?mode=fast
 
 ```
 ────────────────
