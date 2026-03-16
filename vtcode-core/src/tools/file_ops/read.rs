@@ -82,6 +82,35 @@ fn build_read_handler_args(args: &Value, canonical_path: &Path) -> Value {
             json!(canonical_path.to_string_lossy()),
         );
 
+        if let Some(indentation_value) = obj.get("indentation").cloned() {
+            match indentation_value {
+                Value::Bool(true) => {
+                    if !obj.contains_key("mode") {
+                        obj.insert("mode".to_string(), json!("indentation"));
+                    }
+                    obj.insert("indentation".to_string(), json!({}));
+                }
+                Value::Bool(false) | Value::Null => {
+                    obj.remove("indentation");
+                }
+                Value::String(text) if text.eq_ignore_ascii_case("true") => {
+                    if !obj.contains_key("mode") {
+                        obj.insert("mode".to_string(), json!("indentation"));
+                    }
+                    obj.insert("indentation".to_string(), json!({}));
+                }
+                Value::String(text) if text.eq_ignore_ascii_case("false") => {
+                    obj.remove("indentation");
+                }
+                Value::Object(_) => {
+                    if !obj.contains_key("mode") {
+                        obj.insert("mode".to_string(), json!("indentation"));
+                    }
+                }
+                _ => {}
+            }
+        }
+
         if !obj.contains_key("offset") && obj.contains_key("offset_lines") {
             obj.insert("offset".to_string(), obj["offset_lines"].clone());
         }
@@ -635,6 +664,51 @@ mod read_tests {
         assert_eq!(built["file_path"], json!("/tmp/example.txt"));
         assert_eq!(built["offset"], json!(1));
         assert!(built.get("limit").is_none());
+    }
+
+    #[test]
+    fn build_read_handler_args_normalizes_indentation() {
+        let canonical = Path::new("/tmp/example.txt");
+
+        let args_true = json!({
+            "path": "example.txt",
+            "indentation": true
+        });
+        let built_true = build_read_handler_args(&args_true, canonical);
+        assert_eq!(built_true["mode"], json!("indentation"));
+        assert_eq!(built_true["indentation"], json!({}));
+
+        let args_false = json!({
+            "path": "example.txt",
+            "indentation": false,
+            "mode": "slice"
+        });
+        let built_false = build_read_handler_args(&args_false, canonical);
+        assert!(built_false.get("indentation").is_none());
+        assert_eq!(built_false["mode"], json!("slice"));
+
+        let args_obj = json!({
+            "path": "example.txt",
+            "indentation": { "max_levels": 2 }
+        });
+        let built_obj = build_read_handler_args(&args_obj, canonical);
+        assert_eq!(built_obj["mode"], json!("indentation"));
+        assert_eq!(built_obj["indentation"]["max_levels"], json!(2));
+
+        let args_true_str = json!({
+            "path": "example.txt",
+            "indentation": "true"
+        });
+        let built_true_str = build_read_handler_args(&args_true_str, canonical);
+        assert_eq!(built_true_str["mode"], json!("indentation"));
+        assert_eq!(built_true_str["indentation"], json!({}));
+
+        let args_false_str = json!({
+            "path": "example.txt",
+            "indentation": "false"
+        });
+        let built_false_str = build_read_handler_args(&args_false_str, canonical);
+        assert!(built_false_str.get("indentation").is_none());
     }
 
     #[test]

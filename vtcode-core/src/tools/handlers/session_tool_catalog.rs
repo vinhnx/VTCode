@@ -458,8 +458,24 @@ pub(crate) fn unified_file_parameters() -> Value {
             "end_line": {"type": "integer", "description": "End line for 'read' action (inclusive)."},
             "offset": {"type": "integer", "description": "Alias for start_line."},
             "limit": {"type": "integer", "description": "Number of lines to read."},
-            "mode": {"type": "string", "description": "Mode for 'read' (e.g., 'head', 'tail') or 'write' (e.g., 'fail_if_exists')."},
-            "indentation": {"type": "boolean", "description": "Include indentation info in 'read' output.", "default": false}
+            "mode": {"type": "string", "description": "Mode for 'read' ('slice' or 'indentation') or 'write' (e.g., 'fail_if_exists')."},
+            "indentation": {
+                "description": "Indentation-aware read configuration. `true` enables indentation mode with defaults; `false` disables it.",
+                "anyOf": [
+                    {"type": "boolean"},
+                    {
+                        "type": "object",
+                        "properties": {
+                            "anchor_line": {"type": "integer", "description": "Optional explicit anchor line; defaults to offset when omitted."},
+                            "max_levels": {"type": "integer", "description": "Maximum indentation depth to collect; 0 means unlimited."},
+                            "include_siblings": {"type": "boolean", "description": "Include sibling blocks at the same indentation level."},
+                            "include_header": {"type": "boolean", "description": "Include header lines above the anchor block."},
+                            "max_lines": {"type": "integer", "description": "Optional hard cap on returned lines; defaults to the global limit."}
+                        },
+                        "additionalProperties": false
+                    }
+                ]
+            }
         }
     })
 }
