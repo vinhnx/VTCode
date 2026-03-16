@@ -2247,7 +2247,7 @@ fix circuit breaker happens often.
 
 ===
 
-fix Blocked duplicate task_tracker causing planning mode doesn't work
+fix Blocked duplicate task_tracker causing planning mode doesn't work. agent stop and failed in plan mode
 
 ```
 .create in the same turn. Continue with │
@@ -4618,4 +4618,124 @@ check and fix this issue from vtcode logs above, then retry exploring the core a
 2026-03-16T10:40:40.852315Z  WARN tool_execution{tool=unified_file requested=unified_file session_id=session-1773657354654 task_id=}: vtcode_core::tools::registry::execution_facade: Tool circuit breaker tripped after consecutive failures tool=unified_file category=standard
 2026-03-16T10:40:40.852355Z DEBUG tool_execution{tool=unified_file requested=unified_file session_id=session-1773657354654 task_id=}: vtcode_core::tools::registry::execution_facade: exit
 2026-03-16T10:40:40.852369Z DEBUG tool_execution{tool=unified_file requested=unified_file session_id=session-1773657354654 task_id=}: vtcode_core::tools::registry::execution_facade: close time.busy=854µs time.idle=38.7µs
+```
+
+===
+
+Fix plan mode questionaiare render raw json in the questions
+
+```
+╭> VT Code (0.89.1)──────────────────────────────────────────────────────────╮
+│OpenAI (ChatGPT) gpt-5.1-codex (128K) low | Accept edits | Search: ripgrep ·│
+╰────────────────────────────────────────────────────────────────────────────╯
+  └ Strictness: relaxed
+  └ Debug query: pattern
+  └ Detail level: name-only
+  └ Max results: 20
+  └ Context lines: 2
+  └ Max bytes: 0
+  └ Timeout secs: 120
+
+     • Explored docs/project/TODO.md “CORE AGENT LOOP OVERVIEW” section plus
+   docs/modules/vtcode_docs_map.md pointers.
+     • Core loop orchestrates user/assistant turns in
+   src/agent/runloop/unified/*: turn.rs drives turn phases, state.rs tracks se
+   ssion stats, context_manager.rs trims history, tool_pipeline.rs handles asy
+   nc tool exec, tool_routing.rs enforces HITL approval, ui_interaction.rs ren
+   ders streaming output, and MCP/ACP adapters wire events back to TUI and ext
+   ernal protocols.
+     • Supporting docs: docs/project/project_analysis.md (runloop decompositio
+   n, hotspots), docs/guides/async-architecture.md and
+   docs/async/ASYNC_ARCHITECTURE.md (concurrency patterns),
+   docs/modules/vtcode_exec_events.md (event stream),
+   docs/tools/JUSTIFICATION_SYSTEM.md (approval path).
+
+
+
+
+
+
+ Continue, or @files, /commands, Shift+Tab: cycle modes, Enter/Tab: queue,
+
+Processing (Esc, Ctrl+C, or /stop to stop) IDE Context (VS Code): .codex/co…
+Plan
+Question 1/1 (1 unanswered)
+How should the work be decomposed into concrete implementation steps, includin
+g target files or modules for each slice?
+tab to add notes | enter to submit answer
+ctrl + n next question | esc to interrupt
+ 1. Dependency-first slices (Recommended)
+ Order 3-7 steps around dependency boundaries touching {"query":"CORE AGENT LO
+ OP OVERVIEW","matches":[{"type":"begin","data":{"path":{"text":"./docs/module
+ s/vtcode_docs_map.md"}}},{"type":"context","data":{"path":{"text":"./docs/mod
+ ules/vtcode_docs_map.md"},"lines":{"text":"\n"},"line_number":516,"absolute_o
+ ffset":35324,"submatches":[]}},{"type":"context","data":{"path":{"text":"./do
+ cs/modules/vtcode_docs_map.md"},"lines":{"text":"- **File**: `docs/project/TO
+ DO.md`\n"},"line_number":517,"absolute_offset":35325,"submatches":[]}},{"type
+ ":"match","data":{"path":{"text":"./docs/modules/vtcode_docs_map.md"},"lines"
+ :{"text":"  - **Content**: CORE AGENT LOOP OVERVIEW\n"},"line_number":518,"ab
+ solute_offset":35360,"submatches":[{"match":{"text":"CORE AGENT LOOP OVERVIEW
+ "},"start":17,"end":41}]}},{"type":"context","data":{"path":{"text":"./docs/m
+ odules/vtcode_docs_map.md"},"lines":{"text":"  - **Topics**: Summary, Impleme
+ ntation Steps, Test Cases and Validation, Assumptions and Defaults, Plan of W
+```
+
+===
+
+check plan mode, after interview users with questionaire, the agent show "Here’s the decomposition" with raw plan and then stop. It should show a HITL inline interactive modal with implement tasks or stay in plan mode and edit explore again, and refine. currently user has to nudge implement manully.
+
+```
+╭> VT Code (0.89.1)──────────────────────────────────────────────────────────╮
+│OpenAI (ChatGPT) gpt-5.1-codex (128K) low | Accept edits | Search: ripgrep ·│
+╰────────────────────────────────────────────────────────────────────────────╯
+     <plan>
+     1. **Inventory source docs** → files: `docs/project/project_analysis.md`,
+    `docs/guides/async-architecture.md`, `docs/tools/JUSTIFICATION_SYSTEM.md`,
+    `docs/modules/vtcode_docs_map.md` → verify: capture relevant sections summ
+   arizing runloop responsibilities.
+     2. **Map runloop modules** → files: `src/agent/runloop/unified/turn.rs`,
+   `state.rs`, `context_manager.rs`, `tool_pipeline.rs`, `tool_routing.rs`, `u
+   i_interaction.rs`, `session_runtime.rs` → verify: list each module’s role i
+   n the core loop and confirm via inline comments/tests.
+     3. **Trace execution flow** → files: same as step 2 plus `src/tui.rs` (ev
+   ent loop), `vtcode-core/src/core/agent/runner.rs` → verify: describe turn l
+   ifecycle from session start to final answer, referencing concrete functions
+   .
+     4. **Document testing/telemetry hooks** → files:
+   `docs/modules/vtcode_exec_events.md`,
+   `docs/development/async-performance-audit.md`,
+   `src/agent/runloop/unified/progress.rs` → verify: outline monitoring, cance
+   llation, and validation checks tied to the loop.
+     5. **Assemble summary output** → files: `docs/project/TODO.md` (
+   Summary/Implementation/Test/Assumptions/Plan blocks) → verify: ensure each
+   subsection contains synthesized findings and references gathered above.
+     </plan>
+     Test/validation focus:
+
+     • No code change; ensure documentation cites actual files/functions.
+     • If future edits emerge, run cargo check/cargo clippy --workspace --all-
+   targets -- -D warnings/cargo nextest run.
+
+     Assumptions:
+
+     • Scope limited to describing existing loop; no refactor requested.
+     • Use current workspace state; no external data.
+
+
+
+──────────────────────────────────────────────────────────────────────────────
+implement plan
+
+• Exit plan mode
+  └ Reason: Ready to implement CORE AGENT LOOP overview summary per plan
+• Enter plan mode
+  └ Plan name: core_agent_loop_overview
+  └ Plan path: .vtcode/plans/core_agent_loop_overview.md
+  └ Description: Summarize VT Code core agent loop behavior
+
+  ╭─ Info ───────────────────────────────────────────────────────────────────╮
+
+ Continue, or @files, /commands, Shift+Tab: cycle modes, Enter/Tab: queue,
+
+Processing (Esc, Ctrl+C, or /stop to stop) IDE Context (VS Code): docs/proj…
 ```
