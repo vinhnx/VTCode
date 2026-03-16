@@ -58,11 +58,12 @@ pub(crate) fn should_continue_operation(ctrl_c_state: &CtrlCState) -> bool {
 
 /// Sanitize a raw error message for user display.
 ///
-/// Strips internal implementation details that leak from `anyhow` error chains,
-/// long stack traces, and duplicated "context: source" patterns so that the TUI
-/// shows a clean, actionable one-liner.
+/// Strips internal implementation details that leak from `anyhow` error chains
+/// and long stack traces, but preserves the full error content (including API
+/// response bodies and detail fields) so users can see complete debugging info.
 pub(crate) fn sanitize_error_for_display(raw: &str) -> String {
-    // 1. Take only the first meaningful line — anyhow chains are newline-separated.
+    // Strip anyhow chain noise (stack traces, "Caused by:" indented lines)
+    // but keep the first meaningful line intact — it contains all the detail.
     let first_line = raw
         .lines()
         .find(|l| {
@@ -75,22 +76,7 @@ pub(crate) fn sanitize_error_for_display(raw: &str) -> String {
         .unwrap_or(raw)
         .trim();
 
-    // 2. If the line still contains a long chain ("ctx1: ctx2: ctx3: ..."),
-    //    keep only the outermost context and the innermost cause.
-    let parts: Vec<&str> = first_line.splitn(4, ": ").collect();
-    let cleaned = if parts.len() >= 4 {
-        // outer: <middle…>: inner — collapse to "outer: inner"
-        format!("{}: {}", parts[0], parts[parts.len() - 1])
-    } else {
-        first_line.to_string()
-    };
-
-    // 3. Cap length for TUI friendliness (200 chars).
-    if cleaned.len() > 200 {
-        format!("{}…", &cleaned[..197])
-    } else {
-        cleaned
-    }
+    first_line.to_string()
 }
 
 /// Format a tool error with category label and optional recovery hint.
@@ -135,10 +121,10 @@ mod tests {
     }
 
     #[test]
-    fn sanitize_collapses_long_colon_chain() {
+    fn sanitize_preserves_full_colon_chain() {
         let raw = "outer context: middle1: middle2: actual root cause";
         let result = sanitize_error_for_display(raw);
-        assert_eq!(result, "outer context: actual root cause");
+        assert_eq!(result, raw);
     }
 
     #[test]
@@ -149,10 +135,13 @@ mod tests {
     }
 
     #[test]
-    fn sanitize_caps_length() {
-        let raw = "x".repeat(300);
+    fn sanitize_preserves_long_error_body() {
+        let raw = format!(
+            "OpenAI Responses API error (status 400) Body: {{\"detail\":\"The 'gpt-5.4' model is not supported. {}\"}}",
+            "x".repeat(300)
+        );
         let result = sanitize_error_for_display(&raw);
-        assert!(result.len() <= 201); // 197 + "…" (3 bytes UTF-8)
+        assert_eq!(result, raw);
     }
 
     #[test]
