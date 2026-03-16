@@ -209,6 +209,7 @@ fn tool_output_item(
     tool_call_id: Option<&str>,
     status: ToolCallStatus,
     exit_code: Option<i32>,
+    spool_path: Option<&str>,
     output: impl Into<String>,
 ) -> ThreadItem {
     ThreadItem {
@@ -216,6 +217,7 @@ fn tool_output_item(
         details: ThreadItemDetails::ToolOutput(ToolOutputItem {
             call_id: call_item_id.to_string(),
             tool_call_id: tool_call_id.map(str::to_string),
+            spool_path: spool_path.map(str::to_string),
             output: output.into(),
             exit_code,
             status,
@@ -262,6 +264,7 @@ pub(crate) fn tool_output_started_event(
             tool_call_id,
             ToolCallStatus::InProgress,
             None,
+            None,
             String::new(),
         ),
     })
@@ -272,13 +275,22 @@ pub(crate) fn tool_output_completed_event(
     tool_call_id: Option<&str>,
     status: ToolCallStatus,
     exit_code: Option<i32>,
+    spool_path: Option<&str>,
     output: impl Into<String>,
 ) -> ThreadEvent {
     ThreadEvent::ItemCompleted(ItemCompletedEvent {
-        item: tool_output_item(&call_item_id, tool_call_id, status, exit_code, output),
+        item: tool_output_item(
+            &call_item_id,
+            tool_call_id,
+            status,
+            exit_code,
+            spool_path,
+            output,
+        ),
     })
 }
 
+#[cfg(test)]
 pub(crate) fn tool_updated_event(
     call_item_id: String,
     tool_call_id: Option<&str>,
@@ -289,6 +301,7 @@ pub(crate) fn tool_updated_event(
             &call_item_id,
             tool_call_id,
             ToolCallStatus::InProgress,
+            None,
             None,
             output,
         ),
@@ -494,6 +507,7 @@ mod tests {
             Some("tool_call_0"),
             ToolCallStatus::Completed,
             Some(0),
+            None,
             "On branch main",
         );
 
@@ -507,6 +521,7 @@ mod tests {
 
         assert_eq!(details.call_id, "tool-1");
         assert_eq!(details.tool_call_id.as_deref(), Some("tool_call_0"));
+        assert_eq!(details.spool_path, None);
         assert_eq!(details.output, "On branch main");
         assert_eq!(details.exit_code, Some(0));
         assert_eq!(details.status, ToolCallStatus::Completed);
@@ -526,6 +541,7 @@ mod tests {
 
         assert_eq!(details.call_id, "tool-1");
         assert_eq!(details.tool_call_id.as_deref(), Some("tool_call_0"));
+        assert_eq!(details.spool_path, None);
         assert!(details.output.is_empty());
         assert_eq!(details.status, ToolCallStatus::InProgress);
     }
@@ -545,6 +561,7 @@ mod tests {
 
         assert_eq!(details.call_id, "tool-1");
         assert_eq!(details.tool_call_id.as_deref(), Some("tool_call_0"));
+        assert_eq!(details.spool_path, None);
         assert_eq!(details.output, "On branch main");
         assert_eq!(details.status, ToolCallStatus::InProgress);
     }

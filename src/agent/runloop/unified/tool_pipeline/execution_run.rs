@@ -459,6 +459,7 @@ async fn apply_post_execution_side_effects(
                         args_val,
                         ToolCallStatus::Failed,
                         None,
+                        None,
                         error.to_string(),
                     );
                     return Err(error);

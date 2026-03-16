@@ -266,16 +266,13 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
 
     match key.code {
         KeyCode::Char('c') | KeyCode::Char('C') if has_control => {
-            // Copy selected text to clipboard if there's an active input selection
-            if session.input_enabled {
-                if let Some(text) = session.input_manager.selected_text() {
-                    MouseSelectionState::copy_to_clipboard(text);
-                    session.input_manager.clear_selection();
-                    session.mark_dirty();
-                    return None;
-                }
+            // Copy selected text to clipboard (works regardless of input_enabled)
+            if let Some(text) = session.input_manager.selected_text() {
+                MouseSelectionState::copy_to_clipboard(text);
+                session.input_manager.clear_selection();
+                session.mark_dirty();
+                return None;
             }
-            // Also check mouse selection in transcript
             if session.mouse_selection.has_selection {
                 session.mark_dirty();
                 return None;
@@ -284,6 +281,17 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             Some(InlineEvent::Interrupt)
         }
         KeyCode::Char('\u{3}') => {
+            // Copy selected text to clipboard (works regardless of input_enabled)
+            if let Some(text) = session.input_manager.selected_text() {
+                MouseSelectionState::copy_to_clipboard(text);
+                session.input_manager.clear_selection();
+                session.mark_dirty();
+                return None;
+            }
+            if session.mouse_selection.has_selection {
+                session.mark_dirty();
+                return None;
+            }
             session.mark_dirty();
             Some(InlineEvent::Interrupt)
         }
@@ -620,6 +628,16 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             None
         }
         KeyCode::Char(ch) => {
+            // Cmd+C copy works regardless of input_enabled
+            if has_command && matches!(ch, 'c' | 'C') {
+                if let Some(text) = session.input_manager.selected_text() {
+                    MouseSelectionState::copy_to_clipboard(text);
+                    session.input_manager.clear_selection();
+                    session.mark_dirty();
+                }
+                return None;
+            }
+
             if !session.input_enabled {
                 return None;
             }
@@ -651,14 +669,6 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
 
             if has_command {
                 match ch {
-                    'c' | 'C' => {
-                        if let Some(text) = session.input_manager.selected_text() {
-                            MouseSelectionState::copy_to_clipboard(text);
-                            session.input_manager.clear_selection();
-                            session.mark_dirty();
-                        }
-                        return None;
-                    }
                     'a' | 'A' => {
                         session.move_to_start();
                         session.mark_dirty();

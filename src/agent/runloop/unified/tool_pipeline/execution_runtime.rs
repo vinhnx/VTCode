@@ -1,7 +1,5 @@
-use std::sync::{Arc, Mutex as StdMutex};
-use std::time::{Duration, Instant};
-
 use serde_json::Value;
+use std::sync::{Arc, Mutex as StdMutex};
 use tokio::sync::Notify;
 use tracing::warn;
 use vtcode_core::config::constants::tools;
@@ -12,7 +10,7 @@ use vtcode_core::tools::tool_intent;
 
 use crate::agent::runloop::tool_output::resolve_stdout_tail_limit;
 use crate::agent::runloop::unified::inline_events::harness::{
-    HarnessEventEmitter, tool_output_started_event, tool_updated_event,
+    HarnessEventEmitter, tool_output_started_event,
 };
 use crate::agent::runloop::unified::progress::ProgressReporter;
 use crate::agent::runloop::unified::state::CtrlCState;
@@ -52,11 +50,8 @@ impl Drop for ProgressCallbackGuard<'_> {
     }
 }
 
-#[derive(Default)]
 struct StreamingToolOutput {
-    output: String,
-    last_emitted_len: usize,
-    last_emit_at: Option<Instant>,
+    started_emitted: bool,
 }
 
 #[derive(Clone)]
@@ -68,16 +63,15 @@ struct StreamingOutputCoalescer {
 }
 
 impl StreamingOutputCoalescer {
-    const MIN_EMIT_BYTES: usize = 4 * 1024;
-    const MAX_EMIT_INTERVAL: Duration = Duration::from_millis(50);
-
     fn new(
         harness_emitter: HarnessEventEmitter,
         tool_item_id: String,
         tool_call_id: String,
     ) -> Self {
         Self {
-            state: Arc::new(StdMutex::new(StreamingToolOutput::default())),
+            state: Arc::new(StdMutex::new(StreamingToolOutput {
+                started_emitted: false,
+            })),
             harness_emitter,
             tool_item_id,
             tool_call_id,
@@ -85,82 +79,28 @@ impl StreamingOutputCoalescer {
     }
 
     fn on_chunk(&self, chunk: &str) {
-        if let Some(snapshot) = self.snapshot_for_chunk(chunk) {
-            self.emit_snapshot(snapshot);
-        }
-    }
-
-    fn flush(&self) {
-        if let Some(snapshot) = self.snapshot_for_flush() {
-            self.emit_snapshot(snapshot);
-        }
-    }
-
-    fn snapshot_for_chunk(&self, chunk: &str) -> Option<String> {
         if chunk.is_empty() {
-            return None;
+            return;
         }
+        self.emit_started_if_needed();
+    }
 
-        let now = Instant::now();
+    fn flush(&self) {}
+
+    fn emit_started_if_needed(&self) {
         let mut state = self
             .state
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        self.emit_started_if_needed(&state);
-        state.output.push_str(chunk);
-        if !Self::should_emit_snapshot(&state, chunk, now) {
-            return None;
+        if state.started_emitted {
+            return;
         }
 
-        state.last_emitted_len = state.output.len();
-        state.last_emit_at = Some(now);
-        Some(state.output.clone())
-    }
-
-    fn snapshot_for_flush(&self) -> Option<String> {
-        let mut state = self
-            .state
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if state.output.is_empty() || state.output.len() == state.last_emitted_len {
-            return None;
-        }
-
-        state.last_emitted_len = state.output.len();
-        state.last_emit_at = Some(Instant::now());
-        Some(state.output.clone())
-    }
-
-    fn emit_started_if_needed(&self, state: &StreamingToolOutput) {
-        if state.output.is_empty() {
-            let _ = self.harness_emitter.emit(tool_output_started_event(
-                self.tool_item_id.clone(),
-                Some(self.tool_call_id.as_str()),
-            ));
-        }
-    }
-
-    fn emit_snapshot(&self, snapshot: String) {
-        let _ = self.harness_emitter.emit(tool_updated_event(
+        state.started_emitted = true;
+        let _ = self.harness_emitter.emit(tool_output_started_event(
             self.tool_item_id.clone(),
             Some(self.tool_call_id.as_str()),
-            snapshot,
         ));
-    }
-
-    fn should_emit_snapshot(state: &StreamingToolOutput, chunk: &str, now: Instant) -> bool {
-        if state.last_emit_at.is_none() {
-            return true;
-        }
-        if chunk.contains('\n') {
-            return true;
-        }
-        if state.output.len().saturating_sub(state.last_emitted_len) >= Self::MIN_EMIT_BYTES {
-            return true;
-        }
-        state
-            .last_emit_at
-            .is_some_and(|last_emit| now.duration_since(last_emit) >= Self::MAX_EMIT_INTERVAL)
     }
 }
 
@@ -451,17 +391,15 @@ async fn lookup_cached_status(
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::time::{Duration, Instant};
-
-    use serde_json::json;
     use vtcode_core::config::constants::tools;
     use vtcode_core::tools::registry::ToolRegistry;
 
     use super::{
-        ProgressCallbackGuard, StreamingOutputCoalescer, StreamingToolOutput,
-        extract_pty_stream_command, should_cache_success_output,
+        ProgressCallbackGuard, StreamingOutputCoalescer, extract_pty_stream_command,
+        should_cache_success_output,
     };
     use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
     use tempfile::TempDir;
@@ -593,7 +531,7 @@ mod tests {
     }
 
     #[test]
-    fn coalescer_emits_started_event_and_final_snapshot_on_flush() {
+    fn coalescer_emits_started_event_only_once() {
         let temp_dir = TempDir::new().expect("create temp dir");
         let harness_path = temp_dir.path().join("events.jsonl");
         let emitter = HarnessEventEmitter::new(harness_path.clone()).expect("emitter");
@@ -606,77 +544,10 @@ mod tests {
 
         let content = std::fs::read_to_string(harness_path).expect("read harness events");
         let lines = content.lines().collect::<Vec<_>>();
-        assert_eq!(lines.len(), 3);
+        assert_eq!(lines.len(), 1);
 
-        let first_event: serde_json::Value =
-            serde_json::from_str(lines[0]).expect("parse first event");
-        assert_eq!(first_event["event"]["type"].as_str(), Some("item.started"));
-        assert_eq!(first_event["event"]["item"]["output"].as_str(), Some(""));
-
-        let second_event: serde_json::Value =
-            serde_json::from_str(lines[1]).expect("parse second event");
-        assert_eq!(second_event["event"]["type"].as_str(), Some("item.updated"));
-        assert_eq!(
-            second_event["event"]["item"]["output"].as_str(),
-            Some("abc")
-        );
-
-        let third_event: serde_json::Value =
-            serde_json::from_str(lines[2]).expect("parse third event");
-        assert_eq!(third_event["event"]["type"].as_str(), Some("item.updated"));
-        assert_eq!(
-            third_event["event"]["item"]["output"].as_str(),
-            Some("abcdef")
-        );
-    }
-
-    #[test]
-    fn should_emit_snapshot_respects_thresholds() {
-        let now = Instant::now();
-
-        let first_chunk_state = StreamingToolOutput::default();
-        assert!(StreamingOutputCoalescer::should_emit_snapshot(
-            &first_chunk_state,
-            "abc",
-            now
-        ));
-
-        let buffered_state = StreamingToolOutput {
-            output: "abcdef".to_string(),
-            last_emitted_len: 3,
-            last_emit_at: Some(now),
-        };
-        assert!(!StreamingOutputCoalescer::should_emit_snapshot(
-            &buffered_state,
-            "def",
-            now + Duration::from_millis(10)
-        ));
-        assert!(StreamingOutputCoalescer::should_emit_snapshot(
-            &buffered_state,
-            "def\n",
-            now + Duration::from_millis(10)
-        ));
-
-        let large_state = StreamingToolOutput {
-            output: "x".repeat(StreamingOutputCoalescer::MIN_EMIT_BYTES + 4),
-            last_emitted_len: 1,
-            last_emit_at: Some(now),
-        };
-        assert!(StreamingOutputCoalescer::should_emit_snapshot(
-            &large_state,
-            "tail",
-            now + Duration::from_millis(10)
-        ));
-
-        let timed_state = StreamingToolOutput {
-            output: "abcdef".to_string(),
-            last_emitted_len: 3,
-            last_emit_at: Some(now),
-        };
-        assert!(StreamingOutputCoalescer::should_emit_snapshot(
-            &timed_state,
-            "def",
-            now + StreamingOutputCoalescer::MAX_EMIT_INTERVAL
-        ));
+        let event: serde_json::Value = serde_json::from_str(lines[0]).expect("parse event");
+        assert_eq!(event["event"]["type"].as_str(), Some("item.started"));
+        assert_eq!(event["event"]["item"]["output"].as_str(), Some(""));
     }
 }

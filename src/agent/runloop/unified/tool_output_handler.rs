@@ -529,6 +529,61 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn spooled_exec_output_keeps_transcript_at_reference_only() {
+        let mut renderer = vtcode_core::utils::ansi::AnsiRenderer::stdout();
+        let mut stats = SessionStats::default();
+        let mut mcp = McpPanelState::default();
+        let handle = dummy_handle();
+        let mut harness_state = build_harness_state();
+
+        transcript::clear();
+
+        let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
+            output: serde_json::json!({
+                "output": "preview text that should stay out of transcript persistence",
+                "spool_path": ".vtcode/context/tool_outputs/unified_exec_1.txt",
+                "exit_code": 0,
+                "is_exited": true
+            }),
+            stdout: Some("preview text that should stay out of transcript persistence".to_string()),
+            modified_files: vec![],
+            command_success: true,
+        });
+
+        let mut output_ctx = OutcomeContext {
+            session_stats: &mut stats,
+            renderer: &mut renderer,
+            handle: &handle,
+            harness_state: &mut harness_state,
+            mcp_panel_state: &mut mcp,
+            vt_config: None::<&VTCodeConfig>,
+        };
+
+        process_outcome_common(
+            &mut output_ctx,
+            tools::UNIFIED_EXEC,
+            &serde_json::json!({
+                "action": "run",
+                "command": "cargo check -p vtcode-core"
+            }),
+            &outcome,
+        )
+        .await
+        .expect("render should succeed");
+
+        let transcript_lines = transcript::snapshot();
+        let transcript_text = transcript_lines.join("\n");
+        assert!(transcript_text.contains("cargo check -p vtcode-core"));
+        assert!(transcript_text.contains("Large output was spooled to"));
+        assert!(
+            !transcript_text
+                .contains("preview text that should stay out of transcript persistence")
+        );
+
+        transcript::clear();
+    }
+
+    #[tokio::test]
     async fn test_handle_pipeline_output_collects_modified_files_and_records_stats() {
         if !stdin().is_terminal() {
             eprintln!("Skipping TUI-dependent test in non-interactive environment");

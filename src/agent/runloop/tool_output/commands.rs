@@ -3,6 +3,7 @@ use serde_json::Value;
 use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::constants::tools;
 use vtcode_core::config::loader::VTCodeConfig;
+use vtcode_core::tools::tool_intent;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::commands_processing::{parse_command_tokens, preprocess_terminal_stdout};
@@ -113,8 +114,14 @@ pub(crate) async fn render_terminal_command_panel(
     // Keep inline streaming behavior only while the PTY is still running.
     // Once completed, always render the final captured output.
     let inline_streaming = is_pty_session && renderer.prefers_untruncated_output() && !is_completed;
+    let render_spool_reference_only =
+        is_completed && tool_intent::should_use_spool_reference_only(None, &unwrapped_payload);
 
-    if stdout.trim().is_empty() && stderr.trim().is_empty() && critical_note.is_none() {
+    if !render_spool_reference_only
+        && stdout.trim().is_empty()
+        && stderr.trim().is_empty()
+        && critical_note.is_none()
+    {
         if !inline_streaming && (!is_pty_session || is_completed) {
             renderer.line(MessageStyle::ToolDetail, "(no output)")?;
         } else if is_pty_session && !is_completed {
@@ -125,7 +132,7 @@ pub(crate) async fn render_terminal_command_panel(
     }
 
     // Render stdout/PTY output.
-    if !stdout.trim().is_empty() && !inline_streaming {
+    if !render_spool_reference_only && !stdout.trim().is_empty() && !inline_streaming {
         let label = if is_pty_session { "" } else { "stdout" }; // Don't label PTY output as stdout
         render_stream_section(
             renderer,
@@ -145,7 +152,7 @@ pub(crate) async fn render_terminal_command_panel(
     }
 
     // Render stderr if present, even for PTY sessions
-    if !inline_streaming && !stderr.trim().is_empty() {
+    if !render_spool_reference_only && !inline_streaming && !stderr.trim().is_empty() {
         render_stream_section(
             renderer,
             "stderr",
@@ -185,8 +192,10 @@ pub(crate) async fn render_terminal_command_panel(
     }
 
     let rendered_follow_up_body = [
-        (!inline_streaming && !stdout.trim().is_empty()).then_some(stdout.as_ref()),
-        (!inline_streaming && !stderr.trim().is_empty()).then_some(stderr.as_ref()),
+        (!render_spool_reference_only && !inline_streaming && !stdout.trim().is_empty())
+            .then_some(stdout.as_ref()),
+        (!render_spool_reference_only && !inline_streaming && !stderr.trim().is_empty())
+            .then_some(stderr.as_ref()),
         critical_note,
     ]
     .into_iter()

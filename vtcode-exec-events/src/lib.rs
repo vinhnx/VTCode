@@ -476,6 +476,9 @@ pub struct ToolOutputItem {
     /// Raw model-emitted tool call identifier, when available.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
+    /// Canonical spool file path when the full output was written to disk.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spool_path: Option<String>,
     /// Aggregated output emitted by the tool.
     #[serde(default)]
     pub output: String,
@@ -689,6 +692,7 @@ mod tests {
                 details: ThreadItemDetails::ToolOutput(ToolOutputItem {
                     call_id: "tool_1".to_string(),
                     tool_call_id: Some("tool_call_0".to_string()),
+                    spool_path: None,
                     output: "done".to_string(),
                     exit_code: Some(0),
                     status: ToolCallStatus::Completed,

@@ -226,6 +226,47 @@ pub fn canonical_unified_exec_tool_name(tool_name: &str) -> Option<&'static str>
     }
 }
 
+pub fn should_use_spool_reference_only(tool_name: Option<&str>, output: &Value) -> bool {
+    let Some(obj) = output.as_object() else {
+        return false;
+    };
+
+    let has_spool_path = obj
+        .get("spool_path")
+        .and_then(Value::as_str)
+        .is_some_and(|path| !path.trim().is_empty());
+    if !has_spool_path {
+        return false;
+    }
+
+    if obj.get("loop_detected").and_then(Value::as_bool) == Some(true) {
+        return false;
+    }
+
+    if tool_name.is_some_and(|name| canonical_unified_exec_tool_name(name).is_some()) {
+        return true;
+    }
+
+    if obj
+        .get("content_type")
+        .and_then(Value::as_str)
+        .is_some_and(|content_type| content_type == "exec_inspect")
+    {
+        return true;
+    }
+
+    [
+        "command",
+        "id",
+        "session_id",
+        "process_id",
+        "is_exited",
+        "exit_code",
+    ]
+    .iter()
+    .any(|key| obj.contains_key(*key))
+}
+
 pub fn is_command_run_tool_call(tool_name: &str, args: &Value) -> bool {
     match tool_name {
         tools::RUN_PTY_CMD | tools::CREATE_PTY_SESSION | tools::SHELL | "bash" => true,
@@ -575,7 +616,7 @@ mod tests {
     use super::{
         canonical_unified_exec_tool_name, classify_tool_intent, is_command_run_tool_call,
         is_edited_file_conflict_guarded_call, is_parallel_safe_call, normalize_unified_search_args,
-        unified_file_action,
+        should_use_spool_reference_only, unified_file_action,
     };
     use crate::config::constants::tools;
     use serde_json::json;
@@ -918,6 +959,38 @@ mod tests {
                 Some(tools::UNIFIED_EXEC)
             );
         }
+    }
+
+    #[test]
+    fn spool_reference_only_detects_exec_aliases() {
+        assert!(should_use_spool_reference_only(
+            Some(tools::RUN_PTY_CMD),
+            &json!({"spool_path": ".vtcode/context/tool_outputs/run-1.txt"})
+        ));
+    }
+
+    #[test]
+    fn spool_reference_only_detects_exec_payload_without_tool_name() {
+        assert!(should_use_spool_reference_only(
+            None,
+            &json!({
+                "command": "cargo check",
+                "spool_path": ".vtcode/context/tool_outputs/run-1.txt",
+                "exit_code": 0
+            })
+        ));
+    }
+
+    #[test]
+    fn spool_reference_only_skips_loop_recovery_payloads() {
+        assert!(!should_use_spool_reference_only(
+            Some(tools::UNIFIED_EXEC),
+            &json!({
+                "spool_path": ".vtcode/context/tool_outputs/run-1.txt",
+                "exit_code": 0,
+                "loop_detected": true
+            })
+        ));
     }
 
     #[test]

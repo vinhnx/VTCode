@@ -19,7 +19,7 @@
     "unified_exec": "allow",
     "unified_file": "allow",
     "unified_search": "allow",
-    "enter_plan_mode": "prompt",
+    "enter_plan_mode": "allow",
     "exit_plan_mode": "allow",
     "request_user_input": "allow",
     "plan_task_tracker": "allow",

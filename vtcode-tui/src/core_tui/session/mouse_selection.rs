@@ -176,16 +176,71 @@ impl MouseSelectionState {
         self.copied = true;
     }
 
-    /// Copy the selected text to the system clipboard using crossterm clipboard commands.
+    /// Copy the selected text to the system clipboard.
+    ///
+    /// Tries native OS clipboard utilities first (`pbcopy` on macOS, `xclip`/`xsel`
+    /// on Linux, `clip.exe` on Windows/WSL) for maximum compatibility, then falls
+    /// back to the OSC 52 escape sequence.
     pub fn copy_to_clipboard(text: &str) {
         if text.is_empty() {
             return;
         }
+
+        if Self::copy_via_native(text) {
+            return;
+        }
+
+        // Fallback: OSC 52 escape sequence
         let _ = execute!(
             std::io::stderr(),
             CopyToClipboard::to_clipboard_from(text.as_bytes())
         );
         let _ = std::io::stderr().flush();
+    }
+
+    /// Attempt to copy text using native OS clipboard utilities.
+    /// Returns `true` if successful.
+    fn copy_via_native(text: &str) -> bool {
+        use std::process::{Command, Stdio};
+
+        let candidates: &[&str] = if cfg!(target_os = "macos") {
+            &["pbcopy"]
+        } else if cfg!(target_os = "linux") {
+            &["xclip", "xsel"]
+        } else if cfg!(target_os = "windows") {
+            &["clip.exe"]
+        } else {
+            &[]
+        };
+
+        for program in candidates {
+            let mut cmd = Command::new(program);
+            match *program {
+                "xclip" => {
+                    cmd.arg("-selection").arg("clipboard");
+                }
+                "xsel" => {
+                    cmd.arg("--clipboard").arg("--input");
+                }
+                _ => {}
+            }
+            let Ok(mut child) = cmd
+                .stdin(Stdio::piped())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+            else {
+                continue;
+            };
+            if let Some(stdin) = child.stdin.as_mut() {
+                let _ = stdin.write_all(text.as_bytes());
+            }
+            drop(child.stdin.take());
+            if child.wait().is_ok() {
+                return true;
+            }
+        }
+        false
     }
 }
 

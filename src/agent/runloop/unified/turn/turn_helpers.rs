@@ -22,15 +22,12 @@ pub(crate) fn display_error(
         &format!("{}: {}", category, error_message_for_user(error)),
     )?;
     // Show full JSON body for LLM errors when available and different from the message
-    if let Some(llm_err) = error.downcast_ref::<LLMError>() {
-        if let Some(raw_body) = llm_error_raw_body(llm_err) {
-            let human = llm_error_human_message(llm_err);
-            if raw_body != human {
-                renderer.line(
-                    MessageStyle::Error,
-                    &format!("Full response: {}", raw_body),
-                )?;
-            }
+    if let Some(llm_err) = error.downcast_ref::<LLMError>()
+        && let Some(raw_body) = llm_error_raw_body(llm_err)
+    {
+        let human = llm_error_human_message(llm_err);
+        if raw_body != human {
+            renderer.line(MessageStyle::Error, &format!("Full response: {}", raw_body))?;
         }
     }
     Ok(())
@@ -56,15 +53,13 @@ fn llm_error_human_message(error: &LLMError) -> String {
         | LLMError::Network { metadata, .. }
         | LLMError::Provider { metadata, .. } => {
             // Try to extract a clean message from the raw body stored in metadata
-            if let Some(meta) = metadata {
-                if let Some(raw) = &meta.message {
-                    let human =
-                        vtcode_core::llm::providers::error_handling::extract_human_error_message(
-                            raw,
-                        );
-                    if human != *raw {
-                        return human;
-                    }
+            if let Some(meta) = metadata
+                && let Some(raw) = &meta.message
+            {
+                let human =
+                    vtcode_core::llm::providers::error_handling::extract_human_error_message(raw);
+                if human != *raw {
+                    return human;
                 }
             }
             // Fall back to the formatted message field

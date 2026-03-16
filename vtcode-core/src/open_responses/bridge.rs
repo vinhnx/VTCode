@@ -13,7 +13,7 @@ use super::{
 };
 use vtcode_exec_events::{
     CommandExecutionStatus, McpToolCallStatus, PatchApplyStatus, ThreadEvent, ThreadItem,
-    ThreadItemDetails,
+    ThreadItemDetails, ToolOutputItem,
 };
 
 /// Builder for constructing Open Responses `Response` objects from VT Code events.
@@ -37,6 +37,18 @@ struct ActiveItemState {
     content_index: usize,
     /// Previous text content for safe delta computation (avoids UTF-8 slicing issues)
     prev_text: String,
+}
+
+fn tool_output_text(output: &ToolOutputItem) -> String {
+    if !output.output.is_empty() {
+        return output.output.clone();
+    }
+
+    output
+        .spool_path
+        .as_deref()
+        .map(|path| format!("Output saved to {}", path))
+        .unwrap_or_default()
 }
 
 impl ResponseBuilder {
@@ -147,7 +159,7 @@ impl ResponseBuilder {
             ThreadItemDetails::AgentMessage(msg) => msg.text.clone(),
             ThreadItemDetails::Plan(plan) => plan.text.clone(),
             ThreadItemDetails::Reasoning(r) => r.text.clone(),
-            ThreadItemDetails::ToolOutput(output) => output.output.clone(),
+            ThreadItemDetails::ToolOutput(output) => tool_output_text(output),
             _ => String::new(),
         };
         let active_state = ActiveItemState {
@@ -225,10 +237,11 @@ impl ResponseBuilder {
             }
 
             ThreadItemDetails::ToolOutput(output) => {
-                let delta = if let Some(suffix) = output.output.strip_prefix(&state.prev_text) {
+                let current_text = tool_output_text(output);
+                let delta = if let Some(suffix) = current_text.strip_prefix(&state.prev_text) {
                     suffix
                 } else {
-                    &output.output
+                    current_text.as_str()
                 };
 
                 if !delta.is_empty() {
@@ -239,7 +252,7 @@ impl ResponseBuilder {
                         state.content_index,
                         delta,
                     );
-                    state.prev_text = output.output.clone();
+                    state.prev_text = current_text;
                 }
             }
 
@@ -491,7 +504,7 @@ impl ResponseBuilder {
                         &output.call_id,
                         output.tool_call_id.as_deref(),
                     )),
-                    output: output.output.clone(),
+                    output: tool_output_text(output),
                 })
             }
 
@@ -931,6 +944,7 @@ mod tests {
                     details: ThreadItemDetails::ToolOutput(ToolOutputItem {
                         call_id: "tool_1".to_string(),
                         tool_call_id: Some("tool_call_0".to_string()),
+                        spool_path: None,
                         output: String::new(),
                         exit_code: None,
                         status: ToolCallStatus::InProgress,
@@ -946,6 +960,7 @@ mod tests {
                     details: ThreadItemDetails::ToolOutput(ToolOutputItem {
                         call_id: "tool_1".to_string(),
                         tool_call_id: Some("tool_call_0".to_string()),
+                        spool_path: None,
                         output: "On branch".to_string(),
                         exit_code: None,
                         status: ToolCallStatus::InProgress,
@@ -961,6 +976,7 @@ mod tests {
                     details: ThreadItemDetails::ToolOutput(ToolOutputItem {
                         call_id: "tool_1".to_string(),
                         tool_call_id: Some("tool_call_0".to_string()),
+                        spool_path: None,
                         output: "On branch main".to_string(),
                         exit_code: Some(0),
                         status: ToolCallStatus::Completed,
@@ -1008,6 +1024,7 @@ mod tests {
                     details: ThreadItemDetails::ToolOutput(ToolOutputItem {
                         call_id: "tool_1".to_string(),
                         tool_call_id: None,
+                        spool_path: None,
                         output: "done".to_string(),
                         exit_code: Some(0),
                         status: ToolCallStatus::Completed,
@@ -1021,6 +1038,39 @@ mod tests {
             OutputItem::FunctionCallOutput(output) => {
                 assert_eq!(output.call_id.as_deref(), Some("tool_1"));
                 assert_eq!(output.output, "done");
+            }
+            other => panic!("expected function call output, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_tool_output_uses_spool_reference_when_inline_output_is_empty() {
+        let mut builder = ResponseBuilder::new("gpt-5");
+        let mut emitter = VecStreamEmitter::new();
+
+        builder.process_event(
+            &ThreadEvent::ItemCompleted(ItemCompletedEvent {
+                item: ThreadItem {
+                    id: "tool_1:output".to_string(),
+                    details: ThreadItemDetails::ToolOutput(ToolOutputItem {
+                        call_id: "tool_1".to_string(),
+                        tool_call_id: Some("tool_call_0".to_string()),
+                        spool_path: Some(".vtcode/context/tool_outputs/run-1.txt".to_string()),
+                        output: String::new(),
+                        exit_code: Some(0),
+                        status: ToolCallStatus::Completed,
+                    }),
+                },
+            }),
+            &mut emitter,
+        );
+
+        match &builder.response().output[0] {
+            OutputItem::FunctionCallOutput(output) => {
+                assert_eq!(
+                    output.output,
+                    "Output saved to .vtcode/context/tool_outputs/run-1.txt"
+                );
             }
             other => panic!("expected function call output, got {other:?}"),
         }
@@ -1055,6 +1105,7 @@ mod tests {
                 details: ThreadItemDetails::ToolOutput(ToolOutputItem {
                     call_id: "tool_2".to_string(),
                     tool_call_id: Some("tool_call_0".to_string()),
+                    spool_path: None,
                     output: "ok".to_string(),
                     exit_code: Some(0),
                     status: ToolCallStatus::Completed,

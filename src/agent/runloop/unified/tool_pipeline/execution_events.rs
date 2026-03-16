@@ -6,7 +6,19 @@ use vtcode_core::exec::events::ToolCallStatus;
 
 use super::status::ToolExecutionStatus;
 
-fn aggregated_output_from_value(output: &Value) -> String {
+struct ToolOutputEventPayload {
+    aggregated_output: String,
+    spool_path: Option<String>,
+}
+
+fn aggregated_output_from_value(output: &Value) -> ToolOutputEventPayload {
+    if let Some(spool_path) = output.get("spool_path").and_then(Value::as_str) {
+        return ToolOutputEventPayload {
+            aggregated_output: String::new(),
+            spool_path: Some(spool_path.to_string()),
+        };
+    }
+
     let mut parts = Vec::new();
 
     for key in ["output", "stdout", "stderr", "content"] {
@@ -18,7 +30,10 @@ fn aggregated_output_from_value(output: &Value) -> String {
         }
     }
 
-    parts.join("\n")
+    ToolOutputEventPayload {
+        aggregated_output: parts.join("\n"),
+        spool_path: None,
+    }
 }
 
 pub(super) fn emit_tool_completion_status(
@@ -30,6 +45,7 @@ pub(super) fn emit_tool_completion_status(
     args: &Value,
     status: ToolCallStatus,
     exit_code: Option<i32>,
+    spool_path: Option<&str>,
     aggregated_output: impl Into<String>,
 ) {
     if !tool_started_emitted {
@@ -50,6 +66,7 @@ pub(super) fn emit_tool_completion_status(
             Some(tool_call_id),
             status,
             exit_code,
+            spool_path,
             aggregated_output,
         ));
     }
@@ -64,7 +81,7 @@ pub(super) fn emit_tool_completion_for_status(
     args: &Value,
     tool_status: &ToolExecutionStatus,
 ) {
-    let (status, exit_code, aggregated_output) = match tool_status {
+    let (status, exit_code, output_payload) = match tool_status {
         ToolExecutionStatus::Success {
             output,
             command_success,
@@ -81,14 +98,29 @@ pub(super) fn emit_tool_completion_for_status(
                 .and_then(|code| i32::try_from(code).ok()),
             aggregated_output_from_value(output),
         ),
-        ToolExecutionStatus::Failure { error } => (ToolCallStatus::Failed, None, error.to_string()),
-        ToolExecutionStatus::Timeout { error } => {
-            (ToolCallStatus::Failed, None, error.message.clone())
-        }
+        ToolExecutionStatus::Failure { error } => (
+            ToolCallStatus::Failed,
+            None,
+            ToolOutputEventPayload {
+                aggregated_output: error.to_string(),
+                spool_path: None,
+            },
+        ),
+        ToolExecutionStatus::Timeout { error } => (
+            ToolCallStatus::Failed,
+            None,
+            ToolOutputEventPayload {
+                aggregated_output: error.message.clone(),
+                spool_path: None,
+            },
+        ),
         ToolExecutionStatus::Cancelled => (
             ToolCallStatus::Failed,
             None,
-            "Tool execution cancelled".to_string(),
+            ToolOutputEventPayload {
+                aggregated_output: "Tool execution cancelled".to_string(),
+                spool_path: None,
+            },
         ),
     };
     emit_tool_completion_status(
@@ -100,7 +132,8 @@ pub(super) fn emit_tool_completion_for_status(
         args,
         status,
         exit_code,
-        aggregated_output,
+        output_payload.spool_path.as_deref(),
+        output_payload.aggregated_output,
     );
 }
 
@@ -117,7 +150,9 @@ mod tests {
             "stderr": "warn"
         });
 
-        assert_eq!(aggregated_output_from_value(&output), "same\nwarn");
+        let payload = aggregated_output_from_value(&output);
+        assert_eq!(payload.aggregated_output, "same\nwarn");
+        assert_eq!(payload.spool_path, None);
     }
 
     #[test]
@@ -127,7 +162,24 @@ mod tests {
             "path": "README.md"
         });
 
-        assert_eq!(aggregated_output_from_value(&output), "file body");
+        let payload = aggregated_output_from_value(&output);
+        assert_eq!(payload.aggregated_output, "file body");
+        assert_eq!(payload.spool_path, None);
+    }
+
+    #[test]
+    fn prefers_spool_reference_over_inline_output() {
+        let output = json!({
+            "output": "preview",
+            "spool_path": ".vtcode/context/tool_outputs/run-1.txt"
+        });
+
+        let payload = aggregated_output_from_value(&output);
+        assert_eq!(payload.aggregated_output, "");
+        assert_eq!(
+            payload.spool_path.as_deref(),
+            Some(".vtcode/context/tool_outputs/run-1.txt")
+        );
     }
 
     #[test]
@@ -142,7 +194,7 @@ mod tests {
             command_success: false,
         };
 
-        let (event_status, exit_code, aggregated_output) = match &status {
+        let (event_status, exit_code, output_payload) = match &status {
             ToolExecutionStatus::Success {
                 output,
                 command_success,
@@ -164,6 +216,7 @@ mod tests {
 
         assert_eq!(event_status, ToolCallStatus::Failed);
         assert_eq!(exit_code, Some(1));
-        assert_eq!(aggregated_output, "boom");
+        assert_eq!(output_payload.aggregated_output, "boom");
+        assert_eq!(output_payload.spool_path, None);
     }
 }

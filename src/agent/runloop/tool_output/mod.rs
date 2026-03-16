@@ -35,7 +35,7 @@ use mcp::{
 use streams::render_stream_section;
 use styles::{GitStyles, LsStyles};
 
-fn spooled_output_hint(path: &str) -> String {
+pub(crate) fn spooled_output_hint(path: &str) -> String {
     format!(
         "Large output was spooled to \"{}\". Use unified_file (action='read') or unified_search (action='grep') to inspect details.",
         path
@@ -787,6 +787,36 @@ mod tests {
         assert!(inline_output.contains("unified_search (action='grep')"));
         assert!(!inline_output.contains("read_file/grep_file"));
         assert!(inline_output.contains("Use `next_continue_args`."));
+    }
+
+    #[tokio::test]
+    async fn render_tool_output_run_pty_completed_spooled_output_is_reference_only() {
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut renderer =
+            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let payload = json!({
+            "command": "cargo check",
+            "output": "preview text that should not render inline",
+            "session_id": "run-123",
+            "is_exited": true,
+            "exit_code": 0,
+            "spool_path": ".vtcode/context/tool_outputs/run-123.txt"
+        });
+
+        render_tool_output(
+            &mut renderer,
+            Some(vtcode_core::config::constants::tools::RUN_PTY_CMD),
+            &payload,
+            None,
+        )
+        .await
+        .expect("spooled PTY payload should render");
+
+        let inline_output = collect_inline_output(&mut receiver);
+        assert!(inline_output.contains("✓ exit 0"));
+        assert!(inline_output.contains("Large output was spooled to"));
+        assert!(!inline_output.contains("preview text that should not render inline"));
+        assert!(!inline_output.contains("(no output)"));
     }
 
     #[tokio::test]

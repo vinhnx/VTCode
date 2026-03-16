@@ -401,19 +401,13 @@ mod tests {
     #[test]
     fn extract_top_level_message() {
         let body = r#"{"message":"Unauthorized access"}"#;
-        assert_eq!(
-            extract_human_error_message(body),
-            "Unauthorized access"
-        );
+        assert_eq!(extract_human_error_message(body), "Unauthorized access");
     }
 
     #[test]
     fn extract_gemini_status() {
         let body = r#"{"error":{"status":"PERMISSION_DENIED","code":403}}"#;
-        assert_eq!(
-            extract_human_error_message(body),
-            "PERMISSION_DENIED"
-        );
+        assert_eq!(extract_human_error_message(body), "PERMISSION_DENIED");
     }
 
     #[test]

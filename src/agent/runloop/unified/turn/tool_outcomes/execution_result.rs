@@ -601,8 +601,55 @@ pub(crate) fn compact_model_tool_payload(output: serde_json::Value) -> serde_jso
     serde_json::Value::Object(sanitized)
 }
 
-pub(super) fn maybe_inline_spooled(_tool_name: &str, output: &serde_json::Value) -> String {
-    serialize_output(&compact_model_tool_payload(output.clone()))
+fn should_prefer_spool_reference_only(tool_name: &str, output: &serde_json::Value) -> bool {
+    vtcode_core::tools::tool_intent::should_use_spool_reference_only(Some(tool_name), output)
+}
+
+fn apply_spool_reference_only(compacted: &mut serde_json::Value, original: &serde_json::Value) {
+    let Some(obj) = compacted.as_object_mut() else {
+        return;
+    };
+
+    obj.remove("output");
+    obj.remove("content");
+    obj.remove("stdout");
+    obj.remove("stderr");
+
+    if !obj.contains_key("stderr_preview")
+        && let Some(stderr) = original.get("stderr").and_then(serde_json::Value::as_str)
+        && !stderr.trim().is_empty()
+    {
+        let preview = if stderr.len() > 500 {
+            format!("{}... (truncated)", &stderr[..500])
+        } else {
+            stderr.to_string()
+        };
+        obj.insert(
+            "stderr_preview".to_string(),
+            serde_json::Value::String(preview),
+        );
+    }
+
+    if !obj.contains_key("spool_path")
+        && let Some(spool_path) = original
+            .get("spool_path")
+            .and_then(serde_json::Value::as_str)
+    {
+        obj.insert(
+            "spool_path".to_string(),
+            serde_json::Value::String(spool_path.to_string()),
+        );
+    }
+
+    obj.insert("result_ref_only".to_string(), serde_json::Value::Bool(true));
+}
+
+pub(super) fn maybe_inline_spooled(tool_name: &str, output: &serde_json::Value) -> String {
+    let mut compacted = compact_model_tool_payload(output.clone());
+    if should_prefer_spool_reference_only(tool_name, output) {
+        apply_spool_reference_only(&mut compacted, output);
+    }
+    serialize_output(&compacted)
 }
 
 fn compact_next_continue_args(value: &serde_json::Value) -> serde_json::Value {
@@ -1405,6 +1452,42 @@ mod tests {
         assert!(parsed.get("repeat_count").is_none());
         assert!(parsed.get("limit").is_none());
         assert!(parsed.get("tool").is_none());
+    }
+
+    #[test]
+    fn maybe_inline_spooled_uses_reference_only_for_spooled_exec_output() {
+        let serialized = maybe_inline_spooled(
+            tool_names::UNIFIED_EXEC,
+            &serde_json::json!({
+                "output": "preview text",
+                "stdout": "preview text",
+                "stderr": "warning text",
+                "spool_path": ".vtcode/context/tool_outputs/unified_exec_1.txt",
+                "exit_code": 0,
+                "is_exited": true
+            }),
+        );
+
+        let parsed: serde_json::Value =
+            serde_json::from_str(&serialized).expect("serialized JSON payload");
+        assert!(parsed.get("output").is_none());
+        assert!(parsed.get("stdout").is_none());
+        assert!(parsed.get("stderr").is_none());
+        assert_eq!(parsed.get("exit_code"), Some(&serde_json::json!(0)));
+        assert_eq!(
+            parsed.get("spool_path"),
+            Some(&serde_json::json!(
+                ".vtcode/context/tool_outputs/unified_exec_1.txt"
+            ))
+        );
+        assert_eq!(
+            parsed.get("stderr_preview"),
+            Some(&serde_json::json!("warning text"))
+        );
+        assert_eq!(
+            parsed.get("result_ref_only"),
+            Some(&serde_json::json!(true))
+        );
     }
 
     #[test]
