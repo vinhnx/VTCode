@@ -1,10 +1,10 @@
 //! Plan mode tools for entering, exiting, and managing planning workflow
 //!
-//! These tools allow the agent to programmatically enter and exit plan mode,
-//! similar to Claude Code's plan mode implementation. The agent can:
+//! These tools allow the agent to programmatically enter and exit plan mode.
+//! The agent can:
 //! - Enter plan mode to switch to read-only exploration
 //! - Exit plan mode (triggering plan review) to start implementation
-//! - Write plans to `/tmp/vtcode-plans/` by default (with optional custom path)
+//! - Persist canonical plans under `.vtcode/plans/` by default (with optional custom path)
 //!
 //! Based on insights from Claude Code's plan mode implementation:
 //! - Plan files are written to a dedicated directory
@@ -28,6 +28,85 @@ use std::time::SystemTime;
 use crate::tools::traits::Tool;
 use crate::ui::tui::PlanContent;
 
+const PLAN_TRACKER_START: &str = "<!-- vtcode:plan-tracker:start -->";
+const PLAN_TRACKER_END: &str = "<!-- vtcode:plan-tracker:end -->";
+
+const REQUIRED_PLAN_SECTIONS: [&str; 4] = [
+    "Summary",
+    "Implementation Steps",
+    "Test Cases and Validation",
+    "Assumptions and Defaults",
+];
+
+const PLACEHOLDER_TOKENS: [&str; 11] = [
+    "[step]",
+    "[paths]",
+    "[check]",
+    "[explicit assumption]",
+    "[default chosen when user did not specify]",
+    "[out-of-scope items intentionally not changed]",
+    "[project build and lint command",
+    "[project test command",
+    "[2-4 lines: goal, user impact, what will change, what will not]",
+    "[explicit commands/manual checks]",
+    "[what must not break]",
+];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum PlanLifecyclePhase {
+    #[default]
+    Off = 0,
+    EnterPendingApproval = 1,
+    ActiveDrafting = 2,
+    InterviewPending = 3,
+    DraftReady = 4,
+    ReviewPending = 5,
+}
+
+impl PlanLifecyclePhase {
+    fn from_u8(value: u8) -> Self {
+        match value {
+            1 => Self::EnterPendingApproval,
+            2 => Self::ActiveDrafting,
+            3 => Self::InterviewPending,
+            4 => Self::DraftReady,
+            5 => Self::ReviewPending,
+            _ => Self::Off,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PlanValidationReport {
+    pub missing_sections: Vec<String>,
+    pub placeholder_tokens: Vec<String>,
+    pub open_decisions: Vec<String>,
+    pub implementation_step_count: usize,
+    pub validation_item_count: usize,
+    pub assumption_count: usize,
+    pub summary_present: bool,
+}
+
+impl PlanValidationReport {
+    pub fn is_ready(&self) -> bool {
+        self.missing_sections.is_empty()
+            && self.placeholder_tokens.is_empty()
+            && self.open_decisions.is_empty()
+            && self.summary_present
+            && self.implementation_step_count > 0
+            && self.validation_item_count > 0
+            && self.assumption_count > 0
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PersistedPlanDraft {
+    pub plan_file: PathBuf,
+    pub tracker_file: Option<PathBuf>,
+    pub validation: PlanValidationReport,
+}
+
 /// Shared state for plan mode across tools
 #[derive(Debug, Clone)]
 pub struct PlanModeState {
@@ -39,6 +118,8 @@ pub struct PlanModeState {
     plan_baseline: Arc<tokio::sync::RwLock<Option<SystemTime>>>,
     /// Workspace root for plan directory
     workspace_root: PathBuf,
+    /// Shared plan lifecycle phase for the current session.
+    lifecycle_phase: Arc<std::sync::atomic::AtomicU8>,
 }
 
 impl PlanModeState {
@@ -48,6 +129,9 @@ impl PlanModeState {
             current_plan_file: Arc::new(tokio::sync::RwLock::new(None)),
             plan_baseline: Arc::new(tokio::sync::RwLock::new(None)),
             workspace_root,
+            lifecycle_phase: Arc::new(std::sync::atomic::AtomicU8::new(
+                PlanLifecyclePhase::Off as u8,
+            )),
         }
     }
 
@@ -64,6 +148,15 @@ impl PlanModeState {
     /// Disable plan mode
     pub fn disable(&self) {
         self.is_active.store(false, Ordering::Relaxed);
+        self.set_phase(PlanLifecyclePhase::Off);
+    }
+
+    pub fn phase(&self) -> PlanLifecyclePhase {
+        PlanLifecyclePhase::from_u8(self.lifecycle_phase.load(Ordering::Relaxed))
+    }
+
+    pub fn set_phase(&self, phase: PlanLifecyclePhase) {
+        self.lifecycle_phase.store(phase as u8, Ordering::Relaxed);
     }
 
     /// Get the workspace root path
@@ -75,11 +168,15 @@ impl PlanModeState {
         }
     }
 
-    /// Get the plans directory path (ephemeral by default)
+    /// Get the default plans directory path.
     pub fn plans_dir(&self) -> PathBuf {
-        std::env::temp_dir()
-            .join("vtcode-plans")
-            .join(workspace_slug_for_tmp(&self.workspace_root))
+        if self.workspace_root.as_os_str().is_empty() {
+            std::env::temp_dir()
+                .join("vtcode-plans")
+                .join(workspace_slug_for_tmp(&self.workspace_root))
+        } else {
+            self.workspace_root.join(".vtcode").join("plans")
+        }
     }
 
     /// Set the current plan file
@@ -103,15 +200,6 @@ impl PlanModeState {
     pub async fn get_plan_file(&self) -> Option<PathBuf> {
         self.current_plan_file.read().await.clone()
     }
-
-    /// Ensure plans directory exists
-    pub async fn ensure_plans_dir(&self) -> Result<PathBuf> {
-        let dir = self.plans_dir();
-        ensure_dir_exists(&dir)
-            .await
-            .with_context(|| format!("Failed to create plans directory: {}", dir.display()))?;
-        Ok(dir)
-    }
 }
 
 // ============================================================================
@@ -132,6 +220,14 @@ pub struct EnterPlanModeArgs {
     /// Optional: Initial description of what you're planning
     #[serde(default)]
     pub description: Option<String>,
+
+    /// Internal: when true, request confirmation instead of entering immediately.
+    #[serde(default)]
+    pub require_confirmation: bool,
+
+    /// Internal: confirmation has already been granted.
+    #[serde(default)]
+    pub approved: bool,
 }
 
 /// Tool for entering plan mode
@@ -191,6 +287,513 @@ fn workspace_slug_for_tmp(workspace_root: &Path) -> String {
     } else {
         sanitized
     }
+}
+
+fn title_from_plan_name(plan_name: &str) -> String {
+    plan_name
+        .split('-')
+        .filter(|segment| !segment.is_empty())
+        .map(|segment| {
+            let mut chars = segment.chars();
+            match chars.next() {
+                Some(first) => {
+                    format!(
+                        "{}{}",
+                        first.to_ascii_uppercase(),
+                        chars.as_str().to_ascii_lowercase()
+                    )
+                }
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+pub fn tracker_file_for_plan_file(plan_file: &Path) -> Option<PathBuf> {
+    let stem = plan_file.file_stem()?.to_str()?;
+    Some(plan_file.with_file_name(format!("{stem}.tasks.md")))
+}
+
+pub fn plan_file_for_tracker_file(tracker_file: &Path) -> Option<PathBuf> {
+    let file_name = tracker_file.file_name()?.to_str()?;
+    let stem = file_name.strip_suffix(".tasks.md")?;
+    Some(tracker_file.with_file_name(format!("{stem}.md")))
+}
+
+fn strip_embedded_tracker(plan_content: &str) -> String {
+    let Some(start) = plan_content.find(PLAN_TRACKER_START) else {
+        return plan_content.trim().to_string();
+    };
+    let end = plan_content[start..]
+        .find(PLAN_TRACKER_END)
+        .map(|offset| start + offset + PLAN_TRACKER_END.len())
+        .unwrap_or(plan_content.len());
+    let mut merged = String::new();
+    merged.push_str(plan_content[..start].trim_end());
+    if !merged.is_empty() && !plan_content[end..].trim().is_empty() {
+        merged.push_str("\n\n");
+    }
+    merged.push_str(plan_content[end..].trim_start());
+    merged.trim().to_string()
+}
+
+fn extract_embedded_tracker(plan_content: &str) -> Option<String> {
+    let start = plan_content.find(PLAN_TRACKER_START)?;
+    let end = plan_content.find(PLAN_TRACKER_END)?;
+    if end <= start {
+        return None;
+    }
+    let content = plan_content[start + PLAN_TRACKER_START.len()..end].trim();
+    if content.is_empty() {
+        None
+    } else {
+        Some(content.to_string())
+    }
+}
+
+fn render_plan_with_tracker(plan_markdown: &str, tracker_markdown: Option<&str>) -> String {
+    let base_plan = strip_embedded_tracker(plan_markdown);
+    let Some(tracker_markdown) = tracker_markdown
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return format!("{}\n", base_plan.trim_end());
+    };
+    format!(
+        "{}\n\n{}\n{}\n{}\n",
+        base_plan.trim_end(),
+        PLAN_TRACKER_START,
+        tracker_markdown,
+        PLAN_TRACKER_END
+    )
+}
+
+pub fn merge_plan_content(
+    plan_content: Option<String>,
+    tracker_content: Option<String>,
+) -> Option<String> {
+    match (plan_content, tracker_content) {
+        (Some(plan), tracker) => {
+            let plan_trimmed = strip_embedded_tracker(&plan);
+            if plan_trimmed.is_empty() {
+                return tracker
+                    .map(|content| content.trim().to_string())
+                    .filter(|content| !content.is_empty());
+            }
+            let embedded_tracker = extract_embedded_tracker(&plan);
+            let tracker_trimmed = tracker
+                .as_deref()
+                .map(str::trim)
+                .filter(|content| !content.is_empty())
+                .map(ToOwned::to_owned)
+                .or(embedded_tracker);
+            if let Some(tracker_trimmed) = tracker_trimmed {
+                Some(format!(
+                    "{}\n\n{}\n",
+                    plan_trimmed.trim_end(),
+                    tracker_trimmed.trim()
+                ))
+            } else {
+                Some(plan_trimmed.to_string())
+            }
+        }
+        (None, Some(tracker)) => {
+            let trimmed = tracker.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        }
+        (None, None) => None,
+    }
+}
+
+fn section_body(content: &str, header: &str) -> Option<String> {
+    let mut capture = false;
+    let mut lines = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if let Some(found) = trimmed.strip_prefix("## ") {
+            if capture {
+                break;
+            }
+            capture = found.trim().eq_ignore_ascii_case(header);
+            continue;
+        }
+        if capture {
+            lines.push(line.to_string());
+        }
+    }
+    let body = lines.join("\n").trim().to_string();
+    if body.is_empty() { None } else { Some(body) }
+}
+
+fn meaningful_section_lines(body: &str) -> Vec<&str> {
+    body.lines()
+        .map(str::trim)
+        .filter(|line| {
+            !line.is_empty()
+                && !line.starts_with('>')
+                && !line.starts_with("<!--")
+                && *line != PLAN_TRACKER_START
+                && *line != PLAN_TRACKER_END
+        })
+        .collect()
+}
+
+fn is_numbered_line(line: &str) -> bool {
+    let mut seen_digit = false;
+    for ch in line.chars() {
+        if ch.is_ascii_digit() {
+            seen_digit = true;
+            continue;
+        }
+        return seen_digit && (ch == '.' || ch == ')');
+    }
+    false
+}
+
+fn find_placeholder_tokens(content: &str) -> Vec<String> {
+    let lower = content.to_ascii_lowercase();
+    PLACEHOLDER_TOKENS
+        .iter()
+        .filter(|token| lower.contains(**token))
+        .map(|token| token.to_string())
+        .collect()
+}
+
+fn find_open_decisions(content: &str) -> Vec<String> {
+    content
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .filter(|line| {
+            let lower = line.to_ascii_lowercase();
+            lower.contains("next open decision")
+                && ![
+                    "none",
+                    "no remaining",
+                    "no further",
+                    "resolved",
+                    "closed",
+                    "n/a",
+                    "not applicable",
+                ]
+                .iter()
+                .any(|needle| lower.contains(needle))
+        })
+        .map(ToString::to_string)
+        .collect()
+}
+
+pub fn validate_plan_content(content: &str) -> PlanValidationReport {
+    let stripped = strip_embedded_tracker(content);
+    let mut report = PlanValidationReport {
+        placeholder_tokens: find_placeholder_tokens(&stripped),
+        open_decisions: find_open_decisions(&stripped),
+        ..PlanValidationReport::default()
+    };
+
+    let summary_body = section_body(&stripped, "Summary");
+    let implementation_body = section_body(&stripped, "Implementation Steps");
+    let validation_body = section_body(&stripped, "Test Cases and Validation");
+    let assumptions_body = section_body(&stripped, "Assumptions and Defaults");
+
+    for section in REQUIRED_PLAN_SECTIONS {
+        if section_body(&stripped, section).is_none() {
+            report.missing_sections.push(section.to_string());
+        }
+    }
+
+    if let Some(body) = summary_body.as_deref() {
+        report.summary_present = !meaningful_section_lines(body).is_empty();
+    }
+    if !report.summary_present && !report.missing_sections.iter().any(|s| s == "Summary") {
+        report.missing_sections.push("Summary".to_string());
+    }
+
+    if let Some(body) = implementation_body.as_deref() {
+        report.implementation_step_count = meaningful_section_lines(body)
+            .into_iter()
+            .filter(|line| is_numbered_line(line))
+            .count();
+    }
+    if report.implementation_step_count == 0
+        && !report
+            .missing_sections
+            .iter()
+            .any(|s| s == "Implementation Steps")
+    {
+        report
+            .missing_sections
+            .push("Implementation Steps".to_string());
+    }
+
+    if let Some(body) = validation_body.as_deref() {
+        report.validation_item_count = meaningful_section_lines(body)
+            .into_iter()
+            .filter(|line| is_numbered_line(line) || line.starts_with("- "))
+            .count();
+    }
+    if report.validation_item_count == 0
+        && !report
+            .missing_sections
+            .iter()
+            .any(|s| s == "Test Cases and Validation")
+    {
+        report
+            .missing_sections
+            .push("Test Cases and Validation".to_string());
+    }
+
+    if let Some(body) = assumptions_body.as_deref() {
+        report.assumption_count = meaningful_section_lines(body)
+            .into_iter()
+            .filter(|line| is_numbered_line(line) || line.starts_with("- "))
+            .count();
+    }
+    if report.assumption_count == 0
+        && !report
+            .missing_sections
+            .iter()
+            .any(|s| s == "Assumptions and Defaults")
+    {
+        report
+            .missing_sections
+            .push("Assumptions and Defaults".to_string());
+    }
+
+    report
+}
+
+fn parse_bracket_list(raw: &str) -> Vec<String> {
+    let trimmed = raw.trim().trim_start_matches('[').trim_end_matches(']');
+    trimmed
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
+fn tracker_has_progress_or_notes(tracker: &str) -> bool {
+    let lower = tracker.to_ascii_lowercase();
+    if lower.contains("## notes") {
+        return true;
+    }
+    ["[x]", "[~]", "[!]", "[/]"]
+        .iter()
+        .any(|marker| lower.contains(marker))
+}
+
+pub fn generate_tracker_markdown_from_plan(plan_markdown: &str) -> Option<String> {
+    let implementation = section_body(plan_markdown, "Implementation Steps")?;
+    let title = plan_markdown
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("# ").map(str::trim))
+        .filter(|line| !line.is_empty())
+        .unwrap_or("Implementation Plan");
+
+    let mut items = Vec::new();
+    for line in implementation
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+    {
+        if !is_numbered_line(line) {
+            continue;
+        }
+        let description = line
+            .split_once(['.', ')'])
+            .map(|(_, rest)| rest.trim())
+            .unwrap_or(line);
+        let segments = description.split("->").map(str::trim).collect::<Vec<_>>();
+        let main = segments.first().copied().unwrap_or_default();
+        if main.is_empty() {
+            continue;
+        }
+
+        let mut entry = format!("- [ ] {}\n", main);
+        for segment in segments.iter().skip(1) {
+            if let Some(files) = segment.strip_prefix("files:") {
+                let values = parse_bracket_list(files);
+                if !values.is_empty() {
+                    entry.push_str(&format!("  files: {}\n", values.join(", ")));
+                }
+                continue;
+            }
+            if let Some(outcome) = segment.strip_prefix("outcome:") {
+                let outcome = outcome.trim().trim_start_matches('[').trim_end_matches(']');
+                if !outcome.is_empty() {
+                    entry.push_str(&format!("  outcome: {}\n", outcome));
+                }
+                continue;
+            }
+            if let Some(verify) = segment.strip_prefix("verify:") {
+                let values = parse_bracket_list(verify);
+                if values.is_empty() {
+                    let trimmed = verify.trim();
+                    if !trimmed.is_empty() {
+                        entry.push_str(&format!("  verify: {}\n", trimmed));
+                    }
+                } else {
+                    for value in values {
+                        entry.push_str(&format!("  verify: {}\n", value));
+                    }
+                }
+            }
+        }
+        items.push(entry);
+    }
+
+    if items.is_empty() {
+        return None;
+    }
+
+    Some(format!(
+        "# {}\n\n## Plan of Work\n\n{}",
+        title,
+        items.concat().trim_end()
+    ))
+}
+
+async fn persist_global_tracker_if_missing(
+    workspace_root: &Path,
+    tracker_markdown: &str,
+) -> Result<()> {
+    if workspace_root.as_os_str().is_empty() {
+        return Ok(());
+    }
+    let task_file = workspace_root
+        .join(".vtcode")
+        .join("tasks")
+        .join("current_task.md");
+    if task_file.exists() {
+        return Ok(());
+    }
+    if let Some(parent) = task_file.parent() {
+        ensure_dir_exists(parent).await.with_context(|| {
+            format!(
+                "Failed to create task tracker directory: {}",
+                parent.display()
+            )
+        })?;
+    }
+    write_file_with_context(&task_file, tracker_markdown, "task checklist")
+        .await
+        .with_context(|| format!("Failed to write task checklist: {}", task_file.display()))?;
+    Ok(())
+}
+
+pub async fn sync_tracker_into_plan_file(plan_file: &Path, tracker_markdown: &str) -> Result<()> {
+    let plan_content = read_file_with_context(plan_file, "plan file")
+        .await
+        .with_context(|| format!("Failed to read plan file: {}", plan_file.display()))?;
+    let updated = render_plan_with_tracker(&plan_content, Some(tracker_markdown));
+    write_file_with_context(plan_file, &updated, "plan file")
+        .await
+        .with_context(|| format!("Failed to write plan file: {}", plan_file.display()))?;
+    Ok(())
+}
+
+pub async fn persist_plan_draft(
+    state: &PlanModeState,
+    plan_markdown: &str,
+) -> Result<PersistedPlanDraft> {
+    let plan_file = state
+        .get_plan_file()
+        .await
+        .context("No active plan file. Call enter_plan_mode first.")?;
+    let existing_plan = read_file_with_context(&plan_file, "plan file").await.ok();
+    let tracker_file = tracker_file_for_plan_file(&plan_file);
+    let (existing_tracker, tracker_from_sidecar) = if let Some(path) = tracker_file.as_ref() {
+        if path.exists() {
+            (read_file_with_context(path, "plan tracker file").await.ok(), true)
+        } else {
+            (
+                existing_plan
+                    .as_deref()
+                    .and_then(extract_embedded_tracker)
+                    .filter(|content| !content.trim().is_empty()),
+                false,
+            )
+        }
+    } else {
+        (
+            existing_plan
+                .as_deref()
+                .and_then(extract_embedded_tracker)
+                .filter(|content| !content.trim().is_empty()),
+            false,
+        )
+    };
+
+    let should_refresh_embedded = !tracker_from_sidecar
+        && existing_tracker
+            .as_deref()
+            .is_some_and(|tracker| !tracker_has_progress_or_notes(tracker));
+    let tracker_to_persist = if should_refresh_embedded {
+        generate_tracker_markdown_from_plan(plan_markdown).or(existing_tracker.clone())
+    } else {
+        existing_tracker
+            .clone()
+            .or_else(|| generate_tracker_markdown_from_plan(plan_markdown))
+    };
+    let canonical_plan = render_plan_with_tracker(plan_markdown, tracker_to_persist.as_deref());
+    write_file_with_context(&plan_file, &canonical_plan, "plan file")
+        .await
+        .with_context(|| format!("Failed to write plan file: {}", plan_file.display()))?;
+
+    if let (Some(path), Some(tracker_markdown)) =
+        (tracker_file.as_ref(), tracker_to_persist.as_deref())
+    {
+        if let Some(parent) = path.parent() {
+            ensure_dir_exists(parent).await.with_context(|| {
+                format!(
+                    "Failed to create plan tracker directory: {}",
+                    parent.display()
+                )
+            })?;
+        }
+        write_file_with_context(path, tracker_markdown, "plan tracker file")
+            .await
+            .with_context(|| format!("Failed to write plan tracker file: {}", path.display()))?;
+        let workspace_root = state.workspace_root().unwrap_or_default();
+        persist_global_tracker_if_missing(&workspace_root, tracker_markdown).await?;
+    }
+
+    Ok(PersistedPlanDraft {
+        plan_file,
+        tracker_file,
+        validation: validate_plan_content(plan_markdown),
+    })
+}
+
+fn render_initial_plan_file_content(
+    plan_title: &str,
+    description: Option<&str>,
+    plan_file: &Path,
+    validation_hints: &ValidationCommandHints,
+) -> String {
+    let mut content = format!("# {}\n\n", plan_title);
+    content.push_str("Status: drafting\n");
+    content.push_str(&format!(
+        "Created: {}\n",
+        chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
+    ));
+    content.push_str(&format!("Plan file: `{}`\n", plan_file.display()));
+    if let Some(description) = description.map(str::trim).filter(|value| !value.is_empty()) {
+        content.push_str(&format!("Description: {}\n", description));
+    }
+    content.push('\n');
+    content.push_str("> Plan Mode is active. Research first, then materialize one concrete `<proposed_plan>` draft here.\n");
+    content.push_str(&format!(
+        "> Suggested validation defaults: build/lint {}; tests {}.\n",
+        validation_hints.build_and_lint, validation_hints.tests
+    ));
+    content
 }
 
 #[derive(Debug, Clone)]
@@ -317,6 +920,8 @@ impl Tool for EnterPlanModeTool {
             plan_name: None,
             description: None,
             plan_path: None,
+            require_confirmation: false,
+            approved: false,
         });
 
         // Check if already in plan mode
@@ -328,29 +933,20 @@ impl Tool for EnterPlanModeTool {
             }));
         }
 
-        // Enable plan mode
-        self.state.enable();
-
-        // Resolve target plan path. Defaults to /tmp, but allows explicit custom location.
+        // Resolve target plan path. Defaults to .vtcode/plans/, but allows explicit custom location.
         let plan_name = self.generate_plan_name(args.plan_name.as_deref());
         let plan_file = if let Some(raw_path) = args.plan_path.as_deref() {
             let trimmed = raw_path.trim();
-            let resolved = if Path::new(trimmed).is_absolute() {
+            if Path::new(trimmed).is_absolute() {
                 PathBuf::from(trimmed)
             } else {
                 self.state
                     .workspace_root()
                     .unwrap_or_else(|| PathBuf::from("."))
                     .join(trimmed)
-            };
-            if let Some(parent) = resolved.parent() {
-                ensure_dir_exists(parent).await.with_context(|| {
-                    format!("Failed to create plan directory: {}", parent.display())
-                })?;
             }
-            resolved
         } else {
-            let plans_dir = self.state.ensure_plans_dir().await?;
+            let plans_dir = self.state.plans_dir();
             plans_dir.join(format!("{}.md", plan_name))
         };
         let workspace_root = self
@@ -359,55 +955,34 @@ impl Tool for EnterPlanModeTool {
             .unwrap_or_else(|| PathBuf::from("."));
         let validation_hints = detect_validation_command_hints(&workspace_root);
 
-        // Seed the plan file with a sparse scaffold that matches the runtime prompt contract.
-        let initial_content = format!(
-            r#"Repository facts checked:
-- [file, symbol, or behavior confirmed from the repo]
-- [existing pattern or constraint verified before planning]
+        if args.require_confirmation && !args.approved {
+            self.state
+                .set_phase(PlanLifecyclePhase::EnterPendingApproval);
+            return Ok(json!({
+                "status": "pending_confirmation",
+                "requires_confirmation": true,
+                "message": "Plan Mode entry requires user confirmation.",
+                "plan_file": plan_file.display().to_string(),
+                "plan_title": title_from_plan_name(&plan_name),
+                "description": args.description,
+            }));
+        }
 
-Next open decision: [if any], otherwise: No remaining scope decisions.
+        // Enable plan mode only after explicit approval.
+        self.state.enable();
+        self.state.set_phase(PlanLifecyclePhase::ActiveDrafting);
 
-<proposed_plan>
-# {}
+        if let Some(parent) = plan_file.parent() {
+            ensure_dir_exists(parent).await.with_context(|| {
+                format!("Failed to create plan directory: {}", parent.display())
+            })?;
+        }
 
-## Summary
-
-{}
-
-## Implementation Steps
-
-1. [Step] → files: [paths] → verify: [check]
-2. [Step] → files: [paths] → verify: [check]
-3. [Step] → files: [paths] → verify: [check]
-
-## Test Cases and Validation
-
-1. Build and lint: {}
-2. Tests: {}
-3. Targeted behavior checks: [explicit commands/manual checks]
-4. Regression checks: [what must not break]
-
-## Assumptions and Defaults
-
-1. [Explicit assumption]
-2. [Default chosen when user did not specify]
-3. [Out-of-scope items intentionally not changed]
-
-</proposed_plan>
-
-> Plan confirmation is shown as an interactive list in the TUI when you exit Plan Mode.
-
-> Plan file: `{}`
-> Plan created: {}
-"#,
-            plan_name.replace('-', " ").to_uppercase(),
-            args.description
-                .as_deref()
-                .unwrap_or("[2-4 lines: goal, user impact, what will change, what will not]"),
-            validation_hints.build_and_lint,
-            validation_hints.tests,
-            plan_file.display(),
-            chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
+        let initial_content = render_initial_plan_file_content(
+            &title_from_plan_name(&plan_name),
+            args.description.as_deref(),
+            &plan_file,
+            &validation_hints,
         );
 
         write_file_with_context(&plan_file, &initial_content, "plan file")
@@ -429,7 +1004,7 @@ Next open decision: [if any], otherwise: No remaining scope decisions.
             "instructions": [
                 "1. Explore files and capture repository facts before drafting the plan",
                 "2. Ask or close only material blocking decisions",
-                "3. Fill one proposed plan with summary, steps, tests, and assumptions",
+                "3. Emit one concrete <proposed_plan> draft and persist it to the plan file",
                 "4. Use exit_plan_mode when ready for the user to review and approve"
             ],
             "workflow_phases": [
@@ -445,7 +1020,7 @@ Next open decision: [if any], otherwise: No remaining scope decisions.
     }
 
     fn description(&self) -> &'static str {
-        "Enter Plan Mode to switch to read-only exploration. In Plan Mode, you can only read files, search code, and write to the plan file. Use this when you need to understand requirements before making changes."
+        "Enter Plan Mode to switch to read-only exploration. In Plan Mode, you can only read files, search code, and write canonical plan artifacts. Use this when you need to understand requirements before making changes."
     }
 
     fn parameter_schema(&self) -> Option<Value> {
@@ -458,7 +1033,7 @@ Next open decision: [if any], otherwise: No remaining scope decisions.
                 },
                 "plan_path": {
                     "type": "string",
-                    "description": "Optional explicit plan file path. Use this to persist plans in a custom workspace path instead of the default /tmp location."
+                    "description": "Optional explicit plan file path. Use this to persist plans in a custom workspace path instead of the default .vtcode/plans location."
                 },
                 "description": {
                     "type": "string",
@@ -498,96 +1073,6 @@ pub struct ExitPlanModeTool {
 impl ExitPlanModeTool {
     pub fn new(state: PlanModeState) -> Self {
         Self { state }
-    }
-}
-
-fn plan_has_actionable_steps(content: &str) -> bool {
-    let mut in_action_section = false;
-
-    for line in content.lines() {
-        let trimmed = line.trim();
-
-        if let Some(header) = trimmed.strip_prefix("## ") {
-            let header_lower = header.trim().to_lowercase();
-            in_action_section = header_lower == "plan of work"
-                || header_lower == "concrete steps"
-                || header_lower == "implementation plan"
-                || header_lower == "implementation"
-                || header_lower.starts_with("phase ");
-            continue;
-        }
-
-        if !in_action_section {
-            continue;
-        }
-
-        if trimmed.is_empty() || trimmed.starts_with('(') {
-            continue;
-        }
-
-        let is_checkbox =
-            trimmed.starts_with("[ ]") || trimmed.starts_with("[x]") || trimmed.starts_with("[X]");
-        let is_bullet =
-            trimmed.starts_with("- ") || trimmed.starts_with("* ") || trimmed.starts_with("+ ");
-        let mut is_numbered = false;
-        let mut seen_digit = false;
-        for ch in trimmed.chars() {
-            if ch.is_ascii_digit() {
-                seen_digit = true;
-                continue;
-            }
-            if seen_digit && (ch == '.' || ch == ')') {
-                is_numbered = true;
-            }
-            break;
-        }
-
-        if is_checkbox || is_bullet || is_numbered {
-            return true;
-        }
-    }
-
-    false
-}
-
-fn tracker_file_for_plan_file(plan_file: &Path) -> Option<PathBuf> {
-    let stem = plan_file.file_stem()?.to_str()?;
-    Some(plan_file.with_file_name(format!("{stem}.tasks.md")))
-}
-
-fn merge_plan_content(
-    plan_content: Option<String>,
-    tracker_content: Option<String>,
-) -> Option<String> {
-    match (plan_content, tracker_content) {
-        (Some(plan), Some(tracker)) => {
-            let plan_trimmed = plan.trim();
-            let tracker_trimmed = tracker.trim();
-            if plan_trimmed.is_empty() {
-                Some(tracker_trimmed.to_string())
-            } else if tracker_trimmed.is_empty() {
-                Some(plan_trimmed.to_string())
-            } else {
-                Some(format!("{plan_trimmed}\n\n{tracker_trimmed}\n"))
-            }
-        }
-        (Some(plan), None) => {
-            let trimmed = plan.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed.to_string())
-            }
-        }
-        (None, Some(tracker)) => {
-            let trimmed = tracker.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed.to_string())
-            }
-        }
-        (None, None) => None,
     }
 }
 
@@ -649,10 +1134,11 @@ impl Tool for ExitPlanModeTool {
             )
         });
 
-        let plan_ready = plan_content
+        let plan_validation = plan_content
             .as_deref()
-            .map(plan_has_actionable_steps)
-            .unwrap_or(false);
+            .map(validate_plan_content)
+            .unwrap_or_default();
+        let plan_ready = plan_validation.is_ready();
         let plan_recently_updated =
             if let (Some(path), Some(baseline)) = (plan_file.as_ref(), plan_baseline) {
                 match tokio::fs::metadata(path)
@@ -667,16 +1153,50 @@ impl Tool for ExitPlanModeTool {
             };
 
         if !plan_ready || !plan_recently_updated {
+            let mut blockers = Vec::new();
+            if !plan_validation.missing_sections.is_empty() {
+                blockers.push(format!(
+                    "Missing or incomplete sections: {}",
+                    plan_validation.missing_sections.join(", ")
+                ));
+            }
+            if !plan_validation.placeholder_tokens.is_empty() {
+                blockers.push(format!(
+                    "Template placeholders still present: {}",
+                    plan_validation.placeholder_tokens.join(", ")
+                ));
+            }
+            if !plan_validation.open_decisions.is_empty() {
+                blockers.push(format!(
+                    "Open decisions remain: {}",
+                    plan_validation.open_decisions.join(" | ")
+                ));
+            }
+            if !plan_recently_updated {
+                blockers
+                    .push("Plan file has not been updated since entering Plan Mode.".to_string());
+            }
             return Ok(json!({
                 "status": "not_ready",
-                "message": "Plan not ready for confirmation. Add actionable steps under an Implementation Plan/Implementation/Plan of Work/Concrete Steps section (or a Phase section) and update the plan file in this session, then retry.",
+                "message": "Plan not ready for confirmation. Persist a concrete plan with complete sections, no template placeholders, and no open decisions, then retry.",
                 "reason": args.reason,
                 "plan_file": plan_file.map(|p| p.display().to_string()),
                 "plan_tracker_file": tracker_file.map(|p| p.display().to_string()),
                 "plan_content": plan_content,
+                "validation": {
+                    "missing_sections": plan_validation.missing_sections,
+                    "placeholder_tokens": plan_validation.placeholder_tokens,
+                    "open_decisions": plan_validation.open_decisions,
+                    "implementation_step_count": plan_validation.implementation_step_count,
+                    "validation_item_count": plan_validation.validation_item_count,
+                    "assumption_count": plan_validation.assumption_count,
+                },
+                "blockers": blockers,
                 "requires_confirmation": false
             }));
         }
+
+        self.state.set_phase(PlanLifecyclePhase::ReviewPending);
 
         // Build plan summary for JSON response
         let plan_summary = structured_plan.as_ref().map(|p| {
@@ -793,16 +1313,44 @@ mod tests {
         // Plan file should exist
         let plan_file = state.get_plan_file().await.unwrap();
         assert!(plan_file.exists());
+        assert_eq!(
+            plan_file,
+            temp_dir
+                .path()
+                .join(".vtcode")
+                .join("plans")
+                .join("test-plan.md")
+        );
 
         let content = std::fs::read_to_string(&plan_file).unwrap();
-        assert!(content.contains("Repository facts checked"));
-        assert!(content.contains("Next open decision"));
-        assert!(content.contains("## Implementation Steps"));
-        assert!(content.contains("## Test Cases and Validation"));
-        assert!(content.contains("## Assumptions and Defaults"));
-        assert!(content.contains("[project build and lint command(s)]"));
-        assert!(content.contains("[project test command(s)]"));
-        assert!(content.contains(&format!("> Plan file: `{}`", plan_file.display())));
+        assert!(content.contains("# Test Plan"));
+        assert!(content.contains("Status: drafting"));
+        assert!(content.contains(&format!("Plan file: `{}`", plan_file.display())));
+        assert!(content.contains("Description: Test planning"));
+        assert!(!content.contains("Repository facts checked"));
+        assert!(!content.contains("[Step]"));
+        assert!(!content.contains("## Implementation Steps"));
+    }
+
+    #[tokio::test]
+    async fn test_enter_plan_mode_returns_pending_confirmation_when_requested() {
+        let temp_dir = TempDir::new().unwrap();
+        let state = PlanModeState::new(temp_dir.path().to_path_buf());
+        let tool = EnterPlanModeTool::new(state.clone());
+
+        let result = tool
+            .execute(json!({
+                "plan_name": "confirm-me",
+                "require_confirmation": true
+            }))
+            .await
+            .unwrap();
+
+        assert_eq!(result["status"], "pending_confirmation");
+        assert_eq!(result["requires_confirmation"], true);
+        assert!(!state.is_active());
+        assert_eq!(state.phase(), PlanLifecyclePhase::EnterPendingApproval);
+        assert!(state.get_plan_file().await.is_none());
     }
 
     #[test]
@@ -842,7 +1390,11 @@ mod tests {
         let plans_dir = state.plans_dir();
         std::fs::create_dir_all(&plans_dir).unwrap();
         let plan_file = plans_dir.join("test.md");
-        std::fs::write(&plan_file, "# Test Plan\n\n## Summary\nTest summary\n\n## Phase 1: Test\n[ ] Step one\n[x] Step two").unwrap();
+        std::fs::write(
+            &plan_file,
+            "# Test Plan\n\n## Summary\nTest summary\n\n## Implementation Steps\n1. Prepare the change -> files: [src/main.rs] -> verify: [cargo test]\n2. Ship the update -> files: [src/lib.rs] -> verify: [cargo check]\n\n## Test Cases and Validation\n1. Run `cargo test`\n2. Run `cargo check`\n\n## Assumptions and Defaults\n1. The current task scope stays unchanged during review.\n",
+        )
+        .unwrap();
         state.set_plan_file(Some(plan_file)).await;
 
         let tool = ExitPlanModeTool::new(state.clone());
@@ -868,8 +1420,9 @@ mod tests {
         // Verify structured plan summary is included
         assert!(result["plan_summary"].is_object());
         let summary = &result["plan_summary"];
-        assert_eq!(summary["total_steps"], 2);
-        assert_eq!(summary["completed_steps"], 1);
+        assert!(summary["total_steps"].as_u64().unwrap_or_default() >= 2);
+        assert_eq!(summary["completed_steps"], 0);
+        assert_eq!(state.phase(), PlanLifecyclePhase::ReviewPending);
     }
 
     #[tokio::test]
@@ -883,7 +1436,7 @@ mod tests {
         let plan_file = plans_dir.join("merge-test.md");
         std::fs::write(
             &plan_file,
-            "# Test Plan\n\n## Plan of Work\n- [ ] Base step\n",
+            "# Test Plan\n\n## Summary\nMerge tracker sidecar into the canonical review artifact.\n\n## Implementation Steps\n1. Keep the base plan content -> files: [src/base.rs] -> verify: [cargo test]\n\n## Test Cases and Validation\n1. Run `cargo test`\n\n## Assumptions and Defaults\n1. Tracker sidecar content should remain visible during review.\n",
         )
         .unwrap();
         let tracker_file = plans_dir.join("merge-test.tasks.md");
@@ -906,7 +1459,7 @@ mod tests {
             tracker_file.display().to_string()
         );
         let plan_content = result["plan_content"].as_str().unwrap_or_default();
-        assert!(plan_content.contains("Base step"));
+        assert!(plan_content.contains("Keep the base plan content"));
         assert!(plan_content.contains("Tracker step"));
     }
 
@@ -931,6 +1484,13 @@ mod tests {
 
         assert_eq!(result["status"], "not_ready");
         assert_eq!(result["requires_confirmation"], false);
+        assert!(
+            result["validation"]["missing_sections"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|value| value.as_str() == Some("Summary"))
+        );
     }
 
     #[tokio::test]
@@ -971,5 +1531,103 @@ mod tests {
         let result = tool.execute(json!({})).await.unwrap();
 
         assert_eq!(result["status"], "already_active");
+    }
+
+    #[test]
+    fn validate_plan_content_rejects_placeholder_template() {
+        let report = validate_plan_content(
+            r#"# Test Plan
+
+## Summary
+[2-4 lines: goal, user impact, what will change, what will not]
+
+## Implementation Steps
+1. [Step] -> files: [paths] -> verify: [check]
+
+## Test Cases and Validation
+1. Build and lint: [project build and lint command(s)]
+
+## Assumptions and Defaults
+1. [Explicit assumption]
+"#,
+        );
+
+        assert!(!report.is_ready());
+        assert!(!report.placeholder_tokens.is_empty());
+    }
+
+    #[test]
+    fn validate_plan_content_accepts_concrete_plan() {
+        let report = validate_plan_content(
+            r#"# Fix Plan Mode
+
+## Summary
+Persist the reviewed plan draft and route execution through explicit approval.
+
+## Implementation Steps
+1. Add plan lifecycle state -> files: [vtcode-core/src/tools/handlers/plan_mode.rs] -> verify: [cargo test -p vtcode-core test_enter_plan_mode -- --nocapture]
+2. Gate plan entry with overlay approval -> files: [src/agent/runloop/unified/tool_pipeline/execution_plan_mode.rs] -> verify: [cargo test -p vtcode test_run_tool_call_prevalidated_allows_task_tracker_in_plan_mode -- --nocapture]
+
+## Test Cases and Validation
+1. Build and lint: cargo check
+2. Tests: cargo test -p vtcode-core test_enter_plan_mode -- --nocapture
+
+## Assumptions and Defaults
+1. Keep tracker sidecars for compatibility.
+2. Reuse the existing overlay infrastructure.
+"#,
+        );
+
+        assert!(report.is_ready());
+    }
+
+    #[tokio::test]
+    async fn persist_plan_draft_generates_tracker_and_global_task_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let state = PlanModeState::new(temp_dir.path().to_path_buf());
+        let tool = EnterPlanModeTool::new(state.clone());
+        tool.execute(json!({"plan_name":"draft-sync","approved":true}))
+            .await
+            .unwrap();
+
+        let persisted = persist_plan_draft(
+            &state,
+            r#"# Draft Sync
+
+## Summary
+Persist a concrete draft and seed tracker state.
+
+## Implementation Steps
+1. Persist the plan -> files: [vtcode-core/src/tools/handlers/plan_mode.rs] -> verify: [cargo test]
+2. Sync the tracker -> files: [vtcode-core/src/tools/handlers/task_tracker.rs] -> verify: [cargo test]
+
+## Test Cases and Validation
+1. Build and lint: cargo check
+2. Tests: cargo test
+
+## Assumptions and Defaults
+1. Keep task tracker mirrors.
+"#,
+        )
+        .await
+        .unwrap();
+
+        let tracker_file = persisted.tracker_file.expect("tracker file should exist");
+        let plan_content = std::fs::read_to_string(&persisted.plan_file).unwrap();
+        let tracker_content = std::fs::read_to_string(&tracker_file).unwrap();
+        let global_task = std::fs::read_to_string(
+            temp_dir
+                .path()
+                .join(".vtcode")
+                .join("tasks")
+                .join("current_task.md"),
+        )
+        .unwrap();
+
+        assert!(persisted.validation.is_ready());
+        assert!(plan_content.contains(PLAN_TRACKER_START));
+        assert!(plan_content.contains("Persist the plan"));
+        assert!(tracker_content.contains("- [ ] Persist the plan"));
+        assert!(global_task.contains("- [ ] Persist the plan"));
     }
 }
