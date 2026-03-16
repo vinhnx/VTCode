@@ -810,3 +810,4 @@ TODO2.md
 resources/vhs/.vtcode/
 .agents/
 GEMINI.md
+vtcode.toml

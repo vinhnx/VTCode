@@ -278,6 +278,18 @@ pub(super) fn shell_allows_persistent_decisions(
     extract_shell_command_text(tool_name, tool_args).is_none()
 }
 
+fn truncate_arg_preview(value: &str) -> String {
+    const MAX_CHARS: usize = 60;
+    const TRUNCATED_CHARS: usize = 57;
+    if value.chars().nth(MAX_CHARS).is_some() {
+        let mut truncated: String = value.chars().take(TRUNCATED_CHARS).collect();
+        truncated.push_str("...");
+        truncated
+    } else {
+        value.to_string()
+    }
+}
+
 fn tool_args_diff_preview(tool_name: &str, tool_args: Option<&Value>) -> Option<Vec<String>> {
     let args = tool_args?.as_object()?;
     let (before, after) = match tool_name {
@@ -501,12 +513,7 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
         } else {
             for (key, value) in obj.iter().take(3) {
                 if let Some(str_val) = value.as_str() {
-                    let truncated = if str_val.len() > 60 {
-                        format!("{}...", &str_val[..57])
-                    } else {
-                        str_val.to_string()
-                    };
-                    description_lines.push(format!("  {}: {}", key, truncated));
+                    description_lines.push(format!("  {}: {}", key, truncate_arg_preview(str_val)));
                 } else if let Some(bool_val) = value.as_bool() {
                     description_lines.push(format!("  {}: {}", key, bool_val));
                 } else if let Some(num_val) = value.as_number() {
@@ -620,7 +627,7 @@ mod tests {
         extract_shell_approval_scope_signature, extract_shell_command_text,
         extract_shell_persistent_approval_prefix_rule,
         render_shell_persistent_approval_prefix_entry, shell_allows_persistent_decisions,
-        shell_permission_cache_suffix, tool_permission_prompt_kind,
+        shell_permission_cache_suffix, tool_permission_prompt_kind, truncate_arg_preview,
     };
     use serde_json::json;
 
@@ -661,6 +668,14 @@ mod tests {
         });
         let command = extract_shell_command_text("unified_exec", Some(&args));
         assert_eq!(command, None);
+    }
+
+    #[test]
+    fn arg_preview_truncates_unicode_safely() {
+        let value = "an’t ".repeat(20);
+        let truncated = truncate_arg_preview(&value);
+        assert!(truncated.ends_with("..."));
+        assert!(truncated.chars().count() <= 60);
     }
 
     #[test]

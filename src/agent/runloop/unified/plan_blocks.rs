@@ -51,7 +51,10 @@ impl ProposedPlanStreamParser {
                     }
 
                     let keep_tail = OPEN_TAG.len().saturating_sub(1).min(self.pending.len());
-                    let emit_len = self.pending.len().saturating_sub(keep_tail);
+                    let emit_len = safe_char_boundary(
+                        &self.pending,
+                        self.pending.len().saturating_sub(keep_tail),
+                    );
                     visible.push_str(&self.pending[..emit_len]);
                     self.pending.drain(..emit_len);
                     break;
@@ -65,7 +68,10 @@ impl ProposedPlanStreamParser {
                     }
 
                     let keep_tail = CLOSE_TAG.len().saturating_sub(1).min(self.pending.len());
-                    let append_len = self.pending.len().saturating_sub(keep_tail);
+                    let append_len = safe_char_boundary(
+                        &self.pending,
+                        self.pending.len().saturating_sub(keep_tail),
+                    );
                     self.plan_buffer.push_str(&self.pending[..append_len]);
                     self.pending.drain(..append_len);
                     break;
@@ -122,6 +128,20 @@ fn finalize_plan_text(saw_plan_block: bool, raw: &str) -> Option<String> {
     }
 }
 
+fn safe_char_boundary(text: &str, idx: usize) -> usize {
+    if idx >= text.len() {
+        return text.len();
+    }
+    if text.is_char_boundary(idx) {
+        return idx;
+    }
+    text.char_indices()
+        .take_while(|(pos, _)| *pos < idx)
+        .last()
+        .map(|(pos, _)| pos)
+        .unwrap_or(0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{ProposedPlanStreamParser, extract_proposed_plan};
@@ -160,5 +180,17 @@ mod tests {
 
         assert_eq!(visible, "Intro\n\nOutro");
         assert_eq!(trailing.plan_text.as_deref(), Some("- Step 1"));
+    }
+
+    #[test]
+    fn handles_multibyte_text_without_panicking() {
+        let mut parser = ProposedPlanStreamParser::new();
+        let mut visible = String::new();
+        visible.push_str(&parser.consume("an’t exit on my"));
+        let trailing = parser.finish();
+        visible.push_str(&trailing.stripped_text);
+
+        assert_eq!(visible, "an’t exit on my");
+        assert!(trailing.plan_text.is_none());
     }
 }

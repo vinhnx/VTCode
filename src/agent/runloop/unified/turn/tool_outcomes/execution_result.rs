@@ -605,6 +605,17 @@ fn should_prefer_spool_reference_only(tool_name: &str, output: &serde_json::Valu
     vtcode_core::tools::tool_intent::should_use_spool_reference_only(Some(tool_name), output)
 }
 
+fn truncate_stderr_preview(stderr: &str) -> String {
+    const PREVIEW_CHARS: usize = 500;
+    if stderr.chars().nth(PREVIEW_CHARS).is_some() {
+        let mut truncated: String = stderr.chars().take(PREVIEW_CHARS).collect();
+        truncated.push_str("... (truncated)");
+        truncated
+    } else {
+        stderr.to_string()
+    }
+}
+
 fn apply_spool_reference_only(compacted: &mut serde_json::Value, original: &serde_json::Value) {
     let Some(obj) = compacted.as_object_mut() else {
         return;
@@ -619,14 +630,9 @@ fn apply_spool_reference_only(compacted: &mut serde_json::Value, original: &serd
         && let Some(stderr) = original.get("stderr").and_then(serde_json::Value::as_str)
         && !stderr.trim().is_empty()
     {
-        let preview = if stderr.len() > 500 {
-            format!("{}... (truncated)", &stderr[..500])
-        } else {
-            stderr.to_string()
-        };
         obj.insert(
             "stderr_preview".to_string(),
-            serde_json::Value::String(preview),
+            serde_json::Value::String(truncate_stderr_preview(stderr)),
         );
     }
 
@@ -1642,5 +1648,12 @@ mod tests {
         assert!(!is_blocked_or_denied_failure(
             "stream request timed out after 30000ms"
         ));
+    }
+
+    #[test]
+    fn stderr_preview_truncates_unicode_safely() {
+        let stderr = "an’t ".repeat(200);
+        let preview = truncate_stderr_preview(&stderr);
+        assert!(preview.ends_with("... (truncated)"));
     }
 }
