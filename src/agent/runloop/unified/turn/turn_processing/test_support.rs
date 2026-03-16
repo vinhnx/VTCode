@@ -238,6 +238,16 @@ impl TestTurnProcessingBacking {
         self.autonomous_executor.loop_detector()
     }
 
+    pub(crate) fn recovery_is_tool_free(&self) -> bool {
+        self.harness_state.recovery_is_tool_free()
+    }
+
+    pub(crate) fn last_history_message_contains(&self, needle: &str) -> bool {
+        self.working_history
+            .last()
+            .is_some_and(|message| message.content.as_text().contains(needle))
+    }
+
     pub(crate) fn turn_loop_context(
         &mut self,
     ) -> crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext<'_> {

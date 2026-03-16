@@ -346,7 +346,8 @@ fn parse_requested_sandbox_permissions(
         .transpose()
         .with_context(|| {
             "Invalid additional_permissions. Expected object with fs_read/fs_write string arrays."
-        })?;
+        })?
+        .filter(|permissions| !permissions.is_empty());
 
     if sandbox_permissions.requires_escalated_permissions() {
         let justification = payload
@@ -4403,6 +4404,24 @@ mod sandbox_runtime_tests {
             err.to_string()
                 .contains("requires `sandbox_permissions` set to `with_additional_permissions`")
         );
+    }
+
+    #[test]
+    fn empty_additional_permissions_are_ignored_for_default_sandbox_mode() {
+        let payload = json!({
+            "sandbox_permissions": "use_default",
+            "additional_permissions": {
+                "fs_read": [],
+                "fs_write": []
+            }
+        });
+        let obj = payload.as_object().expect("payload object");
+        let (sandbox_permissions, additional_permissions) =
+            parse_requested_sandbox_permissions(obj, PathBuf::from(".").as_path())
+                .expect("empty permissions should be treated as absent");
+
+        assert_eq!(sandbox_permissions, SandboxPermissions::UseDefault);
+        assert!(additional_permissions.is_none());
     }
 
     #[test]

@@ -26,6 +26,7 @@ use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_tui::InlineHandle;
 use vtcode_tui::PlanContent;
 
+use crate::agent::runloop::unified::run_loop_context::RecoveryMode;
 use crate::agent::runloop::unified::state::CtrlCState;
 
 const AUTONOMOUS_CONTINUE_DIRECTIVE: &str = "Do not stop with intent-only updates. Execute the next concrete action now, then report completion or blocker.";
@@ -37,7 +38,7 @@ struct InterimTextContinuationDecision {
     is_interim_progress: bool,
     last_user_follow_up: bool,
     recent_tool_activity: bool,
-    last_user_requested_exploration: bool,
+    last_user_requested_progressive_work: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -643,6 +644,14 @@ impl<'a> TurnProcessingContext<'a> {
         self.harness_state.activate_recovery(reason);
     }
 
+    pub(crate) fn activate_recovery_with_mode(
+        &mut self,
+        reason: impl Into<String>,
+        mode: RecoveryMode,
+    ) {
+        self.harness_state.activate_recovery_with_mode(reason, mode);
+    }
+
     pub(crate) fn is_recovery_active(&self) -> bool {
         self.harness_state.is_recovery_active()
     }
@@ -653,6 +662,10 @@ impl<'a> TurnProcessingContext<'a> {
 
     pub(crate) fn recovery_pass_used(&self) -> bool {
         self.harness_state.recovery_pass_used()
+    }
+
+    pub(crate) fn recovery_is_tool_free(&self) -> bool {
+        self.harness_state.recovery_is_tool_free()
     }
 
     pub(crate) fn consume_recovery_pass(&mut self) -> bool {
@@ -707,15 +720,16 @@ impl<'a> TurnProcessingContext<'a> {
         response_streamed: bool,
     ) -> anyhow::Result<TurnHandlerOutcome> {
         let recovery_pass_response = self.is_recovery_active() && self.recovery_pass_used();
-        let recovery_progress_only = recovery_pass_response && is_interim_progress_update(&text);
-        let continuation_decision = if recovery_pass_response {
+        let tool_free_recovery_pass = recovery_pass_response && self.recovery_is_tool_free();
+        let recovery_progress_only = tool_free_recovery_pass && is_interim_progress_update(&text);
+        let continuation_decision = if tool_free_recovery_pass {
             InterimTextContinuationDecision {
                 should_continue: false,
                 reason: "recovery_pass",
                 is_interim_progress: recovery_progress_only,
                 last_user_follow_up: false,
                 recent_tool_activity: false,
-                last_user_requested_exploration: false,
+                last_user_requested_progressive_work: false,
             }
         } else {
             evaluate_interim_text_continuation(
@@ -755,8 +769,10 @@ impl<'a> TurnProcessingContext<'a> {
             is_interim_progress = continuation_decision.is_interim_progress,
             last_user_follow_up = continuation_decision.last_user_follow_up,
             recent_tool_activity = continuation_decision.recent_tool_activity,
-            last_user_requested_exploration = continuation_decision.last_user_requested_exploration,
+            last_user_requested_progressive_work =
+                continuation_decision.last_user_requested_progressive_work,
             recovery_pass_response,
+            tool_free_recovery_pass,
             plan_mode = self.session_stats.is_plan_mode(),
             full_auto = self.full_auto,
             history_len = self.working_history.len(),
@@ -934,7 +950,7 @@ fn evaluate_interim_text_continuation(
     let is_interim_progress = is_interim_progress_update(text);
     let last_user_follow_up = last_user_message_is_follow_up(history);
     let recent_tool_activity = has_recent_tool_activity(history);
-    let last_user_requested_exploration = last_user_requested_exploration(history);
+    let last_user_requested_progressive_work = last_user_requested_progressive_work(history);
 
     if plan_mode {
         return InterimTextContinuationDecision {
@@ -943,7 +959,7 @@ fn evaluate_interim_text_continuation(
             is_interim_progress,
             last_user_follow_up,
             recent_tool_activity,
-            last_user_requested_exploration,
+            last_user_requested_progressive_work,
         };
     }
 
@@ -954,40 +970,40 @@ fn evaluate_interim_text_continuation(
             is_interim_progress,
             last_user_follow_up,
             recent_tool_activity,
-            last_user_requested_exploration,
+            last_user_requested_progressive_work,
         };
     }
 
-    if full_auto && last_user_follow_up {
+    if last_user_follow_up {
         return InterimTextContinuationDecision {
             should_continue: true,
             reason: "follow_up_prompt",
             is_interim_progress,
             last_user_follow_up,
             recent_tool_activity,
-            last_user_requested_exploration,
+            last_user_requested_progressive_work,
         };
     }
 
-    if full_auto && recent_tool_activity {
+    if recent_tool_activity {
         return InterimTextContinuationDecision {
             should_continue: true,
             reason: "recent_tool_activity",
             is_interim_progress,
             last_user_follow_up,
             recent_tool_activity,
-            last_user_requested_exploration,
+            last_user_requested_progressive_work,
         };
     }
 
-    if last_user_requested_exploration && !recent_tool_activity {
+    if last_user_requested_progressive_work {
         return InterimTextContinuationDecision {
             should_continue: true,
-            reason: "exploration_request",
+            reason: "progressive_request",
             is_interim_progress,
             last_user_follow_up,
             recent_tool_activity,
-            last_user_requested_exploration,
+            last_user_requested_progressive_work,
         };
     }
 
@@ -1001,7 +1017,7 @@ fn evaluate_interim_text_continuation(
         is_interim_progress,
         last_user_follow_up,
         recent_tool_activity,
-        last_user_requested_exploration,
+        last_user_requested_progressive_work,
     }
 }
 
@@ -1034,7 +1050,7 @@ fn has_recent_tool_activity(history: &[uni::Message]) -> bool {
     })
 }
 
-fn last_user_requested_exploration(history: &[uni::Message]) -> bool {
+fn last_user_requested_progressive_work(history: &[uni::Message]) -> bool {
     let Some(text) = last_user_message_text(history) else {
         return false;
     };
@@ -1049,6 +1065,25 @@ fn last_user_requested_exploration(history: &[uni::Message]) -> bool {
         "review",
         "analy",
         "walk through",
+        "run ",
+        "execute",
+        "format",
+        "cargo fmt",
+        "cargo check",
+        "cargo test",
+        "fix",
+        "edit",
+        "update",
+        "change",
+        "modify",
+        "scan",
+        "search",
+        "grep",
+        "ast-grep",
+        "find ",
+        "use vt code",
+        "semantic code understanding",
+        "show me how",
     ]
     .iter()
     .any(|needle| text.contains(needle))
@@ -1077,7 +1112,8 @@ fn is_interim_progress_update(text: &str) -> bool {
     ];
     let starts_with_intent = intent_prefixes
         .iter()
-        .any(|prefix| lower.starts_with(prefix));
+        .any(|prefix| lower.starts_with(prefix))
+        || starts_with_present_progress_update(&lower);
     if !starts_with_intent {
         return false;
     }
@@ -1119,6 +1155,36 @@ fn is_interim_progress_update(text: &str) -> bool {
     !conclusive_markers
         .iter()
         .any(|marker| lower.contains(marker))
+}
+
+fn starts_with_present_progress_update(lower: &str) -> bool {
+    let present_progress_prefixes = [
+        "running ",
+        "checking ",
+        "formatting ",
+        "scanning ",
+        "inspecting ",
+        "searching ",
+        "reading ",
+        "reviewing ",
+        "tracing ",
+        "debugging ",
+    ];
+    let forward_markers = [
+        " now",
+        " then ",
+        " next ",
+        " follow-up",
+        " to confirm",
+        " to check",
+        " to verify",
+        " to inspect",
+    ];
+
+    present_progress_prefixes
+        .iter()
+        .any(|prefix| lower.starts_with(prefix))
+        && forward_markers.iter().any(|marker| lower.contains(marker))
 }
 
 fn should_suppress_redundant_diff_recap(history: &[uni::Message], assistant_text: &str) -> bool {
@@ -1281,8 +1347,14 @@ mod tests {
         assert!(is_interim_progress_update(
             "I'll continue with the next fix."
         ));
+        assert!(is_interim_progress_update(
+            "Running formatter now, then I'll do a quick follow-up check (`cargo check`) to confirm nothing regressed."
+        ));
         assert!(!is_interim_progress_update(
             "I need you to choose which option to apply."
+        ));
+        assert!(!is_interim_progress_update(
+            "Running cargo fmt uses rustfmt to rewrite the source files."
         ));
         assert!(!is_interim_progress_update(
             "Completed. All requested fixes are done."
@@ -1304,7 +1376,7 @@ mod tests {
                 .should_continue
         );
         assert!(
-            !evaluate_interim_text_continuation(
+            evaluate_interim_text_continuation(
                 false,
                 false,
                 &history,
@@ -1338,13 +1410,13 @@ mod tests {
     }
 
     #[test]
-    fn autonomous_continue_does_not_trigger_without_follow_up_or_tool_activity() {
+    fn autonomous_continue_triggers_for_execution_request_without_prior_tool_activity() {
         let history = vec![
             uni::Message::user("run cargo clippy and fix".to_string()),
             uni::Message::assistant("I will start now.".to_string()),
         ];
 
-        assert!(!evaluate_interim_text_continuation(
+        assert!(evaluate_interim_text_continuation(
             true,
             false,
             &history,
@@ -1408,6 +1480,33 @@ mod tests {
             TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. })
         ));
         assert!(!ctx.is_recovery_active());
+    }
+
+    #[tokio::test]
+    async fn tool_enabled_recovery_pass_can_continue_after_interim_progress() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut ctx = backing.turn_processing_context();
+        ctx.working_history.push(uni::Message::user(
+            "run cargo fmt and follow up".to_string(),
+        ));
+        ctx.activate_recovery_with_mode("empty response", RecoveryMode::ToolEnabledRetry);
+        assert!(ctx.consume_recovery_pass());
+
+        let outcome = ctx
+            .handle_text_response(
+                "Running formatter now, then I'll do a quick follow-up check (`cargo check`) to confirm nothing regressed."
+                    .to_string(),
+                Vec::new(),
+                None,
+                None,
+                false,
+            )
+            .await
+            .expect("tool-enabled recovery response should be handled");
+
+        assert!(matches!(outcome, TurnHandlerOutcome::Continue));
+        assert!(!ctx.is_recovery_active());
+        assert!(ctx.recovery_pass_used());
     }
 
     #[test]

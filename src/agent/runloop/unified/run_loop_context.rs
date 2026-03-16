@@ -47,6 +47,12 @@ enum RecoveryPhase {
     Completed,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RecoveryMode {
+    ToolEnabledRetry,
+    ToolFreeSynthesis,
+}
+
 impl From<TurnPhase> for TurnExecutionPhase {
     fn from(value: TurnPhase) -> Self {
         match value {
@@ -86,6 +92,7 @@ pub(crate) struct HarnessTurnState {
     pub tool_budget_exhausted_emitted: bool,
     pub recovery_reason: Option<String>,
     recovery_phase: RecoveryPhase,
+    recovery_mode: Option<RecoveryMode>,
     pub max_tool_calls: usize,
     pub max_tool_wall_clock: Duration,
     pub max_tool_retries: u32,
@@ -117,6 +124,7 @@ impl HarnessTurnState {
             tool_budget_exhausted_emitted: false,
             recovery_reason: None,
             recovery_phase: RecoveryPhase::Inactive,
+            recovery_mode: None,
             max_tool_calls,
             max_tool_wall_clock: Duration::from_secs(max_tool_wall_clock_secs),
             max_tool_retries,
@@ -180,9 +188,18 @@ impl HarnessTurnState {
     }
 
     pub(crate) fn activate_recovery(&mut self, reason: impl Into<String>) {
+        self.activate_recovery_with_mode(reason, RecoveryMode::ToolFreeSynthesis);
+    }
+
+    pub(crate) fn activate_recovery_with_mode(
+        &mut self,
+        reason: impl Into<String>,
+        mode: RecoveryMode,
+    ) {
         if matches!(self.recovery_phase, RecoveryPhase::Inactive) {
             self.recovery_reason = Some(reason.into());
             self.recovery_phase = RecoveryPhase::Pending;
+            self.recovery_mode = Some(mode);
         }
     }
 
@@ -202,6 +219,15 @@ impl HarnessTurnState {
             self.recovery_phase,
             RecoveryPhase::InPass | RecoveryPhase::Completed
         )
+    }
+
+    #[cfg(test)]
+    pub(crate) fn recovery_mode(&self) -> Option<RecoveryMode> {
+        self.recovery_mode
+    }
+
+    pub(crate) fn recovery_is_tool_free(&self) -> bool {
+        matches!(self.recovery_mode, Some(RecoveryMode::ToolFreeSynthesis))
     }
 
     pub(crate) fn consume_recovery_pass(&mut self) -> bool {
@@ -340,7 +366,7 @@ impl<'a> RunLoopContext<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::{HarnessTurnState, TurnExecutionPhase, TurnId, TurnPhase, TurnRunId};
+    use super::{HarnessTurnState, RecoveryMode, TurnExecutionPhase, TurnId, TurnPhase, TurnRunId};
 
     #[test]
     fn harness_state_tracks_phase_transitions() {
@@ -475,6 +501,8 @@ mod tests {
         state.activate_recovery("loop detector");
         assert!(state.is_recovery_active());
         assert_eq!(state.recovery_reason(), Some("loop detector"));
+        assert_eq!(state.recovery_mode(), Some(RecoveryMode::ToolFreeSynthesis));
+        assert!(state.recovery_is_tool_free());
 
         assert!(state.consume_recovery_pass());
         assert!(state.recovery_pass_used());
@@ -500,6 +528,25 @@ mod tests {
         assert!(state.recovery_pass_used());
         assert!(state.finish_recovery_pass());
         assert!(!state.finish_recovery_pass());
+    }
+
+    #[test]
+    fn harness_state_supports_tool_enabled_recovery_retries() {
+        let mut state = HarnessTurnState::new(
+            TurnRunId("run-1".to_string()),
+            TurnId("turn-1".to_string()),
+            4,
+            10,
+            1,
+        );
+
+        state.activate_recovery_with_mode("empty response", RecoveryMode::ToolEnabledRetry);
+
+        assert!(state.is_recovery_active());
+        assert_eq!(state.recovery_mode(), Some(RecoveryMode::ToolEnabledRetry));
+        assert!(!state.recovery_is_tool_free());
+        assert!(state.consume_recovery_pass());
+        assert!(state.finish_recovery_pass());
     }
 
     #[test]

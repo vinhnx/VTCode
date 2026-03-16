@@ -586,7 +586,7 @@ impl OpenAIProvider {
             hosted_shell: self.hosted_shell_for_model(&request.model),
             include_structured_history_in_input: !is_chatgpt_backend,
             preserve_structured_history_on_replay: is_chatgpt_backend,
-            preserve_assistant_phase_on_replay: is_chatgpt_backend,
+            preserve_assistant_phase_on_replay: false,
         };
 
         request_builder::build_responses_request(request, &ctx)

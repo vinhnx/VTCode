@@ -17,6 +17,7 @@ use crate::agent::runloop::unified::extract_action_from_messages;
 use crate::agent::runloop::unified::incremental_system_prompt::PromptCacheShapingMode;
 use crate::agent::runloop::unified::reasoning::resolve_reasoning_visibility;
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
+use crate::agent::runloop::unified::turn::turn_helpers::supports_responses_chaining;
 use crate::agent::runloop::unified::ui_interaction::{
     StreamProgressEvent, StreamSpinnerOptions, stream_and_render_response_with_options_and_progress,
 };
@@ -193,6 +194,8 @@ pub(crate) async fn execute_llm_request(
 
         request.stream = use_streaming;
         let has_post_tool_context = has_recent_tool_responses(&request.messages);
+        let preserve_structured_post_tool_context =
+            supports_responses_chaining(&turn_snapshot.provider_name);
 
         let step_result = if use_streaming {
             let mut stream_bridge = HarnessStreamingBridge::new(
@@ -419,6 +422,7 @@ pub(crate) async fn execute_llm_request(
                         use_streaming,
                         supports_non_streaming,
                         compacted_tool_retry_used,
+                        preserve_structured_post_tool_context,
                     ) {
                         Some(PostToolRetryAction::SwitchToNonStreaming) => {
                             switch_to_non_streaming_retry_mode(
@@ -607,7 +611,7 @@ mod tests {
     #[test]
     fn post_tool_retry_uses_non_streaming_before_compaction_when_supported() {
         assert_eq!(
-            next_post_tool_retry_action(true, true, false),
+            next_post_tool_retry_action(true, true, false, false),
             Some(PostToolRetryAction::SwitchToNonStreaming)
         );
     }
@@ -615,9 +619,14 @@ mod tests {
     #[test]
     fn post_tool_retry_skips_non_streaming_when_unsupported() {
         assert_eq!(
-            next_post_tool_retry_action(true, false, false),
+            next_post_tool_retry_action(true, false, false, false),
             Some(PostToolRetryAction::CompactToolContext)
         );
+    }
+
+    #[test]
+    fn post_tool_retry_preserves_structured_context_for_responses_chaining_providers() {
+        assert_eq!(next_post_tool_retry_action(false, true, false, true), None);
     }
 
     #[test]

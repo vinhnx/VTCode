@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::MessageStyle;
 
+use crate::agent::runloop::unified::run_loop_context::RecoveryMode;
 use crate::agent::runloop::unified::turn::context::{
     PreparedAssistantToolCall, TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext,
     TurnProcessingResult,
@@ -91,6 +92,44 @@ fn record_assistant_tool_calls(
     );
 }
 
+fn has_recent_tool_activity(history: &[uni::Message]) -> bool {
+    history.iter().rev().take(16).any(|message| {
+        message.role == uni::MessageRole::Tool
+            || message.tool_call_id.is_some()
+            || message.tool_calls.is_some()
+    })
+}
+
+fn empty_response_recovery_mode(history: &[uni::Message]) -> RecoveryMode {
+    if has_recent_tool_activity(history) {
+        RecoveryMode::ToolFreeSynthesis
+    } else {
+        RecoveryMode::ToolEnabledRetry
+    }
+}
+
+fn empty_response_recovery_reason(mode: RecoveryMode) -> &'static str {
+    match mode {
+        RecoveryMode::ToolEnabledRetry => {
+            "Model returned no answer. Continue autonomously with the next concrete action now. Tools remain available if needed; do not stop with a status update."
+        }
+        RecoveryMode::ToolFreeSynthesis => {
+            "Model returned no answer after tool activity. Tools are disabled on the next pass; provide a direct textual response from the current context."
+        }
+    }
+}
+
+fn empty_response_notice(mode: RecoveryMode) -> &'static str {
+    match mode {
+        RecoveryMode::ToolEnabledRetry => {
+            "[!] Empty model response detected; scheduling a retry pass with tools still enabled."
+        }
+        RecoveryMode::ToolFreeSynthesis => {
+            "[!] Empty model response detected; scheduling a final recovery pass."
+        }
+    }
+}
+
 /// Dispatch the appropriate response handler based on the processing result.
 pub(crate) async fn handle_turn_processing_result<'a>(
     params: HandleTurnProcessingResultParams<'a>,
@@ -102,7 +141,10 @@ pub(crate) async fn handle_turn_processing_result<'a>(
             reasoning,
             reasoning_details,
         } => {
-            if params.ctx.is_recovery_active() && params.ctx.recovery_pass_used() {
+            if params.ctx.is_recovery_active()
+                && params.ctx.recovery_pass_used()
+                && params.ctx.recovery_is_tool_free()
+            {
                 return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
                     reason: Some(
                         "Recovery mode requested a final tool-free synthesis pass, but the model attempted more tool calls."
@@ -212,25 +254,25 @@ pub(crate) async fn handle_turn_processing_result<'a>(
         }
         TurnProcessingResult::Empty => {
             if params.ctx.is_recovery_active() && params.ctx.recovery_pass_used() {
+                let recovery_reason = if params.ctx.recovery_is_tool_free() {
+                    "Recovery mode requested a final synthesis pass, but the model returned no answer."
+                } else {
+                    "Recovery retry requested another autonomous pass, but the model still returned no answer."
+                };
                 return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
-                    reason: Some(
-                        "Recovery mode requested a final synthesis pass, but the model returned no answer."
-                            .to_string(),
-                    ),
+                    reason: Some(recovery_reason.to_string()),
                 }));
             }
 
-            let recovery_reason =
-                "Model returned no answer. Tools are disabled on the next pass; provide a direct textual response from the current context."
-                    .to_string();
-            params.ctx.activate_recovery(recovery_reason.clone());
+            let recovery_mode = empty_response_recovery_mode(params.ctx.working_history);
+            let recovery_reason = empty_response_recovery_reason(recovery_mode).to_string();
+            params
+                .ctx
+                .activate_recovery_with_mode(recovery_reason.clone(), recovery_mode);
             params
                 .ctx
                 .renderer
-                .line(
-                    MessageStyle::Info,
-                    "[!] Empty model response detected; scheduling a final recovery pass.",
-                )
+                .line(MessageStyle::Info, empty_response_notice(recovery_mode))
                 .unwrap_or(());
             params
                 .ctx
@@ -409,26 +451,69 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn empty_response_schedules_recovery_pass() {
+    async fn empty_response_schedules_tool_enabled_retry_without_prior_tool_activity() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
-        let mut ctx = backing.turn_processing_context();
-
         let mut repeated_tool_attempts = LoopTracker::new();
         let mut turn_modified_files = BTreeSet::new();
 
-        let outcome = handle_turn_processing_result(HandleTurnProcessingResultParams {
-            ctx: &mut ctx,
-            processing_result: TurnProcessingResult::Empty,
-            response_streamed: true,
-            step_count: 1,
-            repeated_tool_attempts: &mut repeated_tool_attempts,
-            turn_modified_files: &mut turn_modified_files,
-            max_tool_loops: 4,
-            tool_repeat_limit: 4,
-        })
-        .await
-        .expect("empty response should schedule recovery");
+        let outcome = {
+            let mut ctx = backing.turn_processing_context();
+            handle_turn_processing_result(HandleTurnProcessingResultParams {
+                ctx: &mut ctx,
+                processing_result: TurnProcessingResult::Empty,
+                response_streamed: true,
+                step_count: 1,
+                repeated_tool_attempts: &mut repeated_tool_attempts,
+                turn_modified_files: &mut turn_modified_files,
+                max_tool_loops: 4,
+                tool_repeat_limit: 4,
+            })
+            .await
+            .expect("empty response should schedule recovery")
+        };
 
         assert!(matches!(outcome, TurnHandlerOutcome::Continue));
+        assert!(!backing.recovery_is_tool_free());
+        assert!(backing.last_history_message_contains("Tools remain available"));
+    }
+
+    #[tokio::test]
+    async fn empty_response_after_tool_activity_schedules_tool_free_recovery() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut repeated_tool_attempts = LoopTracker::new();
+        let mut turn_modified_files = BTreeSet::new();
+
+        let outcome = {
+            let mut ctx = backing.turn_processing_context();
+            ctx.working_history.push(
+                uni::Message::assistant("Running cargo fmt now.".to_string()).with_tool_calls(
+                    vec![uni::ToolCall::function(
+                        "call_1".to_string(),
+                        "unified_exec".to_string(),
+                        r#"{"action":"run","command":"cargo fmt"}"#.to_string(),
+                    )],
+                ),
+            );
+            ctx.working_history.push(uni::Message::tool_response(
+                "call_1".to_string(),
+                "formatted".to_string(),
+            ));
+
+            handle_turn_processing_result(HandleTurnProcessingResultParams {
+                ctx: &mut ctx,
+                processing_result: TurnProcessingResult::Empty,
+                response_streamed: true,
+                step_count: 1,
+                repeated_tool_attempts: &mut repeated_tool_attempts,
+                turn_modified_files: &mut turn_modified_files,
+                max_tool_loops: 4,
+                tool_repeat_limit: 4,
+            })
+            .await
+            .expect("empty response after tool activity should schedule synthesis recovery")
+        };
+
+        assert!(matches!(outcome, TurnHandlerOutcome::Continue));
+        assert!(backing.recovery_is_tool_free());
     }
 }

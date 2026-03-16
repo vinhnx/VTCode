@@ -289,3 +289,7 @@ use /rust-skills and enhance impl. review overall changes again carefully, can y
 2026-03-15T16:03:57.920065Z  INFO vtcode_core::context::dynamic_init: Initialized dynamic context discovery directories workspace=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
 2026-03-15T16:04:09.760442Z  WARN vtcode_core::llm::providers::ollama: Failed to connect to Ollama server: reqwest::Error { kind: Request, url: "http://localhost:11434/api/tags", source: hyper_util::client::legacy::Error(Connect, ConnectError("tcp connect error", 127.0.0.1:11434, Os { code: 61, kind: ConnectionRefused, message: "Connection refused" })) }
 ```
+
+---
+
+research how codex handle agent turn loop, review carefully and apply to vtcode system if applicable https://deepwiki.com/openai/codex

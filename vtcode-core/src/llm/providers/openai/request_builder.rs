@@ -148,10 +148,8 @@ fn allows_sampling_parameters(model: &str, reasoning_effort: Option<ReasoningEff
             reasoning_effort.unwrap_or(ReasoningEffortLevel::None),
             ReasoningEffortLevel::None
         )
-    } else if SAMPLING_DISABLED_MODELS.contains(&model) {
-        false
     } else {
-        true
+        !SAMPLING_DISABLED_MODELS.contains(&model)
     }
 }
 
@@ -335,8 +333,8 @@ pub(crate) fn build_responses_request(
 
     let mut input = responses_payload.input;
     let instructions = responses_payload.instructions;
-    if !ctx.include_assistant_phase
-        && !(ctx.preserve_assistant_phase_on_replay
+    if !(ctx.include_assistant_phase
+        || ctx.preserve_assistant_phase_on_replay
             && supports_assistant_phase_replay(&request.model))
     {
         strip_non_native_assistant_phase(&mut input);

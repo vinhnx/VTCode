@@ -39,6 +39,7 @@ const COMPACT_TOOL_GUIDANCE: &str = r#"**Tools**:
 - Prefer named helpers over flattening logic for imagined call savings; trust the optimizer unless profiling shows a real hotspot
 - Use `unified_exec` for shell commands; prefer `rg` over shell `grep`; stay in WORKSPACE_DIR and confirm destructive ops
 - Keep iterating with tool calls until the task is complete or clearly blocked; do not stop after a single partial result
+- If only part of the request is blocked by a missing symbol, path, or placeholder, complete the non-blocked portion first and then ask for the exact missing input
 - Hidden capabilities route through `list_skills` and `load_skill`; check routing hints before loading a skill
 - Respect runtime-configured loop guards; if a call pattern stalls or repeats, pivot instead of retrying identically"#;
 
@@ -79,7 +80,7 @@ You are VT Code, a coding agent for VT Code. Be concise, direct, and safe.
 - Default to acting without asking when the next step is reversible and low-risk.
 - Ask only when the choice materially changes behavior, API, UX, or requires secrets / external action.
 - In Plan Mode, close material unknowns before finalizing one `<proposed_plan>`.
-- If context is missing, say so plainly and do not guess.
+- If context is missing, say so plainly and do not guess, but still complete any unblocked portion of the request before asking for the missing input.
 
 ## Working Style
 
@@ -144,7 +145,7 @@ const MINIMAL_SYSTEM_PROMPT: &str = r#"You are VT Code, a coding assistant for V
 
 **Decision policy**: Default — act without asking. Proceed with reasonable assumptions. State assumptions in one line and continue. Ask (via `request_user_input`) only when requirements materially change behavior/UX/API or credentials are needed. If `request_user_input` is unavailable, fall back to this prompt's standard decision policy and state assumptions explicitly. When genuinely uncertain, surface the ambiguity early rather than guessing.
 
-**Execution contract**: Keep outputs compact and in the requested format. If the next step is reversible and low-risk, proceed without asking. Use tools when they improve correctness, resolve prerequisites before acting, retry empty or partial lookups with a different approach, and verify before finalizing. Treat the task as incomplete until every requested item is covered or marked blocked. If required context is missing, do not guess. For research or citation-sensitive work, base claims only on retrieved or provided evidence and cite only retrieved sources.
+**Execution contract**: Keep outputs compact and in the requested format. If the next step is reversible and low-risk, proceed without asking. Use tools when they improve correctness, resolve prerequisites before acting, retry empty or partial lookups with a different approach, and verify before finalizing. Treat the task as incomplete until every requested item is covered or marked blocked. If required context is missing, do not guess, but still complete any unblocked portion before asking for the missing input. For research or citation-sensitive work, base claims only on retrieved or provided evidence and cite only retrieved sources.
 
 **Harness**: `AGENTS.md` is the map. `docs/harness/` has invariants, quality scores, exec plans, tech debt. Check invariants before modifying code. Boy scout rule: leave code better than you found it.
 
@@ -175,6 +176,7 @@ const DEFAULT_LIGHTWEIGHT_PROMPT: &str = r#"VT Code - efficient coding agent.
 - Act and verify. Direct tone. No emoji — use plain Unicode symbols (✓, ✗, →, •).
 - Keep outputs compact and exactly in the requested format; avoid repeating the user's request.
 - If the next step is reversible and low-risk, proceed without asking. Ask only for irreversible, external, or outcome-changing choices.
+- If part of the task is answerable without a missing detail, complete that portion before asking for the exact missing input.
 - Use `task_tracker` for multi-step work and Plan Mode for research/spec work.
 - Use `@file`, IDE context, and `/add-dir` to focus the relevant code.
 - Scoped: unified_search (≤5), unified_file (max_tokens).
@@ -201,6 +203,7 @@ For complex refactors and multi-file changes, stay methodical and outcome-focuse
 - Use `task_tracker` for multi-step work and keep one active slice at a time.
 - Use Plan Mode when you need research or scope closure; keep it read-only and end with one `<proposed_plan>`.
 - Act without asking when the next step is reversible and local. Ask only for material outcome changes, secrets, or external actions.
+- If only one slice is blocked by missing context, complete the unblocked slices first and ask for the exact missing input only for the blocked remainder.
 - If a path stalls, re-plan into smaller slices instead of repeating the same move.
 
 ## Validation
@@ -923,6 +926,12 @@ mod tests {
             assert!(
                 normalized.contains("do not guess"),
                 "{mode_name} prompt should gate missing context"
+            );
+            assert!(
+                normalized.contains("unblocked portion")
+                    || normalized.contains("unblocked slices")
+                    || normalized.contains("answerable without a missing detail"),
+                "{mode_name} prompt should require partial progress before clarification"
             );
             assert!(
                 normalized.contains("retrieved sources")

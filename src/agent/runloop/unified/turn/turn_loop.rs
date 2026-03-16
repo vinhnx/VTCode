@@ -459,7 +459,8 @@ pub(crate) async fn run_turn_loop(
         // Execute the LLM request
         turn_processing_ctx.set_phase(TurnPhase::Requesting);
         let active_model = turn_processing_ctx.config.model.clone();
-        let tool_free_recovery = turn_processing_ctx.consume_recovery_pass();
+        let recovery_pass = turn_processing_ctx.consume_recovery_pass();
+        let tool_free_recovery = recovery_pass && turn_processing_ctx.recovery_is_tool_free();
         let (response, response_streamed) = match execute_llm_request(
             &mut turn_processing_ctx,
             step_count,

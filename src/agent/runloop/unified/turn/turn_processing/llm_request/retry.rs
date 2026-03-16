@@ -137,9 +137,14 @@ pub(super) fn next_post_tool_retry_action(
     use_streaming: bool,
     supports_non_streaming: bool,
     compacted_tool_retry_used: bool,
+    preserve_structured_tool_context: bool,
 ) -> Option<PostToolRetryAction> {
     if use_streaming && supports_non_streaming {
         return Some(PostToolRetryAction::SwitchToNonStreaming);
+    }
+
+    if preserve_structured_tool_context {
+        return None;
     }
 
     if !compacted_tool_retry_used {

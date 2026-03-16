@@ -1325,16 +1325,26 @@ fn chatgpt_backend_keeps_tool_turn_history_structured_for_codex() {
     assert_eq!(input.len(), 5);
     assert_eq!(input[0].get("role").and_then(Value::as_str), Some("user"));
     assert_eq!(
-        input[1].get("role").and_then(Value::as_str),
-        Some("assistant")
+        input[1].get("type").and_then(Value::as_str),
+        Some("function_call")
     );
-    assert_eq!(input[2].get("role").and_then(Value::as_str), Some("tool"));
+    assert_eq!(
+        input[1].get("call_id").and_then(Value::as_str),
+        Some("call_1")
+    );
+    assert_eq!(
+        input[2].get("type").and_then(Value::as_str),
+        Some("function_call_output")
+    );
+    assert_eq!(
+        input[2].get("call_id").and_then(Value::as_str),
+        Some("call_1")
+    );
     assert_eq!(
         input[3].get("role").and_then(Value::as_str),
         Some("assistant")
     );
     assert_eq!(input[4].get("role").and_then(Value::as_str), Some("user"));
-    assert_eq!(input[1].get("phase"), None);
     assert_eq!(input[3].get("phase"), None);
     let instructions = payload
         .get("instructions")
@@ -1344,7 +1354,7 @@ fn chatgpt_backend_keeps_tool_turn_history_structured_for_codex() {
 }
 
 #[test]
-fn chatgpt_backend_preserves_assistant_phase_for_gpt_5_3_codex() {
+fn chatgpt_backend_omits_assistant_phase_for_gpt_5_3_codex() {
     let provider = OpenAIProvider::from_config(
         Some(String::new()),
         Some(sample_chatgpt_auth_handle()),
@@ -1382,22 +1392,16 @@ fn chatgpt_backend_preserves_assistant_phase_for_gpt_5_3_codex() {
         input[1].get("role").and_then(Value::as_str),
         Some("assistant")
     );
-    assert_eq!(
-        input[1].get("phase").and_then(Value::as_str),
-        Some("commentary")
-    );
+    assert_eq!(input[1].get("phase"), None);
     assert_eq!(
         input[2].get("role").and_then(Value::as_str),
         Some("assistant")
     );
-    assert_eq!(
-        input[2].get("phase").and_then(Value::as_str),
-        Some("final_answer")
-    );
+    assert_eq!(input[2].get("phase"), None);
 }
 
 #[test]
-fn chatgpt_backend_preserves_structured_tool_turns_and_phase_for_gpt_5_3_codex() {
+fn chatgpt_backend_preserves_structured_tool_turns_with_paired_function_calls_for_gpt_5_3_codex() {
     let provider = OpenAIProvider::from_config(
         Some(String::new()),
         Some(sample_chatgpt_auth_handle()),
@@ -1441,28 +1445,38 @@ fn chatgpt_backend_preserves_structured_tool_turns_and_phase_for_gpt_5_3_codex()
         .and_then(Value::as_array)
         .expect("input should exist");
 
-    assert_eq!(input.len(), 5);
+    assert_eq!(input.len(), 6);
     assert_eq!(
         input[1].get("role").and_then(Value::as_str),
         Some("assistant")
     );
+    assert_eq!(input[1].get("phase"), None);
     assert_eq!(
-        input[1].get("phase").and_then(Value::as_str),
-        Some("commentary")
+        input[2].get("type").and_then(Value::as_str),
+        Some("function_call")
     );
-    assert_eq!(input[2].get("role").and_then(Value::as_str), Some("tool"));
     assert_eq!(
-        input[3].get("role").and_then(Value::as_str),
+        input[2].get("call_id").and_then(Value::as_str),
+        Some("call_1")
+    );
+    assert_eq!(
+        input[3].get("type").and_then(Value::as_str),
+        Some("function_call_output")
+    );
+    assert_eq!(
+        input[3].get("call_id").and_then(Value::as_str),
+        Some("call_1")
+    );
+    assert_eq!(
+        input[4].get("role").and_then(Value::as_str),
         Some("assistant")
     );
-    assert_eq!(
-        input[3].get("phase").and_then(Value::as_str),
-        Some("commentary")
-    );
+    assert_eq!(input[4].get("phase"), None);
+    assert_eq!(input[5].get("role").and_then(Value::as_str), Some("user"));
 }
 
 #[test]
-fn chatgpt_backend_preserves_assistant_phase_for_gpt_5_4() {
+fn chatgpt_backend_omits_assistant_phase_for_gpt_5_4() {
     let provider = OpenAIProvider::from_config(
         Some(String::new()),
         Some(sample_chatgpt_auth_handle()),
@@ -1496,18 +1510,12 @@ fn chatgpt_backend_preserves_assistant_phase_for_gpt_5_4() {
         .expect("input should exist");
 
     assert_eq!(input.len(), 4);
-    assert_eq!(
-        input[1].get("phase").and_then(Value::as_str),
-        Some("commentary")
-    );
-    assert_eq!(
-        input[2].get("phase").and_then(Value::as_str),
-        Some("final_answer")
-    );
+    assert_eq!(input[1].get("phase"), None);
+    assert_eq!(input[2].get("phase"), None);
 }
 
 #[test]
-fn chatgpt_backend_preserves_structured_tool_turns_and_phase_for_gpt_5_4() {
+fn chatgpt_backend_preserves_structured_tool_turns_with_paired_function_calls_for_gpt_5_4() {
     let provider = OpenAIProvider::from_config(
         Some(String::new()),
         Some(sample_chatgpt_auth_handle()),
@@ -1551,26 +1559,191 @@ fn chatgpt_backend_preserves_structured_tool_turns_and_phase_for_gpt_5_4() {
         .and_then(Value::as_array)
         .expect("input should exist");
 
-    assert_eq!(input.len(), 5);
+    assert_eq!(input.len(), 6);
     assert_eq!(input[0].get("role").and_then(Value::as_str), Some("user"));
     assert_eq!(
         input[1].get("role").and_then(Value::as_str),
         Some("assistant")
     );
-    assert_eq!(input[2].get("role").and_then(Value::as_str), Some("tool"));
+    assert_eq!(
+        input[2].get("type").and_then(Value::as_str),
+        Some("function_call")
+    );
+    assert_eq!(
+        input[2].get("call_id").and_then(Value::as_str),
+        Some("call_1")
+    );
+    assert_eq!(
+        input[3].get("type").and_then(Value::as_str),
+        Some("function_call_output")
+    );
+    assert_eq!(
+        input[3].get("call_id").and_then(Value::as_str),
+        Some("call_1")
+    );
+    assert_eq!(
+        input[4].get("role").and_then(Value::as_str),
+        Some("assistant")
+    );
+    assert_eq!(input[1].get("phase"), None);
+    assert_eq!(input[4].get("phase"), None);
+    assert_eq!(input[5].get("role").and_then(Value::as_str), Some("user"));
+}
+
+#[test]
+fn chatgpt_backend_replays_prior_direct_tool_turns_with_function_call_output_items() {
+    let provider = OpenAIProvider::from_config(
+        Some(String::new()),
+        Some(sample_chatgpt_auth_handle()),
+        Some(models::openai::GPT_5_3_CODEX.to_string()),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+    let request = provider::LLMRequest {
+        messages: vec![
+            provider::Message::user("run cargo fmt".to_owned()),
+            provider::Message::assistant_with_tools(
+                String::new(),
+                vec![provider::ToolCall::function(
+                    "direct_unified_exec_1".to_string(),
+                    "unified_exec".to_string(),
+                    "{\"command\":\"cargo fmt\"}".to_string(),
+                )],
+            ),
+            provider::Message::tool_response(
+                "direct_unified_exec_1".to_string(),
+                "{\"output\":\"\",\"exit_code\":0,\"backend\":\"pipe\"}".to_string(),
+            ),
+            provider::Message::assistant(
+                "cargo fmt completed successfully (exit code 0).".to_owned(),
+            )
+            .with_phase(Some(provider::AssistantPhase::FinalAnswer)),
+            provider::Message::user("continue".to_owned()),
+            provider::Message::assistant(
+                "cargo fmt already completed successfully (exit code 0).".to_owned(),
+            )
+            .with_phase(Some(provider::AssistantPhase::FinalAnswer)),
+            provider::Message::user("Inspect this Rust/TypeScript codebase".to_owned()),
+        ],
+        model: models::openai::GPT_5_3_CODEX.to_string(),
+        ..Default::default()
+    };
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+    let input = payload
+        .get("input")
+        .and_then(Value::as_array)
+        .expect("input should exist");
+
+    assert_eq!(input.len(), 7);
+    assert_eq!(input[0].get("role").and_then(Value::as_str), Some("user"));
+    assert_eq!(
+        input[1].get("type").and_then(Value::as_str),
+        Some("function_call")
+    );
+    assert_eq!(
+        input[1].get("call_id").and_then(Value::as_str),
+        Some("direct_unified_exec_1")
+    );
+    assert_eq!(
+        input[2].get("type").and_then(Value::as_str),
+        Some("function_call_output")
+    );
+    assert_eq!(
+        input[2].get("call_id").and_then(Value::as_str),
+        Some("direct_unified_exec_1")
+    );
     assert_eq!(
         input[3].get("role").and_then(Value::as_str),
         Some("assistant")
     );
+    assert_eq!(input[3].get("phase"), None);
     assert_eq!(input[4].get("role").and_then(Value::as_str), Some("user"));
     assert_eq!(
-        input[1].get("phase").and_then(Value::as_str),
-        Some("commentary")
+        input[5].get("role").and_then(Value::as_str),
+        Some("assistant")
     );
-    assert_eq!(
-        input[3].get("phase").and_then(Value::as_str),
-        Some("commentary")
+    assert_eq!(input[5].get("phase"), None);
+    assert_eq!(input[6].get("role").and_then(Value::as_str), Some("user"));
+    assert!(input.iter().all(|item| {
+        let item_type = item.get("type").and_then(Value::as_str);
+        item_type != Some("tool_call") && item_type != Some("tool_result")
+    }));
+}
+
+#[test]
+fn chatgpt_backend_synthesizes_missing_function_call_outputs_for_orphan_calls() {
+    let provider = OpenAIProvider::from_config(
+        Some(String::new()),
+        Some(sample_chatgpt_auth_handle()),
+        Some(models::openai::GPT_5_3_CODEX.to_string()),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
     );
+    let request = provider::LLMRequest {
+        messages: vec![
+            provider::Message::user("Run commands".to_owned()),
+            provider::Message::assistant_with_tools(
+                String::new(),
+                vec![provider::ToolCall::function(
+                    "call_orphan".to_string(),
+                    "unified_exec".to_string(),
+                    "{\"command\":\"echo orphan\"}".to_string(),
+                )],
+            ),
+            provider::Message::assistant_with_tools(
+                String::new(),
+                vec![provider::ToolCall::function(
+                    "call_paired".to_string(),
+                    "unified_exec".to_string(),
+                    "{\"command\":\"echo paired\"}".to_string(),
+                )],
+            ),
+            provider::Message::tool_response(
+                "call_paired".to_string(),
+                "{\"output\":\"paired\",\"exit_code\":0}".to_string(),
+            ),
+            provider::Message::user("continue".to_owned()),
+        ],
+        model: models::openai::GPT_5_3_CODEX.to_string(),
+        ..Default::default()
+    };
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+    let input = payload
+        .get("input")
+        .and_then(Value::as_array)
+        .expect("input should exist");
+
+    assert!(input.iter().any(|item| {
+        item.get("type").and_then(Value::as_str) == Some("function_call")
+            && item.get("call_id").and_then(Value::as_str) == Some("call_orphan")
+    }));
+    assert!(input.iter().any(|item| {
+        item.get("type").and_then(Value::as_str) == Some("function_call_output")
+            && item.get("call_id").and_then(Value::as_str) == Some("call_orphan")
+            && item.get("output").and_then(Value::as_str) == Some("aborted")
+    }));
+    assert!(input.iter().any(|item| {
+        item.get("type").and_then(Value::as_str) == Some("function_call")
+            && item.get("call_id").and_then(Value::as_str) == Some("call_paired")
+    }));
+    assert!(input.iter().any(|item| {
+        item.get("type").and_then(Value::as_str) == Some("function_call_output")
+            && item.get("call_id").and_then(Value::as_str) == Some("call_paired")
+    }));
 }
 
 #[test]

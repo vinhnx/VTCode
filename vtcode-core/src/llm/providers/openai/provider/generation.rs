@@ -20,6 +20,10 @@ fn should_attempt_responses_api(state: ResponsesApiState) -> bool {
     !matches!(state, ResponsesApiState::Disabled)
 }
 
+fn truncate_for_log(input: &str, max_chars: usize) -> String {
+    input.chars().take(max_chars).collect()
+}
+
 async fn collect_streamed_response(
     stream: provider::LLMStream,
 ) -> Result<provider::LLMResponse, provider::LLMError> {
@@ -232,6 +236,19 @@ impl OpenAIProvider {
                 let status = response.status();
                 let headers = response.headers().clone();
                 let error_text = response.text().await.unwrap_or_default();
+                let lower_error = error_text.to_ascii_lowercase();
+                if status == reqwest::StatusCode::BAD_REQUEST
+                    && lower_error.contains("invalid_request_error")
+                    && lower_error.contains("\"param\":\"input\"")
+                {
+                    tracing::error!(
+                        client_request_id = %client_request_id,
+                        status = %status,
+                        openai_request = %truncate_for_log(&openai_request.to_string(), 12_000),
+                        openai_error_body = %truncate_for_log(&error_text, 8_000),
+                        "OpenAI Responses request rejected with invalid input payload"
+                    );
+                }
 
                 if is_model_not_found(status, &error_text) {
                     if let Some(fallback_model) = fallback_model_if_not_found(&request.model) {

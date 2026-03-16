@@ -5,15 +5,25 @@ use crate::llm::provider::{
 };
 use crate::llm::providers::common::append_normalized_reasoning_detail_items;
 use crate::llm::providers::openai::types::OpenAIResponsesPayload;
-use crate::llm::providers::shared::tool_result_content_from_message_content;
-use hashbrown::HashSet;
+use crate::llm::providers::shared::{
+    function_output_value_from_message_content, tool_result_content_from_message_content,
+};
+use hashbrown::{HashMap, HashSet};
 use serde_json::{Value, json};
 
 fn parse_responses_tool_call(item: &Value) -> Option<ToolCall> {
-    let call_id = item.get("id").and_then(|v| v.as_str()).unwrap_or("");
+    let call_id = item
+        .get("call_id")
+        .and_then(|v| v.as_str())
+        .or_else(|| item.get("id").and_then(|v| v.as_str()))
+        .unwrap_or("");
     let function_obj = item.get("function").and_then(|v| v.as_object());
-    let name = function_obj.and_then(|f| f.get("name").and_then(|n| n.as_str()))?;
-    let arguments = function_obj.and_then(|f| f.get("arguments"));
+    let name = function_obj
+        .and_then(|f| f.get("name").and_then(|n| n.as_str()))
+        .or_else(|| item.get("name").and_then(|n| n.as_str()))?;
+    let arguments = function_obj
+        .and_then(|f| f.get("arguments"))
+        .or_else(|| item.get("arguments"));
 
     let serialized = arguments.map_or("{}".to_owned(), |args| {
         if args.is_string() {
@@ -407,6 +417,8 @@ pub fn build_standard_responses_payload(
 ) -> Result<OpenAIResponsesPayload, LLMError> {
     let mut input = Vec::new();
     let mut active_tool_call_ids: HashSet<String> = HashSet::new();
+    let mut pending_tool_call_order: Vec<String> = Vec::new();
+    let mut deferred_tool_outputs: HashMap<String, Value> = HashMap::new();
     let mut instructions_segments = Vec::new();
 
     if let Some(system_prompt) = &request.system_prompt {
@@ -445,6 +457,7 @@ pub fn build_standard_responses_payload(
                 }
 
                 let mut content_parts = Vec::new();
+                let mut function_call_items = Vec::new();
                 if !msg.content.is_empty() {
                     if include_structured_history_in_input {
                         content_parts.push(json!({
@@ -462,16 +475,26 @@ pub fn build_standard_responses_payload(
                 if let Some(tool_calls) = &msg.tool_calls {
                     for call in tool_calls {
                         if let Some(ref func) = call.function {
-                            active_tool_call_ids.insert(call.id.clone());
+                            if active_tool_call_ids.insert(call.id.clone()) {
+                                pending_tool_call_order.push(call.id.clone());
+                            }
                             if include_structured_history_in_input {
-                                content_parts.push(json!({
-                                    "type": "tool_call",
-                                    "id": &call.id,
-                                    "function": {
-                                        "name": &func.name,
-                                        "arguments": &func.arguments
-                                    }
+                                function_call_items.push(json!({
+                                    "type": "function_call",
+                                    "call_id": &call.id,
+                                    "name": &func.name,
+                                    "arguments": &func.arguments
                                 }));
+                                if let Some(deferred_output) =
+                                    deferred_tool_outputs.remove(&call.id)
+                                {
+                                    active_tool_call_ids.remove(&call.id);
+                                    function_call_items.push(json!({
+                                        "type": "function_call_output",
+                                        "call_id": &call.id,
+                                        "output": deferred_output,
+                                    }));
+                                }
                             }
                         }
                     }
@@ -480,6 +503,7 @@ pub fn build_standard_responses_payload(
                 if !content_parts.is_empty() {
                     input.push(assistant_input_item(content_parts, msg.phase));
                 }
+                input.extend(function_call_items);
             }
             MessageRole::Tool => {
                 let tool_call_id = msg.tool_call_id.as_ref().ok_or_else(|| {
@@ -494,6 +518,12 @@ pub fn build_standard_responses_payload(
                 })?;
 
                 if !active_tool_call_ids.contains(tool_call_id) {
+                    if include_structured_history_in_input {
+                        deferred_tool_outputs.insert(
+                            tool_call_id.clone(),
+                            function_output_value_from_message_content(&msg.content),
+                        );
+                    }
                     continue;
                 }
 
@@ -507,26 +537,29 @@ pub fn build_standard_responses_payload(
                     continue;
                 }
 
-                let tool_content = tool_result_content_from_message_content(&msg.content);
-
-                let mut tool_result = json!({
-                    "type": "tool_result",
-                    "tool_call_id": tool_call_id
-                });
-
                 active_tool_call_ids.remove(tool_call_id);
-
-                if !tool_content.is_empty()
-                    && let Value::Object(ref mut map) = tool_result
-                {
-                    map.insert("content".to_owned(), json!(tool_content));
-                }
-
                 input.push(json!({
-                    "role": "tool",
-                    "content": [tool_result]
+                    "type": "function_call_output",
+                    "call_id": tool_call_id,
+                    "output": function_output_value_from_message_content(&msg.content),
                 }));
             }
+        }
+    }
+
+    // Responses API requires every function_call item to have a paired
+    // function_call_output. Synthesize any missing outputs so replay cannot
+    // fail on partially paired history.
+    if include_structured_history_in_input {
+        for call_id in pending_tool_call_order {
+            if !active_tool_call_ids.contains(&call_id) {
+                continue;
+            }
+            input.push(json!({
+                "type": "function_call_output",
+                "call_id": call_id,
+                "output": "aborted",
+            }));
         }
     }
 
@@ -546,21 +579,18 @@ pub fn build_standard_responses_payload(
 mod tests {
     use super::{build_standard_responses_payload, parse_responses_payload};
     use crate::llm::provider::{LLMRequest, Message, ToolCall};
-    use serde_json::json;
+    use serde_json::{Value, json};
 
     fn assert_multimodal_tool_result(payload: super::OpenAIResponsesPayload) {
         let tool_msg = payload
             .input
             .iter()
-            .find(|item| item.get("role").and_then(serde_json::Value::as_str) == Some("tool"))
-            .expect("tool message should exist");
+            .find(|item| item.get("type").and_then(Value::as_str) == Some("function_call_output"))
+            .expect("function_call_output should exist");
         let tool_result_content = tool_msg
-            .get("content")
-            .and_then(serde_json::Value::as_array)
-            .and_then(|items| items.first())
-            .and_then(|result| result.get("content"))
-            .and_then(serde_json::Value::as_array)
-            .expect("tool_result content should be an array");
+            .get("output")
+            .and_then(Value::as_array)
+            .expect("function_call_output output should be an array");
 
         assert_eq!(tool_result_content.len(), 2);
         assert_eq!(tool_result_content[0]["type"], "output_text");
@@ -616,6 +646,199 @@ mod tests {
         let payload =
             build_standard_responses_payload(&request, true).expect("payload should build");
         assert_multimodal_tool_result(payload);
+    }
+
+    #[test]
+    fn standard_payload_uses_responses_function_call_items_for_structured_tool_history() {
+        let request = LLMRequest {
+            model: "gpt-5.3-codex".to_string(),
+            messages: vec![
+                Message::user("run cargo fmt".to_string()),
+                Message::assistant_with_tools(
+                    String::new(),
+                    vec![ToolCall::function(
+                        "direct_unified_exec_1".to_string(),
+                        "unified_exec".to_string(),
+                        "{\"command\":\"cargo fmt\"}".to_string(),
+                    )],
+                ),
+                Message::tool_response(
+                    "direct_unified_exec_1".to_string(),
+                    "{\"output\":\"\",\"exit_code\":0,\"backend\":\"pipe\"}".to_string(),
+                ),
+                Message::assistant("cargo fmt completed successfully.".to_string()),
+            ],
+            ..Default::default()
+        };
+
+        let payload =
+            build_standard_responses_payload(&request, true).expect("payload should build");
+
+        assert_eq!(payload.input.len(), 4);
+        assert_eq!(payload.input[0]["role"], "user");
+        assert_eq!(payload.input[1]["type"], "function_call");
+        assert!(payload.input[1].get("id").is_none());
+        assert_eq!(payload.input[1]["call_id"], "direct_unified_exec_1");
+        assert_eq!(payload.input[2]["type"], "function_call_output");
+        assert_eq!(payload.input[2]["call_id"], "direct_unified_exec_1");
+        assert_eq!(
+            payload.input[2]["output"],
+            "{\"output\":\"\",\"exit_code\":0,\"backend\":\"pipe\"}"
+        );
+        assert_eq!(payload.input[3]["role"], "assistant");
+    }
+
+    #[test]
+    fn standard_payload_synthesizes_missing_function_call_output_for_orphan_call() {
+        let request = LLMRequest {
+            model: "gpt-5.3-codex".to_string(),
+            messages: vec![
+                Message::user("run cargo fmt".to_string()),
+                Message::assistant_with_tools(
+                    String::new(),
+                    vec![ToolCall::function(
+                        "call_orphan".to_string(),
+                        "unified_exec".to_string(),
+                        "{\"command\":\"cargo fmt\"}".to_string(),
+                    )],
+                ),
+                Message::user("continue".to_string()),
+            ],
+            ..Default::default()
+        };
+
+        let payload =
+            build_standard_responses_payload(&request, true).expect("payload should build");
+
+        assert!(payload.input.iter().any(|item| {
+            item.get("type").and_then(Value::as_str) == Some("function_call")
+                && item.get("call_id").and_then(Value::as_str) == Some("call_orphan")
+        }));
+        assert!(payload.input.iter().any(|item| {
+            item.get("type").and_then(Value::as_str) == Some("function_call_output")
+                && item.get("call_id").and_then(Value::as_str) == Some("call_orphan")
+                && item.get("output").and_then(Value::as_str) == Some("aborted")
+        }));
+    }
+
+    #[test]
+    fn standard_payload_pairs_deferred_tool_output_when_output_precedes_call() {
+        let request = LLMRequest {
+            model: "gpt-5.3-codex".to_string(),
+            messages: vec![
+                Message::user("continue".to_string()),
+                Message::tool_response("call_1".to_string(), "{\"output\":\"late\"}".to_string()),
+                Message::assistant_with_tools(
+                    String::new(),
+                    vec![ToolCall::function(
+                        "call_1".to_string(),
+                        "unified_exec".to_string(),
+                        "{\"command\":\"echo late\"}".to_string(),
+                    )],
+                ),
+            ],
+            ..Default::default()
+        };
+
+        let payload =
+            build_standard_responses_payload(&request, true).expect("payload should build");
+
+        let call_index = payload
+            .input
+            .iter()
+            .position(|item| {
+                item.get("type").and_then(Value::as_str) == Some("function_call")
+                    && item.get("call_id").and_then(Value::as_str) == Some("call_1")
+            })
+            .expect("function_call should exist");
+        let output_index = payload
+            .input
+            .iter()
+            .position(|item| {
+                item.get("type").and_then(Value::as_str) == Some("function_call_output")
+                    && item.get("call_id").and_then(Value::as_str) == Some("call_1")
+            })
+            .expect("function_call_output should exist");
+
+        assert!(output_index > call_index);
+        assert_eq!(
+            payload.input[output_index]["output"],
+            "{\"output\":\"late\"}"
+        );
+        assert_ne!(payload.input[output_index]["output"], "aborted");
+    }
+
+    #[test]
+    fn standard_payload_omits_function_call_id_for_codex_replay_shape() {
+        let request = LLMRequest {
+            model: "gpt-5.1-codex".to_string(),
+            messages: vec![
+                Message::user("run cargo fmt and report".to_string()),
+                Message::assistant_with_tools(
+                    String::new(),
+                    vec![ToolCall::function(
+                        "call_T4IsdQtJifUHQUXutDlwoFLd".to_string(),
+                        "unified_exec".to_string(),
+                        r#"{"command":"cd /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode && cargo fmt","workdir":"/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode","sandbox_permissions":"use_default","additional_permissions":{"fs_read":[],"fs_write":[]}}"#.to_string(),
+                    )],
+                ),
+                Message::tool_response(
+                    "call_T4IsdQtJifUHQUXutDlwoFLd".to_string(),
+                    r#"{"output":"","exit_code":0,"backend":"pipe"}"#.to_string(),
+                ),
+                Message::system(
+                    "Previous turn already completed tool execution. Reuse the latest tool outputs in history instead of rerunning the same exploration.".to_string(),
+                ),
+                Message::user("ok".to_string()),
+            ],
+            ..Default::default()
+        };
+
+        let payload =
+            build_standard_responses_payload(&request, true).expect("payload should build");
+        let function_call = payload
+            .input
+            .iter()
+            .find(|item| item.get("type").and_then(Value::as_str) == Some("function_call"))
+            .expect("function_call item should exist");
+
+        assert_eq!(
+            function_call.get("call_id").and_then(Value::as_str),
+            Some("call_T4IsdQtJifUHQUXutDlwoFLd")
+        );
+        assert!(
+            function_call.get("id").is_none(),
+            "function_call replay items should omit id"
+        );
+    }
+
+    #[test]
+    fn parse_responses_payload_prefers_call_id_for_tool_correlation() {
+        let response = json!({
+            "output": [
+                {
+                    "type": "function_call",
+                    "id": "fc_123",
+                    "call_id": "call_123",
+                    "name": "unified_exec",
+                    "arguments": "{\"command\":\"cargo fmt\"}"
+                }
+            ]
+        });
+
+        let parsed = parse_responses_payload(response, "gpt-5.3-codex".to_string(), false)
+            .expect("payload should parse");
+
+        let tool_calls = parsed.tool_calls.expect("tool calls should exist");
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(tool_calls[0].id, "call_123");
+        assert_eq!(
+            tool_calls[0]
+                .function
+                .as_ref()
+                .map(|function| function.name.as_str()),
+            Some("unified_exec")
+        );
     }
 
     #[test]
