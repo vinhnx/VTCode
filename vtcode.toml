@@ -217,7 +217,7 @@ temporal_context_use_utc = false
 # UI theme identifier controlling ANSI styling
 # Default: "ciapre"
 # Type: `string`
-theme = "ansi-classic"
+theme = "ciapre"
 
 # Enable TODO planning helper mode for structured task management
 # Default: true

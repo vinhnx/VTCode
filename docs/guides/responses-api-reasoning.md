@@ -54,7 +54,7 @@ VT Code's default OpenAI profile keeps `gpt-5.4` on a compact execution contract
 
 7. **Function calling etiquette**: Ensure any VT Code tool definitions expose their JSON schema via the `function` payload. The Responses API requires each tool message to include a `tool_call_id`, and VT Code already handles this when serializing `ToolDefinition`s.
 
-8. **Assistant phase continuity**: VT Code preserves assistant phase metadata on native OpenAI Responses requests when replaying assistant history. Interim preambles and progress updates are sent as `commentary`; completed answers are sent as `final_answer`. The field is omitted for Chat Completions, tool/user items, and non-native OpenAI-compatible endpoints.
+8. **Assistant phase continuity**: VT Code preserves assistant phase metadata on official OpenAI Responses replays, including native `api.openai.com` requests and ChatGPT-backed manual history replays, when the target GPT model supports it. Interim preambles and progress updates are sent as `commentary`; completed answers are sent as `final_answer`. The field is omitted for Chat Completions, tool/user items, and non-native OpenAI-compatible endpoints.
 
 9. **Reasoning visibility**: When troubleshooting, inspect `.vtcode/logs/trajectory.jsonl` for `reasoning` entries and correlate them with the configured `reasoning_effort`.
 

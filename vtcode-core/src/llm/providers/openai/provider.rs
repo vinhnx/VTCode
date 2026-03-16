@@ -561,6 +561,7 @@ impl OpenAIProvider {
         } else {
             None
         };
+        let is_chatgpt_backend = self.is_chatgpt_backend();
         let ctx = request_builder::ResponsesRequestContext {
             supports_tools: self.supports_tools(&request.model),
             supports_parallel_tool_config: self.supports_parallel_tool_config(&request.model),
@@ -583,7 +584,9 @@ impl OpenAIProvider {
             default_responses_include: (!self.responses_include.is_empty())
                 .then_some(self.responses_include.as_slice()),
             hosted_shell: self.hosted_shell_for_model(&request.model),
-            include_structured_history_in_input: !self.is_chatgpt_backend(),
+            include_structured_history_in_input: !is_chatgpt_backend,
+            preserve_structured_history_on_replay: is_chatgpt_backend,
+            preserve_assistant_phase_on_replay: is_chatgpt_backend,
         };
 
         request_builder::build_responses_request(request, &ctx)

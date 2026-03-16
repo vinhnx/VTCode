@@ -38,6 +38,7 @@ const COMPACT_TOOL_GUIDANCE: &str = r#"**Tools**:
 - Use `unified_file` for edits/writes and avoid redundant re-reads after successful changes
 - Prefer named helpers over flattening logic for imagined call savings; trust the optimizer unless profiling shows a real hotspot
 - Use `unified_exec` for shell commands; prefer `rg` over shell `grep`; stay in WORKSPACE_DIR and confirm destructive ops
+- Keep iterating with tool calls until the task is complete or clearly blocked; do not stop after a single partial result
 - Hidden capabilities route through `list_skills` and `load_skill`; check routing hints before loading a skill
 - Respect runtime-configured loop guards; if a call pattern stalls or repeats, pivot instead of retrying identically"#;
 

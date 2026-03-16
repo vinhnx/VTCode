@@ -2,6 +2,7 @@
 //!
 //! Keeps JSON shaping for chat payloads out of the main provider.
 
+use crate::config::constants::models::openai as openai_models;
 use crate::config::core::OpenAIHostedShellConfig;
 use crate::config::models::Provider as ModelProvider;
 use crate::config::types::{ReasoningEffortLevel, VerbosityLevel};
@@ -9,12 +10,44 @@ use crate::llm::error_display;
 use crate::llm::provider;
 use crate::llm::providers::common::serialize_message_content_openai_for_model;
 use crate::llm::rig_adapter::RigProviderCapabilities;
+use crate::prompts::system::default_system_prompt;
 use hashbrown::HashSet;
 use serde_json::{Value, json};
 
 use super::responses_api::build_standard_responses_payload;
 use super::tool_serialization;
 use super::types::MAX_COMPLETION_TOKENS_FIELD;
+
+const NONE_REASONING_EFFORT_MODELS: &[&str] = &[
+    openai_models::GPT,
+    openai_models::GPT_5_2,
+    openai_models::GPT_5_4,
+];
+const MEDIUM_REASONING_EFFORT_MODELS: &[&str] = &[openai_models::GPT_5, openai_models::GPT_5_4_PRO];
+const LOW_VERBOSITY_MODELS: &[&str] = &[
+    openai_models::GPT,
+    openai_models::GPT_5_2,
+    openai_models::GPT_5_4,
+    openai_models::GPT_5_4_PRO,
+    openai_models::GPT_5_3_CODEX,
+];
+const PHASE_REPLAY_MODELS: &[&str] = &[
+    openai_models::GPT,
+    openai_models::GPT_5_4,
+    openai_models::GPT_5_4_PRO,
+    openai_models::GPT_5_3_CODEX,
+];
+const GATED_SAMPLING_MODELS: &[&str] = &[
+    openai_models::GPT,
+    openai_models::GPT_5_2,
+    openai_models::GPT_5_4,
+];
+const SAMPLING_DISABLED_MODELS: &[&str] = &[
+    openai_models::GPT_5,
+    openai_models::GPT_5_4_PRO,
+    openai_models::GPT_5_MINI,
+    openai_models::GPT_5_NANO,
+];
 
 pub(crate) struct ChatRequestContext<'a> {
     pub model: &'a str,
@@ -47,6 +80,8 @@ pub(crate) struct ResponsesRequestContext<'a> {
     pub default_responses_include: Option<&'a [String]>,
     pub hosted_shell: Option<&'a OpenAIHostedShellConfig>,
     pub include_structured_history_in_input: bool,
+    pub preserve_structured_history_on_replay: bool,
+    pub preserve_assistant_phase_on_replay: bool,
 }
 
 fn strip_non_native_assistant_phase(input: &mut [Value]) {
@@ -58,15 +93,36 @@ fn strip_non_native_assistant_phase(input: &mut [Value]) {
 }
 
 fn is_gpt5_codex_model(model: &str) -> bool {
-    model == "gpt-5-codex" || (model.starts_with("gpt-5.") && model.contains("codex"))
+    model == openai_models::GPT_5_CODEX
+        || (model.starts_with(openai_models::GPT_5) && model.contains("codex"))
+}
+
+fn is_openai_gpt_responses_model(model: &str) -> bool {
+    model == openai_models::GPT || model.starts_with(openai_models::GPT_5)
+}
+
+fn supports_assistant_phase_replay(model: &str) -> bool {
+    PHASE_REPLAY_MODELS.contains(&model)
+}
+
+fn default_replay_instructions(model: &str) -> Option<String> {
+    if is_gpt5_codex_model(model) {
+        Some(format!(
+            "You are Codex, based on GPT-5. {}",
+            default_system_prompt()
+        ))
+    } else {
+        None
+    }
 }
 
 fn default_reasoning_effort_for_model(model: &str) -> Option<ReasoningEffortLevel> {
-    match model {
-        "gpt" | "gpt-5.2" | "gpt-5.4" => Some(ReasoningEffortLevel::None),
-        "gpt-5" | "gpt-5.4-pro" => Some(ReasoningEffortLevel::Medium),
-        _ if is_gpt5_codex_model(model) => Some(ReasoningEffortLevel::Medium),
-        _ => None,
+    if NONE_REASONING_EFFORT_MODELS.contains(&model) {
+        Some(ReasoningEffortLevel::None)
+    } else if MEDIUM_REASONING_EFFORT_MODELS.contains(&model) || is_gpt5_codex_model(model) {
+        Some(ReasoningEffortLevel::Medium)
+    } else {
+        None
     }
 }
 
@@ -75,11 +131,10 @@ fn supports_text_verbosity(model: &str) -> bool {
 }
 
 fn default_text_verbosity_for_model(model: &str) -> Option<VerbosityLevel> {
-    match model {
-        "gpt" | "gpt-5.2" | "gpt-5.4" | "gpt-5.4-pro" | "gpt-5.3-codex" => {
-            Some(VerbosityLevel::Low)
-        }
-        _ => None,
+    if LOW_VERBOSITY_MODELS.contains(&model) {
+        Some(VerbosityLevel::Low)
+    } else {
+        None
     }
 }
 
@@ -88,15 +143,15 @@ fn trimmed_non_empty(value: Option<&str>) -> Option<&str> {
 }
 
 fn allows_sampling_parameters(model: &str, reasoning_effort: Option<ReasoningEffortLevel>) -> bool {
-    match model {
-        "gpt" | "gpt-5.2" | "gpt-5.4" => {
-            matches!(
-                reasoning_effort.unwrap_or(ReasoningEffortLevel::None),
-                ReasoningEffortLevel::None
-            )
-        }
-        "gpt-5" | "gpt-5.4-pro" | "gpt-5-mini" | "gpt-5-nano" => false,
-        _ => true,
+    if GATED_SAMPLING_MODELS.contains(&model) {
+        matches!(
+            reasoning_effort.unwrap_or(ReasoningEffortLevel::None),
+            ReasoningEffortLevel::None
+        )
+    } else if SAMPLING_DISABLED_MODELS.contains(&model) {
+        false
+    } else {
+        true
     }
 }
 
@@ -266,11 +321,24 @@ pub(crate) fn build_responses_request(
     request: &provider::LLMRequest,
     ctx: &ResponsesRequestContext<'_>,
 ) -> Result<Value, provider::LLMError> {
-    let responses_payload =
-        build_standard_responses_payload(request, ctx.include_structured_history_in_input)?;
+    let preserve_structured_history = ctx.include_structured_history_in_input
+        || (ctx.preserve_structured_history_on_replay
+            && is_openai_gpt_responses_model(&request.model));
+    let mut responses_payload =
+        build_standard_responses_payload(request, preserve_structured_history)?;
+    if responses_payload.instructions.is_none()
+        && preserve_structured_history
+        && let Some(instructions) = default_replay_instructions(&request.model)
+    {
+        responses_payload.instructions = Some(instructions);
+    }
+
     let mut input = responses_payload.input;
     let instructions = responses_payload.instructions;
-    if !ctx.include_assistant_phase {
+    if !ctx.include_assistant_phase
+        && !(ctx.preserve_assistant_phase_on_replay
+            && supports_assistant_phase_replay(&request.model))
+    {
         strip_non_native_assistant_phase(&mut input);
     }
 

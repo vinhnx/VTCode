@@ -6,7 +6,6 @@ use crate::llm::provider::{
 use crate::llm::providers::common::append_normalized_reasoning_detail_items;
 use crate::llm::providers::openai::types::OpenAIResponsesPayload;
 use crate::llm::providers::shared::tool_result_content_from_message_content;
-use crate::prompts::system::default_system_prompt;
 use hashbrown::HashSet;
 use serde_json::{Value, json};
 
@@ -543,135 +542,9 @@ pub fn build_standard_responses_payload(
     })
 }
 
-/// Build a Codex-specific Responses API payload with specialized instructions.
-pub fn build_codex_responses_payload(
-    request: &LLMRequest,
-) -> Result<OpenAIResponsesPayload, LLMError> {
-    let mut additional_guidance = Vec::new();
-
-    if let Some(system_prompt) = &request.system_prompt {
-        let trimmed = system_prompt.trim();
-        if !trimmed.is_empty() {
-            additional_guidance.push(trimmed.to_owned());
-        }
-    }
-
-    let mut input = Vec::new();
-    let mut active_tool_call_ids: HashSet<String> = HashSet::new();
-
-    for msg in &request.messages {
-        match msg.role {
-            MessageRole::System => {
-                let content_text = msg.content.as_text();
-                let trimmed = content_text.trim();
-                if !trimmed.is_empty() {
-                    additional_guidance.push(trimmed.to_owned());
-                }
-            }
-            MessageRole::User => {
-                let mut content_parts: Vec<Value> = Vec::new();
-                append_user_content_parts(&mut content_parts, &msg.content);
-
-                if !content_parts.is_empty() {
-                    input.push(json!({
-                        "role": "user",
-                        "content": content_parts
-                    }));
-                }
-            }
-            MessageRole::Assistant => {
-                // CRITICAL for Codex: Inject any persisted reasoning items from previous turns
-                // Codex models experience ~30% performance degradation when reasoning traces
-                // are dropped (vs ~3% for standard GPT-5). Always preserve reasoning continuity.
-                if let Some(reasoning_details) = &msg.reasoning_details {
-                    append_normalized_reasoning_detail_items(&mut input, reasoning_details);
-                }
-
-                let mut content_parts = Vec::new();
-                if !msg.content.is_empty() {
-                    content_parts.push(json!({
-                        "type": "output_text",
-                        "text": msg.content.as_text()
-                    }));
-                }
-
-                if let Some(tool_calls) = &msg.tool_calls {
-                    for call in tool_calls {
-                        if let Some(ref func) = call.function {
-                            active_tool_call_ids.insert(call.id.clone());
-                            content_parts.push(json!({
-                                "type": "tool_call",
-                                "id": &call.id,
-                                "function": {
-                                    "name": &func.name,
-                                    "arguments": &func.arguments
-                                }
-                            }));
-                        }
-                    }
-                }
-
-                if !content_parts.is_empty() {
-                    input.push(assistant_input_item(content_parts, msg.phase));
-                }
-            }
-            MessageRole::Tool => {
-                let tool_call_id = msg.tool_call_id.clone().ok_or_else(|| {
-                    let formatted_error = error_display::format_llm_error(
-                        "OpenAI",
-                        "Tool messages must include tool_call_id for Responses API",
-                    );
-                    LLMError::InvalidRequest {
-                        message: formatted_error,
-                        metadata: None,
-                    }
-                })?;
-
-                if !active_tool_call_ids.contains(&tool_call_id) {
-                    continue;
-                }
-
-                let tool_content = tool_result_content_from_message_content(&msg.content);
-
-                let mut tool_result = json!({
-                    "type": "tool_result",
-                    "tool_call_id": tool_call_id
-                });
-
-                active_tool_call_ids.remove(&tool_call_id);
-
-                if !tool_content.is_empty()
-                    && let Value::Object(ref mut map) = tool_result
-                {
-                    map.insert("content".to_string(), json!(tool_content));
-                }
-
-                input.push(json!({
-                    "role": "tool",
-                    "content": [tool_result]
-                }));
-            }
-        }
-    }
-
-    // Use collected guidance, or fall back to default system prompt if empty
-    let instructions = if additional_guidance.is_empty() {
-        format!("You are Codex, based on GPT-5. {}", default_system_prompt())
-    } else {
-        additional_guidance.join("\n\n")
-    };
-
-    Ok(OpenAIResponsesPayload {
-        input,
-        instructions: Some(instructions),
-    })
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{
-        build_codex_responses_payload, build_standard_responses_payload, parse_responses_payload,
-    };
+    use super::{build_standard_responses_payload, parse_responses_payload};
     use crate::llm::provider::{LLMRequest, Message, ToolCall};
     use serde_json::json;
 
@@ -714,24 +587,6 @@ mod tests {
 
         let payload =
             build_standard_responses_payload(&request, true).expect("payload should build");
-        assert_eq!(payload.input.len(), 2);
-        assert_eq!(payload.input[0]["type"], "compaction");
-    }
-
-    #[test]
-    fn codex_payload_normalizes_stringified_reasoning_details_items() {
-        let request = LLMRequest {
-            model: "gpt-5-codex".to_string(),
-            messages: vec![
-                Message::assistant("answer".to_string()).with_reasoning_details(Some(vec![
-                    json!(r#"{"type":"compaction","id":"cmp_1","encrypted_content":"opaque"}"#),
-                    json!("plain-text"),
-                ])),
-            ],
-            ..Default::default()
-        };
-
-        let payload = build_codex_responses_payload(&request).expect("payload should build");
         assert_eq!(payload.input.len(), 2);
         assert_eq!(payload.input[0]["type"], "compaction");
     }
@@ -848,32 +703,6 @@ mod tests {
             instructions
                 .contains("Previous assistant response:\ncargo check completed successfully.")
         );
-    }
-
-    #[test]
-    fn codex_payload_preserves_multimodal_tool_result_content() {
-        let request = LLMRequest {
-            model: "gpt-5-codex".to_string(),
-            messages: vec![
-                Message::assistant_with_tools(
-                    String::new(),
-                    vec![ToolCall::function(
-                        "call_1".to_string(),
-                        "view_image".to_string(),
-                        "{\"path\":\"./img.png\"}".to_string(),
-                    )],
-                ),
-                Message::tool_response(
-                    "call_1".to_string(),
-                    r#"[{"type":"input_text","text":"inline image note"},{"type":"input_image","image_url":"data:image/png;base64,abc"}]"#
-                        .to_string(),
-                ),
-            ],
-            ..Default::default()
-        };
-
-        let payload = build_codex_responses_payload(&request).expect("payload should build");
-        assert_multimodal_tool_result(payload);
     }
 
     #[test]

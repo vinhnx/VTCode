@@ -378,6 +378,18 @@ mod tests {
     }
 
     #[test]
+    fn retention_ok_for_gpt_alias() {
+        let mut cfg = VTCodeConfig::default();
+        cfg.prompt_cache.providers.openai.prompt_cache_retention = Some("24h".to_owned());
+        let msg = check_prompt_cache_retention_compat(
+            &cfg,
+            crate::config::constants::models::openai::GPT,
+            "openai",
+        );
+        assert!(msg.is_none());
+    }
+
+    #[test]
     fn hosted_shell_warning_for_non_responses_model() {
         let mut cfg = VTCodeConfig::default();
         cfg.provider.openai.hosted_shell.enabled = true;
@@ -426,6 +438,19 @@ mod tests {
         let msg = check_openai_hosted_shell_compat(
             &cfg,
             crate::config::constants::models::openai::GPT_5,
+            "openai",
+        );
+        assert!(msg.is_none());
+    }
+
+    #[test]
+    fn hosted_shell_ok_for_gpt_alias() {
+        let mut cfg = VTCodeConfig::default();
+        cfg.provider.openai.hosted_shell.enabled = true;
+
+        let msg = check_openai_hosted_shell_compat(
+            &cfg,
+            crate::config::constants::models::openai::GPT,
             "openai",
         );
         assert!(msg.is_none());
