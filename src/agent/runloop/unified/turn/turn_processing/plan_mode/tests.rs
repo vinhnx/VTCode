@@ -676,3 +676,20 @@ fn adaptive_fallback_interview_requests_task_metadata_when_missing() {
     let question_text = questions[0]["question"].as_str().unwrap_or("");
     assert!(question_text.to_ascii_lowercase().contains("task tracker"));
 }
+
+#[test]
+fn select_best_plan_validation_prefers_more_complete_candidate() {
+    let mut current = PlanValidationReport::default();
+    current.missing_sections.push("Summary".to_string());
+    current.placeholder_tokens.push("[step]".to_string());
+
+    let mut candidate = PlanValidationReport::default();
+    candidate.summary_present = true;
+    candidate.implementation_step_count = 2;
+    candidate.validation_item_count = 1;
+    candidate.assumption_count = 1;
+
+    let selected = select_best_plan_validation(Some(&current), Some(&candidate))
+        .expect("expected selected validation");
+    assert_eq!(selected, candidate);
+}

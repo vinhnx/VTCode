@@ -220,9 +220,16 @@ Return JSON only.",
         .and_then(|content| parse_interview_payload_from_text(&content))
         .and_then(|payload| sanitize_generated_interview_payload(payload, &context));
 
-    let plan_validation = plan_context
-        .as_ref()
-        .and_then(|ctx| ctx.plan_validation.clone());
+    let response_plan_validation = response_text
+        .and_then(|text| extract_proposed_plan(text).plan_text)
+        .as_deref()
+        .map(validate_plan_content);
+    let plan_validation = select_best_plan_validation(
+        plan_context
+            .as_ref()
+            .and_then(|ctx| ctx.plan_validation.as_ref()),
+        response_plan_validation.as_ref(),
+    );
     let tracker_summary = plan_context
         .as_ref()
         .and_then(|ctx| ctx.tracker_summary.clone());
@@ -320,10 +327,30 @@ fn collect_interview_research_context(
         }
     }
 
+    let extracted_plan = response_text
+        .and_then(|text| extract_proposed_plan(text).plan_text)
+        .filter(|text| !text.trim().is_empty());
+    let extracted_plan_excerpt = extracted_plan
+        .as_deref()
+        .map(|content| truncate_for_context(content, MAX_PLAN_DRAFT_CHARS));
+    let extracted_plan_validation = extracted_plan.as_deref().map(validate_plan_content);
+    let preferred_validation = select_best_plan_validation(
+        plan_context.and_then(|ctx| ctx.plan_validation.as_ref()),
+        extracted_plan_validation.as_ref(),
+    );
+    let prefer_extracted_plan = match (
+        plan_context.and_then(|ctx| ctx.plan_validation.as_ref()),
+        extracted_plan_validation.as_ref(),
+    ) {
+        (Some(existing), Some(candidate)) => is_validation_better(candidate, existing),
+        (None, Some(_)) => true,
+        _ => false,
+    };
+
     let mut open_decision_hints = response_text
         .map(extract_open_decision_hints)
         .unwrap_or_default();
-    if let Some(plan_validation) = plan_context.and_then(|ctx| ctx.plan_validation.as_ref()) {
+    if let Some(plan_validation) = preferred_validation.as_ref() {
         for decision in plan_validation
             .open_decisions
             .iter()
@@ -333,21 +360,45 @@ fn collect_interview_research_context(
         }
     }
 
+    let extracted_plan_snapshot = extracted_plan_validation
+        .as_ref()
+        .map(PlanValidationSnapshot::from);
+
     let (plan_draft_excerpt, plan_draft_path, plan_validation, task_tracker_excerpt,
         task_tracker_path, task_tracker_summary) = if let Some(plan_context) = plan_context {
-        (
-            plan_context.plan_excerpt.clone(),
-            plan_context.plan_path.clone(),
+        let plan_excerpt = if prefer_extracted_plan {
+            extracted_plan_excerpt
+                .clone()
+                .or_else(|| plan_context.plan_excerpt.clone())
+        } else {
             plan_context
-                .plan_validation
+                .plan_excerpt
+                .clone()
+                .or_else(|| extracted_plan_excerpt.clone())
+        };
+        (
+            plan_excerpt,
+            plan_context.plan_path.clone(),
+            preferred_validation
                 .as_ref()
-                .map(PlanValidationSnapshot::from),
+                .map(PlanValidationSnapshot::from)
+                .or(extracted_plan_snapshot.clone()),
             plan_context.tracker_excerpt.clone(),
             plan_context.tracker_path.clone(),
             plan_context.tracker_summary.clone(),
         )
     } else {
-        (None, None, None, None, None, None)
+        (
+            extracted_plan_excerpt,
+            None,
+            preferred_validation
+                .as_ref()
+                .map(PlanValidationSnapshot::from)
+                .or(extracted_plan_snapshot),
+            None,
+            None,
+            None,
+        )
     };
 
     InterviewResearchContext {
@@ -1214,6 +1265,68 @@ fn extract_plan_validation(response_text: Option<&str>) -> Option<PlanValidation
     let extracted = extract_proposed_plan(text);
     let plan_text = extracted.plan_text?;
     Some(validate_plan_content(&plan_text))
+}
+
+fn select_best_plan_validation(
+    current: Option<&PlanValidationReport>,
+    candidate: Option<&PlanValidationReport>,
+) -> Option<PlanValidationReport> {
+    match (current, candidate) {
+        (None, None) => None,
+        (Some(current), None) => Some(current.clone()),
+        (None, Some(candidate)) => Some(candidate.clone()),
+        (Some(current), Some(candidate)) => {
+            if is_validation_better(candidate, current) {
+                Some(candidate.clone())
+            } else {
+                Some(current.clone())
+            }
+        }
+    }
+}
+
+fn is_validation_better(
+    candidate: &PlanValidationReport,
+    current: &PlanValidationReport,
+) -> bool {
+    if candidate.is_ready() && !current.is_ready() {
+        return true;
+    }
+    if current.is_ready() && !candidate.is_ready() {
+        return false;
+    }
+
+    let candidate_missing = candidate.missing_sections.len();
+    let current_missing = current.missing_sections.len();
+    if candidate_missing != current_missing {
+        return candidate_missing < current_missing;
+    }
+
+    let candidate_placeholders = candidate.placeholder_tokens.len();
+    let current_placeholders = current.placeholder_tokens.len();
+    if candidate_placeholders != current_placeholders {
+        return candidate_placeholders < current_placeholders;
+    }
+
+    let candidate_open = candidate.open_decisions.len();
+    let current_open = current.open_decisions.len();
+    if candidate_open != current_open {
+        return candidate_open < current_open;
+    }
+
+    if candidate.summary_present != current.summary_present {
+        return candidate.summary_present;
+    }
+
+    if candidate.implementation_step_count != current.implementation_step_count {
+        return candidate.implementation_step_count > current.implementation_step_count;
+    }
+
+    if candidate.validation_item_count != current.validation_item_count {
+        return candidate.validation_item_count > current.validation_item_count;
+    }
+
+    candidate.assumption_count > current.assumption_count
 }
 
 fn build_fallback_question(
