@@ -784,13 +784,96 @@ impl<'a> TurnProcessingContext<'a> {
             && let Some(plan_text) = proposed_plan
         {
             self.emit_plan_events(&plan_text).await;
-            persist_plan_draft(&self.tool_registry.plan_mode_state(), &plan_text).await?;
+            let persisted =
+                persist_plan_draft(&self.tool_registry.plan_mode_state(), &plan_text).await?;
             self.tool_registry
                 .plan_mode_state()
                 .set_phase(PlanLifecyclePhase::DraftReady);
+            if persisted.validation.is_ready()
+                && let Some(outcome) = self.maybe_prompt_plan_confirmation_after_draft().await?
+            {
+                return Ok(outcome);
+            }
         }
 
         Ok(TurnHandlerOutcome::Break(TurnLoopResult::Completed))
+    }
+
+    async fn maybe_prompt_plan_confirmation_after_draft(
+        &mut self,
+    ) -> anyhow::Result<Option<TurnHandlerOutcome>> {
+        if !self.session_stats.is_plan_mode() {
+            return Ok(None);
+        }
+
+        if self.tool_registry.plan_mode_state().phase() != PlanLifecyclePhase::DraftReady {
+            return Ok(None);
+        }
+
+        use crate::agent::runloop::unified::tool_pipeline::run_tool_call;
+        use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
+            build_exit_plan_mode_args, build_exit_plan_mode_call_id,
+            EXIT_PLAN_MODE_REASON_PLAN_DRAFT_READY,
+        };
+        use vtcode_core::config::constants::tools;
+
+        let exit_args = build_exit_plan_mode_args(EXIT_PLAN_MODE_REASON_PLAN_DRAFT_READY);
+        let call_id = build_exit_plan_mode_call_id(
+            "call_plan_ready_exit_plan_mode",
+            self.harness_state.turn_started_at.elapsed().as_millis(),
+        );
+        let call = uni::ToolCall::function(
+            call_id,
+            tools::EXIT_PLAN_MODE.to_string(),
+            serde_json::to_string(&exit_args).unwrap_or_else(|_| "{}".to_string()),
+        );
+
+        let ctrl_c_state = self.ctrl_c_state.clone();
+        let ctrl_c_notify = self.ctrl_c_notify.clone();
+        let default_placeholder = self.default_placeholder.clone();
+        let lifecycle_hooks = self.lifecycle_hooks;
+        let vt_cfg = self.vt_cfg;
+        let turn_index = self.working_history.len();
+
+        let outcome = {
+            let mut turn_loop_ctx = self.as_turn_loop_context();
+            let mut run_ctx = turn_loop_ctx.as_run_loop_context();
+            run_tool_call(
+                &mut run_ctx,
+                &call,
+                &ctrl_c_state,
+                &ctrl_c_notify,
+                default_placeholder,
+                lifecycle_hooks,
+                false,
+                vt_cfg,
+                turn_index,
+                false,
+            )
+            .await
+        };
+
+        match outcome {
+            Ok(_pipeline_outcome) => {
+                let plan_mode_disabled = !self.session_stats.is_plan_mode()
+                    && !self.tool_registry.is_plan_mode()
+                    && !self.tool_registry.plan_mode_state().is_active();
+                if plan_mode_disabled {
+                    return Ok(Some(TurnHandlerOutcome::Continue));
+                }
+
+                Ok(Some(TurnHandlerOutcome::Break(TurnLoopResult::Completed)))
+            }
+            Err(err) => {
+                use vtcode_core::utils::ansi::MessageStyle;
+
+                self.renderer.line(
+                    MessageStyle::Error,
+                    &format!("Failed to open plan confirmation: {}", err),
+                )?;
+                Ok(Some(TurnHandlerOutcome::Break(TurnLoopResult::Completed)))
+            }
+        }
     }
 
     async fn emit_plan_events(&self, plan_text: &str) {

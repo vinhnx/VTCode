@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use futures::stream::{self, StreamExt};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Value, json};
 use tokio::fs::File;
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -43,10 +43,10 @@ pub struct ReadFileArgs {
     )]
     pub limit: usize,
     /// Determines whether the handler reads a simple slice or indentation-aware block.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_read_mode")]
     pub mode: ReadMode,
     /// Optional indentation configuration used when `mode` is `Indentation`.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_indentation")]
     pub indentation: Option<IndentationArgs>,
     /// Optional token limit for response
     #[serde(default, deserialize_with = "deserialize_opt_maybe_quoted")]
@@ -95,10 +95,10 @@ pub struct ReadRange {
     )]
     pub limit: usize,
     /// Read mode: slice or indentation.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_read_mode")]
     pub mode: ReadMode,
     /// Indentation options when mode is indentation.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_indentation")]
     pub indentation: Option<IndentationArgs>,
 }
 
@@ -223,6 +223,63 @@ pub struct IndentationArgs {
     /// Optional hard cap on returned lines; defaults to the global `limit`.
     #[serde(default, deserialize_with = "deserialize_opt_maybe_quoted")]
     pub max_lines: Option<usize>,
+}
+
+fn deserialize_read_mode<'de, D>(deserializer: D) -> Result<ReadMode, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Value::deserialize(deserializer)?;
+    match value {
+        Value::Null => Ok(ReadMode::Slice),
+        Value::String(raw) => {
+            let trimmed = raw.trim();
+            if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("slice") {
+                Ok(ReadMode::Slice)
+            } else if trimmed.eq_ignore_ascii_case("indentation") {
+                Ok(ReadMode::Indentation)
+            } else {
+                Err(serde::de::Error::custom(format!(
+                    "invalid read mode: {trimmed}"
+                )))
+            }
+        }
+        other => Err(serde::de::Error::custom(format!(
+            "invalid read mode type: {other}"
+        ))),
+    }
+}
+
+fn deserialize_indentation<'de, D>(deserializer: D) -> Result<Option<IndentationArgs>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Value::deserialize(deserializer)?;
+    match value {
+        Value::Null => Ok(None),
+        Value::Bool(true) => Ok(Some(IndentationArgs::default())),
+        Value::Bool(false) => Ok(None),
+        Value::String(raw) => {
+            let trimmed = raw.trim();
+            if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("false") {
+                Ok(None)
+            } else if trimmed.eq_ignore_ascii_case("true") {
+                Ok(Some(IndentationArgs::default()))
+            } else {
+                Err(serde::de::Error::custom(format!(
+                    "invalid indentation value: {trimmed}"
+                )))
+            }
+        }
+        Value::Object(_) => {
+            let args = IndentationArgs::deserialize(value)
+                .map_err(serde::de::Error::custom)?;
+            Ok(Some(args))
+        }
+        other => Err(serde::de::Error::custom(format!(
+            "invalid indentation type: {other}"
+        ))),
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -473,33 +530,38 @@ impl Tool for ReadFileHandler {
                     "default": "slice"
                 },
                 "indentation": {
-                    "type": "object",
                     "description": "Indentation settings when mode=indentation",
-                    "properties": {
-                        "anchor_line": {
-                            "type": "integer",
-                            "description": "Line number to anchor on (defaults to offset)"
-                        },
-                        "max_levels": {
-                            "type": "integer",
-                            "description": "Max indentation depth (0=unlimited)",
-                            "default": 0
-                        },
-                        "include_siblings": {
-                            "type": "boolean",
-                            "description": "Include sibling blocks",
-                            "default": false
-                        },
-                        "include_header": {
-                            "type": "boolean",
-                            "description": "Include header lines above anchor",
-                            "default": true
-                        },
-                        "max_lines": {
-                            "type": "integer",
-                            "description": "Hard cap on returned lines"
+                    "anyOf": [
+                        {"type": "boolean"},
+                        {
+                            "type": "object",
+                            "properties": {
+                                "anchor_line": {
+                                    "type": "integer",
+                                    "description": "Line number to anchor on (defaults to offset)"
+                                },
+                                "max_levels": {
+                                    "type": "integer",
+                                    "description": "Max indentation depth (0=unlimited)",
+                                    "default": 0
+                                },
+                                "include_siblings": {
+                                    "type": "boolean",
+                                    "description": "Include sibling blocks",
+                                    "default": false
+                                },
+                                "include_header": {
+                                    "type": "boolean",
+                                    "description": "Include header lines above anchor",
+                                    "default": true
+                                },
+                                "max_lines": {
+                                    "type": "integer",
+                                    "description": "Hard cap on returned lines"
+                                }
+                            }
                         }
-                    }
+                    ]
                 },
                 "max_tokens": {
                     "type": "integer",
@@ -943,6 +1005,43 @@ mod tests {
         let lines = read(temp.path(), 2, 2).await?;
         assert_eq!(lines, vec!["beta".to_string(), "gamma".to_string()]);
         Ok(())
+    }
+
+    #[test]
+    fn read_file_args_accepts_boolean_indentation() {
+        let args = json!({
+            "file_path": "/tmp/example.txt",
+            "mode": "slice",
+            "indentation": false
+        });
+
+        let parsed: ReadFileArgs = serde_json::from_value(args).unwrap();
+        assert!(matches!(parsed.mode, ReadMode::Slice));
+        assert!(parsed.indentation.is_none());
+    }
+
+    #[test]
+    fn read_file_args_accepts_true_indentation() {
+        let args = json!({
+            "file_path": "/tmp/example.txt",
+            "mode": "indentation",
+            "indentation": true
+        });
+
+        let parsed: ReadFileArgs = serde_json::from_value(args).unwrap();
+        assert!(matches!(parsed.mode, ReadMode::Indentation));
+        assert!(parsed.indentation.is_some());
+    }
+
+    #[test]
+    fn read_file_args_accepts_empty_mode() {
+        let args = json!({
+            "file_path": "/tmp/example.txt",
+            "mode": ""
+        });
+
+        let parsed: ReadFileArgs = serde_json::from_value(args).unwrap();
+        assert!(matches!(parsed.mode, ReadMode::Slice));
     }
 
     #[tokio::test]

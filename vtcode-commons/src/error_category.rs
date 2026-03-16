@@ -358,12 +358,23 @@ pub fn classify_error_message(msg: &str) -> ErrorCategory {
         &[
             "invalid argument",
             "invalid parameters",
+            "invalid type",
             "malformed",
+            "failed to parse arguments",
+            "failed to parse argument",
             "missing required",
+            "at least one item is required",
+            "is required for",
             "schema validation",
             "argument validation failed",
             "unknown field",
+            "unknown variant",
+            "expected struct",
+            "expected enum",
             "type mismatch",
+            "must be an absolute path",
+            "not parseable",
+            "parseable as",
         ],
     ) {
         return ErrorCategory::InvalidParameters;
@@ -458,7 +469,26 @@ pub fn classify_error_message(msg: &str) -> ErrorCategory {
         return ErrorCategory::ServiceUnavailable;
     }
 
-    // --- Priority 15: Network / Service unavailable ---
+    // --- Priority 15: Service unavailable (HTTP 5xx and related) ---
+    if contains_any(
+        &msg,
+        &[
+            "service unavailable",
+            "temporarily unavailable",
+            "internal server error",
+            "bad gateway",
+            "gateway timeout",
+            "overloaded",
+            "500",
+            "502",
+            "503",
+            "504",
+        ],
+    ) {
+        return ErrorCategory::ServiceUnavailable;
+    }
+
+    // --- Priority 16: Network (connectivity, DNS, transport) ---
     if contains_any(
         &msg,
         &[
@@ -468,18 +498,8 @@ pub fn classify_error_message(msg: &str) -> ErrorCategory {
             "broken pipe",
             "dns",
             "name resolution",
-            "service unavailable",
-            "temporarily unavailable",
-            "internal server error",
-            "bad gateway",
-            "gateway timeout",
-            "overloaded",
             "try again",
             "retry later",
-            "500",
-            "502",
-            "503",
-            "504",
             "upstream connect error",
             "tls handshake",
             "socket hang up",
@@ -490,7 +510,7 @@ pub fn classify_error_message(msg: &str) -> ErrorCategory {
         return ErrorCategory::Network;
     }
 
-    // --- Priority 16: Resource exhausted (memory, disk) ---
+    // --- Priority 17: Resource exhausted (memory, disk) ---
     if contains_any(&msg, &["out of memory", "disk full", "no space left"]) {
         return ErrorCategory::ResourceExhausted;
     }
@@ -612,10 +632,10 @@ mod tests {
     }
 
     #[test]
-    fn service_unavailable_is_network() {
+    fn service_unavailable_is_classified() {
         assert_eq!(
             classify_error_message("503 service unavailable"),
-            ErrorCategory::Network
+            ErrorCategory::ServiceUnavailable
         );
     }
 
@@ -727,6 +747,22 @@ mod tests {
     fn invalid_parameters() {
         assert_eq!(
             classify_error_message("invalid argument: missing path field"),
+            ErrorCategory::InvalidParameters
+        );
+        assert_eq!(
+            classify_error_message(
+                "Failed to parse arguments for read_file handler: invalid type: boolean `false`"
+            ),
+            ErrorCategory::InvalidParameters
+        );
+        assert_eq!(
+            classify_error_message("at least one item is required for 'create'"),
+            ErrorCategory::InvalidParameters
+        );
+        assert_eq!(
+            classify_error_message(
+                "structural pattern preflight failed: pattern is not parseable as Rust syntax"
+            ),
             ErrorCategory::InvalidParameters
         );
     }
