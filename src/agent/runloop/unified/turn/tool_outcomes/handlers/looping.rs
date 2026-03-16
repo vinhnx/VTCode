@@ -185,7 +185,25 @@ pub(super) fn task_tracker_create_signature(tool_name: &str, args: &Value) -> Op
         return None;
     }
 
-    Some("task_tracker::create".to_string())
+    #[derive(serde::Serialize)]
+    struct TaskTrackerCreateSignature<'a> {
+        title: Option<&'a Value>,
+        items: Option<&'a Value>,
+        notes: Option<&'a Value>,
+    }
+
+    let payload = TaskTrackerCreateSignature {
+        title: args.get("title"),
+        items: args.get("items"),
+        notes: args.get("notes"),
+    };
+    let payload_str = serde_json::to_string(&payload).ok()?;
+    let mut signature =
+        String::with_capacity("task_tracker::create::".len() + payload_str.len());
+    signature.push_str("task_tracker::create::");
+    signature.push_str(&payload_str);
+
+    Some(signature)
 }
 
 pub(super) fn spool_chunk_read_path<'a>(

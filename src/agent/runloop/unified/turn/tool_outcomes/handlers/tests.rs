@@ -608,6 +608,63 @@ fn task_tracker_create_signature_matches_identical_payloads() {
 }
 
 #[test]
+fn task_tracker_create_signature_differs_for_payload_changes() {
+    let first = json!({
+        "action": "create",
+        "title": "Fix clippy warnings",
+        "items": ["A"],
+        "notes": "n"
+    });
+    let second = json!({
+        "action": "create",
+        "title": "Fix clippy warnings",
+        "items": ["A", "B"],
+        "notes": "n"
+    });
+    let sig1 = task_tracker_create_signature(tool_names::TASK_TRACKER, &first);
+    let sig2 = task_tracker_create_signature(tool_names::TASK_TRACKER, &second);
+    assert_ne!(sig1, sig2);
+}
+
+#[test]
+fn task_tracker_create_signature_differs_for_title_change() {
+    let first = json!({
+        "action": "create",
+        "title": "Fix clippy warnings",
+        "items": ["A", "B"],
+        "notes": "n"
+    });
+    let second = json!({
+        "action": "create",
+        "title": "Fix clippy warnings later",
+        "items": ["A", "B"],
+        "notes": "n"
+    });
+    let sig1 = task_tracker_create_signature(tool_names::TASK_TRACKER, &first);
+    let sig2 = task_tracker_create_signature(tool_names::TASK_TRACKER, &second);
+    assert_ne!(sig1, sig2);
+}
+
+#[test]
+fn task_tracker_create_signature_differs_for_notes_change() {
+    let first = json!({
+        "action": "create",
+        "title": "Fix clippy warnings",
+        "items": ["A", "B"],
+        "notes": "n"
+    });
+    let second = json!({
+        "action": "create",
+        "title": "Fix clippy warnings",
+        "items": ["A", "B"],
+        "notes": "updated"
+    });
+    let sig1 = task_tracker_create_signature(tool_names::TASK_TRACKER, &first);
+    let sig2 = task_tracker_create_signature(tool_names::TASK_TRACKER, &second);
+    assert_ne!(sig1, sig2);
+}
+
+#[test]
 fn task_tracker_create_signature_ignores_non_create_calls() {
     let args = json!({
         "action": "update",
