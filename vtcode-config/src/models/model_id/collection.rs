@@ -20,6 +20,8 @@ impl ModelId {
             // OpenAI models
             ModelId::GPT54,
             ModelId::GPT54Pro,
+            ModelId::GPT54Nano,
+            ModelId::GPT54Mini,
             ModelId::GPT53Codex,
             ModelId::GPT52Codex,
             ModelId::GPT51Codex,

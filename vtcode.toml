@@ -92,7 +92,7 @@ default_editing_mode = "edit"
 # Default model to use
 # Default: "gpt-5.3-codex"
 # Type: `string`
-default_model = "gpt-5.1-codex"
+default_model = "gpt-5.4-nano"
 
 # Enable an extra self-review pass to refine final responses
 # Default: false
@@ -2400,6 +2400,11 @@ render-mode = "lean"
 # Bundled
 [skills.bundled]
 enabled = true
+
+[provider.openai.tool_search]
+enabled = true
+defer_by_default = true
+always_available_tools = []
 
 
 # Syntax Highlighting

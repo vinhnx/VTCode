@@ -90,7 +90,7 @@ impl ModelId {
             ModelId::Gemini31ProPreview
             | ModelId::Gemini31ProPreviewCustomTools
             | ModelId::Gemini31FlashLitePreview => Some(ModelId::Gemini3FlashPreview),
-            ModelId::GPT52 | ModelId::GPT54 | ModelId::GPT54Pro | ModelId::GPT5 => {
+            ModelId::GPT52 | ModelId::GPT54 | ModelId::GPT54Pro | ModelId::GPT54Nano | ModelId::GPT54Mini | ModelId::GPT5 => {
                 Some(ModelId::GPT5Mini)
             }
             ModelId::DeepSeekReasoner => Some(ModelId::DeepSeekChat),
@@ -239,7 +239,7 @@ impl ModelId {
             ModelId::Gemini3FlashPreview => "3",
             // OpenAI generations
             ModelId::GPT52 | ModelId::GPT52Codex => "5.2",
-            ModelId::GPT54 | ModelId::GPT54Pro => "5.4",
+            ModelId::GPT54 | ModelId::GPT54Pro | ModelId::GPT54Nano | ModelId::GPT54Mini => "5.4",
             ModelId::GPT53Codex => "5.3",
             ModelId::GPT51Codex | ModelId::GPT51CodexMax => "5.1",
             ModelId::GPT5

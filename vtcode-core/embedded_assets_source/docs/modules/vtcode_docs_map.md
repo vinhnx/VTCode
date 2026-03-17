@@ -42,6 +42,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: **Test Overview**, **Running Tests**, **Test Structure**, **Test Categories**, **Testing Tools and Components**
   - **User Questions**: "What can you tell me about **Testing Guide**?", "How does **Test Overview** work?", "How does **Running Tests** work?"
 
+- **File**: `docs/development/ADDING_MODELS.md`
+  - **Content**: Adding New Models to VT Code
+  - **Topics**: Overview, Quick Checklist, Detailed Steps, Verification, Template for Copy-Paste
+  - **User Questions**: "What can you tell me about Adding New Models to VT Code?", "How does Overview work?", "How does Quick Checklist work?"
+
 - **File**: `docs/development/ci-cd.md`
   - **Content**: CI/CD and Code Quality
   - **Topics**: GitHub Actions Workflows, Code Quality Tools, Local Development, Best Practices, CI/CD Configuration
@@ -69,7 +74,7 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/development/README.md`
   - **Content**: Development Guide
-  - **Topics**: Getting Started, Security and Execution, Performance and Reliability, Maintenance Workflows, Navigation
+  - **Topics**: Getting Started, Security and Execution, Performance and Reliability, Model Management, Maintenance Workflows
   - **User Questions**: "What can you tell me about Development Guide?", "How does Getting Started work?", "How does Security and Execution work?"
 
 - **File**: `docs/development/DEVELOPMENT_SETUP.md`
@@ -91,6 +96,16 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Content**: Git-cliff Quick Reference
   - **Topics**: Common Commands, Release Workflow, Configuration, Commit Types, Troubleshooting
   - **User Questions**: "What can you tell me about Git-cliff Quick Reference?", "How does Common Commands work?", "How does Release Workflow work?"
+
+- **File**: `docs/development/MODEL_ADDITION_CHECKLIST.md`
+  - **Content**: Model Addition Checklist
+  - **Topics**: Pre-Flight, Phase 1: Constants & Metadata (Database Layer), Phase 2: Model ID Resolution (Core Layer), Phase 3: Capabilities & Collections (Runtime Layer), Phase 4: Compilation & Verification
+  - **User Questions**: "What can you tell me about Model Addition Checklist?", "How does Pre-Flight work?", "How does Phase 1: Constants & Metadata (Database Layer) work?"
+
+- **File**: `docs/development/MODEL_ADDITION_WORKFLOW.md`
+  - **Content**: Model Addition Workflow Summary
+  - **Topics**: Why This Workflow?, The 10-Step Process, Automation Level: 60% (Guided, Not Fully Automated), Typical Workflow, File Dependency Graph
+  - **User Questions**: "What can you tell me about Model Addition Workflow Summary?", "How does Why This Workflow? work?", "How does The 10-Step Process work?"
 
 - **File**: `docs/development/performance-hasher-policy.md`
   - **Content**: Performance Hasher Policy

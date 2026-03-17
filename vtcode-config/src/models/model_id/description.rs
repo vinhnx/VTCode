@@ -34,6 +34,12 @@ impl ModelId {
             ModelId::GPT54Pro => {
                 "Higher-compute GPT-5.4 variant for tougher problems with deeper reasoning"
             }
+            ModelId::GPT54Nano => {
+                "Lightweight GPT-5.4 variant optimized for speed and cost-efficiency"
+            }
+            ModelId::GPT54Mini => {
+                "Compact GPT-5.4 variant for cost-effective tasks with reduced reasoning overhead"
+            }
             ModelId::GPT53Codex => {
                 "GPT-5.3 variant optimized for agentic coding tasks with reasoning effort support (low, medium, high, xhigh)"
             }

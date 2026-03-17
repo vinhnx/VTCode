@@ -22,6 +22,11 @@ Entry point for VT Code contributor workflows.
 - [Performance Hasher Policy](./performance-hasher-policy.md) - `rustc_hash` usage policy.
 - [Async Performance Audit](./async-performance-audit.md) - Async architecture performance findings.
 
+## Model Management
+
+- [Adding Models](./ADDING_MODELS.md) - Complete workflow for adding new LLM models.
+- [Model Addition Checklist](./MODEL_ADDITION_CHECKLIST.md) - Step-by-step checklist for model additions.
+
 ## Maintenance Workflows
 
 - [Asset Synchronization](./asset-synchronization.md) - Embedded asset maintenance.

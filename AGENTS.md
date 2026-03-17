@@ -198,6 +198,17 @@ Use `update_plan` for 4+ step tasks. 5-7 word steps. Mark `in_progress`/`complet
 
 Answering questions about VT Code? Check `docs/modules/vtcode_docs_map.md` first.
 
+## Model Management
+
+Adding a new LLM model requires updates across three layers (constants, configuration, runtime):
+
+- **Quick start**: `./scripts/add_model.sh` - Interactive prompts + code generation
+- **Full guide**: `docs/development/ADDING_MODELS.md` - 10-step detailed workflow
+- **Checklist**: `docs/development/MODEL_ADDITION_CHECKLIST.md` - 70-point verification
+- **Why partial automation**: `docs/development/MODEL_ADDITION_WORKFLOW.md` - Architecture & approach
+
+Files to update: openai.rs, models.json, model_id.rs, as_str.rs, display.rs, description.rs, parse.rs, provider.rs, collection.rs, capabilities.rs.
+
 ## Resources
 
 - `docs/ARCHITECTURE.md` — High-level architecture
@@ -205,6 +216,7 @@ Answering questions about VT Code? Check `docs/modules/vtcode_docs_map.md` first
 - `docs/config/CONFIGURATION_PRECEDENCE.md` — Config loading order
 - `docs/providers/PROVIDER_GUIDES.md` — LLM provider setup
 - `docs/development/testing.md` — Testing strategy
+- `docs/development/ADDING_MODELS.md` — Model addition workflow
 
 ## Hickey's Core: Simple > Easy
 

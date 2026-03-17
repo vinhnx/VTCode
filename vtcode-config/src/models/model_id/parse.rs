@@ -36,6 +36,8 @@ impl FromStr for ModelId {
             s if s == models::openai::GPT_5_2_CODEX => Ok(ModelId::GPT52Codex),
             s if s == models::GPT_5_4 => Ok(ModelId::GPT54),
             s if s == models::GPT_5_4_PRO => Ok(ModelId::GPT54Pro),
+            s if s == models::openai::GPT_5_4_NANO => Ok(ModelId::GPT54Nano),
+            s if s == models::openai::GPT_5_4_MINI => Ok(ModelId::GPT54Mini),
             s if s == models::openai::GPT_5_3_CODEX => Ok(ModelId::GPT53Codex),
             s if s == models::openai::GPT_5_1_CODEX => Ok(ModelId::GPT51Codex),
             s if s == models::openai::GPT_5_1_CODEX_MAX => Ok(ModelId::GPT51CodexMax),

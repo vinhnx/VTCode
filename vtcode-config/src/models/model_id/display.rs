@@ -18,6 +18,8 @@ impl ModelId {
             ModelId::GPT52Codex => "GPT-5.2 Codex",
             ModelId::GPT54 => "GPT-5.4",
             ModelId::GPT54Pro => "GPT-5.4 Pro",
+            ModelId::GPT54Nano => "GPT-5.4 Nano",
+            ModelId::GPT54Mini => "GPT-5.4 Mini",
             ModelId::GPT53Codex => "GPT-5.3 Codex",
             ModelId::GPT51Codex => "GPT-5.1 Codex",
             ModelId::GPT51CodexMax => "GPT-5.1 Codex Max",

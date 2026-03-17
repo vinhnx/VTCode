@@ -37,6 +37,10 @@ pub enum ModelId {
     GPT54,
     /// GPT-5.4 Pro - Higher-compute GPT-5.4 variant for difficult problems
     GPT54Pro,
+    /// GPT-5.4 Nano - Lightweight GPT-5.4 variant optimized for speed and cost-efficiency
+    GPT54Nano,
+    /// GPT-5.4 Mini - Compact GPT-5.4 variant for cost-effective tasks with reduced reasoning overhead
+    GPT54Mini,
     /// GPT-5.3 Codex - Code-focused GPT-5.3 variant optimized for agentic coding with reasoning effort support (low, medium, high, xhigh)
     GPT53Codex,
     /// GPT-5.1 Codex - Code-focused GPT-5.1 variant optimized for agentic coding

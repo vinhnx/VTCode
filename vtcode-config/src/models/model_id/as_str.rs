@@ -20,6 +20,8 @@ impl ModelId {
             ModelId::GPT52Codex => models::openai::GPT_5_2_CODEX,
             ModelId::GPT54 => models::GPT_5_4,
             ModelId::GPT54Pro => models::GPT_5_4_PRO,
+            ModelId::GPT54Nano => models::openai::GPT_5_4_NANO,
+            ModelId::GPT54Mini => models::openai::GPT_5_4_MINI,
             ModelId::GPT53Codex => models::openai::GPT_5_3_CODEX,
             ModelId::GPT51Codex => models::openai::GPT_5_1_CODEX,
             ModelId::GPT51CodexMax => models::openai::GPT_5_1_CODEX_MAX,
