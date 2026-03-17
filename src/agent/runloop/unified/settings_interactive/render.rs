@@ -1,5 +1,5 @@
 use toml::Value as TomlValue;
-use vtcode_tui::{InlineListItem, InlineListSelection};
+use vtcode_tui::app::{InlineListItem, InlineListSelection};
 
 use crate::agent::runloop::unified::config_section_headings::{
     heading_for_path, humanize_identifier,

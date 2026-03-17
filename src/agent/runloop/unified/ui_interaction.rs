@@ -22,7 +22,7 @@ use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::terminal_setup::detector::TerminalType;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_tui::InlineHandle;
+use vtcode_tui::app::InlineHandle;
 
 use super::async_mcp_manager::{AsyncMcpManager, McpInitStatus};
 use super::state::{CtrlCState, SessionStats};

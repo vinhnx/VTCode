@@ -3,11 +3,11 @@ use crate::config::loader::VTCodeConfig;
 use crate::config::types::{ReasoningEffortLevel, UiSurfacePreference};
 use crate::ui::slash::SlashCommandInfo;
 use crate::ui::theme::ThemeStyles;
-use vtcode_tui::KeyboardProtocolSettings;
 use vtcode_tui::ReasoningEffortLevel as TuiReasoningEffortLevel;
-use vtcode_tui::SessionAppearanceConfig;
-use vtcode_tui::SessionSurface;
-use vtcode_tui::SlashCommandItem;
+use vtcode_tui::app::{KeyboardProtocolSettings, SessionSurface, SlashCommandItem};
+use vtcode_tui::core::{
+    LayoutModeOverride, ReasoningDisplayMode, SessionAppearanceConfig, UiMode, theme_from_styles,
+};
 use vtcode_tui::ui::theme::ThemeStyles as TuiThemeStyles;
 
 pub fn to_tui_reasoning(level: ReasoningEffortLevel) -> TuiReasoningEffortLevel {
@@ -72,9 +72,9 @@ pub fn tui_theme_styles_from_core(styles: &ThemeStyles) -> TuiThemeStyles {
     }
 }
 
-pub fn inline_theme_from_core_styles(styles: &ThemeStyles) -> vtcode_tui::InlineTheme {
+pub fn inline_theme_from_core_styles(styles: &ThemeStyles) -> vtcode_tui::core::InlineTheme {
     let mapped = tui_theme_styles_from_core(styles);
-    vtcode_tui::theme_from_styles(&mapped)
+    theme_from_styles(&mapped)
 }
 
 pub fn to_tui_slash_commands(commands: &[SlashCommandInfo]) -> Vec<SlashCommandItem> {
@@ -90,15 +90,9 @@ pub fn to_tui_appearance(config: &VTCodeConfig) -> SessionAppearanceConfig {
     SessionAppearanceConfig {
         theme: config.agent.theme.clone(),
         ui_mode: match config.ui.display_mode {
-            crate::config::UiDisplayMode::Full => {
-                vtcode_tui::core_tui::session::config::UiMode::Full
-            }
-            crate::config::UiDisplayMode::Minimal => {
-                vtcode_tui::core_tui::session::config::UiMode::Minimal
-            }
-            crate::config::UiDisplayMode::Focused => {
-                vtcode_tui::core_tui::session::config::UiMode::Focused
-            }
+            crate::config::UiDisplayMode::Full => UiMode::Full,
+            crate::config::UiDisplayMode::Minimal => UiMode::Minimal,
+            crate::config::UiDisplayMode::Focused => UiMode::Focused,
         },
         show_sidebar: config.ui.show_sidebar,
         min_content_width: 40,
@@ -112,29 +106,15 @@ pub fn to_tui_appearance(config: &VTCodeConfig) -> SessionAppearanceConfig {
             0
         },
         layout_mode: match config.ui.layout_mode {
-            crate::config::LayoutModeOverride::Auto => {
-                vtcode_tui::core_tui::session::config::LayoutModeOverride::Auto
-            }
-            crate::config::LayoutModeOverride::Compact => {
-                vtcode_tui::core_tui::session::config::LayoutModeOverride::Compact
-            }
-            crate::config::LayoutModeOverride::Standard => {
-                vtcode_tui::core_tui::session::config::LayoutModeOverride::Standard
-            }
-            crate::config::LayoutModeOverride::Wide => {
-                vtcode_tui::core_tui::session::config::LayoutModeOverride::Wide
-            }
+            crate::config::LayoutModeOverride::Auto => LayoutModeOverride::Auto,
+            crate::config::LayoutModeOverride::Compact => LayoutModeOverride::Compact,
+            crate::config::LayoutModeOverride::Standard => LayoutModeOverride::Standard,
+            crate::config::LayoutModeOverride::Wide => LayoutModeOverride::Wide,
         },
         reasoning_display_mode: match config.ui.reasoning_display_mode {
-            crate::config::ReasoningDisplayMode::Always => {
-                vtcode_tui::core_tui::session::config::ReasoningDisplayMode::Always
-            }
-            crate::config::ReasoningDisplayMode::Toggle => {
-                vtcode_tui::core_tui::session::config::ReasoningDisplayMode::Toggle
-            }
-            crate::config::ReasoningDisplayMode::Hidden => {
-                vtcode_tui::core_tui::session::config::ReasoningDisplayMode::Hidden
-            }
+            crate::config::ReasoningDisplayMode::Always => ReasoningDisplayMode::Always,
+            crate::config::ReasoningDisplayMode::Toggle => ReasoningDisplayMode::Toggle,
+            crate::config::ReasoningDisplayMode::Hidden => ReasoningDisplayMode::Hidden,
         },
         reasoning_visible_default: config.ui.reasoning_visible_default,
         vim_mode: config.ui.vim_mode,

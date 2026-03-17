@@ -1,5 +1,5 @@
 use anstyle::Style;
-use vtcode_tui::{InlineTextStyle, InlineTheme, convert_style};
+use vtcode_tui::core::{InlineTextStyle, InlineTheme, convert_style};
 
 fn main() {
     let _theme = InlineTheme {

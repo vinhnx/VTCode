@@ -3,7 +3,7 @@ use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::Notify;
 use vtcode_core::config::constants::tools;
-use vtcode_tui::{InlineHandle, InlineSession};
+use vtcode_tui::app::{InlineHandle, InlineSession};
 
 use crate::agent::runloop::unified::request_user_input;
 use crate::agent::runloop::unified::state::CtrlCState;

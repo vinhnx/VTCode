@@ -69,26 +69,16 @@ pub enum InlineCommand {
         appearance: AppearanceConfig,
     },
     SetVimModeEnabled(bool),
-    SetQueuedInputs {
-        entries: Vec<String>,
-    },
+    SetQueuedInputs { entries: Vec<String> },
     SetCursorVisible(bool),
     SetInputEnabled(bool),
     SetInput(String),
     ApplySuggestedPrompt(String),
-    SetTaskPanelVisible(bool),
-    SetTaskPanelLines(Vec<String>),
     ClearInput,
     ForceRedraw,
-    ShowOverlay {
-        request: Box<OverlayRequest>,
-    },
+    ShowOverlay { request: Box<OverlayRequest> },
     CloseOverlay,
-    LoadFilePalette {
-        files: Vec<String>,
-        workspace: std::path::PathBuf,
-    },
-    OpenHistoryPicker,
+    // App-only palette/history commands are defined in the app protocol layer.
     ClearScreen,
     SuspendEventLoop,
     ResumeEventLoop,
@@ -122,7 +112,6 @@ pub enum InlineEvent {
     ScrollLineDown,
     ScrollPageUp,
     ScrollPageDown,
-    FileSelected(String),
     OpenFileInEditor(String),
     OpenUrl(String),
     LaunchEditor,
@@ -268,14 +257,6 @@ impl InlineHandle {
         self.send_command(InlineCommand::ApplySuggestedPrompt(content));
     }
 
-    pub fn set_task_panel_visible(&self, visible: bool) {
-        self.send_command(InlineCommand::SetTaskPanelVisible(visible));
-    }
-
-    pub fn set_task_panel_lines(&self, lines: Vec<String>) {
-        self.send_command(InlineCommand::SetTaskPanelLines(lines));
-    }
-
     pub fn clear_input(&self) {
         self.send_command(InlineCommand::ClearInput);
     }
@@ -346,14 +327,6 @@ impl InlineHandle {
 
     pub fn clear_screen(&self) {
         self.send_command(InlineCommand::ClearScreen);
-    }
-
-    pub fn load_file_palette(&self, files: Vec<String>, workspace: std::path::PathBuf) {
-        self.send_command(InlineCommand::LoadFilePalette { files, workspace });
-    }
-
-    pub fn open_history_picker(&self) {
-        self.send_command(InlineCommand::OpenHistoryPicker);
     }
 
     pub fn set_skip_confirmations(&self, skip: bool) {

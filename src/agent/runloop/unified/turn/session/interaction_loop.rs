@@ -9,7 +9,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_tui::InlineHandle;
+use vtcode_tui::app::InlineHandle;
 
 use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::model_picker::ModelPickerState;
@@ -27,9 +27,9 @@ use crate::agent::runloop::welcome::SessionBootstrap;
 #[allow(clippy::too_many_arguments)]
 pub(crate) struct InteractionLoopContext<'a> {
     pub renderer: &'a mut AnsiRenderer,
-    pub session: &'a mut vtcode_tui::InlineSession,
+    pub session: &'a mut vtcode_tui::app::InlineSession,
     pub handle: &'a InlineHandle,
-    pub header_context: &'a mut vtcode_tui::InlineHeaderContext,
+    pub header_context: &'a mut vtcode_tui::app::InlineHeaderContext,
     pub ide_context_bridge: &'a mut Option<IdeContextBridge>,
     pub ctrl_c_state: &'a Arc<CtrlCState>,
     pub ctrl_c_notify: &'a Arc<Notify>,

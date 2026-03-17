@@ -596,7 +596,7 @@ mod tests {
         parse_update_args,
     };
     use vtcode_core::utils::ansi::AnsiRenderer;
-    use vtcode_tui::InlineHandle;
+    use vtcode_tui::app::InlineHandle;
 
     fn renderer_for_tests() -> AnsiRenderer {
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();

@@ -10,40 +10,6 @@ impl Session {
         })
     }
 
-    fn bottom_panel_contains(&self, column: u16, row: u16) -> bool {
-        self.bottom_panel_area.is_some_and(|area| {
-            row >= area.y
-                && row < area.y.saturating_add(area.height)
-                && column >= area.x
-                && column < area.x.saturating_add(area.width)
-        })
-    }
-
-    fn shared_panel_row_index(
-        &self,
-        fixed_rows: u16,
-        visible_rows: usize,
-        column: u16,
-        row: u16,
-    ) -> Option<usize> {
-        let area = self.bottom_panel_area?;
-        if row < area.y
-            || row >= area.y.saturating_add(area.height)
-            || column < area.x
-            || column >= area.x.saturating_add(area.width)
-        {
-            return None;
-        }
-
-        let relative_row = row.saturating_sub(area.y);
-        if relative_row < fixed_rows {
-            return None;
-        }
-
-        let list_row = usize::from(relative_row - fixed_rows);
-        (list_row < visible_rows).then_some(list_row)
-    }
-
     fn handle_modal_list_result(
         &mut self,
         result: modal::ModalListKeyResult,
@@ -208,141 +174,13 @@ impl Session {
     }
 
     fn handle_bottom_panel_scroll(&mut self, down: bool) -> bool {
-        if self.bottom_panel_area.is_none() {
-            return false;
-        }
-
-        if self.file_palette_active {
-            let Some(palette) = self.file_palette.as_mut() else {
-                return true;
-            };
-            if down {
-                palette.move_selection_down();
-            } else {
-                palette.move_selection_up();
-            }
-            self.mark_dirty();
-            return true;
-        }
-
-        if self.history_picker_state.active {
-            if down {
-                self.history_picker_state.move_down();
-            } else {
-                self.history_picker_state.move_up();
-            }
-            self.mark_dirty();
-            return true;
-        }
-
-        if slash::slash_navigation_available(self) {
-            if down {
-                slash::move_slash_selection_down(self);
-            } else {
-                slash::move_slash_selection_up(self);
-            }
-            return true;
-        }
-
+        let _ = down;
         false
     }
 
     fn handle_bottom_panel_click(&mut self, mouse_event: MouseEvent) -> bool {
-        let column = mouse_event.column;
-        let row = mouse_event.row;
-        if !self.bottom_panel_contains(column, row) {
-            return false;
-        }
-
-        if self.file_palette_active {
-            let fixed_rows = list_panel::fixed_section_rows(1, 2, true);
-            let visible_rows = self
-                .file_palette
-                .as_ref()
-                .map(|palette| palette.current_page_items().len())
-                .unwrap_or(0);
-            let local_index = self.shared_panel_row_index(fixed_rows, visible_rows, column, row);
-            let mut apply_path = None;
-            let mut should_mark_dirty = false;
-            let Some(palette) = self.file_palette.as_mut() else {
-                return true;
-            };
-            if !palette.has_files() {
-                return true;
-            }
-
-            let page_items = palette.current_page_items();
-            if let Some(local_index) = local_index
-                && let Some((global_index, entry, selected)) = page_items.get(local_index)
-            {
-                if *selected {
-                    apply_path = Some(entry.relative_path.clone());
-                } else if palette.select_index(*global_index) {
-                    should_mark_dirty = true;
-                }
-            }
-
-            if let Some(path) = apply_path {
-                self.insert_file_reference(&path);
-                self.close_file_palette();
-                self.mark_dirty();
-            } else if should_mark_dirty {
-                self.mark_dirty();
-            }
-            return true;
-        }
-
-        if self.history_picker_state.active {
-            let fixed_rows = list_panel::fixed_section_rows(1, 1, true);
-            let visible_rows = if self.history_picker_state.matches.is_empty() {
-                1
-            } else {
-                self.history_picker_state
-                    .matches
-                    .len()
-                    .min(ui::INLINE_LIST_MAX_ROWS)
-            };
-            if let Some(local_index) =
-                self.shared_panel_row_index(fixed_rows, visible_rows, column, row)
-                && !self.history_picker_state.matches.is_empty()
-            {
-                let actual_index = self
-                    .history_picker_state
-                    .scroll_offset()
-                    .saturating_add(local_index);
-                if self.history_picker_state.selected_index() == Some(actual_index) {
-                    self.history_picker_state.accept(&mut self.input_manager);
-                } else if self.history_picker_state.select_index(actual_index) {
-                    self.mark_dirty();
-                }
-            }
-            return true;
-        }
-
-        if slash::slash_navigation_available(self) {
-            let fixed_rows = list_panel::fixed_section_rows(1, 1, true);
-            let visible_rows = self
-                .slash_palette
-                .suggestions()
-                .len()
-                .min(ui::INLINE_LIST_MAX_ROWS);
-            if let Some(local_index) =
-                self.shared_panel_row_index(fixed_rows, visible_rows, column, row)
-            {
-                let actual_index = self
-                    .slash_palette
-                    .scroll_offset()
-                    .saturating_add(local_index);
-                if self.slash_palette.selected_index() == Some(actual_index) {
-                    slash::apply_selected_slash_suggestion(self);
-                } else {
-                    slash::select_slash_suggestion_index(self, actual_index);
-                }
-            }
-            return true;
-        }
-
-        true
+        let _ = mouse_event;
+        false
     }
 
     pub fn handle_event(

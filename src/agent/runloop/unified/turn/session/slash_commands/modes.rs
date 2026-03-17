@@ -3,7 +3,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::EditingMode as ConfigEditingMode;
 use vtcode_core::core::interfaces::session::PlanModeEntrySource;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_tui::EditingMode;
+use vtcode_tui::app::EditingMode;
 
 use super::{SlashCommandContext, SlashCommandControl};
 

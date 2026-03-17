@@ -73,6 +73,56 @@ pub(crate) fn fixed_section_rows(header_rows: usize, info_rows: usize, has_searc
         .saturating_add(if has_search { 1 } else { 0 })
 }
 
+pub(crate) struct ListPanelLayout {
+    fixed_rows: u16,
+    desired_list_rows: u16,
+}
+
+impl ListPanelLayout {
+    pub(crate) fn new(fixed_rows: u16, desired_list_rows: u16) -> Self {
+        Self {
+            fixed_rows,
+            desired_list_rows,
+        }
+    }
+
+    pub(crate) fn split(&self, area: Rect) -> (Rect, Option<Rect>) {
+        split_bottom_list_panel(area, self.fixed_rows, self.desired_list_rows)
+    }
+
+    pub(crate) fn visible_list_rows(&self, panel_area: Rect) -> usize {
+        panel_area
+            .height
+            .saturating_sub(self.fixed_rows)
+            .min(u16::MAX)
+            .into()
+    }
+
+    pub(crate) fn row_index(
+        &self,
+        panel_area: Rect,
+        column: u16,
+        row: u16,
+    ) -> Option<usize> {
+        if row < panel_area.y
+            || row >= panel_area.y.saturating_add(panel_area.height)
+            || column < panel_area.x
+            || column >= panel_area.x.saturating_add(panel_area.width)
+        {
+            return None;
+        }
+
+        let relative_row = row.saturating_sub(panel_area.y);
+        if relative_row < self.fixed_rows {
+            return None;
+        }
+
+        let list_row = usize::from(relative_row - self.fixed_rows);
+        let visible_rows = self.visible_list_rows(panel_area);
+        (list_row < visible_rows).then_some(list_row)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct SharedSearchField {
     pub label: String,

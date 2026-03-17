@@ -68,3 +68,26 @@ then add vtcode-ollama related submodules into vtcode-local-llm as well to furth
 ---
 
 https://claude.ai/chat/37d94c2c-a521-44d2-85f3-e15c38864286
+
+===
+
+https://deepwiki.com/search/how-does-codex-read-agentsmd_b2f6e918-cb8a-4f83-99dd-38c7c11e77fd?mode=fast
+
+For example, here’s how pi-mono loads AGENTS.md:
+
+// Append project context files
+if (contextFiles.length > 0) {
+prompt += "\n\n# Project Context\n\n";
+prompt += "Project-specific instructions and guidelines:\n\n";
+for (const { path: filePath, content } of contextFiles) {
+prompt += `## ${filePath}\n\n${content}\n\n`;
+}
+}
+
+Claude Code does the same with CLAUDE.md. The pattern is simple: read the file, append it right after the system prompt.
+
+==
+
+Recommend: https://blog.yellowday.day/posts/context_engineering_from_the_inside_out/
+
+review carefully and apply to vtcode

@@ -9,12 +9,12 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::path::PathBuf;
 
 use super::{
-    Session,
+    AppSession,
     file_palette::{FilePalette, extract_file_reference},
 };
-use crate::ui::tui::session::slash;
+use crate::core_tui::app::session::slash;
 
-impl Session {
+impl AppSession {
     /// Load the file palette with files from the workspace
     pub(super) fn load_file_palette(&mut self, files: Vec<String>, workspace: PathBuf) {
         let mut palette = FilePalette::new(workspace);
@@ -27,14 +27,16 @@ impl Session {
     /// Check if the current input should trigger the file palette
     pub fn check_file_reference_trigger(&mut self) {
         if let Some(palette) = self.file_palette.as_mut() {
-            if let Some((_start, _end, query)) =
-                extract_file_reference(self.input_manager.content(), self.input_manager.cursor())
+            if let Some((_start, _end, query)) = extract_file_reference(
+                self.core.input_manager.content(),
+                self.core.input_manager.cursor(),
+            )
             {
                 palette.set_filter(query);
                 if !self.file_palette_active {
                     self.ensure_inline_lists_visible_for_trigger();
                     self.file_palette_active = true;
-                    self.needs_full_clear = true;
+                    self.core.needs_full_clear = true;
                     self.mark_dirty();
                 }
             } else if self.file_palette_active {
@@ -46,7 +48,7 @@ impl Session {
     /// Close the file palette and clean up resources
     pub(super) fn close_file_palette(&mut self) {
         self.file_palette_active = false;
-        self.needs_full_clear = true;
+        self.core.needs_full_clear = true;
 
         // Clean up resources when closing to free memory
         if let Some(palette) = self.file_palette.as_mut() {
@@ -116,18 +118,21 @@ impl Session {
     }
 
     /// Insert a file reference into the input at the current position
-    pub(super) fn insert_file_reference(&mut self, file_path: &str) {
+    pub(crate) fn insert_file_reference(&mut self, file_path: &str) {
         if let Some((start, end, _)) =
-            extract_file_reference(self.input_manager.content(), self.input_manager.cursor())
+            extract_file_reference(
+                self.core.input_manager.content(),
+                self.core.input_manager.cursor(),
+            )
         {
-            let before = &self.input_manager.content()[..start];
-            let after = &self.input_manager.content()[end..];
+            let before = &self.core.input_manager.content()[..start];
+            let after = &self.core.input_manager.content()[end..];
             let reference_alias = format!("@{}", file_path);
             let new_content = format!("{}{} {}", before, reference_alias, after);
             let new_cursor = start + reference_alias.len() + 1;
 
-            self.input_manager.set_content(new_content);
-            self.input_manager.set_cursor(new_cursor);
+            self.core.input_manager.set_content(new_content);
+            self.core.input_manager.set_cursor(new_cursor);
             slash::update_slash_suggestions(self);
         }
     }

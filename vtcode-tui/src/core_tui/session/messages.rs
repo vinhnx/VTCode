@@ -61,7 +61,7 @@ fn tail_lines(text: &str, limit: usize) -> Vec<&str> {
 }
 
 impl Session {
-    pub(super) fn retint_lines_for_theme_change(
+    pub(crate) fn retint_lines_for_theme_change(
         &mut self,
         previous_theme: &super::super::types::InlineTheme,
     ) {
@@ -123,7 +123,7 @@ impl Session {
 
     /// Get the prefix text for a message kind
     #[allow(dead_code)]
-    pub(super) fn prefix_text(&self, kind: InlineMessageKind) -> Option<String> {
+    pub(crate) fn prefix_text(&self, kind: InlineMessageKind) -> Option<String> {
         match kind {
             InlineMessageKind::User => Some(
                 self.labels
@@ -143,17 +143,17 @@ impl Session {
 
     /// Get the prefix style for a message line
     #[allow(dead_code)]
-    pub(super) fn prefix_style(&self, line: &MessageLine) -> InlineTextStyle {
+    pub(crate) fn prefix_style(&self, line: &MessageLine) -> InlineTextStyle {
         self.styles.prefix_style(line)
     }
 
     /// Get the text fallback color for a message kind
-    pub(super) fn text_fallback(&self, kind: InlineMessageKind) -> Option<AnsiColorEnum> {
+    pub(crate) fn text_fallback(&self, kind: InlineMessageKind) -> Option<AnsiColorEnum> {
         self.styles.text_fallback(kind)
     }
 
     /// Push a new message line to the transcript
-    pub(super) fn push_line(&mut self, kind: InlineMessageKind, segments: Vec<InlineSegment>) {
+    pub(crate) fn push_line(&mut self, kind: InlineMessageKind, segments: Vec<InlineSegment>) {
         let previous_max_offset = self.current_max_scroll_offset();
         let revision = self.next_revision();
         let index = self.lines.len();
@@ -174,7 +174,7 @@ impl Session {
     }
 
     /// Append a large pasted message as a collapsible placeholder.
-    pub(super) fn append_pasted_message(
+    pub(crate) fn append_pasted_message(
         &mut self,
         kind: InlineMessageKind,
         text: String,
@@ -223,7 +223,7 @@ impl Session {
     }
 
     /// Append a segment to the transcript, handling newlines and control characters
-    pub(super) fn append_inline(&mut self, kind: InlineMessageKind, segment: InlineSegment) {
+    pub(crate) fn append_inline(&mut self, kind: InlineMessageKind, segment: InlineSegment) {
         let previous_max_offset = self.current_max_scroll_offset();
 
         // For Tool messages, process the entire text as one unit to avoid excessive line breaks
@@ -275,7 +275,7 @@ impl Session {
     }
 
     /// Replace the last N message lines with new lines
-    pub(super) fn replace_last(
+    pub(crate) fn replace_last(
         &mut self,
         count: usize,
         kind: InlineMessageKind,
@@ -306,7 +306,7 @@ impl Session {
         self.adjust_scroll_after_change(previous_max_offset);
     }
 
-    pub(super) fn expand_collapsed_paste_at_line_index(&mut self, line_index: usize) -> bool {
+    pub(crate) fn expand_collapsed_paste_at_line_index(&mut self, line_index: usize) -> bool {
         if self.collapsed_pastes.is_empty() {
             return false;
         }
@@ -336,7 +336,7 @@ impl Session {
         true
     }
 
-    pub(super) fn expand_collapsed_paste_at_row(&mut self, width: u16, row: usize) -> bool {
+    pub(crate) fn expand_collapsed_paste_at_row(&mut self, width: u16, row: usize) -> bool {
         if self.collapsed_pastes.is_empty() || width == 0 {
             return false;
         }
@@ -374,7 +374,7 @@ impl Session {
     /// Append text to the current or new message line
     ///
     /// This method handles appending text efficiently by reusing the last line if possible
-    pub(super) fn append_text(
+    pub(crate) fn append_text(
         &mut self,
         kind: InlineMessageKind,
         text: &str,
@@ -465,12 +465,12 @@ impl Session {
     }
 
     /// Start a new empty message line
-    pub(super) fn start_line(&mut self, kind: InlineMessageKind) {
+    pub(crate) fn start_line(&mut self, kind: InlineMessageKind) {
         self.push_line(kind, Vec::new());
     }
 
     /// Reset the current line (clear its segments)
-    pub(super) fn reset_line(&mut self, kind: InlineMessageKind) {
+    pub(crate) fn reset_line(&mut self, kind: InlineMessageKind) {
         let mut cleared = false;
         {
             if let Some(line) = self.lines.last_mut()
@@ -498,7 +498,7 @@ impl Session {
     /// Handle tool code fence markers (``` or ~~~)
     ///
     /// Returns true if the text was a code fence marker (and should not be displayed)
-    pub(super) fn handle_tool_code_fence_marker(&mut self, text: &str) -> bool {
+    pub(crate) fn handle_tool_code_fence_marker(&mut self, text: &str) -> bool {
         let trimmed = text.trim();
         let stripped = trimmed
             .strip_prefix("```")
@@ -524,7 +524,7 @@ impl Session {
     }
 
     /// Remove trailing empty tool lines
-    pub(super) fn remove_trailing_empty_tool_line(&mut self) {
+    pub(crate) fn remove_trailing_empty_tool_line(&mut self) {
         let should_remove = self
             .lines
             .last()

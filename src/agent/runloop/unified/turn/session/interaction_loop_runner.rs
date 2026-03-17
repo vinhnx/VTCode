@@ -241,7 +241,7 @@ fn resolve_full_path_for_alias(alias: &str, workspace: &Path) -> Option<String> 
 }
 
 fn apply_live_theme_and_appearance(
-    handle: &vtcode_tui::InlineHandle,
+    handle: &vtcode_tui::app::InlineHandle,
     cfg: &vtcode_core::config::loader::VTCodeConfig,
 ) {
     let color_config = theme::ColorAccessibilityConfig {

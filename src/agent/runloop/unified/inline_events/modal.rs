@@ -6,7 +6,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider::{self as uni};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_tui::{InlineHandle, InlineHeaderContext, InlineListSelection};
+use vtcode_tui::app::{InlineHandle, InlineHeaderContext, InlineListSelection};
 
 use crate::agent::runloop::model_picker::{ModelPickerProgress, ModelPickerState};
 use crate::agent::runloop::slash_commands::SessionPaletteMode;

@@ -20,7 +20,7 @@ use vtcode_core::tool_policy::ToolPolicy;
 use vtcode_core::tools::registry::{ToolPermissionDecision, ToolRegistry};
 use vtcode_core::tools::{JustificationExtractor, ToolRiskScorer};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_tui::InlineHandle;
+use vtcode_tui::app::InlineHandle;
 
 use super::state::CtrlCState;
 use approval_cache::{approval_history_can_skip_prompt, cache_key, spawn_approval_record_task};

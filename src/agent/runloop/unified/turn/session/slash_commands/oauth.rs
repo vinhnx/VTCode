@@ -4,7 +4,7 @@ use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::types::UiSurfacePreference;
 use vtcode_core::llm::factory::{ProviderConfig, create_provider_with_config};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_tui::{InlineListItem, InlineListSelection, WizardModalMode, WizardStep};
+use vtcode_tui::app::{InlineListItem, InlineListSelection, WizardModalMode, WizardStep};
 
 use super::{SlashCommandContext, SlashCommandControl, ui};
 use crate::agent::runloop::slash_commands::OAuthProviderAction;

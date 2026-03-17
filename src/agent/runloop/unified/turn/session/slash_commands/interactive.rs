@@ -1,6 +1,6 @@
 use anyhow::Result;
 use vtcode_core::utils::ansi::MessageStyle;
-use vtcode_tui::{
+use vtcode_tui::app::{
     InlineListItem, InlineListSearchConfig, InlineListSelection, ListOverlayRequest, OverlayEvent,
     OverlayHotkey, OverlayHotkeyAction, OverlayHotkeyKey, OverlayRequest, OverlaySelectionChange,
     OverlaySubmission,
@@ -180,8 +180,8 @@ enum JobModalActionKind {
 }
 
 async fn wait_for_jobs_modal_action(
-    handle: &vtcode_tui::InlineHandle,
-    session: &mut vtcode_tui::InlineSession,
+    handle: &vtcode_tui::app::InlineHandle,
+    session: &mut vtcode_tui::app::InlineSession,
     ctrl_c_state: &std::sync::Arc<crate::agent::runloop::unified::state::CtrlCState>,
     ctrl_c_notify: &std::sync::Arc<tokio::sync::Notify>,
     initial_selection: Option<InlineListSelection>,
@@ -207,12 +207,12 @@ async fn wait_for_jobs_modal_action(
         };
 
         match event {
-            vtcode_tui::InlineEvent::Overlay(OverlayEvent::SelectionChanged(
+            vtcode_tui::app::InlineEvent::Overlay(OverlayEvent::SelectionChanged(
                 OverlaySelectionChange::List(selection),
             )) => {
                 current_selection = Some(selection);
             }
-            vtcode_tui::InlineEvent::Overlay(OverlayEvent::Submitted(
+            vtcode_tui::app::InlineEvent::Overlay(OverlayEvent::Submitted(
                 OverlaySubmission::Selection(selection),
             )) => {
                 ctrl_c_state.reset();
@@ -221,7 +221,7 @@ async fn wait_for_jobs_modal_action(
                     selection: Some(selection),
                 });
             }
-            vtcode_tui::InlineEvent::Overlay(OverlayEvent::Submitted(
+            vtcode_tui::app::InlineEvent::Overlay(OverlayEvent::Submitted(
                 OverlaySubmission::Hotkey(action),
             )) => {
                 ctrl_c_state.reset();
@@ -236,13 +236,13 @@ async fn wait_for_jobs_modal_action(
                     selection: current_selection.clone(),
                 });
             }
-            vtcode_tui::InlineEvent::Overlay(OverlayEvent::Cancelled)
-            | vtcode_tui::InlineEvent::Cancel
-            | vtcode_tui::InlineEvent::Exit => {
+            vtcode_tui::app::InlineEvent::Overlay(OverlayEvent::Cancelled)
+            | vtcode_tui::app::InlineEvent::Cancel
+            | vtcode_tui::app::InlineEvent::Exit => {
                 ctrl_c_state.reset();
                 return None;
             }
-            vtcode_tui::InlineEvent::Interrupt => {
+            vtcode_tui::app::InlineEvent::Interrupt => {
                 handle.close_overlay();
                 handle.force_redraw();
                 return None;
@@ -398,7 +398,7 @@ mod tests {
     use super::*;
     use std::sync::Arc;
     use tokio::sync::{Notify, mpsc};
-    use vtcode_tui::{InlineEvent, InlineHandle, InlineSession};
+    use vtcode_tui::app::{InlineEvent, InlineHandle, InlineSession};
 
     use crate::agent::runloop::unified::state::CtrlCState;
 

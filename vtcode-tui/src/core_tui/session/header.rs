@@ -116,7 +116,7 @@ impl Session {
     }
 
     #[cfg(test)]
-    pub(super) fn header_height_for_width(&mut self, width: u16) -> u16 {
+    pub(crate) fn header_height_for_width(&mut self, width: u16) -> u16 {
         let lines = self.header_lines();
         self.header_height_from_lines(width, &lines)
     }
@@ -656,7 +656,7 @@ impl Session {
         Some(Line::from(spans))
     }
 
-    pub(super) fn section_title_style(&self) -> Style {
+    pub(crate) fn section_title_style(&self) -> Style {
         let mut style = self.styles.default_style().add_modifier(Modifier::BOLD);
         if let Some(primary) = self.theme.primary.or(self.theme.foreground) {
             style = style.fg(ratatui_color_from_ansi(primary));
@@ -672,7 +672,7 @@ impl Session {
         style
     }
 
-    pub(super) fn header_secondary_style(&self) -> Style {
+    pub(crate) fn header_secondary_style(&self) -> Style {
         let mut style = self.styles.default_style();
         if let Some(secondary) = self.theme.secondary.or(self.theme.foreground) {
             style = style.fg(ratatui_color_from_ansi(secondary));

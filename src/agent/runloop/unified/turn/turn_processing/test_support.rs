@@ -17,7 +17,7 @@ use vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter;
 use vtcode_core::tools::circuit_breaker::CircuitBreaker;
 use vtcode_core::tools::health::ToolHealthTracker;
 use vtcode_core::tools::{ApprovalRecorder, ToolResultCache};
-use vtcode_tui::{InlineHandle, InlineSession};
+use vtcode_tui::app::{InlineHandle, InlineSession};
 
 use crate::agent::runloop::mcp_events::McpPanelState;
 use crate::agent::runloop::unified::context_manager::ContextManager;

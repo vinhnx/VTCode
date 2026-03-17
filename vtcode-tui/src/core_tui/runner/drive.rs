@@ -10,19 +10,14 @@ use ratatui::{
 };
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, error::TryRecvError};
 
-use crate::ui::tui::{
-    session::Session,
-    types::{FocusChangeCallback, InlineCommand, InlineEvent, InlineEventCallback},
-};
+use crate::core_tui::types::FocusChangeCallback;
 
 use super::events::{EventChannels, EventListener, ScrollAccumulator, TerminalEvent};
+use super::{TuiCommand, TuiSessionDriver};
 
 /// Check if session has any modal or palette active that uses keyboard navigation
-fn has_active_navigation_ui(session: &Session) -> bool {
-    session.has_active_overlay()
-        || session.file_palette_active
-        || session.history_picker_state.active
-        || crate::ui::tui::session::slash::slash_navigation_available(session)
+fn has_active_navigation_ui<S: TuiSessionDriver>(session: &S) -> bool {
+    session.has_active_navigation_ui()
 }
 
 fn handle_focus_change_event(
@@ -54,9 +49,9 @@ fn is_suspend_shortcut(event: &crossterm::event::Event) -> bool {
 }
 
 #[cfg(unix)]
-fn suspend_to_shell<B: Backend>(
+fn suspend_to_shell<B: Backend, S: TuiSessionDriver>(
     terminal: &mut Terminal<B>,
-    session: &mut Session,
+    session: &mut S,
     inputs: &mut EventListener,
     event_channels: &EventChannels,
     use_alternate_screen: bool,
@@ -129,33 +124,34 @@ fn suspend_to_shell<B: Backend>(
     suspend_result
 }
 
-fn handle_inline_command(
+fn handle_inline_command<S: TuiSessionDriver>(
     terminal: &mut Terminal<impl Backend>,
-    session: &mut Session,
+    session: &mut S,
     inputs: &mut EventListener,
     event_channels: &EventChannels,
-    command: InlineCommand,
+    command: S::Command,
 ) -> Result<()> {
-    match command {
-        InlineCommand::SuspendEventLoop => {
-            event_channels.pause();
-        }
-        InlineCommand::ResumeEventLoop => {
-            event_channels.resume();
-        }
-        InlineCommand::ClearInputQueue => {
-            inputs.clear_queue();
-        }
-        InlineCommand::ForceRedraw => {
-            terminal
-                .clear()
-                .map_err(|e| anyhow::anyhow!("failed to clear terminal for redraw: {}", e))?;
-            session.handle_command(InlineCommand::ForceRedraw);
-        }
-        cmd => {
-            session.handle_command(cmd);
-        }
+    if command.is_suspend_event_loop() {
+        event_channels.pause();
+        return Ok(());
     }
+    if command.is_resume_event_loop() {
+        event_channels.resume();
+        return Ok(());
+    }
+    if command.is_clear_input_queue() {
+        inputs.clear_queue();
+        return Ok(());
+    }
+    if command.is_force_redraw() {
+        terminal
+            .clear()
+            .map_err(|e| anyhow::anyhow!("failed to clear terminal for redraw: {}", e))?;
+        session.handle_command(command);
+        return Ok(());
+    }
+
+    session.handle_command(command);
 
     Ok(())
 }
@@ -178,9 +174,9 @@ const DRAW_WARN_MS: u128 = 8;
 /// Placing this call right after input processing (same wakeup) eliminates an
 /// extra loop iteration between keypress and screen update — the single highest-
 /// leverage latency improvement per Dan Luu's terminal latency research.
-fn render_if_dirty<B: Backend>(
+fn render_if_dirty<B: Backend, S: TuiSessionDriver>(
     terminal: &mut Terminal<B>,
-    session: &mut Session,
+    session: &mut S,
     event_channels: &EventChannels,
     cursor_steady: &mut bool,
     input_started_at: Option<Instant>,
@@ -228,8 +224,8 @@ fn render_if_dirty<B: Backend>(
     Ok(())
 }
 
-pub(super) struct DriveRuntimeOptions {
-    pub(super) event_callback: Option<InlineEventCallback>,
+pub(super) struct DriveRuntimeOptions<E> {
+    pub(super) event_callback: Option<std::sync::Arc<dyn Fn(&E) + Send + Sync + 'static>>,
     pub(super) focus_callback: Option<FocusChangeCallback>,
     pub(super) input_activity_counter: Option<std::sync::Arc<std::sync::atomic::AtomicU64>>,
     pub(super) use_alternate_screen: bool,
@@ -245,14 +241,14 @@ fn should_count_as_user_activity(event: &crossterm::event::Event) -> bool {
     )
 }
 
-pub(super) async fn drive_terminal<B: Backend>(
+pub(super) async fn drive_terminal<B: Backend, S: TuiSessionDriver>(
     terminal: &mut Terminal<B>,
-    session: &mut Session,
-    commands: &mut UnboundedReceiver<InlineCommand>,
-    events: &UnboundedSender<InlineEvent>,
+    session: &mut S,
+    commands: &mut UnboundedReceiver<S::Command>,
+    events: &UnboundedSender<S::Event>,
     inputs: &mut EventListener,
     event_channels: EventChannels,
-    runtime_options: DriveRuntimeOptions,
+    runtime_options: DriveRuntimeOptions<S::Event>,
 ) -> Result<()> {
     #[cfg(not(unix))]
     let _ = (
@@ -280,7 +276,7 @@ pub(super) async fn drive_terminal<B: Backend>(
         // Update terminal title based on current activity state
         session.update_terminal_title();
 
-        if session.thinking_spinner.is_active
+        if session.thinking_spinner_active()
             || session.is_running_activity()
             || session.has_status_spinner()
         {

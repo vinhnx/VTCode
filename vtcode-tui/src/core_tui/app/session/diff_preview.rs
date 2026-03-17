@@ -10,10 +10,10 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
 };
 
-use super::super::style::{ratatui_color_from_ansi, ratatui_style_from_ansi};
+use crate::core_tui::style::{ratatui_color_from_ansi, ratatui_style_from_ansi};
 use crate::ui::markdown::highlight_line_for_diff;
-use crate::ui::tui::session::Session;
-use crate::ui::tui::types::{DiffPreviewMode, DiffPreviewState, TrustMode};
+use crate::core_tui::app::types::{DiffPreviewMode, DiffPreviewState, TrustMode};
+use super::Session;
 use crate::utils::diff::{DiffBundle, DiffLineKind, DiffOptions, compute_diff_with_theme};
 use crate::utils::diff_styles::{
     DiffColorPalette, DiffLineType, content_background, current_diff_render_style_context,
@@ -321,7 +321,7 @@ fn control_lines(preview: &DiffPreviewState) -> Vec<Line<'static>> {
 #[cfg(test)]
 mod tests {
     use super::{apply_diff_bg_if_missing, control_lines, header_action_label};
-    use crate::ui::tui::types::{DiffPreviewMode, DiffPreviewState};
+    use crate::core_tui::app::types::{DiffPreviewMode, DiffPreviewState};
     use ratatui::style::{Color, Style};
 
     #[test]

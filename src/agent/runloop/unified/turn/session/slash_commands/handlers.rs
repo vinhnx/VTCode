@@ -11,8 +11,8 @@ use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::transcript;
-use vtcode_tui::core_tui::RewindAction;
-use vtcode_tui::{InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection};
+use vtcode_tui::app::RewindAction;
+use vtcode_tui::app::{InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection};
 
 use crate::agent::runloop::unified::state::SessionStats;
 use vtcode_core::hooks::SessionEndReason;
@@ -269,9 +269,7 @@ pub(super) async fn handle_copy_latest_assistant_reply(
     });
 
     if let Some(reply) = latest_reply {
-        vtcode_tui::core_tui::session::mouse_selection::MouseSelectionState::copy_to_clipboard(
-            &reply,
-        );
+        vtcode_tui::core::MouseSelectionState::copy_to_clipboard(&reply);
         ctx.renderer.line(
             MessageStyle::Info,
             "Copied latest assistant reply to clipboard.",

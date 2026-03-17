@@ -10,7 +10,7 @@ use vtcode_core::llm::factory::{ProviderConfig, create_provider_with_config};
 use vtcode_core::llm::provider::LLMProvider;
 use vtcode_core::llm::rig_adapter::RigProviderCapabilities;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_tui::{InlineHandle, InlineHeaderContext};
+use vtcode_tui::app::{InlineHandle, InlineHeaderContext};
 
 use crate::agent::runloop::model_picker::{ModelPickerState, ModelSelectionResult};
 use crate::agent::runloop::welcome::SessionBootstrap;

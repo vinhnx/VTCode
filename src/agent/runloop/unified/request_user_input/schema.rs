@@ -2,7 +2,7 @@ use anyhow::{Result, bail};
 use hashbrown::HashMap;
 use serde::Deserialize;
 use serde_json::Value;
-use vtcode_tui::WizardModalMode;
+use vtcode_tui::app::WizardModalMode;
 
 #[derive(Debug, Deserialize)]
 pub(super) struct RequestUserInputArgs {

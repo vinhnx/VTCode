@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 
-use vtcode_tui::InlineLinkRange;
-use vtcode_tui::InlineSegment;
+use vtcode_tui::app::InlineLinkRange;
+use vtcode_tui::app::InlineSegment;
 
 use super::segments::{PtyLineStyles, line_to_segments};
 

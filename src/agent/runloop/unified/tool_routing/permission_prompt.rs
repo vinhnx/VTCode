@@ -8,7 +8,7 @@ use vtcode_core::core::interfaces::ui::UiSession;
 use vtcode_core::notifications::{NotificationEvent, send_global_notification};
 use vtcode_core::sandboxing::SandboxPermissions as CoreSandboxPermissions;
 use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_tui::{InlineHandle, ListOverlayRequest, OverlayRequest, OverlaySubmission};
+use vtcode_tui::app::{InlineHandle, ListOverlayRequest, OverlayRequest, OverlaySubmission};
 
 use crate::agent::runloop::tool_output::format_unified_diff_lines;
 use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
@@ -388,8 +388,8 @@ fn build_tool_permission_options(
     prompt_kind: ToolPermissionPromptKind,
     persistent_shell_allow_prefix_rule: Option<&[String]>,
     allow_tool_level_persistent_decisions: bool,
-) -> Vec<vtcode_tui::InlineListItem> {
-    use vtcode_tui::{InlineListItem, InlineListSelection};
+) -> Vec<vtcode_tui::app::InlineListItem> {
+    use vtcode_tui::app::{InlineListItem, InlineListSelection};
 
     let mut options = vec![
         InlineListItem {
@@ -563,7 +563,7 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
         allow_tool_level_persistent_decisions,
     );
 
-    use vtcode_tui::InlineListSelection;
+    use vtcode_tui::app::InlineListSelection;
     let default_selection = InlineListSelection::ToolApproval(true);
     if hitl_notification_bell
         && let Err(err) = send_global_notification(NotificationEvent::PermissionPrompt {

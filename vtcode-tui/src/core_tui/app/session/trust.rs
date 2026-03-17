@@ -1,4 +1,4 @@
-use crate::ui::tui::types::TrustMode;
+use crate::core_tui::app::types::TrustMode;
 use hashbrown::{HashMap, HashSet};
 
 #[allow(dead_code)]

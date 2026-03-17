@@ -4,7 +4,7 @@ use anstyle::{
     Ansi256Color, AnsiColor, Color as AnsiColorEnum, Effects, RgbColor, Style as AnsiStyle,
 };
 use vtcode_core::ui::theme;
-use vtcode_tui::{
+use vtcode_tui::app::{
     InlineLinkRange, InlineLinkTarget, InlineSegment, InlineTextStyle, convert_style,
     ui::syntax_highlight,
 };

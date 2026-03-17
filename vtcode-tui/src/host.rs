@@ -1,4 +1,4 @@
-use crate::SlashCommandItem;
+use crate::app::SlashCommandItem;
 use crate::{KeyboardProtocolSettings, SessionSurface};
 
 /// Provides high-level workspace metadata for header rendering.

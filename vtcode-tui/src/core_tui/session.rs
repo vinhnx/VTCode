@@ -18,14 +18,13 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use super::{
     style::{measure_text_width, ratatui_color_from_ansi, ratatui_style_from_inline},
     types::{
-        DiffPreviewState, InlineCommand, InlineEvent, InlineHeaderContext, InlineListSelection,
-        InlineMessageKind, InlineTextStyle, InlineTheme, OverlayRequest,
+        InlineCommand, InlineEvent, InlineHeaderContext, InlineListSelection, InlineMessageKind,
+        InlineTextStyle, InlineTheme, OverlayRequest,
     },
 };
 use crate::config::constants::ui;
 use crate::ui::tui::widgets::SessionWidget;
 
-pub mod file_palette;
 mod header;
 mod impl_events;
 mod impl_init;
@@ -35,11 +34,11 @@ mod impl_logs;
 mod impl_render;
 mod impl_scroll;
 mod impl_style;
-mod inline_list;
+pub(crate) mod inline_list;
 mod input;
-mod input_manager;
-mod layout;
-mod list_panel;
+pub(crate) mod input_manager;
+pub(crate) mod list_panel;
+pub(crate) mod list_navigator;
 mod message;
 pub mod modal;
 pub mod mouse_selection;
@@ -47,8 +46,6 @@ mod navigation;
 mod queue;
 pub mod render;
 mod scroll;
-pub mod slash;
-pub mod slash_palette;
 pub mod styling;
 mod text_utils;
 mod transcript;
@@ -60,14 +57,12 @@ mod command;
 mod editing;
 
 pub mod config;
-mod diff_preview;
 mod events;
-pub mod history_picker;
-mod message_renderer;
+pub(crate) mod message_renderer;
 mod messages;
-mod palette;
+mod driver;
 mod reflow;
-mod reverse_search;
+pub(crate) mod reverse_search;
 mod spinner;
 mod state;
 pub mod terminal_capabilities;
@@ -76,11 +71,8 @@ mod terminal_title;
 mod tests;
 mod tool_renderer;
 mod transcript_links;
-mod trust;
 mod vim;
 
-use self::file_palette::FilePalette;
-use self::history_picker::HistoryPickerState;
 use self::input_manager::InputManager;
 pub(crate) use self::message::TranscriptLine;
 use self::message::{MessageLabels, MessageLine};
@@ -91,7 +83,6 @@ pub(crate) use self::input::status_requires_shimmer;
 use self::mouse_selection::MouseSelectionState;
 use self::queue::QueueOverlay;
 use self::scroll::ScrollManager;
-use self::slash_palette::SlashPalette;
 use self::spinner::{ShimmerState, ThinkingSpinner};
 use self::styling::SessionStyles;
 use self::transcript::TranscriptReflowCache;
@@ -122,63 +113,48 @@ pub(crate) struct SuggestedPromptState {
 pub(crate) enum ActiveOverlay {
     Modal(Box<ModalState>),
     Wizard(Box<WizardModalState>),
-    Diff(Box<DiffPreviewState>),
 }
 
 impl ActiveOverlay {
     fn as_modal(&self) -> Option<&ModalState> {
         match self {
             Self::Modal(state) => Some(state),
-            Self::Wizard(_) | Self::Diff(_) => None,
+            Self::Wizard(_) => None,
         }
     }
 
     fn as_modal_mut(&mut self) -> Option<&mut ModalState> {
         match self {
             Self::Modal(state) => Some(state),
-            Self::Wizard(_) | Self::Diff(_) => None,
+            Self::Wizard(_) => None,
         }
     }
 
     fn as_wizard(&self) -> Option<&WizardModalState> {
         match self {
             Self::Wizard(state) => Some(state),
-            Self::Modal(_) | Self::Diff(_) => None,
+            Self::Modal(_) => None,
         }
     }
 
     fn as_wizard_mut(&mut self) -> Option<&mut WizardModalState> {
         match self {
             Self::Wizard(state) => Some(state),
-            Self::Modal(_) | Self::Diff(_) => None,
-        }
-    }
-
-    fn as_diff(&self) -> Option<&DiffPreviewState> {
-        match self {
-            Self::Diff(state) => Some(state),
-            Self::Modal(_) | Self::Wizard(_) => None,
-        }
-    }
-
-    fn as_diff_mut(&mut self) -> Option<&mut DiffPreviewState> {
-        match self {
-            Self::Diff(state) => Some(state),
-            Self::Modal(_) | Self::Wizard(_) => None,
+            Self::Modal(_) => None,
         }
     }
 
     fn restore_input(&self) -> bool {
         match self {
             Self::Modal(state) => state.restore_input,
-            Self::Wizard(_) | Self::Diff(_) => true,
+            Self::Wizard(_) => true,
         }
     }
 
     fn restore_cursor(&self) -> bool {
         match self {
             Self::Modal(state) => state.restore_cursor,
-            Self::Wizard(_) | Self::Diff(_) => true,
+            Self::Wizard(_) => true,
         }
     }
 }
@@ -219,7 +195,6 @@ pub struct Session {
     input_compact_mode: bool,
 
     // --- UI State ---
-    slash_palette: SlashPalette,
     #[allow(dead_code)]
     navigation_state: ListState,
     input_enabled: bool,
@@ -268,12 +243,7 @@ pub struct Session {
     first_dirty_line: Option<usize>,
     in_tool_code_fence: bool,
 
-    // --- Palette Management ---
-    pub(crate) file_palette: Option<FilePalette>,
-    pub(crate) file_palette_active: bool,
-    pub(crate) inline_lists_visible: bool,
-    pub(crate) show_task_panel: bool,
-    pub(crate) task_panel_lines: Vec<String>,
+    // --- Prompt Suggestions ---
     pub(crate) suggested_prompt_state: SuggestedPromptState,
 
     // --- Thinking Indicator ---
@@ -282,9 +252,6 @@ pub struct Session {
 
     // --- Reverse Search ---
     pub(crate) reverse_search_state: reverse_search::ReverseSearchState,
-
-    // --- History Picker (Ctrl+R fuzzy search) ---
-    pub(crate) history_picker_state: HistoryPickerState,
 
     // --- PTY Session Management ---
     pub(crate) active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,

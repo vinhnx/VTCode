@@ -6,6 +6,7 @@ use crate::config::types::UiSurfacePreference;
 
 pub mod alternate_screen;
 pub(crate) mod language_badge;
+pub mod app;
 pub mod log;
 pub mod panic_hook;
 pub mod runner;
@@ -18,15 +19,14 @@ pub mod widgets;
 pub use style::{convert_style, theme_from_styles};
 pub use theme_parser::ThemeConfigParser;
 pub use types::{
-    ContentPart, DiffHunk, DiffOverlayRequest, DiffPreviewMode, DiffPreviewState, EditingMode,
-    FocusChangeCallback, InlineCommand, InlineEvent, InlineEventCallback, InlineHandle,
-    InlineHeaderContext, InlineHeaderHighlight, InlineHeaderStatusBadge, InlineHeaderStatusTone,
-    InlineLinkRange, InlineLinkTarget, InlineListItem, InlineListSearchConfig, InlineListSelection,
-    InlineMessageKind, InlineSegment, InlineSession, InlineTextStyle, InlineTheme,
-    ListOverlayRequest, ModalOverlayRequest, OverlayEvent, OverlayHotkey, OverlayHotkeyAction,
-    OverlayHotkeyKey, OverlayRequest, OverlaySelectionChange, OverlaySubmission, PlanContent,
-    PlanPhase, PlanStep, RewindAction, SecurePromptConfig, SlashCommandItem, TrustMode,
-    WizardModalMode, WizardOverlayRequest, WizardStep,
+    ContentPart, EditingMode, FocusChangeCallback, InlineCommand, InlineEvent, InlineEventCallback,
+    InlineHandle, InlineHeaderContext, InlineHeaderHighlight, InlineHeaderStatusBadge,
+    InlineHeaderStatusTone, InlineLinkRange, InlineLinkTarget, InlineListItem,
+    InlineListSearchConfig, InlineListSelection, InlineMessageKind, InlineSegment, InlineSession,
+    InlineTextStyle, InlineTheme, ListOverlayRequest, ModalOverlayRequest, OverlayEvent,
+    OverlayHotkey, OverlayHotkeyAction, OverlayHotkeyKey, OverlayRequest,
+    OverlaySelectionChange, OverlaySubmission, RewindAction, SecurePromptConfig, WizardModalMode,
+    WizardOverlayRequest, WizardStep,
 };
 
 use runner::{TuiOptions, run_tui};
@@ -50,7 +50,6 @@ pub fn spawn_session(
         None,
         crate::config::KeyboardProtocolConfig::default(),
         workspace_root,
-        Vec::new(),
     )
 }
 
@@ -66,7 +65,6 @@ pub fn spawn_session_with_prompts(
     input_activity_counter: Option<Arc<std::sync::atomic::AtomicU64>>,
     keyboard_protocol: crate::config::KeyboardProtocolConfig,
     workspace_root: Option<std::path::PathBuf>,
-    slash_commands: Vec<SlashCommandItem>,
 ) -> Result<InlineSession> {
     spawn_session_with_prompts_and_options(
         theme,
@@ -79,7 +77,6 @@ pub fn spawn_session_with_prompts(
         input_activity_counter,
         keyboard_protocol,
         workspace_root,
-        slash_commands,
         None,
         "Agent TUI".to_string(),
         None,
@@ -99,7 +96,6 @@ pub fn spawn_session_with_prompts_and_options(
     input_activity_counter: Option<Arc<std::sync::atomic::AtomicU64>>,
     keyboard_protocol: crate::config::KeyboardProtocolConfig,
     workspace_root: Option<std::path::PathBuf>,
-    slash_commands: Vec<SlashCommandItem>,
     appearance: Option<session::config::AppearanceConfig>,
     app_name: String,
     non_interactive_hint: Option<String>,
@@ -115,17 +111,16 @@ pub fn spawn_session_with_prompts_and_options(
 
     let (command_tx, command_rx) = mpsc::unbounded_channel();
     let (event_tx, event_rx) = mpsc::unbounded_channel();
+    let show_logs = log::is_tui_log_capture_enabled();
 
     tokio::spawn(async move {
         if let Err(error) = run_tui(
             command_rx,
             event_tx,
             TuiOptions {
-                theme,
-                placeholder,
                 surface_preference,
                 inline_rows,
-                show_logs: log::is_tui_log_capture_enabled(),
+                show_logs,
                 log_theme: None,
                 event_callback,
                 focus_callback,
@@ -133,9 +128,16 @@ pub fn spawn_session_with_prompts_and_options(
                 input_activity_counter,
                 keyboard_protocol,
                 workspace_root,
-                slash_commands,
-                appearance,
-                app_name: app_name.clone(),
+            },
+            move |rows| {
+                session::Session::new_with_logs(
+                    theme,
+                    placeholder,
+                    rows,
+                    show_logs,
+                    appearance,
+                    app_name,
+                )
             },
         )
         .await

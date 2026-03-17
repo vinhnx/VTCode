@@ -46,8 +46,8 @@ impl VimEditor for SessionVimEditor<'_> {
 }
 
 impl Session {
-    pub(super) fn handle_vim_key(&mut self, key: &KeyEvent) -> bool {
-        if !self.vim_state.enabled() || !self.input_enabled || self.file_palette_active {
+    pub(crate) fn handle_vim_key(&mut self, key: &KeyEvent) -> bool {
+        if !self.vim_state.enabled() || !self.input_enabled {
             return false;
         }
 
@@ -66,7 +66,6 @@ impl Session {
             self.input_manager.clear_selection();
         }
         self.refresh_input_edit_state();
-        self.check_file_reference_trigger();
         self.mark_dirty();
         true
     }

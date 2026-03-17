@@ -1,7 +1,7 @@
 use anyhow::Result;
 
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_tui::InlineHandle;
+use vtcode_tui::app::InlineHandle;
 
 use super::action::InlineLoopAction;
 use super::queue::InlineQueueState;

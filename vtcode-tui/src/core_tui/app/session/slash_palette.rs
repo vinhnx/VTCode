@@ -1,8 +1,8 @@
-use ratatui::widgets::ListState;
 use unicode_segmentation::UnicodeSegmentation;
 
+use crate::core_tui::session::list_navigator::ListNavigator;
 use crate::ui::search::{fuzzy_score, normalize_query};
-use crate::ui::tui::types::SlashCommandItem;
+use crate::core_tui::app::types::SlashCommandItem;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SlashCommandRange {
@@ -98,8 +98,7 @@ pub enum SlashPaletteUpdate {
 pub struct SlashPalette {
     commands: Vec<SlashCommandItem>,
     suggestions: Vec<SlashPaletteSuggestion>,
-    list_state: ListState,
-    visible_rows: usize,
+    navigator: ListNavigator,
     filter_query: Option<String>,
 }
 
@@ -117,8 +116,7 @@ impl SlashPalette {
         Self {
             commands,
             suggestions: Vec::new(),
-            list_state: ListState::default(),
-            visible_rows: 0,
+            navigator: ListNavigator::new(),
             filter_query: None,
         }
     }
@@ -132,7 +130,7 @@ impl SlashPalette {
     }
 
     pub fn selected_command(&self) -> Option<&SlashCommandItem> {
-        self.list_state
+        self.navigator
             .selected()
             .and_then(|index| self.suggestions.get(index))
             .map(|suggestion| match suggestion {
@@ -140,30 +138,33 @@ impl SlashPalette {
             })
     }
 
-    pub fn list_state_mut(&mut self) -> &mut ListState {
-        &mut self.list_state
-    }
-
     pub fn selected_index(&self) -> Option<usize> {
-        self.list_state.selected()
+        self.navigator.selected()
     }
 
     pub fn scroll_offset(&self) -> usize {
-        self.list_state.offset()
+        self.navigator.scroll_offset()
+    }
+
+    pub(super) fn set_selected(&mut self, selected: Option<usize>) {
+        self.navigator.set_selected(selected);
+    }
+
+    pub(super) fn set_scroll_offset(&mut self, offset: usize) {
+        self.navigator.set_scroll_offset(offset);
     }
 
     pub fn clear_visible_rows(&mut self) {
-        self.visible_rows = 0;
+        self.navigator.set_visible_rows(0);
     }
 
     pub fn set_visible_rows(&mut self, rows: usize) {
-        self.visible_rows = rows;
-        self.ensure_list_visible();
+        self.navigator.set_visible_rows(rows);
     }
 
     #[cfg(test)]
     pub fn visible_rows(&self) -> usize {
-        self.visible_rows
+        self.navigator.visible_rows()
     }
 
     pub fn update(&mut self, prefix: Option<&str>, limit: usize) -> SlashPaletteUpdate {
@@ -224,88 +225,33 @@ impl SlashPalette {
     }
 
     pub fn move_up(&mut self) -> bool {
-        if self.suggestions.is_empty() {
-            return false;
-        }
-
-        let visible_len = self.suggestions.len();
-        let current = self.list_state.selected().unwrap_or(0);
-        let new_index = if current > 0 {
-            current - 1
-        } else {
-            visible_len - 1
-        };
-
-        self.apply_selection(Some(new_index))
+        self.navigator.move_up()
     }
 
     pub fn move_down(&mut self) -> bool {
-        if self.suggestions.is_empty() {
-            return false;
-        }
-
-        let visible_len = self.suggestions.len();
-        let current = self.list_state.selected().unwrap_or(visible_len - 1);
-        let new_index = if current + 1 < visible_len {
-            current + 1
-        } else {
-            0
-        };
-
-        self.apply_selection(Some(new_index))
+        self.navigator.move_down()
     }
 
     pub fn select_first(&mut self) -> bool {
-        if self.suggestions.is_empty() {
-            return false;
-        }
-
-        self.apply_selection(Some(0))
+        self.navigator.select_first()
     }
 
     pub fn select_last(&mut self) -> bool {
-        if self.suggestions.is_empty() {
-            return false;
-        }
-
-        let last = self.suggestions.len() - 1;
-        self.apply_selection(Some(last))
+        self.navigator.select_last()
     }
 
     pub fn page_up(&mut self) -> bool {
-        if self.suggestions.is_empty() {
-            return false;
-        }
-
-        let step = self.visible_rows.max(1);
-        let current = self.list_state.selected().unwrap_or(0);
-        let new_index = current.saturating_sub(step);
-
-        self.apply_selection(Some(new_index))
+        let step = self.navigator.visible_rows().max(1);
+        self.navigator.page_up(step)
     }
 
     pub fn page_down(&mut self) -> bool {
-        if self.suggestions.is_empty() {
-            return false;
-        }
-
-        let step = self.visible_rows.max(1);
-        let visible_len = self.suggestions.len();
-        let current = self.list_state.selected().unwrap_or(0);
-        let mut new_index = current.saturating_add(step);
-        if new_index >= visible_len {
-            new_index = visible_len - 1;
-        }
-
-        self.apply_selection(Some(new_index))
+        let step = self.navigator.visible_rows().max(1);
+        self.navigator.page_down(step)
     }
 
     pub fn select_index(&mut self, index: usize) -> bool {
-        if index >= self.suggestions.len() {
-            return false;
-        }
-
-        self.apply_selection(Some(index))
+        self.navigator.select_index(index)
     }
 
     #[cfg(test)]
@@ -324,17 +270,16 @@ impl SlashPalette {
 
     fn clear_internal(&mut self) -> bool {
         if self.suggestions.is_empty()
-            && self.list_state.selected().is_none()
-            && self.visible_rows == 0
+            && self.navigator.selected().is_none()
+            && self.navigator.visible_rows() == 0
             && self.filter_query.is_none()
         {
             return false;
         }
 
         self.suggestions.clear();
-        self.list_state.select(None);
-        *self.list_state.offset_mut() = 0;
-        self.visible_rows = 0;
+        self.navigator.set_item_count(0);
+        self.navigator.set_visible_rows(0);
         self.filter_query = None;
         true
     }
@@ -345,6 +290,7 @@ impl SlashPalette {
         }
 
         self.suggestions = new_suggestions;
+        self.navigator.set_item_count(self.suggestions.len());
         true
     }
 
@@ -442,58 +388,21 @@ impl SlashPalette {
 
     fn ensure_selection(&mut self) -> bool {
         if self.suggestions.is_empty() {
-            if self.list_state.selected().is_some() {
-                self.list_state.select(None);
-                *self.list_state.offset_mut() = 0;
+            if self.navigator.selected().is_some() {
+                self.navigator.set_item_count(0);
                 return true;
             }
             return false;
         }
 
-        let visible_len = self.suggestions.len();
-        let current = self.list_state.selected().unwrap_or(0);
-        let bounded = current.min(visible_len - 1);
+        let previous = self.navigator.selected();
+        self.navigator.set_item_count(self.suggestions.len());
 
-        if Some(bounded) == self.list_state.selected() {
-            self.ensure_list_visible();
-            false
-        } else {
-            self.apply_selection(Some(bounded))
-        }
-    }
-
-    fn apply_selection(&mut self, index: Option<usize>) -> bool {
-        if self.list_state.selected() == index {
-            return false;
+        if self.navigator.selected().is_none() {
+            return self.navigator.select_first();
         }
 
-        self.list_state.select(index);
-        if index.is_none() {
-            *self.list_state.offset_mut() = 0;
-        }
-        self.ensure_list_visible();
-        true
-    }
-
-    fn ensure_list_visible(&mut self) {
-        if self.visible_rows == 0 {
-            return;
-        }
-
-        let Some(selected) = self.list_state.selected() else {
-            *self.list_state.offset_mut() = 0;
-            return;
-        };
-
-        let visible_rows = self.visible_rows;
-        let offset_ref = self.list_state.offset_mut();
-        let offset = *offset_ref;
-
-        if selected < offset {
-            *offset_ref = selected;
-        } else if selected >= offset + visible_rows {
-            *offset_ref = selected + 1 - visible_rows;
-        }
+        self.navigator.selected() != previous
     }
 
     #[cfg(test)]
@@ -643,18 +552,18 @@ mod tests {
         let mut palette = palette_with_commands();
 
         assert!(palette.move_down());
-        let first = palette.list_state.selected();
+        let first = palette.selected_index();
         assert_eq!(first, Some(1));
 
         let steps = palette.suggestions.len().saturating_sub(1);
         for _ in 0..steps {
             assert!(palette.move_down());
         }
-        assert_eq!(palette.list_state.selected(), Some(0));
+        assert_eq!(palette.selected_index(), Some(0));
 
         assert!(palette.move_up());
         assert_eq!(
-            palette.list_state.selected(),
+            palette.selected_index(),
             Some(palette.suggestions.len() - 1)
         );
     }
@@ -665,12 +574,12 @@ mod tests {
 
         assert!(palette.select_last());
         assert_eq!(
-            palette.list_state.selected(),
+            palette.selected_index(),
             Some(palette.suggestions.len() - 1)
         );
 
         assert!(palette.select_first());
-        assert_eq!(palette.list_state.selected(), Some(0));
+        assert_eq!(palette.selected_index(), Some(0));
     }
 
     #[test]
@@ -679,16 +588,16 @@ mod tests {
         palette.set_visible_rows(3);
 
         assert!(palette.page_down());
-        assert_eq!(palette.list_state.selected(), Some(3));
+        assert_eq!(palette.selected_index(), Some(3));
 
         assert!(palette.page_down());
-        assert_eq!(palette.list_state.selected(), Some(6));
+        assert_eq!(palette.selected_index(), Some(6));
 
         assert!(palette.page_up());
-        assert_eq!(palette.list_state.selected(), Some(3));
+        assert_eq!(palette.selected_index(), Some(3));
 
         assert!(palette.page_up());
-        assert_eq!(palette.list_state.selected(), Some(0));
+        assert_eq!(palette.selected_index(), Some(0));
     }
 
     #[test]
@@ -699,7 +608,7 @@ mod tests {
 
         assert!(palette.clear());
         assert!(palette.suggestions().is_empty());
-        assert_eq!(palette.list_state.selected(), None);
+        assert_eq!(palette.selected_index(), None);
         assert_eq!(palette.visible_rows(), 0);
     }
 

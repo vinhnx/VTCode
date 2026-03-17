@@ -36,7 +36,7 @@ use vtcode_core::ui::{
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::SessionArchive;
 use vtcode_core::utils::transcript;
-use vtcode_tui::{
+use vtcode_tui::app::{
     FocusChangeCallback, InlineEvent, InlineEventCallback, InlineHandle, InlineHeaderContext,
     SessionOptions, spawn_session_with_options,
 };
@@ -138,10 +138,10 @@ pub(crate) async fn initialize_session_ui(
                 .and_then(|cfg| cfg.tui.alternate_screen)
                 .map(|mode| match mode {
                     vtcode_core::config::TuiAlternateScreen::Always => {
-                        vtcode_tui::SessionSurface::Alternate
+                        vtcode_tui::app::SessionSurface::Alternate
                     }
                     vtcode_core::config::TuiAlternateScreen::Never => {
-                        vtcode_tui::SessionSurface::Inline
+                        vtcode_tui::app::SessionSurface::Inline
                     }
                 })
                 .unwrap_or_else(|| to_tui_surface(config.ui_surface)),

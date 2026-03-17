@@ -42,6 +42,7 @@ pub struct SessionWidget<'a> {
     transcript_area: Option<Rect>,
     navigation_area: Option<Rect>,
     layout_mode: Option<LayoutMode>,
+    footer_hint_override: Option<&'static str>,
 }
 
 impl<'a> SessionWidget<'a> {
@@ -54,6 +55,7 @@ impl<'a> SessionWidget<'a> {
             transcript_area: None,
             navigation_area: None,
             layout_mode: None,
+            footer_hint_override: None,
         }
     }
 
@@ -89,6 +91,13 @@ impl<'a> SessionWidget<'a> {
     #[must_use]
     pub fn layout_mode(mut self, mode: LayoutMode) -> Self {
         self.layout_mode = Some(mode);
+        self
+    }
+
+    /// Override the footer hint text (useful for app-specific panels).
+    #[must_use]
+    pub fn footer_hint_override(mut self, hint: &'static str) -> Self {
+        self.footer_hint_override = Some(hint);
         self
     }
 
@@ -248,9 +257,6 @@ impl Widget for &mut SessionWidget<'_> {
         // Update view rows for transcript
         self.session.apply_view_rows(layout.main.height);
 
-        // Check if overlays are active (dim background panels when true)
-        let _overlays_active = self.session.file_palette_active;
-
         // Render header
         let header_lines = if let Some(lines) = self.header_lines.as_ref() {
             lines.clone()
@@ -344,9 +350,11 @@ impl<'a> SessionWidget<'a> {
         let left_status = self.session.input_status_left.as_deref().unwrap_or("");
         let right_status = self.session.input_status_right.as_deref().unwrap_or("");
 
-        let hint = if self.session.thinking_spinner.is_active {
+        let hint = if let Some(hint) = self.footer_hint_override {
+            hint
+        } else if self.session.thinking_spinner.is_active {
             footer_hints::PROCESSING
-        } else if self.session.file_palette_active || self.session.history_picker_state.active {
+        } else if self.session.has_active_overlay() {
             footer_hints::MODAL
         } else if self.session.input_manager.content().is_empty() {
             footer_hints::IDLE

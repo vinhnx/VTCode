@@ -12,7 +12,7 @@ use vtcode_core::tools::registry::ToolTimeoutCategory;
 use vtcode_core::ui::inline_theme_from_core_styles;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_tui::{InlineHandle, InlineSession, SessionOptions, spawn_session_with_options};
+use vtcode_tui::app::{InlineHandle, InlineSession, SessionOptions, spawn_session_with_options};
 
 /// Helper function to create test registry with common setup
 async fn create_test_registry(workspace: &std::path::Path) -> ToolRegistry {
@@ -21,7 +21,7 @@ async fn create_test_registry(workspace: &std::path::Path) -> ToolRegistry {
 
 /// Helper function to create test renderer with default config
 fn create_test_renderer(
-    handle: &vtcode_tui::InlineHandle,
+    handle: &vtcode_tui::app::InlineHandle,
 ) -> vtcode_core::utils::ansi::AnsiRenderer {
     AnsiRenderer::with_inline_ui(handle.clone(), Default::default())
 }
@@ -55,8 +55,8 @@ fn build_harness_state_with(
 struct TestContext {
     registry: ToolRegistry,
     renderer: vtcode_core::utils::ansi::AnsiRenderer,
-    session: vtcode_tui::InlineSession,
-    handle: vtcode_tui::InlineHandle,
+    session: vtcode_tui::app::InlineSession,
+    handle: vtcode_tui::app::InlineHandle,
     approval_recorder: vtcode_core::tools::ApprovalRecorder,
     workspace: std::path::PathBuf,
 }

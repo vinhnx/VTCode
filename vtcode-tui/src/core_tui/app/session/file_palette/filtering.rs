@@ -77,6 +77,7 @@ impl FilePalette {
                 .cmp(&b.relative_path.to_lowercase()),
         });
         self.apply_filter();
+        self.navigator.select_first();
     }
 
     fn make_relative(workspace: &Path, file_path: &str) -> String {
@@ -101,14 +102,15 @@ impl FilePalette {
             }
         }
 
-        self.selected_index = 0;
-        self.current_page = 0;
+        self.navigator.set_item_count(self.filtered_files.len());
+        self.navigator.select_first();
     }
 
     pub(super) fn apply_filter(&mut self) {
         if self.filter_query.is_empty() {
             // Avoid cloning when no filter - just reference all files
             self.filtered_files = self.all_files.clone();
+            self.navigator.set_item_count(self.filtered_files.len());
             return;
         }
 
@@ -151,6 +153,7 @@ impl FilePalette {
         });
 
         self.filtered_files = scored_files.into_iter().map(|(_, entry)| entry).collect();
+        self.navigator.set_item_count(self.filtered_files.len());
     }
 
     /// Simple fuzzy matching using nucleo-matcher

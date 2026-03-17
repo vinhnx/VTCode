@@ -21,7 +21,7 @@ use vtcode_core::tools::{ToolRegistry, ToolResultCache};
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::utils::session_archive::SessionArchive;
 use vtcode_core::utils::session_archive::session_workspace_path;
-use vtcode_tui::{InlineHandle, InlineHeaderContext, InlineSession};
+use vtcode_tui::app::{InlineHandle, InlineHeaderContext, InlineSession};
 
 use crate::updater::{StartupUpdateCheck, StartupUpdateNotice};
 

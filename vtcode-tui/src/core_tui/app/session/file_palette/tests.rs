@@ -218,13 +218,13 @@ fn test_circular_navigation() {
     palette.load_files(files);
 
     // At first item, up should wrap to last
-    assert_eq!(palette.selected_index, 0);
+    assert_eq!(palette.selected_index(), Some(0));
     palette.move_selection_up();
-    assert_eq!(palette.selected_index, 2);
+    assert_eq!(palette.selected_index(), Some(2));
 
     // At last item, down should wrap to first
     palette.move_selection_down();
-    assert_eq!(palette.selected_index, 0);
+    assert_eq!(palette.selected_index(), Some(0));
 }
 
 #[test]

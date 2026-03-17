@@ -2,15 +2,16 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{prelude::*, widgets::Clear};
 
 use crate::config::constants::ui;
+use crate::core_tui::session::inline_list::{InlineListRow, selection_padding};
+use crate::core_tui::session::list_panel::{
+    ListPanelLayout, SharedListPanelSections, SharedListPanelStyles, SharedSearchField,
+    StaticRowsListPanelModel, fixed_section_rows, render_shared_list_panel, rows_to_u16,
+};
+use crate::core_tui::style::{ratatui_color_from_ansi, ratatui_style_from_inline};
 
 use super::super::types::InlineTextStyle;
-use super::inline_list::{InlineListRow, selection_padding};
-use super::list_panel::{
-    SharedListPanelSections, SharedListPanelStyles, SharedSearchField, StaticRowsListPanelModel,
-    fixed_section_rows, render_shared_list_panel, rows_to_u16, split_bottom_list_panel,
-};
 use super::{
-    Session, ratatui_color_from_ansi, ratatui_style_from_inline,
+    Session,
     slash_palette::{self, SlashPaletteUpdate, command_prefix, command_range},
 };
 
@@ -34,14 +35,14 @@ pub(crate) fn split_inline_slash_area(session: &mut Session, area: Rect) -> (Rec
 
     let info_rows = slash_palette_instructions(session).len();
     let has_search_row = command_prefix(
-        session.input_manager.content(),
-        session.input_manager.cursor(),
+        session.core.input_manager.content(),
+        session.core.input_manager.cursor(),
     )
     .is_some();
     let fixed_rows = fixed_section_rows(1, info_rows, has_search_row);
     let desired_list_rows = rows_to_u16(suggestions.len().min(ui::INLINE_LIST_MAX_ROWS));
-    let (transcript_area, panel_area) =
-        split_bottom_list_panel(area, fixed_rows, desired_list_rows);
+    let layout = ListPanelLayout::new(fixed_rows, desired_list_rows);
+    let (transcript_area, panel_area) = layout.split(area);
     if panel_area.is_none() {
         session.slash_palette.clear_visible_rows();
         return (transcript_area, None);
@@ -68,7 +69,7 @@ pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
 
     let rows = slash_rows(session);
     let item_count = rows.len();
-    let default_style = session.styles.default_style();
+    let default_style = session.core.styles.default_style();
     let highlight_style = slash_highlight_style(session);
     let name_style = slash_name_style(session);
     let description_style = slash_description_style(session);
@@ -92,16 +93,14 @@ pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
         })
         .collect::<Vec<_>>();
 
-    let (selected, offset) = {
-        let list_state = session.slash_palette.list_state_mut();
-        (
-            list_state.selected().filter(|index| *index < item_count),
-            list_state.offset(),
-        )
-    };
+    let selected = session
+        .slash_palette
+        .selected_index()
+        .filter(|index| *index < item_count);
+    let offset = session.slash_palette.scroll_offset();
     let search_line = command_prefix(
-        session.input_manager.content(),
-        session.input_manager.cursor(),
+        session.core.input_manager.content(),
+        session.core.input_manager.cursor(),
     )
     .map(|prefix| {
         let filter = prefix.trim_start_matches('/');
@@ -141,22 +140,21 @@ pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
         .slash_palette
         .set_visible_rows(model.visible_rows.min(ui::INLINE_LIST_MAX_ROWS));
 
-    let list_state = session.slash_palette.list_state_mut();
-    list_state.select(model.selected);
-    *list_state.offset_mut() = model.offset;
+    session.slash_palette.set_selected(model.selected);
+    session.slash_palette.set_scroll_offset(model.offset);
 }
 
 fn slash_palette_instructions(session: &Session) -> Vec<Line<'static>> {
     vec![Line::from(Span::styled(
         "Navigation: ↑/↓ select • Enter apply • Esc dismiss".to_owned(),
-        session.styles.default_style(),
+        session.core.styles.default_style(),
     ))]
 }
 
 pub(super) fn handle_slash_palette_change(session: &mut Session) {
-    session.recalculate_transcript_rows();
-    session.enforce_scroll_bounds();
-    session.mark_dirty();
+    session.core.recalculate_transcript_rows();
+    session.core.enforce_scroll_bounds();
+    session.core.mark_dirty();
 }
 
 pub(super) fn clear_slash_suggestions(session: &mut Session) {
@@ -166,14 +164,14 @@ pub(super) fn clear_slash_suggestions(session: &mut Session) {
 }
 
 pub(super) fn update_slash_suggestions(session: &mut Session) {
-    if !session.input_enabled {
+    if !session.core.input_enabled() {
         clear_slash_suggestions(session);
         return;
     }
 
     let Some(prefix) = command_prefix(
-        session.input_manager.content(),
-        session.input_manager.cursor(),
+        session.core.input_manager.content(),
+        session.core.input_manager.cursor(),
     ) else {
         clear_slash_suggestions(session);
         return;
@@ -193,11 +191,11 @@ pub(super) fn update_slash_suggestions(session: &mut Session) {
 
 pub(crate) fn slash_navigation_available(session: &Session) -> bool {
     let has_prefix = command_prefix(
-        session.input_manager.content(),
-        session.input_manager.cursor(),
+        session.core.input_manager.content(),
+        session.core.input_manager.cursor(),
     )
     .is_some();
-    session.input_enabled
+    session.core.input_enabled()
         && session.inline_lists_visible()
         && !session.slash_palette.is_empty()
         && has_prefix
@@ -239,9 +237,9 @@ pub(super) fn page_down_slash_suggestion(session: &mut Session) -> bool {
 pub(super) fn handle_slash_selection_change(session: &mut Session, changed: bool) -> bool {
     if changed {
         preview_selected_slash_suggestion(session);
-        session.recalculate_transcript_rows();
-        session.enforce_scroll_bounds();
-        session.mark_dirty();
+        session.core.recalculate_transcript_rows();
+        session.core.enforce_scroll_bounds();
+        session.core.mark_dirty();
         true
     } else {
         false
@@ -258,13 +256,13 @@ fn preview_selected_slash_suggestion(session: &mut Session) {
         return;
     };
     let Some(range) = command_range(
-        session.input_manager.content(),
-        session.input_manager.cursor(),
+        session.core.input_manager.content(),
+        session.core.input_manager.cursor(),
     ) else {
         return;
     };
 
-    let current_input = session.input_manager.content().to_owned();
+    let current_input = session.core.input_manager.content().to_owned();
     let prefix = &current_input[..range.start];
     let suffix = &current_input[range.end..];
 
@@ -281,7 +279,7 @@ fn preview_selected_slash_suggestion(session: &mut Session) {
         new_input.push_str(suffix);
     }
 
-    session.input_manager.set_content(new_input.clone());
+    session.core.input_manager.set_content(new_input.clone());
     session
         .input_manager
         .set_cursor(cursor_position.min(new_input.len()));
@@ -295,8 +293,8 @@ pub(super) fn apply_selected_slash_suggestion(session: &mut Session) -> bool {
 
     let command_name = command.name.to_owned();
 
-    let input_content = session.input_manager.content();
-    let cursor_pos = session.input_manager.cursor();
+    let input_content = session.core.input_manager.content();
+    let cursor_pos = session.core.input_manager.cursor();
     let Some(range) = command_range(input_content, cursor_pos) else {
         return false;
     };
@@ -316,8 +314,8 @@ pub(super) fn apply_selected_slash_suggestion(session: &mut Session) -> bool {
         position
     };
 
-    session.input_manager.set_content(new_input);
-    session.input_manager.set_cursor(cursor_position);
+    session.core.input_manager.set_content(new_input);
+    session.core.input_manager.set_cursor(cursor_position);
 
     clear_slash_suggestions(session);
     session.mark_dirty();
@@ -326,8 +324,8 @@ pub(super) fn apply_selected_slash_suggestion(session: &mut Session) -> bool {
 }
 
 pub(super) fn autocomplete_slash_suggestion(session: &mut Session) -> bool {
-    let input_content = session.input_manager.content();
-    let cursor_pos = session.input_manager.cursor();
+    let input_content = session.core.input_manager.content();
+    let cursor_pos = session.core.input_manager.cursor();
 
     let Some(range) = command_range(input_content, cursor_pos) else {
         return false;
@@ -366,8 +364,8 @@ pub(super) fn autocomplete_slash_suggestion(session: &mut Session) -> bool {
         position
     };
 
-    session.input_manager.set_content(new_input);
-    session.input_manager.set_cursor(cursor_position);
+    session.core.input_manager.set_content(new_input);
+    session.core.input_manager.set_cursor(cursor_position);
 
     clear_slash_suggestions(session);
     session.mark_dirty();
@@ -445,7 +443,7 @@ pub(super) fn try_handle_slash_navigation(
 }
 
 pub(crate) fn should_submit_immediately_from_palette(session: &Session) -> bool {
-    let Some(command) = session.input_manager.content().split_whitespace().next() else {
+    let Some(command) = session.core.input_manager.content().split_whitespace().next() else {
         return false;
     };
 
@@ -500,7 +498,7 @@ fn slash_rows(session: &Session) -> Vec<SlashRow> {
 
 fn slash_highlight_style(session: &Session) -> Style {
     let mut style = Style::default().add_modifier(Modifier::REVERSED | Modifier::BOLD);
-    if let Some(primary) = session.theme.primary.or(session.theme.secondary) {
+    if let Some(primary) = session.core.theme.primary.or(session.core.theme.secondary) {
         style = style.fg(ratatui_color_from_ansi(primary));
     }
     style
@@ -509,12 +507,12 @@ fn slash_highlight_style(session: &Session) -> Style {
 fn slash_name_style(session: &Session) -> Style {
     let style = InlineTextStyle::default()
         .bold()
-        .with_color(session.theme.primary.or(session.theme.foreground));
-    ratatui_style_from_inline(&style, session.theme.foreground)
+        .with_color(session.core.theme.primary.or(session.core.theme.foreground));
+    ratatui_style_from_inline(&style, session.core.theme.foreground)
 }
 
 fn slash_description_style(session: &Session) -> Style {
-    session.styles.default_style().add_modifier(Modifier::DIM)
+    session.core.styles.default_style().add_modifier(Modifier::DIM)
 }
 
 #[cfg(test)]

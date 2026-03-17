@@ -3,12 +3,11 @@
 /// Provides a visual palette for searching and selecting from command history
 /// using nucleo fuzzy matching, similar to the slash command palette.
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use ratatui::widgets::ListState;
-
 use super::super::types::ContentPart;
+use crate::core_tui::session::list_navigator::ListNavigator;
 use crate::ui::search::fuzzy_score;
 
-use super::input_manager::InputManager;
+use crate::core_tui::session::input_manager::InputManager;
 
 /// A single history entry with fuzzy match score
 #[derive(Debug, Clone)]
@@ -32,10 +31,8 @@ pub struct HistoryPickerState {
     pub search_query: String,
     /// Filtered and sorted matches
     pub matches: Vec<HistoryMatch>,
-    /// List state for selection tracking
-    pub list_state: ListState,
-    /// Number of visible rows in the picker
-    pub visible_rows: usize,
+    /// Shared list navigation state
+    pub navigator: ListNavigator,
     /// Original content before picker was opened (for cancel restoration)
     original_content: String,
     /// Original cursor position before picker was opened
@@ -57,8 +54,7 @@ impl HistoryPickerState {
             active: false,
             search_query: String::new(),
             matches: Vec::new(),
-            list_state: ListState::default(),
-            visible_rows: 10,
+            navigator: ListNavigator::new(),
             original_content: String::new(),
             original_cursor: 0,
             original_attachments: Vec::new(),
@@ -72,7 +68,7 @@ impl HistoryPickerState {
         self.original_content = input_manager.content().to_string();
         self.original_cursor = input_manager.cursor();
         self.original_attachments = input_manager.attachments().to_vec();
-        self.list_state.select(Some(0));
+        self.navigator.select_first();
     }
 
     /// Close the picker and restore original input
@@ -80,6 +76,7 @@ impl HistoryPickerState {
         self.active = false;
         self.search_query.clear();
         self.matches.clear();
+        self.navigator.set_item_count(0);
         input_manager.set_content(self.original_content.clone());
         input_manager.set_cursor(self.original_cursor);
         input_manager.set_attachments(self.original_attachments.clone());
@@ -94,30 +91,26 @@ impl HistoryPickerState {
         self.active = false;
         self.search_query.clear();
         self.matches.clear();
+        self.navigator.set_item_count(0);
     }
 
     /// Get the currently selected match
     pub fn selected_match(&self) -> Option<&HistoryMatch> {
-        self.list_state
+        self.navigator
             .selected()
-            .and_then(|idx| self.matches.get(idx))
+            .and_then(|index| self.matches.get(index))
     }
 
     pub fn selected_index(&self) -> Option<usize> {
-        self.list_state.selected()
+        self.navigator.selected()
     }
 
     pub fn scroll_offset(&self) -> usize {
-        self.list_state.offset()
+        self.navigator.scroll_offset()
     }
 
     pub fn select_index(&mut self, index: usize) -> bool {
-        if index >= self.matches.len() || self.list_state.selected() == Some(index) {
-            return false;
-        }
-
-        self.list_state.select(Some(index));
-        true
+        self.navigator.select_index(index)
     }
 
     /// Update the search query and filter matches
@@ -160,11 +153,11 @@ impl HistoryPickerState {
         // Limit to reasonable number
         self.matches.truncate(100);
 
-        // Reset selection to first item if available
+        self.navigator.set_item_count(self.matches.len());
         if self.matches.is_empty() {
-            self.list_state.select(None);
+            self.navigator.set_selected(None);
         } else {
-            self.list_state.select(Some(0));
+            self.navigator.select_first();
         }
     }
 
@@ -182,28 +175,12 @@ impl HistoryPickerState {
 
     /// Move selection up
     pub fn move_up(&mut self) {
-        if self.matches.is_empty() {
-            return;
-        }
-
-        let current = self.list_state.selected().unwrap_or(0);
-        let new_index = if current == 0 {
-            self.matches.len() - 1
-        } else {
-            current - 1
-        };
-        self.list_state.select(Some(new_index));
+        self.navigator.move_up();
     }
 
     /// Move selection down
     pub fn move_down(&mut self) {
-        if self.matches.is_empty() {
-            return;
-        }
-
-        let current = self.list_state.selected().unwrap_or(0);
-        let new_index = (current + 1) % self.matches.len();
-        self.list_state.select(Some(new_index));
+        self.navigator.move_down();
     }
 
     /// Check if the picker is empty (no matches)
@@ -347,17 +324,17 @@ mod tests {
         picker.open(&manager);
         picker.update_search(&history);
 
-        assert_eq!(picker.list_state.selected(), Some(0));
+        assert_eq!(picker.selected_index(), Some(0));
 
         picker.move_down();
-        assert_eq!(picker.list_state.selected(), Some(1));
+        assert_eq!(picker.selected_index(), Some(1));
 
         picker.move_up();
-        assert_eq!(picker.list_state.selected(), Some(0));
+        assert_eq!(picker.selected_index(), Some(0));
 
         // Wrap around
         picker.move_up();
-        assert_eq!(picker.list_state.selected(), Some(4));
+        assert_eq!(picker.selected_index(), Some(4));
     }
 
     #[test]
