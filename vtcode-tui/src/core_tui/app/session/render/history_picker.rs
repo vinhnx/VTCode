@@ -70,16 +70,13 @@ impl SharedListWidgetModel for HistoryPickerPanelModel {
     }
 }
 
-pub fn split_inline_history_picker_area(session: &mut Session, area: Rect) -> (Rect, Option<Rect>) {
-    if area.height == 0
-        || area.width == 0
-        || session.has_active_overlay()
+pub(crate) fn history_picker_panel_layout(session: &Session) -> Option<ListPanelLayout> {
+    if session.has_active_overlay()
         || !session.inline_lists_visible()
         || session.file_palette_active
         || !session.history_picker_state.active
     {
-        session.history_picker_state.navigator.set_visible_rows(0);
-        return (area, None);
+        return None;
     }
 
     let fixed_rows = fixed_section_rows(1, 1, true);
@@ -94,7 +91,20 @@ pub fn split_inline_history_picker_area(session: &mut Session, area: Rect) -> (R
                 .min(ui::INLINE_LIST_MAX_ROWS),
         )
     };
-    let layout = ListPanelLayout::new(fixed_rows, list_rows);
+
+    Some(ListPanelLayout::new(fixed_rows, list_rows))
+}
+
+pub fn split_inline_history_picker_area(session: &mut Session, area: Rect) -> (Rect, Option<Rect>) {
+    if area.height == 0 || area.width == 0 {
+        session.history_picker_state.navigator.set_visible_rows(0);
+        return (area, None);
+    }
+
+    let Some(layout) = history_picker_panel_layout(session) else {
+        session.history_picker_state.navigator.set_visible_rows(0);
+        return (area, None);
+    };
     let (transcript_area, panel_area) = layout.split(area);
     if panel_area.is_none() {
         session.history_picker_state.navigator.set_visible_rows(0);

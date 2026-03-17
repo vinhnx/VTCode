@@ -16,32 +16,15 @@ use super::{
 };
 
 pub(crate) fn split_inline_slash_area(session: &mut Session, area: Rect) -> (Rect, Option<Rect>) {
-    if area.height == 0
-        || area.width == 0
-        || session.has_active_overlay()
-        || !session.inline_lists_visible()
-        || session.file_palette_active
-        || session.history_picker_state.active
-    {
+    if area.height == 0 || area.width == 0 {
         session.slash_palette.clear_visible_rows();
         return (area, None);
     }
 
-    let suggestions = session.slash_palette.suggestions();
-    if suggestions.is_empty() {
+    let Some(layout) = slash_panel_layout(session) else {
         session.slash_palette.clear_visible_rows();
         return (area, None);
-    }
-
-    let info_rows = slash_palette_instructions(session).len();
-    let has_search_row = command_prefix(
-        session.core.input_manager.content(),
-        session.core.input_manager.cursor(),
-    )
-    .is_some();
-    let fixed_rows = fixed_section_rows(1, info_rows, has_search_row);
-    let desired_list_rows = rows_to_u16(suggestions.len().min(ui::INLINE_LIST_MAX_ROWS));
-    let layout = ListPanelLayout::new(fixed_rows, desired_list_rows);
+    };
     let (transcript_area, panel_area) = layout.split(area);
     if panel_area.is_none() {
         session.slash_palette.clear_visible_rows();
@@ -149,6 +132,28 @@ fn slash_palette_instructions(session: &Session) -> Vec<Line<'static>> {
         "Navigation: ↑/↓ select • Enter apply • Esc dismiss".to_owned(),
         session.core.styles.default_style(),
     ))]
+}
+
+pub(crate) fn slash_panel_layout(session: &Session) -> Option<ListPanelLayout> {
+    if session.has_active_overlay()
+        || !session.inline_lists_visible()
+        || session.file_palette_active
+        || session.history_picker_state.active
+        || session.slash_palette.is_empty()
+    {
+        return None;
+    }
+
+    let info_rows = slash_palette_instructions(session).len();
+    let has_search_row = command_prefix(
+        session.core.input_manager.content(),
+        session.core.input_manager.cursor(),
+    )
+    .is_some();
+    let fixed_rows = fixed_section_rows(1, info_rows, has_search_row);
+    let desired_list_rows =
+        rows_to_u16(session.slash_palette.suggestions().len().min(ui::INLINE_LIST_MAX_ROWS));
+    Some(ListPanelLayout::new(fixed_rows, desired_list_rows))
 }
 
 pub(super) fn handle_slash_palette_change(session: &mut Session) {

@@ -251,22 +251,13 @@ impl Session {
         }
 
         if self.file_palette_active {
-            let fixed_rows = list_panel::fixed_section_rows(1, 2, true);
+            let Some(layout) = render::file_palette_panel_layout(self) else {
+                return true;
+            };
             let bottom_area = self.core.bottom_panel_area();
             let Some(palette) = self.file_palette.as_mut() else {
                 return true;
             };
-            let list_rows = if palette.has_files() {
-                let mut rows = palette.current_page_items().len().max(1);
-                if palette.has_more_items() {
-                    rows += 1;
-                }
-                rows.min(ui::INLINE_LIST_MAX_ROWS)
-            } else {
-                1
-            };
-            let layout =
-                list_panel::ListPanelLayout::new(fixed_rows, list_panel::rows_to_u16(list_rows));
             let local_index = bottom_area.and_then(|area| layout.row_index(area, column, row));
             let mut apply_path = None;
             let mut should_mark_dirty = false;
@@ -296,17 +287,9 @@ impl Session {
         }
 
         if self.history_picker_state.active {
-            let fixed_rows = list_panel::fixed_section_rows(1, 1, true);
-            let list_rows = if self.history_picker_state.matches.is_empty() {
-                1
-            } else {
-                self.history_picker_state
-                    .matches
-                    .len()
-                    .min(ui::INLINE_LIST_MAX_ROWS)
+            let Some(layout) = render::history_picker_panel_layout(self) else {
+                return true;
             };
-            let layout =
-                list_panel::ListPanelLayout::new(fixed_rows, list_panel::rows_to_u16(list_rows));
             if let Some(local_index) = self.panel_row_index(&layout, column, row)
                 && !self.history_picker_state.matches.is_empty()
             {
@@ -326,14 +309,9 @@ impl Session {
         }
 
         if slash::slash_navigation_available(self) {
-            let fixed_rows = list_panel::fixed_section_rows(1, 1, true);
-            let list_rows = self
-                .slash_palette
-                .suggestions()
-                .len()
-                .min(ui::INLINE_LIST_MAX_ROWS);
-            let layout =
-                list_panel::ListPanelLayout::new(fixed_rows, list_panel::rows_to_u16(list_rows));
+            let Some(layout) = slash::slash_panel_layout(self) else {
+                return true;
+            };
             if let Some(local_index) = self.panel_row_index(&layout, column, row) {
                 let actual_index = self
                     .slash_palette

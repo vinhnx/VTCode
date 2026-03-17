@@ -14,28 +14,22 @@ struct FilePaletteRenderRow {
     selected: bool,
 }
 
-pub fn split_inline_file_palette_area(session: &mut Session, area: Rect) -> (Rect, Option<Rect>) {
-    if area.height == 0
-        || area.width == 0
-        || session.has_active_overlay()
+pub(crate) fn file_palette_panel_layout(session: &Session) -> Option<ListPanelLayout> {
+    if session.has_active_overlay()
         || !session.inline_lists_visible()
         || session.history_picker_state.active
         || !session.file_palette_active
     {
-        return (area, None);
+        return None;
     }
 
-    let Some(palette) = session.file_palette.as_ref() else {
-        return (area, None);
-    };
-
+    let palette = session.file_palette.as_ref()?;
     let info_rows = if palette.has_files() {
         file_palette_instructions(session, palette).len()
     } else {
         1
     };
     let fixed_rows = fixed_section_rows(1, info_rows, palette.has_files());
-
     let list_rows = if palette.has_files() {
         let mut rows = palette.current_page_items().len().max(1);
         if palette.has_more_items() {
@@ -46,7 +40,18 @@ pub fn split_inline_file_palette_area(session: &mut Session, area: Rect) -> (Rec
         1
     };
 
-    let layout = ListPanelLayout::new(fixed_rows, rows_to_u16(list_rows));
+    Some(ListPanelLayout::new(fixed_rows, rows_to_u16(list_rows)))
+}
+
+pub fn split_inline_file_palette_area(session: &mut Session, area: Rect) -> (Rect, Option<Rect>) {
+    if area.height == 0 || area.width == 0 {
+        return (area, None);
+    }
+
+    let Some(layout) = file_palette_panel_layout(session) else {
+        return (area, None);
+    };
+
     layout.split(area)
 }
 
