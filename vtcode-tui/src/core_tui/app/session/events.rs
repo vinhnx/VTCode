@@ -22,10 +22,15 @@ fn input_history_entries(session: &Session) -> Vec<(String, Vec<ContentPart>)> {
         .collect()
 }
 
+fn update_input_triggers(session: &mut Session) {
+    session.check_file_reference_trigger();
+    slash::update_slash_suggestions(session);
+}
+
 pub(super) fn handle_paste(session: &mut Session, content: &str) {
     if session.core.input_enabled() {
         session.insert_paste_text(content);
-        session.check_file_reference_trigger();
+        update_input_triggers(session);
         session.mark_dirty();
     } else if let Some(modal) = session.modal_state_mut()
         && let (Some(list), Some(search)) = (modal.list.as_mut(), modal.search.as_mut())
@@ -331,7 +336,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         KeyCode::Char('w') | KeyCode::Char('W') if has_control && !has_command && !has_alt => {
             if session.core.input_enabled() {
                 session.delete_word_backward();
-                session.check_file_reference_trigger();
+                update_input_triggers(session);
                 session.mark_dirty();
             }
             None
@@ -339,7 +344,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         KeyCode::Char('u') | KeyCode::Char('U') if has_control && !has_command && !has_alt => {
             if session.core.input_enabled() {
                 session.delete_to_start_of_line();
-                session.check_file_reference_trigger();
+                update_input_triggers(session);
                 session.mark_dirty();
             }
             None
@@ -347,7 +352,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         KeyCode::Char('k') | KeyCode::Char('K') if has_control && !has_command && !has_alt => {
             if session.core.input_enabled() {
                 session.delete_to_end_of_line();
-                session.check_file_reference_trigger();
+                update_input_triggers(session);
                 session.mark_dirty();
             }
             None
@@ -557,7 +562,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 } else {
                     session.delete_char();
                 }
-                session.check_file_reference_trigger();
+                update_input_triggers(session);
                 session.mark_dirty();
             }
             None
@@ -571,7 +576,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 } else {
                     session.delete_char_forward();
                 }
-                session.check_file_reference_trigger();
+                update_input_triggers(session);
                 session.mark_dirty();
             }
             None
@@ -709,7 +714,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
 
             if !has_control {
                 session.insert_char(ch);
-                session.check_file_reference_trigger();
+                update_input_triggers(session);
                 session.mark_dirty();
             }
             None
