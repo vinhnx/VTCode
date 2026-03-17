@@ -2,6 +2,40 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.89.2 - 2026-03-17
+
+### Highlights
+#### Bug Fixes
+
+- Improve plan mode entry and lifecycle tracking (13638d96) 
+- Improve argument and stderr preview truncation for safety (3a09f7c1) 
+#### Features
+
+- Collapse large JSON outputs in TUI messages and adjust plan mode policies to allow. (80eed12d) 
+### Other Changes
+#### Other
+
+- Refactor plan block parsing for safe character boundaries and add truncation for tool arguments and stderr previews (4b5a4b12) 
+- Fix read tool config issue (73f5cb6f) 
+- Update TODO (f7f2382f) 
+- Implement dynamic signature generation for task_tracker_create and add tests for payload changes (788215be) 
+- Refactor path and symbol hint extraction in research context collection (539c1ac3) 
+- Update TODO (cc9ee77d) 
+- Fix .gitignore entry for vtcode.toml and reorder configuration fields in vtcode.toml (d5e78f45) 
+- Fix plan mode loading (708b5e99) 
+- Add plan confirmation prompt after draft persistence and enhance error classification (ccd75a8f) 
+- Enhance modal list state management to retain last selection and improve overlay behavior (22f813ce) 
+- Refactor plan mode context handling and update configuration values for consistency (cc191c1d) 
+- Refactor plan validation logic to prefer more complete candidates and enhance related tests (f566129c) 
+- Enhance plan extraction and confirmation flow; add handling for incomplete drafts and improve task tracker management (7a2608f7) 
+- Refactor task tracker signature handling to use duplicate enforcement guard (f93d52a7) 
+- Update TODo (8d522e16) 
+- Update TODO (ac4b4f84) 
+- Refactor plan mode handling and improve session loop logic (86b9b95c) 
+- Update TODO (ffdee65d) 
+- Update circuit breaker configuration and tests for improved resiliency (aa92cd91) 
+### Contributors
+@vinhnx
 ## 0.89.1 - 2026-03-16
 
 ### Highlights
