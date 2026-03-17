@@ -67,6 +67,8 @@ then add vtcode-ollama related submodules into vtcode-local-llm as well to furth
 
 ---
 
+try copilot github oauth to use anthropic's claude
+
 https://claude.ai/chat/37d94c2c-a521-44d2-85f3-e15c38864286
 
 ===
@@ -87,7 +89,3 @@ prompt += `## ${filePath}\n\n${content}\n\n`;
 Claude Code does the same with CLAUDE.md. The pattern is simple: read the file, append it right after the system prompt.
 
 ==
-
-Recommend: https://blog.yellowday.day/posts/context_engineering_from_the_inside_out/
-
-review carefully and apply to vtcode
