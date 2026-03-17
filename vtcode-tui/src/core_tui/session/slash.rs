@@ -154,7 +154,7 @@ fn slash_palette_instructions(session: &Session) -> Vec<Line<'static>> {
 }
 
 pub(super) fn handle_slash_palette_change(session: &mut Session) {
-    crate::ui::tui::session::render::recalculate_transcript_rows(session);
+    session.recalculate_transcript_rows();
     session.enforce_scroll_bounds();
     session.mark_dirty();
 }
@@ -239,7 +239,7 @@ pub(super) fn page_down_slash_suggestion(session: &mut Session) -> bool {
 pub(super) fn handle_slash_selection_change(session: &mut Session, changed: bool) -> bool {
     if changed {
         preview_selected_slash_suggestion(session);
-        crate::ui::tui::session::render::recalculate_transcript_rows(session);
+        session.recalculate_transcript_rows();
         session.enforce_scroll_bounds();
         session.mark_dirty();
         true

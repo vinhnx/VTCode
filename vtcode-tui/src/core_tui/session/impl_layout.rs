@@ -21,12 +21,27 @@ impl Session {
         self.enforce_scroll_bounds();
     }
 
+    pub(crate) fn apply_transcript_rows(&mut self, rows: u16) {
+        let resolved = rows.max(1);
+        if self.transcript_rows != resolved {
+            self.transcript_rows = resolved;
+            self.invalidate_scroll_metrics();
+        }
+    }
+
+    pub(crate) fn apply_transcript_width(&mut self, width: u16) {
+        if self.transcript_width != width {
+            self.transcript_width = width;
+            self.invalidate_scroll_metrics();
+        }
+    }
+
     #[allow(dead_code)]
     pub(crate) fn force_view_rows(&mut self, rows: u16) {
         self.apply_view_rows(rows);
     }
 
-    pub(super) fn recalculate_transcript_rows(&mut self) {
+    pub(crate) fn recalculate_transcript_rows(&mut self) {
         // Calculate reserved rows: header + input + borders (2)
         let header_rows = self.header_rows.max(ui::INLINE_HEADER_HEIGHT);
         let reserved = (header_rows + self.input_height).saturating_add(2);

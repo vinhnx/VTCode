@@ -316,12 +316,6 @@ impl Session {
             .and_then(ActiveOverlay::as_diff_mut)
     }
 
-    pub(crate) fn modal_overlay_active(&self) -> bool {
-        self.active_overlay
-            .as_ref()
-            .is_some_and(ActiveOverlay::is_modal_like)
-    }
-
     pub(crate) fn take_modal_state(&mut self) -> Option<ModalState> {
         if !self
             .active_overlay

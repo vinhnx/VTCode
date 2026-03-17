@@ -1,4 +1,6 @@
 use super::*;
+use super::spans::invalidate_scroll_metrics;
+use ratatui::widgets::{Clear, Paragraph, Wrap};
 use crate::ui::tui::session::modal::{
     ModalBodyContext, ModalListState, ModalRenderStyles, render_modal_body,
     render_wizard_modal_body,

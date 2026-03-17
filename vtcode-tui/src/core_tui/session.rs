@@ -30,6 +30,7 @@ mod header;
 mod impl_events;
 mod impl_init;
 mod impl_input;
+mod layout;
 mod impl_layout;
 mod impl_logs;
 mod impl_render;
@@ -165,10 +166,6 @@ impl ActiveOverlay {
             Self::Diff(state) => Some(state),
             Self::Modal(_) | Self::Wizard(_) => None,
         }
-    }
-
-    fn is_modal_like(&self) -> bool {
-        matches!(self, Self::Modal(_) | Self::Wizard(_))
     }
 
     fn restore_input(&self) -> bool {

@@ -293,7 +293,7 @@ impl Session {
         let resolved = height.max(Self::input_block_height_for_lines(1));
         if self.input_height != resolved {
             self.input_height = resolved;
-            crate::ui::tui::session::render::recalculate_transcript_rows(self);
+            self.recalculate_transcript_rows();
         }
     }
 

@@ -95,7 +95,7 @@ pub(super) fn handle_event(
             handle_paste(session, &content);
         }
         CrosstermEvent::Resize(_, rows) => {
-            render::apply_view_rows(session, rows);
+            session.apply_view_rows(rows);
             session.mark_dirty();
         }
         CrosstermEvent::FocusGained => {

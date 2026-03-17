@@ -1,4 +1,5 @@
 use super::*;
+use ratatui::widgets::Clear;
 use crate::ui::tui::session::inline_list::InlineListRow;
 use crate::ui::tui::session::list_panel::{
     SharedListPanelSections, SharedListPanelStyles, SharedListWidgetModel, SharedSearchField,

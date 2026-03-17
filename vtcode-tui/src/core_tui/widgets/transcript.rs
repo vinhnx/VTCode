@@ -7,9 +7,7 @@ use ratatui::{
 
 use crate::config::constants::ui;
 use crate::ui::tui::session::terminal_capabilities;
-use crate::ui::tui::session::{
-    Session, TranscriptLine, render::apply_transcript_rows, render::apply_transcript_width,
-};
+use crate::ui::tui::session::{Session, TranscriptLine};
 
 /// Widget for rendering the transcript area with conversation history
 ///
@@ -85,14 +83,14 @@ impl<'a> Widget for TranscriptWidget<'a> {
         let effective_height = inner.height.min(ui::TUI_MAX_VIEWPORT_HEIGHT);
         let effective_width = inner.width.min(ui::TUI_MAX_VIEWPORT_WIDTH);
 
-        apply_transcript_rows(self.session, effective_height);
+        self.session.apply_transcript_rows(effective_height);
 
         let content_width = effective_width;
         if content_width == 0 {
             self.session.clear_transcript_file_link_targets();
             return;
         }
-        apply_transcript_width(self.session, content_width);
+        self.session.apply_transcript_width(content_width);
 
         let viewport_rows = effective_height as usize;
         let padding = usize::from(ui::INLINE_TRANSCRIPT_BOTTOM_PADDING);

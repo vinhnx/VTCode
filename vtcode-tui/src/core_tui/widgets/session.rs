@@ -7,7 +7,7 @@ use ratatui::{
 use super::{
     FooterWidget, HeaderWidget, LayoutMode, Panel, SidebarWidget, TranscriptWidget, footer_hints,
 };
-use crate::ui::tui::session::{Session, render::apply_view_rows};
+use crate::ui::tui::session::Session;
 
 /// Root compositor widget that orchestrates rendering of the entire session UI
 ///
@@ -203,7 +203,7 @@ impl Widget for &mut SessionWidget<'_> {
             }
 
             if transcript_area.width > 0 && transcript_area.height > 0 {
-                apply_view_rows(self.session, transcript_area.height);
+                self.session.apply_view_rows(transcript_area.height);
                 let has_logs =
                     self.session.show_logs && self.session.has_logs() && mode.show_logs_panel();
                 if has_logs {
@@ -242,11 +242,11 @@ impl Widget for &mut SessionWidget<'_> {
         // Update header rows if changed
         if layout.header.height != self.session.header_rows {
             self.session.header_rows = layout.header.height;
-            crate::ui::tui::session::render::recalculate_transcript_rows(self.session);
+            self.session.recalculate_transcript_rows();
         }
 
         // Update view rows for transcript
-        apply_view_rows(self.session, layout.main.height);
+        self.session.apply_view_rows(layout.main.height);
 
         // Check if overlays are active (dim background panels when true)
         let _overlays_active = self.session.file_palette_active;

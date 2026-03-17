@@ -1,8 +1,6 @@
 use std::fmt::Write;
 
 use ratatui::{
-    Frame,
-    layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Paragraph, Wrap},
@@ -77,16 +75,6 @@ fn header_status_badge_style(badge: &InlineHeaderStatusBadge, fallback: Style) -
 }
 
 impl Session {
-    pub(super) fn render_header(&self, frame: &mut Frame<'_>, area: Rect, lines: &[Line<'static>]) {
-        if area.height == 0 || area.width == 0 {
-            return;
-        }
-
-        let paragraph = self.build_header_paragraph(lines);
-
-        frame.render_widget(paragraph, area);
-    }
-
     pub(crate) fn header_lines(&mut self) -> Vec<Line<'static>> {
         if let Some(cached) = &self.header_lines_cache {
             return cached.clone();

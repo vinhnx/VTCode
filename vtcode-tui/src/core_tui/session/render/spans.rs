@@ -1,4 +1,5 @@
 use super::*;
+use super::super::USER_PREFIX;
 
 pub(super) fn render_message_spans(session: &Session, index: usize) -> Vec<Span<'static>> {
     let Some(line) = session.lines.get(index) else {

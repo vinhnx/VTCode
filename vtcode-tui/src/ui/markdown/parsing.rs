@@ -557,7 +557,7 @@ fn looks_like_markdown_path(token: &str) -> bool {
         return true;
     }
 
-    if COMMON_FILE_NAMES.iter().any(|name| *name == token) {
+    if COMMON_FILE_NAMES.contains(&token) {
         return true;
     }
 
@@ -728,8 +728,8 @@ fn file_link_style(current: Style, theme_styles: &ThemeStyles, base_style: Style
     let mut style = current;
     let base_fg = base_style.get_fg_color();
     let current_fg = style.get_fg_color();
-    if current_fg.is_none() || current_fg == base_fg {
-        if let Some(color) = choose_markdown_accent(
+    if (current_fg.is_none() || current_fg == base_fg)
+        && let Some(color) = choose_markdown_accent(
             base_style,
             &[
                 theme_styles.primary,
@@ -737,9 +737,9 @@ fn file_link_style(current: Style, theme_styles: &ThemeStyles, base_style: Style
                 theme_styles.status,
                 theme_styles.tool_detail,
             ],
-        ) {
-            style = style.fg_color(Some(color));
-        }
+        )
+    {
+        style = style.fg_color(Some(color));
     }
     style.underline()
 }

@@ -1,15 +1,11 @@
 #![allow(dead_code)]
 
 use anstyle::Color as AnsiColorEnum;
-use ratatui::{
-    prelude::*,
-    widgets::{Block, Clear, Paragraph, Wrap},
-};
+use ratatui::prelude::*;
 use unicode_width::UnicodeWidthStr;
 
 use super::super::style::{ratatui_pty_style_from_inline, ratatui_style_from_inline};
 use super::super::types::{InlineMessageKind, InlineTextStyle};
-use super::terminal_capabilities;
 use super::{Session, TranscriptLine, file_palette::FilePalette, message::MessageLine, text_utils};
 use crate::config::constants::ui;
 
@@ -23,7 +19,7 @@ pub(crate) use modal_renderer::modal_render_styles;
 pub use modal_renderer::render_modal;
 pub use modal_renderer::split_inline_modal_area;
 pub use palettes::{render_file_palette, split_inline_file_palette_area};
-use spans::{accent_style, border_style, default_style, invalidate_scroll_metrics, text_fallback};
+use spans::{accent_style, border_style, default_style, text_fallback};
 
 pub(super) fn render_message_spans(session: &Session, index: usize) -> Vec<Span<'static>> {
     spans::render_message_spans(session, index)
@@ -41,132 +37,9 @@ pub(super) fn render_tool_segments(session: &Session, line: &MessageLine) -> Vec
     spans::render_tool_segments(session, line)
 }
 
-const USER_PREFIX: &str = "";
-
 #[allow(dead_code)]
 pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
-    let size = frame.area();
-    if size.width == 0 || size.height == 0 {
-        return;
-    }
-
-    // Clear entire frame if modal was just closed to remove artifacts
-    if session.needs_full_clear {
-        frame.render_widget(Clear, size);
-        session.needs_full_clear = false;
-    }
-
-    // Pull any newly forwarded log entries before layout calculations
-    session.poll_log_entries();
-
-    let header_lines = session.header_lines();
-    let header_height = session.header_height_from_lines(size.width, &header_lines);
-    if header_height != session.header_rows {
-        session.header_rows = header_height;
-        recalculate_transcript_rows(session);
-    }
-
-    // Always reserve a status row to keep input layout stable.
-    let status_height = if size.width > 0 {
-        ui::INLINE_INPUT_STATUS_HEIGHT
-    } else {
-        0
-    };
-    let inner_width = size
-        .width
-        .saturating_sub(ui::INLINE_INPUT_PADDING_HORIZONTAL.saturating_mul(2));
-    let desired_lines = session.desired_input_lines(inner_width);
-    let block_height = Session::input_block_height_for_lines(desired_lines);
-    let input_height = block_height.saturating_add(status_height);
-    session.apply_input_height(input_height);
-
-    let chunks = Layout::vertical([
-        Constraint::Length(header_height),
-        Constraint::Min(1),
-        Constraint::Length(input_height),
-    ])
-    .split(size);
-
-    let (header_area, transcript_area, input_area) = (chunks[0], chunks[1], chunks[2]);
-
-    // Calculate available height for transcript
-    apply_view_rows(session, transcript_area.height);
-
-    // Render components
-    session.render_header(frame, header_area, &header_lines);
-    if session.show_logs {
-        let split = Layout::vertical([Constraint::Percentage(70), Constraint::Percentage(30)])
-            .split(transcript_area);
-        let (transcript_body, modal_area) = split_inline_modal_area(session, split[0]);
-        let (transcript_body, file_palette_area) =
-            split_inline_file_palette_area(session, transcript_body);
-        let (transcript_body, history_picker_area) =
-            split_inline_history_picker_area(session, transcript_body);
-        let (transcript_body, slash_area) =
-            super::slash::split_inline_slash_area(session, transcript_body);
-        let interactive_bottom_buffer = transcript_area
-            .height
-            .saturating_sub(transcript_body.height);
-        render_transcript(session, frame, transcript_body, interactive_bottom_buffer);
-        if let Some(modal_area) = modal_area {
-            render_modal(session, frame, modal_area);
-        } else if session.modal_overlay_active() {
-            render_modal(session, frame, size);
-        }
-        if let Some(file_palette_area) = file_palette_area {
-            render_file_palette(session, frame, file_palette_area);
-        }
-        if let Some(history_picker_area) = history_picker_area {
-            render_history_picker(session, frame, history_picker_area);
-        }
-        if let Some(slash_area) = slash_area {
-            super::slash::render_slash_palette(session, frame, slash_area);
-        }
-        render_log_view(session, frame, split[1]);
-    } else {
-        let (transcript_body, modal_area) = split_inline_modal_area(session, transcript_area);
-        let (transcript_body, file_palette_area) =
-            split_inline_file_palette_area(session, transcript_body);
-        let (transcript_body, history_picker_area) =
-            split_inline_history_picker_area(session, transcript_body);
-        let (transcript_body, slash_area) =
-            super::slash::split_inline_slash_area(session, transcript_body);
-        let interactive_bottom_buffer = transcript_area
-            .height
-            .saturating_sub(transcript_body.height);
-        render_transcript(session, frame, transcript_body, interactive_bottom_buffer);
-        if let Some(modal_area) = modal_area {
-            render_modal(session, frame, modal_area);
-        } else if session.modal_overlay_active() {
-            render_modal(session, frame, size);
-        }
-        if let Some(file_palette_area) = file_palette_area {
-            render_file_palette(session, frame, file_palette_area);
-        }
-        if let Some(history_picker_area) = history_picker_area {
-            render_history_picker(session, frame, history_picker_area);
-        }
-        if let Some(slash_area) = slash_area {
-            super::slash::render_slash_palette(session, frame, slash_area);
-        }
-    }
-    session.render_input(frame, input_area);
-}
-
-fn render_log_view(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
-    let block = Block::bordered()
-        .title("Logs")
-        .border_type(terminal_capabilities::get_border_type())
-        .style(default_style(session))
-        .border_style(border_style(session));
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-    if inner.height == 0 || inner.width == 0 {
-        return;
-    }
-
-    let paragraph = Paragraph::new((*session.log_text()).clone()).wrap(Wrap { trim: false });
-    frame.render_widget(paragraph, inner);
+    session.render(frame);
 }
 
 fn modal_list_highlight_style(session: &Session) -> Style {
@@ -174,124 +47,19 @@ fn modal_list_highlight_style(session: &Session) -> Style {
 }
 
 pub fn apply_view_rows(session: &mut Session, rows: u16) {
-    let resolved = rows.max(2);
-    if session.view_rows != resolved {
-        session.view_rows = resolved;
-        invalidate_scroll_metrics(session);
-    }
-    recalculate_transcript_rows(session);
-    session.enforce_scroll_bounds();
+    session.apply_view_rows(rows);
 }
 
 pub fn apply_transcript_rows(session: &mut Session, rows: u16) {
-    let resolved = rows.max(1);
-    if session.transcript_rows != resolved {
-        session.transcript_rows = resolved;
-        invalidate_scroll_metrics(session);
-    }
+    session.apply_transcript_rows(rows);
 }
 
 pub fn apply_transcript_width(session: &mut Session, width: u16) {
-    if session.transcript_width != width {
-        session.transcript_width = width;
-        invalidate_scroll_metrics(session);
-    }
-}
-
-fn render_transcript(
-    session: &mut Session,
-    frame: &mut Frame<'_>,
-    area: Rect,
-    interactive_bottom_buffer: u16,
-) {
-    if area.height == 0 || area.width == 0 {
-        return;
-    }
-    let block = Block::new()
-        .border_type(terminal_capabilities::get_border_type())
-        .style(default_style(session))
-        .border_style(border_style(session));
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-    if inner.height == 0 || inner.width == 0 {
-        return;
-    }
-
-    apply_transcript_rows(session, inner.height);
-
-    let content_width = inner.width;
-    if content_width == 0 {
-        return;
-    }
-    apply_transcript_width(session, content_width);
-
-    let viewport_rows = inner.height as usize;
-    let padding = usize::from(ui::INLINE_TRANSCRIPT_BOTTOM_PADDING)
-        .saturating_add(usize::from(interactive_bottom_buffer));
-    let effective_padding = padding.min(viewport_rows.saturating_sub(1));
-
-    // Skip expensive total_rows calculation if only scrolling (no content change)
-    // This optimization saves ~30-50% CPU on viewport-only scrolls
-    let total_rows = if session.transcript_content_changed {
-        session.total_transcript_rows(content_width) + effective_padding
-    } else {
-        // Reuse last known total if content unchanged
-        session
-            .scroll_manager
-            .last_known_total()
-            .unwrap_or_else(|| session.total_transcript_rows(content_width) + effective_padding)
-    };
-    let (top_offset, _clamped_total_rows) =
-        session.prepare_transcript_scroll(total_rows, viewport_rows);
-    let vertical_offset = top_offset.min(session.scroll_manager.max_offset());
-    session.transcript_view_top = vertical_offset;
-
-    let visible_start = vertical_offset;
-    let scroll_area = inner;
-
-    // Use cached visible lines to avoid re-cloning on viewport-only scrolls
-    let cached_lines =
-        session.collect_transcript_window_cached(content_width, visible_start, viewport_rows);
-
-    // Only clone if we need to mutate (fill or overlay)
-    let fill_count = viewport_rows.saturating_sub(cached_lines.len());
-    let visible_lines = if fill_count > 0 || !session.queued_inputs.is_empty() {
-        // Need to mutate, so clone from Arc
-        let mut lines = (*cached_lines).clone();
-        if fill_count > 0 {
-            let target_len = lines.len() + fill_count;
-            lines.resize_with(target_len, TranscriptLine::default);
-        }
-        session.overlay_queue_lines(&mut lines, content_width);
-        lines
-    } else {
-        // No mutation needed, use Arc directly
-        (*cached_lines).clone()
-    };
-
-    let visible_lines = session.decorate_visible_transcript_links(visible_lines, scroll_area);
-    let paragraph = Paragraph::new(visible_lines).style(default_style(session));
-
-    // Ratatui recreates a fresh frame buffer for every draw call.
-    // Keep only the state bookkeeping here; explicit clearing is unnecessary.
-    if session.transcript_content_changed {
-        session.transcript_content_changed = false;
-    }
-    frame.render_widget(paragraph, scroll_area);
-}
-
-fn header_reserved_rows(session: &Session) -> u16 {
-    session.header_rows.max(ui::INLINE_HEADER_HEIGHT)
-}
-
-fn input_reserved_rows(session: &Session) -> u16 {
-    header_reserved_rows(session) + session.input_height
+    session.apply_transcript_width(width);
 }
 
 pub fn recalculate_transcript_rows(session: &mut Session) {
-    let reserved = input_reserved_rows(session).saturating_add(2); // account for transcript block borders
-    let available = session.view_rows.saturating_sub(reserved).max(1);
-    apply_transcript_rows(session, available);
+    session.recalculate_transcript_rows();
 }
 fn wrap_block_lines(
     session: &Session,
