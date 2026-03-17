@@ -2,6 +2,31 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.90.0 - 2026-03-17
+
+### Highlights
+#### Features
+
+- Improve OAuth URL display by printing it on a separate line and remove related TODO item. (89d95a8a) 
+- Highlight file paths in markdown output (b50a3d62) 
+### Other Changes
+#### Other
+
+- Refactor session layout and rendering logic; consolidate bottom panel handling and improve input height management (e6e93dbf) 
+- Update format (b8d5aee6) 
+- Fix url wrap line (301f62c7) 
+- Refactor session handling and options; streamline overlay requests and keyboard protocol settings (bc30728c) 
+- Refactor input handling; consolidate trigger checks and update input commands (8c46dc45) 
+- Refactor input trigger updates; consolidate trigger checks into a single method (9c7b8562) 
+- Refactor core TUI frame rendering helpers (a59920bf) 
+- Refactor panel layout functions for file palette and history picker; streamline inline area calculations (0a83dff1) 
+- Add note to explore GitHub Copilot OAuth for using Anthropic's Claude (73ed2711) 
+- Add GPT-5.4 Nano and Mini models to OpenAI configuration (982b5c37) 
+- Add OpenAI tool search configuration and implement deferred loading policy (3a56178a) 
+- Add model management documentation and scripts for LLM integration (861bef97) 
+- Add ToolCatalogSource to tool registration and update related files (9db62221) 
+### Contributors
+@vinhnx
 ## 0.89.2 - 2026-03-17
 
 ### Highlights
