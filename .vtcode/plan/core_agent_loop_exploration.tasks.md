@@ -1,5 +1,7 @@
 # core agent loop exploration
 
+## Plan of Work
+
 - [x] Map runloop modules
   outcome: Identified runloop/unified modules for loop logic (session loop, turn loop, contexts) by listing directory contents.
 - [x] Trace session loop

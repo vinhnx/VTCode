@@ -514,11 +514,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Overview, Binary Size Summary, Release-fast Binary Analysis (32 MiB), Debug Binary Analysis (84 MiB), Recommendations
   - **User Questions**: "What can you tell me about Bloaty Analysis Report for vtcode?", "How does Overview work?", "How does Binary Size Summary work?"
 
-- **File**: `docs/project/TODO.md`
-  - **Content**: CORE AGENT LOOP OVERVIEW
-  - **Topics**: Summary, Implementation Steps, Test Cases and Validation, Assumptions and Defaults, Plan of Work
-  - **User Questions**: "What can you tell me about CORE AGENT LOOP OVERVIEW?", "How does Summary work?", "How does Implementation Steps work?"
-
 - **File**: `docs/skills-enhanced/tutorial-analysis.md`
   - **Content**: Claude API Skills Tutorial - Implementation Analysis
   - **Topics**: Executive Summary, Tutorial Workflow Implementation, Progressive Disclosure Architecture Demonstration, Additional Tutorial Examples, Architecture Benefits Demonstrated
@@ -658,6 +653,10 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Content**: Styling Quick Start Guide
   - **Topics**: For CLI Output, For TUI Widgets, Unified Theme, Color Reference, Common Patterns
   - **User Questions**: "What can you tell me about Styling Quick Start Guide?", "How does For CLI Output work?", "How does For TUI Widgets work?"
+
+- **File**: `docs/project/TODO.md`
+  - **Content**: TODO.md
+  - **User Questions**: "What can you tell me about TODO.md?"
 
 - **File**: `docs/harness/TECH_DEBT_TRACKER.md`
   - **Content**: Tech Debt Tracker

@@ -2656,7 +2656,7 @@ edit_file = "allow"
 
 enter_plan = "prompt"
 
-enter_plan_mode = "prompt"
+enter_plan_mode = "allow"
 
 exec_code = "allow"
 
@@ -2664,7 +2664,7 @@ execute_code = "allow"
 
 exit_plan = "prompt"
 
-exit_plan_mode = "prompt"
+exit_plan_mode = "allow"
 
 git_diff = "allow"
 
@@ -2702,7 +2702,7 @@ plan_on = "prompt"
 
 plan_start = "prompt"
 
-plan_task_tracker = "prompt"
+plan_task_tracker = "allow"
 
 plan_tasks = "prompt"
 

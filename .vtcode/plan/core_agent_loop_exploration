@@ -1,4 +1,17 @@
+# Core_agent_loop_exploration
+
+Status: drafting
+Created: 2026-03-17 05:18:11 UTC
+Plan file: `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/plan/core_agent_loop_exploration`
+Description: Investigate core agent loop architecture and code paths
+
+> Plan Mode is active. Research first, then materialize one concrete `<proposed_plan>` draft here.
+> Suggested validation defaults: build/lint `cargo check`; `cargo clippy --workspace --all-targets -- -D warnings`; tests `cargo test` (or `cargo nextest run` if nextest is configured).
+
+<!-- vtcode:plan-tracker:start -->
 # core agent loop exploration
+
+## Plan of Work
 
 - [x] Map runloop modules
   outcome: Identified runloop/unified modules for loop logic (session loop, turn loop, contexts) by listing directory contents.
@@ -8,3 +21,4 @@
   outcome: Examined `turn/turn_loop.rs`: phases, guard hooks, tool dispatch, recovery, notifications.
 - [x] Summarize supporting components
   outcome: Captured key roles for RunLoopContext, HarnessTurnState, and tool pipeline modules supporting loop behavior.
+<!-- vtcode:plan-tracker:end -->

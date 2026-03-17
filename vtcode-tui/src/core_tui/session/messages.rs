@@ -7,12 +7,58 @@ use anstyle::Color as AnsiColorEnum;
 /// - Handling tool code fence markers
 /// - Message styling and prefixes
 use std::cmp::min;
+use std::collections::VecDeque;
 
 use super::super::types::{InlineMessageKind, InlineSegment, InlineTextStyle};
-use super::{Session, message::MessageLine};
+use super::{CollapsedPaste, Session, message::MessageLine};
+use crate::config::constants::ui;
 use crate::ui::tui::types::InlineLinkRange;
 
 const USER_PREFIX: &str = "";
+const INLINE_JSON_COLLAPSE_BYTES: usize = 50_000;
+
+fn is_large_json_payload(kind: InlineMessageKind, text: &str, line_count: usize) -> bool {
+    if !matches!(kind, InlineMessageKind::Tool | InlineMessageKind::Pty) {
+        return false;
+    }
+
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+
+    if !(trimmed.starts_with('{') || trimmed.starts_with('[')) {
+        return false;
+    }
+    if !(trimmed.ends_with('}') || trimmed.ends_with(']')) {
+        return false;
+    }
+
+    let effective_lines = if line_count == 0 {
+        text.as_bytes().iter().filter(|&&b| b == b'\n').count() + 1
+    } else {
+        line_count
+    };
+
+    text.len() >= INLINE_JSON_COLLAPSE_BYTES
+        || effective_lines >= ui::INLINE_JSON_COLLAPSE_LINE_THRESHOLD
+}
+
+fn tail_lines(text: &str, limit: usize) -> Vec<&str> {
+    if limit == 0 {
+        return Vec::new();
+    }
+
+    let mut buffer: VecDeque<&str> = VecDeque::with_capacity(limit);
+    for line in text.lines() {
+        if buffer.len() == limit {
+            buffer.pop_front();
+        }
+        buffer.push_back(line);
+    }
+
+    buffer.into_iter().collect()
+}
 
 impl Session {
     pub(super) fn retint_lines_for_theme_change(
@@ -132,8 +178,41 @@ impl Session {
         &mut self,
         kind: InlineMessageKind,
         text: String,
-        _line_count: usize,
+        line_count: usize,
     ) {
+        if is_large_json_payload(kind, &text, line_count) {
+            let mut preview = String::new();
+            preview.push_str(&format!(
+                "[...] showing last {} lines - click to expand",
+                ui::INLINE_JSON_TAIL_LINES
+            ));
+
+            let tail = tail_lines(&text, ui::INLINE_JSON_TAIL_LINES);
+            if !tail.is_empty() {
+                preview.push('\n');
+                for (idx, line) in tail.iter().enumerate() {
+                    if idx > 0 {
+                        preview.push('\n');
+                    }
+                    preview.push_str(line);
+                }
+            }
+
+            let line_index = self.lines.len();
+            self.push_line(
+                kind,
+                vec![InlineSegment {
+                    text: preview,
+                    style: std::sync::Arc::new(InlineTextStyle::default()),
+                }],
+            );
+            self.collapsed_pastes.push(CollapsedPaste {
+                line_index,
+                full_text: text,
+            });
+            return;
+        }
+
         self.push_line(
             kind,
             vec![InlineSegment {

@@ -848,6 +848,50 @@ fn pasted_message_displays_full_content() {
 }
 
 #[test]
+fn pasted_message_collapses_large_json_for_tool() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+
+    let mut json = String::from("{\n");
+    let line_total = ui::INLINE_JSON_COLLAPSE_LINE_THRESHOLD + 5;
+    for idx in 0..line_total {
+        json.push_str(&format!("  \"key{idx}\": \"value{idx}\",\n"));
+    }
+    json.push_str("  \"end\": true\n}");
+    let line_count = json.lines().count();
+
+    session.append_pasted_message(InlineMessageKind::Tool, json.clone(), line_count);
+
+    assert_eq!(session.collapsed_pastes.len(), 1);
+    let collapsed_index = session.collapsed_pastes[0].line_index;
+    let preview_line = session
+        .lines
+        .get(collapsed_index)
+        .expect("collapsed line exists");
+    let preview_text: String = preview_line
+        .segments
+        .iter()
+        .map(|segment| segment.text.as_str())
+        .collect();
+    assert!(preview_text.contains("showing last"));
+    assert!(preview_text.contains("\"end\": true"));
+
+    assert!(session.expand_collapsed_paste_at_line_index(collapsed_index));
+    assert!(session.collapsed_pastes.is_empty());
+
+    let expanded_line = session
+        .lines
+        .get(collapsed_index)
+        .expect("expanded line exists");
+    let expanded_text: String = expanded_line
+        .segments
+        .iter()
+        .map(|segment| segment.text.as_str())
+        .collect();
+    assert!(expanded_text.contains("\"key0\": \"value0\""));
+    assert!(expanded_text.contains("\"end\": true"));
+}
+
+#[test]
 fn input_compact_preview_for_large_paste() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     let line_total = ui::INLINE_PASTE_COLLAPSE_LINE_THRESHOLD + 1;

@@ -871,6 +871,14 @@ fn looks_like_diff(text: &str) -> bool {
     looks_like_diff_content(text)
 }
 
+const INLINE_JSON_COLLAPSE_BYTES: usize = 50_000;
+const INLINE_JSON_COLLAPSE_LINES: usize = 200;
+
+struct LargeJsonPayload<'a> {
+    text: &'a str,
+    line_count: usize,
+}
+
 struct InlineSink {
     handle: InlineHandle,
     highlight_config: SyntaxHighlightingConfig,
@@ -879,6 +887,98 @@ struct InlineSink {
 impl InlineSink {
     fn should_record_transcript(kind: InlineMessageKind) -> bool {
         kind != InlineMessageKind::Pty
+    }
+
+    fn count_lines(text: &str) -> usize {
+        if text.is_empty() {
+            0
+        } else {
+            text.as_bytes().iter().filter(|&&b| b == b'\n').count() + 1
+        }
+    }
+
+    fn unwrap_single_fenced_block(text: &str) -> Option<&str> {
+        let trimmed = text.trim_end();
+        if !trimmed.starts_with("```") || !trimmed.ends_with("```") {
+            return None;
+        }
+
+        let first_newline = trimmed.find('\n')?;
+        let last_fence = trimmed.rfind("\n```")?;
+        if last_fence <= first_newline {
+            return None;
+        }
+
+        Some(&trimmed[first_newline + 1..last_fence])
+    }
+
+    fn detect_large_json_payload<'a>(
+        kind: InlineMessageKind,
+        text: &'a str,
+    ) -> Option<LargeJsonPayload<'a>> {
+        if !matches!(kind, InlineMessageKind::Tool | InlineMessageKind::Pty) {
+            return None;
+        }
+
+        let candidate = Self::unwrap_single_fenced_block(text).unwrap_or(text);
+        let trimmed = candidate.trim();
+        if trimmed.is_empty() {
+            return None;
+        }
+
+        if !(trimmed.starts_with('{') || trimmed.starts_with('[')) {
+            return None;
+        }
+        if !(trimmed.ends_with('}') || trimmed.ends_with(']')) {
+            return None;
+        }
+
+        let line_count = Self::count_lines(candidate);
+        if candidate.len() < INLINE_JSON_COLLAPSE_BYTES
+            && line_count < INLINE_JSON_COLLAPSE_LINES
+        {
+            return None;
+        }
+
+        Some(LargeJsonPayload {
+            text: candidate,
+            line_count,
+        })
+    }
+
+    fn indent_multiline(text: &str, indent: &str) -> String {
+        if indent.is_empty() {
+            return text.to_string();
+        }
+
+        let mut out = String::with_capacity(text.len() + indent.len() * 4);
+        for (idx, line) in text.split('\n').enumerate() {
+            if idx > 0 {
+                out.push('\n');
+            }
+            out.push_str(indent);
+            out.push_str(line);
+        }
+        out
+    }
+
+    fn emit_large_json_payload(
+        &mut self,
+        payload: LargeJsonPayload<'_>,
+        indent: &str,
+        kind: InlineMessageKind,
+        record_transcript: bool,
+    ) -> Result<()> {
+        let mut full_text = payload.text.to_string();
+        if !indent.is_empty() {
+            full_text = Self::indent_multiline(&full_text, indent);
+        }
+        self.handle
+            .append_pasted_message(kind, full_text.clone(), payload.line_count);
+        if record_transcript {
+            transcript::append(&full_text);
+        }
+        Ok(())
     }
     fn ansi_from_ratatui_color(color: RatColor) -> Option<AnsiColorEnum> {
         match color {
@@ -1052,6 +1152,10 @@ impl InlineSink {
         preserve_code_indentation: bool,
     ) -> Result<bool> {
         let record_transcript = Self::should_record_transcript(kind);
+        if let Some(payload) = Self::detect_large_json_payload(kind, text) {
+            self.emit_large_json_payload(payload, indent, kind, record_transcript)?;
+            return Ok(false);
+        }
         let (prepared, plain, last_empty) =
             self.prepare_markdown_lines(text, indent, base_style, true, preserve_code_indentation);
         for (segments, line) in prepared.into_iter().zip(plain.iter()) {
@@ -1263,16 +1367,21 @@ impl InlineSink {
         } else {
             text
         };
+        let record_transcript = record_transcript && Self::should_record_transcript(kind);
 
         if text.is_empty() {
             self.handle.append_line(kind, Vec::new());
             return Ok(());
         }
 
+        if let Some(payload) = Self::detect_large_json_payload(kind, text) {
+            self.emit_large_json_payload(payload, indent, kind, record_transcript)?;
+            return Ok(());
+        }
+
         let fallback = self.resolve_fallback_style(style);
         let fallback_arc = Arc::new(fallback.clone());
         let (converted_lines, plain_lines) = self.convert_plain_lines(text, &fallback);
-        let record_transcript = record_transcript && Self::should_record_transcript(kind);
 
         // Combine multiple lines into a single append for User and Tool to avoid
         // creating a separate inline entry for each line. This prevents the
@@ -1643,6 +1752,50 @@ mod tests {
             }
         }
         assert!(saw_append, "error output should be appended when enabled");
+    }
+
+    #[test]
+    fn inline_ui_collapses_large_json_tool_output() {
+        use crate::ui::InlineCommand;
+        use std::fmt::Write as _;
+
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut renderer =
+            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+
+        let mut json = String::from("{\n");
+        let line_total = INLINE_JSON_COLLAPSE_LINES + 5;
+        for idx in 0..line_total {
+            let _ = writeln!(&mut json, "  \"key{idx}\": \"value{idx}\",");
+        }
+        json.push_str("  \"end\": true\n}");
+
+        renderer.line(MessageStyle::ToolOutput, &json).unwrap();
+
+        let mut saw_pasted = false;
+        let mut saw_append_line = false;
+        while let Ok(command) = receiver.try_recv() {
+            match command {
+                InlineCommand::AppendPastedMessage {
+                    kind,
+                    text,
+                    line_count,
+                    ..
+                } => {
+                    saw_pasted = true;
+                    assert_eq!(kind, InlineMessageKind::Pty);
+                    assert!(text.contains("\"end\": true"));
+                    assert!(line_count >= INLINE_JSON_COLLAPSE_LINES);
+                }
+                InlineCommand::AppendLine { .. } => {
+                    saw_append_line = true;
+                }
+                _ => {}
+            }
+        }
+
+        assert!(saw_pasted, "expected large json to use AppendPastedMessage");
+        assert!(!saw_append_line, "unexpected AppendLine for large json");
     }
 
     #[test]

@@ -220,7 +220,13 @@ pub(super) fn collect_param_details(args: &Value, keys: &HashSet<String>) -> Vec
                 | "content"
                 | "new_content"
                 | "text"
+                | "patch"
+                | "code"
         ) {
+            continue;
+        }
+        // Skip infrastructure/plumbing parameters that are implementation details
+        if is_noise_param(key) {
             continue;
         }
         if !include_all && keys.contains(key) {
@@ -247,12 +253,57 @@ pub(super) fn collect_param_details(args: &Value, keys: &HashSet<String>) -> Vec
                 }
             }
             Value::Number(num) => {
+                // Skip zero-valued numbers — they are defaults and add no information
+                if num.as_f64().is_some_and(|n| n == 0.0) {
+                    continue;
+                }
                 details.push(format!("{}: {}", humanize_key(key), num));
             }
             _ => {}
         }
     }
     details
+}
+
+/// Returns `true` for parameter keys that are infrastructure/plumbing noise
+/// and should be omitted from the human-facing transcript summary.
+fn is_noise_param(key: &str) -> bool {
+    matches!(
+        key,
+        // Timeouts and size limits
+        "timeout_secs"
+            | "timeout"
+            | "max_bytes"
+            | "max_matches"
+            // Search plumbing
+            | "debug_query"
+            | "strictness"
+            | "case_sensitive"
+            | "literal"
+            | "context_lines"
+            // Pagination / read plumbing
+            | "offset"
+            | "limit"
+            | "head_lines"
+            | "tail_lines"
+            // Execution plumbing
+            | "shell"
+            | "login"
+            | "tty"
+            | "sandbox_permissions"
+            | "additional_permissions"
+            | "justification"
+            | "prefix_rule"
+            | "workdir"
+            | "cwd"
+            | "language"
+            | "spool_path"
+            | "query"
+            // Tool identity / routing
+            | "type"
+            | "tool_call_id"
+            | "call_type"
+    )
 }
 
 pub(super) fn should_render_command_line(highlights: &HashSet<String>) -> bool {
@@ -403,5 +454,79 @@ mod tests {
 
         let (description, _used) = result.unwrap();
         assert_eq!(description, "cargo test -- --nocapture");
+    }
+
+    #[test]
+    fn collect_param_details_skips_noise_params() {
+        let args = json!({
+            "action": "grep",
+            "pattern": "agent loop",
+            "strictness": "relaxed",
+            "debug_query": "pattern",
+            "detail_level": "full",
+            "max_results": 20,
+            "context_lines": 2,
+            "scope": "repo",
+            "max_bytes": 6000,
+            "timeout_secs": 120
+        });
+        let mut keys = HashSet::new();
+        keys.insert("pattern".to_string());
+        let details = collect_param_details(&args, &keys);
+        // Only action, detail_level, max_results, and scope should remain;
+        // pattern is in keys (highlighted), noise params are skipped.
+        for detail in &details {
+            assert!(
+                !detail.contains("Timeout")
+                    && !detail.contains("Max bytes")
+                    && !detail.contains("Debug query")
+                    && !detail.contains("Strictness")
+                    && !detail.contains("Context lines"),
+                "Noise param leaked through: {detail}"
+            );
+        }
+        assert!(details.iter().any(|d| d.contains("Action")));
+    }
+
+    #[test]
+    fn collect_param_details_skips_zero_numbers() {
+        let args = json!({
+            "action": "read",
+            "path": "src/main.rs",
+            "start_line": 1,
+            "end_line": 200,
+            "offset": 0,
+            "limit": 0
+        });
+        let mut keys = HashSet::new();
+        keys.insert("path".to_string());
+        let details = collect_param_details(&args, &keys);
+        for detail in &details {
+            assert!(
+                !detail.contains("Offset") && !detail.contains("Limit"),
+                "Zero-valued param leaked through: {detail}"
+            );
+        }
+        assert!(details.iter().any(|d| d.contains("Start line: 1")));
+        assert!(details.iter().any(|d| d.contains("End line: 200")));
+    }
+
+    #[test]
+    fn is_noise_param_matches_expected_keys() {
+        assert!(is_noise_param("timeout_secs"));
+        assert!(is_noise_param("max_bytes"));
+        assert!(is_noise_param("debug_query"));
+        assert!(is_noise_param("strictness"));
+        assert!(is_noise_param("case_sensitive"));
+        assert!(is_noise_param("context_lines"));
+        assert!(is_noise_param("offset"));
+        assert!(is_noise_param("limit"));
+        assert!(is_noise_param("shell"));
+        assert!(is_noise_param("sandbox_permissions"));
+        // Meaningful params should pass through
+        assert!(!is_noise_param("action"));
+        assert!(!is_noise_param("pattern"));
+        assert!(!is_noise_param("path"));
+        assert!(!is_noise_param("mode"));
     }
 }
