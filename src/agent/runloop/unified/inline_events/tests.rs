@@ -18,7 +18,7 @@ use vtcode_core::core::agent::snapshots::{
 };
 use vtcode_core::llm::provider::{self as uni, LLMRequest, LLMResponse};
 use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_tui::{InlineEvent, InlineHandle, OverlayEvent, OverlaySubmission};
+use vtcode_tui::app::{InlineEvent, InlineHandle, OverlayEvent, OverlaySubmission};
 
 #[derive(Clone)]
 struct DummyProvider;
@@ -97,7 +97,7 @@ async fn launch_editor_event_submits_edit_command() {
     let mut vt_cfg = None;
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
-    let mut header_context = vtcode_tui::InlineHeaderContext::default();
+    let mut header_context = vtcode_tui::app::InlineHeaderContext::default();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
@@ -139,7 +139,7 @@ async fn open_file_in_editor_event_submits_edit_command_with_path() {
     let mut vt_cfg = None;
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
-    let mut header_context = vtcode_tui::InlineHeaderContext::default();
+    let mut header_context = vtcode_tui::app::InlineHeaderContext::default();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
@@ -182,7 +182,7 @@ async fn toggle_mode_event_submits_mode_command() {
     let mut vt_cfg = None;
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
-    let mut header_context = vtcode_tui::InlineHeaderContext::default();
+    let mut header_context = vtcode_tui::app::InlineHeaderContext::default();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
@@ -224,7 +224,7 @@ async fn plan_confirmation_events_map_to_expected_actions() {
     let mut vt_cfg = None;
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
-    let mut header_context = vtcode_tui::InlineHeaderContext::default();
+    let mut header_context = vtcode_tui::app::InlineHeaderContext::default();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
@@ -247,7 +247,7 @@ async fn plan_confirmation_events_map_to_expected_actions() {
     let execute = context
         .process_event(
             InlineEvent::Overlay(OverlayEvent::Submitted(OverlaySubmission::Selection(
-                vtcode_tui::InlineListSelection::PlanApprovalExecute,
+                vtcode_tui::app::InlineListSelection::PlanApprovalExecute,
             ))),
             &mut queue,
         )
@@ -256,7 +256,7 @@ async fn plan_confirmation_events_map_to_expected_actions() {
     let auto = context
         .process_event(
             InlineEvent::Overlay(OverlayEvent::Submitted(OverlaySubmission::Selection(
-                vtcode_tui::InlineListSelection::PlanApprovalAutoAccept,
+                vtcode_tui::app::InlineListSelection::PlanApprovalAutoAccept,
             ))),
             &mut queue,
         )
@@ -265,7 +265,7 @@ async fn plan_confirmation_events_map_to_expected_actions() {
     let edit = context
         .process_event(
             InlineEvent::Overlay(OverlayEvent::Submitted(OverlaySubmission::Selection(
-                vtcode_tui::InlineListSelection::PlanApprovalEditPlan,
+                vtcode_tui::app::InlineListSelection::PlanApprovalEditPlan,
             ))),
             &mut queue,
         )
@@ -300,7 +300,7 @@ async fn interrupt_event_returns_exit_after_double_ctrl_c() {
     let mut vt_cfg = None;
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
-    let mut header_context = vtcode_tui::InlineHeaderContext::default();
+    let mut header_context = vtcode_tui::app::InlineHeaderContext::default();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
@@ -343,7 +343,7 @@ async fn steering_events_are_passive_in_idle_loop() {
     let mut vt_cfg = None;
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
-    let mut header_context = vtcode_tui::InlineHeaderContext::default();
+    let mut header_context = vtcode_tui::app::InlineHeaderContext::default();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,
@@ -388,7 +388,7 @@ async fn process_latest_queued_event_primes_newest_queue_priority() {
     let mut vt_cfg = None;
     let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
     let session_bootstrap = SessionBootstrap::default();
-    let mut header_context = vtcode_tui::InlineHeaderContext::default();
+    let mut header_context = vtcode_tui::app::InlineHeaderContext::default();
     let mut context = InlineEventContext::new(
         &mut renderer,
         &handle,

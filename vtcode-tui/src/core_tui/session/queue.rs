@@ -2,24 +2,24 @@ use super::{Session, message::TranscriptLine};
 use ratatui::prelude::*;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-pub(super) struct QueueOverlay {
-    pub(super) width: u16,
-    pub(super) version: u64,
-    pub(super) lines: Vec<Line<'static>>,
+pub(crate) struct QueueOverlay {
+    pub(crate) width: u16,
+    pub(crate) version: u64,
+    pub(crate) lines: Vec<Line<'static>>,
 }
 
 impl Session {
-    pub(super) fn set_queued_inputs_entries(&mut self, entries: Vec<String>) {
+    pub(crate) fn set_queued_inputs_entries(&mut self, entries: Vec<String>) {
         self.queued_inputs = entries;
         self.invalidate_queue_overlay();
     }
 
-    pub(super) fn push_queued_input(&mut self, entry: String) {
+    pub(crate) fn push_queued_input(&mut self, entry: String) {
         self.queued_inputs.push(entry);
         self.invalidate_queue_overlay();
     }
 
-    pub(super) fn pop_latest_queued_input(&mut self) -> Option<String> {
+    pub(crate) fn pop_latest_queued_input(&mut self) -> Option<String> {
         let result = self.queued_inputs.pop();
         if result.is_some() {
             self.invalidate_queue_overlay();
@@ -27,7 +27,7 @@ impl Session {
         result
     }
 
-    pub(super) fn queue_input_lines(&self, width: u16) -> Vec<Line<'static>> {
+    pub(crate) fn queue_input_lines(&self, width: u16) -> Vec<Line<'static>> {
         if width == 0 || self.queued_inputs.is_empty() {
             return Vec::new();
         }
@@ -65,12 +65,12 @@ impl Session {
         lines
     }
 
-    pub(super) fn invalidate_queue_overlay(&mut self) {
+    pub(crate) fn invalidate_queue_overlay(&mut self) {
         self.queue_overlay_version = self.queue_overlay_version.wrapping_add(1);
         self.queue_overlay_cache = None;
     }
 
-    pub(super) fn queue_overlay_lines(&mut self, width: u16) -> Option<&[Line<'static>]> {
+    pub(crate) fn queue_overlay_lines(&mut self, width: u16) -> Option<&[Line<'static>]> {
         if width == 0 || self.queued_inputs.is_empty() {
             self.queue_overlay_cache = None;
             return None;

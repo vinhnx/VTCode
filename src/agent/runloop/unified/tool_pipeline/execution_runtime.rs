@@ -156,7 +156,7 @@ pub(super) async fn execute_with_cache_and_streaming(
     args_val: &Value,
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
-    handle: &vtcode_tui::InlineHandle,
+    handle: &vtcode_tui::app::InlineHandle,
     harness_emitter: Option<HarnessEventEmitter>,
     vt_cfg: Option<&VTCodeConfig>,
     max_tool_retries: usize,

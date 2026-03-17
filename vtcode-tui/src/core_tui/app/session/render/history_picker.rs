@@ -1,8 +1,8 @@
 use super::*;
-use crate::ui::tui::session::inline_list::InlineListRow;
-use crate::ui::tui::session::list_panel::{
-    SharedListPanelSections, SharedListPanelStyles, SharedListWidgetModel, SharedSearchField,
-    fixed_section_rows, render_shared_list_panel, rows_to_u16, split_bottom_list_panel,
+use crate::core_tui::session::inline_list::InlineListRow;
+use crate::core_tui::session::list_panel::{
+    ListPanelLayout, SharedListPanelSections, SharedListPanelStyles, SharedListWidgetModel,
+    SharedSearchField, fixed_section_rows, render_shared_list_panel, rows_to_u16,
 };
 use ratatui::widgets::Clear;
 
@@ -78,7 +78,7 @@ pub fn split_inline_history_picker_area(session: &mut Session, area: Rect) -> (R
         || session.file_palette_active
         || !session.history_picker_state.active
     {
-        session.history_picker_state.visible_rows = 0;
+        session.history_picker_state.navigator.set_visible_rows(0);
         return (area, None);
     }
 
@@ -94,9 +94,10 @@ pub fn split_inline_history_picker_area(session: &mut Session, area: Rect) -> (R
                 .min(ui::INLINE_LIST_MAX_ROWS),
         )
     };
-    let (transcript_area, panel_area) = split_bottom_list_panel(area, fixed_rows, list_rows);
+    let layout = ListPanelLayout::new(fixed_rows, list_rows);
+    let (transcript_area, panel_area) = layout.split(area);
     if panel_area.is_none() {
-        session.history_picker_state.visible_rows = 0;
+        session.history_picker_state.navigator.set_visible_rows(0);
         return (transcript_area, None);
     }
     (transcript_area, panel_area)
@@ -110,7 +111,7 @@ pub fn render_history_picker(session: &mut Session, frame: &mut Frame<'_>, area:
         || session.has_active_overlay()
         || session.file_palette_active
     {
-        session.history_picker_state.visible_rows = 0;
+        session.history_picker_state.navigator.set_visible_rows(0);
         return;
     }
 
@@ -120,8 +121,8 @@ pub fn render_history_picker(session: &mut Session, frame: &mut Frame<'_>, area:
         let picker = &session.history_picker_state;
         (
             picker.search_query.clone(),
-            picker.list_state.selected(),
-            picker.list_state.offset(),
+            picker.navigator.selected(),
+            picker.navigator.scroll_offset(),
             picker.matches.clone(),
         )
     };
@@ -167,7 +168,9 @@ pub fn render_history_picker(session: &mut Session, frame: &mut Frame<'_>, area:
     );
 
     let picker = &mut session.history_picker_state;
-    picker.visible_rows = panel_model.visible_rows.min(ui::INLINE_LIST_MAX_ROWS);
-    picker.list_state.select(panel_model.selected);
-    *picker.list_state.offset_mut() = panel_model.offset;
+    picker
+        .navigator
+        .set_visible_rows(panel_model.visible_rows.min(ui::INLINE_LIST_MAX_ROWS));
+    picker.navigator.set_selected(panel_model.selected);
+    picker.navigator.set_scroll_offset(panel_model.offset);
 }

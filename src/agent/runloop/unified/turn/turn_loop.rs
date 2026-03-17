@@ -30,7 +30,7 @@ use vtcode_core::notifications::{CompletionStatus, NotificationEvent, send_globa
 use vtcode_core::tools::ToolResultCache;
 use vtcode_core::tools::{ApprovalRecorder, ToolRegistry};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_tui::{InlineHandle, InlineSession};
+use vtcode_tui::app::{InlineHandle, InlineSession};
 
 // Using `tool_output_handler::handle_pipeline_output_from_turn_ctx` adapter where needed
 
@@ -892,7 +892,7 @@ mod tests {
     use vtcode_core::config::constants::tools as tool_names;
     use vtcode_core::llm::provider as uni;
     use vtcode_core::utils::ansi::AnsiRenderer;
-    use vtcode_tui::InlineHandle;
+    use vtcode_tui::app::InlineHandle;
 
     #[test]
     fn has_tool_response_since_detects_new_tool_message() {

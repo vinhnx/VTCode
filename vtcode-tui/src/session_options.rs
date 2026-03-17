@@ -2,83 +2,15 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::config::KeyboardProtocolConfig;
-use crate::core_tui::session::config::AppearanceConfig;
-
-use crate::{
+use crate::core_tui::app::session::AppSession;
+use crate::core_tui::app::types::{
     FocusChangeCallback, InlineEventCallback, InlineSession, InlineTheme, SlashCommandItem,
 };
-
-/// Standalone surface preference for selecting inline vs alternate rendering.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum SessionSurface {
-    #[default]
-    Auto,
-    Alternate,
-    Inline,
-}
-
-impl From<SessionSurface> for crate::config::UiSurfacePreference {
-    fn from(value: SessionSurface) -> Self {
-        match value {
-            SessionSurface::Auto => Self::Auto,
-            SessionSurface::Alternate => Self::Alternate,
-            SessionSurface::Inline => Self::Inline,
-        }
-    }
-}
-
-impl From<crate::config::UiSurfacePreference> for SessionSurface {
-    fn from(value: crate::config::UiSurfacePreference) -> Self {
-        match value {
-            crate::config::UiSurfacePreference::Auto => Self::Auto,
-            crate::config::UiSurfacePreference::Alternate => Self::Alternate,
-            crate::config::UiSurfacePreference::Inline => Self::Inline,
-        }
-    }
-}
-
-/// Standalone keyboard protocol settings for terminal key event enhancements.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KeyboardProtocolSettings {
-    pub enabled: bool,
-    pub mode: String,
-    pub disambiguate_escape_codes: bool,
-    pub report_event_types: bool,
-    pub report_alternate_keys: bool,
-    pub report_all_keys: bool,
-}
-
-impl Default for KeyboardProtocolSettings {
-    fn default() -> Self {
-        Self::from(KeyboardProtocolConfig::default())
-    }
-}
-
-impl From<KeyboardProtocolConfig> for KeyboardProtocolSettings {
-    fn from(value: KeyboardProtocolConfig) -> Self {
-        Self {
-            enabled: value.enabled,
-            mode: value.mode,
-            disambiguate_escape_codes: value.disambiguate_escape_codes,
-            report_event_types: value.report_event_types,
-            report_alternate_keys: value.report_alternate_keys,
-            report_all_keys: value.report_all_keys,
-        }
-    }
-}
-
-impl From<KeyboardProtocolSettings> for KeyboardProtocolConfig {
-    fn from(value: KeyboardProtocolSettings) -> Self {
-        Self {
-            enabled: value.enabled,
-            mode: value.mode,
-            disambiguate_escape_codes: value.disambiguate_escape_codes,
-            report_event_types: value.report_event_types,
-            report_alternate_keys: value.report_alternate_keys,
-            report_all_keys: value.report_all_keys,
-        }
-    }
-}
+use crate::core_tui::session::config::AppearanceConfig;
+use crate::core_tui::runner::{TuiOptions, run_tui};
+use crate::core_tui::log;
+use crate::options::{KeyboardProtocolSettings, SessionSurface};
+use crate::UiSurfacePreference;
 
 /// Standalone session launch options for reusable integrations.
 #[derive(Clone)]
@@ -140,22 +72,68 @@ pub fn spawn_session_with_options(
     theme: InlineTheme,
     options: SessionOptions,
 ) -> anyhow::Result<InlineSession> {
-    crate::core_tui::spawn_session_with_prompts_and_options(
-        theme,
-        options.placeholder,
-        options.surface_preference.into(),
-        options.inline_rows,
-        options.event_callback,
-        options.focus_callback,
-        options.active_pty_sessions,
-        options.input_activity_counter,
-        options.keyboard_protocol.into(),
-        options.workspace_root,
-        options.slash_commands,
-        options.appearance,
-        options.app_name,
-        options.non_interactive_hint,
-    )
+    use crossterm::tty::IsTty;
+
+    // Check stdin is a terminal BEFORE spawning the task
+    if !std::io::stdin().is_tty() {
+        return Err(anyhow::anyhow!(
+            "cannot run interactive TUI: stdin is not a terminal (must be run in an interactive terminal)"
+        ));
+    }
+
+    let (command_tx, command_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
+    let show_logs = log::is_tui_log_capture_enabled();
+
+    tokio::spawn(async move {
+        if let Err(error) = run_tui(
+            command_rx,
+            event_tx,
+            TuiOptions {
+                surface_preference: UiSurfacePreference::from(options.surface_preference),
+                inline_rows: options.inline_rows,
+                show_logs,
+                log_theme: None,
+                event_callback: options.event_callback,
+                focus_callback: options.focus_callback,
+                active_pty_sessions: options.active_pty_sessions,
+                input_activity_counter: options.input_activity_counter,
+                keyboard_protocol: KeyboardProtocolConfig::from(options.keyboard_protocol),
+                workspace_root: options.workspace_root,
+            },
+            move |rows| {
+                AppSession::new_with_logs(
+                    theme,
+                    options.placeholder,
+                    rows,
+                    show_logs,
+                    options.appearance,
+                    options.slash_commands,
+                    options.app_name,
+                )
+            },
+        )
+        .await
+        {
+            let error_msg = error.to_string();
+            if error_msg.contains("stdin is not a terminal") {
+                eprintln!("Error: Interactive TUI requires a proper terminal.");
+                if let Some(hint) = options.non_interactive_hint.as_deref() {
+                    eprintln!("{}", hint);
+                } else {
+                    eprintln!("Use a non-interactive mode in your host app for piped input.");
+                }
+            } else {
+                eprintln!("Error: TUI startup failed: {:#}", error);
+            }
+            tracing::error!(%error, "inline session terminated unexpectedly");
+        }
+    });
+
+    Ok(InlineSession {
+        handle: crate::core_tui::app::types::InlineHandle { sender: command_tx },
+        events: event_rx,
+    })
 }
 
 /// Spawn a session using defaults from a host adapter.
@@ -206,37 +184,7 @@ mod tests {
         }
     }
 
-    #[test]
-    fn session_surface_conversion_roundtrip() {
-        let variants = [
-            SessionSurface::Auto,
-            SessionSurface::Alternate,
-            SessionSurface::Inline,
-        ];
-
-        for variant in variants {
-            let converted: crate::config::UiSurfacePreference = variant.into();
-            let roundtrip = SessionSurface::from(converted);
-            assert_eq!(variant, roundtrip);
-        }
-    }
-
-    #[test]
-    fn keyboard_protocol_conversion_roundtrip() {
-        let settings = KeyboardProtocolSettings {
-            enabled: true,
-            mode: "custom".to_string(),
-            disambiguate_escape_codes: true,
-            report_event_types: false,
-            report_alternate_keys: true,
-            report_all_keys: false,
-        };
-
-        let config: KeyboardProtocolConfig = settings.clone().into();
-        let restored = KeyboardProtocolSettings::from(config);
-
-        assert_eq!(settings, restored);
-    }
+    // SessionOptions behavior tests.
 
     #[test]
     fn session_options_from_host_uses_defaults() {

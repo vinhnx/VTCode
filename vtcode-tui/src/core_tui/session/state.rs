@@ -15,8 +15,8 @@ use ratatui::layout::Rect;
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::super::types::{
-    DiffOverlayRequest, DiffPreviewState, InlineEvent, InlineListSelection, ListOverlayRequest,
-    ModalOverlayRequest, OverlayRequest, WizardOverlayRequest,
+    InlineEvent, InlineListSelection, ListOverlayRequest, ModalOverlayRequest, OverlayRequest,
+    WizardOverlayRequest,
 };
 use super::status_requires_shimmer;
 use super::{
@@ -26,47 +26,6 @@ use super::{
 use crate::config::constants::ui;
 
 impl Session {
-    pub(crate) fn inline_lists_visible(&self) -> bool {
-        self.inline_lists_visible
-    }
-
-    pub(crate) fn ensure_inline_lists_visible_for_trigger(&mut self) {
-        if self.inline_lists_visible {
-            return;
-        }
-        self.inline_lists_visible = true;
-        self.mark_dirty();
-    }
-
-    pub(crate) fn toggle_inline_lists_visibility(&mut self) {
-        self.inline_lists_visible = !self.inline_lists_visible;
-        if !self.inline_lists_visible {
-            if self.file_palette_active {
-                self.close_file_palette();
-            }
-            if self.history_picker_state.active {
-                self.history_picker_state.cancel(&mut self.input_manager);
-            }
-        }
-        self.mark_dirty();
-    }
-
-    pub(crate) fn set_task_panel_visible(&mut self, visible: bool) {
-        if self.show_task_panel == visible {
-            return;
-        }
-        self.show_task_panel = visible;
-        self.mark_dirty();
-    }
-
-    pub(crate) fn set_task_panel_lines(&mut self, lines: Vec<String>) {
-        if self.task_panel_lines == lines {
-            return;
-        }
-        self.task_panel_lines = lines;
-        self.mark_dirty();
-    }
-
     pub(crate) fn clear_suggested_prompt_state(&mut self) {
         if !self.suggested_prompt_state.active {
             return;
@@ -127,16 +86,52 @@ impl Session {
         self.transcript_area = area;
     }
 
+    pub(crate) fn transcript_area(&self) -> Option<Rect> {
+        self.transcript_area
+    }
+
     pub(crate) fn set_input_area(&mut self, area: Option<Rect>) {
         self.input_area = area;
+    }
+
+    pub(crate) fn input_area(&self) -> Option<Rect> {
+        self.input_area
     }
 
     pub(crate) fn set_bottom_panel_area(&mut self, area: Option<Rect>) {
         self.bottom_panel_area = area;
     }
 
+    pub(crate) fn bottom_panel_area(&self) -> Option<Rect> {
+        self.bottom_panel_area
+    }
+
     pub(crate) fn set_modal_list_area(&mut self, area: Option<Rect>) {
         self.modal_list_area = area;
+    }
+
+    pub(crate) fn modal_list_area(&self) -> Option<Rect> {
+        self.modal_list_area
+    }
+
+    pub(crate) fn input_enabled(&self) -> bool {
+        self.input_enabled
+    }
+
+    pub(crate) fn set_input_enabled(&mut self, enabled: bool) {
+        self.input_enabled = enabled;
+    }
+
+    pub(crate) fn input_compact_mode(&self) -> bool {
+        self.input_compact_mode
+    }
+
+    pub(crate) fn set_input_compact_mode(&mut self, enabled: bool) {
+        self.input_compact_mode = enabled;
+    }
+
+    pub(crate) fn set_cursor_visible(&mut self, visible: bool) {
+        self.cursor_visible = visible;
     }
 
     /// Advance animation state on tick and request redraw when a frame changes.
@@ -197,7 +192,7 @@ impl Session {
         status_requires_shimmer(left)
     }
 
-    pub(super) fn is_shimmer_active(&self) -> bool {
+    pub(crate) fn is_shimmer_active(&self) -> bool {
         self.has_status_spinner()
     }
 
@@ -209,7 +204,7 @@ impl Session {
         }
     }
 
-    pub(super) fn mark_scrolling(&mut self) {
+    pub(crate) fn mark_scrolling(&mut self) {
         let steady_duration = Duration::from_millis(ui::TUI_SCROLL_CURSOR_STEADY_MS);
         if steady_duration.is_zero() {
             self.scroll_cursor_steady_until = None;
@@ -228,14 +223,14 @@ impl Session {
     }
 
     /// Ensure the prompt style has a color set
-    pub(super) fn ensure_prompt_style_color(&mut self) {
+    pub(crate) fn ensure_prompt_style_color(&mut self) {
         if self.prompt_style.color.is_none() {
             self.prompt_style.color = self.theme.primary.or(self.theme.foreground);
         }
     }
 
     /// Clear the screen and reset scroll
-    pub(super) fn clear_screen(&mut self) {
+    pub(crate) fn clear_screen(&mut self) {
         self.lines.clear();
         self.collapsed_pastes.clear();
         self.user_scrolled = false;
@@ -247,14 +242,14 @@ impl Session {
     }
 
     /// Toggle logs panel visibility
-    pub(super) fn toggle_logs(&mut self) {
+    pub(crate) fn toggle_logs(&mut self) {
         self.show_logs = !self.show_logs;
         self.invalidate_scroll_metrics();
         self.mark_dirty();
     }
 
     /// Show a simple modal dialog
-    pub(super) fn show_modal(
+    pub(crate) fn show_modal(
         &mut self,
         title: String,
         lines: Vec<String>,
@@ -267,7 +262,7 @@ impl Session {
         }));
     }
 
-    pub(super) fn show_overlay(&mut self, request: OverlayRequest) {
+    pub(crate) fn show_overlay(&mut self, request: OverlayRequest) {
         if self.has_active_overlay() {
             self.overlay_queue.push_back(request);
             self.mark_dirty();
@@ -304,18 +299,6 @@ impl Session {
             .and_then(ActiveOverlay::as_wizard_mut)
     }
 
-    pub(crate) fn diff_preview_state(&self) -> Option<&DiffPreviewState> {
-        self.active_overlay
-            .as_ref()
-            .and_then(ActiveOverlay::as_diff)
-    }
-
-    pub(crate) fn diff_preview_state_mut(&mut self) -> Option<&mut DiffPreviewState> {
-        self.active_overlay
-            .as_mut()
-            .and_then(ActiveOverlay::as_diff_mut)
-    }
-
     pub(crate) fn take_modal_state(&mut self) -> Option<ModalState> {
         if !self
             .active_overlay
@@ -327,7 +310,7 @@ impl Session {
 
         match self.active_overlay.take() {
             Some(ActiveOverlay::Modal(state)) => Some(*state),
-            Some(ActiveOverlay::Wizard(_) | ActiveOverlay::Diff(_)) | None => None,
+            Some(ActiveOverlay::Wizard(_)) | None => None,
         }
     }
 
@@ -342,14 +325,10 @@ impl Session {
                 self.clear_last_overlay_list_cache();
                 self.activate_wizard_overlay(request);
             }
-            OverlayRequest::Diff(request) => {
-                self.clear_last_overlay_list_cache();
-                self.activate_diff_overlay(request);
-            }
         }
     }
 
-    pub(super) fn close_overlay(&mut self) {
+    pub(crate) fn close_overlay(&mut self) {
         let Some(state) = self.active_overlay.take() else {
             return;
         };
@@ -387,7 +366,6 @@ impl Session {
     }
 
     fn activate_list_overlay(&mut self, request: ListOverlayRequest) {
-        self.ensure_inline_lists_visible_for_trigger();
         let anchor_to_bottom = self.should_anchor_list_to_bottom(request.selected.as_ref());
         let mut list_state = ModalListState::new(request.items, request.selected.clone());
         let search_state = request.search.map(ModalSearchState::from);
@@ -438,7 +416,6 @@ impl Session {
     }
 
     fn activate_wizard_overlay(&mut self, request: WizardOverlayRequest) {
-        self.ensure_inline_lists_visible_for_trigger();
         let wizard = WizardModalState::new(
             request.title,
             request.steps,
@@ -447,21 +424,6 @@ impl Session {
             request.mode,
         );
         self.active_overlay = Some(ActiveOverlay::Wizard(Box::new(wizard)));
-        self.input_enabled = false;
-        self.cursor_visible = false;
-        self.mark_dirty();
-    }
-
-    fn activate_diff_overlay(&mut self, request: DiffOverlayRequest) {
-        let mut state = DiffPreviewState::new_with_mode(
-            request.file_path,
-            request.before,
-            request.after,
-            request.hunks,
-            request.mode,
-        );
-        state.current_hunk = request.current_hunk;
-        self.active_overlay = Some(ActiveOverlay::Diff(Box::new(state)));
         self.input_enabled = false;
         self.cursor_visible = false;
         self.mark_dirty();
@@ -493,7 +455,7 @@ impl Session {
         }
     }
 
-    pub(super) fn scroll_page_up(&mut self) {
+    pub(crate) fn scroll_page_up(&mut self) {
         self.mark_scrolling();
         let previous_offset = self.scroll_manager.offset();
         self.scroll_manager
@@ -504,7 +466,7 @@ impl Session {
         }
     }
 
-    pub(super) fn scroll_page_down(&mut self) {
+    pub(crate) fn scroll_page_down(&mut self) {
         self.mark_scrolling();
         let page = self.viewport_height().max(1);
         let previous_offset = self.scroll_manager.offset();
@@ -556,13 +518,13 @@ impl Session {
     }
 
     /// Invalidate scroll metrics to force recalculation
-    pub(super) fn invalidate_scroll_metrics(&mut self) {
+    pub(crate) fn invalidate_scroll_metrics(&mut self) {
         self.scroll_manager.invalidate_metrics();
         self.invalidate_transcript_cache();
     }
 
     /// Invalidate the transcript cache
-    pub(super) fn invalidate_transcript_cache(&mut self) {
+    pub(crate) fn invalidate_transcript_cache(&mut self) {
         if let Some(cache) = self.transcript_cache.as_mut() {
             cache.invalidate_content();
         }
@@ -576,13 +538,13 @@ impl Session {
     }
 
     /// Get the current maximum scroll offset
-    pub(super) fn current_max_scroll_offset(&mut self) -> usize {
+    pub(crate) fn current_max_scroll_offset(&mut self) -> usize {
         self.ensure_scroll_metrics();
         self.scroll_manager.max_offset()
     }
 
     /// Enforce scroll bounds after viewport changes
-    pub(super) fn enforce_scroll_bounds(&mut self) {
+    pub(crate) fn enforce_scroll_bounds(&mut self) {
         let max_offset = self.current_max_scroll_offset();
         if self.scroll_manager.offset() > max_offset {
             self.scroll_manager.set_offset(max_offset);
@@ -590,7 +552,7 @@ impl Session {
     }
 
     /// Ensure scroll metrics are up to date
-    pub(super) fn ensure_scroll_metrics(&mut self) {
+    pub(crate) fn ensure_scroll_metrics(&mut self) {
         if self.scroll_manager.metrics_valid() {
             return;
         }
@@ -628,7 +590,7 @@ impl Session {
     }
 
     /// Adjust scroll position after content changes
-    pub(super) fn adjust_scroll_after_change(&mut self, previous_max_offset: usize) {
+    pub(crate) fn adjust_scroll_after_change(&mut self, previous_max_offset: usize) {
         use std::cmp::min;
 
         let new_max_offset = self.current_max_scroll_offset();
@@ -646,7 +608,7 @@ impl Session {
 
     /// Emit an inline event through the channel and callback
     #[inline]
-    pub(super) fn emit_inline_event(
+    pub(crate) fn emit_inline_event(
         &self,
         event: &InlineEvent,
         events: &UnboundedSender<InlineEvent>,
@@ -661,7 +623,7 @@ impl Session {
     /// Handle scroll down event
     #[inline]
     #[allow(dead_code)]
-    pub(super) fn handle_scroll_down(
+    pub(crate) fn handle_scroll_down(
         &mut self,
         events: &UnboundedSender<InlineEvent>,
         callback: Option<&(dyn Fn(&InlineEvent) + Send + Sync + 'static)>,
@@ -674,7 +636,7 @@ impl Session {
     /// Handle scroll up event
     #[inline]
     #[allow(dead_code)]
-    pub(super) fn handle_scroll_up(
+    pub(crate) fn handle_scroll_up(
         &mut self,
         events: &UnboundedSender<InlineEvent>,
         callback: Option<&(dyn Fn(&InlineEvent) + Send + Sync + 'static)>,

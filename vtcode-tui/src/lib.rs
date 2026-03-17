@@ -7,33 +7,24 @@
 mod cache;
 #[allow(dead_code)]
 mod config;
+mod options;
 pub mod ui;
 pub mod utils;
 
+pub mod app;
+pub mod core;
 pub mod core_tui;
 pub mod host;
 mod session_options;
 
 pub use config::SyntaxHighlightingConfig as TuiSyntaxHighlightingConfig;
 pub use config::{KeyboardProtocolConfig, ReasoningEffortLevel, UiSurfacePreference};
-pub use core_tui::session::config::AppearanceConfig as SessionAppearanceConfig;
-pub use core_tui::*;
-pub use session_options::{
-    KeyboardProtocolSettings, SessionOptions, SessionSurface, spawn_session_with_host,
-    spawn_session_with_options,
-};
+pub use core_tui::{log, panic_hook};
+pub use options::{KeyboardProtocolSettings, SessionSurface};
 pub use ui::theme::{ThemeSuite, available_theme_suites, theme_suite_id, theme_suite_label};
 
 /// Commonly used TUI API items.
 pub mod prelude {
-    pub use crate::{
-        EditingMode, InlineCommand, InlineEvent, InlineHandle, InlineHeaderStatusBadge,
-        InlineHeaderStatusTone, InlineMessageKind, InlineSegment, InlineSession, InlineTextStyle,
-        InlineTheme, KeyboardProtocolSettings, PlanContent, PlanPhase, PlanStep,
-        SecurePromptConfig, SessionAppearanceConfig, SessionOptions, SessionSurface,
-        SlashCommandItem, TrustMode, WizardModalMode, WizardStep, available_theme_suites,
-        convert_style, spawn_session, spawn_session_with_host, spawn_session_with_options,
-        spawn_session_with_prompts, spawn_session_with_prompts_and_options, theme_from_styles,
-        theme_suite_id, theme_suite_label,
-    };
+    pub use crate::app::prelude::*;
+    pub use crate::core::prelude::*;
 }

@@ -9,7 +9,7 @@ use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::hooks::SessionEndReason;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::ToolRegistry;
-use vtcode_tui::{InlineHandle, InlineHeaderContext, InlineSession};
+use vtcode_tui::app::{InlineHandle, InlineHeaderContext, InlineSession};
 
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::model_picker::ModelPickerState;

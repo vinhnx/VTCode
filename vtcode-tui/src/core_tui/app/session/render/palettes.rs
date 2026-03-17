@@ -1,8 +1,8 @@
 use super::*;
-use crate::ui::tui::session::inline_list::{InlineListRow, selection_padding};
-use crate::ui::tui::session::list_panel::{
-    SharedListPanelSections, SharedListPanelStyles, SharedSearchField, StaticRowsListPanelModel,
-    fixed_section_rows, render_shared_list_panel, rows_to_u16, split_bottom_list_panel,
+use crate::core_tui::session::inline_list::{InlineListRow, selection_padding};
+use crate::core_tui::session::list_panel::{
+    ListPanelLayout, SharedListPanelSections, SharedListPanelStyles, SharedSearchField,
+    StaticRowsListPanelModel, fixed_section_rows, render_shared_list_panel, rows_to_u16,
 };
 use ratatui::widgets::{Clear, Paragraph, Wrap};
 
@@ -46,7 +46,8 @@ pub fn split_inline_file_palette_area(session: &mut Session, area: Rect) -> (Rec
         1
     };
 
-    split_bottom_list_panel(area, fixed_rows, rows_to_u16(list_rows))
+    let layout = ListPanelLayout::new(fixed_rows, rows_to_u16(list_rows));
+    layout.split(area)
 }
 
 pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {

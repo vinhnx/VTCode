@@ -1,15 +1,16 @@
 use super::*;
 use crate::config::constants::ui;
+use crate::core_tui::app::session::AppSession;
+use crate::core_tui::app::types as app_types;
+use crate::core_tui::types::{
+    InlineHeaderStatusBadge, InlineHeaderStatusTone, InlineLinkTarget, InlineListItem,
+    InlineListSearchConfig, InlineListSelection, InlineSegment, InlineTextStyle, InlineTheme,
+    ListOverlayRequest, OverlayEvent, OverlayHotkey, OverlayHotkeyAction, OverlayHotkeyKey,
+    OverlayRequest, OverlaySubmission, WizardModalMode, WizardOverlayRequest, WizardStep,
+};
 use crate::ui::tui::session::message::RenderedTranscriptLink;
 use crate::ui::tui::session::transcript_links::TranscriptLinkTarget;
 use crate::ui::tui::style::ratatui_style_from_inline;
-use crate::ui::tui::{
-    DiffHunk, DiffOverlayRequest, DiffPreviewMode, DiffPreviewState, InlineHeaderStatusBadge,
-    InlineHeaderStatusTone, InlineLinkTarget, InlineListItem, InlineListSearchConfig,
-    InlineListSelection, InlineSegment, InlineTextStyle, InlineTheme, ListOverlayRequest,
-    OverlayEvent, OverlayHotkey, OverlayHotkeyAction, OverlayHotkeyKey, OverlayRequest,
-    OverlaySubmission, SlashCommandItem, WizardModalMode, WizardOverlayRequest, WizardStep,
-};
 use ratatui::crossterm::event::{
     Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
     MouseEventKind,
@@ -58,19 +59,26 @@ fn session_with_input(input: &str, cursor: usize) -> Session {
     session
 }
 
-fn session_with_slash_palette_commands() -> Session {
-    Session::new_with_logs(
+fn app_session_with_input(input: &str, cursor: usize) -> AppSession {
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.core.set_input(input.to_string());
+    session.core.set_cursor(cursor);
+    session
+}
+
+fn session_with_slash_palette_commands() -> AppSession {
+    AppSession::new_with_logs(
         InlineTheme::default(),
         None,
         VIEW_ROWS,
         true,
         None,
         vec![
-            SlashCommandItem::new("new", "Start a new session"),
-            SlashCommandItem::new("review", "Review current diff"),
-            SlashCommandItem::new("doctor", "Run diagnostics"),
-            SlashCommandItem::new("command", "Run a terminal command"),
-            SlashCommandItem::new("files", "Browse files"),
+            app_types::SlashCommandItem::new("new", "Start a new session"),
+            app_types::SlashCommandItem::new("review", "Review current diff"),
+            app_types::SlashCommandItem::new("doctor", "Run diagnostics"),
+            app_types::SlashCommandItem::new("command", "Run a terminal command"),
+            app_types::SlashCommandItem::new("files", "Browse files"),
         ],
         "Agent TUI".to_string(),
     )
@@ -79,6 +87,11 @@ fn session_with_slash_palette_commands() -> Session {
 fn enable_vim_normal_mode(session: &mut Session) {
     session.vim_state.set_enabled(true);
     assert!(session.handle_vim_key(&KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)));
+}
+
+fn enable_vim_normal_mode_app(session: &mut AppSession) {
+    session.core.vim_state.set_enabled(true);
+    assert!(session.core.handle_vim_key(&KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)));
 }
 
 fn show_basic_list_overlay(session: &mut Session) {
@@ -112,12 +125,12 @@ fn show_basic_list_overlay(session: &mut Session) {
     });
 }
 
-fn show_diff_overlay(session: &mut Session, mode: DiffPreviewMode) {
-    session.show_overlay(OverlayRequest::Diff(DiffOverlayRequest {
+fn show_diff_overlay(session: &mut AppSession, mode: app_types::DiffPreviewMode) {
+    session.show_diff_overlay(app_types::DiffOverlayRequest {
         file_path: "src/main.rs".to_string(),
         before: "fn old() {}\n".to_string(),
         after: "fn new() {}\n".to_string(),
-        hunks: vec![DiffHunk {
+        hunks: vec![app_types::DiffHunk {
             old_start: 0,
             new_start: 0,
             old_lines: 1,
@@ -126,13 +139,13 @@ fn show_diff_overlay(session: &mut Session, mode: DiffPreviewMode) {
         }],
         current_hunk: 0,
         mode,
-    }));
+    });
 }
 
 #[test]
 fn vim_mode_does_not_consume_control_shortcuts() {
-    let mut session = session_with_input("hello", 5);
-    enable_vim_normal_mode(&mut session);
+    let mut session = app_session_with_input("hello", 5);
+    enable_vim_normal_mode_app(&mut session);
 
     let event = session.process_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
 
@@ -269,6 +282,25 @@ fn visible_transcript(session: &mut Session) -> Vec<String> {
 }
 
 fn rendered_session_lines(session: &mut Session, rows: u16) -> Vec<String> {
+    let backend = TestBackend::new(VIEW_WIDTH, rows);
+    let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
+    terminal
+        .draw(|frame| session.render(frame))
+        .expect("failed to render session");
+
+    let buffer = terminal.backend().buffer();
+    (0..buffer.area.height)
+        .map(|y| {
+            (0..buffer.area.width)
+                .filter_map(|x| buffer.cell((x, y)).map(|cell| cell.symbol().to_string()))
+                .collect::<String>()
+                .trim_end()
+                .to_string()
+        })
+        .collect()
+}
+
+fn rendered_app_session_lines(session: &mut AppSession, rows: u16) -> Vec<String> {
     let backend = TestBackend::new(VIEW_WIDTH, rows);
     let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
     terminal
@@ -665,24 +697,24 @@ fn move_left_word_skips_trailing_whitespace() {
 
 #[test]
 fn file_palette_insertion_uses_at_alias_in_input() {
-    let mut session = session_with_input("check @mai", "check @mai".len());
+    let mut session = app_session_with_input("check @mai", "check @mai".len());
 
     session.insert_file_reference("src/main.rs");
 
-    assert_eq!(session.input_manager.content(), "check @src/main.rs ");
-    assert_eq!(session.cursor(), "check @src/main.rs ".len());
+    assert_eq!(session.core.input_manager.content(), "check @src/main.rs ");
+    assert_eq!(session.core.cursor(), "check @src/main.rs ".len());
 }
 
 #[test]
 fn set_input_command_activates_file_palette_for_at_query() {
-    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
-    session.handle_command(InlineCommand::LoadFilePalette {
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.handle_command(app_types::InlineCommand::LoadFilePalette {
         files: vec!["src/main.rs".to_string()],
         workspace: PathBuf::from("."),
     });
 
     assert!(!session.file_palette_active);
-    session.handle_command(InlineCommand::SetInput("@src".to_string()));
+    session.handle_command(app_types::InlineCommand::SetInput("@src".to_string()));
     assert!(session.file_palette_active);
 }
 
@@ -1043,7 +1075,7 @@ fn control_l_submits_clear_command() {
 
 #[test]
 fn control_slash_toggles_inline_list_visibility() {
-    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
     assert!(session.inline_lists_visible());
 
     let _ = session.process_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::CONTROL));
@@ -1055,7 +1087,7 @@ fn control_slash_toggles_inline_list_visibility() {
 
 #[test]
 fn control_i_toggles_inline_list_visibility() {
-    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
     assert!(session.inline_lists_visible());
 
     let _ = session.process_key(KeyEvent::new(KeyCode::Char('i'), KeyModifiers::CONTROL));
@@ -1173,7 +1205,7 @@ fn busy_tab_still_queues_submission() {
 #[test]
 fn busy_slash_palette_stop_interrupts_immediately() {
     let mut session = session_with_slash_palette_commands();
-    session.handle_command(InlineCommand::SetInputStatus {
+    session.handle_command(app_types::InlineCommand::SetInputStatus {
         left: Some("Running command: cargo test".to_string()),
         right: None,
     });
@@ -1190,7 +1222,7 @@ fn busy_slash_palette_stop_interrupts_immediately() {
     }
 
     let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(matches!(event, Some(InlineEvent::Interrupt)));
+    assert!(matches!(event, Some(app_types::InlineEvent::Interrupt)));
 }
 
 #[test]
@@ -1218,7 +1250,7 @@ fn slash_palette_enter_submits_immediate_command() {
     }
 
     let submit = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(matches!(submit, Some(InlineEvent::Submit(value)) if value.trim() == "/new"));
+    assert!(matches!(submit, Some(app_types::InlineEvent::Submit(value)) if value.trim() == "/new"));
 }
 
 #[test]
@@ -1236,7 +1268,7 @@ fn slash_palette_enter_submits_review_immediately() {
     }
 
     let submit = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(matches!(submit, Some(InlineEvent::Submit(value)) if value.trim() == "/review"));
+    assert!(matches!(submit, Some(app_types::InlineEvent::Submit(value)) if value.trim() == "/review"));
 }
 
 #[test]
@@ -1277,7 +1309,7 @@ fn slash_trigger_auto_shows_inline_lists() {
 
 #[test]
 fn history_picker_trigger_auto_shows_inline_lists() {
-    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
     let _ = session.process_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::CONTROL));
     assert!(!session.inline_lists_visible());
 
@@ -1297,7 +1329,7 @@ fn slash_panel_renders_search_field_above_results() {
         let _ = session.process_key(key);
     }
 
-    let lines = rendered_session_lines(&mut session, 20);
+    let lines = rendered_app_session_lines(&mut session, 20);
     let search_index = lines
         .iter()
         .position(|line| line.contains("Search commands: [re"))
@@ -1312,17 +1344,17 @@ fn slash_panel_renders_search_field_above_results() {
 
 #[test]
 fn history_picker_renders_search_field_above_results() {
-    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
-    session.set_input("cargo test".to_string());
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.core.set_input("cargo test".to_string());
     let _ = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    session.set_input("git status".to_string());
+    session.core.set_input("git status".to_string());
     let _ = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     let _ = session.process_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
     let _ = session.process_key(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE));
     let _ = session.process_key(KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE));
 
-    let lines = rendered_session_lines(&mut session, 20);
+    let lines = rendered_app_session_lines(&mut session, 20);
     let search_index = lines
         .iter()
         .position(|line| line.contains("Search history: [gi"))
@@ -1340,15 +1372,16 @@ fn mouse_wheel_navigates_slash_palette_instead_of_transcript() {
     let mut session = session_with_slash_palette_commands();
     let _ = session.process_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
 
-    let _ = rendered_session_lines(&mut session, 20);
+    let _ = rendered_app_session_lines(&mut session, 20);
     let selected_before = session.slash_palette.selected_index();
 
     let (event_tx, _event_rx) = mpsc::unbounded_channel();
+    let panel_area = session.core.bottom_panel_area().expect("panel area");
     session.handle_event(
         CrosstermEvent::Mouse(MouseEvent {
             kind: MouseEventKind::ScrollDown,
-            column: session.bottom_panel_area.expect("panel area").x,
-            row: session.bottom_panel_area.expect("panel area").y,
+            column: panel_area.x,
+            row: panel_area.y,
             modifiers: KeyModifiers::NONE,
         }),
         &event_tx,
@@ -1356,7 +1389,7 @@ fn mouse_wheel_navigates_slash_palette_instead_of_transcript() {
     );
 
     assert_ne!(session.slash_palette.selected_index(), selected_before);
-    assert_eq!(session.transcript_view_top, 0);
+    assert_eq!(session.core.transcript_view_top, 0);
 }
 
 #[test]
@@ -1404,8 +1437,8 @@ fn clicking_selected_slash_row_applies_command() {
         let _ = session.process_key(key);
     }
 
-    let _ = rendered_session_lines(&mut session, 20);
-    let panel_area = session.bottom_panel_area.expect("panel area");
+    let _ = rendered_app_session_lines(&mut session, 20);
+    let panel_area = session.core.bottom_panel_area().expect("panel area");
     let (event_tx, _event_rx) = mpsc::unbounded_channel();
     session.handle_event(
         CrosstermEvent::Mouse(MouseEvent {
@@ -1418,28 +1451,28 @@ fn clicking_selected_slash_row_applies_command() {
         None,
     );
 
-    assert_eq!(session.input_manager.content(), "/review ");
+    assert_eq!(session.core.input_manager.content(), "/review ");
     assert!(session.slash_palette.suggestions().is_empty());
 }
 
 #[test]
 fn clicking_selected_file_palette_row_inserts_reference() {
-    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
     let workspace = vtcode_tui_workspace_root();
-    session.load_file_palette(
-        vec![
+    session.handle_command(app_types::InlineCommand::LoadFilePalette {
+        files: vec![
             workspace
                 .join("src/core_tui/session.rs")
                 .display()
                 .to_string(),
         ],
-        workspace.clone(),
-    );
-    session.set_input("@".to_string());
-    session.set_cursor(1);
+        workspace: workspace.clone(),
+    });
+    session.core.set_input("@".to_string());
+    session.core.set_cursor(1);
 
-    let _ = rendered_session_lines(&mut session, 20);
-    let panel_area = session.bottom_panel_area.expect("panel area");
+    let _ = rendered_app_session_lines(&mut session, 20);
+    let panel_area = session.core.bottom_panel_area().expect("panel area");
     let (event_tx, _event_rx) = mpsc::unbounded_channel();
     session.handle_event(
         CrosstermEvent::Mouse(MouseEvent {
@@ -1452,26 +1485,26 @@ fn clicking_selected_file_palette_row_inserts_reference() {
         None,
     );
 
-    assert_eq!(session.input_manager.content(), "@src/core_tui/session.rs ");
+    assert_eq!(session.core.input_manager.content(), "@src/core_tui/session.rs ");
     assert!(!session.file_palette_active);
 }
 
 #[test]
 fn clicking_selected_history_row_accepts_entry() {
-    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
-    session.set_input("cargo test".to_string());
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.core.set_input("cargo test".to_string());
     let _ = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    session.set_input("git status".to_string());
+    session.core.set_input("git status".to_string());
     let _ = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     let _ = session.process_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
-    let _ = rendered_session_lines(&mut session, 20);
+    let _ = rendered_app_session_lines(&mut session, 20);
     let expected = session
         .history_picker_state
         .selected_match()
         .map(|item| item.content.clone())
         .expect("selected history entry");
-    let panel_area = session.bottom_panel_area.expect("panel area");
+    let panel_area = session.core.bottom_panel_area().expect("panel area");
     let (event_tx, _event_rx) = mpsc::unbounded_channel();
     session.handle_event(
         CrosstermEvent::Mouse(MouseEvent {
@@ -1485,7 +1518,7 @@ fn clicking_selected_history_row_accepts_entry() {
     );
 
     assert!(!session.history_picker_state.active);
-    assert_eq!(session.input_manager.content(), expected);
+    assert_eq!(session.core.input_manager.content(), expected);
 }
 
 #[test]
@@ -1625,14 +1658,14 @@ fn backspace_deletes_selected_input_range() {
 
 #[test]
 fn file_palette_renders_search_field_above_results() {
-    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
-    session.handle_command(InlineCommand::LoadFilePalette {
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.handle_command(app_types::InlineCommand::LoadFilePalette {
         files: vec!["src/main.rs".to_string(), "src/lib.rs".to_string()],
         workspace: PathBuf::from("."),
     });
-    session.handle_command(InlineCommand::SetInput("@src".to_string()));
+    session.handle_command(app_types::InlineCommand::SetInput("@src".to_string()));
 
-    let lines = rendered_session_lines(&mut session, 20);
+    let lines = rendered_app_session_lines(&mut session, 20);
     let search_index = lines
         .iter()
         .position(|line| line.contains("Search files: [src"))
@@ -1647,15 +1680,15 @@ fn file_palette_renders_search_field_above_results() {
 
 #[test]
 fn file_palette_trigger_auto_shows_inline_lists() {
-    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
-    session.handle_command(InlineCommand::LoadFilePalette {
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.handle_command(app_types::InlineCommand::LoadFilePalette {
         files: vec!["src/main.rs".to_string()],
         workspace: PathBuf::from("."),
     });
     let _ = session.process_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::CONTROL));
     assert!(!session.inline_lists_visible());
 
-    session.handle_command(InlineCommand::SetInput("@src".to_string()));
+    session.handle_command(app_types::InlineCommand::SetInput("@src".to_string()));
     assert!(session.inline_lists_visible());
     assert!(session.file_palette_active);
 }
@@ -1853,7 +1886,7 @@ fn control_alt_e_does_not_launch_editor() {
 fn control_g_launches_editor_from_plan_confirmation_modal() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.input_status_right = Some("model | 25% context".to_string());
-    let plan = crate::ui::tui::types::PlanContent::from_markdown(
+    let plan = app_types::PlanContent::from_markdown(
         "Test Plan".to_string(),
         "## Plan of Work\n- Step 1",
         Some(".vtcode/plans/test-plan.md".to_string()),
@@ -1875,7 +1908,7 @@ fn control_g_launches_editor_from_plan_confirmation_modal() {
 #[test]
 fn plan_confirmation_modal_matches_four_way_gate_copy() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
-    let plan = crate::ui::tui::types::PlanContent::from_markdown(
+    let plan = app_types::PlanContent::from_markdown(
         "Test Plan".to_string(),
         "## Implementation Plan\n1. Step",
         Some(".vtcode/plans/test-plan.md".to_string()),
@@ -1934,30 +1967,30 @@ fn control_super_e_does_not_launch_editor() {
 
 #[test]
 fn diff_overlay_defaults_to_edit_approval_mode() {
-    let preview = DiffPreviewState::new(
+    let preview = app_types::DiffPreviewState::new(
         "src/main.rs".to_string(),
         "before".to_string(),
         "after".to_string(),
         Vec::new(),
     );
 
-    assert_eq!(preview.mode, DiffPreviewMode::EditApproval);
+    assert_eq!(preview.mode, app_types::DiffPreviewMode::EditApproval);
 }
 
 #[test]
 fn diff_overlay_edit_approval_keys_remain_unchanged() {
-    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
 
-    show_diff_overlay(&mut session, DiffPreviewMode::EditApproval);
+    show_diff_overlay(&mut session, app_types::DiffPreviewMode::EditApproval);
     let apply = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(matches!(
         apply,
-        Some(InlineEvent::Overlay(OverlayEvent::Submitted(
-            OverlaySubmission::DiffApply
+        Some(app_types::InlineEvent::Overlay(app_types::OverlayEvent::Submitted(
+            app_types::OverlaySubmission::DiffApply
         )))
     ));
 
-    show_diff_overlay(&mut session, DiffPreviewMode::EditApproval);
+    show_diff_overlay(&mut session, app_types::DiffPreviewMode::EditApproval);
     let reload = session.process_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE));
     assert!(reload.is_none());
     assert!(session.diff_preview_state().is_some());
@@ -1965,55 +1998,55 @@ fn diff_overlay_edit_approval_keys_remain_unchanged() {
     let reject = session.process_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(matches!(
         reject,
-        Some(InlineEvent::Overlay(OverlayEvent::Submitted(
-            OverlaySubmission::DiffReject
+        Some(app_types::InlineEvent::Overlay(app_types::OverlayEvent::Submitted(
+            app_types::OverlaySubmission::DiffReject
         )))
     ));
 }
 
 #[test]
 fn diff_overlay_conflict_mode_maps_enter_reload_and_escape() {
-    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
 
-    show_diff_overlay(&mut session, DiffPreviewMode::FileConflict);
+    show_diff_overlay(&mut session, app_types::DiffPreviewMode::FileConflict);
     let proceed = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(matches!(
         proceed,
-        Some(InlineEvent::Overlay(OverlayEvent::Submitted(
-            OverlaySubmission::DiffProceed
+        Some(app_types::InlineEvent::Overlay(app_types::OverlayEvent::Submitted(
+            app_types::OverlaySubmission::DiffProceed
         )))
     ));
 
-    show_diff_overlay(&mut session, DiffPreviewMode::FileConflict);
+    show_diff_overlay(&mut session, app_types::DiffPreviewMode::FileConflict);
     let reload = session.process_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE));
     assert!(matches!(
         reload,
-        Some(InlineEvent::Overlay(OverlayEvent::Submitted(
-            OverlaySubmission::DiffReload
+        Some(app_types::InlineEvent::Overlay(app_types::OverlayEvent::Submitted(
+            app_types::OverlaySubmission::DiffReload
         )))
     ));
 
-    show_diff_overlay(&mut session, DiffPreviewMode::FileConflict);
+    show_diff_overlay(&mut session, app_types::DiffPreviewMode::FileConflict);
     let abort = session.process_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(matches!(
         abort,
-        Some(InlineEvent::Overlay(OverlayEvent::Submitted(
-            OverlaySubmission::DiffAbort
+        Some(app_types::InlineEvent::Overlay(app_types::OverlayEvent::Submitted(
+            app_types::OverlaySubmission::DiffAbort
         )))
     ));
 }
 
 #[test]
 fn diff_overlay_conflict_mode_ignores_trust_shortcuts() {
-    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
 
-    show_diff_overlay(&mut session, DiffPreviewMode::FileConflict);
+    show_diff_overlay(&mut session, app_types::DiffPreviewMode::FileConflict);
     let event = session.process_key(KeyEvent::new(KeyCode::Char('1'), KeyModifiers::NONE));
 
     assert!(event.is_none());
     assert!(matches!(
         session.diff_preview_state().map(|preview| preview.mode),
-        Some(DiffPreviewMode::FileConflict)
+        Some(app_types::DiffPreviewMode::FileConflict)
     ));
 }
 
@@ -2107,7 +2140,7 @@ fn request_user_input_step(question_id: &str, label: &str) -> WizardStep {
     }
 }
 
-fn show_plan_confirmation_overlay(session: &mut Session, plan: crate::ui::tui::types::PlanContent) {
+fn show_plan_confirmation_overlay(session: &mut Session, plan: app_types::PlanContent) {
     let mut lines: Vec<String> = plan
         .raw_content
         .lines()
@@ -3525,15 +3558,15 @@ fn empty_enter_with_active_pty_opens_jobs() {
 
 #[test]
 fn task_panel_visibility_is_independent_from_logs() {
-    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
     session.set_task_panel_visible(true);
     let initial_task_panel = session.show_task_panel;
-    let initial_logs = session.show_logs;
+    let initial_logs = session.core.show_logs;
 
-    session.toggle_logs();
+    session.core.toggle_logs();
 
     assert_eq!(session.show_task_panel, initial_task_panel);
-    assert_ne!(session.show_logs, initial_logs);
+    assert_ne!(session.core.show_logs, initial_logs);
 }
 
 #[test]

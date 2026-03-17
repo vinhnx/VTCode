@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use crate::core_tui::session::list_navigator::ListNavigator;
 use crate::ui::FileColorizer;
 
 mod filtering;
@@ -22,8 +23,7 @@ pub struct FileEntry {
 pub struct FilePalette {
     all_files: Vec<FileEntry>,
     filtered_files: Vec<FileEntry>,
-    selected_index: usize,
-    current_page: usize,
+    navigator: ListNavigator,
     filter_query: String,
     workspace_root: PathBuf,
     filter_cache: hashbrown::HashMap<String, Vec<FileEntry>>,
@@ -36,8 +36,7 @@ impl FilePalette {
         Self {
             all_files: Vec::new(),
             filtered_files: Vec::new(),
-            selected_index: 0,
-            current_page: 0,
+            navigator: ListNavigator::new(),
             filter_query: String::new(),
             workspace_root,
             filter_cache: hashbrown::HashMap::new(),
@@ -48,10 +47,9 @@ impl FilePalette {
     /// Reset selection and filter (call when opening file browser)
     #[allow(dead_code)]
     pub fn reset(&mut self) {
-        self.selected_index = 0;
-        self.current_page = 0;
         self.filter_query.clear();
         self.apply_filter(); // Refresh filtered_files to show all
+        self.navigator.select_first();
     }
 
     /// Clean up resources to free memory (call when closing file browser)
@@ -59,6 +57,7 @@ impl FilePalette {
         self.filter_cache.clear();
         self.filtered_files.clear();
         self.filtered_files.shrink_to_fit();
+        self.navigator.set_item_count(0);
     }
 }
 

@@ -8,7 +8,6 @@ impl Session {
     pub fn set_input(&mut self, text: impl Into<String>) {
         self.input_manager.set_content(text.into());
         self.input_compact_mode = self.input_compact_placeholder().is_some();
-        self.check_file_reference_trigger();
         self.mark_dirty();
     }
 
@@ -130,7 +129,6 @@ impl Session {
             }
             InlineCommand::SetInputEnabled(value) => {
                 self.input_enabled = value;
-                slash::update_slash_suggestions(self);
             }
             InlineCommand::SetInput(content) => {
                 // Check if the content appears to be an error message
@@ -143,20 +141,11 @@ impl Session {
                     self.input_manager.set_content(content);
                     self.input_compact_mode = self.input_compact_placeholder().is_some();
                     self.scroll_manager.set_offset(0);
-                    slash::update_slash_suggestions(self);
-                    self.check_file_reference_trigger();
                 }
             }
             InlineCommand::ApplySuggestedPrompt(content) => {
                 self.apply_suggested_prompt(content);
                 self.scroll_manager.set_offset(0);
-                self.check_file_reference_trigger();
-            }
-            InlineCommand::SetTaskPanelVisible(visible) => {
-                self.set_task_panel_visible(visible);
-            }
-            InlineCommand::SetTaskPanelLines(lines) => {
-                self.set_task_panel_lines(lines);
             }
             InlineCommand::ClearInput => {
                 command::clear_input(self);
@@ -169,12 +158,6 @@ impl Session {
             }
             InlineCommand::CloseOverlay => {
                 self.close_overlay();
-            }
-            InlineCommand::LoadFilePalette { files, workspace } => {
-                self.load_file_palette(files, workspace);
-            }
-            InlineCommand::OpenHistoryPicker => {
-                events::open_history_picker(self);
             }
             InlineCommand::ClearScreen => {
                 self.clear_screen();

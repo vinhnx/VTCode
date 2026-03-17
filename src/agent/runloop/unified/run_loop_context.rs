@@ -14,8 +14,8 @@ use vtcode_core::tools::ApprovalRecorder;
 use vtcode_core::tools::ToolRegistry;
 use vtcode_core::tools::ToolResultCache;
 use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_tui::InlineHandle;
-use vtcode_tui::InlineSession;
+use vtcode_tui::app::InlineHandle;
+use vtcode_tui::app::InlineSession;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct TurnRunId(pub String);

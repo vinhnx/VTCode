@@ -5,7 +5,7 @@ use anyhow::{Context, Result};
 use ratatui::crossterm::{
     cursor::{MoveToColumn, RestorePosition, SavePosition},
     execute,
-    terminal::{Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, SetTitle},
+    terminal::{Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -14,13 +14,66 @@ use tokio_util::sync::CancellationToken;
 use crate::config::types::UiSurfacePreference;
 use crate::ui::tui::log::{clear_tui_log_sender, register_tui_log_sender, set_log_theme_name};
 
-use super::{
-    session::{Session, config::AppearanceConfig},
-    types::{
-        FocusChangeCallback, InlineCommand, InlineEvent, InlineEventCallback, InlineTheme,
-        SlashCommandItem,
-    },
-};
+pub trait TuiCommand {
+    fn is_suspend_event_loop(&self) -> bool;
+    fn is_resume_event_loop(&self) -> bool;
+    fn is_clear_input_queue(&self) -> bool;
+    fn is_force_redraw(&self) -> bool;
+}
+
+pub trait TuiSessionDriver {
+    type Command: TuiCommand;
+    type Event;
+
+    fn handle_command(&mut self, command: Self::Command);
+    fn handle_event(
+        &mut self,
+        event: crossterm::event::Event,
+        events: &UnboundedSender<Self::Event>,
+        callback: Option<&(dyn Fn(&Self::Event) + Send + Sync + 'static)>,
+    );
+    fn handle_tick(&mut self);
+    fn render(&mut self, frame: &mut ratatui::Frame<'_>);
+    fn take_redraw(&mut self) -> bool;
+    fn use_steady_cursor(&self) -> bool;
+    fn should_exit(&self) -> bool;
+    fn request_exit(&mut self);
+    fn mark_dirty(&mut self);
+    fn update_terminal_title(&mut self);
+    fn clear_terminal_title(&mut self);
+    fn is_running_activity(&self) -> bool;
+    fn has_status_spinner(&self) -> bool;
+    fn thinking_spinner_active(&self) -> bool;
+    fn has_active_navigation_ui(&self) -> bool;
+    fn apply_coalesced_scroll(&mut self, line_delta: i32, page_delta: i32);
+    fn set_show_logs(&mut self, show: bool);
+    fn set_active_pty_sessions(
+        &mut self,
+        sessions: Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>,
+    );
+    fn set_workspace_root(&mut self, root: Option<std::path::PathBuf>);
+    fn set_log_receiver(&mut self, receiver: UnboundedReceiver<crate::core_tui::log::LogEntry>);
+}
+
+impl TuiCommand for crate::core_tui::types::InlineCommand {
+    fn is_suspend_event_loop(&self) -> bool {
+        matches!(self, crate::core_tui::types::InlineCommand::SuspendEventLoop)
+    }
+
+    fn is_resume_event_loop(&self) -> bool {
+        matches!(self, crate::core_tui::types::InlineCommand::ResumeEventLoop)
+    }
+
+    fn is_clear_input_queue(&self) -> bool {
+        matches!(self, crate::core_tui::types::InlineCommand::ClearInputQueue)
+    }
+
+    fn is_force_redraw(&self) -> bool {
+        matches!(self, crate::core_tui::types::InlineCommand::ForceRedraw)
+    }
+}
+
+use super::types::FocusChangeCallback;
 
 mod drive;
 mod events;
@@ -38,29 +91,29 @@ use terminal_modes::{enable_terminal_modes, restore_terminal_modes};
 
 const ALTERNATE_SCREEN_ERROR: &str = "failed to enter alternate inline screen";
 
-pub struct TuiOptions {
-    pub theme: InlineTheme,
-    pub placeholder: Option<String>,
+pub struct TuiOptions<E> {
     pub surface_preference: UiSurfacePreference,
     pub inline_rows: u16,
     pub show_logs: bool,
     pub log_theme: Option<String>,
-    pub event_callback: Option<InlineEventCallback>,
+    pub event_callback: Option<std::sync::Arc<dyn Fn(&E) + Send + Sync + 'static>>,
     pub focus_callback: Option<FocusChangeCallback>,
     pub active_pty_sessions: Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>,
     pub input_activity_counter: Option<std::sync::Arc<std::sync::atomic::AtomicU64>>,
     pub keyboard_protocol: crate::config::KeyboardProtocolConfig,
     pub workspace_root: Option<std::path::PathBuf>,
-    pub slash_commands: Vec<SlashCommandItem>,
-    pub appearance: Option<AppearanceConfig>,
-    pub app_name: String,
 }
 
-pub async fn run_tui(
-    mut commands: UnboundedReceiver<InlineCommand>,
-    events: UnboundedSender<InlineEvent>,
-    options: TuiOptions,
-) -> Result<()> {
+pub async fn run_tui<S, F>(
+    mut commands: UnboundedReceiver<S::Command>,
+    events: UnboundedSender<S::Event>,
+    options: TuiOptions<S::Event>,
+    make_session: F,
+) -> Result<()>
+where
+    S: TuiSessionDriver,
+    F: FnOnce(u16) -> S,
+{
     // Create a guard to mark TUI as initialized during the session
     // This ensures the panic hook knows to restore terminal state
     let _panic_guard = crate::ui::tui::panic_hook::TuiPanicGuard::new();
@@ -69,17 +122,9 @@ pub async fn run_tui(
 
     let surface = TerminalSurface::detect(options.surface_preference, options.inline_rows)?;
     set_log_theme_name(options.log_theme.clone());
-    let mut session = Session::new_with_logs(
-        options.theme,
-        options.placeholder,
-        surface.rows(),
-        options.show_logs,
-        options.appearance.clone(),
-        options.slash_commands,
-        options.app_name.clone(),
-    );
-    session.show_logs = options.show_logs;
-    session.active_pty_sessions = options.active_pty_sessions;
+    let mut session = make_session(surface.rows());
+    session.set_show_logs(options.show_logs);
+    session.set_active_pty_sessions(options.active_pty_sessions);
     session.set_workspace_root(options.workspace_root.clone());
     if options.show_logs {
         let (log_tx, log_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -103,20 +148,7 @@ pub async fn run_tui(
         execute!(stderr, EnterAlternateScreen).context(ALTERNATE_SCREEN_ERROR)?;
     }
 
-    // Set initial terminal title with project name.
-    let initial_title = options
-        .workspace_root
-        .as_ref()
-        .and_then(|path| {
-            path.file_name()
-                .or_else(|| path.parent()?.file_name())
-                .map(|name| format!("> {} ({})", options.app_name, name.to_string_lossy()))
-        })
-        .unwrap_or_else(|| format!("> {}", options.app_name));
-
-    if let Err(error) = execute!(stderr, SetTitle(&initial_title)) {
-        tracing::debug!(%error, "failed to set initial terminal title");
-    }
+    session.update_terminal_title();
 
     let backend = CrosstermBackend::new(stderr);
     let mut terminal = Terminal::new(backend).context("failed to initialize inline terminal")?;

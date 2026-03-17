@@ -15,7 +15,7 @@ use std::sync::Arc;
 use vtcode_config::loader::SimpleConfigWatcher;
 use vtcode_core::core::agent::features::FeatureSet;
 use vtcode_core::core::interfaces::session::PlanModeEntrySource;
-use vtcode_tui::{
+use vtcode_tui::app::{
     InlineHandle, InlineListItem, InlineListSelection, InlineSession, ListOverlayRequest,
     OverlayRequest, OverlaySubmission,
 };
@@ -199,7 +199,7 @@ struct ExitHeaderDisplay {
     context_window_size: usize,
     mode_label: String,
     tools_count: usize,
-    editing_mode: vtcode_tui::EditingMode,
+    editing_mode: vtcode_tui::app::EditingMode,
     autonomous_mode: bool,
     full_auto: bool,
 }
@@ -208,7 +208,7 @@ fn build_exit_header_context_fast(
     config: &CoreAgentConfig,
     session_bootstrap: &SessionBootstrap,
     display: ExitHeaderDisplay,
-) -> vtcode_tui::InlineHeaderContext {
+) -> vtcode_tui::app::InlineHeaderContext {
     use vtcode_core::config::constants::ui;
 
     let trust_label = match session_bootstrap.acp_workspace_trust {
@@ -222,7 +222,7 @@ fn build_exit_header_context_fast(
         None => "tools policy",
     };
 
-    vtcode_tui::InlineHeaderContext {
+    vtcode_tui::app::InlineHeaderContext {
         app_name: vtcode_core::config::constants::app::DISPLAY_NAME.to_string(),
         provider: format!("{}{}", ui::HEADER_PROVIDER_PREFIX, display.provider_label),
         model: format!("{}{}", ui::HEADER_MODEL_PREFIX, config.model),
@@ -1199,9 +1199,9 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 mode_label,
                 tools_count,
                 editing_mode: if session_stats.is_plan_mode() {
-                    vtcode_tui::EditingMode::Plan
+                    vtcode_tui::app::EditingMode::Plan
                 } else {
-                    vtcode_tui::EditingMode::Edit
+                    vtcode_tui::app::EditingMode::Edit
                 },
                 autonomous_mode: session_stats.is_autonomous_mode(),
                 full_auto,

@@ -20,7 +20,7 @@ use vtcode_core::llm::provider as uni;
 use vtcode_core::llm::providers::ReasoningSegment;
 use vtcode_core::tools::handlers::plan_mode::{PlanLifecyclePhase, persist_plan_draft};
 use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_tui::InlineHandle;
+use vtcode_tui::app::InlineHandle;
 
 use crate::agent::runloop::unified::run_loop_context::RecoveryMode;
 use crate::agent::runloop::unified::state::CtrlCState;
@@ -210,7 +210,7 @@ pub(crate) struct LLMContext<'a> {
 pub(crate) struct UIContext<'a> {
     pub renderer: &'a mut AnsiRenderer,
     pub handle: &'a InlineHandle,
-    pub session: &'a mut vtcode_tui::InlineSession,
+    pub session: &'a mut vtcode_tui::app::InlineSession,
     pub ctrl_c_state: &'a Arc<CtrlCState>,
     pub ctrl_c_notify: &'a Arc<Notify>,
     pub lifecycle_hooks: Option<&'a LifecycleHookEngine>,
@@ -261,7 +261,7 @@ pub(crate) struct TurnProcessingContext<'a> {
     pub context_manager: &'a mut crate::agent::runloop::unified::context_manager::ContextManager,
     pub last_forced_redraw: &'a mut Instant,
     pub input_status_state: &'a mut crate::agent::runloop::unified::status_line::InputStatusState,
-    pub session: &'a mut vtcode_tui::InlineSession,
+    pub session: &'a mut vtcode_tui::app::InlineSession,
     pub lifecycle_hooks: Option<&'a LifecycleHookEngine>,
     pub default_placeholder: &'a Option<String>,
     pub tool_permission_cache: &'a Arc<tokio::sync::RwLock<vtcode_core::acp::ToolPermissionCache>>,

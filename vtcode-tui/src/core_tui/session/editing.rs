@@ -1,6 +1,5 @@
 use super::Session;
 use crate::config::constants::ui;
-use crate::ui::tui::session::slash;
 /// Text editing and cursor movement operations for Session
 ///
 /// This module handles all text manipulation and cursor navigation including:
@@ -12,14 +11,13 @@ use crate::ui::tui::session::slash;
 use unicode_segmentation::UnicodeSegmentation;
 
 impl Session {
-    pub(super) fn refresh_input_edit_state(&mut self) {
+    pub(crate) fn refresh_input_edit_state(&mut self) {
         self.clear_suggested_prompt_state();
         self.input_compact_mode = self.input_compact_placeholder().is_some();
-        slash::update_slash_suggestions(self);
     }
 
     /// Insert a character at the current cursor position
-    pub(super) fn insert_char(&mut self, ch: char) {
+    pub(crate) fn insert_char(&mut self, ch: char) {
         if ch == '\u{7f}' {
             return;
         }
@@ -49,7 +47,7 @@ impl Session {
         self.refresh_input_edit_state();
     }
 
-    pub(super) fn apply_suggested_prompt(&mut self, text: String) {
+    pub(crate) fn apply_suggested_prompt(&mut self, text: String) {
         let trimmed = text.trim();
         if trimmed.is_empty() {
             return;
@@ -66,36 +64,35 @@ impl Session {
             .set_cursor(self.input_manager.content().len());
         self.suggested_prompt_state.active = true;
         self.input_compact_mode = self.input_compact_placeholder().is_some();
-        slash::update_slash_suggestions(self);
         self.mark_dirty();
     }
 
     /// Calculate remaining newline capacity in the input field
-    pub(super) fn remaining_newline_capacity(&self) -> usize {
+    pub(crate) fn remaining_newline_capacity(&self) -> usize {
         ui::INLINE_INPUT_MAX_LINES
             .saturating_sub(1)
             .saturating_sub(self.input_manager.content().matches('\n').count())
     }
 
     /// Check if a newline can be inserted
-    pub(super) fn can_insert_newline(&self) -> bool {
+    pub(crate) fn can_insert_newline(&self) -> bool {
         self.remaining_newline_capacity() > 0
     }
 
     /// Delete the character before the cursor (backspace)
-    pub(super) fn delete_char(&mut self) {
+    pub(crate) fn delete_char(&mut self) {
         self.input_manager.backspace();
         self.refresh_input_edit_state();
     }
 
     /// Delete the character at the cursor (forward delete)
-    pub(super) fn delete_char_forward(&mut self) {
+    pub(crate) fn delete_char_forward(&mut self) {
         self.input_manager.delete();
         self.refresh_input_edit_state();
     }
 
     /// Delete the word before the cursor
-    pub(super) fn delete_word_backward(&mut self) {
+    pub(crate) fn delete_word_backward(&mut self) {
         if self.input_manager.delete_selection() {
             self.refresh_input_edit_state();
             return;
@@ -156,12 +153,12 @@ impl Session {
     }
 
     #[allow(dead_code)]
-    pub(super) fn delete_word_forward(&mut self) {
+    pub(crate) fn delete_word_forward(&mut self) {
         self.input_manager.delete_word_forward();
         self.refresh_input_edit_state();
     }
     /// Delete from cursor to start of current line (Command+Backspace on macOS)
-    pub(super) fn delete_to_start_of_line(&mut self) {
+    pub(crate) fn delete_to_start_of_line(&mut self) {
         if self.input_manager.delete_selection() {
             self.refresh_input_edit_state();
             return;
@@ -186,7 +183,7 @@ impl Session {
     }
 
     /// Delete from cursor to end of current line (Command+Delete on macOS)
-    pub(super) fn delete_to_end_of_line(&mut self) {
+    pub(crate) fn delete_to_end_of_line(&mut self) {
         if self.input_manager.delete_selection() {
             self.refresh_input_edit_state();
             return;
@@ -210,18 +207,16 @@ impl Session {
     }
 
     /// Move cursor left by one character
-    pub(super) fn move_left(&mut self) {
+    pub(crate) fn move_left(&mut self) {
         self.input_manager.move_cursor_left();
-        slash::update_slash_suggestions(self);
     }
 
     /// Move cursor right by one character
-    pub(super) fn move_right(&mut self) {
+    pub(crate) fn move_right(&mut self) {
         self.input_manager.move_cursor_right();
-        slash::update_slash_suggestions(self);
     }
 
-    pub(super) fn select_left(&mut self) {
+    pub(crate) fn select_left(&mut self) {
         let cursor = self.input_manager.cursor();
         if cursor == 0 {
             self.input_manager.set_cursor_with_selection(0);
@@ -234,10 +229,9 @@ impl Session {
             pos -= 1;
         }
         self.input_manager.set_cursor_with_selection(pos);
-        slash::update_slash_suggestions(self);
     }
 
-    pub(super) fn select_right(&mut self) {
+    pub(crate) fn select_right(&mut self) {
         let cursor = self.input_manager.cursor();
         let content = self.input_manager.content();
         if cursor >= content.len() {
@@ -250,11 +244,10 @@ impl Session {
             pos += 1;
         }
         self.input_manager.set_cursor_with_selection(pos);
-        slash::update_slash_suggestions(self);
     }
 
     /// Move cursor left to the start of the previous word
-    pub(super) fn move_left_word(&mut self) {
+    pub(crate) fn move_left_word(&mut self) {
         if self.input_manager.cursor() == 0 {
             return;
         }
@@ -297,7 +290,7 @@ impl Session {
         }
     }
     /// Move cursor right to the start of the next word
-    pub(super) fn move_right_word(&mut self) {
+    pub(crate) fn move_right_word(&mut self) {
         if self.input_manager.cursor() >= self.input_manager.content().len() {
             return;
         }
@@ -354,26 +347,26 @@ impl Session {
         }
     }
     /// Move cursor to the start of the line
-    pub(super) fn move_to_start(&mut self) {
+    pub(crate) fn move_to_start(&mut self) {
         self.input_manager.move_cursor_to_start();
     }
 
     /// Move cursor to the end of the line
-    pub(super) fn move_to_end(&mut self) {
+    pub(crate) fn move_to_end(&mut self) {
         self.input_manager.move_cursor_to_end();
     }
 
-    pub(super) fn select_to_start(&mut self) {
+    pub(crate) fn select_to_start(&mut self) {
         self.input_manager.set_cursor_with_selection(0);
     }
 
-    pub(super) fn select_to_end(&mut self) {
+    pub(crate) fn select_to_end(&mut self) {
         self.input_manager
             .set_cursor_with_selection(self.input_manager.content().len());
     }
 
     /// Remember submitted input in history
-    pub(super) fn remember_submitted_input(
+    pub(crate) fn remember_submitted_input(
         &mut self,
         submitted: super::input_manager::InputHistoryEntry,
     ) {
@@ -382,7 +375,7 @@ impl Session {
 
     /// Navigate to previous history entry (disabled to prevent cursor flickering)
     #[allow(dead_code)]
-    pub(super) fn navigate_history_previous(&mut self) -> bool {
+    pub(crate) fn navigate_history_previous(&mut self) -> bool {
         if let Some(previous) = self.input_manager.go_to_previous_history() {
             self.input_manager.apply_history_entry(previous);
             true
@@ -393,7 +386,7 @@ impl Session {
 
     /// Navigate to next history entry (disabled to prevent cursor flickering)
     #[allow(dead_code)]
-    pub(super) fn navigate_history_next(&mut self) -> bool {
+    pub(crate) fn navigate_history_next(&mut self) -> bool {
         if let Some(next) = self.input_manager.go_to_next_history() {
             self.input_manager.apply_history_entry(next);
             true

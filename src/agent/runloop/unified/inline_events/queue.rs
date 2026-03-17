@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use vtcode_tui::InlineHandle;
+use vtcode_tui::app::InlineHandle;
 
 pub(crate) struct InlineQueueState<'a> {
     handle: &'a InlineHandle,

@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use vtcode_core::core::interfaces::session::PlanModeEntrySource;
-use vtcode_tui::EditingMode;
+use vtcode_tui::app::EditingMode;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum ModelPickerTarget {

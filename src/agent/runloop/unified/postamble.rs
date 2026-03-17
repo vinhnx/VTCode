@@ -4,7 +4,7 @@ use vtcode_commons::ansi_codes::{BOLD, DIM, RESET, fg_256};
 use vtcode_commons::color256_theme::rgb_to_ansi256_for_theme;
 use vtcode_core::config::constants::ui;
 use vtcode_core::core::telemetry::TelemetryStats;
-use vtcode_tui::InlineHeaderContext;
+use vtcode_tui::app::InlineHeaderContext;
 use vtcode_tui::ui::theme;
 
 pub(crate) struct ExitSummaryData {

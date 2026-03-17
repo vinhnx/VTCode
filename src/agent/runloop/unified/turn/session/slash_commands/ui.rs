@@ -3,7 +3,7 @@ use vtcode_core::core::threads::{SessionQueryScope, list_recent_sessions_in_scop
 use vtcode_core::ui::inline_theme_from_core_styles;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::MessageStyle;
-use vtcode_tui::{InlineListItem, InlineListSelection, OverlaySubmission};
+use vtcode_tui::app::{InlineListItem, InlineListSelection, OverlaySubmission};
 
 use crate::agent::runloop::model_picker::{ModelPickerStart, ModelPickerState};
 use crate::agent::runloop::slash_commands::{SessionPaletteMode, StatuslineTargetMode};

@@ -1,26 +1,12 @@
 use super::*;
 use ratatui::crossterm::event::{KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind};
-use std::sync::Arc;
 
-use super::super::types::{
-    ContentPart, DiffPreviewMode, OverlayEvent, OverlaySelectionChange, OverlaySubmission,
-};
-use crate::ui::tui::InlineSegment;
+use super::super::types::{OverlayEvent, OverlaySubmission};
 use crate::ui::tui::session::modal::{ModalKeyModifiers, ModalListKeyResult};
-
-fn input_history_entries(session: &Session) -> Vec<(String, Vec<ContentPart>)> {
-    session
-        .input_manager
-        .history()
-        .iter()
-        .map(|entry| (entry.content().to_string(), entry.attachment_elements()))
-        .collect()
-}
 
 pub(super) fn handle_paste(session: &mut Session, content: &str) {
     if session.input_enabled {
         session.insert_paste_text(content);
-        session.check_file_reference_trigger();
         session.mark_dirty();
     } else if let Some(modal) = session.modal_state_mut()
         && let (Some(list), Some(search)) = (modal.list.as_mut(), modal.search.as_mut())
@@ -58,24 +44,12 @@ pub(super) fn handle_event(
             kind, column, row, ..
         }) => match kind {
             MouseEventKind::ScrollDown => {
-                // Check if history picker is active - delegate scrolling to picker
-                if session.history_picker_state.active {
-                    session.history_picker_state.move_down();
-                    session.mark_dirty();
-                } else {
-                    session.scroll_line_down();
-                    session.mark_dirty();
-                }
+                session.scroll_line_down();
+                session.mark_dirty();
             }
             MouseEventKind::ScrollUp => {
-                // Check if history picker is active - delegate scrolling to picker
-                if session.history_picker_state.active {
-                    session.history_picker_state.move_up();
-                    session.mark_dirty();
-                } else {
-                    session.scroll_line_up();
-                    session.mark_dirty();
-                }
+                session.scroll_line_up();
+                session.mark_dirty();
             }
             MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
                 session.mouse_selection.start_selection(column, row);
@@ -190,48 +164,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         }
     }
 
-    if session.inline_lists_visible() && session.handle_file_palette_key(&key) {
-        return None;
-    }
-
-    if slash::try_handle_slash_navigation(session, &key, has_control, has_alt, has_command) {
-        return None;
-    }
-
-    if let Some(event) = handle_diff_preview_key(session, &key) {
-        return Some(event);
-    }
-
-    // Handle history picker (Ctrl+R) - Visual fuzzy search for command history
-    if has_control
-        && matches!(key.code, KeyCode::Char('r') | KeyCode::Char('R'))
-        && !session.history_picker_state.active
-    {
-        open_history_picker(session);
-        return None;
-    }
-
-    // Handle history picker if active
-    if session.inline_lists_visible() && session.history_picker_state.active {
-        let history = input_history_entries(session);
-        let handled = history_picker::handle_history_picker_key(
-            &key,
-            &mut session.history_picker_state,
-            &mut session.input_manager,
-            &history,
-        );
-        if handled {
-            session.mark_dirty();
-            return None;
-        }
-    }
-
     if session.handle_vim_key(&key) {
-        return None;
-    }
-
-    if is_inline_lists_toggle_shortcut(&key, has_control, has_alt, has_command) {
-        session.toggle_inline_lists_visibility();
         return None;
     }
 
@@ -326,7 +259,6 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         KeyCode::Char('w') | KeyCode::Char('W') if has_control && !has_command && !has_alt => {
             if session.input_enabled {
                 session.delete_word_backward();
-                session.check_file_reference_trigger();
                 session.mark_dirty();
             }
             None
@@ -334,7 +266,6 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         KeyCode::Char('u') | KeyCode::Char('U') if has_control && !has_command && !has_alt => {
             if session.input_enabled {
                 session.delete_to_start_of_line();
-                session.check_file_reference_trigger();
                 session.mark_dirty();
             }
             None
@@ -342,7 +273,6 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         KeyCode::Char('k') | KeyCode::Char('K') if has_control && !has_command && !has_alt => {
             if session.input_enabled {
                 session.delete_to_end_of_line();
-                session.check_file_reference_trigger();
                 session.mark_dirty();
             }
             None
@@ -411,7 +341,6 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                     session.input_manager.set_content(latest);
                     session.input_compact_mode = session.input_compact_placeholder().is_some();
                     session.scroll_manager.set_offset(0);
-                    slash::update_slash_suggestions(session);
                 }
                 session.mark_dirty();
                 Some(InlineEvent::EditQueue)
@@ -435,26 +364,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
 
-            if session.file_palette_active {
-                if let Some(palette) = session.file_palette.as_ref()
-                    && let Some(entry) = palette.get_selected()
-                {
-                    let file_path = entry.path.clone();
-                    session.insert_file_reference(&file_path);
-                    session.close_file_palette();
-                    session.mark_dirty();
-                    return Some(InlineEvent::FileSelected(file_path));
-                }
-                return None;
-            }
-
-            if !has_control && let Some(event) = maybe_handle_busy_steering_command(session) {
-                return Some(event);
-            }
-
-            if !has_control && handle_running_slash_command_block(session) {
-                return None;
-            }
+            // No slash command palette in core session.
 
             if !has_control
                 && !has_shift
@@ -503,16 +413,10 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
 
-            let should_submit_now = slash::should_submit_immediately_from_palette(session);
             let Some(submitted) = take_submitted_input(session) else {
                 session.mark_dirty();
                 return None;
             };
-
-            if should_submit_now {
-                session.mark_dirty();
-                return Some(InlineEvent::Submit(submitted));
-            }
 
             // Note: The thinking spinner message is no longer added here.
             // Instead, it's added in session_loop.rs after the user message is displayed,
@@ -524,10 +428,6 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         }
         KeyCode::Tab => {
             if !session.input_enabled {
-                return None;
-            }
-
-            if handle_running_slash_command_block(session) {
                 return None;
             }
 
@@ -548,7 +448,6 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 } else {
                     session.delete_char();
                 }
-                session.check_file_reference_trigger();
                 session.mark_dirty();
             }
             None
@@ -562,7 +461,6 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 } else {
                     session.delete_char_forward();
                 }
-                session.check_file_reference_trigger();
                 session.mark_dirty();
             }
             None
@@ -700,45 +598,12 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
 
             if !has_control {
                 session.insert_char(ch);
-                session.check_file_reference_trigger();
                 session.mark_dirty();
             }
             None
         }
         _ => None,
     }
-}
-
-pub(super) fn open_history_picker(session: &mut Session) {
-    if session.history_picker_state.active {
-        return;
-    }
-
-    session.ensure_inline_lists_visible_for_trigger();
-    session.history_picker_state.open(&session.input_manager);
-    let history = input_history_entries(session);
-    session.history_picker_state.update_search(&history);
-    session.mark_dirty();
-}
-
-fn is_inline_lists_toggle_shortcut(
-    key: &KeyEvent,
-    has_control: bool,
-    has_alt: bool,
-    has_command: bool,
-) -> bool {
-    if !has_control || has_alt || has_command {
-        return false;
-    }
-
-    matches!(
-        key.code,
-        KeyCode::Char('i')
-            | KeyCode::Char('I')
-            | KeyCode::Char('/')
-            | KeyCode::Char('?')
-            | KeyCode::Char('\u{1f}')
-    )
 }
 
 fn quick_help_lines() -> Vec<String> {
@@ -775,60 +640,6 @@ fn clear_submitted_input(session: &mut Session) {
     session.clear_suggested_prompt_state();
     session.input_compact_mode = false;
     session.scroll_manager.set_offset(0);
-    slash::update_slash_suggestions(session);
-}
-
-fn handle_running_slash_command_block(session: &mut Session) -> bool {
-    if !session.is_running_activity() {
-        return false;
-    }
-
-    let Some(command_name) = extract_slash_command_name(session.input_manager.content()) else {
-        return false;
-    };
-
-    let message = format!(
-        "'/{}' is disabled while a task is in progress. Please wait for the current task to complete before using this command.",
-        command_name
-    );
-    session.push_line(
-        InlineMessageKind::Warning,
-        vec![InlineSegment {
-            text: message,
-            style: Arc::new(InlineTextStyle::default()),
-        }],
-    );
-    session.transcript_content_changed = true;
-    session.mark_dirty();
-    true
-}
-
-fn maybe_handle_busy_steering_command(session: &mut Session) -> Option<InlineEvent> {
-    if !session.is_running_activity() {
-        return None;
-    }
-
-    let event = match extract_slash_command_name(session.input_manager.content()) {
-        Some("stop") => InlineEvent::Interrupt,
-        Some("pause") => InlineEvent::Pause,
-        Some("resume") => InlineEvent::Resume,
-        _ => return None,
-    };
-
-    clear_submitted_input(session);
-    session.mark_dirty();
-    Some(event)
-}
-
-fn extract_slash_command_name(input: &str) -> Option<&str> {
-    let trimmed = input.trim_start();
-    let command_input = trimmed.strip_prefix('/')?;
-    let command = command_input.split_whitespace().next()?;
-    if command.is_empty() {
-        None
-    } else {
-        Some(command)
-    }
 }
 
 /// Emits an InlineEvent through the event channel and callback
@@ -868,93 +679,4 @@ pub(super) fn handle_scroll_up(
     session.scroll_line_up();
     session.mark_dirty();
     emit_inline_event(&InlineEvent::ScrollLineUp, events, callback);
-}
-
-#[allow(dead_code)]
-pub(super) fn handle_diff_preview_key(
-    session: &mut Session,
-    key: &KeyEvent,
-) -> Option<InlineEvent> {
-    let mode = session.diff_preview_state()?.mode;
-
-    match key.code {
-        KeyCode::Tab => {
-            let diff_state = session.diff_preview_state_mut()?;
-            if diff_state.current_hunk + 1 < diff_state.hunk_count() {
-                diff_state.current_hunk += 1;
-            }
-            session.mark_dirty();
-            None
-        }
-        KeyCode::BackTab => {
-            let diff_state = session.diff_preview_state_mut()?;
-            if diff_state.current_hunk > 0 {
-                diff_state.current_hunk -= 1;
-            }
-            session.mark_dirty();
-            None
-        }
-        KeyCode::Enter => {
-            session.close_overlay();
-            session.mark_dirty();
-            Some(InlineEvent::Overlay(OverlayEvent::Submitted(match mode {
-                DiffPreviewMode::EditApproval => OverlaySubmission::DiffApply,
-                DiffPreviewMode::FileConflict => OverlaySubmission::DiffProceed,
-            })))
-        }
-        KeyCode::Char('r') | KeyCode::Char('R')
-            if matches!(mode, DiffPreviewMode::FileConflict) =>
-        {
-            session.close_overlay();
-            session.mark_dirty();
-            Some(InlineEvent::Overlay(OverlayEvent::Submitted(
-                OverlaySubmission::DiffReload,
-            )))
-        }
-        KeyCode::Esc => {
-            session.close_overlay();
-            session.mark_dirty();
-            Some(InlineEvent::Overlay(OverlayEvent::Submitted(match mode {
-                DiffPreviewMode::EditApproval => OverlaySubmission::DiffReject,
-                DiffPreviewMode::FileConflict => OverlaySubmission::DiffAbort,
-            })))
-        }
-        KeyCode::Char('1') if matches!(mode, DiffPreviewMode::EditApproval) => {
-            let diff_state = session.diff_preview_state_mut()?;
-            diff_state.trust_mode = crate::ui::tui::types::TrustMode::Once;
-            let mode = diff_state.trust_mode;
-            session.mark_dirty();
-            Some(InlineEvent::Overlay(OverlayEvent::SelectionChanged(
-                OverlaySelectionChange::DiffTrustMode { mode },
-            )))
-        }
-        KeyCode::Char('2') if matches!(mode, DiffPreviewMode::EditApproval) => {
-            let diff_state = session.diff_preview_state_mut()?;
-            diff_state.trust_mode = crate::ui::tui::types::TrustMode::Session;
-            let mode = diff_state.trust_mode;
-            session.mark_dirty();
-            Some(InlineEvent::Overlay(OverlayEvent::SelectionChanged(
-                OverlaySelectionChange::DiffTrustMode { mode },
-            )))
-        }
-        KeyCode::Char('3') if matches!(mode, DiffPreviewMode::EditApproval) => {
-            let diff_state = session.diff_preview_state_mut()?;
-            diff_state.trust_mode = crate::ui::tui::types::TrustMode::Always;
-            let mode = diff_state.trust_mode;
-            session.mark_dirty();
-            Some(InlineEvent::Overlay(OverlayEvent::SelectionChanged(
-                OverlaySelectionChange::DiffTrustMode { mode },
-            )))
-        }
-        KeyCode::Char('4') if matches!(mode, DiffPreviewMode::EditApproval) => {
-            let diff_state = session.diff_preview_state_mut()?;
-            diff_state.trust_mode = crate::ui::tui::types::TrustMode::AutoTrust;
-            let mode = diff_state.trust_mode;
-            session.mark_dirty();
-            Some(InlineEvent::Overlay(OverlayEvent::SelectionChanged(
-                OverlaySelectionChange::DiffTrustMode { mode },
-            )))
-        }
-        _ => None,
-    }
 }

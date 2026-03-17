@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use vtcode_core::utils::ansi::MessageStyle;
-use vtcode_tui::InlineHandle;
+use vtcode_tui::app::InlineHandle;
 
 use vtcode_core::hooks::SessionEndReason;
 

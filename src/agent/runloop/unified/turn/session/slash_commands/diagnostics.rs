@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use vtcode_core::utils::ansi::MessageStyle;
-use vtcode_tui::{InlineListItem, InlineListSelection};
+use vtcode_tui::app::{InlineListItem, InlineListSelection};
 
 use crate::agent::runloop::unified::diagnostics::{DoctorOptions, run_doctor_diagnostics};
 use crate::agent::runloop::unified::ui_interaction::display_session_status;

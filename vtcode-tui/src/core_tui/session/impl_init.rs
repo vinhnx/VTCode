@@ -37,7 +37,6 @@ impl Session {
             view_rows,
             true,
             None,
-            Vec::new(),
             "Agent TUI".to_string(),
         )
     }
@@ -48,18 +47,9 @@ impl Session {
         view_rows: u16,
         show_logs: bool,
         appearance: Option<AppearanceConfig>,
-        slash_commands: Vec<crate::ui::tui::types::SlashCommandItem>,
         app_name: String,
     ) -> Self {
-        Self::new_with_options(
-            theme,
-            placeholder,
-            view_rows,
-            show_logs,
-            appearance,
-            slash_commands,
-            app_name,
-        )
+        Self::new_with_options(theme, placeholder, view_rows, show_logs, appearance, app_name)
     }
 
     fn new_with_options(
@@ -68,7 +58,6 @@ impl Session {
         view_rows: u16,
         show_logs: bool,
         appearance: Option<AppearanceConfig>,
-        slash_commands: Vec<crate::ui::tui::types::SlashCommandItem>,
         app_name: String,
     ) -> Self {
         let resolved_rows = view_rows.max(2);
@@ -104,7 +93,6 @@ impl Session {
             input_compact_mode: false,
 
             // --- UI State ---
-            slash_palette: SlashPalette::with_commands(slash_commands),
             navigation_state: ListState::default(), // Kept for backward compatibility
             input_enabled: true,
             cursor_visible: true,
@@ -149,12 +137,7 @@ impl Session {
             first_dirty_line: None,
             in_tool_code_fence: false,
 
-            // --- Palette Management ---
-            file_palette: None,
-            file_palette_active: false,
-            inline_lists_visible: true,
-            show_task_panel: false,
-            task_panel_lines: Vec::new(),
+            // --- Prompt Suggestions ---
             suggested_prompt_state: SuggestedPromptState::default(),
 
             // --- Thinking Indicator ---
@@ -163,9 +146,6 @@ impl Session {
 
             // --- Reverse Search ---
             reverse_search_state: reverse_search::ReverseSearchState::new(),
-
-            // --- History Picker (Ctrl+R fuzzy search) ---
-            history_picker_state: HistoryPickerState::new(),
 
             // --- PTY Session Management ---
             active_pty_sessions: None,

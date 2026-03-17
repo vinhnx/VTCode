@@ -4,7 +4,7 @@ use anyhow::Result;
 use tokio::sync::Notify;
 use tokio::task;
 use vtcode_core::core::interfaces::ui::UiSession;
-use vtcode_tui::{InlineEvent, InlineHandle, OverlayEvent, OverlayRequest, OverlaySubmission};
+use vtcode_tui::app::{InlineEvent, InlineHandle, OverlayEvent, OverlayRequest, OverlaySubmission};
 
 use super::state::{CtrlCSignal, CtrlCState};
 use super::stop_requests::request_local_stop;

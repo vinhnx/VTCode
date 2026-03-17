@@ -12,7 +12,7 @@ mod tests {
     use std::time::Duration;
     use tokio::sync::oneshot;
     use tokio::time::timeout;
-    use vtcode_tui::InlineSegment;
+    use vtcode_tui::app::InlineSegment;
 
     use super::runtime::PtyStreamRuntime;
     use super::segments::{PtyLineStyles, line_to_segments, tokenize_preserve_whitespace};

@@ -8,7 +8,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider::{self as uni};
 use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_tui::{InlineHandle, InlineHeaderContext, InlineSession};
+use vtcode_tui::app::{InlineHandle, InlineHeaderContext, InlineSession};
 
 use crate::agent::runloop::model_picker::ModelPickerState;
 use crate::agent::runloop::unified::palettes::ActivePalette;

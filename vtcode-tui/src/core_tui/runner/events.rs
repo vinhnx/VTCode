@@ -7,7 +7,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, error::TryRecvError}
 use tokio_util::sync::CancellationToken;
 
 use crate::config::constants::ui;
-use crate::ui::tui::session::Session;
+use super::TuiSessionDriver;
 
 #[derive(Debug, Clone)]
 pub(super) enum TerminalEvent {
@@ -125,7 +125,7 @@ impl ScrollAccumulator {
     }
 
     /// Apply accumulated scroll to the session using the coalesced scroll method
-    pub(super) fn apply(&self, session: &mut Session) {
+    pub(super) fn apply<S: TuiSessionDriver>(&self, session: &mut S) {
         if self.has_scroll() {
             session.apply_coalesced_scroll(self.line_delta, self.page_delta);
             session.mark_dirty();

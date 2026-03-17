@@ -1,6 +1,6 @@
 use anyhow::Result;
 use vtcode_core::utils::ansi::MessageStyle;
-use vtcode_tui::{InlineListItem, InlineListSelection};
+use vtcode_tui::app::{InlineListItem, InlineListSelection};
 
 use crate::agent::runloop::slash_commands::McpCommandAction;
 use crate::agent::runloop::unified::async_mcp_manager::McpInitStatus;

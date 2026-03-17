@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use vtcode_tui::host::{
     HostAdapter, HostSessionDefaults, NotificationProvider, ThemeProvider, WorkspaceInfoProvider,
 };
-use vtcode_tui::{InlineTheme, SessionSurface, spawn_session_with_host};
+use vtcode_tui::app::{InlineTheme, SessionSurface, spawn_session_with_host};
 
 struct DemoHost;
 

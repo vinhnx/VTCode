@@ -8,7 +8,7 @@ use vtcode_core::tools::tool_intent;
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_core::utils::transcript;
-use vtcode_tui::{InlineHandle, InlineMessageKind, InlineSegment, InlineTextStyle};
+use vtcode_tui::app::{InlineHandle, InlineMessageKind, InlineSegment, InlineTextStyle};
 
 use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
 use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
@@ -424,7 +424,7 @@ mod tests {
     use vtcode_core::tools::result_cache::{ToolCacheKey, ToolResultCache};
     use vtcode_core::ui::inline_theme_from_core_styles;
     use vtcode_core::ui::theme;
-    use vtcode_tui::{InlineCommand, InlineHandle, SessionOptions, spawn_session_with_options};
+    use vtcode_tui::app::{InlineCommand, InlineHandle, SessionOptions, spawn_session_with_options};
 
     fn build_harness_state() -> crate::agent::runloop::unified::run_loop_context::HarnessTurnState {
         crate::agent::runloop::unified::run_loop_context::HarnessTurnState::new(

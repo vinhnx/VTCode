@@ -9,7 +9,7 @@ use crate::config::constants::ui;
 // if needed for future use.
 
 #[allow(dead_code)]
-pub(super) fn render_message_spans(
+pub(crate) fn render_message_spans(
     line: &MessageLine,
     theme: &InlineTheme,
     labels: &MessageLabels,
@@ -81,7 +81,7 @@ pub(super) fn render_message_spans(
 }
 
 #[allow(dead_code)]
-fn agent_prefix_spans(
+pub(crate) fn agent_prefix_spans(
     line: &MessageLine,
     theme: &InlineTheme,
     labels: &MessageLabels,
@@ -104,15 +104,14 @@ fn agent_prefix_spans(
     if let Some(label) = &labels.agent
         && !label.is_empty()
     {
-        let label_style = ratatui_style_from_inline(&prefix_style_fn(line), theme.foreground);
-        spans.push(Span::styled(label.clone(), label_style));
+        spans.push(Span::styled(label.clone(), prefix_style));
     }
 
     spans
 }
 
 #[allow(dead_code)]
-fn render_tool_segments(line: &MessageLine, theme: &InlineTheme) -> Vec<Span<'static>> {
+pub(crate) fn render_tool_segments(line: &MessageLine, theme: &InlineTheme) -> Vec<Span<'static>> {
     // Render tool output without header decorations - just display segments directly
     let mut spans = Vec::with_capacity(line.segments.len());
     for segment in &line.segments {

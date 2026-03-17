@@ -5,7 +5,7 @@ use vtcode_core::llm::provider as uni;
 use vtcode_core::skills::loader::EnhancedSkillLoader;
 use vtcode_core::tools::handlers::ToolModelCapabilities;
 use vtcode_core::utils::ansi::MessageStyle;
-use vtcode_tui::{
+use vtcode_tui::app::{
     InlineListItem, InlineListSearchConfig, InlineListSelection, WizardModalMode, WizardStep,
 };
 

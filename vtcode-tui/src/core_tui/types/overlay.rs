@@ -1,4 +1,3 @@
-use super::diff::{DiffHunk, DiffPreviewMode, TrustMode};
 use super::selection::{
     InlineListItem, InlineListSearchConfig, InlineListSelection, SecurePromptConfig,
     WizardModalMode, WizardStep,
@@ -32,21 +31,10 @@ pub struct WizardOverlayRequest {
 }
 
 #[derive(Clone, Debug)]
-pub struct DiffOverlayRequest {
-    pub file_path: String,
-    pub before: String,
-    pub after: String,
-    pub hunks: Vec<DiffHunk>,
-    pub current_hunk: usize,
-    pub mode: DiffPreviewMode,
-}
-
-#[derive(Clone, Debug)]
 pub enum OverlayRequest {
     Modal(ModalOverlayRequest),
     List(ListOverlayRequest),
     Wizard(WizardOverlayRequest),
-    Diff(DiffOverlayRequest),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -78,17 +66,11 @@ pub enum OverlayEvent {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum OverlaySelectionChange {
     List(InlineListSelection),
-    DiffTrustMode { mode: TrustMode },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum OverlaySubmission {
     Selection(InlineListSelection),
     Wizard(Vec<InlineListSelection>),
-    DiffApply,
-    DiffReject,
-    DiffProceed,
-    DiffReload,
-    DiffAbort,
     Hotkey(OverlayHotkeyAction),
 }

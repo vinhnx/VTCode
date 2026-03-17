@@ -11,7 +11,7 @@ use vtcode_core::ui::set_tui_mode;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::{SessionArchive, SessionMessage};
 use vtcode_core::utils::transcript;
-use vtcode_tui::InlineHandle;
+use vtcode_tui::app::InlineHandle;
 
 use crate::agent::runloop::unified::async_mcp_manager::AsyncMcpManager;
 use crate::agent::runloop::unified::state::SessionStats;

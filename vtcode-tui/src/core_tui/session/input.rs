@@ -194,7 +194,7 @@ const SHELL_MODE_BORDER_TITLE: &str = " ! Shell mode ";
 const SHELL_MODE_STATUS_HINT: &str = "Shell mode (!): direct command execution";
 
 impl Session {
-    pub(super) fn render_input(&mut self, frame: &mut Frame<'_>, area: Rect) {
+    pub(crate) fn render_input(&mut self, frame: &mut Frame<'_>, area: Rect) {
         if area.height == 0 {
             self.set_input_area(None);
             return;
@@ -648,7 +648,7 @@ impl Session {
         ))
     }
 
-    pub(super) fn input_compact_placeholder(&self) -> Option<String> {
+    pub(crate) fn input_compact_placeholder(&self) -> Option<String> {
         let content = self.input_manager.content();
         let trimmed = content.trim();
         let attachment_count = self.input_manager.attachments().len();

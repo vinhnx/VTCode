@@ -4,7 +4,7 @@ use vtcode_core::core::interfaces::session::PlanModeEntrySource;
 use vtcode_core::tools::handlers::plan_mode::PlanLifecyclePhase;
 use vtcode_core::tools::registry::ToolRegistry;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_tui::{EditingMode, InlineHandle};
+use vtcode_tui::app::{EditingMode, InlineHandle};
 
 pub(crate) const PLAN_MODE_REVIEW_AND_EXECUTE_HINT: &str = "Plan Mode: review the plan, then type `implement` (or `yes`/`continue`/`go`/`start`) to execute.";
 pub(crate) const PLAN_MODE_SHORT_CONFIRMATION_HINT: &str = "Plan Mode: type `implement` (or `yes`/`continue`/`go`/`start`) to execute, or say `stay in plan mode` to revise.";

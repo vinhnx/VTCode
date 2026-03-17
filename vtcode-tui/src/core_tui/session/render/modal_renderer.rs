@@ -1,5 +1,6 @@
-use super::spans::invalidate_scroll_metrics;
 use super::*;
+use crate::config::constants::ui;
+use crate::core_tui::types::InlineMessageKind;
 use crate::ui::tui::session::modal::{
     ModalBodyContext, ModalListState, ModalRenderStyles, render_modal_body,
     render_wizard_modal_body,
@@ -248,21 +249,24 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
 }
 
 pub(crate) fn modal_render_styles(session: &Session) -> ModalRenderStyles {
+    let default_style = session.styles.default_style();
+    let accent_style = session.styles.accent_style();
+    let border_style = session.styles.border_style();
     ModalRenderStyles {
-        border: border_style(session),
+        border: border_style,
         highlight: modal_list_highlight_style(session),
-        badge: border_style(session).add_modifier(Modifier::DIM | Modifier::BOLD),
-        header: accent_style(session).add_modifier(Modifier::BOLD),
-        selectable: default_style(session),
-        detail: default_style(session).add_modifier(Modifier::DIM),
-        search_match: accent_style(session).add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
-        title: accent_style(session).add_modifier(Modifier::BOLD),
-        divider: default_style(session).add_modifier(Modifier::DIM | Modifier::ITALIC),
-        instruction_border: border_style(session),
+        badge: border_style.add_modifier(Modifier::DIM | Modifier::BOLD),
+        header: accent_style.add_modifier(Modifier::BOLD),
+        selectable: default_style,
+        detail: default_style.add_modifier(Modifier::DIM),
+        search_match: accent_style.add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+        title: accent_style.add_modifier(Modifier::BOLD),
+        divider: default_style.add_modifier(Modifier::DIM | Modifier::ITALIC),
+        instruction_border: border_style,
         instruction_title: session.section_title_style(),
-        instruction_bullet: accent_style(session).add_modifier(Modifier::BOLD),
-        instruction_body: default_style(session),
-        hint: default_style(session).add_modifier(Modifier::DIM | Modifier::ITALIC),
+        instruction_bullet: accent_style.add_modifier(Modifier::BOLD),
+        instruction_body: default_style,
+        hint: default_style.add_modifier(Modifier::DIM | Modifier::ITALIC),
     }
 }
 
@@ -300,7 +304,7 @@ fn remove_trailing_empty_tool_line(session: &mut Session) {
         .unwrap_or(false);
     if should_remove {
         session.lines.pop();
-        invalidate_scroll_metrics(session);
+        session.invalidate_scroll_metrics();
     }
 }
 
@@ -325,7 +329,7 @@ mod tests {
 
         assert_eq!(
             styles.title,
-            accent_style(&session).add_modifier(Modifier::BOLD)
+            session.styles.accent_style().add_modifier(Modifier::BOLD)
         );
     }
 }
