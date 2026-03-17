@@ -645,6 +645,49 @@ fn test_markdown_http_link_shows_destination() {
 }
 
 #[test]
+fn test_plain_file_paths_get_link_targets() {
+    let markdown = "See src/main.rs and README.md.";
+    let lines = render_markdown(markdown);
+    let mut targets = Vec::new();
+    for line in &lines {
+        for seg in &line.segments {
+            if let Some(target) = &seg.link_target {
+                targets.push((seg.text.clone(), target.clone()));
+            }
+        }
+    }
+
+    assert!(targets
+        .iter()
+        .any(|(text, target)| text == "src/main.rs" && target == "src/main.rs"));
+    assert!(targets
+        .iter()
+        .any(|(text, target)| text == "README.md" && target == "README.md"));
+    assert!(!targets.iter().any(|(text, _)| text.ends_with('.')));
+}
+
+#[test]
+fn test_plain_urls_are_not_file_links() {
+    let markdown = "See https://example.com/docs for info.";
+    let lines = render_markdown(markdown);
+    let has_link_target = lines
+        .iter()
+        .flat_map(|line| line.segments.iter())
+        .any(|seg| seg.link_target.is_some());
+    assert!(!has_link_target);
+}
+
+#[test]
+fn test_quoted_file_path_with_spaces_gets_link_target() {
+    let markdown = "Open \"docs/My Notes.md\" for info.";
+    let lines = render_markdown(markdown);
+    let has_link_target = lines.iter().flat_map(|line| line.segments.iter()).any(|seg| {
+        seg.text == "docs/My Notes.md" && seg.link_target.as_deref() == Some("docs/My Notes.md")
+    });
+    assert!(has_link_target);
+}
+
+#[test]
 fn test_load_location_suffix_regexes() {
     let _colon = &*COLON_LOCATION_SUFFIX_RE;
     let _hash = &*HASH_LOCATION_SUFFIX_RE;

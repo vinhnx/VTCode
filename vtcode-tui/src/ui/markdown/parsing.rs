@@ -8,7 +8,33 @@ use super::{LIST_INDENT_WIDTH, MarkdownLine};
 use crate::ui::theme::ThemeStyles;
 use anstyle::Style;
 use pulldown_cmark::{CodeBlockKind, HeadingLevel, Tag, TagEnd};
+use regex::Regex;
 use std::cmp::max;
+use std::sync::LazyLock;
+
+static NON_WHITESPACE_TOKEN_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\S+").expect("valid transcript token regex"));
+static QUOTED_PATH_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r#"`(?:file://|~/|/|\./|\.\./|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^`]+`|"(?:file://|~/|/|\./|\.\./|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^"]+"|'(?:file://|~/|/|\./|\.\./|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^']+'"#,
+    )
+    .expect("valid quoted transcript path regex")
+});
+
+const COMMON_FILE_EXTENSIONS: &[&str] = &[
+    "rs", "toml", "md", "json", "yaml", "yml", "js", "jsx", "ts", "tsx", "py", "go", "java",
+    "kt", "swift", "c", "h", "cpp", "hpp", "cc", "m", "mm", "sh", "zsh", "bash", "fish", "ps1",
+    "rb", "php", "sql", "html", "css", "scss", "sass", "less", "xml", "ini", "cfg", "conf",
+    "env", "lock", "txt",
+];
+const COMMON_FILE_NAMES: &[&str] = &["Makefile", "Dockerfile"];
+
+#[derive(Clone, Debug)]
+struct FileLinkMatch {
+    start: usize,
+    end: usize,
+    target: String,
+}
 
 #[derive(Clone, Debug)]
 pub(crate) struct ListState {
@@ -341,9 +367,7 @@ pub(crate) fn append_text(text: &str, ctx: &mut MarkdownContext<'_>) {
         if ch == '\n' {
             let segment = &text[start..idx];
             if !segment.is_empty() {
-                ctx.ensure_prefix();
-                ctx.current_line
-                    .push_segment_with_link(style, segment, link_target.clone());
+                append_text_segment(segment, ctx, style, link_target.clone());
             }
             ctx.lines.push(std::mem::take(ctx.current_line));
             start = idx + 1;
@@ -359,10 +383,282 @@ pub(crate) fn append_text(text: &str, ctx: &mut MarkdownContext<'_>) {
     if start < text.len() {
         let remaining = &text[start..];
         if !remaining.is_empty() {
-            ctx.ensure_prefix();
-            ctx.current_line
-                .push_segment_with_link(style, remaining, link_target);
+            append_text_segment(remaining, ctx, style, link_target);
         }
+    }
+}
+
+fn detect_file_link_matches(text: &str) -> Vec<FileLinkMatch> {
+    let mut matches = Vec::new();
+
+    for quoted_match in QUOTED_PATH_PATTERN.find_iter(text) {
+        if let Some(link_match) =
+            build_file_link_match(text, quoted_match.start(), quoted_match.end())
+        {
+            matches.push(link_match);
+        }
+    }
+
+    for token_match in NON_WHITESPACE_TOKEN_PATTERN.find_iter(text) {
+        if matches.iter().any(|existing| {
+            token_match.start() < existing.end && token_match.end() > existing.start
+        }) {
+            continue;
+        }
+
+        if let Some(link_match) =
+            build_file_link_match(text, token_match.start(), token_match.end())
+        {
+            matches.push(link_match);
+        }
+    }
+
+    matches.sort_by_key(|link_match| link_match.start);
+    matches.dedup_by(|left, right| left.start == right.start && left.end == right.end);
+
+    matches
+}
+
+fn build_file_link_match(text: &str, token_start: usize, token_end: usize) -> Option<FileLinkMatch> {
+    let token = &text[token_start..token_end];
+    let (trimmed_start, trimmed_end) = trim_transcript_token_bounds(token);
+    if trimmed_start >= trimmed_end {
+        return None;
+    }
+
+    let start = token_start + trimmed_start;
+    let end = token_start + trimmed_end;
+    let candidate = text[start..end].trim();
+    if candidate.is_empty() {
+        return None;
+    }
+
+    let stripped = strip_location_suffix(strip_file_scheme(candidate)).trim_end_matches(':');
+    if stripped.is_empty() || !looks_like_markdown_path(stripped) {
+        return None;
+    }
+
+    let mut target = candidate.to_string();
+    while target.ends_with(':') {
+        target.pop();
+    }
+    if let Some(paren_start) = location_paren_suffix_start(candidate) {
+        let base = &candidate[..paren_start];
+        let suffix = &candidate[paren_start..];
+        if let Some(location) = parse_paren_location_suffix(suffix) {
+            target = format!("{base}{location}");
+        } else {
+            target = base.to_string();
+        }
+    }
+
+    Some(FileLinkMatch { start, end, target })
+}
+
+fn trim_transcript_token_bounds(token: &str) -> (usize, usize) {
+    let mut start = 0usize;
+    let mut end = token.len();
+
+    while start < end {
+        let Some(ch) = token[start..end].chars().next() else {
+            break;
+        };
+        if matches!(ch, '(' | '[' | '{' | '<' | '"' | '\'' | '`') {
+            start += ch.len_utf8();
+        } else {
+            break;
+        }
+    }
+
+    while start < end {
+        let Some(ch) = token[start..end].chars().next_back() else {
+            break;
+        };
+        if matches!(
+            ch,
+            ')' | ']' | '}' | '>' | '"' | '\'' | '`' | ',' | ';' | '.' | '!' | '?'
+        ) {
+            // Preserve trailing ')' when it looks like a location suffix e.g. file.rs(10,5)
+            if ch == ')' && location_paren_suffix_start(&token[start..end]).is_some() {
+                break;
+            }
+            end -= ch.len_utf8();
+        } else {
+            break;
+        }
+    }
+
+    (start, end)
+}
+
+fn strip_file_scheme(token: &str) -> &str {
+    token.strip_prefix("file://").unwrap_or(token)
+}
+
+fn strip_location_suffix(token: &str) -> &str {
+    let without_fragment = token.split('#').next().unwrap_or(token);
+    let mut base = without_fragment;
+
+    // Strip parenthesized location suffix like (10,5) or (10)
+    if let Some(paren_start) = location_paren_suffix_start(base) {
+        base = &base[..paren_start];
+    }
+
+    // Strip colon-separated line:col suffix like :10:5 or :10
+    for _ in 0..2 {
+        let Some(colon_idx) = base.rfind(':') else {
+            break;
+        };
+        let suffix = &base[colon_idx + 1..];
+        if suffix.is_empty() || !suffix.chars().all(|ch| ch.is_ascii_digit()) {
+            break;
+        }
+        base = &base[..colon_idx];
+    }
+
+    base
+}
+
+fn looks_like_markdown_path(token: &str) -> bool {
+    let token = token.trim();
+    if token.is_empty() {
+        return false;
+    }
+
+    if token.starts_with("http://") || token.starts_with("https://") {
+        return false;
+    }
+    if token.contains("://") && !token.starts_with("file://") {
+        return false;
+    }
+
+    if token.starts_with("./")
+        || token.starts_with("../")
+        || token.starts_with('/')
+        || token.starts_with("~/")
+        || token.starts_with("file://")
+    {
+        return true;
+    }
+
+    if token.len() >= 3
+        && token.as_bytes()[0].is_ascii_alphabetic()
+        && token.as_bytes()[1] == b':'
+        && matches!(token.as_bytes()[2], b'\\' | b'/')
+    {
+        return true;
+    }
+
+    if token.contains('/') || token.contains('\\') {
+        return true;
+    }
+
+    if token.starts_with('.') && token.len() > 1 {
+        return true;
+    }
+
+    if COMMON_FILE_NAMES.iter().any(|name| *name == token) {
+        return true;
+    }
+
+    if let Some((_, ext)) = token.rsplit_once('.')
+        && !ext.is_empty()
+        && ext.len() <= 12
+        && ext.chars().all(|c| c.is_ascii_alphanumeric())
+    {
+        let ext_lower = ext.to_ascii_lowercase();
+        return COMMON_FILE_EXTENSIONS
+            .iter()
+            .any(|candidate| *candidate == ext_lower);
+    }
+
+    false
+}
+
+fn location_paren_suffix_start(token: &str) -> Option<usize> {
+    let paren_start = token.rfind('(')?;
+    let inner = token[paren_start + 1..].strip_suffix(')')?;
+    // Accept `(digits)` or `(digits,digits)` — reject empty or malformed like `(,)` `(10,,5)`
+    let valid = !inner.is_empty()
+        && !inner.starts_with(',')
+        && !inner.ends_with(',')
+        && !inner.contains(",,")
+        && inner.chars().all(|c| c.is_ascii_digit() || c == ',');
+    valid.then_some(paren_start)
+}
+
+fn parse_paren_location_suffix(suffix: &str) -> Option<String> {
+    let inner = suffix.strip_prefix('(')?.strip_suffix(')')?;
+    if inner.is_empty() {
+        return None;
+    }
+
+    let mut parts = inner.split(',');
+    let line = parts.next()?;
+    let col = parts.next();
+    if parts.next().is_some() {
+        return None;
+    }
+
+    if !line.chars().all(|ch| ch.is_ascii_digit()) {
+        return None;
+    }
+    let mut location = format!(":{line}");
+    if let Some(col) = col {
+        if col.is_empty() || !col.chars().all(|ch| ch.is_ascii_digit()) {
+            return None;
+        }
+        location.push(':');
+        location.push_str(col);
+    }
+    Some(location)
+}
+
+fn append_text_segment(
+    segment: &str,
+    ctx: &mut MarkdownContext<'_>,
+    style: Style,
+    link_target: Option<String>,
+) {
+    if segment.is_empty() {
+        return;
+    }
+    ctx.ensure_prefix();
+    if let Some(target) = link_target {
+        ctx.current_line
+            .push_segment_with_link(style, segment, Some(target));
+        return;
+    }
+
+    let matches = detect_file_link_matches(segment);
+    if matches.is_empty() {
+        ctx.current_line
+            .push_segment_with_link(style, segment, None);
+        return;
+    }
+
+    let link_style = file_link_style(style, ctx.theme_styles, ctx.base_style);
+    let mut cursor = 0usize;
+    for link_match in matches {
+        if link_match.start > cursor {
+            ctx.current_line.push_segment_with_link(
+                style,
+                &segment[cursor..link_match.start],
+                None,
+            );
+        }
+        if link_match.end > link_match.start {
+            ctx.current_line.push_segment_with_link(
+                link_style,
+                &segment[link_match.start..link_match.end],
+                Some(link_match.target),
+            );
+        }
+        cursor = link_match.end;
+    }
+    if cursor < segment.len() {
+        ctx.current_line
+            .push_segment_with_link(style, &segment[cursor..], None);
     }
 }
 
@@ -426,6 +722,26 @@ pub(crate) fn inline_code_style(theme_styles: &ThemeStyles, base_style: Style) -
         style = style.fg_color(Some(color));
     }
     style
+}
+
+fn file_link_style(current: Style, theme_styles: &ThemeStyles, base_style: Style) -> Style {
+    let mut style = current;
+    let base_fg = base_style.get_fg_color();
+    let current_fg = style.get_fg_color();
+    if current_fg.is_none() || current_fg == base_fg {
+        if let Some(color) = choose_markdown_accent(
+            base_style,
+            &[
+                theme_styles.primary,
+                theme_styles.secondary,
+                theme_styles.status,
+                theme_styles.tool_detail,
+            ],
+        ) {
+            style = style.fg_color(Some(color));
+        }
+    }
+    style.underline()
 }
 
 fn ensure_prefix(
