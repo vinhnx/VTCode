@@ -428,12 +428,8 @@ impl Session {
         self.last_overlay_list_was_last = false;
     }
 
-    fn should_anchor_list_to_bottom(
-        &self,
-        preferred: Option<&InlineListSelection>,
-    ) -> bool {
-        self.last_overlay_list_was_last
-            && self.last_overlay_list_selection.as_ref() == preferred
+    fn should_anchor_list_to_bottom(&self, preferred: Option<&InlineListSelection>) -> bool {
+        self.last_overlay_list_was_last && self.last_overlay_list_selection.as_ref() == preferred
     }
 
     fn clear_last_overlay_list_cache(&mut self) {

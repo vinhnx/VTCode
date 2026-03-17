@@ -2,8 +2,8 @@ use anyhow::Result;
 use std::path::PathBuf;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, ModelSelectionSource};
-use vtcode_core::core::interfaces::{SessionRuntime, SessionRuntimeParams};
 use vtcode_core::core::interfaces::session::PlanModeEntrySource;
+use vtcode_core::core::interfaces::{SessionRuntime, SessionRuntimeParams};
 use vtcode_core::core::threads::{
     ArchivedSessionIntent, loaded_skills_from_session_listing, messages_from_session_listing,
 };

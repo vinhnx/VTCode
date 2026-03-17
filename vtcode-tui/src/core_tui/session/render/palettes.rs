@@ -1,10 +1,10 @@
 use super::*;
-use ratatui::widgets::{Clear, Paragraph, Wrap};
 use crate::ui::tui::session::inline_list::{InlineListRow, selection_padding};
 use crate::ui::tui::session::list_panel::{
     SharedListPanelSections, SharedListPanelStyles, SharedSearchField, StaticRowsListPanelModel,
     fixed_section_rows, render_shared_list_panel, rows_to_u16, split_bottom_list_panel,
 };
+use ratatui::widgets::{Clear, Paragraph, Wrap};
 
 #[derive(Clone)]
 struct FilePaletteRenderRow {

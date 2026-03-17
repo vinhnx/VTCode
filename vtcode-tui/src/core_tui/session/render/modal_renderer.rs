@@ -1,11 +1,11 @@
-use super::*;
 use super::spans::invalidate_scroll_metrics;
-use ratatui::widgets::{Clear, Paragraph, Wrap};
+use super::*;
 use crate::ui::tui::session::modal::{
     ModalBodyContext, ModalListState, ModalRenderStyles, render_modal_body,
     render_wizard_modal_body,
 };
 use crate::ui::tui::types::InlineListSelection;
+use ratatui::widgets::{Clear, Paragraph, Wrap};
 
 const MAX_INLINE_MODAL_HEIGHT: u16 = 20;
 const MAX_INLINE_MODAL_HEIGHT_MULTILINE: u16 = 32;

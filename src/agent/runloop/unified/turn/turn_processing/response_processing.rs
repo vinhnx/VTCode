@@ -745,7 +745,11 @@ mod tests {
                 .expect("processing should succeed");
 
         match result {
-            TurnProcessingResult::TextResponse { text, proposed_plan, .. } => {
+            TurnProcessingResult::TextResponse {
+                text,
+                proposed_plan,
+                ..
+            } => {
                 assert_eq!(proposed_plan.as_deref(), Some("- Step 1"));
                 assert!(!text.contains("<plan>"));
                 assert!(!text.contains("</plan>"));

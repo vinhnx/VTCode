@@ -103,7 +103,9 @@ fn maybe_force_plan_mode_interview_includes_distinct_question_options() {
             .iter()
             .all(|label| label.contains("(Recommended)"))
     );
-    let unique_labels = first_labels.iter().collect::<std::collections::HashSet<_>>();
+    let unique_labels = first_labels
+        .iter()
+        .collect::<std::collections::HashSet<_>>();
     assert_eq!(unique_labels.len(), first_labels.len());
 }
 
@@ -667,8 +669,9 @@ fn adaptive_fallback_interview_requests_task_metadata_when_missing() {
         has_verify: false,
     };
 
-    let payload = build_adaptive_fallback_interview_args(&context, None, None, Some(tracker_summary))
-        .expect("expected adaptive fallback");
+    let payload =
+        build_adaptive_fallback_interview_args(&context, None, None, Some(tracker_summary))
+            .expect("expected adaptive fallback");
 
     let questions = payload["questions"].as_array().expect("questions array");
     assert_eq!(questions.len(), 1);

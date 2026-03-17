@@ -4,7 +4,6 @@ use std::time::Instant;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::names::canonical_tool_name;
 
-pub(crate) const EXIT_PLAN_MODE_REASON_AUTO_TRIGGER_ON_DENIAL: &str = "auto_trigger_on_plan_denial";
 pub(crate) const EXIT_PLAN_MODE_REASON_USER_REQUESTED_IMPLEMENTATION: &str =
     "user_requested_implementation";
 
@@ -205,10 +204,6 @@ pub(crate) fn build_exit_plan_mode_args(reason: &str) -> serde_json::Value {
     serde_json::json!({
         "reason": reason
     })
-}
-
-pub(crate) fn build_exit_plan_mode_call_id(prefix: &str, suffix: u128) -> String {
-    format!("{prefix}_{suffix}")
 }
 
 pub(crate) fn build_step_exit_plan_mode_call_id(step_count: usize) -> String {

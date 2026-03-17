@@ -713,7 +713,10 @@ pub async fn persist_plan_draft(
     let tracker_file = tracker_file_for_plan_file(&plan_file);
     let (existing_tracker, tracker_from_sidecar) = if let Some(path) = tracker_file.as_ref() {
         if path.exists() {
-            (read_file_with_context(path, "plan tracker file").await.ok(), true)
+            (
+                read_file_with_context(path, "plan tracker file").await.ok(),
+                true,
+            )
         } else {
             (
                 existing_plan
@@ -1047,7 +1050,10 @@ impl Tool for EnterPlanModeTool {
             (resolved, seed)
         } else {
             let plans_dir = self.state.plans_dir();
-            (plans_dir.join(format!("{}.md", plan_name)), plan_name.clone())
+            (
+                plans_dir.join(format!("{}.md", plan_name)),
+                plan_name.clone(),
+            )
         };
         let plan_title = title_from_plan_name(&plan_title_seed);
         if args.require_confirmation && !args.approved {
@@ -1624,11 +1630,7 @@ mod tests {
         let plans_dir = state.plans_dir();
         std::fs::create_dir_all(&plans_dir).unwrap();
         let plan_file = plans_dir.join("draft.md");
-        std::fs::write(
-            &plan_file,
-            "# Test Plan\n\n## Plan of Work\n- Draft step\n",
-        )
-        .unwrap();
+        std::fs::write(&plan_file, "# Test Plan\n\n## Plan of Work\n- Draft step\n").unwrap();
         state.set_plan_file(Some(plan_file)).await;
 
         let tool = ExitPlanModeTool::new(state.clone());
@@ -1708,11 +1710,13 @@ mod tests {
             .await
             .expect("plan file should be set");
         assert!(plan_file.exists());
-        assert!(plan_file
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or_default()
-            .contains("missing-plan"));
+        assert!(
+            plan_file
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or_default()
+                .contains("missing-plan")
+        );
     }
 
     #[test]
@@ -1741,10 +1745,12 @@ Next open decision: [if any], otherwise: No remaining scope decisions.
 
         assert!(!report.is_ready());
         assert!(!report.placeholder_tokens.is_empty());
-        assert!(report
-            .placeholder_tokens
-            .iter()
-            .any(|token| token.contains("file, symbol")));
+        assert!(
+            report
+                .placeholder_tokens
+                .iter()
+                .any(|token| token.contains("file, symbol"))
+        );
     }
 
     #[test]

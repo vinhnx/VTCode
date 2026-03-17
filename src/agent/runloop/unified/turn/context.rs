@@ -786,13 +786,13 @@ impl<'a> TurnProcessingContext<'a> {
             self.emit_plan_events(&plan_text).await;
             let persisted =
                 persist_plan_draft(&self.tool_registry.plan_mode_state(), &plan_text).await?;
-            self.tool_registry.plan_mode_state().set_phase(
-                if persisted.validation.is_ready() {
+            self.tool_registry
+                .plan_mode_state()
+                .set_phase(if persisted.validation.is_ready() {
                     PlanLifecyclePhase::DraftReady
                 } else {
                     PlanLifecyclePhase::ActiveDrafting
-                },
-            );
+                });
         }
 
         Ok(TurnHandlerOutcome::Break(TurnLoopResult::Completed))

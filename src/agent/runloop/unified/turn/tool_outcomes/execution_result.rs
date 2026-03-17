@@ -12,9 +12,7 @@ use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_from_turn_ctx;
 use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
 
-use super::helpers::{
-    check_is_argument_error, serialize_output, signature_key_for,
-};
+use super::helpers::{check_is_argument_error, serialize_output, signature_key_for};
 
 use crate::agent::runloop::unified::turn::context::{
     TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext,

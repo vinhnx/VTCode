@@ -5,9 +5,7 @@ mod plan_seed;
 
 use super::*;
 use crate::agent::runloop::git::compute_session_code_change_delta;
-use crate::agent::runloop::unified::overlay_prompt::{
-    OverlayWaitOutcome, show_overlay_and_wait,
-};
+use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
 use crate::agent::runloop::unified::plan_mode_state::render_plan_mode_next_step_hint;
 use crate::agent::runloop::unified::postamble::{ExitSummaryData, print_exit_summary};
 use crate::agent::runloop::unified::turn::turn_loop::TurnLoopOutcome;

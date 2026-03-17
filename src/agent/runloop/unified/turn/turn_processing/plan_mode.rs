@@ -367,8 +367,14 @@ fn collect_interview_research_context(
         .as_ref()
         .map(PlanValidationSnapshot::from);
 
-    let (plan_draft_excerpt, plan_draft_path, plan_validation, task_tracker_excerpt,
-        task_tracker_path, task_tracker_summary) = if let Some(plan_context) = plan_context {
+    let (
+        plan_draft_excerpt,
+        plan_draft_path,
+        plan_validation,
+        task_tracker_excerpt,
+        task_tracker_path,
+        task_tracker_summary,
+    ) = if let Some(plan_context) = plan_context {
         let plan_excerpt = if prefer_extracted_plan {
             extracted_plan_excerpt
                 .clone()
@@ -421,9 +427,7 @@ fn collect_interview_research_context(
     }
 }
 
-async fn load_plan_draft_context(
-    plan_state: Option<PlanModeState>,
-) -> Option<PlanDraftContext> {
+async fn load_plan_draft_context(plan_state: Option<PlanModeState>) -> Option<PlanDraftContext> {
     let plan_state = plan_state?;
     let plan_file = plan_state.get_plan_file().await?;
     let plan_path = Some(plan_file.display().to_string());
@@ -451,15 +455,11 @@ async fn load_plan_draft_context(
             (Some(path.display().to_string()), content)
         }
         Some(path) => {
-            let content = plan_content
-                .as_deref()
-                .and_then(extract_embedded_tracker);
+            let content = plan_content.as_deref().and_then(extract_embedded_tracker);
             (Some(path.display().to_string()), content)
         }
         None => {
-            let content = plan_content
-                .as_deref()
-                .and_then(extract_embedded_tracker);
+            let content = plan_content.as_deref().and_then(extract_embedded_tracker);
             (None, content)
         }
     };
@@ -618,10 +618,7 @@ fn parse_json_string(input: &str) -> Option<(String, &str)> {
 }
 
 fn looks_like_path_or_file(value: &str) -> bool {
-    value.contains('/')
-        || value.contains(".rs")
-        || value.contains(".toml")
-        || value.contains(".md")
+    value.contains('/') || value.contains(".rs") || value.contains(".toml") || value.contains(".md")
 }
 
 fn is_safe_hint(value: &str) -> bool {
@@ -630,7 +627,10 @@ fn is_safe_hint(value: &str) -> bool {
 
 fn trim_hint_token(token: &str) -> &str {
     token.trim_matches(|ch: char| {
-        matches!(ch, ',' | ';' | ')' | ']' | '(' | '[' | '>' | '<' | '\'' | '"')
+        matches!(
+            ch,
+            ',' | ';' | ')' | ']' | '(' | '[' | '>' | '<' | '\'' | '"'
+        )
     })
 }
 
@@ -1288,10 +1288,7 @@ fn select_best_plan_validation(
     }
 }
 
-fn is_validation_better(
-    candidate: &PlanValidationReport,
-    current: &PlanValidationReport,
-) -> bool {
+fn is_validation_better(candidate: &PlanValidationReport, current: &PlanValidationReport) -> bool {
     if candidate.is_ready() && !current.is_ready() {
         return true;
     }
@@ -1379,7 +1376,10 @@ fn truncate_hint(value: &str, max_len: usize) -> String {
     if trimmed.len() <= max_len {
         return trimmed.to_string();
     }
-    let mut out = trimmed.chars().take(max_len.saturating_sub(3)).collect::<String>();
+    let mut out = trimmed
+        .chars()
+        .take(max_len.saturating_sub(3))
+        .collect::<String>();
     out.push_str("...");
     out
 }

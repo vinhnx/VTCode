@@ -1,10 +1,10 @@
 use super::*;
-use ratatui::widgets::Clear;
 use crate::ui::tui::session::inline_list::InlineListRow;
 use crate::ui::tui::session::list_panel::{
     SharedListPanelSections, SharedListPanelStyles, SharedListWidgetModel, SharedSearchField,
     fixed_section_rows, render_shared_list_panel, rows_to_u16, split_bottom_list_panel,
 };
+use ratatui::widgets::Clear;
 
 struct HistoryPickerPanelModel {
     entries: Vec<String>,

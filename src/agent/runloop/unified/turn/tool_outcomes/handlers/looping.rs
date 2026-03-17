@@ -198,8 +198,7 @@ pub(super) fn task_tracker_create_signature(tool_name: &str, args: &Value) -> Op
         notes: args.get("notes"),
     };
     let payload_str = serde_json::to_string(&payload).ok()?;
-    let mut signature =
-        String::with_capacity("task_tracker::create::".len() + payload_str.len());
+    let mut signature = String::with_capacity("task_tracker::create::".len() + payload_str.len());
     signature.push_str("task_tracker::create::");
     signature.push_str(&payload_str);
 

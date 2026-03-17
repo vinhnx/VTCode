@@ -22,10 +22,10 @@ static QUOTED_PATH_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 const COMMON_FILE_EXTENSIONS: &[&str] = &[
-    "rs", "toml", "md", "json", "yaml", "yml", "js", "jsx", "ts", "tsx", "py", "go", "java",
-    "kt", "swift", "c", "h", "cpp", "hpp", "cc", "m", "mm", "sh", "zsh", "bash", "fish", "ps1",
-    "rb", "php", "sql", "html", "css", "scss", "sass", "less", "xml", "ini", "cfg", "conf",
-    "env", "lock", "txt",
+    "rs", "toml", "md", "json", "yaml", "yml", "js", "jsx", "ts", "tsx", "py", "go", "java", "kt",
+    "swift", "c", "h", "cpp", "hpp", "cc", "m", "mm", "sh", "zsh", "bash", "fish", "ps1", "rb",
+    "php", "sql", "html", "css", "scss", "sass", "less", "xml", "ini", "cfg", "conf", "env",
+    "lock", "txt",
 ];
 const COMMON_FILE_NAMES: &[&str] = &["Makefile", "Dockerfile"];
 
@@ -419,7 +419,11 @@ fn detect_file_link_matches(text: &str) -> Vec<FileLinkMatch> {
     matches
 }
 
-fn build_file_link_match(text: &str, token_start: usize, token_end: usize) -> Option<FileLinkMatch> {
+fn build_file_link_match(
+    text: &str,
+    token_start: usize,
+    token_end: usize,
+) -> Option<FileLinkMatch> {
     let token = &text[token_start..token_end];
     let (trimmed_start, trimmed_end) = trim_transcript_token_bounds(token);
     if trimmed_start >= trimmed_end {

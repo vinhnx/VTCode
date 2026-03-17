@@ -215,7 +215,8 @@ mod tests {
             session_resume: Some(SessionResumeMode::Specific("session-123".to_string())),
             resume_show_all: false,
             custom_session_id: None,
-            plan_mode_entry_source: vtcode_core::core::interfaces::session::PlanModeEntrySource::None,
+            plan_mode_entry_source:
+                vtcode_core::core::interfaces::session::PlanModeEntrySource::None,
         };
 
         configure_runtime_debug_context("seed".to_string(), Some("seed".to_string()));
@@ -244,7 +245,8 @@ mod tests {
             session_resume: None,
             resume_show_all: false,
             custom_session_id: None,
-            plan_mode_entry_source: vtcode_core::core::interfaces::session::PlanModeEntrySource::None,
+            plan_mode_entry_source:
+                vtcode_core::core::interfaces::session::PlanModeEntrySource::None,
         };
 
         configure_runtime_debug_context("seed".to_string(), Some("seed".to_string()));

@@ -799,8 +799,8 @@ mod tests {
     #[test]
     fn test_circuit_breaker_middleware() {
         let middleware = CircuitBreakerMiddleware::new(0.5);
-        let threshold = crate::tools::circuit_breaker::CircuitBreakerConfig::default()
-            .failure_threshold;
+        let threshold =
+            crate::tools::circuit_breaker::CircuitBreakerConfig::default().failure_threshold;
 
         let request = ToolRequest {
             tool_name: "failing_tool".into(),

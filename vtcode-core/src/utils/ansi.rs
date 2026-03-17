@@ -934,9 +934,7 @@ impl InlineSink {
         }
 
         let line_count = Self::count_lines(candidate);
-        if candidate.len() < INLINE_JSON_COLLAPSE_BYTES
-            && line_count < INLINE_JSON_COLLAPSE_LINES
-        {
+        if candidate.len() < INLINE_JSON_COLLAPSE_BYTES && line_count < INLINE_JSON_COLLAPSE_LINES {
             return None;
         }
 

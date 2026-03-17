@@ -7,10 +7,10 @@ use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::{
     AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
 };
-use vtcode_core::core::interfaces::session::PlanModeEntrySource;
 use vtcode_core::core::agent::snapshots::{
     DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
 };
+use vtcode_core::core::interfaces::session::PlanModeEntrySource;
 use vtcode_core::ui::theme::DEFAULT_THEME_ID;
 use vtcode_core::utils::colors::style;
 use vtcode_core::utils::file_utils::ensure_dir_exists;
@@ -60,8 +60,8 @@ pub async fn handle_init_command(workspace: &Path, force: bool, run: bool) -> Re
             PlanModeEntrySource::None,
             None,
         )
-            .await
-            .with_context(|| "failed to start chat session")?;
+        .await
+        .with_context(|| "failed to start chat session")?;
     }
 
     Ok(())

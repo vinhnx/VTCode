@@ -1,5 +1,7 @@
+use super::layout::{
+    BottomPanelKind, resolve_bottom_panel_spec, split_input_and_bottom_panel_area,
+};
 use super::*;
-use super::layout::{BottomPanelKind, resolve_bottom_panel_spec, split_input_and_bottom_panel_area};
 
 impl Session {
     pub fn render(&mut self, frame: &mut Frame<'_>) {

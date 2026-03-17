@@ -157,7 +157,8 @@ mod tests {
             session_resume: None,
             resume_show_all: false,
             custom_session_id: None,
-            plan_mode_entry_source: vtcode_core::core::interfaces::session::PlanModeEntrySource::None,
+            plan_mode_entry_source:
+                vtcode_core::core::interfaces::session::PlanModeEntrySource::None,
         }
     }
 

@@ -523,12 +523,13 @@ mod tests {
 
     #[test]
     fn parses_direct_unified_file_read_with_mode_omitted() {
-        let parsed = parse_direct_tool_input(
-            "unified_file read on /tmp/example.md with mode omitted",
-        )
-        .expect("direct unified_file");
+        let parsed =
+            parse_direct_tool_input("unified_file read on /tmp/example.md with mode omitted")
+                .expect("direct unified_file");
         match parsed {
-            DirectToolInput::Execute { tool_name, args, .. } => {
+            DirectToolInput::Execute {
+                tool_name, args, ..
+            } => {
                 assert_eq!(
                     tool_name,
                     vtcode_core::config::constants::tools::UNIFIED_FILE
@@ -545,11 +546,12 @@ mod tests {
 
     #[test]
     fn parses_run_prefixed_unified_file_read() {
-        let parsed =
-            parse_direct_tool_input("run unified_file read /tmp/example.md")
-                .expect("direct unified_file");
+        let parsed = parse_direct_tool_input("run unified_file read /tmp/example.md")
+            .expect("direct unified_file");
         match parsed {
-            DirectToolInput::Execute { tool_name, args, .. } => {
+            DirectToolInput::Execute {
+                tool_name, args, ..
+            } => {
                 assert_eq!(
                     tool_name,
                     vtcode_core::config::constants::tools::UNIFIED_FILE

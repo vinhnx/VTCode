@@ -52,7 +52,10 @@ pub struct ReadFileArgs {
     #[serde(default, deserialize_with = "deserialize_opt_maybe_quoted")]
     pub max_tokens: Option<usize>,
     /// Whether to condense long outputs to head/tail.
-    #[serde(default = "defaults::condense", deserialize_with = "deserialize_maybe_quoted")]
+    #[serde(
+        default = "defaults::condense",
+        deserialize_with = "deserialize_maybe_quoted"
+    )]
     pub condense: bool,
 }
 
@@ -275,8 +278,7 @@ where
             }
         }
         Value::Object(_) => {
-            let args = IndentationArgs::deserialize(value)
-                .map_err(serde::de::Error::custom)?;
+            let args = IndentationArgs::deserialize(value).map_err(serde::de::Error::custom)?;
             Ok(Some(args))
         }
         other => Err(serde::de::Error::custom(format!(

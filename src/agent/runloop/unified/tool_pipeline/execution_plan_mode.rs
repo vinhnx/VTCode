@@ -72,9 +72,9 @@ pub(super) async fn handle_enter_plan_mode(
 
     let already_approved = allow_preapproved
         && args_val
-        .get("approved")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
+            .get("approved")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
     let tool_args = if already_approved {
         args_val.clone()
     } else {
