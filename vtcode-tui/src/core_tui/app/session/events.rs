@@ -22,15 +22,10 @@ fn input_history_entries(session: &Session) -> Vec<(String, Vec<ContentPart>)> {
         .collect()
 }
 
-fn update_input_triggers(session: &mut Session) {
-    session.check_file_reference_trigger();
-    slash::update_slash_suggestions(session);
-}
-
 pub(super) fn handle_paste(session: &mut Session, content: &str) {
     if session.core.input_enabled() {
         session.insert_paste_text(content);
-        update_input_triggers(session);
+        session.update_input_triggers();
         session.mark_dirty();
     } else if let Some(modal) = session.modal_state_mut()
         && let (Some(list), Some(search)) = (modal.list.as_mut(), modal.search.as_mut())
@@ -224,6 +219,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
     // Handle history picker if active
     if session.inline_lists_visible() && session.history_picker_state.active {
         let history = input_history_entries(session);
+        let was_active = session.history_picker_state.active;
         let handled = history_picker::handle_history_picker_key(
             &key,
             &mut session.history_picker_state,
@@ -231,6 +227,9 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             &history,
         );
         if handled {
+            if was_active && !session.history_picker_state.active {
+                session.update_input_triggers();
+            }
             session.mark_dirty();
             return None;
         }
@@ -336,7 +335,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         KeyCode::Char('w') | KeyCode::Char('W') if has_control && !has_command && !has_alt => {
             if session.core.input_enabled() {
                 session.delete_word_backward();
-                update_input_triggers(session);
+                session.update_input_triggers();
                 session.mark_dirty();
             }
             None
@@ -344,7 +343,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         KeyCode::Char('u') | KeyCode::Char('U') if has_control && !has_command && !has_alt => {
             if session.core.input_enabled() {
                 session.delete_to_start_of_line();
-                update_input_triggers(session);
+                session.update_input_triggers();
                 session.mark_dirty();
             }
             None
@@ -352,7 +351,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         KeyCode::Char('k') | KeyCode::Char('K') if has_control && !has_command && !has_alt => {
             if session.core.input_enabled() {
                 session.delete_to_end_of_line();
-                update_input_triggers(session);
+                session.update_input_triggers();
                 session.mark_dirty();
             }
             None
@@ -562,7 +561,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 } else {
                     session.delete_char();
                 }
-                update_input_triggers(session);
+                session.update_input_triggers();
                 session.mark_dirty();
             }
             None
@@ -576,7 +575,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 } else {
                     session.delete_char_forward();
                 }
-                update_input_triggers(session);
+                session.update_input_triggers();
                 session.mark_dirty();
             }
             None
@@ -714,7 +713,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
 
             if !has_control {
                 session.insert_char(ch);
-                update_input_triggers(session);
+                session.update_input_triggers();
                 session.mark_dirty();
             }
             None
@@ -789,7 +788,7 @@ fn clear_submitted_input(session: &mut Session) {
     session.clear_suggested_prompt_state();
     session.core.set_input_compact_mode(false);
     session.core.scroll_manager.set_offset(0);
-    slash::update_slash_suggestions(session);
+    session.update_input_triggers();
 }
 
 fn handle_running_slash_command_block(session: &mut Session) -> bool {

@@ -316,6 +316,8 @@ impl Session {
                     .saturating_add(local_index);
                 if self.history_picker_state.selected_index() == Some(actual_index) {
                     self.history_picker_state.accept(&mut self.core.input_manager);
+                    self.update_input_triggers();
+                    self.mark_dirty();
                 } else if self.history_picker_state.select_index(actual_index) {
                     self.mark_dirty();
                 }

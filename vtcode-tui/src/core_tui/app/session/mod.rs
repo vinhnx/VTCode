@@ -119,6 +119,19 @@ impl AppSession {
         }
     }
 
+    pub(crate) fn update_input_triggers(&mut self) {
+        if !self.core.input_enabled() {
+            if self.file_palette_active {
+                self.close_file_palette();
+            }
+            slash::clear_slash_suggestions(self);
+            return;
+        }
+
+        self.check_file_reference_trigger();
+        slash::update_slash_suggestions(self);
+    }
+
     pub(crate) fn set_task_panel_visible(&mut self, visible: bool) {
         if self.show_task_panel != visible {
             self.show_task_panel = visible;
@@ -187,21 +200,18 @@ impl AppSession {
             InlineCommand::SetInput(value) => {
                 self.core
                     .handle_command(crate::core_tui::types::InlineCommand::SetInput(value));
-                self.check_file_reference_trigger();
-                slash::update_slash_suggestions(self);
+                self.update_input_triggers();
             }
             InlineCommand::ApplySuggestedPrompt(value) => {
                 self.core.handle_command(
                     crate::core_tui::types::InlineCommand::ApplySuggestedPrompt(value),
                 );
-                self.check_file_reference_trigger();
-                slash::update_slash_suggestions(self);
+                self.update_input_triggers();
             }
             InlineCommand::ClearInput => {
                 self.core
                     .handle_command(crate::core_tui::types::InlineCommand::ClearInput);
-                self.check_file_reference_trigger();
-                slash::update_slash_suggestions(self);
+                self.update_input_triggers();
             }
             InlineCommand::OpenHistoryPicker => {
                 events::open_history_picker(self);
