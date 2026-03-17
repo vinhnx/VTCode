@@ -639,7 +639,7 @@ const fn default_circuit_breaker_enabled() -> bool {
 
 #[inline]
 const fn default_failure_threshold() -> u32 {
-    5 // Open circuit after 5 consecutive failures
+    7 // Open circuit after 7 consecutive failures
 }
 
 #[inline]

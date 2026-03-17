@@ -799,6 +799,8 @@ mod tests {
     #[test]
     fn test_circuit_breaker_middleware() {
         let middleware = CircuitBreakerMiddleware::new(0.5);
+        let threshold = crate::tools::circuit_breaker::CircuitBreakerConfig::default()
+            .failure_threshold;
 
         let request = ToolRequest {
             tool_name: "failing_tool".into(),
@@ -807,8 +809,8 @@ mod tests {
             metadata: RequestMetadata::default(),
         };
 
-        // Simulate 5 failures to open circuit
-        for _ in 0..5 {
+        // Simulate failures to open circuit
+        for _ in 0..threshold {
             let executor = Box::new(|_req: ToolRequest| MiddlewareResult {
                 success: false,
                 result: None,

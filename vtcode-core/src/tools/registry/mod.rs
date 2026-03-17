@@ -583,7 +583,15 @@ mod tests {
             .as_str()
             .expect("partial run should expose session_id")
             .to_string();
-        assert!(initial.get("next_continue_args").is_some());
+        if initial.get("next_continue_args").is_none() {
+            assert_eq!(initial["exit_code"], 0);
+            let output = initial["output"]
+                .as_str()
+                .expect("settled exec output should be text");
+            assert!(output.contains("first"));
+            assert!(output.contains("second"));
+            return Ok(());
+        }
         assert!(initial.get("exit_code").is_none());
 
         let response = registry

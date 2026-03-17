@@ -1294,11 +1294,9 @@ impl ToolRegistry {
             }
             Err(err) => {
                 let error_type = super::classify_error(&err);
+                let error_category = ErrorCategory::from(error_type);
                 if let Some(breaker) = shared_circuit_breaker.as_ref() {
-                    breaker.record_failure_category_for_tool(
-                        &tool_name_owned,
-                        ErrorCategory::from(error_type),
-                    );
+                    breaker.record_failure_category_for_tool(&tool_name_owned, error_category);
                 }
                 let error = ToolExecutionError::with_original_error(
                     tool_name_owned.clone(),
@@ -1307,14 +1305,19 @@ impl ToolRegistry {
                     err.to_string(),
                 );
 
-                let tripped = self.record_tool_failure(timeout_category);
-                if tripped {
-                    warn!(
-                        tool = %tool_name_owned,
-                        category = %timeout_category.label(),
-                        "Tool circuit breaker tripped after consecutive failures"
-                    );
-                }
+                let tripped = if error_category.should_trip_circuit_breaker() {
+                    let tripped = self.record_tool_failure(timeout_category);
+                    if tripped {
+                        warn!(
+                            tool = %tool_name_owned,
+                            category = %timeout_category.label(),
+                            "Tool circuit breaker tripped after consecutive failures"
+                        );
+                    }
+                    tripped
+                } else {
+                    false
+                };
 
                 let mut payload = error.to_json_value();
                 if let Some(obj) = payload.get_mut("error").and_then(|v| v.as_object_mut()) {

@@ -63,8 +63,8 @@ fn vtcode_config_circuit_breaker_to_core(
     vtcode_core::tools::circuit_breaker::CircuitBreakerConfig {
         failure_threshold: cfg.failure_threshold,
         reset_timeout: Duration::from_secs(cfg.recovery_cooldown.max(1) as u64),
-        min_backoff: Duration::from_secs(10),
-        max_backoff: Duration::from_secs(300),
+        min_backoff: Duration::from_secs(5),
+        max_backoff: Duration::from_secs(120),
         backoff_factor: 2.0,
     }
 }

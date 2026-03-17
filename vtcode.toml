@@ -2744,7 +2744,7 @@ switch_to_edit_mode = "prompt"
 
 switch_to_plan_mode = "prompt"
 
-task_tracker = "prompt"
+task_tracker = "allow"
 
 track_tasks = "prompt"
 

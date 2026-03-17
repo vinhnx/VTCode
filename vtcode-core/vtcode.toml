@@ -94,7 +94,7 @@ event_log_path = ""
 
 [agent.circuit_breaker]
 enabled = true
-failure_threshold = 5
+failure_threshold = 7
 pause_on_open = true
 max_open_circuits = 3
 recovery_cooldown = 60

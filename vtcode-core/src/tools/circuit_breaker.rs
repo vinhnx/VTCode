@@ -44,10 +44,10 @@ pub struct CircuitBreakerConfig {
 impl Default for CircuitBreakerConfig {
     fn default() -> Self {
         Self {
-            failure_threshold: 5,
+            failure_threshold: 7,
             reset_timeout: Duration::from_secs(60),
-            min_backoff: Duration::from_secs(10), // Start with 10s
-            max_backoff: Duration::from_secs(300), // Cap at 5m
+            min_backoff: Duration::from_secs(5), // Start with 5s
+            max_backoff: Duration::from_secs(120), // Cap at 2m
             backoff_factor: 2.0,
         }
     }

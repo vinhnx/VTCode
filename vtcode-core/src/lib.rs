@@ -349,6 +349,23 @@ mod tests {
 
     use tempfile::TempDir;
 
+    struct CwdGuard {
+        previous: std::path::PathBuf,
+    }
+
+    impl CwdGuard {
+        fn new() -> Self {
+            let previous = std::env::current_dir().expect("current dir");
+            Self { previous }
+        }
+    }
+
+    impl Drop for CwdGuard {
+        fn drop(&mut self) {
+            let _ = std::env::set_current_dir(&self.previous);
+        }
+    }
+
     #[tokio::test]
     async fn test_library_exports() {
         // Test that all public exports are accessible
@@ -372,6 +389,7 @@ mod tests {
         use crate::config::constants::tools;
 
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let _cwd_guard = CwdGuard::new();
         std::env::set_current_dir(&temp_dir).expect("Failed to change dir");
 
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;

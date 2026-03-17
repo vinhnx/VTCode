@@ -23,7 +23,7 @@
     "exit_plan_mode": "prompt",
     "request_user_input": "allow",
     "plan_task_tracker": "prompt",
-    "task_tracker": "prompt",
+    "task_tracker": "allow",
     "list_skills": "allow",
     "load_skill_resource": "allow",
     "load_skill": "allow"
