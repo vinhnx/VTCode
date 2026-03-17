@@ -13,7 +13,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::ToolRegistry;
-use vtcode_core::tools::handlers::ToolModelCapabilities;
+use vtcode_core::tools::handlers::{DeferredToolPolicy, ToolModelCapabilities};
 use vtcode_core::tools::native_cgp_tool_factory;
 
 pub(crate) struct SkillSetupState {
@@ -49,6 +49,7 @@ pub(crate) async fn register_skill_tools(
     config: &CoreAgentConfig,
     vt_cfg: Option<&VTCodeConfig>,
     tool_documentation_mode: vtcode_core::config::ToolDocumentationMode,
+    deferred_tool_policy: DeferredToolPolicy,
     skill_setup: &SkillSetupState,
 ) -> Result<()> {
     let runtime = vtcode_core::tools::skills::SkillToolSessionRuntime::new(
@@ -69,7 +70,8 @@ pub(crate) async fn register_skill_tools(
                 vt_cfg: vt_cfg.cloned(),
             },
         ),
-    ));
+    ))
+    .with_deferred_tool_policy(deferred_tool_policy.clone());
 
     register_list_skills_tool(
         tool_registry,
@@ -93,6 +95,7 @@ pub(crate) async fn register_skill_tools(
         tool_catalog,
         config,
         tool_documentation_mode,
+        &deferred_tool_policy,
     )
     .await;
     Ok(())

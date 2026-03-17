@@ -1,8 +1,10 @@
 use crate::config::ModelId;
 use crate::config::ToolDocumentationMode;
 use crate::config::constants::tools;
+use crate::config::loader::VTCodeConfig;
+use crate::config::models::Provider;
 use crate::config::types::CapabilityLevel;
-use crate::llm::provider::ToolDefinition;
+use crate::llm::provider::{ToolDefinition, ToolSearchAlgorithm};
 use crate::llm::providers::gemini::wire::FunctionDeclaration;
 use crate::tool_policy::ToolPolicy;
 use crate::tools::mcp::MCP_QUALIFIED_TOOL_PREFIX;
@@ -10,6 +12,8 @@ use crate::tools::registry::{ToolHandler as RegistryToolHandler, ToolRegistratio
 use crate::tools::tool_intent::ToolSurfaceKind;
 use serde::Serialize;
 use serde_json::{Value, json};
+use std::collections::BTreeSet;
+use std::str::FromStr;
 
 use super::tool_handler::{
     AdditionalProperties, ConfiguredToolSpec, JsonSchema, ResponsesApiTool, ToolSpec,
@@ -41,6 +45,92 @@ impl ToolModelCapabilities {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeferredToolSearchKind {
+    Anthropic(ToolSearchAlgorithm),
+    OpenAIHosted,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct DeferredToolPolicy {
+    search_kind: Option<DeferredToolSearchKind>,
+    always_available_tools: BTreeSet<String>,
+}
+
+impl DeferredToolPolicy {
+    #[must_use]
+    pub fn anthropic(
+        algorithm: ToolSearchAlgorithm,
+        always_available_tools: impl IntoIterator<Item = String>,
+    ) -> Self {
+        Self {
+            search_kind: Some(DeferredToolSearchKind::Anthropic(algorithm)),
+            always_available_tools: always_available_tools.into_iter().collect(),
+        }
+    }
+
+    #[must_use]
+    pub fn openai_hosted(always_available_tools: impl IntoIterator<Item = String>) -> Self {
+        Self {
+            search_kind: Some(DeferredToolSearchKind::OpenAIHosted),
+            always_available_tools: always_available_tools.into_iter().collect(),
+        }
+    }
+
+    fn is_enabled(&self) -> bool {
+        self.search_kind.is_some()
+    }
+
+    fn keeps_tool_available(&self, tool_name: &str) -> bool {
+        self.always_available_tools.contains(tool_name)
+    }
+
+    fn tool_search_definition(&self) -> Option<ToolDefinition> {
+        match self.search_kind {
+            Some(DeferredToolSearchKind::Anthropic(algorithm)) => {
+                Some(ToolDefinition::tool_search(algorithm))
+            }
+            Some(DeferredToolSearchKind::OpenAIHosted) => {
+                Some(ToolDefinition::hosted_tool_search())
+            }
+            None => None,
+        }
+    }
+}
+
+#[must_use]
+pub fn deferred_tool_policy_for_runtime(
+    provider: Option<Provider>,
+    model_supports_responses_compaction: bool,
+    vtcode_config: Option<&VTCodeConfig>,
+) -> DeferredToolPolicy {
+    match provider {
+        Some(Provider::Anthropic) => {
+            let config = vtcode_config
+                .map(|cfg| cfg.provider.anthropic.clone())
+                .unwrap_or_default();
+            if !config.tool_search.enabled || !config.tool_search.defer_by_default {
+                return DeferredToolPolicy::default();
+            }
+
+            let algorithm = ToolSearchAlgorithm::from_str(config.tool_search.algorithm.as_str())
+                .unwrap_or_default();
+            DeferredToolPolicy::anthropic(algorithm, config.tool_search.always_available_tools)
+        }
+        Some(Provider::OpenAI) if model_supports_responses_compaction => {
+            let config = vtcode_config
+                .map(|cfg| cfg.provider.openai.clone())
+                .unwrap_or_default();
+            if !config.tool_search.enabled || !config.tool_search.defer_by_default {
+                return DeferredToolPolicy::default();
+            }
+
+            DeferredToolPolicy::openai_hosted(config.tool_search.always_available_tools)
+        }
+        _ => DeferredToolPolicy::default(),
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SessionToolsConfig {
     pub surface: SessionSurface,
     pub capability_level: CapabilityLevel,
@@ -48,6 +138,7 @@ pub struct SessionToolsConfig {
     pub plan_mode: bool,
     pub request_user_input_enabled: bool,
     pub model_capabilities: ToolModelCapabilities,
+    pub deferred_tool_policy: DeferredToolPolicy,
 }
 
 impl SessionToolsConfig {
@@ -64,7 +155,14 @@ impl SessionToolsConfig {
             plan_mode: true,
             request_user_input_enabled: true,
             model_capabilities,
+            deferred_tool_policy: DeferredToolPolicy::default(),
         }
+    }
+
+    #[must_use]
+    pub fn with_deferred_tool_policy(mut self, deferred_tool_policy: DeferredToolPolicy) -> Self {
+        self.deferred_tool_policy = deferred_tool_policy;
+        self
     }
 }
 
@@ -127,13 +225,13 @@ impl SessionToolCatalog {
     }
 
     pub fn public_tool_names(&self, config: SessionToolsConfig) -> Vec<String> {
-        self.filtered_entries(config)
+        self.filtered_entries(&config)
             .map(|entry| entry.public_name.clone())
             .collect()
     }
 
     pub fn schema_entries(&self, config: SessionToolsConfig) -> Vec<ToolSchemaEntry> {
-        self.filtered_entries(config)
+        self.filtered_entries(&config)
             .map(|entry| ToolSchemaEntry {
                 name: entry.public_name.clone(),
                 description: compact_tool_description(
@@ -158,28 +256,46 @@ impl SessionToolCatalog {
 
     pub fn model_tools(&self, config: SessionToolsConfig) -> Vec<ToolDefinition> {
         let mut tools = Vec::new();
+        let mut has_deferred_tools = false;
 
-        for entry in self.filtered_entries(config) {
+        for entry in self.filtered_entries(&config) {
+            let defer_loading = should_defer_tool_loading(entry, &config);
             match entry.kind {
                 CatalogToolKind::ApplyPatch
                     if config.model_capabilities.supports_apply_patch_tool =>
                 {
-                    tools.push(ToolDefinition::apply_patch(compact_tool_description(
+                    let mut tool = ToolDefinition::apply_patch(compact_tool_description(
                         entry.description.as_str(),
                         config.documentation_mode,
-                    )));
+                    ));
+                    if defer_loading {
+                        tool = tool.with_defer_loading(true);
+                        has_deferred_tools = true;
+                    }
+                    tools.push(tool);
                 }
                 _ => {
-                    tools.push(ToolDefinition::function(
+                    let mut tool = ToolDefinition::function(
                         entry.public_name.clone(),
                         compact_tool_description(
                             entry.description.as_str(),
                             config.documentation_mode,
                         ),
                         compact_parameters(entry.parameters.clone(), config.documentation_mode),
-                    ));
+                    );
+                    if defer_loading {
+                        tool = tool.with_defer_loading(true);
+                        has_deferred_tools = true;
+                    }
+                    tools.push(tool);
                 }
             }
+        }
+
+        if has_deferred_tools
+            && let Some(search_tool) = config.deferred_tool_policy.tool_search_definition()
+        {
+            tools.push(search_tool);
         }
 
         crate::prompts::sort_tool_definitions(tools)
@@ -201,7 +317,7 @@ impl SessionToolCatalog {
 
     fn filtered_entries(
         &self,
-        config: SessionToolsConfig,
+        config: &SessionToolsConfig,
     ) -> impl Iterator<Item = &ToolCatalogEntry> {
         self.entries
             .iter()
@@ -221,6 +337,7 @@ impl ToolCatalogEntry {
         let supports_parallel_tool_calls = registration_supports_parallel_tool_calls(registration);
         let aliases = metadata.aliases().to_vec();
         let kind = registration_catalog_kind(registration);
+        let source = registration_catalog_source(registration, kind);
 
         if matches!(kind, CatalogToolKind::ApplyPatch) {
             let public_name = tools::APPLY_PATCH.to_string();
@@ -233,7 +350,7 @@ impl ToolCatalogEntry {
                 registration.capability(),
                 default_permission,
                 supports_parallel_tool_calls,
-                ToolCatalogSource::Builtin,
+                source,
                 kind,
             ));
         }
@@ -253,7 +370,7 @@ impl ToolCatalogEntry {
                 registration.capability(),
                 default_permission,
                 supports_parallel_tool_calls,
-                ToolCatalogSource::Mcp,
+                source,
                 kind,
             ));
         }
@@ -271,7 +388,7 @@ impl ToolCatalogEntry {
             registration.capability(),
             default_permission,
             supports_parallel_tool_calls,
-            ToolCatalogSource::Builtin,
+            source,
             kind,
         ))
     }
@@ -314,7 +431,7 @@ impl ToolCatalogEntry {
         }
     }
 
-    fn is_visible(&self, config: SessionToolsConfig) -> bool {
+    fn is_visible(&self, config: &SessionToolsConfig) -> bool {
         if self.capability > config.capability_level {
             return false;
         }
@@ -328,6 +445,81 @@ impl ToolCatalogEntry {
             tools::PLAN_TASK_TRACKER => config.plan_mode,
             _ => true,
         }
+    }
+}
+
+fn registration_catalog_source(
+    registration: &ToolRegistration,
+    kind: CatalogToolKind,
+) -> ToolCatalogSource {
+    if matches!(kind, CatalogToolKind::ApplyPatch)
+        || is_builtin_public_tool_name(registration.name())
+    {
+        return ToolCatalogSource::Builtin;
+    }
+
+    if registration.name().starts_with("mcp::") {
+        return ToolCatalogSource::Mcp;
+    }
+
+    ToolCatalogSource::Dynamic
+}
+
+fn is_builtin_public_tool_name(name: &str) -> bool {
+    matches!(
+        name,
+        tools::UNIFIED_SEARCH
+            | tools::UNIFIED_FILE
+            | tools::UNIFIED_EXEC
+            | tools::REQUEST_USER_INPUT
+            | tools::ENTER_PLAN_MODE
+            | tools::EXIT_PLAN_MODE
+            | tools::TASK_TRACKER
+            | tools::PLAN_TASK_TRACKER
+            | tools::LIST_SKILLS
+            | tools::LOAD_SKILL
+            | tools::LOAD_SKILL_RESOURCE
+    )
+}
+
+fn should_defer_tool_loading(entry: &ToolCatalogEntry, config: &SessionToolsConfig) -> bool {
+    if !config.deferred_tool_policy.is_enabled() {
+        return false;
+    }
+
+    if matches!(entry.source, ToolCatalogSource::Dynamic) {
+        return false;
+    }
+
+    if config
+        .deferred_tool_policy
+        .keeps_tool_available(entry.public_name.as_str())
+        || is_core_tool_entry(entry, config)
+    {
+        return false;
+    }
+
+    matches!(
+        entry.source,
+        ToolCatalogSource::Builtin | ToolCatalogSource::Mcp
+    )
+}
+
+fn is_core_tool_entry(entry: &ToolCatalogEntry, config: &SessionToolsConfig) -> bool {
+    match entry.public_name.as_str() {
+        tools::UNIFIED_SEARCH
+        | tools::UNIFIED_FILE
+        | tools::UNIFIED_EXEC
+        | tools::TASK_TRACKER
+        | tools::PLAN_TASK_TRACKER
+        | tools::ENTER_PLAN_MODE
+        | tools::EXIT_PLAN_MODE
+        | tools::LIST_SKILLS
+        | tools::LOAD_SKILL
+        | tools::LOAD_SKILL_RESOURCE => true,
+        tools::REQUEST_USER_INPUT => config.request_user_input_enabled,
+        tools::APPLY_PATCH => config.model_capabilities.supports_apply_patch_tool,
+        _ => false,
     }
 }
 
@@ -698,6 +890,7 @@ fn json_schema_from_value(value: &Value) -> JsonSchema {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::VTCodeConfig;
     use crate::tools::registry::ToolRegistration;
     use crate::tools::request_user_input::RequestUserInputTool;
     use crate::tools::tool_intent::{ToolBehavior, ToolMutationModel};
@@ -743,6 +936,7 @@ mod tests {
             plan_mode: true,
             request_user_input_enabled: false,
             model_capabilities: ToolModelCapabilities::default(),
+            deferred_tool_policy: DeferredToolPolicy::default(),
         });
 
         assert!(names.is_empty());
@@ -911,5 +1105,175 @@ mod tests {
             compacted["properties"]["questions"]["items"]["properties"]["options"]["items"]["required"],
             json!(["label", "description"])
         );
+    }
+
+    #[test]
+    fn anthropic_policy_injects_tool_search_and_defers_non_core_tools() {
+        let unified_search = registration(tools::UNIFIED_SEARCH)
+            .with_description("Search")
+            .with_parameter_schema(json!({"type":"object"}));
+        let apply_patch = registration(tools::APPLY_PATCH)
+            .with_llm_visibility(false)
+            .with_description("Apply patch")
+            .with_parameter_schema(apply_patch_parameters())
+            .with_behavior(ToolBehavior::apply_patch(
+                ToolMutationModel::Mutating,
+                false,
+                true,
+            ));
+        let mcp_tool = registration("mcp::context7::search")
+            .with_llm_visibility(false)
+            .with_description("search docs")
+            .with_parameter_schema(json!({"type":"object"}))
+            .with_aliases(["mcp__context7__search"]);
+
+        let catalog = SessionToolCatalog::rebuild_from_registrations(vec![
+            unified_search,
+            apply_patch,
+            mcp_tool,
+        ]);
+        let definitions = catalog.model_tools(
+            SessionToolsConfig::full_public(
+                SessionSurface::Interactive,
+                CapabilityLevel::CodeSearch,
+                ToolDocumentationMode::Full,
+                ToolModelCapabilities::default(),
+            )
+            .with_deferred_tool_policy(DeferredToolPolicy::anthropic(
+                ToolSearchAlgorithm::Regex,
+                Vec::new(),
+            )),
+        );
+
+        assert!(
+            definitions
+                .iter()
+                .any(|tool| tool.tool_type == "tool_search_tool_regex_20251119"),
+            "anthropic tool search should be injected when deferred tools exist"
+        );
+        let search_tool = definitions
+            .iter()
+            .find(|tool| tool.function_name() == tools::UNIFIED_SEARCH)
+            .expect("unified_search should be present");
+        assert_eq!(search_tool.defer_loading, None);
+
+        let apply_patch = definitions
+            .iter()
+            .find(|tool| tool.function_name() == tools::APPLY_PATCH)
+            .expect("apply_patch fallback should be present");
+        assert_eq!(apply_patch.defer_loading, Some(true));
+
+        let mcp_tool = definitions
+            .iter()
+            .find(|tool| tool.function_name() == "mcp__context7__search")
+            .expect("mcp tool should be present");
+        assert_eq!(mcp_tool.defer_loading, Some(true));
+    }
+
+    #[test]
+    fn openai_policy_keeps_always_available_tools_eager() {
+        let unified_search = registration(tools::UNIFIED_SEARCH)
+            .with_description("Search")
+            .with_parameter_schema(json!({"type":"object"}));
+        let mcp_tool = registration("mcp::context7::search")
+            .with_llm_visibility(false)
+            .with_description("search docs")
+            .with_parameter_schema(json!({"type":"object"}))
+            .with_aliases(["mcp__context7__search"]);
+        let second_mcp_tool = registration("mcp::context7::resolve")
+            .with_llm_visibility(false)
+            .with_description("resolve docs")
+            .with_parameter_schema(json!({"type":"object"}))
+            .with_aliases(["mcp__context7__resolve"]);
+
+        let catalog = SessionToolCatalog::rebuild_from_registrations(vec![
+            unified_search,
+            mcp_tool,
+            second_mcp_tool,
+        ]);
+        let definitions = catalog.model_tools(
+            SessionToolsConfig::full_public(
+                SessionSurface::Interactive,
+                CapabilityLevel::CodeSearch,
+                ToolDocumentationMode::Full,
+                ToolModelCapabilities {
+                    supports_apply_patch_tool: true,
+                },
+            )
+            .with_deferred_tool_policy(DeferredToolPolicy::openai_hosted(vec![
+                "mcp__context7__search".to_string(),
+            ])),
+        );
+
+        assert!(
+            definitions
+                .iter()
+                .any(|tool| tool.tool_type == "tool_search"),
+            "openai hosted tool search should be injected when deferred tools exist"
+        );
+        let mcp_tool = definitions
+            .iter()
+            .find(|tool| tool.function_name() == "mcp__context7__search")
+            .expect("mcp tool should be present");
+        assert_eq!(mcp_tool.defer_loading, None);
+
+        let deferred_mcp_tool = definitions
+            .iter()
+            .find(|tool| tool.function_name() == "mcp__context7__resolve")
+            .expect("second mcp tool should be present");
+        assert_eq!(deferred_mcp_tool.defer_loading, Some(true));
+    }
+
+    #[test]
+    fn unsupported_providers_keep_catalog_eager() {
+        let unified_search = registration(tools::UNIFIED_SEARCH)
+            .with_description("Search")
+            .with_parameter_schema(json!({"type":"object"}));
+        let mcp_tool = registration("mcp::context7::search")
+            .with_llm_visibility(false)
+            .with_description("search docs")
+            .with_parameter_schema(json!({"type":"object"}))
+            .with_aliases(["mcp__context7__search"]);
+
+        let catalog =
+            SessionToolCatalog::rebuild_from_registrations(vec![unified_search, mcp_tool]);
+        let definitions = catalog.model_tools(SessionToolsConfig::full_public(
+            SessionSurface::Interactive,
+            CapabilityLevel::CodeSearch,
+            ToolDocumentationMode::Full,
+            ToolModelCapabilities::default(),
+        ));
+
+        assert!(!definitions.iter().any(|tool| tool.is_tool_search()));
+        assert!(
+            definitions.iter().all(|tool| tool.defer_loading.is_none()),
+            "unsupported providers should keep the eager catalog"
+        );
+    }
+
+    #[test]
+    fn deferred_tool_policy_uses_provider_defaults() {
+        let config = VTCodeConfig::default();
+
+        let anthropic =
+            deferred_tool_policy_for_runtime(Some(Provider::Anthropic), false, Some(&config));
+        assert!(anthropic.is_enabled());
+        assert_eq!(
+            anthropic
+                .tool_search_definition()
+                .map(|tool| tool.tool_type),
+            Some("tool_search_tool_regex_20251119".to_string())
+        );
+
+        let openai = deferred_tool_policy_for_runtime(Some(Provider::OpenAI), true, Some(&config));
+        assert!(openai.is_enabled());
+        assert_eq!(
+            openai.tool_search_definition().map(|tool| tool.tool_type),
+            Some("tool_search".to_string())
+        );
+
+        let unsupported =
+            deferred_tool_policy_for_runtime(Some(Provider::OpenAI), false, Some(&config));
+        assert!(!unsupported.is_enabled());
     }
 }

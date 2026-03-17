@@ -27,12 +27,15 @@ use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::state::recover_history_from_crash;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::llm::{
-    factory::{ProviderConfig, create_provider_with_config},
+    factory::{ProviderConfig, create_provider_with_config, infer_provider},
     provider as uni,
 };
 
 use vtcode_core::models::ModelId;
-use vtcode_core::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
+use vtcode_core::tools::handlers::{
+    DeferredToolPolicy, SessionSurface, SessionToolsConfig, ToolModelCapabilities,
+    deferred_tool_policy_for_runtime,
+};
 use vtcode_core::tools::{ApprovalRecorder, ToolRegistry, ToolResultCache};
 use vtcode_core::utils::dot_config::load_workspace_trust_level;
 use vtcode_core::{apply_global_notification_config_from_vtcode, init_global_notification_manager};
@@ -99,6 +102,7 @@ pub(crate) async fn initialize_session(
         append_notice_highlight(&mut session_bootstrap.header_highlights, notice);
     }
     let provider_client = create_provider_client(config, vt_cfg)?;
+    let deferred_tool_policy = active_deferred_tool_policy(config, vt_cfg, &*provider_client);
     let mut full_auto_allowlist = None;
 
     let skill_setup = discover_skills(config, resume).await;
@@ -161,12 +165,15 @@ pub(crate) async fn initialize_session(
 
     let tools = Arc::new(RwLock::new(
         tool_registry
-            .model_tools(SessionToolsConfig::full_public(
-                SessionSurface::Interactive,
-                vtcode_core::config::types::CapabilityLevel::CodeSearch,
-                tool_documentation_mode,
-                ToolModelCapabilities::for_model_name(&config.model),
-            ))
+            .model_tools(
+                SessionToolsConfig::full_public(
+                    SessionSurface::Interactive,
+                    vtcode_core::config::types::CapabilityLevel::CodeSearch,
+                    tool_documentation_mode,
+                    ToolModelCapabilities::for_model_name(&config.model),
+                )
+                .with_deferred_tool_policy(deferred_tool_policy.clone()),
+            )
             .await,
     ));
     register_skill_tools(
@@ -176,6 +183,7 @@ pub(crate) async fn initialize_session(
         config,
         vt_cfg,
         tool_documentation_mode,
+        deferred_tool_policy.clone(),
         &skill_setup,
     )
     .await?;
@@ -185,6 +193,7 @@ pub(crate) async fn initialize_session(
         &tool_catalog,
         config,
         tool_documentation_mode,
+        &deferred_tool_policy,
     )
     .await;
 
@@ -360,20 +369,36 @@ fn create_provider_client(
     .context("Failed to initialize provider client")
 }
 
+pub(crate) fn active_deferred_tool_policy(
+    config: &CoreAgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
+    provider_client: &dyn uni::LLMProvider,
+) -> DeferredToolPolicy {
+    deferred_tool_policy_for_runtime(
+        infer_provider(Some(&config.provider), &config.model),
+        provider_client.supports_responses_compaction(&config.model),
+        vt_cfg,
+    )
+}
+
 pub(crate) async fn refresh_tool_snapshot(
     tool_registry: &ToolRegistry,
     tools: &Arc<RwLock<Vec<uni::ToolDefinition>>>,
     _tool_catalog: &ToolCatalogState,
     config: &CoreAgentConfig,
     tool_documentation_mode: vtcode_core::config::ToolDocumentationMode,
+    deferred_tool_policy: &DeferredToolPolicy,
 ) {
     let next = tool_registry
-        .model_tools(SessionToolsConfig::full_public(
-            SessionSurface::Interactive,
-            vtcode_core::config::types::CapabilityLevel::CodeSearch,
-            tool_documentation_mode,
-            ToolModelCapabilities::for_model_name(&config.model),
-        ))
+        .model_tools(
+            SessionToolsConfig::full_public(
+                SessionSurface::Interactive,
+                vtcode_core::config::types::CapabilityLevel::CodeSearch,
+                tool_documentation_mode,
+                ToolModelCapabilities::for_model_name(&config.model),
+            )
+            .with_deferred_tool_policy(deferred_tool_policy.clone()),
+        )
         .await;
     *tools.write().await = next;
 }

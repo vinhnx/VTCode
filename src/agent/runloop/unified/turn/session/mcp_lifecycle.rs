@@ -9,7 +9,9 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use crate::agent::runloop::unified::async_mcp_manager::{AsyncMcpManager, McpInitStatus};
 use crate::agent::runloop::unified::mcp_tool_manager::McpToolManager;
+use crate::agent::runloop::unified::session_setup::active_deferred_tool_policy;
 use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
+use vtcode_core::config::loader::VTCodeConfig;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RefreshDecision {
@@ -35,6 +37,8 @@ pub(crate) async fn handle_mcp_updates(
     tools: &Arc<tokio::sync::RwLock<Vec<uni::ToolDefinition>>>,
     tool_catalog: &ToolCatalogState,
     config: &CoreAgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
+    provider_client: &dyn uni::LLMProvider,
     tool_documentation_mode: ToolDocumentationMode,
     renderer: &mut AnsiRenderer,
     mcp_catalog_initialized: &mut bool,
@@ -43,6 +47,8 @@ pub(crate) async fn handle_mcp_updates(
     pending_mcp_refresh: &mut bool,
     refresh_interval: std::time::Duration,
 ) -> Result<()> {
+    let deferred_tool_policy = active_deferred_tool_policy(config, vt_cfg, provider_client);
+
     if !*mcp_catalog_initialized {
         match mcp_manager.get_status().await {
             McpInitStatus::Ready { client } => {
@@ -59,6 +65,7 @@ pub(crate) async fn handle_mcp_updates(
                                     tool_catalog,
                                     config,
                                     tool_documentation_mode,
+                                    &deferred_tool_policy,
                                     mcp_tools,
                                     last_known_mcp_tools,
                                 )
@@ -117,6 +124,7 @@ pub(crate) async fn handle_mcp_updates(
                             tool_catalog,
                             config,
                             tool_documentation_mode,
+                            &deferred_tool_policy,
                             last_known_mcp_tools,
                         )
                         .await?;

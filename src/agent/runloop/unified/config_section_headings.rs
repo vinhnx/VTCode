@@ -313,6 +313,11 @@ static SECTION_HEADINGS: &[(&str, &str, &str)] = &[
         "OpenAI-specific request settings.",
     ),
     (
+        "provider.openai.tool_search",
+        "OpenAI Tool Search",
+        "Hosted search tool configuration for OpenAI Responses models.",
+    ),
+    (
         "pty",
         "Terminal Sessions",
         "PTY limits, buffering, and shell defaults.",

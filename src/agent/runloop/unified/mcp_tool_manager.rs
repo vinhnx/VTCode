@@ -6,6 +6,7 @@ use vtcode_core::mcp::McpToolInfo;
 
 use crate::agent::runloop::unified::session_setup::refresh_tool_snapshot;
 use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
+use vtcode_core::tools::handlers::DeferredToolPolicy;
 
 pub(crate) struct McpToolManager;
 
@@ -17,6 +18,7 @@ impl McpToolManager {
         tool_catalog: &ToolCatalogState,
         config: &CoreAgentConfig,
         tool_documentation_mode: ToolDocumentationMode,
+        deferred_tool_policy: &DeferredToolPolicy,
         last_known_mcp_tools: &mut Vec<String>, // This becomes the new current tool list
     ) -> anyhow::Result<()> {
         match tool_registry.list_mcp_tools().await {
@@ -27,6 +29,7 @@ impl McpToolManager {
                     tool_catalog,
                     config,
                     tool_documentation_mode,
+                    deferred_tool_policy,
                 )
                 .await;
                 tool_catalog.mark_pending_refresh("mcp_background_refresh");
@@ -56,6 +59,7 @@ impl McpToolManager {
         tool_catalog: &ToolCatalogState,
         config: &CoreAgentConfig,
         tool_documentation_mode: ToolDocumentationMode,
+        deferred_tool_policy: &DeferredToolPolicy,
         mcp_tools: Vec<McpToolInfo>, // Passed in from initial setup
         last_known_mcp_tools: &mut Vec<String>, // This becomes the new current tool list
     ) -> anyhow::Result<()> {
@@ -65,6 +69,7 @@ impl McpToolManager {
             tool_catalog,
             config,
             tool_documentation_mode,
+            deferred_tool_policy,
         )
         .await;
         tool_catalog.mark_pending_refresh("mcp_background_refresh");

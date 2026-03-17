@@ -852,6 +852,11 @@ websocket_mode = false
 # Optional native OpenAI service tier override. Leave commented out to use the Project default.
 # service_tier = "priority"
 
+[provider.openai.tool_search]
+enabled = true
+defer_by_default = true
+always_available_tools = []
+
 [provider.anthropic]
 skip_model_validation = false
 extended_thinking_enabled = true
@@ -862,7 +867,7 @@ effort = "low"
 count_tokens_enabled = false
 
 [provider.anthropic.tool_search]
-enabled = false
+enabled = true
 algorithm = "regex"
 defer_by_default = true
 max_results = 5

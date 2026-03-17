@@ -186,6 +186,33 @@ impl OpenAIHostedShellConfig {
     }
 }
 
+/// OpenAI hosted tool search configuration.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct OpenAIToolSearchConfig {
+    /// Enable hosted tool search for OpenAI Responses-compatible models.
+    #[serde(default = "default_tool_search_enabled")]
+    pub enabled: bool,
+
+    /// Automatically defer loading of all tools except the core always-on set.
+    #[serde(default = "default_defer_by_default")]
+    pub defer_by_default: bool,
+
+    /// Tool names that should never be deferred (always available).
+    #[serde(default)]
+    pub always_available_tools: Vec<String>,
+}
+
+impl Default for OpenAIToolSearchConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_tool_search_enabled(),
+            defer_by_default: default_defer_by_default(),
+            always_available_tools: Vec::new(),
+        }
+    }
+}
+
 /// OpenAI-specific provider configuration
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
@@ -214,6 +241,10 @@ pub struct OpenAIConfig {
     /// Optional hosted shell configuration for OpenAI native Responses models.
     #[serde(default)]
     pub hosted_shell: OpenAIHostedShellConfig,
+
+    /// Hosted tool search configuration for OpenAI Responses-compatible models.
+    #[serde(default)]
+    pub tool_search: OpenAIToolSearchConfig,
 }
 
 /// Anthropic-specific provider configuration
@@ -301,7 +332,7 @@ fn default_count_tokens_enabled() -> bool {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ToolSearchConfig {
     /// Enable tool search feature (requires advanced-tool-use-2025-11-20 beta)
-    #[serde(default)]
+    #[serde(default = "default_tool_search_enabled")]
     pub enabled: bool,
 
     /// Search algorithm: "regex" (Python regex patterns) or "bm25" (natural language)
@@ -324,13 +355,18 @@ pub struct ToolSearchConfig {
 impl Default for ToolSearchConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
+            enabled: default_tool_search_enabled(),
             algorithm: default_tool_search_algorithm(),
             defer_by_default: default_defer_by_default(),
             max_results: default_max_results(),
             always_available_tools: vec![],
         }
     }
+}
+
+#[inline]
+fn default_tool_search_enabled() -> bool {
+    true
 }
 
 #[inline]
@@ -376,8 +412,8 @@ fn default_effort() -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        OpenAIConfig, OpenAIHostedShellConfig, OpenAIHostedShellEnvironment, OpenAIHostedSkill,
-        OpenAIHostedSkillVersion, OpenAIServiceTier,
+        AnthropicConfig, OpenAIConfig, OpenAIHostedShellConfig, OpenAIHostedShellEnvironment,
+        OpenAIHostedSkill, OpenAIHostedSkillVersion, OpenAIServiceTier,
     };
 
     #[test]
@@ -388,6 +424,9 @@ mod tests {
         assert!(config.responses_include.is_empty());
         assert_eq!(config.service_tier, None);
         assert_eq!(config.hosted_shell, OpenAIHostedShellConfig::default());
+        assert!(config.tool_search.enabled);
+        assert!(config.tool_search.defer_by_default);
+        assert!(config.tool_search.always_available_tools.is_empty());
     }
 
     #[test]
@@ -399,6 +438,7 @@ mod tests {
         assert!(parsed.responses_include.is_empty());
         assert_eq!(parsed.service_tier, None);
         assert_eq!(parsed.hosted_shell, OpenAIHostedShellConfig::default());
+        assert_eq!(parsed.tool_search, super::OpenAIToolSearchConfig::default());
     }
 
     #[test]
@@ -493,6 +533,36 @@ sha256 = "deadbeef"
                 },
             ]
         );
+    }
+
+    #[test]
+    fn openai_config_parses_tool_search() {
+        let parsed: OpenAIConfig = toml::from_str(
+            r#"
+[tool_search]
+enabled = false
+defer_by_default = false
+always_available_tools = ["unified_search", "custom_tool"]
+"#,
+        )
+        .expect("config should parse");
+
+        assert!(!parsed.tool_search.enabled);
+        assert!(!parsed.tool_search.defer_by_default);
+        assert_eq!(
+            parsed.tool_search.always_available_tools,
+            vec!["unified_search".to_string(), "custom_tool".to_string()]
+        );
+    }
+
+    #[test]
+    fn anthropic_tool_search_defaults_to_enabled() {
+        let config = AnthropicConfig::default();
+
+        assert!(config.tool_search.enabled);
+        assert!(config.tool_search.defer_by_default);
+        assert_eq!(config.tool_search.algorithm, "regex");
+        assert!(config.tool_search.always_available_tools.is_empty());
     }
 
     #[test]

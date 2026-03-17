@@ -14,7 +14,7 @@ use crate::config::constants::{
 };
 use crate::config::types::SystemPromptMode;
 use crate::instructions::{
-    InstructionBundle, read_instruction_bundle, render_instruction_markdown,
+    InstructionBundle, read_instruction_bundle, render_instruction_summary_markdown,
 };
 use crate::llm::providers::gemini::wire::Content;
 use crate::project_doc::read_project_doc;
@@ -23,7 +23,7 @@ use crate::prompts::guidelines::generate_tool_guidelines;
 use crate::prompts::output_styles::OutputStyleApplier;
 use crate::prompts::system_prompt_cache::PROMPT_CACHE;
 use crate::prompts::temporal::generate_temporal_context;
-use crate::skills::render::render_skills_section;
+use crate::skills::render::render_prompt_skills_section;
 use dirs::home_dir;
 use std::env;
 use std::fmt::Write as _;
@@ -32,6 +32,7 @@ use tracing::warn;
 
 const COMPACT_TOOL_GUIDANCE: &str = r#"**Tools**:
 - Prefer `unified_search` over repeated reads; default to `action='structural'` for code search and `action='grep'` for plain text
+- Treat prompt-side instruction and skill sections as indexes; read the referenced files on demand when exact wording or deeper details matter
 - For `action='structural'`, set `lang` when known and keep `pattern` parseable code, not fragments like `-> Result<$T>`
 - If a structural query is a fragment, retry `unified_search` with a larger parseable pattern before switching tools or loading a skill
 - `action='structural'` is syntax-aware only; keep refining `unified_search` first and use `unified_exec` only for raw `sg scan`/`sg test` or rewrite workflows
@@ -41,6 +42,7 @@ const COMPACT_TOOL_GUIDANCE: &str = r#"**Tools**:
 - Keep iterating with tool calls until the task is complete or clearly blocked; do not stop after a single partial result
 - If only part of the request is blocked by a missing symbol, path, or placeholder, complete the non-blocked portion first and then ask for the exact missing input
 - Hidden capabilities route through `list_skills` and `load_skill`; check routing hints before loading a skill
+- Use `unified_search` with `action='tools'` as the fallback tool-discovery path when native tool search is unavailable or when you need to inspect a specific tool directly
 - Respect runtime-configured loop guards; if a call pattern stalls or repeats, pivot instead of retrying identically"#;
 
 /// Shared Plan Mode header used by both static and incremental prompt builders.
@@ -70,6 +72,7 @@ You are VT Code, a coding agent for VT Code. Be concise, direct, and safe.
 ## Workflow
 
 - Start with the repo: read `AGENTS.md`, inspect the relevant code, and understand existing patterns before editing.
+- Prompt-side instruction and skill sections may be summaries only; load the referenced file on demand when exact wording matters.
 - For non-trivial work, use `task_tracker` to break the job into small verified slices.
 - Use Plan Mode for research/spec work; stay read-only there until implementation intent is explicit.
 - Execute changes surgically, match surrounding style, and verify before moving on.
@@ -147,6 +150,8 @@ const MINIMAL_SYSTEM_PROMPT: &str = r#"You are VT Code, a coding assistant for V
 
 **Execution contract**: Keep outputs compact and in the requested format. If the next step is reversible and low-risk, proceed without asking. Use tools when they improve correctness, resolve prerequisites before acting, retry empty or partial lookups with a different approach, and verify before finalizing. Treat the task as incomplete until every requested item is covered or marked blocked. If required context is missing, do not guess, but still complete any unblocked portion before asking for the missing input. For research or citation-sensitive work, base claims only on retrieved or provided evidence and cite only retrieved sources.
 
+**Indexed context**: Prompt-side instruction and skill sections may be summaries only. Load the referenced source file when exact wording or deeper guidance matters.
+
 **Harness**: `AGENTS.md` is the map. `docs/harness/` has invariants, quality scores, exec plans, tech debt. Check invariants before modifying code. Boy scout rule: leave code better than you found it.
 
 **Validation**: Run tests/checks yourself. Verify at least once per slice and before concluding. Never claim "tested/passed" unless you actually ran the command.
@@ -178,6 +183,7 @@ const DEFAULT_LIGHTWEIGHT_PROMPT: &str = r#"VT Code - efficient coding agent.
 - If the next step is reversible and low-risk, proceed without asking. Ask only for irreversible, external, or outcome-changing choices.
 - If part of the task is answerable without a missing detail, complete that portion before asking for the exact missing input.
 - Use `task_tracker` for multi-step work and Plan Mode for research/spec work.
+- Prompt instruction and skill sections are indexes, not full source; load referenced files on demand when exact details matter.
 - Use `@file`, IDE context, and `/add-dir` to focus the relevant code.
 - Scoped: unified_search (≤5), unified_file (max_tokens).
 - Use `unified_exec` for shell commands; set `tty=true` only when an interactive PTY is required.
@@ -216,6 +222,7 @@ For complex refactors and multi-file changes, stay methodical and outcome-focuse
 ## Repo Context
 
 - `AGENTS.md` is the map. Use `docs/harness/ARCHITECTURAL_INVARIANTS.md` when structural rules matter.
+- Prompt-side instruction and skill sections may summarize those files; open the referenced source on demand when exact details matter.
 - Use `@file`, IDE context, and `/add-dir` to stay focused on the right code.
 - Keep changes surgical unless the task explicitly calls for deeper restructuring.
 
@@ -364,7 +371,7 @@ pub async fn compose_system_instruction_text(
             instruction.push_str("\n\n");
             instruction.push_str(&language_hints);
         }
-        if let Some(skills_section) = render_skills_section(&ctx.available_skill_metadata) {
+        if let Some(skills_section) = render_prompt_skills_section(&ctx.available_skill_metadata) {
             instruction.push_str("\n\n");
             instruction.push_str(&skills_section);
         }
@@ -415,7 +422,7 @@ pub async fn compose_system_instruction_text(
     if let Some(bundle) = instruction_bundle {
         let home_ref = home_path.as_deref();
         instruction.push_str("\n\n");
-        instruction.push_str(&render_instruction_markdown(
+        instruction.push_str(&render_instruction_summary_markdown(
             "AGENTS.MD INSTRUCTION HIERARCHY",
             &bundle.segments,
             bundle.truncated,
@@ -1145,6 +1152,9 @@ mod tests {
         assert!(result.contains("### Key points"));
         assert!(result.contains("AGENTS.md (workspace)"));
         assert!(result.contains("Root summary"));
+        assert!(result.contains("### On-demand loading"));
+        assert!(result.contains("Full instruction files stay on disk"));
+        assert!(!result.contains("Follow the root guidance."));
     }
 
     #[tokio::test]
@@ -1375,6 +1385,8 @@ mod tests {
         assert!(result.contains("scope: system"));
         assert!(result.contains("use: Use when creating or updating a skill."));
         assert!(result.contains("avoid: Avoid for unrelated implementation work."));
+        assert!(result.contains("- Routing: Use a skill"));
+        assert!(!result.contains("Discovery: Available skills are listed"));
     }
 
     #[test]

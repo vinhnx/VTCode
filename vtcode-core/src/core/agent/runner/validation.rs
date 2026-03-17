@@ -14,6 +14,15 @@ impl AgentRunner {
             plan_mode: self.tool_registry.is_plan_mode(),
             request_user_input_enabled: false,
             model_capabilities: ToolModelCapabilities::for_model_name(&self.model),
+            deferred_tool_policy: crate::tools::handlers::deferred_tool_policy_for_runtime(
+                crate::llm::factory::infer_provider(
+                    Some(&self.config().agent.provider),
+                    &self.model,
+                ),
+                self.provider_client
+                    .supports_responses_compaction(&self.model),
+                Some(self.config()),
+            ),
         };
 
         let definitions = self.tool_registry.model_tools(config).await;

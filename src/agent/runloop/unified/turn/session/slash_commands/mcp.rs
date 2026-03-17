@@ -9,7 +9,9 @@ use crate::agent::runloop::unified::mcp_support::{
     display_mcp_tools, refresh_mcp_tools, render_mcp_config_edit_guidance,
     render_mcp_login_guidance, repair_mcp_runtime,
 };
-use crate::agent::runloop::unified::session_setup::refresh_tool_snapshot;
+use crate::agent::runloop::unified::session_setup::{
+    active_deferred_tool_policy, refresh_tool_snapshot,
+};
 
 use super::{SlashCommandContext, SlashCommandControl};
 
@@ -132,12 +134,15 @@ async fn apply_manual_mcp_refresh(ctx: &mut SlashCommandContext<'_>, reason: &'s
         .as_ref()
         .map(|cfg| cfg.agent.tool_documentation_mode)
         .unwrap_or_default();
+    let deferred_tool_policy =
+        active_deferred_tool_policy(ctx.config, ctx.vt_cfg.as_ref(), &**ctx.provider_client);
     refresh_tool_snapshot(
         ctx.tool_registry,
         ctx.tools,
         ctx.tool_catalog,
         ctx.config,
         tool_documentation_mode,
+        &deferred_tool_policy,
     )
     .await;
     ctx.tool_catalog.note_explicit_refresh(reason);
