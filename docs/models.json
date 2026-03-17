@@ -228,6 +228,38 @@
         },
         "context": 1050000
       },
+      "gpt-5.4-nano": {
+        "id": "gpt-5.4-nano",
+        "name": "GPT-5.4 Nano",
+        "description": "Lightweight GPT-5.4 variant optimized for speed and cost-efficiency.",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 100000
+      },
+      "gpt-5.4-mini": {
+        "id": "gpt-5.4-mini",
+        "name": "GPT-5.4 Mini",
+        "description": "Compact GPT-5.4 variant for cost-effective tasks with reduced reasoning overhead.",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 200000
+      },
       "gpt-5.2-codex": {
         "id": "gpt-5.2-codex",
         "name": "GPT-5.2 Codex",
