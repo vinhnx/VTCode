@@ -97,14 +97,31 @@ fn wrap_mixed_content(
             }
         }
 
-        // Add URL as atomic unit
+        // Add URL — keep atomic if it fits, otherwise break it across lines
         let url_width = url_text.width();
-        if current_width > 0 && current_width + url_width > max_width {
-            flush_line(&mut current_line, &mut result);
-            current_width = 0;
+        if url_width <= max_width {
+            if current_width > 0 && current_width + url_width > max_width {
+                flush_line(&mut current_line, &mut result);
+                current_width = 0;
+            }
+            current_line.push(Span::styled(url_text.to_string(), default_style));
+            current_width += url_width;
+        } else {
+            // URL is wider than max_width — break it grapheme-by-grapheme
+            if current_width > 0 {
+                flush_line(&mut current_line, &mut result);
+                current_width = 0;
+            }
+            for grapheme in UnicodeSegmentation::graphemes(*url_text, true) {
+                let gw = grapheme.width();
+                if current_width + gw > max_width && current_width > 0 {
+                    flush_line(&mut current_line, &mut result);
+                    current_width = 0;
+                }
+                current_line.push(Span::styled(grapheme.to_string(), default_style));
+                current_width += gw;
+            }
         }
-        current_line.push(Span::styled(url_text.to_string(), default_style));
-        current_width += url_width;
 
         text_pos = *url_end;
     }
@@ -212,6 +229,19 @@ mod tests {
             .collect();
 
         assert!(all_text.contains("\"./docs/My Notes.md\""));
+    }
+
+    #[test]
+    fn test_long_url_breaks_across_lines() {
+        let long_url = "https://auth.openai.com/oauth/authorize?response_type=code&client_id=app_EMoamEEZ73f0CkXaXp7hrann&redirect_uri=http%3A%2F%2Flocalhost%3A1455%2Fauth%2Fcallback&scope=openid";
+        let line = Line::from(Span::raw(long_url.to_string()));
+        let wrapped = wrap_line_preserving_urls(line, 80);
+        assert!(wrapped.len() > 1, "Long URL should wrap across multiple lines");
+        let all_text: String = wrapped
+            .iter()
+            .flat_map(|l| l.spans.iter().map(|s| s.content.as_ref()))
+            .collect();
+        assert_eq!(all_text, long_url, "All characters should be preserved");
     }
 
     #[test]
