@@ -300,7 +300,8 @@ fn ensure_supported_provider(
 
 fn open_browser_with_guidance(renderer: &mut AnsiRenderer, auth_url: &str) -> Result<()> {
     renderer.line(MessageStyle::Info, "Opening browser for authentication...")?;
-    renderer.line(MessageStyle::Output, &format!("URL: {}", auth_url))?;
+    renderer.line(MessageStyle::Info, "URL:")?;
+    renderer.line(MessageStyle::Info, auth_url)?;
     if let Err(err) = webbrowser::open(auth_url) {
         renderer.line(
             MessageStyle::Error,

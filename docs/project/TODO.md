@@ -463,13 +463,3 @@ https://claude.ai/chat/37d94c2c-a521-44d2-85f3-e15c38864286
 make file path highlight as ansi color based on current theme and clickable to open the file in the editor. This will improve usability and allow users to quickly navigate to relevant files while reviewing plans and executing tasks. Implement ANSI color coding for file paths based on the current theme, ensuring that they are visually distinct and easily identifiable. Additionally, make the file paths clickable so that users can open them directly in their code editor with a single click, streamlining the workflow and enhancing the overall user experience when working with plans and related files.
 
 /Users/vinhnguyenxuan/Documents/vtcode-resources/idea/file.png
-
-===
-
-show full lines for oauth link, to let user copy and paste to browser. currently it is truncuated
-
-```
-  URL:
-  https://auth.openai.com/oauth/authorize?response_type=code&client_id=app_EMoamEEZ73f0CkXaXp7hrann&redirect_uri=http
-  If localhost is unavailable, paste the redirected URL or raw query string into the inline prompt.
-```
