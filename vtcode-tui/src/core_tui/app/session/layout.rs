@@ -3,8 +3,8 @@ use ratatui::layout::{Constraint, Layout, Rect};
 use crate::config::constants::ui;
 
 use super::{Session, render, slash};
-use crate::core_tui::session::render as core_render;
 use crate::core_tui::session::list_panel;
+use crate::core_tui::session::render as core_render;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum BottomPanelKind {

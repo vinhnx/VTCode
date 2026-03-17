@@ -49,7 +49,14 @@ impl Session {
         appearance: Option<AppearanceConfig>,
         app_name: String,
     ) -> Self {
-        Self::new_with_options(theme, placeholder, view_rows, show_logs, appearance, app_name)
+        Self::new_with_options(
+            theme,
+            placeholder,
+            view_rows,
+            show_logs,
+            appearance,
+            app_name,
+        )
     }
 
     fn new_with_options(

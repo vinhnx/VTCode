@@ -89,3 +89,5 @@ prompt += `## ${filePath}\n\n${content}\n\n`;
 Claude Code does the same with CLAUDE.md. The pattern is simple: read the file, append it right after the system prompt.
 
 ==
+
+Improve /model loading performance. models.json are gettings large and loading them is becoming a bottleneck. Consider lazy loading model metadata, caching results, or optimizing the data structure for faster access. Additionally, review the model selection logic to ensure it is efficient and does not require unnecessary processing of the entire models.json file on each load.

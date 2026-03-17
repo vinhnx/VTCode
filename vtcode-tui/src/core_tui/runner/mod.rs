@@ -57,7 +57,10 @@ pub trait TuiSessionDriver {
 
 impl TuiCommand for crate::core_tui::types::InlineCommand {
     fn is_suspend_event_loop(&self) -> bool {
-        matches!(self, crate::core_tui::types::InlineCommand::SuspendEventLoop)
+        matches!(
+            self,
+            crate::core_tui::types::InlineCommand::SuspendEventLoop
+        )
     }
 
     fn is_resume_event_loop(&self) -> bool {

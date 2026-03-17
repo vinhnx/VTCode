@@ -30,8 +30,7 @@ impl AppSession {
             if let Some((_start, _end, query)) = extract_file_reference(
                 self.core.input_manager.content(),
                 self.core.input_manager.cursor(),
-            )
-            {
+            ) {
                 palette.set_filter(query);
                 if !self.file_palette_active {
                     self.ensure_inline_lists_visible_for_trigger();
@@ -119,12 +118,10 @@ impl AppSession {
 
     /// Insert a file reference into the input at the current position
     pub(crate) fn insert_file_reference(&mut self, file_path: &str) {
-        if let Some((start, end, _)) =
-            extract_file_reference(
-                self.core.input_manager.content(),
-                self.core.input_manager.cursor(),
-            )
-        {
+        if let Some((start, end, _)) = extract_file_reference(
+            self.core.input_manager.content(),
+            self.core.input_manager.cursor(),
+        ) {
             let before = &self.core.input_manager.content()[..start];
             let after = &self.core.input_manager.content()[end..];
             let reference_alias = format!("@{}", file_path);

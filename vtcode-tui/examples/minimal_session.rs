@@ -1,4 +1,6 @@
-use vtcode_tui::app::{InlineHeaderContext, InlineTheme, SessionOptions, spawn_session_with_options};
+use vtcode_tui::app::{
+    InlineHeaderContext, InlineTheme, SessionOptions, spawn_session_with_options,
+};
 
 fn main() {
     let _header = InlineHeaderContext::default();

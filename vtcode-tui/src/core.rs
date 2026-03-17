@@ -5,9 +5,7 @@ use crate::config::KeyboardProtocolConfig;
 use crate::core_tui;
 
 pub use crate::core_tui::session::config::AppearanceConfig as SessionAppearanceConfig;
-pub use crate::core_tui::session::config::{
-    LayoutModeOverride, ReasoningDisplayMode, UiMode,
-};
+pub use crate::core_tui::session::config::{LayoutModeOverride, ReasoningDisplayMode, UiMode};
 pub use crate::core_tui::session::mouse_selection::MouseSelectionState;
 pub use crate::core_tui::style::{convert_style, theme_from_styles};
 pub use crate::core_tui::theme_parser::ThemeConfigParser;
@@ -88,13 +86,12 @@ pub fn spawn_core_session(
 /// Commonly used core TUI API items.
 pub mod prelude {
     pub use super::{
-        CoreCommand, CoreEvent, CoreHandle, CoreSession, CoreSessionOptions,
-        InlineHeaderContext, InlineHeaderHighlight, InlineHeaderStatusBadge,
-        InlineHeaderStatusTone, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
-        KeyboardProtocolSettings, LayoutModeOverride, ListOverlayRequest, ModalOverlayRequest,
-        OverlayEvent, OverlayHotkey, OverlayHotkeyAction, OverlayHotkeyKey, OverlayRequest,
-        OverlaySelectionChange, OverlaySubmission, ReasoningDisplayMode, SessionAppearanceConfig,
-        SessionSurface, UiMode, WizardModalMode, WizardOverlayRequest, WizardStep, convert_style,
-        spawn_core_session, theme_from_styles,
+        CoreCommand, CoreEvent, CoreHandle, CoreSession, CoreSessionOptions, InlineHeaderContext,
+        InlineHeaderHighlight, InlineHeaderStatusBadge, InlineHeaderStatusTone, InlineMessageKind,
+        InlineSegment, InlineTextStyle, InlineTheme, KeyboardProtocolSettings, LayoutModeOverride,
+        ListOverlayRequest, ModalOverlayRequest, OverlayEvent, OverlayHotkey, OverlayHotkeyAction,
+        OverlayHotkeyKey, OverlayRequest, OverlaySelectionChange, OverlaySubmission,
+        ReasoningDisplayMode, SessionAppearanceConfig, SessionSurface, UiMode, WizardModalMode,
+        WizardOverlayRequest, WizardStep, convert_style, spawn_core_session, theme_from_styles,
     };
 }

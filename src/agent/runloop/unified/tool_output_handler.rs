@@ -424,7 +424,9 @@ mod tests {
     use vtcode_core::tools::result_cache::{ToolCacheKey, ToolResultCache};
     use vtcode_core::ui::inline_theme_from_core_styles;
     use vtcode_core::ui::theme;
-    use vtcode_tui::app::{InlineCommand, InlineHandle, SessionOptions, spawn_session_with_options};
+    use vtcode_tui::app::{
+        InlineCommand, InlineHandle, SessionOptions, spawn_session_with_options,
+    };
 
     fn build_harness_state() -> crate::agent::runloop::unified::run_loop_context::HarnessTurnState {
         crate::agent::runloop::unified::run_loop_context::HarnessTurnState::new(

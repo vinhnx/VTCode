@@ -3,12 +3,12 @@ use std::sync::Arc;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use super::overlay::{ListOverlayRequest, ModalOverlayRequest, OverlayEvent, OverlayRequest};
+use crate::core_tui::session::config::AppearanceConfig;
 use crate::core_tui::types::{
     EditingMode, InlineHeaderContext, InlineLinkRange, InlineListItem, InlineListSearchConfig,
     InlineListSelection, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
     SecurePromptConfig,
 };
-use crate::core_tui::session::config::AppearanceConfig;
 
 pub enum InlineCommand {
     AppendLine {
@@ -128,13 +128,9 @@ impl From<crate::core_tui::types::InlineEvent> for InlineEvent {
             crate::core_tui::types::InlineEvent::Submit(text) => Self::Submit(text),
             crate::core_tui::types::InlineEvent::QueueSubmit(text) => Self::QueueSubmit(text),
             crate::core_tui::types::InlineEvent::Steer(text) => Self::Steer(text),
-            crate::core_tui::types::InlineEvent::ProcessLatestQueued => {
-                Self::ProcessLatestQueued
-            }
+            crate::core_tui::types::InlineEvent::ProcessLatestQueued => Self::ProcessLatestQueued,
             crate::core_tui::types::InlineEvent::EditQueue => Self::EditQueue,
-            crate::core_tui::types::InlineEvent::Overlay(event) => {
-                Self::Overlay(event.into())
-            }
+            crate::core_tui::types::InlineEvent::Overlay(event) => Self::Overlay(event.into()),
             crate::core_tui::types::InlineEvent::Cancel => Self::Cancel,
             crate::core_tui::types::InlineEvent::Exit => Self::Exit,
             crate::core_tui::types::InlineEvent::Interrupt => Self::Interrupt,

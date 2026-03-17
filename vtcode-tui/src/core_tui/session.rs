@@ -25,8 +25,8 @@ use super::{
 use crate::config::constants::ui;
 use crate::ui::tui::widgets::SessionWidget;
 
-mod header;
 mod frame_layout;
+mod header;
 mod impl_events;
 mod impl_init;
 mod impl_input;
@@ -38,8 +38,8 @@ mod impl_style;
 pub(crate) mod inline_list;
 mod input;
 pub(crate) mod input_manager;
-pub(crate) mod list_panel;
 pub(crate) mod list_navigator;
+pub(crate) mod list_panel;
 mod message;
 pub mod modal;
 pub mod mouse_selection;
@@ -58,10 +58,10 @@ mod command;
 mod editing;
 
 pub mod config;
+mod driver;
 mod events;
 pub(crate) mod message_renderer;
 mod messages;
-mod driver;
 mod reflow;
 pub(crate) mod reverse_search;
 mod spinner;

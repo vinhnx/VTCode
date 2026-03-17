@@ -15,6 +15,7 @@ use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::ToolRegistry;
 use vtcode_core::tools::handlers::{DeferredToolPolicy, ToolModelCapabilities};
 use vtcode_core::tools::native_cgp_tool_factory;
+use vtcode_core::tools::registry::ToolCatalogSource;
 
 pub(crate) struct SkillSetupState {
     pub active_skills_map: Arc<RwLock<HashMap<String, vtcode_core::skills::types::Skill>>>,
@@ -115,6 +116,7 @@ async fn register_list_skills_tool(
         vtcode_core::config::types::CapabilityLevel::Basic,
         list_skills_tool,
     )
+    .with_catalog_source(ToolCatalogSource::Builtin)
     .with_native_cgp_factory(native_cgp_tool_factory({
         let workspace_root = workspace_root.clone();
         let active_skills_map = Arc::clone(&active_skills_map);
@@ -143,6 +145,7 @@ async fn register_load_skill_resource_tool(
         vtcode_core::config::types::CapabilityLevel::Basic,
         load_resource_tool,
     )
+    .with_catalog_source(ToolCatalogSource::Builtin)
     .with_native_cgp_factory(native_cgp_tool_factory({
         let active_skills_map = Arc::clone(&active_skills_map);
         move || {
@@ -172,6 +175,7 @@ async fn register_load_skill_tool(
         vtcode_core::config::types::CapabilityLevel::Basic,
         load_skill_tool,
     )
+    .with_catalog_source(ToolCatalogSource::Builtin)
     .with_native_cgp_factory(native_cgp_tool_factory({
         let workspace_root = workspace_root.clone();
         let active_skills_map = Arc::clone(&active_skills_map);

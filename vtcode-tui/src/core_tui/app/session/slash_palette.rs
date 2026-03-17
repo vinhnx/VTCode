@@ -1,8 +1,8 @@
 use unicode_segmentation::UnicodeSegmentation;
 
+use crate::core_tui::app::types::SlashCommandItem;
 use crate::core_tui::session::list_navigator::ListNavigator;
 use crate::ui::search::{fuzzy_score, normalize_query};
-use crate::core_tui::app::types::SlashCommandItem;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SlashCommandRange {

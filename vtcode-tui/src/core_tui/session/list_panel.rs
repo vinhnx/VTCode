@@ -98,12 +98,7 @@ impl ListPanelLayout {
             .into()
     }
 
-    pub(crate) fn row_index(
-        &self,
-        panel_area: Rect,
-        column: u16,
-        row: u16,
-    ) -> Option<usize> {
+    pub(crate) fn row_index(&self, panel_area: Rect, column: u16, row: u16) -> Option<usize> {
         if row < panel_area.y
             || row >= panel_area.y.saturating_add(panel_area.height)
             || column < panel_area.x

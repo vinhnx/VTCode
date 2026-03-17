@@ -90,9 +90,12 @@ impl ModelId {
             ModelId::Gemini31ProPreview
             | ModelId::Gemini31ProPreviewCustomTools
             | ModelId::Gemini31FlashLitePreview => Some(ModelId::Gemini3FlashPreview),
-            ModelId::GPT52 | ModelId::GPT54 | ModelId::GPT54Pro | ModelId::GPT54Nano | ModelId::GPT54Mini | ModelId::GPT5 => {
-                Some(ModelId::GPT5Mini)
-            }
+            ModelId::GPT52
+            | ModelId::GPT54
+            | ModelId::GPT54Pro
+            | ModelId::GPT54Nano
+            | ModelId::GPT54Mini
+            | ModelId::GPT5 => Some(ModelId::GPT5Mini),
             ModelId::DeepSeekReasoner => Some(ModelId::DeepSeekChat),
             ModelId::ZaiGlm5 => Some(ModelId::OllamaGlm5Cloud),
             ModelId::ClaudeOpus46 | ModelId::ClaudeSonnet46 => Some(ModelId::ClaudeSonnet46),

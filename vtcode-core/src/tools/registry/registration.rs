@@ -22,6 +22,14 @@ pub type NativeCgpToolFactory = Arc<
 
 use std::fmt;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ToolCatalogSource {
+    Builtin,
+    Mcp,
+    #[default]
+    Dynamic,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct ToolMetadata {
     description: Option<String>,
@@ -157,6 +165,7 @@ impl fmt::Debug for ToolHandler {
 pub struct ToolRegistration {
     name: Arc<str>,
     capability: CapabilityLevel,
+    catalog_source: ToolCatalogSource,
     uses_pty: bool,
     expose_in_llm: bool,
     deprecated: bool,
@@ -172,6 +181,7 @@ impl fmt::Debug for ToolRegistration {
         f.debug_struct("ToolRegistration")
             .field("name", &self.name)
             .field("capability", &self.capability)
+            .field("catalog_source", &self.catalog_source)
             .field("uses_pty", &self.uses_pty)
             .field("expose_in_llm", &self.expose_in_llm)
             .field("deprecated", &self.deprecated)
@@ -194,6 +204,7 @@ impl ToolRegistration {
         Self {
             name: name.into(),
             capability,
+            catalog_source: ToolCatalogSource::Dynamic,
             uses_pty,
             expose_in_llm: true,
             deprecated: false,
@@ -243,6 +254,7 @@ impl ToolRegistration {
         Self {
             name: name.into(),
             capability,
+            catalog_source: ToolCatalogSource::Dynamic,
             uses_pty: false,
             expose_in_llm: true,
             deprecated: false,
@@ -298,6 +310,11 @@ impl ToolRegistration {
         self
     }
 
+    pub fn with_catalog_source(mut self, catalog_source: ToolCatalogSource) -> Self {
+        self.catalog_source = catalog_source;
+        self
+    }
+
     pub fn with_pty(mut self, uses_pty: bool) -> Self {
         self.uses_pty = uses_pty;
         self
@@ -334,6 +351,10 @@ impl ToolRegistration {
 
     pub fn capability(&self) -> CapabilityLevel {
         self.capability
+    }
+
+    pub fn catalog_source(&self) -> ToolCatalogSource {
+        self.catalog_source
     }
 
     pub fn uses_pty(&self) -> bool {

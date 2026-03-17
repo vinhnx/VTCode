@@ -1,8 +1,8 @@
 use super::*;
 use crate::config::constants::ui;
-use crate::core_tui::session::{inline_list, list_panel, modal};
 use crate::core_tui::session::MouseDragTarget;
 use crate::core_tui::session::render::modal_render_styles;
+use crate::core_tui::session::{inline_list, list_panel, modal};
 
 impl Session {
     #[cfg(test)]
@@ -298,7 +298,8 @@ impl Session {
                     .scroll_offset()
                     .saturating_add(local_index);
                 if self.history_picker_state.selected_index() == Some(actual_index) {
-                    self.history_picker_state.accept(&mut self.core.input_manager);
+                    self.history_picker_state
+                        .accept(&mut self.core.input_manager);
                     self.update_input_triggers();
                     self.mark_dirty();
                 } else if self.history_picker_state.select_index(actual_index) {
@@ -396,7 +397,8 @@ impl Session {
                     }
 
                     self.core.mouse_drag_target = MouseDragTarget::Transcript;
-                    self.core.mouse_selection
+                    self.core
+                        .mouse_selection
                         .start_selection(mouse_event.column, mouse_event.row);
                     self.mark_dirty();
                     self.handle_transcript_click(mouse_event);
@@ -413,7 +415,8 @@ impl Session {
                             }
                         }
                         MouseDragTarget::Transcript => {
-                            self.core.mouse_selection
+                            self.core
+                                .mouse_selection
                                 .update_selection(mouse_event.column, mouse_event.row);
                             self.mark_dirty();
                         }
@@ -432,7 +435,8 @@ impl Session {
                             }
                         }
                         MouseDragTarget::Transcript => {
-                            self.core.mouse_selection
+                            self.core
+                                .mouse_selection
                                 .finish_selection(mouse_event.column, mouse_event.row);
                             self.mark_dirty();
                         }
@@ -517,7 +521,8 @@ impl Session {
             return false;
         }
 
-        let cursor_at_end = self.core.input_manager.cursor() == self.core.input_manager.content().len();
+        let cursor_at_end =
+            self.core.input_manager.cursor() == self.core.input_manager.content().len();
         if self.core.input_compact_mode()
             && cursor_at_end
             && self.input_compact_placeholder().is_some()

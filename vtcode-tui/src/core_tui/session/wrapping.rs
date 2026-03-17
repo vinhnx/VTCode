@@ -236,7 +236,10 @@ mod tests {
         let long_url = "https://auth.openai.com/oauth/authorize?response_type=code&client_id=app_EMoamEEZ73f0CkXaXp7hrann&redirect_uri=http%3A%2F%2Flocalhost%3A1455%2Fauth%2Fcallback&scope=openid";
         let line = Line::from(Span::raw(long_url.to_string()));
         let wrapped = wrap_line_preserving_urls(line, 80);
-        assert!(wrapped.len() > 1, "Long URL should wrap across multiple lines");
+        assert!(
+            wrapped.len() > 1,
+            "Long URL should wrap across multiple lines"
+        );
         let all_text: String = wrapped
             .iter()
             .flat_map(|l| l.spans.iter().map(|s| s.content.as_ref()))

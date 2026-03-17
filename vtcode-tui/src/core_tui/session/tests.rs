@@ -91,7 +91,11 @@ fn enable_vim_normal_mode(session: &mut Session) {
 
 fn enable_vim_normal_mode_app(session: &mut AppSession) {
     session.core.vim_state.set_enabled(true);
-    assert!(session.core.handle_vim_key(&KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)));
+    assert!(
+        session
+            .core
+            .handle_vim_key(&KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
+    );
 }
 
 fn show_basic_list_overlay(session: &mut Session) {
@@ -1250,7 +1254,9 @@ fn slash_palette_enter_submits_immediate_command() {
     }
 
     let submit = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(matches!(submit, Some(app_types::InlineEvent::Submit(value)) if value.trim() == "/new"));
+    assert!(
+        matches!(submit, Some(app_types::InlineEvent::Submit(value)) if value.trim() == "/new")
+    );
 }
 
 #[test]
@@ -1268,7 +1274,9 @@ fn slash_palette_enter_submits_review_immediately() {
     }
 
     let submit = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(matches!(submit, Some(app_types::InlineEvent::Submit(value)) if value.trim() == "/review"));
+    assert!(
+        matches!(submit, Some(app_types::InlineEvent::Submit(value)) if value.trim() == "/review")
+    );
 }
 
 #[test]
@@ -1484,7 +1492,10 @@ fn clicking_selected_file_palette_row_inserts_reference() {
         None,
     );
 
-    assert_eq!(session.core.input_manager.content(), "@src/core_tui/session.rs ");
+    assert_eq!(
+        session.core.input_manager.content(),
+        "@src/core_tui/session.rs "
+    );
     assert!(!session.file_palette_active);
 }
 
@@ -1984,9 +1995,9 @@ fn diff_overlay_edit_approval_keys_remain_unchanged() {
     let apply = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(matches!(
         apply,
-        Some(app_types::InlineEvent::Overlay(app_types::OverlayEvent::Submitted(
-            app_types::OverlaySubmission::DiffApply
-        )))
+        Some(app_types::InlineEvent::Overlay(
+            app_types::OverlayEvent::Submitted(app_types::OverlaySubmission::DiffApply)
+        ))
     ));
 
     show_diff_overlay(&mut session, app_types::DiffPreviewMode::EditApproval);
@@ -1997,9 +2008,9 @@ fn diff_overlay_edit_approval_keys_remain_unchanged() {
     let reject = session.process_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(matches!(
         reject,
-        Some(app_types::InlineEvent::Overlay(app_types::OverlayEvent::Submitted(
-            app_types::OverlaySubmission::DiffReject
-        )))
+        Some(app_types::InlineEvent::Overlay(
+            app_types::OverlayEvent::Submitted(app_types::OverlaySubmission::DiffReject)
+        ))
     ));
 }
 
@@ -2011,27 +2022,27 @@ fn diff_overlay_conflict_mode_maps_enter_reload_and_escape() {
     let proceed = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(matches!(
         proceed,
-        Some(app_types::InlineEvent::Overlay(app_types::OverlayEvent::Submitted(
-            app_types::OverlaySubmission::DiffProceed
-        )))
+        Some(app_types::InlineEvent::Overlay(
+            app_types::OverlayEvent::Submitted(app_types::OverlaySubmission::DiffProceed)
+        ))
     ));
 
     show_diff_overlay(&mut session, app_types::DiffPreviewMode::FileConflict);
     let reload = session.process_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE));
     assert!(matches!(
         reload,
-        Some(app_types::InlineEvent::Overlay(app_types::OverlayEvent::Submitted(
-            app_types::OverlaySubmission::DiffReload
-        )))
+        Some(app_types::InlineEvent::Overlay(
+            app_types::OverlayEvent::Submitted(app_types::OverlaySubmission::DiffReload)
+        ))
     ));
 
     show_diff_overlay(&mut session, app_types::DiffPreviewMode::FileConflict);
     let abort = session.process_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(matches!(
         abort,
-        Some(app_types::InlineEvent::Overlay(app_types::OverlayEvent::Submitted(
-            app_types::OverlaySubmission::DiffAbort
-        )))
+        Some(app_types::InlineEvent::Overlay(
+            app_types::OverlayEvent::Submitted(app_types::OverlaySubmission::DiffAbort)
+        ))
     ));
 }
 
@@ -2211,15 +2222,17 @@ fn show_list_modal_uses_bottom_inline_panel_min_height() {
         search_value: Some("Option A".to_string()),
     };
     session.handle_command(app_types::InlineCommand::ShowOverlay {
-        request: Box::new(app_types::OverlayRequest::List(app_types::ListOverlayRequest {
-            title: "Pick one".to_string(),
-            lines: vec!["Choose an option".to_string()],
-            footer_hint: None,
-            items: vec![item],
-            selected: None,
-            search: None,
-            hotkeys: Vec::new(),
-        })),
+        request: Box::new(app_types::OverlayRequest::List(
+            app_types::ListOverlayRequest {
+                title: "Pick one".to_string(),
+                lines: vec!["Choose an option".to_string()],
+                footer_hint: None,
+                items: vec![item],
+                selected: None,
+                search: None,
+                hotkeys: Vec::new(),
+            },
+        )),
     });
 
     let input_width = VIEW_WIDTH.saturating_sub(2);

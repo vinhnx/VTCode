@@ -10,10 +10,10 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
 };
 
+use super::Session;
+use crate::core_tui::app::types::{DiffPreviewMode, DiffPreviewState, TrustMode};
 use crate::core_tui::style::{ratatui_color_from_ansi, ratatui_style_from_ansi};
 use crate::ui::markdown::highlight_line_for_diff;
-use crate::core_tui::app::types::{DiffPreviewMode, DiffPreviewState, TrustMode};
-use super::Session;
 use crate::utils::diff::{DiffBundle, DiffLineKind, DiffOptions, compute_diff_with_theme};
 use crate::utils::diff_styles::{
     DiffColorPalette, DiffLineType, content_background, current_diff_render_style_context,

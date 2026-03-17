@@ -105,11 +105,7 @@ impl Session {
             .render(layout.viewport, frame.buffer_mut());
     }
 
-    pub(crate) fn finalize_mouse_selection(
-        &mut self,
-        frame: &mut Frame<'_>,
-        viewport: Rect,
-    ) {
+    pub(crate) fn finalize_mouse_selection(&mut self, frame: &mut Frame<'_>, viewport: Rect) {
         if !self.mouse_selection.has_selection && !self.mouse_selection.is_selecting {
             return;
         }

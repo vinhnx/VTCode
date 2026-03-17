@@ -69,14 +69,18 @@ pub enum InlineCommand {
         appearance: AppearanceConfig,
     },
     SetVimModeEnabled(bool),
-    SetQueuedInputs { entries: Vec<String> },
+    SetQueuedInputs {
+        entries: Vec<String>,
+    },
     SetCursorVisible(bool),
     SetInputEnabled(bool),
     SetInput(String),
     ApplySuggestedPrompt(String),
     ClearInput,
     ForceRedraw,
-    ShowOverlay { request: Box<OverlayRequest> },
+    ShowOverlay {
+        request: Box<OverlayRequest>,
+    },
     CloseOverlay,
     // App-only palette/history commands are defined in the app protocol layer.
     ClearScreen,

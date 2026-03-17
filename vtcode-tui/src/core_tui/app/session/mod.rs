@@ -7,18 +7,18 @@ pub(super) use ratatui::prelude::*;
 pub(super) use ratatui::widgets::Clear;
 pub(super) use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use crate::core_tui::session::Session as CoreSessionState;
-use crate::core_tui::runner::TuiSessionDriver;
 use crate::core_tui::app::types::{
     DiffOverlayRequest, DiffPreviewState, InlineCommand, InlineEvent, SlashCommandItem,
 };
+use crate::core_tui::runner::TuiSessionDriver;
+use crate::core_tui::session::Session as CoreSessionState;
 
 pub mod diff_preview;
-pub mod file_palette;
 mod events;
+pub mod file_palette;
+pub mod history_picker;
 mod impl_events;
 mod impl_render;
-pub mod history_picker;
 mod layout;
 mod palette;
 pub mod render;
@@ -224,28 +224,27 @@ impl AppSession {
                         .handle_command(crate::core_tui::types::InlineCommand::CloseOverlay);
                 }
             }
-            InlineCommand::ShowOverlay { request } => {
-                match *request {
-                    crate::core_tui::app::types::OverlayRequest::Diff(request) => {
-                        self.show_diff_overlay(request);
-                    }
-                    crate::core_tui::app::types::OverlayRequest::Modal(request) => {
-                        self.core.show_overlay(
-                            crate::core_tui::types::OverlayRequest::Modal(request.into()),
-                        );
-                    }
-                    crate::core_tui::app::types::OverlayRequest::List(request) => {
-                        self.core.show_overlay(
-                            crate::core_tui::types::OverlayRequest::List(request.into()),
-                        );
-                    }
-                    crate::core_tui::app::types::OverlayRequest::Wizard(request) => {
-                        self.core.show_overlay(
-                            crate::core_tui::types::OverlayRequest::Wizard(request.into()),
-                        );
-                    }
+            InlineCommand::ShowOverlay { request } => match *request {
+                crate::core_tui::app::types::OverlayRequest::Diff(request) => {
+                    self.show_diff_overlay(request);
                 }
-            }
+                crate::core_tui::app::types::OverlayRequest::Modal(request) => {
+                    self.core
+                        .show_overlay(crate::core_tui::types::OverlayRequest::Modal(
+                            request.into(),
+                        ));
+                }
+                crate::core_tui::app::types::OverlayRequest::List(request) => {
+                    self.core
+                        .show_overlay(crate::core_tui::types::OverlayRequest::List(request.into()));
+                }
+                crate::core_tui::app::types::OverlayRequest::Wizard(request) => {
+                    self.core
+                        .show_overlay(crate::core_tui::types::OverlayRequest::Wizard(
+                            request.into(),
+                        ));
+                }
+            },
             _ => {
                 if let Some(core_cmd) = to_core_command(&command) {
                     self.core.handle_command(core_cmd);
@@ -347,9 +346,7 @@ fn to_core_command(command: &InlineCommand) -> Option<crate::core_tui::types::In
         InlineCommand::SetAutonomousMode(enabled) => CoreCommand::SetAutonomousMode(*enabled),
         InlineCommand::SetSkipConfirmations(skip) => CoreCommand::SetSkipConfirmations(*skip),
         InlineCommand::Shutdown => CoreCommand::Shutdown,
-        InlineCommand::SetReasoningStage(stage) => {
-            CoreCommand::SetReasoningStage(stage.clone())
-        }
+        InlineCommand::SetReasoningStage(stage) => CoreCommand::SetReasoningStage(stage.clone()),
         InlineCommand::SetTaskPanelVisible(_)
         | InlineCommand::SetTaskPanelLines(_)
         | InlineCommand::LoadFilePalette { .. }

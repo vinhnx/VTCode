@@ -14,20 +14,20 @@ impl ModelId {
             | ModelId::Gemini31FlashLitePreview
             | ModelId::Gemini3FlashPreview => Provider::Gemini,
             ModelId::GPT5
-             | ModelId::GPT52
-             | ModelId::GPT52Codex
-             | ModelId::GPT54
-             | ModelId::GPT54Pro
-             | ModelId::GPT54Nano
-             | ModelId::GPT54Mini
-             | ModelId::GPT5Mini
-             | ModelId::GPT5Nano
-             | ModelId::GPT53Codex
-             | ModelId::GPT51Codex
-             | ModelId::GPT51CodexMax
-             | ModelId::GPT5Codex
-             | ModelId::OpenAIGptOss20b
-             | ModelId::OpenAIGptOss120b => Provider::OpenAI,
+            | ModelId::GPT52
+            | ModelId::GPT52Codex
+            | ModelId::GPT54
+            | ModelId::GPT54Pro
+            | ModelId::GPT54Nano
+            | ModelId::GPT54Mini
+            | ModelId::GPT5Mini
+            | ModelId::GPT5Nano
+            | ModelId::GPT53Codex
+            | ModelId::GPT51Codex
+            | ModelId::GPT51CodexMax
+            | ModelId::GPT5Codex
+            | ModelId::OpenAIGptOss20b
+            | ModelId::OpenAIGptOss120b => Provider::OpenAI,
             ModelId::ClaudeOpus46 | ModelId::ClaudeSonnet46 | ModelId::ClaudeHaiku45 => {
                 Provider::Anthropic
             }

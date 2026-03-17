@@ -1,11 +1,11 @@
+use super::super::types::ContentPart;
+use crate::core_tui::session::list_navigator::ListNavigator;
+use crate::ui::search::fuzzy_score;
 /// History Picker - Fuzzy search for command history (Ctrl+R)
 ///
 /// Provides a visual palette for searching and selecting from command history
 /// using nucleo fuzzy matching, similar to the slash command palette.
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use super::super::types::ContentPart;
-use crate::core_tui::session::list_navigator::ListNavigator;
-use crate::ui::search::fuzzy_score;
 
 use crate::core_tui::session::input_manager::InputManager;
 

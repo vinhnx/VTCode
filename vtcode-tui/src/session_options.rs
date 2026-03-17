@@ -1,16 +1,16 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use crate::UiSurfacePreference;
 use crate::config::KeyboardProtocolConfig;
 use crate::core_tui::app::session::AppSession;
 use crate::core_tui::app::types::{
     FocusChangeCallback, InlineEventCallback, InlineSession, InlineTheme, SlashCommandItem,
 };
-use crate::core_tui::session::config::AppearanceConfig;
-use crate::core_tui::runner::{TuiOptions, run_tui};
 use crate::core_tui::log;
+use crate::core_tui::runner::{TuiOptions, run_tui};
+use crate::core_tui::session::config::AppearanceConfig;
 use crate::options::{KeyboardProtocolSettings, SessionSurface};
-use crate::UiSurfacePreference;
 
 /// Standalone session launch options for reusable integrations.
 #[derive(Clone)]

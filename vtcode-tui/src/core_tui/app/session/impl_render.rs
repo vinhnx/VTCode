@@ -3,8 +3,8 @@ use super::layout::{
 };
 use super::*;
 use crate::config::constants::ui;
-use crate::core_tui::session::{inline_list, list_panel, message_renderer};
 use crate::core_tui::session::render as core_render;
+use crate::core_tui::session::{inline_list, list_panel, message_renderer};
 
 impl Session {
     pub fn render(&mut self, frame: &mut Frame<'_>) {
@@ -18,7 +18,9 @@ impl Session {
             metrics.header_height,
             metrics.input_core_height,
         );
-        let layout = self.core.build_frame_layout(viewport, metrics, panel.height);
+        let layout = self
+            .core
+            .build_frame_layout(viewport, metrics, panel.height);
 
         let modal_in_bottom = matches!(panel.kind, BottomPanelKind::InlineModal);
         let (transcript_area, modal_area) = if modal_in_bottom {

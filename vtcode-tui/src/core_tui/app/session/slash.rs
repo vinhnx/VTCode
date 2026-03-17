@@ -151,8 +151,13 @@ pub(crate) fn slash_panel_layout(session: &Session) -> Option<ListPanelLayout> {
     )
     .is_some();
     let fixed_rows = fixed_section_rows(1, info_rows, has_search_row);
-    let desired_list_rows =
-        rows_to_u16(session.slash_palette.suggestions().len().min(ui::INLINE_LIST_MAX_ROWS));
+    let desired_list_rows = rows_to_u16(
+        session
+            .slash_palette
+            .suggestions()
+            .len()
+            .min(ui::INLINE_LIST_MAX_ROWS),
+    );
     Some(ListPanelLayout::new(fixed_rows, desired_list_rows))
 }
 
@@ -448,7 +453,13 @@ pub(super) fn try_handle_slash_navigation(
 }
 
 pub(crate) fn should_submit_immediately_from_palette(session: &Session) -> bool {
-    let Some(command) = session.core.input_manager.content().split_whitespace().next() else {
+    let Some(command) = session
+        .core
+        .input_manager
+        .content()
+        .split_whitespace()
+        .next()
+    else {
         return false;
     };
 
@@ -517,7 +528,11 @@ fn slash_name_style(session: &Session) -> Style {
 }
 
 fn slash_description_style(session: &Session) -> Style {
-    session.core.styles.default_style().add_modifier(Modifier::DIM)
+    session
+        .core
+        .styles
+        .default_style()
+        .add_modifier(Modifier::DIM)
 }
 
 #[cfg(test)]

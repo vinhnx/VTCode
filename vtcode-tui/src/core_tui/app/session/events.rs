@@ -7,10 +7,10 @@ use super::super::types::{
     OverlaySubmission,
 };
 use crate::core_tui::app::types::InlineMessageKind;
+use crate::core_tui::session::modal::{ModalKeyModifiers, ModalListKeyResult};
 use crate::core_tui::session::mouse_selection::MouseSelectionState;
 use crate::core_tui::session::reverse_search;
 use crate::core_tui::types::InlineSegment;
-use crate::core_tui::session::modal::{ModalKeyModifiers, ModalListKeyResult};
 
 fn input_history_entries(session: &Session) -> Vec<(String, Vec<ContentPart>)> {
     session
@@ -420,9 +420,9 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             if edit_queue_modifier && !session.core.queued_inputs.is_empty() {
                 if let Some(latest) = session.pop_latest_queued_input() {
                     session.core.input_manager.set_content(latest);
-                    session.core.set_input_compact_mode(
-                        session.input_compact_placeholder().is_some(),
-                    );
+                    session
+                        .core
+                        .set_input_compact_mode(session.input_compact_placeholder().is_some());
                     session.core.scroll_manager.set_offset(0);
                     slash::update_slash_suggestions(session);
                 }
@@ -728,7 +728,9 @@ pub(super) fn open_history_picker(session: &mut Session) {
     }
 
     session.ensure_inline_lists_visible_for_trigger();
-    session.history_picker_state.open(&session.core.input_manager);
+    session
+        .history_picker_state
+        .open(&session.core.input_manager);
     let history = input_history_entries(session);
     session.history_picker_state.update_search(&history);
     session.mark_dirty();
@@ -796,7 +798,8 @@ fn handle_running_slash_command_block(session: &mut Session) -> bool {
         return false;
     }
 
-    let Some(command_name) = extract_slash_command_name(session.core.input_manager.content()) else {
+    let Some(command_name) = extract_slash_command_name(session.core.input_manager.content())
+    else {
         return false;
     };
 

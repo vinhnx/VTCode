@@ -10,7 +10,7 @@ use crate::config::types::CapabilityLevel;
 use crate::mcp::{McpClient, McpToolExecutor, McpToolInfo};
 use crate::tool_policy::ToolPolicy;
 use crate::tools::native_cgp_tool_factory;
-use crate::tools::registry::ToolRegistration;
+use crate::tools::registry::{ToolCatalogSource, ToolRegistration};
 use crate::tools::traits::Tool;
 
 pub const MCP_QUALIFIED_TOOL_PREFIX: &str = "mcp__";
@@ -117,6 +117,7 @@ pub fn build_mcp_registration(
         Arc::new(proxy),
         metadata,
     )
+    .with_catalog_source(ToolCatalogSource::Mcp)
     .with_llm_visibility(false)
     .with_native_cgp_factory(native_cgp_tool_factory(move || McpProxyTool {
         client: Arc::clone(&client),

@@ -13,7 +13,7 @@ use crate::tools::handlers::{
 use crate::tools::request_user_input::RequestUserInputTool;
 use crate::tools::tool_intent::builtin_tool_behavior;
 
-use super::registration::ToolRegistration;
+use super::registration::{ToolCatalogSource, ToolRegistration};
 use super::{ToolInventory, ToolRegistry, native_cgp_tool_factory};
 
 /// Register all builtin tools into the inventory using the shared plan mode state.
@@ -319,6 +319,7 @@ pub(super) fn builtin_tool_registrations(
     ]
     .into_iter()
     .map(with_builtin_behavior)
+    .map(|registration| registration.with_catalog_source(ToolCatalogSource::Builtin))
     .collect()
 }
 

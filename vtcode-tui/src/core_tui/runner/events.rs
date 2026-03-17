@@ -6,8 +6,8 @@ use ratatui::crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEventKind, 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, error::TryRecvError};
 use tokio_util::sync::CancellationToken;
 
-use crate::config::constants::ui;
 use super::TuiSessionDriver;
+use crate::config::constants::ui;
 
 #[derive(Debug, Clone)]
 pub(super) enum TerminalEvent {
