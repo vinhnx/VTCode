@@ -26,6 +26,7 @@ use crate::config::constants::ui;
 use crate::ui::tui::widgets::SessionWidget;
 
 mod header;
+mod frame_layout;
 mod impl_events;
 mod impl_init;
 mod impl_input;

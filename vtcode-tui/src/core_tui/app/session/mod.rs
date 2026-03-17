@@ -4,7 +4,7 @@ pub(super) use ratatui::crossterm::event::{
     Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, MouseEvent, MouseEventKind,
 };
 pub(super) use ratatui::prelude::*;
-pub(super) use ratatui::widgets::{Clear, Widget};
+pub(super) use ratatui::widgets::Clear;
 pub(super) use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::core_tui::session::Session as CoreSessionState;

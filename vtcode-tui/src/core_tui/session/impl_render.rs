@@ -2,83 +2,21 @@ use super::*;
 
 impl Session {
     pub fn render(&mut self, frame: &mut Frame<'_>) {
-        let viewport = frame.area();
-        if viewport.height == 0 || viewport.width == 0 {
+        let Some(layout) = self.prepare_frame_layout(frame, 0) else {
             return;
-        }
+        };
 
-        // Clear entire frame if modal was just closed to remove artifacts
-        if self.needs_full_clear {
-            frame.render_widget(Clear, viewport);
-            self.needs_full_clear = false;
-        }
-
-        // Calculate layout constraints
-        let header_lines = self.header_lines();
-        let header_height = self.header_height_from_lines(viewport.width, &header_lines);
-        if header_height != self.header_rows {
-            self.header_rows = header_height;
-            self.recalculate_transcript_rows();
-        }
-
-        let inner_width = viewport.width.saturating_sub(2);
-        let desired_lines = self.desired_input_lines(inner_width);
-        let block_height = Self::input_block_height_for_lines(desired_lines);
-        let status_height = ui::INLINE_INPUT_STATUS_HEIGHT;
-        let input_height = block_height.saturating_add(status_height);
-        self.apply_input_height(input_height);
-
-        let mut constraints = vec![Constraint::Length(header_height), Constraint::Min(1)];
-        constraints.push(Constraint::Length(input_height));
-
-        let segments = Layout::vertical(constraints).split(viewport);
-
-        let header_area = segments[0];
-        let main_area = segments[1];
-        let input_area = segments[2];
-
-        let _available_width = main_area.width;
-        let _horizontal_minimum = ui::INLINE_CONTENT_MIN_WIDTH + ui::INLINE_NAVIGATION_MIN_WIDTH;
-
-        let (transcript_area, modal_area) = render::split_inline_modal_area(self, main_area);
+        let (transcript_area, modal_area) = render::split_inline_modal_area(self, layout.main_area);
         self.set_modal_list_area(None);
         self.set_bottom_panel_area(None);
-        let navigation_area = Rect::new(main_area.x, main_area.y, 0, 0); // No navigation area since timeline pane is removed
-
-        // Use SessionWidget for buffer-based rendering (header, transcript, overlays)
-        SessionWidget::new(self)
-            .header_lines(header_lines.clone())
-            .header_area(header_area)
-            .transcript_area(transcript_area)
-            .navigation_area(navigation_area) // Pass empty navigation area
-            .render(viewport, frame.buffer_mut());
-
-        // Handle frame-based rendering for components that need it
-        // Note: header, transcript, and overlays are handled by SessionWidget
-        // Timeline pane has been removed, so no navigation rendering
-        self.render_input(frame, input_area);
+        self.render_base_frame(frame, &layout, transcript_area);
+        self.render_input(frame, layout.input_area);
         if let Some(modal_area) = modal_area {
             render::render_modal(self, frame, modal_area);
         } else {
-            render::render_modal(self, frame, viewport);
+            render::render_modal(self, frame, layout.viewport);
         }
-
-        // Apply mouse text selection highlight
-        if self.mouse_selection.has_selection || self.mouse_selection.is_selecting {
-            self.mouse_selection
-                .apply_highlight(frame.buffer_mut(), viewport);
-
-            // Copy to clipboard once when selection is finalized
-            if self.mouse_selection.needs_copy() {
-                let text = self
-                    .mouse_selection
-                    .extract_text(frame.buffer_mut(), viewport);
-                if !text.is_empty() {
-                    MouseSelectionState::copy_to_clipboard(&text);
-                }
-                self.mouse_selection.mark_copied();
-            }
-        }
+        self.finalize_mouse_selection(frame, layout.viewport);
     }
 
     #[allow(dead_code)]
