@@ -115,8 +115,9 @@ pub use turn_diff_tracker::{
 
 // Shell handler
 pub use session_tool_catalog::{
-    CatalogToolKind, SessionSurface, SessionToolCatalog, SessionToolsConfig, ToolCatalogEntry,
-    ToolCatalogSource, ToolModelCapabilities, ToolSchemaEntry,
+    CatalogToolKind, DeferredToolPolicy, DeferredToolSearchKind, SessionSurface,
+    SessionToolCatalog, SessionToolsConfig, ToolCatalogEntry, ToolCatalogSource,
+    ToolModelCapabilities, ToolSchemaEntry, deferred_tool_policy_for_runtime,
 };
 pub use shell_handler::{ShellHandler, create_shell_tool};
 

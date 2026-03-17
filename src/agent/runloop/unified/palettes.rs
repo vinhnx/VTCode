@@ -8,9 +8,8 @@ use vtcode_core::ui::theme;
 use vtcode_core::ui::{inline_theme_from_core_styles, to_tui_appearance};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::SessionListing;
-use vtcode_tui::app::{
-    InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection, convert_style,
-};
+use vtcode_tui::app::{InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection};
+use vtcode_tui::core::convert_style;
 
 use crate::agent::runloop::slash_commands::{SessionPaletteMode, ThemePaletteMode};
 use crate::agent::runloop::ui::build_inline_header_context;

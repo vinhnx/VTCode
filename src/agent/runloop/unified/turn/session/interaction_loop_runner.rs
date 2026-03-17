@@ -463,6 +463,8 @@ pub(super) async fn run_interaction_loop_impl(
                     ctx.tools,
                     ctx.tool_catalog,
                     ctx.config,
+                    ctx.vt_cfg.as_ref(),
+                    &**ctx.provider_client,
                     ctx.vt_cfg
                         .as_ref()
                         .map(|cfg| cfg.agent.tool_documentation_mode)

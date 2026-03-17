@@ -203,6 +203,16 @@ async fn build_universal_tools_matches_registry_agent_runner_snapshot() {
             plan_mode: runner.tool_registry.is_plan_mode(),
             request_user_input_enabled: false,
             model_capabilities: ToolModelCapabilities::for_model_name(&runner.model),
+            deferred_tool_policy: crate::tools::handlers::deferred_tool_policy_for_runtime(
+                crate::llm::factory::infer_provider(
+                    Some(&runner.config().agent.provider),
+                    &runner.model,
+                ),
+                runner
+                    .provider_client
+                    .supports_responses_compaction(&runner.model),
+                Some(runner.config()),
+            ),
         })
         .await;
     let mut expected = Vec::new();

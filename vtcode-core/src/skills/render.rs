@@ -5,44 +5,35 @@ pub fn render_skills_section(skills: &[SkillMetadata]) -> Option<String> {
         return None;
     }
 
-    let mut lines: Vec<String> = Vec::new();
-    lines.push("## Skills".to_string());
-    lines.push("These skills are discovered at startup from multiple local sources. Each entry includes routing metadata and a file path so you can open the source for full instructions.".to_string());
-
-    let mut sorted_skills = skills.iter().collect::<Vec<_>>();
-    sorted_skills.sort_by(|left, right| left.name.cmp(&right.name));
-    let overflow = sorted_skills.len().saturating_sub(10);
-    if overflow > 0 {
-        sorted_skills.truncate(10);
-    }
-
-    for skill in sorted_skills {
-        let path_str = skill.path.to_string_lossy().replace('\\', "/");
-        let name = skill.name.as_str();
-        let description = skill.description.as_str();
-        let scope = match skill.scope {
-            crate::skills::model::SkillScope::User => "user",
-            crate::skills::model::SkillScope::Repo => "repo",
-            crate::skills::model::SkillScope::System => "system",
-            crate::skills::model::SkillScope::Admin => "admin",
-        };
-        let mut line = format!("- {name}: {description} (file: {path_str}, scope: {scope})");
-        if let Some(manifest) = &skill.manifest {
-            if let Some(when_to_use) = &manifest.when_to_use {
-                line.push_str(&format!("; use: {when_to_use}"));
-            }
-            if let Some(when_not_to_use) = &manifest.when_not_to_use {
-                line.push_str(&format!("; avoid: {when_not_to_use}"));
-            }
-        }
-        lines.push(line);
-    }
+    let (mut lines, overflow) = render_skill_index(
+        skills,
+        "These skills are discovered at startup from multiple local sources. Each entry includes routing metadata and a file path so you can open the source for full instructions.",
+    );
 
     if overflow > 0 {
         lines.push(format!("(+{} more skills available)", overflow));
     }
 
     lines.push(render_skills_usage_rules().to_string());
+
+    Some(lines.join("\n"))
+}
+
+pub fn render_prompt_skills_section(skills: &[SkillMetadata]) -> Option<String> {
+    if skills.is_empty() {
+        return None;
+    }
+
+    let (mut lines, overflow) = render_skill_index(
+        skills,
+        "These skills are indexed for routing. Each entry includes the local source path; load the relevant `SKILL.md` only when the task or user request calls for it.",
+    );
+
+    if overflow > 0 {
+        lines.push(format!("(+{} more skills available)", overflow));
+    }
+
+    lines.push("- Routing: Use a skill when the user names it or the task clearly matches the description. Load only the relevant `SKILL.md` and referenced resources on demand.".to_string());
 
     Some(lines.join("\n"))
 }
@@ -67,6 +58,47 @@ fn render_skills_usage_rules() -> &'static str {
   - Avoid deeply nested references; prefer one-hop files explicitly linked from `SKILL.md`.
   - When variants exist (frameworks, providers, domains), pick only the relevant reference file(s) and note that choice.
 - Safety and fallback: If a skill can't be applied cleanly (missing files, unclear instructions), state the issue, pick the next-best approach, and continue."###
+}
+
+fn render_skill_index(skills: &[SkillMetadata], intro: &str) -> (Vec<String>, usize) {
+    let mut lines = Vec::new();
+    lines.push("## Skills".to_string());
+    lines.push(intro.to_string());
+
+    let mut sorted_skills = skills.iter().collect::<Vec<_>>();
+    sorted_skills.sort_by(|left, right| left.name.cmp(&right.name));
+    let overflow = sorted_skills.len().saturating_sub(10);
+    if overflow > 0 {
+        sorted_skills.truncate(10);
+    }
+
+    for skill in sorted_skills {
+        lines.push(render_skill_line(skill));
+    }
+
+    (lines, overflow)
+}
+
+fn render_skill_line(skill: &SkillMetadata) -> String {
+    let path_str = skill.path.to_string_lossy().replace('\\', "/");
+    let name = skill.name.as_str();
+    let description = skill.description.as_str();
+    let scope = match skill.scope {
+        crate::skills::model::SkillScope::User => "user",
+        crate::skills::model::SkillScope::Repo => "repo",
+        crate::skills::model::SkillScope::System => "system",
+        crate::skills::model::SkillScope::Admin => "admin",
+    };
+    let mut line = format!("- {name}: {description} (file: {path_str}, scope: {scope})");
+    if let Some(manifest) = &skill.manifest {
+        if let Some(when_to_use) = &manifest.when_to_use {
+            line.push_str(&format!("; use: {when_to_use}"));
+        }
+        if let Some(when_not_to_use) = &manifest.when_not_to_use {
+            line.push_str(&format!("; avoid: {when_not_to_use}"));
+        }
+    }
+    line
 }
 
 #[cfg(test)]
@@ -130,6 +162,25 @@ mod tests {
         assert!(output.contains("- skill-one: First skill (file: /path/to/skill1, scope: user)"));
         assert!(output.contains("- skill-two: Second skill (file: /path/to/skill2, scope: repo)")); // Path separator replaced
         assert!(output.contains("Context hygiene"));
+    }
+
+    #[test]
+    fn test_render_prompt_skills_section_stays_lean() {
+        let skill = SkillMetadata {
+            name: "test-skill".to_string(),
+            description: "A test skill".to_string(),
+            short_description: None,
+            path: PathBuf::from("/path/to/skill"),
+            scope: crate::skills::model::SkillScope::User,
+            manifest: None,
+        };
+        let output = render_prompt_skills_section(&[skill]).expect("prompt skills section");
+
+        assert!(output.contains("## Skills"));
+        assert!(output.contains("indexed for routing"));
+        assert!(output.contains("- Routing: Use a skill"));
+        assert!(!output.contains("Discovery: Available skills are listed"));
+        assert!(!output.contains("Description as trigger"));
     }
 
     #[test]

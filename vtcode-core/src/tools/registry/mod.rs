@@ -297,13 +297,13 @@ mod tests {
             .public_tool_names(SessionSurface::Interactive, CapabilityLevel::CodeSearch)
             .await;
         let schema_names = registry
-            .schema_entries(config)
+            .schema_entries(config.clone())
             .await
             .into_iter()
             .map(|entry| entry.name)
             .collect::<Vec<_>>();
         let declaration_names = registry
-            .function_declarations(config)
+            .function_declarations(config.clone())
             .await
             .into_iter()
             .map(|entry| entry.name)

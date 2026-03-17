@@ -4,7 +4,9 @@ use tracing::warn;
 use vtcode_core::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::unified::async_mcp_manager::McpInitStatus;
-use crate::agent::runloop::unified::session_setup::refresh_tool_snapshot;
+use crate::agent::runloop::unified::session_setup::{
+    active_deferred_tool_policy, refresh_tool_snapshot,
+};
 
 use super::SlashCommandContext;
 
@@ -57,12 +59,18 @@ pub(super) async fn try_attach_ready_mcp(ctx: &mut SlashCommandContext<'_>) -> R
                         .as_ref()
                         .map(|cfg| cfg.agent.tool_documentation_mode)
                         .unwrap_or_default();
+                    let deferred_tool_policy = active_deferred_tool_policy(
+                        ctx.config,
+                        ctx.vt_cfg.as_ref(),
+                        &**ctx.provider_client,
+                    );
                     refresh_tool_snapshot(
                         ctx.tool_registry,
                         ctx.tools,
                         ctx.tool_catalog,
                         ctx.config,
                         tool_documentation_mode,
+                        &deferred_tool_policy,
                     )
                     .await;
                     ctx.tool_catalog

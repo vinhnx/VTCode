@@ -162,6 +162,54 @@ pub fn render_instruction_markdown(
     section
 }
 
+pub fn render_instruction_summary_markdown(
+    title: &str,
+    segments: &[InstructionSegment],
+    truncated: bool,
+    project_root: &Path,
+    home_dir: Option<&Path>,
+    highlight_limit: usize,
+    truncation_note: &str,
+) -> String {
+    let mut section = String::with_capacity(1024);
+    let _ = writeln!(section, "## {title}\n");
+    section.push_str(
+        "Instructions are listed from lowest to highest precedence. When conflicts exist, defer to the later entries.\n\n",
+    );
+
+    if !segments.is_empty() {
+        section.push_str("### Instruction map\n");
+        for (index, segment) in segments.iter().enumerate() {
+            let _ = writeln!(
+                section,
+                "- {}. {} ({})",
+                index + 1,
+                format_instruction_path(&segment.source.path, project_root, home_dir),
+                instruction_scope_label(&segment.source.scope),
+            );
+        }
+
+        let highlights = extract_instruction_highlights(segments, highlight_limit);
+        if !highlights.is_empty() {
+            section.push_str("\n### Key points\n");
+            for highlight in highlights {
+                let _ = writeln!(section, "- {highlight}");
+            }
+        }
+
+        section.push_str(
+            "\n### On-demand loading\n- This prompt only indexes instruction files.\n- Full instruction files stay on disk and are not inlined here.\n- Use the available file-read tools to open a listed file when exact wording or deeper details matter.\n",
+        );
+    }
+
+    if truncated && !truncation_note.is_empty() {
+        let _ = writeln!(section, "\n_{truncation_note}_");
+    }
+
+    section.push('\n');
+    section
+}
+
 pub fn instruction_scope_label(scope: &InstructionScope) -> &'static str {
     match scope {
         InstructionScope::Global => "global",
@@ -707,5 +755,33 @@ mod tests {
         assert!(markdown.contains("Nested summary"));
         assert!(markdown.contains("### 1. AGENTS.md (workspace)"));
         assert!(markdown.contains("### 2. nested/AGENTS.md (workspace)"));
+    }
+
+    #[test]
+    fn renders_instruction_summary_markdown_without_full_contents() {
+        let project_root = PathBuf::from("/workspace");
+        let segments = vec![InstructionSegment {
+            source: InstructionSource {
+                path: project_root.join("AGENTS.md"),
+                scope: InstructionScope::Workspace,
+            },
+            contents: "- Root summary\n\nFollow the root guidance.\n".to_owned(),
+        }];
+
+        let markdown = render_instruction_summary_markdown(
+            "AGENTS.MD INSTRUCTION HIERARCHY",
+            &segments,
+            false,
+            &project_root,
+            None,
+            5,
+            "instruction content was truncated",
+        );
+
+        assert!(markdown.contains("### Instruction map"));
+        assert!(markdown.contains("### Key points"));
+        assert!(markdown.contains("### On-demand loading"));
+        assert!(markdown.contains("Root summary"));
+        assert!(!markdown.contains("Follow the root guidance."));
     }
 }

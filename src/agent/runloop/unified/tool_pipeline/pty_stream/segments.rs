@@ -4,10 +4,9 @@ use anstyle::{
     Ansi256Color, AnsiColor, Color as AnsiColorEnum, Effects, RgbColor, Style as AnsiStyle,
 };
 use vtcode_core::ui::theme;
-use vtcode_tui::app::{
-    InlineLinkRange, InlineLinkTarget, InlineSegment, InlineTextStyle, convert_style,
-    ui::syntax_highlight,
-};
+use vtcode_tui::app::{InlineLinkRange, InlineLinkTarget, InlineSegment, InlineTextStyle};
+use vtcode_tui::core::convert_style;
+use vtcode_tui::ui::syntax_highlight;
 
 pub(super) struct PtyLineStyles {
     pub(super) output: Arc<InlineTextStyle>,

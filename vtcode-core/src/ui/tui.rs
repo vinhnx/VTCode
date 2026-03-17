@@ -2,3 +2,4 @@
 // The implementation now lives in the standalone `vtcode-tui` crate.
 
 pub use vtcode_tui::app::*;
+pub use vtcode_tui::core::convert_style;

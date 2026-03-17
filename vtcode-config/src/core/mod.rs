@@ -29,7 +29,8 @@ pub use prompt_cache::{
 };
 pub use provider::{
     AnthropicConfig, OpenAIConfig, OpenAIHostedShellConfig, OpenAIHostedShellEnvironment,
-    OpenAIHostedSkill, OpenAIHostedSkillVersion, OpenAIServiceTier, ToolSearchConfig,
+    OpenAIHostedSkill, OpenAIHostedSkillVersion, OpenAIServiceTier, OpenAIToolSearchConfig,
+    ToolSearchConfig,
 };
 pub use sandbox::{
     DockerSandboxConfig, ExternalSandboxConfig, ExternalSandboxType, MicroVMSandboxConfig,

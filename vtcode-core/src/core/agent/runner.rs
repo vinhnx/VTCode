@@ -360,6 +360,14 @@ impl AgentRunner {
             .tools
             .max_repeated_tool_calls
             .max(1);
+        let deferred_tool_policy = crate::tools::handlers::deferred_tool_policy_for_runtime(
+            crate::llm::factory::infer_provider(
+                Some(&session_config.effective().agent.provider),
+                model.as_str(),
+            ),
+            provider_client.supports_responses_compaction(model.as_str()),
+            Some(session_config.effective()),
+        );
         let tool_registry = ToolRegistry::new(workspace.clone()).await;
         tool_registry.set_harness_session(session_id.clone());
         tool_registry.set_agent_type(agent_type.to_string());
@@ -401,6 +409,7 @@ impl AgentRunner {
                 model_capabilities: crate::tools::handlers::ToolModelCapabilities::for_model_name(
                     model.as_str(),
                 ),
+                deferred_tool_policy,
             })
             .await
             .into_iter()

@@ -13,7 +13,9 @@ use crate::skills::manager::SkillsManager;
 use crate::skills::model::{SkillErrorInfo, SkillLoadOutcome};
 use crate::skills::types::{Skill, SkillVariety};
 use crate::tool_policy::ToolPolicy;
-use crate::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
+use crate::tools::handlers::{
+    DeferredToolPolicy, SessionSurface, SessionToolsConfig, ToolModelCapabilities,
+};
 use crate::tools::registry::{
     ToolMetadata, ToolRegistration, ToolRegistry, native_cgp_tool_factory,
 };
@@ -51,6 +53,7 @@ pub struct SkillToolSessionRuntime {
     active_tools: Option<ToolDefList>,
     tool_documentation_mode: ToolDocumentationMode,
     model_capabilities: ToolModelCapabilities,
+    deferred_tool_policy: DeferredToolPolicy,
     on_tools_changed: Option<ToolChangeNotifier>,
     fork_executor: Option<Arc<dyn ForkSkillExecutor>>,
 }
@@ -68,6 +71,7 @@ impl SkillToolSessionRuntime {
             active_tools,
             tool_documentation_mode,
             model_capabilities,
+            deferred_tool_policy: DeferredToolPolicy::default(),
             on_tools_changed,
             fork_executor: None,
         }
@@ -75,6 +79,11 @@ impl SkillToolSessionRuntime {
 
     pub fn with_fork_executor(mut self, fork_executor: Arc<dyn ForkSkillExecutor>) -> Self {
         self.fork_executor = Some(fork_executor);
+        self
+    }
+
+    pub fn with_deferred_tool_policy(mut self, deferred_tool_policy: DeferredToolPolicy) -> Self {
+        self.deferred_tool_policy = deferred_tool_policy;
         self
     }
 
@@ -120,12 +129,15 @@ impl SkillToolSessionRuntime {
         if let Some(active_tools) = &self.active_tools {
             let refreshed = self
                 .tool_registry
-                .model_tools(SessionToolsConfig::full_public(
-                    SessionSurface::Interactive,
-                    CapabilityLevel::CodeSearch,
-                    self.tool_documentation_mode,
-                    self.model_capabilities,
-                ))
+                .model_tools(
+                    SessionToolsConfig::full_public(
+                        SessionSurface::Interactive,
+                        CapabilityLevel::CodeSearch,
+                        self.tool_documentation_mode,
+                        self.model_capabilities,
+                    )
+                    .with_deferred_tool_policy(self.deferred_tool_policy.clone()),
+                )
                 .await;
             *active_tools.write().await = refreshed;
         }
