@@ -24,8 +24,8 @@ tokio-util = { workspace = true, features = ["compat"] }
 tracing = { workspace = true }
 url = { workspace = true }
 percent-encoding = "2.3"
-vtcode-acp-client = { path = "../vtcode-acp-client", version = "0.89.2" }
-vtcode-core = { path = "../vtcode-core", version = "0.89.2" }
+vtcode-acp-client = { path = "../vtcode-acp-client", version = "0.90.0" }
+vtcode-core = { path = "../vtcode-core", version = "0.90.0" }
 
 [dev-dependencies]
 assert_fs = { workspace = true }

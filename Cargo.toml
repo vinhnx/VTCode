@@ -1,6 +1,6 @@
 [package]
 name = "vtcode"
-version = "0.89.2"
+version = "0.90.0"
 edition = "2024"
 rust-version = "1.88"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
@@ -87,7 +87,7 @@ ignore = "0.4"
 ring = "0.17"
 
 [workspace.package]
-version = "0.89.2"
+version = "0.90.0"
 edition = "2024"
 license = "MIT"
 
@@ -145,12 +145,12 @@ multiple_unsafe_ops_per_block = "warn"
 
 
 [dependencies]
-vtcode-acp = { path = "vtcode-acp", version = "0.89.2" }
-vtcode-commons = { path = "vtcode-commons", version = "0.89.2" }
-vtcode-config = { path = "vtcode-config", version = "0.89.2" }
-vtcode-auth = { path = "vtcode-auth", version = "0.89.2" }
-vtcode-core = { path = "vtcode-core", version = "0.89.2", default-features = false }
-vtcode-tui = { path = "vtcode-tui", version = "0.89.2" }
+vtcode-acp = { path = "vtcode-acp", version = "0.90.0" }
+vtcode-commons = { path = "vtcode-commons", version = "0.90.0" }
+vtcode-config = { path = "vtcode-config", version = "0.90.0" }
+vtcode-auth = { path = "vtcode-auth", version = "0.90.0" }
+vtcode-core = { path = "vtcode-core", version = "0.90.0", default-features = false }
+vtcode-tui = { path = "vtcode-tui", version = "0.90.0" }
 anyhow = { workspace = true }
 clap = { workspace = true }
 serde_json = { workspace = true }

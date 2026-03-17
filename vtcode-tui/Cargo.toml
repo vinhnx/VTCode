@@ -56,8 +56,8 @@ tui-shimmer = "0.1.3"
 tui-widget-list = "0.15"
 unicode-segmentation = "1.11"
 unicode-width = { workspace = true }
-vtcode-commons = { path = "../vtcode-commons", version = "0.89.2" }
-vtcode-vim = { path = "../vtcode-vim", version = "0.89.2" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.90.0" }
+vtcode-vim = { path = "../vtcode-vim", version = "0.90.0" }
 
 [dev-dependencies]
 criterion = { workspace = true }
