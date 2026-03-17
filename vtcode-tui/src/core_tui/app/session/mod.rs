@@ -184,6 +184,25 @@ impl AppSession {
             InlineCommand::LoadFilePalette { files, workspace } => {
                 self.load_file_palette(files, workspace);
             }
+            InlineCommand::SetInput(value) => {
+                self.core
+                    .handle_command(crate::core_tui::types::InlineCommand::SetInput(value));
+                self.check_file_reference_trigger();
+                slash::update_slash_suggestions(self);
+            }
+            InlineCommand::ApplySuggestedPrompt(value) => {
+                self.core.handle_command(
+                    crate::core_tui::types::InlineCommand::ApplySuggestedPrompt(value),
+                );
+                self.check_file_reference_trigger();
+                slash::update_slash_suggestions(self);
+            }
+            InlineCommand::ClearInput => {
+                self.core
+                    .handle_command(crate::core_tui::types::InlineCommand::ClearInput);
+                self.check_file_reference_trigger();
+                slash::update_slash_suggestions(self);
+            }
             InlineCommand::OpenHistoryPicker => {
                 events::open_history_picker(self);
             }

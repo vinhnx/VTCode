@@ -121,7 +121,6 @@ pub enum InlineEvent {
 }
 
 pub type InlineEventCallback = Arc<dyn Fn(&InlineEvent) + Send + Sync + 'static>;
-pub type FocusChangeCallback = Arc<dyn Fn(bool) + Send + Sync + 'static>;
 
 impl From<crate::core_tui::types::InlineEvent> for InlineEvent {
     fn from(value: crate::core_tui::types::InlineEvent) -> Self {

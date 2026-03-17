@@ -32,7 +32,7 @@ pub struct HistoryPickerState {
     /// Filtered and sorted matches
     pub matches: Vec<HistoryMatch>,
     /// Shared list navigation state
-    pub navigator: ListNavigator,
+    pub(crate) navigator: ListNavigator,
     /// Original content before picker was opened (for cancel restoration)
     original_content: String,
     /// Original cursor position before picker was opened

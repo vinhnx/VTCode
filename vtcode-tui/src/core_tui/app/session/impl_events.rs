@@ -5,6 +5,7 @@ use crate::core_tui::session::MouseDragTarget;
 use crate::core_tui::session::render::modal_render_styles;
 
 impl Session {
+    #[cfg(test)]
     pub(crate) fn process_key(&mut self, key: KeyEvent) -> Option<InlineEvent> {
         events::process_key(self, key)
     }

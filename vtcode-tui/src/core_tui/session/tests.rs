@@ -1124,41 +1124,41 @@ fn busy_escape_interrupts_then_exits() {
 
 #[test]
 fn busy_stop_command_interrupts_immediately() {
-    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
-    session.handle_command(InlineCommand::SetInputStatus {
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.handle_command(app_types::InlineCommand::SetInputStatus {
         left: Some("Running tool: unified_search".to_string()),
         right: None,
     });
-    session.set_input("/stop".to_string());
+    session.core.set_input("/stop".to_string());
 
     let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(matches!(event, Some(InlineEvent::Interrupt)));
+    assert!(matches!(event, Some(app_types::InlineEvent::Interrupt)));
 }
 
 #[test]
 fn busy_pause_command_emits_pause_event() {
-    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
-    session.handle_command(InlineCommand::SetInputStatus {
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.handle_command(app_types::InlineCommand::SetInputStatus {
         left: Some("Running tool: unified_search".to_string()),
         right: None,
     });
-    session.set_input("/pause".to_string());
+    session.core.set_input("/pause".to_string());
 
     let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(matches!(event, Some(InlineEvent::Pause)));
+    assert!(matches!(event, Some(app_types::InlineEvent::Pause)));
 }
 
 #[test]
 fn busy_resume_command_emits_resume_event() {
-    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
-    session.handle_command(InlineCommand::SetInputStatus {
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.handle_command(app_types::InlineCommand::SetInputStatus {
         left: Some("Running tool: unified_search".to_string()),
         right: None,
     });
-    session.set_input("/resume".to_string());
+    session.core.set_input("/resume".to_string());
 
     let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(matches!(event, Some(InlineEvent::Resume)));
+    assert!(matches!(event, Some(app_types::InlineEvent::Resume)));
 }
 
 #[test]
@@ -1468,8 +1468,7 @@ fn clicking_selected_file_palette_row_inserts_reference() {
         ],
         workspace: workspace.clone(),
     });
-    session.core.set_input("@".to_string());
-    session.core.set_cursor(1);
+    session.handle_command(app_types::InlineCommand::SetInput("@".to_string()));
 
     let _ = rendered_app_session_lines(&mut session, 20);
     let panel_area = session.core.bottom_panel_area().expect("panel area");
@@ -2202,7 +2201,7 @@ fn show_plan_confirmation_overlay(session: &mut Session, plan: app_types::PlanCo
 
 #[test]
 fn show_list_modal_uses_bottom_inline_panel_min_height() {
-    let mut session = Session::new(InlineTheme::default(), None, 30);
+    let mut session = AppSession::new(InlineTheme::default(), None, 30);
     let item = InlineListItem {
         title: "Option A".to_string(),
         subtitle: Some("Select this option".to_string()),
@@ -2211,8 +2210,8 @@ fn show_list_modal_uses_bottom_inline_panel_min_height() {
         selection: Some(InlineListSelection::SlashCommand("a".to_string())),
         search_value: Some("Option A".to_string()),
     };
-    session.handle_command(InlineCommand::ShowOverlay {
-        request: Box::new(OverlayRequest::List(ListOverlayRequest {
+    session.handle_command(app_types::InlineCommand::ShowOverlay {
+        request: Box::new(app_types::OverlayRequest::List(app_types::ListOverlayRequest {
             title: "Pick one".to_string(),
             lines: vec!["Choose an option".to_string()],
             footer_hint: None,
@@ -2225,7 +2224,7 @@ fn show_list_modal_uses_bottom_inline_panel_min_height() {
 
     let input_width = VIEW_WIDTH.saturating_sub(2);
     let base_input_height =
-        Session::input_block_height_for_lines(session.desired_input_lines(input_width));
+        Session::input_block_height_for_lines(session.core.desired_input_lines(input_width));
 
     let backend = TestBackend::new(VIEW_WIDTH, 30);
     let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
@@ -2234,7 +2233,7 @@ fn show_list_modal_uses_bottom_inline_panel_min_height() {
         .expect("failed to render list modal");
 
     assert!(
-        session.input_height >= base_input_height + ui::INLINE_LIST_PANEL_MIN_HEIGHT,
+        session.core.input_height >= base_input_height + ui::INLINE_LIST_PANEL_MIN_HEIGHT,
         "list modal should reserve min panel height below input"
     );
 }
