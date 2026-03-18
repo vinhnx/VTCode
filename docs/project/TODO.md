@@ -61,10 +61,6 @@ module
 
 ---
 
-move vtcode-lmstudio module and move its functionality into vtcode-local-llm to reduce fragmentation and improve cohesion. Refactor the codebase to eliminate the vtcode-lmstudio module, integrating its features directly into vtcode-core while ensuring all existing functionality is preserved. Update all references, imports, and documentation to reflect the removal of the vtcode-lmstudio module and the consolidation of its capabilities into vtcode-core. Conduct thorough testing to ensure that the refactored codebase maintains stability, reliability, and performance while simplifying the overall architecture.
-
-then add vtcode-ollama related submodules into vtcode-local-llm as well to further consolidate local LLM functionality and reduce fragmentation. Refactor the vtcode-ollama related code into vtcode-core, ensuring that all features are preserved and properly integrated. Update documentation and references accordingly, and conduct comprehensive testing to validate the refactored codebase.
-
 ---
 
 try copilot github oauth to use anthropic's claude
@@ -130,18 +126,6 @@ bug:
 2. When selecting the user's chat box' input text, and then press Ctrl+C to copy, current the highlight text is not copied to clipboard. Fix the issue so that when the user selects text in the chat input box and presses Ctrl+C, the selected text is properly copied to the clipboard as expected. This will allow users to easily copy and share their input without any issues.
 
 ===
-
-bug for oauth and API_key interoperability and logout token clearance. currently when user has setup both openai oauth and has set OPENAI_API_KEY in .env. Then user logout of oauth and want to use OPENAI_API_KEY, the system still use the oauth token, and it seems to confused flow. because it is not cleared properly, which causes confusion and authentication failure. Fix the issue by ensuring that when user logs out of openai oauth, all related tokens and authentication state are properly cleared from the system. This includes removing any cached tokens, resetting authentication flags, and ensuring that subsequent API calls will correctly fall back to using OPENAI_API_KEY for authentication instead of the now-invalid oauth token. This will allow users to seamlessly switch between authentication methods without encountering unexpected errors or confusion about which credentials are being used.
-
-```
- ╭─ Info ──────────────────────────────────────────────────────────────────╮
-  │ Both ChatGPT subscription auth and OPENAI_API_KEY are available. VT Code│
-  │  is using ChatGPT subscription because auth.openai.preferred_method = au│
-  │ to.                                                                     │
-  ╰─────────────────────────────────────────────────────────────────────────╯
-  Next step: keep the current priority, run /logout openai to rely on API-key
-   auth only, or set [auth.openai].preferred_method = "api_key".
-```
 
 ===
 

@@ -220,8 +220,10 @@ pub(crate) fn clear_openrouter_login(vt_cfg: Option<&VTCodeConfig>) -> Result<()
     clear_oauth_token_with_mode(credential_storage_mode(vt_cfg))
 }
 
-pub(crate) fn clear_openai_login(vt_cfg: Option<&VTCodeConfig>) -> Result<()> {
-    clear_openai_chatgpt_session_with_mode(credential_storage_mode(vt_cfg))
+pub(crate) fn clear_openai_login(_vt_cfg: Option<&VTCodeConfig>) -> Result<()> {
+    clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File)?;
+    clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::Keyring)?;
+    Ok(())
 }
 
 pub(crate) fn openrouter_auth_status(vt_cfg: Option<&VTCodeConfig>) -> Result<AuthStatus> {
@@ -489,9 +491,10 @@ mod tests {
     use serial_test::serial;
     use std::future;
     use vtcode_auth::{
-        AuthCallbackOutcome, AuthCredentialsStoreMode, OpenAIChatGptSession, OpenRouterToken,
-        clear_oauth_token_with_mode, clear_openai_chatgpt_session_with_mode,
-        load_oauth_token_with_mode, load_openai_chatgpt_session_with_mode,
+        AuthCallbackOutcome, AuthCredentialsStoreMode, OpenAIAuthConfig, OpenAIChatGptSession,
+        OpenAIResolvedAuth, OpenRouterToken, clear_oauth_token_with_mode,
+        clear_openai_chatgpt_session, clear_openai_chatgpt_session_with_mode,
+        load_oauth_token_with_mode, load_openai_chatgpt_session_with_mode, resolve_openai_auth,
         save_oauth_token_with_mode, save_openai_chatgpt_session_with_mode,
     };
     use vtcode_config::VTCodeConfig;
@@ -584,7 +587,8 @@ mod tests {
 
     #[test]
     #[serial]
-    fn openai_logout_clears_only_configured_storage_mode() {
+    fn openai_logout_clears_all_sessions_and_falls_back_to_api_key() {
+        let _ = clear_openai_chatgpt_session();
         let _ = clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File);
         let _ = clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::Keyring);
 
@@ -606,20 +610,25 @@ mod tests {
         let config = config_with_storage_mode(AuthCredentialsStoreMode::File);
         clear_openai_login(Some(&config)).expect("clear openai login");
 
-        assert_eq!(
+        assert!(
             load_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File)
                 .expect("load file session")
-                .expect("keyring session should remain as file-mode fallback")
-                .openai_api_key,
-            "keyring-api-key"
+                .is_none()
         );
-        assert_eq!(
+        assert!(
             load_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::Keyring)
                 .expect("load keyring session")
-                .expect("keyring session should remain")
-                .openai_api_key,
-            "keyring-api-key"
+                .is_none()
         );
+        assert!(matches!(
+            resolve_openai_auth(
+                &OpenAIAuthConfig::default(),
+                AuthCredentialsStoreMode::File,
+                Some("env-api-key".to_string())
+            )
+            .expect("resolve auth after logout"),
+            OpenAIResolvedAuth::ApiKey { api_key } if api_key == "env-api-key"
+        ));
 
         let _ = clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File);
         let _ = clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::Keyring);
