@@ -1,6 +1,7 @@
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
+    style::Modifier,
     text::{Line, Span},
     widgets::{Block, Clear, Paragraph, Widget},
 };
@@ -114,7 +115,7 @@ impl<'a> FooterWidget<'a> {
                 if let Some(phase) = self.shimmer_phase {
                     spans.extend(shimmer_spans_with_style_at_phase(
                         left,
-                        self.styles.muted_style(),
+                        self.styles.accent_style().add_modifier(Modifier::DIM),
                         phase,
                     ));
                 } else {

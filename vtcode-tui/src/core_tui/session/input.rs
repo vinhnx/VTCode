@@ -738,7 +738,7 @@ impl Session {
             {
                 spans.extend(shimmer_spans_with_style_at_phase(
                     left_value,
-                    dim_style,
+                    self.styles.accent_style().add_modifier(Modifier::DIM),
                     self.shimmer_state.phase(),
                 ));
             } else {
