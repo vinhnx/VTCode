@@ -457,9 +457,7 @@ pub fn load_openai_chatgpt_session_with_mode(
 }
 
 pub fn clear_openai_chatgpt_session() -> Result<()> {
-    let _ = clear_session_from_keyring();
-    let _ = clear_session_from_file();
-    Ok(())
+    clear_session_from_all_stores()
 }
 
 pub fn clear_openai_chatgpt_session_with_mode(mode: AuthCredentialsStoreMode) -> Result<()> {
@@ -540,7 +538,7 @@ async fn refresh_openai_chatgpt_session_without_lock(
         .context("failed to refresh openai chatgpt token")?;
     response
         .error_for_status_ref()
-        .map_err(|err| classify_refresh_error(err, storage_mode))?;
+        .map_err(classify_refresh_error)?;
     let token_response: OpenAITokenResponse = response
         .json()
         .await
@@ -745,19 +743,40 @@ async fn acquire_refresh_lock() -> Result<RefreshLockGuard> {
     Ok(RefreshLockGuard { file })
 }
 
-fn classify_refresh_error(
-    err: reqwest::Error,
-    storage_mode: AuthCredentialsStoreMode,
-) -> anyhow::Error {
+fn classify_refresh_error(err: reqwest::Error) -> anyhow::Error {
     let status = err.status();
     let message = err.to_string();
     if status.is_some_and(|status| status == reqwest::StatusCode::BAD_REQUEST)
         && (message.contains("invalid_grant") || message.contains("refresh_token"))
     {
-        let _ = clear_openai_chatgpt_session_with_mode(storage_mode);
+        if let Err(clear_err) = clear_session_from_all_stores() {
+            tracing::warn!(
+                "failed to clear expired openai chatgpt session across all stores: {clear_err}"
+            );
+        }
         anyhow!("Your ChatGPT session expired. Run `vtcode login openai` again.")
     } else {
         anyhow!(message)
+    }
+}
+
+fn clear_session_from_all_stores() -> Result<()> {
+    let mut errors = Vec::new();
+
+    if let Err(err) = clear_session_from_keyring() {
+        errors.push(err.to_string());
+    }
+    if let Err(err) = clear_session_from_file() {
+        errors.push(err.to_string());
+    }
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(anyhow!(
+            "failed to clear openai session from all stores: {}",
+            errors.join("; ")
+        ))
     }
 }
 
@@ -1243,6 +1262,39 @@ mod tests {
         assert_eq!(loaded.email, session.email);
         clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File)
             .expect("clear session");
+    }
+
+    #[test]
+    #[serial]
+    fn clear_openai_chatgpt_session_removes_file_and_keyring_sessions() {
+        let _guard = TestAuthDirGuard::new();
+        let session = sample_session();
+        save_openai_chatgpt_session_with_mode(&session, AuthCredentialsStoreMode::File)
+            .expect("save file session");
+
+        if save_openai_chatgpt_session_with_mode(&session, AuthCredentialsStoreMode::Keyring)
+            .is_err()
+        {
+            clear_openai_chatgpt_session().expect("clear session");
+            assert!(
+                load_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File)
+                    .expect("load file session")
+                    .is_none()
+            );
+            return;
+        }
+
+        clear_openai_chatgpt_session().expect("clear session");
+        assert!(
+            load_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File)
+                .expect("load file session")
+                .is_none()
+        );
+        assert!(
+            load_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::Keyring)
+                .expect("load keyring session")
+                .is_none()
+        );
     }
 
     #[test]

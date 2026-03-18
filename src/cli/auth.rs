@@ -3,7 +3,7 @@ use std::future::Future;
 use vtcode_auth::{
     AuthCallbackOutcome, AuthCredentialsStoreMode, AuthStatus, OAuthCallbackPage, OAuthProvider,
     OpenAIChatGptAuthStatus, OpenAIChatGptSession, OpenRouterToken, PkceChallenge,
-    clear_oauth_token_with_mode, clear_openai_chatgpt_session_with_mode, exchange_code_for_token,
+    clear_oauth_token_with_mode, clear_openai_chatgpt_session, exchange_code_for_token,
     exchange_openai_chatgpt_code_for_tokens, generate_openai_oauth_state, generate_pkce_challenge,
     get_auth_status_with_mode, get_auth_url, get_openai_chatgpt_auth_status_with_mode,
     get_openai_chatgpt_auth_url, load_openai_chatgpt_session_with_mode,
@@ -221,9 +221,7 @@ pub(crate) fn clear_openrouter_login(vt_cfg: Option<&VTCodeConfig>) -> Result<()
 }
 
 pub(crate) fn clear_openai_login(_vt_cfg: Option<&VTCodeConfig>) -> Result<()> {
-    clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File)?;
-    clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::Keyring)?;
-    Ok(())
+    clear_openai_chatgpt_session()
 }
 
 pub(crate) fn openrouter_auth_status(vt_cfg: Option<&VTCodeConfig>) -> Result<AuthStatus> {
