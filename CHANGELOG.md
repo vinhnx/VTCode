@@ -2,6 +2,30 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.91.0 - 2026-03-18
+
+### Highlights
+#### Bug Fixes
+
+- Ensure all OpenAI sessions are cleared on logout and fallback to API key (3d6cb033) 
+#### Features
+
+- Enhance OAuth flow with clickable URLs and improved user guidance (d5e9afa9) 
+- Implement transcript link click handling and update keyboard protocol flags (12e48c6d) 
+- Enhance mouse selection with double-click detection and clipboard functionality (25bae2b5) 
+- Implement explicit copy request for mouse selection and update Homebrew publishing process (21f2f1da) 
+- Update styling for shimmer effect and change UI theme to ayu (53ca8d5e) 
+- Add MiniMax-M2.7 model and update related configurations (3eeb3664) 
+### Other Changes
+#### Other
+
+- Update TODO (a2eeed96) 
+#### Refactors
+
+- Simplify model and provider selection entries, remove unnecessary enumerations (baea18fb) 
+- Streamline OpenAI session clearing by consolidating storage methods (23a6c55b) 
+### Contributors
+@vinhnx
 ## 0.90.0 - 2026-03-17
 
 ### Highlights
