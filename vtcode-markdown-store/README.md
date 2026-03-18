@@ -37,7 +37,7 @@ irm https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.ps1 | i
 cargo install vtcode
 
 # Homebrew (macOS/Linux)
-brew install vinhnx/tap/vtcode
+brew install vtcode
 ```
 
 

@@ -24,7 +24,7 @@ irm https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.ps1 | i
 ### Homebrew (macOS & Linux)
 
 ```bash
-brew install vinhnx/tap/vtcode
+brew install vtcode
 
 # Optional after brew install
 vtcode dependencies install search-tools
@@ -50,7 +50,7 @@ npm install -g @vinhnx/vtcode --registry=https://npm.pkg.github.com
 | Method               | Platforms         | Command                                                               | Notes                                 |
 | -------------------- | ----------------- | --------------------------------------------------------------------- | ------------------------------------- |
 | **Native Installer** | macOS, Linux, WSL | See Quick Install above                                               | Recommended, auto-detects platform    |
-| **Homebrew**         | macOS, Linux      | `brew install vinhnx/tap/vtcode`                                      | Package manager, easy updates         |
+| **Homebrew**         | macOS, Linux      | `brew install vtcode`                                                 | Package manager, easy updates         |
 | **Cargo**            | All               | `cargo install vtcode`                                                | Build from source, latest dev version |
 | **npm**              | All               | `npm install -g @vinhnx/vtcode --registry=https://npm.pkg.github.com` | JavaScript package manager            |
 | **npx**              | All               | `npx @vinhnx/vtcode`                                                  | No installation, run directly         |

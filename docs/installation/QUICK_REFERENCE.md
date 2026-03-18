@@ -10,7 +10,7 @@ curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.
 irm https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.ps1 | iex
 
 # Homebrew
-brew install vinhnx/tap/vtcode
+brew install vtcode
 
 # Cargo
 cargo install vtcode

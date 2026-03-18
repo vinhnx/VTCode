@@ -24,6 +24,8 @@ pub struct MouseSelectionState {
     pub has_selection: bool,
     /// Whether the current selection has already been copied to clipboard.
     copied: bool,
+    /// Whether Ctrl+C was pressed to explicitly copy the current selection.
+    copy_requested: bool,
     /// Tracks the previous mouse click so double-clicks can be detected.
     last_click: Option<ClickRecord>,
 }
@@ -82,6 +84,7 @@ impl MouseSelectionState {
         self.is_selecting = false;
         self.has_selection = false;
         self.copied = false;
+        self.copy_requested = false;
         self.last_click = None;
     }
 
@@ -218,6 +221,18 @@ impl MouseSelectionState {
     /// Returns `true` if the selection needs to be copied (finalized and not yet copied).
     pub fn needs_copy(&self) -> bool {
         self.has_selection && !self.is_selecting && !self.copied
+    }
+
+    /// Returns `true` if an explicit copy was requested via Ctrl+C.
+    pub fn has_copy_request(&self) -> bool {
+        self.copy_requested
+    }
+
+    /// Request an explicit copy of the current selection (triggered by Ctrl+C).
+    pub fn request_copy(&mut self) {
+        if self.has_selection {
+            self.copy_requested = true;
+        }
     }
 
     /// Mark the selection as already copied.

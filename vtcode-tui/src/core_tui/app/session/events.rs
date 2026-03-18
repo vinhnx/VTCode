@@ -295,6 +295,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
             if session.core.mouse_selection.has_selection {
+                session.core.mouse_selection.request_copy();
                 session.mark_dirty();
                 return None;
             }
@@ -310,6 +311,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
             if session.core.mouse_selection.has_selection {
+                session.core.mouse_selection.request_copy();
                 session.mark_dirty();
                 return None;
             }

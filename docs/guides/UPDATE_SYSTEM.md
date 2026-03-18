@@ -231,7 +231,7 @@ vtcode update --channel beta
 
 If VT Code was installed via a package manager, the update system will detect this and provide the appropriate update command:
 
-- **Homebrew**: `brew upgrade vinhnx/tap/vtcode`
+- **Homebrew**: `brew upgrade vtcode`
 - **Cargo**: `cargo install vtcode --force`
 - **npm**: `npm install -g @vinhnx/vtcode@latest --registry=https://npm.pkg.github.com`
 - **Standalone**: Direct update via `vtcode update`

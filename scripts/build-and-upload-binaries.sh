@@ -443,6 +443,93 @@ upload_binaries() {
     cd ..
 }
 
+update_homebrew_formula_file() {
+    local formula_path=$1
+    local version=$2
+    local x86_64_macos_sha=$3
+    local aarch64_macos_sha=$4
+
+    FORMULA_PATH="$formula_path" \
+    FORMULA_VERSION="$version" \
+    FORMULA_X86_64_MACOS_SHA="$x86_64_macos_sha" \
+    FORMULA_AARCH64_MACOS_SHA="$aarch64_macos_sha" \
+        python3 <<'PYTHON_SCRIPT'
+import os
+import re
+from pathlib import Path
+
+formula_path = Path(os.environ["FORMULA_PATH"])
+version = os.environ["FORMULA_VERSION"]
+x86_64_macos_sha = os.environ["FORMULA_X86_64_MACOS_SHA"]
+aarch64_macos_sha = os.environ["FORMULA_AARCH64_MACOS_SHA"]
+
+content = formula_path.read_text()
+content = re.sub(r'version\s+"[^"]*"', f'version "{version}"', content)
+content = re.sub(
+    r'(aarch64-apple-darwin\.tar\.gz"\s+sha256\s+")([^"]*)(")',
+    lambda match: f'{match.group(1)}{aarch64_macos_sha}{match.group(3)}',
+    content,
+)
+content = re.sub(
+    r'(x86_64-apple-darwin\.tar\.gz"\s+sha256\s+")([^"]*)(")',
+    lambda match: f'{match.group(1)}{x86_64_macos_sha}{match.group(3)}',
+    content,
+)
+
+formula_path.write_text(content)
+PYTHON_SCRIPT
+}
+
+publish_homebrew_tap() {
+    local version=$1
+    local x86_64_macos_sha=$2
+    local aarch64_macos_sha=$3
+
+    print_info "Publishing Homebrew formula to vinhnx/homebrew-tap..."
+
+    local temp_dir
+    temp_dir=$(mktemp -d 2>/dev/null || mktemp -d -t 'vtcode-homebrew')
+
+    if ! (
+        trap 'rm -rf "$temp_dir"' EXIT
+
+        if ! gh repo clone vinhnx/homebrew-tap "$temp_dir" >/dev/null 2>&1; then
+            print_error "Failed to clone vinhnx/homebrew-tap"
+            exit 1
+        fi
+
+        if ! update_homebrew_formula_file "$temp_dir/vtcode.rb" "$version" "$x86_64_macos_sha" "$aarch64_macos_sha"; then
+            print_error "Failed to update Homebrew tap formula"
+            exit 1
+        fi
+
+        if git -C "$temp_dir" diff --quiet -- vtcode.rb; then
+            print_info "Homebrew tap formula is already up to date"
+            exit 0
+        fi
+
+        git -C "$temp_dir" add vtcode.rb
+
+        if ! GIT_AUTHOR_NAME="vtcode-release-bot" \
+            GIT_AUTHOR_EMAIL="noreply@vtcode.com" \
+            GIT_COMMITTER_NAME="vtcode-release-bot" \
+            GIT_COMMITTER_EMAIL="noreply@vtcode.com" \
+            git -C "$temp_dir" commit -m "Update vtcode formula to v$version"; then
+            print_error "Failed to commit Homebrew tap update"
+            exit 1
+        fi
+
+        if ! git -C "$temp_dir" -c credential.helper='!gh auth git-credential' push https://github.com/vinhnx/homebrew-tap.git HEAD:main; then
+            print_error "Failed to push Homebrew tap update"
+            exit 1
+        fi
+
+        print_success "Published vtcode formula to vinhnx/homebrew-tap"
+    ); then
+        return 1
+    fi
+}
+
 # Function to update Homebrew formula
 update_homebrew_formula() {
     local version=$1
@@ -460,45 +547,39 @@ update_homebrew_formula() {
 
     print_info "Updating Homebrew formula at $formula_path..."
 
-    local x86_64_macos_sha=$(cat "dist/vtcode-$version-x86_64-apple-darwin.sha256" 2>/dev/null || echo "")
-    local aarch64_macos_sha=$(cat "dist/vtcode-$version-aarch64-apple-darwin.sha256" 2>/dev/null || echo "")
-    local universal_macos_sha=$(cat "dist/vtcode-$version-universal-apple-darwin.sha256" 2>/dev/null || echo "")
-
+    local x86_64_macos_sha
+    x86_64_macos_sha=$(cat "dist/vtcode-$version-x86_64-apple-darwin.sha256" 2>/dev/null || echo "")
+    local aarch64_macos_sha
+    aarch64_macos_sha=$(cat "dist/vtcode-$version-aarch64-apple-darwin.sha256" 2>/dev/null || echo "")
     if [ -z "$x86_64_macos_sha" ] || [ -z "$aarch64_macos_sha" ]; then
         print_error "Missing macOS checksums, cannot update Homebrew formula"
         return 1
     fi
 
-    python3 << PYTHON_SCRIPT
-import re
-with open('$formula_path', 'r') as f:
-    content = f.read()
-
-content = re.sub(r'version\s+"[^\"]*"', 'version "$version"', content)
-content = re.sub(
-    r'(aarch64-apple-darwin.tar.gz"\s+sha256\s+")[^\"]*(")', 
-    r'\g<1>$aarch64_macos_sha\g<2>',
-    content
-)
-content = re.sub(
-    r'(x86_64-apple-darwin.tar.gz"\s+sha256\s+")[^\"]*(")', 
-    r'\g<1>$x86_64_macos_sha\g<2>',
-    content
-)
-
-# If universal SHA is available, we could update that too if the formula supports it
-# For now, we update the primary architecture-specific ones
-
-with open('$formula_path', 'w') as f:
-    f.write(content)
-PYTHON_SCRIPT
+    if ! update_homebrew_formula_file "$formula_path" "$version" "$x86_64_macos_sha" "$aarch64_macos_sha"; then
+        print_error "Failed to update local Homebrew formula"
+        return 1
+    fi
 
     print_success "Homebrew formula updated locally"
-    
-    # Commit and push
-    git add "$formula_path"
-    git commit -m "chore: update homebrew formula to $version" || true
-    git push origin main || print_warning "Failed to push Homebrew update"
+
+    if ! git diff --quiet -- "$formula_path"; then
+        git add "$formula_path"
+
+        if ! GIT_AUTHOR_NAME="vtcode-release-bot" \
+            GIT_AUTHOR_EMAIL="noreply@vtcode.com" \
+            GIT_COMMITTER_NAME="vtcode-release-bot" \
+            GIT_COMMITTER_EMAIL="noreply@vtcode.com" \
+            git commit -m "chore: update homebrew formula to $version"; then
+            print_warning "Failed to commit local Homebrew formula update"
+        elif ! git -c credential.helper='!gh auth git-credential' push https://github.com/vinhnx/vtcode.git main; then
+            print_warning "Failed to push Homebrew update"
+        fi
+    else
+        print_info "Local Homebrew formula is already up to date"
+    fi
+
+    publish_homebrew_tap "$version" "$x86_64_macos_sha" "$aarch64_macos_sha"
 }
 
 # Main function

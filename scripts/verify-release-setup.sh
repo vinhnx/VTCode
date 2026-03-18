@@ -209,6 +209,20 @@ test_release_script() {
     else
         print_error "release.sh missing automatic npm bin stub creation"
     fi
+
+    # Check for Homebrew tap publishing
+    if grep -q "publish_homebrew_tap" scripts/release.sh && grep -q "vinhnx/homebrew-tap" scripts/release.sh; then
+        print_success "release.sh publishes the Homebrew tap"
+    else
+        print_error "release.sh missing Homebrew tap publication"
+    fi
+
+    # Check for authenticated push to the tap repo
+    if grep -q "credential.helper='!gh auth git-credential'" scripts/release.sh && grep -q "https://github.com/vinhnx/homebrew-tap.git" scripts/release.sh; then
+        print_success "release.sh pushes to the tap repo via authenticated HTTPS"
+    else
+        print_error "release.sh missing authenticated HTTPS push for the tap repo"
+    fi
 }
 
 # Test 6: Check build script for key improvements
@@ -241,6 +255,20 @@ test_build_script() {
         print_success "build-and-upload-binaries.sh checks release existence"
     else
         print_error "build-and-upload-binaries.sh missing release existence check"
+    fi
+
+    # Check for Homebrew tap publication
+    if grep -q "vinhnx/homebrew-tap" scripts/build-and-upload-binaries.sh; then
+        print_success "build-and-upload-binaries.sh publishes to vinhnx/homebrew-tap"
+    else
+        print_error "build-and-upload-binaries.sh missing Homebrew tap publication"
+    fi
+
+    # Check for authenticated HTTPS push
+    if grep -q "gh auth git-credential" scripts/build-and-upload-binaries.sh && grep -q "https://github.com/vinhnx/homebrew-tap.git" scripts/build-and-upload-binaries.sh; then
+        print_success "build-and-upload-binaries.sh pushes via authenticated HTTPS"
+    else
+        print_error "build-and-upload-binaries.sh missing authenticated HTTPS push"
     fi
 }
 

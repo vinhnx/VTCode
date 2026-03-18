@@ -212,24 +212,3 @@ check and improve first-launch wizard CLI VT Code setup
 ```
 
 ===
-
-check homebrew tap install still install very old version
-
-# Homebrew (macOS/Linux)
-
-brew install vinhnx/tap/vtcode
-
-# Optional: install the search tools bundle later
-
-vtcode dependencies install search-tools
-Initialized empty Git repository in /usr/local/Homebrew/.git/
-fatal: not in a git directory
-✔︎ JSON API formula_tap_migrations.jws.json [Downloaded 1.9KB/ 1.9KB]
-✔︎ JSON API cask_tap_migrations.jws.json [Downloaded 2.4KB/ 2.4KB]
-✔︎ JSON API cask.jws.json [Downloaded 15.4MB/ 15.4MB]
-✔︎ JSON API formula.jws.json [Downloaded 32.0MB/ 32.0MB]
-==> Fetching downloads for: vtcode
-✔︎ Formula vtcode (0.15.0) [Verifying 4.7MB/ 4.7MB]
-==> Installing vtcode from vinhnx/tap
-
-> I published: https://formulae.brew.sh/formula/vtcode

@@ -7,7 +7,7 @@ const CURL_INSTALL_COMMAND: &str =
     "curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash";
 const WINDOWS_INSTALL_COMMAND: &str =
     "irm https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.ps1 | iex";
-const HOMEBREW_UPDATE_COMMAND: &str = "brew upgrade vinhnx/tap/vtcode";
+const HOMEBREW_UPDATE_COMMAND: &str = "brew upgrade vtcode";
 const CARGO_UPDATE_COMMAND: &str = "cargo install vtcode --force";
 const NPM_UPDATE_COMMAND: &str =
     "npm install -g @vinhnx/vtcode@latest --registry=https://npm.pkg.github.com";
@@ -133,6 +133,14 @@ mod tests {
         let action = InstallSource::Standalone.update_action_for_os("windows");
         assert_eq!(action.display_command, WINDOWS_INSTALL_COMMAND);
         assert_eq!(action.execution, UpdateExecutionStrategy::PowerShell);
+    }
+
+    #[test]
+    fn homebrew_uses_core_upgrade_command() {
+        let action = InstallSource::Homebrew.update_action_for_os("linux");
+        assert_eq!(action.display_command, "brew upgrade vtcode");
+        assert_eq!(action.execution, UpdateExecutionStrategy::Shell);
+        assert!(action.prefer_path_relaunch);
     }
 
     #[test]

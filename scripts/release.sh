@@ -6,7 +6,7 @@
 # 1. Builds binaries locally (Sanity Check)
 # 2. Runs cargo-release to version, tag, and publish to crates.io
 # 3. Uploads pre-built binaries to GitHub Releases
-# 4. Updates Homebrew formula
+# 4. Updates and publishes Homebrew formula
 #
 # Usage: ./scripts/release.sh [version|level] [options]
 
@@ -628,6 +628,120 @@ trigger_docs_rs_rebuild() {
     curl -s -o /dev/null "https://docs.rs/vtcode-core/$version" || true
 }
 
+update_homebrew_formula_file() {
+    local formula_path=$1
+    local version=$2
+    local x86_64_macos_sha=$3
+    local aarch64_macos_sha=$4
+
+    FORMULA_PATH="$formula_path" \
+    FORMULA_VERSION="$version" \
+    FORMULA_X86_64_MACOS_SHA="$x86_64_macos_sha" \
+    FORMULA_AARCH64_MACOS_SHA="$aarch64_macos_sha" \
+        python3 <<'PYTHON_SCRIPT'
+import os
+import re
+from pathlib import Path
+
+formula_path = Path(os.environ["FORMULA_PATH"])
+version = os.environ["FORMULA_VERSION"]
+x86_64_macos_sha = os.environ["FORMULA_X86_64_MACOS_SHA"]
+aarch64_macos_sha = os.environ["FORMULA_AARCH64_MACOS_SHA"]
+
+content = formula_path.read_text()
+content = re.sub(r'version\s+"[^"]*"', f'version "{version}"', content)
+content = re.sub(
+    r'(aarch64-apple-darwin\.tar\.gz"\s+sha256\s+")([^"]*)(")',
+    lambda match: f'{match.group(1)}{aarch64_macos_sha}{match.group(3)}',
+    content,
+)
+content = re.sub(
+    r'(x86_64-apple-darwin\.tar\.gz"\s+sha256\s+")([^"]*)(")',
+    lambda match: f'{match.group(1)}{x86_64_macos_sha}{match.group(3)}',
+    content,
+)
+
+formula_path.write_text(content)
+PYTHON_SCRIPT
+}
+
+publish_homebrew_tap() {
+    local version=$1
+    local formula_path="homebrew/vtcode.rb"
+
+    local x86_64_macos_sha
+    x86_64_macos_sha=$(cat "dist/vtcode-$version-x86_64-apple-darwin.sha256" 2>/dev/null || echo "")
+    local aarch64_macos_sha
+    aarch64_macos_sha=$(cat "dist/vtcode-$version-aarch64-apple-darwin.sha256" 2>/dev/null || echo "")
+
+    if [[ -z "$x86_64_macos_sha" || -z "$aarch64_macos_sha" ]]; then
+        print_error "Missing macOS checksums, cannot publish Homebrew tap"
+        return 1
+    fi
+
+    print_info "Updating local Homebrew formula at $formula_path..."
+    if ! update_homebrew_formula_file "$formula_path" "$version" "$x86_64_macos_sha" "$aarch64_macos_sha"; then
+        print_error "Failed to update local Homebrew formula"
+        return 1
+    fi
+
+    if git diff --quiet -- "$formula_path"; then
+        print_info "Local Homebrew formula is already up to date"
+    else
+        git add "$formula_path"
+        if GIT_AUTHOR_NAME="vtcode-release-bot" \
+            GIT_AUTHOR_EMAIL="noreply@vtcode.com" \
+            GIT_COMMITTER_NAME="vtcode-release-bot" \
+            GIT_COMMITTER_EMAIL="noreply@vtcode.com" \
+            git commit -m "chore: update homebrew formula to $version [skip ci]"; then
+            print_success "Local Homebrew formula updated and committed"
+        else
+            print_warning "Failed to commit local Homebrew formula update"
+        fi
+    fi
+
+    print_info "Publishing Homebrew formula to vinhnx/homebrew-tap..."
+
+    local temp_dir
+    temp_dir=$(mktemp -d 2>/dev/null || mktemp -d -t 'vtcode-homebrew')
+
+    if ! (
+        trap 'rm -rf "$temp_dir"' EXIT
+
+        if ! gh repo clone vinhnx/homebrew-tap "$temp_dir" >/dev/null 2>&1; then
+            print_error "Failed to clone vinhnx/homebrew-tap"
+            exit 1
+        fi
+
+        cp "$formula_path" "$temp_dir/vtcode.rb"
+
+        if git -C "$temp_dir" diff --quiet -- vtcode.rb; then
+            print_info "Homebrew tap formula is already up to date"
+            exit 0
+        fi
+
+        git -C "$temp_dir" add vtcode.rb
+
+        if ! GIT_AUTHOR_NAME="vtcode-release-bot" \
+            GIT_AUTHOR_EMAIL="noreply@vtcode.com" \
+            GIT_COMMITTER_NAME="vtcode-release-bot" \
+            GIT_COMMITTER_EMAIL="noreply@vtcode.com" \
+            git -C "$temp_dir" commit -m "Update vtcode formula to v$version"; then
+            print_error "Failed to commit Homebrew tap update"
+            exit 1
+        fi
+
+        if ! git -C "$temp_dir" -c credential.helper='!gh auth git-credential' push https://github.com/vinhnx/homebrew-tap.git HEAD:main; then
+            print_error "Failed to push Homebrew tap update"
+            exit 1
+        fi
+
+        print_success "Published vtcode formula to vinhnx/homebrew-tap"
+    ); then
+        return 1
+    fi
+}
+
 main() {
     local release_argument=''
     local increment_type=''
@@ -1078,28 +1192,28 @@ main() {
     fi
 
 
-     # 5. Update Homebrew
-     if [[ "$skip_binaries" == 'false' ]]; then
-         print_info "Step 5: Updating Homebrew formula..."
-         ./scripts/build-and-upload-binaries.sh -v "$released_version" --only-homebrew
-     fi
+    # 5. Publish Homebrew tap
+    if [[ "$skip_binaries" == 'false' ]]; then
+        print_info "Step 5: Publishing Homebrew formula to vinhnx/homebrew-tap..."
+        publish_homebrew_tap "$released_version"
+    fi
 
-     # 6. Handle docs.rs rebuild
-     if [[ "$skip_crates" == 'false' && "$skip_docs" == 'false' ]]; then
-         trigger_docs_rs_rebuild "$released_version" false
-     fi
+    # 6. Handle docs.rs rebuild
+    if [[ "$skip_crates" == 'false' && "$skip_docs" == 'false' ]]; then
+        trigger_docs_rs_rebuild "$released_version" false
+    fi
 
-     print_success "Release process finished for $released_version"
-     print_info "Distribution:"
-     print_info "  ✓ Cargo (crates.io)"
-     print_info "  ✓ GitHub Releases (all platforms: macOS local + Linux/Windows CI)"
-     print_info "  ✓ Homebrew (vinhnx/tap/vtcode)"
-     print_info ""
-     print_info "Cost optimization:"
-     print_info "  • macOS binaries: built locally (no CI cost)"
-     print_info "  • Linux/Windows binaries: built on GitHub Actions (free for public repo)"
-     print_info ""
-     print_info "Tip: Use --full-ci to build ALL platforms on GitHub Actions"
+    print_success "Release process finished for $released_version"
+    print_info "Distribution:"
+    print_info "  ✓ Cargo (crates.io)"
+    print_info "  ✓ GitHub Releases (all platforms: macOS local + Linux/Windows CI)"
+    print_info "  ✓ Homebrew (vinhnx/homebrew-tap/vtcode)"
+    print_info ""
+    print_info "Cost optimization:"
+    print_info "  • macOS binaries: built locally (no CI cost)"
+    print_info "  • Linux/Windows binaries: built on GitHub Actions (free for public repo)"
+    print_info ""
+    print_info "Tip: Use --full-ci to build ALL platforms on GitHub Actions"
 }
 
 main "$@"

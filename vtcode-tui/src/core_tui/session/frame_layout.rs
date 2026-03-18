@@ -113,13 +113,17 @@ impl Session {
         self.mouse_selection
             .apply_highlight(frame.buffer_mut(), viewport);
 
-        if self.mouse_selection.needs_copy() {
+        // Only copy to clipboard when explicitly requested via Ctrl+C.
+        if self.mouse_selection.has_copy_request() {
             let text = self
                 .mouse_selection
                 .extract_text(frame.buffer_mut(), viewport);
             if !text.is_empty() {
                 MouseSelectionState::copy_to_clipboard(&text);
             }
+            self.mouse_selection.mark_copied();
+        } else if self.mouse_selection.needs_copy() {
+            // Mark as processed without copying — no auto-copy on mouse-up.
             self.mouse_selection.mark_copied();
         }
     }
