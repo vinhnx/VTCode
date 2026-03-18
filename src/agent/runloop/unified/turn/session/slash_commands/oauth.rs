@@ -101,14 +101,11 @@ pub(crate) async fn handle_oauth_login(
             )?;
             let prepared = prepare_openai_login(vt_cfg)?;
             open_browser_with_guidance(ctx.renderer, &prepared.auth_url)?;
-            ctx.renderer.line(
-                MessageStyle::Output,
-                "If localhost is unavailable, paste the redirected URL or raw query string into the inline prompt.",
-            )?;
             ctx.renderer
                 .line(MessageStyle::Info, "Waiting for OpenAI OAuth callback...")?;
+            let auth_url = prepared.auth_url.clone();
             let manual_input =
-                prompt_openai_manual_callback_input(&mut ctx, prepared.callback_port);
+                prompt_openai_manual_callback_input(&mut ctx, prepared.callback_port, &auth_url);
             let login_result =
                 complete_openai_login_with_manual_future(prepared, Some(manual_input)).await;
             ctx.handle.close_modal();
@@ -300,8 +297,7 @@ fn ensure_supported_provider(
 
 fn open_browser_with_guidance(renderer: &mut AnsiRenderer, auth_url: &str) -> Result<()> {
     renderer.line(MessageStyle::Info, "Opening browser for authentication...")?;
-    renderer.line(MessageStyle::Info, "URL:")?;
-    renderer.line(MessageStyle::Info, auth_url)?;
+    renderer.hyperlink_line(MessageStyle::Response, auth_url)?;
     if let Err(err) = webbrowser::open(auth_url) {
         renderer.line(
             MessageStyle::Error,
@@ -318,10 +314,13 @@ fn open_browser_with_guidance(renderer: &mut AnsiRenderer, auth_url: &str) -> Re
 async fn prompt_openai_manual_callback_input(
     ctx: &mut SlashCommandContext<'_>,
     callback_port: u16,
+    auth_url: &str,
 ) -> Result<Option<String>> {
     let step = WizardStep {
         title: "Callback".to_string(),
-        question: "Paste the redirected URL or raw query string while VT Code keeps waiting for the browser callback.".to_string(),
+        question: format!(
+            "Waiting for browser callback. If it doesn't open automatically, copy this URL:\n\n{auth_url}\n\nOr paste the redirected URL / query string below."
+        ),
         items: vec![InlineListItem {
             title: "Submit".to_string(),
             subtitle: Some("Press Tab to type text, then Enter to submit.".to_string()),

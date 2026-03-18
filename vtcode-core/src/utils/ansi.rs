@@ -464,6 +464,53 @@ impl AnsiRenderer {
         }
     }
 
+    /// Write a URL as a full, clickable line using OSC 8 hyperlinks.
+    ///
+    /// The URL is rendered on its own line so that terminal emulators can
+    /// detect and activate it for click-to-open behaviour.
+    pub fn hyperlink_line(&mut self, style: MessageStyle, url: &str) -> Result<()> {
+        if !self.should_render_style(style) {
+            return Ok(());
+        }
+        let indent = style.indent();
+        if let Some(sink) = &mut self.sink {
+            let linked = format!(
+                "{}{}{}",
+                vtcode_commons::ansi_codes::hyperlink_open(url),
+                url,
+                vtcode_commons::ansi_codes::hyperlink_close(),
+            );
+            sink.write_multiline_with_transcript(
+                style.style(),
+                indent,
+                &linked,
+                Self::message_kind(style),
+                true,
+            )?;
+            self.last_line_was_empty = false;
+            return Ok(());
+        }
+        self.buffer.clear();
+        if !indent.is_empty() {
+            self.buffer.push_str(indent);
+        }
+        self.buffer.push_str(&vtcode_commons::ansi_codes::hyperlink_open(url));
+        self.buffer.push_str(url);
+        self.buffer
+            .push_str(&vtcode_commons::ansi_codes::hyperlink_close());
+        let ansi_style = style.style();
+        if self.color {
+            writeln!(self.writer, "{ansi_style}{}{Reset}", self.buffer)?;
+        } else {
+            writeln!(self.writer, "{}", self.buffer)?;
+        }
+        self.writer.flush()?;
+        transcript::append(url);
+        self.last_line_was_empty = false;
+        self.buffer.clear();
+        Ok(())
+    }
+
     /// Append a large pasted user message as a placeholder in inline UI.
     pub fn append_paste_placeholder(&mut self, message: &str, line_count: usize) -> Result<()> {
         if let Some(sink) = &self.sink {

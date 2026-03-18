@@ -428,7 +428,7 @@ impl ModelPickerState {
                 MessageStyle::Info,
                 "Opening browser for OpenAI ChatGPT authentication...",
             )?;
-            renderer.line(MessageStyle::Output, &format!("URL: {}", prepared.auth_url))?;
+            renderer.hyperlink_line(MessageStyle::Response, &prepared.auth_url)?;
             if let Err(err) = webbrowser::open(&prepared.auth_url) {
                 renderer.line(
                     MessageStyle::Error,

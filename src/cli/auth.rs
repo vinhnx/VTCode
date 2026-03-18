@@ -400,7 +400,12 @@ fn prompt_openai_manual_input_cli_once() -> Result<Option<String>> {
 
 fn open_browser_or_print_url(url: &str) {
     println!("Open this URL to continue:");
-    println!("{url}");
+    println!(
+        "{}{}{}",
+        vtcode_commons::ansi_codes::hyperlink_open(url),
+        url,
+        vtcode_commons::ansi_codes::hyperlink_close(),
+    );
     if let Err(err) = webbrowser::open(url) {
         eprintln!("warning: failed to open browser automatically: {}", err);
     }
