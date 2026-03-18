@@ -93,3 +93,143 @@ Claude Code does the same with CLAUDE.md. The pattern is simple: read the file, 
 Improve /model loading performance. models.json are gettings large and loading them is becoming a bottleneck. Consider lazy loading model metadata, caching results, or optimizing the data structure for faster access. Additionally, review the model selection logic to ensure it is efficient and does not require unnecessary processing of the entire models.json file on each load.
 
 ==
+
+handle double click text to highlight text in tui and copy to clipboard.
+
+---
+
+idea: file change detection for better context management. Implement a file watcher that detects changes in project files and automatically updates the agent's context with the latest content. This will ensure that the agent always has access to the most up-to-date information without requiring manual refreshes. The file watcher can be implemented using libraries such as chokidar for Node.js or fs.watch for Python, and can be configured to monitor specific directories or file types relevant to the project.
+
+Show a human in the loop UI asking user for next step.
+
+```
+* Asking user I found an unrelated modified file in the worktree: "docs...
+
+VT Code is requesting information
+
+I found an unrelated modified file in the worktree: "docs/project/TODO.md". I didn't change it as part of this
+task. How would you like me to proceed?
+
+Choose an action:
+› {leave_as_is} text
+  {inspect_changes} text
+  {stop_here} text
+
+Other (type your answer)
+
+th select • Enter accept • ctrl+d decline • Esc cancel
+```
+
+/Users/vinhnguyenxuan/Documents/vtcode-resources/idea/file_change_detection.png
+
+===
+
+bug:
+
+1. currently when selecting the text in the TUI, it being automatically coppy the highlight text to clip board -> remove it. Don't want to have it automatically copy to clipboard when selecting text in the TUI, as it can be disruptive and may not always be desired. Instead, implement a more intentional action for copying to clipboard, such as a specific keyboard shortcut (e.g., Ctrl+C) or a context menu option that appears when right-clicking on the selected text. This way, users can choose when they want to copy the highlighted text without it happening automatically every time they select something in the TUI.
+2. When selecting the user's chat box' input text, and then press Ctrl+C to copy, current the highlight text is not copied to clipboard. Fix the issue so that when the user selects text in the chat input box and presses Ctrl+C, the selected text is properly copied to the clipboard as expected. This will allow users to easily copy and share their input without any issues.
+
+===
+
+bug for oauth and API_key interoperability and logout token clearance. currently when user has setup both openai oauth and has set OPENAI_API_KEY in .env. Then user logout of oauth and want to use OPENAI_API_KEY, the system still use the oauth token, and it seems to confused flow. because it is not cleared properly, which causes confusion and authentication failure. Fix the issue by ensuring that when user logs out of openai oauth, all related tokens and authentication state are properly cleared from the system. This includes removing any cached tokens, resetting authentication flags, and ensuring that subsequent API calls will correctly fall back to using OPENAI_API_KEY for authentication instead of the now-invalid oauth token. This will allow users to seamlessly switch between authentication methods without encountering unexpected errors or confusion about which credentials are being used.
+
+```
+ ╭─ Info ──────────────────────────────────────────────────────────────────╮
+  │ Both ChatGPT subscription auth and OPENAI_API_KEY are available. VT Code│
+  │  is using ChatGPT subscription because auth.openai.preferred_method = au│
+  │ to.                                                                     │
+  ╰─────────────────────────────────────────────────────────────────────────╯
+  Next step: keep the current priority, run /logout openai to rely on API-key
+   auth only, or set [auth.openai].preferred_method = "api_key".
+```
+
+===
+
+check and improve first-launch wizard CLI VT Code setup
+
+```
+╭Instructions──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+ │Default: OpenAI. Use ↑/↓ or j/k to choose, Enter to confirm, Esc to keep the default.                                                                                                                                                     │
+ ╭Providers─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+ │>  1.  1. OpenAI                                                                                                                                                                                                                          │
+ │   2.  2. Anthropic                                                                                                                                                                                                                       │
+ │   3.  3. MiniMax                                                                                                                                                                                                                         │
+ │   4.  4. Gemini                                                                                                                                                                                                                          │
+ │   5.  5. DeepSeek                                                                                                                                                                                                                        │
+ │   6.  6. Hugging Face                                                                                                                                                                                                                    │
+ │   7.  7. OpenRouter                                                                                                                                                                                                                      │
+ │   8.  8. Ollama                                                                                                                                                                                                                          │
+ │   9.  9. LM Studio                                                                                                                                                                                                                       │
+ │  10. 10. Moonshot                                                                                                                                                                                                                        │
+ │  11. 11. Z.AI                                                                                                                                                                                                                            │
+ │  12. 12. LiteLLM                                                                                                                                                                                                                         │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ │                                                                                                                                                                                                                                          │
+ ╭Selection─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+ │1. OpenAI                                                                                                                                                                                                                                 │
+ │                                                                                                                                                                                                                                          │
+ ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+===
+
+check homebrew tap install still install very old version
+
+# Homebrew (macOS/Linux)
+
+brew install vinhnx/tap/vtcode
+
+# Optional: install the search tools bundle later
+
+vtcode dependencies install search-tools
+Initialized empty Git repository in /usr/local/Homebrew/.git/
+fatal: not in a git directory
+✔︎ JSON API formula_tap_migrations.jws.json [Downloaded 1.9KB/ 1.9KB]
+✔︎ JSON API cask_tap_migrations.jws.json [Downloaded 2.4KB/ 2.4KB]
+✔︎ JSON API cask.jws.json [Downloaded 15.4MB/ 15.4MB]
+✔︎ JSON API formula.jws.json [Downloaded 32.0MB/ 32.0MB]
+==> Fetching downloads for: vtcode
+✔︎ Formula vtcode (0.15.0) [Verifying 4.7MB/ 4.7MB]
+==> Installing vtcode from vinhnx/tap
+
+> I published: https://formulae.brew.sh/formula/vtcode

@@ -3,6 +3,7 @@ use crate::config::constants::ui;
 use crate::core_tui::session::MouseDragTarget;
 use crate::core_tui::session::render::modal_render_styles;
 use crate::core_tui::session::{TranscriptLinkClickAction, inline_list, list_panel, modal};
+use std::time::Instant;
 
 impl Session {
     #[cfg(test)]
@@ -354,6 +355,7 @@ impl Session {
                     }
                 }
                 MouseEventKind::ScrollDown => {
+                    self.core.mouse_selection.clear_click_history();
                     if !self.handle_active_overlay_scroll(mouse_event, true, events, callback)
                         && !self.handle_bottom_panel_scroll(true)
                     {
@@ -362,6 +364,7 @@ impl Session {
                     }
                 }
                 MouseEventKind::ScrollUp => {
+                    self.core.mouse_selection.clear_click_history();
                     if !self.handle_active_overlay_scroll(mouse_event, false, events, callback)
                         && !self.handle_bottom_panel_scroll(false)
                     {
@@ -379,25 +382,51 @@ impl Session {
                             self.mark_dirty();
                             let outbound: InlineEvent = outbound.into();
                             events::emit_inline_event(&outbound, events, callback);
+                            self.core.mouse_selection.clear_click_history();
                             return;
                         }
-                        TranscriptLinkClickAction::Consume => return,
+                        TranscriptLinkClickAction::Consume => {
+                            self.core.mouse_selection.clear_click_history();
+                            return;
+                        }
                         TranscriptLinkClickAction::Ignore => {}
                     }
 
                     if self.has_active_overlay()
                         && self.handle_active_overlay_click(mouse_event, events, callback)
                     {
+                        self.core.mouse_selection.clear_click_history();
                         return;
                     }
 
                     if self.handle_bottom_panel_click(mouse_event) {
+                        self.core.mouse_selection.clear_click_history();
                         return;
                     }
 
                     if self.handle_input_click(mouse_event) {
                         self.core.mouse_drag_target = MouseDragTarget::Input;
                         self.core.mouse_selection.clear();
+                        return;
+                    }
+
+                    let is_double_click = self.core.mouse_selection.register_click(
+                        mouse_event.column,
+                        mouse_event.row,
+                        Instant::now(),
+                    );
+                    if is_double_click {
+                        self.core.mouse_drag_target = MouseDragTarget::None;
+                        let _ = self.handle_transcript_click(mouse_event);
+                        if self
+                            .core
+                            .select_transcript_word_at(mouse_event.column, mouse_event.row)
+                        {
+                            self.mark_dirty();
+                        } else {
+                            self.core.mouse_selection.clear();
+                        }
+                        self.core.mouse_selection.clear_click_history();
                         return;
                     }
 

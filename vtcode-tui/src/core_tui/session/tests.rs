@@ -23,7 +23,10 @@ use ratatui::{
 };
 use std::fs;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{
+    LazyLock, Mutex,
+    atomic::{AtomicUsize, Ordering},
+};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 
@@ -33,6 +36,7 @@ const LINE_COUNT: usize = 10;
 const LABEL_PREFIX: &str = "line";
 const EXTRA_SEGMENT: &str = "\nextra-line";
 static TRANSCRIPT_TEST_FILE_COUNTER: AtomicUsize = AtomicUsize::new(0);
+static CLIPBOARD_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
 fn make_segment(text: &str) -> InlineSegment {
     InlineSegment {
@@ -979,6 +983,173 @@ fn app_session_ctrl_click_on_link_is_consumed_without_selection() {
     assert_eq!(session.core.mouse_drag_target, MouseDragTarget::None);
     assert!(!session.core.mouse_selection.is_selecting);
     assert!(!session.core.mouse_selection.has_selection);
+}
+
+#[cfg(unix)]
+#[test]
+fn double_click_selects_transcript_word_and_copies_it() {
+    use crate::core_tui::session::mouse_selection::{
+        clipboard_command_override, set_clipboard_command_override,
+    };
+    use std::os::unix::fs::PermissionsExt;
+    use std::path::PathBuf;
+
+    let _guard = CLIPBOARD_TEST_LOCK
+        .lock()
+        .expect("clipboard test lock should not be poisoned");
+
+    let temp_dir = std::env::temp_dir().join(format!(
+        "vtcode-clipboard-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock should be after UNIX_EPOCH")
+            .as_nanos()
+    ));
+    fs::create_dir_all(&temp_dir).expect("create temp dir for clipboard script");
+    struct TempDirGuard(PathBuf);
+    impl Drop for TempDirGuard {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+    let _temp_guard = TempDirGuard(temp_dir.clone());
+
+    let clipboard_file = temp_dir.join("clipboard.txt");
+    let script_name = if cfg!(target_os = "macos") {
+        "pbcopy"
+    } else {
+        "xclip"
+    };
+    let script_path = temp_dir.join(script_name);
+    fs::write(
+        &script_path,
+        format!("#!/bin/sh\ncat > '{}'\n", clipboard_file.display()),
+    )
+    .expect("write fake clipboard command");
+    let mut permissions = fs::metadata(&script_path)
+        .expect("read fake clipboard metadata")
+        .permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(&script_path, permissions).expect("make fake clipboard executable");
+
+    struct ClipboardCommandGuard(Option<PathBuf>);
+    impl Drop for ClipboardCommandGuard {
+        fn drop(&mut self) {
+            set_clipboard_command_override(self.0.clone());
+        }
+    }
+
+    let _path_guard = ClipboardCommandGuard(clipboard_command_override());
+    set_clipboard_command_override(Some(script_path.clone()));
+
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.push_line(InlineMessageKind::Agent, vec![make_segment("hello world")]);
+
+    let rendered = rendered_session_lines(&mut session, VIEW_ROWS);
+    let row = rendered
+        .iter()
+        .position(|line| line.contains("hello world"))
+        .expect("expected hello world to be rendered");
+    let column = rendered[row]
+        .find("hello")
+        .expect("expected hello word in rendered line") as u16
+        + 1;
+    let row = row as u16;
+
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let click = MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column,
+        row,
+        modifiers: KeyModifiers::NONE,
+    };
+    let release = MouseEvent {
+        kind: MouseEventKind::Up(MouseButton::Left),
+        column,
+        row,
+        modifiers: KeyModifiers::NONE,
+    };
+
+    session.handle_event(CrosstermEvent::Mouse(click), &tx, None);
+    session.handle_event(CrosstermEvent::Mouse(release), &tx, None);
+    session.handle_event(CrosstermEvent::Mouse(click), &tx, None);
+    session.handle_event(CrosstermEvent::Mouse(release), &tx, None);
+
+    let backend = TestBackend::new(VIEW_WIDTH, VIEW_ROWS);
+    let mut terminal = Terminal::new(backend).expect("create test terminal");
+    terminal
+        .draw(|frame| session.render(frame))
+        .expect("render double-click selection");
+
+    let buffer = terminal.backend().buffer();
+    assert_eq!(
+        session.mouse_selection.extract_text(buffer, buffer.area),
+        "hello"
+    );
+    assert!(session.mouse_selection.has_selection);
+    assert!(!session.mouse_selection.needs_copy());
+
+    let clipboard_contents =
+        fs::read_to_string(&clipboard_file).expect("read copied transcript text");
+    assert_eq!(clipboard_contents, "hello");
+}
+
+#[cfg(unix)]
+#[test]
+fn scroll_between_clicks_clears_double_click_history() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.push_line(InlineMessageKind::Agent, vec![make_segment("hello world")]);
+
+    let rendered = rendered_session_lines(&mut session, VIEW_ROWS);
+    let row = rendered
+        .iter()
+        .position(|line| line.contains("hello world"))
+        .expect("expected hello world to be rendered");
+    let column = rendered[row]
+        .find("hello")
+        .expect("expected hello word in rendered line") as u16
+        + 1;
+    let row = row as u16;
+
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let click = MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column,
+        row,
+        modifiers: KeyModifiers::NONE,
+    };
+    let release = MouseEvent {
+        kind: MouseEventKind::Up(MouseButton::Left),
+        column,
+        row,
+        modifiers: KeyModifiers::NONE,
+    };
+    let scroll = MouseEvent {
+        kind: MouseEventKind::ScrollDown,
+        column,
+        row,
+        modifiers: KeyModifiers::NONE,
+    };
+
+    session.handle_event(CrosstermEvent::Mouse(click), &tx, None);
+    session.handle_event(CrosstermEvent::Mouse(release), &tx, None);
+    session.handle_event(CrosstermEvent::Mouse(scroll), &tx, None);
+    session.handle_event(CrosstermEvent::Mouse(click), &tx, None);
+    session.handle_event(CrosstermEvent::Mouse(release), &tx, None);
+
+    let backend = TestBackend::new(VIEW_WIDTH, VIEW_ROWS);
+    let mut terminal = Terminal::new(backend).expect("create test terminal");
+    terminal
+        .draw(|frame| session.render(frame))
+        .expect("render scroll-between-clicks selection");
+
+    let buffer = terminal.backend().buffer();
+    assert_eq!(
+        session.mouse_selection.extract_text(buffer, buffer.area),
+        ""
+    );
+    assert!(!session.mouse_selection.has_selection);
 }
 
 #[test]

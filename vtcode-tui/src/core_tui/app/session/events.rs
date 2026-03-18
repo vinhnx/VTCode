@@ -1,6 +1,7 @@
 use super::*;
 use ratatui::crossterm::event::{KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind};
 use std::sync::Arc;
+use std::time::Instant;
 
 use super::super::types::{
     ContentPart, DiffPreviewMode, InlineTextStyle, OverlayEvent, OverlaySelectionChange,
@@ -63,6 +64,7 @@ pub(super) fn handle_event(
             kind, column, row, ..
         }) => match kind {
             MouseEventKind::ScrollDown => {
+                session.core.mouse_selection.clear_click_history();
                 // Check if history picker is active - delegate scrolling to picker
                 if session.history_picker_state.active {
                     session.history_picker_state.move_down();
@@ -73,6 +75,7 @@ pub(super) fn handle_event(
                 }
             }
             MouseEventKind::ScrollUp => {
+                session.core.mouse_selection.clear_click_history();
                 // Check if history picker is active - delegate scrolling to picker
                 if session.history_picker_state.active {
                     session.history_picker_state.move_up();
@@ -83,7 +86,16 @@ pub(super) fn handle_event(
                 }
             }
             MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
-                session.core.mouse_selection.start_selection(column, row);
+                if session
+                    .core
+                    .mouse_selection
+                    .register_click(column, row, Instant::now())
+                {
+                    let _ = session.core.select_transcript_word_at(column, row);
+                    session.core.mouse_selection.clear_click_history();
+                } else {
+                    session.core.mouse_selection.start_selection(column, row);
+                }
                 session.mark_dirty();
             }
             MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {

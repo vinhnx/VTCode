@@ -1,5 +1,6 @@
 use super::*;
 use ratatui::crossterm::event::{KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind};
+use std::time::Instant;
 
 use super::super::types::{OverlayEvent, OverlaySubmission};
 use crate::ui::tui::session::modal::{ModalKeyModifiers, ModalListKeyResult};
@@ -44,15 +45,25 @@ pub(super) fn handle_event(
             kind, column, row, ..
         }) => match kind {
             MouseEventKind::ScrollDown => {
+                session.mouse_selection.clear_click_history();
                 session.scroll_line_down();
                 session.mark_dirty();
             }
             MouseEventKind::ScrollUp => {
+                session.mouse_selection.clear_click_history();
                 session.scroll_line_up();
                 session.mark_dirty();
             }
             MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
-                session.mouse_selection.start_selection(column, row);
+                if session
+                    .mouse_selection
+                    .register_click(column, row, Instant::now())
+                {
+                    let _ = session.select_transcript_word_at(column, row);
+                    session.mouse_selection.clear_click_history();
+                } else {
+                    session.mouse_selection.start_selection(column, row);
+                }
                 session.mark_dirty();
             }
             MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {

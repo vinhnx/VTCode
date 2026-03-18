@@ -1,5 +1,6 @@
 use super::transcript_links::TranscriptLinkClickAction;
 use super::*;
+use std::time::Instant;
 
 impl Session {
     fn input_area_contains(&self, column: u16, row: u16) -> bool {
@@ -208,6 +209,7 @@ impl Session {
                     }
                 }
                 MouseEventKind::ScrollDown => {
+                    self.mouse_selection.clear_click_history();
                     if !self.handle_active_overlay_scroll(mouse_event, true, events, callback)
                         && !self.handle_bottom_panel_scroll(true)
                     {
@@ -216,6 +218,7 @@ impl Session {
                     }
                 }
                 MouseEventKind::ScrollUp => {
+                    self.mouse_selection.clear_click_history();
                     if !self.handle_active_overlay_scroll(mouse_event, false, events, callback)
                         && !self.handle_bottom_panel_scroll(false)
                     {
@@ -232,25 +235,48 @@ impl Session {
                         TranscriptLinkClickAction::Open(outbound) => {
                             self.mark_dirty();
                             self.emit_inline_event(&outbound, events, callback);
+                            self.mouse_selection.clear_click_history();
                             return;
                         }
-                        TranscriptLinkClickAction::Consume => return,
+                        TranscriptLinkClickAction::Consume => {
+                            self.mouse_selection.clear_click_history();
+                            return;
+                        }
                         TranscriptLinkClickAction::Ignore => {}
                     }
 
                     if self.has_active_overlay()
                         && self.handle_active_overlay_click(mouse_event, events, callback)
                     {
+                        self.mouse_selection.clear_click_history();
                         return;
                     }
 
                     if self.handle_bottom_panel_click(mouse_event) {
+                        self.mouse_selection.clear_click_history();
                         return;
                     }
 
                     if self.handle_input_click(mouse_event) {
                         self.mouse_drag_target = MouseDragTarget::Input;
                         self.mouse_selection.clear();
+                        return;
+                    }
+
+                    let is_double_click = self.mouse_selection.register_click(
+                        mouse_event.column,
+                        mouse_event.row,
+                        Instant::now(),
+                    );
+                    if is_double_click {
+                        self.mouse_drag_target = MouseDragTarget::None;
+                        let _ = self.handle_transcript_click(mouse_event);
+                        if self.select_transcript_word_at(mouse_event.column, mouse_event.row) {
+                            self.mark_dirty();
+                        } else {
+                            self.mouse_selection.clear();
+                        }
+                        self.mouse_selection.clear_click_history();
                         return;
                     }
 
@@ -361,6 +387,65 @@ impl Session {
             self.mark_dirty();
         }
         expanded
+    }
+
+    pub(crate) fn transcript_word_selection_range(
+        &mut self,
+        column: u16,
+        row: u16,
+    ) -> Option<((u16, u16), (u16, u16))> {
+        let area = self.transcript_area?;
+        if row < area.y
+            || row >= area.y.saturating_add(area.height)
+            || column < area.x
+            || column >= area.x.saturating_add(area.width)
+        {
+            return None;
+        }
+
+        if self.transcript_width == 0 || self.transcript_rows == 0 {
+            return None;
+        }
+
+        let row_in_view = usize::from(row.saturating_sub(area.y));
+        if row_in_view >= self.transcript_rows as usize {
+            return None;
+        }
+
+        let viewport_rows = self.transcript_rows.max(1) as usize;
+        let visible_lines = self.collect_transcript_window_cached(
+            self.transcript_width,
+            self.transcript_view_top,
+            viewport_rows,
+        );
+        let Some(line) = visible_lines.get(row_in_view) else {
+            return None;
+        };
+
+        let text: String = line
+            .line
+            .spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect();
+        let local_column = column.saturating_sub(area.x);
+        let Some((start_col, end_col)) = mouse_selection::word_selection_range(&text, local_column)
+        else {
+            return None;
+        };
+
+        let start = (area.x.saturating_add(start_col), row);
+        let end = (area.x.saturating_add(end_col), row);
+        (start != end).then_some((start, end))
+    }
+
+    pub(crate) fn select_transcript_word_at(&mut self, column: u16, row: u16) -> bool {
+        let Some((start, end)) = self.transcript_word_selection_range(column, row) else {
+            return false;
+        };
+
+        self.mouse_selection.set_selection(start, end);
+        true
     }
 
     pub(crate) fn handle_input_click(&mut self, mouse_event: MouseEvent) -> bool {

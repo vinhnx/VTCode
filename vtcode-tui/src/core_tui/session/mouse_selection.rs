@@ -2,6 +2,14 @@ use ratatui::buffer::Buffer;
 use ratatui::crossterm::{clipboard::CopyToClipboard, execute};
 use ratatui::layout::Rect;
 use std::io::Write;
+#[cfg(test)]
+use std::path::PathBuf;
+#[cfg(test)]
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+
+const DOUBLE_CLICK_INTERVAL: Duration = Duration::from_millis(450);
 
 /// Tracks mouse-driven text selection state for the TUI transcript.
 #[derive(Debug, Default)]
@@ -16,6 +24,15 @@ pub struct MouseSelectionState {
     pub has_selection: bool,
     /// Whether the current selection has already been copied to clipboard.
     copied: bool,
+    /// Tracks the previous mouse click so double-clicks can be detected.
+    last_click: Option<ClickRecord>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ClickRecord {
+    column: u16,
+    row: u16,
+    at: Instant,
 }
 
 impl MouseSelectionState {
@@ -30,6 +47,15 @@ impl MouseSelectionState {
         self.copied = false;
         self.start = (col, row);
         self.end = (col, row);
+    }
+
+    /// Set a selection directly, bypassing drag state.
+    pub fn set_selection(&mut self, start: (u16, u16), end: (u16, u16)) {
+        self.is_selecting = false;
+        self.has_selection = start != end;
+        self.copied = false;
+        self.start = start;
+        self.end = end;
     }
 
     /// Update the end position while dragging.
@@ -56,6 +82,29 @@ impl MouseSelectionState {
         self.is_selecting = false;
         self.has_selection = false;
         self.copied = false;
+        self.last_click = None;
+    }
+
+    /// Clears only the mouse click history used for double-click detection.
+    pub fn clear_click_history(&mut self) {
+        self.last_click = None;
+    }
+
+    /// Records a click and returns `true` when it matches the previous click closely enough
+    /// to be treated as a double click.
+    pub fn register_click(&mut self, col: u16, row: u16, at: Instant) -> bool {
+        let is_double_click = self.last_click.is_some_and(|last| {
+            last.column == col
+                && last.row == row
+                && at.saturating_duration_since(last.at) <= DOUBLE_CLICK_INTERVAL
+        });
+
+        self.last_click = Some(ClickRecord {
+            column: col,
+            row,
+            at,
+        });
+        is_double_click
     }
 
     /// Returns the selection range normalized so that `from` is before `to`.
@@ -201,7 +250,12 @@ impl MouseSelectionState {
     /// Attempt to copy text using native OS clipboard utilities.
     /// Returns `true` if successful.
     fn copy_via_native(text: &str) -> bool {
-        use std::process::{Command, Stdio};
+        use std::process::Command;
+
+        #[cfg(test)]
+        if let Some(program) = clipboard_command_override() {
+            return spawn_clipboard_command(Command::new(program), text);
+        }
 
         let candidates: &[&str] = if cfg!(target_os = "macos") {
             &["pbcopy"]
@@ -224,19 +278,7 @@ impl MouseSelectionState {
                 }
                 _ => {}
             }
-            let Ok(mut child) = cmd
-                .stdin(Stdio::piped())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .spawn()
-            else {
-                continue;
-            };
-            if let Some(stdin) = child.stdin.as_mut() {
-                let _ = stdin.write_all(text.as_bytes());
-            }
-            drop(child.stdin.take());
-            if child.wait().is_ok() {
+            if spawn_clipboard_command(cmd, text) {
                 return true;
             }
         }
@@ -244,10 +286,104 @@ impl MouseSelectionState {
     }
 }
 
+fn spawn_clipboard_command(mut cmd: std::process::Command, text: &str) -> bool {
+    use std::process::Stdio;
+
+    let Ok(mut child) = cmd
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+    else {
+        return false;
+    };
+    if let Some(stdin) = child.stdin.as_mut() {
+        let _ = stdin.write_all(text.as_bytes());
+    }
+    drop(child.stdin.take());
+    child.wait().is_ok()
+}
+
+#[cfg(test)]
+static CLIPBOARD_COMMAND_OVERRIDE: OnceLock<Mutex<Option<PathBuf>>> = OnceLock::new();
+
+#[cfg(test)]
+pub(crate) fn set_clipboard_command_override(path: Option<PathBuf>) {
+    let lock = CLIPBOARD_COMMAND_OVERRIDE.get_or_init(|| Mutex::new(None));
+    if let Ok(mut guard) = lock.lock() {
+        *guard = path;
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn clipboard_command_override() -> Option<PathBuf> {
+    let lock = CLIPBOARD_COMMAND_OVERRIDE.get_or_init(|| Mutex::new(None));
+    match lock.lock() {
+        Ok(guard) => guard.clone(),
+        Err(_) => None,
+    }
+}
+
+/// Return the half-open display-column range for the word under `column`.
+pub(crate) fn word_selection_range(text: &str, column: u16) -> Option<(u16, u16)> {
+    if text.is_empty() {
+        return None;
+    }
+
+    let chars: Vec<char> = text.chars().collect();
+    if chars.is_empty() {
+        return None;
+    }
+
+    let line_width = UnicodeWidthStr::width(text);
+    if usize::from(column) >= line_width {
+        return None;
+    }
+
+    let mut consumed = 0usize;
+    let mut char_index = 0usize;
+    for ch in &chars {
+        let width = UnicodeWidthChar::width(*ch).unwrap_or(0);
+        if consumed.saturating_add(width) > usize::from(column) {
+            break;
+        }
+        consumed = consumed.saturating_add(width);
+        char_index += 1;
+    }
+
+    if char_index >= chars.len() || chars[char_index].is_whitespace() {
+        return None;
+    }
+
+    let mut start = char_index;
+    while start > 0 && !chars[start - 1].is_whitespace() {
+        start -= 1;
+    }
+
+    let mut end = char_index + 1;
+    while end < chars.len() && !chars[end].is_whitespace() {
+        end += 1;
+    }
+
+    Some((
+        display_width_for_char_count(&chars, start),
+        display_width_for_char_count(&chars, end),
+    ))
+}
+
+fn display_width_for_char_count(chars: &[char], char_count: usize) -> u16 {
+    chars
+        .iter()
+        .take(char_count)
+        .map(|ch| UnicodeWidthChar::width(*ch).unwrap_or(0) as u16)
+        .fold(0_u16, u16::saturating_add)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use ratatui::style::Color;
+    use std::time::{Duration, Instant};
 
     #[test]
     fn extract_text_clamps_area_to_buffer_bounds() {
@@ -279,5 +415,26 @@ mod tests {
 
         assert_eq!(buf[(0, 0)].fg, Color::Blue);
         assert_eq!(buf[(0, 0)].bg, Color::Red);
+    }
+
+    #[test]
+    fn word_selection_range_selects_clicked_word() {
+        assert_eq!(word_selection_range("hello world", 1), Some((0, 5)));
+        assert_eq!(word_selection_range("hello world", 7), Some((6, 11)));
+    }
+
+    #[test]
+    fn word_selection_range_returns_none_for_whitespace() {
+        assert_eq!(word_selection_range("hello world", 5), None);
+    }
+
+    #[test]
+    fn register_click_detects_double_clicks_at_same_position() {
+        let mut selection = MouseSelectionState::new();
+        let now = Instant::now();
+
+        assert!(!selection.register_click(3, 7, now));
+        assert!(selection.register_click(3, 7, now + Duration::from_millis(250)));
+        assert!(!selection.register_click(4, 7, now + Duration::from_millis(250)));
     }
 }
