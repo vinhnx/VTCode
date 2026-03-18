@@ -71,12 +71,15 @@ fn model_options(provider: Provider, default_model: &'static str) -> Vec<String>
     options
 }
 
-fn select_model_with_ratatui(options: &[String], default_model: &'static str) -> Result<String> {
-    let entries: Vec<SelectionEntry> = options
+fn model_entries(options: &[String]) -> Vec<SelectionEntry> {
+    options
         .iter()
-        .enumerate()
-        .map(|(index, model)| SelectionEntry::new(format!("{:>2}. {}", index + 1, model), None))
-        .collect();
+        .map(|model| SelectionEntry::new(model.clone(), None))
+        .collect()
+}
+
+fn select_model_with_ratatui(options: &[String], default_model: &'static str) -> Result<String> {
+    let entries = model_entries(options);
 
     let default_index = options
         .iter()
@@ -125,5 +128,18 @@ fn prompt_model_text(
             )?;
             Ok(trimmed.to_owned())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn model_entries_use_raw_model_ids() {
+        let entries = model_entries(&["gpt-5.4".to_owned(), "claude-sonnet-4".to_owned()]);
+
+        assert_eq!(entries[0].title, "gpt-5.4");
+        assert_eq!(entries[1].title, "claude-sonnet-4");
     }
 }

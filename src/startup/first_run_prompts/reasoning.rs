@@ -45,17 +45,18 @@ pub(crate) fn prompt_reasoning_effort(
     }
 }
 
+fn reasoning_entries(levels: &[(ReasoningEffortLevel, &str)]) -> Vec<SelectionEntry> {
+    levels
+        .iter()
+        .map(|(_level, label)| SelectionEntry::new((*label).to_owned(), None))
+        .collect()
+}
+
 fn select_reasoning_with_ratatui(
     levels: &[(ReasoningEffortLevel, &str)],
     default: ReasoningEffortLevel,
 ) -> Result<ReasoningEffortLevel> {
-    let entries: Vec<SelectionEntry> = levels
-        .iter()
-        .enumerate()
-        .map(|(index, (_level, label))| {
-            SelectionEntry::new(format!("{:>2}. {}", index + 1, label), None)
-        })
-        .collect();
+    let entries = reasoning_entries(levels);
 
     let default_index = levels
         .iter()
@@ -98,7 +99,32 @@ fn prompt_reasoning_effort_text(
 
         renderer.line(
             MessageStyle::Error,
-            "Please choose a valid reasoning effort level (low, medium, high).",
+            "Please choose a valid reasoning effort level (none, low, medium, high).",
         )?;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reasoning_entries_keep_labels_without_ordinals() {
+        let entries = reasoning_entries(&[
+            (
+                ReasoningEffortLevel::None,
+                "None – lowest latency, good default for GPT-5.4",
+            ),
+            (
+                ReasoningEffortLevel::Low,
+                "Low – faster responses, less reasoning",
+            ),
+        ]);
+
+        assert_eq!(
+            entries[0].title,
+            "None – lowest latency, good default for GPT-5.4"
+        );
+        assert_eq!(entries[1].title, "Low – faster responses, less reasoning");
     }
 }

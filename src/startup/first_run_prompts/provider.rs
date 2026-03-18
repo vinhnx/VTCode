@@ -36,6 +36,13 @@ pub(crate) fn prompt_provider(renderer: &mut AnsiRenderer, default: Provider) ->
     }
 }
 
+fn provider_entries(providers: &[Provider]) -> Vec<SelectionEntry> {
+    providers
+        .iter()
+        .map(|provider| SelectionEntry::new(provider.label(), None))
+        .collect()
+}
+
 fn prompt_provider_text(
     renderer: &mut AnsiRenderer,
     providers: &[Provider],
@@ -76,13 +83,7 @@ fn prompt_provider_text(
 }
 
 fn select_provider_with_ratatui(providers: &[Provider], default: Provider) -> Result<Provider> {
-    let entries: Vec<SelectionEntry> = providers
-        .iter()
-        .enumerate()
-        .map(|(index, provider)| {
-            SelectionEntry::new(format!("{:>2}. {}", index + 1, provider.label()), None)
-        })
-        .collect();
+    let entries = provider_entries(providers);
 
     let default_index = providers
         .iter()
@@ -95,4 +96,17 @@ fn select_provider_with_ratatui(providers: &[Provider], default: Provider) -> Re
     );
     let selected_index = run_selection("Providers", &instructions, &entries, default_index)?;
     Ok(providers[selected_index])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn provider_entries_are_unnumbered() {
+        let entries = provider_entries(&[Provider::OpenAI, Provider::Anthropic]);
+
+        assert_eq!(entries[0].title, "OpenAI");
+        assert_eq!(entries[1].title, "Anthropic");
+    }
 }

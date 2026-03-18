@@ -5,6 +5,10 @@ use vtcode_tui::ui::interactive_list::SelectionEntry;
 
 use super::common::{prompt_with_placeholder, run_selection};
 
+const TOOLS_POLICY_LABEL: &str =
+    "Tools policy – prompts before running elevated actions (recommended)";
+const FULL_AUTO_LABEL: &str = "Full auto – allow unattended execution without prompts";
+
 pub(crate) fn prompt_trust(
     renderer: &mut AnsiRenderer,
     default: WorkspaceTrustLevel,
@@ -13,14 +17,8 @@ pub(crate) fn prompt_trust(
         MessageStyle::Status,
         "Workspace trust determines which actions are allowed.",
     )?;
-    renderer.line(
-        MessageStyle::Info,
-        "  [1] Tools policy – prompts before running elevated actions (recommended)",
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        "  [2] Full auto – allow unattended execution without prompts",
-    )?;
+    renderer.line(MessageStyle::Info, &format!("  [1] {TOOLS_POLICY_LABEL}"))?;
+    renderer.line(MessageStyle::Info, &format!("  [2] {FULL_AUTO_LABEL}"))?;
 
     match select_trust_with_ratatui(default) {
         Ok(level) => Ok(level),
@@ -63,27 +61,21 @@ fn prompt_trust_text(
     }
 }
 
-fn select_trust_with_ratatui(default: WorkspaceTrustLevel) -> Result<WorkspaceTrustLevel> {
-    let entries = [
+fn trust_entries() -> [(WorkspaceTrustLevel, SelectionEntry); 2] {
+    [
         (
             WorkspaceTrustLevel::ToolsPolicy,
-            SelectionEntry::new(
-                " 1. Tools policy – prompts before running elevated actions (recommended)"
-                    .to_owned(),
-                Some(
-                    "Tools policy – prompts before running elevated actions (recommended)"
-                        .to_owned(),
-                ),
-            ),
+            SelectionEntry::new(TOOLS_POLICY_LABEL.to_owned(), None),
         ),
         (
             WorkspaceTrustLevel::FullAuto,
-            SelectionEntry::new(
-                " 2. Full auto – allow unattended execution without prompts".to_owned(),
-                Some("Full auto – allow unattended execution without prompts".to_owned()),
-            ),
+            SelectionEntry::new(FULL_AUTO_LABEL.to_owned(), None),
         ),
-    ];
+    ]
+}
+
+fn select_trust_with_ratatui(default: WorkspaceTrustLevel) -> Result<WorkspaceTrustLevel> {
+    let entries = trust_entries();
 
     let default_index = match default {
         WorkspaceTrustLevel::ToolsPolicy => 0,
@@ -94,14 +86,9 @@ fn select_trust_with_ratatui(default: WorkspaceTrustLevel) -> Result<WorkspaceTr
         .iter()
         .map(|(_level, entry)| entry.clone())
         .collect();
-    let default_entry = &selection_entries[default_index];
-    let default_summary = default_entry
-        .description
-        .as_deref()
-        .unwrap_or(default_entry.title.as_str());
     let instructions = format!(
         "Default: {}. Use ↑/↓ or j/k to choose, Enter to confirm, Esc to keep the default.",
-        default_summary
+        selection_entries[default_index].title
     );
     let selected_index = run_selection(
         "Workspace trust",
@@ -110,4 +97,17 @@ fn select_trust_with_ratatui(default: WorkspaceTrustLevel) -> Result<WorkspaceTr
         default_index,
     )?;
     Ok(entries[selected_index].0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn trust_entries_are_unnumbered() {
+        let entries = trust_entries();
+
+        assert_eq!(entries[0].1.title, TOOLS_POLICY_LABEL);
+        assert_eq!(entries[1].1.title, FULL_AUTO_LABEL);
+    }
 }
