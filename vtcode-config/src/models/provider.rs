@@ -136,7 +136,7 @@ impl Provider {
             Provider::LmStudio => models::lmstudio::REASONING_MODELS.contains(&model),
             Provider::Moonshot => models::moonshot::REASONING_MODELS.contains(&model),
             Provider::ZAI => models::zai::REASONING_MODELS.contains(&model),
-            Provider::Minimax => model == models::minimax::MINIMAX_M2_5,
+            Provider::Minimax => models::minimax::SUPPORTED_MODELS.contains(&model),
             Provider::HuggingFace => models::huggingface::REASONING_MODELS.contains(&model),
             Provider::LiteLLM => false,
         }

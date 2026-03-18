@@ -124,9 +124,3 @@ bug:
 
 1. currently when selecting the text in the TUI, it being automatically coppy the highlight text to clip board -> remove it. Don't want to have it automatically copy to clipboard when selecting text in the TUI, as it can be disruptive and may not always be desired. Instead, implement a more intentional action for copying to clipboard, such as a specific keyboard shortcut (e.g., Ctrl+C) or a context menu option that appears when right-clicking on the selected text. This way, users can choose when they want to copy the highlighted text without it happening automatically every time they select something in the TUI.
 2. When selecting the user's chat box' input text, and then press Ctrl+C to copy, current the highlight text is not copied to clipboard. Fix the issue so that when the user selects text in the chat input box and presses Ctrl+C, the selected text is properly copied to the clipboard as expected. This will allow users to easily copy and share their input without any issues.
-
-===
-
-===
-
-===
