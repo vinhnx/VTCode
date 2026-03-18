@@ -6717,6 +6717,7 @@ dependencies = [
  "tui-widget-list",
  "unicode-segmentation",
  "unicode-width 0.2.2",
+ "url",
  "vtcode-commons",
  "vtcode-vim",
 ]

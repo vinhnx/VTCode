@@ -4,7 +4,8 @@ use std::{collections::VecDeque, sync::Arc, time::Instant};
 use anstyle::Color as AnsiColorEnum;
 use anstyle::RgbColor;
 use ratatui::crossterm::event::{
-    Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, MouseEvent, MouseEventKind,
+    Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent,
+    MouseEventKind,
 };
 
 use ratatui::{
@@ -88,6 +89,7 @@ use self::spinner::{ShimmerState, ThinkingSpinner};
 use self::styling::SessionStyles;
 use self::transcript::TranscriptReflowCache;
 use self::transcript_links::TranscriptFileLinkTarget;
+pub(crate) use self::transcript_links::TranscriptLinkClickAction;
 use self::vim::VimState;
 #[cfg(test)]
 use super::types::InlineHeaderHighlight;
@@ -219,6 +221,7 @@ pub struct Session {
     transcript_file_link_targets: Vec<TranscriptFileLinkTarget>,
     hovered_transcript_file_link: Option<usize>,
     last_mouse_position: Option<(u16, u16)>,
+    held_key_modifiers: KeyModifiers,
 
     // --- Logging ---
     log_receiver: Option<UnboundedReceiver<LogEntry>>,

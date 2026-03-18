@@ -1,3 +1,4 @@
+use super::transcript_links::TranscriptLinkClickAction;
 use super::*;
 
 impl Session {
@@ -191,6 +192,7 @@ impl Session {
     ) {
         match event {
             CrosstermEvent::Key(key) => {
+                self.update_held_key_modifiers(&key);
                 // Only process Press events to avoid duplicate character insertion
                 // Repeat events can cause characters to be inserted multiple times
                 if matches!(key.kind, KeyEventKind::Press)
@@ -222,14 +224,18 @@ impl Session {
                     }
                 }
                 MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
-                    if let Some(outbound) = self.transcript_file_link_event(
+                    match self.transcript_file_link_click_action(
                         mouse_event.column,
                         mouse_event.row,
                         mouse_event.modifiers,
                     ) {
-                        self.mark_dirty();
-                        self.emit_inline_event(&outbound, events, callback);
-                        return;
+                        TranscriptLinkClickAction::Open(outbound) => {
+                            self.mark_dirty();
+                            self.emit_inline_event(&outbound, events, callback);
+                            return;
+                        }
+                        TranscriptLinkClickAction::Consume => return,
+                        TranscriptLinkClickAction::Ignore => {}
                     }
 
                     if self.has_active_overlay()
@@ -306,7 +312,7 @@ impl Session {
                 // No-op: focus tracking is host/application concern.
             }
             CrosstermEvent::FocusLost => {
-                // No-op: focus tracking is host/application concern.
+                self.clear_held_key_modifiers();
             }
         }
     }

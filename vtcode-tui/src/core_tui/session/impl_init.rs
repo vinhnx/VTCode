@@ -121,6 +121,7 @@ impl Session {
             transcript_file_link_targets: Vec::new(),
             hovered_transcript_file_link: None,
             last_mouse_position: None,
+            held_key_modifiers: KeyModifiers::empty(),
 
             // --- Logging ---
             log_receiver: None,

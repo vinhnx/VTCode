@@ -130,6 +130,18 @@ impl SessionStyles {
         ratatui_style_from_inline(&self.accent_inline_style(), self.theme.foreground)
     }
 
+    pub fn transcript_link_style(&self) -> Style {
+        let style = InlineTextStyle {
+            color: self
+                .theme
+                .tool_accent
+                .or(self.theme.primary)
+                .or(self.theme.foreground),
+            ..InlineTextStyle::default()
+        };
+        ratatui_style_from_inline(&style, self.theme.foreground)
+    }
+
     /// Get the border inline style
     pub fn border_inline_style(&self) -> InlineTextStyle {
         InlineTextStyle {

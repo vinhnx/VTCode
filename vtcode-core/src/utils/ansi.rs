@@ -494,7 +494,8 @@ impl AnsiRenderer {
         if !indent.is_empty() {
             self.buffer.push_str(indent);
         }
-        self.buffer.push_str(&vtcode_commons::ansi_codes::hyperlink_open(url));
+        self.buffer
+            .push_str(&vtcode_commons::ansi_codes::hyperlink_open(url));
         self.buffer.push_str(url);
         self.buffer
             .push_str(&vtcode_commons::ansi_codes::hyperlink_close());

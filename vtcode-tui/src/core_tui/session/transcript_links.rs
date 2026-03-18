@@ -3,7 +3,7 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
-use ratatui::crossterm::event::KeyModifiers;
+use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers, ModifierKeyCode};
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -52,6 +52,12 @@ struct StyledFileLinkMatch {
     hovered: bool,
 }
 
+pub(crate) enum TranscriptLinkClickAction {
+    Open(InlineEvent),
+    Consume,
+    Ignore,
+}
+
 impl Session {
     pub(crate) fn clear_transcript_file_link_targets(&mut self) {
         self.transcript_file_link_targets.clear();
@@ -66,7 +72,7 @@ impl Session {
         let workspace_root = self.workspace_root.as_deref();
         let link_style = self
             .styles
-            .accent_style()
+            .transcript_link_style()
             .add_modifier(Modifier::UNDERLINED);
         let hovered_style = link_style.add_modifier(Modifier::BOLD);
         let mut targets = Vec::new();
@@ -88,6 +94,7 @@ impl Session {
                 transcript_line.explicit_links,
                 row_idx,
                 area,
+                workspace_root,
                 self.last_mouse_position,
             );
             for FileLinkMatch { start, end, path } in matches {
@@ -147,26 +154,49 @@ impl Session {
         true
     }
 
-    pub(crate) fn transcript_file_link_event(
+    pub(crate) fn transcript_file_link_click_action(
         &self,
         column: u16,
         row: u16,
         modifiers: KeyModifiers,
-    ) -> Option<InlineEvent> {
-        if !is_open_file_modifier_click(modifiers) {
-            return None;
+    ) -> TranscriptLinkClickAction {
+        let modifiers = self.effective_link_click_modifiers(modifiers);
+        let Some(target) = self
+            .transcript_link_target_index_at(column, row)
+            .and_then(|index| self.transcript_file_link_targets.get(index))
+        else {
+            return TranscriptLinkClickAction::Ignore;
+        };
+
+        if should_consume_transcript_link_click(modifiers) {
+            return TranscriptLinkClickAction::Consume;
         }
 
-        let target = self
-            .transcript_link_target_index_at(column, row)
-            .and_then(|index| self.transcript_file_link_targets.get(index))?;
+        if is_open_file_modifier_click(modifiers) {
+            return TranscriptLinkClickAction::Open(match &target.target {
+                TranscriptLinkTarget::File(path) => {
+                    InlineEvent::OpenFileInEditor(path.display().to_string())
+                }
+                TranscriptLinkTarget::Url(url) => InlineEvent::OpenUrl(url.clone()),
+            });
+        }
 
-        Some(match &target.target {
-            TranscriptLinkTarget::File(path) => {
-                InlineEvent::OpenFileInEditor(path.display().to_string())
-            }
-            TranscriptLinkTarget::Url(url) => InlineEvent::OpenUrl(url.clone()),
-        })
+        TranscriptLinkClickAction::Ignore
+    }
+
+    pub(crate) fn update_held_key_modifiers(&mut self, key: &KeyEvent) {
+        let Some(modifier) = modifier_key_flag(key.code) else {
+            return;
+        };
+
+        match key.kind {
+            KeyEventKind::Press | KeyEventKind::Repeat => self.held_key_modifiers.insert(modifier),
+            KeyEventKind::Release => self.held_key_modifiers.remove(modifier),
+        }
+    }
+
+    pub(crate) fn clear_held_key_modifiers(&mut self) {
+        self.held_key_modifiers = KeyModifiers::empty();
     }
 
     fn mouse_hovered_transcript_file_link_index(&self) -> Option<usize> {
@@ -179,6 +209,10 @@ impl Session {
             .iter()
             .position(|target| point_in_rect(target.area, column, row))
     }
+
+    fn effective_link_click_modifiers(&self, mouse_modifiers: KeyModifiers) -> KeyModifiers {
+        mouse_modifiers | self.held_key_modifiers
+    }
 }
 
 fn point_in_rect(area: Rect, column: u16, row: u16) -> bool {
@@ -188,12 +222,44 @@ fn point_in_rect(area: Rect, column: u16, row: u16) -> bool {
         && column < area.x.saturating_add(area.width)
 }
 
+fn should_consume_transcript_link_click(modifiers: KeyModifiers) -> bool {
+    // On macOS, Ctrl+Click is a secondary-click gesture. If a terminal forwards it
+    // to the TUI as Left+Control, consume it on transcript links so it does not
+    // open the link or fall through into transcript selection/expansion handling.
+    cfg!(target_os = "macos")
+        && modifiers.contains(KeyModifiers::CONTROL)
+        && !modifiers.contains(KeyModifiers::SUPER)
+        && !modifiers.contains(KeyModifiers::META)
+}
+
+fn modifier_key_flag(code: KeyCode) -> Option<KeyModifiers> {
+    match code {
+        KeyCode::Modifier(ModifierKeyCode::LeftShift | ModifierKeyCode::RightShift) => {
+            Some(KeyModifiers::SHIFT)
+        }
+        KeyCode::Modifier(ModifierKeyCode::LeftControl | ModifierKeyCode::RightControl) => {
+            Some(KeyModifiers::CONTROL)
+        }
+        KeyCode::Modifier(ModifierKeyCode::LeftAlt | ModifierKeyCode::RightAlt) => {
+            Some(KeyModifiers::ALT)
+        }
+        KeyCode::Modifier(ModifierKeyCode::LeftSuper | ModifierKeyCode::RightSuper) => {
+            Some(KeyModifiers::SUPER)
+        }
+        KeyCode::Modifier(ModifierKeyCode::LeftMeta | ModifierKeyCode::RightMeta) => {
+            Some(KeyModifiers::META)
+        }
+        _ => None,
+    }
+}
+
 fn append_explicit_link_matches(
     targets: &mut Vec<TranscriptFileLinkTarget>,
     styled_matches: &mut Vec<StyledFileLinkMatch>,
     explicit_links: Vec<RenderedTranscriptLink>,
     row_idx: usize,
     area: Rect,
+    workspace_root: Option<&Path>,
     last_mouse_position: Option<(u16, u16)>,
 ) {
     for explicit in explicit_links {
@@ -206,7 +272,9 @@ fn append_explicit_link_matches(
         let hovered = last_mouse_position
             .is_some_and(|(column, row)| point_in_rect(target_area, column, row));
         let target = match explicit.target {
-            InlineLinkTarget::Url(url) => TranscriptLinkTarget::Url(url),
+            InlineLinkTarget::Url(url) => resolve_transcript_file_path(&url, workspace_root)
+                .map(TranscriptLinkTarget::File)
+                .unwrap_or(TranscriptLinkTarget::Url(url)),
         };
         targets.push(TranscriptFileLinkTarget {
             area: target_area,
@@ -501,8 +569,9 @@ fn looks_like_transcript_path(token: &str) -> bool {
 }
 
 fn is_open_file_modifier_click(modifiers: KeyModifiers) -> bool {
-    // On macOS: Cmd+Click. crossterm reports Command as SUPER or META depending on
-    // the terminal emulator (iTerm2, Terminal.app, Ghostty, Alacritty all vary).
+    // On macOS: Cmd+Click. crossterm's Unix mouse events only carry Shift/Alt/Ctrl,
+    // so Command is supplied via held keyboard modifier state when the terminal
+    // reports modifier key press/release events.
     // On other platforms: Ctrl+Click.
     if cfg!(target_os = "macos") {
         modifiers.contains(KeyModifiers::SUPER) || modifiers.contains(KeyModifiers::META)

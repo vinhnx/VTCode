@@ -12,8 +12,8 @@ use crate::ui::tui::session::message::RenderedTranscriptLink;
 use crate::ui::tui::session::transcript_links::TranscriptLinkTarget;
 use crate::ui::tui::style::ratatui_style_from_inline;
 use ratatui::crossterm::event::{
-    Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
-    MouseEventKind,
+    Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, ModifierKeyCode,
+    MouseButton, MouseEvent, MouseEventKind,
 };
 use ratatui::{
     Terminal,
@@ -375,6 +375,33 @@ fn open_file_click_modifiers() -> KeyModifiers {
     KeyModifiers::CONTROL
 }
 
+#[cfg(target_os = "macos")]
+fn command_modifier_press_event() -> KeyEvent {
+    KeyEvent::new_with_kind(
+        KeyCode::Modifier(ModifierKeyCode::LeftSuper),
+        KeyModifiers::SUPER,
+        KeyEventKind::Press,
+    )
+}
+
+#[cfg(target_os = "macos")]
+fn command_modifier_release_event() -> KeyEvent {
+    KeyEvent::new_with_kind(
+        KeyCode::Modifier(ModifierKeyCode::LeftSuper),
+        KeyModifiers::SUPER,
+        KeyEventKind::Release,
+    )
+}
+
+#[cfg(target_os = "macos")]
+fn meta_modifier_press_event() -> KeyEvent {
+    KeyEvent::new_with_kind(
+        KeyCode::Modifier(ModifierKeyCode::LeftMeta),
+        KeyModifiers::META,
+        KeyEventKind::Press,
+    )
+}
+
 #[test]
 fn move_left_word_from_end_moves_to_word_start() {
     let text = "hello world";
@@ -593,6 +620,85 @@ fn modifier_click_emits_open_url_event_for_explicit_transcript_link() {
 }
 
 #[test]
+fn modifier_click_emits_open_file_event_for_explicit_transcript_file_link() {
+    let mut session = Session::new(themed_inline_colors(), None, VIEW_ROWS);
+    let absolute_path = transcript_file_fixture_absolute_path();
+    let _ = session.decorate_visible_transcript_links(
+        vec![TranscriptLine {
+            line: Line::from("Open file"),
+            explicit_links: vec![RenderedTranscriptLink {
+                start: 5,
+                end: 9,
+                start_col: 5,
+                width: 4,
+                target: InlineLinkTarget::Url(absolute_path.clone()),
+            }],
+        }],
+        Rect::new(0, 0, 200, 1),
+    );
+    let target = session
+        .transcript_file_link_targets
+        .first()
+        .expect("expected transcript file target")
+        .clone();
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: target.area.x,
+            row: target.area.y,
+            modifiers: open_file_click_modifiers(),
+        }),
+        &tx,
+        None,
+    );
+
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(InlineEvent::OpenFileInEditor(path)) if path == absolute_path
+    ));
+}
+
+#[test]
+fn explicit_transcript_file_link_uses_theme_accent_color() {
+    let mut session = Session::new(themed_inline_colors(), None, VIEW_ROWS);
+    let absolute_path = transcript_file_fixture_absolute_path();
+    let decorated = session.decorate_visible_transcript_links(
+        vec![TranscriptLine {
+            line: Line::from("Open file"),
+            explicit_links: vec![RenderedTranscriptLink {
+                start: 5,
+                end: 9,
+                start_col: 5,
+                width: 4,
+                target: InlineLinkTarget::Url(absolute_path),
+            }],
+        }],
+        Rect::new(0, 0, 200, 1),
+    );
+
+    let linked_span = decorated[0]
+        .spans
+        .iter()
+        .find(|span| span.content == "file")
+        .expect("expected explicit linked span");
+
+    assert_eq!(
+        linked_span.style.fg,
+        themed_inline_colors()
+            .tool_accent
+            .map(ratatui_color_from_ansi)
+    );
+    assert!(
+        linked_span
+            .style
+            .add_modifier
+            .contains(Modifier::UNDERLINED)
+    );
+}
+
+#[test]
 fn meta_click_emits_open_file_event_for_transcript_path() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     let absolute_path = transcript_file_fixture_absolute_path();
@@ -629,6 +735,250 @@ fn meta_click_emits_open_file_event_for_transcript_path() {
 
     #[cfg(not(target_os = "macos"))]
     assert!(rx.try_recv().is_err());
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn ctrl_click_does_not_emit_open_file_event_on_macos() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let absolute_path = transcript_file_fixture_absolute_path();
+    session.push_line(
+        InlineMessageKind::Agent,
+        vec![make_segment(&format!("Open {}", absolute_path))],
+    );
+
+    let _ = visible_transcript(&mut session);
+    let target = session
+        .transcript_file_link_targets
+        .first()
+        .expect("expected transcript file target")
+        .clone();
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: target.area.x,
+            row: target.area.y,
+            modifiers: KeyModifiers::CONTROL,
+        }),
+        &tx,
+        None,
+    );
+
+    assert!(rx.try_recv().is_err());
+    assert_eq!(session.mouse_drag_target, MouseDragTarget::None);
+    assert!(!session.mouse_selection.is_selecting);
+    assert!(!session.mouse_selection.has_selection);
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn command_key_press_then_plain_click_emits_open_file_event_on_macos() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let absolute_path = transcript_file_fixture_absolute_path();
+    session.push_line(
+        InlineMessageKind::Agent,
+        vec![make_segment(&format!("Open {}", absolute_path))],
+    );
+
+    let _ = visible_transcript(&mut session);
+    let target = session
+        .transcript_file_link_targets
+        .first()
+        .expect("expected transcript file target")
+        .clone();
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    session.handle_event(
+        CrosstermEvent::Key(command_modifier_press_event()),
+        &tx,
+        None,
+    );
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: target.area.x,
+            row: target.area.y,
+            modifiers: KeyModifiers::NONE,
+        }),
+        &tx,
+        None,
+    );
+
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(InlineEvent::OpenFileInEditor(path)) if path == absolute_path
+    ));
+
+    session.handle_event(
+        CrosstermEvent::Key(command_modifier_release_event()),
+        &tx,
+        None,
+    );
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: target.area.x,
+            row: target.area.y,
+            modifiers: KeyModifiers::NONE,
+        }),
+        &tx,
+        None,
+    );
+
+    assert!(rx.try_recv().is_err());
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn meta_key_press_then_plain_click_emits_open_file_event_on_macos() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let absolute_path = transcript_file_fixture_absolute_path();
+    session.push_line(
+        InlineMessageKind::Agent,
+        vec![make_segment(&format!("Open {}", absolute_path))],
+    );
+
+    let _ = visible_transcript(&mut session);
+    let target = session
+        .transcript_file_link_targets
+        .first()
+        .expect("expected transcript file target")
+        .clone();
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    session.handle_event(CrosstermEvent::Key(meta_modifier_press_event()), &tx, None);
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: target.area.x,
+            row: target.area.y,
+            modifiers: KeyModifiers::NONE,
+        }),
+        &tx,
+        None,
+    );
+
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(InlineEvent::OpenFileInEditor(path)) if path == absolute_path
+    ));
+}
+
+#[test]
+fn app_session_modifier_click_emits_open_file_event_for_transcript_path() {
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
+    let absolute_path = transcript_file_fixture_absolute_path();
+    session.push_line(
+        InlineMessageKind::Agent,
+        vec![make_segment(&format!("Open {}", absolute_path))],
+    );
+
+    let _ = rendered_app_session_lines(&mut session, VIEW_ROWS);
+    let target = session
+        .core
+        .transcript_file_link_targets
+        .first()
+        .expect("expected transcript file target")
+        .clone();
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: target.area.x,
+            row: target.area.y,
+            modifiers: open_file_click_modifiers(),
+        }),
+        &tx,
+        None,
+    );
+
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(app_types::InlineEvent::OpenFileInEditor(path)) if path == absolute_path
+    ));
+    assert_eq!(session.core.mouse_drag_target, MouseDragTarget::None);
+    assert!(!session.core.mouse_selection.is_selecting);
+    assert!(!session.core.mouse_selection.has_selection);
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn app_session_command_key_press_then_plain_click_emits_open_file_event_on_macos() {
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
+    let absolute_path = transcript_file_fixture_absolute_path();
+    session.push_line(
+        InlineMessageKind::Agent,
+        vec![make_segment(&format!("Open {}", absolute_path))],
+    );
+
+    let _ = rendered_app_session_lines(&mut session, VIEW_ROWS);
+    let target = session
+        .core
+        .transcript_file_link_targets
+        .first()
+        .expect("expected transcript file target")
+        .clone();
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    session.handle_event(
+        CrosstermEvent::Key(command_modifier_press_event()),
+        &tx,
+        None,
+    );
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: target.area.x,
+            row: target.area.y,
+            modifiers: KeyModifiers::NONE,
+        }),
+        &tx,
+        None,
+    );
+
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(app_types::InlineEvent::OpenFileInEditor(path)) if path == absolute_path
+    ));
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn app_session_ctrl_click_on_link_is_consumed_without_selection() {
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
+    let absolute_path = transcript_file_fixture_absolute_path();
+    session.push_line(
+        InlineMessageKind::Agent,
+        vec![make_segment(&format!("Open {}", absolute_path))],
+    );
+
+    let _ = rendered_app_session_lines(&mut session, VIEW_ROWS);
+    let target = session
+        .core
+        .transcript_file_link_targets
+        .first()
+        .expect("expected transcript file target")
+        .clone();
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: target.area.x,
+            row: target.area.y,
+            modifiers: KeyModifiers::CONTROL,
+        }),
+        &tx,
+        None,
+    );
+
+    assert!(rx.try_recv().is_err());
+    assert_eq!(session.core.mouse_drag_target, MouseDragTarget::None);
+    assert!(!session.core.mouse_selection.is_selecting);
+    assert!(!session.core.mouse_selection.has_selection);
 }
 
 #[test]

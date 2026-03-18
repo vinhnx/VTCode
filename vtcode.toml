@@ -92,7 +92,7 @@ default_editing_mode = "edit"
 # Default model to use
 # Default: "gpt-5.3-codex"
 # Type: `string`
-default_model = "gpt-5.4-nano"
+default_model = "gpt-5.1-codex"
 
 # Enable an extra self-review pass to refine final responses
 # Default: false
@@ -3089,4 +3089,3 @@ mode = "Auto"
 # Default: 1000
 # Type: `integer`
 refresh_interval_ms = 1000
-

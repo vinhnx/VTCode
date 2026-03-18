@@ -80,13 +80,27 @@ pub use vtcode_config::{TimeoutsConfig, resolve_timeout};
 pub fn keyboard_protocol_to_flags(
     config: &KeyboardProtocolConfig,
 ) -> crossterm::event::KeyboardEnhancementFlags {
+    keyboard_protocol_to_flags_for_terminal(
+        config,
+        cfg!(target_os = "macos"),
+        std::env::var("TERM_PROGRAM").ok().as_deref(),
+        std::env::var("TERM").ok().as_deref(),
+    )
+}
+
+fn keyboard_protocol_to_flags_for_terminal(
+    config: &KeyboardProtocolConfig,
+    is_macos: bool,
+    term_program: Option<&str>,
+    term: Option<&str>,
+) -> crossterm::event::KeyboardEnhancementFlags {
     use ratatui::crossterm::event::KeyboardEnhancementFlags;
 
     if !config.enabled {
         return KeyboardEnhancementFlags::empty();
     }
 
-    match config.mode.as_str() {
+    let mut flags = match config.mode.as_str() {
         "default" => {
             KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
                 | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
@@ -124,30 +138,77 @@ pub fn keyboard_protocol_to_flags(
                 | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
                 | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS
         }
+    };
+
+    if should_force_report_all_keys(config.mode.as_str(), is_macos, term_program, term) {
+        flags |= KeyboardEnhancementFlags::REPORT_ALL_KEYS_AS_ESCAPE_CODES;
     }
+
+    flags
+}
+
+fn should_force_report_all_keys(
+    mode: &str,
+    is_macos: bool,
+    term_program: Option<&str>,
+    term: Option<&str>,
+) -> bool {
+    if !is_macos || !matches!(mode, "default") {
+        return false;
+    }
+
+    // Ghostty on macOS needs "report all keys" enabled so bare Command presses
+    // surface as modifier-key events that transcript link clicks can merge in.
+    terminal_name_contains(term_program, "ghostty") || terminal_name_contains(term, "ghostty")
+}
+
+fn terminal_name_contains(value: Option<&str>, needle: &str) -> bool {
+    value
+        .map(|value| value.to_ascii_lowercase().contains(needle))
+        .unwrap_or(false)
 }
 
 #[cfg(test)]
 mod keyboard_protocol_tests {
     use super::*;
+    use ratatui::crossterm::event::KeyboardEnhancementFlags;
 
-    #[test]
-    fn test_keyboard_protocol_default_mode() {
-        let config = KeyboardProtocolConfig {
+    fn default_keyboard_protocol_config() -> KeyboardProtocolConfig {
+        KeyboardProtocolConfig {
             enabled: true,
             mode: "default".to_string(),
             disambiguate_escape_codes: true,
             report_event_types: true,
             report_alternate_keys: true,
             report_all_keys: false,
-        };
+        }
+    }
 
-        let flags = keyboard_protocol_to_flags(&config);
-        use ratatui::crossterm::event::KeyboardEnhancementFlags;
+    #[test]
+    fn test_keyboard_protocol_default_mode() {
+        let flags = keyboard_protocol_to_flags_for_terminal(
+            &default_keyboard_protocol_config(),
+            false,
+            Some("Ghostty"),
+            Some("xterm-ghostty"),
+        );
 
         assert!(flags.contains(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES));
         assert!(flags.contains(KeyboardEnhancementFlags::REPORT_EVENT_TYPES));
         assert!(flags.contains(KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS));
+        assert!(!flags.contains(KeyboardEnhancementFlags::REPORT_ALL_KEYS_AS_ESCAPE_CODES));
+    }
+
+    #[test]
+    fn test_keyboard_protocol_default_mode_enables_all_keys_for_ghostty_on_macos() {
+        let flags = keyboard_protocol_to_flags_for_terminal(
+            &default_keyboard_protocol_config(),
+            true,
+            Some("Ghostty"),
+            Some("xterm-ghostty"),
+        );
+
+        assert!(flags.contains(KeyboardEnhancementFlags::REPORT_ALL_KEYS_AS_ESCAPE_CODES));
     }
 
     #[test]
@@ -161,12 +222,17 @@ mod keyboard_protocol_tests {
             report_all_keys: false,
         };
 
-        let flags = keyboard_protocol_to_flags(&config);
-        use ratatui::crossterm::event::KeyboardEnhancementFlags;
+        let flags = keyboard_protocol_to_flags_for_terminal(
+            &config,
+            true,
+            Some("Ghostty"),
+            Some("xterm-ghostty"),
+        );
 
         assert!(flags.contains(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES));
         assert!(!flags.contains(KeyboardEnhancementFlags::REPORT_EVENT_TYPES));
         assert!(!flags.contains(KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS));
+        assert!(!flags.contains(KeyboardEnhancementFlags::REPORT_ALL_KEYS_AS_ESCAPE_CODES));
     }
 
     #[test]
@@ -180,7 +246,12 @@ mod keyboard_protocol_tests {
             report_all_keys: false,
         };
 
-        let flags = keyboard_protocol_to_flags(&config);
+        let flags = keyboard_protocol_to_flags_for_terminal(
+            &config,
+            true,
+            Some("Ghostty"),
+            Some("xterm-ghostty"),
+        );
         assert!(flags.is_empty());
     }
 
@@ -195,12 +266,17 @@ mod keyboard_protocol_tests {
             report_all_keys: false,
         };
 
-        let flags = keyboard_protocol_to_flags(&config);
-        use ratatui::crossterm::event::KeyboardEnhancementFlags;
+        let flags = keyboard_protocol_to_flags_for_terminal(
+            &config,
+            true,
+            Some("Ghostty"),
+            Some("xterm-ghostty"),
+        );
 
         assert!(flags.contains(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES));
         assert!(!flags.contains(KeyboardEnhancementFlags::REPORT_EVENT_TYPES));
         assert!(flags.contains(KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS));
+        assert!(!flags.contains(KeyboardEnhancementFlags::REPORT_ALL_KEYS_AS_ESCAPE_CODES));
     }
 
     #[test]
