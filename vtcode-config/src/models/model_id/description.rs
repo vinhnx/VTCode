@@ -116,6 +116,9 @@ impl ModelId {
             ModelId::OllamaMinimaxM2Cloud => {
                 "Cloud-hosted MiniMax-M2 model accessed through Ollama Cloud for reasoning tasks"
             }
+            ModelId::MinimaxM27 => {
+                "Beginning the journey of recursive self-improvement with 204.8K context and strong reasoning/coding performance"
+            }
             ModelId::MinimaxM25 => {
                 "Latest MiniMax-M2.5 model with further improvements in reasoning and coding"
             }

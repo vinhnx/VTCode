@@ -37,6 +37,7 @@ pub const CLAUDE_SONNET_4_6: &str = anthropic::CLAUDE_SONNET_4_6;
 pub const CLAUDE_OPUS_4_6: &str = anthropic::CLAUDE_OPUS_4_6;
 pub const CLAUDE_HAIKU_4_5: &str = anthropic::CLAUDE_HAIKU_4_5;
 pub const CLAUDE_HAIKU_4_5_20251001: &str = anthropic::CLAUDE_HAIKU_4_5_20251001;
+pub const MINIMAX_M2_7: &str = minimax::MINIMAX_M2_7;
 pub const MINIMAX_M2_5: &str = minimax::MINIMAX_M2_5;
 pub const GLM_5: &str = zai::GLM_5;
 pub const DEEPSEEK_CHAT: &str = deepseek::DEEPSEEK_CHAT;

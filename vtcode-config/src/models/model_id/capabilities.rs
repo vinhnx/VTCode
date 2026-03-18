@@ -99,7 +99,7 @@ impl ModelId {
             ModelId::DeepSeekReasoner => Some(ModelId::DeepSeekChat),
             ModelId::ZaiGlm5 => Some(ModelId::OllamaGlm5Cloud),
             ModelId::ClaudeOpus46 | ModelId::ClaudeSonnet46 => Some(ModelId::ClaudeSonnet46),
-            ModelId::MinimaxM25 => None,
+            ModelId::MinimaxM27 | ModelId::MinimaxM25 => None,
             _ => None,
         };
 
@@ -147,6 +147,7 @@ impl ModelId {
                 | ModelId::ZaiGlm5
                 | ModelId::OpenRouterStepfunStep35FlashFree
                 | ModelId::OpenRouterNvidiaNemotron3Super120bA12bFree
+                | ModelId::MinimaxM27
                 | ModelId::MinimaxM25
                 | ModelId::OllamaGlm5Cloud
                 | ModelId::OllamaNemotron3SuperCloud
@@ -271,6 +272,7 @@ impl ModelId {
             ModelId::OllamaNemotron3SuperCloud => "nemotron-3",
             ModelId::OllamaGemini3FlashPreviewCloud => "gemini-3",
             // MiniMax models
+            ModelId::MinimaxM27 => "M2.7",
             ModelId::MinimaxM25 => "M2.5",
             // Moonshot models
             ModelId::MoonshotKimiK25 => "k2.5",

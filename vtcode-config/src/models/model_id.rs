@@ -127,6 +127,8 @@ pub enum ModelId {
     OllamaNemotron3SuperCloud,
 
     // MiniMax models
+    /// MiniMax-M2.7 - Recursive self-improvement flagship with 204.8K context
+    MinimaxM27,
     /// MiniMax-M2.5 - Latest MiniMax model with further improvements in reasoning and coding
     MinimaxM25,
 

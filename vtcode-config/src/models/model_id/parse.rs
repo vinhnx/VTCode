@@ -75,6 +75,7 @@ impl FromStr for ModelId {
             s if s == models::ollama::NEMOTRON_3_SUPER_CLOUD => {
                 Ok(ModelId::OllamaNemotron3SuperCloud)
             }
+            s if s == models::minimax::MINIMAX_M2_7 => Ok(ModelId::MinimaxM27),
             s if s == models::minimax::MINIMAX_M2_5 => Ok(ModelId::MinimaxM25),
             // Hugging Face models
             s if s == models::huggingface::DEEPSEEK_V32 => Ok(ModelId::HuggingFaceDeepseekV32),

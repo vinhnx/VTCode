@@ -72,6 +72,7 @@ impl ModelId {
             }
             ModelId::HuggingFaceStep35Flash => models::huggingface::STEP_3_5_FLASH,
             // MiniMax models
+            ModelId::MinimaxM27 => models::minimax::MINIMAX_M2_7,
             ModelId::MinimaxM25 => models::minimax::MINIMAX_M2_5,
             // OpenRouter models
             ModelId::OpenRouterMinimaxM25 => "minimax/minimax-m2.5",

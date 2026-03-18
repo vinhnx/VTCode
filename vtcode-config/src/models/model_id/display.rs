@@ -64,6 +64,7 @@ impl ModelId {
             ModelId::OpenRouterMinimaxM25 => "MiniMax-M2.5 (OpenRouter)",
             ModelId::OpenRouterQwen3CoderNext => "Qwen3-Coder-Next (OpenRouter)",
             // MiniMax models
+            ModelId::MinimaxM27 => "MiniMax-M2.7",
             ModelId::MinimaxM25 => "MiniMax-M2.5",
             // Moonshot models
             ModelId::MoonshotKimiK25 => "Kimi K2.5 (Moonshot)",
