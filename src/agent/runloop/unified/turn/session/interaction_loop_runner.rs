@@ -2,7 +2,9 @@ use anyhow::Result;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::path::Path;
+use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 use vtcode_core::config::constants::tools as tool_names;
@@ -16,6 +18,7 @@ use vtcode_core::ui::theme;
 use vtcode_core::ui::{inline_theme_from_core_styles, to_tui_appearance};
 use vtcode_core::utils::ansi::MessageStyle;
 
+use crate::agent::runloop::git::{DirtyWorktreeEntry, git_dirty_worktree_entries};
 use crate::agent::runloop::model_picker::ModelPickerProgress;
 use crate::agent::runloop::prompt::refine_and_enrich_prompt;
 use crate::agent::runloop::unified::async_mcp_manager::{
@@ -36,6 +39,10 @@ use crate::agent::runloop::unified::turn::session::direct_tool_completion::{
 };
 use crate::agent::runloop::unified::turn::session::{
     mcp_lifecycle, slash_command_handler, tool_dispatch,
+    unrelated_worktree_prompt::{
+        UnrelatedWorktreePromptOutcome, UnrelatedWorktreePromptState,
+        prompt_for_unrelated_worktree_change,
+    },
 };
 use vtcode_config::loader::SimpleConfigWatcher;
 
@@ -320,6 +327,83 @@ fn refresh_live_ide_context_update(
                 changed: false,
             }
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum PendingTurnWorktreeAction {
+    Proceed,
+    RestoreInput,
+    ReplaceInput(String),
+    Exit,
+}
+
+fn next_unrelated_dirty_worktree_entry(
+    workspace: &Path,
+    tool_registry: &vtcode_core::tools::registry::ToolRegistry,
+    agent_touched_paths: &BTreeSet<PathBuf>,
+    prompt_state: &UnrelatedWorktreePromptState,
+) -> Result<Option<DirtyWorktreeEntry>> {
+    let Some(entries) = git_dirty_worktree_entries(workspace)? else {
+        return Ok(None);
+    };
+
+    let tracked_paths = tool_registry
+        .edited_file_monitor()
+        .tracked_paths()
+        .into_iter()
+        .collect::<BTreeSet<_>>();
+
+    Ok(entries.into_iter().find(|entry| {
+        !tracked_paths.contains(&entry.path)
+            && !agent_touched_paths.contains(&entry.path)
+            && !prompt_state.is_acknowledged(entry)
+    }))
+}
+
+async fn resolve_unrelated_worktree_before_turn(
+    ctx: &mut InteractionLoopContext<'_>,
+    state: &mut InteractionState<'_>,
+    input: &str,
+) -> Result<PendingTurnWorktreeAction> {
+    let Some(entry) = next_unrelated_dirty_worktree_entry(
+        ctx.config.workspace.as_path(),
+        ctx.tool_registry,
+        ctx.agent_touched_paths,
+        state.unrelated_worktree_prompt_state,
+    )?
+    else {
+        return Ok(PendingTurnWorktreeAction::Proceed);
+    };
+
+    match prompt_for_unrelated_worktree_change(
+        ctx.handle,
+        ctx.session,
+        ctx.ctrl_c_state,
+        ctx.ctrl_c_notify,
+        ctx.config.workspace.as_path(),
+        &entry,
+        ctx.vt_cfg
+            .as_ref()
+            .map(|cfg| cfg.security.hitl_notification_bell)
+            .unwrap_or(true),
+    )
+    .await?
+    {
+        UnrelatedWorktreePromptOutcome::LeaveAsIs => {
+            state.unrelated_worktree_prompt_state.acknowledge(&entry);
+            ctx.handle.set_input(input.to_string());
+            Ok(PendingTurnWorktreeAction::RestoreInput)
+        }
+        UnrelatedWorktreePromptOutcome::StopHere => {
+            ctx.handle.set_input(input.to_string());
+            Ok(PendingTurnWorktreeAction::RestoreInput)
+        }
+        UnrelatedWorktreePromptOutcome::Other(text) => {
+            state.unrelated_worktree_prompt_state.acknowledge(&entry);
+            Ok(PendingTurnWorktreeAction::ReplaceInput(text))
+        }
+        UnrelatedWorktreePromptOutcome::Exit => Ok(PendingTurnWorktreeAction::Exit),
     }
 }
 
@@ -723,6 +807,19 @@ pub(super) async fn run_interaction_loop_impl(
             }
         }
 
+        match resolve_unrelated_worktree_before_turn(ctx, state, input_owned.as_str()).await? {
+            PendingTurnWorktreeAction::Proceed => {}
+            PendingTurnWorktreeAction::RestoreInput => continue,
+            PendingTurnWorktreeAction::ReplaceInput(new_input) => {
+                input_owned = new_input;
+            }
+            PendingTurnWorktreeAction::Exit => {
+                return Ok(InteractionOutcome::Exit {
+                    reason: SessionEndReason::Exit,
+                });
+            }
+        }
+
         let recent_follow_up_hint = if is_follow_up_prompt_like(input_owned.as_str()) {
             extract_recent_follow_up_hint(ctx.conversation_history)
         } else {
@@ -901,19 +998,25 @@ pub(super) async fn run_interaction_loop_impl(
 mod tests {
     use super::{
         append_file_reference_metadata, build_file_reference_metadata,
-        extract_recent_follow_up_hint, fallback_args_preview, refresh_live_ide_context_update,
-        tool_names,
+        extract_recent_follow_up_hint, fallback_args_preview, next_unrelated_dirty_worktree_entry,
+        refresh_live_ide_context_update, tool_names,
     };
+    use crate::agent::runloop::git::normalize_workspace_path;
     use crate::agent::runloop::unified::context_manager::ContextManager;
     use crate::agent::runloop::unified::session_setup::{
         IdeContextBridge, ide_context_status_label_from_bridge,
     };
+    use crate::agent::runloop::unified::turn::session::unrelated_worktree_prompt::UnrelatedWorktreePromptState;
     use hashbrown::HashMap;
+    use serde_json::json;
+    use std::collections::BTreeSet;
     use std::fs;
+    use std::process::Command;
     use std::sync::Arc;
     use tempfile::TempDir;
     use tokio::sync::RwLock;
     use vtcode_core::llm::provider as uni;
+    use vtcode_core::tools::registry::ToolRegistry;
 
     #[test]
     fn extract_recent_follow_up_hint_reads_latest_recoverable_tool_payload() {
@@ -1273,5 +1376,141 @@ mod tests {
             .as_deref(),
             Some("IDE Context (VS Code): src/beta.rs")
         );
+    }
+
+    fn init_git_repo() -> TempDir {
+        let temp = TempDir::new().expect("temp dir");
+        let run = |args: &[&str]| {
+            let status = Command::new("git")
+                .args(args)
+                .current_dir(temp.path())
+                .status()
+                .expect("git command");
+            assert!(status.success(), "git command failed: {args:?}");
+        };
+
+        run(&["init"]);
+        run(&["config", "user.name", "VT Code"]);
+        run(&["config", "user.email", "vtcode@example.com"]);
+        temp
+    }
+
+    fn seed_dirty_repo() -> (TempDir, std::path::PathBuf) {
+        let repo = init_git_repo();
+        let path = repo.path().join("docs/project/TODO.md");
+        fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
+        fs::write(&path, "before\n").expect("write");
+
+        let run = |args: &[&str]| {
+            let status = Command::new("git")
+                .args(args)
+                .current_dir(repo.path())
+                .status()
+                .expect("git command");
+            assert!(status.success(), "git command failed: {args:?}");
+        };
+
+        run(&["add", "."]);
+        run(&["commit", "-m", "test: seed repo"]);
+        fs::write(&path, "after\n").expect("write");
+        (repo, path)
+    }
+
+    #[tokio::test]
+    async fn preexisting_unrelated_dirty_file_is_detected_before_turn() {
+        let (repo, path) = seed_dirty_repo();
+        let registry = ToolRegistry::new(repo.path().to_path_buf()).await;
+
+        let entry = next_unrelated_dirty_worktree_entry(
+            repo.path(),
+            &registry,
+            &BTreeSet::new(),
+            &UnrelatedWorktreePromptState::default(),
+        )
+        .expect("entry lookup")
+        .expect("dirty entry");
+
+        assert_eq!(entry.path, normalize_workspace_path(repo.path(), &path));
+    }
+
+    #[tokio::test]
+    async fn tracked_agent_file_is_not_treated_as_unrelated() {
+        let (repo, _path) = seed_dirty_repo();
+        let registry = ToolRegistry::new(repo.path().to_path_buf()).await;
+        registry
+            .read_file(json!({"path": "docs/project/TODO.md"}))
+            .await
+            .expect("read file");
+
+        let entry = next_unrelated_dirty_worktree_entry(
+            repo.path(),
+            &registry,
+            &BTreeSet::new(),
+            &UnrelatedWorktreePromptState::default(),
+        )
+        .expect("entry lookup");
+
+        assert!(entry.is_none());
+    }
+
+    #[tokio::test]
+    async fn agent_touched_file_is_not_treated_as_unrelated() {
+        let (repo, path) = seed_dirty_repo();
+        let registry = ToolRegistry::new(repo.path().to_path_buf()).await;
+        let mut touched_paths = BTreeSet::new();
+        touched_paths.insert(normalize_workspace_path(repo.path(), &path));
+
+        let entry = next_unrelated_dirty_worktree_entry(
+            repo.path(),
+            &registry,
+            &touched_paths,
+            &UnrelatedWorktreePromptState::default(),
+        )
+        .expect("entry lookup");
+
+        assert!(entry.is_none());
+    }
+
+    #[tokio::test]
+    async fn acknowledged_dirty_file_reappears_after_fingerprint_changes() {
+        let (repo, path) = seed_dirty_repo();
+        let registry = ToolRegistry::new(repo.path().to_path_buf()).await;
+        let mut prompt_state = UnrelatedWorktreePromptState::default();
+
+        let first_entry = next_unrelated_dirty_worktree_entry(
+            repo.path(),
+            &registry,
+            &BTreeSet::new(),
+            &prompt_state,
+        )
+        .expect("entry lookup")
+        .expect("dirty entry");
+        prompt_state.acknowledge(&first_entry);
+
+        let suppressed = next_unrelated_dirty_worktree_entry(
+            repo.path(),
+            &registry,
+            &BTreeSet::new(),
+            &prompt_state,
+        )
+        .expect("entry lookup");
+        assert!(suppressed.is_none());
+
+        fs::write(&path, "after again\n").expect("write");
+
+        let refreshed_entry = next_unrelated_dirty_worktree_entry(
+            repo.path(),
+            &registry,
+            &BTreeSet::new(),
+            &prompt_state,
+        )
+        .expect("entry lookup")
+        .expect("refreshed entry");
+
+        assert_eq!(
+            refreshed_entry.path,
+            normalize_workspace_path(repo.path(), &path)
+        );
+        assert_ne!(refreshed_entry.fingerprint, first_entry.fingerprint);
     }
 }

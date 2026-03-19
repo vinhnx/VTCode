@@ -66,6 +66,7 @@ pub enum DiffPreviewMode {
     #[default]
     EditApproval,
     FileConflict,
+    ReadonlyReview,
 }
 
 /// State for diff preview modal

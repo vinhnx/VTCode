@@ -2,6 +2,7 @@ use anyhow::Result;
 use std::collections::BTreeSet;
 use std::path::Path;
 
+use crate::agent::runloop::git::normalize_workspace_path;
 use crate::agent::runloop::unified::display::display_user_message;
 use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, TurnId, TurnRunId};
 use crate::agent::runloop::unified::shell::shell_quote_if_needed;
@@ -171,6 +172,14 @@ pub(crate) async fn execute_direct_tool_call(
             uni::Message::assistant(reply).with_phase(Some(uni::AssistantPhase::FinalAnswer)),
         );
     }
+
+    drop(t_ctx);
+    drop(tp_ctx);
+    ctx.interaction_ctx
+        .agent_touched_paths
+        .extend(turn_modified_files.iter().map(|path| {
+            normalize_workspace_path(ctx.interaction_ctx.config.workspace.as_path(), path)
+        }));
 
     // Direct tool paths already executed and rendered output; skip creating an
     // immediate LLM turn for this interaction loop iteration.

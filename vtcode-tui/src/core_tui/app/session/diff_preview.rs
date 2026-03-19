@@ -228,6 +228,7 @@ fn header_action_label(mode: DiffPreviewMode) -> &'static str {
     match mode {
         DiffPreviewMode::EditApproval => "← Edit ",
         DiffPreviewMode::FileConflict => "← Conflict ",
+        DiffPreviewMode::ReadonlyReview => "← Review ",
     }
 }
 
@@ -315,6 +316,28 @@ fn control_lines(preview: &DiffPreviewState) -> Vec<Line<'static>> {
                 Span::raw(" Nav"),
             ]),
         ],
+        DiffPreviewMode::ReadonlyReview => vec![
+            Line::from(vec![
+                Span::styled(
+                    "Enter",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(" Back  "),
+                Span::styled(
+                    "Esc",
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(" Back"),
+            ]),
+            Line::from(vec![
+                Span::styled("Tab", Style::default().fg(Color::Yellow)),
+                Span::raw("/"),
+                Span::styled("S-Tab", Style::default().fg(Color::Yellow)),
+                Span::raw(" Nav"),
+            ]),
+        ],
     }
 }
 
@@ -360,6 +383,28 @@ mod tests {
     }
 
     #[test]
+    fn readonly_review_controls_show_back_navigation() {
+        let preview = DiffPreviewState::new_with_mode(
+            "src/main.rs".to_string(),
+            "before".to_string(),
+            "after".to_string(),
+            Vec::new(),
+            DiffPreviewMode::ReadonlyReview,
+        );
+
+        let lines = control_lines(&preview);
+        let first_line: String = lines[0]
+            .spans
+            .iter()
+            .map(|span| span.content.clone().into_owned())
+            .collect();
+
+        assert!(first_line.contains("Back"));
+        assert!(!first_line.contains("Proceed"));
+        assert!(!first_line.contains("Reload"));
+    }
+
+    #[test]
     fn conflict_header_uses_conflict_label() {
         assert_eq!(
             header_action_label(DiffPreviewMode::FileConflict),
@@ -368,6 +413,10 @@ mod tests {
         assert_eq!(
             header_action_label(DiffPreviewMode::EditApproval),
             "← Edit "
+        );
+        assert_eq!(
+            header_action_label(DiffPreviewMode::ReadonlyReview),
+            "← Review "
         );
     }
 }

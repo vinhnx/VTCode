@@ -2672,6 +2672,43 @@ fn diff_overlay_conflict_mode_ignores_trust_shortcuts() {
 }
 
 #[test]
+fn diff_overlay_readonly_review_maps_enter_and_escape_to_back() {
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
+
+    show_diff_overlay(&mut session, app_types::DiffPreviewMode::ReadonlyReview);
+    let enter = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(matches!(
+        enter,
+        Some(app_types::InlineEvent::Overlay(
+            app_types::OverlayEvent::Submitted(app_types::OverlaySubmission::DiffAbort)
+        ))
+    ));
+
+    show_diff_overlay(&mut session, app_types::DiffPreviewMode::ReadonlyReview);
+    let escape = session.process_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(matches!(
+        escape,
+        Some(app_types::InlineEvent::Overlay(
+            app_types::OverlayEvent::Submitted(app_types::OverlaySubmission::DiffAbort)
+        ))
+    ));
+}
+
+#[test]
+fn diff_overlay_readonly_review_ignores_reload_shortcut() {
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
+
+    show_diff_overlay(&mut session, app_types::DiffPreviewMode::ReadonlyReview);
+    let reload = session.process_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE));
+
+    assert!(reload.is_none());
+    assert!(matches!(
+        session.diff_preview_state().map(|preview| preview.mode),
+        Some(app_types::DiffPreviewMode::ReadonlyReview)
+    ));
+}
+
+#[test]
 fn arrow_keys_never_launch_editor() {
     let text = "hello world";
     let mut session = session_with_input(text, 0);

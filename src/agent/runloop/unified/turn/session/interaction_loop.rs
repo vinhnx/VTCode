@@ -23,6 +23,10 @@ use crate::agent::runloop::unified::session_setup::IdeContextBridge;
 use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
 use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
 use crate::agent::runloop::welcome::SessionBootstrap;
+use std::collections::BTreeSet;
+use std::path::PathBuf;
+
+use super::unrelated_worktree_prompt::UnrelatedWorktreePromptState;
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) struct InteractionLoopContext<'a> {
@@ -43,6 +47,7 @@ pub(crate) struct InteractionLoopContext<'a> {
     pub tools: &'a Arc<tokio::sync::RwLock<Vec<uni::ToolDefinition>>>,
     pub tool_catalog: &'a Arc<ToolCatalogState>,
     pub conversation_history: &'a mut Vec<uni::Message>,
+    pub agent_touched_paths: &'a mut BTreeSet<PathBuf>,
     pub decision_ledger:
         &'a Arc<tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
     pub context_manager: &'a mut crate::agent::runloop::unified::context_manager::ContextManager,
@@ -153,6 +158,7 @@ pub(crate) struct InteractionState<'a> {
     pub prefer_latest_queued_input_once: &'a mut bool,
     pub model_picker_state: &'a mut Option<ModelPickerState>,
     pub palette_state: &'a mut Option<ActivePalette>,
+    pub unrelated_worktree_prompt_state: &'a mut UnrelatedWorktreePromptState,
     pub last_known_mcp_tools: &'a mut Vec<String>,
     pub pending_mcp_refresh: &'a mut bool,
     pub mcp_catalog_initialized: &'a mut bool,

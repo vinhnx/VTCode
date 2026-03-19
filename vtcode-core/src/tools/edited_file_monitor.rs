@@ -31,6 +31,17 @@ pub struct FileSnapshot {
 }
 
 impl FileSnapshot {
+    fn fingerprint(&self) -> String {
+        let modified = self
+            .modified_millis
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "none".to_string());
+        format!(
+            "exists={};size={};modified={};sha256={}",
+            self.exists, self.size_bytes, modified, self.sha256
+        )
+    }
+
     fn to_json(&self) -> Value {
         json!({
             "exists": self.exists,
@@ -104,6 +115,13 @@ pub struct FileConflict {
     pub disk_snapshot: Option<FileSnapshot>,
     pub intended_content: Option<String>,
     pub emit_hitl_notification: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TrackedPathFreshness {
+    pub path: PathBuf,
+    pub is_stale: bool,
+    pub fingerprint: Option<String>,
 }
 
 impl FileConflict {
@@ -314,19 +332,19 @@ impl EditedFileMonitor {
     }
 
     pub async fn track_read(&self, path: &Path) -> Result<()> {
-        let path = path.to_path_buf();
+        let path = normalize_event_path(path);
         let snapshot = snapshot_path_async(path.clone()).await?;
         self.record_read_snapshot(&path, snapshot)
     }
 
     pub async fn accept_disk_version(&self, path: &Path) -> Result<()> {
-        let path = path.to_path_buf();
+        let path = normalize_event_path(path);
         let snapshot = snapshot_path_async(path.clone()).await?;
         self.record_read_snapshot(&path, snapshot)
     }
 
     pub fn record_read_snapshot(&self, path: &Path, snapshot: FileSnapshot) -> Result<()> {
-        let path = path.to_path_buf();
+        let path = normalize_event_path(path);
         {
             let mut state = self.inner.state.lock();
             let entry = state
@@ -346,7 +364,7 @@ impl EditedFileMonitor {
     }
 
     pub fn record_agent_write_snapshot(&self, path: &Path, snapshot: FileSnapshot) -> Result<()> {
-        let path = path.to_path_buf();
+        let path = normalize_event_path(path);
         {
             let mut state = self.inner.state.lock();
             let entry = state
@@ -371,16 +389,68 @@ impl EditedFileMonitor {
     }
 
     pub async fn tracked_read_text(&self, path: &Path) -> Option<String> {
+        let path = normalize_event_path(path);
         let state = self.inner.state.lock();
         state
             .tracked_files
-            .get(path)
+            .get(&path)
             .and_then(|entry| entry.last_read_snapshot.as_ref())
             .and_then(|snapshot| snapshot.text_content.clone())
     }
 
+    pub fn tracked_paths(&self) -> Vec<PathBuf> {
+        let state = self.inner.state.lock();
+        let mut paths = state.tracked_files.keys().cloned().collect::<Vec<_>>();
+        paths.sort();
+        paths
+    }
+
+    pub fn stale_tracked_paths(&self) -> Vec<PathBuf> {
+        self.tracked_path_freshness()
+            .into_iter()
+            .filter_map(|entry| entry.is_stale.then_some(entry.path))
+            .collect()
+    }
+
+    pub fn tracked_path_freshness(&self) -> Vec<TrackedPathFreshness> {
+        let state = self.inner.state.lock();
+        let mut entries = state
+            .tracked_files
+            .iter()
+            .map(|(path, entry)| {
+                let is_stale = entry
+                    .last_read_snapshot
+                    .as_ref()
+                    .zip(entry.last_known_disk_snapshot.as_ref())
+                    .is_some_and(|(read_snapshot, disk_snapshot)| {
+                        !read_snapshot.same_contents(disk_snapshot)
+                    });
+                TrackedPathFreshness {
+                    path: path.clone(),
+                    is_stale,
+                    fingerprint: entry
+                        .last_known_disk_snapshot
+                        .as_ref()
+                        .map(FileSnapshot::fingerprint),
+                }
+            })
+            .collect::<Vec<_>>();
+        entries.sort_by(|left, right| left.path.cmp(&right.path));
+        entries
+    }
+
+    pub fn tracked_path_fingerprint(&self, path: &Path) -> Option<String> {
+        let path = normalize_event_path(path);
+        let state = self.inner.state.lock();
+        state
+            .tracked_files
+            .get(&path)
+            .and_then(|entry| entry.last_known_disk_snapshot.as_ref())
+            .map(FileSnapshot::fingerprint)
+    }
+
     pub async fn acquire_mutation(&self, path: &Path) -> MutationLease {
-        let path = path.to_path_buf();
+        let path = normalize_event_path(path);
         let mutation_id = self.inner.next_mutation_id.fetch_add(1, Ordering::SeqCst);
         let mut pending_guard =
             PendingMutationGuard::new(Arc::clone(&self.inner), path.clone(), mutation_id);
@@ -439,7 +509,7 @@ impl EditedFileMonitor {
         intended_content: Option<String>,
         approved_snapshot: Option<FileSnapshot>,
     ) -> Result<Option<FileConflict>> {
-        let path = path.to_path_buf();
+        let path = normalize_event_path(path);
         let current_snapshot = snapshot_path_async(path.clone()).await?;
         let mut should_audit = false;
 
@@ -953,6 +1023,38 @@ mod tests {
             .await?
             .expect("expected renewed conflict");
         assert!(second_conflict.emit_hitl_notification);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn stale_path_queries_expose_external_change_without_clearing_state() -> Result<()> {
+        let temp = TempDir::new()?;
+        let file = temp.path().join("sample.txt");
+        std::fs::write(&file, "before\n")?;
+        let monitor = EditedFileMonitor::new();
+
+        monitor.track_read(&file).await?;
+        let tracked_paths = monitor.tracked_paths();
+        assert_eq!(tracked_paths.len(), 1);
+        let tracked_path = tracked_paths[0].clone();
+        assert!(monitor.stale_tracked_paths().is_empty());
+
+        std::fs::write(&file, "external\n")?;
+        monitor.debug_process_path_change(&file).await?;
+
+        let freshness = monitor.tracked_path_freshness();
+        assert_eq!(freshness.len(), 1);
+        assert_eq!(freshness[0].path, tracked_path);
+        assert!(freshness[0].is_stale);
+        assert!(freshness[0].fingerprint.is_some());
+        assert_eq!(
+            monitor.stale_tracked_paths(),
+            vec![freshness[0].path.clone()]
+        );
+        assert_eq!(
+            monitor.tracked_path_fingerprint(&freshness[0].path),
+            freshness[0].fingerprint
+        );
         Ok(())
     }
 

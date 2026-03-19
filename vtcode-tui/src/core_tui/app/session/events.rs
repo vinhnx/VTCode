@@ -936,6 +936,7 @@ pub(super) fn handle_diff_preview_key(
             Some(InlineEvent::Overlay(OverlayEvent::Submitted(match mode {
                 DiffPreviewMode::EditApproval => OverlaySubmission::DiffApply,
                 DiffPreviewMode::FileConflict => OverlaySubmission::DiffProceed,
+                DiffPreviewMode::ReadonlyReview => OverlaySubmission::DiffAbort,
             })))
         }
         KeyCode::Char('r') | KeyCode::Char('R')
@@ -953,6 +954,7 @@ pub(super) fn handle_diff_preview_key(
             Some(InlineEvent::Overlay(OverlayEvent::Submitted(match mode {
                 DiffPreviewMode::EditApproval => OverlaySubmission::DiffReject,
                 DiffPreviewMode::FileConflict => OverlaySubmission::DiffAbort,
+                DiffPreviewMode::ReadonlyReview => OverlaySubmission::DiffAbort,
             })))
         }
         KeyCode::Char('1') if matches!(mode, DiffPreviewMode::EditApproval) => {

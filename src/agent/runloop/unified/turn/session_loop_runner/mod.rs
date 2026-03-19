@@ -4,7 +4,9 @@ mod metrics;
 mod plan_seed;
 
 use super::*;
-use crate::agent::runloop::git::compute_session_code_change_delta;
+use crate::agent::runloop::git::{
+    compute_session_code_change_delta, normalize_workspace_path, workspace_relative_display,
+};
 use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
 use crate::agent::runloop::unified::plan_mode_state::render_plan_mode_next_step_hint;
 use crate::agent::runloop::unified::postamble::{ExitSummaryData, print_exit_summary};
@@ -83,6 +85,25 @@ impl TurnHistoryCheckpoint {
             .hash(&mut hasher);
         hasher.finish()
     }
+}
+
+fn build_tracked_file_freshness_note(
+    workspace: &std::path::Path,
+    stale_paths: &[std::path::PathBuf],
+) -> Option<String> {
+    if stale_paths.is_empty() {
+        return None;
+    }
+
+    let display_paths = stale_paths
+        .iter()
+        .map(|path| format!("- {}", workspace_relative_display(workspace, path)))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    Some(format!(
+        "Freshness note: the following files changed on disk after VT Code last read them:\n{display_paths}\nRe-read these files before relying on earlier content because disk content is newer than the agent's prior read snapshot."
+    ))
 }
 
 fn live_reload_preserves_session_config(
@@ -610,6 +631,9 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             ),
         );
         let mut queued_inputs: VecDeque<String> = VecDeque::with_capacity(8);
+        let mut agent_touched_paths = std::collections::BTreeSet::new();
+        let mut unrelated_worktree_prompt_state =
+            crate::agent::runloop::unified::turn::session::unrelated_worktree_prompt::UnrelatedWorktreePromptState::default();
         let mut ctrl_c_notice_displayed = false;
         let mut mcp_catalog_initialized = tool_registry.mcp_client().is_some();
         let mut last_known_mcp_tools: Vec<String> = Vec::with_capacity(16);
@@ -666,6 +690,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     tools: &tools,
                     tool_catalog: &tool_catalog,
                     conversation_history: &mut conversation_history,
+                    agent_touched_paths: &mut agent_touched_paths,
                     decision_ledger: &decision_ledger,
                     context_manager: &mut context_manager,
                     session_stats: &mut session_stats,
@@ -703,6 +728,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         prefer_latest_queued_input_once: &mut prefer_latest_queued_input_once,
                         model_picker_state: &mut model_picker_state,
                         palette_state: &mut palette_state,
+                        unrelated_worktree_prompt_state: &mut unrelated_worktree_prompt_state,
                         last_known_mcp_tools: &mut last_known_mcp_tools,
                         pending_mcp_refresh: &mut pending_mcp_refresh,
                         mcp_catalog_initialized: &mut mcp_catalog_initialized,
@@ -784,6 +810,18 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     continue;
                 }
                 let mut working_history = std::mem::take(&mut conversation_history);
+                let transient_freshness_index = {
+                    let stale_paths = tool_registry.edited_file_monitor().stale_tracked_paths();
+                    if let Some(note) =
+                        build_tracked_file_freshness_note(config.workspace.as_path(), &stale_paths)
+                    {
+                        let index = working_history.len();
+                        working_history.push(vtcode_core::llm::provider::Message::system(note));
+                        Some(index)
+                    } else {
+                        None
+                    }
+                };
                 let timeout_secs = resolve_effective_turn_timeout_secs(
                     resolve_timeout(
                         vt_cfg
@@ -948,6 +986,17 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         }
                     }
                 };
+                if let Some(index) = transient_freshness_index
+                    && index < working_history.len()
+                {
+                    let _ = working_history.remove(index);
+                }
+                agent_touched_paths.extend(
+                    outcome
+                        .turn_modified_files
+                        .iter()
+                        .map(|path| normalize_workspace_path(config.workspace.as_path(), path)),
+                );
                 conversation_history = working_history;
                 let outcome_result = outcome.result.clone();
                 let turn_elapsed = turn_started_at.elapsed();
@@ -1227,8 +1276,9 @@ mod tests {
     use super::{
         TurnHistoryCheckpoint, archive::NextRuntimeArchiveId,
         archive::next_runtime_archive_id_request, archive::workspace_archive_label,
-        build_partial_timeout_messages, checkpoint_session_archive_start,
-        effective_max_tool_calls_for_turn, prepare_resume_bootstrap_without_archive,
+        build_partial_timeout_messages, build_tracked_file_freshness_note,
+        checkpoint_session_archive_start, effective_max_tool_calls_for_turn,
+        prepare_resume_bootstrap_without_archive,
         resolve_effective_turn_timeout_secs,
     };
     use crate::agent::agents::ResumeSession;
@@ -1374,6 +1424,23 @@ mod tests {
     #[test]
     fn workspace_archive_label_uses_directory_name() {
         assert_eq!(workspace_archive_label(Path::new("/tmp/demo")), "demo");
+    }
+
+    #[test]
+    fn tracked_file_freshness_note_uses_relative_paths_and_reread_guidance() {
+        let note = build_tracked_file_freshness_note(
+            Path::new("/tmp/workspace"),
+            &[
+                PathBuf::from("/tmp/workspace/src/main.rs"),
+                PathBuf::from("/tmp/workspace/docs/project/TODO.md"),
+            ],
+        )
+        .expect("freshness note");
+
+        assert!(note.contains("Freshness note"));
+        assert!(note.contains("- src/main.rs"));
+        assert!(note.contains("- docs/project/TODO.md"));
+        assert!(note.contains("Re-read these files before relying on earlier content"));
     }
 
     #[test]
