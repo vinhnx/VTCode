@@ -28,6 +28,7 @@ use crate::llm::AnyClient;
 use crate::llm::client::ProviderClientAdapter;
 use crate::llm::factory::{ProviderConfig, create_provider_with_config, infer_provider_from_model};
 use crate::llm::provider as uni_provider;
+use crate::project_doc::build_instruction_appendix;
 use crate::prompts::PromptContext;
 use crate::prompts::system::compose_system_instruction_text;
 use crate::tools::ToolRegistry;
@@ -417,12 +418,18 @@ impl AgentRunner {
             .collect::<Vec<_>>();
         let mut prompt_context = PromptContext::from_workspace_tools(&workspace, available_tools);
         prompt_context.load_available_skills();
-        let system_prompt = compose_system_instruction_text(
+        let mut system_prompt = compose_system_instruction_text(
             workspace.as_path(),
             Some(session_config.effective()),
             Some(&prompt_context),
         )
         .await;
+        if let Some(appendix) =
+            build_instruction_appendix(&session_config.effective().agent, workspace.as_path()).await
+        {
+            system_prompt.push_str("\n\n# INSTRUCTIONS\n");
+            system_prompt.push_str(&appendix);
+        }
         let loop_detector = LoopDetector::with_max_repeated_calls(max_repeated_tool_calls);
         let bootstrap_messages = bootstrap.messages.clone();
         let mut bootstrap = bootstrap;

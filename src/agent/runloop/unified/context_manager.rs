@@ -296,7 +296,7 @@ impl ContextManager {
             retry_attempts > 0,
             false,
             3, // This could be configurable
-            PromptAssemblyMode::BaseIncludesInstructions,
+            PromptAssemblyMode::AppendInstructions,
         );
 
         // Determine if the provider/model exposes native context-awareness signals.
@@ -337,6 +337,7 @@ impl ContextManager {
             token_budget_guidance,
             prompt_cache_shaping_mode: params.prompt_cache_shaping_mode,
             editor_context_block: self.editor_context_prompt_block(),
+            active_instruction_directory: self.workspace_root.clone(),
         };
 
         // Use incremental builder to avoid redundant cloning and processing

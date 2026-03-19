@@ -9,27 +9,13 @@ use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::fmt::Write;
 
-/// Compose the full system instruction text combining the base prompt with task metadata.
+/// Compose the current system instruction text for the request.
 pub fn compose_system_instruction(
     base_prompt: &str,
-    task: &Task,
-    contexts: &[ContextItem],
+    _task: &Task,
+    _contexts: &[ContextItem],
 ) -> String {
-    let mut instruction = base_prompt.to_string();
-    let _ = write!(
-        instruction,
-        "\n\nTask: {}\n{}",
-        task.title, task.description
-    );
-
-    if !contexts.is_empty() {
-        instruction.push_str("\n\nRelevant Context:");
-        for ctx in contexts {
-            let _ = write!(instruction, "\n[{}] {}", ctx.id, ctx.content);
-        }
-    }
-
-    instruction
+    base_prompt.to_string()
 }
 
 /// Build the initial conversation payload (without the system instruction message).
@@ -148,16 +134,14 @@ pub fn messages_from_conversation(conversation: &[Content]) -> Vec<Message> {
     messages
 }
 
-/// Convert Gemini `Content` structures into universal provider messages and prepend the current
-/// system instruction.
+/// Convert Gemini `Content` structures into universal provider messages.
+///
+/// System instructions travel separately via `LLMRequest.system_prompt` on the active request.
 pub fn build_messages_from_conversation(
-    system_instruction: &str,
+    _system_instruction: &str,
     conversation: &[Content],
 ) -> Vec<Message> {
-    let mut messages = Vec::with_capacity(conversation.len() + 1);
-    messages.push(Message::system(system_instruction.to_string()));
-    messages.extend(messages_from_conversation(conversation));
-    messages
+    messages_from_conversation(conversation)
 }
 
 fn parts_from_message_content(content: &MessageContent) -> Vec<Part> {
@@ -340,8 +324,7 @@ mod tests {
         }];
 
         let instruction = compose_system_instruction("Base", &task, &contexts);
-        assert!(instruction.contains("Task: Example"));
-        assert!(instruction.contains("[ctx1] Details"));
+        assert_eq!(instruction, "Base");
     }
 
     #[test]
@@ -360,7 +343,7 @@ mod tests {
         let task = sample_task();
         let conversation = build_conversation(&task, &[]);
         let messages = build_messages_from_conversation("Base", &conversation);
-        assert_eq!(messages.len(), conversation.len() + 1);
+        assert_eq!(messages.len(), conversation.len());
     }
 
     #[test]
@@ -391,12 +374,11 @@ mod tests {
         let conversation = conversation_from_messages(&history);
         let rebuilt = build_messages_from_conversation("Fresh system", &conversation);
 
-        assert_eq!(rebuilt[0].role, MessageRole::System);
-        assert_eq!(rebuilt[1].role, MessageRole::User);
-        assert_eq!(rebuilt[1].content.as_text().as_ref(), "Inspect src/main.rs");
-        assert_eq!(rebuilt[2].role, MessageRole::Assistant);
+        assert_eq!(rebuilt[0].role, MessageRole::User);
+        assert_eq!(rebuilt[0].content.as_text().as_ref(), "Inspect src/main.rs");
+        assert_eq!(rebuilt[1].role, MessageRole::Assistant);
         assert_eq!(
-            rebuilt[2]
+            rebuilt[1]
                 .tool_calls
                 .as_ref()
                 .and_then(|calls| calls.first())
@@ -404,9 +386,9 @@ mod tests {
                 .map(|function| function.name.as_str()),
             Some("read_file")
         );
-        assert_eq!(rebuilt[3].role, MessageRole::Tool);
-        assert_eq!(rebuilt[3].tool_call_id.as_deref(), Some("call-1"));
-        assert_eq!(rebuilt[4].role, MessageRole::Assistant);
-        assert_eq!(rebuilt[4].content.as_text().as_ref(), "Done");
+        assert_eq!(rebuilt[2].role, MessageRole::Tool);
+        assert_eq!(rebuilt[2].tool_call_id.as_deref(), Some("call-1"));
+        assert_eq!(rebuilt[3].role, MessageRole::Assistant);
+        assert_eq!(rebuilt[3].content.as_text().as_ref(), "Done");
     }
 }

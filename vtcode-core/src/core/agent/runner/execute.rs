@@ -21,6 +21,7 @@ use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
 use crate::exec::events::HarnessEventKind;
 use crate::llm::provider::{LLMRequest, Message, ToolCall};
 use crate::llm::providers::gemini::wire::Part;
+use crate::project_doc::build_instruction_appendix;
 use crate::prompts::PromptContext;
 use crate::prompts::system::compose_system_instruction_text;
 use crate::utils::colors::style;
@@ -185,12 +186,19 @@ impl AgentRunner {
                     tools.iter().map(|tool| tool.function_name().to_string()),
                 );
                 prompt_context.load_available_skills();
-                compose_system_instruction_text(
+                let mut prompt = compose_system_instruction_text(
                     self._workspace.as_path(),
                     Some(&config),
                     Some(&prompt_context),
                 )
-                .await
+                .await;
+                if let Some(appendix) =
+                    build_instruction_appendix(&config.agent, self._workspace.as_path()).await
+                {
+                    prompt.push_str("\n\n# INSTRUCTIONS\n");
+                    prompt.push_str(&appendix);
+                }
+                prompt
             } else {
                 self.system_prompt.clone()
             };

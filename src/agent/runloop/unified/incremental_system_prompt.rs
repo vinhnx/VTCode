@@ -3,6 +3,7 @@
 //! This module provides a cached system prompt builder that only rebuilds the prompt
 //! when the underlying configuration or context has changed.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -91,7 +92,6 @@ pub(crate) struct IncrementalSystemPrompt {
 pub(crate) enum PromptAssemblyMode {
     #[default]
     AppendInstructions,
-    BaseIncludesInstructions,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -229,8 +229,7 @@ impl IncrementalSystemPrompt {
         agent_config: Option<&vtcode_config::core::AgentConfig>,
     ) -> String {
         use std::fmt::Write;
-        use vtcode_core::project_doc::get_user_instructions;
-        use vtcode_core::skills::types::SkillMetadata;
+        use vtcode_core::project_doc::build_instruction_appendix;
 
         let mut prompt = String::with_capacity(base_system_prompt.len() + 1024);
         prompt.push_str(base_system_prompt);
@@ -251,59 +250,58 @@ impl IncrementalSystemPrompt {
         }
 
         let cache_friendly_mode = context.prompt_cache_shaping_mode.is_enabled();
-        let mut deferred_runtime_context = String::new();
+        let mut runtime_tail = String::new();
         if cache_friendly_mode {
             let has_runtime_context = retry_attempts > 0
                 || context.error_count > 0
                 || context.conversation_length > 0
                 || context.tool_usage_count > 0
                 || context.token_usage_ratio > 0.0;
-            if has_runtime_context {
-                let _ = writeln!(deferred_runtime_context, "\n[Runtime Context]");
+            if has_runtime_context || context.full_auto || context.plan_mode {
+                let _ = writeln!(runtime_tail, "\n[Runtime Context]");
                 if retry_attempts > 0 {
                     let _ = writeln!(
-                        deferred_runtime_context,
+                        runtime_tail,
                         "# Retry #{}: Try a different strategy, not the same steps.",
                         retry_attempts
                     );
                     let _ = writeln!(
-                        deferred_runtime_context,
+                        runtime_tail,
                         "# Re-plan now: use `task_tracker` to define composable slices (files + outcome + verify) before more mutating edits."
                     );
                 }
                 if context.error_count > 0 {
                     let _ = writeln!(
-                        deferred_runtime_context,
+                        runtime_tail,
                         "# {} errors: Check file paths, permissions, and tool args, then continue with smaller verified slices.",
                         context.error_count
                     );
                 }
-                append_context_metrics(&mut deferred_runtime_context, context);
-            }
-
-            if context.full_auto {
-                append_full_auto_notice(&mut prompt, context.plan_mode);
-            }
-
-            if context.plan_mode {
-                append_plan_mode_notice(&mut prompt);
+                if has_runtime_context {
+                    append_context_metrics(&mut runtime_tail, context);
+                }
+                if context.full_auto {
+                    append_full_auto_notice(&mut runtime_tail, context.plan_mode);
+                }
+                if context.plan_mode {
+                    append_plan_mode_notice(&mut runtime_tail);
+                }
             }
         } else {
-            // Concise retry/error context
             if retry_attempts > 0 {
                 let _ = writeln!(
-                    prompt,
+                    runtime_tail,
                     "\n# Retry #{}: Try a different strategy, not the same steps.",
                     retry_attempts
                 );
                 let _ = writeln!(
-                    prompt,
+                    runtime_tail,
                     "# Re-plan now: use `task_tracker` to define composable slices (files + outcome + verify) before more mutating edits."
                 );
             }
             if context.error_count > 0 {
                 let _ = writeln!(
-                    prompt,
+                    runtime_tail,
                     "\n# {} errors: Check file paths, permissions, and tool args, then continue with smaller verified slices.",
                     context.error_count
                 );
@@ -317,74 +315,36 @@ impl IncrementalSystemPrompt {
                 || context.plan_mode;
 
             if has_context {
-                let _ = writeln!(prompt, "\n[Context]");
-                append_context_metrics(&mut prompt, context);
+                let _ = writeln!(runtime_tail, "\n[Context]");
+                append_context_metrics(&mut runtime_tail, context);
 
                 if context.full_auto {
-                    append_full_auto_notice(&mut prompt, context.plan_mode);
+                    append_full_auto_notice(&mut runtime_tail, context.plan_mode);
                 }
 
-                // Always append runtime plan-mode guardrails when plan mode is active.
                 if context.plan_mode {
-                    append_plan_mode_notice(&mut prompt);
+                    append_plan_mode_notice(&mut runtime_tail);
                 }
             }
         }
 
-        // Unified Instructions (Project Docs, User Inst, Skills)
         if prompt_assembly_mode == PromptAssemblyMode::AppendInstructions {
             if let Some(cfg) = agent_config {
-                let skill_metadata: Vec<SkillMetadata> = context
-                    .discovered_skills
-                    .iter()
-                    .map(|s| SkillMetadata {
-                        name: s.manifest.name.clone(),
-                        description: s.manifest.description.clone(),
-                        short_description: s.manifest.when_to_use.clone(),
-                        path: s.path.clone(),
-                        scope: s.scope,
-                        manifest: Some(s.manifest.clone()),
-                    })
-                    .collect();
-                let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-                if let Some(unified) =
-                    get_user_instructions(cfg, &cwd, Some(&skill_metadata[..])).await
+                if let Some(active_dir) = context.active_instruction_directory.as_deref()
+                    && let Some(unified) = build_instruction_appendix(cfg, active_dir).await
                 {
                     let _ = writeln!(prompt, "\n# INSTRUCTIONS\n{}", unified);
                 }
             } else if !context.discovered_skills.is_empty() {
-                // Fallback if config is missing (basic skills rendering)
                 let _ = writeln!(
                     prompt,
                     "\n# SKILLS\nUse `list_skills` to see available capabilities."
                 );
             }
-        } else if !context.discovered_skills.is_empty() {
-            // Base prompt already includes instruction hierarchy; append only active skill names.
-            let mut skill_names = context
-                .discovered_skills
-                .iter()
-                .map(|s| s.name().to_string())
-                .collect::<Vec<_>>();
-            skill_names.sort();
-
-            let preview = skill_names.iter().take(12).cloned().collect::<Vec<_>>();
-            let _ = writeln!(prompt, "\n# ACTIVE SKILLS\n{}", preview.join(", "));
-            if skill_names.len() > preview.len() {
-                let _ = writeln!(
-                    prompt,
-                    "(+{} more active skills)",
-                    skill_names.len() - preview.len()
-                );
-            }
         }
 
-        if cache_friendly_mode && !deferred_runtime_context.trim().is_empty() {
-            let _ = writeln!(
-                prompt,
-                "\n{}",
-                deferred_runtime_context.trim_start_matches('\n')
-            );
+        if !runtime_tail.trim().is_empty() {
+            let _ = writeln!(prompt, "\n{}", runtime_tail.trim_start_matches('\n'));
         }
 
         prompt
@@ -478,6 +438,8 @@ pub(crate) struct SystemPromptContext {
     pub(crate) prompt_cache_shaping_mode: PromptCacheShapingMode,
     /// Structured active editor context injected at request time.
     pub(crate) editor_context_block: Option<String>,
+    /// Explicit scope root for AGENTS.md and instruction discovery.
+    pub(crate) active_instruction_directory: Option<PathBuf>,
 }
 
 impl SystemPromptContext {
@@ -498,6 +460,7 @@ impl SystemPromptContext {
         self.token_budget_guidance.hash(&mut hasher);
         self.prompt_cache_shaping_mode.hash(&mut hasher);
         self.editor_context_block.hash(&mut hasher);
+        self.active_instruction_directory.hash(&mut hasher);
         // We use skill names and versions for hashing
         for skill in &self.discovered_skills {
             skill.name().hash(&mut hasher);

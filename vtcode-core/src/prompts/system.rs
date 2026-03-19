@@ -13,9 +13,6 @@ use crate::config::constants::{
     instructions as instruction_constants, project_doc as project_doc_constants,
 };
 use crate::config::types::SystemPromptMode;
-use crate::instructions::{
-    InstructionBundle, read_instruction_bundle, render_instruction_summary_markdown,
-};
 use crate::llm::providers::gemini::wire::Content;
 use crate::project_doc::read_project_doc;
 use crate::prompts::context::PromptContext;
@@ -24,7 +21,6 @@ use crate::prompts::output_styles::OutputStyleApplier;
 use crate::prompts::system_prompt_cache::PROMPT_CACHE;
 use crate::prompts::temporal::generate_temporal_context;
 use crate::skills::render::render_prompt_skills_section;
-use dirs::home_dir;
 use std::env;
 use std::fmt::Write as _;
 use std::path::Path;
@@ -313,15 +309,10 @@ pub async fn read_agent_guidelines(project_root: &Path) -> Option<String> {
 /// * `vtcode_config` - Configuration loaded from vtcode.toml
 /// * `prompt_context` - Optional context with tool information for dynamic enhancements
 pub async fn compose_system_instruction_text(
-    project_root: &Path,
+    _project_root: &Path,
     vtcode_config: Option<&crate::config::VTCodeConfig>,
     prompt_context: Option<&PromptContext>,
 ) -> String {
-    // OPTIMIZATION: Pre-allocate with improved capacity estimation
-    // Read instruction hierarchy once upfront for accurate sizing
-    let home_path = home_dir();
-    let instruction_bundle = read_instruction_hierarchy(project_root, vtcode_config).await;
-
     // Select base prompt based on configured mode
     use crate::config::types::SystemPromptMode;
     let prompt_mode = vtcode_config
@@ -343,17 +334,7 @@ pub async fn compose_system_instruction_text(
 
     let base_len = rendered_base_prompt.len();
     let config_overhead = vtcode_config.map_or(0, |_| 1024);
-    let instruction_hierarchy_size = instruction_bundle
-        .as_ref()
-        .map(|b| {
-            b.segments
-                .iter()
-                .map(|s| s.contents.len() + 200)
-                .sum::<usize>()
-        })
-        .unwrap_or(0);
-
-    let estimated_capacity = base_len + config_overhead + instruction_hierarchy_size + 1024; // +512 for enhancements
+    let estimated_capacity = base_len + config_overhead + 1024;
     let mut instruction = String::with_capacity(estimated_capacity);
     instruction.push_str(&rendered_base_prompt);
     if should_include_structured_reasoning(vtcode_config, prompt_mode) {
@@ -409,30 +390,6 @@ pub async fn compose_system_instruction_text(
         }
     }
 
-    if !prompt_context
-        .map(|ctx| ctx.skip_standard_instructions)
-        .unwrap_or(false)
-        && let Some(cfg) = vtcode_config
-        && let Some(user_inst) = &cfg.agent.user_instructions
-    {
-        instruction.push_str("\n\n## USER INSTRUCTIONS\n");
-        instruction.push_str(user_inst);
-    }
-
-    if let Some(bundle) = instruction_bundle {
-        let home_ref = home_path.as_deref();
-        instruction.push_str("\n\n");
-        instruction.push_str(&render_instruction_summary_markdown(
-            "AGENTS.MD INSTRUCTION HIERARCHY",
-            &bundle.segments,
-            bundle.truncated,
-            project_root,
-            home_ref,
-            3,
-            "instruction content was truncated due to size limits. Review the source files for full details.",
-        ));
-    }
-
     // ENHANCEMENT 2: Temporal context (metadata - goes at end)
     if let Some(cfg) = vtcode_config
         && cfg.agent.include_temporal_context
@@ -472,7 +429,7 @@ fn should_include_structured_reasoning(
     )
 }
 
-/// Generate system instruction with configuration and AGENTS.md guidelines incorporated
+/// Generate the stable base system instruction with configuration-aware sections.
 ///
 /// Note: This function maintains backward compatibility by not accepting prompt_context.
 /// For enhanced prompts with dynamic guidelines, call `compose_system_instruction_text` directly.
@@ -496,7 +453,7 @@ pub async fn generate_system_instruction_with_config(
     Content::system_text(styled_instruction)
 }
 
-/// Generate system instruction with AGENTS.md guidelines incorporated
+/// Generate the stable base system instruction without workspace configuration.
 pub async fn generate_system_instruction_with_guidelines(
     _config: &SystemPromptConfig,
     project_root: &Path,
@@ -539,48 +496,6 @@ pub async fn apply_output_style(
     }
 }
 
-async fn read_instruction_hierarchy(
-    project_root: &Path,
-    vtcode_config: Option<&crate::config::VTCodeConfig>,
-) -> Option<InstructionBundle> {
-    let (max_bytes, extra_sources, fallback_filenames) = match vtcode_config {
-        Some(cfg) => (
-            cfg.agent.instruction_max_bytes,
-            cfg.agent.instruction_files.clone(),
-            cfg.agent.project_doc_fallback_filenames.clone(),
-        ),
-        None => (
-            instruction_constants::DEFAULT_MAX_BYTES,
-            Vec::new(),
-            Vec::new(),
-        ),
-    };
-
-    if max_bytes == 0 {
-        return None;
-    }
-
-    let current_dir = env::current_dir().unwrap_or_else(|_| project_root.to_path_buf());
-    let home = home_dir();
-    match read_instruction_bundle(
-        &current_dir,
-        project_root,
-        home.as_deref(),
-        &extra_sources,
-        &fallback_filenames,
-        max_bytes,
-    )
-    .await
-    {
-        Ok(Some(bundle)) => Some(bundle),
-        Ok(None) => None,
-        Err(err) => {
-            warn!("failed to load instruction hierarchy: {err:#}");
-            None
-        }
-    }
-}
-
 fn cache_key(project_root: &Path, vtcode_config: Option<&crate::config::VTCodeConfig>) -> String {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
@@ -592,8 +507,6 @@ fn cache_key(project_root: &Path, vtcode_config: Option<&crate::config::VTCodeCo
 
     if let Some(cfg) = vtcode_config {
         // Config fields that affect prompt generation
-        cfg.agent.instruction_max_bytes.hash(&mut hasher);
-        cfg.agent.instruction_files.hash(&mut hasher);
         cfg.agent.include_working_directory.hash(&mut hasher);
         cfg.agent.include_temporal_context.hash(&mut hasher);
         cfg.agent
@@ -1132,7 +1045,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_live_prompt_renders_instruction_map_and_key_points() {
+    async fn test_live_prompt_omits_project_docs_and_user_instructions_from_base_prompt() {
         let workspace = tempfile::TempDir::new().expect("workspace tempdir");
         std::fs::write(
             workspace.path().join("AGENTS.md"),
@@ -1141,19 +1054,18 @@ mod tests {
         .expect("write agents");
 
         let mut config = VTCodeConfig::default();
+        config.agent.user_instructions = Some("keep responses terse".to_string());
         config.agent.include_temporal_context = false;
         config.agent.include_working_directory = false;
         config.agent.instruction_max_bytes = 4096;
 
         let result = compose_system_instruction_text(workspace.path(), Some(&config), None).await;
 
-        assert!(result.contains("## AGENTS.MD INSTRUCTION HIERARCHY"));
-        assert!(result.contains("### Instruction map"));
-        assert!(result.contains("### Key points"));
-        assert!(result.contains("AGENTS.md (workspace)"));
-        assert!(result.contains("Root summary"));
-        assert!(result.contains("### On-demand loading"));
-        assert!(result.contains("Full instruction files stay on disk"));
+        assert!(!result.contains("## AGENTS.MD INSTRUCTION HIERARCHY"));
+        assert!(!result.contains("### Instruction map"));
+        assert!(!result.contains("### Key points"));
+        assert!(!result.contains("keep responses terse"));
+        assert!(!result.contains("Root summary"));
         assert!(!result.contains("Follow the root guidance."));
     }
 

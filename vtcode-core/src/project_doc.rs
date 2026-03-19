@@ -4,11 +4,10 @@ use anyhow::{Context, Result};
 use serde::Serialize;
 
 use crate::instructions::{
-    InstructionBundle, InstructionSegment, extract_instruction_highlights, read_instruction_bundle,
-    render_instruction_markdown,
+    InstructionBundle, InstructionSegment, extract_instruction_highlights, format_instruction_path,
+    read_instruction_bundle,
 };
 use crate::skills::model::SkillMetadata;
-use crate::skills::render::render_skills_section;
 use crate::utils::file_utils::canonicalize_with_context;
 use vtcode_config::core::AgentConfig;
 
@@ -81,45 +80,79 @@ pub async fn read_project_doc(cwd: &Path, max_bytes: usize) -> Result<Option<Pro
 
 pub async fn get_user_instructions(
     config: &AgentConfig,
-    cwd: &Path,
-    skills: Option<&[SkillMetadata]>,
+    active_dir: &Path,
+    _skills: Option<&[SkillMetadata]>,
 ) -> Option<String> {
-    let project_root = resolve_project_root(cwd).unwrap_or_else(|_| cwd.to_path_buf());
+    build_instruction_appendix(config, active_dir).await
+}
+
+pub async fn build_instruction_appendix(config: &AgentConfig, active_dir: &Path) -> Option<String> {
+    let project_root =
+        resolve_project_root(active_dir).unwrap_or_else(|_| active_dir.to_path_buf());
     let home_dir = dirs::home_dir();
     let bundle = read_project_doc_with_options(&ProjectDocOptions {
-        current_dir: cwd,
+        current_dir: active_dir,
         project_root: &project_root,
         home_dir: home_dir.as_deref(),
-        extra_instruction_files: &[],
+        extra_instruction_files: &config.instruction_files,
         fallback_filenames: &config.project_doc_fallback_filenames,
-        max_bytes: config.project_doc_max_bytes,
+        max_bytes: config.instruction_max_bytes,
     })
     .await
     .ok()
     .flatten();
 
+    render_instruction_appendix(
+        config.user_instructions.as_deref(),
+        bundle.as_ref(),
+        &project_root,
+        home_dir.as_deref(),
+    )
+}
+
+pub fn render_instruction_appendix(
+    user_instructions: Option<&str>,
+    bundle: Option<&ProjectDocBundle>,
+    project_root: &Path,
+    home_dir: Option<&Path>,
+) -> Option<String> {
     let mut section = String::with_capacity(1024);
 
-    if let Some(user_inst) = &config.user_instructions {
-        section.push_str("## USER INSTRUCTIONS\n");
+    if let Some(user_inst) = user_instructions.map(str::trim)
+        && !user_inst.is_empty()
+    {
         section.push_str(user_inst);
-        section.push_str("\n\n");
     }
 
-    if let Some(bundle) = bundle {
-        section.push_str(&render_instruction_markdown(
-            "PROJECT DOCUMENTATION",
-            &bundle.segments,
-            bundle.truncated,
-            &project_root,
-            home_dir.as_deref(),
-            3,
-            "project documentation was truncated due to size limits. Review the source files for full details.",
-        ));
-    }
+    if let Some(bundle) = bundle
+        && !bundle.segments.is_empty()
+    {
+        if !section.is_empty() {
+            section.push_str(PROJECT_DOC_SEPARATOR);
+        }
 
-    if let Some(skills_text) = skills.and_then(render_skills_section) {
-        section.push_str(&skills_text);
+        let multiple_sources = bundle.segments.len() > 1;
+        for (index, segment) in bundle.segments.iter().enumerate() {
+            if index > 0 {
+                section.push_str("\n\n---\n\n");
+            }
+
+            if multiple_sources {
+                section.push('[');
+                section.push_str(&format_instruction_path(
+                    &segment.source.path,
+                    project_root,
+                    home_dir,
+                ));
+                section.push_str("]\n");
+            }
+
+            section.push_str(segment.contents.trim());
+        }
+
+        if bundle.truncated {
+            section.push_str("\n\n[project-doc truncated]");
+        }
     }
 
     if section.is_empty() {
@@ -259,6 +292,63 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn instruction_appendix_uses_instruction_hierarchy_scope_and_budget() {
+        let repo = tempdir().expect("repo");
+        std::fs::write(repo.path().join(".git"), "gitdir: /tmp/git").expect("write git");
+        write_doc(repo.path(), "root doc").expect("write root doc");
+
+        let nested = repo.path().join("nested/sub");
+        std::fs::create_dir_all(&nested).expect("create nested");
+        write_doc(&nested, "nested doc").expect("write nested doc");
+
+        let extra_dir = repo.path().join("docs");
+        std::fs::create_dir_all(&extra_dir).expect("create docs");
+        std::fs::write(extra_dir.join("guidelines.md"), "extra doc").expect("write extra doc");
+
+        let mut config = AgentConfig::default();
+        config.user_instructions = Some("user note".to_string());
+        config.instruction_files = vec!["docs/*.md".to_string()];
+        config.instruction_max_bytes = 4096;
+        config.project_doc_max_bytes = 1;
+
+        let appendix = build_instruction_appendix(&config, &nested)
+            .await
+            .expect("instruction appendix");
+
+        assert!(appendix.starts_with("user note"));
+        assert!(appendix.contains("--- project-doc ---"));
+        assert!(appendix.contains("[AGENTS.md]"));
+        assert!(appendix.contains("[docs/guidelines.md]"));
+        assert!(appendix.contains("[nested/sub/AGENTS.md]"));
+        assert!(appendix.contains("root doc"));
+        assert!(appendix.contains("extra doc"));
+        assert!(appendix.contains("nested doc"));
+    }
+
+    #[tokio::test]
+    async fn instruction_appendix_returns_none_when_empty() {
+        let tmp = tempdir().expect("tmp");
+        let appendix = build_instruction_appendix(&AgentConfig::default(), tmp.path()).await;
+        assert!(appendix.is_none());
+    }
+
+    #[tokio::test]
+    async fn instruction_appendix_marks_truncation() {
+        let repo = tempdir().expect("repo");
+        std::fs::write(repo.path().join(".git"), "gitdir: /tmp/git").expect("write git");
+        write_doc(repo.path(), &"A".repeat(128)).expect("write doc");
+
+        let mut config = AgentConfig::default();
+        config.instruction_max_bytes = 16;
+
+        let appendix = build_instruction_appendix(&config, repo.path())
+            .await
+            .expect("instruction appendix");
+
+        assert!(appendix.contains("[project-doc truncated]"));
+    }
+
+    #[tokio::test]
     async fn includes_extra_instruction_files() {
         let repo = tempdir().expect("failed to unwrap");
         write_doc(repo.path(), "root doc").expect("write doc");
@@ -304,7 +394,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn renders_instruction_map_and_segment_headers() {
+    async fn renders_compact_instruction_appendix() {
         let repo = tempdir().expect("failed to unwrap");
         std::fs::write(repo.path().join(".git"), "gitdir: /tmp/git").expect("failed to unwrap");
         write_doc(
@@ -325,13 +415,12 @@ mod tests {
             .await
             .expect("expected instructions");
 
-        assert!(instructions.contains("### Instruction map"));
-        assert!(instructions.contains("- 1. AGENTS.md (workspace)"));
-        assert!(instructions.contains("- 2. nested/sub/AGENTS.md (workspace)"));
-        assert!(instructions.contains("### Key points"));
-        assert!(instructions.contains("### 1. AGENTS.md (workspace)"));
-        assert!(instructions.contains("### 2. nested/sub/AGENTS.md (workspace)"));
+        assert!(instructions.contains("[AGENTS.md]"));
+        assert!(instructions.contains("[nested/sub/AGENTS.md]"));
         assert!(instructions.contains("Root summary"));
         assert!(instructions.contains("Nested summary"));
+        assert!(!instructions.contains("### Instruction map"));
+        assert!(!instructions.contains("### Key points"));
+        assert!(!instructions.contains("--- project-doc ---"));
     }
 }
