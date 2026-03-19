@@ -3,11 +3,6 @@
 //! Prompt variants share one canonical base contract plus thin mode deltas and
 //! compact runtime addenda. Richer behavior comes from AGENTS.md, dynamic tool
 //! guidance, skill metadata, and runtime notices.
-//!
-//! Prompt variants:
-//! - `DEFAULT_SYSTEM_PROMPT`: general-purpose default workflow
-//! - `DEFAULT_LIGHTWEIGHT_PROMPT`: smaller contract for simple work
-//! - `DEFAULT_SPECIALIZED_PROMPT`: methodical contract for complex changes
 
 use crate::config::constants::{
     instructions as instruction_constants, project_doc as project_doc_constants,
@@ -47,54 +42,50 @@ pub const PLAN_MODE_IMPLEMENT_REMINDER: &str = "• Still in Plan Mode (read-onl
 
 const CANONICAL_SYSTEM_PROMPT: &str = r#"# VT Code
 
-You are VT Code, a coding agent for VT Code. Be concise, direct, and safe.
+You are VT Code. Be concise, direct, and safe.
 
 ## Core Contract
 
-- Start with the repo: read `AGENTS.md`, inspect the code, and follow local patterns before editing.
-- Prompt-side instruction and skill sections are indexes; open the referenced file when exact wording matters.
-- Default to acting without asking when the next step is reversible and low-risk.
-- Ask only when behavior, API, UX, credentials, or external actions materially change.
-- If context is missing, say so plainly and do not guess; complete any unblocked portion first.
+- Start with the repo: read `AGENTS.md`, inspect code, and follow local patterns.
+- Instruction and skill sections are indexes; open files when wording matters.
+- Act without asking when the next step is safe and reversible.
+- Ask only for material behavior, API, UX, credential, or external-action changes.
+- If context is missing, say so plainly and do not guess; finish any unblocked portion first.
 - Prefer simple, readable changes over clever abstractions.
-- Use `@file`, IDE context, and `/add-dir` to keep the right code in focus.
-- Verify changes yourself before concluding. Never claim something passed unless you actually ran it.
+- Use `@file` and `/add-dir` to focus the right code.
+- Verify changes yourself; never claim a check passed unless you ran it.
 - Respect approval gates, keep destructive or external actions explicit, and never print or commit secrets.
-- For research or citation-sensitive work, rely on retrieved evidence and label inference clearly.
+- For research or citation-sensitive work, use retrieved evidence and label inference clearly.
 
 ## Output
 
-- Keep responses compact and outcome-first.
-- Use file references when they help.
-- No emoji, no filler, and no code dumps unless requested."#;
+- Keep responses compact and outcome-first. Use file refs when helpful.
+- No emoji, filler, or code dumps unless requested."#;
 
 const DEFAULT_MODE_DELTA: &str = r#"## Mode
 
 - Use `task_tracker` for non-trivial work.
-- Use Plan Mode for research/spec work and stay read-only there until implementation intent is explicit.
-- `AGENTS.md` is the map and `docs/harness/ARCHITECTURAL_INVARIANTS.md` is the structural constraint set for repo-level changes."#;
+- Use Plan Mode for research/spec work; stay read-only there until implementation intent is explicit.
+- For repo-level changes, use `AGENTS.md` and `docs/harness/ARCHITECTURAL_INVARIANTS.md`."#;
 
 const MINIMAL_MODE_DELTA: &str = r#"## Mode
 
-- Stay lightweight and precise.
-- Use `task_tracker` once the task stops being trivial.
-- If you are uncertain, say so early instead of guessing.
-- Hidden capabilities route through `list_skills` and `load_skill`.
-- Use `AGENTS.md` as the map and check `docs/harness/` when structural rules matter."#;
+- Stay lightweight and precise; use `task_tracker` once the task stops being trivial.
+- Say so early when uncertain; hidden capabilities route through `list_skills` and `load_skill`.
+- Use `AGENTS.md` as the map and `docs/harness/` when structural rules matter."#;
 
 const LIGHTWEIGHT_MODE_DELTA: &str = r#"## Mode
 
 - Act and verify in one thread.
 - Use `task_tracker` for multi-step work and Plan Mode for research/spec work.
-- Keep investigation explicit before edits and keep code consistent with nearby patterns."#;
+- Investigate before edits; match nearby patterns."#;
 
 const SPECIALIZED_MODE_DELTA: &str = r#"## Mode
 
-- Explore first, then plan, then execute.
-- Use `task_tracker` for multi-step work and keep one active slice at a time.
-- Use Plan Mode when you need scope closure and end with one `<proposed_plan>`.
-- If a path stalls, re-plan into smaller verified slices instead of repeating it.
-- `AGENTS.md` is the map and `docs/harness/ARCHITECTURAL_INVARIANTS.md` applies when structural rules matter."#;
+- Explore, plan, then execute.
+- Use `task_tracker` for multi-step work, keep one active slice, and use Plan Mode when you need scope closure.
+- End plan work with one `<proposed_plan>`; if a path stalls, re-plan into smaller verified slices.
+- For repo-level changes, use `AGENTS.md` and `docs/harness/ARCHITECTURAL_INVARIANTS.md`."#;
 
 static DEFAULT_SYSTEM_PROMPT: OnceLock<String> = OnceLock::new();
 static MINIMAL_SYSTEM_PROMPT: OnceLock<String> = OnceLock::new();
@@ -132,11 +123,7 @@ pub fn specialized_instruction_text() -> String {
 const STRUCTURED_REASONING_INSTRUCTIONS: &str = r#"
 ## Structured Reasoning
 
-Use these tags when they help:
-- `<analysis>` for repo facts and options
-- `<plan>` for concrete steps
-- `<uncertainty>` for blocking ambiguity before guessing
-- `<verification>` for checks and regressions
+Use tags when helpful: `<analysis>` facts/options, `<plan>` steps, `<uncertainty>` blockers, `<verification>` checks.
 "#;
 
 /// System instruction configuration
@@ -189,21 +176,7 @@ pub async fn read_agent_guidelines(project_root: &Path) -> Option<String> {
     }
 }
 
-/// Compose the system instruction text for the agent
-///
-/// ## Skills Integration Note
-///
-/// VT Code implements a **Tiered Disclosure** model for skills:
-/// 1. **Discovery Profile**: Names and descriptions are available via `list_skills` and summarized in the system prompt.
-/// 2. **Active Instructions**: Full `SKILL.md` content is loaded via `load_skill` and then persists in the incremental system prompt.
-/// 3. **Deep Resources**: Level 3 assets (scripts, technical refs) are lazy-loaded via `load_skill_resource`.
-///
-/// This approach follows the Agent Skills spec while optimizing context usage.
-///
-/// # Arguments
-/// * `project_root` - Root directory of the project
-/// * `vtcode_config` - Configuration loaded from vtcode.toml
-/// * `prompt_context` - Optional context with tool information for dynamic enhancements
+/// Compose the base system instruction plus compact tool/skill/environment addenda.
 pub async fn compose_system_instruction_text(
     _project_root: &Path,
     vtcode_config: Option<&crate::config::VTCodeConfig>,
@@ -212,16 +185,10 @@ pub async fn compose_system_instruction_text(
     let prompt_mode = vtcode_config
         .map(|c| c.agent.system_prompt_mode)
         .unwrap_or(SystemPromptMode::Default);
-    let mode_name = match prompt_mode {
-        SystemPromptMode::Minimal => "minimal",
-        SystemPromptMode::Lightweight => "lightweight",
-        SystemPromptMode::Specialized => "specialized",
-        SystemPromptMode::Default => "default",
-    };
     let base_prompt = static_mode_prompt(prompt_mode);
 
     tracing::debug!(
-        mode = mode_name,
+        mode = ?prompt_mode,
         base_tokens_approx = base_prompt.len() / 4, // rough token estimate
         "Selected system prompt mode"
     );
@@ -232,28 +199,29 @@ pub async fn compose_system_instruction_text(
     let mut instruction = String::with_capacity(estimated_capacity);
     instruction.push_str(base_prompt);
     if should_include_structured_reasoning(vtcode_config, prompt_mode) {
-        instruction.push_str("\n\n");
-        instruction.push_str(STRUCTURED_REASONING_INSTRUCTIONS);
+        append_prompt_section(&mut instruction, STRUCTURED_REASONING_INSTRUCTIONS);
     }
 
     if let Some(ctx) = prompt_context {
         let guidelines = generate_tool_guidelines(&ctx.available_tools, ctx.capability_level);
         if !guidelines.is_empty() {
-            instruction.push_str("\n\n");
-            instruction.push_str(guidelines.trim_start_matches('\n'));
+            append_prompt_section(&mut instruction, guidelines.trim_start_matches('\n'));
         }
         if let Some(skills_section) = render_prompt_skills_section(&ctx.available_skill_metadata) {
-            instruction.push_str("\n\n");
-            instruction.push_str(&skills_section);
+            append_prompt_section(&mut instruction, &skills_section);
         }
     }
 
     if let Some(environment_section) = render_environment_addenda(vtcode_config, prompt_context) {
-        instruction.push_str("\n\n");
-        instruction.push_str(&environment_section);
+        append_prompt_section(&mut instruction, &environment_section);
     }
 
     instruction
+}
+
+fn append_prompt_section(prompt: &mut String, section: &str) {
+    prompt.push_str("\n\n");
+    prompt.push_str(section);
 }
 
 fn static_mode_prompt(prompt_mode: SystemPromptMode) -> &'static str {
@@ -291,50 +259,25 @@ fn render_environment_addenda(
         && !ctx.languages.is_empty()
     {
         lines.push(format!(
-            "- Workspace languages: {}. Prefer matching structural-search `lang` values when ambiguity exists.",
+            "- Languages: {}. Match structural-search `lang` when needed.",
             ctx.languages.join(", ")
         ));
     }
 
     if let Some(cfg) = vtcode_config {
-        if cfg.security.human_in_the_loop {
-            lines.push("- Approval: sensitive actions may require approval.".to_string());
-        } else {
-            lines.push(
-                "- Approval: reduced by config; keep destructive or external actions explicit."
-                    .to_string(),
-            );
-        }
-
-        if cfg.chat.ask_questions.enabled {
-            lines.push(
-                "- Questions: `request_user_input` is available for material blockers.".to_string(),
-            );
-        } else {
-            lines.push(
-                "- Questions: `request_user_input` is disabled here; make reasonable assumptions unless Plan Mode requires follow-up.".to_string(),
-            );
-        }
-
-        if cfg.ide_context.enabled && cfg.ide_context.inject_into_prompt {
-            lines.push(
-                "- IDE context: active editor selection and file focus may be injected."
-                    .to_string(),
-            );
+        if let Some(interaction_line) = render_interaction_addendum(cfg) {
+            lines.push(interaction_line);
         }
 
         if cfg.mcp.enabled {
-            lines.push(
-                "- MCP: prefer configured MCP sources before external fetches when they can answer."
-                    .to_string(),
-            );
+            lines.push("- Sources: prefer MCP before external fetches when available.".to_string());
         }
 
         if cfg.agent.include_temporal_context {
             lines.push(
                 generate_temporal_context(cfg.agent.temporal_context_use_utc)
                     .trim()
-                    .replacen("Current date and time", "- Current date and time", 1)
+                    .replacen("Current date and time", "- Time", 1)
                     .to_string(),
             );
         }
@@ -343,7 +286,7 @@ fn render_environment_addenda(
             && let Some(ctx) = prompt_context
             && let Some(cwd) = &ctx.current_directory
         {
-            lines.push(format!("- Current working directory: {}", cwd.display()));
+            lines.push(format!("- Working directory: {}", cwd.display()));
         }
     }
 
@@ -351,6 +294,21 @@ fn render_environment_addenda(
         None
     } else {
         Some(format!("## Environment\n{}", lines.join("\n")))
+    }
+}
+
+fn render_interaction_addendum(cfg: &crate::config::VTCodeConfig) -> Option<String> {
+    match (cfg.security.human_in_the_loop, cfg.chat.ask_questions.enabled) {
+        (true, true) => None,
+        (true, false) => Some(
+            "- Interaction: approval may gate sensitive actions; no `request_user_input`, so make reasonable assumptions unless Plan Mode needs follow-up.".to_string(),
+        ),
+        (false, true) => Some(
+            "- Interaction: approval reduced by config; use `request_user_input` for material blockers.".to_string(),
+        ),
+        (false, false) => Some(
+            "- Interaction: approval reduced by config; no `request_user_input`, so make reasonable assumptions unless Plan Mode needs follow-up.".to_string(),
+        ),
     }
 }
 
@@ -497,8 +455,8 @@ mod tests {
 
         // Minimal prompt should remain compact and deterministic without AGENTS.md injection
         assert!(
-            result.len() < 6000,
-            "Minimal mode should produce <6.0K chars (was {} chars)",
+            result.len() < 2200,
+            "Minimal mode should produce <2.2K chars (was {} chars)",
             result.len()
         );
         assert!(
@@ -520,8 +478,8 @@ mod tests {
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
         assert!(
-            result.len() <= 6500,
-            "Default mode should stay sparse (<=6.5K chars, was {} chars)",
+            result.len() <= 2600,
+            "Default mode should stay sparse (<=2.6K chars, was {} chars)",
             result.len()
         );
         assert!(result.contains("task_tracker"));
@@ -544,8 +502,8 @@ mod tests {
         // Lightweight is optimized for simple operations (v4.2)
         assert!(result.len() > 100, "Lightweight should be >100 chars");
         assert!(
-            result.len() < 4400,
-            "Lightweight should be compact (<4.4K chars, was {} chars)",
+            result.len() < 2100,
+            "Lightweight should be compact (<2.1K chars, was {} chars)",
             result.len()
         );
         assert!(result.contains("task_tracker"));
@@ -620,8 +578,8 @@ mod tests {
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
         assert!(
-            result.len() <= 4000,
-            "Specialized should stay sparse (<=4.0K chars, was {} chars)",
+            result.len() <= 2500,
+            "Specialized should stay sparse (<=2.5K chars, was {} chars)",
             result.len()
         );
         assert!(result.contains("task_tracker"));
@@ -655,7 +613,7 @@ mod tests {
         // Rough estimate: 1 token ≈ 4 characters
         let approx_tokens = minimal_system_prompt().len() / 4;
         assert!(
-            approx_tokens < 700,
+            approx_tokens < 380,
             "Minimal prompt should stay compact, got ~{}",
             approx_tokens
         );
@@ -665,7 +623,7 @@ mod tests {
     fn test_default_prompt_token_count() {
         let approx_tokens = default_system_prompt().len() / 4;
         assert!(
-            approx_tokens < 900,
+            approx_tokens < 500,
             "Default prompt should stay compact, got ~{}",
             approx_tokens
         );
@@ -948,7 +906,7 @@ mod tests {
         let result =
             compose_system_instruction_text(workspace.path(), Some(&config), Some(&ctx)).await;
 
-        assert!(!result.contains("Workspace languages:"));
+        assert!(!result.contains("Languages:"));
     }
 
     #[tokio::test]
@@ -986,11 +944,11 @@ mod tests {
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
         assert!(
-            result.contains("Current date and time:"),
+            result.contains("Time:"),
             "Should include temporal context when enabled"
         );
         let env_pos = result.find("## Environment");
-        let temporal_pos = result.find("Current date and time:");
+        let temporal_pos = result.find("Time:");
         if let (Some(t), Some(e)) = (temporal_pos, env_pos) {
             assert!(
                 t > e,
@@ -1027,7 +985,7 @@ mod tests {
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
         assert!(
-            !result.contains("Current date and time"),
+            !result.contains("Time:"),
             "Should not include temporal context when disabled"
         );
     }
@@ -1045,13 +1003,13 @@ mod tests {
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
         assert!(result.contains("## Environment"));
-        assert!(result.contains("Approval: sensitive actions may require approval"));
+        assert!(result.contains("Interaction: approval may gate sensitive actions"));
         assert!(result.contains("request_user_input"));
-        assert!(result.contains("IDE context: active editor selection"));
-        assert!(result.contains("MCP: prefer configured MCP sources"));
+        assert!(result.contains("Sources: prefer MCP"));
         assert!(!result.contains("PTY functionality"));
         assert!(!result.contains("Loop guards"));
         assert!(!result.contains(".vtcode/context/tool_outputs/"));
+        assert!(!result.contains("IDE context:"));
     }
 
     #[tokio::test]
@@ -1062,7 +1020,20 @@ mod tests {
         let result =
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
-        assert!(result.contains("Approval: reduced by config"));
+        assert!(result.contains("Interaction: approval reduced by config"));
+    }
+
+    #[tokio::test]
+    async fn test_default_environment_omits_default_interaction_guidance() {
+        let config = VTCodeConfig::default();
+
+        let result =
+            compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
+
+        assert!(
+            !result.contains("Interaction:"),
+            "Default-on interaction guidance should stay out of the prompt"
+        );
     }
 
     #[tokio::test]
@@ -1077,14 +1048,14 @@ mod tests {
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;
 
         assert!(
-            result.contains("Current working directory"),
+            result.contains("Working directory"),
             "Should include working directory label"
         );
         assert!(
             result.contains("/tmp/test"),
             "Should show actual directory path"
         );
-        let wd_pos = result.find("Current working directory");
+        let wd_pos = result.find("Working directory");
         let env_pos = result.find("## Environment");
         if let (Some(w), Some(e)) = (wd_pos, env_pos) {
             assert!(
@@ -1106,7 +1077,7 @@ mod tests {
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;
 
         assert!(
-            !result.contains("Current working directory"),
+            !result.contains("Working directory"),
             "Should not include working directory when disabled"
         );
     }
@@ -1174,12 +1145,9 @@ mod tests {
             result.contains("## Environment"),
             "Should have environment addenda"
         );
+        assert!(result.contains("Time:"), "Should have temporal context");
         assert!(
-            result.contains("Current date and time"),
-            "Should have temporal context"
-        );
-        assert!(
-            result.contains("Current working directory"),
+            result.contains("Working directory"),
             "Should have working directory"
         );
         assert!(result.contains("/workspace"), "Should show workspace path");
