@@ -128,10 +128,22 @@ Key features of Open Responses conformance:
 
 For more information about Open Responses implementation, see [Open Responses Documentation](./docs/protocols/OPEN_RESPONSES.md).
 
+### Authentication
+
+VT Code supports secure OAuth 2.0 authentication for seamless account-based access:
+
+- **OAuth Providers**: OpenAI ChatGPT and OpenRouter with PKCE-secured flows
+- **Secure Token Storage**: OS-native credential stores (Keychain, Credential Manager, Secret Service)
+- **Automatic Token Refresh**: Transparent token renewal without user intervention
+- **Fallback Encryption**: AES-256-GCM encrypted files when keyring unavailable
+
+For detailed setup and provider guides, see [OAuth Authentication Guide](./docs/guides/oauth-authentication.md).
+
 ### Configuration
 
 VT Code supports a rich set of configuration options, with preferences stored in `vtcode.toml`. Key configuration features include:
 
+- **OAuth Settings**: Control authentication method and token storage per provider
 - **Lifecycle Hooks**: Execute shell commands in response to agent events - see [Lifecycle Hooks Guide](./docs/guides/lifecycle-hooks.md)
 - **Tool Policies**: Control which tools are allowed, prompted, or denied
 - **Security Settings**: Configure human-in-the-loop approval and workspace boundaries
@@ -155,6 +167,7 @@ VT Code follows the [Command Line Interface Guidelines](https://clig.dev/) and s
 ### Key Features
 
 - **Security First**: Multi-layered security model with tree-sitter-bash command validation, execution policy, and sandbox isolation
+- **OAuth Authentication**: Secure PKCE-based OAuth flows with OS-native credential storage and automatic token refresh ([docs](./docs/guides/oauth-authentication.md))
 - **Multi-Provider AI**: OpenAI, Anthropic, DeepSeek, Gemini, Z.AI, Moonshot AI, OpenRouter, MiniMax, Ollama (local)
 - **Semantic Code Understanding**: LLM-native code analysis and navigation (Rust, Python, JavaScript/TypeScript, Go, Java, and more)
 - **Smart Tools**: Built-in code analysis, file operations, terminal commands, and refactoring
@@ -188,6 +201,7 @@ See [Security Model](./docs/security/SECURITY_MODEL.md) and [Sandbox Deep Dive](
 - [**Getting started**](./docs/user-guide/getting-started.md)
     - [Interactive mode](./docs/user-guide/interactive-mode.md)
     - [Command line interface](./docs/user-guide/commands.md)
+- [**OAuth Authentication**](./docs/guides/oauth-authentication.md) - Secure OAuth 2.0 flows with PKCE, token storage, and automatic refresh
 - [Configuration](./docs/config/CONFIGURATION_PRECEDENCE.md)
 - [**Update System**](./docs/guides/UPDATE_SYSTEM.md) - Release channels, version pinning, and update management
 - [**AI Provider Setup**](./docs/providers/PROVIDER_GUIDES.md) - Complete guides for configuring different LLM providers:

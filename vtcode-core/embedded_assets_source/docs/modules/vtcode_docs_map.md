@@ -258,6 +258,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Overview, Configuration Options, Supported Features, Limitations, Example Usage
   - **User Questions**: "What can you tell me about MiniMax Integration Guide?", "How does Overview work?", "How does Configuration Options work?"
 
+- **File**: `docs/guides/oauth-authentication.md`
+  - **Content**: OAuth Authentication Guide
+  - **Topics**: Overview, Supported Providers, Security Model, CLI Usage, Token Lifecycle
+  - **User Questions**: "What can you tell me about OAuth Authentication Guide?", "How does Overview work?", "How does Supported Providers work?"
+
 - **File**: `docs/guides/pty-integration-testing.md`
   - **Content**: PTY Integration Testing Guide
   - **Topics**: Automated Verification, Manual TUI Walkthrough, Troubleshooting
