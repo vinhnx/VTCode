@@ -24,146 +24,85 @@ const TOOL_APPLY_PATCH: &str = "apply_patch";
 /// use vtcode_core::prompts::guidelines::generate_tool_guidelines;
 /// use vtcode_core::config::types::CapabilityLevel;
 ///
-/// let tools = vec!["unified_file".to_string(), "unified_search".to_string()];
+/// let tools = vec!["unified_search".to_string()];
 /// let guidelines = generate_tool_guidelines(&tools, None);
-/// assert!(guidelines.contains("READ-ONLY MODE"));
+/// assert!(guidelines.contains("Mode: read-only"));
 /// ```
 pub fn generate_tool_guidelines(
     available_tools: &[String],
     capability_level: Option<CapabilityLevel>,
 ) -> String {
-    let mut guidelines = Vec::new();
+    let mut active_tools = available_tools
+        .iter()
+        .map(String::as_str)
+        .collect::<Vec<_>>();
+    active_tools.sort_unstable();
+    active_tools.dedup();
 
-    // Detect tool availability
-    let has_exec = available_tools.iter().any(|t| t == TOOL_UNIFIED_EXEC);
-    let has_file = available_tools.iter().any(|t| t == TOOL_UNIFIED_FILE);
-    let has_search = available_tools.iter().any(|t| t == TOOL_UNIFIED_SEARCH);
-    let has_apply_patch = available_tools.iter().any(|t| t == TOOL_APPLY_PATCH);
+    let has_exec = active_tools.contains(&TOOL_UNIFIED_EXEC);
+    let has_file = active_tools.contains(&TOOL_UNIFIED_FILE);
+    let has_search = active_tools.contains(&TOOL_UNIFIED_SEARCH);
+    let has_apply_patch = active_tools.contains(&TOOL_APPLY_PATCH);
 
-    let read_only_mode = capability_level.is_some_and(|level| {
-        matches!(
-            level,
-            CapabilityLevel::Basic | CapabilityLevel::FileListing | CapabilityLevel::FileReading
-        )
-    }) || (!has_exec && !has_file);
-
-    // Read-only mode detection
-    if read_only_mode {
-        guidelines.push(
-            "**READ-ONLY MODE**: You cannot modify files or execute commands. \
-             Focus on analysis, planning, and providing recommendations."
-                .to_string(),
-        );
+    let mut lines = Vec::new();
+    if let Some(mode_line) = capability_mode_line(capability_level, has_exec, has_file) {
+        lines.push(mode_line.to_string());
     }
 
-    // Tool preference guidelines
-    if has_exec && has_search {
-        guidelines.push(
-            "**Tool Selection**: Prefer `unified_search` over `unified_exec` for exploration. \
-             Default to action='structural' for language-aware code search, set `lang` when known, \
-             use action='grep' for plain-text search, and action='list' for file discovery."
-                .to_string(),
-        );
+    for tool in active_tools {
+        lines.push(render_tool_line(tool));
     }
 
-    // Git diff guidance - requires command execution to run git commands
+    if has_search && has_exec {
+        lines.push(
+            "- Rule: Prefer `unified_search` over `unified_exec` for exploration.".to_string(),
+        );
+    }
     if has_exec {
-        guidelines.push(
-            "**Git Diff Requests**: When user asks to 'show diff', 'git diff', or 'view changes': \
-             ALWAYS run `git diff -- <path>` via `unified_exec`. NEVER read file content and fabricate a diff - \
-             reading a file shows current content, not what changed. \
-             After tool output renders the diff in TUI, DO NOT restate the same diff body again in prose. \
-             Keep follow-up to one concise line unless user explicitly asks for analysis. \
-             Examples: `git diff` (all changes), `git diff -- src/main.rs` (specific file), \
-             `git diff HEAD~1` (vs previous commit)."
-                .to_string(),
+        lines.push(
+            "- Rule: For diff requests, run `git diff -- <path>` via `unified_exec`; do not fabricate diffs from file reads.".to_string(),
+        );
+    }
+    if has_file || has_apply_patch {
+        lines.push(
+            "- Rule: If calls repeat without progress, re-plan into smaller verified slices instead of retrying identically.".to_string(),
         );
     }
 
-    if has_file {
-        guidelines.push(
-            "**File Workflow**: Always use `unified_file` (action='read') to examine content before \
-             using action='edit' - this ensures accurate `old_str` matching and \
-             prevents edit failures. Use action='write' for new files, action='edit' for \
-             modifications to existing files."
-                .to_string(),
-        );
-
-        if has_apply_patch {
-            guidelines.push(
-                "**Diff vs Patch**: `git diff` (via `unified_exec`) is READ-ONLY to VIEW changes. \
-                 `apply_patch` and `unified_file` (action='patch') are for WRITING changes. \
-                 Never use patch tools when user only wants to view a diff."
-                    .to_string(),
-            );
-            guidelines.push(
-                "**Patch Anchors**: Keep patches small and prefer stable semantic `@@` headers \
-                 like `@@ fn parse_patch(...)`, `@@ class Foo`, `@@ render()`, or `@@ impl Bar` \
-                 instead of brittle raw line-number style context."
-                    .to_string(),
-            );
-        } else {
-            guidelines.push(
-                "**Diff vs Patch**: `git diff` (via `unified_exec`) is READ-ONLY to VIEW changes. \
-                 Use `unified_file` with action='patch' for WRITING patch changes. \
-                 Do not send patch text to `unified_file` read mode."
-                    .to_string(),
-            );
-        }
-
-        guidelines.push(
-            "**Dotfile Protection**: Hidden configuration files (dotfiles like .gitignore, .env, \
-             .bashrc, .ssh/*, etc.) are PROTECTED and require explicit user confirmation before \
-             modification. If a dotfile modification is blocked, do NOT retry - instead inform \
-             the user that dotfile protection requires their explicit approval. Never attempt to \
-             modify dotfiles repeatedly or work around the protection."
-                .to_string(),
-        );
-
-        guidelines.push(
-            "**Loop Detection**: If you see 'Loop Detected' or similar errors, STOP retrying the \
-             same operation. Instead: (1) Acknowledge the issue to the user, (2) Diagnose the root \
-             cause, (3) Re-plan into smaller composable slices with expected outcome + verification \
-             (use `task_tracker` when available), (4) Execute one slice and verify before the next. \
-             Avoid repeated calls with identical arguments; change approach immediately after a failed repeat."
-                .to_string(),
-        );
-    }
-
-    // Capability-based guidance
-    if let Some(level) = capability_level {
-        match level {
-            CapabilityLevel::Basic => {
-                guidelines.push(
-                    "**Limited Mode**: Only basic chat available. If you need to \
-                     read or modify files, ask the user to enable additional capabilities."
-                        .to_string(),
-                );
-            }
-            CapabilityLevel::FileReading => {
-                guidelines.push(
-                    "**Analysis Mode**: You can read and search files but not modify them. \
-                     Provide detailed analysis and suggest changes for the user to implement."
-                        .to_string(),
-                );
-            }
-            CapabilityLevel::FileListing | CapabilityLevel::Bash => {
-                // Normal operational mode - no special guidance needed
-            }
-            CapabilityLevel::Editing | CapabilityLevel::CodeSearch => {
-                // Full capabilities - no special guidance needed
-            }
-        }
-    }
-
-    if guidelines.is_empty() {
+    if lines.is_empty() {
         return String::new();
     }
 
-    format!(
-        "\n\n## TOOL USAGE GUIDELINES\n\n{}",
-        guidelines.join("\n\n")
-    )
+    format!("\n\n## Active Tools\n{}", lines.join("\n"))
+}
+
+fn capability_mode_line(
+    capability_level: Option<CapabilityLevel>,
+    has_exec: bool,
+    has_file: bool,
+) -> Option<&'static str> {
+    match capability_level {
+        Some(CapabilityLevel::Basic) => Some(
+            "- Mode: limited. Ask the user to enable more capabilities if file work is required.",
+        ),
+        Some(CapabilityLevel::FileReading | CapabilityLevel::FileListing) => Some(
+            "- Mode: read-only. Analyze and search, but do not modify files or run shell commands.",
+        ),
+        _ if !has_exec && !has_file => Some(
+            "- Mode: read-only. Analyze and search, but do not modify files or run shell commands.",
+        ),
+        _ => None,
+    }
+}
+
+fn render_tool_line(tool: &str) -> String {
+    match tool {
+        TOOL_UNIFIED_SEARCH => "- `unified_search`: code/text search. Prefer `action='structural'` for code, set `lang` when known, and use `action='grep'` for plain text.".to_string(),
+        TOOL_UNIFIED_FILE => "- `unified_file`: file reads and edits. Read before `edit`; use `write` for new files.".to_string(),
+        TOOL_UNIFIED_EXEC => "- `unified_exec`: shell commands and verification. prefer `rg` over shell `grep`; use it for `git diff` and checks.".to_string(),
+        TOOL_APPLY_PATCH => "- `apply_patch`: surgical patches. Keep anchors stable and patches small.".to_string(),
+        _ => format!("- `{tool}`: available in this session."),
+    }
 }
 
 /// Infer capability level from available tools
@@ -183,7 +122,7 @@ pub fn generate_tool_guidelines(
 /// use vtcode_core::config::types::CapabilityLevel;
 ///
 /// let tools = vec!["unified_file".to_string()];
-/// assert_eq!(infer_capability_level(&tools), CapabilityLevel::FileReading);
+/// assert_eq!(infer_capability_level(&tools), CapabilityLevel::Editing);
 /// ```
 pub fn infer_capability_level(available_tools: &[String]) -> CapabilityLevel {
     let has_search = available_tools.iter().any(|t| t == TOOL_UNIFIED_SEARCH);
@@ -210,11 +149,11 @@ mod tests {
         let tools = vec!["unified_search".to_string()];
         let guidelines = generate_tool_guidelines(&tools, None);
         assert!(
-            guidelines.contains("READ-ONLY MODE"),
+            guidelines.contains("Mode: read-only"),
             "Should detect read-only mode when edit/write/exec tools unavailable"
         );
         assert!(
-            guidelines.contains("cannot modify files"),
+            guidelines.contains("do not modify files"),
             "Should explain read-only constraints"
         );
     }
@@ -238,12 +177,8 @@ mod tests {
         let tools = vec!["unified_file".to_string()];
         let guidelines = generate_tool_guidelines(&tools, None);
         assert!(
-            guidelines.contains("unified_file") && guidelines.contains("before"),
+            guidelines.contains("`unified_file`") && guidelines.contains("Read before `edit`"),
             "Should advise reading before editing"
-        );
-        assert!(
-            guidelines.contains("old_str"),
-            "Should mention old_str matching requirement"
         );
     }
 
@@ -252,11 +187,11 @@ mod tests {
         let tools = vec!["unified_file".to_string()];
         let guidelines = generate_tool_guidelines(&tools, None);
         assert!(
-            guidelines.contains("action='write'") && guidelines.contains("new files"),
+            guidelines.contains("`write` for new files"),
             "Should explain write for new files"
         );
         assert!(
-            guidelines.contains("action='edit'") && guidelines.contains("modifications"),
+            guidelines.contains("Read before `edit`"),
             "Should explain edit for modifications"
         );
     }
@@ -266,12 +201,8 @@ mod tests {
         let tools = vec!["unified_file".to_string(), "apply_patch".to_string()];
         let guidelines = generate_tool_guidelines(&tools, None);
         assert!(
-            guidelines.contains("stable semantic `@@` headers"),
-            "Should mention semantic @@ anchors when apply_patch is available"
-        );
-        assert!(
-            guidelines.contains("fn parse_patch") && guidelines.contains("class Foo"),
-            "Should include concrete anchor examples"
+            guidelines.contains("`apply_patch`: surgical patches"),
+            "Should mention apply_patch availability"
         );
     }
 
@@ -280,11 +211,11 @@ mod tests {
         let tools = vec![];
         let guidelines = generate_tool_guidelines(&tools, Some(CapabilityLevel::Basic));
         assert!(
-            guidelines.contains("Limited Mode"),
+            guidelines.contains("Mode: limited"),
             "Should indicate limited mode"
         );
         assert!(
-            guidelines.contains("ask the user"),
+            guidelines.contains("enable more capabilities"),
             "Should suggest asking user for more capabilities"
         );
     }
@@ -294,11 +225,11 @@ mod tests {
         let tools = vec!["unified_file".to_string()];
         let guidelines = generate_tool_guidelines(&tools, Some(CapabilityLevel::FileReading));
         assert!(
-            guidelines.contains("Analysis Mode"),
-            "Should indicate analysis mode"
+            guidelines.contains("Mode: read-only"),
+            "Should indicate read-only mode"
         );
         assert!(
-            guidelines.contains("not modify"),
+            guidelines.contains("do not modify"),
             "Should explain no modification capability"
         );
     }
@@ -314,12 +245,12 @@ mod tests {
 
         // Should not have capability warnings (only tool preference guidance)
         assert!(
-            !guidelines.contains("Limited Mode"),
+            !guidelines.contains("Mode: limited"),
             "Should not show limited mode warning"
         );
         assert!(
-            !guidelines.contains("Analysis Mode"),
-            "Should not show analysis mode warning"
+            !guidelines.contains("Mode: read-only"),
+            "Should not show read-only mode warning"
         );
     }
 
@@ -329,7 +260,7 @@ mod tests {
         let guidelines = generate_tool_guidelines(&tools, None);
         // Empty tools = no modification tools = read-only mode
         assert!(
-            guidelines.contains("READ-ONLY MODE"),
+            guidelines.contains("Mode: read-only"),
             "Empty tools should trigger read-only mode detection"
         );
     }

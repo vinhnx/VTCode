@@ -24,16 +24,29 @@ pub fn render_prompt_skills_section(skills: &[SkillMetadata]) -> Option<String> 
         return None;
     }
 
-    let (mut lines, overflow) = render_skill_index(
-        skills,
-        "These skills are indexed for routing. Each entry includes the local source path; load the relevant `SKILL.md` only when the task or user request calls for it.",
+    let mut lines = Vec::new();
+    lines.push("## Skills".to_string());
+    lines.push(
+        "Indexed for routing. Open only the relevant `SKILL.md` when the task or user request calls for it."
+            .to_string(),
     );
+
+    let mut sorted_skills = skills.iter().collect::<Vec<_>>();
+    sorted_skills.sort_by(|left, right| left.name.cmp(&right.name));
+    let overflow = sorted_skills.len().saturating_sub(10);
+    if overflow > 0 {
+        sorted_skills.truncate(10);
+    }
+
+    for skill in sorted_skills {
+        lines.push(render_prompt_skill_line(skill));
+    }
 
     if overflow > 0 {
         lines.push(format!("(+{} more skills available)", overflow));
     }
 
-    lines.push("- Routing: Use a skill when the user names it or the task clearly matches the description. Load only the relevant `SKILL.md` and referenced resources on demand.".to_string());
+    lines.push("- Routing: Use a skill when the user names it or the task clearly matches the description. Load only the relevant `SKILL.md` on demand.".to_string());
 
     Some(lines.join("\n"))
 }
@@ -99,6 +112,14 @@ fn render_skill_line(skill: &SkillMetadata) -> String {
         }
     }
     line
+}
+
+fn render_prompt_skill_line(skill: &SkillMetadata) -> String {
+    let path_str = skill.path.to_string_lossy().replace('\\', "/");
+    format!(
+        "- {}: {} (file: {})",
+        skill.name, skill.description, path_str
+    )
 }
 
 #[cfg(test)]
@@ -177,10 +198,13 @@ mod tests {
         let output = render_prompt_skills_section(&[skill]).expect("prompt skills section");
 
         assert!(output.contains("## Skills"));
-        assert!(output.contains("indexed for routing"));
+        assert!(output.contains("Indexed for routing"));
+        assert!(output.contains("- test-skill: A test skill (file: /path/to/skill)"));
         assert!(output.contains("- Routing: Use a skill"));
         assert!(!output.contains("Discovery: Available skills are listed"));
         assert!(!output.contains("Description as trigger"));
+        assert!(!output.contains("scope:"));
+        assert!(!output.contains("; use:"));
     }
 
     #[test]

@@ -3,12 +3,15 @@ use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::config::types::SystemPromptMode;
 use vtcode_core::prompts::PromptContext;
 use vtcode_core::prompts::system::{
-    compose_system_instruction_text, default_system_prompt, minimal_system_prompt,
+    compose_system_instruction_text, default_lightweight_prompt, default_system_prompt,
+    minimal_system_prompt, specialized_system_prompt,
 };
 
 fn fallback_base_system_prompt(vt_cfg: Option<&vtcode_core::config::VTCodeConfig>) -> &'static str {
     match vt_cfg.map(|cfg| cfg.agent.system_prompt_mode) {
         Some(SystemPromptMode::Minimal) => minimal_system_prompt(),
+        Some(SystemPromptMode::Lightweight) => default_lightweight_prompt(),
+        Some(SystemPromptMode::Specialized) => specialized_system_prompt(),
         _ => default_system_prompt(),
     }
 }
@@ -67,6 +70,28 @@ mod tests {
         assert_eq!(
             fallback_base_system_prompt(Some(&config)),
             minimal_system_prompt()
+        );
+    }
+
+    #[test]
+    fn test_fallback_base_system_prompt_uses_lightweight_mode() {
+        let mut config = VTCodeConfig::default();
+        config.agent.system_prompt_mode = SystemPromptMode::Lightweight;
+
+        assert_eq!(
+            fallback_base_system_prompt(Some(&config)),
+            default_lightweight_prompt()
+        );
+    }
+
+    #[test]
+    fn test_fallback_base_system_prompt_uses_specialized_mode() {
+        let mut config = VTCodeConfig::default();
+        config.agent.system_prompt_mode = SystemPromptMode::Specialized;
+
+        assert_eq!(
+            fallback_base_system_prompt(Some(&config)),
+            specialized_system_prompt()
         );
     }
 }

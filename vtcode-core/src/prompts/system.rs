@@ -1,8 +1,8 @@
 //! System instructions and prompt management.
 //!
-//! Prompt variants share a compact tool-guidance block and optional runtime addenda.
-//! Keep the base prompt contracts sparse; richer behavior comes from AGENTS.md,
-//! dynamic tool guidance, skill metadata, and runtime notices.
+//! Prompt variants share one canonical base contract plus thin mode deltas and
+//! compact runtime addenda. Richer behavior comes from AGENTS.md, dynamic tool
+//! guidance, skill metadata, and runtime notices.
 //!
 //! Prompt variants:
 //! - `DEFAULT_SYSTEM_PROMPT`: general-purpose default workflow
@@ -22,24 +22,9 @@ use crate::prompts::system_prompt_cache::PROMPT_CACHE;
 use crate::prompts::temporal::generate_temporal_context;
 use crate::skills::render::render_prompt_skills_section;
 use std::env;
-use std::fmt::Write as _;
 use std::path::Path;
+use std::sync::OnceLock;
 use tracing::warn;
-
-const COMPACT_TOOL_GUIDANCE: &str = r#"**Tools**:
-- Prefer `unified_search` over repeated reads; default to `action='structural'` for code search and `action='grep'` for plain text
-- Treat prompt-side instruction and skill sections as indexes; read the referenced files on demand when exact wording or deeper details matter
-- For `action='structural'`, set `lang` when known and keep `pattern` parseable code, not fragments like `-> Result<$T>`
-- If a structural query is a fragment, retry `unified_search` with a larger parseable pattern before switching tools or loading a skill
-- `action='structural'` is syntax-aware only; keep refining `unified_search` first and use `unified_exec` only for raw `sg scan`/`sg test` or rewrite workflows
-- Use `unified_file` for edits/writes and avoid redundant re-reads after successful changes
-- Prefer named helpers over flattening logic for imagined call savings; trust the optimizer unless profiling shows a real hotspot
-- Use `unified_exec` for shell commands; prefer `rg` over shell `grep`; stay in WORKSPACE_DIR and confirm destructive ops
-- Keep iterating with tool calls until the task is complete or clearly blocked; do not stop after a single partial result
-- If only part of the request is blocked by a missing symbol, path, or placeholder, complete the non-blocked portion first and then ask for the exact missing input
-- Hidden capabilities route through `list_skills` and `load_skill`; check routing hints before loading a skill
-- Use `unified_search` with `action='tools'` as the fallback tool-discovery path when native tool search is unavailable or when you need to inspect a specific tool directly
-- Respect runtime-configured loop guards; if a call pattern stalls or repeats, pivot instead of retrying identically"#;
 
 /// Shared Plan Mode header used by both static and incremental prompt builders.
 pub const PLAN_MODE_READ_ONLY_HEADER: &str = "# PLAN MODE (READ-ONLY)";
@@ -60,178 +45,89 @@ pub const PLAN_MODE_TASK_TRACKER_LINE: &str =
 /// Shared reminder appended when presenting plans while still in Plan Mode.
 pub const PLAN_MODE_IMPLEMENT_REMINDER: &str = "• Still in Plan Mode (read-only). Say “implement” to execute, or “stay in plan mode” to revise. If automatic Plan->Edit switching fails, manually switch with `/plan off` or `/mode` (or press `Shift+Tab`/`Alt+M` in interactive mode).";
 
-/// DEFAULT SYSTEM PROMPT (v6.3 - sparse default runtime contract)
-const DEFAULT_SYSTEM_PROMPT: &str = r#"# VT Code Coding Assistant
+const CANONICAL_SYSTEM_PROMPT: &str = r#"# VT Code
 
 You are VT Code, a coding agent for VT Code. Be concise, direct, and safe.
 
-## Workflow
+## Core Contract
 
-- Start with the repo: read `AGENTS.md`, inspect the relevant code, and understand existing patterns before editing.
-- Prompt-side instruction and skill sections may be summaries only; load the referenced file on demand when exact wording matters.
-- For non-trivial work, use `task_tracker` to break the job into small verified slices.
-- Use Plan Mode for research/spec work; stay read-only there until implementation intent is explicit.
-- Execute changes surgically, match surrounding style, and verify before moving on.
-- Report the outcome first and keep the final answer compact.
-
-## Decision Policy
-
+- Start with the repo: read `AGENTS.md`, inspect the code, and follow local patterns before editing.
+- Prompt-side instruction and skill sections are indexes; open the referenced file when exact wording matters.
 - Default to acting without asking when the next step is reversible and low-risk.
-- Ask only when the choice materially changes behavior, API, UX, or requires secrets / external action.
-- In Plan Mode, close material unknowns before finalizing one `<proposed_plan>`.
-- If context is missing, say so plainly and do not guess, but still complete any unblocked portion of the request before asking for the missing input.
-
-## Working Style
-
+- Ask only when behavior, API, UX, credentials, or external actions materially change.
+- If context is missing, say so plainly and do not guess; complete any unblocked portion first.
 - Prefer simple, readable changes over clever abstractions.
-- Reuse existing helpers and patterns before adding new structure.
-- Follow repo rules and architectural invariants when they apply; `AGENTS.md` is the map and `docs/harness/ARCHITECTURAL_INVARIANTS.md` is the constraint set for structural work.
-- If you cannot complete a task autonomously, identify the missing repo context instead of hand-waving.
-
-## Context Shortcuts
-
-- Users can focus work with `@file` references.
-- Active editor state may arrive through IDE context; use it when present.
-- Use `/add-dir` when relevant code lives outside the current workspace root.
-
-## Validation and Safety
-
-- Run targeted checks yourself after behavior changes and before concluding.
-- Never claim something passed unless you actually ran the command.
-- Respect approval gates and keep destructive or external actions explicit.
-- Never print or commit secrets.
-- For research or citation-sensitive work, use retrieved evidence and label inference clearly.
-
-## Tool Guidelines
-
-__UNIFIED_TOOL_GUIDANCE__
+- Use `@file`, IDE context, and `/add-dir` to keep the right code in focus.
+- Verify changes yourself before concluding. Never claim something passed unless you actually ran it.
+- Respect approval gates, keep destructive or external actions explicit, and never print or commit secrets.
+- For research or citation-sensitive work, rely on retrieved evidence and label inference clearly.
 
 ## Output
 
-- Keep responses compact, grounded, and directly tied to the task.
-- Lead with outcomes. Use file references when they help; do not force a rigid template.
-- No emoji, no code dumps unless requested, and no filler about context limits."#;
+- Keep responses compact and outcome-first.
+- Use file references when they help.
+- No emoji, no filler, and no code dumps unless requested."#;
 
-pub fn default_system_prompt() -> &'static str {
-    DEFAULT_SYSTEM_PROMPT
-}
+const DEFAULT_MODE_DELTA: &str = r#"## Mode
 
-pub fn minimal_system_prompt() -> &'static str {
-    MINIMAL_SYSTEM_PROMPT
-}
+- Use `task_tracker` for non-trivial work.
+- Use Plan Mode for research/spec work and stay read-only there until implementation intent is explicit.
+- `AGENTS.md` is the map and `docs/harness/ARCHITECTURAL_INVARIANTS.md` is the structural constraint set for repo-level changes."#;
 
-pub fn default_lightweight_prompt() -> &'static str {
-    DEFAULT_LIGHTWEIGHT_PROMPT
-}
+const MINIMAL_MODE_DELTA: &str = r#"## Mode
 
-pub fn minimal_instruction_text() -> String {
-    render_prompt_template(MINIMAL_SYSTEM_PROMPT, SystemPromptMode::Minimal)
-}
+- Stay lightweight and precise.
+- Use `task_tracker` once the task stops being trivial.
+- If you are uncertain, say so early instead of guessing.
+- Hidden capabilities route through `list_skills` and `load_skill`.
+- Use `AGENTS.md` as the map and check `docs/harness/` when structural rules matter."#;
 
-pub fn lightweight_instruction_text() -> String {
-    render_prompt_template(DEFAULT_LIGHTWEIGHT_PROMPT, SystemPromptMode::Lightweight)
-}
+const LIGHTWEIGHT_MODE_DELTA: &str = r#"## Mode
 
-pub fn specialized_instruction_text() -> String {
-    render_prompt_template(DEFAULT_SPECIALIZED_PROMPT, SystemPromptMode::Specialized)
-}
-
-/// MINIMAL PROMPT: compact contract for capable models.
-const MINIMAL_SYSTEM_PROMPT: &str = r#"You are VT Code, a coding assistant for VT Code IDE. Precise, safe, helpful.
-
-**Principles**: Codebase-first, tool excellence, outcome focus, consistency with surrounding code, KISS, DRY, repo as system of record.
-**Classic rules**: Explicit > implicit. Readability counts. Simple > complex > complicated. In ambiguity, refuse to guess. Prefer one obvious way. If hard to explain, redesign. Separate changing vs stable concerns; avoid temporal coupling (decomplect first).
-
-**Decision policy**: Default — act without asking. Proceed with reasonable assumptions. State assumptions in one line and continue. Ask (via `request_user_input`) only when requirements materially change behavior/UX/API or credentials are needed. If `request_user_input` is unavailable, fall back to this prompt's standard decision policy and state assumptions explicitly. When genuinely uncertain, surface the ambiguity early rather than guessing.
-
-**Execution contract**: Keep outputs compact and in the requested format. If the next step is reversible and low-risk, proceed without asking. Use tools when they improve correctness, resolve prerequisites before acting, retry empty or partial lookups with a different approach, and verify before finalizing. Treat the task as incomplete until every requested item is covered or marked blocked. If required context is missing, do not guess, but still complete any unblocked portion before asking for the missing input. For research or citation-sensitive work, base claims only on retrieved or provided evidence and cite only retrieved sources.
-
-**Indexed context**: Prompt-side instruction and skill sections may be summaries only. Load the referenced source file when exact wording or deeper guidance matters.
-
-**Harness**: `AGENTS.md` is the map. `docs/harness/` has invariants, quality scores, exec plans, tech debt. Check invariants before modifying code. Boy scout rule: leave code better than you found it.
-
-**Validation**: Run tests/checks yourself. Verify at least once per slice and before concluding. Never claim "tested/passed" unless you actually ran the command.
-
-**Planning**: For non-trivial scope, use `task_tracker` — composable steps with outcome + verification each. Use Plan Mode for research/spec work and keep one active step at a time.
-
-**Context**: Use `@file`, IDE context, and `/add-dir` to keep the right code in focus.
-
-__UNIFIED_TOOL_GUIDANCE__
-
-**Discover**: `list_skills` and `load_skill` to find/activate tools (hidden by default).
-**Delegation**: Use focused plans and clear step handoffs inside the main conversation.
-
-**Output**: No emoji — use plain Unicode symbols (✓, ✗, →, •, ■, ▸, —) instead. Keep replies compact, outcome-first, and grounded. Use file refs when they help. No chain-of-thought or code dumps unless requested.
-
-**Security**: Never print/log secrets. Never commit secrets to repo. Redact if encountered.
-
-**Git**: Never `git commit`, `git push`, or branch unless explicitly requested.
-
-**AGENTS.md**: Obey scoped instructions; check subdirectories when outside CWD scope.
-
-Stop when done."#;
-
-/// LIGHTWEIGHT PROMPT: compact default for simple operations.
-const DEFAULT_LIGHTWEIGHT_PROMPT: &str = r#"VT Code - efficient coding agent.
-
-- Act and verify. Direct tone. No emoji — use plain Unicode symbols (✓, ✗, →, •).
-- Keep outputs compact and exactly in the requested format; avoid repeating the user's request.
-- If the next step is reversible and low-risk, proceed without asking. Ask only for irreversible, external, or outcome-changing choices.
-- If part of the task is answerable without a missing detail, complete that portion before asking for the exact missing input.
+- Act and verify in one thread.
 - Use `task_tracker` for multi-step work and Plan Mode for research/spec work.
-- Prompt instruction and skill sections are indexes, not full source; load referenced files on demand when exact details matter.
-- Use `@file`, IDE context, and `/add-dir` to focus the relevant code.
-- Scoped: unified_search (≤5), unified_file (max_tokens).
-- Use `unified_exec` for shell commands; set `tty=true` only when an interactive PTY is required.
-- Tools hidden by default. `list_skills --search <term>` to find them.
-- Resolve prerequisites before acting, retry empty or narrow lookups with a different approach, and verify before finalizing.
-- Treat tasks as incomplete until each requested item is covered or marked blocked. If required context is missing, do not guess.
-- For research or citation-sensitive work, ground claims in retrieved or provided evidence and cite only retrieved sources.
-- Keep investigation and implementation explicit in a single thread; summarize findings before edits.
-- Keep code consistent with nearby patterns; prefer KISS and DRY.
-- Prefer explicit, readable, simple code. In ambiguity, refuse to guess.
-- WORKSPACE_DIR only. Confirm destructive ops.
+- Keep investigation explicit before edits and keep code consistent with nearby patterns."#;
 
-__UNIFIED_TOOL_GUIDANCE__"#;
-
-/// SPECIALIZED PROMPT (v6.3 - sparse methodical refactoring)
-const DEFAULT_SPECIALIZED_PROMPT: &str = r#"# VT Code Specialized Agent
-
-For complex refactors and multi-file changes, stay methodical and outcome-focused.
-
-## Decision Policy & Execution
+const SPECIALIZED_MODE_DELTA: &str = r#"## Mode
 
 - Explore first, then plan, then execute.
 - Use `task_tracker` for multi-step work and keep one active slice at a time.
-- Use Plan Mode when you need research or scope closure; keep it read-only and end with one `<proposed_plan>`.
-- Act without asking when the next step is reversible and local. Ask only for material outcome changes, secrets, or external actions.
-- If only one slice is blocked by missing context, complete the unblocked slices first and ask for the exact missing input only for the blocked remainder.
-- If a path stalls, re-plan into smaller slices instead of repeating the same move.
+- Use Plan Mode when you need scope closure and end with one `<proposed_plan>`.
+- If a path stalls, re-plan into smaller verified slices instead of repeating it.
+- `AGENTS.md` is the map and `docs/harness/ARCHITECTURAL_INVARIANTS.md` applies when structural rules matter."#;
 
-## Validation
+static DEFAULT_SYSTEM_PROMPT: OnceLock<String> = OnceLock::new();
+static MINIMAL_SYSTEM_PROMPT: OnceLock<String> = OnceLock::new();
+static DEFAULT_LIGHTWEIGHT_PROMPT: OnceLock<String> = OnceLock::new();
+static DEFAULT_SPECIALIZED_PROMPT: OnceLock<String> = OnceLock::new();
 
-- Verify each completed slice and the final result.
-- Run targeted checks first, then broaden when the change is risky.
-- Never claim success without execution evidence.
-- For research or citation-sensitive work, rely on retrieved evidence and say when it is incomplete.
+pub fn default_system_prompt() -> &'static str {
+    static_mode_prompt(SystemPromptMode::Default)
+}
 
-## Repo Context
+pub fn minimal_system_prompt() -> &'static str {
+    static_mode_prompt(SystemPromptMode::Minimal)
+}
 
-- `AGENTS.md` is the map. Use `docs/harness/ARCHITECTURAL_INVARIANTS.md` when structural rules matter.
-- Prompt-side instruction and skill sections may summarize those files; open the referenced source on demand when exact details matter.
-- Use `@file`, IDE context, and `/add-dir` to stay focused on the right code.
-- Keep changes surgical unless the task explicitly calls for deeper restructuring.
+pub fn default_lightweight_prompt() -> &'static str {
+    static_mode_prompt(SystemPromptMode::Lightweight)
+}
 
-## Tool Strategy
+pub fn specialized_system_prompt() -> &'static str {
+    static_mode_prompt(SystemPromptMode::Specialized)
+}
 
-__UNIFIED_TOOL_GUIDANCE__
+pub fn minimal_instruction_text() -> String {
+    minimal_system_prompt().to_string()
+}
 
-## Output
+pub fn lightweight_instruction_text() -> String {
+    default_lightweight_prompt().to_string()
+}
 
-- Be concise and explicit about what changed and how it was verified.
-- Use file references when useful, but do not force a rigid response template.
-- No emoji, no filler, and do not guess when evidence is missing.
-"#;
+pub fn specialized_instruction_text() -> String {
+    specialized_system_prompt().to_string()
+}
 
 const STRUCTURED_REASONING_INSTRUCTIONS: &str = r#"
 ## Structured Reasoning
@@ -313,44 +209,38 @@ pub async fn compose_system_instruction_text(
     vtcode_config: Option<&crate::config::VTCodeConfig>,
     prompt_context: Option<&PromptContext>,
 ) -> String {
-    // Select base prompt based on configured mode
-    use crate::config::types::SystemPromptMode;
     let prompt_mode = vtcode_config
         .map(|c| c.agent.system_prompt_mode)
         .unwrap_or(SystemPromptMode::Default);
-    let (base_prompt, mode_name) = match prompt_mode {
-        SystemPromptMode::Minimal => (MINIMAL_SYSTEM_PROMPT, "minimal"),
-        SystemPromptMode::Lightweight => (DEFAULT_LIGHTWEIGHT_PROMPT, "lightweight"),
-        SystemPromptMode::Specialized => (DEFAULT_SPECIALIZED_PROMPT, "specialized"),
-        SystemPromptMode::Default => (DEFAULT_SYSTEM_PROMPT, "default"),
+    let mode_name = match prompt_mode {
+        SystemPromptMode::Minimal => "minimal",
+        SystemPromptMode::Lightweight => "lightweight",
+        SystemPromptMode::Specialized => "specialized",
+        SystemPromptMode::Default => "default",
     };
-    let rendered_base_prompt = render_prompt_template(base_prompt, prompt_mode);
+    let base_prompt = static_mode_prompt(prompt_mode);
 
     tracing::debug!(
         mode = mode_name,
-        base_tokens_approx = rendered_base_prompt.len() / 4, // rough token estimate
+        base_tokens_approx = base_prompt.len() / 4, // rough token estimate
         "Selected system prompt mode"
     );
 
-    let base_len = rendered_base_prompt.len();
+    let base_len = base_prompt.len();
     let config_overhead = vtcode_config.map_or(0, |_| 1024);
     let estimated_capacity = base_len + config_overhead + 1024;
     let mut instruction = String::with_capacity(estimated_capacity);
-    instruction.push_str(&rendered_base_prompt);
+    instruction.push_str(base_prompt);
     if should_include_structured_reasoning(vtcode_config, prompt_mode) {
         instruction.push_str("\n\n");
         instruction.push_str(STRUCTURED_REASONING_INSTRUCTIONS);
     }
 
-    // ENHANCEMENT 1: Dynamic tool-aware guidelines (behavioral - goes early)
     if let Some(ctx) = prompt_context {
         let guidelines = generate_tool_guidelines(&ctx.available_tools, ctx.capability_level);
         if !guidelines.is_empty() {
-            instruction.push_str(&guidelines);
-        }
-        if let Some(language_hints) = render_workspace_language_hints(&ctx.languages) {
             instruction.push_str("\n\n");
-            instruction.push_str(&language_hints);
+            instruction.push_str(guidelines.trim_start_matches('\n'));
         }
         if let Some(skills_section) = render_prompt_skills_section(&ctx.available_skill_metadata) {
             instruction.push_str("\n\n");
@@ -358,60 +248,110 @@ pub async fn compose_system_instruction_text(
         }
     }
 
-    if let Some(cfg) = vtcode_config {
-        instruction.push_str("\n\n## CONFIGURATION AWARENESS\n");
-        instruction.push_str("Only the active behavior-relevant policies are listed here.\n\n");
+    if let Some(environment_section) = render_environment_addenda(vtcode_config, prompt_context) {
+        instruction.push_str("\n\n");
+        instruction.push_str(&environment_section);
+    }
 
+    instruction
+}
+
+fn static_mode_prompt(prompt_mode: SystemPromptMode) -> &'static str {
+    match prompt_mode {
+        SystemPromptMode::Default => {
+            DEFAULT_SYSTEM_PROMPT.get_or_init(|| build_mode_prompt(DEFAULT_MODE_DELTA))
+        }
+        SystemPromptMode::Minimal => {
+            MINIMAL_SYSTEM_PROMPT.get_or_init(|| build_mode_prompt(MINIMAL_MODE_DELTA))
+        }
+        SystemPromptMode::Lightweight => {
+            DEFAULT_LIGHTWEIGHT_PROMPT.get_or_init(|| build_mode_prompt(LIGHTWEIGHT_MODE_DELTA))
+        }
+        SystemPromptMode::Specialized => {
+            DEFAULT_SPECIALIZED_PROMPT.get_or_init(|| build_mode_prompt(SPECIALIZED_MODE_DELTA))
+        }
+    }
+}
+
+fn build_mode_prompt(mode_delta: &str) -> String {
+    let mut prompt = String::with_capacity(CANONICAL_SYSTEM_PROMPT.len() + mode_delta.len() + 2);
+    prompt.push_str(CANONICAL_SYSTEM_PROMPT);
+    prompt.push_str("\n\n");
+    prompt.push_str(mode_delta);
+    prompt
+}
+
+fn render_environment_addenda(
+    vtcode_config: Option<&crate::config::VTCodeConfig>,
+    prompt_context: Option<&PromptContext>,
+) -> Option<String> {
+    let mut lines = Vec::new();
+
+    if let Some(ctx) = prompt_context
+        && !ctx.languages.is_empty()
+    {
+        lines.push(format!(
+            "- Workspace languages: {}. Prefer matching structural-search `lang` values when ambiguity exists.",
+            ctx.languages.join(", ")
+        ));
+    }
+
+    if let Some(cfg) = vtcode_config {
         if cfg.security.human_in_the_loop {
-            instruction.push_str("- Sensitive actions may require approval.\n");
+            lines.push("- Approval: sensitive actions may require approval.".to_string());
         } else {
-            instruction.push_str(
-                "- Approval prompts are reduced by config; still treat destructive or external actions explicitly.\n",
+            lines.push(
+                "- Approval: reduced by config; keep destructive or external actions explicit."
+                    .to_string(),
             );
         }
 
         if cfg.chat.ask_questions.enabled {
-            instruction
-                .push_str("- `request_user_input` is available for material blocking questions.\n");
+            lines.push(
+                "- Questions: `request_user_input` is available for material blockers.".to_string(),
+            );
         } else {
-            instruction.push_str("- `request_user_input` is disabled in Edit mode; make reasonable assumptions unless Plan Mode requires follow-up.\n");
+            lines.push(
+                "- Questions: `request_user_input` is disabled here; make reasonable assumptions unless Plan Mode requires follow-up.".to_string(),
+            );
         }
 
         if cfg.ide_context.enabled && cfg.ide_context.inject_into_prompt {
-            instruction.push_str(
-                "- IDE context can inject the active editor selection and file focus into the prompt.\n",
+            lines.push(
+                "- IDE context: active editor selection and file focus may be injected."
+                    .to_string(),
             );
         }
 
         if cfg.mcp.enabled {
-            instruction.push_str(
-                "- MCP context sources are enabled; prefer them before external fetches when they can answer the question.\n",
+            lines.push(
+                "- MCP: prefer configured MCP sources before external fetches when they can answer."
+                    .to_string(),
             );
+        }
+
+        if cfg.agent.include_temporal_context {
+            lines.push(
+                generate_temporal_context(cfg.agent.temporal_context_use_utc)
+                    .trim()
+                    .replacen("Current date and time", "- Current date and time", 1)
+                    .to_string(),
+            );
+        }
+
+        if cfg.agent.include_working_directory
+            && let Some(ctx) = prompt_context
+            && let Some(cwd) = &ctx.current_directory
+        {
+            lines.push(format!("- Current working directory: {}", cwd.display()));
         }
     }
 
-    // ENHANCEMENT 2: Temporal context (metadata - goes at end)
-    if let Some(cfg) = vtcode_config
-        && cfg.agent.include_temporal_context
-    {
-        let temporal = generate_temporal_context(cfg.agent.temporal_context_use_utc);
-        instruction.push_str(&temporal);
+    if lines.is_empty() {
+        None
+    } else {
+        Some(format!("## Environment\n{}", lines.join("\n")))
     }
-
-    // ENHANCEMENT 3: Working directory context (metadata - goes at end)
-    if let Some(cfg) = vtcode_config
-        && cfg.agent.include_working_directory
-        && let Some(ctx) = prompt_context
-        && let Some(cwd) = &ctx.current_directory
-    {
-        let _ = write!(
-            instruction,
-            "\n\nCurrent working directory: {}",
-            cwd.display()
-        );
-    }
-
-    instruction
 }
 
 fn should_include_structured_reasoning(
@@ -534,28 +474,6 @@ pub fn generate_lightweight_instruction() -> Content {
 /// Generate a specialized system instruction for advanced operations
 pub fn generate_specialized_instruction() -> Content {
     Content::system_text(specialized_instruction_text())
-}
-
-fn render_prompt_template(prompt_template: &str, prompt_mode: SystemPromptMode) -> String {
-    prompt_template.replace(
-        "__UNIFIED_TOOL_GUIDANCE__",
-        tool_guidance_for_mode(prompt_mode),
-    )
-}
-
-fn tool_guidance_for_mode(_prompt_mode: SystemPromptMode) -> &'static str {
-    COMPACT_TOOL_GUIDANCE
-}
-
-fn render_workspace_language_hints(languages: &[String]) -> Option<String> {
-    if languages.is_empty() {
-        return None;
-    }
-
-    Some(format!(
-        "## Workspace Language Hints\n- Detected workspace languages: {}\n- Prefer matching structural-search `lang` values when working in these files; omitting `lang` is only safe when `path` or positive `globs` make the language unambiguous.",
-        languages.join(", ")
-    ))
 }
 
 #[cfg(test)]
@@ -735,20 +653,20 @@ mod tests {
     #[test]
     fn test_minimal_prompt_token_count() {
         // Rough estimate: 1 token ≈ 4 characters
-        let approx_tokens = MINIMAL_SYSTEM_PROMPT.len() / 4;
+        let approx_tokens = minimal_system_prompt().len() / 4;
         assert!(
-            approx_tokens < 1000,
-            "Minimal prompt should be <1K tokens, got ~{}",
+            approx_tokens < 700,
+            "Minimal prompt should stay compact, got ~{}",
             approx_tokens
         );
     }
 
     #[test]
     fn test_default_prompt_token_count() {
-        let approx_tokens = DEFAULT_SYSTEM_PROMPT.len() / 4;
+        let approx_tokens = default_system_prompt().len() / 4;
         assert!(
-            approx_tokens < 1300,
-            "Default prompt should stay under ~1.3K tokens, got ~{}",
+            approx_tokens < 900,
+            "Default prompt should stay compact, got ~{}",
             approx_tokens
         );
     }
@@ -867,32 +785,30 @@ mod tests {
 
     #[test]
     fn test_prompt_text_avoids_hardcoded_loop_thresholds() {
-        let specialized_prompt =
-            DEFAULT_SPECIALIZED_PROMPT.replace("__UNIFIED_TOOL_GUIDANCE__", COMPACT_TOOL_GUIDANCE);
-        assert!(!DEFAULT_SYSTEM_PROMPT.contains("stuck twice"));
-        assert!(!MINIMAL_SYSTEM_PROMPT.contains("stuck twice"));
+        let specialized_prompt = specialized_instruction_text();
+        assert!(!default_system_prompt().contains("stuck twice"));
+        assert!(!minimal_system_prompt().contains("stuck twice"));
         assert!(!specialized_prompt.contains("stuck twice"));
         assert!(!specialized_prompt.contains("10+ calls without progress"));
         assert!(!specialized_prompt.contains("Same tool+params twice"));
-        assert!(specialized_prompt.contains("runtime-configured"));
     }
 
     #[test]
     fn test_harness_awareness_in_prompts() {
         assert!(
-            DEFAULT_SYSTEM_PROMPT.contains("AGENTS.md"),
+            default_system_prompt().contains("AGENTS.md"),
             "Default prompt should reference AGENTS.md as map"
         );
         assert!(
-            DEFAULT_SYSTEM_PROMPT.contains("ARCHITECTURAL_INVARIANTS"),
+            default_system_prompt().contains("ARCHITECTURAL_INVARIANTS"),
             "Default prompt should reference architectural invariants"
         );
         assert!(
-            DEFAULT_SPECIALIZED_PROMPT.contains("ARCHITECTURAL_INVARIANTS"),
+            specialized_instruction_text().contains("ARCHITECTURAL_INVARIANTS"),
             "Specialized prompt should reference architectural invariants"
         );
         assert!(
-            MINIMAL_SYSTEM_PROMPT.contains("docs/harness/"),
+            minimal_system_prompt().contains("docs/harness/"),
             "Minimal prompt should reference harness knowledge base"
         );
     }
@@ -900,21 +816,21 @@ mod tests {
     #[test]
     fn test_prompts_reject_guessing_when_context_is_missing() {
         assert!(
-            DEFAULT_SYSTEM_PROMPT.contains("do not guess"),
+            default_system_prompt().contains("do not guess"),
             "Default prompt should reject guessing"
         );
         assert!(
-            DEFAULT_SPECIALIZED_PROMPT.contains("do not guess"),
+            specialized_instruction_text().contains("do not guess"),
             "Specialized prompt should reject guessing"
         );
         assert!(
-            MINIMAL_SYSTEM_PROMPT.contains("uncertain"),
+            minimal_system_prompt().contains("uncertain"),
             "Minimal prompt should still mention uncertainty"
         );
     }
 
     #[tokio::test]
-    async fn test_generated_prompts_prefer_named_extractions_over_imagined_indirection_savings() {
+    async fn test_generated_prompts_keep_mode_deltas_bounded() {
         let project_root = PathBuf::from(".");
 
         for (mode_name, mode) in [
@@ -930,44 +846,35 @@ mod tests {
             config.agent.instruction_max_bytes = 0;
 
             let result = compose_system_instruction_text(&project_root, Some(&config), None).await;
-            let normalized = result.to_ascii_lowercase();
 
             assert!(
-                normalized.contains("named helpers over flattening logic"),
-                "{mode_name} prompt should prefer named helpers over flattening logic"
+                result.contains("## Core Contract"),
+                "{mode_name} prompt should reuse the canonical base prompt"
             );
             assert!(
-                normalized.contains("trust the optimizer"),
-                "{mode_name} prompt should trust the optimizer before flattening code"
-            );
-            assert!(
-                normalized.contains("real hotspot"),
-                "{mode_name} prompt should require profiling evidence for indirection tradeoffs"
+                result.matches("## Mode").count() == 1,
+                "{mode_name} prompt should add only one mode delta"
             );
         }
     }
 
     #[test]
     fn test_search_guidance_prefers_structural_and_rg() {
+        let guidelines = generate_tool_guidelines(
+            &["unified_search".to_string(), "unified_exec".to_string()],
+            None,
+        );
         assert!(
-            COMPACT_TOOL_GUIDANCE.contains("default to `action='structural'` for code search"),
+            guidelines.contains("`action='structural'`"),
             "Tool guidance should prefer structural search for code"
         );
         assert!(
-            COMPACT_TOOL_GUIDANCE.contains("parseable code"),
-            "Tool guidance should warn that structural patterns must be parseable"
-        );
-        assert!(
-            COMPACT_TOOL_GUIDANCE.contains("prefer `rg` over shell `grep`"),
+            guidelines.contains("prefer `rg` over shell `grep`"),
             "Tool guidance should prefer ripgrep in shell"
         );
         assert!(
-            COMPACT_TOOL_GUIDANCE.contains("load_skill"),
-            "Tool guidance should route hidden capabilities through skills"
-        );
-        assert!(
-            !COMPACT_TOOL_GUIDANCE.contains(">8KB"),
-            "Tool guidance should avoid stale hardcoded spool thresholds"
+            guidelines.contains("git diff -- <path>"),
+            "Tool guidance should keep diff guidance explicit"
         );
     }
 
@@ -988,11 +895,11 @@ mod tests {
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;
 
         assert!(
-            result.contains("READ-ONLY MODE"),
+            result.contains("Mode: read-only"),
             "Should detect read-only mode when no edit/write/exec tools available"
         );
         assert!(
-            result.contains("cannot modify files"),
+            result.contains("do not modify files"),
             "Should explain read-only constraints"
         );
     }
@@ -1028,9 +935,9 @@ mod tests {
         let result =
             compose_system_instruction_text(workspace.path(), Some(&config), Some(&ctx)).await;
 
-        assert!(result.contains("## Workspace Language Hints"));
+        assert!(result.contains("## Environment"));
         assert!(result.contains("Rust, TypeScript"));
-        assert!(result.contains("positive `globs`"));
+        assert!(result.contains("structural-search `lang`"));
     }
 
     #[tokio::test]
@@ -1041,7 +948,7 @@ mod tests {
         let result =
             compose_system_instruction_text(workspace.path(), Some(&config), Some(&ctx)).await;
 
-        assert!(!result.contains("## Workspace Language Hints"));
+        assert!(!result.contains("Workspace languages:"));
     }
 
     #[tokio::test]
@@ -1082,13 +989,12 @@ mod tests {
             result.contains("Current date and time:"),
             "Should include temporal context when enabled"
         );
-        // Should appear at the end (after AGENTS.MD would be)
+        let env_pos = result.find("## Environment");
         let temporal_pos = result.find("Current date and time:");
-        let config_pos = result.find("CONFIGURATION AWARENESS");
-        if let (Some(t), Some(c)) = (temporal_pos, config_pos) {
+        if let (Some(t), Some(e)) = (temporal_pos, env_pos) {
             assert!(
-                t > c,
-                "Temporal context should come after configuration section"
+                t > e,
+                "Temporal context should appear inside the environment section"
             );
         }
     }
@@ -1138,11 +1044,11 @@ mod tests {
         let result =
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
-        assert!(result.contains("CONFIGURATION AWARENESS"));
-        assert!(result.contains("Sensitive actions may require approval"));
+        assert!(result.contains("## Environment"));
+        assert!(result.contains("Approval: sensitive actions may require approval"));
         assert!(result.contains("request_user_input"));
-        assert!(result.contains("IDE context can inject"));
-        assert!(result.contains("MCP context sources are enabled"));
+        assert!(result.contains("IDE context: active editor selection"));
+        assert!(result.contains("MCP: prefer configured MCP sources"));
         assert!(!result.contains("PTY functionality"));
         assert!(!result.contains("Loop guards"));
         assert!(!result.contains(".vtcode/context/tool_outputs/"));
@@ -1156,7 +1062,7 @@ mod tests {
         let result =
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
-        assert!(result.contains("Approval prompts are reduced by config"));
+        assert!(result.contains("Approval: reduced by config"));
     }
 
     #[tokio::test]
@@ -1178,13 +1084,12 @@ mod tests {
             result.contains("/tmp/test"),
             "Should show actual directory path"
         );
-        // Should appear at the end
         let wd_pos = result.find("Current working directory");
-        let config_pos = result.find("CONFIGURATION AWARENESS");
-        if let (Some(w), Some(c)) = (wd_pos, config_pos) {
+        let env_pos = result.find("## Environment");
+        if let (Some(w), Some(e)) = (wd_pos, env_pos) {
             assert!(
-                w > c,
-                "Working directory should come after configuration section"
+                w > e,
+                "Working directory should appear inside the environment section"
             );
         }
     }
@@ -1219,20 +1124,22 @@ mod tests {
         .await;
 
         // Should still work without new features
-        assert!(result.len() > 1000, "Should generate substantial prompt");
+        assert!(result.len() > 600, "Should generate substantial prompt");
         assert!(
             result.contains("VT Code"),
             "Should contain base prompt content"
         );
         // Should not have dynamic guidelines without context
         assert!(
-            !result.contains("TOOL USAGE GUIDELINES"),
+            !result.contains("## Active Tools"),
             "Should not have tool guidelines without prompt context"
         );
     }
 
     #[tokio::test]
     async fn test_all_enhancements_combined() {
+        use crate::skills::model::{SkillMetadata, SkillScope};
+
         let mut config = VTCodeConfig::default();
         config.agent.include_temporal_context = true;
         config.agent.include_working_directory = true;
@@ -1242,14 +1149,30 @@ mod tests {
         ctx.add_tool("unified_search".to_string());
         ctx.infer_capability_level();
         ctx.set_current_directory(PathBuf::from("/workspace"));
+        ctx.add_skill_metadata(SkillMetadata {
+            name: "rust-skills".to_string(),
+            description: "Rust coding guidance".to_string(),
+            short_description: None,
+            path: PathBuf::from("/tmp/rust-skills/SKILL.md"),
+            scope: SkillScope::System,
+            manifest: None,
+        });
 
         let result =
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;
 
         // Verify all enhancements present
         assert!(
-            result.contains("TOOL USAGE GUIDELINES"),
+            result.contains("## Active Tools"),
             "Should have dynamic guidelines"
+        );
+        assert!(
+            result.contains("## Skills"),
+            "Should have lean skills routing"
+        );
+        assert!(
+            result.contains("## Environment"),
+            "Should have environment addenda"
         );
         assert!(
             result.contains("Current date and time"),
@@ -1263,13 +1186,48 @@ mod tests {
 
         // Verify specific guideline for this tool set
         assert!(
-            result.contains("unified_file") && result.contains("before"),
+            result.contains("`unified_file`") && result.contains("Read before `edit`"),
             "Should have read-before-edit guideline"
         );
     }
 
     #[tokio::test]
-    async fn test_skills_section_renders_scope_and_routing_hints() {
+    async fn test_prompt_layers_render_in_stable_order() {
+        use crate::skills::model::{SkillMetadata, SkillScope};
+
+        let mut config = VTCodeConfig::default();
+        config.agent.include_temporal_context = true;
+        config.agent.include_working_directory = true;
+
+        let mut ctx = PromptContext::default();
+        ctx.add_tool("unified_search".to_string());
+        ctx.add_tool("unified_exec".to_string());
+        ctx.add_skill_metadata(SkillMetadata {
+            name: "skill-creator".to_string(),
+            description: "Create skills".to_string(),
+            short_description: None,
+            path: PathBuf::from("/tmp/skill-creator/SKILL.md"),
+            scope: SkillScope::System,
+            manifest: None,
+        });
+        ctx.add_language("Rust".to_string());
+        ctx.set_current_directory(PathBuf::from("/workspace"));
+
+        let result =
+            compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;
+
+        let mode_pos = result.find("## Mode").expect("mode section");
+        let tools_pos = result.find("## Active Tools").expect("tools section");
+        let skills_pos = result.find("## Skills").expect("skills section");
+        let env_pos = result.find("## Environment").expect("environment section");
+
+        assert!(mode_pos < tools_pos, "mode should precede tools");
+        assert!(tools_pos < skills_pos, "tools should precede skills");
+        assert!(skills_pos < env_pos, "skills should precede environment");
+    }
+
+    #[tokio::test]
+    async fn test_skills_section_stays_lean_and_routing_focused() {
         use crate::skills::model::SkillScope;
         use crate::skills::types::SkillManifest;
 
@@ -1294,24 +1252,23 @@ mod tests {
 
         assert!(result.contains("## Skills"));
         assert!(result.contains("skill-creator: Create or update skills"));
-        assert!(result.contains("scope: system"));
-        assert!(result.contains("use: Use when creating or updating a skill."));
-        assert!(result.contains("avoid: Avoid for unrelated implementation work."));
+        assert!(result.contains("(file: /tmp/skill-creator/SKILL.md)"));
         assert!(result.contains("- Routing: Use a skill"));
         assert!(!result.contains("Discovery: Available skills are listed"));
+        assert!(!result.contains("scope: system"));
+        assert!(!result.contains("use: Use when creating or updating a skill."));
+        assert!(!result.contains("avoid: Avoid for unrelated implementation work."));
     }
 
     #[test]
-    fn test_no_uninterpolated_placeholders() {
+    fn test_static_prompts_have_no_placeholders() {
         let _minimal = generate_minimal_instruction();
         let _lightweight = generate_lightweight_instruction();
         let _specialized = generate_specialized_instruction();
 
-        let minimal_text = render_prompt_template(MINIMAL_SYSTEM_PROMPT, SystemPromptMode::Minimal);
-        let lightweight_text =
-            render_prompt_template(DEFAULT_LIGHTWEIGHT_PROMPT, SystemPromptMode::Lightweight);
-        let specialized_text =
-            render_prompt_template(DEFAULT_SPECIALIZED_PROMPT, SystemPromptMode::Specialized);
+        let minimal_text = minimal_instruction_text();
+        let lightweight_text = lightweight_instruction_text();
+        let specialized_text = specialized_instruction_text();
 
         assert!(
             !minimal_text.contains("__UNIFIED_TOOL_GUIDANCE__"),
@@ -1326,8 +1283,7 @@ mod tests {
             "Specialized prompt has uninterpolated placeholder"
         );
         assert!(
-            !render_prompt_template(DEFAULT_SYSTEM_PROMPT, SystemPromptMode::Default)
-                .contains("__UNIFIED_TOOL_GUIDANCE__"),
+            !default_system_prompt().contains("__UNIFIED_TOOL_GUIDANCE__"),
             "Default prompt has uninterpolated placeholder"
         );
     }

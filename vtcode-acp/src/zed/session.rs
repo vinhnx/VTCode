@@ -11,7 +11,7 @@ use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use tracing::{error, info, warn};
 use vtcode_core::config::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
-use vtcode_core::prompts::generate_system_instruction;
+use vtcode_core::prompts::system::generate_system_instruction_with_config;
 
 use super::ZedAgent;
 use super::constants::{
@@ -51,7 +51,12 @@ pub async fn run_acp_agent(
 
     let outgoing = tokio::io::stdout().compat_write();
     let incoming = tokio::io::stdin().compat();
-    let content = generate_system_instruction(&Default::default()).await;
+    let content = generate_system_instruction_with_config(
+        &Default::default(),
+        &config.workspace,
+        Some(vt_cfg),
+    )
+    .await;
     let system_prompt = if let Some(text) = content.parts.first().and_then(|p| p.as_text()) {
         text.to_string()
     } else {
