@@ -9,7 +9,6 @@ use tracing::{info, warn};
 impl AgentRunner {
     pub(super) fn summarize_conversation_if_needed(
         &self,
-        system_instruction: &str,
         session_state: &mut AgentSessionState,
         preserve_recent_turns: usize,
         utilization: f64,
@@ -89,8 +88,7 @@ impl AgentRunner {
         }]));
         new_conversation.extend_from_slice(&session_state.conversation[split_at..]);
         session_state.conversation = new_conversation;
-        session_state.messages =
-            build_messages_from_conversation(system_instruction, &session_state.conversation);
+        session_state.messages = build_messages_from_conversation(&session_state.conversation);
 
         // Context Manager: Ensure history invariants are maintained after summarization.
         // session_state.normalize(); // TODO: Implement normalize in session_state if needed

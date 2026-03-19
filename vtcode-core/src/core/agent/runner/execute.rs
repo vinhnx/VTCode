@@ -10,8 +10,7 @@ use crate::config::types::{ReasoningEffortLevel, SystemPromptMode, VerbosityLeve
 use crate::core::agent::blocked_handoff::write_blocked_handoff;
 use crate::core::agent::completion::{check_completion_indicators, check_for_response_loop};
 use crate::core::agent::conversation::{
-    build_conversation, build_messages_from_conversation, compose_system_instruction,
-    conversation_from_messages,
+    build_conversation, build_messages_from_conversation, conversation_from_messages,
 };
 use crate::core::agent::events::ExecEventRecorder;
 use crate::core::agent::session::AgentSessionState;
@@ -204,15 +203,13 @@ impl AgentRunner {
             };
 
             // Prepare conversation with task context
-            let system_instruction =
-                Arc::new(compose_system_instruction(&system_prompt, task, contexts));
+            let system_instruction = Arc::new(system_prompt);
             let mut conversation = conversation_from_messages(&self.bootstrap_messages);
             conversation.extend(build_conversation(task, contexts));
 
             // Maintain a mirrored conversation history for providers that expect
             // OpenAI/Anthropic style message roles.
-            let conversation_messages =
-                build_messages_from_conversation(&system_instruction, &conversation);
+            let conversation_messages = build_messages_from_conversation(&conversation);
 
             // Track execution results
             // Determine loop guards via cached configuration
@@ -369,7 +366,6 @@ impl AgentRunner {
 
                 // Context compaction before the request
                 self.summarize_conversation_if_needed(
-                    &system_instruction,
                     &mut controller.state,
                     preserve_recent_turns,
                     utilization,

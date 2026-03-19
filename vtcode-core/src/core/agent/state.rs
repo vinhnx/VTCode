@@ -354,7 +354,6 @@ impl TaskRunState {
 
     pub fn summarize_conversation_if_needed(
         &mut self,
-        system_instruction: &str,
         preserve_recent_turns: usize,
         utilization: f64,
     ) {
@@ -412,8 +411,7 @@ impl TaskRunState {
         }]));
         new_conversation.extend_from_slice(&self.conversation[split_at..]);
         self.conversation = new_conversation;
-        self.conversation_messages =
-            build_messages_from_conversation(system_instruction, &self.conversation);
+        self.conversation_messages = build_messages_from_conversation(&self.conversation);
 
         // Context Manager: Ensure history invariants are maintained after summarization.
         // Summarization might split a tool call from its response if they span across

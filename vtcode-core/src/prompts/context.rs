@@ -30,9 +30,6 @@ pub struct PromptContext {
     pub current_directory: Option<PathBuf>,
     /// Active IDE/editor context snapshot when available.
     pub editor_context: Option<EditorContextSnapshot>,
-    /// Skip standard instruction blocks (project docs, user instructions)
-    /// Used when these will be provided elsewhere (e.g. unified block in runloop)
-    pub skip_standard_instructions: bool,
 }
 
 /// User preferences for prompt customization
@@ -159,7 +156,6 @@ impl PromptContext {
     ) -> Self {
         let mut context = Self {
             workspace: Some(workspace.as_ref().to_path_buf()),
-            skip_standard_instructions: false,
             ..Default::default()
         };
 

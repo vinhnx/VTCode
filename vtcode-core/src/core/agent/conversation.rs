@@ -9,15 +9,6 @@ use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::fmt::Write;
 
-/// Compose the current system instruction text for the request.
-pub fn compose_system_instruction(
-    base_prompt: &str,
-    _task: &Task,
-    _contexts: &[ContextItem],
-) -> String {
-    base_prompt.to_string()
-}
-
 /// Build the initial conversation payload (without the system instruction message).
 pub fn build_conversation(task: &Task, contexts: &[ContextItem]) -> Vec<Content> {
     let mut conversation = Vec::with_capacity(3);
@@ -137,10 +128,7 @@ pub fn messages_from_conversation(conversation: &[Content]) -> Vec<Message> {
 /// Convert Gemini `Content` structures into universal provider messages.
 ///
 /// System instructions travel separately via `LLMRequest.system_prompt` on the active request.
-pub fn build_messages_from_conversation(
-    _system_instruction: &str,
-    conversation: &[Content],
-) -> Vec<Message> {
+pub fn build_messages_from_conversation(conversation: &[Content]) -> Vec<Message> {
     messages_from_conversation(conversation)
 }
 
@@ -316,18 +304,6 @@ mod tests {
     }
 
     #[test]
-    fn system_instruction_composes_context() {
-        let task = sample_task();
-        let contexts = vec![ContextItem {
-            id: "ctx1".to_owned(),
-            content: "Details".to_owned(),
-        }];
-
-        let instruction = compose_system_instruction("Base", &task, &contexts);
-        assert_eq!(instruction, "Base");
-    }
-
-    #[test]
     fn conversation_builds_expected_steps() {
         let task = sample_task();
         let contexts = vec![ContextItem {
@@ -339,11 +315,16 @@ mod tests {
     }
 
     #[test]
-    fn messages_include_system_prompt() {
+    fn messages_mirror_conversation_without_system_prompt() {
         let task = sample_task();
         let conversation = build_conversation(&task, &[]);
-        let messages = build_messages_from_conversation("Base", &conversation);
+        let messages = build_messages_from_conversation(&conversation);
         assert_eq!(messages.len(), conversation.len());
+        assert!(
+            messages
+                .iter()
+                .all(|message| message.role != MessageRole::System)
+        );
     }
 
     #[test]
@@ -372,7 +353,7 @@ mod tests {
         ];
 
         let conversation = conversation_from_messages(&history);
-        let rebuilt = build_messages_from_conversation("Fresh system", &conversation);
+        let rebuilt = build_messages_from_conversation(&conversation);
 
         assert_eq!(rebuilt[0].role, MessageRole::User);
         assert_eq!(rebuilt[0].content.as_text().as_ref(), "Inspect src/main.rs");

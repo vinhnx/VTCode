@@ -23,30 +23,14 @@ async fn test_incremental_prompt_caching() {
 
     // First call - should build from scratch (includes context section)
     let prompt1 = prompt_builder
-        .get_system_prompt(
-            base_prompt,
-            1,
-            1,
-            0,
-            PromptAssemblyMode::AppendInstructions,
-            &context,
-            None,
-        )
+        .get_system_prompt(base_prompt, 1, 1, 0, &context, None)
         .await;
     assert!(prompt1.contains("Test system prompt"));
     assert!(prompt1.contains("[Context]"));
 
     // Second call with same parameters - should use cache
     let prompt2 = prompt_builder
-        .get_system_prompt(
-            base_prompt,
-            1,
-            1,
-            0,
-            PromptAssemblyMode::AppendInstructions,
-            &context,
-            None,
-        )
+        .get_system_prompt(base_prompt, 1, 1, 0, &context, None)
         .await;
     assert_eq!(prompt1, prompt2);
 
@@ -78,28 +62,12 @@ async fn test_incremental_prompt_rebuild() {
     };
     // Build initial prompt
     let _ = prompt_builder
-        .get_system_prompt(
-            base_prompt,
-            1,
-            1,
-            0,
-            PromptAssemblyMode::AppendInstructions,
-            &context,
-            None,
-        )
+        .get_system_prompt(base_prompt, 1, 1, 0, &context, None)
         .await;
 
     // Rebuild with different retry attempts
     let prompt = prompt_builder
-        .rebuild_prompt(
-            base_prompt,
-            1,
-            1,
-            1,
-            PromptAssemblyMode::AppendInstructions,
-            &context,
-            None,
-        )
+        .rebuild_prompt(base_prompt, 1, 1, 1, &context, None)
         .await;
 
     assert!(prompt.contains("Retry #1"));
@@ -108,20 +76,8 @@ async fn test_incremental_prompt_rebuild() {
 
 #[tokio::test]
 async fn test_prompt_config_hash() {
-    let config1 = SystemPromptConfig::new(
-        "Test",
-        true,
-        false,
-        3,
-        PromptAssemblyMode::AppendInstructions,
-    );
-    let config2 = SystemPromptConfig::new(
-        "Test",
-        true,
-        false,
-        3,
-        PromptAssemblyMode::AppendInstructions,
-    );
+    let config1 = SystemPromptConfig::new("Test", true, false, 3);
+    let config2 = SystemPromptConfig::new("Test", true, false, 3);
 
     assert_eq!(config1.hash(), config2.hash());
 }
@@ -165,26 +121,10 @@ async fn test_cache_friendly_mode_moves_volatile_context_to_runtime_section() {
     };
 
     let prompt_a = prompt_builder
-        .get_system_prompt(
-            base_prompt,
-            1,
-            context_a.hash(),
-            0,
-            PromptAssemblyMode::AppendInstructions,
-            &context_a,
-            None,
-        )
+        .get_system_prompt(base_prompt, 1, context_a.hash(), 0, &context_a, None)
         .await;
     let prompt_b = prompt_builder
-        .get_system_prompt(
-            base_prompt,
-            1,
-            context_b.hash(),
-            0,
-            PromptAssemblyMode::AppendInstructions,
-            &context_b,
-            None,
-        )
+        .get_system_prompt(base_prompt, 1, context_b.hash(), 0, &context_b, None)
         .await;
 
     let marker = "\n[Runtime Context]\n";
@@ -233,7 +173,6 @@ async fn test_instruction_appendix_uses_explicit_directory_and_precedes_runtime_
             1,
             context.hash(),
             0,
-            PromptAssemblyMode::AppendInstructions,
             &context,
             Some(&config),
         )
@@ -271,15 +210,7 @@ async fn test_context_awareness_token_budget_warning() {
     };
 
     let prompt = prompt_builder
-        .get_system_prompt(
-            base_prompt,
-            1,
-            1,
-            0,
-            PromptAssemblyMode::AppendInstructions,
-            &context,
-            None,
-        )
+        .get_system_prompt(base_prompt, 1, 1, 0, &context, None)
         .await;
 
     assert!(prompt.contains("<budget:token_budget>200000</budget:token_budget>"));
@@ -309,15 +240,7 @@ async fn test_context_awareness_token_budget_high() {
     };
 
     let prompt = prompt_builder
-        .get_system_prompt(
-            base_prompt,
-            1,
-            1,
-            0,
-            PromptAssemblyMode::AppendInstructions,
-            &context,
-            None,
-        )
+        .get_system_prompt(base_prompt, 1, 1, 0, &context, None)
         .await;
 
     assert!(prompt.contains("<budget:token_budget>200000</budget:token_budget>"));
@@ -347,15 +270,7 @@ async fn test_context_awareness_token_budget_critical() {
     };
 
     let prompt = prompt_builder
-        .get_system_prompt(
-            base_prompt,
-            1,
-            1,
-            0,
-            PromptAssemblyMode::AppendInstructions,
-            &context,
-            None,
-        )
+        .get_system_prompt(base_prompt, 1, 1, 0, &context, None)
         .await;
 
     assert!(prompt.contains("<budget:token_budget>200000</budget:token_budget>"));
@@ -385,15 +300,7 @@ async fn test_context_awareness_normal_no_guidance() {
     };
 
     let prompt = prompt_builder
-        .get_system_prompt(
-            base_prompt,
-            1,
-            1,
-            0,
-            PromptAssemblyMode::AppendInstructions,
-            &context,
-            None,
-        )
+        .get_system_prompt(base_prompt, 1, 1, 0, &context, None)
         .await;
 
     assert!(prompt.contains("<budget:token_budget>200000</budget:token_budget>"));
@@ -425,15 +332,7 @@ async fn test_non_context_aware_model_no_budget_tags() {
     };
 
     let prompt = prompt_builder
-        .get_system_prompt(
-            base_prompt,
-            1,
-            1,
-            0,
-            PromptAssemblyMode::AppendInstructions,
-            &context,
-            None,
-        )
+        .get_system_prompt(base_prompt, 1, 1, 0, &context, None)
         .await;
 
     assert!(!prompt.contains("<budget:token_budget>"));
@@ -462,15 +361,7 @@ async fn test_non_context_aware_model_with_context_window_no_budget_tags() {
     };
 
     let prompt = prompt_builder
-        .get_system_prompt(
-            base_prompt,
-            1,
-            1,
-            0,
-            PromptAssemblyMode::AppendInstructions,
-            &context,
-            None,
-        )
+        .get_system_prompt(base_prompt, 1, 1, 0, &context, None)
         .await;
 
     assert!(!prompt.contains("<budget:token_budget>1000000</budget:token_budget>"));
@@ -500,15 +391,7 @@ async fn test_plan_mode_notice_appended() {
     };
 
     let prompt = prompt_builder
-        .get_system_prompt(
-            base_prompt,
-            1,
-            1,
-            0,
-            PromptAssemblyMode::AppendInstructions,
-            &context,
-            None,
-        )
+        .get_system_prompt(base_prompt, 1, 1, 0, &context, None)
         .await;
 
     assert!(prompt.contains(vtcode_core::prompts::system::PLAN_MODE_READ_ONLY_HEADER));
@@ -543,15 +426,7 @@ async fn test_full_auto_is_constrained_in_plan_mode() {
     };
 
     let prompt = prompt_builder
-        .get_system_prompt(
-            base_prompt,
-            1,
-            1,
-            0,
-            PromptAssemblyMode::AppendInstructions,
-            &context,
-            None,
-        )
+        .get_system_prompt(base_prompt, 1, 1, 0, &context, None)
         .await;
 
     assert!(
@@ -583,15 +458,7 @@ async fn test_editor_context_block_is_appended() {
     };
 
     let prompt = prompt_builder
-        .get_system_prompt(
-            "Base prompt",
-            1,
-            context.hash(),
-            0,
-            PromptAssemblyMode::AppendInstructions,
-            &context,
-            None,
-        )
+        .get_system_prompt("Base prompt", 1, context.hash(), 0, &context, None)
         .await;
 
     assert!(prompt.contains("## Active Editor Context"));
@@ -631,7 +498,6 @@ async fn test_editor_context_changes_invalidate_cached_prompt() {
             1,
             context_without_editor.hash(),
             0,
-            PromptAssemblyMode::AppendInstructions,
             &context_without_editor,
             None,
         )
@@ -642,7 +508,6 @@ async fn test_editor_context_changes_invalidate_cached_prompt() {
             1,
             context_with_editor.hash(),
             0,
-            PromptAssemblyMode::AppendInstructions,
             &context_with_editor,
             None,
         )

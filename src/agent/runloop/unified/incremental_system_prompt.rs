@@ -89,12 +89,6 @@ pub(crate) struct IncrementalSystemPrompt {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub(crate) enum PromptAssemblyMode {
-    #[default]
-    AppendInstructions,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub(crate) enum PromptCacheShapingMode {
     #[default]
     Disabled,
@@ -118,8 +112,6 @@ struct CachedPrompt {
     context_hash: u64,
     /// Number of retry attempts this prompt was built for
     retry_attempts: usize,
-    /// Assembly mode for this prompt
-    assembly_mode: PromptAssemblyMode,
 }
 
 impl IncrementalSystemPrompt {
@@ -130,7 +122,6 @@ impl IncrementalSystemPrompt {
                 config_hash: 0,
                 context_hash: 0,
                 retry_attempts: usize::MAX, // Force rebuild on first use
-                assembly_mode: PromptAssemblyMode::AppendInstructions,
             })),
         }
     }
@@ -142,7 +133,6 @@ impl IncrementalSystemPrompt {
         config_hash: u64,
         context_hash: u64,
         retry_attempts: usize,
-        prompt_assembly_mode: PromptAssemblyMode,
         context: &SystemPromptContext,
         agent_config: Option<&vtcode_config::core::AgentConfig>,
     ) -> String {
@@ -152,7 +142,6 @@ impl IncrementalSystemPrompt {
         if read_guard.config_hash == config_hash
             && read_guard.context_hash == context_hash
             && read_guard.retry_attempts == retry_attempts
-            && read_guard.assembly_mode == prompt_assembly_mode
             && !read_guard.content.is_empty()
         {
             return read_guard.content.clone();
@@ -167,7 +156,6 @@ impl IncrementalSystemPrompt {
             config_hash,
             context_hash,
             retry_attempts,
-            prompt_assembly_mode,
             context,
             agent_config,
         )
@@ -182,7 +170,6 @@ impl IncrementalSystemPrompt {
         config_hash: u64,
         context_hash: u64,
         retry_attempts: usize,
-        prompt_assembly_mode: PromptAssemblyMode,
         context: &SystemPromptContext,
         agent_config: Option<&vtcode_config::core::AgentConfig>,
     ) -> String {
@@ -192,7 +179,6 @@ impl IncrementalSystemPrompt {
         if write_guard.config_hash == config_hash
             && write_guard.context_hash == context_hash
             && write_guard.retry_attempts == retry_attempts
-            && write_guard.assembly_mode == prompt_assembly_mode
             && !write_guard.content.is_empty()
         {
             return write_guard.content.clone();
@@ -200,13 +186,7 @@ impl IncrementalSystemPrompt {
 
         // Build the new prompt
         let new_content = self
-            .build_prompt_content(
-                base_system_prompt,
-                retry_attempts,
-                prompt_assembly_mode,
-                context,
-                agent_config,
-            )
+            .build_prompt_content(base_system_prompt, retry_attempts, context, agent_config)
             .await;
 
         // Update cache
@@ -214,7 +194,6 @@ impl IncrementalSystemPrompt {
         write_guard.config_hash = config_hash;
         write_guard.context_hash = context_hash;
         write_guard.retry_attempts = retry_attempts;
-        write_guard.assembly_mode = prompt_assembly_mode;
 
         new_content
     }
@@ -224,7 +203,6 @@ impl IncrementalSystemPrompt {
         &self,
         base_system_prompt: &str,
         retry_attempts: usize,
-        prompt_assembly_mode: PromptAssemblyMode,
         context: &SystemPromptContext,
         agent_config: Option<&vtcode_config::core::AgentConfig>,
     ) -> String {
@@ -328,19 +306,17 @@ impl IncrementalSystemPrompt {
             }
         }
 
-        if prompt_assembly_mode == PromptAssemblyMode::AppendInstructions {
-            if let Some(cfg) = agent_config {
-                if let Some(active_dir) = context.active_instruction_directory.as_deref()
-                    && let Some(unified) = build_instruction_appendix(cfg, active_dir).await
-                {
-                    let _ = writeln!(prompt, "\n# INSTRUCTIONS\n{}", unified);
-                }
-            } else if !context.discovered_skills.is_empty() {
-                let _ = writeln!(
-                    prompt,
-                    "\n# SKILLS\nUse `list_skills` to see available capabilities."
-                );
+        if let Some(cfg) = agent_config {
+            if let Some(active_dir) = context.active_instruction_directory.as_deref()
+                && let Some(unified) = build_instruction_appendix(cfg, active_dir).await
+            {
+                let _ = writeln!(prompt, "\n# INSTRUCTIONS\n{}", unified);
             }
+        } else if !context.discovered_skills.is_empty() {
+            let _ = writeln!(
+                prompt,
+                "\n# SKILLS\nUse `list_skills` to see available capabilities."
+            );
         }
 
         if !runtime_tail.trim().is_empty() {
@@ -373,7 +349,6 @@ pub(crate) struct SystemPromptConfig {
     pub(crate) enable_retry_context: bool,
     pub(crate) enable_token_tracking: bool,
     pub(crate) max_retry_attempts: usize,
-    pub(crate) prompt_assembly_mode: PromptAssemblyMode,
 }
 
 impl SystemPromptConfig {
@@ -383,7 +358,6 @@ impl SystemPromptConfig {
         enable_retry_context: bool,
         enable_token_tracking: bool,
         max_retry_attempts: usize,
-        prompt_assembly_mode: PromptAssemblyMode,
     ) -> Self {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
@@ -396,7 +370,6 @@ impl SystemPromptConfig {
             enable_retry_context,
             enable_token_tracking,
             max_retry_attempts,
-            prompt_assembly_mode,
         }
     }
 
@@ -409,7 +382,6 @@ impl SystemPromptConfig {
         self.enable_retry_context.hash(&mut hasher);
         self.enable_token_tracking.hash(&mut hasher);
         self.max_retry_attempts.hash(&mut hasher);
-        self.prompt_assembly_mode.hash(&mut hasher);
         hasher.finish()
     }
 }

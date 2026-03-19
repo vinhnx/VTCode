@@ -12,8 +12,7 @@ use vtcode_core::EditorContextSnapshot;
 use vtcode_core::llm::provider as uni;
 
 use crate::agent::runloop::unified::incremental_system_prompt::{
-    IncrementalSystemPrompt, PromptAssemblyMode, PromptCacheShapingMode, SystemPromptConfig,
-    SystemPromptContext,
+    IncrementalSystemPrompt, PromptCacheShapingMode, SystemPromptConfig, SystemPromptContext,
 };
 
 /// Parameters for building system prompts
@@ -296,7 +295,6 @@ impl ContextManager {
             retry_attempts > 0,
             false,
             3, // This could be configurable
-            PromptAssemblyMode::AppendInstructions,
         );
 
         // Determine if the provider/model exposes native context-awareness signals.
@@ -348,7 +346,6 @@ impl ContextManager {
                 config.hash(),
                 context.hash(),
                 retry_attempts,
-                config.prompt_assembly_mode,
                 &context,
                 self.agent_config.as_ref(),
             )
