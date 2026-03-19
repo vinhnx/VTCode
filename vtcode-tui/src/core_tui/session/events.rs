@@ -32,6 +32,9 @@ fn copy_selected_input_if_requested(
     has_command: bool,
 ) -> bool {
     if has_command && matches!(key.code, KeyCode::Char('c') | KeyCode::Char('C')) {
+        if session.input_manager.copy_selected_text_to_clipboard() {
+            session.mark_dirty();
+        }
         return true;
     }
 
