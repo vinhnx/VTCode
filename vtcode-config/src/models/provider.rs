@@ -172,6 +172,25 @@ impl fmt::Display for Provider {
     }
 }
 
+impl AsRef<str> for Provider {
+    fn as_ref(&self) -> &str {
+        match self {
+            Provider::Gemini => "gemini",
+            Provider::OpenAI => "openai",
+            Provider::Anthropic => "anthropic",
+            Provider::DeepSeek => "deepseek",
+            Provider::OpenRouter => "openrouter",
+            Provider::Ollama => "ollama",
+            Provider::LmStudio => "lmstudio",
+            Provider::Moonshot => "moonshot",
+            Provider::ZAI => "zai",
+            Provider::Minimax => "minimax",
+            Provider::HuggingFace => "huggingface",
+            Provider::LiteLLM => "litellm",
+        }
+    }
+}
+
 impl FromStr for Provider {
     type Err = ModelParseError;
 

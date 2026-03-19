@@ -6,7 +6,7 @@ use vtcode_core::config::constants::reasoning;
 use vtcode_core::config::models::{ModelId, Provider};
 use vtcode_core::config::types::ReasoningEffortLevel;
 
-use super::options::ModelOption;
+use super::options::{ModelOption, find_option_index};
 
 #[derive(Clone)]
 pub(super) struct SelectionDetail {
@@ -91,11 +91,9 @@ pub(super) fn parse_model_selection(
     let provider_lower = provider_token.to_ascii_lowercase();
     let provider_enum = Provider::from_str(&provider_lower).ok();
 
-    if let Some(option) = options
-        .iter()
-        .find(|candidate| candidate.id.eq_ignore_ascii_case(model_token.trim()))
-        && let Some(provider) = provider_enum
-        && provider == option.provider
+    if let Some(provider) = provider_enum
+        && let Some(option_index) = find_option_index(provider, model_token.trim())
+        && let Some(option) = options.get(option_index)
     {
         return Ok(selection_from_option(option));
     }

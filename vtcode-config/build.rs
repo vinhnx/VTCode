@@ -169,6 +169,8 @@ struct ProviderCatalog {
 #[derive(Deserialize)]
 struct CapabilityModelSpec {
     id: String,
+    #[serde(default)]
+    context: usize,
     #[serde(default = "default_tool_call_true")]
     tool_call: bool,
     #[serde(default)]
@@ -184,6 +186,7 @@ struct CapabilityModalities {
 struct CapabilityEntry {
     provider: String,
     id: String,
+    context_window: usize,
     tool_call: bool,
     input_modalities: Vec<String>,
 }
@@ -264,6 +267,7 @@ fn load_model_capability_entries(manifest_dir: &Path) -> Result<Vec<CapabilityEn
             entries.push(CapabilityEntry {
                 provider: provider_key.to_string(),
                 id: spec.id,
+                context_window: spec.context,
                 tool_call: spec.tool_call,
                 input_modalities: spec.modalities.input,
             });
@@ -401,7 +405,7 @@ fn write_metadata(out_dir: &Path, entries: &[EntryData]) -> Result<()> {
     metadata.push_str("    pub tool_call: bool,\n");
     metadata.push_str("}\n\n");
 
-    metadata.push_str("pub const ENTRIES: &[Entry] = &[\n");
+    metadata.push_str("#[allow(dead_code)]\npub const ENTRIES: &[Entry] = &[\n");
     for entry in entries {
         metadata.push_str("    Entry {\n");
         metadata.push_str("        variant: super::ModelId::");
@@ -474,21 +478,61 @@ pub const VENDOR_MODELS: &[VendorModels] = &[
         "];
 
 pub fn metadata_for(model: super::ModelId) -> Option<super::OpenRouterMetadata> {
-    ENTRIES.iter().find(|entry| entry.variant == model).map(|entry| super::OpenRouterMetadata {
-        id: entry.id,
-        vendor: entry.vendor,
-        display: entry.display,
-        description: entry.description,
-        efficient: entry.efficient,
-        top_tier: entry.top_tier,
-        generation: entry.generation,
-        reasoning: entry.reasoning,
-        tool_call: entry.tool_call,
-    })
+    match model {
+",
+    );
+    for entry in entries {
+        metadata.push_str("        super::ModelId::");
+        metadata.push_str(&entry.variant);
+        metadata.push_str(" => Some(super::OpenRouterMetadata {\n");
+        metadata.push_str("            id: crate::constants::models::openrouter::");
+        metadata.push_str(&entry.const_name);
+        metadata.push_str(",\n");
+        metadata.push_str("            vendor: \"");
+        metadata.push_str(&entry.vendor);
+        metadata.push_str("\",\n");
+        metadata.push_str("            display: \"");
+        metadata.push_str(&escape_rust_string(&entry.display));
+        metadata.push_str("\",\n");
+        metadata.push_str("            description: \"");
+        metadata.push_str(&escape_rust_string(&entry.description));
+        metadata.push_str("\",\n");
+        metadata.push_str("            efficient: ");
+        metadata.push_str(if entry.efficient { "true" } else { "false" });
+        metadata.push_str(",\n");
+        metadata.push_str("            top_tier: ");
+        metadata.push_str(if entry.top_tier { "true" } else { "false" });
+        metadata.push_str(",\n");
+        metadata.push_str("            generation: \"");
+        metadata.push_str(&escape_rust_string(&entry.generation));
+        metadata.push_str("\",\n");
+        metadata.push_str("            reasoning: ");
+        metadata.push_str(if entry.reasoning { "true" } else { "false" });
+        metadata.push_str(",\n");
+        metadata.push_str("            tool_call: ");
+        metadata.push_str(if entry.tool_call { "true" } else { "false" });
+        metadata.push_str(",\n");
+        metadata.push_str("        }),\n");
+    }
+    metadata.push_str(
+        "        _ => None,
+    }
 }
 
 pub fn parse_model(value: &str) -> Option<super::ModelId> {
-    ENTRIES.iter().find(|entry| entry.id == value).map(|entry| entry.variant)
+    match value {
+",
+    );
+    for entry in entries {
+        metadata.push_str("        crate::constants::models::openrouter::");
+        metadata.push_str(&entry.const_name);
+        metadata.push_str(" => Some(super::ModelId::");
+        metadata.push_str(&entry.variant);
+        metadata.push_str("),\n");
+    }
+    metadata.push_str(
+        "        _ => None,
+    }
 }
 
 pub fn vendor_groups() -> &'static [VendorModels] {
@@ -507,11 +551,12 @@ fn write_model_capabilities(out_dir: &Path, entries: &[CapabilityEntry]) -> Resu
     metadata.push_str("pub struct Entry {\n");
     metadata.push_str("    pub provider: &'static str,\n");
     metadata.push_str("    pub id: &'static str,\n");
+    metadata.push_str("    pub context_window: usize,\n");
     metadata.push_str("    pub tool_call: bool,\n");
     metadata.push_str("    pub input_modalities: &'static [&'static str],\n");
     metadata.push_str("}\n\n");
 
-    metadata.push_str("pub const ENTRIES: &[Entry] = &[\n");
+    metadata.push_str("#[allow(dead_code)]\npub const ENTRIES: &[Entry] = &[\n");
     for entry in entries {
         metadata.push_str("    Entry {\n");
         metadata.push_str("        provider: \"");
@@ -520,6 +565,9 @@ fn write_model_capabilities(out_dir: &Path, entries: &[CapabilityEntry]) -> Resu
         metadata.push_str("        id: \"");
         metadata.push_str(&escape_rust_string(&entry.id));
         metadata.push_str("\",\n");
+        metadata.push_str("        context_window: ");
+        metadata.push_str(&entry.context_window.to_string());
+        metadata.push_str(",\n");
         metadata.push_str("        tool_call: ");
         metadata.push_str(if entry.tool_call { "true" } else { "false" });
         metadata.push_str(",\n");
@@ -532,9 +580,69 @@ fn write_model_capabilities(out_dir: &Path, entries: &[CapabilityEntry]) -> Resu
         metadata.push_str("        ],\n");
         metadata.push_str("    },\n");
     }
+    let mut provider_map: IndexMap<&str, Vec<&CapabilityEntry>> = IndexMap::new();
+    for entry in entries {
+        provider_map.entry(&entry.provider).or_default().push(entry);
+    }
+
+    metadata.push_str("];\n\npub const PROVIDERS: &[&str] = &[\n");
+    for provider in provider_map.keys() {
+        metadata.push_str("    \"");
+        metadata.push_str(provider);
+        metadata.push_str("\",\n");
+    }
+    metadata.push_str("];\n\n");
+
     metadata.push_str(
-        "];\n\npub fn metadata_for(provider: &str, id: &str) -> Option<Entry> {\n    ENTRIES\n        .iter()\n        .find(|entry| entry.provider == provider && entry.id == id)\n        .copied()\n}\n",
+        "pub fn metadata_for(provider: &str, id: &str) -> Option<Entry> {\n    match provider {\n",
     );
+    for (provider, provider_entries) in &provider_map {
+        metadata.push_str("        \"");
+        metadata.push_str(provider);
+        metadata.push_str("\" => match id {\n");
+        for entry in provider_entries {
+            metadata.push_str("            \"");
+            metadata.push_str(&escape_rust_string(&entry.id));
+            metadata.push_str("\" => Some(Entry {\n");
+            metadata.push_str("                provider: \"");
+            metadata.push_str(provider);
+            metadata.push_str("\",\n");
+            metadata.push_str("                id: \"");
+            metadata.push_str(&escape_rust_string(&entry.id));
+            metadata.push_str("\",\n");
+            metadata.push_str("                context_window: ");
+            metadata.push_str(&entry.context_window.to_string());
+            metadata.push_str(",\n");
+            metadata.push_str("                tool_call: ");
+            metadata.push_str(if entry.tool_call { "true" } else { "false" });
+            metadata.push_str(",\n");
+            metadata.push_str("                input_modalities: &[\n");
+            for modality in &entry.input_modalities {
+                metadata.push_str("                    \"");
+                metadata.push_str(&escape_rust_string(modality));
+                metadata.push_str("\",\n");
+            }
+            metadata.push_str("                ],\n");
+            metadata.push_str("            }),\n");
+        }
+        metadata.push_str("            _ => None,\n");
+        metadata.push_str("        },\n");
+    }
+    metadata.push_str("        _ => None,\n    }\n}\n\n");
+
+    metadata.push_str("pub fn models_for_provider(provider: &str) -> Option<&'static [&'static str]> {\n    match provider {\n");
+    for (provider, provider_entries) in &provider_map {
+        metadata.push_str("        \"");
+        metadata.push_str(provider);
+        metadata.push_str("\" => Some(&[\n");
+        for entry in provider_entries {
+            metadata.push_str("            \"");
+            metadata.push_str(&escape_rust_string(&entry.id));
+            metadata.push_str("\",\n");
+        }
+        metadata.push_str("        ]),\n");
+    }
+    metadata.push_str("        _ => None,\n    }\n}\n");
 
     fs::write(out_dir.join("model_capabilities.rs"), metadata)
         .context("Failed to write generated model capability metadata")

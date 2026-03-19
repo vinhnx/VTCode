@@ -5,6 +5,8 @@ use tempfile::tempdir;
 use vtcode_config::OpenAIServiceTier;
 use vtcode_core::config::models::ModelId;
 
+use self::options::{find_option_index, option_indexes_for_provider};
+
 fn has_model(options: &[ModelOption], model: ModelId) -> bool {
     let id = model.as_str();
     let provider = model.provider();
@@ -183,6 +185,20 @@ fn preferred_model_selection_matches_current_static_model() {
         .expect("selected index should be valid");
     assert_eq!(option.provider, Provider::Anthropic);
     assert_eq!(option.id, model_id);
+}
+
+#[test]
+fn static_picker_indexes_resolve_provider_models() {
+    let openai_indexes = option_indexes_for_provider(Provider::OpenAI);
+    assert!(!openai_indexes.is_empty());
+
+    let gpt54_index = find_option_index(Provider::OpenAI, "GPT-5.4")
+        .expect("gpt-5.4 should be indexed case-insensitively");
+    let option = MODEL_OPTIONS
+        .get(gpt54_index)
+        .expect("indexed option should exist");
+    assert_eq!(option.id, "gpt-5.4");
+    assert_eq!(option.provider, Provider::OpenAI);
 }
 
 #[test]

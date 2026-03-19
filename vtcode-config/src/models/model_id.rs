@@ -11,6 +11,10 @@ mod openrouter;
 mod parse;
 mod provider;
 
+pub use capabilities::{
+    ModelCatalogEntry, catalog_provider_keys, model_catalog_entry, supported_models_for_provider,
+};
+
 /// Centralized enum for all supported model identifiers
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]

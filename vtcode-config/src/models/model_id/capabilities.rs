@@ -3,24 +3,72 @@ use crate::models::Provider;
 use super::ModelId;
 
 #[cfg(not(docsrs))]
+#[allow(dead_code)]
 mod capability_generated {
     include!(concat!(env!("OUT_DIR"), "/model_capabilities.rs"));
 }
 
 #[cfg(docsrs)]
+#[allow(dead_code)]
 mod capability_generated {
     #[derive(Clone, Copy)]
     pub struct Entry {
         pub provider: &'static str,
         pub id: &'static str,
+        pub context_window: usize,
         pub tool_call: bool,
         pub input_modalities: &'static [&'static str],
     }
 
     pub const ENTRIES: &[Entry] = &[];
+    pub const PROVIDERS: &[&str] = &[];
 
     pub fn metadata_for(_provider: &str, _id: &str) -> Option<Entry> {
         None
+    }
+
+    pub fn models_for_provider(_provider: &str) -> Option<&'static [&'static str]> {
+        None
+    }
+}
+
+/// Catalog metadata generated from `docs/models.json`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ModelCatalogEntry {
+    pub provider: &'static str,
+    pub id: &'static str,
+    pub context_window: usize,
+    pub tool_call: bool,
+    pub input_modalities: &'static [&'static str],
+}
+
+fn catalog_provider_key(provider: &str) -> &str {
+    if provider.eq_ignore_ascii_case("google") || provider.eq_ignore_ascii_case("gemini") {
+        "gemini"
+    } else if provider.eq_ignore_ascii_case("openai") {
+        "openai"
+    } else if provider.eq_ignore_ascii_case("anthropic") {
+        "anthropic"
+    } else if provider.eq_ignore_ascii_case("deepseek") {
+        "deepseek"
+    } else if provider.eq_ignore_ascii_case("openrouter") {
+        "openrouter"
+    } else if provider.eq_ignore_ascii_case("ollama") {
+        "ollama"
+    } else if provider.eq_ignore_ascii_case("lmstudio") {
+        "lmstudio"
+    } else if provider.eq_ignore_ascii_case("moonshot") {
+        "moonshot"
+    } else if provider.eq_ignore_ascii_case("zai") {
+        "zai"
+    } else if provider.eq_ignore_ascii_case("minimax") {
+        "minimax"
+    } else if provider.eq_ignore_ascii_case("huggingface") {
+        "huggingface"
+    } else if provider.eq_ignore_ascii_case("litellm") {
+        "litellm"
+    } else {
+        provider
     }
 }
 
@@ -41,9 +89,33 @@ fn capability_provider_key(provider: Provider) -> &'static str {
     }
 }
 
+fn generated_catalog_entry(provider: &str, id: &str) -> Option<ModelCatalogEntry> {
+    capability_generated::metadata_for(catalog_provider_key(provider), id).map(|entry| {
+        ModelCatalogEntry {
+            provider: entry.provider,
+            id: entry.id,
+            context_window: entry.context_window,
+            tool_call: entry.tool_call,
+            input_modalities: entry.input_modalities,
+        }
+    })
+}
+
+pub fn model_catalog_entry(provider: &str, id: &str) -> Option<ModelCatalogEntry> {
+    generated_catalog_entry(provider, id)
+}
+
+pub fn supported_models_for_provider(provider: &str) -> Option<&'static [&'static str]> {
+    capability_generated::models_for_provider(catalog_provider_key(provider))
+}
+
+pub fn catalog_provider_keys() -> &'static [&'static str] {
+    capability_generated::PROVIDERS
+}
+
 impl ModelId {
-    fn generated_capabilities(&self) -> Option<capability_generated::Entry> {
-        capability_generated::metadata_for(capability_provider_key(self.provider()), self.as_str())
+    fn generated_capabilities(&self) -> Option<ModelCatalogEntry> {
+        generated_catalog_entry(capability_provider_key(self.provider()), self.as_str())
     }
 
     /// Attempt to find a non-reasoning variant for this model.

@@ -1,5 +1,3 @@
-use hashbrown::HashMap;
-
 use anyhow::Result;
 
 use vtcode_core::config::constants::ui;
@@ -10,7 +8,7 @@ use vtcode_core::ui::{InlineListItem, InlineListSearchConfig, InlineListSelectio
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::dynamic_models::DynamicModelRegistry;
-use super::options::{ModelOption, picker_provider_order};
+use super::options::{ModelOption, option_indexes_for_provider, picker_provider_order};
 
 mod prompts;
 pub(super) use prompts::{
@@ -236,20 +234,23 @@ pub(super) fn render_step_one_inline(
 ) -> Result<()> {
     let mut items = Vec::new();
     for provider in picker_provider_order() {
-        let provider_models: Vec<(usize, &ModelOption)> = options
-            .iter()
-            .enumerate()
-            .filter(|(_, candidate)| candidate.provider == provider)
-            .collect();
+        let provider_model_indexes = option_indexes_for_provider(provider);
         let dynamic_indexes = dynamic_models.indexes_for(provider);
         let has_error = dynamic_models.error_for(provider).is_some();
         let has_warning = dynamic_models.warning_for(provider).is_some();
 
-        if provider_models.is_empty() && dynamic_indexes.is_empty() && !has_error && !has_warning {
+        if provider_model_indexes.is_empty()
+            && dynamic_indexes.is_empty()
+            && !has_error
+            && !has_warning
+        {
             continue;
         }
 
-        for (idx, option) in &provider_models {
+        for idx in provider_model_indexes {
+            let Some(option) = options.get(*idx) else {
+                continue;
+            };
             items.push(InlineListItem {
                 title: option.display.to_string(),
                 subtitle: Some(static_model_subtitle(
@@ -271,7 +272,7 @@ pub(super) fn render_step_one_inline(
         }
 
         if provider.is_dynamic() {
-            for entry_index in &dynamic_indexes {
+            for entry_index in dynamic_indexes {
                 if let Some(detail) = dynamic_models.detail(*entry_index) {
                     let extra_terms = {
                         let mut terms = Vec::new();
@@ -329,7 +330,7 @@ pub(super) fn render_step_one_inline(
                     search_value: Some(format!("{} setup", provider.label().to_ascii_lowercase())),
                 });
             }
-        } else if provider == Provider::HuggingFace && provider_models.is_empty() {
+        } else if provider == Provider::HuggingFace && provider_model_indexes.is_empty() {
             items.push(InlineListItem {
                 title: "Custom Hugging Face model".to_string(),
                 subtitle: Some(
@@ -399,28 +400,25 @@ pub(super) fn render_step_one_plain(
         "Type 'refresh' to re-query LM Studio and Ollama servers.",
     )?;
 
-    let mut grouped: HashMap<Provider, Vec<&ModelOption>> = HashMap::new();
-    for option in options {
-        grouped.entry(option.provider).or_default().push(option);
-    }
-
     let mut first_section = true;
     for provider in picker_provider_order() {
+        let provider_model_indexes = option_indexes_for_provider(provider);
         if provider.is_local() {
             if !first_section {
                 renderer.line(MessageStyle::Info, &provider_group_divider_line())?;
             }
             first_section = false;
             renderer.line(MessageStyle::Info, &format!("[{}]", provider.label()))?;
-            if let Some(list) = grouped.get(&provider) {
-                for option in list {
-                    renderer.line(MessageStyle::Info, &format!("  {}", option.display))?;
-                    renderer.line(
-                        MessageStyle::Info,
-                        &format!("      {}", static_model_subtitle(option, "", "")),
-                    )?;
-                    renderer.line(MessageStyle::Info, &format!("      {}", option.description))?;
-                }
+            for option_index in provider_model_indexes {
+                let Some(option) = options.get(*option_index) else {
+                    continue;
+                };
+                renderer.line(MessageStyle::Info, &format!("  {}", option.display))?;
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!("      {}", static_model_subtitle(option, "", "")),
+                )?;
+                renderer.line(MessageStyle::Info, &format!("      {}", option.description))?;
             }
 
             if let Some(warning) = dynamic_models.warning_for(provider) {
@@ -443,7 +441,7 @@ pub(super) fn render_step_one_plain(
                 }
             } else {
                 for entry_index in dynamic_indexes {
-                    if let Some(detail) = dynamic_models.detail(entry_index) {
+                    if let Some(detail) = dynamic_models.detail(*entry_index) {
                         renderer
                             .line(MessageStyle::Info, &format!("  {}", detail.model_display))?;
                         renderer.line(
@@ -476,26 +474,30 @@ pub(super) fn render_step_one_plain(
                 MessageStyle::Info,
                 "      Docs: https://huggingface.co/docs/inference-providers",
             )?;
-            if let Some(list) = grouped.get(&provider) {
-                for option in list {
-                    renderer.line(MessageStyle::Info, &format!("  {}", option.display))?;
-                    renderer.line(
-                        MessageStyle::Info,
-                        &format!("      {}", static_model_subtitle(option, "", "")),
-                    )?;
-                    renderer.line(MessageStyle::Info, &format!("      {}", option.description))?;
-                }
+            for option_index in provider_model_indexes {
+                let Some(option) = options.get(*option_index) else {
+                    continue;
+                };
+                renderer.line(MessageStyle::Info, &format!("  {}", option.display))?;
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!("      {}", static_model_subtitle(option, "", "")),
+                )?;
+                renderer.line(MessageStyle::Info, &format!("      {}", option.description))?;
             }
         } else {
-            let Some(list) = grouped.get(&provider) else {
+            if provider_model_indexes.is_empty() {
                 continue;
-            };
+            }
             if !first_section {
                 renderer.line(MessageStyle::Info, &provider_group_divider_line())?;
             }
             first_section = false;
             renderer.line(MessageStyle::Info, &format!("[{}]", provider.label()))?;
-            for option in list {
+            for option_index in provider_model_indexes {
+                let Some(option) = options.get(*option_index) else {
+                    continue;
+                };
                 renderer.line(MessageStyle::Info, &format!("  {}", option.display))?;
                 renderer.line(
                     MessageStyle::Info,

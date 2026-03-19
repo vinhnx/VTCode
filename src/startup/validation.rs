@@ -156,35 +156,19 @@ pub(super) fn resolve_workspace_path(workspace_arg: Option<PathBuf>) -> Result<P
 
 pub(super) fn validate_startup_configuration(
     config: &VTCodeConfig,
-    workspace: &Path,
+    _workspace: &Path,
     quiet: bool,
 ) -> Result<()> {
     check_ripgrep_availability();
 
-    let mut models_json_paths = vec![workspace.join("docs/models.json")];
-    if let Ok(cwd) = std::env::current_dir() {
-        models_json_paths.push(cwd.join("docs/models.json"));
-    }
-
-    let models_json_path = models_json_paths
-        .iter()
-        .find(|p| p.exists())
-        .map(|p| p.to_path_buf());
-
-    if let Some(models_path) = models_json_path {
-        match ConfigValidator::new(&models_path) {
-            Ok(validator) => {
-                let _ = validator.validate(config);
-            }
-            Err(e) => {
-                if !quiet {
-                    eprintln!(
-                        "vtcode: warning: could not load models database for validation: {}",
-                        e
-                    );
-                }
-            }
-        }
+    let validator = ConfigValidator::generated();
+    if let Err(e) = validator.validate(config)
+        && !quiet
+    {
+        eprintln!(
+            "vtcode: warning: could not validate configured model catalog: {}",
+            e
+        );
     }
 
     Ok(())

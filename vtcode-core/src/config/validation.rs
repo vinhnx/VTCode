@@ -2,15 +2,14 @@
 ///
 /// Provides comprehensive validation of VTCodeConfig at startup to catch
 /// common configuration errors early and provide helpful error messages.
-use anyhow::{Context, Result, bail};
-use hashbrown::HashMap;
+use anyhow::{Result, bail};
 use std::path::Path;
-use std::sync::OnceLock;
 
 use crate::config::FullAutoConfig;
 use crate::config::loader::VTCodeConfig;
-use crate::utils::file_utils::read_file_with_context_sync;
-use serde_json::Value as JsonValue;
+use crate::config::models::{
+    catalog_provider_keys, model_catalog_entry, supported_models_for_provider,
+};
 
 /// Result of a configuration validation check
 #[derive(Debug, Clone)]
@@ -66,107 +65,32 @@ impl Default for ValidationResult {
     }
 }
 
-/// Load and parse models.json
-fn load_models_json() -> Result<JsonValue> {
-    static MODELS_CACHE: OnceLock<JsonValue> = OnceLock::new();
-
-    if let Some(cached) = MODELS_CACHE.get() {
-        return Ok(cached.clone());
-    }
-
-    // Try to load from docs/models.json relative to current dir or workspace
-    let paths = [
-        std::path::PathBuf::from("docs/models.json"),
-        std::path::PathBuf::from("../docs/models.json"),
-        std::path::PathBuf::from("../../docs/models.json"),
-    ];
-
-    for path in &paths {
-        if path.exists() {
-            let content = read_file_with_context_sync(path, "models database")?;
-            let parsed: JsonValue = serde_json::from_str(&content)
-                .context("Failed to parse docs/models.json. Check JSON syntax.")?;
-            let _ = MODELS_CACHE.set(parsed.clone());
-            return Ok(parsed);
-        }
-    }
-
-    anyhow::bail!("Could not find docs/models.json. Checked: {:?}", paths)
-}
-
-/// Get available models from models.json
-fn get_available_models() -> Result<HashMap<String, Vec<String>>> {
-    let models_json = load_models_json()?;
-
-    let mut result = HashMap::new();
-
-    if let Some(providers) = models_json.as_object() {
-        for (provider_name, provider_data) in providers {
-            if let Some(provider_obj) = provider_data.as_object()
-                && let Some(models_obj) = provider_obj.get("models").and_then(|m| m.as_object())
-            {
-                let model_ids: Vec<String> = models_obj.keys().cloned().collect();
-                result.insert(provider_name.clone(), model_ids);
-            }
-        }
-    }
-
-    Ok(result)
-}
-
-/// Validate that the configured model exists in models.json
+/// Validate that the configured model exists in the generated model catalog.
 pub fn validate_model_exists(provider: &str, model: &str) -> Result<()> {
-    let available_models =
-        get_available_models().context("Failed to load available models from docs/models.json")?;
-
-    match available_models.get(provider) {
-        Some(models) => {
-            if !models.iter().any(|m| m == model) {
-                bail!(
-                    "Model '{}' not found for provider '{}'. Available models: {}",
-                    model,
-                    provider,
-                    models.join(", ")
-                );
-            }
-            Ok(())
-        }
-        None => {
-            let providers: Vec<&str> = available_models.keys().map(|s| s.as_str()).collect();
+    if let Some(models) = supported_models_for_provider(provider) {
+        if !models.contains(&model) {
             bail!(
-                "Provider '{}' not recognized. Available providers: {}",
+                "Model '{}' not found for provider '{}'. Available models: {}",
+                model,
                 provider,
-                providers.join(", ")
+                models.join(", ")
             );
         }
-    }
-}
-
-fn provider_catalog_key(provider: &str) -> &str {
-    if provider.eq_ignore_ascii_case("gemini") {
-        "google"
+        Ok(())
     } else {
-        provider
+        bail!(
+            "Provider '{}' not recognized. Available providers: {}",
+            provider,
+            catalog_provider_keys().join(", ")
+        );
     }
 }
 
 /// Get context window size for a model from the catalog.
 fn catalog_model_context_window(provider: &str, model: &str) -> Result<Option<usize>> {
-    let models_json = load_models_json()?;
-    let provider = provider_catalog_key(provider);
-
-    if let Some(provider_data) = models_json.get(provider).and_then(|p| p.as_object())
-        && let Some(model_data) = provider_data
-            .get("models")
-            .and_then(|m| m.as_object())
-            .and_then(|m| m.get(model))
-            .and_then(|m| m.as_object())
-        && let Some(context_size) = model_data.get("context").and_then(|c| c.as_u64())
-    {
-        return Ok(Some(context_size as usize));
-    }
-
-    Ok(None)
+    Ok(model_catalog_entry(provider, model)
+        .map(|entry| entry.context_window)
+        .filter(|context_window| *context_window > 0))
 }
 
 /// Resolve the effective context window size for a model.
@@ -297,29 +221,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn loads_models_json() {
-        let result = load_models_json();
-        assert!(result.is_ok(), "Should load models.json successfully");
-    }
-
-    #[test]
-    fn gets_available_models() {
-        let result = get_available_models();
-        assert!(result.is_ok(), "Should get available models");
-
-        let models = result.unwrap();
-        assert!(!models.is_empty(), "Should have at least one provider");
-
-        // Check for common providers
+    fn generated_catalog_contains_providers() {
+        let providers = catalog_provider_keys();
+        assert!(!providers.is_empty(), "Should expose generated providers");
         assert!(
-            models.contains_key("google") || models.contains_key("openai"),
+            providers.contains(&"gemini") || providers.contains(&"openai"),
             "Should have at least one major provider"
         );
     }
 
     #[test]
     fn validates_known_model() {
-        // This will succeed if google provider and gemini-3-flash-preview exist
         let result = validate_model_exists("google", "gemini-3-flash-preview");
         assert!(
             result.is_ok(),

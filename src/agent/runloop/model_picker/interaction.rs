@@ -6,7 +6,7 @@ use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_tui::ui::interactive_list::{SelectionEntry, run_interactive_selection};
 
 use super::dynamic_models::DynamicModelRegistry;
-use super::options::{ModelOption, picker_provider_order};
+use super::options::{ModelOption, option_indexes_for_provider, picker_provider_order};
 use super::rendering::{
     CUSTOM_PROVIDER_SUBTITLE, CUSTOM_PROVIDER_TITLE, KEEP_CURRENT_DESCRIPTION,
     dynamic_model_subtitle, static_model_subtitle,
@@ -49,11 +49,10 @@ pub(super) fn select_model_with_ratatui_list(
 
     let mut choices = Vec::new();
     for provider in picker_provider_order() {
-        let provider_models: Vec<&ModelOption> = options
-            .iter()
-            .filter(|option| option.provider == provider)
-            .collect();
-        for option in &provider_models {
+        for option_index in option_indexes_for_provider(provider) {
+            let Some(option) = options.get(*option_index) else {
+                continue;
+            };
             let description = format!(
                 "{} • {}",
                 provider.label(),
@@ -87,7 +86,7 @@ pub(super) fn select_model_with_ratatui_list(
                 }
             } else {
                 for entry_index in dynamic_indexes {
-                    if let Some(detail) = dynamic_models.detail(entry_index) {
+                    if let Some(detail) = dynamic_models.detail(*entry_index) {
                         let description = format!(
                             "{} • {}",
                             provider.label(),

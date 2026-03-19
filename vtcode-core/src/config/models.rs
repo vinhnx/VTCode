@@ -7,4 +7,7 @@
 #[cfg(test)]
 mod tests;
 
-pub use vtcode_config::models::{ModelId, ModelParseError, OpenRouterMetadata, Provider};
+pub use vtcode_config::models::{
+    ModelCatalogEntry, ModelId, ModelParseError, OpenRouterMetadata, Provider,
+    catalog_provider_keys, model_catalog_entry, supported_models_for_provider,
+};

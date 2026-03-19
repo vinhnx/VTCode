@@ -451,6 +451,20 @@ fn test_core_capability_helpers() {
 
 #[test]
 fn test_generated_model_capability_lookup() {
+    let gpt54_catalog = model_catalog_entry("openai", "gpt-5.4").expect("gpt-5.4 metadata");
+    assert_eq!(gpt54_catalog.context_window, 1_050_000);
+    assert!(gpt54_catalog.tool_call);
+    assert_eq!(gpt54_catalog.input_modalities, &["text", "image"]);
+
+    let gemini_catalog = model_catalog_entry("google", "gemini-3-flash-preview")
+        .expect("gemini-3-flash-preview metadata");
+    assert_eq!(gemini_catalog.provider, "gemini");
+    assert_eq!(gemini_catalog.context_window, 1_048_576);
+
+    let openai_models = supported_models_for_provider("openai").expect("openai models");
+    assert!(openai_models.contains(&models::GPT_5_4));
+    assert!(catalog_provider_keys().contains(&"openai"));
+
     assert_eq!(ModelId::GPT54.input_modalities(), &["text", "image"]);
     assert_eq!(ModelId::GPT52Codex.input_modalities(), &["text", "image"]);
     assert_eq!(ModelId::GPT51Codex.input_modalities(), &["text", "image"]);

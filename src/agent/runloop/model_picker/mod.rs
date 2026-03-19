@@ -14,7 +14,7 @@ use interaction::{
     ModelSelectionListOutcome, select_model_with_ratatui_list, select_reasoning_with_ratatui,
     select_service_tier_with_ratatui,
 };
-use options::{MODEL_OPTIONS, ModelOption};
+use options::{MODEL_OPTIONS, ModelOption, find_option_index};
 use rendering::{
     CLOSE_THEME_MESSAGE, prompt_api_key_plain, prompt_custom_model_entry, prompt_reasoning_plain,
     prompt_service_tier_plain, render_reasoning_inline, render_service_tier_inline,
@@ -425,20 +425,17 @@ impl ModelPickerState {
             return None;
         }
 
-        if let Some((index, _)) = self.options.iter().enumerate().find(|(_, option)| {
-            option.provider.to_string() == provider_key && option.id.eq_ignore_ascii_case(model_key)
-        }) {
-            return Some(InlineListSelection::Model(index));
-        }
-
         let Ok(provider) = Provider::from_str(provider_key.as_str()) else {
             return None;
         };
+        if let Some(index) = find_option_index(provider, model_key) {
+            return Some(InlineListSelection::Model(index));
+        }
         for entry_index in self.dynamic_models.indexes_for(provider) {
-            if let Some(detail) = self.dynamic_models.detail(entry_index)
+            if let Some(detail) = self.dynamic_models.detail(*entry_index)
                 && detail.model_id.eq_ignore_ascii_case(model_key)
             {
-                return Some(InlineListSelection::DynamicModel(entry_index));
+                return Some(InlineListSelection::DynamicModel(*entry_index));
             }
         }
 

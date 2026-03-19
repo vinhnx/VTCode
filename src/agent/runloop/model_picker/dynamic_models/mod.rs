@@ -86,11 +86,11 @@ impl DynamicModelRegistry {
         registry
     }
 
-    pub(super) fn indexes_for(&self, provider: Provider) -> Vec<usize> {
+    pub(super) fn indexes_for(&self, provider: Provider) -> &[usize] {
         self.provider_models
             .get(&provider)
-            .cloned()
-            .unwrap_or_default()
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
     }
 
     pub(super) fn detail(&self, index: usize) -> Option<&SelectionDetail> {

@@ -11,13 +11,16 @@ use crate::config::api_keys::ApiKeySources;
 use crate::config::api_keys::get_api_key;
 use crate::config::constants::models::openai::RESPONSES_API_MODELS;
 use crate::config::loader::VTCodeConfig;
+use crate::config::models::{model_catalog_entry, supported_models_for_provider};
 use crate::utils::file_utils::read_file_with_context_sync;
 
 /// Loaded models database from docs/models.json
 #[derive(Debug, Clone)]
-struct ModelsDatabase {
-    /// Provider ID -> models
-    providers: HashMap<String, ProviderModels>,
+enum ModelsDatabase {
+    Generated,
+    File {
+        providers: HashMap<String, ProviderModels>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -31,6 +34,10 @@ struct ModelInfo {
 }
 
 impl ModelsDatabase {
+    pub fn generated() -> Self {
+        Self::Generated
+    }
+
     /// Load models database from docs/models.json
     pub fn from_file(path: &Path) -> Result<Self> {
         let content = read_file_with_context_sync(path, "models database")?;
@@ -63,23 +70,33 @@ impl ModelsDatabase {
             }
         }
 
-        Ok(ModelsDatabase { providers })
+        Ok(Self::File { providers })
     }
 
     /// Check if model exists for provider
     pub fn model_exists(&self, provider: &str, model: &str) -> bool {
-        self.providers
-            .get(provider)
-            .map(|p| p.models.contains_key(model))
-            .unwrap_or(false)
+        match self {
+            Self::Generated => supported_models_for_provider(provider)
+                .map(|models| models.contains(&model))
+                .unwrap_or(false),
+            Self::File { providers } => providers
+                .get(provider)
+                .map(|p| p.models.contains_key(model))
+                .unwrap_or(false),
+        }
     }
 
     /// Get context window size for model
     pub fn get_context_window(&self, provider: &str, model: &str) -> Option<usize> {
-        self.providers
-            .get(provider)
-            .and_then(|p| p.models.get(model))
-            .map(|m| m.context_window)
+        match self {
+            Self::Generated => model_catalog_entry(provider, model)
+                .map(|entry| entry.context_window)
+                .filter(|context_window| *context_window > 0),
+            Self::File { providers } => providers
+                .get(provider)
+                .and_then(|p| p.models.get(model))
+                .map(|m| m.context_window),
+        }
     }
 }
 
@@ -89,6 +106,13 @@ pub struct ConfigValidator {
 }
 
 impl ConfigValidator {
+    /// Create a validator backed by the build-generated model catalog.
+    pub fn generated() -> Self {
+        Self {
+            models_db: ModelsDatabase::generated(),
+        }
+    }
+
     /// Create a new validator from models database file
     pub fn new(models_db_path: &Path) -> Result<Self> {
         Ok(Self {
