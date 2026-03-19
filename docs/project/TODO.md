@@ -2,6 +2,10 @@ NOTE: use private relay signup codex free
 
 ---
 
+idea: wrap a 'vtcode update' cli command to replace curl brew cargo install
+
+---
+
 NOTE: use deepwiki mcp to reference from codex https://deepwiki.com/openai/codex
 
 ---
