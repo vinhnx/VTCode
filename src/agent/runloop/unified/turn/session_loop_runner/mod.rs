@@ -1278,8 +1278,7 @@ mod tests {
         archive::next_runtime_archive_id_request, archive::workspace_archive_label,
         build_partial_timeout_messages, build_tracked_file_freshness_note,
         checkpoint_session_archive_start, effective_max_tool_calls_for_turn,
-        prepare_resume_bootstrap_without_archive,
-        resolve_effective_turn_timeout_secs,
+        prepare_resume_bootstrap_without_archive, resolve_effective_turn_timeout_secs,
     };
     use crate::agent::agents::ResumeSession;
     use crate::agent::runloop::unified::run_loop_context::TurnPhase;

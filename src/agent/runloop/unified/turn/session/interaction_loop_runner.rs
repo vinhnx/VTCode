@@ -18,7 +18,9 @@ use vtcode_core::ui::theme;
 use vtcode_core::ui::{inline_theme_from_core_styles, to_tui_appearance};
 use vtcode_core::utils::ansi::MessageStyle;
 
-use crate::agent::runloop::git::{DirtyWorktreeEntry, git_dirty_worktree_entries};
+use crate::agent::runloop::git::{
+    DirtyWorktreeEntry, DirtyWorktreeStatus, git_dirty_worktree_entries,
+};
 use crate::agent::runloop::model_picker::ModelPickerProgress;
 use crate::agent::runloop::prompt::refine_and_enrich_prompt;
 use crate::agent::runloop::unified::async_mcp_manager::{
@@ -334,7 +336,7 @@ fn refresh_live_ide_context_update(
 enum PendingTurnWorktreeAction {
     Proceed,
     RestoreInput,
-    ReplaceInput(String),
+    QueueInput(String),
     Exit,
 }
 
@@ -355,7 +357,8 @@ fn next_unrelated_dirty_worktree_entry(
         .collect::<BTreeSet<_>>();
 
     Ok(entries.into_iter().find(|entry| {
-        !tracked_paths.contains(&entry.path)
+        entry.status == DirtyWorktreeStatus::Modified
+            && !tracked_paths.contains(&entry.path)
             && !agent_touched_paths.contains(&entry.path)
             && !prompt_state.is_acknowledged(entry)
     }))
@@ -401,7 +404,7 @@ async fn resolve_unrelated_worktree_before_turn(
         }
         UnrelatedWorktreePromptOutcome::Other(text) => {
             state.unrelated_worktree_prompt_state.acknowledge(&entry);
-            Ok(PendingTurnWorktreeAction::ReplaceInput(text))
+            Ok(PendingTurnWorktreeAction::QueueInput(text))
         }
         UnrelatedWorktreePromptOutcome::Exit => Ok(PendingTurnWorktreeAction::Exit),
     }
@@ -810,8 +813,13 @@ pub(super) async fn run_interaction_loop_impl(
         match resolve_unrelated_worktree_before_turn(ctx, state, input_owned.as_str()).await? {
             PendingTurnWorktreeAction::Proceed => {}
             PendingTurnWorktreeAction::RestoreInput => continue,
-            PendingTurnWorktreeAction::ReplaceInput(new_input) => {
-                input_owned = new_input;
+            PendingTurnWorktreeAction::QueueInput(new_input) => {
+                state.queued_inputs.push_back(new_input);
+                *state.prefer_latest_queued_input_once = true;
+                ctx.handle
+                    .set_queued_inputs(state.queued_inputs.iter().cloned().collect());
+                ctx.handle.clear_input();
+                continue;
             }
             PendingTurnWorktreeAction::Exit => {
                 return Ok(InteractionOutcome::Exit {
@@ -1512,5 +1520,37 @@ mod tests {
             normalize_workspace_path(repo.path(), &path)
         );
         assert_ne!(refreshed_entry.fingerprint, first_entry.fingerprint);
+    }
+
+    #[tokio::test]
+    async fn deleted_worktree_files_do_not_trigger_unrelated_modified_prompt() {
+        let repo = init_git_repo();
+        let path = repo.path().join("docs/project/TODO.md");
+        fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
+        fs::write(&path, "before\n").expect("write");
+
+        let run = |args: &[&str]| {
+            let status = Command::new("git")
+                .args(args)
+                .current_dir(repo.path())
+                .status()
+                .expect("git command");
+            assert!(status.success(), "git command failed: {args:?}");
+        };
+
+        run(&["add", "."]);
+        run(&["commit", "-m", "test: seed repo"]);
+        fs::remove_file(&path).expect("remove file");
+
+        let registry = ToolRegistry::new(repo.path().to_path_buf()).await;
+        let entry = next_unrelated_dirty_worktree_entry(
+            repo.path(),
+            &registry,
+            &BTreeSet::new(),
+            &UnrelatedWorktreePromptState::default(),
+        )
+        .expect("entry lookup");
+
+        assert!(entry.is_none());
     }
 }
