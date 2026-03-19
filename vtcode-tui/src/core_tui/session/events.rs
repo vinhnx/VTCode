@@ -26,6 +26,33 @@ pub(super) fn handle_paste(session: &mut Session, content: &str) {
     }
 }
 
+fn copy_selected_input_if_requested(
+    session: &mut Session,
+    key: &KeyEvent,
+    has_command: bool,
+) -> bool {
+    if has_command && matches!(key.code, KeyCode::Char('c') | KeyCode::Char('C')) {
+        return true;
+    }
+
+    let is_copy_shortcut = match key.code {
+        KeyCode::Char('c') | KeyCode::Char('C') => key.modifiers.contains(KeyModifiers::CONTROL),
+        KeyCode::Char('\u{3}') => true,
+        _ => false,
+    };
+
+    if !is_copy_shortcut {
+        return false;
+    }
+
+    if session.input_manager.copy_selected_text_to_clipboard() {
+        session.mark_dirty();
+        return true;
+    }
+
+    false
+}
+
 #[allow(dead_code)]
 pub(super) fn handle_event(
     session: &mut Session,
@@ -103,6 +130,10 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
     // On macOS: Command = SUPER, on some terminals Alt = META
     let has_command = has_super || raw_meta;
     let has_alt = raw_alt && !has_command;
+
+    if copy_selected_input_if_requested(session, &key, has_command) {
+        return None;
+    }
 
     if let Some(modal) = session.modal_state_mut() {
         let modal_modifiers = ModalKeyModifiers {
@@ -210,13 +241,6 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
 
     match key.code {
         KeyCode::Char('c') | KeyCode::Char('C') if has_control => {
-            // Copy selected text to clipboard (works regardless of input_enabled)
-            if let Some(text) = session.input_manager.selected_text() {
-                MouseSelectionState::copy_to_clipboard(text);
-                session.input_manager.clear_selection();
-                session.mark_dirty();
-                return None;
-            }
             if session.mouse_selection.has_selection {
                 session.mouse_selection.request_copy();
                 session.mark_dirty();
@@ -226,13 +250,6 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             Some(InlineEvent::Interrupt)
         }
         KeyCode::Char('\u{3}') => {
-            // Copy selected text to clipboard (works regardless of input_enabled)
-            if let Some(text) = session.input_manager.selected_text() {
-                MouseSelectionState::copy_to_clipboard(text);
-                session.input_manager.clear_selection();
-                session.mark_dirty();
-                return None;
-            }
             if session.mouse_selection.has_selection {
                 session.mouse_selection.request_copy();
                 session.mark_dirty();
@@ -539,16 +556,6 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             None
         }
         KeyCode::Char(ch) => {
-            // Cmd+C copy works regardless of input_enabled
-            if has_command && matches!(ch, 'c' | 'C') {
-                if let Some(text) = session.input_manager.selected_text() {
-                    MouseSelectionState::copy_to_clipboard(text);
-                    session.input_manager.clear_selection();
-                    session.mark_dirty();
-                }
-                return None;
-            }
-
             if !session.input_enabled {
                 return None;
             }

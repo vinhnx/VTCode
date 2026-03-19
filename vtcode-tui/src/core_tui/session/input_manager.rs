@@ -5,6 +5,7 @@
 use std::time::Instant;
 
 use super::super::types::ContentPart;
+use super::mouse_selection::MouseSelectionState;
 
 #[derive(Clone, Debug)]
 pub struct InputHistoryEntry {
@@ -53,6 +54,8 @@ pub struct InputManager {
     cursor: usize,
     /// Selection anchor when the input has an active range selection.
     selection_anchor: Option<usize>,
+    /// Whether the current selection has already been copied to the clipboard.
+    selection_copied: bool,
     /// Non-text input elements (e.g. image attachments)
     attachments: Vec<ContentPart>,
     /// Command history entries
@@ -73,6 +76,7 @@ impl InputManager {
             content: String::new(),
             cursor: 0,
             selection_anchor: None,
+            selection_copied: false,
             attachments: Vec::new(),
             history: Vec::new(),
             history_index: None,
@@ -90,7 +94,7 @@ impl InputManager {
     pub fn set_content(&mut self, content: String) {
         self.content = content.clone();
         self.cursor = content.len();
-        self.selection_anchor = None;
+        self.clear_selection();
         self.reset_history_navigation();
     }
 
@@ -102,15 +106,19 @@ impl InputManager {
     /// Sets the cursor position (clamped to valid range)
     pub fn set_cursor(&mut self, pos: usize) {
         self.cursor = pos.min(self.content.len());
-        self.selection_anchor = None;
+        self.clear_selection();
     }
 
     pub fn set_cursor_with_selection(&mut self, pos: usize) {
+        let previous_selection = self.selection_range();
         let next = pos.min(self.content.len());
         if self.selection_anchor.is_none() {
             self.selection_anchor = Some(self.cursor);
         }
         self.cursor = next;
+        if self.selection_range() != previous_selection {
+            self.selection_copied = false;
+        }
     }
 
     pub fn selection_range(&self) -> Option<(usize, usize)> {
@@ -131,14 +139,32 @@ impl InputManager {
         Some(&self.content[start..end])
     }
 
+    /// Copies the selected text to the system clipboard.
+    ///
+    /// Returns `true` when text was copied.
+    pub fn copy_selected_text_to_clipboard(&mut self) -> bool {
+        let Some(text) = self.selected_text() else {
+            return false;
+        };
+
+        MouseSelectionState::copy_to_clipboard(text);
+        self.selection_copied = true;
+        true
+    }
+
+    pub fn selection_needs_copy(&self) -> bool {
+        self.has_selection() && !self.selection_copied
+    }
+
     pub fn clear_selection(&mut self) {
         self.selection_anchor = None;
+        self.selection_copied = false;
     }
 
     fn replace_range(&mut self, start: usize, end: usize, replacement: &str) {
         self.content.replace_range(start..end, replacement);
         self.cursor = start + replacement.len();
-        self.selection_anchor = None;
+        self.clear_selection();
     }
 
     pub fn delete_selection(&mut self) -> bool {
@@ -153,7 +179,7 @@ impl InputManager {
     pub fn move_cursor_left(&mut self) {
         if let Some((start, _)) = self.selection_range() {
             self.cursor = start;
-            self.selection_anchor = None;
+            self.clear_selection();
             return;
         }
         if self.cursor > 0 {
@@ -169,7 +195,7 @@ impl InputManager {
     pub fn move_cursor_right(&mut self) {
         if let Some((_, end)) = self.selection_range() {
             self.cursor = end;
-            self.selection_anchor = None;
+            self.clear_selection();
             return;
         }
         if self.cursor < self.content.len() {
@@ -184,13 +210,13 @@ impl InputManager {
     /// Moves cursor to the beginning
     pub fn move_cursor_to_start(&mut self) {
         self.cursor = 0;
-        self.selection_anchor = None;
+        self.clear_selection();
     }
 
     /// Moves cursor to the end
     pub fn move_cursor_to_end(&mut self) {
         self.cursor = self.content.len();
-        self.selection_anchor = None;
+        self.clear_selection();
     }
 
     /// Inserts a single character at the current cursor position
@@ -206,7 +232,7 @@ impl InputManager {
         } else {
             self.content.insert_str(self.cursor, text);
             self.cursor += text.len();
-            self.selection_anchor = None;
+            self.clear_selection();
         }
     }
 
@@ -262,7 +288,7 @@ impl InputManager {
     pub fn clear(&mut self) {
         self.content.clear();
         self.cursor = 0;
-        self.selection_anchor = None;
+        self.clear_selection();
         self.attachments.clear();
         self.reset_history_navigation();
     }
@@ -379,7 +405,7 @@ impl InputManager {
     pub fn apply_history_entry(&mut self, entry: InputHistoryEntry) {
         self.content = entry.content.clone();
         self.cursor = self.content.len();
-        self.selection_anchor = None;
+        self.clear_selection();
         self.attachments = entry.attachment_elements();
     }
 

@@ -237,6 +237,9 @@ impl Session {
             .wrap(Wrap { trim: false });
         frame.render_widget(paragraph.block(block), input_area);
         self.apply_input_selection_highlight(frame.buffer_mut(), inner);
+        if self.input_manager.selection_needs_copy() {
+            let _ = self.input_manager.copy_selected_text_to_clipboard();
+        }
 
         if self.cursor_should_be_visible() && inner.width > 0 && inner.height > 0 {
             let cursor_x = input_render

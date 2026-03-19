@@ -1097,6 +1097,96 @@ fn double_click_selects_transcript_word_and_copies_it() {
 
 #[cfg(unix)]
 #[test]
+fn selecting_input_text_auto_copies_and_keeps_selection() {
+    use crate::core_tui::session::mouse_selection::{
+        clipboard_command_override, set_clipboard_command_override,
+    };
+    use std::os::unix::fs::PermissionsExt;
+    use std::path::PathBuf;
+
+    let _guard = CLIPBOARD_TEST_LOCK
+        .lock()
+        .expect("clipboard test lock should not be poisoned");
+
+    let temp_dir = std::env::temp_dir().join(format!(
+        "vtcode-clipboard-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock should be after UNIX_EPOCH")
+            .as_nanos()
+    ));
+    fs::create_dir_all(&temp_dir).expect("create temp dir for clipboard script");
+    struct TempDirGuard(PathBuf);
+    impl Drop for TempDirGuard {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+    let _temp_guard = TempDirGuard(temp_dir.clone());
+
+    let clipboard_file = temp_dir.join("clipboard.txt");
+    let script_name = if cfg!(target_os = "macos") {
+        "pbcopy"
+    } else {
+        "xclip"
+    };
+    let script_path = temp_dir.join(script_name);
+    fs::write(
+        &script_path,
+        format!("#!/bin/sh\ncat > '{}'\n", clipboard_file.display()),
+    )
+    .expect("write fake clipboard command");
+    let mut permissions = fs::metadata(&script_path)
+        .expect("read fake clipboard metadata")
+        .permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(&script_path, permissions).expect("make fake clipboard executable");
+
+    struct ClipboardCommandGuard(Option<PathBuf>);
+    impl Drop for ClipboardCommandGuard {
+        fn drop(&mut self) {
+            set_clipboard_command_override(self.0.clone());
+        }
+    }
+
+    let _path_guard = ClipboardCommandGuard(clipboard_command_override());
+    set_clipboard_command_override(Some(script_path.clone()));
+
+    let mut session = app_session_with_input("hello world", "hello world".len());
+    for _ in 0..5 {
+        let result = session.process_key(KeyEvent::new(KeyCode::Left, KeyModifiers::SHIFT));
+        assert!(result.is_none());
+    }
+
+    assert_eq!(
+        session.core.input_manager.selection_range(),
+        Some(("hello world".len() - 5, "hello world".len()))
+    );
+
+    let _ = rendered_app_session_lines(&mut session, VIEW_ROWS);
+
+    let clipboard_contents = fs::read_to_string(&clipboard_file).expect("read copied input text");
+    assert_eq!(clipboard_contents, "world");
+
+    assert_eq!(
+        session.core.input_manager.selection_range(),
+        Some(("hello world".len() - 5, "hello world".len()))
+    );
+
+    let result = session.process_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
+    assert!(result.is_none());
+    assert_eq!(
+        session.core.input_manager.selection_range(),
+        Some(("hello world".len() - 5, "hello world".len()))
+    );
+
+    let clipboard_contents = fs::read_to_string(&clipboard_file).expect("read copied input text");
+    assert_eq!(clipboard_contents, "world");
+}
+
+#[cfg(unix)]
+#[test]
 fn scroll_between_clicks_clears_double_click_history() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.push_line(InlineMessageKind::Agent, vec![make_segment("hello world")]);
