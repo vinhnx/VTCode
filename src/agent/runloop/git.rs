@@ -250,12 +250,10 @@ pub(crate) fn git_diff_preview_for_path(
     if !is_git_repo_at(workspace) {
         return Ok(None);
     }
-    if git_diff_for_path(workspace, path)?.is_none() {
-        return Ok(None);
-    }
 
     let display_path = workspace_relative_display(workspace, path);
     let repo_path = workspace_relative_git_path(workspace, path);
+    let diff_available = git_diff_for_path(workspace, path)?.is_some();
     let before = std::process::Command::new("git")
         .args(["show", &format!(":{repo_path}")])
         .current_dir(workspace)
@@ -271,19 +269,27 @@ pub(crate) fn git_diff_preview_for_path(
         .ok()
         .and_then(|bytes| String::from_utf8(bytes).ok());
 
-    match (before_text, after_text) {
-        (Some(before), Some(after)) => Ok(Some(DirtyWorktreeDiffPreview {
+    match (diff_available, before_text, after_text) {
+        (true, Some(before), Some(after)) => Ok(Some(DirtyWorktreeDiffPreview {
             display_path,
             before,
             after,
             used_fallback_preview: false,
         })),
-        (_, Some(after)) => Ok(Some(DirtyWorktreeDiffPreview {
+        (true, _, Some(after)) => Ok(Some(DirtyWorktreeDiffPreview {
             display_path,
             before: String::new(),
             after,
             used_fallback_preview: true,
         })),
+        (false, Some(before), Some(after)) if before != after => {
+            Ok(Some(DirtyWorktreeDiffPreview {
+                display_path,
+                before,
+                after,
+                used_fallback_preview: true,
+            }))
+        }
         _ => Ok(None),
     }
 }
