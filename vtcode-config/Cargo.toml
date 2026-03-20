@@ -38,8 +38,8 @@ thiserror = { workspace = true }
 toml_edit = "0.24.0"
 tracing = { workspace = true }
 urlencoding = "2.1"
-vtcode-commons = { path = "../vtcode-commons", version = "0.91.0" }
-vtcode-auth = { path = "../vtcode-auth", version = "0.91.0" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.91.1" }
+vtcode-auth = { path = "../vtcode-auth", version = "0.91.1" }
 dotenvy = { workspace = true }
 tempfile = { workspace = true }
 walkdir = { workspace = true }

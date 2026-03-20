@@ -21,7 +21,7 @@ anyhow = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 ignore = { workspace = true }
 nucleo-matcher = "0.3"
-vtcode-commons = { path = "../vtcode-commons", version = "0.91.0" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.91.1" }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["full"] }

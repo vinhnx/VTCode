@@ -30,7 +30,7 @@ schemars = { workspace = true, optional = true, features = [
 ] }
 uuid = { workspace = true, features = ["v4", "serde"] }
 chrono = { workspace = true }
-vtcode-commons = { path = "../vtcode-commons", version = "0.91.0" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.91.1" }
 
 [lints]
 workspace = true
