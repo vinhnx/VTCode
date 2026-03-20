@@ -17,7 +17,7 @@
 ## Installation
 
 **Native Installer (Recommended)** - No dependencies, instant setup:
-The default macOS/Linux installer also attempts the recommended `ripgrep` + `ast-grep` bundle.
+The default macOS/Linux installer also attempts the recommended `[ripgrep](https://github.com/BurntSushi/ripgrep)` + `[ast-grep](https://ast-grep.github.io/)` bundle for enhanced semantic grep and programming language-level understanding (optional).
 
 **macOS & Linux:**
 
