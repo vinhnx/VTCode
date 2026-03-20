@@ -455,6 +455,17 @@ fn selection_change_event(
     })
 }
 
+fn is_custom_note_selection(selection: &InlineListSelection) -> bool {
+    matches!(
+        selection,
+        InlineListSelection::RequestUserInputAnswer {
+            selected,
+            other,
+            ..
+        } if selected.is_empty() && other.is_some()
+    )
+}
+
 fn map_config_selection_for_arrow(
     selection: &InlineListSelection,
     is_left: bool,
@@ -1246,30 +1257,53 @@ impl WizardModalState {
     }
 
     pub fn handle_mouse_click(&mut self, visible_index: usize) -> ModalListKeyResult {
-        let Some(step) = self.steps.get_mut(self.current_step) else {
-            return ModalListKeyResult::NotHandled;
-        };
-        let Some(&item_index) = step.list.visible_indices.get(visible_index) else {
-            return ModalListKeyResult::HandledNoRedraw;
-        };
-        if step
-            .list
-            .items
-            .get(item_index)
-            .and_then(|item| item.selection.as_ref())
-            .is_none()
-        {
-            return ModalListKeyResult::HandledNoRedraw;
-        }
+        let submit_after_click = {
+            let Some(step) = self.steps.get_mut(self.current_step) else {
+                return ModalListKeyResult::NotHandled;
+            };
+            let Some(&item_index) = step.list.visible_indices.get(visible_index) else {
+                return ModalListKeyResult::HandledNoRedraw;
+            };
+            let Some(item) = step.list.items.get(item_index) else {
+                return ModalListKeyResult::HandledNoRedraw;
+            };
+            let Some(selection) = item.selection.as_ref() else {
+                return ModalListKeyResult::HandledNoRedraw;
+            };
 
-        if step.list.list_state.selected() == Some(visible_index) {
+            let clicked_custom_note = is_custom_note_selection(selection);
+
+            if self.mode == WizardModalMode::TabbedList {
+                step.list.list_state.select(Some(visible_index));
+                if let Some(rows) = step.list.viewport_rows {
+                    step.list.ensure_visible(rows);
+                }
+
+                if clicked_custom_note && step.notes.trim().is_empty() {
+                    step.notes_active = true;
+                    return ModalListKeyResult::Redraw;
+                }
+
+                true
+            } else {
+                if step.list.list_state.selected() == Some(visible_index) {
+                    return ModalListKeyResult::Submit(InlineEvent::Overlay(
+                        OverlayEvent::Submitted(OverlaySubmission::Selection(selection.clone())),
+                    ));
+                }
+
+                step.list.list_state.select(Some(visible_index));
+                if let Some(rows) = step.list.viewport_rows {
+                    step.list.ensure_visible(rows);
+                }
+                return ModalListKeyResult::Redraw;
+            }
+        };
+
+        if submit_after_click {
             return self.submit_current_selection();
         }
 
-        step.list.list_state.select(Some(visible_index));
-        if let Some(rows) = step.list.viewport_rows {
-            step.list.ensure_visible(rows);
-        }
         ModalListKeyResult::Redraw
     }
 
@@ -1351,12 +1385,10 @@ impl WizardModalState {
         let selected_visible = step.list.list_state.selected()?;
         let item_index = *step.list.visible_indices.get(selected_visible)?;
         let item = step.list.items.get(item_index)?;
-        match item.selection.as_ref() {
-            Some(InlineListSelection::RequestUserInputAnswer {
-                selected, other, ..
-            }) if selected.is_empty() && other.is_some() => Some(item_index),
-            _ => None,
-        }
+        item.selection
+            .as_ref()
+            .filter(|selection| is_custom_note_selection(selection))
+            .map(|_| item_index)
     }
 
     fn current_step_selected_custom_note_item_index(&self) -> Option<usize> {

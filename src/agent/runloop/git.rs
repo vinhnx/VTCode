@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use hashbrown::{HashMap, HashSet};
-use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
@@ -45,31 +44,12 @@ impl DirtyWorktreeStatus {
             _ => None,
         }
     }
-
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            Self::Modified => "modified",
-            Self::Added => "added",
-            Self::Deleted => "deleted",
-            Self::TypeChanged => "type_changed",
-            Self::Unmerged => "unmerged",
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct DirtyWorktreeEntry {
     pub path: PathBuf,
     pub status: DirtyWorktreeStatus,
-    pub fingerprint: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct DirtyWorktreeDiffPreview {
-    pub display_path: String,
-    pub before: String,
-    pub after: String,
-    pub used_fallback_preview: bool,
 }
 
 fn is_git_repo() -> bool {
@@ -118,35 +98,6 @@ pub(crate) fn workspace_relative_display(workspace: &Path, path: &Path) -> Strin
         return relative.display().to_string();
     }
     path.display().to_string()
-}
-
-fn workspace_relative_git_path(workspace: &Path, path: &Path) -> String {
-    workspace_relative_display(workspace, path).replace('\\', "/")
-}
-
-fn hex_digest(bytes: &[u8]) -> String {
-    let mut output = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        use std::fmt::Write as _;
-        let _ = write!(&mut output, "{byte:02x}");
-    }
-    output
-}
-
-fn dirty_worktree_fingerprint(path: &Path, status: DirtyWorktreeStatus) -> Result<String> {
-    let mut hasher = Sha256::new();
-    hasher.update(status.as_str().as_bytes());
-
-    match fs::read(path) {
-        Ok(bytes) => hasher.update(&bytes),
-        Err(err) if err.kind() == io::ErrorKind::NotFound => hasher.update(b"missing"),
-        Err(err) => {
-            return Err(err)
-                .with_context(|| format!("Failed to read dirty worktree file {}", path.display()));
-        }
-    }
-
-    Ok(hex_digest(&hasher.finalize()))
 }
 
 pub(crate) fn git_dirty_worktree_entries(
@@ -207,91 +158,11 @@ pub(crate) fn git_dirty_worktree_entries(
         };
 
         let path = normalize_workspace_path(workspace, Path::new(&raw_path));
-        let fingerprint = dirty_worktree_fingerprint(&path, status)?;
-        entries.push(DirtyWorktreeEntry {
-            path,
-            status,
-            fingerprint,
-        });
+        entries.push(DirtyWorktreeEntry { path, status });
     }
 
     entries.sort_by(|left, right| left.path.cmp(&right.path));
     Ok(Some(entries))
-}
-
-pub(crate) fn git_diff_for_path(workspace: &Path, path: &Path) -> Result<Option<String>> {
-    if !is_git_repo_at(workspace) {
-        return Ok(None);
-    }
-
-    let repo_path = workspace_relative_git_path(workspace, path);
-    let output = std::process::Command::new("git")
-        .args(["diff", "--no-color", "--no-ext-diff", "--", &repo_path])
-        .current_dir(workspace)
-        .output()
-        .with_context(|| format!("Failed to read git diff for {}", repo_path))?;
-
-    if !output.status.success() {
-        return Ok(None);
-    }
-
-    let diff = String::from_utf8_lossy(&output.stdout).to_string();
-    if diff.trim().is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(diff))
-    }
-}
-
-pub(crate) fn git_diff_preview_for_path(
-    workspace: &Path,
-    path: &Path,
-) -> Result<Option<DirtyWorktreeDiffPreview>> {
-    if !is_git_repo_at(workspace) {
-        return Ok(None);
-    }
-
-    let display_path = workspace_relative_display(workspace, path);
-    let repo_path = workspace_relative_git_path(workspace, path);
-    let diff_available = git_diff_for_path(workspace, path)?.is_some();
-    let before = std::process::Command::new("git")
-        .args(["show", &format!(":{repo_path}")])
-        .current_dir(workspace)
-        .output()
-        .with_context(|| format!("Failed to read git index content for {}", repo_path))?;
-    let before_text = if before.status.success() {
-        String::from_utf8(before.stdout).ok()
-    } else {
-        None
-    };
-
-    let after_text = fs::read(path)
-        .ok()
-        .and_then(|bytes| String::from_utf8(bytes).ok());
-
-    match (diff_available, before_text, after_text) {
-        (true, Some(before), Some(after)) => Ok(Some(DirtyWorktreeDiffPreview {
-            display_path,
-            before,
-            after,
-            used_fallback_preview: false,
-        })),
-        (true, _, Some(after)) => Ok(Some(DirtyWorktreeDiffPreview {
-            display_path,
-            before: String::new(),
-            after,
-            used_fallback_preview: true,
-        })),
-        (false, Some(before), Some(after)) if before != after => {
-            Ok(Some(DirtyWorktreeDiffPreview {
-                display_path,
-                before,
-                after,
-                used_fallback_preview: true,
-            }))
-        }
-        _ => Ok(None),
-    }
 }
 
 pub(crate) fn git_working_tree_numstat_snapshot(
@@ -479,8 +350,7 @@ pub(crate) async fn confirm_changes_with_git_diff(
 mod tests {
     use super::{
         CodeChangeDelta, DirtyWorktreeStatus, FileStat, compute_session_code_change_delta,
-        git_diff_for_path, git_diff_preview_for_path, git_dirty_worktree_entries,
-        normalize_workspace_path, workspace_relative_display,
+        git_dirty_worktree_entries, normalize_workspace_path, workspace_relative_display,
     };
     use hashbrown::HashMap;
     use std::fs;
@@ -623,43 +493,5 @@ mod tests {
             "docs/project/TODO.md"
         );
         assert_eq!(entries[0].status, DirtyWorktreeStatus::Modified);
-        assert!(!entries[0].fingerprint.is_empty());
-    }
-
-    #[test]
-    fn git_diff_helpers_return_single_file_preview() {
-        let repo = init_repo();
-        fs::create_dir_all(repo.path().join("docs/project")).expect("mkdir");
-        fs::write(repo.path().join("docs/project/TODO.md"), "before\n").expect("write");
-
-        let run = |args: &[&str]| {
-            let status = Command::new("git")
-                .args(args)
-                .current_dir(repo.path())
-                .status()
-                .expect("git command");
-            assert!(status.success(), "git command failed: {args:?}");
-        };
-
-        run(&["add", "."]);
-        run(&["commit", "-m", "test: seed repo"]);
-
-        let path = repo.path().join("docs/project/TODO.md");
-        fs::write(&path, "after\n").expect("write");
-
-        let diff = git_diff_for_path(repo.path(), &path)
-            .expect("diff")
-            .expect("non-empty diff");
-        assert!(diff.contains("docs/project/TODO.md"));
-        assert!(diff.contains("-before"));
-        assert!(diff.contains("+after"));
-
-        let preview = git_diff_preview_for_path(repo.path(), &path)
-            .expect("preview")
-            .expect("preview");
-        assert_eq!(preview.display_path, "docs/project/TODO.md");
-        assert_eq!(preview.before, "before\n");
-        assert_eq!(preview.after, "after\n");
-        assert!(!preview.used_fallback_preview);
     }
 }

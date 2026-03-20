@@ -26,8 +26,6 @@ use crate::agent::runloop::welcome::SessionBootstrap;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-use super::unrelated_worktree_prompt::UnrelatedWorktreePromptState;
-
 #[allow(clippy::too_many_arguments)]
 pub(crate) struct InteractionLoopContext<'a> {
     pub renderer: &'a mut AnsiRenderer,
@@ -158,7 +156,6 @@ pub(crate) struct InteractionState<'a> {
     pub prefer_latest_queued_input_once: &'a mut bool,
     pub model_picker_state: &'a mut Option<ModelPickerState>,
     pub palette_state: &'a mut Option<ActivePalette>,
-    pub unrelated_worktree_prompt_state: &'a mut UnrelatedWorktreePromptState,
     pub last_known_mcp_tools: &'a mut Vec<String>,
     pub pending_mcp_refresh: &'a mut bool,
     pub mcp_catalog_initialized: &'a mut bool,

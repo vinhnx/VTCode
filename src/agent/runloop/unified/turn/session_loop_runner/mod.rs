@@ -5,7 +5,8 @@ mod plan_seed;
 
 use super::*;
 use crate::agent::runloop::git::{
-    compute_session_code_change_delta, normalize_workspace_path, workspace_relative_display,
+    DirtyWorktreeStatus, compute_session_code_change_delta, git_dirty_worktree_entries,
+    normalize_workspace_path, workspace_relative_display,
 };
 use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
 use crate::agent::runloop::unified::plan_mode_state::render_plan_mode_next_step_hint;
@@ -104,6 +105,33 @@ fn build_tracked_file_freshness_note(
     Some(format!(
         "Freshness note: the following files changed on disk after VT Code last read them:\n{display_paths}\nRe-read these files before relying on earlier content because disk content is newer than the agent's prior read snapshot."
     ))
+}
+
+fn build_unrelated_dirty_worktree_note(
+    workspace: &std::path::Path,
+    agent_touched_paths: &std::collections::BTreeSet<std::path::PathBuf>,
+) -> Result<Option<String>> {
+    let Some(entries) = git_dirty_worktree_entries(workspace)? else {
+        return Ok(None);
+    };
+
+    let display_paths = entries
+        .into_iter()
+        .filter(|entry| {
+            entry.status == DirtyWorktreeStatus::Modified
+                && !agent_touched_paths.contains(&entry.path)
+        })
+        .map(|entry| format!("- {}", workspace_relative_display(workspace, &entry.path)))
+        .collect::<Vec<_>>();
+
+    if display_paths.is_empty() {
+        return Ok(None);
+    }
+
+    Ok(Some(format!(
+        "Workspace note: the following files already have unrelated user modifications before this turn:\n{}\nTreat these files as user-owned changes. Do not edit, format, revert, or overwrite them unless the user explicitly asks to work on those files.",
+        display_paths.join("\n")
+    )))
 }
 
 fn live_reload_preserves_session_config(
@@ -632,8 +660,6 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         );
         let mut queued_inputs: VecDeque<String> = VecDeque::with_capacity(8);
         let mut agent_touched_paths = std::collections::BTreeSet::new();
-        let mut unrelated_worktree_prompt_state =
-            crate::agent::runloop::unified::turn::session::unrelated_worktree_prompt::UnrelatedWorktreePromptState::default();
         let mut ctrl_c_notice_displayed = false;
         let mut mcp_catalog_initialized = tool_registry.mcp_client().is_some();
         let mut last_known_mcp_tools: Vec<String> = Vec::with_capacity(16);
@@ -728,7 +754,6 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         prefer_latest_queued_input_once: &mut prefer_latest_queued_input_once,
                         model_picker_state: &mut model_picker_state,
                         palette_state: &mut palette_state,
-                        unrelated_worktree_prompt_state: &mut unrelated_worktree_prompt_state,
                         last_known_mcp_tools: &mut last_known_mcp_tools,
                         pending_mcp_refresh: &mut pending_mcp_refresh,
                         mcp_catalog_initialized: &mut mcp_catalog_initialized,
@@ -810,18 +835,32 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     continue;
                 }
                 let mut working_history = std::mem::take(&mut conversation_history);
-                let transient_freshness_index = {
+                let mut transient_system_note_indices = Vec::with_capacity(2);
+                if let Some(note) = {
                     let stale_paths = tool_registry.edited_file_monitor().stale_tracked_paths();
-                    if let Some(note) =
-                        build_tracked_file_freshness_note(config.workspace.as_path(), &stale_paths)
-                    {
+                    build_tracked_file_freshness_note(config.workspace.as_path(), &stale_paths)
+                } {
+                    let index = working_history.len();
+                    working_history.push(vtcode_core::llm::provider::Message::system(note));
+                    transient_system_note_indices.push(index);
+                }
+                match build_unrelated_dirty_worktree_note(
+                    config.workspace.as_path(),
+                    &agent_touched_paths,
+                ) {
+                    Ok(Some(note)) => {
                         let index = working_history.len();
                         working_history.push(vtcode_core::llm::provider::Message::system(note));
-                        Some(index)
-                    } else {
-                        None
+                        transient_system_note_indices.push(index);
                     }
-                };
+                    Ok(None) => {}
+                    Err(err) => {
+                        tracing::warn!(
+                            error = %err,
+                            "Failed to inspect unrelated dirty worktree entries before turn"
+                        );
+                    }
+                }
                 let timeout_secs = resolve_effective_turn_timeout_secs(
                     resolve_timeout(
                         vt_cfg
@@ -986,10 +1025,10 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         }
                     }
                 };
-                if let Some(index) = transient_freshness_index
-                    && index < working_history.len()
-                {
-                    let _ = working_history.remove(index);
+                while let Some(index) = transient_system_note_indices.pop() {
+                    if index < working_history.len() {
+                        let _ = working_history.remove(index);
+                    }
                 }
                 agent_touched_paths.extend(
                     outcome
@@ -1277,13 +1316,19 @@ mod tests {
         TurnHistoryCheckpoint, archive::NextRuntimeArchiveId,
         archive::next_runtime_archive_id_request, archive::workspace_archive_label,
         build_partial_timeout_messages, build_tracked_file_freshness_note,
-        checkpoint_session_archive_start, effective_max_tool_calls_for_turn,
-        prepare_resume_bootstrap_without_archive, resolve_effective_turn_timeout_secs,
+        build_unrelated_dirty_worktree_note, checkpoint_session_archive_start,
+        effective_max_tool_calls_for_turn, prepare_resume_bootstrap_without_archive,
+        resolve_effective_turn_timeout_secs,
     };
     use crate::agent::agents::ResumeSession;
+    use crate::agent::runloop::git::normalize_workspace_path;
     use crate::agent::runloop::unified::run_loop_context::TurnPhase;
     use chrono::Utc;
+    use std::collections::BTreeSet;
+    use std::fs;
     use std::path::{Path, PathBuf};
+    use std::process::Command;
+    use tempfile::TempDir;
     use vtcode_core::core::threads::ArchivedSessionIntent;
     use vtcode_core::llm::provider::MessageRole;
     use vtcode_core::utils::session_archive::{
@@ -1440,6 +1485,70 @@ mod tests {
         assert!(note.contains("- src/main.rs"));
         assert!(note.contains("- docs/project/TODO.md"));
         assert!(note.contains("Re-read these files before relying on earlier content"));
+    }
+
+    fn init_git_repo() -> TempDir {
+        let temp = TempDir::new().expect("temp dir");
+        let run = |args: &[&str]| {
+            let status = Command::new("git")
+                .args(args)
+                .current_dir(temp.path())
+                .status()
+                .expect("git command");
+            assert!(status.success(), "git command failed: {args:?}");
+        };
+
+        run(&["init"]);
+        run(&["config", "user.name", "VT Code"]);
+        run(&["config", "user.email", "vtcode@example.com"]);
+        temp
+    }
+
+    fn seed_dirty_repo() -> (TempDir, PathBuf) {
+        let repo = init_git_repo();
+        let path = repo.path().join("docs/project/TODO.md");
+        fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
+        fs::write(&path, "before\n").expect("write");
+
+        let run = |args: &[&str]| {
+            let status = Command::new("git")
+                .args(args)
+                .current_dir(repo.path())
+                .status()
+                .expect("git command");
+            assert!(status.success(), "git command failed: {args:?}");
+        };
+
+        run(&["add", "."]);
+        run(&["commit", "-m", "test: seed repo"]);
+        fs::write(&path, "after\n").expect("write");
+        (repo, path)
+    }
+
+    #[test]
+    fn unrelated_dirty_worktree_note_uses_relative_paths_and_user_owned_guidance() {
+        let (repo, path) = seed_dirty_repo();
+
+        let note = build_unrelated_dirty_worktree_note(repo.path(), &BTreeSet::new())
+            .expect("note build")
+            .expect("note");
+
+        assert!(note.contains("Workspace note"));
+        assert!(note.contains("docs/project/TODO.md"));
+        assert!(note.contains("user-owned changes"));
+        assert!(!note.contains(&path.display().to_string()));
+    }
+
+    #[test]
+    fn unrelated_dirty_worktree_note_skips_agent_touched_files() {
+        let (repo, path) = seed_dirty_repo();
+        let mut touched_paths = BTreeSet::new();
+        touched_paths.insert(normalize_workspace_path(repo.path(), &path));
+
+        let note =
+            build_unrelated_dirty_worktree_note(repo.path(), &touched_paths).expect("note build");
+
+        assert!(note.is_none());
     }
 
     #[test]
