@@ -77,6 +77,7 @@ fn capability_provider_key(provider: Provider) -> &'static str {
         Provider::Gemini => "gemini",
         Provider::OpenAI => "openai",
         Provider::Anthropic => "anthropic",
+        Provider::Copilot => "copilot",
         Provider::DeepSeek => "deepseek",
         Provider::OpenRouter => "openrouter",
         Provider::Ollama => "ollama",
@@ -168,6 +169,7 @@ impl ModelId {
             | ModelId::GPT54Nano
             | ModelId::GPT54Mini
             | ModelId::GPT5 => Some(ModelId::GPT5Mini),
+            ModelId::CopilotGPT52Codex | ModelId::CopilotGPT54 => Some(ModelId::CopilotGPT54Mini),
             ModelId::DeepSeekReasoner => Some(ModelId::DeepSeekChat),
             ModelId::ZaiGlm5 => Some(ModelId::OllamaGlm5Cloud),
             ModelId::ClaudeOpus46 | ModelId::ClaudeSonnet46 => Some(ModelId::ClaudeSonnet46),
@@ -212,6 +214,10 @@ impl ModelId {
                 | ModelId::GPT53Codex
                 | ModelId::GPT51Codex
                 | ModelId::GPT51CodexMax
+                | ModelId::CopilotGPT52Codex
+                | ModelId::CopilotGPT51CodexMax
+                | ModelId::CopilotGPT54
+                | ModelId::CopilotClaudeSonnet46
                 | ModelId::GPT5Codex
                 | ModelId::ClaudeOpus46
                 | ModelId::ClaudeSonnet46
@@ -240,6 +246,7 @@ impl ModelId {
                 | ModelId::Gemini31FlashLitePreview
                 | ModelId::GPT5Mini
                 | ModelId::GPT5Nano
+                | ModelId::CopilotGPT54Mini
                 | ModelId::ClaudeHaiku45
                 | ModelId::DeepSeekChat
                 | ModelId::HuggingFaceStep35Flash

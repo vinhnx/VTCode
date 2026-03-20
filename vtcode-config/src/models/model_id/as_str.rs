@@ -34,6 +34,12 @@ impl ModelId {
             ModelId::ClaudeOpus46 => models::CLAUDE_OPUS_4_6,
             ModelId::ClaudeSonnet46 => models::CLAUDE_SONNET_4_6,
             ModelId::ClaudeHaiku45 => models::CLAUDE_HAIKU_4_5,
+            ModelId::CopilotAuto => models::copilot::AUTO,
+            ModelId::CopilotGPT52Codex => models::copilot::GPT_5_2_CODEX,
+            ModelId::CopilotGPT51CodexMax => models::copilot::GPT_5_1_CODEX_MAX,
+            ModelId::CopilotGPT54 => models::copilot::GPT_5_4,
+            ModelId::CopilotGPT54Mini => models::copilot::GPT_5_4_MINI,
+            ModelId::CopilotClaudeSonnet46 => models::copilot::CLAUDE_SONNET_4_6,
             // DeepSeek models
             ModelId::DeepSeekChat => models::DEEPSEEK_CHAT,
             ModelId::DeepSeekReasoner => models::DEEPSEEK_REASONER,

@@ -86,6 +86,12 @@ pub fn api_key_env_var(provider: &str) -> String {
         return defaults::DEFAULT_API_KEY_ENV.to_owned();
     }
 
+    if let Ok(resolved) = Provider::from_str(trimmed)
+        && resolved.uses_managed_auth()
+    {
+        return String::new();
+    }
+
     Provider::from_str(trimmed)
         .map(|resolved| resolved.default_api_key_env().to_owned())
         .unwrap_or_else(|_| format!("{}_API_KEY", trimmed.to_ascii_uppercase()))
@@ -206,6 +212,9 @@ pub fn get_api_key(provider: &str, sources: &ApiKeySources) -> Result<String> {
         "gemini" => get_gemini_api_key(sources),
         "anthropic" => get_anthropic_api_key(sources),
         "openai" => get_openai_api_key(sources),
+        "copilot" => Err(anyhow::anyhow!(
+            "GitHub Copilot authentication is managed by the official `copilot` CLI. Run `vtcode login copilot`."
+        )),
         "deepseek" => get_deepseek_api_key(sources),
         "openrouter" => get_openrouter_api_key(sources),
         "zai" => get_zai_api_key(sources),

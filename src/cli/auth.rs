@@ -1,5 +1,6 @@
 use anyhow::{Result, anyhow};
 use std::future::Future;
+use std::path::PathBuf;
 use vtcode_auth::{
     AuthCallbackOutcome, AuthCredentialsStoreMode, AuthStatus, OAuthCallbackPage, OAuthProvider,
     OpenAIChatGptAuthStatus, OpenAIChatGptSession, OpenRouterToken, PkceChallenge,
@@ -12,9 +13,14 @@ use vtcode_auth::{
 };
 use vtcode_config::VTCodeConfig;
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
+use vtcode_core::copilot::{
+    CopilotAuthStatus, CopilotAuthStatusKind, login as login_copilot, logout as logout_copilot,
+    probe_auth_status,
+};
 
 pub(crate) const OPENAI_PROVIDER: &str = "openai";
 pub(crate) const OPENROUTER_PROVIDER: &str = "openrouter";
+pub(crate) const COPILOT_PROVIDER: &str = "copilot";
 const DEFAULT_OPENROUTER_CALLBACK_PORT: u16 = 8484;
 const DEFAULT_FLOW_TIMEOUT_SECS: u64 = 300;
 const OPENAI_MANUAL_PLACEHOLDER: &str = "http://localhost:1455/auth/callback?code=...&state=...";
@@ -40,6 +46,10 @@ pub(crate) struct PreparedOpenAiLogin {
 
 pub(crate) fn supports_oauth_provider(provider: &str) -> bool {
     provider.parse::<OAuthProvider>().is_ok()
+}
+
+pub(crate) fn supports_auth_provider(provider: &str) -> bool {
+    provider.eq_ignore_ascii_case(COPILOT_PROVIDER) || supports_oauth_provider(provider)
 }
 
 pub(crate) fn prepare_openrouter_login(
@@ -258,6 +268,18 @@ pub(crate) async fn handle_login_command(
     vt_cfg: Option<&VTCodeConfig>,
     provider: &str,
 ) -> Result<()> {
+    let provider = provider.trim().to_ascii_lowercase();
+    if provider == COPILOT_PROVIDER {
+        let workspace = current_auth_workspace();
+        let auth_cfg = vt_cfg
+            .map(|cfg| cfg.auth.copilot.clone())
+            .unwrap_or_default();
+        println!("Starting GitHub Copilot authentication via the official `copilot` CLI...");
+        login_copilot(&auth_cfg, &workspace).await?;
+        println!("GitHub Copilot authentication complete.");
+        return Ok(());
+    }
+
     match provider.parse::<OAuthProvider>() {
         Ok(OAuthProvider::OpenRouter) => {
             let prepared = prepare_openrouter_login(vt_cfg)?;
@@ -287,13 +309,27 @@ pub(crate) async fn handle_login_command(
             Ok(())
         }
         Err(()) => Err(anyhow!(
-            "OAuth authentication is not supported for provider '{}'. Supported providers: openai, openrouter",
+            "Authentication is not supported for provider '{}'. Supported providers: openai, openrouter, copilot",
             provider
         )),
     }
 }
 
-pub(crate) fn handle_logout_command(vt_cfg: Option<&VTCodeConfig>, provider: &str) -> Result<()> {
+pub(crate) async fn handle_logout_command(
+    vt_cfg: Option<&VTCodeConfig>,
+    provider: &str,
+) -> Result<()> {
+    let provider = provider.trim().to_ascii_lowercase();
+    if provider == COPILOT_PROVIDER {
+        let workspace = current_auth_workspace();
+        let auth_cfg = vt_cfg
+            .map(|cfg| cfg.auth.copilot.clone())
+            .unwrap_or_default();
+        logout_copilot(&auth_cfg, &workspace).await?;
+        println!("GitHub Copilot authentication cleared.");
+        return Ok(());
+    }
+
     match provider.parse::<OAuthProvider>() {
         Ok(OAuthProvider::OpenRouter) => {
             clear_openrouter_login(vt_cfg)?;
@@ -306,13 +342,13 @@ pub(crate) fn handle_logout_command(vt_cfg: Option<&VTCodeConfig>, provider: &st
             Ok(())
         }
         Err(()) => Err(anyhow!(
-            "OAuth authentication is not supported for provider '{}'. Supported providers: openai, openrouter",
+            "Authentication is not supported for provider '{}'. Supported providers: openai, openrouter, copilot",
             provider
         )),
     }
 }
 
-pub(crate) fn handle_show_auth_command(
+pub(crate) async fn handle_show_auth_command(
     vt_cfg: Option<&VTCodeConfig>,
     provider: Option<&str>,
 ) -> Result<()> {
@@ -320,6 +356,13 @@ pub(crate) fn handle_show_auth_command(
     println!();
 
     match provider.map(str::trim).filter(|value| !value.is_empty()) {
+        Some(value) if value.eq_ignore_ascii_case(COPILOT_PROVIDER) => {
+            let workspace = current_auth_workspace();
+            let auth_cfg = vt_cfg
+                .map(|cfg| cfg.auth.copilot.clone())
+                .unwrap_or_default();
+            render_copilot_auth_status(probe_auth_status(&auth_cfg, Some(&workspace)).await);
+        }
         Some(value) => match value.parse::<OAuthProvider>() {
             Ok(OAuthProvider::OpenRouter) => {
                 render_openrouter_auth_status(openrouter_auth_status(vt_cfg)?)
@@ -327,7 +370,7 @@ pub(crate) fn handle_show_auth_command(
             Ok(OAuthProvider::OpenAi) => render_openai_auth_status(openai_auth_status(vt_cfg)?),
             Err(()) => {
                 return Err(anyhow!(
-                    "OAuth authentication is not supported for provider '{}'. Supported providers: openai, openrouter",
+                    "Authentication is not supported for provider '{}'. Supported providers: openai, openrouter, copilot",
                     value
                 ));
             }
@@ -336,6 +379,12 @@ pub(crate) fn handle_show_auth_command(
             render_openrouter_auth_status(openrouter_auth_status(vt_cfg)?);
             println!();
             render_openai_auth_status(openai_auth_status(vt_cfg)?);
+            println!();
+            let workspace = current_auth_workspace();
+            let auth_cfg = vt_cfg
+                .map(|cfg| cfg.auth.copilot.clone())
+                .unwrap_or_default();
+            render_copilot_auth_status(probe_auth_status(&auth_cfg, Some(&workspace)).await);
             println!();
             println!("Use `vtcode login <provider>` to authenticate.");
             println!("Use `vtcode logout <provider>` to clear stored credentials.");
@@ -349,6 +398,10 @@ fn credential_storage_mode(vt_cfg: Option<&VTCodeConfig>) -> AuthCredentialsStor
     vt_cfg
         .map(|cfg| cfg.agent.credential_storage_mode)
         .unwrap_or_default()
+}
+
+fn current_auth_workspace() -> PathBuf {
+    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
 }
 
 pub(crate) fn openai_manual_placeholder(callback_port: u16) -> String {
@@ -460,6 +513,21 @@ fn render_openai_auth_status(status: OpenAIChatGptAuthStatus) {
                 println!("OpenAI: not authenticated");
             }
         }
+    }
+}
+
+fn render_copilot_auth_status(status: CopilotAuthStatus) {
+    match status.kind {
+        CopilotAuthStatusKind::Authenticated => println!("GitHub Copilot: authenticated"),
+        CopilotAuthStatusKind::Unauthenticated => println!("GitHub Copilot: not authenticated"),
+        CopilotAuthStatusKind::ServerUnavailable => println!("GitHub Copilot: CLI unavailable"),
+        CopilotAuthStatusKind::AuthFlowFailed => println!("GitHub Copilot: auth flow failed"),
+    }
+
+    if let Some(message) = status.message.as_deref()
+        && !message.trim().is_empty()
+    {
+        println!("  Details: {}", message);
     }
 }
 

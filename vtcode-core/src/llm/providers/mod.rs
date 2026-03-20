@@ -17,6 +17,7 @@ pub mod streaming_progress;
 pub mod zai;
 
 pub mod common;
+pub mod copilot;
 pub mod reasoning;
 mod shared;
 pub use shared::TagStreamSanitizer;
@@ -32,6 +33,7 @@ pub use reasoning::{
 };
 
 pub use anthropic::AnthropicProvider;
+pub use copilot::CopilotProvider;
 pub use deepseek::DeepSeekProvider;
 pub use gemini::GeminiProvider;
 pub use huggingface::HuggingFaceProvider;

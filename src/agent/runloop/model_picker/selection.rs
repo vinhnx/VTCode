@@ -245,6 +245,10 @@ pub(super) fn derive_env_key(provider: &str) -> String {
 }
 
 pub(super) fn provider_requires_api_key(provider: Provider, model_id: &str, env_key: &str) -> bool {
+    if provider.uses_managed_auth() {
+        return false;
+    }
+
     if provider == Provider::Ollama {
         let is_cloud_model = model_id.contains(":cloud") || model_id.contains("-cloud");
         if !is_cloud_model {
@@ -280,4 +284,15 @@ pub(super) fn title_case(value: &str) -> String {
     result.push(first.to_ascii_uppercase());
     result.push_str(&chars.as_str().to_ascii_lowercase());
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::provider_requires_api_key;
+    use vtcode_core::config::models::Provider;
+
+    #[test]
+    fn managed_auth_provider_skips_api_key_requirement() {
+        assert!(!provider_requires_api_key(Provider::Copilot, "copilot", "",));
+    }
 }

@@ -357,6 +357,7 @@ fn create_provider_client(
         ProviderConfig {
             api_key: Some(config.api_key.clone()),
             openai_chatgpt_auth: config.openai_chatgpt_auth.clone(),
+            copilot_auth: vt_cfg.map(|cfg| cfg.auth.copilot.clone()),
             base_url: None,
             model: Some(config.model.clone()),
             prompt_cache: Some(config.prompt_cache.clone()),
@@ -364,6 +365,7 @@ fn create_provider_client(
             openai: vt_cfg.map(|cfg| cfg.provider.openai.clone()),
             anthropic: vt_cfg.map(|cfg| cfg.provider.anthropic.clone()),
             model_behavior: vt_cfg.map(|cfg| cfg.model.clone()),
+            workspace_root: Some(config.workspace.clone()),
         },
     )
     .context("Failed to initialize provider client")

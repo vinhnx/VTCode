@@ -31,6 +31,12 @@ impl ModelId {
             ModelId::ClaudeOpus46 | ModelId::ClaudeSonnet46 | ModelId::ClaudeHaiku45 => {
                 Provider::Anthropic
             }
+            ModelId::CopilotAuto
+            | ModelId::CopilotGPT52Codex
+            | ModelId::CopilotGPT51CodexMax
+            | ModelId::CopilotGPT54
+            | ModelId::CopilotGPT54Mini
+            | ModelId::CopilotClaudeSonnet46 => Provider::Copilot,
             ModelId::DeepSeekChat | ModelId::DeepSeekReasoner => Provider::DeepSeek,
             ModelId::HuggingFaceDeepseekV32
             | ModelId::HuggingFaceOpenAIGptOss20b

@@ -12,6 +12,29 @@ pub struct AuthConfig {
     pub openrouter: OpenRouterOAuthConfig,
     #[serde(default)]
     pub openai: OpenAIAuthConfig,
+    #[serde(default)]
+    pub copilot: CopilotAuthConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(default)]
+pub struct CopilotAuthConfig {
+    pub command: Option<String>,
+    pub host: Option<String>,
+    pub startup_timeout_secs: u64,
+    pub auth_timeout_secs: u64,
+}
+
+impl Default for CopilotAuthConfig {
+    fn default() -> Self {
+        Self {
+            command: None,
+            host: None,
+            startup_timeout_secs: 20,
+            auth_timeout_secs: 300,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -74,5 +97,14 @@ mod tests {
         assert_eq!(config.callback_port, 1455);
         assert!(config.auto_refresh);
         assert_eq!(config.flow_timeout_secs, 300);
+    }
+
+    #[test]
+    fn copilot_defaults_match_expected_values() {
+        let config = CopilotAuthConfig::default();
+        assert!(config.command.is_none());
+        assert!(config.host.is_none());
+        assert_eq!(config.startup_timeout_secs, 20);
+        assert_eq!(config.auth_timeout_secs, 300);
     }
 }

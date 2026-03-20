@@ -41,6 +41,7 @@ pub(crate) fn default_model_for_provider(provider: Provider) -> &'static str {
         Provider::Gemini => models::google::DEFAULT_MODEL,
         Provider::OpenAI => models::openai::DEFAULT_MODEL,
         Provider::Anthropic => models::anthropic::DEFAULT_MODEL,
+        Provider::Copilot => models::copilot::DEFAULT_MODEL,
         Provider::DeepSeek => models::deepseek::DEFAULT_MODEL,
         Provider::HuggingFace => models::huggingface::DEFAULT_MODEL,
         Provider::OpenRouter => models::openrouter::DEFAULT_MODEL,
@@ -54,7 +55,7 @@ pub(crate) fn default_model_for_provider(provider: Provider) -> &'static str {
 }
 
 fn model_options(provider: Provider, default_model: &'static str) -> Vec<String> {
-    let mut options: Vec<String> = model_helpers::supported_for(&provider.to_string())
+    let mut options: Vec<String> = model_helpers::supported_for(provider.as_ref())
         .map(|list| list.iter().map(|model| (*model).to_owned()).collect())
         .unwrap_or_default();
 

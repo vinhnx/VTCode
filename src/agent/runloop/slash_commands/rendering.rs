@@ -44,7 +44,7 @@ pub(super) fn render_mcp_usage(renderer: &mut AnsiRenderer) -> Result<()> {
     )?;
     renderer.line(
         MessageStyle::Info,
-        "  login/logout <name> – Manage OAuth sessions (if supported)",
+        "  login/logout <name> – Manage provider authentication (if supported)",
     )?;
     renderer.line(
         MessageStyle::Info,

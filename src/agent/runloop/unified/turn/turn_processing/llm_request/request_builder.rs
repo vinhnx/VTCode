@@ -184,6 +184,17 @@ async fn assemble_prompt(
             0,
         );
         (None, false)
+    } else if !input.turn.capabilities.tools {
+        emit_tool_catalog_cache_metrics(
+            ctx,
+            input.step_count,
+            input.active_model,
+            true,
+            input.turn.plan_mode,
+            input.turn.request_user_input_enabled,
+            0,
+        );
+        (None, false)
     } else {
         let tool_snapshot = ctx
             .tool_catalog
@@ -422,6 +433,44 @@ mod tests {
         assert!(system_prompt.contains("do_not_request_more_tools: true"));
         assert!(system_prompt.contains("recovery_reason: loop detector"));
         assert!(!system_prompt.contains("<budget:token_budget>"));
+    }
+
+    #[tokio::test]
+    async fn text_only_provider_request_omits_tools_and_tool_choice() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        backing
+            .add_tool_definition(ToolDefinition::function(
+                "unified_search".to_string(),
+                "Search project files".to_string(),
+                json!({
+                    "type": "object",
+                    "properties": {
+                        "pattern": { "type": "string" }
+                    }
+                }),
+            ))
+            .await;
+
+        let mut ctx = backing.turn_processing_context();
+
+        let mut snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
+        snapshot.capabilities.tools = false;
+        let built =
+            build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
+                .await
+                .expect("text-only request should build");
+
+        assert!(!built.has_tools);
+        assert!(built.request.tools.is_none());
+        assert!(built.request.tool_choice.is_none());
+
+        let system_prompt = built
+            .request
+            .system_prompt
+            .as_ref()
+            .expect("system prompt")
+            .as_str();
+        assert!(!system_prompt.contains("[Runtime Tool Catalog]"));
     }
 
     #[test]

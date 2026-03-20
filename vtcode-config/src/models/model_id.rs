@@ -69,6 +69,18 @@ pub enum ModelId {
     ClaudeSonnet46,
     /// Claude Haiku 4.5 - Latest efficient Anthropic model (2025-10-15)
     ClaudeHaiku45,
+    /// GitHub Copilot auto model selection
+    CopilotAuto,
+    /// GitHub Copilot GPT-5.2 Codex
+    CopilotGPT52Codex,
+    /// GitHub Copilot GPT-5.1 Codex Max
+    CopilotGPT51CodexMax,
+    /// GitHub Copilot GPT-5.4
+    CopilotGPT54,
+    /// GitHub Copilot GPT-5.4 Mini
+    CopilotGPT54Mini,
+    /// GitHub Copilot Claude Sonnet 4.6
+    CopilotClaudeSonnet46,
 
     // DeepSeek models
     /// DeepSeek V3.2 Chat - Fast non-thinking mode

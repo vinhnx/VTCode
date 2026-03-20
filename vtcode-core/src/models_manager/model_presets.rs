@@ -5,6 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::config::constants::models::copilot as copilot_models;
 use crate::config::models::Provider;
 use crate::config::types::ReasoningEffortLevel;
 
@@ -152,6 +153,9 @@ pub fn builtin_model_presets() -> Vec<ModelPreset> {
     // Anthropic presets
     presets.extend(anthropic_presets());
 
+    // Copilot presets
+    presets.extend(copilot_presets());
+
     // DeepSeek presets
     presets.extend(deepseek_presets());
 
@@ -176,6 +180,7 @@ pub fn presets_for_provider(provider: Provider) -> Vec<ModelPreset> {
         Provider::Gemini => gemini_presets(),
         Provider::OpenAI => openai_presets(),
         Provider::Anthropic => anthropic_presets(),
+        Provider::Copilot => copilot_presets(),
         Provider::DeepSeek => deepseek_presets(),
         Provider::ZAI => zai_presets(),
         Provider::Minimax => minimax_presets(),
@@ -186,6 +191,95 @@ pub fn presets_for_provider(provider: Provider) -> Vec<ModelPreset> {
         Provider::HuggingFace => huggingface_presets(),
         Provider::LiteLLM => litellm_presets(),
     }
+}
+
+fn copilot_presets() -> Vec<ModelPreset> {
+    vec![
+        ModelPreset {
+            id: copilot_models::AUTO.to_string(),
+            model: copilot_models::AUTO.to_string(),
+            display_name: "GitHub Copilot Auto".to_string(),
+            description: "Official GitHub Copilot preview provider via the Copilot CLI with automatic model selection.".to_string(),
+            provider: Provider::Copilot,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: Vec::new(),
+            is_default: true,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(400_000),
+        },
+        ModelPreset {
+            id: copilot_models::GPT_5_2_CODEX.to_string(),
+            model: copilot_models::GPT_5_2_CODEX.to_string(),
+            display_name: "GitHub Copilot GPT-5.2 Codex".to_string(),
+            description: "Curated Copilot GPT-5.2 Codex option for agentic software engineering.".to_string(),
+            provider: Provider::Copilot,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: Vec::new(),
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(400_000),
+        },
+        ModelPreset {
+            id: copilot_models::GPT_5_1_CODEX_MAX.to_string(),
+            model: copilot_models::GPT_5_1_CODEX_MAX.to_string(),
+            display_name: "GitHub Copilot GPT-5.1 Codex Max".to_string(),
+            description: "Higher-compute Copilot GPT-5.1 Codex Max option for longer-running engineering tasks.".to_string(),
+            provider: Provider::Copilot,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: Vec::new(),
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(400_000),
+        },
+        ModelPreset {
+            id: copilot_models::GPT_5_4.to_string(),
+            model: copilot_models::GPT_5_4.to_string(),
+            display_name: "GitHub Copilot GPT-5.4".to_string(),
+            description: "Frontier Copilot GPT-5.4 option for complex professional work.".to_string(),
+            provider: Provider::Copilot,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: Vec::new(),
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(1_050_000),
+        },
+        ModelPreset {
+            id: copilot_models::GPT_5_4_MINI.to_string(),
+            model: copilot_models::GPT_5_4_MINI.to_string(),
+            display_name: "GitHub Copilot GPT-5.4 Mini".to_string(),
+            description: "Lighter-weight Copilot GPT-5.4 Mini option for faster responses.".to_string(),
+            provider: Provider::Copilot,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: Vec::new(),
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(200_000),
+        },
+        ModelPreset {
+            id: copilot_models::CLAUDE_SONNET_4_6.to_string(),
+            model: copilot_models::CLAUDE_SONNET_4_6.to_string(),
+            display_name: "GitHub Copilot Claude Sonnet 4.6".to_string(),
+            description: "Balanced Copilot Claude Sonnet 4.6 option for coding and reasoning work.".to_string(),
+            provider: Provider::Copilot,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: Vec::new(),
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(200_000),
+        },
+    ]
 }
 
 fn gemini_presets() -> Vec<ModelPreset> {

@@ -49,6 +49,15 @@ define_provider_config!(
     ()
 );
 define_provider_config!(
+    CopilotProviderConfig,
+    "copilot",
+    "GitHub Copilot",
+    crate::config::constants::models::copilot::DEFAULT_MODEL,
+    "",
+    None,
+    ()
+);
+define_provider_config!(
     OpenAIProviderConfig,
     "openai",
     "OpenAI",
@@ -184,6 +193,7 @@ pub fn create_provider_unified(
         FactoryProviderConfig {
             api_key: non_empty(api_key),
             openai_chatgpt_auth: None,
+            copilot_auth: None,
             base_url: non_empty(base_url),
             model: non_empty(model),
             prompt_cache,
@@ -191,6 +201,7 @@ pub fn create_provider_unified(
             openai: None,
             anthropic: None,
             model_behavior: None,
+            workspace_root: None,
         },
     )
 }
@@ -258,6 +269,7 @@ mod tests {
             FactoryProviderConfig {
                 api_key: None,
                 openai_chatgpt_auth: None,
+                copilot_auth: None,
                 base_url: Some("http://localhost:11434".to_string()),
                 model: Some("gpt-oss:20b".to_string()),
                 prompt_cache: None,
@@ -265,6 +277,7 @@ mod tests {
                 openai: None,
                 anthropic: None,
                 model_behavior: None,
+                workspace_root: None,
             },
         )
         .expect("factory provider should build");

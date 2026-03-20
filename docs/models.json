@@ -423,6 +423,119 @@
     },
     "default_model": "gpt-5.4"
   },
+  "copilot": {
+    "id": "copilot",
+    "env": [
+      "COPILOT_GITHUB_TOKEN",
+      "GH_TOKEN",
+      "GITHUB_TOKEN"
+    ],
+    "api": "copilot-cli",
+    "name": "GitHub Copilot",
+    "description": "Official GitHub Copilot CLI-backed preview provider.",
+    "doc": "https://docs.github.com/en/copilot/reference/ai-models/supported-models",
+    "default_model": "copilot-auto",
+    "models": {
+      "copilot-auto": {
+        "id": "copilot-auto",
+        "name": "GitHub Copilot Auto",
+        "description": "Automatic model selection via the official GitHub Copilot CLI.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 400000
+      },
+      "copilot-gpt-5.2-codex": {
+        "id": "copilot-gpt-5.2-codex",
+        "name": "GitHub Copilot GPT-5.2 Codex",
+        "description": "GPT-5.2 Codex option in GitHub Copilot for agentic software engineering tasks.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 400000
+      },
+      "copilot-gpt-5.1-codex-max": {
+        "id": "copilot-gpt-5.1-codex-max",
+        "name": "GitHub Copilot GPT-5.1 Codex Max",
+        "description": "Higher-compute GPT-5.1 Codex Max option in GitHub Copilot for longer-running engineering tasks.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 400000
+      },
+      "copilot-gpt-5.4": {
+        "id": "copilot-gpt-5.4",
+        "name": "GitHub Copilot GPT-5.4",
+        "description": "GPT-5.4 option in GitHub Copilot for complex professional work and long context.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1050000
+      },
+      "copilot-gpt-5.4-mini": {
+        "id": "copilot-gpt-5.4-mini",
+        "name": "GitHub Copilot GPT-5.4 Mini",
+        "description": "GPT-5.4 Mini option in GitHub Copilot for lighter-weight tasks and faster responses.",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 200000
+      },
+      "copilot-claude-sonnet-4.6": {
+        "id": "copilot-claude-sonnet-4.6",
+        "name": "GitHub Copilot Claude Sonnet 4.6",
+        "description": "Claude Sonnet 4.6 option in GitHub Copilot for balanced coding and reasoning work.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 200000
+      }
+    }
+  },
   "huggingface": {
     "id": "huggingface",
     "env": [

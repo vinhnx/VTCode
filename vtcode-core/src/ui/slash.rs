@@ -185,14 +185,14 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             name: "statusline",
             description: "Set up a custom status line with target selection (usage: /statusline [instructions...])",
         },
-        // OAuth authentication
+        // Provider authentication
         SlashCommandInfo {
             name: "login",
-            description: "Authenticate with OpenAI or OpenRouter via OAuth (usage: /login [provider])",
+            description: "Authenticate with OpenAI, OpenRouter, or GitHub Copilot (usage: /login [provider])",
         },
         SlashCommandInfo {
             name: "logout",
-            description: "Clear stored OAuth authentication (usage: /logout [provider])",
+            description: "Clear stored provider authentication (usage: /logout [provider])",
         },
         SlashCommandInfo {
             name: "auth",
@@ -200,7 +200,7 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
         },
         SlashCommandInfo {
             name: "refresh-oauth",
-            description: "Refresh stored OAuth credentials when supported (usage: /refresh-oauth [provider])",
+            description: "Refresh stored provider credentials when supported (usage: /refresh-oauth [provider])",
         },
     ]
 });

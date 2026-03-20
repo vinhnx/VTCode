@@ -37,6 +37,12 @@ impl ModelId {
             ModelId::ClaudeOpus46,
             ModelId::ClaudeSonnet46,
             ModelId::ClaudeHaiku45,
+            ModelId::CopilotAuto,
+            ModelId::CopilotGPT52Codex,
+            ModelId::CopilotGPT51CodexMax,
+            ModelId::CopilotGPT54,
+            ModelId::CopilotGPT54Mini,
+            ModelId::CopilotClaudeSonnet46,
             // DeepSeek models
             ModelId::DeepSeekChat,
             ModelId::DeepSeekReasoner,

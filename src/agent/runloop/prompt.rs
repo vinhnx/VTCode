@@ -84,6 +84,7 @@ pub(crate) async fn refine_user_prompt_if_enabled(
         ProviderConfig {
             api_key: Some(cfg.api_key.clone()),
             openai_chatgpt_auth: cfg.openai_chatgpt_auth.clone(),
+            copilot_auth: vt_cfg.map(|cfg| cfg.auth.copilot.clone()),
             base_url: None,
             model: Some(refiner_model.clone()),
             prompt_cache: Some(cfg.prompt_cache.clone()),
@@ -91,6 +92,7 @@ pub(crate) async fn refine_user_prompt_if_enabled(
             openai: None,
             anthropic: None,
             model_behavior: cfg.model_behavior.clone(),
+            workspace_root: Some(cfg.workspace.clone()),
         },
     ) else {
         return raw.to_string();

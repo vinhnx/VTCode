@@ -67,10 +67,94 @@ module
 
 ---
 
-try copilot github oauth to use anthropic's claude
+try copilot github oauth in vtcode system. reference OpenAI and OpenRouter OAUTH flows and vtcode-auth module implementation.
 
-https://claude.ai/chat/37d94c2c-a521-44d2-85f3-e15c38864286
+deepwiki reference (use mcp and web search to explore if possible):
+
+- opencode: https://deepwiki.com/search/how-does-github-copilot-subscr_f92939bf-7608-4e34-b694-f318941b019c?mode=fast
+- pi-mono: https://deepwiki.com/search/how-does-github-copilot-subscr_1387ab95-3e25-408b-a6e9-880712afe35d?mode=fast
+
+NOTE:
+
+```
+Clear answer: **it depends entirely on which integration path you use.** Here's the breakdown:
+
+---
+
+**TOS violation: using `copilot_internal` API directly**
+
+Using `api.github.com/copilot_internal` outside of officially supported clients violates GitHub's ToS and can result in account suspension — third-party implementations that reverse-engineer or proxy Copilot's internal API are not officially supported.
+
+---
+
+**Sanctioned path: `@github/copilot-language-server` SDK**
+
+GitHub released the Copilot Language Server SDK publicly in February 2025, explicitly enabling any editor or IDE to integrate Copilot via the Language Server Protocol standard. This is GitHub's official blessed route — the same one used by VS Code, JetBrains, Neovim, and Xcode.
+
+The Copilot Language Server also supports the Agent Client Protocol (ACP), enabling integration with ACP-compatible editors. Communication happens over stdin/stdout.
+
+---
+
+**Integration architecture for VT Code**
+
+Since VT Code is a terminal agent (Rust), the wiring is:
+
+```
+
+VT Code (LSP client, Rust) <--JSON-RPC 2.0 over stdio--> @github/copilot-language-server (Node.js subprocess)
+
+````
+
+Bootstrap flow:
+```json
+// 1. Send initialize
+{ "editorInfo": { "name": "VT Code", "version": "x.y.z" }, "editorPluginInfo": { "name": "vtcode-copilot", "version": "1.0.0" } }
+
+// 2. Auth via device flow — server returns userCode, user visits URL once
+{ "userCode": "ABCD-EFGH", "command": { "command": "github.copilot.finishDeviceFlow" } }
+
+// 3. Inline completions
+{ "method": "textDocument/inlineCompletion", "params": { "textDocument": { "uri": "file:///...", "version": 0 }, "position": {"line": N, "character": M} } }
+````
+
+---
+
+**Key ToS constraints to stay compliant**
+
+- Each user authenticates with their own Copilot subscription via the device flow — VT Code does not proxy or pool credentials
+- You must pass telemetry back (accept/reject events) via `github.copilot.didAcceptCompletionItem` — this is required by the protocol, not optional
+- GitHub Copilot Extensions are being deprecated on November 10, 2025, in favor of MCP — so don't build on the Extensions platform, LSP is the right surface
+
+---
+
+**Bottom line**: using `@github/copilot-language-server` is fully compliant and architecturally sound for VT Code. It's a Node.js subprocess that VT Code spawns and speaks LSP JSON-RPC to over stdio — clean separation, no ToS risk.
+
+Package: `npm:@github/copilot-language-server` — native binaries for `darwin-arm64` (M4), `linux-x64`, etc. are bundled, so no Node runtime dependency on the user side if you ship the binary.
+
+```
+
+===
+
 
 https://gist.github.com/cedws/3a24b2c7569bb610e24aa90dd217d9f2
 
 ===
+```
+
+===
+
+Fix OAUTH info display broken in TUI
+
+'/Users/vinhnguyenxuan/Desktop/Screenshot 2026-03-20 at 4.13.12 PM.png'
+
+===
+
+check Pi implementation again, it seems Pi is using GitHUb Copilot plugin, instead of GitHub Copilot CLI (https://deepwiki.com/search/how-does-github-copilot-subscr_1387ab95-3e25-408b-a6e9-880712afe35d?mode=fast). While Open Code use a Github app (should we register a VT Code Github app for better integration and compliance?).
+
+Pi: '/Users/vinhnguyenxuan/Desktop/Screenshot 2026-03-20 at 4.18.16 PM.png'
+Ours: '/Users/vinhnguyenxuan/Desktop/Screenshot 2026-03-20 at 4.13.50 PM.png'
+OpenCode: ''/Users/vinhnguyenxuan/Desktop/Screenshot 2026-03-20 at 4.21.49 PM.png'
+
+===
+
+Also add full list of supports GitHUb copilot models.
