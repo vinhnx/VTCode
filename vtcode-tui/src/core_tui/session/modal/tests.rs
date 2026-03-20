@@ -179,6 +179,109 @@ fn wizard_tabbed_list_enter_submits_single_selection() {
 }
 
 #[test]
+fn wizard_tabbed_list_mouse_click_submits_on_first_click() {
+    let steps = vec![WizardStep {
+        title: "Tab".to_owned(),
+        question: "Pick".to_owned(),
+        items: vec![
+            InlineListItem {
+                title: "Choice A".to_owned(),
+                selection: Some(InlineListSelection::AskUserChoice {
+                    tab_id: "tab".to_owned(),
+                    choice_id: "choice_a".to_owned(),
+                    text: None,
+                }),
+                ..base_item("Choice A")
+            },
+            InlineListItem {
+                title: "Choice B".to_owned(),
+                selection: Some(InlineListSelection::AskUserChoice {
+                    tab_id: "tab".to_owned(),
+                    choice_id: "choice_b".to_owned(),
+                    text: None,
+                }),
+                ..base_item("Choice B")
+            },
+        ],
+        completed: false,
+        answer: None,
+        allow_freeform: false,
+        freeform_label: None,
+        freeform_placeholder: None,
+    }];
+
+    let mut wizard = WizardModalState::new(
+        "Pick".to_owned(),
+        steps,
+        0,
+        None,
+        WizardModalMode::TabbedList,
+    );
+
+    let result = wizard.handle_mouse_click(1);
+    match result {
+        ModalListKeyResult::Submit(InlineEvent::Overlay(OverlayEvent::Submitted(
+            OverlaySubmission::Wizard(selections),
+        ))) => {
+            assert_eq!(selections.len(), 1);
+            match &selections[0] {
+                InlineListSelection::AskUserChoice { choice_id, .. } => {
+                    assert_eq!(choice_id, "choice_b");
+                }
+                other => panic!("unexpected selection: {:?}", other),
+            }
+        }
+        other => panic!("Expected submit, got: {:?}", other),
+    }
+}
+
+#[test]
+fn wizard_tabbed_list_mouse_click_activates_custom_note_editor() {
+    let steps = vec![WizardStep {
+        title: "Tab".to_owned(),
+        question: "Pick".to_owned(),
+        items: vec![
+            InlineListItem {
+                title: "Choice A".to_owned(),
+                selection: Some(InlineListSelection::AskUserChoice {
+                    tab_id: "tab".to_owned(),
+                    choice_id: "choice_a".to_owned(),
+                    text: None,
+                }),
+                ..base_item("Choice A")
+            },
+            InlineListItem {
+                title: "Other".to_owned(),
+                selection: Some(InlineListSelection::RequestUserInputAnswer {
+                    question_id: "tab".to_owned(),
+                    selected: vec![],
+                    other: Some(String::new()),
+                }),
+                ..base_item("Other")
+            },
+        ],
+        completed: false,
+        answer: None,
+        allow_freeform: true,
+        freeform_label: Some("Other".to_owned()),
+        freeform_placeholder: Some("Type your response...".to_owned()),
+    }];
+
+    let mut wizard = WizardModalState::new(
+        "Pick".to_owned(),
+        steps,
+        0,
+        None,
+        WizardModalMode::TabbedList,
+    );
+
+    let result = wizard.handle_mouse_click(1);
+    assert!(matches!(result, ModalListKeyResult::Redraw));
+    assert!(wizard.steps[0].notes_active);
+    assert_eq!(wizard.steps[0].list.list_state.selected(), Some(1));
+}
+
+#[test]
 fn wizard_multistep_ctrl_n_advances_without_completion() {
     let steps = vec![
         WizardStep {
