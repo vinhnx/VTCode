@@ -511,6 +511,7 @@ fn generate_agents_md(analysis: &ProjectAnalysis) -> Result<String> {
     content.push_str(&build_architecture_section(analysis));
     content.push_str(&build_code_style_section(analysis));
     content.push_str(&build_testing_section(analysis));
+    content.push_str(&build_performance_section());
 
     if let Some(section) = build_pr_guidelines_section(analysis) {
         content.push_str(&section);
@@ -716,6 +717,20 @@ fn build_testing_section(analysis: &ProjectAnalysis) -> String {
 
     render_section("Testing", lines).unwrap_or_else(|| {
         "## Testing\n\nRun the project's automated checks before submitting changes.\n".to_string()
+    })
+}
+
+fn build_performance_section() -> String {
+    let lines = vec![
+        "Do not guess at bottlenecks; measure before optimizing.".to_owned(),
+        "Prefer simple algorithms and data structures until workload data proves more complexity is worth it.".to_owned(),
+        "Let data shape the design so the algorithm stays obvious and maintainable.".to_owned(),
+        "Keep performance changes surgical and behavior-preserving.".to_owned(),
+    ];
+
+    render_section("Performance & simplicity", lines).unwrap_or_else(|| {
+        "## Performance & simplicity\n\nMeasure before optimizing and prefer simple designs.\n"
+            .to_string()
     })
 }
 
@@ -965,6 +980,7 @@ mod tests {
         assert!(output.contains("# AGENTS.md"));
         assert!(output.contains("## Quick start"));
         assert!(output.contains("## Architecture & layout"));
+        assert!(output.contains("## Performance & simplicity"));
         assert!(output.contains("Rust code uses 4-space indentation"));
         assert!(output.contains("Use Conventional Commits"));
         assert!(output.contains("Repository docs spotted"));

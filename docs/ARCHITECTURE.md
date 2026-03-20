@@ -153,9 +153,11 @@ pub trait CacheableTool: Tool {
 
 1. **Trait-based Composability** - Tools implement multiple traits for different capabilities
 2. **Mode-based Execution** - Single tools support multiple execution modes
-3. **Backward Compatibility** - All existing APIs remain functional
-4. **Performance Optimization** - Strategic caching and async operations
-5. **Clear Separation** - Each module has single responsibility
+3. **Simplicity First** - Prefer simple algorithms and control flow until real workload data justifies more complexity
+4. **Data-Oriented Design** - Choose data structures and boundaries so the right algorithm is obvious
+5. **Backward Compatibility** - All existing APIs remain functional
+6. **Measured Optimization** - Profile and benchmark before keeping performance-motivated complexity
+7. **Clear Separation** - Each module has single responsibility
 
 ## Adding New Tools
 

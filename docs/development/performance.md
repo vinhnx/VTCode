@@ -1,12 +1,22 @@
 # Performance Optimization
 
-VT Code uses a local-first performance workflow. Performance checks are measured manually and are not hard CI gates.
+VT Code uses a local-first performance workflow. Performance checks are measured manually and are not hard CI gates. The default stance is simple: do not guess, measure first, and only keep complexity that pays for itself.
 
 ## Goals
 
 - Keep release artifacts portable.
 - Improve runtime without hurting day-to-day iteration speed.
 - Optimize only measured hotspots.
+
+## Performance & Simplicity Rules
+
+- Do not guess where time goes. Capture a baseline before changing code that claims a performance win.
+- Measure before tuning. Keep before/after numbers from `baseline.sh`, targeted timers, or benchmarks.
+- Prefer simple algorithms when input sizes are small or not yet proven large.
+- Avoid fancy algorithms and broad refactors unless measurements justify their constant-factor and maintenance cost.
+- Start with data structures and layout. In VT Code, the right cache shape, queue boundary, or representation usually matters more than clever control flow.
+
+These rules apply to product code and refactors alike. The burden of proof is on the optimization, not on the simpler baseline.
 
 ## Local Workflow
 
@@ -24,6 +34,8 @@ VT Code uses a local-first performance workflow. Performance checks are measured
 ```
 
 Artifacts are written to `.vtcode/perf/` and include JSON metrics plus raw logs.
+
+Use this loop for any non-trivial performance change. Change one thing at a time so the comparison stays attributable.
 
 ## Profiling Build
 
@@ -60,9 +72,13 @@ cargo bench -p vtcode-core --bench tool_pipeline
 cargo bench -p vtcode-tools --bench cache_bench
 ```
 
+Use benches when a hotspot is stable and repeatable. Use the baseline/profile scripts when the question is broader end-to-end behavior.
+
 ## Optimization Rules
 
 - Change one thing at a time.
 - Keep changes surgical and behavior-preserving.
-- Prefer safe single-pass reductions over broad refactors.
+- Prefer simple, safe single-pass reductions over broad refactors.
+- Revisit data structures before introducing algorithmic sophistication.
+- Keep the simplest implementation until measured workload data proves it insufficient.
 - For hashers, follow the selective policy in `performance-hasher-policy.md`.

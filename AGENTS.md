@@ -128,6 +128,14 @@ cargo clippy --workspace --all-targets -- -D warnings && cargo fmt --check && ca
 
 **Performance**: Single codegen unit, strict Clippy, no `expect_used`/`unwrap_used`.
 
+### Performance & Simplicity
+
+- Don't speculate about bottlenecks; measure with VT Code benchmarks, traces, or targeted timings before optimizing.
+- Benchmark before tuning and keep before/after evidence for non-trivial performance claims.
+- Prefer simple or brute-force approaches when scale is unproven or inputs are usually small.
+- Avoid fancy algorithms unless measurements show they matter more than the simpler alternative.
+- Choose data structures and layout first; once the data is right, the algorithm should usually become obvious.
+
 **Blocked Handoff Recovery**: When a run writes a blocked handoff, check `.vtcode/tasks/current_blocked.md` (and `.vtcode/tasks/blockers/`) for context, then resume with `vtcode --resume <session_id>`.
 
 **Hooks Noise Control**: Set `hooks.lifecycle.quiet_success_output = true` in `vtcode.toml` to suppress plain stdout for successful lifecycle hooks while retaining structured/failed output.
