@@ -2,6 +2,30 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.91.1 - 2026-03-20
+
+### Highlights
+#### Bug Fixes
+
+- Auto-copy highlighted TUI selections (5a33748a) 
+- Copy selected input on command-c (05a4472f) 
+### Other Changes
+#### Other
+
+- Update TODO.md (a96c1aca) (@vinhnx)
+- Add unrelated worktree prompt handling and related functionality (dd59dd65) 
+- Refactor model option handling and validation logic for improved performance and clarity (ed7d837a) 
+- Add OAuth authentication guide and enhance README with OAuth details (0660f149) 
+- Refactor system prompts and skills rendering for improved clarity and efficiency (7ba88e31) 
+#### Refactors
+
+- Improve git diff preview logic and update related enums (18a30a87) 
+- Update prompt assembly logic and enhance instruction handling (8b6f71f5) 
+- Remove unused PromptAssemblyMode and simplify related code (1f348cd4) 
+- Streamline system prompt instructions for clarity and conciseness (dcf8fa34) 
+- Enhance performance guidelines and simplify related documentation (f6259c32) 
+### Contributors
+@vinhnx
 ## 0.91.0 - 2026-03-18
 
 ### Highlights
