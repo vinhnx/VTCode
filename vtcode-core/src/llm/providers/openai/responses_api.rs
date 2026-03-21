@@ -6,7 +6,8 @@ use crate::llm::provider::{
 use crate::llm::providers::common::append_normalized_reasoning_detail_items;
 use crate::llm::providers::openai::types::OpenAIResponsesPayload;
 use crate::llm::providers::shared::{
-    function_output_value_from_message_content, tool_result_content_from_message_content,
+    collect_tool_references_from_tool_search_output, function_output_value_from_message_content,
+    tool_result_content_from_message_content,
 };
 use hashbrown::{HashMap, HashSet};
 use serde_json::{Value, json};
@@ -18,6 +19,11 @@ fn parse_responses_tool_call(item: &Value) -> Option<ToolCall> {
         .or_else(|| item.get("id").and_then(|v| v.as_str()))
         .unwrap_or("");
     let function_obj = item.get("function").and_then(|v| v.as_object());
+    let namespace = item
+        .get("namespace")
+        .and_then(|v| v.as_str())
+        .or_else(|| function_obj.and_then(|f| f.get("namespace").and_then(|n| n.as_str())))
+        .map(ToOwned::to_owned);
     let name = function_obj
         .and_then(|f| f.get("name").and_then(|n| n.as_str()))
         .or_else(|| item.get("name").and_then(|n| n.as_str()))?;
@@ -33,8 +39,9 @@ fn parse_responses_tool_call(item: &Value) -> Option<ToolCall> {
         }
     });
 
-    Some(ToolCall::function(
+    Some(ToolCall::function_with_namespace(
         call_id.to_string(),
+        namespace,
         name.to_string(),
         serialized,
     ))
@@ -225,6 +232,7 @@ pub fn parse_responses_payload(
     let mut reasoning_text_fragments: Vec<String> = Vec::new();
     let mut reasoning_items: Vec<Value> = Vec::new();
     let mut tool_calls_vec: Vec<ToolCall> = Vec::new();
+    let mut tool_references: Vec<String> = Vec::new();
 
     for item in output {
         let item_type = item
@@ -281,6 +289,9 @@ pub fn parse_responses_payload(
                 if let Some(call) = parse_responses_tool_call(item) {
                     tool_calls_vec.push(call);
                 }
+            }
+            "tool_search_output" => {
+                collect_tool_references_from_tool_search_output(item, &mut tool_references);
             }
             "web_search" | "file_search" => {
                 if let Some(results) = item.get("results").and_then(|r| r.as_array()) {
@@ -395,7 +406,7 @@ pub fn parse_responses_payload(
         finish_reason,
         reasoning,
         reasoning_details,
-        tool_references: Vec::new(),
+        tool_references,
         request_id: response_json
             .get("id")
             .and_then(|value| value.as_str())
@@ -838,6 +849,69 @@ mod tests {
                 .as_ref()
                 .map(|function| function.name.as_str()),
             Some("unified_exec")
+        );
+    }
+
+    #[test]
+    fn parse_responses_payload_preserves_function_namespace() {
+        let response = json!({
+            "output": [
+                {
+                    "type": "function_call",
+                    "id": "fc_456",
+                    "call_id": "call_456",
+                    "namespace": "repo_browser",
+                    "name": "list_files",
+                    "arguments": "{\"path\":\".\"}"
+                }
+            ]
+        });
+
+        let parsed = parse_responses_payload(response, "gpt-5.3-codex".to_string(), false)
+            .expect("payload should parse");
+
+        let tool_calls = parsed.tool_calls.expect("tool calls should exist");
+        let namespace = tool_calls[0]
+            .function
+            .as_ref()
+            .and_then(|function| function.namespace.as_deref());
+
+        assert_eq!(namespace, Some("repo_browser"));
+    }
+
+    #[test]
+    fn parse_responses_payload_extracts_tool_search_references() {
+        let response = json!({
+            "output": [
+                {
+                    "type": "tool_search_output",
+                    "execution": "client",
+                    "status": "completed",
+                    "tools": [
+                        {
+                            "name": "read_file",
+                            "description": "Read a file"
+                        },
+                        {
+                            "name": "namespace_group",
+                            "tools": [
+                                {
+                                    "name": "write_file",
+                                    "description": "Write a file"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let parsed = parse_responses_payload(response, "gpt-5.3-codex".to_string(), false)
+            .expect("payload should parse");
+
+        assert_eq!(
+            parsed.tool_references,
+            vec!["read_file".to_string(), "write_file".to_string()]
         );
     }
 

@@ -110,6 +110,7 @@ pub enum ImageDetail {
     Low,
     High,
     Auto,
+    Original,
 }
 
 /// Input image content.

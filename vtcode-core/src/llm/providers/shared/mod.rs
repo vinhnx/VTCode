@@ -99,6 +99,7 @@ impl StreamDelta {
 #[derive(Default, Clone)]
 pub struct ToolCallBuilder {
     id: Option<String>,
+    namespace: Option<String>,
     name: Option<String>,
     arguments: String,
 }
@@ -109,7 +110,15 @@ impl ToolCallBuilder {
             self.id = Some(id.to_string());
         }
 
+        if let Some(namespace) = delta.get("namespace").and_then(|value| value.as_str()) {
+            self.namespace = Some(namespace.to_string());
+        }
+
         if let Some(function) = delta.get("function") {
+            if let Some(namespace) = function.get("namespace").and_then(|value| value.as_str()) {
+                self.namespace = Some(namespace.to_string());
+            }
+
             if let Some(name) = function.get("name").and_then(|value| value.as_str()) {
                 self.name = Some(name.to_string());
             }
@@ -135,7 +144,12 @@ impl ToolCallBuilder {
             self.arguments
         };
 
-        Some(ToolCall::function(id, name, arguments))
+        Some(ToolCall::function_with_namespace(
+            id,
+            self.namespace,
+            name,
+            arguments,
+        ))
     }
 }
 
@@ -390,6 +404,11 @@ fn output_item_text(content: &Value) -> String {
 
 fn parse_function_call_item(item: &Value) -> Option<ToolCall> {
     let function_obj = item.get("function").and_then(Value::as_object);
+    let namespace = item
+        .get("namespace")
+        .and_then(Value::as_str)
+        .or_else(|| function_obj.and_then(|f| f.get("namespace").and_then(Value::as_str)))
+        .map(ToOwned::to_owned);
     let name = function_obj
         .and_then(|f| f.get("name").and_then(Value::as_str))
         .or_else(|| item.get("name").and_then(Value::as_str))?
@@ -416,7 +435,9 @@ fn parse_function_call_item(item: &Value) -> Option<ToolCall> {
         },
     );
 
-    Some(ToolCall::function(id, name, arguments))
+    Some(ToolCall::function_with_namespace(
+        id, namespace, name, arguments,
+    ))
 }
 
 fn parse_message_item(item: &Value) -> Option<Message> {
@@ -761,6 +782,11 @@ pub fn parse_openai_tool_calls(calls: &[Value]) -> Vec<ToolCall> {
         .filter_map(|call| {
             let id = call.get("id").and_then(|v| v.as_str())?;
             let function = call.get("function")?;
+            let namespace = call
+                .get("namespace")
+                .and_then(|v| v.as_str())
+                .or_else(|| function.get("namespace").and_then(|v| v.as_str()))
+                .map(ToOwned::to_owned);
             let name = function.get("name").and_then(|v| v.as_str())?;
             let arguments = function.get("arguments");
             let serialized = arguments.map_or_else(
@@ -773,13 +799,63 @@ pub fn parse_openai_tool_calls(calls: &[Value]) -> Vec<ToolCall> {
                     }
                 },
             );
-            Some(ToolCall::function(
+            Some(ToolCall::function_with_namespace(
                 id.to_string(),
+                namespace,
                 name.to_string(),
                 serialized,
             ))
         })
         .collect()
+}
+
+fn push_unique_tool_reference(tool_references: &mut Vec<String>, tool_name: &str) {
+    if !tool_references.iter().any(|existing| existing == tool_name) {
+        tool_references.push(tool_name.to_string());
+    }
+}
+
+pub(crate) fn collect_tool_references_from_tool_search_output(
+    value: &Value,
+    tool_references: &mut Vec<String>,
+) {
+    match value {
+        Value::Array(items) => {
+            for item in items {
+                collect_tool_references_from_tool_search_output(item, tool_references);
+            }
+        }
+        Value::Object(object) => {
+            let has_nested_tools = object.get("tools").and_then(Value::as_array);
+            if let Some(tools) = has_nested_tools {
+                for tool in tools {
+                    collect_tool_references_from_tool_search_output(tool, tool_references);
+                }
+            } else {
+                if let Some(tool_name) = object.get("tool_name").and_then(Value::as_str) {
+                    push_unique_tool_reference(tool_references, tool_name);
+                } else if let Some(function) = object.get("function").and_then(Value::as_object)
+                    && let Some(tool_name) = function.get("name").and_then(Value::as_str)
+                {
+                    push_unique_tool_reference(tool_references, tool_name);
+                } else if let Some(tool_name) = object.get("name").and_then(Value::as_str) {
+                    push_unique_tool_reference(tool_references, tool_name);
+                } else {
+                    match object.get("type").and_then(Value::as_str) {
+                        Some("function") | Some("tool") | Some("function_tool") => {}
+                        _ => {}
+                    }
+                }
+            }
+
+            if let Some(tool_refs) = object.get("tool_references").and_then(Value::as_array) {
+                for tool_ref in tool_refs {
+                    collect_tool_references_from_tool_search_output(tool_ref, tool_references);
+                }
+            }
+        }
+        _ => {}
+    }
 }
 
 #[allow(dead_code)]

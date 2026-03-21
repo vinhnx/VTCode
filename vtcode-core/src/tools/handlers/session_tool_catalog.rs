@@ -52,6 +52,8 @@ pub enum DeferredToolSearchKind {
     OpenAIHosted,
 }
 
+const DIRECT_TOOL_EXPOSURE_THRESHOLD: usize = 100;
+
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct DeferredToolPolicy {
     search_kind: Option<DeferredToolSearchKind>,
@@ -281,10 +283,17 @@ impl SessionToolCatalog {
     }
 
     pub fn model_tools(&self, config: SessionToolsConfig) -> Vec<ToolDefinition> {
+        let filtered_entries = self.filtered_entries(&config).collect::<Vec<_>>();
+        let deferable_tool_count = filtered_entries
+            .iter()
+            .filter(|entry| should_defer_tool_loading(entry, &config))
+            .count();
+        let expose_tools_directly = !config.deferred_tool_policy.is_enabled()
+            || deferable_tool_count < DIRECT_TOOL_EXPOSURE_THRESHOLD;
         let mut tools = Vec::new();
         let mut has_deferred_tools = false;
 
-        for entry in self.filtered_entries(&config) {
+        for entry in filtered_entries {
             let defer_loading = should_defer_tool_loading(entry, &config);
             match entry.kind {
                 CatalogToolKind::ApplyPatch
@@ -294,7 +303,7 @@ impl SessionToolCatalog {
                         entry.description.as_str(),
                         config.documentation_mode,
                     ));
-                    if defer_loading {
+                    if defer_loading && !expose_tools_directly {
                         tool = tool.with_defer_loading(true);
                         has_deferred_tools = true;
                     }
@@ -309,7 +318,7 @@ impl SessionToolCatalog {
                         ),
                         compact_parameters(entry.parameters.clone(), config.documentation_mode),
                     );
-                    if defer_loading {
+                    if defer_loading && !expose_tools_directly {
                         tool = tool.with_defer_loading(true);
                         has_deferred_tools = true;
                     }
@@ -1129,11 +1138,22 @@ mod tests {
             .with_parameter_schema(json!({"type":"object"}))
             .with_aliases(["mcp__context7__search"]);
 
-        let catalog = SessionToolCatalog::rebuild_from_registrations(vec![
-            unified_search,
-            apply_patch,
-            mcp_tool,
-        ]);
+        let mut registrations = vec![unified_search, apply_patch, mcp_tool];
+        for index in 0..DIRECT_TOOL_EXPOSURE_THRESHOLD {
+            let name: &'static str =
+                Box::leak(format!("mcp::context7::resolve_{index}").into_boxed_str());
+            let alias = format!("mcp__context7__resolve_{index}");
+            registrations.push(
+                registration(name)
+                    .with_catalog_source(ToolCatalogSource::Mcp)
+                    .with_llm_visibility(false)
+                    .with_description(format!("resolve docs {index}"))
+                    .with_parameter_schema(json!({"type":"object"}))
+                    .with_aliases([alias]),
+            );
+        }
+
+        let catalog = SessionToolCatalog::rebuild_from_registrations(registrations);
         let definitions = catalog.model_tools(
             SessionToolsConfig::full_public(
                 SessionSurface::Interactive,
@@ -1173,7 +1193,7 @@ mod tests {
     }
 
     #[test]
-    fn openai_policy_keeps_always_available_tools_eager() {
+    fn openai_policy_injects_tool_search_for_large_catalogs() {
         let unified_search = registration(tools::UNIFIED_SEARCH)
             .with_description("Search")
             .with_parameter_schema(json!({"type":"object"}));
@@ -1183,18 +1203,23 @@ mod tests {
             .with_description("search docs")
             .with_parameter_schema(json!({"type":"object"}))
             .with_aliases(["mcp__context7__search"]);
-        let second_mcp_tool = registration("mcp::context7::resolve")
-            .with_catalog_source(ToolCatalogSource::Mcp)
-            .with_llm_visibility(false)
-            .with_description("resolve docs")
-            .with_parameter_schema(json!({"type":"object"}))
-            .with_aliases(["mcp__context7__resolve"]);
 
-        let catalog = SessionToolCatalog::rebuild_from_registrations(vec![
-            unified_search,
-            mcp_tool,
-            second_mcp_tool,
-        ]);
+        let mut registrations = vec![unified_search, mcp_tool];
+        for index in 0..DIRECT_TOOL_EXPOSURE_THRESHOLD {
+            let name: &'static str =
+                Box::leak(format!("mcp::context7::resolve_{index}").into_boxed_str());
+            let alias = format!("mcp__context7__resolve_{index}");
+            registrations.push(
+                registration(name)
+                    .with_catalog_source(ToolCatalogSource::Mcp)
+                    .with_llm_visibility(false)
+                    .with_description(format!("resolve docs {index}"))
+                    .with_parameter_schema(json!({"type":"object"}))
+                    .with_aliases([alias]),
+            );
+        }
+
+        let catalog = SessionToolCatalog::rebuild_from_registrations(registrations);
         let definitions = catalog.model_tools(
             SessionToolsConfig::full_public(
                 SessionSurface::Interactive,
@@ -1223,9 +1248,56 @@ mod tests {
 
         let deferred_mcp_tool = definitions
             .iter()
-            .find(|tool| tool.function_name() == "mcp__context7__resolve")
-            .expect("second mcp tool should be present");
+            .find(|tool| tool.function_name() == "mcp__context7__resolve_0")
+            .expect("deferred mcp tool should be present");
         assert_eq!(deferred_mcp_tool.defer_loading, Some(true));
+    }
+
+    #[test]
+    fn openai_policy_bypasses_tool_search_for_small_catalogs() {
+        let mcp_tool = registration("mcp::context7::search")
+            .with_catalog_source(ToolCatalogSource::Mcp)
+            .with_llm_visibility(false)
+            .with_description("search docs")
+            .with_parameter_schema(json!({"type":"object"}))
+            .with_aliases(["mcp__context7__search"]);
+        let second_mcp_tool = registration("mcp::context7::resolve")
+            .with_catalog_source(ToolCatalogSource::Mcp)
+            .with_llm_visibility(false)
+            .with_description("resolve docs")
+            .with_parameter_schema(json!({"type":"object"}))
+            .with_aliases(["mcp__context7__resolve"]);
+
+        let catalog =
+            SessionToolCatalog::rebuild_from_registrations(vec![mcp_tool, second_mcp_tool]);
+        let definitions = catalog.model_tools(
+            SessionToolsConfig::full_public(
+                SessionSurface::Interactive,
+                CapabilityLevel::CodeSearch,
+                ToolDocumentationMode::Full,
+                ToolModelCapabilities::default(),
+            )
+            .with_deferred_tool_policy(DeferredToolPolicy::openai_hosted(vec![
+                "mcp__context7__search".to_string(),
+            ])),
+        );
+
+        assert!(
+            !definitions
+                .iter()
+                .any(|tool| tool.tool_type == "tool_search")
+        );
+        let mcp_tool = definitions
+            .iter()
+            .find(|tool| tool.function_name() == "mcp__context7__search")
+            .expect("mcp tool should be present");
+        assert_eq!(mcp_tool.defer_loading, None);
+
+        let direct_mcp_tool = definitions
+            .iter()
+            .find(|tool| tool.function_name() == "mcp__context7__resolve")
+            .expect("direct mcp tool should be present");
+        assert_eq!(direct_mcp_tool.defer_loading, None);
     }
 
     #[test]

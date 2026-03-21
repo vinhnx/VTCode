@@ -76,7 +76,10 @@ Current VT Code scope for OpenAI:
 
 - Supported: hosted `tool_search`
 - Supported: deferred function schemas
-- Not yet modeled in shared tool definitions: OpenAI namespaces, client-executed `tool_search_output`, or MCP-server search surfaces
+- Supported in the Responses parser: OpenAI function-call namespaces and `tool_search_output` tool references
+- Not yet modeled in shared tool definitions: MCP-server search surfaces
+
+VT Code keeps small deferred catalogs eager and skips hosted tool search until the deferable tool set reaches 100 entries. This avoids paying the search-tool overhead when direct exposure is cheaper and simpler.
 
 ### Handling Tool References
 

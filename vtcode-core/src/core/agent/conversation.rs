@@ -338,6 +338,7 @@ mod tests {
                     id: "call-1".to_string(),
                     call_type: "function".to_string(),
                     function: Some(FunctionCall {
+                        namespace: None,
                         name: "read_file".to_string(),
                         arguments: "{\"path\":\"src/main.rs\"}".to_string(),
                     }),

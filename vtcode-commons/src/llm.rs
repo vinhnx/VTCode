@@ -181,6 +181,10 @@ pub struct ToolCall {
 /// Function call within a tool call
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FunctionCall {
+    /// Optional namespace for grouped or deferred tools.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub namespace: Option<String>,
+
     /// The name of the function to call
     pub name: String,
 
@@ -191,10 +195,24 @@ pub struct FunctionCall {
 impl ToolCall {
     /// Create a new function tool call
     pub fn function(id: String, name: String, arguments: String) -> Self {
+        Self::function_with_namespace(id, None, name, arguments)
+    }
+
+    /// Create a new function tool call with an optional namespace.
+    pub fn function_with_namespace(
+        id: String,
+        namespace: Option<String>,
+        name: String,
+        arguments: String,
+    ) -> Self {
         Self {
             id,
             call_type: "function".to_owned(),
-            function: Some(FunctionCall { name, arguments }),
+            function: Some(FunctionCall {
+                namespace,
+                name,
+                arguments,
+            }),
             text: None,
             thought_signature: None,
         }
@@ -206,6 +224,7 @@ impl ToolCall {
             id,
             call_type: "custom".to_owned(),
             function: Some(FunctionCall {
+                namespace: None,
                 name,
                 arguments: text.clone(),
             }),
@@ -489,5 +508,19 @@ mod tests {
         );
 
         assert!(call.parsed_arguments().is_err());
+    }
+
+    #[test]
+    fn function_call_serializes_optional_namespace() {
+        let call = ToolCall::function_with_namespace(
+            "call_read".to_string(),
+            Some("workspace".to_string()),
+            "read_file".to_string(),
+            r#"{"path":"src/main.rs"}"#.to_string(),
+        );
+
+        let json = serde_json::to_value(&call).expect("tool call should serialize");
+        assert_eq!(json["function"]["namespace"], "workspace");
+        assert_eq!(json["function"]["name"], "read_file");
     }
 }

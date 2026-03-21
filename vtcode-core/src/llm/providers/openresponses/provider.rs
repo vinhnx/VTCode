@@ -13,7 +13,8 @@ use crate::llm::providers::common::{
     append_normalized_reasoning_detail_items, serialize_message_content_openai,
 };
 use crate::llm::providers::shared::{
-    function_output_value_from_message_content, parse_compacted_output_messages,
+    collect_tool_references_from_tool_search_output, function_output_value_from_message_content,
+    parse_compacted_output_messages,
 };
 use crate::llm::rig_adapter::RigProviderCapabilities;
 use anyhow::Result;
@@ -246,7 +247,7 @@ impl OpenResponsesProvider {
                                 } => {
                                     content.push(ContentPart::InputImage(InputImageContent {
                                         image_url: format!("data:{};base64,{}", mime_type, data),
-                                        detail: ImageDetail::Auto,
+                                        detail: Some(ImageDetail::Auto),
                                     }));
                                 }
                                 crate::llm::provider::ContentPart::File {
@@ -489,10 +490,16 @@ impl OpenResponsesProvider {
                     .filter_map(|call| {
                         let id = call.get("id").and_then(|v| v.as_str())?;
                         let function = call.get("function")?;
+                        let namespace = call
+                            .get("namespace")
+                            .and_then(|v| v.as_str())
+                            .or_else(|| function.get("namespace").and_then(|v| v.as_str()))
+                            .map(ToOwned::to_owned);
                         let name = function.get("name").and_then(|v| v.as_str())?;
                         let arguments = function.get("arguments").and_then(|v| v.as_str())?;
-                        Some(ToolCall::function(
+                        Some(ToolCall::function_with_namespace(
                             id.to_string(),
+                            namespace,
                             name.to_string(),
                             arguments.to_string(),
                         ))
@@ -734,6 +741,7 @@ impl LLMProvider for OpenResponsesProvider {
         let mut content = String::new();
         let mut tool_calls = Vec::new();
         let mut reasoning = None;
+        let mut tool_references = Vec::new();
 
         for item_val in output {
             let item_type = item_val.get("type").and_then(|t| t.as_str()).unwrap_or("");
@@ -768,7 +776,16 @@ impl LLMProvider for OpenResponsesProvider {
                         .get("arguments")
                         .map(|v| v.to_string())
                         .unwrap_or_else(|| "{}".to_string());
-                    tool_calls.push(ToolCall::function(id, name, arguments));
+                    let namespace = item_val
+                        .get("namespace")
+                        .and_then(|v| v.as_str())
+                        .map(ToOwned::to_owned);
+                    tool_calls.push(ToolCall::function_with_namespace(
+                        id, namespace, name, arguments,
+                    ));
+                }
+                "tool_search_output" => {
+                    collect_tool_references_from_tool_search_output(item_val, &mut tool_references);
                 }
                 _ => {}
             }
@@ -814,7 +831,7 @@ impl LLMProvider for OpenResponsesProvider {
             finish_reason,
             reasoning: final_reasoning,
             reasoning_details,
-            tool_references: Vec::new(),
+            tool_references,
             request_id: json
                 .get("id")
                 .and_then(|v| v.as_str())

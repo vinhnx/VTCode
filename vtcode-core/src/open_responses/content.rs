@@ -85,8 +85,8 @@ pub struct InputImageContent {
     pub image_url: String,
 
     /// Level of detail for image analysis.
-    #[serde(default)]
-    pub detail: ImageDetail,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<ImageDetail>,
 }
 
 /// Level of detail for image analysis.
@@ -100,6 +100,8 @@ pub enum ImageDetail {
     /// Let the model decide.
     #[default]
     Auto,
+    /// Preserve the original image detail.
+    Original,
 }
 
 /// File input provided to the model.

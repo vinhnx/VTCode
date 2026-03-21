@@ -417,6 +417,7 @@ impl GeminiProvider {
                         id: call_id,
                         call_type: "function".to_string(),
                         function: Some(FunctionCall {
+                            namespace: None,
                             name: function_call.name,
                             arguments: serde_json::to_string(&function_call.args)
                                 .unwrap_or_else(|_| "{}".to_string()),

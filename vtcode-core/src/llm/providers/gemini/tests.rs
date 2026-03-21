@@ -500,6 +500,7 @@ fn thought_signature_roundtrip_in_request() {
                     id: "call_456".to_string(),
                     call_type: "function".to_string(),
                     function: Some(FunctionCall {
+                        namespace: None,
                         name: "get_weather".to_string(),
                         arguments: r#"{"city":"Paris"}"#.to_string(),
                     }),
