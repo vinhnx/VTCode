@@ -312,7 +312,7 @@ impl CopilotProvider {
         self.validate_request(&request)?;
         let model = self.resolve_model(&request)?;
         let transcript = self.build_transcript(&request)?;
-        let client = self.client(&model, &tools).await?;
+        let client = self.client(&model, tools).await?;
         client
             .start_prompt(transcript)
             .await

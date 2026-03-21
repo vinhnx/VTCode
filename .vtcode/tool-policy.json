@@ -15,7 +15,7 @@
     "unified_search"
   ],
   "policies": {
-    "apply_patch": "prompt",
+    "apply_patch": "allow",
     "unified_search": "allow",
     "enter_plan_mode": "prompt",
     "exit_plan_mode": "prompt",

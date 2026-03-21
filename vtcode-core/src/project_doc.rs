@@ -305,11 +305,13 @@ mod tests {
         std::fs::create_dir_all(&extra_dir).expect("create docs");
         std::fs::write(extra_dir.join("guidelines.md"), "extra doc").expect("write extra doc");
 
-        let mut config = AgentConfig::default();
-        config.user_instructions = Some("user note".to_string());
-        config.instruction_files = vec!["docs/*.md".to_string()];
-        config.instruction_max_bytes = 4096;
-        config.project_doc_max_bytes = 1;
+        let config = AgentConfig {
+            user_instructions: Some("user note".to_string()),
+            instruction_files: vec!["docs/*.md".to_string()],
+            instruction_max_bytes: 4096,
+            project_doc_max_bytes: 1,
+            ..Default::default()
+        };
 
         let appendix = build_instruction_appendix(&config, &nested)
             .await
@@ -338,8 +340,10 @@ mod tests {
         std::fs::write(repo.path().join(".git"), "gitdir: /tmp/git").expect("write git");
         write_doc(repo.path(), &"A".repeat(128)).expect("write doc");
 
-        let mut config = AgentConfig::default();
-        config.instruction_max_bytes = 16;
+        let config = AgentConfig {
+            instruction_max_bytes: 16,
+            ..Default::default()
+        };
 
         let appendix = build_instruction_appendix(&config, repo.path())
             .await

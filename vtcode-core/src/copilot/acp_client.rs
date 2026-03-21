@@ -801,10 +801,9 @@ fn send_prompt_update(inner: &Arc<CopilotAcpClientInner>, update: PromptUpdate) 
         .lock()
         .map_err(|_| anyhow!("copilot acp active prompt mutex poisoned"))?
         .as_ref()
+        && active_prompt.updates.send(update).is_err()
     {
-        if active_prompt.updates.send(update).is_err() {
-            clear_active_prompt_state(inner);
-        }
+        clear_active_prompt_state(inner);
     }
     Ok(())
 }

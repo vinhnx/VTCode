@@ -65,7 +65,7 @@ read_file = true
 # Environment variable that stores the API key for the active provider
 # Default: "OPENAI_API_KEY"
 # Type: `string`
-api_key_env = ""
+api_key_env = "MINIMAX_API_KEY"
 
 # Enable autonomous mode - auto-approve safe tools with reduced HITL prompts When true, the agent
 # operates with fewer confirmation prompts for safe tools.
@@ -92,7 +92,7 @@ default_editing_mode = "edit"
 # Default model to use
 # Default: "gpt-5.3-codex"
 # Type: `string`
-default_model = "copilot-claude-sonnet-4.6"
+default_model = "MiniMax-M2.7"
 
 # Enable an extra self-review pass to refine final responses
 # Default: false
@@ -156,7 +156,7 @@ project_doc_max_bytes = 16384
 # Possible values: anthropic, gemini, openai, openrouter, zai
 # Default: "openai"
 # Type: `string`
-provider = "copilot"
+provider = "minimax"
 
 # Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh) Applies
 # to: Claude, GPT-5 family, Gemini, Qwen3, DeepSeek with reasoning capability
@@ -2657,7 +2657,7 @@ manifests = []
 
 agent_info = "allow"
 
-apply_patch = "prompt"
+apply_patch = "allow"
 
 ask_user_question = "allow"
 

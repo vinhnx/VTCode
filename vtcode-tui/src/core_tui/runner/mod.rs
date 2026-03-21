@@ -14,6 +14,8 @@ use tokio_util::sync::CancellationToken;
 use crate::config::types::UiSurfacePreference;
 use crate::ui::tui::log::{clear_tui_log_sender, register_tui_log_sender, set_log_theme_name};
 
+type EventCallback<E> = std::sync::Arc<dyn Fn(&E) + Send + Sync + 'static>;
+
 pub trait TuiCommand {
     fn is_suspend_event_loop(&self) -> bool;
     fn is_resume_event_loop(&self) -> bool;
@@ -26,6 +28,7 @@ pub trait TuiSessionDriver {
     type Event;
 
     fn handle_command(&mut self, command: Self::Command);
+    #[allow(clippy::type_complexity)]
     fn handle_event(
         &mut self,
         event: crossterm::event::Event,
@@ -99,7 +102,7 @@ pub struct TuiOptions<E> {
     pub inline_rows: u16,
     pub show_logs: bool,
     pub log_theme: Option<String>,
-    pub event_callback: Option<std::sync::Arc<dyn Fn(&E) + Send + Sync + 'static>>,
+    pub event_callback: Option<EventCallback<E>>,
     pub focus_callback: Option<FocusChangeCallback>,
     pub active_pty_sessions: Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>,
     pub input_activity_counter: Option<std::sync::Arc<std::sync::atomic::AtomicU64>>,

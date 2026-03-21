@@ -215,16 +215,16 @@ impl CopilotPermissionDecision {
     #[must_use]
     pub fn to_rpc_result(&self) -> Value {
         match self {
-            Self::Approved | Self::ApprovedAlways => Value::from(serde_json::json!({
+            Self::Approved | Self::ApprovedAlways => serde_json::json!({
                 "kind": "approved",
-            })),
-            Self::DeniedByRules => Value::from(serde_json::json!({
+            }),
+            Self::DeniedByRules => serde_json::json!({
                 "kind": "denied-by-rules",
                 "rules": [],
-            })),
-            Self::DeniedNoApprovalRule => Value::from(serde_json::json!({
+            }),
+            Self::DeniedNoApprovalRule => serde_json::json!({
                 "kind": "denied-no-approval-rule-and-could-not-request-from-user",
-            })),
+            }),
             Self::DeniedInteractivelyByUser { feedback } => {
                 let mut result = serde_json::Map::from_iter([(
                     "kind".to_string(),
@@ -236,11 +236,11 @@ impl CopilotPermissionDecision {
                 Value::Object(result)
             }
             Self::DeniedByContentExclusionPolicy { path, message } => {
-                Value::from(serde_json::json!({
+                serde_json::json!({
                     "kind": "denied-by-content-exclusion-policy",
                     "path": path,
                     "message": message,
-                }))
+                })
             }
         }
     }
