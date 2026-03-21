@@ -76,7 +76,6 @@ impl PtyManager {
     pub fn resize_session(&self, session_id: &str, size: PtySize) -> Result<VTCodePtySession> {
         let handle = self.session_handle(session_id)?;
 
-        // Lock order: master -> terminal (Arc-wrapped, separate scope)
         {
             let master = handle.master.lock();
             master
@@ -84,10 +83,9 @@ impl PtyManager {
                 .context("failed to resize PTY session")?;
         }
 
-        // Terminal lock acquired separately (Arc, safe to interleave)
         {
-            let mut parser = handle.terminal.lock();
-            parser.set_size(size.rows, size.cols);
+            let mut screen_state = handle.screen_state.lock();
+            screen_state.resize(size);
         }
 
         Ok(handle.snapshot_metadata())
@@ -263,7 +261,7 @@ impl PtyManager {
             }
         }
 
-        // Snapshot metadata calls snapshot_metadata() which acquires master, terminal, scrollback locks
+        // Snapshot metadata acquires the PTY master plus screen and scrollback state.
         Ok(handle.snapshot_metadata())
     }
 

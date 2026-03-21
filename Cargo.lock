@@ -6566,6 +6566,7 @@ dependencies = [
  "vtcode-config",
  "vtcode-exec-events",
  "vtcode-file-search",
+ "vtcode-ghostty-vt-sys",
  "vtcode-indexer",
  "vtcode-markdown-store",
  "vtcode-tui",
@@ -6606,6 +6607,14 @@ dependencies = [
  "tempfile",
  "tokio",
  "vtcode-commons",
+]
+
+[[package]]
+name = "vtcode-ghostty-vt-sys"
+version = "0.92.0"
+dependencies = [
+ "anyhow",
+ "tempfile",
 ]
 
 [[package]]

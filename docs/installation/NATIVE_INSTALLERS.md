@@ -23,7 +23,10 @@ curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.
 2. Fetches latest version from GitHub API (or uses specified version)
 3. Downloads release tarball from GitHub Releases
 4. Extracts and installs to `$VTCode_INSTALL_DIR/vtcode`
-5. Adds to PATH if needed (updates `.bashrc`, `.zshrc`, or `.profile`)
+5. Copies the optional `ghostty-vt/` sidecar when present in the release archive
+6. Adds to PATH if needed (updates `.bashrc`, `.zshrc`, or `.profile`)
+
+If the `ghostty-vt/` sidecar is missing or cannot be installed, VT Code still installs successfully and falls back to `legacy_vt100`.
 
 ### Supported Platforms
 
@@ -41,3 +44,5 @@ irm https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.ps1 | i
 ```
 
 See `install.ps1` for details.
+
+The Windows installer also copies an optional `ghostty-vt\` sidecar directory when present in the release archive. Failure to install the sidecar is non-fatal; VT Code falls back to `legacy_vt100`.

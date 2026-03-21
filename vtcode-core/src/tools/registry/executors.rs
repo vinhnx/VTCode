@@ -2203,8 +2203,7 @@ impl ToolRegistry {
         }
 
         let session_id = generate_session_id("run");
-        let session_metadata = self
-            .exec_sessions
+        self.exec_sessions
             .create_pty_session(
                 session_id.clone(),
                 command,
@@ -2230,6 +2229,7 @@ impl ToolRegistry {
                 true,
             )
             .await;
+        let session_metadata = self.exec_session_metadata(&session_id).await?;
         let raw_output = filter_pty_output(&strip_ansi(&capture.output));
         let mut matched_count = None;
         let mut query_truncated = false;
@@ -2470,6 +2470,7 @@ impl ToolRegistry {
                 true,
             )
             .await;
+        let session_metadata = self.exec_session_metadata(sid).await?;
         let raw_output = filter_pty_output(&strip_ansi(&capture.output));
         let preview = build_exec_output_preview(raw_output.clone(), max_tokens);
         let response = build_exec_response(
@@ -2524,6 +2525,7 @@ impl ToolRegistry {
                 settle_noninteractive_exec && session_metadata.backend == "pipe",
             )
             .await?;
+        let session_metadata = self.exec_session_metadata(sid).await?;
 
         let raw_output = filter_pty_output(&strip_ansi(&capture.output));
         let response = build_exec_response(

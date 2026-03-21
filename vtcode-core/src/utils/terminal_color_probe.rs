@@ -42,7 +42,7 @@ pub fn probe_and_cache_terminal_palette_harmony() {
             return;
         }
 
-        let timeout = Duration::from_millis(200);
+        let timeout = Duration::from_millis(500);
         match probe_terminal_colors(timeout) {
             Ok(result) => {
                 let scheme = if result.is_term_light_theme {
@@ -116,11 +116,16 @@ fn read_until_da1(tty: &mut File, timeout: Duration) -> Result<Vec<u8>> {
     let mut buffer = Vec::with_capacity(1024);
 
     loop {
-        if buffer
+        // Look for the DA1 response start
+        if let Some(pos) = buffer
             .windows(DA1_RESPONSE_PREFIX.len())
-            .any(|window| window == DA1_RESPONSE_PREFIX)
+            .position(|window| window == DA1_RESPONSE_PREFIX)
         {
-            return Ok(buffer);
+            // If found the start, we MUST also wait for the end ('c')
+            // This ensures we consume the entire sentinel sequence
+            if buffer[pos..].iter().any(|&b| b == b'c') {
+                return Ok(buffer);
+            }
         }
 
         let now = Instant::now();

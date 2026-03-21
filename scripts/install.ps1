@@ -220,6 +220,37 @@ function Install-Binary {
     }
 }
 
+function Install-GhosttySidecar {
+    param(
+        [string]$BinaryPath,
+        [string]$InstallDir
+    )
+
+    $SidecarSource = Join-Path (Split-Path $BinaryPath -Parent) "ghostty-vt"
+    if (-not (Test-Path $SidecarSource)) {
+        return
+    }
+
+    $SidecarTarget = Join-Path $InstallDir "ghostty-vt"
+    Write-Info "Installing Ghostty VT sidecar to $SidecarTarget..."
+
+    try {
+        if (Test-Path $SidecarTarget) {
+            Remove-Item -Path $SidecarTarget -Recurse -Force -ErrorAction Stop
+        }
+        New-Item -ItemType Directory -Path $SidecarTarget -Force > $null
+        Copy-Item -Path (Join-Path $SidecarSource '*') -Destination $SidecarTarget -Recurse -Force -ErrorAction Stop
+        Write-Success "Ghostty VT sidecar installed to $SidecarTarget"
+    }
+    catch {
+        Write-Warning "Failed to install Ghostty VT sidecar"
+        Write-Warning "VT Code will continue and fall back to legacy_vt100 if Ghostty assets are unavailable"
+        if (Test-Path $SidecarTarget) {
+            Remove-Item -Path $SidecarTarget -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 # Check if installation directory is in PATH
 function Check-Path {
     param([string]$InstallPath)
@@ -281,6 +312,7 @@ function Main {
         # Install binary
         $TargetPath = Join-Path $InstallDir $BinName
         Install-Binary -Source $BinaryPath -Target $TargetPath
+        Install-GhosttySidecar -BinaryPath $BinaryPath -InstallDir $InstallDir
         
         # Check if in PATH
         if (-not (Check-Path $InstallDir)) {

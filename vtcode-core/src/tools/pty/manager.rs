@@ -12,13 +12,14 @@ use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use shell_words::join;
 use tokio::sync::Mutex as TokioMutex;
 use tracing::{debug, info, warn};
-use vt100::Parser;
 
 use super::command_utils::{
     is_long_running_command, is_long_running_command_string, is_sandbox_wrapper_program,
     is_shell_program,
 };
 use super::manager_utils::{clamp_timeout, exit_status_code, set_command_environment};
+use super::raw_vt_buffer::RawVtBuffer;
+use super::screen_backend::PtyScreenState;
 use super::scrollback::PtyScrollback;
 use super::session::PtySessionHandle;
 use super::types::{PtyCommandRequest, PtyCommandResult};
@@ -590,16 +591,27 @@ if output.len() > max_tokens * 4 {
             .context("failed to clone PTY reader")?;
         let writer = master.take_writer().context("failed to take PTY writer")?;
 
-        let parser = Arc::new(Mutex::new(Parser::new(
-            size.rows,
-            size.cols,
+        let screen_state = Arc::new(Mutex::new(PtyScreenState::new(
+            size,
             self.config.scrollback_lines,
+            self.config.emulation_backend,
+        )));
+        let raw_vt_buffer = Arc::new(Mutex::new(RawVtBuffer::new(
+            self.config.max_scrollback_bytes,
         )));
         let scrollback = Arc::new(Mutex::new(PtyScrollback::new(
             self.config.scrollback_lines,
             self.config.max_scrollback_bytes,
         )));
-        let parser_clone = Arc::clone(&parser);
+        debug!(
+            session_id = %session_id,
+            configured_backend = self.config.emulation_backend.as_str(),
+            rows = size.rows,
+            cols = size.cols,
+            "Created PTY session"
+        );
+        let screen_state_clone = Arc::clone(&screen_state);
+        let raw_vt_buffer_clone = Arc::clone(&raw_vt_buffer);
         let scrollback_clone = Arc::clone(&scrollback);
         let session_name = session_id.clone();
         // Start unicode monitoring for this session
@@ -634,10 +646,14 @@ Ok(bytes_read) => {
         unicode_detection_hits += 1;
     }
 
-    // Process chunk through VT100 parser for screen updates
     {
-        let mut parser = parser_clone.lock();
-        parser.process(chunk);
+        let mut raw_vt_buffer = raw_vt_buffer_clone.lock();
+        raw_vt_buffer.push(chunk);
+    }
+
+    {
+        let mut screen_state = screen_state_clone.lock();
+        screen_state.process(chunk);
     }
 
     utf8_buffer.extend_from_slice(chunk);
@@ -697,7 +713,8 @@ info!("PTY session '{}' processed {} unicode characters across {} sessions with 
             child: Mutex::new(child),
             child_pid,
             writer: Mutex::new(Some(writer)),
-            terminal: parser,
+            screen_state,
+            raw_vt_buffer,
             scrollback,
             reader_thread: Mutex::new(Some(reader_thread)),
             metadata: metadata.clone(),

@@ -1,0 +1,12 @@
+source = "ghostty-org/ghostty"
+commit = "efb35235919a38bb04ac8b8ef06537f0317b7045"
+
+[layout]
+asset_root = "dist/ghostty-vt/<target-triple>"
+required_dirs = ["include/ghostty", "lib"]
+optional_files = ["ghostty_vt_host", "ghostty_vt_host.exe"]
+
+[runtime]
+sidecar_dir = "ghostty-vt"
+env_helper = "VTCODE_GHOSTTY_VT_HOST"
+env_dir = "VTCODE_GHOSTTY_VT_DIR"

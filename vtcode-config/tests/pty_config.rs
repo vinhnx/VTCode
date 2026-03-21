@@ -1,10 +1,29 @@
 use anyhow::Result;
-use vtcode_config::PtyConfig;
+use vtcode_config::{PtyConfig, PtyEmulationBackend, VTCodeConfig};
 
 #[test]
 fn shell_zsh_fork_disabled_allows_missing_zsh_path() {
     let config = PtyConfig::default();
     assert!(config.validate().is_ok());
+}
+
+#[test]
+fn pty_defaults_to_ghostty_backend() {
+    let config = PtyConfig::default();
+    assert_eq!(config.emulation_backend, PtyEmulationBackend::Ghostty);
+}
+
+#[test]
+fn pty_deserializes_legacy_vt100_backend() -> Result<()> {
+    let config: VTCodeConfig = toml::from_str(
+        r#"
+[pty]
+emulation_backend = "legacy_vt100"
+"#,
+    )?;
+
+    assert_eq!(config.pty.emulation_backend, PtyEmulationBackend::LegacyVt100);
+    Ok(())
 }
 
 #[test]

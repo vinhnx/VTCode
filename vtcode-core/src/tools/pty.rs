@@ -2,6 +2,8 @@ mod command_utils;
 mod formatting;
 mod manager;
 mod manager_utils;
+mod raw_vt_buffer;
+mod screen_backend;
 mod scrollback;
 mod session;
 mod types;

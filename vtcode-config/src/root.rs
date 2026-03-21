@@ -523,6 +523,10 @@ pub struct PtyConfig {
     #[serde(default = "default_max_scrollback_bytes")]
     pub max_scrollback_bytes: usize,
 
+    /// Terminal emulation backend used for screen and scrollback snapshots.
+    #[serde(default)]
+    pub emulation_backend: PtyEmulationBackend,
+
     /// Threshold (KB) at which to auto-spool large outputs to disk instead of memory
     #[serde(default = "default_large_output_threshold_kb")]
     pub large_output_threshold_kb: usize,
@@ -551,10 +555,30 @@ impl Default for PtyConfig {
             stdout_tail_lines: default_stdout_tail_lines(),
             scrollback_lines: default_scrollback_lines(),
             max_scrollback_bytes: default_max_scrollback_bytes(),
+            emulation_backend: PtyEmulationBackend::default(),
             large_output_threshold_kb: default_large_output_threshold_kb(),
             preferred_shell: None,
             shell_zsh_fork: default_shell_zsh_fork(),
             zsh_path: None,
+        }
+    }
+}
+
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum PtyEmulationBackend {
+    #[default]
+    Ghostty,
+    LegacyVt100,
+}
+
+impl PtyEmulationBackend {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Ghostty => "ghostty",
+            Self::LegacyVt100 => "legacy_vt100",
         }
     }
 }
