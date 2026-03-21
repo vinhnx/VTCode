@@ -573,6 +573,8 @@ impl ModelPickerState {
 fn oauth_auth_message(selection: &SelectionDetail) -> String {
     if matches!(selection.provider_enum, Some(Provider::OpenAI)) {
         "Using ChatGPT subscription for OpenAI.".to_string()
+    } else if matches!(selection.provider_enum, Some(Provider::Copilot)) {
+        "Using managed authentication via GitHub Copilot CLI.".to_string()
     } else {
         format!(
             "Using OAuth authentication for {}.",

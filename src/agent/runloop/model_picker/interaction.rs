@@ -16,7 +16,7 @@ use super::selection::{
     reasoning_level_label, selection_from_option, service_tier_label, supports_xhigh_reasoning,
 };
 
-pub(super) const REFRESH_ENTRY_LABEL: &str = "Refresh local LM Studio/Ollama models";
+pub(super) const REFRESH_ENTRY_LABEL: &str = "Refresh dynamic model lists";
 
 #[derive(Clone)]
 pub(super) struct ModelSelectionChoice {
@@ -137,7 +137,7 @@ pub(super) fn select_model_with_ratatui_list(
     choices.push(ModelSelectionChoice {
         entry: SelectionEntry::new(
             REFRESH_ENTRY_LABEL,
-            Some("Re-query local servers without closing the picker.".to_string()),
+            Some("Re-query dynamic provider model lists without closing the picker.".to_string()),
         ),
         outcome: ModelSelectionChoiceOutcome::Refresh,
     });

@@ -83,6 +83,7 @@ pub(crate) struct TurnLoopContext<'a> {
     pub turn_metadata_cache: &'a mut Option<Option<serde_json::Value>>,
     pub provider_client: &'a mut Box<dyn uni::LLMProvider>,
     pub traj: &'a TrajectoryLogger,
+    pub skip_confirmations: bool,
     pub full_auto: bool,
     pub steering_receiver: &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
 }
@@ -126,6 +127,7 @@ impl<'a> TurnLoopContext<'a> {
         turn_metadata_cache: &'a mut Option<Option<serde_json::Value>>,
         provider_client: &'a mut Box<dyn uni::LLMProvider>,
         traj: &'a TrajectoryLogger,
+        skip_confirmations: bool,
         full_auto: bool,
         steering_receiver: &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
     ) -> Self {
@@ -164,6 +166,7 @@ impl<'a> TurnLoopContext<'a> {
             turn_metadata_cache,
             provider_client,
             traj,
+            skip_confirmations,
             full_auto,
             steering_receiver,
         }
@@ -235,6 +238,7 @@ impl<'a> TurnLoopContext<'a> {
             mcp_panel_state: self.mcp_panel_state,
             working_history,
             turn_metadata_cache: self.turn_metadata_cache,
+            skip_confirmations: self.skip_confirmations,
             full_auto: self.full_auto,
             harness_state: self.harness_state,
             harness_emitter: self.harness_emitter,

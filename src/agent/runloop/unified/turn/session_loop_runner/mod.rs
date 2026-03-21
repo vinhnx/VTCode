@@ -375,7 +375,7 @@ async fn prompt_startup_plan_mode(
 pub(super) async fn run_single_agent_loop_unified_impl(
     config: &CoreAgentConfig,
     initial_vt_cfg: Option<VTCodeConfig>,
-    _skip_confirmations: bool,
+    skip_confirmations: bool,
     full_auto: bool,
     plan_mode_entry_source: PlanModeEntrySource,
     resume: Option<ResumeSession>,
@@ -550,7 +550,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             resume_ref,
             session_archive,
             full_auto,
-            _skip_confirmations,
+            skip_confirmations,
             steering_sender,
         )
         .await?;
@@ -925,6 +925,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         &mut turn_metadata_cache,
                         &mut provider_client,
                         &traj,
+                        skip_confirmations,
                         full_auto,
                         steering_receiver,
                     );

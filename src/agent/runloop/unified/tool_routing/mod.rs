@@ -426,6 +426,44 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
     }
 }
 
+pub(crate) async fn prompt_external_tool_permission<S: UiSession + ?Sized>(
+    renderer: &mut AnsiRenderer,
+    handle: &InlineHandle,
+    session: &mut S,
+    ctrl_c_state: &Arc<CtrlCState>,
+    ctrl_c_notify: &Arc<Notify>,
+    default_placeholder: Option<String>,
+    tool_name: &str,
+    tool_args: Option<&Value>,
+    display_name: &str,
+    approval_learning_key: &str,
+    approval_learning_label: &str,
+    approval_reason: Option<&str>,
+    approval_recorder: Option<&vtcode_core::tools::ApprovalRecorder>,
+    hitl_notification_bell: bool,
+) -> Result<HitlDecision> {
+    prompt_tool_permission(
+        display_name,
+        tool_name,
+        tool_args,
+        approval_learning_key,
+        approval_learning_label,
+        renderer,
+        handle,
+        session,
+        ctrl_c_state,
+        ctrl_c_notify,
+        default_placeholder,
+        approval_reason,
+        None,
+        None,
+        false,
+        approval_recorder,
+        hitl_notification_bell,
+    )
+    .await
+}
+
 pub(crate) async fn prompt_session_limit_increase<S: UiSession + ?Sized>(
     handle: &InlineHandle,
     session: &mut S,

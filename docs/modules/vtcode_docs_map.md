@@ -350,6 +350,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 ### LLM Providers & Models
 
+- **File**: `docs/providers/copilot.md`
+  - **Content**: GitHub Copilot Managed Auth
+  - **Topics**: What You Need, If `copilot` Is Missing, If `gh` Is Missing, Troubleshooting
+  - **User Questions**: "What can you tell me about GitHub Copilot Managed Auth?", "How does What You Need work?", "How does If `copilot` Is Missing work?"
+
 - **File**: `docs/providers/lmstudio-quick-reference.md`
   - **Content**: LM Studio Client Quick Reference
   - **Topics**: Module, Common Tasks, API Reference, Error Handling, CLI Tool Discovery
@@ -392,7 +397,7 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/providers/PROVIDER_GUIDES.md`
   - **Content**: Provider Guides
-  - **Topics**: Google Gemini, OpenAI GPT, Anthropic Claude, OpenRouter Marketplace, Ollama Local & Cloud Models
+  - **Topics**: Google Gemini, OpenAI GPT, Anthropic Claude, GitHub Copilot, OpenRouter Marketplace
   - **User Questions**: "What can you tell me about Provider Guides?", "How does Google Gemini work?", "How does OpenAI GPT work?"
 
 - **File**: `docs/models.json`

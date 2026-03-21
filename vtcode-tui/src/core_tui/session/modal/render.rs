@@ -569,6 +569,18 @@ fn render_modal_instructions(
     instructions: &[String],
     styles: &ModalRenderStyles,
 ) {
+    fn parse_instruction_highlight_markup(text: &str) -> (String, bool) {
+        let trimmed = text.trim();
+        match trimmed
+            .strip_prefix("**")
+            .and_then(|value| value.strip_suffix("**"))
+            .map(str::trim)
+        {
+            Some(value) if !value.is_empty() => (value.to_string(), true),
+            _ => (trimmed.to_string(), false),
+        }
+    }
+
     fn wrap_instruction_lines(text: &str, width: usize) -> Vec<String> {
         if width == 0 {
             return vec![text.to_owned()];
@@ -623,7 +635,8 @@ fn render_modal_instructions(
             continue;
         }
 
-        let wrapped = wrap_instruction_lines(trimmed, content_width);
+        let (display_text, is_highlighted) = parse_instruction_highlight_markup(trimmed);
+        let wrapped = wrap_instruction_lines(&display_text, content_width);
         if wrapped.is_empty() {
             items.push(vec![Line::default()]);
             continue;
@@ -632,7 +645,9 @@ fn render_modal_instructions(
         if !first_content_rendered {
             let mut lines = Vec::new();
             for (index, segment) in wrapped.into_iter().enumerate() {
-                let style = if index == 0 {
+                let style = if is_highlighted {
+                    styles.highlight.add_modifier(Modifier::BOLD)
+                } else if index == 0 {
                     styles.header
                 } else {
                     styles.instruction_body
@@ -644,15 +659,20 @@ fn render_modal_instructions(
         } else {
             let mut lines = Vec::new();
             for (index, segment) in wrapped.into_iter().enumerate() {
+                let body_style = if is_highlighted {
+                    styles.highlight.add_modifier(Modifier::BOLD)
+                } else {
+                    styles.instruction_body
+                };
                 if index == 0 {
                     lines.push(Line::from(vec![
                         Span::styled(bullet_prefix.clone(), styles.instruction_bullet),
-                        Span::styled(segment, styles.instruction_body),
+                        Span::styled(segment, body_style),
                     ]));
                 } else {
                     lines.push(Line::from(vec![
                         Span::styled(bullet_indent.clone(), styles.instruction_bullet),
-                        Span::styled(segment, styles.instruction_body),
+                        Span::styled(segment, body_style),
                     ]));
                 }
             }
@@ -1249,5 +1269,46 @@ mod tests {
         assert!(text.contains("Matches 1 of 1"));
         assert!(!text.contains("gpt"));
         assert!(!text.contains("Filter:"));
+    }
+
+    #[test]
+    fn instruction_highlight_markup_strips_bold_markers() {
+        let styles = modal_render_styles();
+        let mut list = ModalListState::new(Vec::new(), None);
+        let instructions = vec!["Header".to_string(), "**ABCD-EFGH**".to_string()];
+        let backend = TestBackend::new(40, 8);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+
+        terminal
+            .draw(|frame| {
+                render_modal_body(
+                    frame,
+                    Rect::new(0, 0, 40, 8),
+                    ModalBodyContext {
+                        instructions: &instructions,
+                        footer_hint: None,
+                        list: Some(&mut list),
+                        styles: &styles,
+                        secure_prompt: None,
+                        search: None,
+                        input: "",
+                        cursor: 0,
+                    },
+                );
+            })
+            .expect("modal render should succeed");
+
+        let buffer = terminal.backend().buffer();
+        let rendered = (0..buffer.area.height)
+            .map(|y| {
+                (0..buffer.area.width)
+                    .filter_map(|x| buffer.cell((x, y)).map(|cell| cell.symbol().to_string()))
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(rendered.contains("ABCD-EFGH"));
+        assert!(!rendered.contains("**ABCD-EFGH**"));
     }
 }

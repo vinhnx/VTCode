@@ -65,7 +65,9 @@ pub use request::{
     CodingAgentSettings, LLMRequest, ParallelToolConfig, SpecificFunctionChoice,
     SpecificToolChoice, ToolChoice,
 };
-pub use response::{FinishReason, LLMResponse, LLMStream, LLMStreamEvent, Usage};
+pub use response::{
+    BorrowedLLMStream, FinishReason, LLMResponse, LLMStream, LLMStreamEvent, Usage,
+};
 pub use tool::{
     FunctionDefinition, GrammarDefinition, ShellToolDefinition, ToolDefinition, ToolSearchAlgorithm,
 };

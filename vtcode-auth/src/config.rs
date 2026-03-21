@@ -22,6 +22,12 @@ pub struct AuthConfig {
 pub struct CopilotAuthConfig {
     pub command: Option<String>,
     pub host: Option<String>,
+    #[serde(default = "default_copilot_available_tools")]
+    pub available_tools: Vec<String>,
+    #[serde(default)]
+    pub excluded_tools: Vec<String>,
+    #[serde(default = "default_vtcode_tool_allowlist")]
+    pub vtcode_tool_allowlist: Vec<String>,
     pub startup_timeout_secs: u64,
     pub auth_timeout_secs: u64,
 }
@@ -31,10 +37,32 @@ impl Default for CopilotAuthConfig {
         Self {
             command: None,
             host: None,
+            available_tools: default_copilot_available_tools(),
+            excluded_tools: Vec::new(),
+            vtcode_tool_allowlist: default_vtcode_tool_allowlist(),
             startup_timeout_secs: 20,
             auth_timeout_secs: 300,
         }
     }
+}
+
+fn default_copilot_available_tools() -> Vec<String> {
+    ["view", "glob", "grep"]
+        .into_iter()
+        .map(str::to_string)
+        .collect()
+}
+
+fn default_vtcode_tool_allowlist() -> Vec<String> {
+    [
+        "unified_search",
+        "unified_file",
+        "unified_exec",
+        "apply_patch",
+    ]
+    .into_iter()
+    .map(str::to_string)
+    .collect()
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -104,6 +132,17 @@ mod tests {
         let config = CopilotAuthConfig::default();
         assert!(config.command.is_none());
         assert!(config.host.is_none());
+        assert_eq!(config.available_tools, vec!["view", "glob", "grep"]);
+        assert!(config.excluded_tools.is_empty());
+        assert_eq!(
+            config.vtcode_tool_allowlist,
+            vec![
+                "unified_search",
+                "unified_file",
+                "unified_exec",
+                "apply_patch"
+            ]
+        );
         assert_eq!(config.startup_timeout_secs, 20);
         assert_eq!(config.auth_timeout_secs, 300);
     }

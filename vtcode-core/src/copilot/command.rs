@@ -15,6 +15,13 @@ const ACP_FLAGS: &[&str] = &[
     "--no-experimental",
     "--disable-builtin-mcps",
 ];
+const SERVER_FLAGS: &[&str] = &[
+    "--headless",
+    "--no-auto-update",
+    "--log-level",
+    "error",
+    "--stdio",
+];
 const STRIPPED_RUNTIME_ENV_VARS: &[&str] = &[
     "COPILOT_ALLOW_ALL",
     "COPILOT_CUSTOM_INSTRUCTIONS_DIRS",
@@ -22,6 +29,12 @@ const STRIPPED_RUNTIME_ENV_VARS: &[&str] = &[
     "COPILOT_FEATURE_FLAGS",
     "GITHUB_COPILOT_MCP_JSON_FROM_INPUT",
 ];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CopilotModelSelectionMode {
+    CliArgument,
+    EnvironmentVariable,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedCopilotCommand {
@@ -78,13 +91,35 @@ pub fn copilot_command_available(resolved: &ResolvedCopilotCommand) -> bool {
 
 pub fn spawn_copilot_acp_process(
     resolved: &ResolvedCopilotCommand,
+    config: &CopilotAuthConfig,
     cwd: &Path,
     raw_model: Option<&str>,
+    model_selection_mode: CopilotModelSelectionMode,
 ) -> Result<Child> {
-    let extra_args = ACP_FLAGS
-        .iter()
-        .map(|flag| (*flag).to_string())
-        .collect::<Vec<_>>();
+    let mut extra_args = Vec::new();
+    if let Some(raw_model) = raw_model.filter(|value| !value.trim().is_empty())
+        && matches!(model_selection_mode, CopilotModelSelectionMode::CliArgument)
+    {
+        extra_args.push("--model".to_string());
+        extra_args.push(raw_model.to_string());
+    }
+    for tool in &config.available_tools {
+        let trimmed = tool.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        extra_args.push("--available-tools".to_string());
+        extra_args.push(trimmed.to_string());
+    }
+    for tool in &config.excluded_tools {
+        let trimmed = tool.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        extra_args.push("--excluded-tools".to_string());
+        extra_args.push(trimmed.to_string());
+    }
+    extra_args.extend(ACP_FLAGS.iter().map(|flag| (*flag).to_string()));
     let mut command = resolved.command(Some(cwd), &extra_args);
     command
         .stdin(Stdio::piped())
@@ -92,7 +127,12 @@ pub fn spawn_copilot_acp_process(
         .stderr(Stdio::piped())
         .kill_on_drop(true);
 
-    if let Some(raw_model) = raw_model.filter(|value| !value.trim().is_empty()) {
+    if let Some(raw_model) = raw_model.filter(|value| !value.trim().is_empty())
+        && matches!(
+            model_selection_mode,
+            CopilotModelSelectionMode::EnvironmentVariable
+        )
+    {
         command.env("COPILOT_MODEL", raw_model);
     } else {
         command.env_remove("COPILOT_MODEL");
@@ -104,6 +144,34 @@ pub fn spawn_copilot_acp_process(
     command.spawn().with_context(|| {
         format!(
             "failed to spawn GitHub Copilot ACP runtime using `{}`",
+            resolved.display()
+        )
+    })
+}
+
+pub fn spawn_copilot_server_process(
+    resolved: &ResolvedCopilotCommand,
+    cwd: &Path,
+) -> Result<Child> {
+    let extra_args = SERVER_FLAGS
+        .iter()
+        .map(|flag| (*flag).to_string())
+        .collect::<Vec<_>>();
+    let mut command = resolved.command(Some(cwd), &extra_args);
+    command
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .env_remove("COPILOT_MODEL");
+
+    for env_var in STRIPPED_RUNTIME_ENV_VARS {
+        command.env_remove(env_var);
+    }
+
+    command.spawn().with_context(|| {
+        format!(
+            "failed to spawn GitHub Copilot CLI server using `{}`",
             resolved.display()
         )
     })

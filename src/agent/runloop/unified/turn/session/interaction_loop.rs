@@ -133,6 +133,7 @@ impl<'a> InteractionLoopContext<'a> {
             mcp_panel_state: self.mcp_panel_state,
             working_history: self.conversation_history,
             turn_metadata_cache: self.turn_metadata_cache,
+            skip_confirmations: false,
             full_auto: self.full_auto,
             harness_state,
             harness_emitter: self.harness_emitter,

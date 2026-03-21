@@ -14,8 +14,8 @@ use vtcode_auth::{
 use vtcode_config::VTCodeConfig;
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::copilot::{
-    CopilotAuthStatus, CopilotAuthStatusKind, login as login_copilot, logout as logout_copilot,
-    probe_auth_status,
+    COPILOT_AUTH_DOC_PATH, CopilotAuthEvent, CopilotAuthStatus, CopilotAuthStatusKind,
+    login_with_events, logout_with_events, probe_auth_status,
 };
 
 pub(crate) const OPENAI_PROVIDER: &str = "openai";
@@ -275,7 +275,7 @@ pub(crate) async fn handle_login_command(
             .map(|cfg| cfg.auth.copilot.clone())
             .unwrap_or_default();
         println!("Starting GitHub Copilot authentication via the official `copilot` CLI...");
-        login_copilot(&auth_cfg, &workspace).await?;
+        login_with_events(&auth_cfg, &workspace, print_copilot_auth_event).await?;
         println!("GitHub Copilot authentication complete.");
         return Ok(());
     }
@@ -325,7 +325,7 @@ pub(crate) async fn handle_logout_command(
         let auth_cfg = vt_cfg
             .map(|cfg| cfg.auth.copilot.clone())
             .unwrap_or_default();
-        logout_copilot(&auth_cfg, &workspace).await?;
+        logout_with_events(&auth_cfg, &workspace, print_copilot_auth_event).await?;
         println!("GitHub Copilot authentication cleared.");
         return Ok(());
     }
@@ -518,7 +518,9 @@ fn render_openai_auth_status(status: OpenAIChatGptAuthStatus) {
 
 fn render_copilot_auth_status(status: CopilotAuthStatus) {
     match status.kind {
-        CopilotAuthStatusKind::Authenticated => println!("GitHub Copilot: authenticated"),
+        CopilotAuthStatusKind::Authenticated => {
+            println!("GitHub Copilot: authenticated (managed auth via Copilot CLI)")
+        }
         CopilotAuthStatusKind::Unauthenticated => println!("GitHub Copilot: not authenticated"),
         CopilotAuthStatusKind::ServerUnavailable => println!("GitHub Copilot: CLI unavailable"),
         CopilotAuthStatusKind::AuthFlowFailed => println!("GitHub Copilot: auth flow failed"),
@@ -529,6 +531,34 @@ fn render_copilot_auth_status(status: CopilotAuthStatus) {
     {
         println!("  Details: {}", message);
     }
+
+    if matches!(status.kind, CopilotAuthStatusKind::ServerUnavailable) {
+        println!(
+            "  Help: install `copilot` or configure `[auth.copilot].command`; see {}",
+            COPILOT_AUTH_DOC_PATH
+        );
+    }
+}
+
+fn print_copilot_auth_event(event: CopilotAuthEvent) -> Result<()> {
+    match event {
+        CopilotAuthEvent::VerificationCode { url, user_code } => {
+            println!("Open this URL to continue:");
+            println!("{}", url);
+            println!("GitHub device code: {}", user_code);
+        }
+        CopilotAuthEvent::Progress { message } => println!("{}", message),
+        CopilotAuthEvent::Success { account } => {
+            if let Some(account) = account {
+                println!("GitHub Copilot account: {}", account);
+            }
+        }
+        CopilotAuthEvent::Failure { message } => {
+            eprintln!("GitHub Copilot auth failed: {}", message)
+        }
+    }
+
+    Ok(())
 }
 
 fn format_auth_duration(seconds: u64) -> String {

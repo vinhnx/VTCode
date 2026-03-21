@@ -2,7 +2,7 @@ mod cache;
 mod endpoints;
 
 use hashbrown::{HashMap, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Result, anyhow};
 use reqwest::StatusCode;
@@ -10,6 +10,7 @@ use serde::Deserialize;
 use vtcode_config::VTCodeConfig;
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::models::Provider;
+use vtcode_core::copilot::{CopilotAuthStatusKind, list_available_models, probe_auth_status};
 use vtcode_core::llm::providers::ollama::fetch_ollama_models;
 
 use self::cache::CachedDynamicModelStore;
@@ -37,6 +38,9 @@ impl DynamicModelRegistry {
         let endpoints = ProviderEndpointConfig::gather(workspace).await;
         let static_index = build_static_model_index(options);
         let mut cache_store = CachedDynamicModelStore::load().await;
+        let workspace_root = workspace
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
 
         let openai_base_url = endpoints.resolved_base_url(Provider::OpenAI);
         let openai_auth = resolve_openai_dynamic_auth(vt_cfg);
@@ -60,6 +64,36 @@ impl DynamicModelRegistry {
                 fetch_ollama_models,
             )
             .await;
+
+        let copilot_auth_cfg = vt_cfg
+            .map(|cfg| cfg.auth.copilot.clone())
+            .unwrap_or_default();
+        let copilot_status = probe_auth_status(&copilot_auth_cfg, Some(&workspace_root)).await;
+        let copilot_fetch = if matches!(copilot_status.kind, CopilotAuthStatusKind::Authenticated) {
+            let (result, warning) = cache_store
+                .fetch_with_cache(
+                    Provider::Copilot,
+                    Some(copilot_cache_base(&copilot_auth_cfg)),
+                    {
+                        let copilot_auth_cfg = copilot_auth_cfg.clone();
+                        let workspace_root = workspace_root.clone();
+                        move |_| {
+                            let copilot_auth_cfg = copilot_auth_cfg.clone();
+                            let workspace_root = workspace_root.clone();
+                            async move {
+                                let models =
+                                    list_available_models(&copilot_auth_cfg, &workspace_root)
+                                        .await?;
+                                Ok(models.into_iter().map(|model| model.id).collect())
+                            }
+                        }
+                    },
+                )
+                .await;
+            Some((result, warning))
+        } else {
+            None
+        };
         let _ = cache_store.persist().await;
 
         let mut registry = Self::default();
@@ -82,6 +116,37 @@ impl DynamicModelRegistry {
         );
         if let Some(warning) = ollama_warning {
             registry.record_warning(Provider::Ollama, warning);
+        }
+        if let Some((copilot_result, copilot_warning)) = copilot_fetch {
+            registry.process_fetch(
+                Provider::Copilot,
+                copilot_result,
+                "copilot-cli".to_string(),
+                &static_index,
+            );
+            if let Some(warning) = copilot_warning {
+                registry.record_warning(Provider::Copilot, warning);
+            }
+        } else {
+            match copilot_status.kind {
+                CopilotAuthStatusKind::Unauthenticated => registry.record_warning(
+                    Provider::Copilot,
+                    "Run `vtcode login copilot` to load the live GitHub Copilot model list. `copilot-auto` remains available.".to_string(),
+                ),
+                CopilotAuthStatusKind::ServerUnavailable => registry.record_error(
+                    Provider::Copilot,
+                    copilot_status
+                        .message
+                        .unwrap_or_else(|| "GitHub Copilot CLI is unavailable.".to_string()),
+                ),
+                CopilotAuthStatusKind::AuthFlowFailed => registry.record_warning(
+                    Provider::Copilot,
+                    copilot_status
+                        .message
+                        .unwrap_or_else(|| "GitHub Copilot authentication needs attention.".to_string()),
+                ),
+                CopilotAuthStatusKind::Authenticated => {}
+            }
         }
         registry
     }
@@ -225,6 +290,16 @@ fn resolve_openai_dynamic_auth(vt_cfg: Option<&VTCodeConfig>) -> Option<String> 
         .map(|resolved| resolved.api_key().to_string())
 }
 
+fn copilot_cache_base(config: &vtcode_config::auth::CopilotAuthConfig) -> String {
+    config
+        .host
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| format!("copilot-cli://{}", value.trim_end_matches('/')))
+        .unwrap_or_else(|| "copilot-cli://github.com".to_string())
+}
+
 async fn fetch_openai_models(
     base_url: Option<String>,
     api_key: String,
@@ -355,6 +430,14 @@ mod tests {
                 .error_for(Provider::Ollama)
                 .expect("error should be captured")
                 .contains("boom")
+        );
+    }
+
+    #[test]
+    fn copilot_cache_base_defaults_to_github_com() {
+        assert_eq!(
+            copilot_cache_base(&vtcode_config::auth::CopilotAuthConfig::default()),
+            "copilot-cli://github.com"
         );
     }
 }

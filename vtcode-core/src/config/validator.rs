@@ -227,8 +227,7 @@ fn configured_managed_auth_provider(config: &VTCodeConfig) -> Option<Provider> {
 }
 
 fn is_managed_auth_model(provider: Option<Provider>, model: &str) -> bool {
-    matches!(provider, Some(Provider::Copilot))
-        && crate::config::constants::models::copilot::SUPPORTED_MODELS.contains(&model)
+    matches!(provider, Some(Provider::Copilot)) && !model.trim().is_empty()
 }
 
 /// Results from configuration validation
@@ -377,6 +376,15 @@ mod tests {
         assert!(!result.errors.iter().any(|e| {
             e.contains("Model 'gemini-3-flash-preview' not found for provider 'google'")
         }));
+    }
+
+    #[test]
+    fn copilot_managed_auth_model_accepts_live_raw_ids() {
+        assert!(is_managed_auth_model(
+            Some(Provider::Copilot),
+            "gpt-5.3-codex"
+        ));
+        assert!(!is_managed_auth_model(Some(Provider::Copilot), "   "));
     }
 
     #[test]

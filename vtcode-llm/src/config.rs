@@ -295,6 +295,7 @@ fn project_provider_config(
     vtcode_core::llm::factory::ProviderConfig {
         api_key: source.api_key().map(Cow::into_owned),
         openai_chatgpt_auth: None,
+        copilot_auth: None,
         base_url: source.base_url().map(Cow::into_owned),
         model: source.model().map(Cow::into_owned),
         prompt_cache: source.prompt_cache().map(Cow::into_owned),
@@ -302,6 +303,7 @@ fn project_provider_config(
         openai: source.openai().map(Cow::into_owned),
         anthropic: source.anthropic().map(Cow::into_owned),
         model_behavior: source.model_behavior().map(Cow::into_owned),
+        workspace_root: None,
     }
 }
 
@@ -483,6 +485,7 @@ mod tests {
         let config = vtcode_core::llm::factory::ProviderConfig {
             api_key: None,
             openai_chatgpt_auth: None,
+            copilot_auth: None,
             base_url: None,
             model: None,
             prompt_cache: Some(PromptCachingConfig::default()),
@@ -490,6 +493,7 @@ mod tests {
             openai: Some(OpenAIConfig::default()),
             anthropic: Some(AnthropicConfig::default()),
             model_behavior: Some(ModelConfig::default()),
+            workspace_root: None,
         };
 
         assert!(matches!(
@@ -550,6 +554,7 @@ mod tests {
         let source = vtcode_core::llm::factory::ProviderConfig {
             api_key: Some("secret".to_string()),
             openai_chatgpt_auth: None,
+            copilot_auth: None,
             base_url: Some("https://api.example.com".to_string()),
             model: Some("gpt-5".to_string()),
             prompt_cache: Some(PromptCachingConfig::default()),
@@ -563,6 +568,7 @@ mod tests {
                 ..AnthropicConfig::default()
             }),
             model_behavior: Some(ModelConfig::default()),
+            workspace_root: None,
         };
 
         let adapted = as_factory_config(&source);

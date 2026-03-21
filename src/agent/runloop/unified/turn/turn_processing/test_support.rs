@@ -286,6 +286,7 @@ impl TestTurnProcessingBacking {
             &mut self.turn_metadata_cache,
             &mut self.provider_client,
             &self.traj,
+            true,
             false,
             &mut self.steering_receiver,
         )
@@ -332,6 +333,7 @@ impl TestTurnProcessingBacking {
             mcp_panel_state: &mut self.mcp_panel_state,
             working_history: &mut self.working_history,
             turn_metadata_cache: &mut self.turn_metadata_cache,
+            skip_confirmations: true,
             full_auto: false,
             harness_state: &mut self.harness_state,
             harness_emitter: None,

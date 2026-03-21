@@ -803,6 +803,8 @@ TODO2.md
 .vtcode/mcp/status.json
 .vtcode/terminals/
 .vtcode/sessions/
+.vtcode/tasks/
+.vtcode/tasks/current_blocked.md
 
 .claude/
 .agent/

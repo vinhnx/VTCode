@@ -152,6 +152,17 @@ pub trait LLMProvider: Send + Sync {
         Ok(Box::pin(stream))
     }
 
+    /// Provider-specific streaming path that can service interactive runtime
+    /// requests while the stream is active. Copilot uses this to bridge ACP
+    /// tool calls and permission prompts back into VT Code's turn runtime.
+    fn start_copilot_prompt_session<'a>(
+        &'a self,
+        _request: LLMRequest,
+        _tools: &'a [super::ToolDefinition],
+    ) -> Option<crate::copilot::CopilotPromptSessionFuture<'a>> {
+        None
+    }
+
     /// Get supported models
     fn supported_models(&self) -> Vec<String>;
 

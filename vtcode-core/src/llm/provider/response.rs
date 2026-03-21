@@ -11,3 +11,5 @@ pub enum LLMStreamEvent {
 }
 
 pub type LLMStream = Pin<Box<dyn futures::Stream<Item = Result<LLMStreamEvent, LLMError>> + Send>>;
+pub type BorrowedLLMStream<'a> =
+    Pin<Box<dyn futures::Stream<Item = Result<LLMStreamEvent, LLMError>> + Send + 'a>>;

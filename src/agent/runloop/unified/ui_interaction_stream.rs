@@ -2,13 +2,15 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
+use async_trait::async_trait;
 use futures::StreamExt;
-use tokio::sync::Notify;
+use tokio::sync::{Notify, mpsc};
 
 use crate::agent::runloop::unified::plan_blocks::{
     ProposedPlanStreamParser, extract_proposed_plan,
 };
 use crate::agent::runloop::unified::turn::harmony::strip_harmony_syntax;
+use vtcode_core::copilot::CopilotRuntimeRequest;
 use vtcode_core::llm::error_display;
 use vtcode_core::llm::provider::{self as uni, LLMStreamEvent};
 use vtcode_core::llm::providers::clean_reasoning_text;
@@ -232,6 +234,15 @@ fn sanitize_harmony_final_text(text: String) -> String {
     }
 }
 
+#[async_trait]
+pub(crate) trait CopilotRuntimeRequestHandler: Send {
+    async fn handle_runtime_request(
+        &mut self,
+        renderer: &mut AnsiRenderer,
+        request: CopilotRuntimeRequest,
+    ) -> Result<(), uni::LLMError>;
+}
+
 pub(crate) async fn stream_and_render_response_with_options_impl(
     provider: &dyn uni::LLMProvider,
     request: uni::LLMRequest,
@@ -240,7 +251,7 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
     options: StreamSpinnerOptions,
-    mut on_progress: Option<&mut (dyn FnMut(StreamProgressEvent) + Send)>,
+    on_progress: Option<&mut (dyn FnMut(StreamProgressEvent) + Send)>,
 ) -> Result<(uni::LLMResponse, bool), uni::LLMError> {
     let provider_name = provider.name();
 
@@ -252,10 +263,6 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
         });
     }
 
-    let supports_streaming_markdown = renderer.supports_streaming_markdown();
-    // Keep live streaming focused on assistant message tokens; reasoning deltas are streamed
-    // only when inline markdown streaming is available and reasoning output is visible.
-    let stream_reasoning_deltas = supports_streaming_markdown && renderer.reasoning_visible();
     let stream_future = provider.stream(request);
     tokio::pin!(stream_future);
 
@@ -276,9 +283,73 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
         result = stream_future => result?,
     };
 
+    render_stream_with_options_and_progress_impl(
+        provider_name,
+        &mut stream,
+        spinner,
+        renderer,
+        ctrl_c_state,
+        ctrl_c_notify,
+        options,
+        on_progress,
+    )
+    .await
+}
+
+pub(crate) async fn render_stream_with_options_and_progress_impl(
+    provider_name: &str,
+    stream: &mut uni::BorrowedLLMStream<'_>,
+    spinner: &PlaceholderSpinner,
+    renderer: &mut AnsiRenderer,
+    ctrl_c_state: &Arc<CtrlCState>,
+    ctrl_c_notify: &Arc<Notify>,
+    options: StreamSpinnerOptions,
+    on_progress: Option<&mut (dyn FnMut(StreamProgressEvent) + Send)>,
+) -> Result<(uni::LLMResponse, bool), uni::LLMError> {
+    render_stream_with_options_and_copilot_runtime_impl(
+        provider_name,
+        stream,
+        None,
+        None,
+        None,
+        spinner,
+        renderer,
+        ctrl_c_state,
+        ctrl_c_notify,
+        options,
+        on_progress,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
+    provider_name: &str,
+    stream: &mut uni::BorrowedLLMStream<'_>,
+    runtime_requests: Option<&mut mpsc::UnboundedReceiver<CopilotRuntimeRequest>>,
+    mut runtime_handler: Option<&mut dyn CopilotRuntimeRequestHandler>,
+    timeout_budget: Option<Duration>,
+    spinner: &PlaceholderSpinner,
+    renderer: &mut AnsiRenderer,
+    ctrl_c_state: &Arc<CtrlCState>,
+    ctrl_c_notify: &Arc<Notify>,
+    options: StreamSpinnerOptions,
+    mut on_progress: Option<&mut (dyn FnMut(StreamProgressEvent) + Send)>,
+) -> Result<(uni::LLMResponse, bool), uni::LLMError> {
+    if ctrl_c_state.is_cancel_requested() {
+        spinner.finish_with_restore(true);
+        return Err(uni::LLMError::Provider {
+            message: error_display::format_llm_error(provider_name, "Interrupted by user"),
+            metadata: None,
+        });
+    }
+
+    let supports_streaming_markdown = renderer.supports_streaming_markdown();
+    let stream_reasoning_deltas = supports_streaming_markdown && renderer.reasoning_visible();
     let mut final_response: Option<uni::LLMResponse> = None;
     let mut aggregated = String::new();
     let mut spinner_active = true;
+    let mut runtime_requests = runtime_requests;
     let mut rendered_line_count = 0usize;
     let finish_spinner = |active: &mut bool, force: bool| {
         if *active {
@@ -319,6 +390,7 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
     let mut harmony_stream_mode = false;
     let mut harmony_raw_stream = String::new();
     let mut harmony_visible_stream = String::new();
+    let mut timeout_deadline = timeout_budget.map(|budget| tokio::time::Instant::now() + budget);
 
     loop {
         if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
@@ -340,6 +412,58 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
                     .handle_stream_failure(renderer)
                     .map_err(|err| map_render_error(provider_name, err))?;
                 return Err(uni::LLMError::Provider { message: error_display::format_llm_error(provider_name, "Interrupted by user"), metadata: None });
+            }
+            _ = async {
+                match timeout_deadline {
+                    Some(deadline) => tokio::time::sleep_until(deadline).await,
+                    None => std::future::pending().await,
+                }
+            } => {
+                finish_spinner(&mut spinner_active, true);
+                reasoning_state
+                    .handle_stream_failure(renderer)
+                    .map_err(|err| map_render_error(provider_name, err))?;
+                return Err(uni::LLMError::Provider {
+                    message: error_display::format_llm_error(
+                        provider_name,
+                        &format!(
+                            "LLM request timed out after {} seconds",
+                            timeout_budget.unwrap_or_default().as_secs()
+                        ),
+                    ),
+                    metadata: None,
+                });
+            }
+            request = async {
+                match runtime_requests.as_deref_mut() {
+                    Some(receiver) => receiver.recv().await,
+                    None => std::future::pending().await,
+                }
+            } => {
+                match request {
+                    Some(request) => {
+                        finish_spinner(&mut spinner_active, true);
+                        let Some(handler) = runtime_handler.as_deref_mut() else {
+                            return Err(uni::LLMError::Provider {
+                                message: error_display::format_llm_error(
+                                    provider_name,
+                                    "Copilot runtime request arrived without a VT Code handler",
+                                ),
+                                metadata: None,
+                            });
+                        };
+                        let blocked_started_at = tokio::time::Instant::now();
+                        handler.handle_runtime_request(renderer, request).await?;
+                        if let Some(deadline) = timeout_deadline.as_mut() {
+                            *deadline += blocked_started_at.elapsed();
+                        }
+                        continue;
+                    }
+                    None => {
+                        runtime_requests = None;
+                        continue;
+                    }
+                }
             }
             event = stream.next() => event,
         };
@@ -742,4 +866,116 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
     }
 
     Ok((response, emitted_tokens))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        CopilotRuntimeRequestHandler, render_stream_with_options_and_copilot_runtime_impl,
+    };
+    use crate::agent::runloop::unified::state::CtrlCState;
+    use crate::agent::runloop::unified::ui_interaction::{
+        PlaceholderSpinner, StreamSpinnerOptions,
+    };
+    use async_trait::async_trait;
+    use futures::stream;
+    use std::sync::Arc;
+    use std::time::Duration;
+    use tokio::sync::{Notify, mpsc};
+    use vtcode_core::copilot::{
+        CopilotObservedToolCall, CopilotObservedToolCallStatus, CopilotRuntimeRequest,
+    };
+    use vtcode_core::llm::provider::{self as uni, FinishReason, LLMResponse, LLMStreamEvent};
+    use vtcode_core::utils::ansi::AnsiRenderer;
+    use vtcode_tui::app::{InlineCommand, InlineHandle};
+
+    struct SleepingRuntimeHandler {
+        sleep_for: Duration,
+    }
+
+    #[async_trait]
+    impl CopilotRuntimeRequestHandler for SleepingRuntimeHandler {
+        async fn handle_runtime_request(
+            &mut self,
+            _renderer: &mut AnsiRenderer,
+            _request: CopilotRuntimeRequest,
+        ) -> Result<(), uni::LLMError> {
+            tokio::time::sleep(self.sleep_for).await;
+            Ok(())
+        }
+    }
+
+    fn build_spinner() -> PlaceholderSpinner {
+        let (tx, _rx) = mpsc::unbounded_channel::<InlineCommand>();
+        let handle = InlineHandle::new_for_tests(tx);
+        PlaceholderSpinner::new(&handle, None, None, "")
+    }
+
+    fn completed_response(content: &str) -> LLMResponse {
+        LLMResponse {
+            content: Some(content.to_string()),
+            model: "mock-model".to_string(),
+            tool_calls: None,
+            usage: None,
+            finish_reason: FinishReason::Stop,
+            reasoning: None,
+            reasoning_details: None,
+            organization_id: None,
+            request_id: None,
+            tool_references: vec![],
+        }
+    }
+
+    #[tokio::test]
+    async fn copilot_runtime_prompt_time_does_not_consume_timeout_budget() {
+        let spinner = build_spinner();
+        let mut renderer = AnsiRenderer::stdout();
+        let ctrl_c_state = Arc::new(CtrlCState::new());
+        let ctrl_c_notify = Arc::new(Notify::new());
+
+        let mut stream: uni::LLMStream = Box::pin(stream::once(async {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+            Ok(LLMStreamEvent::Completed {
+                response: Box::new(completed_response("ok")),
+            })
+        }));
+
+        let (runtime_tx, mut runtime_rx) = mpsc::unbounded_channel();
+        runtime_tx
+            .send(CopilotRuntimeRequest::ObservedToolCall(
+                CopilotObservedToolCall {
+                    tool_call_id: "call_1".to_string(),
+                    tool_name: "copilot_tool".to_string(),
+                    status: CopilotObservedToolCallStatus::Pending,
+                    arguments: None,
+                    output: None,
+                },
+            ))
+            .expect("send runtime request");
+        drop(runtime_tx);
+
+        let mut handler = SleepingRuntimeHandler {
+            sleep_for: Duration::from_millis(40),
+        };
+
+        let result = render_stream_with_options_and_copilot_runtime_impl(
+            "copilot",
+            &mut stream,
+            Some(&mut runtime_rx),
+            Some(&mut handler),
+            Some(Duration::from_millis(20)),
+            &spinner,
+            &mut renderer,
+            &ctrl_c_state,
+            &ctrl_c_notify,
+            StreamSpinnerOptions::default(),
+            None,
+        )
+        .await;
+
+        assert!(
+            result.is_ok(),
+            "runtime prompt handling should pause timeout"
+        );
+    }
 }

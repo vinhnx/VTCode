@@ -96,7 +96,7 @@ impl Provider {
     }
 
     pub fn is_dynamic(&self) -> bool {
-        self.is_local()
+        matches!(self, Provider::Copilot) || self.is_local()
     }
 
     pub fn is_local(&self) -> bool {

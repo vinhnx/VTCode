@@ -287,6 +287,7 @@ impl TestContextBacking {
             mcp_panel_state: &mut self.mcp_panel_state,
             working_history: &mut self.working_history,
             turn_metadata_cache: &mut self.turn_metadata_cache,
+            skip_confirmations: true,
             full_auto: false,
             harness_state: &mut self.harness_state,
             harness_emitter: None,
@@ -315,6 +316,21 @@ async fn cache_tool_permission(
         .normalized_tool_name;
     let mut cache = backing.tool_permission_cache.write().await;
     cache.cache_grant(normalized_tool_name, grant);
+}
+
+#[tokio::test]
+async fn build_tool_permissions_context_propagates_skip_confirmations() {
+    let mut backing = TestContextBacking::new(2).await;
+    let mut ctx = backing.turn_processing_context();
+
+    let permissions = super::build_tool_permissions_context(&mut ctx);
+    assert!(permissions.skip_confirmations);
+    drop(permissions);
+
+    ctx.skip_confirmations = false;
+
+    let permissions = super::build_tool_permissions_context(&mut ctx);
+    assert!(!permissions.skip_confirmations);
 }
 
 #[test]

@@ -225,3 +225,46 @@ async fn test_prepare_session_bootstrap_hides_placeholder_when_planning_disabled
         assert!(!prompt.contains("task_tracker"));
     }
 }
+
+#[tokio::test]
+async fn test_prepare_session_bootstrap_does_not_surface_acp_trust_in_terminal_session() {
+    let tmp = tempdir().expect("Failed to create temp directory");
+    fs::write(
+        tmp.path().join("Cargo.toml"),
+        "[package]\nname = \"demo\"\nversion = \"0.1.0\"\ndescription = \"Demo\"\n",
+    )
+    .expect("Failed to write Cargo.toml");
+
+    let runtime_cfg = CoreAgentConfig {
+        model: vtcode_core::config::constants::models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
+        api_key: "test".to_string(),
+        provider: "gemini".to_string(),
+        api_key_env: Provider::Gemini.default_api_key_env().to_string(),
+        workspace: tmp.path().to_path_buf(),
+        verbose: false,
+        theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
+        reasoning_effort: ReasoningEffortLevel::default(),
+        ui_surface: UiSurfacePreference::default(),
+        prompt_cache: PromptCachingConfig::default(),
+        model_source: ModelSelectionSource::WorkspaceConfig,
+        custom_api_keys: BTreeMap::new(),
+        checkpointing_enabled: DEFAULT_CHECKPOINTS_ENABLED,
+        checkpointing_storage_dir: None,
+        checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
+        checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
+        quiet: false,
+        max_conversation_turns: 1000,
+        model_behavior: None,
+        openai_chatgpt_auth: None,
+    };
+
+    let mut vt_cfg = VTCodeConfig::default();
+    vt_cfg.acp.enabled = true;
+    vt_cfg.acp.zed.enabled = true;
+    vt_cfg.acp.zed.workspace_trust =
+        vtcode_core::config::AgentClientProtocolZedWorkspaceTrustMode::FullAuto;
+
+    let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg), None).await;
+
+    assert!(bootstrap.acp_workspace_trust.is_none());
+}

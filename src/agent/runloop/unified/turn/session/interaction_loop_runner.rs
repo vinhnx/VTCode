@@ -594,6 +594,11 @@ pub(super) async fn run_interaction_loop_impl(
             continue;
         }
 
+        // A fresh submitted input starts a new turn. Clear any stale local cancel
+        // latch left behind by a prior interrupted turn so permission modals and
+        // the provider stream don't inherit a spurious "interrupted" state.
+        ctx.ctrl_c_state.reset();
+
         if let Err(err) = crate::agent::runloop::unified::turn::workspace::refresh_vt_config(
             &ctx.config.workspace,
             ctx.config,

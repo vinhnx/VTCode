@@ -1,3 +1,4 @@
+mod copilot_runtime;
 mod metrics;
 mod request_builder;
 mod retry;
@@ -21,10 +22,12 @@ use crate::agent::runloop::unified::turn::turn_helpers::supports_responses_chain
 use crate::agent::runloop::unified::ui_interaction::{
     StreamProgressEvent, StreamSpinnerOptions, stream_and_render_response_with_options_and_progress,
 };
+use crate::agent::runloop::unified::ui_interaction_stream::render_stream_with_options_and_copilot_runtime_impl;
 use crate::agent::runloop::unified::wait_feedback::{
     WAIT_KEEPALIVE_INITIAL, WAIT_KEEPALIVE_INTERVAL, resolve_fractional_warning_delay,
     wait_keepalive_message, wait_timeout_warning_message,
 };
+use copilot_runtime::{CopilotRuntimeHost, prompt_session_to_stream};
 use metrics::emit_llm_retry_metrics;
 #[cfg(test)]
 use request_builder::{
@@ -92,6 +95,7 @@ pub(crate) async fn execute_llm_request(
     .await?;
     let mut request = initial_request.request;
     let has_tools = initial_request.has_tools;
+    let runtime_tools = initial_request.runtime_tools;
     if let Err(err) = ctx.provider_client.as_ref().validate_request(&request) {
         return Err(anyhow::Error::new(err));
     }
@@ -209,35 +213,130 @@ pub(crate) async fn execute_llm_request(
                 strip_proposed_plan_blocks: turn_snapshot.plan_mode,
             };
             let mut progress = |event: StreamProgressEvent| stream_bridge.on_progress(event);
-            let stream_future = stream_and_render_response_with_options_and_progress(
-                &**ctx.provider_client,
-                request.clone(),
-                &_spinner,
-                ctx.renderer,
-                ctx.ctrl_c_state,
-                ctx.ctrl_c_notify,
-                stream_options,
-                Some(&mut progress),
-            );
-            let res =
-                tokio::time::timeout(Duration::from_secs(request_timeout_secs), stream_future)
+            if turn_snapshot.provider_name == vtcode_core::copilot::COPILOT_PROVIDER_KEY {
+                let mut runtime_host = CopilotRuntimeHost::new(
+                    ctx.tool_registry,
+                    ctx.tool_result_cache,
+                    ctx.session,
+                    ctx.session_stats,
+                    ctx.mcp_panel_state,
+                    ctx.handle,
+                    ctx.ctrl_c_state,
+                    ctx.ctrl_c_notify,
+                    ctx.default_placeholder.clone(),
+                    ctx.approval_recorder,
+                    ctx.decision_ledger,
+                    ctx.tool_permission_cache,
+                    ctx.safety_validator,
+                    ctx.lifecycle_hooks,
+                    ctx.vt_cfg,
+                    ctx.traj,
+                    ctx.harness_state,
+                    runtime_tools.as_ref(),
+                    ctx.skip_confirmations,
+                    ctx.harness_emitter,
+                    format!("{}-step-{}", ctx.harness_state.turn_id.0, step_count),
+                );
+                let exposed_tools = runtime_host.exposed_tools().to_vec();
+
+                if let Some(start_prompt_session) = ctx
+                    .provider_client
+                    .as_ref()
+                    .start_copilot_prompt_session(request.clone(), &exposed_tools)
+                {
+                    let prompt_session = start_prompt_session.await?;
+                    let (mut stream, mut runtime_requests) =
+                        prompt_session_to_stream(request.model.clone(), prompt_session);
+                    match render_stream_with_options_and_copilot_runtime_impl(
+                        &turn_snapshot.provider_name,
+                        &mut stream,
+                        Some(&mut runtime_requests),
+                        Some(&mut runtime_host),
+                        Some(Duration::from_secs(request_timeout_secs)),
+                        &_spinner,
+                        ctx.renderer,
+                        ctx.ctrl_c_state,
+                        ctx.ctrl_c_notify,
+                        stream_options,
+                        Some(&mut progress),
+                    )
+                    .await
+                    {
+                        Ok((response, emitted_tokens)) => {
+                            stream_bridge.complete_open_items();
+                            Ok((response, emitted_tokens))
+                        }
+                        Err(err) => {
+                            stream_bridge.abort();
+                            Err(anyhow::Error::new(err))
+                        }
+                    }
+                } else {
+                    let stream_future = stream_and_render_response_with_options_and_progress(
+                        &**ctx.provider_client,
+                        request.clone(),
+                        &_spinner,
+                        ctx.renderer,
+                        ctx.ctrl_c_state,
+                        ctx.ctrl_c_notify,
+                        stream_options,
+                        Some(&mut progress),
+                    );
+                    let res = tokio::time::timeout(
+                        Duration::from_secs(request_timeout_secs),
+                        stream_future,
+                    )
                     .await;
 
-            match res {
-                Ok(Ok((response, emitted_tokens))) => {
-                    stream_bridge.complete_open_items();
-                    Ok((response, emitted_tokens))
+                    match res {
+                        Ok(Ok((response, emitted_tokens))) => {
+                            stream_bridge.complete_open_items();
+                            Ok((response, emitted_tokens))
+                        }
+                        Ok(Err(err)) => {
+                            stream_bridge.abort();
+                            Err(anyhow::Error::new(err))
+                        }
+                        Err(_) => {
+                            stream_bridge.abort();
+                            Err(anyhow::anyhow!(
+                                "LLM request timed out after {} seconds",
+                                request_timeout_secs
+                            ))
+                        }
+                    }
                 }
-                Ok(Err(err)) => {
-                    stream_bridge.abort();
-                    Err(anyhow::Error::new(err))
-                }
-                Err(_) => {
-                    stream_bridge.abort();
-                    Err(anyhow::anyhow!(
-                        "LLM request timed out after {} seconds",
-                        request_timeout_secs
-                    ))
+            } else {
+                let stream_future = stream_and_render_response_with_options_and_progress(
+                    &**ctx.provider_client,
+                    request.clone(),
+                    &_spinner,
+                    ctx.renderer,
+                    ctx.ctrl_c_state,
+                    ctx.ctrl_c_notify,
+                    stream_options,
+                    Some(&mut progress),
+                );
+                let res =
+                    tokio::time::timeout(Duration::from_secs(request_timeout_secs), stream_future)
+                        .await;
+
+                match res {
+                    Ok(Ok((response, emitted_tokens))) => {
+                        stream_bridge.complete_open_items();
+                        Ok((response, emitted_tokens))
+                    }
+                    Ok(Err(err)) => {
+                        stream_bridge.abort();
+                        Err(anyhow::Error::new(err))
+                    }
+                    Err(_) => {
+                        stream_bridge.abort();
+                        Err(anyhow::anyhow!(
+                            "LLM request timed out after {} seconds",
+                            request_timeout_secs
+                        ))
+                    }
                 }
             }
         } else if ctx.ctrl_c_state.is_cancel_requested() || ctx.ctrl_c_state.is_exit_requested() {

@@ -429,6 +429,7 @@ fn test_provider_local_helpers() {
     assert!(!Provider::OpenAI.is_local());
     assert!(Provider::Ollama.is_dynamic());
     assert!(Provider::LmStudio.is_dynamic());
+    assert!(Provider::Copilot.is_dynamic());
     assert!(!Provider::OpenAI.is_dynamic());
     assert!(Provider::Ollama.local_install_instructions().is_some());
     assert!(Provider::LmStudio.local_install_instructions().is_some());

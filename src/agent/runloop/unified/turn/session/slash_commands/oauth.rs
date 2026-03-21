@@ -3,10 +3,11 @@ use vtcode_auth::{AuthStatus, OpenAIChatGptAuthStatus, OpenAIResolvedAuthSource}
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::types::UiSurfacePreference;
 use vtcode_core::copilot::{
-    CopilotAuthStatus, CopilotAuthStatusKind, login as login_copilot, logout as logout_copilot,
-    probe_auth_status,
+    COPILOT_AUTH_DOC_PATH, CopilotAuthEvent, CopilotAuthStatus, CopilotAuthStatusKind,
+    login_with_events, logout_with_events, probe_auth_status,
 };
 use vtcode_core::llm::factory::{ProviderConfig, create_provider_with_config};
+use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_tui::app::{InlineListItem, InlineListSelection, WizardModalMode, WizardStep};
 
@@ -78,16 +79,17 @@ pub(crate) async fn handle_oauth_login(
                 MessageStyle::Info,
                 "Starting GitHub Copilot authentication via the official `copilot` CLI...",
             )?;
+            render_copilot_auth_intro(ctx.renderer, CopilotAuthAction::Login)?;
             let workspace = ctx.config.workspace.clone();
             let auth_cfg = ctx
                 .vt_cfg
                 .as_ref()
                 .map(|cfg| cfg.auth.copilot.clone())
                 .unwrap_or_default();
-            ctx.handle.close_modal();
-            ctx.handle.force_redraw();
-            login_copilot(&auth_cfg, &workspace).await?;
-            ctx.handle.force_redraw();
+            login_with_events(&auth_cfg, &workspace, |event| {
+                render_copilot_auth_event(ctx.renderer, event)
+            })
+            .await?;
             sync_copilot_runtime_if_active(&mut ctx).await?;
             ctx.renderer.line(
                 MessageStyle::Info,
@@ -182,10 +184,18 @@ pub(crate) async fn handle_oauth_logout(
 
     match provider.as_str() {
         COPILOT_PROVIDER => {
+            ctx.renderer.line(
+                MessageStyle::Info,
+                "Starting GitHub Copilot logout via the official `copilot` CLI...",
+            )?;
+            render_copilot_auth_intro(ctx.renderer, CopilotAuthAction::Logout)?;
             let auth_cfg = vt_cfg
                 .map(|cfg| cfg.auth.copilot.clone())
                 .unwrap_or_default();
-            logout_copilot(&auth_cfg, &ctx.config.workspace).await?;
+            logout_with_events(&auth_cfg, &ctx.config.workspace, |event| {
+                render_copilot_auth_event(ctx.renderer, event)
+            })
+            .await?;
             sync_copilot_runtime_if_active(&mut ctx).await?;
             ctx.renderer.line(
                 MessageStyle::Info,
@@ -550,15 +560,17 @@ fn copilot_modal_subtitle(action: OAuthProviderAction, status: &CopilotAuthStatu
     match action {
         OAuthProviderAction::Login => match status.kind {
             CopilotAuthStatusKind::Authenticated => {
-                "Connected; run the official Copilot CLI login again to replace the active session."
+                "Managed auth is connected; rerun the Copilot CLI login to replace the active session."
                     .to_string()
             }
             CopilotAuthStatusKind::Unauthenticated => {
-                "Sign in with your GitHub Copilot subscription.".to_string()
+                "Sign in with your GitHub Copilot subscription through the official Copilot CLI."
+                    .to_string()
             }
             CopilotAuthStatusKind::ServerUnavailable => {
-                "Copilot CLI unavailable; check your Copilot command configuration first."
-                    .to_string()
+                format!(
+                    "Copilot CLI unavailable; install `copilot` or configure `[auth.copilot].command`. See {COPILOT_AUTH_DOC_PATH}."
+                )
             }
             CopilotAuthStatusKind::AuthFlowFailed => {
                 "Authentication needs attention; rerun the Copilot CLI login flow.".to_string()
@@ -761,7 +773,10 @@ fn render_copilot_auth_status(
 ) -> Result<()> {
     match status.kind {
         CopilotAuthStatusKind::Authenticated => {
-            renderer.line(MessageStyle::Info, "GitHub Copilot: authenticated")?;
+            renderer.line(
+                MessageStyle::Info,
+                "GitHub Copilot: authenticated (managed auth via Copilot CLI)",
+            )?;
         }
         CopilotAuthStatusKind::Unauthenticated => {
             renderer.line(MessageStyle::Info, "GitHub Copilot: not authenticated")?;
@@ -778,6 +793,15 @@ fn render_copilot_auth_status(
         && !message.trim().is_empty()
     {
         renderer.line(MessageStyle::Output, &format!("  Details: {}", message))?;
+    }
+
+    if matches!(status.kind, CopilotAuthStatusKind::ServerUnavailable) {
+        renderer.line(
+            MessageStyle::Output,
+            &format!(
+                "  Help: install `copilot` or configure `[auth.copilot].command`; see {COPILOT_AUTH_DOC_PATH}."
+            ),
+        )?;
     }
 
     Ok(())
@@ -983,4 +1007,53 @@ fn format_auth_duration(seconds: u64) -> String {
     } else {
         format!("{}d {}h", seconds / 86_400, (seconds % 86_400) / 3600)
     }
+}
+
+#[derive(Clone, Copy)]
+enum CopilotAuthAction {
+    Login,
+    Logout,
+}
+
+fn render_copilot_auth_intro(renderer: &mut AnsiRenderer, action: CopilotAuthAction) -> Result<()> {
+    renderer.line(MessageStyle::Info, "Managed auth via GitHub Copilot CLI.")?;
+    renderer.line(
+        MessageStyle::Info,
+        "`gh` is optional fallback only; login/logout require the official `copilot` CLI.",
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        match action {
+            CopilotAuthAction::Login => {
+                "Waiting for the official Copilot CLI to start the managed login flow."
+            }
+            CopilotAuthAction::Logout => "Clearing the managed GitHub Copilot CLI session.",
+        },
+    )?;
+    Ok(())
+}
+
+fn render_copilot_auth_event(renderer: &mut AnsiRenderer, event: CopilotAuthEvent) -> Result<()> {
+    match event {
+        CopilotAuthEvent::VerificationCode { url, user_code } => {
+            renderer.line(MessageStyle::Info, "Open this URL in your browser:")?;
+            renderer.hyperlink_line(MessageStyle::Info, &url)?;
+            renderer.line(
+                MessageStyle::Info,
+                "Enter this one-time GitHub device code:",
+            )?;
+            renderer.line_with_style(theme::banner_style(), &user_code)?;
+        }
+        CopilotAuthEvent::Progress { message } => renderer.line(MessageStyle::Info, &message)?,
+        CopilotAuthEvent::Success { account } => {
+            if let Some(account) = account.as_deref() {
+                renderer.line(MessageStyle::Output, &format!("Account: {account}"))?;
+            }
+        }
+        CopilotAuthEvent::Failure { message } => {
+            renderer.line(MessageStyle::Info, &format!("Failure: {message}"))?;
+        }
+    }
+
+    Ok(())
 }

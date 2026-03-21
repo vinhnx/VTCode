@@ -21,6 +21,9 @@ pub(super) static MODEL_OPTIONS: Lazy<Vec<ModelOption>> = Lazy::new(|| {
     let mut options = Vec::with_capacity(models.len());
     for model in models {
         let provider = model.provider();
+        if provider == Provider::Copilot && !matches!(model, ModelId::CopilotAuto) {
+            continue;
+        }
         options.push(ModelOption {
             model,
             provider,

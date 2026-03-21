@@ -162,7 +162,7 @@ fn build_trust_line(ctx: &InlineHeaderContext) -> String {
         .trim();
     let trust = trust.to_ascii_lowercase();
     if trust.contains("full auto") {
-        "Accept edits".into()
+        "Full-auto trust".into()
     } else if trust.contains("tools policy") {
         "Safe tools".into()
     } else if trust.is_empty() || trust == "unknown" {
@@ -223,6 +223,16 @@ fn format_cache_hit_ratio(cache_read: u64, cache_creation: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn build_trust_line_labels_full_auto_as_trust_not_auto_accept() {
+        let ctx = InlineHeaderContext {
+            workspace_trust: format!("{}full auto", ui::HEADER_TRUST_PREFIX),
+            ..InlineHeaderContext::default()
+        };
+
+        assert_eq!(build_trust_line(&ctx), "Full-auto trust");
+    }
 
     #[test]
     fn formats_duration() {
