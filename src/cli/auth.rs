@@ -554,9 +554,13 @@ fn render_copilot_auth_status(status: CopilotAuthStatus) {
 fn print_copilot_auth_event(event: CopilotAuthEvent) -> Result<()> {
     match event {
         CopilotAuthEvent::VerificationCode { url, user_code } => {
+            println!("GitHub device code (copy this): {}", user_code);
+            vtcode_commons::ansi_codes::notify_attention(
+                true,
+                Some(&format!("GitHub device code: {user_code}")),
+            );
             println!("Open this URL to continue:");
             println!("{}", url);
-            println!("GitHub device code: {}", user_code);
         }
         CopilotAuthEvent::Progress { message } => println!("{}", message),
         CopilotAuthEvent::Success { account } => {
