@@ -423,6 +423,437 @@
     },
     "default_model": "gpt-5.4"
   },
+  "copilot": {
+    "id": "copilot",
+    "env": [
+      "COPILOT_GITHUB_TOKEN",
+      "GH_TOKEN",
+      "GITHUB_TOKEN"
+    ],
+    "api": "copilot-cli",
+    "name": "GitHub Copilot",
+    "description": "Official GitHub Copilot CLI-backed preview provider. VT Code v1 keeps this provider text-only and discovers the live available model list at runtime.",
+    "doc": "https://docs.github.com/en/copilot/reference/ai-models/supported-models",
+    "default_model": "copilot-auto",
+    "models": {
+      "copilot-auto": {
+        "id": "copilot-auto",
+        "name": "GitHub Copilot Auto",
+        "description": "Automatic model selection via the official GitHub Copilot CLI. VT Code uses live Copilot discovery to resolve the concrete model.",
+        "reasoning": true,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 400000
+      },
+      "copilot-gpt-5.2-codex": {
+        "id": "copilot-gpt-5.2-codex",
+        "name": "GitHub Copilot GPT-5.2 Codex",
+        "description": "Backward-compatible VT Code alias for the Copilot CLI raw model `gpt-5.2-codex`.",
+        "reasoning": true,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 400000
+      },
+      "copilot-gpt-5.1-codex-max": {
+        "id": "copilot-gpt-5.1-codex-max",
+        "name": "GitHub Copilot GPT-5.1 Codex Max",
+        "description": "Backward-compatible VT Code alias for the Copilot CLI raw model `gpt-5.1-codex-max`.",
+        "reasoning": true,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 400000
+      },
+      "copilot-gpt-5.4": {
+        "id": "copilot-gpt-5.4",
+        "name": "GitHub Copilot GPT-5.4",
+        "description": "Backward-compatible VT Code alias for the Copilot CLI raw model `gpt-5.4`.",
+        "reasoning": true,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1050000
+      },
+      "copilot-gpt-5.4-mini": {
+        "id": "copilot-gpt-5.4-mini",
+        "name": "GitHub Copilot GPT-5.4 Mini",
+        "description": "Backward-compatible VT Code alias for the Copilot CLI raw model `gpt-5.4-mini`.",
+        "reasoning": false,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 200000
+      },
+      "copilot-claude-sonnet-4.6": {
+        "id": "copilot-claude-sonnet-4.6",
+        "name": "GitHub Copilot Claude Sonnet 4.6",
+        "description": "Backward-compatible VT Code alias for the Copilot CLI raw model `claude-sonnet-4.6`.",
+        "reasoning": true,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000
+      },
+      "claude-sonnet-4.6": {
+        "id": "claude-sonnet-4.6",
+        "name": "Claude Sonnet 4.6",
+        "description": "Verified GitHub Copilot CLI raw model id. VT Code exposes it through the text-only Copilot runtime.",
+        "reasoning": true,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000
+      },
+      "claude-sonnet-4.5": {
+        "id": "claude-sonnet-4.5",
+        "name": "Claude Sonnet 4.5",
+        "description": "Verified GitHub Copilot CLI raw model id for Claude Sonnet 4.5.",
+        "reasoning": true,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000
+      },
+      "claude-haiku-4.5": {
+        "id": "claude-haiku-4.5",
+        "name": "Claude Haiku 4.5",
+        "description": "Verified GitHub Copilot CLI raw model id for Claude Haiku 4.5.",
+        "reasoning": false,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 200000
+      },
+      "claude-opus-4.6": {
+        "id": "claude-opus-4.6",
+        "name": "Claude Opus 4.6",
+        "description": "Verified GitHub Copilot CLI raw model id for Claude Opus 4.6.",
+        "reasoning": true,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000
+      },
+      "claude-opus-4.6-fast": {
+        "id": "claude-opus-4.6-fast",
+        "name": "Claude Opus 4.6 Fast",
+        "description": "Verified GitHub Copilot CLI raw model id for the faster Claude Opus 4.6 variant.",
+        "reasoning": true,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000
+      },
+      "claude-opus-4.6-1m": {
+        "id": "claude-opus-4.6-1m",
+        "name": "Claude Opus 4.6 1M",
+        "description": "Verified GitHub Copilot CLI raw model id for the 1M-context Claude Opus 4.6 variant.",
+        "reasoning": true,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000
+      },
+      "claude-opus-4.5": {
+        "id": "claude-opus-4.5",
+        "name": "Claude Opus 4.5",
+        "description": "Verified GitHub Copilot CLI raw model id for Claude Opus 4.5.",
+        "reasoning": true,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000
+      },
+      "claude-sonnet-4": {
+        "id": "claude-sonnet-4",
+        "name": "Claude Sonnet 4",
+        "description": "Verified GitHub Copilot CLI raw model id for Claude Sonnet 4.",
+        "reasoning": true,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000
+      },
+      "gemini-3-pro-preview": {
+        "id": "gemini-3-pro-preview",
+        "name": "Gemini 3 Pro Preview",
+        "description": "Verified GitHub Copilot CLI raw model id for Gemini 3 Pro Preview.",
+        "reasoning": true,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1048576
+      },
+      "gpt-5.4": {
+        "id": "gpt-5.4",
+        "name": "GPT-5.4",
+        "description": "Verified GitHub Copilot CLI raw model id for GPT-5.4.",
+        "reasoning": true,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1050000
+      },
+      "gpt-5.3-codex": {
+        "id": "gpt-5.3-codex",
+        "name": "GPT-5.3 Codex",
+        "description": "Verified GitHub Copilot CLI raw model id for GPT-5.3 Codex.",
+        "reasoning": true,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 400000
+      },
+      "gpt-5.2-codex": {
+        "id": "gpt-5.2-codex",
+        "name": "GPT-5.2 Codex",
+        "description": "Verified GitHub Copilot CLI raw model id for GPT-5.2 Codex.",
+        "reasoning": true,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 400000
+      },
+      "gpt-5.2": {
+        "id": "gpt-5.2",
+        "name": "GPT-5.2",
+        "description": "Verified GitHub Copilot CLI raw model id for GPT-5.2.",
+        "reasoning": true,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 400000
+      },
+      "gpt-5.1-codex-max": {
+        "id": "gpt-5.1-codex-max",
+        "name": "GPT-5.1 Codex Max",
+        "description": "Verified GitHub Copilot CLI raw model id for GPT-5.1 Codex Max.",
+        "reasoning": true,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 400000
+      },
+      "gpt-5.1-codex": {
+        "id": "gpt-5.1-codex",
+        "name": "GPT-5.1 Codex",
+        "description": "Verified GitHub Copilot CLI raw model id for GPT-5.1 Codex.",
+        "reasoning": true,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 400000
+      },
+      "gpt-5.1": {
+        "id": "gpt-5.1",
+        "name": "GPT-5.1",
+        "description": "Verified GitHub Copilot CLI raw model id for GPT-5.1.",
+        "reasoning": true,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 400000
+      },
+      "gpt-5.4-mini": {
+        "id": "gpt-5.4-mini",
+        "name": "GPT-5.4 Mini",
+        "description": "Verified GitHub Copilot CLI raw model id for GPT-5.4 Mini.",
+        "reasoning": false,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 200000
+      },
+      "gpt-5.1-codex-mini": {
+        "id": "gpt-5.1-codex-mini",
+        "name": "GPT-5.1 Codex Mini",
+        "description": "Verified GitHub Copilot CLI raw model id for GPT-5.1 Codex Mini.",
+        "reasoning": false,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 200000
+      },
+      "gpt-5-mini": {
+        "id": "gpt-5-mini",
+        "name": "GPT-5 Mini",
+        "description": "Verified GitHub Copilot CLI raw model id for GPT-5 Mini.",
+        "reasoning": false,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 200000
+      },
+      "gpt-4.1": {
+        "id": "gpt-4.1",
+        "name": "GPT-4.1",
+        "description": "Verified GitHub Copilot CLI raw model id for GPT-4.1.",
+        "reasoning": false,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1050000
+      }
+    }
+  },
   "huggingface": {
     "id": "huggingface",
     "env": [

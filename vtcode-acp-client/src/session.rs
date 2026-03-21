@@ -350,6 +350,15 @@ pub enum SessionUpdate {
         /// Error message
         message: String,
     },
+
+    /// Server requests the client to execute a tool (bidirectional ACP protocol).
+    ///
+    /// Arrives via a `server/request` SSE event. After executing the tool,
+    /// send the result back with [`AcpClientV2::session_tool_response`].
+    ServerRequest {
+        /// The tool execution request from the agent.
+        request: ToolExecutionRequest,
+    },
 }
 
 // ============================================================================
@@ -405,6 +414,44 @@ pub struct ToolCallRecord {
 
     /// Timestamp
     pub timestamp: String,
+}
+
+/// Server-to-client tool execution request (arrives via `server/request` SSE event).
+///
+/// When the ACP agent needs the client to run a tool on its behalf it emits a
+/// `server/request` SSE event containing this payload. The client must execute
+/// the tool and reply with [`ToolExecutionResult`] via `client/response`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolExecutionRequest {
+    /// Unique request identifier used to correlate the response.
+    pub request_id: String,
+    /// The tool call the agent wants the client to execute.
+    pub tool_call: ToolCallRecord,
+}
+
+/// Result of a client-side tool execution, sent back via `client/response`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolExecutionResult {
+    /// Must match the `request_id` from [`ToolExecutionRequest`].
+    pub request_id: String,
+    /// ID of the tool call that was executed.
+    pub tool_call_id: String,
+    /// Tool output (structured or text).
+    pub output: Value,
+    /// Whether execution succeeded.
+    pub success: bool,
+    /// Error message when `success` is false.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+/// Wrapper for a `server/request` SSE event notification.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerRequestNotification {
+    /// Session this request belongs to.
+    pub session_id: String,
+    /// The tool execution request.
+    pub request: ToolExecutionRequest,
 }
 
 /// A single turn in the conversation
@@ -466,5 +513,52 @@ mod tests {
         session.set_state(SessionState::Active);
         assert_eq!(session.state, SessionState::Active);
         assert!(session.last_activity_at.is_some());
+    }
+
+    #[test]
+    fn server_request_update_serializes_correctly() {
+        let tool_call = ToolCallRecord {
+            id: "tc-1".to_string(),
+            name: "unified_search".to_string(),
+            arguments: json!({"query": "fn main"}),
+            result: None,
+            timestamp: "2025-01-01T00:00:00Z".to_string(),
+        };
+        let request = ToolExecutionRequest {
+            request_id: "req-1".to_string(),
+            tool_call,
+        };
+        let update = SessionUpdate::ServerRequest { request };
+        let json = serde_json::to_value(&update).unwrap();
+        assert_eq!(json["update_type"], "server_request");
+        assert_eq!(json["request"]["request_id"], "req-1");
+    }
+
+    #[test]
+    fn tool_execution_result_success_serializes() {
+        let result = ToolExecutionResult {
+            request_id: "req-1".to_string(),
+            tool_call_id: "tc-1".to_string(),
+            output: json!({"matches": []}),
+            success: true,
+            error: None,
+        };
+        let json = serde_json::to_value(&result).unwrap();
+        assert_eq!(json["success"], true);
+        assert!(json.get("error").is_none());
+    }
+
+    #[test]
+    fn tool_execution_result_failure_includes_error() {
+        let result = ToolExecutionResult {
+            request_id: "req-1".to_string(),
+            tool_call_id: "tc-1".to_string(),
+            output: Value::Null,
+            success: false,
+            error: Some("permission denied".to_string()),
+        };
+        let json = serde_json::to_value(&result).unwrap();
+        assert_eq!(json["success"], false);
+        assert_eq!(json["error"], "permission denied");
     }
 }

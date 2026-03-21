@@ -6,6 +6,7 @@ pub fn supported_for(provider: &str) -> Option<&'static [&'static str]> {
         "google" | "gemini" => Some(models::google::SUPPORTED_MODELS),
         "openai" => Some(models::openai::SUPPORTED_MODELS),
         "anthropic" => Some(models::anthropic::SUPPORTED_MODELS),
+        "copilot" => Some(models::copilot::SUPPORTED_MODELS),
         "minimax" => Some(models::minimax::SUPPORTED_MODELS),
         "deepseek" => Some(models::deepseek::SUPPORTED_MODELS),
         #[cfg(not(docsrs))]
@@ -25,6 +26,7 @@ pub fn default_for(provider: &str) -> Option<&'static str> {
         "google" | "gemini" => Some(models::google::DEFAULT_MODEL),
         "openai" => Some(models::openai::DEFAULT_MODEL),
         "anthropic" => Some(models::anthropic::DEFAULT_MODEL),
+        "copilot" => Some(models::copilot::DEFAULT_MODEL),
         "minimax" => Some(models::minimax::DEFAULT_MODEL),
         "deepseek" => Some(models::deepseek::DEFAULT_MODEL),
         #[cfg(not(docsrs))]

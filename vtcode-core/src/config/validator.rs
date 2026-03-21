@@ -11,7 +11,7 @@ use crate::config::api_keys::ApiKeySources;
 use crate::config::api_keys::get_api_key;
 use crate::config::constants::models::openai::RESPONSES_API_MODELS;
 use crate::config::loader::VTCodeConfig;
-use crate::config::models::{model_catalog_entry, supported_models_for_provider};
+use crate::config::models::{Provider, model_catalog_entry, supported_models_for_provider};
 use crate::utils::file_utils::read_file_with_context_sync;
 
 /// Loaded models database from docs/models.json
@@ -123,11 +123,13 @@ impl ConfigValidator {
     /// Validate entire configuration
     pub fn validate(&self, config: &VTCodeConfig) -> Result<ValidationResult> {
         let mut result = ValidationResult::default();
+        let managed_auth_provider = configured_managed_auth_provider(config);
 
         // Check if configured model exists
-        if !self
-            .models_db
-            .model_exists(&config.agent.provider, &config.agent.default_model)
+        if !is_managed_auth_model(managed_auth_provider, &config.agent.default_model)
+            && !self
+                .models_db
+                .model_exists(&config.agent.provider, &config.agent.default_model)
         {
             result.errors.push(format!(
                 "Model '{}' not found for provider '{}'. Check docs/models.json.",
@@ -136,7 +138,9 @@ impl ConfigValidator {
         }
 
         // Check if API key is available
-        if let Err(e) = get_api_key(&config.agent.provider, &ApiKeySources::default()) {
+        if managed_auth_provider.is_none()
+            && let Err(e) = get_api_key(&config.agent.provider, &ApiKeySources::default())
+        {
             result.errors.push(format!(
                 "API key not found for provider '{}': {}. Set {} environment variable.",
                 config.agent.provider,
@@ -183,10 +187,13 @@ impl ConfigValidator {
 
     /// Quick validation - only critical checks
     pub fn quick_validate(&self, config: &VTCodeConfig) -> Result<()> {
+        let managed_auth_provider = configured_managed_auth_provider(config);
+
         // Check model exists
-        if !self
-            .models_db
-            .model_exists(&config.agent.provider, &config.agent.default_model)
+        if !is_managed_auth_model(managed_auth_provider, &config.agent.default_model)
+            && !self
+                .models_db
+                .model_exists(&config.agent.provider, &config.agent.default_model)
         {
             bail!(
                 "Model '{}' not found for provider '{}'. Check docs/models.json.",
@@ -196,16 +203,31 @@ impl ConfigValidator {
         }
 
         // Check API key
-        get_api_key(&config.agent.provider, &ApiKeySources::default()).with_context(|| {
-            format!(
-                "API key not found for provider '{}'. Set {} environment variable.",
-                config.agent.provider,
-                config.agent.provider.to_uppercase()
-            )
-        })?;
+        if managed_auth_provider.is_none() {
+            get_api_key(&config.agent.provider, &ApiKeySources::default()).with_context(|| {
+                format!(
+                    "API key not found for provider '{}'. Set {} environment variable.",
+                    config.agent.provider,
+                    config.agent.provider.to_uppercase()
+                )
+            })?;
+        }
 
         Ok(())
     }
+}
+
+fn configured_managed_auth_provider(config: &VTCodeConfig) -> Option<Provider> {
+    config
+        .agent
+        .provider
+        .parse::<Provider>()
+        .ok()
+        .filter(|provider| provider.uses_managed_auth())
+}
+
+fn is_managed_auth_model(provider: Option<Provider>, model: &str) -> bool {
+    matches!(provider, Some(Provider::Copilot)) && !model.trim().is_empty()
 }
 
 /// Results from configuration validation
@@ -354,6 +376,15 @@ mod tests {
         assert!(!result.errors.iter().any(|e| {
             e.contains("Model 'gemini-3-flash-preview' not found for provider 'google'")
         }));
+    }
+
+    #[test]
+    fn copilot_managed_auth_model_accepts_live_raw_ids() {
+        assert!(is_managed_auth_model(
+            Some(Provider::Copilot),
+            "gpt-5.3-codex"
+        ));
+        assert!(!is_managed_auth_model(Some(Provider::Copilot), "   "));
     }
 
     #[test]

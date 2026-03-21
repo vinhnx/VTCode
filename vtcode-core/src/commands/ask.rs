@@ -43,6 +43,7 @@ pub async fn handle_ask_command(
         ProviderConfig {
             api_key: Some(config.api_key.clone()),
             openai_chatgpt_auth: config.openai_chatgpt_auth.clone(),
+            copilot_auth: None,
             base_url: None,
             model: Some(request.model.clone()),
             prompt_cache: None,
@@ -50,6 +51,7 @@ pub async fn handle_ask_command(
             openai: None,
             anthropic: None,
             model_behavior: config.model_behavior.clone(),
+            workspace_root: Some(config.workspace.clone()),
         },
     )?;
     let backend_kind = provider.name().to_string();

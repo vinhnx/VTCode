@@ -47,6 +47,9 @@ impl RigProviderCapabilities {
                 let client = anthropic::Client::new(api_key);
                 let _ = client.completion_model(&self.model);
             }
+            Provider::Copilot => {
+                // Copilot is authenticated through the official CLI, not rig.
+            }
             Provider::Minimax => {
                 // MiniMax uses an Anthropic-compatible API; rig has no direct client.
             }

@@ -43,6 +43,10 @@ use vtcode_core::{apply_global_notification_config_from_vtcode, init_global_noti
 use crate::startup::take_search_tools_bundle_notice;
 use crate::updater::{Updater, append_notice_highlight};
 
+use std::collections::BTreeSet;
+
+use vtcode_config::auth::CopilotAuthConfig;
+
 #[allow(clippy::unnecessary_cast)]
 fn vtcode_config_circuit_breaker_to_core(
     vt_cfg: Option<&VTCodeConfig>,
@@ -70,6 +74,36 @@ fn vtcode_config_circuit_breaker_to_core(
         max_backoff: Duration::from_secs(120),
         backoff_factor: 2.0,
     }
+}
+
+fn prompt_visible_tool_names(
+    provider_name: &str,
+    vt_cfg: Option<&VTCodeConfig>,
+    tool_defs: &[uni::ToolDefinition],
+) -> Vec<String> {
+    let mut names = tool_defs
+        .iter()
+        .filter_map(tool_definition_name)
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+
+    if !provider_name.eq_ignore_ascii_case(vtcode_core::copilot::COPILOT_PROVIDER_KEY) {
+        return names;
+    }
+
+    let allowlist: BTreeSet<_> = vt_cfg
+        .map(|cfg| cfg.auth.copilot.vtcode_tool_allowlist.clone())
+        .unwrap_or_else(|| CopilotAuthConfig::default().vtcode_tool_allowlist)
+        .into_iter()
+        .collect();
+    names.retain(|name| allowlist.contains(name));
+    names
+}
+
+fn tool_definition_name(tool: &uni::ToolDefinition) -> Option<&str> {
+    tool.function
+        .as_ref()
+        .map(|function| function.name.as_str())
 }
 
 pub(crate) async fn initialize_session(
@@ -200,10 +234,7 @@ pub(crate) async fn initialize_session(
     let trajectory = build_trajectory_logger(&config.workspace, vt_cfg);
     let available_tools = {
         let tool_defs = tools.read().await;
-        tool_defs
-            .iter()
-            .map(|def| def.function_name().to_string())
-            .collect::<Vec<_>>()
+        prompt_visible_tool_names(provider_client.name(), vt_cfg, tool_defs.as_slice())
     };
     let base_system_prompt = read_system_prompt(
         &config.workspace,
@@ -357,6 +388,7 @@ fn create_provider_client(
         ProviderConfig {
             api_key: Some(config.api_key.clone()),
             openai_chatgpt_auth: config.openai_chatgpt_auth.clone(),
+            copilot_auth: vt_cfg.map(|cfg| cfg.auth.copilot.clone()),
             base_url: None,
             model: Some(config.model.clone()),
             prompt_cache: Some(config.prompt_cache.clone()),
@@ -364,6 +396,7 @@ fn create_provider_client(
             openai: vt_cfg.map(|cfg| cfg.provider.openai.clone()),
             anthropic: vt_cfg.map(|cfg| cfg.provider.anthropic.clone()),
             model_behavior: vt_cfg.map(|cfg| cfg.model.clone()),
+            workspace_root: Some(config.workspace.clone()),
         },
     )
     .context("Failed to initialize provider client")
@@ -442,4 +475,59 @@ async fn apply_workspace_trust_prompt_policy(
     tool_registry
         .set_enforce_safe_mode_prompts(enforce_safe_mode_prompts)
         .await;
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::prompt_visible_tool_names;
+    use vtcode_core::config::loader::VTCodeConfig;
+    use vtcode_core::llm::provider::ToolDefinition;
+
+    #[test]
+    fn prompt_visible_tool_names_keep_all_tools_for_non_copilot() {
+        let tool_defs = vec![
+            ToolDefinition::function(
+                "unified_search".to_string(),
+                "Search project files".to_string(),
+                json!({"type": "object"}),
+            ),
+            ToolDefinition::function(
+                "request_user_input".to_string(),
+                "Request user input".to_string(),
+                json!({"type": "object"}),
+            ),
+        ];
+
+        let names = prompt_visible_tool_names("openai", None, &tool_defs);
+
+        assert_eq!(names, vec!["unified_search", "request_user_input"]);
+    }
+
+    #[test]
+    fn prompt_visible_tool_names_filter_to_copilot_allowlist() {
+        let tool_defs = vec![
+            ToolDefinition::function(
+                "unified_search".to_string(),
+                "Search project files".to_string(),
+                json!({"type": "object"}),
+            ),
+            ToolDefinition::function(
+                "request_user_input".to_string(),
+                "Request user input".to_string(),
+                json!({"type": "object"}),
+            ),
+        ];
+        let mut cfg = VTCodeConfig::default();
+        cfg.auth.copilot.vtcode_tool_allowlist = vec!["unified_search".to_string()];
+
+        let names = prompt_visible_tool_names(
+            vtcode_core::copilot::COPILOT_PROVIDER_KEY,
+            Some(&cfg),
+            &tool_defs,
+        );
+
+        assert_eq!(names, vec!["unified_search"]);
+    }
 }

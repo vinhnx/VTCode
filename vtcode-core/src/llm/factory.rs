@@ -5,7 +5,9 @@ use crate::config::models::{ModelId, Provider};
 use crate::ctx_err;
 use crate::llm::provider::{LLMError, LLMProvider};
 use hashbrown::HashMap;
+use std::path::PathBuf;
 use std::str::FromStr;
+use vtcode_config::auth::CopilotAuthConfig;
 use vtcode_config::auth::OpenAIChatGptAuthHandle;
 
 type ProviderFactory = Box<dyn Fn(ProviderConfig) -> Box<dyn LLMProvider> + Send + Sync>;
@@ -19,6 +21,7 @@ pub struct LLMFactory {
 pub struct ProviderConfig {
     pub api_key: Option<String>,
     pub openai_chatgpt_auth: Option<OpenAIChatGptAuthHandle>,
+    pub copilot_auth: Option<CopilotAuthConfig>,
     pub base_url: Option<String>,
     pub model: Option<String>,
     pub prompt_cache: Option<PromptCachingConfig>,
@@ -26,6 +29,7 @@ pub struct ProviderConfig {
     pub openai: Option<OpenAIConfig>,
     pub anthropic: Option<AnthropicConfig>,
     pub model_behavior: Option<ModelConfig>,
+    pub workspace_root: Option<PathBuf>,
 }
 
 impl LLMFactory {
@@ -98,6 +102,8 @@ impl LLMFactory {
             || m.starts_with("codex")
         {
             Some("openai".to_owned())
+        } else if m == "copilot" || m.starts_with("copilot-") {
+            Some("copilot".to_owned())
         } else if m.starts_with("claude-") {
             Some("anthropic".to_owned())
         } else if m.starts_with("deepseek-") {
@@ -251,6 +257,7 @@ pub fn create_provider_for_model(
         ProviderConfig {
             api_key: Some(api_key),
             openai_chatgpt_auth: None,
+            copilot_auth: None,
             base_url: None,
             model: Some(model.to_string()),
             prompt_cache,
@@ -258,6 +265,7 @@ pub fn create_provider_for_model(
             openai: None,
             anthropic: None,
             model_behavior,
+            workspace_root: None,
         },
     )
 }
@@ -294,6 +302,7 @@ mod tests {
             providers,
             vec![
                 "anthropic",
+                "copilot",
                 "deepseek",
                 "gemini",
                 "huggingface",
@@ -319,6 +328,7 @@ mod tests {
                 ProviderConfig {
                     api_key: Some("test-key".to_string()),
                     openai_chatgpt_auth: None,
+                    copilot_auth: None,
                     base_url: None,
                     model: Some(
                         crate::config::constants::models::google::GEMINI_3_FLASH_PREVIEW
@@ -329,6 +339,7 @@ mod tests {
                     openai: None,
                     anthropic: None,
                     model_behavior: None,
+                    workspace_root: None,
                 },
             )
             .expect("built-in cgp registration should build");
@@ -345,6 +356,7 @@ mod tests {
                 ProviderConfig {
                     api_key: Some("test-key".to_string()),
                     openai_chatgpt_auth: None,
+                    copilot_auth: None,
                     base_url: None,
                     model: Some(
                         crate::config::constants::models::openai::DEFAULT_MODEL.to_string(),
@@ -357,6 +369,7 @@ mod tests {
                     }),
                     anthropic: Some(AnthropicConfig::default()),
                     model_behavior: None,
+                    workspace_root: None,
                 },
             )
             .expect("openai cgp registration should build");
@@ -373,6 +386,7 @@ mod tests {
                 ProviderConfig {
                     api_key: Some("test-key".to_string()),
                     openai_chatgpt_auth: None,
+                    copilot_auth: None,
                     base_url: None,
                     model: Some(
                         crate::config::constants::models::anthropic::DEFAULT_MODEL.to_string(),
@@ -385,6 +399,7 @@ mod tests {
                         ..AnthropicConfig::default()
                     }),
                     model_behavior: None,
+                    workspace_root: None,
                 },
             )
             .expect("anthropic cgp registration should build");
@@ -413,6 +428,7 @@ mod tests {
                 ProviderConfig {
                     api_key: None,
                     openai_chatgpt_auth: None,
+                    copilot_auth: None,
                     base_url: None,
                     model: None,
                     prompt_cache: None,
@@ -420,6 +436,7 @@ mod tests {
                     openai: None,
                     anthropic: None,
                     model_behavior: None,
+                    workspace_root: None,
                 },
             )
             .expect("custom provider should still register");
@@ -429,6 +446,7 @@ mod tests {
                 ProviderConfig {
                     api_key: Some("test-key".to_string()),
                     openai_chatgpt_auth: None,
+                    copilot_auth: None,
                     base_url: None,
                     model: Some(
                         crate::config::constants::models::openai::DEFAULT_MODEL.to_string(),
@@ -438,6 +456,7 @@ mod tests {
                     openai: None,
                     anthropic: None,
                     model_behavior: None,
+                    workspace_root: None,
                 },
             )
             .expect("builtin provider should still build");

@@ -1,7 +1,10 @@
+use crate::agent::runloop::unified::run_loop_context::RecoveryMode;
 use crate::agent::runloop::unified::turn::context::{TurnHandlerOutcome, TurnProcessingContext};
+use crate::agent::runloop::unified::turn::turn_processing::llm_attempt_timeout_secs;
 use anyhow::Result;
 use serde_json::Value;
 use std::borrow::Cow;
+use std::time::Duration;
 use vtcode_core::utils::ansi::MessageStyle;
 
 use std::sync::Arc;
@@ -214,10 +217,53 @@ pub(crate) async fn run_proactive_guards(
         decision_ledger.auto_prune();
     }
 
+    maybe_activate_turn_timeout_recovery(ctx);
+
     // Context trim and compaction has been removed - no proactive guards needed
     // The function is kept for future extensibility but now does minimal work
 
     Ok(())
+}
+
+#[cfg(test)]
+fn should_activate_turn_timeout_recovery(
+    tool_calls: usize,
+    recovery_active: bool,
+    elapsed: Duration,
+    timeout_budget: Duration,
+    reserve: Duration,
+) -> bool {
+    tool_calls > 0 && !recovery_active && elapsed >= timeout_budget.saturating_sub(reserve)
+}
+
+fn maybe_activate_turn_timeout_recovery(ctx: &mut TurnProcessingContext<'_>) {
+    let configured_turn_timeout_secs = ctx
+        .vt_cfg
+        .map(|cfg| cfg.optimization.agent_execution.max_execution_time_secs)
+        .unwrap_or(300);
+    let reserve = Duration::from_secs(llm_attempt_timeout_secs(
+        configured_turn_timeout_secs.max(1),
+        ctx.session_stats.is_plan_mode(),
+        ctx.provider_client.name(),
+    ));
+    if !ctx
+        .harness_state
+        .should_force_recovery_before_turn_timeout(reserve)
+    {
+        return;
+    }
+
+    let remaining_turn_budget_secs = ctx.harness_state.remaining_turn_timeout().as_secs();
+    let tool_calls = ctx.harness_state.tool_calls;
+    let reason = format!(
+        "Turn budget nearly exhausted after {tool_calls} tool call(s); synthesize a final answer now without more tools (remaining_turn_budget_secs={remaining_turn_budget_secs})."
+    );
+    ctx.activate_recovery_with_mode(reason.clone(), RecoveryMode::ToolFreeSynthesis);
+    ctx.push_system_message(reason);
+    let _ = ctx.renderer.line(
+        MessageStyle::Info,
+        "Turn budget nearly exhausted; forcing a final tool-free synthesis pass.",
+    );
 }
 
 /// Check if a tool signature represents a read-only operation
@@ -422,7 +468,7 @@ fn apply_balancer_recovery(
 mod tests {
     use super::{
         apply_balancer_recovery, is_readonly_signature, navigation_loop_guidance,
-        validate_tool_args_security,
+        should_activate_turn_timeout_recovery, validate_tool_args_security,
     };
     use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
     use crate::agent::runloop::unified::turn::context::TurnHandlerOutcome;
@@ -432,6 +478,7 @@ mod tests {
     };
     use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
     use serde_json::json;
+    use std::time::Duration;
     use vtcode_core::config::constants::tools as tool_names;
 
     #[test]
@@ -637,5 +684,38 @@ mod tests {
                 .expect("legacy loop detector should lock")
                 .is_hard_limit_exceeded(tool_names::UNIFIED_SEARCH)
         );
+    }
+
+    #[test]
+    fn timeout_recovery_requires_tool_activity() {
+        assert!(!should_activate_turn_timeout_recovery(
+            0,
+            false,
+            Duration::from_secs(55),
+            Duration::from_secs(60),
+            Duration::from_secs(10),
+        ));
+    }
+
+    #[test]
+    fn timeout_recovery_triggers_near_deadline() {
+        assert!(should_activate_turn_timeout_recovery(
+            3,
+            false,
+            Duration::from_secs(55),
+            Duration::from_secs(60),
+            Duration::from_secs(10),
+        ));
+    }
+
+    #[test]
+    fn timeout_recovery_respects_existing_recovery() {
+        assert!(!should_activate_turn_timeout_recovery(
+            3,
+            true,
+            Duration::from_secs(55),
+            Duration::from_secs(60),
+            Duration::from_secs(10),
+        ));
     }
 }

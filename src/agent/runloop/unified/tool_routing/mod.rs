@@ -23,15 +23,18 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_tui::app::InlineHandle;
 
 use super::state::CtrlCState;
-use approval_cache::{approval_history_can_skip_prompt, cache_key, spawn_approval_record_task};
+use approval_cache::{cache_key, spawn_approval_record_task};
 use approval_persistence::{persist_shell_approval_prefix_rule, persisted_shell_approval};
-use approval_policy::{approval_policy_rejects_prompt, build_tool_risk_context};
-use hook_messages::render_hook_messages;
-use permission_prompt::{
-    extract_shell_persistent_approval_prefix_rule, prompt_tool_permission,
-    shell_allows_persistent_decisions,
+use approval_policy::{
+    approval_policy_rejects_prompt, build_tool_risk_context,
+    trusted_auto_allows_history_based_approval, trusted_auto_allows_immediate_approval,
 };
-use shell_approval::{approval_learning_target, tool_display_labels};
+use hook_messages::render_hook_messages;
+use permission_prompt::prompt_tool_permission;
+use shell_approval::{
+    approval_learning_target, exact_shell_approval_target, persistent_approval_target,
+    tool_display_labels,
+};
 use vtcode_core::hooks::{LifecycleHookEngine, PreToolHookDecision};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,6 +54,42 @@ pub(crate) enum ToolPermissionFlow {
     Denied,
     Exit,
     Interrupted,
+}
+
+async fn persisted_approval_hit_key(
+    tool_registry: &ToolRegistry,
+    primary_target: &shell_approval::ApprovalLearningTarget,
+    exact_shell_target: Option<&shell_approval::ApprovalLearningTarget>,
+) -> Option<String> {
+    if tool_registry
+        .has_persisted_approval(&primary_target.approval_key)
+        .await
+    {
+        return Some(primary_target.approval_key.clone());
+    }
+
+    let exact_target = exact_shell_target?;
+    tool_registry
+        .has_persisted_approval(&exact_target.approval_key)
+        .await
+        .then(|| exact_target.approval_key.clone())
+}
+
+async fn persist_approval_cache_key(
+    tool_registry: &ToolRegistry,
+    tool_name: &str,
+    approval_key: &str,
+    log_message: &str,
+) {
+    if let Err(err) = tool_registry.persist_approval_cache_key(approval_key).await {
+        tracing::warn!(
+            tool = %tool_name,
+            approval_key = %approval_key,
+            error = %err,
+            message = %log_message,
+            "Failed to persist approval cache key"
+        );
+    }
 }
 
 /// Context for tool permission checks to reduce argument count
@@ -102,37 +141,14 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         return Ok(ToolPermissionFlow::Approved);
     }
 
-    // Autonomous mode auto-approval for safe tools
-    if autonomous_mode && !tool_registry.is_mutating_tool(tool_name) {
-        tracing::debug!(
-            "Auto-approving safe tool '{}' in autonomous mode",
-            tool_name
-        );
-        return Ok(ToolPermissionFlow::Approved);
-    }
-
     // Generate cache key - use command text for shell tools to enable granular session approval
     let cache_key = cache_key(tool_name, tool_args);
 
-    // Check tool permission cache for previously granted permissions
+    // Check tool permission cache for persisted denials up front.
     if let Some(cache) = tool_permission_cache {
         let permission_cache = cache.read().await;
-
-        // Check if tool access is denied by policy (not execution failure)
-        // Only reject on explicit policy denials, not temporary execution failures
         if permission_cache.is_denied(&cache_key) || permission_cache.is_denied(tool_name) {
             return Ok(ToolPermissionFlow::Denied);
-        }
-
-        // Check if we have cached permission that can be reused
-        // Temporary denials are NOT reusable; they should be retried
-        if permission_cache.can_use_cached(&cache_key) || permission_cache.can_use_cached(tool_name)
-        {
-            tracing::debug!(
-                "Using cached ACP permission for tool invocation: {}",
-                cache_key
-            );
-            return Ok(ToolPermissionFlow::Approved);
         }
     }
 
@@ -192,6 +208,55 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         );
     }
 
+    let display_labels = tool_display_labels(tool_name, tool_args);
+    let approval_learning_target = approval_learning_target(
+        &normalized_tool_name,
+        tool_args,
+        &display_labels.learning_label,
+    );
+    let exact_shell_approval_target = exact_shell_approval_target(
+        &normalized_tool_name,
+        tool_args,
+        &display_labels.learning_label,
+    );
+    let persistent_approval_target = persistent_approval_target(
+        &normalized_tool_name,
+        tool_args,
+        &display_labels.learning_label,
+    );
+
+    if let Some(approval_key) = persisted_approval_hit_key(
+        tool_registry,
+        &approval_learning_target,
+        exact_shell_approval_target.as_ref(),
+    )
+    .await
+    {
+        tool_registry.mark_tool_preapproved(tool_name).await;
+        if let Some(cache) = tool_permission_cache {
+            let mut permission_cache = cache.write().await;
+            permission_cache.cache_grant(cache_key.clone(), PermissionGrant::Permanent);
+        }
+        tracing::debug!(
+            approval_key = %approval_key,
+            "Using persisted approval cache entry"
+        );
+        return Ok(ToolPermissionFlow::Approved);
+    }
+
+    // Session approvals are reusable, but only after hook/policy deny checks.
+    if let Some(cache) = tool_permission_cache {
+        let permission_cache = cache.read().await;
+        if permission_cache.can_use_cached(&cache_key) || permission_cache.can_use_cached(tool_name)
+        {
+            tracing::debug!(
+                "Using cached ACP permission for tool invocation: {}",
+                cache_key
+            );
+            return Ok(ToolPermissionFlow::Approved);
+        }
+    }
+
     let should_prompt = hook_requires_prompt
         || policy_decision == ToolPermissionDecision::Prompt
         || shell_approval_reason.is_some();
@@ -211,10 +276,7 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         return Ok(ToolPermissionFlow::Denied);
     }
 
-    let mut risk_context = build_tool_risk_context(tool_name, tool_args);
-    let display_labels = tool_display_labels(tool_name, tool_args);
-    let approval_learning_target =
-        approval_learning_target(tool_name, tool_args, &display_labels.learning_label);
+    let mut risk_context = build_tool_risk_context(&normalized_tool_name, tool_args);
 
     if let Some(recorder) = approval_recorder {
         risk_context.recent_approvals = recorder
@@ -223,20 +285,40 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
     }
     let risk_level = ToolRiskScorer::calculate_risk(&risk_context);
 
-    // Check approval patterns for auto-approval before prompting
-    if approval_history_can_skip_prompt(
-        hook_requires_prompt,
-        shell_approval_reason.as_deref(),
-        risk_level,
-    ) && let Some(recorder) = approval_recorder
+    if autonomous_mode
+        && trusted_auto_allows_immediate_approval(
+            hook_requires_prompt,
+            shell_approval_reason.as_deref(),
+            &risk_context,
+            risk_level,
+        )
+    {
+        tool_registry.mark_tool_preapproved(tool_name).await;
+        tracing::debug!(
+            tool = %tool_name,
+            risk = %risk_level,
+            "Trusted Auto approved low-risk tool"
+        );
+        return Ok(ToolPermissionFlow::Approved);
+    }
+
+    if autonomous_mode
+        && trusted_auto_allows_history_based_approval(
+            hook_requires_prompt,
+            shell_approval_reason.as_deref(),
+            &risk_context,
+            risk_level,
+        )
+        && let Some(recorder) = approval_recorder
         && recorder
-            .should_auto_approve(&approval_learning_target.approval_key)
+            .supports_trusted_auto_approval(&approval_learning_target.approval_key)
             .await
     {
         tool_registry.mark_tool_preapproved(tool_name).await;
         tracing::debug!(
             approval_key = %approval_learning_target.approval_key,
-            "Auto-approved tool based on approval pattern history"
+            risk = %risk_level,
+            "Trusted Auto approved tool from strong approval history"
         );
         return Ok(ToolPermissionFlow::Approved);
     }
@@ -258,11 +340,6 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
     };
 
     let final_justification = justification.or(extracted_justification.as_ref());
-    let persistent_shell_allow_prefix_rule =
-        extract_shell_persistent_approval_prefix_rule(tool_name, tool_args);
-    let allow_tool_level_persistent_decisions =
-        shell_allows_persistent_decisions(tool_name, tool_args);
-
     let decision = prompt_tool_permission(
         &display_labels.prompt_label,
         tool_name,
@@ -277,8 +354,7 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         default_placeholder,
         shell_approval_reason.as_deref(),
         final_justification,
-        persistent_shell_allow_prefix_rule.as_deref(),
-        allow_tool_level_persistent_decisions,
+        Some(&persistent_approval_target),
         approval_recorder,
         hitl_notification_bell,
     )
@@ -308,22 +384,18 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
             Ok(ToolPermissionFlow::Approved)
         }
         HitlDecision::ApprovedPermanent => {
-            // Permanent approval - mark and persist to policy SYNCHRONOUSLY
             tool_registry.mark_tool_preapproved(tool_name).await;
-            tracing::info!("✓ Tool '{}' marked as preapproved", tool_name);
 
-            if let Some(prefix_rule) = persistent_shell_allow_prefix_rule.as_deref() {
+            if let shell_approval::PersistentApprovalTarget::PrefixRule { prefix_rule, .. } =
+                &persistent_approval_target
+            {
                 match persist_shell_approval_prefix_rule(
                     tool_registry,
                     tool_name,
                     tool_args,
-                    prefix_rule,
+                    prefix_rule.as_slice(),
                 ) {
                     Ok(rendered_rule) => {
-                        if let Some(cache) = tool_permission_cache {
-                            let mut perm_cache = cache.write().await;
-                            perm_cache.cache_grant(cache_key.clone(), PermissionGrant::Permanent);
-                        }
                         tracing::info!(
                             tool = %tool_name,
                             prefix_rule = %rendered_rule,
@@ -338,39 +410,30 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
                         );
                     }
                 }
-            } else {
-                // Cache permission grant permanently at tool level
-                if let Some(cache) = tool_permission_cache {
-                    let mut perm_cache = cache.write().await;
-                    perm_cache.cache_grant(tool_name.to_string(), PermissionGrant::Permanent);
-                    tracing::info!("✓ Tool '{}' cached as permanently approved", tool_name);
-                }
+            }
 
-                // Persist to policy manager IMMEDIATELY
-                if let Err(err) = tool_registry
-                    .set_tool_policy(tool_name, ToolPolicy::Allow)
-                    .await
-                {
-                    tracing::warn!(
-                        "Failed to persist permanent approval for '{}': {}",
-                        tool_name,
-                        err
-                    );
-                } else {
-                    tracing::info!("✓ Policy persisted for '{}'", tool_name);
-                }
+            persist_approval_cache_key(
+                tool_registry,
+                tool_name,
+                &approval_learning_target.approval_key,
+                "Failed to persist approval cache entry",
+            )
+            .await;
+            if let Some(exact_target) = exact_shell_approval_target.as_ref()
+                && exact_target.approval_key != approval_learning_target.approval_key
+            {
+                persist_approval_cache_key(
+                    tool_registry,
+                    tool_name,
+                    &exact_target.approval_key,
+                    "Failed to persist exact shell approval cache entry",
+                )
+                .await;
+            }
 
-                // Also persist MCP tool policy
-                if let Err(err) = tool_registry
-                    .persist_mcp_tool_policy(tool_name, ToolPolicy::Allow)
-                    .await
-                {
-                    tracing::warn!(
-                        "Failed to persist MCP approval for tool '{}': {}",
-                        tool_name,
-                        err
-                    );
-                }
+            if let Some(cache) = tool_permission_cache {
+                let mut perm_cache = cache.write().await;
+                perm_cache.cache_grant(cache_key.clone(), PermissionGrant::Permanent);
             }
 
             // Record approval decision for pattern learning
@@ -426,6 +489,43 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
     }
 }
 
+pub(crate) async fn prompt_external_tool_permission<S: UiSession + ?Sized>(
+    renderer: &mut AnsiRenderer,
+    handle: &InlineHandle,
+    session: &mut S,
+    ctrl_c_state: &Arc<CtrlCState>,
+    ctrl_c_notify: &Arc<Notify>,
+    default_placeholder: Option<String>,
+    tool_name: &str,
+    tool_args: Option<&Value>,
+    display_name: &str,
+    approval_learning_key: &str,
+    approval_learning_label: &str,
+    approval_reason: Option<&str>,
+    approval_recorder: Option<&vtcode_core::tools::ApprovalRecorder>,
+    hitl_notification_bell: bool,
+) -> Result<HitlDecision> {
+    prompt_tool_permission(
+        display_name,
+        tool_name,
+        tool_args,
+        approval_learning_key,
+        approval_learning_label,
+        renderer,
+        handle,
+        session,
+        ctrl_c_state,
+        ctrl_c_notify,
+        default_placeholder,
+        approval_reason,
+        None,
+        None,
+        approval_recorder,
+        hitl_notification_bell,
+    )
+    .await
+}
+
 pub(crate) async fn prompt_session_limit_increase<S: UiSession + ?Sized>(
     handle: &InlineHandle,
     session: &mut S,
@@ -463,9 +563,11 @@ pub(crate) async fn prompt_tool_loop_limit_increase<S: UiSession + ?Sized>(
 #[cfg(test)]
 mod tests {
     use super::{
-        approval_history_can_skip_prompt, approval_learning_target,
+        approval_learning_target,
         approval_persistence::shell_command_has_persisted_approval_prefix,
-        approval_policy_rejects_prompt, persist_shell_approval_prefix_rule, tool_display_labels,
+        approval_policy_rejects_prompt, build_tool_risk_context,
+        persist_shell_approval_prefix_rule, tool_display_labels,
+        trusted_auto_allows_history_based_approval, trusted_auto_allows_immediate_approval,
     };
     use serde_json::json;
     use vtcode_core::config::loader::ConfigManager;
@@ -474,29 +576,55 @@ mod tests {
     use vtcode_core::tools::registry::ToolRegistry;
 
     #[test]
-    fn approval_history_auto_approval_rejects_explicit_shell_escalation() {
-        assert!(!approval_history_can_skip_prompt(
+    fn trusted_auto_rejects_explicit_shell_escalation() {
+        let risk_context = build_tool_risk_context("read_file", None);
+        assert!(!trusted_auto_allows_immediate_approval(
             false,
             Some("Command requested execution without sandbox restrictions."),
+            &risk_context,
+            RiskLevel::Low,
+        ));
+    }
+
+    #[test]
+    fn trusted_auto_rejects_high_risk_commands() {
+        let tool_args = json!({
+            "action": "run",
+            "command": "rm -rf /tmp/demo",
+        });
+        let risk_context = build_tool_risk_context("unified_exec", Some(&tool_args));
+        assert!(!trusted_auto_allows_immediate_approval(
+            false,
+            None,
+            &risk_context,
             RiskLevel::High,
         ));
     }
 
     #[test]
-    fn approval_history_auto_approval_rejects_critical_risk() {
-        assert!(!approval_history_can_skip_prompt(
+    fn trusted_auto_allows_low_risk_read_only_tools() {
+        let risk_context = build_tool_risk_context("read_file", None);
+        assert!(trusted_auto_allows_immediate_approval(
             false,
             None,
-            RiskLevel::Critical,
+            &risk_context,
+            RiskLevel::Low,
         ));
     }
 
     #[test]
-    fn approval_history_auto_approval_allows_non_critical_prompt_reuse() {
-        assert!(approval_history_can_skip_prompt(
+    fn trusted_auto_allows_medium_risk_history_reuse_only_for_safe_tools() {
+        let tool_args = json!({
+            "action": "grep",
+            "pattern": "tool_policy",
+            "path": ".",
+        });
+        let risk_context = build_tool_risk_context("unified_search", Some(&tool_args));
+        assert!(trusted_auto_allows_history_based_approval(
             false,
             None,
-            RiskLevel::High,
+            &risk_context,
+            RiskLevel::Medium,
         ));
     }
 

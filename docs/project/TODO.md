@@ -63,14 +63,8 @@ vtcode-acp-client
 
 module
 
----
-
----
-
-try copilot github oauth to use anthropic's claude
-
-https://claude.ai/chat/37d94c2c-a521-44d2-85f3-e15c38864286
-
-https://gist.github.com/cedws/3a24b2c7569bb610e24aa90dd217d9f2
-
 ===
+
+check and support https://github.com/vinhnx/VTCode/issues/613
+
+stash "https://github.com/vinhnx/VTCode/issues/613"

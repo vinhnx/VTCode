@@ -67,6 +67,13 @@ impl Default for ValidationResult {
 
 /// Validate that the configured model exists in the generated model catalog.
 pub fn validate_model_exists(provider: &str, model: &str) -> Result<()> {
+    if provider.eq_ignore_ascii_case("copilot") {
+        if model.trim().is_empty() {
+            bail!("Model must not be empty for provider 'copilot'");
+        }
+        return Ok(());
+    }
+
     if let Some(models) = supported_models_for_provider(provider) {
         if !models.contains(&model) {
             bail!(
@@ -243,6 +250,12 @@ mod tests {
     fn rejects_unknown_model() {
         let result = validate_model_exists("google", "model-does-not-exist");
         assert!(result.is_err(), "Should reject unknown model");
+    }
+
+    #[test]
+    fn accepts_live_copilot_model_id() {
+        let result = validate_model_exists("copilot", "gpt-5.3-codex");
+        assert!(result.is_ok(), "Should accept live Copilot model ids");
     }
 
     #[test]

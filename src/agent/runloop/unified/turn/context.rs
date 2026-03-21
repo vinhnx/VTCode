@@ -225,6 +225,7 @@ pub(crate) struct TurnProcessingState<'a> {
     pub mcp_panel_state: &'a mut mcp_events::McpPanelState,
     pub working_history: &'a mut Vec<uni::Message>,
     pub turn_metadata_cache: &'a mut Option<Option<serde_json::Value>>,
+    pub skip_confirmations: bool,
     pub full_auto: bool,
     pub harness_state: &'a mut crate::agent::runloop::unified::run_loop_context::HarnessTurnState,
     pub harness_emitter:
@@ -273,6 +274,7 @@ pub(crate) struct TurnProcessingContext<'a> {
     pub provider_client: &'a mut Box<dyn uni::LLMProvider>,
     pub config: &'a mut vtcode_core::config::types::AgentConfig,
     pub traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
+    pub skip_confirmations: bool,
     pub full_auto: bool,
     // Phase 4 Integration
     pub circuit_breaker: &'a Arc<vtcode_core::tools::circuit_breaker::CircuitBreaker>,
@@ -325,6 +327,7 @@ impl<'a> TurnProcessingContext<'a> {
             provider_client: llm.provider_client,
             config: llm.config,
             traj: llm.traj,
+            skip_confirmations: state.skip_confirmations,
             full_auto: state.full_auto,
             circuit_breaker: tool.circuit_breaker,
             tool_health_tracker: tool.tool_health_tracker,
@@ -379,6 +382,7 @@ impl<'a> TurnProcessingContext<'a> {
             mcp_panel_state: self.mcp_panel_state,
             working_history: self.working_history,
             turn_metadata_cache: self.turn_metadata_cache,
+            skip_confirmations: self.skip_confirmations,
             full_auto: self.full_auto,
             harness_state: self.harness_state,
             harness_emitter: self.harness_emitter,
@@ -440,6 +444,7 @@ impl<'a> TurnProcessingContext<'a> {
             state.turn_metadata_cache,
             llm_ctx.provider_client,
             llm_ctx.traj,
+            state.skip_confirmations,
             state.full_auto,
             state.steering_receiver,
         )

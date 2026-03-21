@@ -140,6 +140,19 @@ cargo clippy --workspace --all-targets -- -D warnings && cargo fmt --check && ca
 
 **Hooks Noise Control**: Set `hooks.lifecycle.quiet_success_output = true` in `vtcode.toml` to suppress plain stdout for successful lifecycle hooks while retaining structured/failed output.
 
+**Interactive Session Commands**: See `docs/user-guide/interactive-mode.md` for full details.
+
+- `/terminal-setup` runs the guided terminal setup flow for multiline bindings (see `docs/guides/terminal-optimization.md`).
+- `/vim`, `/vim on`, `/vim off` toggle Vim prompt editing; set `ui.vim_mode = true` in `vtcode.toml` to enable by default.
+- `/suggest`, `/tasks`, `/jobs` open prompt suggestions, the TODO panel, and the jobs picker.
+
+**Update System**: See `docs/guides/UPDATE_SYSTEM.md` for the full workflow.
+
+- `vtcode update` installs updates; `vtcode update --check` checks only.
+- `vtcode update --list` lists available versions; `vtcode update --list --limit <N>` lists more.
+- `vtcode update --pin <version>` pins a release; `vtcode update --unpin` clears the pin.
+- `vtcode update --channel <stable|beta|nightly>` switches release channels.
+
 ## Agent-First CLI Invariants
 
 - Prefer machine-readable output for automation (`vtcode ask --output-format json`, `vtcode exec --json`).

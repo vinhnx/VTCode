@@ -146,9 +146,11 @@ async fn test_instruction_appendix_uses_explicit_directory_and_precedes_runtime_
     std::fs::create_dir_all(&nested).expect("create nested");
     std::fs::write(nested.join("AGENTS.md"), "nested rule").expect("write nested");
 
-    let mut config = vtcode_config::core::AgentConfig::default();
-    config.user_instructions = Some("be brief".to_string());
-    config.instruction_max_bytes = 4096;
+    let config = vtcode_config::core::AgentConfig {
+        user_instructions: Some("be brief".to_string()),
+        instruction_max_bytes: 4096,
+        ..Default::default()
+    };
 
     let context = SystemPromptContext {
         conversation_length: 3,

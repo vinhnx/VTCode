@@ -1,9 +1,15 @@
 use anyhow::Result;
+use anstyle::{AnsiColor, Color, Effects, Style as AnsiStyle};
 use vtcode_auth::{AuthStatus, OpenAIChatGptAuthStatus, OpenAIResolvedAuthSource};
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::types::UiSurfacePreference;
+use vtcode_core::copilot::{
+    COPILOT_AUTH_DOC_PATH, CopilotAuthEvent, CopilotAuthStatus, CopilotAuthStatusKind,
+    login_with_events, logout_with_events, probe_auth_status,
+};
 use vtcode_core::llm::factory::{ProviderConfig, create_provider_with_config};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_core::utils::ansi_codes::notify_attention;
 use vtcode_tui::app::{InlineListItem, InlineListSelection, WizardModalMode, WizardStep};
 
 use super::{SlashCommandContext, SlashCommandControl, ui};
@@ -13,10 +19,10 @@ use crate::agent::runloop::unified::wizard_modal::{
     WizardModalOutcome, show_wizard_modal_and_wait,
 };
 use crate::cli::auth::{
-    OPENAI_PROVIDER, OPENROUTER_PROVIDER, clear_openai_login, clear_openrouter_login,
-    complete_openai_login_with_manual_future, complete_openrouter_login, openai_auth_status,
-    openai_manual_placeholder, openrouter_auth_status, prepare_openai_login,
-    prepare_openrouter_login, refresh_openai_login, supports_oauth_provider,
+    COPILOT_PROVIDER, OPENAI_PROVIDER, OPENROUTER_PROVIDER, clear_openai_login,
+    clear_openrouter_login, complete_openai_login_with_manual_future, complete_openrouter_login,
+    openai_auth_status, openai_manual_placeholder, openrouter_auth_status, prepare_openai_login,
+    prepare_openrouter_login, refresh_openai_login, supports_auth_provider,
 };
 
 const OAUTH_PROVIDER_PREFIX: &str = "oauth-provider:";
@@ -28,15 +34,15 @@ pub(crate) async fn handle_start_oauth_provider_picker(
     action: OAuthProviderAction,
 ) -> Result<SlashCommandControl> {
     let activity = match action {
-        OAuthProviderAction::Login => "opening OAuth login",
-        OAuthProviderAction::Logout => "opening OAuth logout",
-        OAuthProviderAction::Refresh => "opening OAuth refresh",
+        OAuthProviderAction::Login => "opening authentication login",
+        OAuthProviderAction::Logout => "opening authentication logout",
+        OAuthProviderAction::Refresh => "opening authentication refresh",
     };
     if !ui::ensure_selection_ui_available(&mut ctx, activity)? {
         return Ok(SlashCommandControl::Continue);
     }
 
-    show_oauth_provider_modal(&mut ctx, action)?;
+    show_oauth_provider_modal(&mut ctx, action).await?;
     let Some(selection) = ui::wait_for_list_modal_selection(&mut ctx).await else {
         return Ok(SlashCommandControl::Continue);
     };
@@ -69,6 +75,34 @@ pub(crate) async fn handle_oauth_login(
     let vt_cfg = ctx.vt_cfg.as_ref();
 
     match provider.as_str() {
+        COPILOT_PROVIDER => {
+            ctx.renderer.line(
+                MessageStyle::Info,
+                "Starting GitHub Copilot authentication via the official `copilot` CLI...",
+            )?;
+            render_copilot_auth_intro(ctx.renderer, CopilotAuthAction::Login)?;
+            let workspace = ctx.config.workspace.clone();
+            let auth_cfg = ctx
+                .vt_cfg
+                .as_ref()
+                .map(|cfg| cfg.auth.copilot.clone())
+                .unwrap_or_default();
+            login_with_events(&auth_cfg, &workspace, |event| {
+                render_copilot_auth_event(ctx.renderer, event)
+            })
+            .await?;
+            sync_copilot_runtime_if_active(&mut ctx).await?;
+            ctx.renderer.line(
+                MessageStyle::Info,
+                "Successfully authenticated with GitHub Copilot.",
+            )?;
+            if ctx.config.provider.eq_ignore_ascii_case(COPILOT_PROVIDER) {
+                ctx.renderer.line(
+                    MessageStyle::Output,
+                    "Switched the current session to GitHub Copilot.",
+                )?;
+            }
+        }
         OPENROUTER_PROVIDER => {
             ctx.renderer.line(
                 MessageStyle::Info,
@@ -150,7 +184,46 @@ pub(crate) async fn handle_oauth_logout(
     let vt_cfg = ctx.vt_cfg.as_ref();
 
     match provider.as_str() {
+        COPILOT_PROVIDER => {
+            ctx.renderer.line(
+                MessageStyle::Info,
+                "Starting GitHub Copilot logout via the official `copilot` CLI...",
+            )?;
+            render_copilot_auth_intro(ctx.renderer, CopilotAuthAction::Logout)?;
+            let auth_cfg = vt_cfg
+                .map(|cfg| cfg.auth.copilot.clone())
+                .unwrap_or_default();
+            logout_with_events(&auth_cfg, &ctx.config.workspace, |event| {
+                render_copilot_auth_event(ctx.renderer, event)
+            })
+            .await?;
+            sync_copilot_runtime_if_active(&mut ctx).await?;
+            ctx.renderer.line(
+                MessageStyle::Info,
+                "GitHub Copilot authentication cleared successfully.",
+            )?;
+            if ctx.config.provider.eq_ignore_ascii_case(COPILOT_PROVIDER) {
+                ctx.renderer.line(
+                    MessageStyle::Output,
+                    "The current GitHub Copilot session no longer has active credentials.",
+                )?;
+            }
+        }
         OPENROUTER_PROVIDER => {
+            if matches!(openrouter_auth_status(vt_cfg)?, AuthStatus::NotAuthenticated) {
+                if get_api_key(OPENROUTER_PROVIDER, &ApiKeySources::default()).is_ok() {
+                    ctx.renderer.line(
+                        MessageStyle::Info,
+                        "OpenRouter OAuth token already cleared; using OPENROUTER_API_KEY.",
+                    )?;
+                } else {
+                    ctx.renderer.line(
+                        MessageStyle::Info,
+                        "No stored OpenRouter OAuth token to clear.",
+                    )?;
+                }
+                return Ok(SlashCommandControl::Continue);
+            }
             clear_openrouter_login(vt_cfg)?;
             ctx.renderer.line(
                 MessageStyle::Info,
@@ -158,6 +231,23 @@ pub(crate) async fn handle_oauth_logout(
             )?;
         }
         OPENAI_PROVIDER => {
+            if matches!(
+                openai_auth_status(vt_cfg)?,
+                OpenAIChatGptAuthStatus::NotAuthenticated
+            ) {
+                if get_api_key(OPENAI_PROVIDER, &ApiKeySources::default()).is_ok() {
+                    ctx.renderer.line(
+                        MessageStyle::Info,
+                        "OpenAI ChatGPT session already cleared; using OPENAI_API_KEY.",
+                    )?;
+                } else {
+                    ctx.renderer.line(
+                        MessageStyle::Info,
+                        "No stored OpenAI ChatGPT session to clear.",
+                    )?;
+                }
+                return Ok(SlashCommandControl::Continue);
+            }
             clear_openai_login(vt_cfg)?;
             sync_openai_runtime_if_active(&mut ctx).await?;
             ctx.renderer.line(
@@ -194,6 +284,12 @@ pub(crate) async fn handle_refresh_oauth(
     }
 
     match provider.as_str() {
+        COPILOT_PROVIDER => {
+            ctx.renderer.line(
+                MessageStyle::Info,
+                "GitHub Copilot does not expose a refresh-token flow. Use /login copilot to reconnect if needed.",
+            )?;
+        }
         OPENAI_PROVIDER => {
             ctx.renderer.line(
                 MessageStyle::Info,
@@ -232,12 +328,12 @@ pub(crate) async fn handle_show_auth_status(
 ) -> Result<SlashCommandControl> {
     let provider = provider.map(|value| value.trim().to_ascii_lowercase());
     if let Some(provider_name) = provider.as_deref()
-        && !supports_oauth_provider(provider_name)
+        && !supports_auth_provider(provider_name)
     {
         ctx.renderer.line(
             MessageStyle::Error,
             &format!(
-                "OAuth status not supported for provider: {}. Supported providers: openai, openrouter",
+                "Authentication status not supported for provider: {}. Supported providers: openai, openrouter, copilot",
                 provider_name
             ),
         )?;
@@ -268,9 +364,21 @@ pub(crate) async fn handle_show_auth_status(
 
     if provider.is_none() {
         ctx.renderer.line(MessageStyle::Output, "")?;
+    }
+
+    if provider.is_none() || provider.as_deref() == Some(COPILOT_PROVIDER) {
+        let auth_cfg = vt_cfg
+            .map(|cfg| cfg.auth.copilot.clone())
+            .unwrap_or_default();
+        let status = probe_auth_status(&auth_cfg, Some(&ctx.config.workspace)).await;
+        render_copilot_auth_status(ctx.renderer, status)?;
+    }
+
+    if provider.is_none() {
+        ctx.renderer.line(MessageStyle::Output, "")?;
         ctx.renderer.line(
             MessageStyle::Output,
-            "Use /login, /logout, or /refresh-oauth to manage OAuth-backed credentials.",
+            "Use /login, /logout, or /refresh-oauth to manage stored authentication.",
         )?;
     }
 
@@ -282,14 +390,14 @@ fn ensure_supported_provider(
     provider: &str,
     action: &str,
 ) -> Result<bool> {
-    if supports_oauth_provider(provider) {
+    if supports_auth_provider(provider) {
         return Ok(true);
     }
 
     renderer.line(
         MessageStyle::Error,
         &format!(
-            "OAuth {action} not supported for provider: {provider}. Supported providers: openai, openrouter"
+            "Authentication {action} not supported for provider: {provider}. Supported providers: openai, openrouter, copilot"
         ),
     )?;
     Ok(false)
@@ -377,7 +485,7 @@ async fn prompt_openai_manual_callback_input(
     }))
 }
 
-fn show_oauth_provider_modal(
+async fn show_oauth_provider_modal(
     ctx: &mut SlashCommandContext<'_>,
     action: OAuthProviderAction,
 ) -> Result<()> {
@@ -385,8 +493,23 @@ fn show_oauth_provider_modal(
     let openrouter_status = openrouter_auth_status(vt_cfg)?;
     let openai_status = openai_auth_status(vt_cfg)?;
     let openai_overview = summarize_current_openai_credentials(vt_cfg)?;
+    let copilot_auth_cfg = vt_cfg
+        .map(|cfg| cfg.auth.copilot.clone())
+        .unwrap_or_default();
+    let copilot_status = probe_auth_status(&copilot_auth_cfg, Some(&ctx.config.workspace)).await;
 
     let mut items = vec![
+        InlineListItem {
+            title: "GitHub Copilot".to_string(),
+            subtitle: Some(copilot_modal_subtitle(action, &copilot_status)),
+            badge: Some(copilot_modal_badge(action, &copilot_status)),
+            indent: 0,
+            selection: Some(InlineListSelection::ConfigAction(format!(
+                "{}{}",
+                OAUTH_PROVIDER_PREFIX, COPILOT_PROVIDER
+            ))),
+            search_value: Some("github copilot cli auth".to_string()),
+        },
         InlineListItem {
             title: "OpenAI ChatGPT".to_string(),
             subtitle: Some(openai_modal_subtitle(action, &openai_status)),
@@ -422,8 +545,9 @@ fn show_oauth_provider_modal(
     ];
 
     if matches!(action, OAuthProviderAction::Refresh) {
-        items[0].badge = Some("Refresh".to_string());
-        items[1].badge = Some("Info".to_string());
+        items[0].badge = Some("Info".to_string());
+        items[1].badge = Some("Refresh".to_string());
+        items[2].badge = Some("Info".to_string());
     }
 
     ctx.renderer.show_list_modal(
@@ -432,7 +556,7 @@ fn show_oauth_provider_modal(
         items,
         Some(InlineListSelection::ConfigAction(format!(
             "{}{}",
-            OAUTH_PROVIDER_PREFIX, OPENAI_PROVIDER
+            OAUTH_PROVIDER_PREFIX, COPILOT_PROVIDER
         ))),
         None,
     );
@@ -441,28 +565,71 @@ fn show_oauth_provider_modal(
 
 fn oauth_modal_title(action: OAuthProviderAction) -> &'static str {
     match action {
-        OAuthProviderAction::Login => "OAuth login",
-        OAuthProviderAction::Logout => "OAuth logout",
-        OAuthProviderAction::Refresh => "Refresh OAuth",
+        OAuthProviderAction::Login => "Authentication login",
+        OAuthProviderAction::Logout => "Authentication logout",
+        OAuthProviderAction::Refresh => "Refresh authentication",
     }
 }
 
 fn oauth_modal_lines(action: OAuthProviderAction) -> Vec<String> {
     match action {
         OAuthProviderAction::Login => vec![
-            "Choose an OAuth-capable provider to connect.".to_string(),
-            "VT Code stores credentials securely using your configured credential storage mode."
-                .to_string(),
+            "Choose a provider to connect.".to_string(),
+            "VT Code stores OpenAI/OpenRouter credentials securely and uses the official `copilot` CLI for GitHub Copilot.".to_string(),
         ],
         OAuthProviderAction::Logout => vec![
-            "Choose an OAuth-capable provider to disconnect.".to_string(),
-            "This removes the stored OAuth session for the selected provider.".to_string(),
+            "Choose a provider to disconnect.".to_string(),
+            "This removes the stored authentication session for the selected provider.".to_string(),
         ],
         OAuthProviderAction::Refresh => vec![
-            "Choose an OAuth-capable provider to refresh.".to_string(),
-            "OpenAI refreshes the stored ChatGPT session; OpenRouter requires a new login."
-                .to_string(),
+            "Choose a provider to refresh.".to_string(),
+            "OpenAI refreshes the stored ChatGPT session; OpenRouter and GitHub Copilot require a new login.".to_string(),
         ],
+    }
+}
+
+fn copilot_modal_subtitle(action: OAuthProviderAction, status: &CopilotAuthStatus) -> String {
+    match action {
+        OAuthProviderAction::Login => match status.kind {
+            CopilotAuthStatusKind::Authenticated => {
+                "Managed auth is connected; rerun the Copilot CLI login to replace the active session."
+                    .to_string()
+            }
+            CopilotAuthStatusKind::Unauthenticated => {
+                "Sign in with your GitHub Copilot subscription through the official Copilot CLI."
+                    .to_string()
+            }
+            CopilotAuthStatusKind::ServerUnavailable => {
+                format!(
+                    "Copilot CLI unavailable; install `copilot` or configure `[auth.copilot].command`. See {COPILOT_AUTH_DOC_PATH}."
+                )
+            }
+            CopilotAuthStatusKind::AuthFlowFailed => {
+                "Authentication needs attention; rerun the Copilot CLI login flow.".to_string()
+            }
+        },
+        OAuthProviderAction::Logout => match status.kind {
+            CopilotAuthStatusKind::Authenticated => {
+                "Remove the active GitHub Copilot CLI session.".to_string()
+            }
+            _ => "No stored GitHub Copilot session to remove.".to_string(),
+        },
+        OAuthProviderAction::Refresh => {
+            "GitHub Copilot requires a new login instead of token refresh.".to_string()
+        }
+    }
+}
+
+fn copilot_modal_badge(action: OAuthProviderAction, status: &CopilotAuthStatus) -> String {
+    if matches!(action, OAuthProviderAction::Refresh) {
+        return "Info".to_string();
+    }
+
+    match status.kind {
+        CopilotAuthStatusKind::Authenticated => "Connected".to_string(),
+        CopilotAuthStatusKind::ServerUnavailable => "Unavailable".to_string(),
+        CopilotAuthStatusKind::AuthFlowFailed => "Attention".to_string(),
+        CopilotAuthStatusKind::Unauthenticated => "Auth".to_string(),
     }
 }
 
@@ -632,6 +799,46 @@ fn render_openai_auth_status(
     Ok(())
 }
 
+fn render_copilot_auth_status(
+    renderer: &mut AnsiRenderer,
+    status: CopilotAuthStatus,
+) -> Result<()> {
+    match status.kind {
+        CopilotAuthStatusKind::Authenticated => {
+            renderer.line(
+                MessageStyle::Info,
+                "GitHub Copilot: authenticated (managed auth via Copilot CLI)",
+            )?;
+        }
+        CopilotAuthStatusKind::Unauthenticated => {
+            renderer.line(MessageStyle::Info, "GitHub Copilot: not authenticated")?;
+        }
+        CopilotAuthStatusKind::ServerUnavailable => {
+            renderer.line(MessageStyle::Warning, "GitHub Copilot: CLI unavailable")?;
+        }
+        CopilotAuthStatusKind::AuthFlowFailed => {
+            renderer.line(MessageStyle::Warning, "GitHub Copilot: auth flow failed")?;
+        }
+    }
+
+    if let Some(message) = status.message.as_deref()
+        && !message.trim().is_empty()
+    {
+        renderer.line(MessageStyle::Output, &format!("  Details: {}", message))?;
+    }
+
+    if matches!(status.kind, CopilotAuthStatusKind::ServerUnavailable) {
+        renderer.line(
+            MessageStyle::Output,
+            &format!(
+                "  Help: install `copilot` or configure `[auth.copilot].command`; see {COPILOT_AUTH_DOC_PATH}."
+            ),
+        )?;
+    }
+
+    Ok(())
+}
+
 fn render_openai_credential_overview(
     renderer: &mut AnsiRenderer,
     vt_cfg: Option<&vtcode_config::VTCodeConfig>,
@@ -729,6 +936,7 @@ async fn sync_openai_runtime_if_active(ctx: &mut SlashCommandContext<'_>) -> Res
         ProviderConfig {
             api_key: Some(runtime_api_key.clone()),
             openai_chatgpt_auth: runtime_auth.clone(),
+            copilot_auth: ctx.vt_cfg.as_ref().map(|cfg| cfg.auth.copilot.clone()),
             base_url: None,
             model: Some(ctx.config.model.clone()),
             prompt_cache: Some(ctx.config.prompt_cache.clone()),
@@ -736,6 +944,7 @@ async fn sync_openai_runtime_if_active(ctx: &mut SlashCommandContext<'_>) -> Res
             openai: ctx.vt_cfg.as_ref().map(|cfg| cfg.provider.openai.clone()),
             anthropic: None,
             model_behavior: ctx.config.model_behavior.clone(),
+            workspace_root: Some(ctx.config.workspace.clone()),
         },
     )?;
     *ctx.provider_client = provider;
@@ -771,6 +980,55 @@ async fn sync_openai_runtime_if_active(ctx: &mut SlashCommandContext<'_>) -> Res
     Ok(())
 }
 
+async fn sync_copilot_runtime_if_active(ctx: &mut SlashCommandContext<'_>) -> Result<()> {
+    if !ctx.config.provider.eq_ignore_ascii_case(COPILOT_PROVIDER) {
+        return Ok(());
+    }
+
+    let provider = create_provider_with_config(
+        COPILOT_PROVIDER,
+        ProviderConfig {
+            api_key: Some(String::new()),
+            openai_chatgpt_auth: None,
+            copilot_auth: ctx.vt_cfg.as_ref().map(|cfg| cfg.auth.copilot.clone()),
+            base_url: None,
+            model: Some(ctx.config.model.clone()),
+            prompt_cache: Some(ctx.config.prompt_cache.clone()),
+            timeouts: None,
+            openai: ctx.vt_cfg.as_ref().map(|cfg| cfg.provider.openai.clone()),
+            anthropic: None,
+            model_behavior: ctx.config.model_behavior.clone(),
+            workspace_root: Some(ctx.config.workspace.clone()),
+        },
+    )?;
+    *ctx.provider_client = provider;
+    ctx.config.api_key.clear();
+    ctx.config.openai_chatgpt_auth = None;
+
+    let mode_label = match (ctx.config.ui_surface, ctx.full_auto) {
+        (UiSurfacePreference::Inline, true) => "auto".to_string(),
+        (UiSurfacePreference::Inline, false) => "inline".to_string(),
+        (UiSurfacePreference::Alternate, _) => "alt".to_string(),
+        (UiSurfacePreference::Auto, true) => "auto".to_string(),
+        (UiSurfacePreference::Auto, false) => "std".to_string(),
+    };
+    let next_header_context = build_inline_header_context(
+        ctx.config,
+        ctx.session_bootstrap,
+        "GitHub Copilot".to_string(),
+        ctx.config.model.clone(),
+        ctx.provider_client
+            .effective_context_size(&ctx.config.model),
+        mode_label,
+        ctx.config.reasoning_effort.as_str().to_string(),
+    )
+    .await?;
+    ctx.header_context.clone_from(&next_header_context);
+    ctx.handle.set_header_context(next_header_context);
+
+    Ok(())
+}
+
 fn format_auth_duration(seconds: u64) -> String {
     if seconds < 60 {
         format!("{seconds}s")
@@ -781,4 +1039,58 @@ fn format_auth_duration(seconds: u64) -> String {
     } else {
         format!("{}d {}h", seconds / 86_400, (seconds % 86_400) / 3600)
     }
+}
+
+#[derive(Clone, Copy)]
+enum CopilotAuthAction {
+    Login,
+    Logout,
+}
+
+fn render_copilot_auth_intro(renderer: &mut AnsiRenderer, action: CopilotAuthAction) -> Result<()> {
+    renderer.line(MessageStyle::Info, "Managed auth via GitHub Copilot CLI.")?;
+    renderer.line(
+        MessageStyle::Info,
+        "`gh` is optional fallback only; login/logout require the official `copilot` CLI.",
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        match action {
+            CopilotAuthAction::Login => {
+                "Waiting for the official Copilot CLI to start the managed login flow."
+            }
+            CopilotAuthAction::Logout => "Clearing the managed GitHub Copilot CLI session.",
+        },
+    )?;
+    Ok(())
+}
+
+fn render_copilot_auth_event(renderer: &mut AnsiRenderer, event: CopilotAuthEvent) -> Result<()> {
+    match event {
+        CopilotAuthEvent::VerificationCode { url, user_code } => {
+            renderer.line(
+                MessageStyle::Info,
+                "Your GitHub device code — copy it before the browser opens:",
+            )?;
+            let device_code_style = AnsiStyle::new()
+                .fg_color(Some(Color::Ansi(AnsiColor::BrightYellow)))
+                .effects(Effects::BOLD);
+            renderer.line_with_style(device_code_style, &user_code)?;
+            notify_attention(true, Some(&format!("GitHub device code: {user_code}")));
+            renderer.line(MessageStyle::Info, "Opening browser to:")?;
+            renderer.hyperlink_line(MessageStyle::Info, &url)?;
+            renderer.line(MessageStyle::Info, "Enter the code above when prompted.")?;
+        }
+        CopilotAuthEvent::Progress { message } => renderer.line(MessageStyle::Info, &message)?,
+        CopilotAuthEvent::Success { account } => {
+            if let Some(account) = account.as_deref() {
+                renderer.line(MessageStyle::Output, &format!("Account: {account}"))?;
+            }
+        }
+        CopilotAuthEvent::Failure { message } => {
+            renderer.line(MessageStyle::Info, &format!("Failure: {message}"))?;
+        }
+    }
+
+    Ok(())
 }

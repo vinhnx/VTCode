@@ -267,7 +267,7 @@ fn build_exit_header_context_fast(
         Some(vtcode_core::config::AgentClientProtocolZedWorkspaceTrustMode::ToolsPolicy) => {
             "tools_policy"
         }
-        None if display.full_auto || display.autonomous_mode => "full auto",
+        None if display.full_auto => "full auto",
         None => "tools policy",
     };
 
@@ -375,7 +375,7 @@ async fn prompt_startup_plan_mode(
 pub(super) async fn run_single_agent_loop_unified_impl(
     config: &CoreAgentConfig,
     initial_vt_cfg: Option<VTCodeConfig>,
-    _skip_confirmations: bool,
+    skip_confirmations: bool,
     full_auto: bool,
     plan_mode_entry_source: PlanModeEntrySource,
     resume: Option<ResumeSession>,
@@ -550,7 +550,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             resume_ref,
             session_archive,
             full_auto,
-            _skip_confirmations,
+            skip_confirmations,
             steering_sender,
         )
         .await?;
@@ -643,6 +643,12 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 render_plan_mode_next_step_hint(&mut renderer)?;
             }
         }
+        if !session_stats.is_plan_mode() {
+            session_stats
+                .set_autonomous_mode(vt_cfg.as_ref().is_some_and(|cfg| cfg.agent.autonomous_mode));
+        }
+        header_context.autonomous_mode = session_stats.is_autonomous_mode();
+        handle.set_autonomous_mode(session_stats.is_autonomous_mode());
         let mut linked_directories: Vec<LinkedDirectory> = Vec::with_capacity(4);
         let mut model_picker_state: Option<ModelPickerState> = None;
         let mut palette_state: Option<ActivePalette> = None;
@@ -888,6 +894,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         harness_config.max_tool_wall_clock_secs,
                         harness_config.max_tool_retries,
                     );
+                    harness_state.set_turn_timeout_secs(timeout_secs);
                     let execution_history_len_before_attempt =
                         tool_registry.execution_history_len();
                     let turn_loop_ctx = crate::agent::runloop::unified::turn::TurnLoopContext::new(
@@ -925,6 +932,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         &mut turn_metadata_cache,
                         &mut provider_client,
                         &traj,
+                        skip_confirmations,
                         full_auto,
                         steering_receiver,
                     );

@@ -120,7 +120,7 @@ pub enum InlineEvent {
     OpenUrl(String),
     LaunchEditor,
     ForceCancelPtySession,
-    /// Toggle editing mode (Shift+Tab cycles through Edit -> Plan -> Edit).
+    /// Toggle editing mode (Shift+Tab cycles through Edit -> Trusted Auto -> Plan -> Edit).
     ToggleMode,
     HistoryPrevious,
     HistoryNext,

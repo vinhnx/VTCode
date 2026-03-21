@@ -8,6 +8,9 @@ use vtcode_core::review::build_review_prompt;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use crate::agent::runloop::unified::palettes::format_duration_label;
+use crate::cli::auth::{
+    COPILOT_PROVIDER, OPENAI_PROVIDER, OPENROUTER_PROVIDER, supports_auth_provider,
+};
 
 use super::SlashCommandOutcome;
 use super::parsing::parse_review_spec;
@@ -290,7 +293,7 @@ pub(super) fn handle_mode_command(
     if !args.trim().is_empty() {
         renderer.line(
             MessageStyle::Error,
-            "Usage: /mode - Cycle through Edit -> Plan modes",
+            "Usage: /mode - Cycle through Edit -> Trusted Auto -> Plan modes",
         )?;
         return Ok(SlashCommandOutcome::Handled);
     }
@@ -309,23 +312,27 @@ pub(super) fn handle_login_command(
             });
         }
         renderer.line(MessageStyle::Info, "Usage: /login <provider>")?;
-        renderer.line(MessageStyle::Output, "  openai")?;
-        renderer.line(MessageStyle::Output, "  openrouter")?;
+        renderer.line(MessageStyle::Output, &format!("  {OPENAI_PROVIDER}"))?;
+        renderer.line(MessageStyle::Output, &format!("  {OPENROUTER_PROVIDER}"))?;
+        renderer.line(MessageStyle::Output, &format!("  {COPILOT_PROVIDER}"))?;
         return Ok(SlashCommandOutcome::Handled);
     }
-    if provider != "openrouter" && provider != "openai" {
+    if !supports_auth_provider(&provider) {
         renderer.line(
             MessageStyle::Error,
-            &format!("Provider '{}' does not support OAuth.", provider),
+            &format!(
+                "Provider '{}' does not support VT Code authentication.",
+                provider
+            ),
         )?;
         renderer.line(
             MessageStyle::Info,
-            "Supported OAuth providers: openai, openrouter",
+            "Supported authentication providers: openai, openrouter, copilot",
         )?;
         renderer.line(MessageStyle::Output, "")?;
         renderer.line(
             MessageStyle::Output,
-            "For other providers, set the API key via environment variable or .env file.",
+            "For other providers, configure credentials via environment variables or workspace configuration.",
         )?;
         return Ok(SlashCommandOutcome::Handled);
     }
@@ -344,14 +351,18 @@ pub(super) fn handle_logout_command(
             });
         }
         renderer.line(MessageStyle::Info, "Usage: /logout <provider>")?;
-        renderer.line(MessageStyle::Output, "  openai")?;
-        renderer.line(MessageStyle::Output, "  openrouter")?;
+        renderer.line(MessageStyle::Output, &format!("  {OPENAI_PROVIDER}"))?;
+        renderer.line(MessageStyle::Output, &format!("  {OPENROUTER_PROVIDER}"))?;
+        renderer.line(MessageStyle::Output, &format!("  {COPILOT_PROVIDER}"))?;
         return Ok(SlashCommandOutcome::Handled);
     }
-    if provider != "openrouter" && provider != "openai" {
+    if !supports_auth_provider(&provider) {
         renderer.line(
             MessageStyle::Error,
-            &format!("Provider '{}' does not use OAuth authentication.", provider),
+            &format!(
+                "Provider '{}' does not use VT Code-managed authentication.",
+                provider
+            ),
         )?;
         return Ok(SlashCommandOutcome::Handled);
     }
@@ -370,13 +381,13 @@ pub(super) fn handle_refresh_oauth_command(
             });
         }
         renderer.line(MessageStyle::Info, "Usage: /refresh-oauth <provider>")?;
-        renderer.line(MessageStyle::Output, "  openai")?;
+        renderer.line(MessageStyle::Output, &format!("  {OPENAI_PROVIDER}"))?;
         return Ok(SlashCommandOutcome::Handled);
     }
-    if provider != "openai" && provider != "openrouter" {
+    if provider != OPENAI_PROVIDER && provider != OPENROUTER_PROVIDER {
         renderer.line(
             MessageStyle::Error,
-            &format!("Provider '{}' does not use OAuth authentication.", provider),
+            &format!("Provider '{}' does not support refresh-oauth.", provider),
         )?;
         return Ok(SlashCommandOutcome::Handled);
     }

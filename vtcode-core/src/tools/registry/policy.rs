@@ -184,6 +184,20 @@ impl ToolPolicyGateway {
         }
     }
 
+    pub async fn add_approval_cache_key(&mut self, approval_key: &str) -> Result<()> {
+        if let Some(ref mut manager) = self.tool_policy {
+            manager.add_approval_cache_key(approval_key).await
+        } else {
+            Err(anyhow::anyhow!("Tool policy manager not initialized"))
+        }
+    }
+
+    pub fn has_approval_cache_key(&self, approval_key: &str) -> bool {
+        self.tool_policy
+            .as_ref()
+            .is_some_and(|manager| manager.has_approval_cache_key(approval_key))
+    }
+
     pub fn get_tool_policy(&self, tool_name: &str) -> ToolPolicy {
         let canonical = canonical_tool_name(tool_name);
         self.tool_policy

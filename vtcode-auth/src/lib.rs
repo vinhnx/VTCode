@@ -8,7 +8,7 @@ pub mod openrouter_oauth;
 pub mod pkce;
 mod storage_paths;
 
-pub use config::{AuthConfig, OpenAIAuthConfig, OpenAIPreferredMethod};
+pub use config::{AuthConfig, CopilotAuthConfig, OpenAIAuthConfig, OpenAIPreferredMethod};
 pub use credentials::{
     AuthCredentialsStoreMode, CredentialStorage, CustomApiKeyStorage, clear_custom_api_keys,
     load_custom_api_keys, migrate_custom_api_keys_to_keyring,

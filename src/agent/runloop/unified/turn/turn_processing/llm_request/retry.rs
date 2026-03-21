@@ -78,7 +78,7 @@ pub(super) fn compact_tool_messages_for_retry(messages: &[uni::Message]) -> Vec<
     }
 }
 
-pub(super) fn llm_attempt_timeout_secs(
+pub(crate) fn llm_attempt_timeout_secs(
     turn_timeout_secs: u64,
     plan_mode: bool,
     provider_name: &str,

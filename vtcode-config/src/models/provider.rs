@@ -15,6 +15,8 @@ pub enum Provider {
     OpenAI,
     /// Anthropic Claude models
     Anthropic,
+    /// GitHub Copilot preview integration
+    Copilot,
     /// DeepSeek native models
     DeepSeek,
     /// OpenRouter marketplace models
@@ -42,6 +44,7 @@ impl Provider {
             Provider::Gemini => "GEMINI_API_KEY",
             Provider::OpenAI => "OPENAI_API_KEY",
             Provider::Anthropic => "ANTHROPIC_API_KEY",
+            Provider::Copilot => "",
             Provider::DeepSeek => "DEEPSEEK_API_KEY",
             Provider::OpenRouter => "OPENROUTER_API_KEY",
             Provider::Ollama => "OLLAMA_API_KEY",
@@ -59,6 +62,7 @@ impl Provider {
         vec![
             Provider::OpenAI,
             Provider::Anthropic,
+            Provider::Copilot,
             Provider::Minimax,
             Provider::Gemini,
             Provider::DeepSeek,
@@ -78,6 +82,7 @@ impl Provider {
             Provider::Gemini => "Gemini",
             Provider::OpenAI => "OpenAI",
             Provider::Anthropic => "Anthropic",
+            Provider::Copilot => "GitHub Copilot",
             Provider::DeepSeek => "DeepSeek",
             Provider::OpenRouter => "OpenRouter",
             Provider::Ollama => "Ollama",
@@ -91,7 +96,7 @@ impl Provider {
     }
 
     pub fn is_dynamic(&self) -> bool {
-        self.is_local()
+        matches!(self, Provider::Copilot) || self.is_local()
     }
 
     pub fn is_local(&self) -> bool {
@@ -118,6 +123,7 @@ impl Provider {
             Provider::Gemini => models::google::REASONING_MODELS.contains(&model),
             Provider::OpenAI => models::openai::REASONING_MODELS.contains(&model),
             Provider::Anthropic => models::anthropic::REASONING_MODELS.contains(&model),
+            Provider::Copilot => false,
             Provider::DeepSeek => model == models::deepseek::DEEPSEEK_REASONER,
             Provider::OpenRouter => {
                 if let Ok(model_id) = ModelId::from_str(model) {
@@ -151,6 +157,10 @@ impl Provider {
             _ => false,
         }
     }
+
+    pub fn uses_managed_auth(&self) -> bool {
+        matches!(self, Provider::Copilot)
+    }
 }
 
 impl fmt::Display for Provider {
@@ -159,6 +169,7 @@ impl fmt::Display for Provider {
             Provider::Gemini => write!(f, "gemini"),
             Provider::OpenAI => write!(f, "openai"),
             Provider::Anthropic => write!(f, "anthropic"),
+            Provider::Copilot => write!(f, "copilot"),
             Provider::DeepSeek => write!(f, "deepseek"),
             Provider::OpenRouter => write!(f, "openrouter"),
             Provider::Ollama => write!(f, "ollama"),
@@ -178,6 +189,7 @@ impl AsRef<str> for Provider {
             Provider::Gemini => "gemini",
             Provider::OpenAI => "openai",
             Provider::Anthropic => "anthropic",
+            Provider::Copilot => "copilot",
             Provider::DeepSeek => "deepseek",
             Provider::OpenRouter => "openrouter",
             Provider::Ollama => "ollama",
@@ -199,6 +211,7 @@ impl FromStr for Provider {
             "gemini" => Ok(Provider::Gemini),
             "openai" => Ok(Provider::OpenAI),
             "anthropic" => Ok(Provider::Anthropic),
+            "copilot" => Ok(Provider::Copilot),
             "deepseek" => Ok(Provider::DeepSeek),
             "openrouter" => Ok(Provider::OpenRouter),
             "ollama" => Ok(Provider::Ollama),

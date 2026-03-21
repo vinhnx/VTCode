@@ -130,7 +130,7 @@ pub(crate) enum SlashCommandOutcome {
         enable: Option<bool>,
         prompt: Option<String>,
     },
-    /// /mode command - cycle through Edit → Plan → Edit
+    /// /mode command - cycle through Edit → Trusted Auto → Plan → Edit
     CycleMode,
     /// /login command - OAuth login for a provider
     OAuthLogin {

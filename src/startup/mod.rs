@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use vtcode_core::dotfile_protection::init_global_guardian;
@@ -25,10 +25,12 @@ use vtcode_config::auth::{OpenAIChatGptAuthHandle, resolve_openai_auth};
 use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::loader::VTCodeConfig;
+use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::config::validator::{
     check_openai_hosted_shell_compat, check_prompt_cache_retention_compat,
 };
+use vtcode_core::copilot::{CopilotAuthStatusKind, probe_auth_status};
 use vtcode_core::core::agent::config::{
     RuntimeModelSelection, api_key_env_var, build_runtime_agent_config, provider_label,
     resolve_runtime_model_selection,
@@ -126,7 +128,14 @@ impl StartupContext {
         let (api_key, openai_chatgpt_auth) = if command_skips_provider_auth(args.command.as_ref()) {
             (String::new(), None)
         } else {
-            match resolve_runtime_provider_auth(&config, &selection, loaded.first_run_occurred) {
+            match resolve_runtime_provider_auth(
+                &config,
+                &loaded.workspace,
+                &selection,
+                loaded.first_run_occurred,
+            )
+            .await
+            {
                 Ok(auth) => auth,
                 Err(err) if can_start_without_provider_auth(args.command.as_ref()) => {
                     tracing::warn!("starting VT Code without provider auth: {err}");
@@ -198,8 +207,9 @@ impl StartupContext {
     }
 }
 
-fn resolve_runtime_provider_auth(
+async fn resolve_runtime_provider_auth(
     config: &VTCodeConfig,
+    workspace: &Path,
     selection: &RuntimeModelSelection,
     first_run_occurred: bool,
 ) -> Result<(String, Option<OpenAIChatGptAuthHandle>)> {
@@ -214,6 +224,24 @@ fn resolve_runtime_provider_auth(
         return Ok((resolved.api_key().to_string(), resolved.handle()));
     }
 
+    if selection.provider.eq_ignore_ascii_case("copilot") {
+        let status = probe_auth_status(&config.auth.copilot, Some(workspace)).await;
+        return match status.kind {
+            CopilotAuthStatusKind::Authenticated => Ok((String::new(), None)),
+            CopilotAuthStatusKind::Unauthenticated | CopilotAuthStatusKind::AuthFlowFailed => {
+                Err(anyhow::anyhow!(status.message.unwrap_or_else(|| {
+                    missing_api_key_message(selection, first_run_occurred)
+                })))
+            }
+            CopilotAuthStatusKind::ServerUnavailable => Err(anyhow::anyhow!(
+                status.message.unwrap_or_else(|| {
+                    "GitHub Copilot CLI is unavailable. Install `copilot`, set `VTCODE_COPILOT_COMMAND`, or configure `[auth.copilot].command`."
+                        .to_string()
+                })
+            )),
+        };
+    }
+
     let api_key = get_api_key(&selection.provider, &ApiKeySources::default())
         .with_context(|| missing_api_key_message(selection, first_run_occurred))?;
     Ok((api_key, None))
@@ -221,7 +249,18 @@ fn resolve_runtime_provider_auth(
 
 fn missing_api_key_message(selection: &RuntimeModelSelection, first_run_occurred: bool) -> String {
     let provider_name = provider_label(&selection.provider);
-    let env_var = api_key_env_var(&selection.provider);
+    if selection.provider.eq_ignore_ascii_case("copilot") {
+        return "Authentication not found for GitHub Copilot. Run `vtcode login copilot`. Install `copilot` first if needed; `gh` is only an optional fallback."
+            .to_string();
+    }
+
+    let env_var = selection
+        .provider
+        .parse::<Provider>()
+        .ok()
+        .filter(|provider| !provider.uses_managed_auth())
+        .map(|provider| provider.default_api_key_env().to_string())
+        .unwrap_or_else(|| api_key_env_var(&selection.provider));
     if selection.provider.eq_ignore_ascii_case("openai") {
         return format!(
             "Authentication not found for OpenAI. Set {env_var}, configure it in vtcode.toml, or run `vtcode login openai`."

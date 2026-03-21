@@ -70,6 +70,24 @@ impl ModelId {
             ModelId::ClaudeHaiku45 => {
                 "Latest efficient Anthropic model optimized for low-latency agent workflows"
             }
+            ModelId::CopilotAuto => {
+                "GitHub Copilot preview provider with automatic model selection via the official Copilot CLI"
+            }
+            ModelId::CopilotGPT52Codex => {
+                "GitHub Copilot GPT-5.2 Codex option for agentic software engineering workflows"
+            }
+            ModelId::CopilotGPT51CodexMax => {
+                "GitHub Copilot GPT-5.1 Codex Max option for longer-running engineering tasks"
+            }
+            ModelId::CopilotGPT54 => {
+                "GitHub Copilot GPT-5.4 option for complex professional work and long context"
+            }
+            ModelId::CopilotGPT54Mini => {
+                "GitHub Copilot GPT-5.4 Mini option for faster, lighter-weight tasks"
+            }
+            ModelId::CopilotClaudeSonnet46 => {
+                "GitHub Copilot Claude Sonnet 4.6 option for balanced coding and reasoning work"
+            }
             // DeepSeek models
             ModelId::DeepSeekChat => {
                 "DeepSeek V3.2 - Fast, efficient chat model for immediate responses"

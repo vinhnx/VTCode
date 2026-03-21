@@ -6,6 +6,7 @@ use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, UiSurfacePreference};
+use vtcode_core::copilot::{CopilotAuthStatusKind, probe_auth_status};
 use vtcode_core::llm::factory::{ProviderConfig, create_provider_with_config};
 use vtcode_core::llm::provider::LLMProvider;
 use vtcode_core::llm::rig_adapter::RigProviderCapabilities;
@@ -32,12 +33,12 @@ pub(crate) async fn finalize_model_selection(
     conversation_history_len: usize,
 ) -> Result<()> {
     let workspace = config.workspace.clone();
-
-    let updated_cfg = picker.persist_selection(&workspace, &selection).await?;
+    let auth_cfg = vt_cfg.as_ref().cloned().unwrap_or_default();
     let (api_key, openai_chatgpt_auth) =
-        resolve_runtime_api_key(&workspace, Some(&updated_cfg), &selection)?;
+        resolve_runtime_api_key(&workspace, Some(&auth_cfg), &selection).await?;
     let using_chatgpt_auth =
         selection.provider_enum == Some(Provider::OpenAI) && openai_chatgpt_auth.is_some();
+    let updated_cfg = picker.persist_selection(&workspace, &selection).await?;
     *vt_cfg = Some(updated_cfg);
 
     if let Some(provider_enum) = selection.provider_enum
@@ -60,6 +61,7 @@ pub(crate) async fn finalize_model_selection(
             ProviderConfig {
                 api_key: Some(api_key.clone()),
                 openai_chatgpt_auth: openai_chatgpt_auth.clone(),
+                copilot_auth: vt_cfg.as_ref().map(|cfg| cfg.auth.copilot.clone()),
                 base_url: None,
                 model: Some(selection.model.clone()),
                 prompt_cache: Some(config.prompt_cache.clone()),
@@ -67,6 +69,7 @@ pub(crate) async fn finalize_model_selection(
                 openai: vt_cfg.as_ref().map(|cfg| cfg.provider.openai.clone()),
                 anthropic: None,
                 model_behavior: config.model_behavior.clone(),
+                workspace_root: Some(config.workspace.clone()),
             },
         )
         .context("Failed to initialize provider for the selected model")?;
@@ -165,6 +168,11 @@ pub(crate) async fn finalize_model_selection(
 
     if using_chatgpt_auth {
         renderer.line(MessageStyle::Info, "Using ChatGPT subscription for OpenAI.")?;
+    } else if selection.provider_enum == Some(Provider::Copilot) {
+        renderer.line(
+            MessageStyle::Info,
+            "Using GitHub Copilot managed authentication.",
+        )?;
     } else if selection.api_key.is_some() {
         renderer.line(
             MessageStyle::Info,
@@ -186,7 +194,7 @@ pub(crate) async fn finalize_model_selection(
     Ok(())
 }
 
-fn resolve_runtime_api_key(
+async fn resolve_runtime_api_key(
     workspace: &Path,
     vt_cfg: Option<&VTCodeConfig>,
     selection: &ModelSelectionResult,
@@ -203,6 +211,30 @@ fn resolve_runtime_api_key(
         let resolved =
             resolve_openai_auth(&cfg.auth.openai, cfg.agent.credential_storage_mode, api_key)?;
         return Ok((resolved.api_key().to_string(), resolved.handle()));
+    }
+
+    if selection.provider_enum == Some(Provider::Copilot) {
+        let Some(cfg) = vt_cfg else {
+            return Err(anyhow!(
+                "GitHub Copilot configuration is unavailable. Run `vtcode login copilot`."
+            ));
+        };
+        let status = probe_auth_status(&cfg.auth.copilot, Some(workspace)).await;
+        return match status.kind {
+            CopilotAuthStatusKind::Authenticated => Ok((String::new(), None)),
+            CopilotAuthStatusKind::Unauthenticated | CopilotAuthStatusKind::AuthFlowFailed => {
+                Err(anyhow!(status.message.unwrap_or_else(|| {
+                    "GitHub Copilot is not authenticated. Run `vtcode login copilot`."
+                        .to_string()
+                })))
+            }
+            CopilotAuthStatusKind::ServerUnavailable => Err(anyhow!(
+                status.message.unwrap_or_else(|| {
+                    "GitHub Copilot CLI is unavailable. Install `copilot`, set `VTCODE_COPILOT_COMMAND`, or configure `[auth.copilot].command`."
+                        .to_string()
+                })
+            )),
+        };
     }
 
     if let Some(key) = read_workspace_api_key(workspace, &selection.env_key)? {
@@ -302,7 +334,9 @@ mod tests {
             true,
         );
 
-        let resolved = resolve_runtime_api_key(dir.path(), None, &selection)
+        let resolved = tokio::runtime::Runtime::new()
+            .expect("runtime")
+            .block_on(resolve_runtime_api_key(dir.path(), None, &selection))
             .expect("workspace env should resolve");
 
         assert_eq!(resolved.0, "workspace-key");
@@ -319,8 +353,10 @@ mod tests {
             true,
         );
 
-        let resolved =
-            resolve_runtime_api_key(dir.path(), None, &selection).expect("user key should resolve");
+        let resolved = tokio::runtime::Runtime::new()
+            .expect("runtime")
+            .block_on(resolve_runtime_api_key(dir.path(), None, &selection))
+            .expect("user key should resolve");
         let written =
             read_workspace_api_key(dir.path(), "OPENAI_API_KEY").expect("workspace env read");
 
@@ -333,7 +369,9 @@ mod tests {
         let dir = tempdir().expect("temp dir");
         let selection = selection("custom", None, "CUSTOM_API_KEY", None, true);
 
-        let err = resolve_runtime_api_key(dir.path(), None, &selection)
+        let err = tokio::runtime::Runtime::new()
+            .expect("runtime")
+            .block_on(resolve_runtime_api_key(dir.path(), None, &selection))
             .expect_err("missing custom provider key should fail");
 
         assert!(err.to_string().contains("CUSTOM_API_KEY"));

@@ -332,6 +332,7 @@ impl AgentRunner {
         let provider_config = ProviderConfig {
             api_key: Some(api_key.clone()),
             openai_chatgpt_auth: openai_chatgpt_auth.clone(),
+            copilot_auth: Some(session_config.effective().auth.copilot.clone()),
             base_url: None,
             model: Some(model.to_string()),
             prompt_cache: Some(session_config.effective().prompt_cache.clone()),
@@ -339,6 +340,7 @@ impl AgentRunner {
             openai: Some(session_config.effective().provider.openai.clone()),
             anthropic: Some(session_config.effective().provider.anthropic.clone()),
             model_behavior: Some(session_config.effective().model.clone()),
+            workspace_root: Some(workspace.clone()),
         };
 
         let client: AnyClient = Box::new(ProviderClientAdapter::new(

@@ -51,6 +51,12 @@ impl FromStr for ModelId {
             s if s == models::CLAUDE_SONNET_4_6 => Ok(ModelId::ClaudeSonnet46),
             s if s == models::CLAUDE_HAIKU_4_5 => Ok(ModelId::ClaudeHaiku45),
             s if s == models::CLAUDE_HAIKU_4_5_20251001 => Ok(ModelId::ClaudeHaiku45),
+            s if s == models::copilot::AUTO => Ok(ModelId::CopilotAuto),
+            s if s == models::copilot::GPT_5_2_CODEX => Ok(ModelId::CopilotGPT52Codex),
+            s if s == models::copilot::GPT_5_1_CODEX_MAX => Ok(ModelId::CopilotGPT51CodexMax),
+            s if s == models::copilot::GPT_5_4 => Ok(ModelId::CopilotGPT54),
+            s if s == models::copilot::GPT_5_4_MINI => Ok(ModelId::CopilotGPT54Mini),
+            s if s == models::copilot::CLAUDE_SONNET_4_6 => Ok(ModelId::CopilotClaudeSonnet46),
             // DeepSeek models
             s if s == models::DEEPSEEK_CHAT => Ok(ModelId::DeepSeekChat),
             s if s == models::DEEPSEEK_REASONER => Ok(ModelId::DeepSeekReasoner),

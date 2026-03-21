@@ -217,7 +217,7 @@ temporal_context_use_utc = false
 # UI theme identifier controlling ANSI styling
 # Default: "ciapre"
 # Type: `string`
-theme = "ayu"
+theme = "vitesse-black"
 
 # Enable TODO planning helper mode for structured task management
 # Default: true
@@ -559,6 +559,24 @@ track_workspace_state = true
 # Authentication
 # Provider login and token handling.
 [auth]
+
+[auth.copilot]
+startup_timeout_secs = 20
+auth_timeout_secs = 300
+available_tools = [
+    "view",
+    "glob",
+    "grep",
+    "edit",
+    "create",
+]
+excluded_tools = []
+vtcode_tool_allowlist = [
+    "unified_search",
+    "unified_file",
+    "unified_exec",
+    "apply_patch",
+]
 # OpenAI
 [auth.openai]
 auto_refresh = true
@@ -2639,7 +2657,7 @@ manifests = []
 
 agent_info = "allow"
 
-apply_patch = "prompt"
+apply_patch = "allow"
 
 ask_user_question = "allow"
 

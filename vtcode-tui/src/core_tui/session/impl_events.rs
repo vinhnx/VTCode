@@ -418,9 +418,7 @@ impl Session {
             self.transcript_view_top,
             viewport_rows,
         );
-        let Some(line) = visible_lines.get(row_in_view) else {
-            return None;
-        };
+        let line = visible_lines.get(row_in_view)?;
 
         let text: String = line
             .line
@@ -429,10 +427,7 @@ impl Session {
             .map(|span| span.content.as_ref())
             .collect();
         let local_column = column.saturating_sub(area.x);
-        let Some((start_col, end_col)) = mouse_selection::word_selection_range(&text, local_column)
-        else {
-            return None;
-        };
+        let (start_col, end_col) = mouse_selection::word_selection_range(&text, local_column)?;
 
         let start = (area.x.saturating_add(start_col), row);
         let end = (area.x.saturating_add(end_col), row);

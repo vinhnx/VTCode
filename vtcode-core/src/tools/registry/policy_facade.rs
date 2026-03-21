@@ -128,6 +128,21 @@ impl ToolRegistry {
             .await
     }
 
+    pub async fn persist_approval_cache_key(&self, approval_key: &str) -> Result<()> {
+        self.policy_gateway
+            .write()
+            .await
+            .add_approval_cache_key(approval_key)
+            .await
+    }
+
+    pub async fn has_persisted_approval(&self, approval_key: &str) -> bool {
+        self.policy_gateway
+            .read()
+            .await
+            .has_approval_cache_key(approval_key)
+    }
+
     pub async fn get_tool_policy(&self, tool_name: &str) -> ToolPolicy {
         self.policy_gateway
             .read()

@@ -91,11 +91,7 @@ impl ListPanelLayout {
     }
 
     pub(crate) fn visible_list_rows(&self, panel_area: Rect) -> usize {
-        panel_area
-            .height
-            .saturating_sub(self.fixed_rows)
-            .min(u16::MAX)
-            .into()
+        panel_area.height.saturating_sub(self.fixed_rows).into()
     }
 
     pub(crate) fn row_index(&self, panel_area: Rect, column: u16, row: u16) -> Option<usize> {

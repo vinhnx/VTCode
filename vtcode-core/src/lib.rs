@@ -138,6 +138,7 @@ pub mod components; // Context-Generic Programming (CGP) substrate for composabl
 pub mod config;
 pub mod constants;
 pub mod context; // Vibe coding support: entity resolution, workspace state, conversation memory
+pub mod copilot;
 pub mod core;
 pub mod diagnostics;
 pub mod dotfile_protection; // Comprehensive dotfile protection system

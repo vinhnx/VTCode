@@ -224,6 +224,7 @@ async fn llm_prompt_suggestions_with_route(
         ProviderConfig {
             api_key: Some(config.api_key.clone()),
             openai_chatgpt_auth: config.openai_chatgpt_auth.clone(),
+            copilot_auth: vt_cfg.map(|cfg| cfg.auth.copilot.clone()),
             base_url: None,
             model: Some(route.model.clone()),
             prompt_cache: Some(config.prompt_cache.clone()),
@@ -231,6 +232,7 @@ async fn llm_prompt_suggestions_with_route(
             openai: vt_cfg.map(|cfg| cfg.provider.openai.clone()),
             anthropic: vt_cfg.map(|cfg| cfg.provider.anthropic.clone()),
             model_behavior: vt_cfg.map(|cfg| cfg.model.clone()),
+            workspace_root: Some(config.workspace.clone()),
         },
     ) else {
         return Vec::new();

@@ -1,4 +1,5 @@
 use anyhow::Result;
+use tokio::task;
 use vtcode_core::core::threads::{SessionQueryScope, list_recent_sessions_in_scope};
 use vtcode_core::ui::inline_theme_from_core_styles;
 use vtcode_core::ui::theme;
@@ -59,12 +60,20 @@ pub(super) async fn wait_for_list_modal_selection(
     .await
     .ok()?;
 
+    close_list_modal(ctx).await;
+
     match outcome {
         OverlayWaitOutcome::Submitted(selection) => Some(selection),
         OverlayWaitOutcome::Cancelled
         | OverlayWaitOutcome::Interrupted
         | OverlayWaitOutcome::Exit => None,
     }
+}
+
+async fn close_list_modal(ctx: &mut SlashCommandContext<'_>) {
+    ctx.handle.close_modal();
+    ctx.handle.force_redraw();
+    task::yield_now().await;
 }
 
 pub(crate) async fn handle_theme_changed(

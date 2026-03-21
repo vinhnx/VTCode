@@ -19,6 +19,7 @@ use vtcode_core::config::loader::layers::ConfigLayerSource;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::mcp::McpTransportConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+use vtcode_core::copilot::{CopilotAuthStatusKind, probe_auth_status};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::terminal_setup::detector::TerminalType;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
@@ -88,7 +89,7 @@ pub(crate) async fn display_session_status(
         MessageStyle::Info,
         &format!("  Model: {}", ctx.config.model),
     )?;
-    render_auth_usage_status(renderer, &ctx, openai_session.as_ref())?;
+    render_auth_usage_status(renderer, &ctx, openai_session.as_ref()).await?;
     renderer.line(MessageStyle::Info, &format!("  IDE: {}", ide_info))?;
     renderer.line(
         MessageStyle::Info,
@@ -132,18 +133,23 @@ pub(crate) async fn display_session_status(
     Ok(())
 }
 
-fn render_auth_usage_status(
+async fn render_auth_usage_status(
     renderer: &mut AnsiRenderer,
     ctx: &SessionStatusContext<'_>,
     openai_session: Option<&vtcode_auth::OpenAIChatGptSession>,
 ) -> Result<()> {
     let openrouter_status = crate::cli::auth::openrouter_auth_status(ctx.vt_cfg)?;
     let openai_status = crate::cli::auth::openai_auth_status(ctx.vt_cfg)?;
+    let copilot_auth_cfg = ctx
+        .vt_cfg
+        .map(|cfg| cfg.auth.copilot.clone())
+        .unwrap_or_default();
+    let copilot_status = probe_auth_status(&copilot_auth_cfg, Some(&ctx.config.workspace)).await;
     let openai_connected = matches!(
         openai_status,
         vtcode_auth::OpenAIChatGptAuthStatus::Authenticated { .. }
     ) || ctx.config.openai_chatgpt_auth.is_some();
-    render_status_heading(renderer, "OAuth info")?;
+    render_status_heading(renderer, "Authentication info")?;
     renderer.line(
         MessageStyle::Info,
         &format!(
@@ -168,6 +174,13 @@ fn render_auth_usage_status(
         &format!(
             "  OpenRouter: {}",
             short_oauth_status_openrouter(&openrouter_status)
+        ),
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        &format!(
+            "  GitHub Copilot: {}",
+            short_copilot_status(&copilot_status)
         ),
     )?;
 
@@ -227,6 +240,24 @@ fn render_auth_usage_status(
             MessageStyle::Info,
             &format!("  Usage status: {}", usage_status),
         )?;
+    } else if ctx.config.provider.eq_ignore_ascii_case("copilot") {
+        let usage_status = match copilot_status.kind {
+            CopilotAuthStatusKind::Authenticated => "using GitHub Copilot managed authentication",
+            CopilotAuthStatusKind::Unauthenticated => "no active GitHub Copilot credential",
+            CopilotAuthStatusKind::ServerUnavailable => "GitHub Copilot CLI unavailable",
+            CopilotAuthStatusKind::AuthFlowFailed => {
+                "GitHub Copilot authentication needs attention"
+            }
+        };
+        renderer.line(
+            MessageStyle::Info,
+            &format!("  Usage status: {}", usage_status),
+        )?;
+        if let Some(message) = copilot_status.message.as_deref()
+            && !message.trim().is_empty()
+        {
+            renderer.line(MessageStyle::Info, &format!("  Notice: {}", message))?;
+        }
     }
 
     Ok(())
@@ -236,6 +267,15 @@ fn short_oauth_status_openrouter(status: &vtcode_auth::AuthStatus) -> &'static s
     match status {
         vtcode_auth::AuthStatus::Authenticated { .. } => "connected",
         vtcode_auth::AuthStatus::NotAuthenticated => "not connected",
+    }
+}
+
+fn short_copilot_status(status: &vtcode_core::copilot::CopilotAuthStatus) -> &'static str {
+    match status.kind {
+        CopilotAuthStatusKind::Authenticated => "connected",
+        CopilotAuthStatusKind::Unauthenticated => "not connected",
+        CopilotAuthStatusKind::ServerUnavailable => "CLI unavailable",
+        CopilotAuthStatusKind::AuthFlowFailed => "needs attention",
     }
 }
 

@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use serde_json::Value;
-use vtcode_core::tools::{ApprovalRecorder, RiskLevel};
+use vtcode_core::tools::ApprovalRecorder;
 
 use super::shell_approval::ApprovalLearningTarget;
 
@@ -43,14 +43,6 @@ pub(super) fn spawn_approval_record_task(
             }
         }
     });
-}
-
-pub(super) fn approval_history_can_skip_prompt(
-    hook_requires_prompt: bool,
-    shell_approval_reason: Option<&str>,
-    risk_level: RiskLevel,
-) -> bool {
-    !hook_requires_prompt && shell_approval_reason.is_none() && risk_level != RiskLevel::Critical
 }
 
 pub(super) fn cache_key(tool_name: &str, tool_args: Option<&Value>) -> String {

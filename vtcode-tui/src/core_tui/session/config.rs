@@ -142,7 +142,7 @@ impl Default for AppearanceConfig {
             message_block_spacing: 0,
             layout_mode: LayoutModeOverride::Auto,
             reasoning_display_mode: ReasoningDisplayMode::Toggle,
-            reasoning_visible_default: false,
+            reasoning_visible_default: crate::config::constants::ui::DEFAULT_REASONING_VISIBLE,
             vim_mode: false,
             screen_reader_mode: false,
             reduce_motion_mode: false,
@@ -409,6 +409,12 @@ mod tests {
     fn test_default_config() {
         let config = SessionConfig::new();
         assert_eq!(config.behavior.history_size, 100);
+        assert_eq!(
+            config.appearance.reasoning_display_mode,
+            ReasoningDisplayMode::Toggle
+        );
+        assert!(config.appearance.reasoning_visible_default);
+        assert!(config.appearance.reasoning_visible());
     }
 
     #[test]

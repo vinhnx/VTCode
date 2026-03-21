@@ -94,6 +94,16 @@ impl ApprovalRecorder {
         }
     }
 
+    /// Should trusted auto mode approve this action from history alone.
+    pub async fn supports_trusted_auto_approval(&self, approval_key: &str) -> bool {
+        let manager = self.manager.read().await;
+        if let Some(pattern) = manager.get_pattern(approval_key) {
+            pattern.supports_trusted_auto_approval()
+        } else {
+            false
+        }
+    }
+
     /// Suggest auto-approval message if user has approved this target many times
     pub async fn get_auto_approval_suggestion(
         &self,
@@ -205,6 +215,25 @@ mod tests {
         assert!(recorder.should_auto_approve("run_command").await);
 
         // Cleanup
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[tokio::test]
+    async fn trusted_auto_requires_last_decision_to_be_approve() {
+        let temp_dir = std::env::temp_dir().join(format!("vtcode_test_{}", std::process::id()));
+        let recorder = ApprovalRecorder::new(temp_dir.clone());
+
+        for _ in 0..3 {
+            let _ = recorder
+                .record_approval("run_command", Some("Run Command"), true, None)
+                .await;
+        }
+        let _ = recorder
+            .record_approval("run_command", Some("Run Command"), false, None)
+            .await;
+
+        assert!(!recorder.supports_trusted_auto_approval("run_command").await);
+
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
 

@@ -221,4 +221,10 @@ mod tests {
     fn resolve_reasoning_visibility_defaults_to_enabled_without_config() {
         assert!(resolve_reasoning_visibility(None, true));
     }
+
+    #[test]
+    fn resolve_reasoning_visibility_uses_visible_default_config() {
+        let cfg = VTCodeConfig::default();
+        assert!(resolve_reasoning_visibility(Some(&cfg), true));
+    }
 }

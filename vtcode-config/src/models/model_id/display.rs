@@ -32,6 +32,12 @@ impl ModelId {
             ModelId::ClaudeOpus46 => "Claude Opus 4.6",
             ModelId::ClaudeSonnet46 => "Claude Sonnet 4.6",
             ModelId::ClaudeHaiku45 => "Claude Haiku 4.5",
+            ModelId::CopilotAuto => "GitHub Copilot Auto",
+            ModelId::CopilotGPT52Codex => "GitHub Copilot GPT-5.2 Codex",
+            ModelId::CopilotGPT51CodexMax => "GitHub Copilot GPT-5.1 Codex Max",
+            ModelId::CopilotGPT54 => "GitHub Copilot GPT-5.4",
+            ModelId::CopilotGPT54Mini => "GitHub Copilot GPT-5.4 Mini",
+            ModelId::CopilotClaudeSonnet46 => "GitHub Copilot Claude Sonnet 4.6",
             // DeepSeek models
             ModelId::DeepSeekChat => "DeepSeek V3.2 Chat",
             ModelId::DeepSeekReasoner => "DeepSeek V3.2 Reasoner",

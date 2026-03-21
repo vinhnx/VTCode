@@ -523,21 +523,21 @@ pub enum Commands {
         global: bool,
     },
 
-    /// Authenticate with an OAuth-capable provider
+    /// Authenticate with a supported provider
     Login {
-        /// Provider name (`openai` or `openrouter`)
+        /// Provider name (`openai`, `openrouter`, or `copilot`)
         provider: String,
     },
 
-    /// Clear stored OAuth credentials for a provider
+    /// Clear stored authentication credentials for a provider
     Logout {
-        /// Provider name (`openai` or `openrouter`)
+        /// Provider name (`openai`, `openrouter`, or `copilot`)
         provider: String,
     },
 
     /// Show authentication status for one provider or all supported providers
     Auth {
-        /// Optional provider name (`openai` or `openrouter`)
+        /// Optional provider name (`openai`, `openrouter`, or `copilot`)
         provider: Option<String>,
     },
 

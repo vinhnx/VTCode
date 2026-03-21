@@ -13,7 +13,8 @@ pub enum EditingMode {
 }
 
 impl EditingMode {
-    /// Cycle to the next mode: Edit -> Plan -> Edit
+    /// Cycle to the next mode: Edit -> Plan -> Edit.
+    /// Trusted Auto is tracked separately via the session autonomous-mode flag.
     pub fn next(self) -> Self {
         match self {
             Self::Edit => Self::Plan,

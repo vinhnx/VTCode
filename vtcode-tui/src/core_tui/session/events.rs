@@ -451,13 +451,16 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             };
 
-            // Note: The thinking spinner message is no longer added here.
-            // Instead, it's added in session_loop.rs after the user message is displayed,
-            // ensuring proper message ordering in the transcript (user message first, then spinner).
-
-            session.push_queued_input(submitted.clone());
             session.mark_dirty();
-            Some(InlineEvent::QueueSubmit(submitted))
+
+            // If a turn is actively running, queue the message so it starts immediately after
+            // the current turn completes. Otherwise submit directly so the turn starts now.
+            if session.is_running_activity() {
+                session.push_queued_input(submitted.clone());
+                Some(InlineEvent::QueueSubmit(submitted))
+            } else {
+                Some(InlineEvent::Submit(submitted))
+            }
         }
         KeyCode::Tab => {
             if !session.input_enabled {

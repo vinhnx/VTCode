@@ -1340,12 +1340,12 @@ fn arrow_keys_navigate_input_history() {
     session.set_input("first message".to_string());
     let submit_first = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(
-        matches!(submit_first, Some(InlineEvent::QueueSubmit(value)) if value == "first message")
+        matches!(submit_first, Some(InlineEvent::Submit(value)) if value == "first message")
     );
 
     session.set_input("second".to_string());
     let submit_second = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(matches!(submit_second, Some(InlineEvent::QueueSubmit(value)) if value == "second"));
+    assert!(matches!(submit_second, Some(InlineEvent::Submit(value)) if value == "second"));
 
     assert_eq!(session.input_manager.history().len(), 2);
     assert!(session.input_manager.content().is_empty());
@@ -1652,13 +1652,13 @@ fn non_bang_input_uses_default_padding() {
 }
 
 #[test]
-fn enter_queues_submission_by_default() {
+fn idle_enter_submits_immediately() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
     session.set_input("queued".to_string());
 
-    let queued = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(matches!(queued, Some(InlineEvent::QueueSubmit(value)) if value == "queued"));
+    let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(matches!(event, Some(InlineEvent::Submit(value)) if value == "queued"));
 }
 
 #[test]
@@ -2333,11 +2333,11 @@ fn consecutive_duplicate_submissions_not_stored_twice() {
 
     session.set_input("repeat".to_string());
     let first = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(matches!(first, Some(InlineEvent::QueueSubmit(value)) if value == "repeat"));
+    assert!(matches!(first, Some(InlineEvent::Submit(value)) if value == "repeat"));
 
     session.set_input("repeat".to_string());
     let second = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(matches!(second, Some(InlineEvent::QueueSubmit(value)) if value == "repeat"));
+    assert!(matches!(second, Some(InlineEvent::Submit(value)) if value == "repeat"));
 
     assert_eq!(session.input_manager.history().len(), 1);
 }
@@ -3255,6 +3255,48 @@ fn header_shows_safe_badge_for_tools_policy_trust() {
         .iter()
         .map(|span| span.content.clone().into_owned())
         .collect();
+    assert!(line_text.contains("[SAFE]"));
+}
+
+#[test]
+fn header_shows_full_auto_trust_badge_for_full_auto_trust() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.header_context.workspace_trust = format!("{}full auto", ui::HEADER_TRUST_PREFIX);
+    session.input_manager.set_content("test".to_string());
+    session
+        .input_manager
+        .set_cursor(session.input_manager.content().len());
+
+    let lines = session.header_lines();
+    assert_eq!(lines.len(), 1);
+
+    let line_text: String = lines[0]
+        .spans
+        .iter()
+        .map(|span| span.content.clone().into_owned())
+        .collect();
+    assert!(line_text.contains("Full-auto trust"));
+}
+
+#[test]
+fn header_shows_trusted_auto_badge() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.header_context.autonomous_mode = true;
+    session.header_context.workspace_trust = format!("{}tools policy", ui::HEADER_TRUST_PREFIX);
+    session.input_manager.set_content("test".to_string());
+    session
+        .input_manager
+        .set_cursor(session.input_manager.content().len());
+
+    let lines = session.header_lines();
+    assert_eq!(lines.len(), 1);
+
+    let line_text: String = lines[0]
+        .spans
+        .iter()
+        .map(|span| span.content.clone().into_owned())
+        .collect();
+    assert!(line_text.contains("Trusted auto"));
     assert!(line_text.contains("[SAFE]"));
 }
 

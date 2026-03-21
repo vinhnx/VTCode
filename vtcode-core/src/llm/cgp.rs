@@ -14,15 +14,15 @@ use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
 use crate::llm::factory::{LLMFactory, ProviderConfig as FactoryProviderConfig};
 use crate::llm::provider::LLMProvider;
 use crate::llm::provider_config::{
-    AnthropicProviderConfig, DeepSeekProviderConfig, GeminiProviderConfig,
+    AnthropicProviderConfig, CopilotProviderConfig, DeepSeekProviderConfig, GeminiProviderConfig,
     HuggingFaceProviderConfig, LiteLLMProviderConfig, LmStudioProviderConfig,
     MinimaxProviderConfig, MoonshotProviderConfig, OllamaProviderConfig, OpenAIProviderConfig,
     OpenResponsesProviderConfig, OpenRouterProviderConfig, ZAIProviderConfig,
 };
 use crate::llm::providers::{
-    AnthropicProvider, DeepSeekProvider, GeminiProvider, HuggingFaceProvider, LiteLLMProvider,
-    LmStudioProvider, MinimaxProvider, MoonshotProvider, OllamaProvider, OpenAIProvider,
-    OpenResponsesProvider, OpenRouterProvider, ZAIProvider,
+    AnthropicProvider, CopilotProvider, DeepSeekProvider, GeminiProvider, HuggingFaceProvider,
+    LiteLLMProvider, LmStudioProvider, MinimaxProvider, MoonshotProvider, OllamaProvider,
+    OpenAIProvider, OpenResponsesProvider, OpenRouterProvider, ZAIProvider,
 };
 
 /// Marker component for static provider metadata.
@@ -124,6 +124,7 @@ where
             openai: _,
             anthropic,
             model_behavior,
+            ..
         } = config;
 
         Box::new(P::from_standard_config(
@@ -152,6 +153,7 @@ impl ProviderBuildProvider<AnthropicProviderConfig> for AnthropicProviderBuild {
             openai: _,
             anthropic,
             model_behavior,
+            ..
         } = config;
 
         Box::new(AnthropicProvider::from_config(
@@ -180,6 +182,7 @@ impl ProviderBuildProvider<OpenAIProviderConfig> for OpenAIProviderBuild {
             openai,
             anthropic,
             model_behavior,
+            ..
         } = config;
 
         Box::new(OpenAIProvider::from_config(
@@ -192,6 +195,25 @@ impl ProviderBuildProvider<OpenAIProviderConfig> for OpenAIProviderBuild {
             anthropic,
             openai,
             model_behavior,
+        ))
+    }
+}
+
+pub struct CopilotProviderBuild;
+
+impl ProviderBuildProvider<CopilotProviderConfig> for CopilotProviderBuild {
+    fn build_provider(config: FactoryProviderConfig) -> Box<dyn LLMProvider> {
+        let FactoryProviderConfig {
+            model,
+            copilot_auth,
+            workspace_root,
+            ..
+        } = config;
+
+        Box::new(CopilotProvider::from_config(
+            model,
+            copilot_auth,
+            workspace_root,
         ))
     }
 }
@@ -246,6 +268,10 @@ crate::delegate_components!(AnthropicProviderConfig {
     ProviderMetadataComponent => AnthropicProviderConfig,
     ProviderBuildComponent => AnthropicProviderBuild,
 });
+crate::delegate_components!(CopilotProviderConfig {
+    ProviderMetadataComponent => CopilotProviderConfig,
+    ProviderBuildComponent => CopilotProviderBuild,
+});
 crate::delegate_components!(OpenAIProviderConfig {
     ProviderMetadataComponent => OpenAIProviderConfig,
     ProviderBuildComponent => OpenAIProviderBuild,
@@ -298,6 +324,7 @@ pub fn register_builtin_cgp_providers(factory: &mut LLMFactory) {
     factory.register_cgp_provider::<HuggingFaceProviderConfig>();
     factory.register_cgp_provider::<LiteLLMProviderConfig>();
     factory.register_cgp_provider::<AnthropicProviderConfig>();
+    factory.register_cgp_provider::<CopilotProviderConfig>();
     factory.register_cgp_provider::<MinimaxProviderConfig>();
     factory.register_cgp_provider::<DeepSeekProviderConfig>();
     factory.register_cgp_provider::<OpenRouterProviderConfig>();
@@ -335,6 +362,7 @@ mod tests {
             <GeminiProviderConfig as CanBuildProvider>::build_provider(FactoryProviderConfig {
                 api_key: Some("test-key".to_string()),
                 openai_chatgpt_auth: None,
+                copilot_auth: None,
                 base_url: None,
                 model: Some(
                     crate::config::constants::models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
@@ -344,6 +372,7 @@ mod tests {
                 openai: None,
                 anthropic: None,
                 model_behavior: None,
+                workspace_root: None,
             });
 
         assert_eq!(provider.name(), "gemini");
@@ -355,6 +384,7 @@ mod tests {
             <OpenAIProviderConfig as CanBuildProvider>::build_provider(FactoryProviderConfig {
                 api_key: Some("test-key".to_string()),
                 openai_chatgpt_auth: None,
+                copilot_auth: None,
                 base_url: None,
                 model: Some(crate::config::constants::models::openai::DEFAULT_MODEL.to_string()),
                 prompt_cache: None,
@@ -365,6 +395,7 @@ mod tests {
                 }),
                 anthropic: Some(AnthropicConfig::default()),
                 model_behavior: None,
+                workspace_root: None,
             });
 
         assert_eq!(provider.name(), "openai");
@@ -376,6 +407,7 @@ mod tests {
             <AnthropicProviderConfig as CanBuildProvider>::build_provider(FactoryProviderConfig {
                 api_key: Some("test-key".to_string()),
                 openai_chatgpt_auth: None,
+                copilot_auth: None,
                 base_url: None,
                 model: Some(crate::config::constants::models::anthropic::DEFAULT_MODEL.to_string()),
                 prompt_cache: None,
@@ -386,6 +418,7 @@ mod tests {
                     ..AnthropicConfig::default()
                 }),
                 model_behavior: None,
+                workspace_root: None,
             });
 
         assert_eq!(provider.name(), "anthropic");
@@ -403,6 +436,7 @@ mod tests {
             providers,
             vec![
                 "anthropic",
+                "copilot",
                 "deepseek",
                 "gemini",
                 "huggingface",

@@ -57,6 +57,13 @@ fn apply_api_key_state(config: &mut VTCodeConfig, selection: &ModelSelectionResu
 }
 
 fn uses_provider_api_key(selection: &ModelSelectionResult) -> bool {
+    if selection
+        .provider_enum
+        .is_some_and(|provider| provider.uses_managed_auth())
+    {
+        return false;
+    }
+
     selection.provider_enum != Some(Provider::Ollama) || is_cloud_ollama_model(&selection.model)
 }
 
@@ -160,6 +167,15 @@ mod tests {
             Some(Provider::OpenAI),
             "openai",
             "gpt-5.2"
+        )));
+    }
+
+    #[test]
+    fn managed_auth_providers_skip_provider_api_key_state() {
+        assert!(!uses_provider_api_key(&selection(
+            Some(Provider::Copilot),
+            "copilot",
+            vtcode_core::config::constants::models::copilot::DEFAULT_MODEL
         )));
     }
 

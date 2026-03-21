@@ -8,23 +8,13 @@ mkdir -p "${OUT_DIR}"
 LABEL="${1:-latest}"
 OUT_JSON="${OUT_DIR}/${LABEL}.json"
 
-now_ns() {
-  python3 - <<'PY'
-import time
-print(time.perf_counter_ns())
-PY
-}
-
 run_timed() {
   local name="$1"
   shift
   local log_file="${OUT_DIR}/${LABEL}-${name}.log"
-  local start_ns end_ns duration_ms
-  start_ns="$(now_ns)"
-  (cd "${ROOT_DIR}" && "$@") >"${log_file}" 2>&1
-  end_ns="$(now_ns)"
-  duration_ms=$(((end_ns - start_ns) / 1000000))
-  echo "${duration_ms}"
+  local time_file="${OUT_DIR}/${LABEL}-${name}.time"
+  (cd "${ROOT_DIR}" && /usr/bin/time -p -o "${time_file}" "$@" >"${log_file}" 2>&1)
+  awk '/^real / { printf "%.0f\n", $2 * 1000.0 }' "${time_file}"
 }
 
 echo "[perf] collecting baseline in ${OUT_JSON}"

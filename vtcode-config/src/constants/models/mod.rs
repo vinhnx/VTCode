@@ -1,4 +1,5 @@
 pub mod anthropic;
+pub mod copilot;
 pub mod deepseek;
 pub mod google;
 pub mod huggingface;
@@ -37,6 +38,7 @@ pub const CLAUDE_SONNET_4_6: &str = anthropic::CLAUDE_SONNET_4_6;
 pub const CLAUDE_OPUS_4_6: &str = anthropic::CLAUDE_OPUS_4_6;
 pub const CLAUDE_HAIKU_4_5: &str = anthropic::CLAUDE_HAIKU_4_5;
 pub const CLAUDE_HAIKU_4_5_20251001: &str = anthropic::CLAUDE_HAIKU_4_5_20251001;
+pub const COPILOT: &str = copilot::DEFAULT_MODEL;
 pub const MINIMAX_M2_7: &str = minimax::MINIMAX_M2_7;
 pub const MINIMAX_M2_5: &str = minimax::MINIMAX_M2_5;
 pub const GLM_5: &str = zai::GLM_5;

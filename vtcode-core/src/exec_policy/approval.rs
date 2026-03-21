@@ -82,6 +82,15 @@ impl AskForApproval {
         }
     }
 
+    /// Check whether built-in permission requests are rejected.
+    pub const fn rejects_request_permission_prompt(self) -> bool {
+        match self {
+            Self::Never => true,
+            Self::Reject(reject_config) => reject_config.rejects_request_permissions(),
+            Self::OnFailure | Self::OnRequest | Self::UnlessTrusted => false,
+        }
+    }
+
     /// Check whether MCP elicitation prompts are rejected.
     pub const fn rejects_mcp_elicitation(self) -> bool {
         match self {
@@ -332,20 +341,23 @@ mod tests {
     fn test_ask_for_approval_rejection_helpers() {
         assert!(AskForApproval::Never.rejects_rule_prompt());
         assert!(AskForApproval::Never.rejects_sandbox_prompt());
+        assert!(AskForApproval::Never.rejects_request_permission_prompt());
         assert!(AskForApproval::Never.rejects_mcp_elicitation());
 
         assert!(!AskForApproval::OnRequest.rejects_rule_prompt());
         assert!(!AskForApproval::OnRequest.rejects_sandbox_prompt());
+        assert!(!AskForApproval::OnRequest.rejects_request_permission_prompt());
         assert!(!AskForApproval::OnRequest.rejects_mcp_elicitation());
 
         let reject_policy = AskForApproval::Reject(RejectConfig {
             sandbox_approval: true,
             rules: false,
-            request_permissions: false,
+            request_permissions: true,
             mcp_elicitations: true,
         });
         assert!(!reject_policy.rejects_rule_prompt());
         assert!(reject_policy.rejects_sandbox_prompt());
+        assert!(reject_policy.rejects_request_permission_prompt());
         assert!(reject_policy.rejects_mcp_elicitation());
     }
 

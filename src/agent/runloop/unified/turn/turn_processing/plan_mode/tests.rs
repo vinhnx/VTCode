@@ -686,11 +686,13 @@ fn select_best_plan_validation_prefers_more_complete_candidate() {
     current.missing_sections.push("Summary".to_string());
     current.placeholder_tokens.push("[step]".to_string());
 
-    let mut candidate = PlanValidationReport::default();
-    candidate.summary_present = true;
-    candidate.implementation_step_count = 2;
-    candidate.validation_item_count = 1;
-    candidate.assumption_count = 1;
+    let candidate = PlanValidationReport {
+        summary_present: true,
+        implementation_step_count: 2,
+        validation_item_count: 1,
+        assumption_count: 1,
+        ..Default::default()
+    };
 
     let selected = select_best_plan_validation(Some(&current), Some(&candidate))
         .expect("expected selected validation");

@@ -44,7 +44,7 @@ pub(super) fn render_mcp_usage(renderer: &mut AnsiRenderer) -> Result<()> {
     )?;
     renderer.line(
         MessageStyle::Info,
-        "  login/logout <name> – Manage OAuth sessions (if supported)",
+        "  login/logout <name> – Manage provider authentication (if supported)",
     )?;
     renderer.line(
         MessageStyle::Info,
@@ -160,12 +160,19 @@ pub(super) fn render_help(
             "  Up/Down arrows – Navigate command history",
         )?;
         renderer.line(MessageStyle::Info, "  Esc+Esc – Open the rewind picker")?;
-        renderer.line(MessageStyle::Info, "  Enter/Tab – Queue the current input")?;
         renderer.line(
             MessageStyle::Info,
-            "  Ctrl+Enter – Run now (or steer the active turn)",
+            "  Enter – Submit now (or queue if a turn is active)",
         )?;
-        renderer.line(MessageStyle::Info, "  Shift+Tab – Toggle permission modes")?;
+        renderer.line(MessageStyle::Info, "  Tab – Queue the current input")?;
+        renderer.line(
+            MessageStyle::Info,
+            "  Ctrl+Enter – Run now / steer the active turn",
+        )?;
+        renderer.line(
+            MessageStyle::Info,
+            "  Shift+Tab – Cycle Edit, Trusted Auto, and Plan modes",
+        )?;
         renderer.line(MessageStyle::Info, "")?;
         renderer.line(MessageStyle::Info, "Multiline input:")?;
         renderer.line(

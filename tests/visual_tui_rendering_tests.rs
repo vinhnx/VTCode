@@ -7,7 +7,7 @@
 
 use insta::assert_snapshot;
 use ratatui::{Terminal, backend::TestBackend};
-use vtcode_tui::{
+use vtcode_core::ui::{
     InlineHeaderContext, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
     SessionOptions, spawn_session_with_options,
 };

@@ -64,6 +64,7 @@ async fn handle_list_models(_cli: &Cli) -> Result<()> {
             ProviderConfig {
                 api_key: Some("dummy".to_owned()),
                 openai_chatgpt_auth: None,
+                copilot_auth: None,
                 base_url: None,
                 model: None,
                 prompt_cache: None,
@@ -71,6 +72,7 @@ async fn handle_list_models(_cli: &Cli) -> Result<()> {
                 openai: None,
                 anthropic: None,
                 model_behavior: None,
+                workspace_root: None,
             },
         ) {
             let models = provider.supported_models();
@@ -280,6 +282,7 @@ async fn handle_test_provider(_cli: &Cli, provider: &str) -> Result<()> {
         ProviderConfig {
             api_key,
             openai_chatgpt_auth: None,
+            copilot_auth: None,
             base_url,
             model: model.clone(),
             prompt_cache: None,
@@ -287,6 +290,7 @@ async fn handle_test_provider(_cli: &Cli, provider: &str) -> Result<()> {
             openai: None,
             anthropic: None,
             model_behavior: None,
+            workspace_root: None,
         },
     )?;
 

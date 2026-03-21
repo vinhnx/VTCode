@@ -225,7 +225,7 @@ fn render_if_dirty<B: Backend, S: TuiSessionDriver>(
 }
 
 pub(super) struct DriveRuntimeOptions<E> {
-    pub(super) event_callback: Option<std::sync::Arc<dyn Fn(&E) + Send + Sync + 'static>>,
+    pub(super) event_callback: Option<super::EventCallback<E>>,
     pub(super) focus_callback: Option<FocusChangeCallback>,
     pub(super) input_activity_counter: Option<std::sync::Arc<std::sync::atomic::AtomicU64>>,
     pub(super) use_alternate_screen: bool,

@@ -972,6 +972,27 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn persisted_approval_cache_round_trips_through_registry() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let policy_path = temp_dir.path().join("tool-policy.json");
+        let policy_manager =
+            crate::tool_policy::ToolPolicyManager::new_with_config_path(&policy_path).await?;
+        let registry =
+            ToolRegistry::new_with_custom_policy(temp_dir.path().to_path_buf(), policy_manager)
+                .await;
+
+        registry.persist_approval_cache_key("read_file").await?;
+
+        assert!(registry.has_persisted_approval("read_file").await);
+
+        let manager =
+            crate::tool_policy::ToolPolicyManager::new_with_config_path(&policy_path).await?;
+        assert!(manager.has_approval_cache_key("read_file"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn public_alias_resolution_stays_consistent_across_execution_preflight_and_policy()
     -> Result<()> {
         let temp_dir = TempDir::new()?;

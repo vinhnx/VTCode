@@ -133,10 +133,10 @@ pub(crate) async fn dispatch_command(
             crate::cli::auth::handle_login_command(Some(cfg), &provider).await?;
         }
         Commands::Logout { provider } => {
-            crate::cli::auth::handle_logout_command(Some(cfg), &provider)?;
+            crate::cli::auth::handle_logout_command(Some(cfg), &provider).await?;
         }
         Commands::Auth { provider } => {
-            crate::cli::auth::handle_show_auth_command(Some(cfg), provider.as_deref())?;
+            crate::cli::auth::handle_show_auth_command(Some(cfg), provider.as_deref()).await?;
         }
         Commands::InitProject {
             name,

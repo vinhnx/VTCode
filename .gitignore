@@ -803,6 +803,9 @@ TODO2.md
 .vtcode/mcp/status.json
 .vtcode/terminals/
 .vtcode/sessions/
+.vtcode/tasks/
+.vtcode/tasks/current_blocked.md
+plans/
 
 .claude/
 .agent/
@@ -810,6 +813,6 @@ TODO2.md
 resources/vhs/.vtcode/
 .agents/
 GEMINI.md
-.vtcode.toml
+vtcode.toml
 
 plans/

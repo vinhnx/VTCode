@@ -164,5 +164,8 @@
       }
     },
     "providers": {}
+  },
+  "approval_cache": {
+    "allowed": []
   }
 }

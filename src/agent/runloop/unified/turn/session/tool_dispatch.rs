@@ -100,81 +100,82 @@ pub(crate) async fn execute_direct_tool_call(
         ctx.input_status_state,
     );
 
-    let mut repeated_tool_attempts =
-        crate::agent::runloop::unified::turn::tool_outcomes::helpers::LoopTracker::new();
-    let mut turn_modified_files = BTreeSet::new();
+    let turn_modified_files = {
+        let mut repeated_tool_attempts =
+            crate::agent::runloop::unified::turn::tool_outcomes::helpers::LoopTracker::new();
+        let mut turn_modified_files = BTreeSet::new();
+        let mut t_ctx = ToolOutcomeContext {
+            ctx: &mut tp_ctx,
+            repeated_tool_attempts: &mut repeated_tool_attempts,
+            turn_modified_files: &mut turn_modified_files,
+        };
 
-    let mut t_ctx = ToolOutcomeContext {
-        ctx: &mut tp_ctx,
-        repeated_tool_attempts: &mut repeated_tool_attempts,
-        turn_modified_files: &mut turn_modified_files,
-    };
-
-    // 1. Display user message and push to history
-    if is_bang_prefix {
-        t_ctx.ctx.renderer.line(
-            vtcode_core::utils::ansi::MessageStyle::Info,
-            "Shell mode (!): executing command directly.",
-        )?;
-    }
-    display_user_message(t_ctx.ctx.renderer, input)?;
-    t_ctx
-        .ctx
-        .working_history
-        .push(uni::Message::user(input.to_string()));
-
-    // 2. Inject assistant message with tool call to keep history valid for LLM
-    let tool_call_id = format!("direct_{}_{}", tool_name, t_ctx.ctx.working_history.len());
-    let tool_call = uni::ToolCall::function(
-        tool_call_id.clone(),
-        tool_name.to_string(),
-        serde_json::to_string(&args).unwrap_or_default(),
-    );
-    t_ctx
-        .ctx
-        .working_history
-        .push(uni::Message::assistant_with_tools(
-            String::new(),
-            vec![tool_call],
-        ));
-
-    // 3. Execute through unified pipeline to ensure safety, metrics, and consistent output
-    let outcome = handle_single_tool_call(&mut t_ctx, &tool_call_id, tool_name, args).await?;
-
-    // 4. Cleanup UI and return outcome
-    t_ctx.ctx.handle.clear_input();
-    if let Some(placeholder) = t_ctx.ctx.default_placeholder {
-        t_ctx.ctx.handle.set_placeholder(Some(placeholder.clone()));
-    }
-    let restore_left = t_ctx.ctx.input_status_state.left.clone();
-    let restore_right = t_ctx.ctx.input_status_state.right.clone();
-    t_ctx.ctx.restore_input_status(restore_left, restore_right);
-
-    if let Some(TurnHandlerOutcome::Break(TurnLoopResult::Exit)) = outcome {
-        return Ok(Some(InteractionOutcome::Exit {
-            reason: vtcode_core::hooks::SessionEndReason::Exit,
-        }));
-    }
-
-    if let Some(reply) = generate_completion_reply_with_suggestions(
-        t_ctx.ctx.working_history,
-        ReplyKind::Immediate,
-        t_ctx.ctx.provider_client.as_ref(),
-        &t_ctx.ctx.config.model,
-    )
-    .await
-    {
+        // 1. Display user message and push to history
+        if is_bang_prefix {
+            t_ctx.ctx.renderer.line(
+                vtcode_core::utils::ansi::MessageStyle::Info,
+                "Shell mode (!): executing command directly.",
+            )?;
+        }
+        display_user_message(t_ctx.ctx.renderer, input)?;
         t_ctx
             .ctx
-            .renderer
-            .line(vtcode_core::utils::ansi::MessageStyle::Response, &reply)?;
-        t_ctx.ctx.working_history.push(
-            uni::Message::assistant(reply).with_phase(Some(uni::AssistantPhase::FinalAnswer)),
-        );
-    }
+            .working_history
+            .push(uni::Message::user(input.to_string()));
 
-    drop(t_ctx);
-    drop(tp_ctx);
+        // 2. Inject assistant message with tool call to keep history valid for LLM
+        let tool_call_id = format!("direct_{}_{}", tool_name, t_ctx.ctx.working_history.len());
+        let tool_call = uni::ToolCall::function(
+            tool_call_id.clone(),
+            tool_name.to_string(),
+            serde_json::to_string(&args).unwrap_or_default(),
+        );
+        t_ctx
+            .ctx
+            .working_history
+            .push(uni::Message::assistant_with_tools(
+                String::new(),
+                vec![tool_call],
+            ));
+
+        // 3. Execute through unified pipeline to ensure safety, metrics, and consistent output
+        let outcome = handle_single_tool_call(&mut t_ctx, &tool_call_id, tool_name, args).await?;
+
+        // 4. Cleanup UI and return outcome
+        t_ctx.ctx.handle.clear_input();
+        if let Some(placeholder) = t_ctx.ctx.default_placeholder {
+            t_ctx.ctx.handle.set_placeholder(Some(placeholder.clone()));
+        }
+        let restore_left = t_ctx.ctx.input_status_state.left.clone();
+        let restore_right = t_ctx.ctx.input_status_state.right.clone();
+        t_ctx.ctx.restore_input_status(restore_left, restore_right);
+
+        if let Some(TurnHandlerOutcome::Break(TurnLoopResult::Exit)) = outcome {
+            return Ok(Some(InteractionOutcome::Exit {
+                reason: vtcode_core::hooks::SessionEndReason::Exit,
+            }));
+        }
+
+        if let Some(reply) = generate_completion_reply_with_suggestions(
+            t_ctx.ctx.working_history,
+            ReplyKind::Immediate,
+            t_ctx.ctx.provider_client.as_ref(),
+            &t_ctx.ctx.config.model,
+        )
+        .await
+        {
+            t_ctx
+                .ctx
+                .renderer
+                .line(vtcode_core::utils::ansi::MessageStyle::Response, &reply)?;
+            t_ctx.ctx.working_history.push(
+                uni::Message::assistant(reply).with_phase(Some(uni::AssistantPhase::FinalAnswer)),
+            );
+        }
+
+        turn_modified_files
+    };
+
     ctx.interaction_ctx
         .agent_touched_paths
         .extend(turn_modified_files.iter().map(|path| {

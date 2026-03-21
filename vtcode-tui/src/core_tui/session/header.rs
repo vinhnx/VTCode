@@ -428,7 +428,7 @@ impl Session {
                 .add_modifier(Modifier::BOLD);
             push_badge(
                 &mut spans,
-                "[AUTO]".to_string(),
+                "Trusted auto".to_string(),
                 badge_style,
                 &mut first_section,
             );
@@ -442,7 +442,7 @@ impl Session {
                 .add_modifier(Modifier::BOLD);
             push_badge(
                 &mut spans,
-                "Accept edits".to_string(),
+                "Full-auto trust".to_string(),
                 badge_style,
                 &mut first_section,
             );
