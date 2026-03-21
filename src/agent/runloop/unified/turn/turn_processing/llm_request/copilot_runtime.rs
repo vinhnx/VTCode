@@ -12,7 +12,7 @@ use vtcode_core::copilot::{
     CopilotAcpCompatibilityState, CopilotObservedToolCall, CopilotObservedToolCallStatus,
     CopilotPermissionDecision, CopilotPermissionRequest, CopilotRuntimeRequest,
     CopilotToolCallFailure, CopilotToolCallRequest, CopilotToolCallResponse,
-    CopilotToolCallSuccess, PromptSession, PromptSessionCancelHandle,
+    CopilotToolCallSuccess, PromptSession, PromptSessionCancelHandle, PromptUpdate,
 };
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::exec::events::ToolCallStatus;
@@ -655,20 +655,26 @@ pub(super) fn prompt_session_to_stream(
 
         let mut content = String::new();
         let mut reasoning = String::new();
+        // Once the updates channel closes (all tokens delivered), disable that arm so
+        // the select no longer spins on None and immediately picks `completion`.
+        let mut updates_done = false;
 
         loop {
             tokio::select! {
-                update = updates.recv() => {
+                update = updates.recv(), if !updates_done => {
                     match update {
-                        Some(vtcode_core::copilot::PromptUpdate::Text(delta)) => {
+                        Some(PromptUpdate::Text(delta)) => {
                             content.push_str(&delta);
                             yield Ok(LLMStreamEvent::Token { delta });
                         }
-                        Some(vtcode_core::copilot::PromptUpdate::Thought(delta)) => {
+                        Some(PromptUpdate::Thought(delta)) => {
                             reasoning.push_str(&delta);
                             yield Ok(LLMStreamEvent::Reasoning { delta });
                         }
-                        None => {}
+                        None => {
+                            // All tokens delivered; completion will be ready on next tick.
+                            updates_done = true;
+                        }
                     }
                 }
                 result = &mut completion => {
@@ -688,22 +694,22 @@ pub(super) fn prompt_session_to_stream(
                     };
                     while let Ok(update) = updates.try_recv() {
                         match update {
-                            vtcode_core::copilot::PromptUpdate::Text(delta) => {
+                            PromptUpdate::Text(delta) => {
                                 content.push_str(&delta);
                                 yield Ok(LLMStreamEvent::Token { delta });
                             }
-                            vtcode_core::copilot::PromptUpdate::Thought(delta) => {
+                            PromptUpdate::Thought(delta) => {
                                 reasoning.push_str(&delta);
                                 yield Ok(LLMStreamEvent::Reasoning { delta });
                             }
                         }
                     }
 
-                    let mut response = LLMResponse::new(model.clone(), content.clone());
+                    let mut response = LLMResponse::new(model, content);
                     response.finish_reason =
                         map_copilot_finish_reason(&completion.stop_reason);
                     if !reasoning.is_empty() {
-                        response.reasoning = Some(reasoning.clone());
+                        response.reasoning = Some(reasoning);
                     }
                     cancellation_guard.disarm();
                     yield Ok(Completed {

@@ -160,10 +160,14 @@ pub(super) fn render_help(
             "  Up/Down arrows – Navigate command history",
         )?;
         renderer.line(MessageStyle::Info, "  Esc+Esc – Open the rewind picker")?;
-        renderer.line(MessageStyle::Info, "  Enter/Tab – Queue the current input")?;
         renderer.line(
             MessageStyle::Info,
-            "  Ctrl+Enter – Run now (or steer the active turn)",
+            "  Enter – Submit now (or queue if a turn is active)",
+        )?;
+        renderer.line(MessageStyle::Info, "  Tab – Queue the current input")?;
+        renderer.line(
+            MessageStyle::Info,
+            "  Ctrl+Enter – Run now / steer the active turn",
         )?;
         renderer.line(
             MessageStyle::Info,
