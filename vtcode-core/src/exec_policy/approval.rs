@@ -6,11 +6,13 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct RejectConfig {
-    /// Reject approval prompts related to sandbox escalation.
+    /// Reject approval prompts related to sandbox escalation, including
+    /// `with_additional_permissions`.
     pub sandbox_approval: bool,
     /// Reject prompts triggered by policy `prompt` rules.
     pub rules: bool,
-    /// Reject permission request prompts that are separate from sandbox approval.
+    /// Reject built-in permission request prompts that are separate from
+    /// sandbox approval.
     pub request_permissions: bool,
     /// Reject MCP elicitation prompts.
     pub mcp_elicitations: bool,
@@ -82,7 +84,7 @@ impl AskForApproval {
         }
     }
 
-    /// Check whether permission request prompts are rejected.
+    /// Check whether built-in permission request prompts are rejected.
     pub const fn rejects_request_permission_prompt(self) -> bool {
         match self {
             Self::Never => true,
@@ -503,14 +505,11 @@ mod tests {
             mcp_elicitations: false,
         });
 
-        let requirement = default_exec_approval_requirement(policy, true);
+        let requirement = default_exec_approval_requirement(policy, false);
 
         assert_eq!(
             requirement,
-            ExecApprovalRequirement::NeedsApproval {
-                reason: None,
-                proposed_execpolicy_amendment: None,
-            }
+            ExecApprovalRequirement::skip()
         );
     }
 
