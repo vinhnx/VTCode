@@ -115,6 +115,21 @@ http_headers = { "X-Example-Header" = "example-value" }
 env_http_headers = { "X-Example-Features" = "EXAMPLE_FEATURES" }
 ```
 
+### custom_providers
+
+Use `custom_providers` for named OpenAI-compatible endpoints that are not one of VT Code's built-in providers. Each entry has a stable `name`, a human-friendly `display_name`, a `base_url`, an optional `api_key_env`, and a default `model`.
+
+```toml
+[[custom_providers]]
+name = "mycorp"
+display_name = "MyCorporateName"
+base_url = "https://llm.corp.example/v1"
+api_key_env = "MYCORP_API_KEY"
+model = "gpt-5.4"
+```
+
+These entries are editable from `/config`, and they show up in the model picker using `display_name` so you can toggle between multiple custom endpoints without losing track of the active one.
+
 ### Model-specific settings
 
 You can also configure model-specific behavior:

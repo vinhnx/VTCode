@@ -165,7 +165,9 @@ pub struct VTCodeConfig {
     #[serde(default)]
     pub skills: SkillsConfig,
 
-    /// User-defined OpenAI-compatible provider endpoints
+    /// User-defined OpenAI-compatible provider endpoints.
+    /// These entries are editable in `/config` and appear in the model picker
+    /// using each entry's `display_name`.
     #[serde(default)]
     pub custom_providers: Vec<CustomProviderConfig>,
 
