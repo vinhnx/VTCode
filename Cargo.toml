@@ -90,6 +90,9 @@ ring = "0.17"
 version = "0.92.0"
 edition = "2024"
 license = "MIT"
+homepage = "https://github.com/vinhnx/vtcode"
+repository = "https://github.com/vinhnx/vtcode"
+documentation = "https://docs.rs/vtcode"
 
 [workspace]
 resolver = "2"
