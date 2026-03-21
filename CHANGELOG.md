@@ -2,6 +2,20 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.92.1 - 2026-03-21
+
+### Highlights
+#### Bug Fixes
+
+- Remove idle input notification (367e91ba) 
+### Other Changes
+#### Other
+
+- Implement Ghostty VT backend for terminal emulation and snapshot rendering (2af5a11d) 
+- Refactor code for improved readability and performance; add loading indicators for better user experience (0d20012f) 
+- Add support for custom OpenAI-compatible providers in configuration (8a76debf) 
+### Contributors
+@vinhnx
 ## 0.92.0 - 2026-03-21
 
 ### Highlights
