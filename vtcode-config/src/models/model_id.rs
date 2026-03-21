@@ -134,6 +134,8 @@ pub enum ModelId {
     OllamaQwen3Next80bCloud,
     /// MiniMax-M2 Cloud - Cloud-hosted MiniMax-M2 model served via Ollama Cloud
     OllamaMinimaxM2Cloud,
+    /// MiniMax-M2.7 Cloud - Cloud-hosted MiniMax-M2.7 model served via Ollama Cloud
+    OllamaMinimaxM27Cloud,
     /// GLM-5 Cloud - Cloud-hosted GLM-5 model served via Ollama Cloud
     OllamaGlm5Cloud,
     /// MiniMax-M2.5 Cloud - Cloud-hosted MiniMax-M2.5 model served via Ollama Cloud

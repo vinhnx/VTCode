@@ -61,6 +61,7 @@ impl ModelId {
             ModelId::OllamaGlm5Cloud,
             ModelId::OllamaGemini3FlashPreviewCloud,
             ModelId::OllamaMinimaxM2Cloud,
+            ModelId::OllamaMinimaxM27Cloud,
             ModelId::OllamaMinimaxM25Cloud,
             ModelId::OllamaNemotron3SuperCloud,
             // MiniMax models

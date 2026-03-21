@@ -391,6 +391,7 @@ impl ModelId {
             ModelId::OllamaDeepseekV32Cloud => "deepseek-v3.2",
             ModelId::OllamaQwen3Next80bCloud => "qwen3-next",
             ModelId::OllamaMinimaxM2Cloud => "minimax-m2",
+            ModelId::OllamaMinimaxM27Cloud => "minimax-m2.7",
             ModelId::OllamaGlm5Cloud => "glm-5",
             ModelId::OllamaMinimaxM25Cloud => "minimax-m2.5",
             ModelId::OllamaNemotron3SuperCloud => "nemotron-3",

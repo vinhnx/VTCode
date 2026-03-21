@@ -59,6 +59,7 @@ impl ModelId {
             | ModelId::OllamaQwen3Next80bCloud
             | ModelId::OllamaGemini3FlashPreviewCloud
             | ModelId::OllamaMinimaxM2Cloud
+            | ModelId::OllamaMinimaxM27Cloud
             | ModelId::OllamaMinimaxM25Cloud
             | ModelId::OllamaNemotron3SuperCloud
             | ModelId::OllamaGlm5Cloud => Provider::Ollama,

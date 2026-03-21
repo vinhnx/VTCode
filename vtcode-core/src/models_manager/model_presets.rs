@@ -781,6 +781,29 @@ fn ollama_presets() -> Vec<ModelPreset> {
         show_in_picker: true,
         supported_in_api: true,
         context_window: Some(96_000),
+    },
+    ModelPreset {
+        id: "ollama/minimax-m2.7:cloud".to_string(),
+        model: "minimax-m2.7:cloud".to_string(),
+        display_name: "MiniMax M2.7 (Ollama)".to_string(),
+        description: "Cloud-hosted MiniMax-M2.7 served through Ollama".to_string(),
+        provider: Provider::Ollama,
+        default_reasoning_effort: ReasoningEffortLevel::Medium,
+        supported_reasoning_efforts: vec![
+            ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::Medium,
+                description: "Balanced".to_string(),
+            },
+            ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::High,
+                description: "Deep".to_string(),
+            },
+        ],
+        is_default: false,
+        upgrade: None,
+        show_in_picker: true,
+        supported_in_api: true,
+        context_window: Some(204_800),
     }]
 }
 

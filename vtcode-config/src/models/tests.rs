@@ -351,6 +351,7 @@ fn test_models_for_provider() {
     assert!(ollama_models.contains(&ModelId::OllamaQwen3Next80bCloud));
     assert!(ollama_models.contains(&ModelId::OllamaGemini3FlashPreviewCloud));
     assert!(ollama_models.contains(&ModelId::OllamaMinimaxM2Cloud));
+    assert!(ollama_models.contains(&ModelId::OllamaMinimaxM27Cloud));
     assert!(ollama_models.contains(&ModelId::OllamaMinimaxM25Cloud));
     assert!(ollama_models.contains(&ModelId::OllamaGlm5Cloud));
 
@@ -389,6 +390,10 @@ fn test_ollama_cloud_models() {
         (
             ModelId::OllamaMinimaxM2Cloud,
             models::ollama::MINIMAX_M2_CLOUD,
+        ),
+        (
+            ModelId::OllamaMinimaxM27Cloud,
+            models::ollama::MINIMAX_M27_CLOUD,
         ),
         (ModelId::OllamaGlm5Cloud, models::ollama::GLM_5_CLOUD),
     ];

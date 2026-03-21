@@ -78,6 +78,7 @@ The `/model` picker now lists the core Ollama catalog so you can choose them wit
 - `qwen3-coder:480b-cloud`
 - `glm-4.6:cloud`
 - `glm-4.7:cloud`
+- `minimax-m2.7:cloud`
 - `minimax-m2.5:cloud`
 - `nemotron-3-super:cloud`
 

@@ -53,6 +53,7 @@ impl ModelId {
             ModelId::OllamaQwen3Next80bCloud => "Qwen3 Next 80B (cloud)",
             ModelId::OllamaGemini3FlashPreviewCloud => "Gemini 3 Flash Preview (cloud)",
             ModelId::OllamaMinimaxM2Cloud => "MiniMax-M2 (cloud)",
+            ModelId::OllamaMinimaxM27Cloud => "MiniMax-M2.7 (cloud)",
             ModelId::OllamaGlm5Cloud => "GLM-5 (cloud)",
             ModelId::OllamaMinimaxM25Cloud => "MiniMax-M2.5 (cloud)",
             ModelId::OllamaNemotron3SuperCloud => "Nemotron-3-Super (cloud)",

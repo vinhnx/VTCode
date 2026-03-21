@@ -2559,6 +2559,22 @@
         },
         "context": 131072
       },
+      "minimax-m2.7:cloud": {
+        "id": "minimax-m2.7:cloud",
+        "name": "MiniMax-M2.7 (cloud)",
+        "description": "Recursive self-improvement flagship with strong reasoning and coding performance",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 204800
+      },
       "gemini-3-flash-preview:cloud": {
         "id": "gemini-3-flash-preview:cloud",
         "name": "Gemini 3 Flash Preview (cloud)",
