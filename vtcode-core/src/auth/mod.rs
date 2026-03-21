@@ -13,7 +13,7 @@ pub use vtcode_auth::{
     run_auth_code_callback_server as run_oauth_callback_server,
 };
 
-pub use auth_handler::AuthHandler;
+pub use auth_handler::{AuthHandler, AuthMethod};
 
 // Re-export config auth types for convenience
 pub use vtcode_config::auth::{

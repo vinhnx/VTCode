@@ -3,7 +3,7 @@
 ## Initialize ACP Client
 
 ```rust
-use vtcode_acp_client::AcpClient;
+use vtcode_acp::AcpClient;
 
 let client = AcpClient::new("my-agent".to_string())?;
 let registry = client.registry();
@@ -12,7 +12,7 @@ let registry = client.registry();
 ## Register Remote Agent
 
 ```rust
-use vtcode_acp_client::AgentInfo;
+use vtcode_acp::AgentInfo;
 
 let agent = AgentInfo {
     id: "remote-agent".to_string(),
@@ -94,7 +94,7 @@ println!("Capabilities: {:?}", agent_info.capabilities);
 ## Error Handling
 
 ```rust
-use vtcode_acp_client::AcpError;
+use vtcode_acp::AcpError;
 
 match client.call_sync("id", "action".to_string(), json!({})).await {
     Ok(result) => println!("Success: {}", result),
@@ -111,7 +111,7 @@ match client.call_sync("id", "action".to_string(), json!({})).await {
 ## Message Types
 
 ```rust
-use vtcode_acp_client::AcpMessage;
+use vtcode_acp::AcpMessage;
 
 // Create request
 let msg = AcpMessage::request(
@@ -172,7 +172,7 @@ registry.unregister("agent-id").await?;
 
 ```rust
 use std::time::Duration;
-use vtcode_acp_client::AcpClientBuilder;
+use vtcode_acp::AcpClientBuilder;
 
 let client = AcpClientBuilder::new("local-agent".to_string())
     .with_timeout(Duration::from_secs(60))
@@ -265,7 +265,7 @@ Response: "OK" or JSON status
 
 ```bash
 # Enable tracing
-RUST_LOG=vtcode_acp_client=trace
+RUST_LOG=vtcode_acp=trace
 
 # Or with all details
 RUST_LOG=debug
@@ -340,13 +340,13 @@ for job_id in job_ids {
 
 ```bash
 # Run all ACP client tests
-cargo test -p vtcode-acp-client
+cargo test -p vtcode-acp
 
 # Run specific test
-cargo test -p vtcode-acp-client test_agent_registry
+cargo test -p vtcode-acp test_agent_registry
 
 # Run with output
-cargo test -p vtcode-acp-client -- --nocapture
+cargo test -p vtcode-acp -- --nocapture
 
 # Run example
 cargo run --example acp_distributed_workflow
@@ -387,6 +387,6 @@ Error: Failed to parse response
 ## Documentation Links
 
 - [Full ACP Integration Guide](./ACP_INTEGRATION.md)
-- [Client Library README](../vtcode-acp-client/README.md)
+- [Client Library README](../vtcode-acp/README.md)
 - [ACP Specification](https://agentcommunicationprotocol.dev/)
 - [Example Code](../examples/acp_distributed_workflow.rs)

@@ -30,7 +30,7 @@ absolute-paths-allowed-crates = [
     "vtcode-bash-runner",
     "vtcode-exec-events",
     "vtcode-file-search",
-    "vtcode-acp-client",
+    "vtcode-acp",
     "vtcode-process-hardening",
 ]
 

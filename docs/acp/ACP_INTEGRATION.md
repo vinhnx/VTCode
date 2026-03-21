@@ -29,7 +29,7 @@ VT Code now supports Agent Communication Protocol (ACP) for inter-agent communic
 
 
 
-          vtcode-acp-client
+          vtcode-acp
            HTTP Communication Layer
            Agent Registry
            Message Handling
@@ -46,9 +46,9 @@ VT Code now supports Agent Communication Protocol (ACP) for inter-agent communic
 
 ## Module Structure
 
-### `vtcode-acp-client` Library
+### `vtcode-acp` Library
 
-The ACP client library is located in `vtcode-acp-client/` and provides:
+The ACP client library is located in `vtcode-acp/` and provides:
 
 #### Core Modules
 
@@ -195,7 +195,7 @@ Returns immediately with `message_id`:
 ### In Rust Code
 
 ```rust
-use vtcode_acp_client::{AcpClient, AgentInfo};
+use vtcode_acp::{AcpClient, AgentInfo};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

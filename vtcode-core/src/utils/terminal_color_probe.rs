@@ -123,7 +123,7 @@ fn read_until_da1(tty: &mut File, timeout: Duration) -> Result<Vec<u8>> {
         {
             // If found the start, we MUST also wait for the end ('c')
             // This ensures we consume the entire sentinel sequence
-            if buffer[pos..].iter().any(|&b| b == b'c') {
+            if buffer[pos..].contains(&b'c') {
                 return Ok(buffer);
             }
         }

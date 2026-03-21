@@ -5,7 +5,50 @@
 
 use anyhow::Result;
 use hashbrown::HashMap;
-use vtcode_acp_client::AuthMethod;
+use serde::{Deserialize, Serialize};
+
+/// ACP authentication methods mirrored locally so `vtcode-core` does not
+/// depend on the ACP client crate.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum AuthMethod {
+    #[serde(rename = "agent")]
+    Agent {
+        id: String,
+        name: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        description: Option<String>,
+    },
+    #[serde(rename = "env_var")]
+    EnvVar {
+        id: String,
+        name: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        description: Option<String>,
+        var_name: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        link: Option<String>,
+    },
+    #[serde(rename = "terminal")]
+    Terminal {
+        id: String,
+        name: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        description: Option<String>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        args: Vec<String>,
+        #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+        env: HashMap<String, String>,
+    },
+    #[serde(rename = "api_key")]
+    ApiKey,
+    #[serde(rename = "oauth2")]
+    OAuth2,
+    #[serde(rename = "bearer")]
+    Bearer,
+    #[serde(rename = "custom")]
+    Custom(String),
+}
 
 /// Handles authentication based on the auth method type
 #[derive(Debug, Clone)]

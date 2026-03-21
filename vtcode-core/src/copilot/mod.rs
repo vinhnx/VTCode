@@ -1,7 +1,9 @@
 mod acp_client;
 mod auth;
 mod command;
+mod error;
 mod server_client;
+mod transport;
 mod types;
 
 pub use acp_client::{

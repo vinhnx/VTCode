@@ -6305,34 +6305,21 @@ dependencies = [
  "anyhow",
  "assert_fs",
  "async-trait",
- "futures",
- "hashbrown 0.15.5",
- "percent-encoding",
- "serde_json",
- "tokio",
- "tokio-util",
- "tracing",
- "url",
- "vtcode-acp-client",
- "vtcode-core",
-]
-
-[[package]]
-name = "vtcode-acp-client"
-version = "0.92.1"
-dependencies = [
- "agent-client-protocol",
- "anyhow",
  "chrono",
+ "futures",
  "futures-util",
  "hashbrown 0.15.5",
+ "percent-encoding",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-util",
  "tracing",
+ "url",
  "uuid",
+ "vtcode-core",
 ]
 
 [[package]]
@@ -6559,7 +6546,6 @@ dependencies = [
  "url",
  "uuid",
  "vt100",
- "vtcode-acp-client",
  "vtcode-auth",
  "vtcode-bash-runner",
  "vtcode-commons",
@@ -6682,7 +6668,7 @@ dependencies = [
  "hashbrown 0.15.5",
  "serde_json",
  "tokio",
- "vtcode-acp-client",
+ "vtcode-acp",
  "vtcode-commons",
  "vtcode-core",
 ]

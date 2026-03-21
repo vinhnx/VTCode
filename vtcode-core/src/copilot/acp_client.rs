@@ -5,12 +5,12 @@ use std::sync::Mutex as StdMutex;
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
 use tokio::time::timeout;
-use vtcode_acp_client::StdioTransport;
 use vtcode_config::auth::CopilotAuthConfig;
 
 use super::command::{
     CopilotModelSelectionMode, resolve_copilot_command, spawn_copilot_acp_process,
 };
+use super::transport::StdioTransport;
 use super::types::{
     CopilotAcpCompatibilityState, CopilotObservedToolCall, CopilotObservedToolCallStatus,
     CopilotPermissionDecision, CopilotPermissionRequest, CopilotShellCommandSummary,
@@ -1350,11 +1350,11 @@ fn request_id(message: &Value) -> Option<i64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::copilot::transport::StdioTransport;
     use serde_json::{Value, json};
     use std::sync::Arc;
     use std::time::Duration;
     use tokio::sync::mpsc;
-    use vtcode_acp_client::StdioTransport;
 
     fn make_inner(write_tx: mpsc::UnboundedSender<String>) -> Arc<CopilotAcpClientInner> {
         Arc::new(CopilotAcpClientInner {

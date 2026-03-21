@@ -29,7 +29,7 @@ use tokio::process::{Child, ChildStderr, ChildStdin, ChildStdout};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::timeout;
 
-use crate::error::{AcpError, AcpResult};
+use super::error::{AcpError, AcpResult};
 
 /// Callback type for incoming server→client requests and notifications.
 ///
@@ -95,6 +95,7 @@ impl StdioTransport {
     ///
     /// No subprocess is spawned and no background tasks are started. The caller
     /// can drive the mock by reading from the paired receiver.
+    #[cfg(test)]
     pub fn new_for_testing(write_tx: mpsc::UnboundedSender<String>, rpc_timeout: Duration) -> Self {
         Self {
             write_tx,

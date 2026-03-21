@@ -32,7 +32,7 @@ Side crates with no upstream dependents:
 - `vtcode-markdown-store` — used by core
 - `vtcode-indexer` — used for workspace file indexing
 - `vtcode-exec-events` — event definitions, used by core
-- `vtcode-acp-client` — Zed integration, used by agent
+- `vtcode-acp` — Zed integration, used by agent
 - `vtcode-process-hardening` — pre-main, no deps on workspace crates
 - `vtcode-file-search` — used by core/tools
 

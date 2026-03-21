@@ -99,7 +99,6 @@ resolver = "2"
 members = [
     "vtcode-auth",
     "vtcode-acp",
-    "vtcode-acp-client",
     "vtcode-core",
     "vtcode-ghostty-vt-sys",
     "vtcode-tui",

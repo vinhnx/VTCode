@@ -56,17 +56,4 @@ vtchat.io
 
 ---
 
-merge
-
-vtcode-acp
-vtcode-acp-client
-
-module
-
-===
-
-check and support https://github.com/vinhnx/VTCode/issues/613
-
-stash "https://github.com/vinhnx/VTCode/issues/613"
-
 ==

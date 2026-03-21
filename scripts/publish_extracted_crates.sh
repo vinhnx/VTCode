@@ -78,7 +78,6 @@ done
 
 CRATES=(
     vtcode-commons
-    vtcode-acp-client
     vtcode-markdown-store
     vtcode-exec-events
     vtcode-config

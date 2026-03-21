@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use serde_json::{Value, json};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use vtcode_acp_client::{AcpClient, AgentRegistry};
+use vtcode_acp::{AcpClient, AgentRegistry};
 use vtcode_core::tools::traits::Tool;
 
 /// Shared utilities for ACP tools to reduce duplication
