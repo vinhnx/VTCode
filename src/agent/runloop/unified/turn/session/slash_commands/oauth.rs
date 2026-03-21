@@ -1,4 +1,5 @@
 use anyhow::Result;
+use anstyle::{AnsiColor, Color, Effects, Style as AnsiStyle};
 use vtcode_auth::{AuthStatus, OpenAIChatGptAuthStatus, OpenAIResolvedAuthSource};
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::types::UiSurfacePreference;
@@ -7,8 +8,8 @@ use vtcode_core::copilot::{
     login_with_events, logout_with_events, probe_auth_status,
 };
 use vtcode_core::llm::factory::{ProviderConfig, create_provider_with_config};
-use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_core::utils::ansi_codes::notify_attention;
 use vtcode_tui::app::{InlineListItem, InlineListSelection, WizardModalMode, WizardStep};
 
 use super::{SlashCommandContext, SlashCommandControl, ui};
@@ -1067,13 +1068,18 @@ fn render_copilot_auth_intro(renderer: &mut AnsiRenderer, action: CopilotAuthAct
 fn render_copilot_auth_event(renderer: &mut AnsiRenderer, event: CopilotAuthEvent) -> Result<()> {
     match event {
         CopilotAuthEvent::VerificationCode { url, user_code } => {
-            renderer.line(MessageStyle::Info, "Open this URL in your browser:")?;
-            renderer.hyperlink_line(MessageStyle::Info, &url)?;
             renderer.line(
                 MessageStyle::Info,
-                "Enter this one-time GitHub device code:",
+                "Your GitHub device code — copy it before the browser opens:",
             )?;
-            renderer.line_with_style(theme::banner_style(), &user_code)?;
+            let device_code_style = AnsiStyle::new()
+                .fg_color(Some(Color::Ansi(AnsiColor::BrightYellow)))
+                .effects(Effects::BOLD);
+            renderer.line_with_style(device_code_style, &user_code)?;
+            notify_attention(true, Some(&format!("GitHub device code: {user_code}")));
+            renderer.line(MessageStyle::Info, "Opening browser to:")?;
+            renderer.hyperlink_line(MessageStyle::Info, &url)?;
+            renderer.line(MessageStyle::Info, "Enter the code above when prompted.")?;
         }
         CopilotAuthEvent::Progress { message } => renderer.line(MessageStyle::Info, &message)?,
         CopilotAuthEvent::Success { account } => {
