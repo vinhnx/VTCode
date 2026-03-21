@@ -2,6 +2,8 @@ use anyhow::{Result, anyhow};
 use std::str::FromStr;
 
 use vtcode_config::OpenAIServiceTier;
+use vtcode_config::VTCodeConfig;
+use vtcode_config::core::CustomProviderConfig;
 use vtcode_core::config::constants::reasoning;
 use vtcode_core::config::models::{ModelId, Provider};
 use vtcode_core::config::types::ReasoningEffortLevel;
@@ -42,6 +44,7 @@ pub(super) enum ExistingKey {
     WorkspaceDotenv,
     /// OAuth token from encrypted storage (for OpenRouter)
     OAuthToken,
+    StoredCredential,
 }
 
 #[derive(Clone)]
@@ -67,6 +70,7 @@ pub(crate) struct ModelSelectionResult {
 pub(super) fn parse_model_selection(
     options: &[ModelOption],
     input: &str,
+    vt_cfg: Option<&VTCodeConfig>,
 ) -> Result<SelectionDetail> {
     if let Ok(index) = input.parse::<usize>() {
         if let Some(option) = options.get(index) {
@@ -90,6 +94,7 @@ pub(super) fn parse_model_selection(
 
     let provider_lower = provider_token.to_ascii_lowercase();
     let provider_enum = Provider::from_str(&provider_lower).ok();
+    let custom_provider = vt_cfg.and_then(|cfg| cfg.custom_provider(&provider_lower));
 
     if let Some(provider) = provider_enum
         && let Some(option_index) = find_option_index(provider, model_token.trim())
@@ -98,11 +103,13 @@ pub(super) fn parse_model_selection(
         return Ok(selection_from_option(option));
     }
 
-    let provider_label = provider_enum
-        .map(|provider| provider.label().to_string())
+    let provider_label = custom_provider
+        .map(|provider| provider.display_name.clone())
+        .or_else(|| provider_enum.map(|provider| provider.label().to_string()))
         .unwrap_or_else(|| title_case(&provider_lower));
-    let env_key = provider_enum
-        .map(|provider| provider.default_api_key_env().to_string())
+    let env_key = custom_provider
+        .map(|provider| provider.resolved_api_key_env())
+        .or_else(|| provider_enum.map(|provider| provider.default_api_key_env().to_string()))
         .unwrap_or_else(|| derive_env_key(&provider_lower));
     let reasoning_supported = provider_enum
         .map(|provider| provider.supports_reasoning_effort(model_token.trim()))
@@ -171,6 +178,26 @@ pub(super) fn selection_from_dynamic(provider: Provider, model_id: &str) -> Sele
         reasoning_off_model: None,
         service_tier_supported: provider.supports_service_tier(model_id),
         requires_api_key,
+        uses_chatgpt_auth: false,
+        env_key,
+    }
+}
+
+pub(super) fn selection_from_custom_provider(provider: &CustomProviderConfig) -> SelectionDetail {
+    let model_id = provider.model.trim().to_string();
+    let env_key = provider.resolved_api_key_env();
+    SelectionDetail {
+        provider_key: provider.name.to_lowercase(),
+        provider_label: provider.display_name.clone(),
+        provider_enum: None,
+        model_id: model_id.clone(),
+        model_display: model_id,
+        known_model: false,
+        reasoning_supported: Provider::OpenAI.supports_reasoning_effort(&provider.model),
+        reasoning_optional: true,
+        reasoning_off_model: None,
+        service_tier_supported: Provider::OpenAI.supports_service_tier(&provider.model),
+        requires_api_key: true,
         uses_chatgpt_auth: false,
         env_key,
     }

@@ -13,6 +13,7 @@ pub enum RewindAction {
 pub enum InlineListSelection {
     Model(usize),
     DynamicModel(usize),
+    CustomProvider(usize),
     RefreshDynamicModels,
     Reasoning(ReasoningEffortLevel),
     DisableReasoning,

@@ -68,6 +68,12 @@ struct OpenAIRequestAuth {
 
 pub struct OpenAIProvider {
     api_key: Arc<str>,
+    /// Override provider key for custom providers (e.g., "mycorp").
+    /// When `None`, defaults to `"openai"`.
+    provider_key_override: Option<Arc<str>>,
+    /// Override display name for custom providers.
+    /// When `None`, defaults to `"OpenAI"`.
+    provider_display_override: Option<Arc<str>>,
     openai_chatgpt_auth: Option<OpenAIChatGptAuthHandle>,
     http_client: HttpClient,
     base_url: Arc<str>,
@@ -170,6 +176,8 @@ impl OpenAIProvider {
 
         Self {
             api_key: Arc::from(api_key.as_str()),
+            provider_key_override: None,
+            provider_display_override: None,
             openai_chatgpt_auth,
             http_client,
             base_url: Arc::from(base_url.as_str()),
@@ -212,6 +220,35 @@ impl OpenAIProvider {
             openai,
             model_behavior,
         )
+    }
+
+    /// Create a custom OpenAI-compatible provider with overridden identity.
+    #[allow(clippy::too_many_arguments)]
+    pub fn from_custom_config(
+        provider_key: String,
+        display_name: String,
+        api_key: Option<String>,
+        model: Option<String>,
+        base_url: Option<String>,
+        prompt_cache: Option<PromptCachingConfig>,
+        timeouts: Option<TimeoutsConfig>,
+        openai: Option<OpenAIConfig>,
+        model_behavior: Option<ModelConfig>,
+    ) -> Self {
+        let mut provider = Self::from_config(
+            api_key,
+            None, // no chatgpt auth for custom providers
+            model,
+            base_url,
+            prompt_cache,
+            timeouts,
+            None, // no anthropic config
+            openai,
+            model_behavior,
+        );
+        provider.provider_key_override = Some(Arc::from(provider_key.as_str()));
+        provider.provider_display_override = Some(Arc::from(display_name.as_str()));
+        provider
     }
 
     fn with_model_internal(
@@ -287,6 +324,8 @@ impl OpenAIProvider {
 
         Self {
             api_key: Arc::from(api_key.as_str()),
+            provider_key_override: None,
+            provider_display_override: None,
             openai_chatgpt_auth,
             http_client,
             base_url: Arc::from(resolved_base_url.as_str()),
@@ -371,17 +410,25 @@ impl OpenAIProvider {
         format!("vtcode-{}", Uuid::new_v4())
     }
 
-    fn format_network_error(error: impl std::fmt::Display) -> provider::LLMError {
+    fn format_network_error(&self, error: impl std::fmt::Display) -> provider::LLMError {
+        let label = self
+            .provider_display_override
+            .as_deref()
+            .unwrap_or("OpenAI");
         provider::LLMError::Network {
-            message: error_display::format_llm_error("OpenAI", &format!("Network error: {error}")),
+            message: error_display::format_llm_error(label, &format!("Network error: {error}")),
             metadata: None,
         }
     }
 
-    fn format_auth_error(error: impl std::fmt::Display) -> provider::LLMError {
+    fn format_auth_error(&self, error: impl std::fmt::Display) -> provider::LLMError {
+        let label = self
+            .provider_display_override
+            .as_deref()
+            .unwrap_or("OpenAI");
         provider::LLMError::Authentication {
             message: error_display::format_llm_error(
-                "OpenAI",
+                label,
                 &format!("Authentication error: {error}"),
             ),
             metadata: None,
@@ -396,8 +443,10 @@ impl OpenAIProvider {
         handle
             .refresh_if_needed()
             .await
-            .map_err(Self::format_auth_error)?;
-        handle.current_api_key().map_err(Self::format_auth_error)
+            .map_err(|e| self.format_auth_error(e))?;
+        handle
+            .current_api_key()
+            .map_err(|e| self.format_auth_error(e))
     }
 
     fn request_auth_from_session(&self, session: OpenAIChatGptSession) -> OpenAIRequestAuth {
@@ -425,8 +474,8 @@ impl OpenAIProvider {
         handle
             .refresh_if_needed()
             .await
-            .map_err(Self::format_auth_error)?;
-        let session = handle.snapshot().map_err(Self::format_auth_error)?;
+            .map_err(|e| self.format_auth_error(e))?;
+        let session = handle.snapshot().map_err(|e| self.format_auth_error(e))?;
         Ok(self.request_auth_from_session(session))
     }
 
@@ -443,8 +492,8 @@ impl OpenAIProvider {
         handle
             .force_refresh()
             .await
-            .map_err(Self::format_auth_error)?;
-        let session = handle.snapshot().map_err(Self::format_auth_error)?;
+            .map_err(|e| self.format_auth_error(e))?;
+        let session = handle.snapshot().map_err(|e| self.format_auth_error(e))?;
         Ok(self.request_auth_from_session(session))
     }
 
@@ -456,8 +505,10 @@ impl OpenAIProvider {
         handle
             .force_refresh()
             .await
-            .map_err(Self::format_auth_error)?;
-        handle.current_api_key().map_err(Self::format_auth_error)
+            .map_err(|e| self.format_auth_error(e))?;
+        handle
+            .current_api_key()
+            .map_err(|e| self.format_auth_error(e))
     }
 
     async fn send_authorized<F>(
@@ -471,14 +522,14 @@ impl OpenAIProvider {
         let response = build_request(&auth)
             .send()
             .await
-            .map_err(Self::format_network_error)?;
+            .map_err(|e| self.format_network_error(e))?;
 
         if self.uses_chatgpt_auth() && Self::auth_retryable_status(response.status()) {
             let retry_auth = self.refresh_request_auth_for_retry().await?;
             return build_request(&retry_auth)
                 .send()
                 .await
-                .map_err(Self::format_network_error);
+                .map_err(|e| self.format_network_error(e));
         }
 
         Ok(response)

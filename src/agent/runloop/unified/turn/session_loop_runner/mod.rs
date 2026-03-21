@@ -1276,14 +1276,16 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             (vtcode_core::config::types::UiSurfacePreference::Auto, false) => "std".to_string(),
         };
         let tools_count = tools.read().await.len();
-        let provider_label = if config.provider.eq_ignore_ascii_case("openai")
-            && config.openai_chatgpt_auth.is_some()
-        {
-            "OpenAI (ChatGPT)".to_string()
-        } else if config.provider.trim().is_empty() {
-            provider_name.clone()
-        } else {
-            config.provider.clone()
+        let provider_label = {
+            let label = crate::agent::runloop::unified::session_setup::resolve_provider_label(
+                &config,
+                vt_cfg.as_ref(),
+            );
+            if label.is_empty() {
+                provider_name.clone()
+            } else {
+                label
+            }
         };
         let header_context = Some(build_exit_header_context_fast(
             &config,

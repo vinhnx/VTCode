@@ -82,6 +82,11 @@ impl LLMFactory {
         self.providers.keys().cloned().collect()
     }
 
+    /// Remove a provider registration by name.
+    pub fn remove_provider(&mut self, name: &str) {
+        self.providers.remove(name);
+    }
+
     /// Determine provider name from model string
     pub fn provider_from_model(&self, model: &str) -> Option<String> {
         let trimmed = model.trim();
@@ -283,9 +288,106 @@ pub fn create_provider_with_config(
     factory.create_provider(provider_name, config)
 }
 
+/// Register custom OpenAI-compatible providers from config into the global factory.
+///
+/// This performs a sync/replace: previously registered custom providers are
+/// removed first, then the new set is registered. Built-in providers are
+/// never touched.
+pub fn register_custom_providers(custom_providers: &[vtcode_config::core::CustomProviderConfig]) {
+    use crate::llm::providers::OpenAIProvider;
+
+    let Ok(mut factory) = get_factory().lock() else {
+        tracing::error!("Failed to lock LLM factory for custom provider registration");
+        return;
+    };
+
+    // Collect built-in provider keys to avoid removing them
+    let builtins: hashbrown::HashSet<String> = [
+        "openai",
+        "anthropic",
+        "gemini",
+        "copilot",
+        "deepseek",
+        "openrouter",
+        "ollama",
+        "lmstudio",
+        "moonshot",
+        "zai",
+        "minimax",
+        "huggingface",
+        "litellm",
+        "openresponses",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect();
+
+    // Remove previously registered custom providers (anything not built-in)
+    let registered: Vec<String> = factory.list_providers();
+    for key in &registered {
+        if !builtins.contains(key) {
+            factory.remove_provider(key);
+        }
+    }
+
+    // Register each custom provider
+    for cp in custom_providers {
+        if let Err(msg) = cp.validate() {
+            tracing::warn!("Skipping invalid custom provider: {msg}");
+            continue;
+        }
+
+        let key = cp.name.to_lowercase();
+        let display_name = cp.display_name.clone();
+        let default_base_url = cp.base_url.clone();
+        let default_model = cp.model.clone();
+        let api_key_env = cp.resolved_api_key_env();
+        let reg_key = key.clone();
+
+        factory.register_provider(&reg_key, move |config: ProviderConfig| {
+            // Resolve API key: explicit config > env var > empty
+            let api_key = config
+                .api_key
+                .clone()
+                .or_else(|| std::env::var(&api_key_env).ok());
+
+            let model = config
+                .model
+                .clone()
+                .filter(|m| !m.trim().is_empty())
+                .unwrap_or_else(|| default_model.clone());
+
+            let base_url = config
+                .base_url
+                .clone()
+                .filter(|u| !u.trim().is_empty())
+                .unwrap_or_else(|| default_base_url.clone());
+
+            Box::new(OpenAIProvider::from_custom_config(
+                key.clone(),
+                display_name.clone(),
+                api_key,
+                Some(model),
+                Some(base_url),
+                config.prompt_cache,
+                config.timeouts,
+                config.openai,
+                config.model_behavior,
+            ))
+        });
+
+        tracing::info!(
+            provider = cp.name,
+            display_name = cp.display_name,
+            "Registered custom OpenAI-compatible provider"
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::core::CustomProviderConfig;
     use crate::config::core::{AnthropicConfig, OpenAIConfig};
     use crate::llm::provider_config::{
         AnthropicProviderConfig, GeminiProviderConfig, OpenAIProviderConfig,
@@ -463,6 +565,42 @@ mod tests {
 
         assert_eq!(custom.name(), "ollama");
         assert_eq!(builtin.name(), "openai");
+    }
+
+    #[test]
+    fn custom_openai_compatible_provider_uses_configured_display_name() {
+        register_custom_providers(&[CustomProviderConfig {
+            name: "mycorp".to_string(),
+            display_name: "MyCorporateName".to_string(),
+            base_url: "https://llm.corp.example/v1".to_string(),
+            api_key_env: "MYCORP_API_KEY".to_string(),
+            model: "gpt-4o-mini".to_string(),
+        }]);
+
+        let provider = create_provider_with_config(
+            "mycorp",
+            ProviderConfig {
+                api_key: None,
+                openai_chatgpt_auth: None,
+                copilot_auth: None,
+                base_url: None,
+                model: Some("gpt-4o-mini".to_string()),
+                prompt_cache: None,
+                timeouts: None,
+                openai: Some(OpenAIConfig::default()),
+                anthropic: None,
+                model_behavior: None,
+                workspace_root: None,
+            },
+        )
+        .expect("custom provider should register");
+
+        assert_eq!(provider.name(), "mycorp");
+        assert_eq!(provider.supported_models(), vec!["gpt-4o-mini".to_string()]);
+
+        if let Ok(mut factory) = get_factory().lock() {
+            factory.remove_provider("mycorp");
+        }
     }
 
     #[test]

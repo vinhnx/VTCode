@@ -8,8 +8,8 @@ use crate::codex::{FileOpener, HistoryConfig, TuiConfig};
 use crate::context::ContextFeaturesConfig;
 use crate::core::{
     AgentConfig, AnthropicConfig, AuthConfig, AutomationConfig, CommandsConfig,
-    DotfileProtectionConfig, ModelConfig, OpenAIConfig, PermissionsConfig, PromptCachingConfig,
-    SandboxConfig, SecurityConfig, SkillsConfig, ToolsConfig,
+    CustomProviderConfig, DotfileProtectionConfig, ModelConfig, OpenAIConfig, PermissionsConfig,
+    PromptCachingConfig, SandboxConfig, SecurityConfig, SkillsConfig, ToolsConfig,
 };
 use crate::debug::DebugConfig;
 use crate::defaults::{self, ConfigDefaultsProvider};
@@ -165,6 +165,10 @@ pub struct VTCodeConfig {
     #[serde(default)]
     pub skills: SkillsConfig,
 
+    /// User-defined OpenAI-compatible provider endpoints
+    #[serde(default)]
+    pub custom_providers: Vec<CustomProviderConfig>,
+
     /// Output style configuration
     #[serde(default)]
     pub output_style: OutputStyleConfig,
@@ -213,7 +217,39 @@ impl VTCodeConfig {
 
         self.pty.validate().context("Invalid pty configuration")?;
 
+        // Validate custom providers
+        let mut seen_names = std::collections::HashSet::new();
+        for cp in &self.custom_providers {
+            cp.validate()
+                .map_err(|msg| anyhow::anyhow!(msg))
+                .context("Invalid custom_providers configuration")?;
+            if !seen_names.insert(cp.name.to_lowercase()) {
+                anyhow::bail!("custom_providers: duplicate name `{}`", cp.name);
+            }
+        }
+
         Ok(())
+    }
+
+    /// Look up a custom provider by its stable key.
+    pub fn custom_provider(&self, name: &str) -> Option<&CustomProviderConfig> {
+        let lower = name.to_lowercase();
+        self.custom_providers
+            .iter()
+            .find(|cp| cp.name.to_lowercase() == lower)
+    }
+
+    /// Get the display name for any provider key, falling back to the raw key
+    /// if no custom provider matches.
+    pub fn provider_display_name(&self, provider_key: &str) -> String {
+        if let Some(cp) = self.custom_provider(provider_key) {
+            cp.display_name.clone()
+        } else if let Ok(p) = std::str::FromStr::from_str(provider_key) {
+            let p: crate::models::Provider = p;
+            p.label().to_string()
+        } else {
+            provider_key.to_string()
+        }
     }
 
     #[cfg(feature = "bootstrap")]
@@ -301,6 +337,16 @@ project_doc_fallback_filenames = []
 
 # Optional external command invoked after each completed agent turn
 notify = []
+
+# User-defined OpenAI-compatible providers
+custom_providers = []
+
+# [[custom_providers]]
+# name = "mycorp"
+# display_name = "MyCorporateName"
+# base_url = "https://llm.corp.example/v1"
+# api_key_env = "MYCORP_API_KEY"
+# model = "gpt-4o-mini"
 
 [history]
 # Persist local session transcripts to disk

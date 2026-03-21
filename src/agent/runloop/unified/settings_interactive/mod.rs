@@ -386,6 +386,7 @@ mod tests {
 
         let items = build_settings_items(&state, &draft).expect("settings items");
         assert!(items.iter().any(|item| item.title == "IDE Context"));
+        assert!(items.iter().any(|item| item.title == "Custom Providers"));
     }
 
     #[test]
@@ -425,6 +426,33 @@ mod tests {
         let persisted = std::fs::read_to_string(&source_path).expect("persisted config");
         assert!(persisted.contains("[ide_context]"));
         assert!(persisted.contains("enabled = false"));
+    }
+
+    #[test]
+    fn custom_providers_array_add_uses_valid_template() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let source_path = temp.path().join("vtcode.toml");
+        let mut state = SettingsPaletteState {
+            workspace: temp.path().to_path_buf(),
+            source_path: source_path.clone(),
+            source_label: "test".to_string(),
+            draft: VTCodeConfig::default(),
+            view_path: Some("custom_providers".to_string()),
+        };
+
+        apply_settings_action(&mut state, "settings:array_add:custom_providers")
+            .expect("add custom provider template");
+
+        assert_eq!(state.draft.custom_providers.len(), 1);
+        let provider = &state.draft.custom_providers[0];
+        assert_eq!(provider.name, "custom-provider-1");
+        assert_eq!(provider.display_name, "Custom Provider 1");
+        assert_eq!(provider.base_url, "https://llm.example/v1");
+        assert_eq!(provider.api_key_env, "");
+        assert_eq!(provider.model, "");
+
+        let persisted = std::fs::read_to_string(&source_path).expect("persisted config");
+        assert!(persisted.contains("custom_providers"));
     }
 
     #[test]

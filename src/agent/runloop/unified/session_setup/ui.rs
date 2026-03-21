@@ -205,14 +205,14 @@ pub(crate) async fn initialize_session_ui(
     transcript::clear();
     render_resume_state_if_present(&mut renderer, resume_state, supports_reasoning)?;
 
-    let provider_label =
-        if config.provider.eq_ignore_ascii_case("openai") && config.openai_chatgpt_auth.is_some() {
-            "OpenAI (ChatGPT)".to_string()
-        } else if config.provider.trim().is_empty() {
+    let provider_label = {
+        let label = super::init::resolve_provider_label(config, vt_cfg);
+        if label.is_empty() {
             session_state.provider_client.name().to_string()
         } else {
-            config.provider.clone()
-        };
+            label
+        }
+    };
     let header_provider_label = provider_label.clone();
 
     let mut checkpoint_config =

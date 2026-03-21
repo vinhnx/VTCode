@@ -220,7 +220,7 @@ async fn resolve_runtime_provider_auth(
             config.agent.credential_storage_mode,
             api_key,
         )
-        .with_context(|| missing_api_key_message(selection, first_run_occurred))?;
+        .with_context(|| missing_api_key_message(config, selection, first_run_occurred))?;
         return Ok((resolved.api_key().to_string(), resolved.handle()));
     }
 
@@ -230,7 +230,7 @@ async fn resolve_runtime_provider_auth(
             CopilotAuthStatusKind::Authenticated => Ok((String::new(), None)),
             CopilotAuthStatusKind::Unauthenticated | CopilotAuthStatusKind::AuthFlowFailed => {
                 Err(anyhow::anyhow!(status.message.unwrap_or_else(|| {
-                    missing_api_key_message(selection, first_run_occurred)
+                    missing_api_key_message(config, selection, first_run_occurred)
                 })))
             }
             CopilotAuthStatusKind::ServerUnavailable => Err(anyhow::anyhow!(
@@ -242,16 +242,44 @@ async fn resolve_runtime_provider_auth(
         };
     }
 
+    if let Some(custom_provider) = config.custom_provider(&selection.provider) {
+        let api_key_env = custom_provider.resolved_api_key_env();
+        if let Ok(api_key) = std::env::var(&api_key_env)
+            && !api_key.trim().is_empty()
+        {
+            return Ok((api_key, None));
+        }
+    }
+
     let api_key = get_api_key(&selection.provider, &ApiKeySources::default())
-        .with_context(|| missing_api_key_message(selection, first_run_occurred))?;
+        .with_context(|| missing_api_key_message(config, selection, first_run_occurred))?;
     Ok((api_key, None))
 }
 
-fn missing_api_key_message(selection: &RuntimeModelSelection, first_run_occurred: bool) -> String {
-    let provider_name = provider_label(&selection.provider);
+fn missing_api_key_message(
+    config: &VTCodeConfig,
+    selection: &RuntimeModelSelection,
+    first_run_occurred: bool,
+) -> String {
+    let provider_name = provider_label(&selection.provider, Some(config));
     if selection.provider.eq_ignore_ascii_case("copilot") {
         return "Authentication not found for GitHub Copilot. Run `vtcode login copilot`. Install `copilot` first if needed; `gh` is only an optional fallback."
             .to_string();
+    }
+
+    if let Some(custom_provider) = config.custom_provider(&selection.provider) {
+        let env_var = custom_provider.resolved_api_key_env();
+        if first_run_occurred {
+            return format!(
+                "API key not found for {}. To fix:\n  1. Set {} environment variable, or\n  2. Add to .env file, or\n  3. Configure in vtcode.toml under [[custom_providers]]\n\nRun `/init` anytime to reconfigure.",
+                provider_name, env_var
+            );
+        }
+
+        return format!(
+            "API key not found for custom provider '{}'. Set {} environment variable (or add to .env file) or configure it in vtcode.toml under [[custom_providers]].",
+            provider_name, env_var
+        );
     }
 
     let env_var = selection
@@ -323,6 +351,31 @@ mod validation_tests {
         assert!(!can_start_without_provider_auth(Some(&Commands::Login {
             provider: "openai".to_string(),
         })));
+    }
+
+    #[test]
+    fn missing_api_key_message_uses_custom_provider_label_and_env_key() {
+        let mut cfg = VTCodeConfig::default();
+        cfg.custom_providers
+            .push(vtcode_config::core::CustomProviderConfig {
+                name: "mycorp".to_string(),
+                display_name: "MyCorporateName".to_string(),
+                base_url: "https://llm.example/v1".to_string(),
+                api_key_env: "MYCORP_API_KEY".to_string(),
+                model: "gpt-4o-mini".to_string(),
+            });
+
+        let selection = RuntimeModelSelection {
+            model: "gpt-4o-mini".to_string(),
+            provider: "mycorp".to_string(),
+            model_source: vtcode_core::config::types::ModelSelectionSource::WorkspaceConfig,
+        };
+
+        let message = missing_api_key_message(&cfg, &selection, true);
+
+        assert!(message.contains("MyCorporateName"));
+        assert!(message.contains("MYCORP_API_KEY"));
+        assert!(message.contains("[[custom_providers]]"));
     }
 
     #[test]

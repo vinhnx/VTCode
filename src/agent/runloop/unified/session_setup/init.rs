@@ -76,6 +76,30 @@ fn vtcode_config_circuit_breaker_to_core(
     }
 }
 
+/// Resolve the provider display label, preferring custom provider display names.
+///
+/// Returns an empty string when the provider key is blank (caller should fall
+/// back to the runtime provider name).
+pub(crate) fn resolve_provider_label(
+    config: &CoreAgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
+) -> String {
+    if config.provider.eq_ignore_ascii_case("openai") && config.openai_chatgpt_auth.is_some() {
+        return "OpenAI (ChatGPT)".to_string();
+    }
+
+    let key = config.provider.trim();
+    if key.is_empty() {
+        return String::new();
+    }
+
+    if let Some(vt_cfg) = vt_cfg {
+        return vt_cfg.provider_display_name(key);
+    }
+
+    key.to_string()
+}
+
 fn prompt_visible_tool_names(
     provider_name: &str,
     vt_cfg: Option<&VTCodeConfig>,
@@ -135,6 +159,11 @@ pub(crate) async fn initialize_session(
     if let Some(notice) = startup_update_check.cached_notice.as_ref() {
         append_notice_highlight(&mut session_bootstrap.header_highlights, notice);
     }
+    // Register custom OpenAI-compatible providers from config
+    if let Some(cfg) = vt_cfg {
+        vtcode_core::llm::factory::register_custom_providers(&cfg.custom_providers);
+    }
+
     let provider_client = create_provider_client(config, vt_cfg)?;
     let deferred_tool_policy = active_deferred_tool_policy(config, vt_cfg, &*provider_client);
     let mut full_auto_allowlist = None;

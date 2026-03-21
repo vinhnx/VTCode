@@ -60,6 +60,7 @@ pub(crate) async fn refresh_vt_config(
 ) -> Result<()> {
     let mut snapshot = load_workspace_config_snapshot(workspace).await?;
     apply_runtime_overrides(Some(&mut snapshot), runtime_cfg);
+    vtcode_core::llm::factory::register_custom_providers(&snapshot.custom_providers);
     *vt_cfg = Some(snapshot);
     Ok(())
 }

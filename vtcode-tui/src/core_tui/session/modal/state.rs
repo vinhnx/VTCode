@@ -628,6 +628,7 @@ impl ModalListState {
             match selection {
                 InlineListSelection::Model(_)
                 | InlineListSelection::DynamicModel(_)
+                | InlineListSelection::CustomProvider(_)
                 | InlineListSelection::RefreshDynamicModels
                 | InlineListSelection::Reasoning(_)
                 | InlineListSelection::DisableReasoning

@@ -3,6 +3,8 @@ use anyhow::Result;
 use std::fs;
 use tempfile::tempdir;
 use vtcode_config::OpenAIServiceTier;
+use vtcode_config::core::CustomProviderConfig;
+use vtcode_config::loader::VTCodeConfig;
 use vtcode_core::config::models::ModelId;
 
 use self::options::{find_option_index, option_indexes_for_provider};
@@ -102,6 +104,26 @@ fn model_search_value_includes_provider_model_aliases() {
 }
 
 #[test]
+fn parse_model_selection_uses_custom_provider_display_and_env_key() {
+    let mut cfg = VTCodeConfig::default();
+    cfg.custom_providers.push(CustomProviderConfig {
+        name: "mycorp".to_string(),
+        display_name: "MyCorporateName".to_string(),
+        base_url: "https://llm.corp.example/v1".to_string(),
+        api_key_env: "MYCORP_API_KEY".to_string(),
+        model: "gpt-4o-mini".to_string(),
+    });
+
+    let detail = selection::parse_model_selection(&MODEL_OPTIONS, "mycorp gpt-4o-mini", Some(&cfg))
+        .expect("custom provider should parse");
+
+    assert_eq!(detail.provider_key, "mycorp");
+    assert_eq!(detail.provider_label, "MyCorporateName");
+    assert_eq!(detail.env_key, "MYCORP_API_KEY");
+    assert_eq!(detail.provider_enum, None);
+}
+
+#[test]
 fn static_model_subtitle_formats_current_capabilities() {
     let option = MODEL_OPTIONS
         .iter()
@@ -160,6 +182,7 @@ fn base_picker_state(current_provider: &str, current_model: &str) -> ModelPicker
         current_provider: current_provider.to_string(),
         current_model: current_model.to_string(),
         selection: None,
+        custom_providers: Vec::new(),
         selected_reasoning: None,
         selected_service_tier: None,
         pending_api_key: None,
@@ -205,6 +228,32 @@ fn static_picker_indexes_resolve_provider_models() {
 fn preferred_model_selection_returns_none_for_unknown_model() {
     let picker = base_picker_state("anthropic", "does-not-exist");
     assert_eq!(picker.preferred_model_selection(), None);
+}
+
+#[test]
+fn preferred_model_selection_matches_current_custom_provider() {
+    let mut picker = base_picker_state("mycorp", "gpt-4o-mini");
+    let config = CustomProviderConfig {
+        name: "mycorp".to_string(),
+        display_name: "MyCorporateName".to_string(),
+        base_url: "https://llm.corp.example/v1".to_string(),
+        api_key_env: "MYCORP_API_KEY".to_string(),
+        model: "gpt-4o-mini".to_string(),
+    };
+    picker.custom_providers = vec![selection::selection_from_custom_provider(&config)];
+
+    let selection = picker.preferred_model_selection();
+    let Some(InlineListSelection::CustomProvider(index)) = selection else {
+        panic!("expected custom provider selection, got {selection:?}");
+    };
+
+    let detail = picker
+        .custom_providers
+        .get(index)
+        .expect("selected custom provider should be valid");
+    assert_eq!(detail.provider_key, "mycorp");
+    assert_eq!(detail.provider_label, "MyCorporateName");
+    assert_eq!(detail.model_id, "gpt-4o-mini");
 }
 
 #[test]
