@@ -41,3 +41,7 @@ criterion = { workspace = true }
 
 [lints]
 workspace = true
+
+[[bench]]
+name = "cache_bench"
+harness = false
