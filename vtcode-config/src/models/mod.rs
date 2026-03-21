@@ -11,7 +11,7 @@ mod provider;
 
 pub use errors::ModelParseError;
 pub use model_id::{
-    ModelCatalogEntry, ModelId, catalog_provider_keys, model_catalog_entry,
+    ModelCatalogEntry, ModelId, ModelPricing, catalog_provider_keys, model_catalog_entry,
     supported_models_for_provider,
 };
 pub use openrouter::OpenRouterMetadata;

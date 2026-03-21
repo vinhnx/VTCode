@@ -6,8 +6,8 @@ use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
 use crate::config::models::Provider as ModelProvider;
 use crate::llm::error_display;
 use crate::llm::provider::{
-    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
-    Message, ToolCall,
+    FinishReason, LLMError, LLMNormalizedStream, LLMProvider, LLMRequest, LLMResponse, LLMStream,
+    LLMStreamEvent, Message, NormalizedStreamEvent, ToolCall,
 };
 use crate::llm::providers::common::{
     append_normalized_reasoning_detail_items, serialize_message_content_openai,
@@ -21,6 +21,7 @@ use anyhow::Result;
 use async_stream::try_stream;
 use async_trait::async_trait;
 use futures::StreamExt;
+use hashbrown::HashSet;
 use reqwest::Client as HttpClient;
 use serde_json::{Value, json};
 
@@ -948,6 +949,143 @@ impl LLMProvider for OpenResponsesProvider {
 
         Ok(Box::pin(stream))
     }
+
+    async fn stream_normalized(
+        &self,
+        mut request: LLMRequest,
+    ) -> Result<LLMNormalizedStream, LLMError> {
+        if request.model.is_empty() {
+            request.model = self.model.clone();
+        }
+        let model = request.model.clone();
+
+        let payload = self.build_native_payload(&request, true)?;
+        let url = self.responses_url();
+
+        let response = self
+            .http_client
+            .post(url)
+            .bearer_auth(&self.api_key)
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|e| format_network_error("OpenResponses", &e))?;
+
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            let mut legacy_stream = self.stream_fallback(request).await?;
+            let stream = try_stream! {
+                while let Some(event) = legacy_stream.next().await {
+                    for normalized in event?.into_normalized() {
+                        yield normalized;
+                    }
+                }
+            };
+            return Ok(Box::pin(stream));
+        }
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            let formatted_error = error_display::format_llm_error(
+                "OpenResponses",
+                &format!("HTTP {}: {}", status, body),
+            );
+            return Err(LLMError::Provider {
+                message: formatted_error,
+                metadata: None,
+            });
+        }
+
+        let stream = try_stream! {
+            let mut body_stream = response.bytes_stream();
+            let mut buffer = String::new();
+            let mut aggregator = crate::llm::providers::shared::StreamAggregator::new(model);
+            let mut seen_tool_calls = HashSet::new();
+
+            while let Some(chunk_result) = body_stream.next().await {
+                let chunk = chunk_result.map_err(|e| format_network_error("OpenResponses", &e))?;
+                buffer.push_str(&String::from_utf8_lossy(&chunk));
+
+                while let Some((split_idx, delimiter_len)) =
+                    crate::llm::providers::shared::find_sse_boundary(&buffer)
+                {
+                    let event_text = buffer[..split_idx].to_string();
+                    buffer.drain(..split_idx + delimiter_len);
+
+                    if let Some(data_payload) =
+                        crate::llm::providers::shared::extract_data_payload(&event_text)
+                    {
+                        let trimmed = data_payload.trim();
+                        if trimmed.is_empty() || trimmed == "[DONE]" {
+                            continue;
+                        }
+
+                        if let Ok(event) = serde_json::from_str::<Value>(trimmed) {
+                            let event_type = event.get("type").and_then(|t| t.as_str()).unwrap_or("");
+
+                            match event_type {
+                                "response.output_text.delta" => {
+                                    if let Some(delta) = event.get("delta").and_then(|v| v.as_str()) {
+                                        for ev in aggregator.handle_content(delta) {
+                                            if let LLMStreamEvent::Token { delta } = ev {
+                                                yield NormalizedStreamEvent::TextDelta { delta };
+                                            } else if let LLMStreamEvent::Reasoning { delta } = ev {
+                                                yield NormalizedStreamEvent::ReasoningDelta { delta };
+                                            }
+                                        }
+                                    }
+                                }
+                                "response.function_call_arguments.delta" => {
+                                    if let Some(delta) = event.get("delta").and_then(|v| v.as_str()) {
+                                        let call_id = event
+                                            .get("item_id")
+                                            .and_then(Value::as_str)
+                                            .filter(|value| !value.is_empty())
+                                            .unwrap_or("tool_call_0")
+                                            .to_string();
+                                        if seen_tool_calls.insert(call_id.clone()) {
+                                            yield NormalizedStreamEvent::ToolCallStart {
+                                                call_id: call_id.clone(),
+                                                name: None,
+                                            };
+                                        }
+                                        yield NormalizedStreamEvent::ToolCallDelta {
+                                            call_id: call_id.clone(),
+                                            delta: delta.to_string(),
+                                        };
+                                        let tc_json = json!([{
+                                            "index": 0,
+                                            "id": call_id,
+                                            "function": { "arguments": delta }
+                                        }]);
+                                        if let Some(tool_calls) = tc_json.as_array() {
+                                            aggregator.handle_tool_calls(tool_calls);
+                                        }
+                                    }
+                                }
+                                "response.reasoning.delta"
+                                | "response.reasoning_content.delta"
+                                | "response.reasoning_summary_text.delta" => {
+                                    if let Some(delta) = event.get("delta").and_then(|v| v.as_str()) {
+                                        yield NormalizedStreamEvent::ReasoningDelta {
+                                            delta: delta.to_string(),
+                                        };
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+
+            yield NormalizedStreamEvent::Done {
+                response: Box::new(aggregator.finalize()),
+            };
+        };
+
+        Ok(Box::pin(stream))
+    }
 }
 
 #[cfg(test)]
@@ -1278,5 +1416,59 @@ data: [DONE]\n\n",
 
         let response = completed.expect("stream should finish with a completed response");
         assert_eq!(response.content.as_deref(), Some("fallback stream"));
+    }
+
+    #[tokio::test]
+    async fn stream_normalized_emits_tool_call_start_and_delta_events() {
+        let server = MockServer::start().await;
+        let provider = test_provider(&server.uri());
+
+        Mock::given(method("POST"))
+            .and(path("/responses"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .insert_header("content-type", "text/event-stream")
+                    .set_body_string(
+                        "data: {\"type\":\"response.function_call_arguments.delta\",\"item_id\":\"call_1\",\"delta\":\"{\\\"pattern\\\":\\\"ph\"}\n\n\
+data: {\"type\":\"response.function_call_arguments.delta\",\"item_id\":\"call_1\",\"delta\":\"ase\\\"}\"}\n\n\
+data: {\"type\":\"response.output_text.delta\",\"delta\":\"done\"}\n\n\
+data: [DONE]\n\n",
+                    ),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let mut stream = provider
+            .stream_normalized(LLMRequest {
+                model: "gpt-5".to_string(),
+                messages: vec![Message::user("hello".to_string())],
+                ..Default::default()
+            })
+            .await
+            .expect("normalized stream should succeed");
+
+        let mut events = Vec::new();
+        while let Some(event) = stream.next().await {
+            events.push(event.expect("stream event should parse"));
+        }
+
+        assert!(matches!(
+            events.as_slice(),
+            [
+                NormalizedStreamEvent::ToolCallStart { call_id, name },
+                NormalizedStreamEvent::ToolCallDelta { call_id: first_delta_id, delta: first_delta },
+                NormalizedStreamEvent::ToolCallDelta { call_id: second_delta_id, delta: second_delta },
+                NormalizedStreamEvent::TextDelta { delta },
+                NormalizedStreamEvent::Done { .. }
+            ]
+            if call_id == "call_1"
+                && name.is_none()
+                && first_delta_id == "call_1"
+                && first_delta == "{\"pattern\":\"ph"
+                && second_delta_id == "call_1"
+                && second_delta == "ase\"}"
+                && delta == "done"
+        ));
     }
 }

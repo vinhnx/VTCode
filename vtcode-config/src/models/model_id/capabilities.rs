@@ -12,12 +12,28 @@ mod capability_generated {
 #[allow(dead_code)]
 mod capability_generated {
     #[derive(Clone, Copy)]
+    pub struct Pricing {
+        pub input: Option<f64>,
+        pub output: Option<f64>,
+        pub cache_read: Option<f64>,
+        pub cache_write: Option<f64>,
+    }
+
+    #[derive(Clone, Copy)]
     pub struct Entry {
         pub provider: &'static str,
         pub id: &'static str,
+        pub display_name: &'static str,
+        pub description: &'static str,
         pub context_window: usize,
+        pub max_output_tokens: Option<usize>,
+        pub reasoning: bool,
         pub tool_call: bool,
+        pub vision: bool,
         pub input_modalities: &'static [&'static str],
+        pub caching: bool,
+        pub structured_output: bool,
+        pub pricing: Pricing,
     }
 
     pub const ENTRIES: &[Entry] = &[];
@@ -33,13 +49,29 @@ mod capability_generated {
 }
 
 /// Catalog metadata generated from `docs/models.json`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ModelPricing {
+    pub input: Option<f64>,
+    pub output: Option<f64>,
+    pub cache_read: Option<f64>,
+    pub cache_write: Option<f64>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ModelCatalogEntry {
     pub provider: &'static str,
     pub id: &'static str,
+    pub display_name: &'static str,
+    pub description: &'static str,
     pub context_window: usize,
+    pub max_output_tokens: Option<usize>,
+    pub reasoning: bool,
     pub tool_call: bool,
+    pub vision: bool,
     pub input_modalities: &'static [&'static str],
+    pub caching: bool,
+    pub structured_output: bool,
+    pub pricing: ModelPricing,
 }
 
 fn catalog_provider_key(provider: &str) -> &str {
@@ -95,9 +127,22 @@ fn generated_catalog_entry(provider: &str, id: &str) -> Option<ModelCatalogEntry
         ModelCatalogEntry {
             provider: entry.provider,
             id: entry.id,
+            display_name: entry.display_name,
+            description: entry.description,
             context_window: entry.context_window,
+            max_output_tokens: entry.max_output_tokens,
+            reasoning: entry.reasoning,
             tool_call: entry.tool_call,
+            vision: entry.vision,
             input_modalities: entry.input_modalities,
+            caching: entry.caching,
+            structured_output: entry.structured_output,
+            pricing: ModelPricing {
+                input: entry.pricing.input,
+                output: entry.pricing.output,
+                cache_read: entry.pricing.cache_read,
+                cache_write: entry.pricing.cache_write,
+            },
         }
     })
 }

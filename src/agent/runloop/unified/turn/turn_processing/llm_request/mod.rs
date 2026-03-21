@@ -252,6 +252,7 @@ pub(crate) async fn execute_llm_request(
                     match render_stream_with_options_and_copilot_runtime_impl(
                         &turn_snapshot.provider_name,
                         &mut stream,
+                        None,
                         Some(&mut runtime_requests),
                         Some(&mut runtime_host),
                         Some(Duration::from_secs(request_timeout_secs)),
@@ -1120,5 +1121,93 @@ mod tests {
             })
             .count();
         assert_eq!(completed_count, 1, "abort should close active stream item");
+    }
+
+    #[test]
+    fn harness_streaming_bridge_emits_tool_invocation_items() {
+        let tmp = TempDir::new().expect("temp dir");
+        let path = tmp.path().join("harness.jsonl");
+        let emitter =
+            crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter::new(path)
+                .expect("harness emitter");
+
+        let mut bridge = HarnessStreamingBridge::new(Some(&emitter), "turn_tool", 4, 1);
+        bridge.on_progress(StreamProgressEvent::ToolCallStarted {
+            call_id: "call_1".to_string(),
+            name: Some("shell".to_string()),
+        });
+        bridge.on_progress(StreamProgressEvent::ToolCallDelta {
+            call_id: "call_1".to_string(),
+            delta: "{\"cmd\":\"ec".to_string(),
+        });
+        bridge.on_progress(StreamProgressEvent::ToolCallDelta {
+            call_id: "call_1".to_string(),
+            delta: "ho hi\"}".to_string(),
+        });
+        bridge.complete_open_items();
+
+        let payload = std::fs::read_to_string(tmp.path().join("harness.jsonl")).expect("log");
+        let mut saw_started = false;
+        let mut saw_updated = false;
+        let mut saw_completed = false;
+
+        for line in payload.lines() {
+            let value: serde_json::Value = serde_json::from_str(line).expect("json");
+            let event = value.get("event").expect("event");
+            let event_type = event
+                .get("type")
+                .and_then(|kind| kind.as_str())
+                .unwrap_or_default();
+            let item = event.get("item").expect("item");
+            let item_type = item
+                .get("type")
+                .and_then(|kind| kind.as_str())
+                .unwrap_or_default();
+
+            if item_type != "tool_invocation" {
+                continue;
+            }
+
+            let tool_name = item
+                .get("tool_name")
+                .and_then(|name| name.as_str())
+                .unwrap_or_default();
+            let tool_call_id = item
+                .get("tool_call_id")
+                .and_then(|id| id.as_str())
+                .unwrap_or_default();
+            let status = item
+                .get("status")
+                .and_then(|status| status.as_str())
+                .unwrap_or_default();
+            let arguments = item.get("arguments");
+
+            if event_type == "item.started" {
+                saw_started =
+                    tool_name == "shell" && tool_call_id == "call_1" && status == "in_progress";
+            }
+            if event_type == "item.updated" {
+                saw_updated = tool_name == "shell"
+                    && tool_call_id == "call_1"
+                    && status == "in_progress"
+                    && arguments
+                        .and_then(|value| value.get("cmd"))
+                        .and_then(|cmd| cmd.as_str())
+                        == Some("echo hi");
+            }
+            if event_type == "item.completed" {
+                saw_completed = tool_name == "shell"
+                    && tool_call_id == "call_1"
+                    && status == "completed"
+                    && arguments
+                        .and_then(|value| value.get("cmd"))
+                        .and_then(|cmd| cmd.as_str())
+                        == Some("echo hi");
+            }
+        }
+
+        assert!(saw_started);
+        assert!(saw_updated);
+        assert!(saw_completed);
     }
 }

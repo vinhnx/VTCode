@@ -232,7 +232,10 @@ impl DynamicModelRegistry {
                 continue;
             }
 
-            self.register_model(provider, selection_from_dynamic(provider, trimmed));
+            self.register_model(
+                provider,
+                selection_from_dynamic(provider, trimmed, trimmed, None, None),
+            );
         }
     }
 

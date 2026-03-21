@@ -4,12 +4,14 @@ use once_cell::sync::Lazy;
 use rustc_hash::FxHashMap;
 use std::sync::RwLock;
 
-use super::{LLMRequest, LLMResponse, LLMStream, LLMStreamEvent, Message};
+use super::{LLMNormalizedStream, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent, Message};
 pub use vtcode_commons::llm::{LLMError, LLMErrorMetadata};
 
 /// Cached provider capabilities to reduce repeated trait method calls
 #[derive(Debug, Clone)]
 pub struct ProviderCapabilities {
+    pub provider_name: String,
+    pub model: String,
     pub streaming: bool,
     pub reasoning: bool,
     pub reasoning_effort: bool,
@@ -20,6 +22,68 @@ pub struct ProviderCapabilities {
     pub responses_compaction: bool,
     pub context_awareness: bool,
     pub vision: bool,
+    pub context_size: usize,
+}
+
+impl ProviderCapabilities {
+    pub fn detect(provider: &dyn LLMProvider, model: &str) -> Self {
+        Self {
+            provider_name: provider.name().to_string(),
+            model: model.to_string(),
+            streaming: provider.supports_streaming(),
+            reasoning: provider.supports_reasoning(model),
+            reasoning_effort: provider.supports_reasoning_effort(model),
+            tools: provider.supports_tools(model),
+            parallel_tool_config: provider.supports_parallel_tool_config(model),
+            structured_output: provider.supports_structured_output(model),
+            context_caching: provider.supports_context_caching(model),
+            responses_compaction: provider.supports_responses_compaction(model),
+            context_awareness: provider.supports_context_awareness(model),
+            vision: provider.supports_vision(model),
+            context_size: provider.effective_context_size(model),
+        }
+    }
+
+    pub fn has_advanced_features(&self) -> bool {
+        self.reasoning || self.structured_output || self.context_caching || self.reasoning_effort
+    }
+
+    pub fn summary(&self) -> String {
+        let mut features = Vec::new();
+
+        if self.streaming {
+            features.push("streaming");
+        }
+        if self.reasoning {
+            features.push("advanced-reasoning");
+        }
+        if self.reasoning_effort {
+            features.push("reasoning-effort");
+        }
+        if self.structured_output {
+            features.push("structured-output");
+        }
+        if self.context_caching {
+            features.push("context-caching");
+        }
+        if self.parallel_tool_config {
+            features.push("parallel-tools");
+        }
+        if self.responses_compaction {
+            features.push("responses-compaction");
+        }
+
+        let features_str = if features.is_empty() {
+            "basic".to_string()
+        } else {
+            features.join(", ")
+        };
+
+        format!(
+            "{} ({} tokens): {}",
+            self.model, self.context_size, features_str
+        )
+    }
 }
 
 /// Global cache for provider capabilities (provider_name::model -> capabilities)
@@ -38,18 +102,7 @@ pub fn get_cached_capabilities(provider: &dyn LLMProvider, model: &str) -> Provi
     }
 
     // Compute capabilities
-    let caps = ProviderCapabilities {
-        streaming: provider.supports_streaming(),
-        reasoning: provider.supports_reasoning(model),
-        reasoning_effort: provider.supports_reasoning_effort(model),
-        tools: provider.supports_tools(model),
-        parallel_tool_config: provider.supports_parallel_tool_config(model),
-        structured_output: provider.supports_structured_output(model),
-        context_caching: provider.supports_context_caching(model),
-        responses_compaction: provider.supports_responses_compaction(model),
-        context_awareness: provider.supports_context_awareness(model),
-        vision: provider.supports_vision(model),
-    };
+    let caps = ProviderCapabilities::detect(provider, model);
 
     // Cache for future use
     if let Ok(mut cache) = CAPABILITY_CACHE.write() {
@@ -148,6 +201,22 @@ pub trait LLMProvider: Send + Sync {
         let response = self.generate(request).await?;
         let stream = try_stream! {
             yield LLMStreamEvent::Completed { response: Box::new(response) };
+        };
+        Ok(Box::pin(stream))
+    }
+
+    /// Normalized streaming contract layered on top of the legacy provider stream.
+    async fn stream_normalized(
+        &self,
+        request: LLMRequest,
+    ) -> Result<LLMNormalizedStream, LLMError> {
+        let mut legacy_stream = self.stream(request).await?;
+        let stream = try_stream! {
+            while let Some(event) = futures::StreamExt::next(&mut legacy_stream).await {
+                for normalized in event?.into_normalized() {
+                    yield normalized;
+                }
+            }
         };
         Ok(Box::pin(stream))
     }

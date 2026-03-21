@@ -2,7 +2,7 @@ use super::AgentRunner;
 use super::constants::STREAMING_COOLDOWN_SECS;
 use super::types::ProviderResponseSummary;
 use crate::core::agent::events::ExecEventRecorder;
-use crate::llm::provider::{LLMRequest, LLMStreamEvent};
+use crate::llm::provider::{LLMRequest, NormalizedStreamEvent, Usage};
 use crate::utils::colors::style;
 use anyhow::{Context, Result, anyhow};
 use futures::StreamExt;
@@ -50,19 +50,27 @@ impl AgentRunner {
         let mut aggregated_text = String::with_capacity(2048);
         let mut aggregated_reasoning = String::with_capacity(1024);
         let mut streaming_response: Option<Box<crate::llm::provider::LLMResponse>> = None;
+        let mut streamed_usage: Option<Usage> = None;
 
         if supports_streaming && !streaming_disabled {
             let stream_result = if let Some(limit) = streaming_deadline {
-                tokio::time::timeout(limit, self.provider_client.stream(request.clone())).await
+                tokio::time::timeout(
+                    limit,
+                    self.provider_client.stream_normalized(request.clone()),
+                )
+                .await
             } else {
-                Ok(self.provider_client.stream(request.clone()).await)
+                Ok(self
+                    .provider_client
+                    .stream_normalized(request.clone())
+                    .await)
             };
 
             match stream_result {
                 Ok(Ok(mut stream)) => {
                     while let Some(event) = stream.next().await {
                         match event {
-                            Ok(LLMStreamEvent::Token { delta }) => {
+                            Ok(NormalizedStreamEvent::TextDelta { delta }) => {
                                 if delta.is_empty() {
                                     continue;
                                 }
@@ -71,17 +79,18 @@ impl AgentRunner {
                                     agent_message_streamed = true;
                                 }
                             }
-                            Ok(LLMStreamEvent::Reasoning { delta }) => {
+                            Ok(NormalizedStreamEvent::ReasoningDelta { delta }) => {
                                 aggregated_reasoning.push_str(&delta);
                                 if event_recorder.reasoning_stream_update(&aggregated_reasoning) {
                                     reasoning_recorded = true;
                                 }
                             }
-                            Ok(LLMStreamEvent::ReasoningStage { stage }) => {
-                                *self.last_reasoning_stage.lock() = Some(stage.clone());
-                                event_recorder.set_reasoning_stage(&stage);
+                            Ok(NormalizedStreamEvent::ToolCallStart { .. })
+                            | Ok(NormalizedStreamEvent::ToolCallDelta { .. }) => {}
+                            Ok(NormalizedStreamEvent::Usage { usage }) => {
+                                streamed_usage = Some(usage);
                             }
-                            Ok(LLMStreamEvent::Completed { response }) => {
+                            Ok(NormalizedStreamEvent::Done { response }) => {
                                 streaming_response = Some(response);
                                 break;
                             }
@@ -165,6 +174,9 @@ impl AgentRunner {
         if let Some(mut response) = streaming_response {
             *self.streaming_failures.lock() = 0;
             self.streaming_last_failure.lock().take();
+            if response.usage.is_none() {
+                response.usage = streamed_usage;
+            }
             let response_text = response.content.take().unwrap_or_default();
             if !response_text.is_empty() {
                 aggregated_text = response_text;

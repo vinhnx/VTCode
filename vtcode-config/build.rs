@@ -61,7 +61,7 @@ fn generate_placeholder_artifacts() {
     }
     if let Err(error) = fs::write(
         out_dir.join("model_capabilities.rs"),
-        "// Placeholder for docs.rs build\n#[derive(Clone, Copy)]\npub struct Entry {\n    pub provider: &'static str,\n    pub id: &'static str,\n    pub tool_call: bool,\n    pub input_modalities: &'static [&'static str],\n}\n\npub const ENTRIES: &[Entry] = &[];\n\npub fn metadata_for(_provider: &str, _id: &str) -> Option<Entry> { None }\n",
+        "// Placeholder for docs.rs build\n#[derive(Clone, Copy)]\npub struct Pricing {\n    pub input: Option<f64>,\n    pub output: Option<f64>,\n    pub cache_read: Option<f64>,\n    pub cache_write: Option<f64>,\n}\n\n#[derive(Clone, Copy)]\npub struct Entry {\n    pub provider: &'static str,\n    pub id: &'static str,\n    pub display_name: &'static str,\n    pub description: &'static str,\n    pub context_window: usize,\n    pub max_output_tokens: Option<usize>,\n    pub reasoning: bool,\n    pub tool_call: bool,\n    pub vision: bool,\n    pub input_modalities: &'static [&'static str],\n    pub caching: bool,\n    pub structured_output: bool,\n    pub pricing: Pricing,\n}\n\npub const ENTRIES: &[Entry] = &[];\npub const PROVIDERS: &[&str] = &[];\n\npub fn metadata_for(_provider: &str, _id: &str) -> Option<Entry> { None }\npub fn models_for_provider(_provider: &str) -> Option<&'static [&'static str]> { None }\n",
     ) {
         eprintln!("warning: failed to write capability metadata: {error}");
     }
@@ -170,11 +170,23 @@ struct ProviderCatalog {
 struct CapabilityModelSpec {
     id: String,
     #[serde(default)]
+    name: String,
+    #[serde(default)]
+    description: String,
+    #[serde(default)]
     context: usize,
+    #[serde(default, alias = "output_tokens")]
+    max_output_tokens: Option<usize>,
+    #[serde(default)]
+    reasoning: bool,
     #[serde(default = "default_tool_call_true")]
     tool_call: bool,
     #[serde(default)]
     modalities: CapabilityModalities,
+    #[serde(default)]
+    capabilities: CapabilityFlags,
+    #[serde(default)]
+    cost: Option<PricingSpec>,
 }
 
 #[derive(Default, Deserialize)]
@@ -183,12 +195,42 @@ struct CapabilityModalities {
     input: Vec<String>,
 }
 
+#[derive(Default, Deserialize)]
+struct CapabilityFlags {
+    #[serde(default)]
+    caching: bool,
+    #[serde(default)]
+    context_caching: bool,
+    #[serde(default)]
+    structured_output: bool,
+}
+
+#[derive(Clone, Copy, Default, Deserialize)]
+struct PricingSpec {
+    #[serde(default)]
+    input: Option<f64>,
+    #[serde(default)]
+    output: Option<f64>,
+    #[serde(default)]
+    cache_read: Option<f64>,
+    #[serde(default)]
+    cache_write: Option<f64>,
+}
+
 struct CapabilityEntry {
     provider: String,
     id: String,
+    display_name: String,
+    description: String,
     context_window: usize,
+    max_output_tokens: Option<usize>,
+    reasoning: bool,
     tool_call: bool,
+    vision: bool,
     input_modalities: Vec<String>,
+    caching: bool,
+    structured_output: bool,
+    pricing: PricingSpec,
 }
 
 impl Provider {
@@ -264,12 +306,25 @@ fn load_model_capability_entries(manifest_dir: &Path) -> Result<Vec<CapabilityEn
     for (provider_key, provider) in providers {
         let provider_key = canonical_provider_key(&provider_key);
         for spec in provider.models.into_values() {
+            let vision = spec
+                .modalities
+                .input
+                .iter()
+                .any(|modality| matches!(modality.as_str(), "image" | "video"));
             entries.push(CapabilityEntry {
                 provider: provider_key.to_string(),
                 id: spec.id,
+                display_name: spec.name,
+                description: spec.description,
                 context_window: spec.context,
+                max_output_tokens: spec.max_output_tokens,
+                reasoning: spec.reasoning,
                 tool_call: spec.tool_call,
                 input_modalities: spec.modalities.input,
+                vision,
+                caching: spec.capabilities.caching || spec.capabilities.context_caching,
+                structured_output: spec.capabilities.structured_output,
+                pricing: spec.cost.unwrap_or_default(),
             });
         }
     }
@@ -548,12 +603,28 @@ pub fn vendor_groups() -> &'static [VendorModels] {
 fn write_model_capabilities(out_dir: &Path, entries: &[CapabilityEntry]) -> Result<()> {
     let mut metadata = String::new();
     metadata.push_str("#[derive(Clone, Copy)]\n");
+    metadata.push_str("pub struct Pricing {\n");
+    metadata.push_str("    pub input: Option<f64>,\n");
+    metadata.push_str("    pub output: Option<f64>,\n");
+    metadata.push_str("    pub cache_read: Option<f64>,\n");
+    metadata.push_str("    pub cache_write: Option<f64>,\n");
+    metadata.push_str("}\n\n");
+
+    metadata.push_str("#[derive(Clone, Copy)]\n");
     metadata.push_str("pub struct Entry {\n");
     metadata.push_str("    pub provider: &'static str,\n");
     metadata.push_str("    pub id: &'static str,\n");
+    metadata.push_str("    pub display_name: &'static str,\n");
+    metadata.push_str("    pub description: &'static str,\n");
     metadata.push_str("    pub context_window: usize,\n");
+    metadata.push_str("    pub max_output_tokens: Option<usize>,\n");
+    metadata.push_str("    pub reasoning: bool,\n");
     metadata.push_str("    pub tool_call: bool,\n");
+    metadata.push_str("    pub vision: bool,\n");
     metadata.push_str("    pub input_modalities: &'static [&'static str],\n");
+    metadata.push_str("    pub caching: bool,\n");
+    metadata.push_str("    pub structured_output: bool,\n");
+    metadata.push_str("    pub pricing: Pricing,\n");
     metadata.push_str("}\n\n");
 
     metadata.push_str("#[allow(dead_code)]\npub const ENTRIES: &[Entry] = &[\n");
@@ -565,11 +636,29 @@ fn write_model_capabilities(out_dir: &Path, entries: &[CapabilityEntry]) -> Resu
         metadata.push_str("        id: \"");
         metadata.push_str(&escape_rust_string(&entry.id));
         metadata.push_str("\",\n");
+        metadata.push_str("        display_name: \"");
+        metadata.push_str(&escape_rust_string(&entry.display_name));
+        metadata.push_str("\",\n");
+        metadata.push_str("        description: \"");
+        metadata.push_str(&escape_rust_string(&entry.description));
+        metadata.push_str("\",\n");
         metadata.push_str("        context_window: ");
         metadata.push_str(&entry.context_window.to_string());
         metadata.push_str(",\n");
+        metadata.push_str("        max_output_tokens: ");
+        match entry.max_output_tokens {
+            Some(value) => metadata.push_str(&format!("Some({value})")),
+            None => metadata.push_str("None"),
+        }
+        metadata.push_str(",\n");
+        metadata.push_str("        reasoning: ");
+        metadata.push_str(if entry.reasoning { "true" } else { "false" });
+        metadata.push_str(",\n");
         metadata.push_str("        tool_call: ");
         metadata.push_str(if entry.tool_call { "true" } else { "false" });
+        metadata.push_str(",\n");
+        metadata.push_str("        vision: ");
+        metadata.push_str(if entry.vision { "true" } else { "false" });
         metadata.push_str(",\n");
         metadata.push_str("        input_modalities: &[\n");
         for modality in &entry.input_modalities {
@@ -578,6 +667,30 @@ fn write_model_capabilities(out_dir: &Path, entries: &[CapabilityEntry]) -> Resu
             metadata.push_str("\",\n");
         }
         metadata.push_str("        ],\n");
+        metadata.push_str("        caching: ");
+        metadata.push_str(if entry.caching { "true" } else { "false" });
+        metadata.push_str(",\n");
+        metadata.push_str("        structured_output: ");
+        metadata.push_str(if entry.structured_output {
+            "true"
+        } else {
+            "false"
+        });
+        metadata.push_str(",\n");
+        metadata.push_str("        pricing: Pricing {\n");
+        metadata.push_str("            input: ");
+        write_optional_f64(&mut metadata, entry.pricing.input);
+        metadata.push_str(",\n");
+        metadata.push_str("            output: ");
+        write_optional_f64(&mut metadata, entry.pricing.output);
+        metadata.push_str(",\n");
+        metadata.push_str("            cache_read: ");
+        write_optional_f64(&mut metadata, entry.pricing.cache_read);
+        metadata.push_str(",\n");
+        metadata.push_str("            cache_write: ");
+        write_optional_f64(&mut metadata, entry.pricing.cache_write);
+        metadata.push_str(",\n");
+        metadata.push_str("        },\n");
         metadata.push_str("    },\n");
     }
     let mut provider_map: IndexMap<&str, Vec<&CapabilityEntry>> = IndexMap::new();
@@ -610,11 +723,29 @@ fn write_model_capabilities(out_dir: &Path, entries: &[CapabilityEntry]) -> Resu
             metadata.push_str("                id: \"");
             metadata.push_str(&escape_rust_string(&entry.id));
             metadata.push_str("\",\n");
+            metadata.push_str("                display_name: \"");
+            metadata.push_str(&escape_rust_string(&entry.display_name));
+            metadata.push_str("\",\n");
+            metadata.push_str("                description: \"");
+            metadata.push_str(&escape_rust_string(&entry.description));
+            metadata.push_str("\",\n");
             metadata.push_str("                context_window: ");
             metadata.push_str(&entry.context_window.to_string());
             metadata.push_str(",\n");
+            metadata.push_str("                max_output_tokens: ");
+            match entry.max_output_tokens {
+                Some(value) => metadata.push_str(&format!("Some({value})")),
+                None => metadata.push_str("None"),
+            }
+            metadata.push_str(",\n");
+            metadata.push_str("                reasoning: ");
+            metadata.push_str(if entry.reasoning { "true" } else { "false" });
+            metadata.push_str(",\n");
             metadata.push_str("                tool_call: ");
             metadata.push_str(if entry.tool_call { "true" } else { "false" });
+            metadata.push_str(",\n");
+            metadata.push_str("                vision: ");
+            metadata.push_str(if entry.vision { "true" } else { "false" });
             metadata.push_str(",\n");
             metadata.push_str("                input_modalities: &[\n");
             for modality in &entry.input_modalities {
@@ -623,6 +754,30 @@ fn write_model_capabilities(out_dir: &Path, entries: &[CapabilityEntry]) -> Resu
                 metadata.push_str("\",\n");
             }
             metadata.push_str("                ],\n");
+            metadata.push_str("                caching: ");
+            metadata.push_str(if entry.caching { "true" } else { "false" });
+            metadata.push_str(",\n");
+            metadata.push_str("                structured_output: ");
+            metadata.push_str(if entry.structured_output {
+                "true"
+            } else {
+                "false"
+            });
+            metadata.push_str(",\n");
+            metadata.push_str("                pricing: Pricing {\n");
+            metadata.push_str("                    input: ");
+            write_optional_f64(&mut metadata, entry.pricing.input);
+            metadata.push_str(",\n");
+            metadata.push_str("                    output: ");
+            write_optional_f64(&mut metadata, entry.pricing.output);
+            metadata.push_str(",\n");
+            metadata.push_str("                    cache_read: ");
+            write_optional_f64(&mut metadata, entry.pricing.cache_read);
+            metadata.push_str(",\n");
+            metadata.push_str("                    cache_write: ");
+            write_optional_f64(&mut metadata, entry.pricing.cache_write);
+            metadata.push_str(",\n");
+            metadata.push_str("                },\n");
             metadata.push_str("            }),\n");
         }
         metadata.push_str("            _ => None,\n");
@@ -665,6 +820,17 @@ fn escape_rust_string(input: &str) -> String {
         }
     }
     output
+}
+
+fn write_optional_f64(output: &mut String, value: Option<f64>) {
+    match value {
+        Some(value) => {
+            output.push_str("Some(");
+            output.push_str(&format!("{value:?}"));
+            output.push(')');
+        }
+        None => output.push_str("None"),
+    }
 }
 
 fn to_module_name(vendor: &str) -> String {

@@ -7,6 +7,7 @@ use vtcode_config::core::CustomProviderConfig;
 use vtcode_core::config::constants::reasoning;
 use vtcode_core::config::models::{ModelId, Provider};
 use vtcode_core::config::types::ReasoningEffortLevel;
+use vtcode_core::llm::{DynamicModelMeta, ModelResolver, ResolvedModel};
 
 use super::options::{ModelOption, find_option_index};
 
@@ -111,20 +112,20 @@ pub(super) fn parse_model_selection(
         .map(|provider| provider.resolved_api_key_env())
         .or_else(|| provider_enum.map(|provider| provider.default_api_key_env().to_string()))
         .unwrap_or_else(|| derive_env_key(&provider_lower));
-    let reasoning_supported = provider_enum
-        .map(|provider| provider.supports_reasoning_effort(model_token.trim()))
-        .unwrap_or(false);
-    let service_tier_supported = provider_enum
-        .map(|provider| provider.supports_service_tier(model_token.trim()))
-        .unwrap_or(false);
-    let requires_api_key = if let Some(provider) = provider_enum {
-        provider_requires_api_key(provider, model_token.trim(), &env_key)
-    } else {
-        match std::env::var(&env_key) {
-            Ok(value) => value.trim().is_empty(),
-            Err(_) => true,
-        }
-    };
+    if let Some(provider) = provider_enum {
+        let resolved =
+            ModelResolver::resolve(Some(provider.as_ref()), model_token.trim(), &[], None)
+                .expect("provider override should resolve");
+        return Ok(selection_from_resolved(
+            provider_lower,
+            provider_label,
+            Some(provider),
+            resolved,
+            true,
+            None,
+            env_key,
+        ));
+    }
 
     Ok(SelectionDetail {
         provider_key: provider_lower,
@@ -133,54 +134,58 @@ pub(super) fn parse_model_selection(
         model_id: model_token.trim().to_string(),
         model_display: model_token.trim().to_string(),
         known_model: false,
-        reasoning_supported,
+        reasoning_supported: false,
         reasoning_optional: true,
         reasoning_off_model: None,
-        service_tier_supported,
-        requires_api_key,
+        service_tier_supported: false,
+        requires_api_key: true,
         uses_chatgpt_auth: false,
         env_key,
     })
 }
 
 pub(super) fn selection_from_option(option: &ModelOption) -> SelectionDetail {
-    let env_key = option.provider.default_api_key_env().to_string();
-    let requires_api_key = provider_requires_api_key(option.provider, option.id, &env_key);
-    SelectionDetail {
-        provider_key: option.provider.to_string(),
-        provider_label: option.provider.label().to_string(),
-        provider_enum: Some(option.provider),
-        model_id: option.id.to_string(),
-        model_display: option.display.to_string(),
-        known_model: true,
-        reasoning_supported: option.supports_reasoning,
-        reasoning_optional: false,
-        reasoning_off_model: option.reasoning_alternative,
-        service_tier_supported: option.provider.supports_service_tier(option.id),
-        requires_api_key,
-        uses_chatgpt_auth: false,
-        env_key,
-    }
+    let resolved = ModelResolver::resolve(Some(option.provider.as_ref()), option.id, &[], None)
+        .expect("static model option should resolve");
+    selection_from_resolved(
+        option.provider.to_string(),
+        option.provider.label().to_string(),
+        Some(option.provider),
+        resolved,
+        false,
+        option.reasoning_alternative,
+        option.provider.default_api_key_env().to_string(),
+    )
 }
 
-pub(super) fn selection_from_dynamic(provider: Provider, model_id: &str) -> SelectionDetail {
+pub(super) fn selection_from_dynamic(
+    provider: Provider,
+    model_id: &str,
+    display_name: &str,
+    description: Option<&str>,
+    context_window: Option<usize>,
+) -> SelectionDetail {
     let env_key = provider.default_api_key_env().to_string();
-    let requires_api_key = provider_requires_api_key(provider, model_id, &env_key);
-    SelectionDetail {
-        provider_key: provider.to_string(),
-        provider_label: provider.label().to_string(),
-        provider_enum: Some(provider),
-        model_id: model_id.to_string(),
-        model_display: model_id.to_string(),
-        known_model: false,
-        reasoning_supported: provider.supports_reasoning_effort(model_id),
-        reasoning_optional: true,
-        reasoning_off_model: None,
-        service_tier_supported: provider.supports_service_tier(model_id),
-        requires_api_key,
-        uses_chatgpt_auth: false,
+    let resolved = ModelResolver::resolve(
+        Some(provider.as_ref()),
+        model_id,
+        &[vtcode_core::llm::DynamicModelRef { provider, model_id }],
+        Some(DynamicModelMeta {
+            display_name: display_name.to_string(),
+            description: description.map(ToOwned::to_owned),
+            context_window,
+        }),
+    )
+    .expect("dynamic model should resolve");
+    selection_from_resolved(
+        provider.to_string(),
+        provider.label().to_string(),
+        Some(provider),
+        resolved,
+        true,
+        None,
         env_key,
-    }
+    )
 }
 
 pub(super) fn selection_from_custom_provider(provider: &CustomProviderConfig) -> SelectionDetail {
@@ -199,6 +204,32 @@ pub(super) fn selection_from_custom_provider(provider: &CustomProviderConfig) ->
         service_tier_supported: Provider::OpenAI.supports_service_tier(&provider.model),
         requires_api_key: true,
         uses_chatgpt_auth: false,
+        env_key,
+    }
+}
+
+fn selection_from_resolved(
+    provider_key: String,
+    provider_label: String,
+    provider_enum: Option<Provider>,
+    resolved: ResolvedModel,
+    reasoning_optional: bool,
+    reasoning_off_model: Option<ModelId>,
+    env_key: String,
+) -> SelectionDetail {
+    SelectionDetail {
+        provider_key,
+        provider_label,
+        provider_enum,
+        model_id: resolved.model_id.clone(),
+        model_display: resolved.display_name().into_owned(),
+        known_model: resolved.known_model(),
+        reasoning_supported: resolved.reasoning_supported(),
+        reasoning_optional,
+        reasoning_off_model,
+        service_tier_supported: resolved.service_tier_supported(),
+        requires_api_key: resolved.availability.requires_api_key(),
+        uses_chatgpt_auth: resolved.availability.uses_managed_auth(),
         env_key,
     }
 }
@@ -271,37 +302,6 @@ pub(super) fn derive_env_key(provider: &str) -> String {
     key
 }
 
-pub(super) fn provider_requires_api_key(provider: Provider, model_id: &str, env_key: &str) -> bool {
-    if provider.uses_managed_auth() {
-        return false;
-    }
-
-    if provider == Provider::Ollama {
-        let is_cloud_model = model_id.contains(":cloud") || model_id.contains("-cloud");
-        if !is_cloud_model {
-            return false;
-        }
-    }
-
-    // OAuth-backed credentials can satisfy provider auth without a pasted API key.
-    if provider == Provider::OpenRouter
-        && let Ok(Some(_token)) = vtcode_config::auth::load_oauth_token()
-    {
-        return false;
-    }
-
-    if provider == Provider::OpenAI
-        && let Ok(Some(_session)) = vtcode_config::auth::load_openai_chatgpt_session()
-    {
-        return false;
-    }
-
-    match std::env::var(env_key) {
-        Ok(value) => value.trim().is_empty(),
-        Err(_) => true,
-    }
-}
-
 pub(super) fn title_case(value: &str) -> String {
     let mut chars = value.chars();
     let Some(first) = chars.next() else {
@@ -315,11 +315,14 @@ pub(super) fn title_case(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::provider_requires_api_key;
     use vtcode_core::config::models::Provider;
+    use vtcode_core::llm::{ModelAvailability, ModelResolver};
 
     #[test]
     fn managed_auth_provider_skips_api_key_requirement() {
-        assert!(!provider_requires_api_key(Provider::Copilot, "copilot", "",));
+        assert_eq!(
+            ModelResolver::availability(Provider::Copilot, "copilot"),
+            ModelAvailability::ManagedAuthAvailable
+        );
     }
 }

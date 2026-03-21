@@ -1,12 +1,12 @@
 use super::cgp::{CanBuildProvider, CanDescribeProvider, register_builtin_cgp_providers};
+use super::model_resolver::{ModelResolver, heuristic_provider_from_model};
 use crate::config::TimeoutsConfig;
 use crate::config::core::{AnthropicConfig, ModelConfig, OpenAIConfig, PromptCachingConfig};
-use crate::config::models::{ModelId, Provider};
+use crate::config::models::Provider;
 use crate::ctx_err;
 use crate::llm::provider::{LLMError, LLMProvider};
 use hashbrown::HashMap;
 use std::path::PathBuf;
-use std::str::FromStr;
 use vtcode_config::auth::CopilotAuthConfig;
 use vtcode_config::auth::OpenAIChatGptAuthHandle;
 
@@ -89,60 +89,7 @@ impl LLMFactory {
 
     /// Determine provider name from model string
     pub fn provider_from_model(&self, model: &str) -> Option<String> {
-        let trimmed = model.trim();
-        if trimmed.is_empty() {
-            return None;
-        }
-
-        if trimmed.contains(':') && !trimmed.contains('/') && !trimmed.contains('@') {
-            return Some("ollama".to_owned());
-        }
-
-        let m = trimmed.to_lowercase();
-        if m.starts_with("gpt-oss-")
-            || m.starts_with("gpt-")
-            || m.starts_with("o1")
-            || m.starts_with("o3")
-            || m.starts_with("o4")
-            || m.starts_with("codex")
-        {
-            Some("openai".to_owned())
-        } else if m == "copilot" || m.starts_with("copilot-") {
-            Some("copilot".to_owned())
-        } else if m.starts_with("claude-") {
-            Some("anthropic".to_owned())
-        } else if m.starts_with("deepseek-") {
-            Some("deepseek".to_owned())
-        } else if m.contains("gemini") || m.starts_with("palm") {
-            Some("gemini".to_owned())
-        } else if m.starts_with("glm-") {
-            Some("zai".to_owned())
-        } else if m.starts_with("litellm/") {
-            Some("litellm".to_owned())
-        } else if m.starts_with("lmstudio-community/") {
-            Some("lmstudio".to_owned())
-        } else if m.starts_with("moonshot-") || m.starts_with("kimi-") {
-            Some("moonshot".to_owned())
-        } else if m.starts_with("deepseek-ai/")
-            || m.starts_with("openai/gpt-oss-")
-            || m.starts_with("zai-org/")
-            || m.starts_with("moonshotai/")
-            || m.starts_with("minimaxai/")
-        {
-            Some("huggingface".to_owned())
-        } else if m.starts_with("mistral-")
-            || m.starts_with("mixtral-")
-            || m.starts_with("qwen-")
-            || m.starts_with("meta-")
-            || m.starts_with("llama-")
-            || m.starts_with("command-")
-            || m.contains('/')
-            || m.contains('@')
-        {
-            Some("openrouter".to_owned())
-        } else {
-            None
-        }
+        heuristic_provider_from_model(model).map(|provider| provider.to_string())
     }
 }
 
@@ -153,29 +100,7 @@ impl LLMFactory {
 /// 2. Parse the model into a [`ModelId`] and return its provider.
 /// 3. Fall back to heuristic detection via [`LLMFactory::provider_from_model`].
 pub fn infer_provider(override_provider: Option<&str>, model: &str) -> Option<Provider> {
-    if let Some(name) = override_provider.and_then(normalize_override) {
-        return Provider::from_str(name).ok();
-    }
-
-    if let Ok(model_id) = ModelId::from_str(model) {
-        return Some(model_id.provider());
-    }
-
-    let Ok(factory) = get_factory().lock() else {
-        return None;
-    };
-    factory
-        .provider_from_model(model)
-        .and_then(|name| Provider::from_str(&name).ok())
-}
-
-fn normalize_override(value: &str) -> Option<&str> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        None
-    } else {
-        Some(trimmed)
-    }
+    ModelResolver::resolve_provider(override_provider, model, &[])
 }
 
 impl Default for LLMFactory {
@@ -207,27 +132,10 @@ pub fn get_models_manager() -> &'static ModelsManager {
 /// This provides a more accurate provider resolution than heuristic-based
 /// `provider_from_model` by checking against known model presets first.
 pub fn infer_provider_from_model(model: &str) -> Option<Provider> {
-    // First check ModelsManager presets for exact match
-    let manager = get_models_manager();
-    if let Ok(models) = manager.try_list_models()
-        && let Some(preset) = models.iter().find(|m| m.model == model || m.id == model)
-    {
-        return Some(preset.provider);
-    }
-
-    // Preserve the legacy heuristic mapping for ad-hoc model strings such as
-    // OpenRouter, LM Studio, or Hugging Face repo identifiers.
-    if let Ok(factory) = get_factory().lock()
-        && let Some(provider_name) = factory.provider_from_model(model)
-        && let Ok(provider) = Provider::from_str(&provider_name)
-    {
-        return Some(provider);
-    }
-
-    // Fall back to ModelFamily detection for newer slugs that are not covered
-    // by the historical heuristics.
-    let family = crate::models_manager::find_family_for_model(model);
-    (family.family != "unknown").then_some(family.provider)
+    ModelResolver::resolve_provider(None, model, &[]).or_else(|| {
+        let family = crate::models_manager::find_family_for_model(model);
+        (family.family != "unknown").then_some(family.provider)
+    })
 }
 
 /// Create provider from model name and API key

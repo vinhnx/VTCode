@@ -114,8 +114,6 @@ pub struct AgentRunner {
     streaming_failures: Mutex<u8>,
     /// Records when streaming last failed for cooldown-based re-enablement
     streaming_last_failure: Mutex<Option<Instant>>,
-    /// Tracks the latest reasoning stage name for the current turn
-    last_reasoning_stage: Mutex<Option<String>>,
     /// Receiver for steering messages (e.g., stop, pause)
     steering_receiver: Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>>,
     /// Optional restricted tool definitions used instead of the default registry projection.
@@ -479,7 +477,6 @@ impl AgentRunner {
             context_optimizer: tokio::sync::Mutex::new(ContextOptimizer::new()),
             streaming_failures: Mutex::new(0),
             streaming_last_failure: Mutex::new(None),
-            last_reasoning_stage: Mutex::new(None),
             steering_receiver: Mutex::new(steering_receiver),
             tool_definitions_override: RwLock::new(None),
             tool_arg_transform: None,

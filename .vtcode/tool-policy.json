@@ -199,7 +199,10 @@
       "cargo check|sandbox_permissions=\"use_default\"|additional_permissions=null",
       "in a PTY by calling|sandbox_permissions=\"use_default\"|additional_permissions=null",
       "unified_exec|sandbox_permissions=\"use_default\"|additional_permissions=null",
-      "unified_exec"
+      "unified_exec",
+      "cargo fmt -- --check|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "cargo check use tty|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "cargo clippy --workspace --all-targets -- -D warnings|sandbox_permissions=\"use_default\"|additional_permissions=null"
     ]
   }
 }

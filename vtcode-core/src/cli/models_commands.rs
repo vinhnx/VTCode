@@ -347,12 +347,40 @@ async fn handle_compare_models(_cli: &Cli) -> Result<()> {
 
 /// Show model information
 async fn handle_model_info(_cli: &Cli, model: &str) -> Result<()> {
+    let resolved = crate::llm::ModelResolver::resolve(None, model, &[], None);
     println!("{} Model Info: {}", cyan("・"), underline(&bold(model)));
     println!();
 
     println!("Model: {}", cyan(model));
-    println!("Provider: {}", infer_provider_from_model(model));
-    println!("Status: {}", green("Available"));
+    if let Some(resolved) = resolved {
+        println!("Provider: {}", resolved.provider.label());
+        if let Some(context_window) = resolved.context_window() {
+            println!("Context: {}", context_window);
+        }
+        println!(
+            "Reasoning: {}",
+            if resolved.reasoning_supported() {
+                green("Yes")
+            } else {
+                yellow("No")
+            }
+        );
+        println!(
+            "Tools: {}",
+            if resolved.supports_tool_calls() {
+                green("Yes")
+            } else {
+                yellow("No")
+            }
+        );
+        println!(
+            "Availability: {}",
+            model_availability_label(&resolved.availability)
+        );
+    } else {
+        println!("Provider: {}", infer_provider_from_model(model));
+        println!("Availability: {}", yellow("Unknown"));
+    }
     println!();
     println!("{} Check docs/models.json for specs", cyan("・"));
 
@@ -364,4 +392,14 @@ fn infer_provider_from_model(model: &str) -> &'static str {
     crate::llm::factory::infer_provider(None, model)
         .map(|provider| provider.label())
         .unwrap_or("Unknown")
+}
+
+fn model_availability_label(availability: &crate::llm::ModelAvailability) -> &'static str {
+    match availability {
+        crate::llm::ModelAvailability::Available => "Available",
+        crate::llm::ModelAvailability::MissingCredential => "Missing credential",
+        crate::llm::ModelAvailability::ManagedAuthAvailable => "Managed auth",
+        crate::llm::ModelAvailability::Misconfigured => "Misconfigured",
+        crate::llm::ModelAvailability::LocalOnly => "Local only",
+    }
 }

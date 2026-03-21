@@ -1,6 +1,7 @@
 use super::super::stream_decoder::parse_usage_value;
 use super::*;
 use crate::config::TimeoutsConfig;
+use crate::llm::provider::{LLMProvider, NormalizedStreamEvent};
 use crate::llm::providers::openrouter::stream_decoder::parse_stream_payload;
 
 use crate::llm::FinishReason;
@@ -8,6 +9,7 @@ use crate::llm::provider::ToolDefinition;
 use crate::llm::providers::ReasoningBuffer;
 use crate::llm::providers::shared::NoopStreamTelemetry;
 use crate::llm::providers::shared::{StreamFragment, extract_data_payload};
+use futures::StreamExt;
 use serde_json::json;
 use wiremock::matchers::{body_partial_json, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -259,10 +261,63 @@ async fn generate_retries_without_tools_when_openrouter_rejects_tool_endpoints()
         .mount(&server)
         .await;
 
-    let response =
-        crate::llm::provider::LLMProvider::generate(&provider, request_with_tools(model_id))
-            .await
-            .expect("fallback request should succeed");
+    let response = LLMProvider::generate(&provider, request_with_tools(model_id))
+        .await
+        .expect("fallback request should succeed");
 
     assert_eq!(response.content.as_deref(), Some("fallback answer"));
+}
+
+#[tokio::test]
+async fn stream_normalized_emits_tool_call_start_and_delta_events() {
+    let server = MockServer::start().await;
+    let provider = test_provider(&server.uri(), models::openrouter::OPENAI_GPT_5);
+
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(
+                    "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"function\":{\"name\":\"unified_search\",\"arguments\":\"{\\\"pattern\\\":\\\"ph\"}}]}}]}\n\n\
+data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"function\":{\"arguments\":\"ase\\\"}\"}}]}}]}\n\n\
+data: {\"choices\":[{\"delta\":{\"content\":\"done\"}}]}\n\n\
+data: [DONE]\n\n",
+                ),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let mut stream = provider
+        .stream_normalized(LLMRequest {
+            model: models::openrouter::OPENAI_GPT_5.to_string(),
+            messages: vec![Message::user("hello".to_string())],
+            ..Default::default()
+        })
+        .await
+        .expect("normalized stream should succeed");
+
+    let mut events = Vec::new();
+    while let Some(event) = stream.next().await {
+        events.push(event.expect("stream event should parse"));
+    }
+
+    assert!(matches!(
+        events.as_slice(),
+        [
+            NormalizedStreamEvent::ToolCallStart { call_id, name },
+            NormalizedStreamEvent::ToolCallDelta { call_id: first_delta_id, delta: first_delta },
+            NormalizedStreamEvent::ToolCallDelta { call_id: second_delta_id, delta: second_delta },
+            NormalizedStreamEvent::TextDelta { delta },
+            NormalizedStreamEvent::Done { .. }
+        ]
+        if call_id == "call_1"
+            && name.as_deref() == Some("unified_search")
+            && first_delta_id == "call_1"
+            && first_delta == "{\"pattern\":\"ph"
+            && second_delta_id == "call_1"
+            && second_delta == "ase\"}"
+            && delta == "done"
+    ));
 }

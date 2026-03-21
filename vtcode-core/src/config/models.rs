@@ -8,6 +8,6 @@
 mod tests;
 
 pub use vtcode_config::models::{
-    ModelCatalogEntry, ModelId, ModelParseError, OpenRouterMetadata, Provider,
+    ModelCatalogEntry, ModelId, ModelParseError, ModelPricing, OpenRouterMetadata, Provider,
     catalog_provider_keys, model_catalog_entry, supported_models_for_provider,
 };

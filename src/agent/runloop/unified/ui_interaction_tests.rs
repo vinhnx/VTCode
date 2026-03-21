@@ -34,6 +34,14 @@ struct ReasoningThenChunkedContentProvider {
     reasoning_chunks: Vec<String>,
 }
 
+#[derive(Clone)]
+struct NormalizedToolCallProvider {
+    content: String,
+    tool_name: String,
+    tool_call_id: String,
+    tool_argument_chunks: Vec<String>,
+}
+
 #[async_trait::async_trait]
 impl uni::LLMProvider for CompletedOnlyProvider {
     fn name(&self) -> &str {
@@ -217,6 +225,72 @@ impl uni::LLMProvider for ReasoningThenChunkedContentProvider {
             }));
         }
         events.push(Ok(uni::LLMStreamEvent::Completed {
+            response: Box::new(response),
+        }));
+        Ok(Box::pin(stream::iter(events)))
+    }
+
+    fn supported_models(&self) -> Vec<String> {
+        vec!["test-model".to_string()]
+    }
+
+    fn validate_request(&self, _request: &uni::LLMRequest) -> Result<(), uni::LLMError> {
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl uni::LLMProvider for NormalizedToolCallProvider {
+    fn name(&self) -> &str {
+        "test-provider"
+    }
+
+    fn supports_streaming(&self) -> bool {
+        true
+    }
+
+    async fn generate(&self, _request: uni::LLMRequest) -> Result<uni::LLMResponse, uni::LLMError> {
+        Ok(uni::LLMResponse {
+            content: Some(self.content.clone()),
+            model: "mock-model".to_string(),
+            tool_calls: None,
+            usage: None,
+            finish_reason: uni::FinishReason::Stop,
+            reasoning: None,
+            reasoning_details: None,
+            organization_id: None,
+            request_id: None,
+            tool_references: vec![],
+        })
+    }
+
+    async fn stream(&self, _request: uni::LLMRequest) -> Result<uni::LLMStream, uni::LLMError> {
+        Err(uni::LLMError::Provider {
+            message: "legacy stream should not be used in this test".to_string(),
+            metadata: None,
+        })
+    }
+
+    async fn stream_normalized(
+        &self,
+        request: uni::LLMRequest,
+    ) -> Result<uni::LLMNormalizedStream, uni::LLMError> {
+        let response = self.generate(request).await?;
+        let mut events = Vec::with_capacity(self.tool_argument_chunks.len() + 2);
+        events.push(Ok(uni::NormalizedStreamEvent::ToolCallStart {
+            call_id: self.tool_call_id.clone(),
+            name: Some(self.tool_name.clone()),
+        }));
+        for chunk in &self.tool_argument_chunks {
+            events.push(Ok(uni::NormalizedStreamEvent::ToolCallDelta {
+                call_id: self.tool_call_id.clone(),
+                delta: chunk.clone(),
+            }));
+        }
+        events.push(Ok(uni::NormalizedStreamEvent::TextDelta {
+            delta: self.content.clone(),
+        }));
+        events.push(Ok(uni::NormalizedStreamEvent::Done {
             response: Box::new(response),
         }));
         Ok(Box::pin(stream::iter(events)))
@@ -552,6 +626,61 @@ async fn suppresses_harmony_tool_call_wire_text_from_output_deltas() {
         .collect();
 
     assert_eq!(output_deltas, vec!["safe answer"]);
+}
+
+#[tokio::test]
+async fn emits_tool_call_progress_events_from_normalized_stream() {
+    let provider = NormalizedToolCallProvider {
+        content: "final content".to_string(),
+        tool_name: "shell".to_string(),
+        tool_call_id: "call_123".to_string(),
+        tool_argument_chunks: vec!["{\"cmd\":\"ec".to_string(), "ho hi\"}".to_string()],
+    };
+    let request = build_request();
+    let spinner = build_spinner();
+    let mut renderer = AnsiRenderer::stdout();
+    let ctrl_c_state = super::state::CtrlCState::new();
+    let ctrl_c_notify = Arc::new(Notify::new());
+    let mut events: Vec<StreamProgressEvent> = Vec::new();
+    let mut callback = |event: StreamProgressEvent| events.push(event);
+
+    let (_resp, _emitted) = stream_and_render_response_with_options_and_progress(
+        &provider,
+        request,
+        &spinner,
+        &mut renderer,
+        &Arc::new(ctrl_c_state),
+        &ctrl_c_notify,
+        StreamSpinnerOptions::default(),
+        Some(&mut callback),
+    )
+    .await
+    .expect("stream should succeed");
+
+    assert!(events.iter().any(|event| {
+        matches!(
+            event,
+            StreamProgressEvent::ToolCallStarted { call_id, name }
+            if call_id == "call_123" && name.as_deref() == Some("shell")
+        )
+    }));
+    assert!(events.iter().any(|event| {
+        matches!(
+            event,
+            StreamProgressEvent::ToolCallDelta { call_id, delta }
+            if call_id == "call_123" && delta == "{\"cmd\":\"ec"
+        )
+    }));
+    assert!(events.iter().any(|event| {
+        matches!(
+            event,
+            StreamProgressEvent::ToolCallDelta { call_id, delta }
+            if call_id == "call_123" && delta == "ho hi\"}"
+        )
+    }));
+    assert!(events.iter().any(
+        |event| matches!(event, StreamProgressEvent::OutputDelta(delta) if delta == "final content")
+    ));
 }
 
 #[tokio::test]

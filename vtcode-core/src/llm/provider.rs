@@ -66,7 +66,8 @@ pub use request::{
     SpecificToolChoice, ToolChoice,
 };
 pub use response::{
-    BorrowedLLMStream, FinishReason, LLMResponse, LLMStream, LLMStreamEvent, Usage,
+    BorrowedLLMStream, FinishReason, LLMNormalizedStream, LLMResponse, LLMStream, LLMStreamEvent,
+    NormalizedStreamEvent, Usage,
 };
 pub use tool::{
     FunctionDefinition, GrammarDefinition, ShellToolDefinition, ToolDefinition, ToolSearchAlgorithm,

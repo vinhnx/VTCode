@@ -169,6 +169,7 @@ pub mod client;
 pub mod error_display;
 pub mod factory;
 pub mod http_client;
+pub mod model_resolver;
 pub mod optimized_client;
 pub mod provider;
 pub mod provider_base; // Shared provider utilities to eliminate duplicate code
@@ -188,6 +189,9 @@ pub use capabilities::ProviderCapabilities;
 pub use client::{AnyClient, ProviderClientAdapter, make_client};
 pub use factory::{
     create_provider_with_config, get_factory, get_models_manager, infer_provider_from_model,
+};
+pub use model_resolver::{
+    DynamicModelMeta, DynamicModelRef, ModelAvailability, ModelResolver, ResolvedModel,
 };
 pub use optimized_client::{OptimizedLLMClient, OptimizedRequest, OptimizedResponse};
 pub use provider::{FinishReason, LLMStream, LLMStreamEvent, Usage};

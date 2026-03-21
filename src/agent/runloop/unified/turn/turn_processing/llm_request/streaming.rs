@@ -1,6 +1,7 @@
+use std::collections::HashMap;
 use vtcode_core::exec::events::{
     AgentMessageItem, ItemCompletedEvent, ItemStartedEvent, ItemUpdatedEvent, ReasoningItem,
-    ThreadEvent, ThreadItem, ThreadItemDetails,
+    ThreadEvent, ThreadItem, ThreadItemDetails, ToolCallStatus, ToolInvocationItem,
 };
 
 use crate::agent::runloop::unified::ui_interaction::StreamProgressEvent;
@@ -14,6 +15,14 @@ struct StreamItemBuffer {
     text: String,
 }
 
+#[derive(Default)]
+struct ToolCallBuffer {
+    item_id: String,
+    started: bool,
+    name: Option<String>,
+    arguments: String,
+}
+
 pub(super) struct HarnessStreamingBridge<'a> {
     emitter:
         Option<&'a crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter>,
@@ -21,6 +30,7 @@ pub(super) struct HarnessStreamingBridge<'a> {
     reasoning_item_id: String,
     assistant: StreamItemBuffer,
     reasoning: StreamItemBuffer,
+    tool_calls: HashMap<String, ToolCallBuffer>,
     reasoning_stage: Option<String>,
     reasoning_update_events: usize,
     last_reasoning_emit_len: usize,
@@ -41,6 +51,7 @@ impl<'a> HarnessStreamingBridge<'a> {
             reasoning_item_id: format!("{turn_id}-step-{step}-reasoning-stream-{attempt}"),
             assistant: StreamItemBuffer::default(),
             reasoning: StreamItemBuffer::default(),
+            tool_calls: HashMap::new(),
             reasoning_stage: None,
             reasoning_update_events: 0,
             last_reasoning_emit_len: 0,
@@ -52,6 +63,12 @@ impl<'a> HarnessStreamingBridge<'a> {
             StreamProgressEvent::OutputDelta(delta) => self.push_assistant_delta(&delta),
             StreamProgressEvent::ReasoningDelta(delta) => self.push_reasoning_delta(&delta),
             StreamProgressEvent::ReasoningStage(stage) => self.update_reasoning_stage(stage),
+            StreamProgressEvent::ToolCallStarted { call_id, name } => {
+                self.start_tool_call(call_id, name)
+            }
+            StreamProgressEvent::ToolCallDelta { call_id, delta } => {
+                self.push_tool_call_delta(call_id, &delta)
+            }
         }
     }
 
@@ -151,6 +168,10 @@ impl<'a> HarnessStreamingBridge<'a> {
                 }),
             });
         }
+        let tool_call_ids = self.tool_calls.keys().cloned().collect::<Vec<_>>();
+        for call_id in tool_call_ids {
+            self.complete_tool_call(&call_id);
+        }
     }
 
     fn should_emit_reasoning_update(&self, stage_changed: bool) -> bool {
@@ -189,4 +210,108 @@ impl<'a> HarnessStreamingBridge<'a> {
             let _ = emitter.emit(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
         }
     }
+
+    fn start_tool_call(&mut self, call_id: String, name: Option<String>) {
+        let item_id = format!("{}-tool-call-{call_id}", self.assistant_item_id);
+        let (item_id, tool_name, started) = {
+            let buffer = self
+                .tool_calls
+                .entry(call_id.clone())
+                .or_insert(ToolCallBuffer {
+                    item_id,
+                    ..Default::default()
+                });
+            if buffer.name.is_none() {
+                buffer.name = name;
+            }
+            if buffer.started {
+                (
+                    buffer.item_id.clone(),
+                    buffer.name.clone().unwrap_or_default(),
+                    true,
+                )
+            } else {
+                buffer.started = true;
+                (
+                    buffer.item_id.clone(),
+                    buffer.name.clone().unwrap_or_default(),
+                    false,
+                )
+            }
+        };
+        if started {
+            return;
+        }
+
+        self.emit_item_started(ThreadItem {
+            id: item_id,
+            details: ThreadItemDetails::ToolInvocation(ToolInvocationItem {
+                tool_name,
+                arguments: None,
+                tool_call_id: Some(call_id),
+                status: ToolCallStatus::InProgress,
+            }),
+        });
+    }
+
+    fn push_tool_call_delta(&mut self, call_id: String, delta: &str) {
+        if delta.is_empty() {
+            return;
+        }
+
+        if !self.tool_calls.contains_key(&call_id) {
+            self.start_tool_call(call_id.clone(), None);
+        }
+
+        let Some(buffer) = self.tool_calls.get_mut(&call_id) else {
+            return;
+        };
+        buffer.arguments.push_str(delta);
+        let item_id = buffer.item_id.clone();
+        let tool_name = buffer.name.clone().unwrap_or_default();
+        let arguments = progress_tool_arguments(&buffer.arguments);
+        let tool_call_id = call_id.clone();
+
+        self.emit_item_updated(ThreadItem {
+            id: item_id,
+            details: ThreadItemDetails::ToolInvocation(ToolInvocationItem {
+                tool_name,
+                arguments: Some(arguments),
+                tool_call_id: Some(tool_call_id),
+                status: ToolCallStatus::InProgress,
+            }),
+        });
+    }
+
+    fn complete_tool_call(&mut self, call_id: &str) {
+        let Some(buffer) = self.tool_calls.get_mut(call_id) else {
+            return;
+        };
+        if !buffer.started {
+            return;
+        }
+
+        buffer.started = false;
+        let item_id = buffer.item_id.clone();
+        let tool_name = buffer.name.clone().unwrap_or_default();
+        let arguments = if buffer.arguments.is_empty() {
+            None
+        } else {
+            Some(progress_tool_arguments(&buffer.arguments))
+        };
+        self.emit_item_completed(ThreadItem {
+            id: item_id,
+            details: ThreadItemDetails::ToolInvocation(ToolInvocationItem {
+                tool_name,
+                arguments,
+                tool_call_id: Some(call_id.to_string()),
+                status: ToolCallStatus::Completed,
+            }),
+        });
+    }
+}
+
+fn progress_tool_arguments(arguments: &str) -> serde_json::Value {
+    serde_json::from_str(arguments)
+        .unwrap_or_else(|_| serde_json::Value::String(arguments.to_string()))
 }

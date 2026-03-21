@@ -706,6 +706,14 @@ pub(crate) enum StreamProgressEvent {
     OutputDelta(String),
     ReasoningDelta(String),
     ReasoningStage(String),
+    ToolCallStarted {
+        call_id: String,
+        name: Option<String>,
+    },
+    ToolCallDelta {
+        call_id: String,
+        delta: String,
+    },
 }
 
 #[cfg(test)]

@@ -6,6 +6,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use crate::llm::provider::NormalizedStreamEvent;
 use vtcode_config::OpenResponsesConfig;
 use vtcode_exec_events::ThreadEvent;
 
@@ -94,6 +95,26 @@ impl OpenResponsesIntegration {
         // Process collected events
         for stream_event in collector.into_events() {
             // Apply filtering based on config
+            if self.should_emit_event(&stream_event) {
+                self.emit_event(stream_event);
+            }
+        }
+    }
+
+    /// Processes a normalized provider stream event and emits corresponding Open Responses events.
+    pub fn process_normalized_event(&mut self, event: &NormalizedStreamEvent) {
+        if !self.config.enabled || !self.config.emit_events {
+            return;
+        }
+
+        let Some(builder) = self.builder.as_mut() else {
+            return;
+        };
+
+        let mut collector = VecStreamEmitter::new();
+        builder.process_normalized_event(event, &mut collector);
+
+        for stream_event in collector.into_events() {
             if self.should_emit_event(&stream_event) {
                 self.emit_event(stream_event);
             }
@@ -261,6 +282,7 @@ impl ToOpenResponse for crate::llm::provider::LLMResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::llm::provider::{FinishReason, LLMResponse, NormalizedStreamEvent};
 
     #[test]
     fn test_integration_disabled_by_default() {
@@ -295,5 +317,44 @@ mod tests {
         integration.start_response("gpt-5");
         // Should not create a builder when disabled
         assert!(integration.current_response().is_none());
+    }
+
+    #[test]
+    fn integration_processes_normalized_events() {
+        let mut integration = OpenResponsesIntegration::new(OpenResponsesConfig {
+            enabled: true,
+            emit_events: true,
+            ..Default::default()
+        });
+        integration.start_response("gpt-5");
+
+        integration.process_normalized_event(&NormalizedStreamEvent::TextDelta {
+            delta: "hello".to_string(),
+        });
+        integration.process_normalized_event(&NormalizedStreamEvent::Done {
+            response: Box::new(LLMResponse {
+                content: Some("hello".to_string()),
+                model: "gpt-5".to_string(),
+                tool_calls: None,
+                usage: None,
+                finish_reason: FinishReason::Stop,
+                reasoning: None,
+                reasoning_details: None,
+                organization_id: None,
+                request_id: None,
+                tool_references: Vec::new(),
+            }),
+        });
+
+        assert!(integration.events().iter().any(|event| matches!(
+            event,
+            ResponseStreamEvent::OutputTextDelta { delta, .. } if delta == "hello"
+        )));
+        assert!(
+            integration
+                .events()
+                .iter()
+                .any(|event| matches!(event, ResponseStreamEvent::ResponseCompleted { .. }))
+        );
     }
 }

@@ -2,8 +2,9 @@
 
 use crate::core::agent::events::unified::AgentEvent;
 use crate::core::agent::session::AgentSessionState;
-use crate::llm::provider::{LLMProvider, LLMRequest, LLMStreamEvent, Usage};
+use crate::llm::provider::{LLMProvider, LLMRequest, NormalizedStreamEvent, Usage};
 use anyhow::Result;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -83,12 +84,12 @@ impl AgentSessionController {
 
         let start_time = std::time::Instant::now();
         let mut stream = if let Some(t) = timeout {
-            match tokio::time::timeout(t, provider.stream(request)).await {
+            match tokio::time::timeout(t, provider.stream_normalized(request)).await {
                 Ok(res) => res?,
                 Err(_) => return Err(anyhow::anyhow!("Stream request timed out after {:?}", t)),
             }
         } else {
-            provider.stream(request).await?
+            provider.stream_normalized(request).await?
         };
 
         let mut full_text = String::new();
@@ -97,6 +98,7 @@ impl AgentSessionController {
         let mut final_usage = Usage::default();
         let mut aggregated_tool_calls: Option<Vec<crate::llm::provider::ToolCall>> = None;
         let mut completed_response: Option<crate::llm::provider::LLMResponse> = None;
+        let mut emitted_tool_calls = HashSet::new();
 
         while let Some(event_result) = stream.next().await {
             // Check steering
@@ -138,20 +140,36 @@ impl AgentSessionController {
             }
 
             match event_result? {
-                LLMStreamEvent::Token { delta } => {
+                NormalizedStreamEvent::TextDelta { delta } => {
                     full_text.push_str(&delta);
                     self.emit(AgentEvent::OutputDelta { delta });
                 }
-                LLMStreamEvent::Reasoning { delta } => {
+                NormalizedStreamEvent::ReasoningDelta { delta } => {
                     full_reasoning.push_str(&delta);
                     self.emit(AgentEvent::ThinkingDelta { delta });
                 }
-                LLMStreamEvent::ReasoningStage { stage } => {
-                    self.state.current_stage = Some(stage.clone());
-                    self.emit(AgentEvent::ThinkingStage { stage });
+                NormalizedStreamEvent::ToolCallStart { call_id, name } => {
+                    if emitted_tool_calls.insert(call_id.clone()) {
+                        self.emit(AgentEvent::ToolCallStarted {
+                            id: call_id,
+                            name: name.unwrap_or_default(),
+                            args: "{}".to_string(),
+                        });
+                    }
                 }
-                LLMStreamEvent::Completed { response } => {
-                    completed_response = Some((*response).clone());
+                NormalizedStreamEvent::ToolCallDelta { .. } => {}
+                NormalizedStreamEvent::Usage { usage } => {
+                    final_usage = usage;
+                }
+                NormalizedStreamEvent::Done { response } => {
+                    let mut response = *response;
+                    if response.usage.is_none()
+                        && (final_usage.prompt_tokens > 0
+                            || final_usage.completion_tokens > 0
+                            || final_usage.total_tokens > 0)
+                    {
+                        response.usage = Some(final_usage.clone());
+                    }
                     finish_reason = match response.finish_reason.clone() {
                         crate::llm::provider::FinishReason::Stop => "stop".to_string(),
                         crate::llm::provider::FinishReason::ToolCalls => "tool_calls".to_string(),
@@ -165,21 +183,25 @@ impl AgentSessionController {
                     // Handle tool calls in the response
                     if let Some(tool_calls) = &response.tool_calls {
                         for call in tool_calls {
-                            self.emit(AgentEvent::ToolCallStarted {
-                                id: call.id.clone(),
-                                name: call
-                                    .function
-                                    .as_ref()
-                                    .map(|f| f.name.clone())
-                                    .unwrap_or_default(),
-                                args: call
-                                    .function
-                                    .as_ref()
-                                    .map(|f| f.arguments.clone())
-                                    .unwrap_or_else(|| "{}".to_string()),
-                            });
+                            if emitted_tool_calls.insert(call.id.clone()) {
+                                self.emit(AgentEvent::ToolCallStarted {
+                                    id: call.id.clone(),
+                                    name: call
+                                        .function
+                                        .as_ref()
+                                        .map(|f| f.name.clone())
+                                        .unwrap_or_default(),
+                                    args: call
+                                        .function
+                                        .as_ref()
+                                        .map(|f| f.arguments.clone())
+                                        .unwrap_or_else(|| "{}".to_string()),
+                                });
+                            }
                         }
                     }
+
+                    completed_response = Some(response);
                 }
             }
         }
@@ -287,9 +309,11 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use futures::stream;
+    use std::sync::{Arc, Mutex};
 
     use crate::llm::provider::{
-        AssistantPhase, LLMError, LLMResponse, LLMStream, LLMStreamEvent, ToolCall,
+        AssistantPhase, LLMError, LLMNormalizedStream, LLMResponse, LLMStream, LLMStreamEvent,
+        NormalizedStreamEvent, ToolCall,
     };
 
     #[derive(Clone)]
@@ -502,5 +526,118 @@ mod tests {
         assert_eq!(last.phase, Some(AssistantPhase::FinalAnswer));
         assert!(last.tool_calls.is_none());
         assert!(resp.tool_calls.is_none());
+    }
+
+    #[tokio::test]
+    async fn run_turn_consumes_normalized_tool_and_usage_events() {
+        #[derive(Clone)]
+        struct NormalizedProvider;
+
+        #[async_trait]
+        impl LLMProvider for NormalizedProvider {
+            fn name(&self) -> &str {
+                "test-provider"
+            }
+
+            fn supports_streaming(&self) -> bool {
+                true
+            }
+
+            async fn generate(&self, _request: LLMRequest) -> Result<LLMResponse, LLMError> {
+                Ok(LLMResponse::default())
+            }
+
+            async fn stream(&self, _request: LLMRequest) -> Result<LLMStream, LLMError> {
+                panic!("legacy stream should not be used for normalized consumer")
+            }
+
+            async fn stream_normalized(
+                &self,
+                _request: LLMRequest,
+            ) -> Result<LLMNormalizedStream, LLMError> {
+                Ok(Box::pin(stream::iter(vec![
+                    Ok(NormalizedStreamEvent::ToolCallStart {
+                        call_id: "call_1".to_string(),
+                        name: Some("unified_search".to_string()),
+                    }),
+                    Ok(NormalizedStreamEvent::TextDelta {
+                        delta: "Searching...".to_string(),
+                    }),
+                    Ok(NormalizedStreamEvent::Usage {
+                        usage: Usage {
+                            prompt_tokens: 12,
+                            completion_tokens: 7,
+                            total_tokens: 19,
+                            cached_prompt_tokens: None,
+                            cache_creation_tokens: None,
+                            cache_read_tokens: None,
+                        },
+                    }),
+                    Ok(NormalizedStreamEvent::Done {
+                        response: Box::new(LLMResponse {
+                            content: Some("Searching...".to_string()),
+                            model: "test-model".to_string(),
+                            finish_reason: crate::llm::provider::FinishReason::ToolCalls,
+                            tool_calls: Some(vec![ToolCall::function(
+                                "call_1".to_string(),
+                                "unified_search".to_string(),
+                                r#"{"pattern":"phase"}"#.to_string(),
+                            )]),
+                            usage: None,
+                            ..Default::default()
+                        }),
+                    }),
+                ])))
+            }
+
+            fn supported_models(&self) -> Vec<String> {
+                vec!["test-model".to_string()]
+            }
+
+            fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+                Ok(())
+            }
+        }
+
+        let captured_events = Arc::new(Mutex::new(Vec::new()));
+        let sink_events = Arc::clone(&captured_events);
+        let sink: AgentEventSink = Arc::new(Mutex::new(Box::new(move |event| {
+            sink_events
+                .lock()
+                .expect("event capture mutex should not be poisoned")
+                .push(event);
+        })));
+
+        let state = AgentSessionState::new("session".to_string(), 16, 4, 128_000);
+        let mut controller = AgentSessionController::new(state, Some(sink));
+        let mut provider_box: Box<dyn LLMProvider> = Box::new(NormalizedProvider);
+        let request = LLMRequest {
+            model: "test-model".to_string(),
+            ..Default::default()
+        };
+        let mut steering = None;
+
+        let (resp, content, _) = controller
+            .run_turn(&mut provider_box, request, &mut steering, None)
+            .await
+            .expect("run_turn should succeed");
+
+        assert_eq!(content, "Searching...");
+        assert_eq!(
+            resp.usage.as_ref().map(|usage| usage.total_tokens),
+            Some(19)
+        );
+
+        let events = captured_events
+            .lock()
+            .expect("event capture mutex should not be poisoned");
+        let tool_call_started = events
+            .iter()
+            .filter_map(|event| match event {
+                AgentEvent::ToolCallStarted { id, name, .. } => Some((id.as_str(), name.as_str())),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(tool_call_started, vec![("call_1", "unified_search")]);
     }
 }

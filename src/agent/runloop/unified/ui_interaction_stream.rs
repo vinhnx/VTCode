@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
+use async_stream::try_stream;
 use async_trait::async_trait;
 use futures::StreamExt;
 use tokio::sync::{Notify, mpsc};
@@ -12,7 +13,7 @@ use crate::agent::runloop::unified::plan_blocks::{
 use crate::agent::runloop::unified::turn::harmony::strip_harmony_syntax;
 use vtcode_core::copilot::CopilotRuntimeRequest;
 use vtcode_core::llm::error_display;
-use vtcode_core::llm::provider::{self as uni, LLMStreamEvent};
+use vtcode_core::llm::provider::{self as uni, LLMStreamEvent, NormalizedStreamEvent};
 use vtcode_core::llm::providers::clean_reasoning_text;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
@@ -243,6 +244,46 @@ pub(crate) trait CopilotRuntimeRequestHandler: Send {
     ) -> Result<(), uni::LLMError>;
 }
 
+fn normalized_to_legacy_stream(
+    mut stream: uni::LLMNormalizedStream,
+) -> (uni::LLMStream, mpsc::UnboundedReceiver<StreamProgressEvent>) {
+    let (progress_tx, progress_rx) = mpsc::unbounded_channel();
+    let stream = try_stream! {
+        let mut pending_usage = None;
+
+        while let Some(event) = stream.next().await {
+            match event? {
+                NormalizedStreamEvent::TextDelta { delta } => {
+                    yield LLMStreamEvent::Token { delta };
+                }
+                NormalizedStreamEvent::ReasoningDelta { delta } => {
+                    yield LLMStreamEvent::Reasoning { delta };
+                }
+                NormalizedStreamEvent::ToolCallStart { call_id, name } => {
+                    let _ = progress_tx.send(StreamProgressEvent::ToolCallStarted { call_id, name });
+                }
+                NormalizedStreamEvent::ToolCallDelta { call_id, delta } => {
+                    let _ = progress_tx.send(StreamProgressEvent::ToolCallDelta { call_id, delta });
+                }
+                NormalizedStreamEvent::Usage { usage } => {
+                    pending_usage = Some(usage);
+                }
+                NormalizedStreamEvent::Done { response } => {
+                    let mut response = *response;
+                    if response.usage.is_none() {
+                        response.usage = pending_usage.take();
+                    }
+                    yield LLMStreamEvent::Completed {
+                        response: Box::new(response),
+                    };
+                }
+            }
+        }
+    };
+
+    (Box::pin(stream), progress_rx)
+}
+
 pub(crate) async fn stream_and_render_response_with_options_impl(
     provider: &dyn uni::LLMProvider,
     request: uni::LLMRequest,
@@ -263,7 +304,7 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
         });
     }
 
-    let stream_future = provider.stream(request);
+    let stream_future = provider.stream_normalized(request);
     tokio::pin!(stream_future);
 
     if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
@@ -274,7 +315,7 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
         });
     }
 
-    let mut stream = tokio::select! {
+    let normalized_stream = tokio::select! {
         biased;
         _ = ctrl_c_notify.notified() => {
             spinner.finish_with_restore(true);
@@ -282,10 +323,12 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
         }
         result = stream_future => result?,
     };
+    let (mut stream, mut progress_events) = normalized_to_legacy_stream(normalized_stream);
 
     render_stream_with_options_and_progress_impl(
         provider_name,
         &mut stream,
+        Some(&mut progress_events),
         spinner,
         renderer,
         ctrl_c_state,
@@ -299,6 +342,7 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
 pub(crate) async fn render_stream_with_options_and_progress_impl(
     provider_name: &str,
     stream: &mut uni::BorrowedLLMStream<'_>,
+    progress_events: Option<&mut mpsc::UnboundedReceiver<StreamProgressEvent>>,
     spinner: &PlaceholderSpinner,
     renderer: &mut AnsiRenderer,
     ctrl_c_state: &Arc<CtrlCState>,
@@ -309,6 +353,7 @@ pub(crate) async fn render_stream_with_options_and_progress_impl(
     render_stream_with_options_and_copilot_runtime_impl(
         provider_name,
         stream,
+        progress_events,
         None,
         None,
         None,
@@ -326,6 +371,7 @@ pub(crate) async fn render_stream_with_options_and_progress_impl(
 pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
     provider_name: &str,
     stream: &mut uni::BorrowedLLMStream<'_>,
+    progress_events: Option<&mut mpsc::UnboundedReceiver<StreamProgressEvent>>,
     runtime_requests: Option<&mut mpsc::UnboundedReceiver<CopilotRuntimeRequest>>,
     mut runtime_handler: Option<&mut dyn CopilotRuntimeRequestHandler>,
     timeout_budget: Option<Duration>,
@@ -349,6 +395,7 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
     let mut final_response: Option<uni::LLMResponse> = None;
     let mut aggregated = String::new();
     let mut spinner_active = true;
+    let mut progress_events = progress_events;
     let mut runtime_requests = runtime_requests;
     let mut rendered_line_count = 0usize;
     let finish_spinner = |active: &mut bool, force: bool| {
@@ -461,6 +508,41 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
                     }
                     None => {
                         runtime_requests = None;
+                        continue;
+                    }
+                }
+            }
+            progress_event = async {
+                match progress_events.as_deref_mut() {
+                    Some(receiver) => receiver.recv().await,
+                    None => std::future::pending().await,
+                }
+            } => {
+                match progress_event {
+                    Some(StreamProgressEvent::ToolCallStarted { call_id, name }) => {
+                        finish_spinner(&mut spinner_active, false);
+                        if let Some(tool_name) = name.as_deref().filter(|value| !value.is_empty()) {
+                            spinner.update_message(format!("Preparing tool call: {tool_name}"));
+                            spinner_message_updated = true;
+                        }
+                        if let Some(callback) = on_progress.as_deref_mut() {
+                            callback(StreamProgressEvent::ToolCallStarted { call_id, name });
+                        }
+                        continue;
+                    }
+                    Some(StreamProgressEvent::ToolCallDelta { call_id, delta }) => {
+                        if let Some(callback) = on_progress.as_deref_mut() {
+                            callback(StreamProgressEvent::ToolCallDelta { call_id, delta });
+                        }
+                        continue;
+                    }
+                    Some(
+                        StreamProgressEvent::OutputDelta(_)
+                        | StreamProgressEvent::ReasoningDelta(_)
+                        | StreamProgressEvent::ReasoningStage(_),
+                    ) => continue,
+                    None => {
+                        progress_events = None;
                         continue;
                     }
                 }
@@ -961,6 +1043,7 @@ mod tests {
         let result = render_stream_with_options_and_copilot_runtime_impl(
             "copilot",
             &mut stream,
+            None,
             Some(&mut runtime_rx),
             Some(&mut handler),
             Some(Duration::from_millis(20)),

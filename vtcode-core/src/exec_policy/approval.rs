@@ -507,10 +507,7 @@ mod tests {
 
         let requirement = default_exec_approval_requirement(policy, false);
 
-        assert_eq!(
-            requirement,
-            ExecApprovalRequirement::skip()
-        );
+        assert_eq!(requirement, ExecApprovalRequirement::skip());
     }
 
     #[test]
