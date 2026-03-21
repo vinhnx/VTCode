@@ -53,9 +53,9 @@ where
     if stored_auth_source(&host)?.is_none() {
         if let Some(source) = env_auth_source_with(|name| std::env::var(name).ok()) {
             let message = match source {
-                CopilotAuthSource::Environment(name) => format!(
-                    "Copilot auth is set via {name}; nothing to clear in the Copilot CLI."
-                ),
+                CopilotAuthSource::Environment(name) => {
+                    format!("Copilot auth is set via {name}; nothing to clear in the Copilot CLI.")
+                }
                 _ => "No Copilot CLI session found; already logged out.".to_string(),
             };
             on_event(CopilotAuthEvent::Progress { message })?;
@@ -309,7 +309,9 @@ impl CapturedCommandState {
 
         if matches!(kind, CommandKind::Logout)
             && matches!(line.stream, CapturedStream::Stdout)
-            && trimmed.to_ascii_lowercase().contains("non-interactive mode")
+            && trimmed
+                .to_ascii_lowercase()
+                .contains("non-interactive mode")
         {
             self.record_safe_message(trimmed.to_string());
             return Ok(());

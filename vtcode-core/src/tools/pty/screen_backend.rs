@@ -26,7 +26,11 @@ pub(super) struct PreparedScreenSnapshot {
 }
 
 impl PtyScreenState {
-    pub(super) fn new(size: PtySize, scrollback_lines: usize, backend: PtyEmulationBackend) -> Self {
+    pub(super) fn new(
+        size: PtySize,
+        scrollback_lines: usize,
+        backend: PtyEmulationBackend,
+    ) -> Self {
         Self {
             backend,
             parser: Parser::new(size.rows, size.cols, scrollback_lines),
@@ -101,11 +105,7 @@ impl PreparedScreenSnapshot {
         }
     }
 
-    fn snapshot_with_ghostty(
-        &self,
-        size: PtySize,
-        raw_vt_stream: &[u8],
-    ) -> Result<ScreenSnapshot> {
+    fn snapshot_with_ghostty(&self, size: PtySize, raw_vt_stream: &[u8]) -> Result<ScreenSnapshot> {
         let snapshot = render_terminal_snapshot(
             GhosttyRenderRequest {
                 cols: size.cols,
@@ -176,11 +176,7 @@ mod tests {
         assert_legacy_snapshot(prepared, size, "legacy");
     }
 
-    fn assert_legacy_snapshot(
-        prepared: PreparedScreenSnapshot,
-        size: PtySize,
-        expected: &str,
-    ) {
+    fn assert_legacy_snapshot(prepared: PreparedScreenSnapshot, size: PtySize, expected: &str) {
         let snapshot = prepared.render(
             size,
             &RawVtSnapshot {

@@ -22,7 +22,10 @@ emulation_backend = "legacy_vt100"
 "#,
     )?;
 
-    assert_eq!(config.pty.emulation_backend, PtyEmulationBackend::LegacyVt100);
+    assert_eq!(
+        config.pty.emulation_backend,
+        PtyEmulationBackend::LegacyVt100
+    );
     Ok(())
 }
 

@@ -1,6 +1,7 @@
 //! Model management command handlers with concise, actionable output
 
 use super::args::{Cli, ModelCommands};
+use crate::config::models::supported_models_for_provider;
 use crate::llm::factory::{ProviderConfig, create_provider_with_config, get_factory};
 use crate::utils::colors::{bold, cyan, dimmed, green, red, underline, yellow};
 use crate::utils::dot_config::{DotConfig, get_dot_manager, load_user_config};
@@ -37,6 +38,7 @@ pub async fn handle_models_command(cli: &Cli, command: &ModelCommands) -> Result
 async fn handle_list_models(_cli: &Cli) -> Result<()> {
     println!("{}", underline(&bold("Available Providers & Models")));
     println!();
+    println!("{}", dimmed("Loading available providers and models..."));
 
     let config = load_user_config().await.unwrap_or_default();
     let factory = {
@@ -59,23 +61,7 @@ async fn handle_list_models(_cli: &Cli) -> Result<()> {
         };
         println!("{}", colored_provider);
 
-        if let Ok(provider) = create_provider_with_config(
-            provider_name,
-            ProviderConfig {
-                api_key: Some("dummy".to_owned()),
-                openai_chatgpt_auth: None,
-                copilot_auth: None,
-                base_url: None,
-                model: None,
-                prompt_cache: None,
-                timeouts: None,
-                openai: None,
-                anthropic: None,
-                model_behavior: None,
-                workspace_root: None,
-            },
-        ) {
-            let models = provider.supported_models();
+        if let Some(models) = supported_models_for_provider(provider_name) {
             let current_model = &config.preferences.default_model;
 
             for model in models.iter().take(3) {

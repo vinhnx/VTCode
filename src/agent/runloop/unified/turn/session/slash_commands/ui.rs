@@ -20,6 +20,7 @@ use crate::agent::runloop::unified::session_setup::{
     apply_ide_context_snapshot, ide_context_status_label_from_bridge,
 };
 use crate::agent::runloop::unified::state::ModelPickerTarget;
+use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
 
 use super::{SlashCommandContext, SlashCommandControl};
 
@@ -367,17 +368,35 @@ pub(super) async fn start_model_picker(
         .as_ref()
         .and_then(|cfg| cfg.provider.openai.service_tier);
     let workspace_hint = Some(ctx.config.workspace.clone());
-    match ModelPickerState::new(
-        ctx.renderer,
-        ctx.vt_cfg.clone(),
-        reasoning,
-        service_tier,
-        workspace_hint,
-        ctx.config.provider.clone(),
-        ctx.config.model.clone(),
-    )
-    .await
-    {
+    let restore_status_left = ctx.input_status_state.left.clone();
+    let restore_status_right = ctx.input_status_state.right.clone();
+    let picker_start = {
+        let loading_spinner = if ctx.renderer.supports_inline_ui() {
+            Some(PlaceholderSpinner::new(
+                ctx.handle,
+                restore_status_left.clone(),
+                restore_status_right.clone(),
+                "Loading model lists...",
+            ))
+        } else {
+            ctx.renderer
+                .line(MessageStyle::Info, "Loading model lists...")?;
+            None
+        };
+        let result = ModelPickerState::new(
+            ctx.renderer,
+            ctx.vt_cfg.clone(),
+            reasoning,
+            service_tier,
+            workspace_hint,
+            ctx.config.provider.clone(),
+            ctx.config.model.clone(),
+        )
+        .await;
+        drop(loading_spinner);
+        result
+    };
+    match picker_start {
         Ok(ModelPickerStart::InProgress(picker)) => {
             *ctx.model_picker_state = Some(picker);
         }

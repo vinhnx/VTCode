@@ -254,12 +254,19 @@ mod tests {
                 .iter()
                 .any(|path| path == &PathBuf::from("/tmp/ghostty-vt").join(super::helper_name()))
         );
-        assert!(candidates.iter().any(|path| path == &PathBuf::from("/tmp/build-helper")));
+        assert!(
+            candidates
+                .iter()
+                .any(|path| path == &PathBuf::from("/tmp/build-helper"))
+        );
     }
 
     #[test]
     fn build_helper_renders_snapshot_when_available() {
-        if option_env!("VTCODE_GHOSTTY_VT_HOST_BUILD").filter(|value| !value.is_empty()).is_none() {
+        if option_env!("VTCODE_GHOSTTY_VT_HOST_BUILD")
+            .filter(|value| !value.is_empty())
+            .is_none()
+        {
             return;
         }
 

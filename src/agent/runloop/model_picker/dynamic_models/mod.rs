@@ -35,9 +35,11 @@ impl DynamicModelRegistry {
         workspace: Option<&Path>,
         vt_cfg: Option<&VTCodeConfig>,
     ) -> Self {
-        let endpoints = ProviderEndpointConfig::gather(workspace).await;
         let static_index = build_static_model_index(options);
-        let mut cache_store = CachedDynamicModelStore::load().await;
+        let (endpoints, mut cache_store) = tokio::join!(
+            ProviderEndpointConfig::gather(workspace),
+            CachedDynamicModelStore::load()
+        );
         let workspace_root = workspace
             .map(Path::to_path_buf)
             .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));

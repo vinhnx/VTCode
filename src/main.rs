@@ -148,7 +148,13 @@ fn bootstrap_main() -> Result<BootstrapOutcome> {
     } else {
         // Only probe if color is enabled and we're not running a short-lived automated command
         // that shouldn't touch the TTY (like checking versions during install)
-        if !args.quiet && !matches!(args.command, Some(vtcode_core::cli::args::Commands::Dependencies(_)) | Some(vtcode_core::cli::args::Commands::Update { .. })) {
+        if !args.quiet
+            && !matches!(
+                args.command,
+                Some(vtcode_core::cli::args::Commands::Dependencies(_))
+                    | Some(vtcode_core::cli::args::Commands::Update { .. })
+            )
+        {
             probe_and_cache_terminal_palette_harmony();
         }
     }

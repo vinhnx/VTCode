@@ -247,6 +247,35 @@ fn build_spinner() -> PlaceholderSpinner {
 }
 
 #[tokio::test]
+async fn placeholder_spinner_restores_previous_input_status() {
+    let (tx, mut rx) = mpsc::unbounded_channel::<InlineCommand>();
+    let handle = InlineHandle::new_for_tests(tx);
+    handle.set_input_status(Some("provider".to_string()), Some("model".to_string()));
+
+    {
+        let spinner = PlaceholderSpinner::new(
+            &handle,
+            Some("provider".to_string()),
+            Some("model".to_string()),
+            "Loading model lists...",
+        );
+        spinner.finish();
+    }
+
+    let mut last_status: Option<(Option<String>, Option<String>)> = None;
+    while let Ok(command) = rx.try_recv() {
+        if let InlineCommand::SetInputStatus { left, right } = command {
+            last_status = Some((left, right));
+        }
+    }
+
+    assert_eq!(
+        last_status,
+        Some((Some("provider".to_string()), Some("model".to_string())))
+    );
+}
+
+#[tokio::test]
 async fn renders_completed_only_content() {
     let provider = CompletedOnlyProvider {
         content: Some("hello world".to_string()),

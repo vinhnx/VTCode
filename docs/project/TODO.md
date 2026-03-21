@@ -68,7 +68,3 @@ module
 check and support https://github.com/vinhnx/VTCode/issues/613
 
 stash "https://github.com/vinhnx/VTCode/issues/613"
-
-===
-
-/model list loading first time is long, we can add a loading state to indicate that the models are being loaded. This will improve the user experience by providing feedback that the system is working on loading the models.

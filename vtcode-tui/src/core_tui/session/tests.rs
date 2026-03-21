@@ -1339,9 +1339,7 @@ fn arrow_keys_navigate_input_history() {
 
     session.set_input("first message".to_string());
     let submit_first = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(
-        matches!(submit_first, Some(InlineEvent::Submit(value)) if value == "first message")
-    );
+    assert!(matches!(submit_first, Some(InlineEvent::Submit(value)) if value == "first message"));
 
     session.set_input("second".to_string());
     let submit_second = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));

@@ -1,5 +1,5 @@
-use anyhow::Result;
 use anstyle::{AnsiColor, Color, Effects, Style as AnsiStyle};
+use anyhow::Result;
 use vtcode_auth::{AuthStatus, OpenAIChatGptAuthStatus, OpenAIResolvedAuthSource};
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::types::UiSurfacePreference;
@@ -210,7 +210,10 @@ pub(crate) async fn handle_oauth_logout(
             }
         }
         OPENROUTER_PROVIDER => {
-            if matches!(openrouter_auth_status(vt_cfg)?, AuthStatus::NotAuthenticated) {
+            if matches!(
+                openrouter_auth_status(vt_cfg)?,
+                AuthStatus::NotAuthenticated
+            ) {
                 if get_api_key(OPENROUTER_PROVIDER, &ApiKeySources::default()).is_ok() {
                     ctx.renderer.line(
                         MessageStyle::Info,

@@ -198,6 +198,7 @@ impl ModelPickerState {
     }
 
     pub async fn refresh_dynamic_models(&mut self, renderer: &mut AnsiRenderer) -> Result<()> {
+        renderer.line(MessageStyle::Info, "Refreshing local model inventory...")?;
         self.dynamic_models = DynamicModelRegistry::load(
             self.options,
             self.workspace.as_deref(),
@@ -210,7 +211,6 @@ impl ModelPickerState {
         self.pending_api_key = None;
         self.step = PickerStep::AwaitModel;
         if self.inline_enabled {
-            renderer.line(MessageStyle::Info, "Refreshing local model inventory...")?;
             render_step_one_inline(
                 renderer,
                 self.options,
@@ -221,7 +221,6 @@ impl ModelPickerState {
                 &self.current_model,
             )?;
         } else if self.plain_mode_active {
-            renderer.line(MessageStyle::Info, "Refreshing local model inventory...")?;
             render_step_one_plain(renderer, self.options, &self.dynamic_models)?;
             if matches!(self.step, PickerStep::AwaitModel) {
                 prompt_custom_model_entry(renderer)?;

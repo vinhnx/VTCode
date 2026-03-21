@@ -67,14 +67,17 @@ fn find_asset_dir(workspace_root: &Path, target: &str) -> Option<PathBuf> {
     let env_dir = env::var_os("VTCODE_GHOSTTY_VT_ASSET_DIR").map(PathBuf::from);
     let fallback_dir = workspace_root.join("dist").join("ghostty-vt").join(target);
 
-    [env_dir, Some(fallback_dir)].into_iter().flatten().find_map(|base| {
-        if has_asset_layout(&base) {
-            Some(base)
-        } else {
-            let target_dir = base.join(target);
-            has_asset_layout(&target_dir).then_some(target_dir)
-        }
-    })
+    [env_dir, Some(fallback_dir)]
+        .into_iter()
+        .flatten()
+        .find_map(|base| {
+            if has_asset_layout(&base) {
+                Some(base)
+            } else {
+                let target_dir = base.join(target);
+                has_asset_layout(&target_dir).then_some(target_dir)
+            }
+        })
 }
 
 fn has_asset_layout(path: &Path) -> bool {
@@ -89,5 +92,8 @@ fn run_command(command: &mut Command, description: &str) {
     let status = command
         .status()
         .unwrap_or_else(|error| panic!("{description}: {error}"));
-    assert!(status.success(), "{description} failed with status {status}");
+    assert!(
+        status.success(),
+        "{description} failed with status {status}"
+    );
 }

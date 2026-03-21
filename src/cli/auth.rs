@@ -332,7 +332,10 @@ pub(crate) async fn handle_logout_command(
 
     match provider.parse::<OAuthProvider>() {
         Ok(OAuthProvider::OpenRouter) => {
-            if matches!(openrouter_auth_status(vt_cfg)?, AuthStatus::NotAuthenticated) {
+            if matches!(
+                openrouter_auth_status(vt_cfg)?,
+                AuthStatus::NotAuthenticated
+            ) {
                 println!("OpenRouter OAuth token already cleared.");
                 return Ok(());
             }
