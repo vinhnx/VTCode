@@ -200,7 +200,7 @@ fn build_tool_permissions_context<'ctx, 'a>(
             .map(|cfg| cfg.security.human_in_the_loop)
             .map(approval_policy_from_human_in_the_loop)
             .unwrap_or(AskForApproval::OnRequest),
-        skip_confirmations: false,
+        skip_confirmations: ctx.skip_confirmations,
     }
 }
 

@@ -33,6 +33,13 @@ This index collects provider-specific guides for configuring VT Code with differ
 -   Key management and defaults mirror the Gemini/OpenAI flow in [Getting Started](./user-guide/getting-started.md#configure-your-llm-provider).
 -   Supported model IDs live in [`vtcode-core/src/config/constants.rs`](../vtcode-core/src/config/constants.rs).
 
+## GitHub Copilot
+
+-   **Guide:** [GitHub Copilot Managed Auth](./copilot.md)
+-   **Runtime dependency:** `copilot` must be installed and runnable for login/logout
+-   **Optional fallback:** `gh` is only used when VT Code probes an existing GitHub CLI auth session
+-   **Commands:** `vtcode login copilot`, `vtcode logout copilot`, `/login copilot`, `/logout copilot`
+
 ## OpenRouter Marketplace
 
 -   **Guide:** [OpenRouter Integration](./providers/openrouter.md)

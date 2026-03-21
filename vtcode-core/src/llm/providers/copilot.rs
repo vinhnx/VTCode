@@ -9,12 +9,16 @@ use async_trait::async_trait;
 use tokio::sync::Mutex;
 use vtcode_config::auth::CopilotAuthConfig;
 use vtcode_config::constants::models::copilot as copilot_models;
+use vtcode_config::models::supported_models_for_provider;
 
 use crate::copilot::{
-    COPILOT_MODEL_ID, COPILOT_PROVIDER_KEY, CopilotAcpClient, PromptUpdate, probe_auth_status,
+    COPILOT_MODEL_ID, COPILOT_PROVIDER_KEY, CopilotAcpClient, CopilotPromptSessionFuture,
+    CopilotRuntimeRequest, CopilotToolCallFailure, CopilotToolCallResponse, PromptSession,
+    PromptSessionCancelHandle, PromptUpdate, probe_auth_status,
 };
 use crate::llm::provider::{
-    LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent, Message, MessageRole,
+    LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent, Message,
+    MessageRole, ToolDefinition,
 };
 use crate::llm::providers::common::validate_request_common;
 
@@ -27,13 +31,14 @@ pub struct CopilotProvider {
 
 struct CachedCopilotClient {
     raw_model: Option<String>,
+    tool_signature: String,
     client: Arc<CopilotAcpClient>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ResolvedCopilotModel {
     request_model: String,
-    raw_model: Option<&'static str>,
+    raw_model: Option<String>,
 }
 
 impl CopilotProvider {
@@ -54,8 +59,10 @@ impl CopilotProvider {
     async fn client(
         &self,
         model: &ResolvedCopilotModel,
+        tools: &[ToolDefinition],
     ) -> Result<Arc<CopilotAcpClient>, LLMError> {
-        if let Some(client) = self.cached_client(model).await {
+        let tool_signature = copilot_tool_signature(tools);
+        if let Some(client) = self.cached_client(model, &tool_signature).await {
             return Ok(client);
         }
 
@@ -70,29 +77,43 @@ impl CopilotProvider {
         }
 
         let created = Arc::new(
-            CopilotAcpClient::connect(&self.auth_config, &self.workspace_root, model.raw_model)
-                .await
-                .map_err(map_copilot_error)?,
+            CopilotAcpClient::connect(
+                &self.auth_config,
+                &self.workspace_root,
+                model.raw_model.as_deref(),
+                tools,
+            )
+            .await
+            .map_err(map_copilot_error)?,
         );
 
         let mut client = self.client.lock().await;
         if let Some(existing) = client.as_ref()
-            && existing.raw_model.as_deref() == model.raw_model
+            && existing.raw_model.as_deref() == model.raw_model.as_deref()
+            && existing.tool_signature == tool_signature
         {
             return Ok(existing.client.clone());
         }
         *client = Some(CachedCopilotClient {
-            raw_model: model.raw_model.map(ToString::to_string),
+            raw_model: model.raw_model.clone(),
+            tool_signature,
             client: created.clone(),
         });
         Ok(created)
     }
 
-    async fn cached_client(&self, model: &ResolvedCopilotModel) -> Option<Arc<CopilotAcpClient>> {
+    async fn cached_client(
+        &self,
+        model: &ResolvedCopilotModel,
+        tool_signature: &str,
+    ) -> Option<Arc<CopilotAcpClient>> {
         let client = self.client.lock().await;
         client
             .as_ref()
-            .filter(|cached| cached.raw_model.as_deref() == model.raw_model)
+            .filter(|cached| {
+                cached.raw_model.as_deref() == model.raw_model.as_deref()
+                    && cached.tool_signature == tool_signature
+            })
             .map(|cached| cached.client.clone())
     }
 
@@ -103,10 +124,9 @@ impl CopilotProvider {
             request.model.trim()
         };
 
-        let raw_model = map_copilot_model_id(requested).ok_or_else(|| {
+        let raw_model = normalize_copilot_model_id(requested).ok_or_else(|| {
             invalid_request(&format!(
-                "Unsupported GitHub Copilot model: {requested}. Choose one of {}.",
-                copilot_models::SUPPORTED_MODELS.join(", ")
+                "Unsupported GitHub Copilot model: {requested}. Choose `copilot-auto` or a live GitHub Copilot model id from the picker."
             ))
         })?;
 
@@ -124,17 +144,165 @@ impl CopilotProvider {
         }
 
         for message in &request.messages {
-            validate_message_for_copilot(message)?;
             let label = match message.role {
                 MessageRole::System => "System",
                 MessageRole::User => "User",
                 MessageRole::Assistant => "Assistant",
-                MessageRole::Tool => unreachable!(),
+                MessageRole::Tool => "Tool",
             };
-            append_block(&mut transcript, label, message.content.as_text().as_ref());
+            append_block(&mut transcript, label, &render_message_for_copilot(message));
         }
 
         Ok(transcript)
+    }
+
+    async fn stream_from_session(
+        &self,
+        model: ResolvedCopilotModel,
+        prompt_session: PromptSession,
+    ) -> Result<LLMStream, LLMError> {
+        struct PromptCancellationGuard {
+            cancel_handle: Option<PromptSessionCancelHandle>,
+        }
+
+        impl PromptCancellationGuard {
+            fn new(cancel_handle: PromptSessionCancelHandle) -> Self {
+                Self {
+                    cancel_handle: Some(cancel_handle),
+                }
+            }
+
+            fn disarm(&mut self) {
+                self.cancel_handle = None;
+            }
+        }
+
+        impl Drop for PromptCancellationGuard {
+            fn drop(&mut self) {
+                if let Some(cancel_handle) = self.cancel_handle.take() {
+                    cancel_handle.cancel();
+                }
+            }
+        }
+
+        let (mut updates, mut runtime_requests, completion, cancel_handle) =
+            prompt_session.into_parts();
+        let stream = stream! {
+            let mut cancellation_guard = PromptCancellationGuard::new(cancel_handle);
+            let completion = completion;
+            tokio::pin!(completion);
+
+            let mut content = String::new();
+            let mut reasoning = String::new();
+
+            loop {
+                tokio::select! {
+                    update = updates.recv() => {
+                        match update {
+                            Some(PromptUpdate::Text(delta)) => {
+                                content.push_str(&delta);
+                                yield Ok(LLMStreamEvent::Token { delta });
+                            }
+                            Some(PromptUpdate::Thought(delta)) => {
+                                reasoning.push_str(&delta);
+                                yield Ok(LLMStreamEvent::Reasoning { delta });
+                            }
+                            None => {}
+                        }
+                    }
+                    runtime_request = runtime_requests.recv() => {
+                        if let Some(runtime_request) = runtime_request {
+                            let response = match runtime_request {
+                                CopilotRuntimeRequest::Permission(request) => {
+                                    request.respond(crate::copilot::CopilotPermissionDecision::DeniedNoApprovalRule)
+                                }
+                                CopilotRuntimeRequest::ToolCall(request) => {
+                                    let tool_name = request.request.tool_name.clone();
+                                    request.respond(CopilotToolCallResponse::Failure(CopilotToolCallFailure {
+                                        text_result_for_llm: format!(
+                                            "VT Code does not expose the client tool `{}` to GitHub Copilot.",
+                                            tool_name
+                                        ),
+                                        error: format!(
+                                            "tool '{}' not supported by VT Code",
+                                            tool_name
+                                        ),
+                                    }))
+                                }
+                                CopilotRuntimeRequest::ObservedToolCall(_) => {
+                                    continue;
+                                }
+                                CopilotRuntimeRequest::CompatibilityNotice(_) => {
+                                    continue;
+                                }
+                            };
+                            if let Err(err) = response {
+                                yield Err(map_copilot_error(err));
+                                break;
+                            }
+                        }
+                    }
+                    result = &mut completion => {
+                        let completion = match result.context("copilot acp prompt task join failed") {
+                            Ok(completion) => completion,
+                            Err(err) => {
+                                yield Err(map_copilot_error(err));
+                                break;
+                            }
+                        };
+                        let completion = match completion {
+                            Ok(completion) => completion,
+                            Err(err) => {
+                                yield Err(map_copilot_error(err));
+                                break;
+                            }
+                        };
+                        let finish_reason = map_stop_reason(&completion.stop_reason);
+                        while let Ok(update) = updates.try_recv() {
+                            match update {
+                                PromptUpdate::Text(delta) => {
+                                    content.push_str(&delta);
+                                    yield Ok(LLMStreamEvent::Token { delta });
+                                }
+                                PromptUpdate::Thought(delta) => {
+                                    reasoning.push_str(&delta);
+                                    yield Ok(LLMStreamEvent::Reasoning { delta });
+                                }
+                            }
+                        }
+
+                        let mut response =
+                            LLMResponse::new(model.request_model.clone(), content.clone());
+                        response.finish_reason = finish_reason;
+                        if !reasoning.is_empty() {
+                            response.reasoning = Some(reasoning.clone());
+                        }
+                        cancellation_guard.disarm();
+                        yield Ok(LLMStreamEvent::Completed {
+                            response: Box::new(response),
+                        });
+                        break;
+                    }
+                }
+            }
+        };
+
+        Ok(Box::pin(stream))
+    }
+
+    async fn start_prompt_session_impl(
+        &self,
+        request: LLMRequest,
+        tools: &[ToolDefinition],
+    ) -> Result<PromptSession, LLMError> {
+        self.validate_request(&request)?;
+        let model = self.resolve_model(&request)?;
+        let transcript = self.build_transcript(&request)?;
+        let client = self.client(&model, &tools).await?;
+        client
+            .start_prompt(transcript)
+            .await
+            .map_err(map_copilot_error)
     }
 }
 
@@ -148,8 +316,16 @@ impl LLMProvider for CopilotProvider {
         true
     }
 
-    fn supports_tools(&self, _model: &str) -> bool {
+    fn supports_non_streaming(&self, _model: &str) -> bool {
         false
+    }
+
+    fn supports_reasoning(&self, _model: &str) -> bool {
+        true
+    }
+
+    fn supports_tools(&self, _model: &str) -> bool {
+        true
     }
 
     fn supports_structured_output(&self, _model: &str) -> bool {
@@ -193,96 +369,37 @@ impl LLMProvider for CopilotProvider {
         self.validate_request(&request)?;
         let model = self.resolve_model(&request)?;
         let transcript = self.build_transcript(&request)?;
-        let client = self.client(&model).await?;
+        let client = self.client(&model, &[]).await?;
         let prompt_session = client
             .start_prompt(transcript)
             .await
             .map_err(map_copilot_error)?;
+        self.stream_from_session(model, prompt_session).await
+    }
 
-        let stream = stream! {
-            let mut updates = prompt_session.updates;
-            let completion = prompt_session.completion;
-            tokio::pin!(completion);
-
-            let mut content = String::new();
-            let mut reasoning = String::new();
-
-            loop {
-                tokio::select! {
-                    update = updates.recv() => {
-                        match update {
-                            Some(PromptUpdate::Text(delta)) => {
-                                content.push_str(&delta);
-                                yield Ok(LLMStreamEvent::Token { delta });
-                            }
-                            Some(PromptUpdate::Thought(delta)) => {
-                                reasoning.push_str(&delta);
-                                yield Ok(LLMStreamEvent::Reasoning { delta });
-                            }
-                            None => {}
-                        }
-                    }
-                    result = &mut completion => {
-                        let completion = match result.context("copilot acp prompt task join failed") {
-                            Ok(completion) => completion,
-                            Err(err) => {
-                                yield Err(map_copilot_error(err));
-                                break;
-                            }
-                        };
-                        let completion = match completion {
-                            Ok(completion) => completion,
-                            Err(err) => {
-                                yield Err(map_copilot_error(err));
-                                break;
-                            }
-                        };
-                        let finish_reason = map_stop_reason(&completion.stop_reason);
-                        while let Ok(update) = updates.try_recv() {
-                            match update {
-                                PromptUpdate::Text(delta) => {
-                                    content.push_str(&delta);
-                                    yield Ok(LLMStreamEvent::Token { delta });
-                                }
-                                PromptUpdate::Thought(delta) => {
-                                    reasoning.push_str(&delta);
-                                    yield Ok(LLMStreamEvent::Reasoning { delta });
-                                }
-                            }
-                        }
-
-                        let mut response =
-                            LLMResponse::new(model.request_model.clone(), content.clone());
-                        response.finish_reason = finish_reason;
-                        if !reasoning.is_empty() {
-                            response.reasoning = Some(reasoning.clone());
-                        }
-                        yield Ok(LLMStreamEvent::Completed {
-                            response: Box::new(response),
-                        });
-                        break;
-                    }
-                }
-            }
-        };
-
-        Ok(Box::pin(stream))
+    fn start_copilot_prompt_session<'a>(
+        &'a self,
+        request: LLMRequest,
+        tools: &'a [ToolDefinition],
+    ) -> Option<CopilotPromptSessionFuture<'a>> {
+        Some(Box::pin(async move {
+            self.start_prompt_session_impl(request, tools).await
+        }))
     }
 
     fn supported_models(&self) -> Vec<String> {
-        copilot_models::SUPPORTED_MODELS
-            .iter()
-            .map(|model| (*model).to_string())
-            .collect()
+        supported_models_for_provider(COPILOT_PROVIDER_KEY)
+            .map(|models| models.iter().map(|model| (*model).to_string()).collect())
+            .unwrap_or_else(|| {
+                copilot_models::SUPPORTED_MODELS
+                    .iter()
+                    .map(|model| (*model).to_string())
+                    .collect()
+            })
     }
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
-        validate_request_common(
-            request,
-            "GitHub Copilot",
-            COPILOT_PROVIDER_KEY,
-            Some(&self.supported_models()),
-        )?;
+        validate_request_common(request, "GitHub Copilot", COPILOT_PROVIDER_KEY, None)?;
 
         if request
             .tools
@@ -290,23 +407,13 @@ impl LLMProvider for CopilotProvider {
             .is_some_and(|tools| !tools.is_empty())
         {
             return Err(invalid_request(
-                "GitHub Copilot in VT Code is text-only in v1 and does not support tools.",
+                "GitHub Copilot in VT Code v1 does not accept VT Code tool definitions.",
             ));
         }
 
         if request.output_format.is_some() {
             return Err(invalid_request(
-                "GitHub Copilot in VT Code is text-only in v1 and does not support structured output.",
-            ));
-        }
-
-        if request.messages.iter().any(|message| {
-            message.role == MessageRole::Tool
-                || message.has_tool_calls()
-                || message.content.has_images()
-        }) {
-            return Err(invalid_request(
-                "GitHub Copilot in VT Code is text-only in v1 and does not support tool or vision history.",
+                "GitHub Copilot in VT Code v1 does not support structured output.",
             ));
         }
 
@@ -326,18 +433,76 @@ fn append_block(buffer: &mut String, label: &str, text: &str) {
     buffer.push_str(text.trim());
 }
 
-fn validate_message_for_copilot(message: &Message) -> Result<(), LLMError> {
-    if message.role == MessageRole::Tool || message.has_tool_calls() {
-        return Err(invalid_request(
-            "GitHub Copilot in VT Code is text-only in v1 and does not support tool history.",
+fn render_message_for_copilot(message: &Message) -> String {
+    let mut sections = Vec::new();
+    let text = message.content.as_text();
+    let trimmed = text.trim();
+    if !trimmed.is_empty() {
+        sections.push(trimmed.to_string());
+    }
+
+    if let Some(tool_calls) = message
+        .tool_calls
+        .as_ref()
+        .filter(|calls| !calls.is_empty())
+    {
+        let mut tool_history = String::from("[VT Code tool call history]");
+        for call in tool_calls {
+            let (tool_name, args) = call
+                .function
+                .as_ref()
+                .map(|function| (function.name.as_str(), function.arguments.trim()))
+                .unwrap_or((call.call_type.as_str(), ""));
+            if args.is_empty() {
+                tool_history.push_str(&format!("\n- {tool_name} id={}", call.id));
+            } else {
+                tool_history.push_str(&format!("\n- {tool_name} id={} args={args}", call.id));
+            }
+        }
+        sections.push(tool_history);
+    }
+
+    if message.role == MessageRole::Tool {
+        let mut tool_result = String::from("[VT Code tool result]");
+        if let Some(tool_call_id) = message.tool_call_id.as_deref() {
+            tool_result.push_str(&format!("\n- tool_call_id: {tool_call_id}"));
+        }
+        if let Some(origin_tool) = message.origin_tool.as_deref() {
+            tool_result.push_str(&format!("\n- tool: {origin_tool}"));
+        }
+        sections.insert(0, tool_result);
+    }
+
+    let (image_count, file_count) = count_non_text_parts(message);
+    if image_count > 0 {
+        sections.push(format!(
+            "[VT Code omitted {image_count} image input{} because GitHub Copilot v1 only accepts text input.]",
+            plural_suffix(image_count)
         ));
     }
-    if message.content.has_images() {
-        return Err(invalid_request(
-            "GitHub Copilot in VT Code is text-only in v1 and does not support image inputs.",
+    if file_count > 0 {
+        sections.push(format!(
+            "[VT Code omitted {file_count} file attachment{} because GitHub Copilot v1 only accepts text input.]",
+            plural_suffix(file_count)
         ));
     }
-    Ok(())
+
+    sections.join("\n\n")
+}
+
+fn count_non_text_parts(message: &Message) -> (usize, usize) {
+    match &message.content {
+        crate::llm::provider::MessageContent::Text(_) => (0, 0),
+        crate::llm::provider::MessageContent::Parts(parts) => {
+            let image_count = parts.iter().filter(|part| part.is_image()).count();
+            let file_count = parts.iter().filter(|part| part.is_file()).count();
+            (image_count, file_count)
+        }
+    }
+}
+
+fn plural_suffix(count: usize) -> &'static str {
+    if count == 1 { "" } else { "s" }
 }
 
 fn invalid_request(message: &str) -> LLMError {
@@ -373,23 +538,45 @@ fn map_stop_reason(stop_reason: &str) -> crate::llm::provider::FinishReason {
     }
 }
 
-fn map_copilot_model_id(model: &str) -> Option<Option<&'static str>> {
-    match model {
+fn copilot_tool_signature(tools: &[ToolDefinition]) -> String {
+    let mut signature_parts = tools
+        .iter()
+        .filter_map(|tool| {
+            let function = tool.function.as_ref()?;
+            Some(format!(
+                "{}:{}",
+                function.name,
+                serde_json::to_string(&function.parameters).ok()?
+            ))
+        })
+        .collect::<Vec<_>>();
+    signature_parts.sort_unstable();
+    signature_parts.join("|")
+}
+
+fn normalize_copilot_model_id(model: &str) -> Option<Option<String>> {
+    let trimmed = model.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    match trimmed {
         copilot_models::AUTO => Some(None),
-        copilot_models::GPT_5_2_CODEX => Some(Some("gpt-5.2-codex")),
-        copilot_models::GPT_5_1_CODEX_MAX => Some(Some("gpt-5.1-codex-max")),
-        copilot_models::GPT_5_4 => Some(Some("gpt-5.4")),
-        copilot_models::GPT_5_4_MINI => Some(Some("gpt-5.4-mini")),
-        copilot_models::CLAUDE_SONNET_4_6 => Some(Some("claude-sonnet-4.6")),
-        _ => None,
+        copilot_models::GPT_5_2_CODEX => Some(Some("gpt-5.2-codex".to_string())),
+        copilot_models::GPT_5_1_CODEX_MAX => Some(Some("gpt-5.1-codex-max".to_string())),
+        copilot_models::GPT_5_4 => Some(Some("gpt-5.4".to_string())),
+        copilot_models::GPT_5_4_MINI => Some(Some("gpt-5.4-mini".to_string())),
+        copilot_models::CLAUDE_SONNET_4_6 => Some(Some("claude-sonnet-4.6".to_string())),
+        _ if trimmed.contains(char::is_whitespace) => None,
+        _ => Some(Some(trimmed.to_string())),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::CopilotProvider;
-    use super::map_copilot_model_id;
-    use crate::llm::provider::{LLMProvider, LLMRequest, Message};
+    use super::normalize_copilot_model_id;
+    use crate::llm::provider::{ContentPart, LLMProvider, LLMRequest, Message, ToolCall};
     use std::path::PathBuf;
     use std::sync::Arc;
     use vtcode_config::constants::models::copilot as copilot_models;
@@ -422,15 +609,24 @@ mod tests {
 
     #[test]
     fn curated_model_mapping_uses_auto_as_empty_override() {
-        assert_eq!(map_copilot_model_id(copilot_models::AUTO), Some(None));
+        assert_eq!(normalize_copilot_model_id(copilot_models::AUTO), Some(None));
         assert_eq!(
-            map_copilot_model_id(copilot_models::GPT_5_4),
-            Some(Some("gpt-5.4"))
+            normalize_copilot_model_id(copilot_models::GPT_5_4),
+            Some(Some("gpt-5.4".to_string()))
         );
     }
 
     #[test]
-    fn validate_request_rejects_tool_history() {
+    fn normalize_copilot_model_id_accepts_raw_model_ids() {
+        assert_eq!(
+            normalize_copilot_model_id("gpt-5.3-codex"),
+            Some(Some("gpt-5.3-codex".to_string()))
+        );
+        assert_eq!(normalize_copilot_model_id("gpt 5.3"), None);
+    }
+
+    #[test]
+    fn validate_request_allows_tool_history_followups() {
         let provider = provider();
         let request = LLMRequest {
             messages: vec![Message::tool_response(
@@ -440,26 +636,69 @@ mod tests {
             ..Default::default()
         };
 
-        let err = provider
+        provider
             .validate_request(&request)
-            .expect_err("tool history should be rejected");
+            .expect("tool history should be flattened for Copilot");
+    }
+
+    #[test]
+    fn transcript_flattens_tool_history_and_image_inputs() {
+        let provider = provider();
+        let request = LLMRequest {
+            messages: vec![
+                Message::assistant_with_tools(
+                    "Running checks.".to_string(),
+                    vec![ToolCall::function(
+                        "call-1".to_string(),
+                        "unified_exec".to_string(),
+                        r#"{"cmd":"cargo check"}"#.to_string(),
+                    )],
+                ),
+                Message::tool_response_with_origin(
+                    "call-1".to_string(),
+                    "cargo check completed successfully.".to_string(),
+                    "unified_exec".to_string(),
+                ),
+                Message::user_with_parts(vec![
+                    ContentPart::text("Tell me more.".to_string()),
+                    ContentPart::image("AAAA".to_string(), "image/png".to_string()),
+                ]),
+            ],
+            ..Default::default()
+        };
+
+        let transcript = provider
+            .build_transcript(&request)
+            .expect("transcript should flatten Copilot-incompatible history");
+
+        assert!(transcript.contains("Assistant:\nRunning checks."));
+        assert!(transcript.contains("[VT Code tool call history]"));
+        assert!(transcript.contains("- unified_exec id=call-1 args={\"cmd\":\"cargo check\"}"));
+        assert!(transcript.contains("Tool:\n[VT Code tool result]"));
+        assert!(transcript.contains("- tool_call_id: call-1"));
+        assert!(transcript.contains("- tool: unified_exec"));
+        assert!(transcript.contains("cargo check completed successfully."));
+        assert!(transcript.contains("User:\nTell me more."));
+        assert!(transcript.contains("omitted 1 image input"));
+    }
+
+    #[test]
+    fn supported_models_include_copilot_auto() {
+        let provider = provider();
 
         assert!(
-            err.to_string()
-                .contains("does not support tool or vision history")
+            provider
+                .supported_models()
+                .iter()
+                .any(|model| model == copilot_models::AUTO)
         );
     }
 
     #[test]
-    fn supported_models_return_curated_copilot_set() {
+    fn supports_reasoning_for_alias_and_live_raw_models() {
         let provider = provider();
 
-        assert_eq!(
-            provider.supported_models(),
-            copilot_models::SUPPORTED_MODELS
-                .iter()
-                .map(|model| (*model).to_string())
-                .collect::<Vec<_>>()
-        );
+        assert!(provider.supports_reasoning(copilot_models::AUTO));
+        assert!(provider.supports_reasoning("gpt-5.3-codex"));
     }
 }

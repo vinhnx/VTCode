@@ -96,10 +96,6 @@ pub(crate) async fn prepare_session_bootstrap(
         None
     };
 
-    let acp_workspace_trust = vt_cfg
-        .filter(|cfg| cfg.acp.zed.enabled)
-        .map(|cfg| cfg.acp.zed.workspace_trust);
-
     SessionBootstrap {
         placeholder,
         prompt_addendum,
@@ -108,7 +104,10 @@ pub(crate) async fn prepare_session_bootstrap(
         mcp_error,
         search_tools_notice: None,
         header_highlights,
-        acp_workspace_trust,
+        // Regular terminal sessions are not launched through the ACP bridge, so
+        // ACP-specific workspace trust must not leak into the runtime header or
+        // tool prompt policy.
+        acp_workspace_trust: None,
     }
 }
 

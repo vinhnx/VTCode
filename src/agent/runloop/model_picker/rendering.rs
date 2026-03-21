@@ -345,14 +345,14 @@ pub(super) fn render_step_one_inline(
     }
 
     items.push(InlineListItem {
-        title: "Refresh local LM Studio/Ollama models".to_string(),
+        title: "Refresh dynamic model lists".to_string(),
         subtitle: Some(
-            "Re-query LM Studio and Ollama servers without closing the picker.".to_string(),
+            "Re-query GitHub Copilot, LM Studio, and Ollama model lists without closing the picker.".to_string(),
         ),
         badge: Some("Action".to_string()),
         indent: 0,
         selection: Some(InlineListSelection::RefreshDynamicModels),
-        search_value: Some("refresh local models".to_string()),
+        search_value: Some("refresh dynamic models".to_string()),
     });
 
     items.push(InlineListItem {

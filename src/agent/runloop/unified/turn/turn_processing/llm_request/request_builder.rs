@@ -91,6 +91,18 @@ struct PromptAssemblyOutput {
 pub(super) struct TurnRequestBuildResult {
     pub request: uni::LLMRequest,
     pub has_tools: bool,
+    pub runtime_tools: Option<Arc<Vec<uni::ToolDefinition>>>,
+}
+
+fn uses_out_of_band_copilot_tools(provider_name: &str) -> bool {
+    provider_name.eq_ignore_ascii_case(vtcode_core::copilot::COPILOT_PROVIDER_KEY)
+}
+
+fn append_copilot_runtime_guidance(system_prompt: &mut String) {
+    let _ = writeln!(
+        system_prompt,
+        "\n[GitHub Copilot Client Tools]\n- the VT Code tools named in this prompt are exposed as Copilot client tools outside the normal JSON tool list\n- when a tool is needed, emit the actual client tool call instead of describing the call in plain text\n- do not claim a tool was rejected, blocked, or unavailable unless the runtime returned that result"
+    );
 }
 
 pub(super) fn capture_turn_request_snapshot(
@@ -230,6 +242,10 @@ async fn assemble_prompt(
         );
     }
 
+    if has_tools && uses_out_of_band_copilot_tools(&input.turn.provider_name) {
+        append_copilot_runtime_guidance(&mut system_prompt);
+    }
+
     Ok(PromptAssemblyOutput {
         system_prompt,
         current_tools,
@@ -324,8 +340,12 @@ pub(super) async fn build_turn_request(
     } else {
         None
     };
+    let use_out_of_band_copilot_tools =
+        uses_out_of_band_copilot_tools(&turn_snapshot.provider_name);
     let tool_choice = if turn_snapshot.tool_free_recovery {
         Some(uni::ToolChoice::none())
+    } else if use_out_of_band_copilot_tools {
+        None
     } else if prompt_output.has_tools {
         Some(uni::ToolChoice::auto())
     } else {
@@ -358,7 +378,11 @@ pub(super) async fn build_turn_request(
     let request = uni::LLMRequest {
         messages: normalized_messages,
         system_prompt: Some(Arc::new(prompt_output.system_prompt)),
-        tools: prompt_output.current_tools,
+        tools: if use_out_of_band_copilot_tools {
+            None
+        } else {
+            prompt_output.current_tools.clone()
+        },
         model: active_model.to_string(),
         max_tokens: max_tokens_opt,
         temperature,
@@ -376,6 +400,7 @@ pub(super) async fn build_turn_request(
     Ok(TurnRequestBuildResult {
         request,
         has_tools: prompt_output.has_tools,
+        runtime_tools: prompt_output.current_tools,
     })
 }
 
@@ -471,6 +496,56 @@ mod tests {
             .expect("system prompt")
             .as_str();
         assert!(!system_prompt.contains("[Runtime Tool Catalog]"));
+    }
+
+    #[tokio::test]
+    async fn copilot_request_keeps_runtime_tools_out_of_band() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        backing
+            .add_tool_definition(ToolDefinition::function(
+                "unified_search".to_string(),
+                "Search project files".to_string(),
+                json!({
+                    "type": "object",
+                    "properties": {
+                        "pattern": { "type": "string" }
+                    }
+                }),
+            ))
+            .await;
+
+        let mut ctx = backing.turn_processing_context();
+        let mut snapshot = capture_turn_request_snapshot(&mut ctx, "copilot-gpt-5.4", false);
+        snapshot.provider_name = vtcode_core::copilot::COPILOT_PROVIDER_KEY.to_string();
+        snapshot.capabilities.tools = true;
+        let built = build_turn_request(
+            &mut ctx,
+            1,
+            "copilot-gpt-5.4",
+            &snapshot,
+            Some(320),
+            None,
+            true,
+        )
+        .await
+        .expect("copilot request should build");
+
+        assert!(built.has_tools);
+        assert!(built.request.tools.is_none());
+        assert!(built.request.tool_choice.is_none());
+        assert_eq!(
+            built.runtime_tools.as_ref().map(|tools| tools.len()),
+            Some(1)
+        );
+
+        let system_prompt = built
+            .request
+            .system_prompt
+            .as_ref()
+            .expect("system prompt")
+            .as_str();
+        assert!(system_prompt.contains("[GitHub Copilot Client Tools]"));
+        assert!(system_prompt.contains("emit the actual client tool call"));
     }
 
     #[test]

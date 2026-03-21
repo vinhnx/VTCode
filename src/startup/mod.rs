@@ -250,7 +250,7 @@ async fn resolve_runtime_provider_auth(
 fn missing_api_key_message(selection: &RuntimeModelSelection, first_run_occurred: bool) -> String {
     let provider_name = provider_label(&selection.provider);
     if selection.provider.eq_ignore_ascii_case("copilot") {
-        return "Authentication not found for GitHub Copilot. Run `vtcode login copilot`."
+        return "Authentication not found for GitHub Copilot. Run `vtcode login copilot`. Install `copilot` first if needed; `gh` is only an optional fallback."
             .to_string();
     }
 
