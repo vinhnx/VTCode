@@ -568,6 +568,13 @@ pub enum Commands {
         command: ModelCommands,
     },
 
+    /// Manage GPU pod deployments
+    #[command(name = "pods")]
+    Pods {
+        #[command(subcommand)]
+        command: PodsCommands,
+    },
+
     /// Generate or display man pages
     Man {
         /// Command name to generate man page for (optional)
@@ -691,6 +698,67 @@ pub enum ModelCommands {
         /// Model name to get information about
         model: String,
     },
+}
+
+/// GPU pod management commands.
+#[derive(Subcommand, Debug, Clone)]
+pub enum PodsCommands {
+    /// Start a model on the active pod.
+    Start {
+        /// Local model name used for lookup and storage.
+        #[arg(long)]
+        name: String,
+        /// Hugging Face or provider model identifier to launch.
+        #[arg(long)]
+        model: String,
+        /// Optional explicit pod name to store as the active pod.
+        #[arg(long = "pod-name")]
+        pod_name: Option<String>,
+        /// SSH connection string used for the pod.
+        #[arg(long)]
+        ssh: Option<String>,
+        /// GPU identifiers on the pod, repeated as `ID:NAME`.
+        #[arg(long = "gpu", value_name = "ID:NAME", action = ArgAction::Append)]
+        gpus: Vec<String>,
+        /// Optional remote models directory.
+        #[arg(long = "models-path")]
+        models_path: Option<String>,
+        /// Optional exact profile name to use.
+        #[arg(long)]
+        profile: Option<String>,
+        /// Optional requested GPU count.
+        #[arg(long = "gpus")]
+        gpus_count: Option<usize>,
+        /// Optional override for `--gpu-memory-utilization` (percent).
+        #[arg(long)]
+        memory: Option<f32>,
+        /// Optional override for `--max-model-len` (e.g. 4k, 32k, 131072).
+        #[arg(long)]
+        context: Option<String>,
+    },
+
+    /// Stop a running model on the active pod.
+    Stop {
+        /// Local model name to stop.
+        #[arg(long)]
+        name: String,
+    },
+
+    /// Stop every running model on the active pod.
+    StopAll,
+
+    /// List running models on the active pod.
+    List,
+
+    /// Stream logs for a running model on the active pod.
+    Logs {
+        /// Local model name whose logs should be streamed.
+        #[arg(long)]
+        name: String,
+    },
+
+    /// Show compatible and incompatible known models for the active pod.
+    KnownModels,
 }
 
 /// Skills subcommands
@@ -861,7 +929,9 @@ pub struct LoggingConfig {
 
 #[cfg(test)]
 mod exec_command_tests {
-    use super::{Cli, Commands, DependenciesSubcommand, ExecSubcommand, ManagedDependency};
+    use super::{
+        Cli, Commands, DependenciesSubcommand, ExecSubcommand, ManagedDependency, PodsCommands,
+    };
     use clap::Parser;
     use std::path::PathBuf;
 
@@ -1077,6 +1147,62 @@ mod exec_command_tests {
         };
 
         assert_eq!(dependency, ManagedDependency::SearchTools);
+    }
+
+    #[test]
+    fn pods_start_parses_model_and_gpu_flags() {
+        let cli = Cli::parse_from([
+            "vtcode",
+            "pods",
+            "start",
+            "--name",
+            "llama",
+            "--model",
+            "meta-llama/Llama-3.1-8B-Instruct",
+            "--pod-name",
+            "gpu-box",
+            "--ssh",
+            "ssh root@gpu.example.com",
+            "--gpu",
+            "0:A100",
+            "--gpu",
+            "1:A100",
+            "--gpus",
+            "2",
+            "--memory",
+            "90",
+            "--context",
+            "32k",
+        ]);
+        let Some(Commands::Pods {
+            command:
+                PodsCommands::Start {
+                    name,
+                    model,
+                    pod_name,
+                    ssh,
+                    gpus,
+                    models_path,
+                    profile,
+                    gpus_count,
+                    memory,
+                    context,
+                },
+        }) = cli.command
+        else {
+            panic!("expected pods start command");
+        };
+
+        assert_eq!(name, "llama");
+        assert_eq!(model, "meta-llama/Llama-3.1-8B-Instruct");
+        assert_eq!(pod_name.as_deref(), Some("gpu-box"));
+        assert_eq!(ssh.as_deref(), Some("ssh root@gpu.example.com"));
+        assert_eq!(gpus, vec!["0:A100", "1:A100"]);
+        assert!(models_path.is_none());
+        assert!(profile.is_none());
+        assert_eq!(gpus_count, Some(2));
+        assert_eq!(memory, Some(90.0));
+        assert_eq!(context.as_deref(), Some("32k"));
     }
 }
 

@@ -191,6 +191,37 @@ vtcode dependencies status ast-grep
 - On Linux, prefer `ast-grep` over `sg`
 - The curl installer includes the search-tools bundle by default; use `--without-search-tools` to skip it
 
+## pods
+
+Manage remote GPU-backed model pods over SSH. See the full feature guide in
+[GPU Pod Manager](../features/GPU_POD_MANAGER.md).
+
+### Usage
+
+```bash
+# Start a pod-backed model
+vtcode pods start --name llama \
+  --model meta-llama/Llama-3.1-8B-Instruct \
+  --ssh "ssh root@gpu.example.com" \
+  --gpu 0:A100 --gpu 1:A100 \
+  --gpus 2
+
+# Inspect tracked pods
+vtcode pods list
+
+# Stream logs for one model
+vtcode pods logs --name llama
+```
+
+### Commands
+
+- `vtcode pods start` - Launch a model on the active pod
+- `vtcode pods stop` - Stop one tracked model
+- `vtcode pods stop-all` - Stop every tracked model on the active pod
+- `vtcode pods list` - Show tracked model status
+- `vtcode pods logs` - Stream the remote log for a model
+- `vtcode pods known-models` - Show compatible and incompatible profiles
+
 ## Tips
 
 -   The agent respects `.vtcodegitignore` to exclude files from search and I/O.

@@ -579,6 +579,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Overview, Usage, UI Design, Implementation Details, Benefits
   - **User Questions**: "What can you tell me about File Reference Feature (@-Symbol)?", "How does Overview work?", "How does Usage work?"
 
+- **File**: `docs/features/GPU_POD_MANAGER.md`
+  - **Content**: GPU Pod Manager
+  - **Topics**: Overview, Commands, Behavior Notes, Testing
+  - **User Questions**: "What can you tell me about GPU Pod Manager?", "How does Overview work?", "How does Commands work?"
+
 - **File**: `docs/harness/INDEX.md`
   - **Content**: Harness Engineering Knowledge Base
   - **Topics**: Purpose, File Index, Cross-References, Navigation, Maintaining Freshness

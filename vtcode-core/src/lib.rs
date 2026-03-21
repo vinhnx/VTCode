@@ -164,6 +164,7 @@ pub mod notifications;
 pub mod open_responses; // Open Responses specification conformance layer
 pub mod orchestrator;
 pub mod plugins;
+pub mod pods;
 pub mod project_doc;
 pub mod prompts;
 pub mod retry;
@@ -271,6 +272,7 @@ pub use orchestrator::{
     DistributedOrchestrator, ExecutionTarget, ExecutorRegistry, LocalExecutor, ScheduledWork,
     WorkExecutor,
 };
+pub use pods::*;
 pub use prompts::{
     generate_lightweight_instruction, generate_specialized_instruction, generate_system_instruction,
 };
