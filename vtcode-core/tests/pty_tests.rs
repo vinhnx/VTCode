@@ -4,7 +4,7 @@ use anyhow::Result;
 use portable_pty::PtySize;
 use tempfile::tempdir;
 
-use vtcode_core::config::PtyConfig;
+use vtcode_core::config::{PtyConfig, PtyEmulationBackend};
 use vtcode_core::tools::{PtyCommandRequest, PtyManager};
 
 fn shell_command(script: &str) -> Vec<String> {
@@ -196,6 +196,60 @@ async fn session_input_roundtrip_and_resize() -> Result<()> {
         .expect("scrollback should be present");
     assert!(scrollback.contains("got:hello"));
     assert!(scrollback.contains("got:world"));
+
+    manager.close_session(&session_id)?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn legacy_vt100_backend_keeps_session_snapshots_working() -> Result<()> {
+    let temp_dir = tempdir()?;
+    let manager = PtyManager::new(
+        temp_dir.path().to_path_buf(),
+        PtyConfig {
+            emulation_backend: PtyEmulationBackend::LegacyVt100,
+            ..Default::default()
+        },
+    );
+
+    let working_dir = manager.resolve_working_dir(Some(".")).await?;
+    let size = PtySize {
+        rows: 24,
+        cols: 80,
+        pixel_width: 0,
+        pixel_height: 0,
+    };
+
+    let session_id = "legacy-backend".to_string();
+    manager.create_session(
+        session_id.clone(),
+        vec![
+            "sh".to_string(),
+            "-c".to_string(),
+            "printf legacy-ready && sleep 0.1".to_string(),
+        ],
+        working_dir,
+        size,
+    )?;
+
+    std::thread::sleep(Duration::from_millis(150));
+
+    let snapshot = manager.snapshot_session(&session_id)?;
+    assert!(
+        snapshot
+            .screen_contents
+            .as_deref()
+            .map(|contents| contents.contains("legacy-ready"))
+            .unwrap_or(false)
+    );
+    assert!(
+        snapshot
+            .scrollback
+            .as_deref()
+            .map(|contents| contents.contains("legacy-ready"))
+            .unwrap_or(false)
+    );
 
     manager.close_session(&session_id)?;
 

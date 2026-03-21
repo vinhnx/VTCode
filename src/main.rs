@@ -132,9 +132,6 @@ fn bootstrap_main() -> Result<BootstrapOutcome> {
         && !args.quiet
     {}
 
-    // Probe terminal color semantics once and cache for theme-aware ANSI256 mapping.
-    probe_and_cache_terminal_palette_harmony();
-
     if args.print.is_some() && args.command.is_some() {
         anyhow::bail!(
             "The --print/-p flag cannot be combined with subcommands. Use print mode without a subcommand."
@@ -148,6 +145,12 @@ fn bootstrap_main() -> Result<BootstrapOutcome> {
     args.color.write_global();
     if !color_policy.enabled {
         GlobalColorChoice::Never.write_global();
+    } else {
+        // Only probe if color is enabled and we're not running a short-lived automated command
+        // that shouldn't touch the TTY (like checking versions during install)
+        if !args.quiet && !matches!(args.command, Some(vtcode_core::cli::args::Commands::Dependencies(_)) | Some(vtcode_core::cli::args::Commands::Update { .. })) {
+            probe_and_cache_terminal_palette_harmony();
+        }
     }
 
     let startup_runtime = tokio::runtime::Builder::new_current_thread()

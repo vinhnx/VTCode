@@ -373,6 +373,30 @@ install_binary() {
     log_success "Binary installed to $target"
 }
 
+install_ghostty_sidecar() {
+    local binary_source="$1"
+    local install_dir="$2"
+    local sidecar_source
+    sidecar_source="$(dirname "$binary_source")/ghostty-vt"
+
+    if [[ ! -d "$sidecar_source" ]]; then
+        return 0
+    fi
+
+    local sidecar_target="$install_dir/ghostty-vt"
+    rm -rf "$sidecar_target"
+    mkdir -p "$sidecar_target"
+
+    if ! cp -R "$sidecar_source/." "$sidecar_target/"; then
+        log_warning "Failed to install Ghostty VT sidecar to $sidecar_target"
+        log_warning "VT Code will continue and fall back to legacy_vt100 if Ghostty assets are unavailable"
+        rm -rf "$sidecar_target"
+        return 0
+    fi
+
+    log_success "Ghostty VT sidecar installed to $sidecar_target"
+}
+
 # Check if install directory is in PATH
 check_path() {
     local install_path="$1"
@@ -486,6 +510,7 @@ main() {
     # Install binary
     local target_path="$INSTALL_DIR/$BIN_NAME"
     install_binary "$binary_path" "$target_path"
+    install_ghostty_sidecar "$binary_path" "$INSTALL_DIR"
 
     # Check if in PATH
     if ! check_path "$INSTALL_DIR"; then

@@ -195,7 +195,11 @@
   },
   "approval_cache": {
     "allowed": [
-      "cargo fmt|sandbox_permissions=\"use_default\"|additional_permissions=null"
+      "cargo fmt|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "cargo check|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "in a PTY by calling|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "unified_exec|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "unified_exec"
     ]
   }
 }

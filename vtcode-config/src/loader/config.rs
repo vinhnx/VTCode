@@ -628,6 +628,9 @@ stdout_tail_lines = 20
 # Total lines to keep in PTY scrollback buffer
 scrollback_lines = 400
 
+# Terminal emulation backend for PTY snapshots
+emulation_backend = "ghostty"
+
 # Optional preferred shell for PTY sessions (falls back to $SHELL when unset)
 # preferred_shell = "/bin/zsh"
 

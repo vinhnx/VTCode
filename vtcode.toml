@@ -92,7 +92,7 @@ default_editing_mode = "edit"
 # Default model to use
 # Default: "gpt-5.3-codex"
 # Type: `string`
-default_model = "nemotron-3-super:cloud"
+default_model = "gpt-oss:120b-cloud"
 
 # Enable an extra self-review pass to refine final responses
 # Default: false
@@ -2142,6 +2142,7 @@ shell_zsh_fork = false
 # Default: 20
 # Type: `integer`
 stdout_tail_lines = 20
+emulation_backend = "ghostty"
 
 
 # Sandboxing

@@ -98,6 +98,7 @@ members = [
     "vtcode-acp",
     "vtcode-acp-client",
     "vtcode-core",
+    "vtcode-ghostty-vt-sys",
     "vtcode-tui",
     "vtcode-vim",
     "vtcode-commons",
@@ -121,6 +122,7 @@ vtcode-indexer = { path = "vtcode-indexer" }
 vtcode-bash-runner = { path = "vtcode-bash-runner" }
 vtcode-exec-events = { path = "vtcode-exec-events" }
 vtcode-file-search = { path = "vtcode-file-search" }
+vtcode-ghostty-vt-sys = { path = "vtcode-ghostty-vt-sys" }
 
 [workspace.lints]
 # Rust compiler lints

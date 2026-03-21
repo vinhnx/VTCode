@@ -18,6 +18,7 @@
 
 **Native Installer (Recommended)** - No dependencies, instant setup:
 The default macOS/Linux installer also attempts the recommended [ripgrep](https://github.com/BurntSushi/ripgrep) + [ast-grep](https://ast-grep.github.io/) bundle for enhanced semantic grep and programming language-level understanding (optional).
+Release archives may also include an optional `ghostty-vt/` sidecar for richer PTY screen snapshots. VT Code installs and runs without it, and falls back to the built-in `legacy_vt100` backend when Ghostty assets are unavailable.
 
 **macOS & Linux:**
 
@@ -164,8 +165,11 @@ VT Code supports a rich set of configuration options, with preferences stored in
 - **Tool Policies**: Control which tools are allowed, prompted, or denied
 - **Security Settings**: Configure human-in-the-loop approval and workspace boundaries
 - **Performance Tuning**: Adjust context limits, timeouts, and caching behavior
+- **PTY Backend Selection**: Prefer Ghostty VT when packaged sidecar assets are available, or force `legacy_vt100`
 
 For full configuration options, see [Configuration](./docs/config/CONFIGURATION_PRECEDENCE.md).
+
+For Ghostty VT sidecar packaging details, see [Ghostty VT Packaging](./docs/development/GHOSTTY_VT_PACKAGING.md).
 
 ### CLI Design Principles
 
@@ -192,6 +196,7 @@ VT Code follows the [Command Line Interface Guidelines](https://clig.dev/) and s
 - **Lifecycle Hooks**: Execute custom shell commands in response to agent events for context enrichment, policy enforcement, and automation ([docs](./docs/guides/lifecycle-hooks.md))
 - **Context Management**: Advanced token budget tracking and context curation
 - **TUI Interface**: Rich terminal user interface with real-time streaming
+- **Optional Ghostty VT Snapshots**: PTY sessions can use a packaged Ghostty VT sidecar for terminal emulation snapshots while preserving a built-in `legacy_vt100` fallback
 - **Auto-Update System**: Built-in update manager with release channels, version pinning, and mirror support ([docs](./docs/guides/UPDATE_SYSTEM.md))
 
 ### Security & Safety

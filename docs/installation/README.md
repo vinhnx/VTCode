@@ -5,6 +5,7 @@ VT Code supports multiple installation methods. Choose the one that works best f
 ## Quick Install
 
 The default macOS/Linux native installer also attempts the recommended `ripgrep` + `ast-grep` bundle.
+Some release archives may also contain an optional `ghostty-vt/` sidecar directory for enhanced PTY snapshots. Installation still succeeds without it, and VT Code falls back to `legacy_vt100` automatically when Ghostty assets are unavailable.
 
 ### macOS & Linux
 
@@ -62,6 +63,14 @@ npm install -g @vinhnx/vtcode --registry=https://npm.pkg.github.com
 ```bash
 vtcode --version
 ```
+
+### 1a. Optional Ghostty VT sidecar
+
+If your release archive or installer provided a `ghostty-vt/` directory next to the VT Code binary, VT Code can use it for PTY screen snapshots.
+
+- Native installers copy the sidecar when present.
+- Homebrew/Cargo/npm installs may not include Ghostty VT assets.
+- VT Code continues to work without the sidecar by falling back to `pty.emulation_backend = "legacy_vt100"`.
 
 ### 2. Set your API key
 
@@ -148,6 +157,9 @@ Run PowerShell as Administrator.
 rm /usr/local/bin/vtcode
 # or
 rm ~/.local/bin/vtcode
+rm -rf /usr/local/bin/ghostty-vt
+# or
+rm -rf ~/.local/bin/ghostty-vt
 ```
 
 ### Homebrew
@@ -174,6 +186,9 @@ npm uninstall -g @vinhnx/vtcode
 Remove-Item "$env:LOCALAPPDATA\VT Code\vtcode.exe"
 # or (if in Program Files)
 Remove-Item "C:\Program Files\VT Code\vtcode.exe"
+Remove-Item "$env:LOCALAPPDATA\VT Code\ghostty-vt" -Recurse -Force -ErrorAction SilentlyContinue
+# or
+Remove-Item "C:\Program Files\VT Code\ghostty-vt" -Recurse -Force -ErrorAction SilentlyContinue
 ```
 
 ## Installation Paths
@@ -183,11 +198,13 @@ Remove-Item "C:\Program Files\VT Code\vtcode.exe"
 -   `/usr/local/bin/vtcode` (standard)
 -   `/opt/local/bin/vtcode` (Homebrew ARM64)
 -   `~/.local/bin/vtcode` (user fallback)
+-   Optional sidecar: sibling `ghostty-vt/` directory
 
 ### Windows
 
 -   `C:\Program Files\VT Code\vtcode.exe` (system-wide, requires admin)
 -   `%LOCALAPPDATA%\VT Code\vtcode.exe` (user-scoped)
+-   Optional sidecar: sibling `ghostty-vt\` directory
 
 The native installers automatically select the best location and add it to PATH.
 

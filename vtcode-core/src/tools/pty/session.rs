@@ -4,12 +4,13 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use parking_lot::Mutex;
-use portable_pty::{Child, MasterPty};
+use portable_pty::{Child, MasterPty, PtySize};
 use tracing::warn;
-use vt100::Parser;
 
 use crate::tools::types::VTCodePtySession;
 
+use super::raw_vt_buffer::RawVtBuffer;
+use super::screen_backend::PtyScreenState;
 use super::scrollback::PtyScrollback;
 
 /// Maximum time to wait for reader thread to finish (ms)
@@ -158,7 +159,8 @@ pub(super) struct PtySessionHandle {
     pub(super) child: Mutex<Box<dyn Child + Send>>,
     pub(super) child_pid: Option<u32>,
     pub(super) writer: Mutex<Option<Box<dyn Write + Send>>>,
-    pub(super) terminal: Arc<Mutex<Parser>>,
+    pub(super) screen_state: Arc<Mutex<PtyScreenState>>,
+    pub(super) raw_vt_buffer: Arc<Mutex<RawVtBuffer>>,
     pub(super) scrollback: Arc<Mutex<PtyScrollback>>,
     pub(super) reader_thread: Mutex<Option<JoinHandle<()>>>,
     pub(super) metadata: VTCodePtySession,
@@ -259,30 +261,40 @@ impl PtySessionHandle {
     pub(super) fn snapshot_metadata(&self) -> VTCodePtySession {
         let mut metadata = self.metadata.clone();
 
-        // Lock order: master -> terminal -> scrollback (respect documented order)
-        // Note: master is acquired first (single-threaded access)
         let master_size = {
             let master = self.master.lock();
             master.get_size().ok()
         };
 
-        if let Some(size) = master_size {
-            metadata.rows = size.rows;
-            metadata.cols = size.cols;
-        }
+        let size = master_size.unwrap_or(PtySize {
+            rows: metadata.rows,
+            cols: metadata.cols,
+            pixel_width: 0,
+            pixel_height: 0,
+        });
+        metadata.rows = size.rows;
+        metadata.cols = size.cols;
 
-        // terminal and scrollback are Arc-wrapped, can be acquired independently
-        {
-            let parser = self.terminal.lock();
-            let contents = parser.screen().contents();
-            metadata.screen_contents = Some(contents);
-        }
-        {
+        let raw_vt_stream = {
+            let raw_vt_buffer = self.raw_vt_buffer.lock();
+            raw_vt_buffer.snapshot()
+        };
+        let fallback_scrollback = {
             let scrollback = self.scrollback.lock();
-            let contents = scrollback.snapshot();
-            if !contents.is_empty() {
-                metadata.scrollback = Some(contents);
-            }
+            scrollback.snapshot()
+        };
+
+        let prepared_snapshot = {
+            let screen_state = self.screen_state.lock();
+            screen_state.prepare_snapshot()
+        };
+        let snapshot = prepared_snapshot.render(size, &raw_vt_stream, &fallback_scrollback);
+
+        metadata.screen_contents = Some(snapshot.screen_contents);
+        if !snapshot.scrollback.is_empty() {
+            metadata.scrollback = Some(snapshot.scrollback);
+        } else {
+            metadata.scrollback = None;
         }
 
         metadata

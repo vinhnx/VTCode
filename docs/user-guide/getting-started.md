@@ -56,6 +56,8 @@ cargo build --release
 # The binary will be available at target/release/vtcode
 ```
 
+GitHub release archives may also include an optional `ghostty-vt/` sidecar directory for enhanced PTY snapshots. VT Code still runs without it and falls back to `legacy_vt100`.
+
 ### Option 2: Using Provided Scripts
 
 ```bash
@@ -217,6 +219,7 @@ enabled = true
 default_rows = 24
 default_cols = 80
 command_timeout_seconds = 300
+emulation_backend = "ghostty" # or "legacy_vt100"
 
 # Lifecycle hooks - Execute shell commands in response to agent events
 # For comprehensive examples and setup, see: ../../guides/lifecycle-hooks.md
