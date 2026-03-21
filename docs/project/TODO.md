@@ -70,7 +70,3 @@ check and support https://github.com/vinhnx/VTCode/issues/613
 stash "https://github.com/vinhnx/VTCode/issues/613"
 
 ==
-
-remove notification
-
-[2026-03-21T09:29:44Z] INFO vtcode_core::notifications Notification: VT Code waiting for input: VT Code has been waiting for your input for 60 seconds
