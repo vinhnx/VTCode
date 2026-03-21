@@ -134,7 +134,11 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
     let has_command = has_super || raw_meta;
     let has_alt = raw_alt && !has_command;
 
-    if copy_selected_input_if_requested(session, &key, has_command) {
+    // When a modal/wizard overlay is active, prioritize modal key handling
+    // over copy-to-clipboard so that Ctrl+C dismisses the overlay.
+    let has_modal = session.modal_state().is_some() || session.wizard_overlay().is_some();
+
+    if !has_modal && copy_selected_input_if_requested(session, &key, has_command) {
         return None;
     }
 

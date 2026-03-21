@@ -361,6 +361,9 @@ impl ModalState {
                 ModalListKeyResult::Cancel(InlineEvent::Overlay(OverlayEvent::Cancelled))
             }
             KeyCode::Char(ch) if modifiers.control || modifiers.alt => match ch {
+                'c' | 'C' if modifiers.control => {
+                    ModalListKeyResult::Cancel(InlineEvent::Overlay(OverlayEvent::Cancelled))
+                }
                 'n' | 'N' | 'j' | 'J' => {
                     list.select_next();
                     if let Some(event) = selection_change_event(list, previous_selection) {
@@ -379,6 +382,9 @@ impl ModalState {
                 }
                 _ => ModalListKeyResult::NotHandled,
             },
+            KeyCode::Char('\u{3}') => {
+                ModalListKeyResult::Cancel(InlineEvent::Overlay(OverlayEvent::Cancelled))
+            }
             _ => ModalListKeyResult::NotHandled,
         }
     }
@@ -1207,8 +1213,14 @@ impl WizardModalState {
             }
             // Enter: select current item and mark step complete
             KeyCode::Enter => self.submit_current_selection(),
-            // Escape: cancel wizard
+            // Escape or Ctrl+C: cancel wizard
             KeyCode::Esc => {
+                ModalListKeyResult::Cancel(InlineEvent::Overlay(OverlayEvent::Cancelled))
+            }
+            KeyCode::Char('c') | KeyCode::Char('C') if modifiers.control => {
+                ModalListKeyResult::Cancel(InlineEvent::Overlay(OverlayEvent::Cancelled))
+            }
+            KeyCode::Char('\u{3}') => {
                 ModalListKeyResult::Cancel(InlineEvent::Overlay(OverlayEvent::Cancelled))
             }
             // Up/Down/Tab: delegate to current step's list
