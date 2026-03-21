@@ -10,7 +10,7 @@ pub struct RejectConfig {
     pub sandbox_approval: bool,
     /// Reject prompts triggered by policy `prompt` rules.
     pub rules: bool,
-    /// Reject approval prompts related to built-in permission requests.
+    /// Reject permission request prompts that are separate from sandbox approval.
     pub request_permissions: bool,
     /// Reject MCP elicitation prompts.
     pub mcp_elicitations: bool,
@@ -82,7 +82,7 @@ impl AskForApproval {
         }
     }
 
-    /// Check whether built-in permission requests are rejected.
+    /// Check whether permission request prompts are rejected.
     pub const fn rejects_request_permission_prompt(self) -> bool {
         match self {
             Self::Never => true,
@@ -349,16 +349,27 @@ mod tests {
         assert!(!AskForApproval::OnRequest.rejects_request_permission_prompt());
         assert!(!AskForApproval::OnRequest.rejects_mcp_elicitation());
 
-        let reject_policy = AskForApproval::Reject(RejectConfig {
+        let sandbox_reject_policy = AskForApproval::Reject(RejectConfig {
             sandbox_approval: true,
             rules: false,
-            request_permissions: true,
+            request_permissions: false,
             mcp_elicitations: true,
         });
-        assert!(!reject_policy.rejects_rule_prompt());
-        assert!(reject_policy.rejects_sandbox_prompt());
-        assert!(reject_policy.rejects_request_permission_prompt());
-        assert!(reject_policy.rejects_mcp_elicitation());
+        assert!(!sandbox_reject_policy.rejects_rule_prompt());
+        assert!(sandbox_reject_policy.rejects_sandbox_prompt());
+        assert!(!sandbox_reject_policy.rejects_request_permission_prompt());
+        assert!(sandbox_reject_policy.rejects_mcp_elicitation());
+
+        let request_permissions_reject_policy = AskForApproval::Reject(RejectConfig {
+            sandbox_approval: false,
+            rules: false,
+            request_permissions: true,
+            mcp_elicitations: false,
+        });
+        assert!(!request_permissions_reject_policy.rejects_rule_prompt());
+        assert!(!request_permissions_reject_policy.rejects_sandbox_prompt());
+        assert!(request_permissions_reject_policy.rejects_request_permission_prompt());
+        assert!(!request_permissions_reject_policy.rejects_mcp_elicitation());
     }
 
     #[test]
@@ -479,6 +490,26 @@ mod tests {
             requirement,
             ExecApprovalRequirement::Forbidden {
                 reason: "approval policy rejected sandbox approval prompt".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn default_exec_approval_requirement_ignores_request_permission_rejection() {
+        let policy = AskForApproval::Reject(RejectConfig {
+            sandbox_approval: false,
+            rules: false,
+            request_permissions: true,
+            mcp_elicitations: false,
+        });
+
+        let requirement = default_exec_approval_requirement(policy, true);
+
+        assert_eq!(
+            requirement,
+            ExecApprovalRequirement::NeedsApproval {
+                reason: None,
+                proposed_execpolicy_amendment: None,
             }
         );
     }
