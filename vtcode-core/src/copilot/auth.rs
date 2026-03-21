@@ -50,6 +50,23 @@ where
     }
 
     let host = resolve_copilot_host(config)?;
+    if stored_auth_source(&host)?.is_none() {
+        if let Some(source) = env_auth_source_with(|name| std::env::var(name).ok()) {
+            let message = match source {
+                CopilotAuthSource::Environment(name) => format!(
+                    "Copilot auth is set via {name}; nothing to clear in the Copilot CLI."
+                ),
+                _ => "No Copilot CLI session found; already logged out.".to_string(),
+            };
+            on_event(CopilotAuthEvent::Progress { message })?;
+        } else {
+            on_event(CopilotAuthEvent::Progress {
+                message: "No Copilot CLI session found; already logged out.".to_string(),
+            })?;
+        }
+        on_event(CopilotAuthEvent::Success { account: None })?;
+        return Ok(());
+    }
     let args = login_command_args(&host);
 
     run_captured_command(
@@ -94,28 +111,33 @@ where
     }
 
     let host = resolve_copilot_host(config)?;
-    let args = logout_command_args();
+    let interactive_result = run_interactive_logout_command(&resolved, workspace_root, &host)
+        .await
+        .with_context(|| "copilot logout started an interactive Copilot CLI session");
 
-    let direct_logout = run_captured_command(
-        &resolved,
-        workspace_root,
-        &args,
-        "copilot logout",
-        CommandKind::Logout,
-        &mut on_event,
-    )
-    .await;
+    if let Err(interactive_err) = interactive_result {
+        let args = logout_command_args();
+        let direct_logout = run_captured_command(
+            &resolved,
+            workspace_root,
+            &args,
+            "copilot logout",
+            CommandKind::Logout,
+            &mut on_event,
+        )
+        .await;
 
-    match direct_logout {
-        Ok(()) => {}
-        Err(err) if should_retry_logout_interactively(&err.to_string()) => {
-            run_interactive_logout_command(&resolved, workspace_root, &host)
-                .await
-                .with_context(
-                    || "copilot logout fell back to an interactive Copilot CLI session",
-                )?;
+        match direct_logout {
+            Ok(()) => {}
+            Err(err) if should_retry_logout_interactively(&err.to_string()) => {
+                return Err(interactive_err);
+            }
+            Err(err) => {
+                return Err(err).with_context(|| {
+                    format!("interactive copilot logout failed: {interactive_err}")
+                });
+            }
         }
-        Err(err) => return Err(err),
     }
 
     on_event(CopilotAuthEvent::Success { account: None })?;
@@ -282,6 +304,14 @@ impl CapturedCommandState {
         let normalized = normalize_captured_line(&line.text);
         let trimmed = normalized.trim();
         if trimmed.is_empty() {
+            return Ok(());
+        }
+
+        if matches!(kind, CommandKind::Logout)
+            && matches!(line.stream, CapturedStream::Stdout)
+            && trimmed.to_ascii_lowercase().contains("non-interactive mode")
+        {
+            self.record_safe_message(trimmed.to_string());
             return Ok(());
         }
 
@@ -607,6 +637,8 @@ fn blocking_interactive_logout_command(
     });
 
     let start = Instant::now();
+    let mut last_auth_check = Instant::now();
+    let mut auth_cleared = false;
     let mut state = CapturedCommandState::default();
     let wait_granularity = Duration::from_millis(100);
 
@@ -626,6 +658,15 @@ fn blocking_interactive_logout_command(
             break;
         }
 
+        if last_auth_check.elapsed() >= Duration::from_millis(250) {
+            last_auth_check = Instant::now();
+            if stored_auth_source(host)?.is_none() {
+                auth_cleared = true;
+                let _ = killer.kill();
+                break;
+            }
+        }
+
         if start.elapsed() >= resolved.auth_timeout {
             let _ = killer.kill();
             let _ = writer_thread.join();
@@ -640,35 +681,34 @@ fn blocking_interactive_logout_command(
         thread::sleep(wait_granularity);
     }
 
-    let status = wait_thread
-        .join()
-        .map_err(|panic| {
-            anyhow!(
-                "interactive copilot logout wait thread panicked: {:?}",
-                panic
-            )
-        })?
-        .context("failed to wait for interactive copilot logout process")?;
+    let status = wait_thread.join().map_err(|panic| {
+        anyhow!(
+            "interactive copilot logout wait thread panicked: {:?}",
+            panic
+        )
+    })?;
 
-    writer_thread
-        .join()
-        .map_err(|panic| {
-            anyhow!(
-                "interactive copilot logout writer thread panicked: {:?}",
-                panic
-            )
-        })?
-        .context("failed to write interactive copilot logout commands")?;
+    let writer_result = writer_thread.join().map_err(|panic| {
+        anyhow!(
+            "interactive copilot logout writer thread panicked: {:?}",
+            panic
+        )
+    })?;
 
-    reader_thread
-        .join()
-        .map_err(|panic| {
-            anyhow!(
-                "interactive copilot logout reader thread panicked: {:?}",
-                panic
-            )
-        })?
-        .context("failed to read interactive copilot logout output")?;
+    let reader_result = reader_thread.join().map_err(|panic| {
+        anyhow!(
+            "interactive copilot logout reader thread panicked: {:?}",
+            panic
+        )
+    })?;
+
+    if auth_cleared {
+        return Ok(());
+    }
+
+    let status = status.context("failed to wait for interactive copilot logout process")?;
+    writer_result.context("failed to write interactive copilot logout commands")?;
+    reader_result.context("failed to read interactive copilot logout output")?;
 
     while let Ok(text) = line_rx.try_recv() {
         state.handle_line(

@@ -209,6 +209,20 @@ pub(crate) async fn handle_oauth_logout(
             }
         }
         OPENROUTER_PROVIDER => {
+            if matches!(openrouter_auth_status(vt_cfg)?, AuthStatus::NotAuthenticated) {
+                if get_api_key(OPENROUTER_PROVIDER, &ApiKeySources::default()).is_ok() {
+                    ctx.renderer.line(
+                        MessageStyle::Info,
+                        "OpenRouter OAuth token already cleared; using OPENROUTER_API_KEY.",
+                    )?;
+                } else {
+                    ctx.renderer.line(
+                        MessageStyle::Info,
+                        "No stored OpenRouter OAuth token to clear.",
+                    )?;
+                }
+                return Ok(SlashCommandControl::Continue);
+            }
             clear_openrouter_login(vt_cfg)?;
             ctx.renderer.line(
                 MessageStyle::Info,
@@ -216,6 +230,23 @@ pub(crate) async fn handle_oauth_logout(
             )?;
         }
         OPENAI_PROVIDER => {
+            if matches!(
+                openai_auth_status(vt_cfg)?,
+                OpenAIChatGptAuthStatus::NotAuthenticated
+            ) {
+                if get_api_key(OPENAI_PROVIDER, &ApiKeySources::default()).is_ok() {
+                    ctx.renderer.line(
+                        MessageStyle::Info,
+                        "OpenAI ChatGPT session already cleared; using OPENAI_API_KEY.",
+                    )?;
+                } else {
+                    ctx.renderer.line(
+                        MessageStyle::Info,
+                        "No stored OpenAI ChatGPT session to clear.",
+                    )?;
+                }
+                return Ok(SlashCommandControl::Continue);
+            }
             clear_openai_login(vt_cfg)?;
             sync_openai_runtime_if_active(&mut ctx).await?;
             ctx.renderer.line(

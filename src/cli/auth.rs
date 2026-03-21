@@ -332,11 +332,22 @@ pub(crate) async fn handle_logout_command(
 
     match provider.parse::<OAuthProvider>() {
         Ok(OAuthProvider::OpenRouter) => {
+            if matches!(openrouter_auth_status(vt_cfg)?, AuthStatus::NotAuthenticated) {
+                println!("OpenRouter OAuth token already cleared.");
+                return Ok(());
+            }
             clear_openrouter_login(vt_cfg)?;
             println!("OpenRouter OAuth token cleared.");
             Ok(())
         }
         Ok(OAuthProvider::OpenAi) => {
+            if matches!(
+                openai_auth_status(vt_cfg)?,
+                OpenAIChatGptAuthStatus::NotAuthenticated
+            ) {
+                println!("OpenAI ChatGPT session already cleared.");
+                return Ok(());
+            }
             clear_openai_login(vt_cfg)?;
             println!("OpenAI ChatGPT session cleared.");
             Ok(())
