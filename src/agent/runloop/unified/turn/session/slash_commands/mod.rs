@@ -30,6 +30,7 @@ mod handlers;
 pub(crate) enum SlashCommandControl {
     Continue,
     SubmitPrompt(String),
+    ReplaceInput(String),
     BreakWithReason(SessionEndReason),
 }
 
@@ -71,6 +72,9 @@ pub(crate) async fn handle_outcome(
     match outcome {
         SlashCommandOutcome::SubmitPrompt { prompt } => {
             Ok(SlashCommandControl::SubmitPrompt(prompt))
+        }
+        SlashCommandOutcome::ReplaceInput { content } => {
+            Ok(SlashCommandControl::ReplaceInput(content))
         }
         SlashCommandOutcome::Handled => Ok(SlashCommandControl::Continue),
         SlashCommandOutcome::ThemeChanged(theme_id) => {

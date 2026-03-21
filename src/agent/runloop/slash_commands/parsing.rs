@@ -10,6 +10,16 @@ pub(super) fn split_command_and_args(input: &str) -> (&str, &str) {
     }
 }
 
+pub(super) fn parse_prompt_template_args(args: &str) -> std::result::Result<Vec<String>, String> {
+    let trimmed = args.trim();
+    if trimmed.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    shell_words::split(trimmed)
+        .map_err(|err| format!("Failed to parse template arguments: {}", err))
+}
+
 pub(super) fn parse_session_log_export_format(
     args: &str,
 ) -> std::result::Result<SessionLogExportFormat, String> {

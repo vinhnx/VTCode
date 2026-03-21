@@ -27,6 +27,7 @@ use vtcode_core::llm::provider as uni;
 use vtcode_core::notifications::{
     set_global_notification_hook_engine, set_global_terminal_focused,
 };
+use vtcode_core::prompts::discover_prompt_templates;
 use vtcode_core::ui::slash::visible_commands;
 use vtcode_core::ui::theme;
 use vtcode_core::ui::{
@@ -38,7 +39,7 @@ use vtcode_core::utils::session_archive::SessionArchive;
 use vtcode_core::utils::transcript;
 use vtcode_tui::app::{
     FocusChangeCallback, InlineEvent, InlineEventCallback, InlineHandle, InlineHeaderContext,
-    SessionOptions, spawn_session_with_options,
+    SessionOptions, SlashCommandItem, spawn_session_with_options,
 };
 
 pub(crate) async fn initialize_session_ui(
@@ -129,6 +130,18 @@ pub(crate) async fn initialize_session_ui(
         .set_active_pty_sessions(pty_counter.clone());
 
     let visible_slash_commands: Vec<_> = visible_commands().into_iter().copied().collect();
+    let mut slash_command_items = to_tui_slash_commands(visible_slash_commands.as_slice());
+    let template_slash_commands = discover_prompt_templates(&config.workspace)
+        .await
+        .into_iter()
+        .filter(|template| {
+            !visible_slash_commands
+                .iter()
+                .any(|cmd| cmd.name == template.name)
+        })
+        .map(|template| SlashCommandItem::new(template.name, template.description))
+        .collect::<Vec<_>>();
+    slash_command_items.extend(template_slash_commands);
 
     let mut session = spawn_session_with_options(
         theme_spec.clone(),
@@ -154,7 +167,7 @@ pub(crate) async fn initialize_session_ui(
                 .map(|cfg| to_tui_keyboard_protocol(cfg.ui.keyboard_protocol.clone()))
                 .unwrap_or_default(),
             workspace_root: Some(config.workspace.clone()),
-            slash_commands: to_tui_slash_commands(visible_slash_commands.as_slice()),
+            slash_commands: slash_command_items,
             appearance: vt_cfg.map(to_tui_appearance),
             app_name: "VT Code".to_string(),
             non_interactive_hint: Some(

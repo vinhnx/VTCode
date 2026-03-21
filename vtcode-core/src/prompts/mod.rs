@@ -10,6 +10,7 @@ pub mod generator;
 pub mod guidelines;
 pub mod harness_limits;
 pub mod output_styles;
+pub mod resources;
 pub mod system;
 pub mod system_prompt_cache;
 pub mod templates;
@@ -22,6 +23,10 @@ pub use context::PromptContext;
 pub use generator::{SystemPromptGenerator, generate_system_instruction_with_config};
 pub use guidelines::{generate_tool_guidelines, infer_capability_level};
 pub use harness_limits::upsert_harness_limits_section;
+pub use resources::{
+    PromptTemplate, apply_system_prompt_layers, discover_prompt_templates, expand_prompt_template,
+    find_prompt_template, resolve_system_prompt_layers,
+};
 pub use system::{
     apply_output_style, generate_lightweight_instruction, generate_specialized_instruction,
     generate_system_instruction,

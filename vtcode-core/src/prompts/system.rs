@@ -13,6 +13,7 @@ use crate::project_doc::read_project_doc;
 use crate::prompts::context::PromptContext;
 use crate::prompts::guidelines::generate_tool_guidelines;
 use crate::prompts::output_styles::OutputStyleApplier;
+use crate::prompts::resources::{apply_system_prompt_layers, resolve_system_prompt_layers};
 use crate::prompts::system_prompt_cache::PROMPT_CACHE;
 use crate::prompts::temporal::generate_temporal_context;
 use crate::skills::render::render_prompt_skills_section;
@@ -188,7 +189,9 @@ pub async fn compose_system_instruction_text(
     let prompt_mode = vtcode_config
         .map(|c| c.agent.system_prompt_mode)
         .unwrap_or(SystemPromptMode::Default);
-    let base_prompt = static_mode_prompt(prompt_mode);
+    let static_base_prompt = static_mode_prompt(prompt_mode);
+    let resolved_layers = resolve_system_prompt_layers(_project_root).await;
+    let base_prompt = apply_system_prompt_layers(static_base_prompt, &resolved_layers);
 
     tracing::debug!(
         mode = ?prompt_mode,
@@ -200,7 +203,7 @@ pub async fn compose_system_instruction_text(
     let config_overhead = vtcode_config.map_or(0, |_| 1024);
     let estimated_capacity = base_len + config_overhead + 1024;
     let mut instruction = String::with_capacity(estimated_capacity);
-    instruction.push_str(base_prompt);
+    instruction.push_str(&base_prompt);
     if should_include_structured_reasoning(vtcode_config, prompt_mode) {
         append_prompt_section(&mut instruction, STRUCTURED_REASONING_INSTRUCTIONS);
     }
@@ -935,6 +938,57 @@ mod tests {
         assert!(!result.contains("keep responses terse"));
         assert!(!result.contains("Root summary"));
         assert!(!result.contains("Follow the root guidance."));
+    }
+
+    #[tokio::test]
+    async fn test_workspace_prompt_resources_override_base_and_keep_dynamic_sections() {
+        use crate::skills::model::{SkillMetadata, SkillScope};
+
+        let workspace = tempfile::TempDir::new().expect("workspace tempdir");
+        let prompts_dir = workspace.path().join(".vtcode/prompts");
+        std::fs::create_dir_all(&prompts_dir).expect("create prompts dir");
+        std::fs::write(prompts_dir.join("system.md"), "# Workspace system base").expect("system");
+        std::fs::write(
+            prompts_dir.join("append-system.md"),
+            "Workspace prompt appendix",
+        )
+        .expect("append");
+
+        let mut config = VTCodeConfig::default();
+        config.agent.include_temporal_context = false;
+        config.agent.include_working_directory = true;
+
+        let mut ctx = PromptContext::default();
+        ctx.add_tool("unified_search".to_string());
+        ctx.add_skill_metadata(SkillMetadata {
+            name: "skill-creator".to_string(),
+            description: "Create skills".to_string(),
+            short_description: None,
+            path: PathBuf::from("/tmp/skill-creator/SKILL.md"),
+            scope: SkillScope::System,
+            manifest: None,
+        });
+        ctx.set_current_directory(workspace.path().to_path_buf());
+
+        let result =
+            compose_system_instruction_text(workspace.path(), Some(&config), Some(&ctx)).await;
+
+        assert!(result.starts_with("# Workspace system base"));
+        assert!(result.contains("Workspace prompt appendix"));
+        assert!(result.contains("## Active Tools"));
+        assert!(result.contains("## Skills"));
+        assert!(result.contains("## Environment"));
+
+        let appendix_pos = result
+            .find("Workspace prompt appendix")
+            .expect("append text");
+        let tools_pos = result.find("## Active Tools").expect("tools section");
+        let skills_pos = result.find("## Skills").expect("skills section");
+        let env_pos = result.find("## Environment").expect("environment section");
+
+        assert!(appendix_pos < tools_pos);
+        assert!(tools_pos < skills_pos);
+        assert!(skills_pos < env_pos);
     }
 
     #[tokio::test]

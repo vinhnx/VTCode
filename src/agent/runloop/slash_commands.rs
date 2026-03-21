@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use anyhow::Result;
+use vtcode_core::prompts::{expand_prompt_template, find_prompt_template};
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
@@ -18,7 +19,9 @@ use flow::{
     handle_rewind_command,
 };
 use management::{handle_add_dir_command, handle_mcp_command};
-use parsing::{parse_session_log_export_format, split_command_and_args};
+use parsing::{
+    parse_prompt_template_args, parse_session_log_export_format, split_command_and_args,
+};
 use rendering::{render_generate_agent_file_usage, render_help, render_theme_list};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -113,6 +116,9 @@ pub(crate) enum SlashCommandOutcome {
     LaunchGit,
     ManageSkills {
         action: crate::agent::runloop::SkillCommandAction,
+    },
+    ReplaceInput {
+        content: String,
     },
     SubmitPrompt {
         prompt: String,
@@ -502,7 +508,7 @@ pub(crate) async fn handle_slash_command(
             } else {
                 Some(args.trim())
             };
-            render_help(renderer, specific_cmd)?;
+            render_help(renderer, specific_cmd, workspace).await?;
             Ok(SlashCommandOutcome::Handled)
         }
         "terminal-setup" => {
@@ -516,11 +522,21 @@ pub(crate) async fn handle_slash_command(
             Ok(SlashCommandOutcome::StartTerminalSetup)
         }
         _ => {
-            renderer.line(
-                MessageStyle::Error,
-                &format!("Unknown command '/{}'. Try /help.", command_key),
-            )?;
-            Ok(SlashCommandOutcome::Handled)
+            if let Some(template) = find_prompt_template(workspace, &command_key).await {
+                let template_args = match parse_prompt_template_args(args) {
+                    Ok(parsed) => parsed,
+                    Err(message) => {
+                        renderer.line(MessageStyle::Error, &message)?;
+                        return Ok(SlashCommandOutcome::Handled);
+                    }
+                };
+                let expanded = expand_prompt_template(&template.body, &template_args);
+                return Ok(SlashCommandOutcome::ReplaceInput { content: expanded });
+            }
+
+            Ok(SlashCommandOutcome::SubmitPrompt {
+                prompt: format!("/{}", input.trim()),
+            })
         }
     }
 }
@@ -759,5 +775,98 @@ mod tests {
             .await
             .expect("jobs should parse");
         assert!(matches!(jobs, SlashCommandOutcome::ShowJobsPanel));
+    }
+
+    #[tokio::test]
+    async fn prompt_template_invocation_replaces_editor_input() {
+        let workspace = tempfile::TempDir::new().expect("workspace");
+        let template_dir = workspace.path().join(".vtcode/prompts/templates");
+        std::fs::create_dir_all(&template_dir).expect("template dir");
+        std::fs::write(
+            template_dir.join("review-template.md"),
+            "---\ndescription: Review template\n---\nReview $1 against $2.\nArgs: $@",
+        )
+        .expect("template");
+
+        let mut renderer = renderer_for_tests();
+        let outcome = handle_slash_command(
+            "review-template src/lib.rs main",
+            &mut renderer,
+            workspace.path(),
+        )
+        .await
+        .expect("review template should parse");
+
+        assert!(matches!(
+            outcome,
+            SlashCommandOutcome::ReplaceInput { ref content }
+                if content == "Review src/lib.rs against main.\nArgs: src/lib.rs main"
+        ));
+    }
+
+    #[tokio::test]
+    async fn prompt_template_invocation_preserves_quoted_arguments() {
+        let workspace = tempfile::TempDir::new().expect("workspace");
+        let template_dir = workspace.path().join(".vtcode/prompts/templates");
+        std::fs::create_dir_all(&template_dir).expect("template dir");
+        std::fs::write(
+            template_dir.join("rename-template.md"),
+            "---\ndescription: Rename template\n---\nRename $1 to $2",
+        )
+        .expect("template");
+
+        let mut renderer = renderer_for_tests();
+        let outcome = handle_slash_command(
+            r#"rename-template "src/old name.rs" "src/new name.rs""#,
+            &mut renderer,
+            workspace.path(),
+        )
+        .await
+        .expect("rename template should parse");
+
+        assert!(matches!(
+            outcome,
+            SlashCommandOutcome::ReplaceInput { ref content }
+                if content == "Rename src/old name.rs to src/new name.rs"
+        ));
+    }
+
+    #[tokio::test]
+    async fn built_in_slash_command_beats_same_named_template() {
+        let workspace = tempfile::TempDir::new().expect("workspace");
+        let template_dir = workspace.path().join(".vtcode/prompts/templates");
+        std::fs::create_dir_all(&template_dir).expect("template dir");
+        std::fs::write(
+            template_dir.join("help.md"),
+            "---\ndescription: shadow help\n---\nThis should not run.",
+        )
+        .expect("template");
+
+        let mut renderer = renderer_for_tests();
+        let outcome = handle_slash_command("help", &mut renderer, workspace.path())
+            .await
+            .expect("help should parse");
+
+        assert!(matches!(outcome, SlashCommandOutcome::Handled));
+    }
+
+    #[tokio::test]
+    async fn unknown_slash_command_falls_back_to_normal_prompt_submission() {
+        let workspace = tempfile::TempDir::new().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let outcome = handle_slash_command(
+            "totally-unknown keep this raw",
+            &mut renderer,
+            workspace.path(),
+        )
+        .await
+        .expect("unknown slash should pass through");
+
+        assert!(matches!(
+            outcome,
+            SlashCommandOutcome::SubmitPrompt { ref prompt }
+                if prompt == "/totally-unknown keep this raw"
+        ));
     }
 }

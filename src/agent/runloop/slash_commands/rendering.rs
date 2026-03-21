@@ -1,5 +1,8 @@
+use std::path::Path;
+
 use anyhow::Result;
 
+use vtcode_core::prompts::find_prompt_template;
 use vtcode_core::terminal_setup::detector::TerminalType;
 use vtcode_core::ui::slash::{find_command, visible_commands};
 use vtcode_core::ui::theme;
@@ -106,9 +109,10 @@ pub(super) fn render_theme_list(renderer: &mut AnsiRenderer) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn render_help(
+pub(super) async fn render_help(
     renderer: &mut AnsiRenderer,
     specific_command: Option<&str>,
+    workspace: &Path,
 ) -> Result<()> {
     if let Some(cmd_name) = specific_command {
         if let Some(cmd) = find_command(cmd_name) {
@@ -118,6 +122,16 @@ pub(super) fn render_help(
                 &format!("  Description: {}", cmd.description),
             )?;
             // Additional usage examples could be added here in the future
+        } else if let Some(template) = find_prompt_template(workspace, cmd_name).await {
+            renderer.line(MessageStyle::Info, &format!("Help for /{}:", template.name))?;
+            renderer.line(
+                MessageStyle::Info,
+                &format!("  Description: {}", template.description),
+            )?;
+            renderer.line(
+                MessageStyle::Info,
+                "  Type `/name [args...]` to expand this prompt template into the editor.",
+            )?;
         } else {
             renderer.line(
                 MessageStyle::Error,
@@ -135,6 +149,21 @@ pub(super) fn render_help(
                 MessageStyle::Info,
                 &format!("  /{} – {}", cmd.name, cmd.description),
             )?;
+        }
+        let prompt_templates = vtcode_core::prompts::discover_prompt_templates(workspace)
+            .await
+            .into_iter()
+            .filter(|template| find_command(&template.name).is_none())
+            .collect::<Vec<_>>();
+        if !prompt_templates.is_empty() {
+            renderer.line(MessageStyle::Info, "")?;
+            renderer.line(MessageStyle::Info, "Prompt templates:")?;
+            for template in prompt_templates {
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!("  /{} – {}", template.name, template.description),
+                )?;
+            }
         }
 
         // Add information about interactive features

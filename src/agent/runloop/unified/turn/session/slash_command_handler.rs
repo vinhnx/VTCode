@@ -105,6 +105,10 @@ pub(crate) async fn handle_input_commands(
                     SlashCommandControl::SubmitPrompt(prompt) => {
                         return Ok(CommandProcessingResult::UpdateInput(prompt));
                     }
+                    SlashCommandControl::ReplaceInput(content) => {
+                        ctx.handle.set_input(content);
+                        return Ok(CommandProcessingResult::ContinueLoop);
+                    }
                     SlashCommandControl::Continue => {
                         return Ok(CommandProcessingResult::ContinueLoop);
                     }
