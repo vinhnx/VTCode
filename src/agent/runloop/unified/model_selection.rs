@@ -1,5 +1,6 @@
 use anyhow::{Context, Result, anyhow};
 use std::path::Path;
+use vtcode_config::auth::CustomApiKeyStorage;
 use vtcode_config::{read_workspace_env_value, resolve_openai_auth, write_workspace_env_value};
 
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
@@ -40,6 +41,10 @@ pub(crate) async fn finalize_model_selection(
         selection.provider_enum == Some(Provider::OpenAI) && openai_chatgpt_auth.is_some();
     let updated_cfg = picker.persist_selection(&workspace, &selection).await?;
     *vt_cfg = Some(updated_cfg);
+    let custom_provider_enabled = vt_cfg
+        .as_ref()
+        .and_then(|cfg| cfg.custom_provider(&selection.provider))
+        .is_some();
 
     if let Some(provider_enum) = selection.provider_enum
         && let Err(err) =
@@ -54,7 +59,7 @@ pub(crate) async fn finalize_model_selection(
         )?;
     }
 
-    if let Some(provider_enum) = selection.provider_enum {
+    if selection.provider_enum.is_some() || custom_provider_enabled {
         let provider_name = selection.provider.clone();
         let new_client = create_provider_with_config(
             &provider_name,
@@ -74,7 +79,7 @@ pub(crate) async fn finalize_model_selection(
         )
         .context("Failed to initialize provider for the selected model")?;
         *provider_client = new_client;
-        config.provider = provider_enum.to_string();
+        config.provider = provider_name;
     } else {
         renderer.line(
             MessageStyle::Info,
@@ -239,6 +244,29 @@ async fn resolve_runtime_api_key(
 
     if let Some(key) = read_workspace_api_key(workspace, &selection.env_key)? {
         return Ok((key, None));
+    }
+
+    if selection.provider_enum.is_none()
+        && vt_cfg
+            .and_then(|cfg| cfg.custom_provider(&selection.provider))
+            .is_some()
+    {
+        let storage_mode = vt_cfg
+            .map(|cfg| cfg.agent.credential_storage_mode)
+            .unwrap_or_default();
+        if let Ok(Some(key)) = CustomApiKeyStorage::new(&selection.provider).load(storage_mode) {
+            return Ok((key, None));
+        }
+
+        return match std::env::var(&selection.env_key) {
+            Ok(value) if !value.trim().is_empty() => Ok((value, None)),
+            _ if selection.requires_api_key => Err(anyhow!(
+                "API key not found for custom provider '{}'. Set {} or enter a key to continue.",
+                selection.provider,
+                selection.env_key
+            )),
+            _ => Ok((String::new(), None)),
+        };
     }
 
     if selection.provider_enum.is_some() {

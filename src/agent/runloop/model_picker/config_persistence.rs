@@ -48,12 +48,16 @@ fn apply_api_key_state(config: &mut VTCodeConfig, selection: &ModelSelectionResu
 
     if uses_provider_api_key(selection) {
         config.agent.api_key_env = selection.env_key.clone();
-        sync_stored_api_key(config, selection);
+        if selection.api_key.is_some() {
+            sync_stored_api_key(config, selection);
+        }
         return;
     }
 
     config.agent.api_key_env.clear();
-    clear_stored_api_key(config, &selection.provider);
+    if selection.api_key.is_some() {
+        clear_stored_api_key(config, &selection.provider);
+    }
 }
 
 fn uses_provider_api_key(selection: &ModelSelectionResult) -> bool {

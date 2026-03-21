@@ -1,5 +1,6 @@
 use super::*;
 
+use crate::core::CustomProviderConfig;
 use crate::defaults::{self, SyntaxHighlightingDefaults, WorkspacePathsDefaults};
 use crate::ide_context::{
     IdeContextProviderConfig, IdeContextProviderMode, IdeContextProvidersConfig,
@@ -296,6 +297,33 @@ fn ide_context_fields_round_trip_through_toml() {
     assert!(!parsed.ide_context.providers.vscode_compatible.enabled);
     assert!(parsed.ide_context.providers.zed.enabled);
     assert!(!parsed.ide_context.providers.generic.enabled);
+}
+
+#[test]
+fn custom_providers_fields_round_trip_through_toml() {
+    let mut config = VTCodeConfig::default();
+    config.custom_providers.push(CustomProviderConfig {
+        name: "mycorp".to_string(),
+        display_name: "MyCorp".to_string(),
+        base_url: "https://llm.corp.example/v1".to_string(),
+        api_key_env: "MYCORP_API_KEY".to_string(),
+        model: "gpt-4o-mini".to_string(),
+    });
+
+    let serialized = toml::to_string(&config).expect("serialize config");
+    let parsed: VTCodeConfig = toml::from_str(&serialized).expect("parse config");
+
+    parsed
+        .validate()
+        .expect("custom provider config should validate");
+    assert_eq!(parsed.custom_providers.len(), 1);
+
+    let provider = &parsed.custom_providers[0];
+    assert_eq!(provider.name, "mycorp");
+    assert_eq!(provider.display_name, "MyCorp");
+    assert_eq!(provider.base_url, "https://llm.corp.example/v1");
+    assert_eq!(provider.api_key_env, "MYCORP_API_KEY");
+    assert_eq!(provider.model, "gpt-4o-mini");
 }
 
 #[test]

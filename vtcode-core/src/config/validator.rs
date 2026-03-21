@@ -124,9 +124,12 @@ impl ConfigValidator {
     pub fn validate(&self, config: &VTCodeConfig) -> Result<ValidationResult> {
         let mut result = ValidationResult::default();
         let managed_auth_provider = configured_managed_auth_provider(config);
+        let custom_provider = config.custom_provider(&config.agent.provider);
+        let is_custom_provider = custom_provider.is_some();
 
         // Check if configured model exists
-        if !is_managed_auth_model(managed_auth_provider, &config.agent.default_model)
+        if !is_custom_provider
+            && !is_managed_auth_model(managed_auth_provider, &config.agent.default_model)
             && !self
                 .models_db
                 .model_exists(&config.agent.provider, &config.agent.default_model)
@@ -138,7 +141,8 @@ impl ConfigValidator {
         }
 
         // Check if API key is available
-        if managed_auth_provider.is_none()
+        if !is_custom_provider
+            && managed_auth_provider.is_none()
             && let Err(e) = get_api_key(&config.agent.provider, &ApiKeySources::default())
         {
             result.errors.push(format!(
@@ -150,9 +154,10 @@ impl ConfigValidator {
         }
 
         // Check context window configuration
-        if let Some(max_tokens) = self
-            .models_db
-            .get_context_window(&config.agent.provider, &config.agent.default_model)
+        if !is_custom_provider
+            && let Some(max_tokens) = self
+                .models_db
+                .get_context_window(&config.agent.provider, &config.agent.default_model)
         {
             let configured_context = config.context.max_context_tokens;
             if configured_context > 0 && configured_context > max_tokens {
@@ -188,9 +193,11 @@ impl ConfigValidator {
     /// Quick validation - only critical checks
     pub fn quick_validate(&self, config: &VTCodeConfig) -> Result<()> {
         let managed_auth_provider = configured_managed_auth_provider(config);
+        let is_custom_provider = config.custom_provider(&config.agent.provider).is_some();
 
         // Check model exists
-        if !is_managed_auth_model(managed_auth_provider, &config.agent.default_model)
+        if !is_custom_provider
+            && !is_managed_auth_model(managed_auth_provider, &config.agent.default_model)
             && !self
                 .models_db
                 .model_exists(&config.agent.provider, &config.agent.default_model)
@@ -203,7 +210,7 @@ impl ConfigValidator {
         }
 
         // Check API key
-        if managed_auth_provider.is_none() {
+        if !is_custom_provider && managed_auth_provider.is_none() {
             get_api_key(&config.agent.provider, &ApiKeySources::default()).with_context(|| {
                 format!(
                     "API key not found for provider '{}'. Set {} environment variable.",
@@ -376,6 +383,28 @@ mod tests {
         assert!(!result.errors.iter().any(|e| {
             e.contains("Model 'gemini-3-flash-preview' not found for provider 'google'")
         }));
+    }
+
+    #[test]
+    fn custom_provider_skips_builtin_model_catalog_checks() {
+        let dir = create_test_models_db();
+        let validator = ConfigValidator::new(&dir.path().join("models.json")).unwrap();
+        let mut config = VTCodeConfig::default();
+        config.agent.provider = "mycorp".to_owned();
+        config.agent.default_model = "totally-custom-model".to_owned();
+        config
+            .custom_providers
+            .push(vtcode_config::core::CustomProviderConfig {
+                name: "mycorp".to_string(),
+                display_name: "MyCorporateName".to_string(),
+                base_url: "https://llm.example/v1".to_string(),
+                api_key_env: "MYCORP_API_KEY".to_string(),
+                model: "totally-custom-model".to_string(),
+            });
+
+        let result = validator.validate(&config).unwrap();
+
+        assert!(result.errors.is_empty());
     }
 
     #[test]

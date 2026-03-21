@@ -138,6 +138,13 @@ python3 scripts/generate_config_field_reference.py
 | `commands.deny_regex[]` | `string` | no | `-` | - |
 | `commands.extra_path_entries` | `array` | no | `["$HOME/.cargo/bin", "$HOME/.local/bin", "/opt/homebrew/bin", "/usr/local/bin", "$HOME/.asdf/bin", "$HOME/.asdf/shims...` | Additional directories that should be searched/prepended to PATH for command execution |
 | `commands.extra_path_entries[]` | `string` | no | `-` | - |
+| `custom_providers` | `array` | no | `[]` | User-defined OpenAI-compatible provider endpoints |
+| `custom_providers[]` | `object` | no | `-` | Configuration for a user-defined OpenAI-compatible provider endpoint. Allows users to define multiple named custom endpoints (e.g., corporate proxies) with distinct display names, so they can toggle between them and clearly see which endpoint is active. |
+| `custom_providers[].api_key_env` | `string` | no | `""` | Environment variable name that holds the API key for this endpoint (e.g., "MYCORP_API_KEY"). |
+| `custom_providers[].base_url` | `string` | yes | `-` | Base URL of the OpenAI-compatible API endpoint (e.g., "https://llm.corp.example/v1"). |
+| `custom_providers[].display_name` | `string` | yes | `-` | Human-friendly label shown in the TUI header, footer, and model picker (e.g., "MyCorporateName"). |
+| `custom_providers[].model` | `string` | no | `""` | Default model to use with this endpoint (e.g., "gpt-4o-mini"). |
+| `custom_providers[].name` | `string` | yes | `-` | Stable provider key used for routing and persistence (e.g., "mycorp"). Must be lowercase alphanumeric with optional hyphens/underscores. |
 | `context.dynamic.enabled` | `boolean` | no | `true` | Enable dynamic context discovery features |
 | `context.dynamic.max_spooled_files` | `integer` | no | `100` | Maximum number of spooled files to keep |
 | `context.dynamic.persist_history` | `boolean` | no | `true` | Enable persisting conversation history during summarization |

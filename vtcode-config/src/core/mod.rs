@@ -2,6 +2,7 @@ pub mod agent;
 pub mod auth;
 pub mod automation;
 pub mod commands;
+pub mod custom_provider;
 pub mod dotfile_protection;
 pub mod model;
 pub mod permissions;
@@ -19,6 +20,7 @@ pub use auth::{
 };
 pub use automation::{AutomationConfig, FullAutoConfig};
 pub use commands::CommandsConfig;
+pub use custom_provider::CustomProviderConfig;
 pub use dotfile_protection::DotfileProtectionConfig;
 pub use model::ModelConfig;
 pub use permissions::PermissionsConfig;

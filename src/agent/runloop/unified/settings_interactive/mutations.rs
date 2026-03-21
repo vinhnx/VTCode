@@ -1,4 +1,5 @@
 use anyhow::{Context, Result, anyhow, bail};
+use std::collections::HashSet;
 use std::fmt::Write as _;
 use std::path::Path;
 use toml::Value as TomlValue;
@@ -84,12 +85,55 @@ pub(super) fn add_array_item(root: &mut TomlValue, path: &str) -> Result<()> {
         bail!("Path '{}' is not an array", path);
     };
 
-    let value = values
-        .first()
-        .cloned()
-        .unwrap_or_else(|| TomlValue::String(String::new()));
+    let value = default_array_item(path, values);
     values.push(value);
     Ok(())
+}
+
+fn default_array_item(path: &str, existing: &[TomlValue]) -> TomlValue {
+    if normalize_config_path(path) == "custom_providers" {
+        return default_custom_provider_item(existing);
+    }
+
+    existing
+        .first()
+        .cloned()
+        .unwrap_or_else(|| TomlValue::String(String::new()))
+}
+
+fn default_custom_provider_item(existing: &[TomlValue]) -> TomlValue {
+    let mut used_names: HashSet<String> = HashSet::new();
+    for value in existing {
+        let TomlValue::Table(table) = value else {
+            continue;
+        };
+        if let Some(name) = table.get("name").and_then(TomlValue::as_str) {
+            used_names.insert(name.to_ascii_lowercase());
+        }
+    }
+
+    let mut suffix = existing.len().max(1);
+    let name = loop {
+        let candidate = format!("custom-provider-{}", suffix);
+        if !used_names.contains(&candidate) {
+            break candidate;
+        }
+        suffix += 1;
+    };
+
+    let mut table = toml::map::Map::new();
+    table.insert("name".to_string(), TomlValue::String(name));
+    table.insert(
+        "display_name".to_string(),
+        TomlValue::String(format!("Custom Provider {}", suffix)),
+    );
+    table.insert(
+        "base_url".to_string(),
+        TomlValue::String("https://llm.example/v1".to_string()),
+    );
+    table.insert("api_key_env".to_string(), TomlValue::String(String::new()));
+    table.insert("model".to_string(), TomlValue::String(String::new()));
+    TomlValue::Table(table)
 }
 
 pub(super) fn pop_array_item(root: &mut TomlValue, path: &str) -> Result<()> {

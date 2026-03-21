@@ -9,6 +9,7 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::dynamic_models::DynamicModelRegistry;
 use super::options::{ModelOption, option_indexes_for_provider, picker_provider_order};
+use super::selection::SelectionDetail;
 
 mod prompts;
 pub(super) use prompts::{
@@ -210,6 +211,58 @@ pub(super) fn dynamic_model_subtitle(
     )
 }
 
+fn is_current_custom_provider(
+    provider_key: &str,
+    model_id: &str,
+    current_provider: &str,
+    current_model: &str,
+) -> bool {
+    provider_key
+        .trim()
+        .eq_ignore_ascii_case(current_provider.trim())
+        && model_id.eq_ignore_ascii_case(current_model.trim())
+}
+
+fn custom_provider_subtitle(
+    selection: &SelectionDetail,
+    current_provider: &str,
+    current_model: &str,
+) -> String {
+    let mut segments = Vec::new();
+    if let Some(context_window) = context_window_segment("openai", &selection.model_id) {
+        segments.push(context_window);
+    }
+    if selection.reasoning_supported {
+        segments.push("Reasoning".to_string());
+    }
+
+    subtitle_from_segments(
+        &selection.model_id,
+        is_current_custom_provider(
+            &selection.provider_key,
+            &selection.model_id,
+            current_provider,
+            current_model,
+        ),
+        segments,
+    )
+}
+
+fn custom_provider_search_value(selection: &SelectionDetail) -> String {
+    let mut value = format!(
+        "{} {} {} {} custom provider openai compatible",
+        selection.provider_label,
+        selection.provider_key,
+        selection.model_display,
+        selection.model_id
+    );
+    if !selection.env_key.trim().is_empty() {
+        value.push(' ');
+        value.push_str(&selection.env_key);
+    }
+    value
+}
+
 pub(super) fn current_model_line(current_provider: &str, current_model: &str) -> String {
     if current_provider.trim().is_empty() || current_model.trim().is_empty() {
         return "Pick a model provider and model id.".to_string();
@@ -231,6 +284,7 @@ pub(super) fn render_step_one_inline(
     selected: Option<InlineListSelection>,
     current_provider: &str,
     current_model: &str,
+    custom_providers: &[SelectionDetail],
 ) -> Result<()> {
     let mut items = Vec::new();
     for provider in picker_provider_order() {
@@ -344,6 +398,23 @@ pub(super) fn render_step_one_inline(
         }
     }
 
+    if !custom_providers.is_empty() {
+        for (index, selection) in custom_providers.iter().enumerate() {
+            items.push(InlineListItem {
+                title: selection.provider_label.clone(),
+                subtitle: Some(custom_provider_subtitle(
+                    selection,
+                    current_provider,
+                    current_model,
+                )),
+                badge: Some("Custom".to_string()),
+                indent: 0,
+                selection: Some(InlineListSelection::CustomProvider(index)),
+                search_value: Some(custom_provider_search_value(selection)),
+            });
+        }
+    }
+
     items.push(InlineListItem {
         title: "Refresh dynamic model lists".to_string(),
         subtitle: Some(
@@ -382,6 +453,7 @@ pub(super) fn render_step_one_plain(
     renderer: &mut AnsiRenderer,
     options: &[ModelOption],
     dynamic_models: &DynamicModelRegistry,
+    custom_providers: &[SelectionDetail],
 ) -> Result<()> {
     renderer.line(
         MessageStyle::Info,
@@ -505,6 +577,27 @@ pub(super) fn render_step_one_plain(
                 )?;
                 renderer.line(MessageStyle::Info, &format!("      {}", option.description))?;
             }
+        }
+    }
+
+    if !custom_providers.is_empty() {
+        if !first_section {
+            renderer.line(MessageStyle::Info, &provider_group_divider_line())?;
+        }
+        renderer.line(MessageStyle::Info, "[Custom providers]")?;
+        for selection in custom_providers {
+            renderer.line(
+                MessageStyle::Info,
+                &format!("  {}", selection.provider_label),
+            )?;
+            renderer.line(
+                MessageStyle::Info,
+                &format!("      {}", custom_provider_subtitle(selection, "", "")),
+            )?;
+            renderer.line(
+                MessageStyle::Info,
+                &format!("      env: {}", selection.env_key),
+            )?;
         }
     }
 

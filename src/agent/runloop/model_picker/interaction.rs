@@ -42,6 +42,7 @@ pub(super) fn select_model_with_ratatui_list(
     options: &[ModelOption],
     _current_reasoning: ReasoningEffortLevel,
     dynamic_models: &DynamicModelRegistry,
+    custom_providers: &[SelectionDetail],
 ) -> Result<ModelSelectionListOutcome> {
     if options.is_empty() {
         return Err(anyhow!("No models available for selection"));
@@ -132,6 +133,26 @@ pub(super) fn select_model_with_ratatui_list(
                 outcome: ModelSelectionChoiceOutcome::Manual,
             });
         }
+    }
+
+    for selection in custom_providers {
+        let description = if selection.model_id.trim().is_empty() {
+            format!(
+                "{} • Configure a model in vtcode.toml",
+                selection.provider_label
+            )
+        } else {
+            format!("{} • {}", selection.provider_label, selection.model_id)
+        };
+        choices.push(ModelSelectionChoice {
+            entry: SelectionEntry::new(
+                selection.provider_label.clone(),
+                Some(format!(
+                    "{description}\nConfigured custom OpenAI-compatible endpoint"
+                )),
+            ),
+            outcome: ModelSelectionChoiceOutcome::Predefined(selection.clone()),
+        });
     }
 
     choices.push(ModelSelectionChoice {

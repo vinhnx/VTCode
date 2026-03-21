@@ -109,7 +109,11 @@ pub fn resolve_checkpointing_storage_dir(
     })
 }
 
-pub fn provider_label(provider: &str) -> String {
+pub fn provider_label(provider: &str, vt_cfg: Option<&VTCodeConfig>) -> String {
+    if let Some(vt_cfg) = vt_cfg {
+        return vt_cfg.provider_display_name(provider);
+    }
+
     Provider::from_str(provider)
         .map(|resolved| resolved.label().to_string())
         .unwrap_or_else(|_| provider.to_string())
@@ -254,6 +258,22 @@ mod tests {
         );
 
         assert_eq!(agent_config.api_key_env, "CUSTOM_OPENAI_KEY");
+    }
+
+    #[test]
+    fn provider_label_uses_custom_provider_display_name() {
+        let mut config = VTCodeConfig::default();
+        config
+            .custom_providers
+            .push(vtcode_config::core::CustomProviderConfig {
+                name: "mycorp".to_string(),
+                display_name: "MyCorporateName".to_string(),
+                base_url: "https://llm.example/v1".to_string(),
+                api_key_env: "MYCORP_API_KEY".to_string(),
+                model: "gpt-4o-mini".to_string(),
+            });
+
+        assert_eq!(provider_label("mycorp", Some(&config)), "MyCorporateName");
     }
 
     #[test]

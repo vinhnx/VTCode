@@ -108,6 +108,16 @@ static SECTION_HEADINGS: &[(&str, &str, &str)] = &[
         "Allow and deny rules for shell execution.",
     ),
     (
+        "custom_providers",
+        "Custom Providers",
+        "Named OpenAI-compatible endpoints configured in vtcode.toml.",
+    ),
+    (
+        "custom_providers[]",
+        "Custom Provider",
+        "Display name, base URL, and API key settings for one endpoint.",
+    ),
+    (
         "context",
         "Context Budget",
         "How much history and workspace context is retained.",

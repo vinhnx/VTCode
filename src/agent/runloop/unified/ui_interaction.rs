@@ -74,12 +74,15 @@ pub(crate) async fn display_session_status(
         &format!("  Directory: {}", ctx.config.workspace.display()),
     )?;
     renderer.line(MessageStyle::Info, "")?;
-    let provider_label = if ctx.config.provider.eq_ignore_ascii_case("openai")
-        && ctx.config.openai_chatgpt_auth.is_some()
-    {
-        "OpenAI (ChatGPT)".to_string()
-    } else {
-        ctx.config.provider.clone()
+    let provider_label = {
+        let label = crate::agent::runloop::unified::session_setup::resolve_provider_label(
+            ctx.config, ctx.vt_cfg,
+        );
+        if label.is_empty() {
+            ctx.config.provider.clone()
+        } else {
+            label
+        }
     };
     renderer.line(
         MessageStyle::Info,

@@ -1,3 +1,5 @@
+use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
+
 use super::selection::supports_gpt5_none_reasoning;
 use super::*;
 
@@ -317,7 +319,7 @@ impl ModelPickerState {
         self.selected_service_tier = None;
         let mut selection = selection;
         if selection.requires_api_key {
-            match self.find_existing_api_key(&selection.env_key) {
+            match self.find_existing_api_key(&selection.provider_key, &selection.env_key) {
                 Ok(Some(ExistingKey::OAuthToken)) => {
                     selection.requires_api_key = false;
                     if matches!(selection.provider_enum, Some(Provider::OpenAI)) {
@@ -343,6 +345,13 @@ impl ModelPickerState {
                             "Loaded {} from workspace .env for {}.",
                             selection.env_key, selection.provider_label
                         ),
+                    )?;
+                }
+                Ok(Some(ExistingKey::StoredCredential)) => {
+                    selection.requires_api_key = false;
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!("Using stored API key for {}.", selection.provider_label),
                     )?;
                 }
                 Ok(None) => {}
@@ -454,7 +463,7 @@ impl ModelPickerState {
         }
 
         if input.eq_ignore_ascii_case("skip") {
-            match self.find_existing_api_key(&selection.env_key) {
+            match self.find_existing_api_key(&selection.provider_key, &selection.env_key) {
                 Ok(Some(ExistingKey::OAuthToken)) => {
                     if self.inline_enabled {
                         renderer.close_modal();
@@ -506,6 +515,21 @@ impl ModelPickerState {
                     let result = self.build_result();
                     return Ok(ModelPickerProgress::Completed(result?));
                 }
+                Ok(Some(ExistingKey::StoredCredential)) => {
+                    if self.inline_enabled {
+                        renderer.close_modal();
+                    }
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!("Using stored API key for {}.", selection.provider_label),
+                    )?;
+                    self.pending_api_key = None;
+                    if let Some(current) = self.selection.as_mut() {
+                        current.requires_api_key = false;
+                    }
+                    let result = self.build_result();
+                    return Ok(ModelPickerProgress::Completed(result?));
+                }
                 Ok(None) => {
                     renderer.line(
                         MessageStyle::Error,
@@ -539,7 +563,7 @@ impl ModelPickerState {
         Ok(ModelPickerProgress::Completed(result?))
     }
 
-    fn find_existing_api_key(&self, env_key: &str) -> Result<Option<ExistingKey>> {
+    fn find_existing_api_key(&self, provider: &str, env_key: &str) -> Result<Option<ExistingKey>> {
         // For OpenRouter, check OAuth token first
         if env_key == "OPENROUTER_API_KEY"
             && let Ok(Some(_token)) = vtcode_config::auth::load_oauth_token()
@@ -564,6 +588,10 @@ impl ModelPickerState {
             && !value.trim().is_empty()
         {
             return Ok(Some(ExistingKey::WorkspaceDotenv));
+        }
+
+        if get_api_key(provider, &ApiKeySources::default()).is_ok() {
+            return Ok(Some(ExistingKey::StoredCredential));
         }
 
         Ok(None)

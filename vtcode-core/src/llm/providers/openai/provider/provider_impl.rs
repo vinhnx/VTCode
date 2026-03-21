@@ -8,7 +8,7 @@ use async_trait::async_trait;
 #[async_trait]
 impl provider::LLMProvider for OpenAIProvider {
     fn name(&self) -> &str {
-        "openai"
+        self.provider_key_override.as_deref().unwrap_or("openai")
     }
 
     fn supports_streaming(&self) -> bool {
@@ -116,6 +116,9 @@ impl provider::LLMProvider for OpenAIProvider {
     }
 
     fn supported_models(&self) -> Vec<String> {
+        if self.provider_key_override.is_some() {
+            return vec![self.model.to_string()];
+        }
         models::openai::SUPPORTED_MODELS
             .iter()
             .map(|s| s.to_string())
@@ -126,10 +129,15 @@ impl provider::LLMProvider for OpenAIProvider {
         let supported_models =
             (!self.base_url.contains("api.openai.com")).then(|| self.supported_models());
 
+        let display_name = self
+            .provider_display_override
+            .as_deref()
+            .unwrap_or("OpenAI");
+        let key = self.provider_key_override.as_deref().unwrap_or("openai");
         super::super::super::common::validate_request_common(
             request,
-            "OpenAI",
-            "openai",
+            display_name,
+            key,
             supported_models.as_deref(),
         )
     }

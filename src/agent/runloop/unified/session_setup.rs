@@ -9,6 +9,7 @@ pub(crate) use ide_context::{IdeContextBridge, preferred_display_language_for_wo
 pub(crate) use init::active_deferred_tool_policy;
 pub(crate) use init::initialize_session;
 pub(crate) use init::refresh_tool_snapshot;
+pub(crate) use init::resolve_provider_label;
 pub(crate) use signal::spawn_signal_handler;
 pub(crate) use types::SessionState;
 pub(crate) use ui::{

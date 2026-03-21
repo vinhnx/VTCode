@@ -22,7 +22,7 @@ use rendering::{
 };
 use selection::{
     ExistingKey, ReasoningChoice, SelectionDetail, ServiceTierChoice, is_cancel_command,
-    parse_model_selection, selection_from_option,
+    parse_model_selection, selection_from_custom_provider, selection_from_option,
 };
 
 mod config_persistence;
@@ -62,6 +62,7 @@ pub(crate) struct ModelPickerState {
     current_provider: String,
     current_model: String,
     selection: Option<SelectionDetail>,
+    custom_providers: Vec<SelectionDetail>,
     selected_reasoning: Option<ReasoningEffortLevel>,
     selected_service_tier: Option<bool>,
     pending_api_key: Option<String>,
@@ -93,6 +94,15 @@ impl ModelPickerState {
         let inline_enabled = renderer.supports_inline_ui();
         let dynamic_models =
             DynamicModelRegistry::load(options, workspace.as_deref(), vt_cfg.as_ref()).await;
+        let custom_providers = vt_cfg
+            .as_ref()
+            .map(|cfg| {
+                cfg.custom_providers
+                    .iter()
+                    .map(selection_from_custom_provider)
+                    .collect()
+            })
+            .unwrap_or_default();
 
         let mut state = Self {
             options,
@@ -104,6 +114,7 @@ impl ModelPickerState {
             current_provider,
             current_model,
             selection: None,
+            custom_providers,
             selected_reasoning: None,
             selected_service_tier: None,
             pending_api_key: None,
@@ -121,6 +132,7 @@ impl ModelPickerState {
                 state.preferred_model_selection(),
                 &state.current_provider,
                 &state.current_model,
+                &state.custom_providers,
             )?;
         }
 
@@ -130,6 +142,7 @@ impl ModelPickerState {
                     options,
                     current_reasoning,
                     &state.dynamic_models,
+                    &state.custom_providers,
                 ) {
                     Ok(ModelSelectionListOutcome::Predefined(detail)) => {
                         match state.process_model_selection(renderer, detail)? {
@@ -157,13 +170,23 @@ impl ModelPickerState {
                     }
                     Ok(ModelSelectionListOutcome::Manual) => {
                         state.plain_mode_active = true;
-                        render_step_one_plain(renderer, options, &state.dynamic_models)?;
+                        render_step_one_plain(
+                            renderer,
+                            options,
+                            &state.dynamic_models,
+                            &state.custom_providers,
+                        )?;
                         prompt_custom_model_entry(renderer)?;
                         break;
                     }
                     Ok(ModelSelectionListOutcome::Cancelled) => {
                         state.plain_mode_active = true;
-                        render_step_one_plain(renderer, options, &state.dynamic_models)?;
+                        render_step_one_plain(
+                            renderer,
+                            options,
+                            &state.dynamic_models,
+                            &state.custom_providers,
+                        )?;
                         prompt_custom_model_entry(renderer)?;
                         break;
                     }
@@ -186,7 +209,12 @@ impl ModelPickerState {
                             ),
                         )?;
                         state.plain_mode_active = true;
-                        render_step_one_plain(renderer, options, &state.dynamic_models)?;
+                        render_step_one_plain(
+                            renderer,
+                            options,
+                            &state.dynamic_models,
+                            &state.custom_providers,
+                        )?;
                         prompt_custom_model_entry(renderer)?;
                         break;
                     }
@@ -205,6 +233,16 @@ impl ModelPickerState {
             self.vt_cfg.as_ref(),
         )
         .await;
+        self.custom_providers = self
+            .vt_cfg
+            .as_ref()
+            .map(|cfg| {
+                cfg.custom_providers
+                    .iter()
+                    .map(selection_from_custom_provider)
+                    .collect()
+            })
+            .unwrap_or_default();
         self.selection = None;
         self.selected_reasoning = None;
         self.selected_service_tier = None;
@@ -219,9 +257,15 @@ impl ModelPickerState {
                 self.preferred_model_selection(),
                 &self.current_provider,
                 &self.current_model,
+                &self.custom_providers,
             )?;
         } else if self.plain_mode_active {
-            render_step_one_plain(renderer, self.options, &self.dynamic_models)?;
+            render_step_one_plain(
+                renderer,
+                self.options,
+                &self.dynamic_models,
+                &self.custom_providers,
+            )?;
             if matches!(self.step, PickerStep::AwaitModel) {
                 prompt_custom_model_entry(renderer)?;
             }
@@ -297,6 +341,16 @@ impl ModelPickerState {
                     };
                     self.process_model_selection(renderer, detail)
                 }
+                InlineListSelection::CustomProvider(entry_index) => {
+                    let Some(detail) = self.custom_providers.get(entry_index).cloned() else {
+                        renderer.line(
+                            MessageStyle::Error,
+                            "Unable to locate the selected custom provider.",
+                        )?;
+                        return Ok(ModelPickerProgress::InProgress);
+                    };
+                    self.process_model_selection(renderer, detail)
+                }
                 InlineListSelection::RefreshDynamicModels => Ok(ModelPickerProgress::NeedsRefresh),
                 InlineListSelection::CustomModel => {
                     prompt_custom_model_entry(renderer)?;
@@ -345,6 +399,7 @@ impl ModelPickerState {
                 | InlineListSelection::Model(_)
                 | InlineListSelection::RefreshDynamicModels
                 | InlineListSelection::DynamicModel(_)
+                | InlineListSelection::CustomProvider(_)
                 | InlineListSelection::ToolApproval(_)
                 | InlineListSelection::ToolApprovalDenyOnce
                 | InlineListSelection::ToolApprovalSession
@@ -369,6 +424,7 @@ impl ModelPickerState {
                 | InlineListSelection::Model(_)
                 | InlineListSelection::RefreshDynamicModels
                 | InlineListSelection::DynamicModel(_)
+                | InlineListSelection::CustomProvider(_)
                 | InlineListSelection::Reasoning(_)
                 | InlineListSelection::DisableReasoning
                 | InlineListSelection::ToolApproval(_)
@@ -402,7 +458,7 @@ impl ModelPickerState {
         renderer: &mut AnsiRenderer,
         input: &str,
     ) -> Result<ModelPickerProgress> {
-        let selection = match parse_model_selection(self.options, input) {
+        let selection = match parse_model_selection(self.options, input, self.vt_cfg.as_ref()) {
             Ok(detail) => detail,
             Err(err) => {
                 renderer.line(MessageStyle::Error, &err.to_string())?;
@@ -424,17 +480,24 @@ impl ModelPickerState {
             return None;
         }
 
-        let Ok(provider) = Provider::from_str(provider_key.as_str()) else {
-            return None;
-        };
-        if let Some(index) = find_option_index(provider, model_key) {
-            return Some(InlineListSelection::Model(index));
+        if let Ok(provider) = Provider::from_str(provider_key.as_str()) {
+            if let Some(index) = find_option_index(provider, model_key) {
+                return Some(InlineListSelection::Model(index));
+            }
+            for entry_index in self.dynamic_models.indexes_for(provider) {
+                if let Some(detail) = self.dynamic_models.detail(*entry_index)
+                    && detail.model_id.eq_ignore_ascii_case(model_key)
+                {
+                    return Some(InlineListSelection::DynamicModel(*entry_index));
+                }
+            }
         }
-        for entry_index in self.dynamic_models.indexes_for(provider) {
-            if let Some(detail) = self.dynamic_models.detail(*entry_index)
+
+        for (entry_index, detail) in self.custom_providers.iter().enumerate() {
+            if detail.provider_key.eq_ignore_ascii_case(&provider_key)
                 && detail.model_id.eq_ignore_ascii_case(model_key)
             {
-                return Some(InlineListSelection::DynamicModel(*entry_index));
+                return Some(InlineListSelection::CustomProvider(entry_index));
             }
         }
 
