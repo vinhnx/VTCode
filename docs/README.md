@@ -122,6 +122,7 @@ Deploying VT Code in production? Focus on enterprise features:
 - **Search & Analysis** - Fast text and syntax-aware code search
 - **Batch Processing** - Efficient multi-file operations
 - **Configuration Management** - Dynamic TOML-based settings
+- **GPU Pod Manager** - Remote model pod lifecycle management over SSH ([feature guide](./features/GPU_POD_MANAGER.md))
 
 ### Safety & Security
 

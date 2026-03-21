@@ -1,0 +1,184 @@
+{
+  "version": "1",
+  "profiles": [
+    {
+      "name": "llama-3.1-8b-instruct",
+      "model": "meta-llama/Llama-3.1-8B-Instruct",
+      "gpu_count": 1,
+      "gpu_types": ["A100", "H100", "L40S", "RTX 4090", "A10"],
+      "vllm_args": [
+        "--trust-remote-code",
+        "--dtype",
+        "auto",
+        "--gpu-memory-utilization",
+        "0.90",
+        "--max-model-len",
+        "8192"
+      ]
+    },
+    {
+      "name": "qwen2.5-coder-32b",
+      "model": "Qwen/Qwen2.5-Coder-32B-Instruct",
+      "gpu_count": 1,
+      "gpu_types": ["A100", "H100", "L40S"],
+      "vllm_args": [
+        "--trust-remote-code",
+        "--dtype",
+        "bfloat16",
+        "--gpu-memory-utilization",
+        "0.88",
+        "--max-model-len",
+        "16384"
+      ]
+    },
+    {
+      "name": "qwen2.5-coder-32b-2gpu",
+      "model": "Qwen/Qwen2.5-Coder-32B-Instruct",
+      "gpu_count": 2,
+      "gpu_types": ["H100", "H200"],
+      "vllm_args": [
+        "--tool-call-parser",
+        "hermes",
+        "--enable-auto-tool-choice",
+        "--tensor-parallel-size",
+        "2"
+      ]
+    },
+    {
+      "name": "deepseek-r1-2gpu",
+      "model": "deepseek-ai/DeepSeek-R1",
+      "gpu_count": 2,
+      "gpu_types": ["A100", "H100"],
+      "vllm_args": [
+        "--trust-remote-code",
+        "--tensor-parallel-size",
+        "2",
+        "--dtype",
+        "bfloat16",
+        "--gpu-memory-utilization",
+        "0.85",
+        "--max-model-len",
+        "32768"
+      ]
+    },
+    {
+      "name": "deepseek-r1-4gpu",
+      "model": "deepseek-ai/DeepSeek-R1",
+      "gpu_count": 4,
+      "gpu_types": ["A100", "H100"],
+      "vllm_args": [
+        "--trust-remote-code",
+        "--tensor-parallel-size",
+        "4",
+        "--dtype",
+        "bfloat16",
+        "--gpu-memory-utilization",
+        "0.90",
+        "--max-model-len",
+        "65536"
+      ]
+    },
+    {
+      "name": "qwen3-coder-480b",
+      "model": "Qwen/Qwen3-Coder-480B-A35B-Instruct",
+      "gpu_count": 8,
+      "gpu_types": ["H200", "H20"],
+      "vllm_args": [
+        "--tensor-parallel-size",
+        "8",
+        "--max-model-len",
+        "32000",
+        "--enable-auto-tool-choice",
+        "--tool-call-parser",
+        "qwen3_coder"
+      ]
+    },
+    {
+      "name": "qwen3-coder-480b-fp8",
+      "model": "Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8",
+      "gpu_count": 8,
+      "gpu_types": ["H200", "H20"],
+      "vllm_args": [
+        "--max-model-len",
+        "131072",
+        "--enable-expert-parallel",
+        "--data-parallel-size",
+        "8",
+        "--enable-auto-tool-choice",
+        "--tool-call-parser",
+        "qwen3_coder"
+      ],
+      "env": {
+        "VLLM_USE_DEEP_GEMM": "1"
+      }
+    },
+    {
+      "name": "gpt-oss-20b",
+      "model": "openai/gpt-oss-20b",
+      "gpu_count": 1,
+      "gpu_types": ["H100", "H200"],
+      "vllm_args": ["--async-scheduling"]
+    },
+    {
+      "name": "gpt-oss-20b-b200",
+      "model": "openai/gpt-oss-20b",
+      "gpu_count": 1,
+      "gpu_types": ["B200"],
+      "vllm_args": ["--async-scheduling"],
+      "env": {
+        "VLLM_USE_TRTLLM_ATTENTION": "1",
+        "VLLM_USE_TRTLLM_DECODE_ATTENTION": "1",
+        "VLLM_USE_TRTLLM_CONTEXT_ATTENTION": "1",
+        "VLLM_USE_FLASHINFER_MXFP4_MOE": "1"
+      }
+    },
+    {
+      "name": "gpt-oss-120b-1gpu",
+      "model": "openai/gpt-oss-120b",
+      "gpu_count": 1,
+      "gpu_types": ["H100", "H200"],
+      "vllm_args": [
+        "--async-scheduling",
+        "--gpu-memory-utilization",
+        "0.95",
+        "--max-num-batched-tokens",
+        "1024"
+      ]
+    },
+    {
+      "name": "gpt-oss-120b-2gpu",
+      "model": "openai/gpt-oss-120b",
+      "gpu_count": 2,
+      "gpu_types": ["H100", "H200"],
+      "vllm_args": [
+        "--tensor-parallel-size",
+        "2",
+        "--async-scheduling",
+        "--gpu-memory-utilization",
+        "0.94"
+      ]
+    },
+    {
+      "name": "gpt-oss-120b-4gpu",
+      "model": "openai/gpt-oss-120b",
+      "gpu_count": 4,
+      "gpu_types": ["H100", "H200"],
+      "vllm_args": [
+        "--tensor-parallel-size",
+        "4",
+        "--async-scheduling"
+      ]
+    },
+    {
+      "name": "gpt-oss-120b-8gpu",
+      "model": "openai/gpt-oss-120b",
+      "gpu_count": 8,
+      "gpu_types": ["H100", "H200"],
+      "vllm_args": [
+        "--tensor-parallel-size",
+        "8",
+        "--async-scheduling"
+      ]
+    }
+  ]
+}

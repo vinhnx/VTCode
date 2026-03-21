@@ -39,6 +39,9 @@ pub(crate) async fn dispatch_command(
         Commands::Models { command } => {
             vtcode_core::cli::models_commands::handle_models_command(args, &command).await?;
         }
+        Commands::Pods { command } => {
+            vtcode_core::cli::pods_commands::handle_pods_command(command).await?;
+        }
         Commands::Chat | Commands::ChatVerbose => {
             handle_chat_command(
                 core_cfg.clone(),
