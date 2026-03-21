@@ -237,9 +237,12 @@ fn should_activate_turn_timeout_recovery(
 }
 
 fn maybe_activate_turn_timeout_recovery(ctx: &mut TurnProcessingContext<'_>) {
-    let timeout_budget = ctx.harness_state.turn_timeout;
+    let configured_turn_timeout_secs = ctx
+        .vt_cfg
+        .map(|cfg| cfg.optimization.agent_execution.max_execution_time_secs)
+        .unwrap_or(300);
     let reserve = Duration::from_secs(llm_attempt_timeout_secs(
-        timeout_budget.as_secs().max(1),
+        configured_turn_timeout_secs.max(1),
         ctx.session_stats.is_plan_mode(),
         ctx.provider_client.name(),
     ));
