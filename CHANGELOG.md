@@ -2,6 +2,42 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.92.0 - 2026-03-21
+
+### Highlights
+#### Bug Fixes
+
+- Remove repeated unrelated worktree prompts (8f93b519) 
+- Remove repeated unrelated worktree prompts (1f4ea2bd) 
+- Handle already cleared oauth logout states (081e20a6) 
+#### Documentation
+
+- Update README and authentication guide to include GitHub Copilot support (2144d1d6) 
+### Other Changes
+#### Other
+
+- Update README.md (fa33fa70) (@vinhnx)
+- Fix formatting in README for installation section (53fccf14) (@vinhnx)
+- Update AgentSkills to Skills in README.md (00a37fa0) (@vinhnx)
+- Update README.md (3aa6dcc2) (@vinhnx)
+- Implement GitHub Copilot authentication and command handling (40da600d) 
+- Add request permission rejection handling and enhance Copilot integration (d713178d) 
+- Fix reasoning formatting in CopilotProvider to ensure proper newline handling (565ae957) 
+- Update notes (a66b4d84) 
+- Implement StdioTransport for JSON-RPC communication and refactor CopilotAcpClient to use it (543dbca1) 
+- Update note (5e7d9492) 
+- Refactor configuration initialization and improve code readability across multiple files; update API key and model settings in configuration. (dd5221bc) 
+- Update code structure for improved readability and maintainability (952b06fe) 
+- Add turn timeout management and recovery logic (bb180e82) 
+- Update TURN timeout recovery to use configured max execution time (e8f27aae) 
+- Refactor tool permission handling and add persistent approval cache (ca53f066) 
+#### Refactors
+
+- Replace custom timing with /usr/bin/time for performance measurement (5be0c3b4) 
+- Update tool policies and improve command submission handling (890eacf0) 
+- Improve GitHub Copilot OAuth flow and update configuration settings (86b8d667) 
+### Contributors
+@vinhnx
 ## 0.91.1 - 2026-03-20
 
 ### Highlights
