@@ -204,6 +204,14 @@ impl CopilotProvider {
                                 yield Ok(LLMStreamEvent::Token { delta });
                             }
                             Some(PromptUpdate::Thought(delta)) => {
+                                let delta = if !reasoning.is_empty()
+                                    && !reasoning.ends_with('\n')
+                                    && !delta.starts_with('\n')
+                                {
+                                    format!("\n{delta}")
+                                } else {
+                                    delta
+                                };
                                 reasoning.push_str(&delta);
                                 yield Ok(LLMStreamEvent::Reasoning { delta });
                             }
@@ -265,6 +273,14 @@ impl CopilotProvider {
                                     yield Ok(LLMStreamEvent::Token { delta });
                                 }
                                 PromptUpdate::Thought(delta) => {
+                                    let delta = if !reasoning.is_empty()
+                                        && !reasoning.ends_with('\n')
+                                        && !delta.starts_with('\n')
+                                    {
+                                        format!("\n{delta}")
+                                    } else {
+                                        delta
+                                    };
                                     reasoning.push_str(&delta);
                                     yield Ok(LLMStreamEvent::Reasoning { delta });
                                 }
