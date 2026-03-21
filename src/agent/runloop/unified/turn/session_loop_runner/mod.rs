@@ -888,6 +888,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         harness_config.max_tool_wall_clock_secs,
                         harness_config.max_tool_retries,
                     );
+                    harness_state.set_turn_timeout_secs(timeout_secs);
                     let execution_history_len_before_attempt =
                         tool_registry.execution_history_len();
                     let turn_loop_ctx = crate::agent::runloop::unified::turn::TurnLoopContext::new(

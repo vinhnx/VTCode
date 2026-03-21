@@ -45,10 +45,12 @@ use retry::{DEFAULT_LLM_RETRY_ATTEMPTS, MAX_LLM_RETRY_ATTEMPTS};
 use retry::{
     PostToolRetryAction, classify_llm_error, compact_error_message,
     compact_tool_messages_for_retry, has_recent_tool_responses, is_stream_timeout_error,
-    llm_attempt_timeout_secs, llm_retry_attempts, next_post_tool_retry_action,
-    supports_streaming_timeout_fallback, switch_to_non_streaming_retry_mode,
+    llm_retry_attempts, next_post_tool_retry_action, supports_streaming_timeout_fallback,
+    switch_to_non_streaming_retry_mode,
 };
 use streaming::HarnessStreamingBridge;
+
+pub(crate) use retry::llm_attempt_timeout_secs;
 
 const WAIT_TIMEOUT_WARNING_HEADROOM: Duration = Duration::from_secs(15);
 const WAIT_TIMEOUT_WARNING_FRACTION: f32 = 0.75;

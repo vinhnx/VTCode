@@ -6,6 +6,7 @@ mod result_handler;
 pub(crate) mod test_support;
 
 pub(crate) use llm_request::execute_llm_request;
+pub(crate) use llm_request::llm_attempt_timeout_secs;
 pub(crate) use plan_mode::{
     maybe_force_plan_mode_interview, plan_mode_interview_ready,
     should_attempt_dynamic_interview_generation, synthesize_plan_mode_interview_args,

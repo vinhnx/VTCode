@@ -79,6 +79,7 @@ pub(crate) struct HarnessTurnState {
     pub turn_id: TurnId,
     pub phase: TurnPhase,
     pub turn_started_at: Instant,
+    pub turn_timeout: Duration,
     pub tool_calls: usize,
     pub blocked_tool_calls: usize,
     pub consecutive_blocked_tool_calls: usize,
@@ -111,6 +112,7 @@ impl HarnessTurnState {
             turn_id,
             phase: TurnPhase::Preparing,
             turn_started_at: Instant::now(),
+            turn_timeout: Duration::from_secs(max_tool_wall_clock_secs.max(1)),
             tool_calls: 0,
             blocked_tool_calls: 0,
             consecutive_blocked_tool_calls: 0,
@@ -145,6 +147,21 @@ impl HarnessTurnState {
 
     pub(crate) fn wall_clock_exhausted(&self) -> bool {
         self.turn_started_at.elapsed() >= self.max_tool_wall_clock
+    }
+
+    pub(crate) fn set_turn_timeout_secs(&mut self, turn_timeout_secs: u64) {
+        self.turn_timeout = Duration::from_secs(turn_timeout_secs.max(1));
+    }
+
+    pub(crate) fn remaining_turn_timeout(&self) -> Duration {
+        self.turn_timeout
+            .saturating_sub(self.turn_started_at.elapsed())
+    }
+
+    pub(crate) fn should_force_recovery_before_turn_timeout(&self, reserve: Duration) -> bool {
+        self.tool_calls > 0
+            && !self.is_recovery_active()
+            && self.turn_started_at.elapsed() >= self.turn_timeout.saturating_sub(reserve)
     }
 
     pub(crate) fn record_tool_call(&mut self) {
@@ -371,6 +388,7 @@ impl<'a> RunLoopContext<'a> {
 #[cfg(test)]
 mod tests {
     use super::{HarnessTurnState, RecoveryMode, TurnExecutionPhase, TurnId, TurnPhase, TurnRunId};
+    use std::time::{Duration, Instant};
 
     #[test]
     fn harness_state_tracks_phase_transitions() {
@@ -532,6 +550,41 @@ mod tests {
         assert!(state.recovery_pass_used());
         assert!(state.finish_recovery_pass());
         assert!(!state.finish_recovery_pass());
+    }
+
+    #[test]
+    fn harness_state_force_recovery_before_turn_timeout_requires_tool_activity() {
+        let mut state = HarnessTurnState::new(
+            TurnRunId("run-1".to_string()),
+            TurnId("turn-1".to_string()),
+            4,
+            10,
+            1,
+        );
+        state.set_turn_timeout_secs(60);
+        state.turn_started_at = Instant::now() - Duration::from_secs(45);
+
+        assert!(!state.should_force_recovery_before_turn_timeout(Duration::from_secs(20)));
+
+        state.record_tool_call();
+        assert!(state.should_force_recovery_before_turn_timeout(Duration::from_secs(20)));
+    }
+
+    #[test]
+    fn harness_state_force_recovery_before_turn_timeout_skips_active_recovery() {
+        let mut state = HarnessTurnState::new(
+            TurnRunId("run-1".to_string()),
+            TurnId("turn-1".to_string()),
+            4,
+            10,
+            1,
+        );
+        state.set_turn_timeout_secs(60);
+        state.turn_started_at = Instant::now() - Duration::from_secs(50);
+        state.record_tool_call();
+        state.activate_recovery("loop detector");
+
+        assert!(!state.should_force_recovery_before_turn_timeout(Duration::from_secs(20)));
     }
 
     #[test]
