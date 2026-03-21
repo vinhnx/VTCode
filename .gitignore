@@ -805,6 +805,7 @@ TODO2.md
 .vtcode/sessions/
 .vtcode/tasks/
 .vtcode/tasks/current_blocked.md
+plans/
 
 .claude/
 .agent/

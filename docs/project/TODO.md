@@ -197,10 +197,6 @@ If you want, I can implement the next step: make Copilot tool-capable in VT Code
 
 ===
 
-===
-
-===
-
 As of March 20, 2026, the better design is: let the `copilot` CLI own Copilot auth, treat ACP as a best-effort transport, and keep VT Code in charge of dangerous tools. GitHub’s current docs say Copilot CLI is installed as its own binary, supports OAuth device flow by default, uses env vars for automation, and only falls back to `gh` if `gh` is already installed and authenticated. ACP support is also explicitly in public preview and subject to change.
 
 **Recommendation**
@@ -226,10 +222,6 @@ As of March 20, 2026, the better design is: let the `copilot` CLI own Copilot au
 If you want the minimal next patch set, I’d do exactly three things: make `copilot` the only required dependency, narrow Copilot’s built-in tools to read-only, and harden ACP parsing/recording so permission and tool events are first-class harness events instead of inferred from model text.
 
 Sources: [Install Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/install-copilot-cli), [Authenticate Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli), [Copilot CLI ACP server](https://docs.github.com/en/copilot/reference/copilot-cli-reference/acp-server), [Configure Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/configure-copilot-cli), [Using Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli-agents/overview).
-
-==
-
-double check ACP impl, deeep research and fix to make sure ACP can use tools call properly. major refactor and re-archietecture is allowed. use /rust-skills and enhance impl. review overall changes again carefully, can you do better? continue with your careful recommendations, proceed with outcome. KISS and DRY but focus on main logic, no need DRY for tests, do repeatly until all done, don't stop use skills and continue with your careful recommendations, proceed with outcome. KISS and DRY, do repeatly until all done, don't stop
 
 ==
 
@@ -304,3 +296,9 @@ tell me more
 
 Ghostty feature/GitHub-Copilot-OAuth* IDE Context (VS Code): docs/project/TODO.md | copilot-claude-sonnet-4.6 | 100…
 ```
+
+==
+
+check and support https://github.com/vinhnx/VTCode/issues/613
+
+stash "https://github.com/vinhnx/VTCode/issues/613"
