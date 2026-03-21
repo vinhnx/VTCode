@@ -267,7 +267,7 @@ fn build_exit_header_context_fast(
         Some(vtcode_core::config::AgentClientProtocolZedWorkspaceTrustMode::ToolsPolicy) => {
             "tools_policy"
         }
-        None if display.full_auto || display.autonomous_mode => "full auto",
+        None if display.full_auto => "full auto",
         None => "tools policy",
     };
 
@@ -643,6 +643,12 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 render_plan_mode_next_step_hint(&mut renderer)?;
             }
         }
+        if !session_stats.is_plan_mode() {
+            session_stats
+                .set_autonomous_mode(vt_cfg.as_ref().is_some_and(|cfg| cfg.agent.autonomous_mode));
+        }
+        header_context.autonomous_mode = session_stats.is_autonomous_mode();
+        handle.set_autonomous_mode(session_stats.is_autonomous_mode());
         let mut linked_directories: Vec<LinkedDirectory> = Vec::with_capacity(4);
         let mut model_picker_state: Option<ModelPickerState> = None;
         let mut palette_state: Option<ActivePalette> = None;

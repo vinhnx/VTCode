@@ -3279,6 +3279,28 @@ fn header_shows_full_auto_trust_badge_for_full_auto_trust() {
 }
 
 #[test]
+fn header_shows_trusted_auto_badge() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.header_context.autonomous_mode = true;
+    session.header_context.workspace_trust = format!("{}tools policy", ui::HEADER_TRUST_PREFIX);
+    session.input_manager.set_content("test".to_string());
+    session
+        .input_manager
+        .set_cursor(session.input_manager.content().len());
+
+    let lines = session.header_lines();
+    assert_eq!(lines.len(), 1);
+
+    let line_text: String = lines[0]
+        .spans
+        .iter()
+        .map(|span| span.content.clone().into_owned())
+        .collect();
+    assert!(line_text.contains("Trusted auto"));
+    assert!(line_text.contains("[SAFE]"));
+}
+
+#[test]
 fn header_shows_search_tools_status_badge() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.header_context.search_tools = Some(InlineHeaderStatusBadge {

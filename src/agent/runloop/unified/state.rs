@@ -12,6 +12,13 @@ pub(crate) enum ModelPickerTarget {
     Main,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SessionMode {
+    Edit,
+    TrustedAuto,
+    Plan,
+}
+
 #[derive(Default)]
 pub(crate) struct SessionStats {
     tools: std::collections::BTreeSet<String>,
@@ -82,6 +89,18 @@ impl SessionStats {
         self.autonomous_mode
     }
 
+    pub(crate) fn current_mode(&self) -> SessionMode {
+        match (self.editing_mode, self.autonomous_mode) {
+            (EditingMode::Plan, _) => SessionMode::Plan,
+            (EditingMode::Edit, true) => SessionMode::TrustedAuto,
+            (EditingMode::Edit, false) => SessionMode::Edit,
+        }
+    }
+
+    pub(crate) fn set_autonomous_mode(&mut self, enabled: bool) {
+        self.autonomous_mode = enabled && !self.is_plan_mode();
+    }
+
     /// Set plan mode.
     pub(crate) fn set_plan_mode(&mut self, enabled: bool) {
         self.editing_mode = if enabled {
@@ -89,6 +108,7 @@ impl SessionStats {
         } else {
             EditingMode::Edit
         };
+        self.autonomous_mode = false;
         if enabled {
             self.plan_mode_interview_shown = false;
             self.plan_mode_interview_pending = false;
@@ -107,10 +127,23 @@ impl SessionStats {
         self.plan_mode_entry_source = Some(source);
     }
 
-    /// Cycle to the next mode: Edit → Plan → Edit
-    pub(crate) fn cycle_mode(&mut self) -> EditingMode {
-        self.editing_mode = self.editing_mode.next();
-        self.editing_mode
+    /// Cycle to the next mode: Edit -> Trusted Auto -> Plan -> Edit
+    pub(crate) fn cycle_mode(&mut self) -> SessionMode {
+        match self.current_mode() {
+            SessionMode::Edit => {
+                self.editing_mode = EditingMode::Edit;
+                self.autonomous_mode = true;
+                SessionMode::TrustedAuto
+            }
+            SessionMode::TrustedAuto => {
+                self.set_plan_mode(true);
+                SessionMode::Plan
+            }
+            SessionMode::Plan => {
+                self.set_plan_mode(false);
+                SessionMode::Edit
+            }
+        }
     }
 
     #[cfg(test)]
@@ -436,8 +469,9 @@ mod tests {
     use std::thread;
     use std::time::Duration;
 
-    use super::{CtrlCSignal, CtrlCState, SessionStats, is_follow_up_prompt_like};
+    use super::{CtrlCSignal, CtrlCState, SessionMode, SessionStats, is_follow_up_prompt_like};
     use vtcode_core::config::constants::tools;
+    use vtcode_tui::app::EditingMode;
 
     #[test]
     fn record_tool_normalizes_exec_aliases() {
@@ -542,6 +576,24 @@ mod tests {
         stats.set_plan_mode(true);
         assert_eq!(stats.plan_mode_interview_cycles_completed(), 0);
         assert!(!stats.plan_mode_last_interview_cancelled());
+    }
+
+    #[test]
+    fn cycle_mode_rotates_edit_trusted_auto_plan() {
+        let mut stats = SessionStats::default();
+
+        assert_eq!(stats.current_mode(), SessionMode::Edit);
+        assert_eq!(stats.cycle_mode(), SessionMode::TrustedAuto);
+        assert!(stats.is_autonomous_mode());
+        assert_eq!(stats.editing_mode, EditingMode::Edit);
+
+        assert_eq!(stats.cycle_mode(), SessionMode::Plan);
+        assert!(stats.is_plan_mode());
+        assert!(!stats.is_autonomous_mode());
+
+        assert_eq!(stats.cycle_mode(), SessionMode::Edit);
+        assert_eq!(stats.current_mode(), SessionMode::Edit);
+        assert!(!stats.is_autonomous_mode());
     }
 
     #[test]

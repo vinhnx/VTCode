@@ -16,6 +16,7 @@ use crate::agent::runloop::unified::state::CtrlCState;
 use crate::agent::runloop::unified::ui_interaction::PlaceholderGuard;
 
 use super::HitlDecision;
+use super::shell_approval::PersistentApprovalTarget;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ToolPermissionPromptKind {
@@ -271,6 +272,7 @@ pub(super) fn shell_permission_cache_suffix(
     Some(format!("{command}|{scope_suffix}"))
 }
 
+#[cfg(test)]
 pub(super) fn shell_allows_persistent_decisions(
     tool_name: &str,
     tool_args: Option<&Value>,
@@ -386,8 +388,7 @@ fn tool_args_diff_preview(tool_name: &str, tool_args: Option<&Value>) -> Option<
 
 fn build_tool_permission_options(
     prompt_kind: ToolPermissionPromptKind,
-    persistent_shell_allow_prefix_rule: Option<&[String]>,
-    allow_tool_level_persistent_decisions: bool,
+    persistent_approval_target: Option<&PersistentApprovalTarget>,
 ) -> Vec<vtcode_tui::app::InlineListItem> {
     use vtcode_tui::app::{InlineListItem, InlineListSelection};
 
@@ -418,15 +419,20 @@ fn build_tool_permission_options(
         },
     ];
 
-    if allow_tool_level_persistent_decisions || persistent_shell_allow_prefix_rule.is_some() {
-        let subtitle = persistent_shell_allow_prefix_rule
-            .map(|prefix_rule| {
-                let rendered = shell_words::join(prefix_rule.iter().map(|part| part.as_str()));
-                format!("Permanently allow commands that start with `{}`", rendered)
-            })
-            .unwrap_or_else(|| "Permanently allow this tool (saved to policy)".to_string());
+    if let Some(target) = persistent_approval_target {
+        let subtitle = match target {
+            PersistentApprovalTarget::ToolLevel => {
+                "Remember approval for this tool in this workspace".to_string()
+            }
+            PersistentApprovalTarget::ExactInvocation { display_label } => {
+                format!("Remember approval for {} in this workspace", display_label)
+            }
+            PersistentApprovalTarget::PrefixRule { display_label, .. } => {
+                format!("Remember approval for {} in this workspace", display_label)
+            }
+        };
         options.push(InlineListItem {
-            title: "Always Allow".to_string(),
+            title: "Always approve and save to policy cache".to_string(),
             subtitle: Some(subtitle),
             badge: Some("Permanent".to_string()),
             indent: 0,
@@ -465,7 +471,11 @@ fn build_tool_permission_options(
         }),
     });
 
-    if allow_tool_level_persistent_decisions && prompt_kind != ToolPermissionPromptKind::Mcp {
+    if matches!(
+        persistent_approval_target,
+        Some(PersistentApprovalTarget::ToolLevel)
+    ) && prompt_kind != ToolPermissionPromptKind::Mcp
+    {
         options.push(InlineListItem {
             title: "Always Deny".to_string(),
             subtitle: Some("Block this tool until policy is changed".to_string()),
@@ -493,8 +503,7 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     default_placeholder: Option<String>,
     approval_reason: Option<&str>,
     justification: Option<&vtcode_core::tools::ToolJustification>,
-    persistent_shell_allow_prefix_rule: Option<&[String]>,
-    allow_tool_level_persistent_decisions: bool,
+    persistent_approval_target: Option<&PersistentApprovalTarget>,
     approval_recorder: Option<&vtcode_core::tools::ApprovalRecorder>,
     hitl_notification_bell: bool,
 ) -> Result<HitlDecision> {
@@ -557,11 +566,7 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
         "Use ↑↓ or Tab to navigate • Enter to select • Esc to deny".to_string()
     });
 
-    let options = build_tool_permission_options(
-        prompt_kind,
-        persistent_shell_allow_prefix_rule,
-        allow_tool_level_persistent_decisions,
-    );
+    let options = build_tool_permission_options(prompt_kind, persistent_approval_target);
 
     use vtcode_tui::app::InlineListSelection;
     let default_selection = InlineListSelection::ToolApproval(true);
@@ -629,6 +634,7 @@ mod tests {
         render_shell_persistent_approval_prefix_entry, shell_allows_persistent_decisions,
         shell_permission_cache_suffix, tool_permission_prompt_kind, truncate_arg_preview,
     };
+    use crate::agent::runloop::unified::tool_routing::shell_approval::PersistentApprovalTarget;
     use serde_json::json;
 
     #[test]
@@ -864,22 +870,47 @@ mod tests {
 
     #[test]
     fn mcp_prompt_uses_cancel_without_persistent_deny() {
-        let titles = build_tool_permission_options(ToolPermissionPromptKind::Mcp, None, true)
-            .into_iter()
-            .map(|item| item.title)
-            .collect::<Vec<_>>();
+        let titles = build_tool_permission_options(
+            ToolPermissionPromptKind::Mcp,
+            Some(&PersistentApprovalTarget::ToolLevel),
+        )
+        .into_iter()
+        .map(|item| item.title)
+        .collect::<Vec<_>>();
         assert!(titles.iter().any(|title| title == "Cancel"));
         assert!(!titles.iter().any(|title| title == "Always Deny"));
     }
 
     #[test]
     fn standard_prompt_keeps_persistent_deny() {
-        let titles = build_tool_permission_options(ToolPermissionPromptKind::Standard, None, true)
-            .into_iter()
-            .map(|item| item.title)
-            .collect::<Vec<_>>();
+        let titles = build_tool_permission_options(
+            ToolPermissionPromptKind::Standard,
+            Some(&PersistentApprovalTarget::ToolLevel),
+        )
+        .into_iter()
+        .map(|item| item.title)
+        .collect::<Vec<_>>();
         assert!(titles.iter().any(|title| title == "Deny Once"));
         assert!(titles.iter().any(|title| title == "Always Deny"));
+    }
+
+    #[test]
+    fn shell_prompt_offers_policy_cache_option_for_exact_invocation() {
+        let titles = build_tool_permission_options(
+            ToolPermissionPromptKind::Standard,
+            Some(&PersistentApprovalTarget::ExactInvocation {
+                display_label: "command `cargo clippy`".to_string(),
+            }),
+        )
+        .into_iter()
+        .map(|item| item.title)
+        .collect::<Vec<_>>();
+        assert!(
+            titles
+                .iter()
+                .any(|title| title == "Always approve and save to policy cache")
+        );
+        assert!(!titles.iter().any(|title| title == "Always Deny"));
     }
 
     #[test]

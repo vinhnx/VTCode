@@ -293,7 +293,7 @@ pub(super) fn handle_mode_command(
     if !args.trim().is_empty() {
         renderer.line(
             MessageStyle::Error,
-            "Usage: /mode - Cycle through Edit -> Plan modes",
+            "Usage: /mode - Cycle through Edit -> Trusted Auto -> Plan modes",
         )?;
         return Ok(SlashCommandOutcome::Handled);
     }

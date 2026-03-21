@@ -5,6 +5,8 @@ use vtcode_core::core::interfaces::session::PlanModeEntrySource;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_tui::app::EditingMode;
 
+use crate::agent::runloop::unified::state::SessionMode;
+
 use super::{SlashCommandContext, SlashCommandControl};
 
 pub(crate) async fn handle_toggle_plan_mode(
@@ -86,6 +88,7 @@ pub(crate) async fn handle_toggle_plan_mode(
         } else {
             ConfigEditingMode::Edit
         },
+        Some(false),
         "plan mode preference",
     )?;
 
@@ -94,28 +97,31 @@ pub(crate) async fn handle_toggle_plan_mode(
 
 pub(crate) async fn handle_cycle_mode(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     let new_mode = ctx.session_stats.cycle_mode();
-    if new_mode == EditingMode::Plan {
-        crate::agent::runloop::unified::plan_mode_state::transition_to_plan_mode(
-            ctx.tool_registry,
-            ctx.session_stats,
-            ctx.handle,
-            PlanModeEntrySource::UserRequest,
-            false,
-            false,
-        )
-        .await;
-    } else {
-        crate::agent::runloop::unified::plan_mode_state::transition_to_edit_mode(
-            ctx.tool_registry,
-            ctx.session_stats,
-            ctx.handle,
-            true,
-        )
-        .await;
+    match new_mode {
+        SessionMode::Plan => {
+            crate::agent::runloop::unified::plan_mode_state::transition_to_plan_mode(
+                ctx.tool_registry,
+                ctx.session_stats,
+                ctx.handle,
+                PlanModeEntrySource::UserRequest,
+                false,
+                false,
+            )
+            .await;
+        }
+        SessionMode::Edit | SessionMode::TrustedAuto => {
+            ctx.tool_registry.disable_plan_mode();
+            let plan_state = ctx.tool_registry.plan_mode_state();
+            plan_state.disable();
+            plan_state.set_plan_file(None).await;
+            ctx.handle.set_editing_mode(EditingMode::Edit);
+            ctx.handle
+                .set_autonomous_mode(matches!(new_mode, SessionMode::TrustedAuto));
+        }
     }
 
     match new_mode {
-        EditingMode::Edit => {
+        SessionMode::Edit => {
             ctx.renderer
                 .line(MessageStyle::Info, "Switched to Edit Mode")?;
             ctx.renderer.line(
@@ -123,7 +129,15 @@ pub(crate) async fn handle_cycle_mode(ctx: SlashCommandContext<'_>) -> Result<Sl
                 "  Full tool access with standard confirmation prompts.",
             )?;
         }
-        EditingMode::Plan => {
+        SessionMode::TrustedAuto => {
+            ctx.renderer
+                .line(MessageStyle::Info, "Switched to Trusted Auto Mode")?;
+            ctx.renderer.line(
+                MessageStyle::Output,
+                "  Auto-approves trusted low-risk tools; higher-risk actions still prompt.",
+            )?;
+        }
+        SessionMode::Plan => {
             ctx.renderer
                 .line(MessageStyle::Info, "Switched to Plan Mode")?;
             ctx.renderer.line(
@@ -141,8 +155,12 @@ pub(crate) async fn handle_cycle_mode(ctx: SlashCommandContext<'_>) -> Result<Sl
         ctx.config.workspace.as_path(),
         ctx.vt_cfg,
         match new_mode {
-            EditingMode::Plan => ConfigEditingMode::Plan,
-            EditingMode::Edit => ConfigEditingMode::Edit,
+            SessionMode::Plan => ConfigEditingMode::Plan,
+            SessionMode::Edit | SessionMode::TrustedAuto => ConfigEditingMode::Edit,
+        },
+        match new_mode {
+            SessionMode::TrustedAuto => Some(true),
+            SessionMode::Edit | SessionMode::Plan => Some(false),
         },
         "editing mode preference",
     )?;
@@ -155,9 +173,10 @@ fn persist_mode_preference(
     workspace: &std::path::Path,
     vt_cfg: &mut Option<VTCodeConfig>,
     mode: ConfigEditingMode,
+    autonomous_mode: Option<bool>,
     preference_label: &str,
 ) -> Result<()> {
-    if let Err(err) = super::persist_mode_settings(workspace, vt_cfg, Some(mode), None) {
+    if let Err(err) = super::persist_mode_settings(workspace, vt_cfg, Some(mode), autonomous_mode) {
         renderer.line(
             MessageStyle::Error,
             &format!("Failed to persist {preference_label}: {}", err),

@@ -113,6 +113,11 @@ impl ApprovalPattern {
         self.approval_count() >= 3 && self.approval_rate() > 0.8
     }
 
+    /// Check if this pattern is strong enough for trusted auto-approval.
+    pub fn supports_trusted_auto_approval(&self) -> bool {
+        self.has_high_approval_rate() && self.last_decision == Some(true)
+    }
+
     /// Return approval count
     pub fn approval_count(&self) -> u32 {
         self.approve_count

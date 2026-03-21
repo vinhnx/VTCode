@@ -8,7 +8,7 @@ use crate::utils::error_messages::ERR_CREATE_POLICY_DIR;
 use anyhow::{Context, Result};
 use dialoguer::console::style;
 use hashbrown::{HashMap, HashSet};
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -77,6 +77,9 @@ pub struct ToolPolicyConfig {
     /// MCP-specific policy configuration
     #[serde(default)]
     pub mcp: McpPolicyStore,
+    /// Explicit remembered approvals for future prompts in this workspace
+    #[serde(default)]
+    pub approval_cache: ApprovalCacheConfig,
 }
 
 impl Default for ToolPolicyConfig {
@@ -87,8 +90,17 @@ impl Default for ToolPolicyConfig {
             policies: IndexMap::new(),
             constraints: IndexMap::new(),
             mcp: McpPolicyStore::default(),
+            approval_cache: ApprovalCacheConfig::default(),
         }
     }
+}
+
+/// Persisted approval cache stored alongside tool policies
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApprovalCacheConfig {
+    /// Stable approval keys that should bypass future prompts
+    #[serde(default)]
+    pub allowed: IndexSet<String>,
 }
 
 /// Stored MCP policy state, persisted alongside standard tool policies
@@ -574,6 +586,7 @@ impl ToolPolicyManager {
             policies,
             constraints: alt_config.constraints,
             mcp: McpPolicyStore::default(),
+            approval_cache: ApprovalCacheConfig::default(),
         };
         Self::apply_auto_allow_defaults(&mut config);
         config
@@ -941,6 +954,7 @@ impl ToolPolicyManager {
                 *policy = ToolPolicy::Prompt;
             }
         }
+        self.config.approval_cache.allowed.clear();
         self.save_config().await
     }
 
@@ -967,6 +981,7 @@ impl ToolPolicyManager {
                 *policy = ToolPolicy::Deny;
             }
         }
+        self.config.approval_cache.allowed.clear();
         self.save_config().await
     }
 
@@ -979,6 +994,33 @@ impl ToolPolicyManager {
             }
         }
         summary
+    }
+
+    /// Check whether an explicit approval key is remembered for this workspace.
+    pub fn has_approval_cache_key(&self, approval_key: &str) -> bool {
+        self.config.approval_cache.allowed.contains(approval_key)
+    }
+
+    /// Persist an explicit approval key for future prompts in this workspace.
+    pub async fn add_approval_cache_key(&mut self, approval_key: impl Into<String>) -> Result<()> {
+        if self
+            .config
+            .approval_cache
+            .allowed
+            .insert(approval_key.into())
+        {
+            self.save_config().await?;
+        }
+        Ok(())
+    }
+
+    /// Remove all persisted approval cache entries.
+    pub async fn clear_approval_cache(&mut self) -> Result<()> {
+        if !self.config.approval_cache.allowed.is_empty() {
+            self.config.approval_cache.allowed.clear();
+            self.save_config().await?;
+        }
+        Ok(())
     }
 
     /// Save configuration to file
@@ -1136,12 +1178,17 @@ mod tests {
         config
             .policies
             .insert(tools::WRITE_FILE.to_owned(), ToolPolicy::Prompt);
+        config
+            .approval_cache
+            .allowed
+            .insert("unified_exec:cargo test".to_string());
 
         let json = serde_json::to_string_pretty(&config).unwrap();
         let deserialized: ToolPolicyConfig = serde_json::from_str(&json).unwrap();
 
         assert_eq!(config.available_tools, deserialized.available_tools);
         assert_eq!(config.policies, deserialized.policies);
+        assert_eq!(config.approval_cache, deserialized.approval_cache);
     }
 
     #[tokio::test]
@@ -1189,5 +1236,48 @@ mod tests {
             loaded_config.policies.get("tool1"),
             Some(&ToolPolicy::Prompt)
         );
+    }
+
+    #[tokio::test]
+    async fn approval_cache_keys_round_trip() {
+        let dir = tempdir().unwrap();
+        let config_path = dir.path().join("tool-policy.json");
+        let mut manager = ToolPolicyManager::new_with_config_path(&config_path)
+            .await
+            .expect("manager");
+
+        manager
+            .add_approval_cache_key(
+                "cargo test|sandbox_permissions=\"use_default\"|additional_permissions=null",
+            )
+            .await
+            .expect("persist approval");
+
+        let reloaded = ToolPolicyManager::new_with_config_path(&config_path)
+            .await
+            .expect("reload manager");
+        assert!(reloaded.has_approval_cache_key(
+            "cargo test|sandbox_permissions=\"use_default\"|additional_permissions=null"
+        ));
+    }
+
+    #[tokio::test]
+    async fn reset_to_prompt_clears_approval_cache() {
+        let dir = tempdir().unwrap();
+        let config_path = dir.path().join("tool-policy.json");
+        let mut manager = ToolPolicyManager::new_with_config_path(&config_path)
+            .await
+            .expect("manager");
+
+        manager
+            .add_approval_cache_key("read_file")
+            .await
+            .expect("persist approval");
+        manager.reset_all_to_prompt().await.expect("reset policies");
+
+        let reloaded = ToolPolicyManager::new_with_config_path(&config_path)
+            .await
+            .expect("reload manager");
+        assert!(!reloaded.has_approval_cache_key("read_file"));
     }
 }

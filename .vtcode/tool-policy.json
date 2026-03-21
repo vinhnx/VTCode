@@ -192,5 +192,10 @@
       }
     },
     "providers": {}
+  },
+  "approval_cache": {
+    "allowed": [
+      "cargo fmt|sandbox_permissions=\"use_default\"|additional_permissions=null"
+    ]
   }
 }
