@@ -255,14 +255,17 @@ impl<'a> CopilotRuntimeHost<'a> {
             return Ok(response);
         }
 
-        let tools = Arc::new(RwLock::new(Vec::<ToolDefinition>::new()));
+        // Record tool use AFTER permission is granted (prepare_vtcode_tool_execution returned None).
+        self.record_tool_use(&canonical_tool_name);
+
+        let tools = Arc::new(RwLock::new(self.exposed_tools.clone()));
         let turn_index = self.harness_state.tool_calls;
         let tool_item_id = harness_call_item_id(
             &self.harness_item_prefix,
             &request.tool_call_id,
             &canonical_tool_name,
         );
-        let pipeline_outcome = {
+        let (pipeline_outcome, last_stdout) = {
             let mut run_loop_ctx = RunLoopContext::new(
                 renderer,
                 self.handle,
@@ -298,7 +301,7 @@ impl<'a> CopilotRuntimeHost<'a> {
             .await
             .with_context(|| format!("copilot tool execution for '{canonical_tool_name}'"))?;
 
-            let (modified_files, _last_stdout) = handle_pipeline_output(
+            let (modified_files, last_stdout) = handle_pipeline_output(
                 &mut run_loop_ctx,
                 &canonical_tool_name,
                 &request.arguments,
@@ -315,13 +318,18 @@ impl<'a> CopilotRuntimeHost<'a> {
                 );
             }
 
-            pipeline_outcome
+            (pipeline_outcome, last_stdout)
         };
 
         match pipeline_outcome.status {
             ToolExecutionStatus::Success { output, .. } => {
-                let text_result =
-                    serde_json::to_string_pretty(&output).unwrap_or_else(|_| output.to_string());
+                // Prefer human-readable stdout (e.g., search/bash output) over raw JSON.
+                // Fall back to pretty-printed JSON when stdout is absent or empty.
+                let text_result = last_stdout
+                    .filter(|s: &String| !s.trim().is_empty())
+                    .unwrap_or_else(|| {
+                        serde_json::to_string_pretty(&output).unwrap_or_else(|_| output.to_string())
+                    });
                 Ok(CopilotToolCallResponse::Success(CopilotToolCallSuccess {
                     text_result_for_llm: text_result,
                 }))

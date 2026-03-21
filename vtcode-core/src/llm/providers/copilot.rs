@@ -228,12 +228,10 @@ impl CopilotProvider {
                                     let tool_name = request.request.tool_name.clone();
                                     request.respond(CopilotToolCallResponse::Failure(CopilotToolCallFailure {
                                         text_result_for_llm: format!(
-                                            "VT Code does not expose the client tool `{}` to GitHub Copilot.",
-                                            tool_name
+                                            "GitHub Copilot tool execution is not available in this session mode. Tool `{tool_name}` was not executed."
                                         ),
                                         error: format!(
-                                            "tool '{}' not supported by VT Code",
-                                            tool_name
+                                            "tool '{tool_name}' cannot be executed outside the VT Code agent runloop session"
                                         ),
                                     }))
                                 }

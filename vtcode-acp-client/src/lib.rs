@@ -40,6 +40,7 @@ pub mod capabilities;
 pub mod client_v2;
 pub mod jsonrpc;
 pub mod session;
+pub mod transport;
 
 // V1 modules (legacy, deprecated)
 pub mod client;
@@ -62,6 +63,7 @@ pub use session::{
     SessionNewParams, SessionNewResult, SessionPromptParams, SessionPromptResult, SessionState,
     SessionUpdate, SessionUpdateNotification, ToolCallRecord, TurnStatus,
 };
+pub use transport::StdioTransport;
 
 // V1 exports (deprecated)
 #[deprecated(since = "0.60.0", note = "Use AcpClientV2 for ACP protocol compliance")]

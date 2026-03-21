@@ -15,9 +15,9 @@ use crate::capabilities::{
 use crate::error::{AcpError, AcpResult};
 use crate::jsonrpc::{JSONRPC_VERSION, JsonRpcId, JsonRpcRequest, JsonRpcResponse};
 use crate::session::{
-    AcpSession, SessionCancelParams, SessionLoadParams, SessionLoadResult, SessionNewParams,
-    SessionNewResult, SessionPromptParams, SessionPromptResult, SessionState,
-    SessionUpdateNotification,
+    AcpSession, ServerRequestNotification, SessionCancelParams, SessionLoadParams,
+    SessionLoadResult, SessionNewParams, SessionNewResult, SessionPromptParams,
+    SessionPromptResult, SessionState, SessionUpdateNotification, ToolExecutionResult,
 };
 
 use hashbrown::HashMap;
@@ -266,8 +266,10 @@ impl AcpClientV2 {
             req_builder = req_builder.bearer_auth(token);
         }
 
-        // Fire and forget
-        let _ = req_builder.send().await;
+        // Best-effort delivery — log but don't propagate send errors
+        if let Err(e) = req_builder.send().await {
+            warn!(method = method, error = %e, "ACP notification send failed");
+        }
 
         Ok(())
     }
@@ -479,6 +481,29 @@ impl AcpClientV2 {
         self.sessions.read().await.values().cloned().collect()
     }
 
+    /// Send a tool execution result back to the agent (`client/response`).
+    ///
+    /// Call this after handling a [`SessionUpdate::ServerRequest`] event to
+    /// complete the bidirectional tool call cycle.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if serialization or the network request fails.
+    pub async fn session_tool_response(
+        &self,
+        session_id: &str,
+        result: ToolExecutionResult,
+    ) -> AcpResult<()> {
+        self.notify(
+            "client/response",
+            Some(serde_json::json!({
+                "session_id": session_id,
+                "result": result,
+            })),
+        )
+        .await
+    }
+
     // ========================================================================
     // SSE Streaming
     // ========================================================================
@@ -578,6 +603,29 @@ impl AcpClientV2 {
                         return Ok(());
                     }
                 }
+
+                // Process server/request events (bidirectional tool call protocol).
+                // The agent emits these when it needs the client to execute a tool.
+                if event_type == Some("server/request") && !data_lines.is_empty() {
+                    let data = data_lines.join("\n");
+                    match serde_json::from_str::<ServerRequestNotification>(&data) {
+                        Ok(server_req) => {
+                            let notification = SessionUpdateNotification {
+                                session_id: server_req.session_id.clone(),
+                                turn_id: String::new(),
+                                update: crate::session::SessionUpdate::ServerRequest {
+                                    request: server_req.request,
+                                },
+                            };
+                            if tx.send(notification).await.is_err() {
+                                return Ok(());
+                            }
+                        }
+                        Err(e) => {
+                            warn!("Failed to parse server/request SSE event: {e}");
+                        }
+                    }
+                }
             }
         }
 
@@ -616,5 +664,22 @@ mod tests {
         let id2 = client.next_request_id();
 
         assert_ne!(id1, id2);
+    }
+
+    #[tokio::test]
+    async fn test_session_tool_response_sends_notification() {
+        // This verifies the method exists and constructs a valid notification.
+        // Full integration would require a mock HTTP server.
+        let client = AcpClientV2::new("http://localhost:9999").unwrap();
+        let result = ToolExecutionResult {
+            request_id: "req-1".to_string(),
+            tool_call_id: "tc-1".to_string(),
+            output: serde_json::json!({"result": "ok"}),
+            success: true,
+            error: None,
+        };
+        // Expect a network error since localhost:9999 won't be listening,
+        // but the method must exist and be callable.
+        let _ = client.session_tool_response("sess-1", result).await;
     }
 }

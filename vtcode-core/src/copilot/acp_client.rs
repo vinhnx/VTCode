@@ -1,15 +1,11 @@
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
-use std::sync::atomic::{AtomicI64, Ordering};
 
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{Child, ChildStderr, ChildStdout};
-use tokio::sync::{mpsc, oneshot};
 use tokio::time::timeout;
+use vtcode_acp_client::StdioTransport;
 use vtcode_config::auth::CopilotAuthConfig;
 
 use super::command::{
@@ -34,8 +30,8 @@ pub struct PromptCompletion {
 }
 
 pub struct PromptSession {
-    pub updates: mpsc::UnboundedReceiver<PromptUpdate>,
-    pub runtime_requests: mpsc::UnboundedReceiver<CopilotRuntimeRequest>,
+    pub updates: tokio::sync::mpsc::UnboundedReceiver<PromptUpdate>,
+    pub runtime_requests: tokio::sync::mpsc::UnboundedReceiver<CopilotRuntimeRequest>,
     pub completion: tokio::task::JoinHandle<Result<PromptCompletion>>,
     cancel_handle: PromptSessionCancelHandle,
 }
@@ -58,8 +54,8 @@ impl PromptSession {
     pub fn into_parts(
         self,
     ) -> (
-        mpsc::UnboundedReceiver<PromptUpdate>,
-        mpsc::UnboundedReceiver<CopilotRuntimeRequest>,
+        tokio::sync::mpsc::UnboundedReceiver<PromptUpdate>,
+        tokio::sync::mpsc::UnboundedReceiver<CopilotRuntimeRequest>,
         tokio::task::JoinHandle<Result<PromptCompletion>>,
         PromptSessionCancelHandle,
     ) {
@@ -83,7 +79,7 @@ pub enum CopilotRuntimeRequest {
 #[derive(Debug)]
 pub struct PendingPermissionRequest {
     pub request: CopilotPermissionRequest,
-    response_tx: oneshot::Sender<Value>,
+    response_tx: tokio::sync::oneshot::Sender<Value>,
     response_format: PermissionResponseFormat,
 }
 
@@ -98,7 +94,7 @@ impl PendingPermissionRequest {
 #[derive(Debug)]
 pub struct PendingToolCallRequest {
     pub request: CopilotToolCallRequest,
-    response_tx: oneshot::Sender<CopilotToolCallResponse>,
+    response_tx: tokio::sync::oneshot::Sender<CopilotToolCallResponse>,
 }
 
 impl PendingToolCallRequest {
@@ -120,20 +116,26 @@ pub struct CopilotCompatibilityNotice {
     pub message: String,
 }
 
+// ---------------------------------------------------------------------------
+// Inner state — Copilot-specific only.
+// The generic transport machinery (request correlation, child I/O) lives in
+// StdioTransport.
+// ---------------------------------------------------------------------------
+
 struct CopilotAcpClientInner {
-    request_counter: AtomicI64,
-    write_tx: mpsc::UnboundedSender<String>,
-    pending: StdMutex<HashMap<i64, oneshot::Sender<Result<Value>>>>,
+    /// Generic JSON-RPC-over-stdio transport.
+    transport: StdioTransport,
+    /// State for the currently active prompt session (if any).
     active_prompt: StdMutex<Option<ActivePrompt>>,
-    child: StdMutex<Option<Child>>,
+    /// Copilot session identifier (set after session.create succeeds).
     session_id: StdMutex<Option<String>>,
+    /// Copilot ACP compatibility state (updated as messages arrive).
     compatibility_state: StdMutex<CopilotAcpCompatibilityState>,
-    timeout: std::time::Duration,
 }
 
 struct ActivePrompt {
-    updates: mpsc::UnboundedSender<PromptUpdate>,
-    runtime_requests: mpsc::UnboundedSender<CopilotRuntimeRequest>,
+    updates: tokio::sync::mpsc::UnboundedSender<PromptUpdate>,
+    runtime_requests: tokio::sync::mpsc::UnboundedSender<CopilotRuntimeRequest>,
 }
 
 #[derive(Debug, Clone)]
@@ -169,6 +171,10 @@ enum AcpPermissionOptionKind {
     RejectAlways,
     Other,
 }
+
+// ---------------------------------------------------------------------------
+// CopilotAcpClient implementation
+// ---------------------------------------------------------------------------
 
 impl CopilotAcpClient {
     pub async fn connect(
@@ -233,21 +239,28 @@ impl CopilotAcpClient {
             .take()
             .ok_or_else(|| anyhow!("copilot acp child stderr unavailable"))?;
 
-        let (write_tx, write_rx) = mpsc::unbounded_channel();
+        let transport =
+            StdioTransport::from_child(child, stdin, stdout, stderr, resolved.auth_timeout);
+
         let inner = Arc::new(CopilotAcpClientInner {
-            request_counter: AtomicI64::new(1),
-            write_tx,
-            pending: StdMutex::new(HashMap::new()),
+            transport,
             active_prompt: StdMutex::new(None),
-            child: StdMutex::new(Some(child)),
             session_id: StdMutex::new(None),
             compatibility_state: StdMutex::new(CopilotAcpCompatibilityState::Unavailable),
-            timeout: resolved.auth_timeout,
         });
 
-        spawn_acp_writer(write_rx, stdin);
-        spawn_acp_stderr(stderr);
-        spawn_acp_reader(stdout, inner.clone());
+        // Register the Copilot-specific notification handler.
+        // Use a Weak reference to avoid a retain cycle:
+        //   Arc<Inner> → StdioTransport → handler → Weak<Inner>
+        let inner_weak = Arc::downgrade(&inner);
+        inner
+            .transport
+            .set_notification_handler(Arc::new(move |message| {
+                if let Some(inner_strong) = inner_weak.upgrade() {
+                    handle_acp_message(&inner_strong, message)?;
+                }
+                Ok(())
+            }));
 
         let client = Self { inner };
         timeout(resolved.startup_timeout, async {
@@ -288,8 +301,8 @@ impl CopilotAcpClient {
     }
 
     pub async fn start_prompt(&self, prompt_text: String) -> Result<PromptSession> {
-        let (updates_tx, updates_rx) = mpsc::unbounded_channel();
-        let (runtime_tx, runtime_rx) = mpsc::unbounded_channel();
+        let (updates_tx, updates_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (runtime_tx, runtime_rx) = tokio::sync::mpsc::unbounded_channel();
         {
             let mut active_prompt = self
                 .inner
@@ -358,12 +371,15 @@ impl CopilotAcpClient {
     }
 
     pub fn cancel(&self) -> Result<()> {
-        self.send_notification(
-            "session/cancel",
-            json!({
-                "sessionId": self.session_id()?,
-            }),
-        )
+        self.inner
+            .transport
+            .notify(
+                "session/cancel",
+                json!({
+                    "sessionId": self.session_id()?,
+                }),
+            )
+            .map_err(anyhow::Error::from)
     }
 
     async fn initialize(&self) -> Result<()> {
@@ -485,47 +501,11 @@ impl CopilotAcpClient {
     }
 
     async fn call(&self, method: &str, params: Value) -> Result<Value> {
-        let id = self.inner.request_counter.fetch_add(1, Ordering::SeqCst);
-        let (tx, rx) = oneshot::channel();
         self.inner
-            .pending
-            .lock()
-            .map_err(|_| anyhow!("copilot acp pending mutex poisoned"))?
-            .insert(id, tx);
-
-        self.send_request(id, method, params)?;
-        timeout(self.inner.timeout, rx)
+            .transport
+            .call(method, params)
             .await
-            .with_context(|| format!("copilot acp {method} timeout"))?
-            .map_err(|_| anyhow!("copilot acp {method} response channel closed"))?
-    }
-
-    fn send_request(&self, id: i64, method: &str, params: Value) -> Result<()> {
-        let payload = json!({
-            "jsonrpc": "2.0",
-            "id": id,
-            "method": method,
-            "params": params,
-        });
-        self.send_payload(payload)
-    }
-
-    fn send_notification(&self, method: &str, params: Value) -> Result<()> {
-        let payload = json!({
-            "jsonrpc": "2.0",
-            "method": method,
-            "params": params,
-        });
-        self.send_payload(payload)
-    }
-
-    fn send_payload(&self, payload: Value) -> Result<()> {
-        let payload =
-            serde_json::to_string(&payload).context("copilot acp json serialization failed")?;
-        self.inner
-            .write_tx
-            .send(payload)
-            .map_err(|_| anyhow!("copilot acp writer channel closed"))
+            .map_err(anyhow::Error::from)
     }
 
     fn clear_active_prompt(&self) {
@@ -543,105 +523,13 @@ impl CopilotAcpClient {
     }
 }
 
-impl Drop for CopilotAcpClientInner {
-    fn drop(&mut self) {
-        if let Ok(mut child) = self.child.lock()
-            && let Some(child) = child.as_mut()
-        {
-            let _ = child.start_kill();
-        }
-    }
-}
-
-fn spawn_acp_writer(
-    mut write_rx: mpsc::UnboundedReceiver<String>,
-    mut stdin: tokio::process::ChildStdin,
-) {
-    tokio::spawn(async move {
-        while let Some(payload) = write_rx.recv().await {
-            if let Err(err) = stdin.write_all(payload.as_bytes()).await {
-                tracing::warn!(error = %err, "copilot acp writer failed");
-                break;
-            }
-            if let Err(err) = stdin.write_all(b"\n").await {
-                tracing::warn!(error = %err, "copilot acp newline write failed");
-                break;
-            }
-            if let Err(err) = stdin.flush().await {
-                tracing::warn!(error = %err, "copilot acp writer flush failed");
-                break;
-            }
-        }
-    });
-}
-
-fn spawn_acp_stderr(stderr: ChildStderr) {
-    tokio::spawn(async move {
-        let mut reader = BufReader::new(stderr);
-        let mut line = String::new();
-        loop {
-            line.clear();
-            match reader.read_line(&mut line).await {
-                Ok(0) => break,
-                Ok(_) => tracing::debug!(target: "copilot.acp.stderr", "{}", line.trim_end()),
-                Err(err) => {
-                    tracing::warn!(error = %err, "copilot acp stderr read failed");
-                    break;
-                }
-            }
-        }
-    });
-}
-
-fn spawn_acp_reader(stdout: ChildStdout, inner: Arc<CopilotAcpClientInner>) {
-    tokio::spawn(async move {
-        let mut reader = BufReader::new(stdout).lines();
-        while let Ok(Some(line)) = reader.next_line().await {
-            if line.trim().is_empty() {
-                continue;
-            }
-
-            match serde_json::from_str::<Value>(&line) {
-                Ok(message) => {
-                    if let Err(err) = handle_acp_message(&inner, message) {
-                        tracing::warn!(error = %err, "copilot acp message handling failed");
-                    }
-                }
-                Err(err) => tracing::warn!(error = %err, "copilot acp json decode failed"),
-            }
-        }
-
-        clear_active_prompt_state(&inner);
-    });
-}
+// ---------------------------------------------------------------------------
+// ACP message dispatch (Copilot-specific protocol)
+// ---------------------------------------------------------------------------
+// StdioTransport already handles JSON-RPC response routing (id → pending).
+// This function receives only server-initiated requests and notifications.
 
 fn handle_acp_message(inner: &Arc<CopilotAcpClientInner>, message: Value) -> Result<()> {
-    if let Some(id) = response_id(&message) {
-        let response = if let Some(error) = message.get("error") {
-            let code = error
-                .get("code")
-                .and_then(Value::as_i64)
-                .unwrap_or_default();
-            let detail = error
-                .get("message")
-                .and_then(Value::as_str)
-                .unwrap_or("unknown error");
-            Err(anyhow!("copilot acp rpc error {code}: {detail}"))
-        } else {
-            Ok(message.get("result").cloned().unwrap_or(Value::Null))
-        };
-
-        if let Some(sender) = inner
-            .pending
-            .lock()
-            .map_err(|_| anyhow!("copilot acp pending mutex poisoned"))?
-            .remove(&id)
-        {
-            let _ = sender.send(response);
-        }
-        return Ok(());
-    }
-
     let Some(method) = message.get("method").and_then(Value::as_str) else {
         return Ok(());
     };
@@ -655,7 +543,10 @@ fn handle_acp_message(inner: &Arc<CopilotAcpClientInner>, message: Value) -> Res
             if let Some(id) = request_id(&message) {
                 let error_message = unsupported_client_capability_message(client_method);
                 mark_prompt_degraded(inner, error_message.clone())?;
-                send_payload(inner, jsonrpc_error_payload(id, error_message))?;
+                inner
+                    .transport
+                    .respond_error(id, -32601, error_message)
+                    .map_err(anyhow::Error::from)?;
             }
         }
     }
@@ -722,7 +613,7 @@ fn handle_permission_request(inner: &Arc<CopilotAcpClientInner>, message: &Value
             raw: Value::Null,
         });
 
-    let (response_tx, response_rx) = oneshot::channel();
+    let (response_tx, response_rx) = tokio::sync::oneshot::channel();
     let dispatched = match enqueue_runtime_request(
         inner,
         CopilotRuntimeRequest::Permission(PendingPermissionRequest {
@@ -740,30 +631,27 @@ fn handle_permission_request(inner: &Arc<CopilotAcpClientInner>, message: &Value
         tokio::spawn(async move {
             match response_rx.await {
                 Ok(result) => {
-                    let _ = send_payload(&inner, jsonrpc_result_payload(id, result));
+                    let _ = inner.transport.respond(id, result).map_err(|e| {
+                        tracing::warn!("copilot acp permission respond failed: {e}");
+                    });
                 }
                 Err(_) => {
-                    let _ = send_payload(
-                        &inner,
-                        jsonrpc_result_payload(
-                            id,
-                            PermissionResponseFormat::CopilotCli
-                                .render(CopilotPermissionDecision::DeniedNoApprovalRule),
-                        ),
-                    );
+                    let fallback = PermissionResponseFormat::CopilotCli
+                        .render(CopilotPermissionDecision::DeniedNoApprovalRule);
+                    let _ = inner.transport.respond(id, fallback).map_err(|e| {
+                        tracing::warn!("copilot acp permission fallback respond failed: {e}");
+                    });
                 }
             }
         });
         Ok(())
     } else {
-        send_payload(
-            inner,
-            jsonrpc_result_payload(
-                id,
-                PermissionResponseFormat::CopilotCli
-                    .render(CopilotPermissionDecision::DeniedNoApprovalRule),
-            ),
-        )
+        let fallback = PermissionResponseFormat::CopilotCli
+            .render(CopilotPermissionDecision::DeniedNoApprovalRule);
+        inner
+            .transport
+            .respond(id, fallback)
+            .map_err(anyhow::Error::from)
     }
 }
 
@@ -786,7 +674,7 @@ fn handle_legacy_permission_request(
         });
     let options = parse_permission_options(params.get("options"));
 
-    let (response_tx, response_rx) = oneshot::channel();
+    let (response_tx, response_rx) = tokio::sync::oneshot::channel();
     let dispatched = match enqueue_runtime_request(
         inner,
         CopilotRuntimeRequest::Permission(PendingPermissionRequest {
@@ -804,36 +692,27 @@ fn handle_legacy_permission_request(
         tokio::spawn(async move {
             match response_rx.await {
                 Ok(result) => {
-                    let _ = send_payload(&inner, jsonrpc_result_payload(id, result));
+                    let _ = inner.transport.respond(id, result).map_err(|e| {
+                        tracing::warn!("copilot acp legacy permission respond failed: {e}");
+                    });
                 }
                 Err(_) => {
-                    let _ = send_payload(
-                        &inner,
-                        jsonrpc_result_payload(
-                            id,
-                            json!({
-                                "outcome": {
-                                    "outcome": "cancelled",
-                                }
-                            }),
-                        ),
-                    );
+                    let fallback = json!({ "outcome": { "outcome": "cancelled" } });
+                    let _ = inner.transport.respond(id, fallback).map_err(|e| {
+                        tracing::warn!(
+                            "copilot acp legacy permission fallback respond failed: {e}"
+                        );
+                    });
                 }
             }
         });
         Ok(())
     } else {
-        send_payload(
-            inner,
-            jsonrpc_result_payload(
-                id,
-                json!({
-                    "outcome": {
-                        "outcome": "cancelled",
-                    }
-                }),
-            ),
-        )
+        let fallback = json!({ "outcome": { "outcome": "cancelled" } });
+        inner
+            .transport
+            .respond(id, fallback)
+            .map_err(anyhow::Error::from)
     }
 }
 
@@ -858,7 +737,7 @@ fn handle_tool_call_request(inner: &Arc<CopilotAcpClientInner>, message: &Value)
     };
     let fallback_tool_name = request.tool_name.clone();
 
-    let (response_tx, response_rx) = oneshot::channel();
+    let (response_tx, response_rx) = tokio::sync::oneshot::channel();
     let dispatched = match enqueue_runtime_request(
         inner,
         CopilotRuntimeRequest::ToolCall(PendingToolCallRequest {
@@ -875,42 +754,46 @@ fn handle_tool_call_request(inner: &Arc<CopilotAcpClientInner>, message: &Value)
         tokio::spawn(async move {
             match response_rx.await {
                 Ok(response) => {
-                    let _ = send_payload(&inner, tool_call_response_payload(id, response));
+                    let result = build_tool_call_result(response);
+                    let _ = inner.transport.respond(id, result).map_err(|e| {
+                        tracing::warn!("copilot acp tool call respond failed: {e}");
+                    });
                 }
                 Err(_) => {
-                    let _ = send_payload(
-                        &inner,
-                        tool_call_response_payload(
-                            id,
-                            CopilotToolCallResponse::Failure(CopilotToolCallFailure {
-                                text_result_for_llm: format!(
-                                    "VT Code could not complete the client tool `{fallback_tool_name}`."
-                                ),
-                                error: format!(
-                                    "tool '{fallback_tool_name}' response channel closed"
-                                ),
-                            }),
-                        ),
-                    );
+                    let result = build_tool_call_result(CopilotToolCallResponse::Failure(
+                        CopilotToolCallFailure {
+                            text_result_for_llm: format!(
+                                "VT Code could not complete the client tool `{fallback_tool_name}`."
+                            ),
+                            error: format!("tool '{fallback_tool_name}' response channel closed"),
+                        },
+                    ));
+                    let _ = inner.transport.respond(id, result).map_err(|e| {
+                        tracing::warn!("copilot acp tool call fallback respond failed: {e}");
+                    });
                 }
             }
         });
         Ok(())
     } else {
-        send_payload(
-            inner,
-            tool_call_response_payload(
-                id,
-                CopilotToolCallResponse::Failure(CopilotToolCallFailure {
-                    text_result_for_llm: format!(
-                        "VT Code does not expose the client tool `{fallback_tool_name}` to GitHub Copilot."
-                    ),
-                    error: format!("tool '{fallback_tool_name}' not supported by VT Code"),
-                }),
-            ),
-        )
+        let result = build_tool_call_result(CopilotToolCallResponse::Failure(
+            CopilotToolCallFailure {
+                text_result_for_llm: format!(
+                    "VT Code does not expose the client tool `{fallback_tool_name}` to GitHub Copilot."
+                ),
+                error: format!("tool '{fallback_tool_name}' not supported by VT Code"),
+            },
+        ));
+        inner
+            .transport
+            .respond(id, result)
+            .map_err(anyhow::Error::from)
     }
 }
+
+// ---------------------------------------------------------------------------
+// Active prompt helpers
+// ---------------------------------------------------------------------------
 
 fn send_prompt_update(inner: &Arc<CopilotAcpClientInner>, update: PromptUpdate) -> Result<()> {
     if let Some(active_prompt) = inner
@@ -956,13 +839,6 @@ fn mark_prompt_degraded(inner: &Arc<CopilotAcpClientInner>, message: String) -> 
     Ok(())
 }
 
-fn send_payload(inner: &Arc<CopilotAcpClientInner>, payload: Value) -> Result<()> {
-    inner
-        .write_tx
-        .send(serde_json::to_string(&payload)?)
-        .map_err(|_| anyhow!("copilot acp writer channel closed"))
-}
-
 fn enqueue_runtime_request(
     inner: &Arc<CopilotAcpClientInner>,
     request: CopilotRuntimeRequest,
@@ -995,8 +871,13 @@ fn clear_active_prompt_state(inner: &Arc<CopilotAcpClientInner>) {
     }
 }
 
-fn tool_call_response_payload(id: i64, response: CopilotToolCallResponse) -> Value {
-    let result = match response {
+// ---------------------------------------------------------------------------
+// Payload builders
+// ---------------------------------------------------------------------------
+
+/// Build the JSON-RPC `result` value for a `tool.call` response.
+fn build_tool_call_result(response: CopilotToolCallResponse) -> Value {
+    let inner = match response {
         CopilotToolCallResponse::Success(success) => json!({
             "textResultForLlm": success.text_result_for_llm,
             "resultType": "success",
@@ -1009,31 +890,7 @@ fn tool_call_response_payload(id: i64, response: CopilotToolCallResponse) -> Val
             "toolTelemetry": {},
         }),
     };
-    jsonrpc_result_payload(
-        id,
-        json!({
-            "result": result,
-        }),
-    )
-}
-
-fn jsonrpc_result_payload(id: i64, result: Value) -> Value {
-    json!({
-        "jsonrpc": "2.0",
-        "id": id,
-        "result": result,
-    })
-}
-
-fn jsonrpc_error_payload(id: i64, message: String) -> Value {
-    json!({
-        "jsonrpc": "2.0",
-        "id": id,
-        "error": {
-            "code": -32601,
-            "message": message,
-        }
-    })
+    json!({ "result": inner })
 }
 
 fn unsupported_client_capability_message(method: &str) -> String {
@@ -1491,34 +1348,23 @@ fn request_id(message: &Value) -> Option<i64> {
     message.get("id").and_then(Value::as_i64)
 }
 
-fn response_id(message: &Value) -> Option<i64> {
-    if message.get("result").is_some() || message.get("error").is_some() {
-        message.get("id").and_then(Value::as_i64)
-    } else {
-        None
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{
-        AcpPermissionOption, AcpPermissionOptionKind, ActivePrompt, CopilotAcpClient,
-        CopilotAcpClientInner, CopilotAcpCompatibilityState, CopilotCompatibilityNotice,
-        CopilotObservedToolCallStatus, CopilotPermissionDecision, CopilotRuntimeRequest,
-        CopilotToolCallFailure, CopilotToolCallResponse, PermissionResponseFormat,
-        PromptCompletion, PromptSessionCancelHandle, PromptUpdate, custom_tools_payload,
-        enqueue_runtime_request, extract_text, handle_permission_request, jsonrpc_result_payload,
-        legacy_permission_outcome, parse_observed_tool_call, parse_permission_request,
-        string_array, tool_call_response_payload, unsupported_client_capability_message,
-    };
-    use crate::llm::provider::ToolDefinition;
+    use super::*;
     use serde_json::{Value, json};
-    use std::collections::HashMap;
     use std::sync::Arc;
-    use std::sync::Mutex as StdMutex;
-    use std::sync::atomic::AtomicI64;
     use std::time::Duration;
     use tokio::sync::mpsc;
+    use vtcode_acp_client::StdioTransport;
+
+    fn make_inner(write_tx: mpsc::UnboundedSender<String>) -> Arc<CopilotAcpClientInner> {
+        Arc::new(CopilotAcpClientInner {
+            transport: StdioTransport::new_for_testing(write_tx, Duration::from_secs(1)),
+            active_prompt: StdMutex::new(None),
+            session_id: StdMutex::new(None),
+            compatibility_state: StdMutex::new(CopilotAcpCompatibilityState::FullTools),
+        })
+    }
 
     #[test]
     fn extracts_text_from_text_objects() {
@@ -1539,17 +1385,12 @@ mod tests {
     }
 
     #[test]
-    fn permission_payload_denies_without_prompt() {
-        let payload = jsonrpc_result_payload(
-            7,
-            PermissionResponseFormat::CopilotCli
-                .render(CopilotPermissionDecision::DeniedNoApprovalRule),
-        );
+    fn permission_render_denies_without_prompt() {
+        let result = PermissionResponseFormat::CopilotCli
+            .render(CopilotPermissionDecision::DeniedNoApprovalRule);
 
-        assert_eq!(payload["jsonrpc"], "2.0");
-        assert_eq!(payload["id"], 7);
         assert_eq!(
-            payload["result"]["result"]["kind"],
+            result["result"]["kind"],
             "denied-no-approval-rule-and-could-not-request-from-user"
         );
     }
@@ -1575,19 +1416,15 @@ mod tests {
     }
 
     #[test]
-    fn tool_call_payload_returns_failure_result() {
-        let payload = tool_call_response_payload(
-            11,
-            CopilotToolCallResponse::Failure(CopilotToolCallFailure {
+    fn tool_call_result_returns_failure_structure() {
+        let result =
+            build_tool_call_result(CopilotToolCallResponse::Failure(CopilotToolCallFailure {
                 text_result_for_llm: "failed".to_string(),
                 error: "boom".to_string(),
-            }),
-        );
+            }));
 
-        assert_eq!(payload["jsonrpc"], "2.0");
-        assert_eq!(payload["id"], 11);
-        assert_eq!(payload["result"]["result"]["resultType"], "failure");
-        assert_eq!(payload["result"]["result"]["error"], "boom");
+        assert_eq!(result["result"]["resultType"], "failure");
+        assert_eq!(result["result"]["error"], "boom");
     }
 
     #[test]
@@ -1606,7 +1443,7 @@ mod tests {
         .unwrap();
 
         match request {
-            super::CopilotPermissionRequest::Shell {
+            CopilotPermissionRequest::Shell {
                 full_command_text,
                 possible_paths,
                 possible_urls,
@@ -1677,17 +1514,13 @@ mod tests {
         drop(runtime_requests_rx);
 
         let inner = Arc::new(CopilotAcpClientInner {
-            request_counter: AtomicI64::new(1),
-            write_tx,
-            pending: StdMutex::new(HashMap::new()),
+            transport: StdioTransport::new_for_testing(write_tx, Duration::from_secs(1)),
             active_prompt: StdMutex::new(Some(ActivePrompt {
                 updates,
                 runtime_requests,
             })),
-            child: StdMutex::new(None),
             session_id: StdMutex::new(None),
             compatibility_state: StdMutex::new(CopilotAcpCompatibilityState::FullTools),
-            timeout: Duration::from_secs(1),
         });
 
         let err = enqueue_runtime_request(
@@ -1721,17 +1554,13 @@ mod tests {
         drop(runtime_requests_rx);
 
         let inner = Arc::new(CopilotAcpClientInner {
-            request_counter: AtomicI64::new(1),
-            write_tx,
-            pending: StdMutex::new(HashMap::new()),
+            transport: StdioTransport::new_for_testing(write_tx, Duration::from_secs(1)),
             active_prompt: StdMutex::new(Some(ActivePrompt {
                 updates,
                 runtime_requests,
             })),
-            child: StdMutex::new(None),
             session_id: StdMutex::new(None),
             compatibility_state: StdMutex::new(CopilotAcpCompatibilityState::FullTools),
-            timeout: Duration::from_secs(1),
         });
 
         handle_permission_request(
@@ -1753,6 +1582,8 @@ mod tests {
 
         let payload = write_rx.try_recv().expect("fallback response payload");
         let payload: Value = serde_json::from_str(&payload).expect("valid json payload");
+        assert_eq!(payload["jsonrpc"], "2.0");
+        assert_eq!(payload["id"], 9);
         assert_eq!(
             payload["result"]["result"]["kind"],
             "denied-no-approval-rule-and-could-not-request-from-user"
@@ -1768,17 +1599,13 @@ mod tests {
 
         let client = CopilotAcpClient {
             inner: Arc::new(CopilotAcpClientInner {
-                request_counter: AtomicI64::new(1),
-                write_tx,
-                pending: StdMutex::new(HashMap::new()),
+                transport: StdioTransport::new_for_testing(write_tx, Duration::from_secs(1)),
                 active_prompt: StdMutex::new(Some(ActivePrompt {
                     updates,
                     runtime_requests,
                 })),
-                child: StdMutex::new(None),
                 session_id: StdMutex::new(Some("session_123".to_string())),
                 compatibility_state: StdMutex::new(CopilotAcpCompatibilityState::FullTools),
-                timeout: Duration::from_secs(1),
             }),
         };
 
@@ -1812,5 +1639,17 @@ mod tests {
 
         let err = completion.await.expect_err("completion should be aborted");
         assert!(err.is_cancelled(), "expected cancelled task, got {err}");
+    }
+
+    #[test]
+    fn make_inner_helper_creates_valid_inner() {
+        let (tx, _rx) = mpsc::unbounded_channel();
+        let inner = make_inner(tx);
+        assert!(inner.active_prompt.lock().unwrap().is_none());
+        assert!(inner.session_id.lock().unwrap().is_none());
+        assert_eq!(
+            *inner.compatibility_state.lock().unwrap(),
+            CopilotAcpCompatibilityState::FullTools
+        );
     }
 }
