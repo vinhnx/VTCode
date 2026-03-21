@@ -72,9 +72,27 @@ For more information about skills implementation in VT Code, see [Agent Skills G
 
 ### Supported Providers
 
-VT Code works with OpenAI, Anthropic, Google Gemini, DeepSeek, OpenRouter, Z.AI, Moonshot AI, MiniMax, HuggingFace Inference Providers, Ollama (local & cloud), and LM Studio (local).
+VT Code works with GitHub Copilot, OpenAI, Anthropic, Google Gemini, DeepSeek, OpenRouter, Z.AI, Moonshot AI, MiniMax, HuggingFace Inference Providers, Ollama (local & cloud), and LM Studio (local).
 
 Set the corresponding environment variable for your provider (see [Installation Guide](./docs/installation/#supported-ai-providers) for all options).
+
+#### GitHub Copilot Integration
+
+VT Code includes first-class support for GitHub Copilot with OAuth device-flow authentication via the official `copilot` CLI:
+
+```bash
+# Install GitHub Copilot CLI
+brew install gh-copilot
+
+# Authenticate
+copilot login
+
+# Or use VT Code's TUI
+vtcode
+# Then: /login copilot
+```
+
+For detailed setup, see [GitHub Copilot Authentication](./docs/guides/oauth-authentication.md#github-copilot-managed-auth).
 
 ### Agent Protocols
 

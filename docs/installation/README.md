@@ -77,6 +77,7 @@ vtcode
 
 ## Supported AI Providers
 
+-   **GitHub Copilot** (requires `copilot` CLI; see [GitHub Copilot Auth](../guides/oauth-authentication.md#github-copilot-managed-auth))
 -   **OpenAI** (OPENAI_API_KEY)
 -   **Anthropic** (ANTHROPIC_API_KEY)
 -   **Google Gemini** (GEMINI_API_KEY)
@@ -86,7 +87,7 @@ vtcode
 -   **Ollama** (local, no API key)
 -   **LM Studio** (local, no API key by default)
 
-Set the corresponding environment variable for your chosen provider.
+Set the corresponding environment variable for your chosen provider. For GitHub Copilot, install the `copilot` CLI and authenticate using `copilot login`.
 
 ## Troubleshooting
 

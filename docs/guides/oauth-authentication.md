@@ -9,10 +9,107 @@ OAuth integration in VT Code provides:
 - **PKCE-Secured Flows**: RFC 7636 Proof Key for Code Exchange for client-only applications
 - **Secure Token Storage**: OS-native credential storage (Keychain, Credential Manager, Secret Service)
 - **Automatic Token Refresh**: Seamless token renewal without user intervention
-- **Multi-Provider Support**: OpenAI ChatGPT and OpenRouter
+- **Multi-Provider Support**: GitHub Copilot, OpenAI ChatGPT, and OpenRouter
+- **Managed Auth Delegation**: GitHub Copilot authentication delegated to official `copilot` CLI
 - **Fallback Encryption**: AES-256-GCM encrypted file storage when keyring unavailable
 
 ## Supported Providers
+
+### GitHub Copilot Managed Auth
+
+VT Code uses the official `copilot` CLI for GitHub Copilot authentication. No separate OAuth flow is implemented — instead, authentication is delegated to the official `copilot` binary.
+
+#### Setup
+
+```bash
+# Install GitHub Copilot CLI
+# See: https://docs.github.com/en/copilot/how-tos/copilot-cli/install-copilot-cli
+
+# Authenticate via the official copilot CLI
+copilot login
+
+# Or use VT Code's TUI
+vtcode
+# Then use: /login copilot
+```
+
+**How it Works**:
+- VT Code shells out to `copilot` binary for device-flow authentication
+- `copilot login` launches browser-based device flow (GitHub handles auth)
+- Credentials stored securely by the `copilot` CLI (platform-native keyring)
+- VT Code probes auth status and launches ACP session without managing tokens
+
+#### Requirements
+
+- **Required**: `copilot` CLI on `PATH` (install via [GitHub's official guide](https://docs.github.com/en/copilot/how-tos/copilot-cli/install-copilot-cli))
+- **Optional**: `gh` (GitHub CLI) — only used as fallback if already authenticated
+- Active GitHub Copilot subscription
+
+#### Configuration
+
+In `vtcode.toml`:
+
+```toml
+[auth.copilot]
+# Optional: Point to custom copilot binary if not on PATH
+command = "/path/to/copilot"
+```
+
+Or via environment variable:
+
+```bash
+export VTCODE_COPILOT_COMMAND="/path/to/copilot"
+```
+
+#### Device Flow Authentication
+
+When you run `/login copilot`:
+
+1. VT Code invokes `copilot login`
+2. `copilot` outputs a user code (e.g., `ABCD-EFGH`)
+3. Browser opens to `github.com/login/device`
+4. You enter the code and authorize
+5. `copilot` stores credentials in OS keyring
+6. VT Code detects auth status and activates Copilot provider
+
+#### Token Management
+
+Tokens are managed entirely by the `copilot` CLI:
+
+```bash
+# Check authentication status
+vtcode auth status copilot
+
+# Logout
+vtcode logout copilot
+# Or: /logout copilot
+```
+
+#### Troubleshooting
+
+**`copilot` command not found**:
+```bash
+# Install copilot CLI
+# macOS:
+brew install gh-copilot
+
+# Or download from GitHub:
+# https://github.com/github/copilot-cli/releases
+```
+
+**VT Code doesn't detect auth**:
+```bash
+# Manually authenticate via copilot CLI first
+copilot login
+
+# Then check VT Code's detection
+vtcode auth status copilot
+```
+
+**`gh` not found (optional)**:
+- This is only a fallback; it's not required
+- `copilot` works independently for auth
+- VT Code only uses `gh` to detect existing auth sessions
 
 ### OpenAI ChatGPT OAuth
 
@@ -193,7 +290,9 @@ vtcode auth clear <provider>
 vtcode auth refresh <provider>
 ```
 
-**Supported providers**: `openai`, `openrouter`
+**Supported providers**: `copilot`, `openai`, `openrouter`
+
+**GitHub Copilot note**: Tokens are managed by the `copilot` CLI and stored in the OS keyring. VT Code probes status but does not store credentials directly.
 
 ## Token Lifecycle
 
