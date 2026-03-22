@@ -166,9 +166,17 @@ fn live_reload_preserves_session_config(
 
 fn prepare_resume_bootstrap_without_archive(
     resume: &ResumeSession,
-    metadata: vtcode_core::utils::session_archive::SessionArchiveMetadata,
+    mut metadata: vtcode_core::utils::session_archive::SessionArchiveMetadata,
     reserved_archive_id: Option<String>,
 ) -> (vtcode_core::core::threads::ThreadBootstrap, String) {
+    let source_metadata = &resume.snapshot().metadata;
+    let is_compatible = metadata.workspace_path == source_metadata.workspace_path
+        && metadata.provider == source_metadata.provider
+        && metadata.model == source_metadata.model;
+    if is_compatible && let Some(lineage_id) = source_metadata.prompt_cache_lineage_id.as_ref() {
+        metadata.prompt_cache_lineage_id = Some(lineage_id.clone());
+    }
+
     let mut bootstrap =
         vtcode_core::core::threads::ThreadBootstrap::from_listing(resume.listing().clone());
     bootstrap.metadata = Some(metadata);
@@ -636,6 +644,13 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         session_stats.tool_health_tracker = tool_health_tracker.clone();
         session_stats.rate_limiter = rate_limiter.clone();
         session_stats.validation_cache = validation_cache.clone();
+        session_stats.set_prompt_cache_lineage_id(
+            thread_handle
+                .snapshot()
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.prompt_cache_lineage_id.clone()),
+        );
         session_stats.vim_mode_enabled = vt_cfg.as_ref().is_some_and(|cfg| cfg.ui.vim_mode);
         if plan_mode_entry_source.should_auto_enter() {
             transition_to_plan_mode(
@@ -1670,6 +1685,53 @@ mod tests {
         );
 
         assert_eq!(thread_id, "reserved-session-id");
+    }
+
+    #[test]
+    fn resume_bootstrap_without_archive_preserves_compatible_prompt_cache_lineage() {
+        let listing = SessionListing {
+            path: PathBuf::from("/tmp/session-source.json"),
+            snapshot: SessionSnapshot {
+                metadata: SessionArchiveMetadata::new(
+                    "workspace",
+                    "/tmp/workspace",
+                    "model",
+                    "provider",
+                    "theme",
+                    "medium",
+                )
+                .with_prompt_cache_lineage_id("lineage-123"),
+                started_at: Utc::now(),
+                ended_at: Utc::now(),
+                total_messages: 1,
+                distinct_tools: Vec::new(),
+                transcript: Vec::new(),
+                messages: vec![SessionMessage::new(MessageRole::User, "hello")],
+                progress: None,
+                error_logs: Vec::new(),
+            },
+        };
+        let resume = ResumeSession::from_listing(&listing, ArchivedSessionIntent::ResumeInPlace);
+        let (bootstrap, _) = prepare_resume_bootstrap_without_archive(
+            &resume,
+            SessionArchiveMetadata::new(
+                "workspace",
+                "/tmp/workspace",
+                "model",
+                "provider",
+                "other-theme",
+                "high",
+            ),
+            None,
+        );
+
+        assert_eq!(
+            bootstrap
+                .metadata
+                .as_ref()
+                .and_then(|meta| meta.prompt_cache_lineage_id.as_deref()),
+            Some("lineage-123")
+        );
     }
 
     #[tokio::test]

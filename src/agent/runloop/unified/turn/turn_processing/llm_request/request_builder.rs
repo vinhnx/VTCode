@@ -1,5 +1,7 @@
 use anyhow::Result;
+use std::collections::hash_map::DefaultHasher;
 use std::fmt::Write as _;
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use vtcode_core::config::{OpenAIPromptCacheKeyMode, PromptCachingConfig};
@@ -48,16 +50,45 @@ pub(super) fn resolve_prompt_cache_shaping_mode(
 pub(super) fn build_openai_prompt_cache_key(
     openai_prompt_cache_enabled: bool,
     prompt_cache_key_mode: &OpenAIPromptCacheKeyMode,
-    run_id: &str,
+    prompt_cache_lineage_id: Option<&str>,
+    model: &str,
 ) -> Option<String> {
     if !openai_prompt_cache_enabled {
         return None;
     }
 
     match prompt_cache_key_mode {
-        OpenAIPromptCacheKeyMode::Session => Some(format!("vtcode:openai:{run_id}")),
+        OpenAIPromptCacheKeyMode::Session => {
+            prompt_cache_lineage_id.map(|lineage_id| format!("vtcode:openai:{lineage_id}:{model}"))
+        }
         OpenAIPromptCacheKeyMode::Off => None,
     }
+}
+
+fn hash_value<T: Hash>(value: &T) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    value.hash(&mut hasher);
+    hasher.finish()
+}
+
+fn stable_system_prefix_hash(system_prompt: &str) -> u64 {
+    let stable_prefix = system_prompt
+        .split("\n[Runtime Context]\n")
+        .next()
+        .unwrap_or(system_prompt)
+        .split("\n[Context]\n")
+        .next()
+        .unwrap_or(system_prompt)
+        .trim_end();
+    hash_value(&stable_prefix)
+}
+
+fn tool_catalog_hash(current_tools: Option<&Arc<Vec<uni::ToolDefinition>>>) -> Option<u64> {
+    current_tools.and_then(|defs| {
+        serde_json::to_string(defs)
+            .ok()
+            .map(|text| hash_value(&text))
+    })
 }
 
 pub(super) struct TurnRequestSnapshot {
@@ -78,7 +109,6 @@ pub(super) struct TurnRequestSnapshot {
 
 struct PromptAssemblyInput<'a> {
     step_count: usize,
-    active_model: &'a str,
     turn: &'a TurnRequestSnapshot,
 }
 
@@ -86,6 +116,7 @@ struct PromptAssemblyOutput {
     system_prompt: String,
     current_tools: Option<Arc<Vec<uni::ToolDefinition>>>,
     has_tools: bool,
+    tool_catalog_cache_hit: bool,
 }
 
 pub(super) struct TurnRequestBuildResult {
@@ -178,7 +209,7 @@ async fn assemble_prompt(
         input.turn.execution.max_tool_retries,
     );
 
-    let (current_tools, has_tools) = if input.turn.tool_free_recovery {
+    let (current_tools, has_tools, tool_catalog_cache_hit) = if input.turn.tool_free_recovery {
         let _ = writeln!(
             system_prompt,
             "\n[Recovery Mode]\n- tools_disabled: true\n- answer_mode: summarize only from evidence already collected in this turn\n- if evidence is incomplete, say so explicitly\n- do_not_request_more_tools: true\n- keep_response_brief: true"
@@ -186,27 +217,9 @@ async fn assemble_prompt(
         if let Some(reason) = input.turn.recovery_reason.as_deref() {
             let _ = writeln!(system_prompt, "- recovery_reason: {}", reason);
         }
-        emit_tool_catalog_cache_metrics(
-            ctx,
-            input.step_count,
-            input.active_model,
-            true,
-            input.turn.plan_mode,
-            input.turn.request_user_input_enabled,
-            0,
-        );
-        (None, false)
+        (None, false, true)
     } else if !input.turn.capabilities.tools {
-        emit_tool_catalog_cache_metrics(
-            ctx,
-            input.step_count,
-            input.active_model,
-            true,
-            input.turn.plan_mode,
-            input.turn.request_user_input_enabled,
-            0,
-        );
-        (None, false)
+        (None, false, true)
     } else {
         let tool_snapshot = ctx
             .tool_catalog
@@ -218,16 +231,7 @@ async fn assemble_prompt(
             .await;
         let current_tools = tool_snapshot.snapshot;
         let has_tools = current_tools.is_some();
-        emit_tool_catalog_cache_metrics(
-            ctx,
-            input.step_count,
-            input.active_model,
-            tool_snapshot.cache_hit,
-            input.turn.plan_mode,
-            input.turn.request_user_input_enabled,
-            current_tools.as_ref().map_or(0, |defs| defs.len()),
-        );
-        (current_tools, has_tools)
+        (current_tools, has_tools, tool_snapshot.cache_hit)
     };
 
     if let Some(defs) = current_tools.as_ref()
@@ -250,6 +254,7 @@ async fn assemble_prompt(
         system_prompt,
         current_tools,
         has_tools,
+        tool_catalog_cache_hit,
     })
 }
 
@@ -310,7 +315,6 @@ pub(super) async fn build_turn_request(
         ctx,
         PromptAssemblyInput {
             step_count,
-            active_model,
             turn: turn_snapshot,
         },
     )
@@ -362,7 +366,30 @@ pub(super) async fn build_turn_request(
     let prompt_cache_key = build_openai_prompt_cache_key(
         turn_snapshot.openai_prompt_cache_enabled,
         &turn_snapshot.openai_prompt_cache_key_mode,
-        &ctx.harness_state.run_id.0,
+        ctx.session_stats.prompt_cache_lineage_id(),
+        active_model,
+    );
+    let stable_prefix_hash = stable_system_prefix_hash(&prompt_output.system_prompt);
+    let tool_catalog_hash = tool_catalog_hash(prompt_output.current_tools.as_ref());
+    let prefix_change_reason = ctx.session_stats.record_prompt_cache_fingerprint(
+        active_model,
+        stable_prefix_hash,
+        tool_catalog_hash,
+    );
+    emit_tool_catalog_cache_metrics(
+        ctx,
+        step_count,
+        active_model,
+        prompt_output.tool_catalog_cache_hit,
+        turn_snapshot.plan_mode,
+        turn_snapshot.request_user_input_enabled,
+        prompt_output
+            .current_tools
+            .as_ref()
+            .map_or(0, |defs| defs.len()),
+        stable_prefix_hash,
+        tool_catalog_hash,
+        prefix_change_reason,
     );
     let previous_response_id = if supports_responses_chaining(&turn_snapshot.provider_name) {
         ctx.session_stats
@@ -410,7 +437,7 @@ mod tests {
     use vtcode_core::config::loader::VTCodeConfig;
     use vtcode_core::llm::provider::{self as uni, ToolDefinition};
 
-    use super::{build_turn_request, capture_turn_request_snapshot};
+    use super::{build_turn_request, capture_turn_request_snapshot, stable_system_prefix_hash};
     use crate::agent::runloop::unified::turn::compaction::build_server_compaction_context_management;
     use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
 
@@ -565,6 +592,28 @@ mod tests {
                 "type": "compaction",
                 "compact_threshold": 512,
             }]))
+        );
+    }
+
+    #[test]
+    fn stable_prefix_hash_ignores_runtime_only_changes() {
+        let first = "Static prefix\n## Skills\n- rust-skills\n[Runtime Context]\n- Time (UTC): 2026-03-22T00:00:00Z\n- retries: 1";
+        let second = "Static prefix\n## Skills\n- rust-skills\n[Runtime Context]\n- Time (UTC): 2026-03-23T00:00:00Z\n- retries: 4";
+
+        assert_eq!(
+            stable_system_prefix_hash(first),
+            stable_system_prefix_hash(second)
+        );
+    }
+
+    #[test]
+    fn stable_prefix_hash_ignores_editor_context_runtime_tail_changes() {
+        let first = "Static prefix\n## Skills\n- rust-skills\n[Runtime Context]\n## Active Editor Context\n- Active file: src/main.rs\n- Language: Rust";
+        let second = "Static prefix\n## Skills\n- rust-skills\n[Runtime Context]\n## Active Editor Context\n- Active file: src/lib.rs\n- Language: Rust";
+
+        assert_eq!(
+            stable_system_prefix_hash(first),
+            stable_system_prefix_hash(second)
         );
     }
 }

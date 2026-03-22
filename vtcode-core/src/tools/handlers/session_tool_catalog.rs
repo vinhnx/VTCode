@@ -512,7 +512,6 @@ impl ToolCatalogEntry {
 
         match self.public_name.as_str() {
             tools::REQUEST_USER_INPUT => config.request_user_input_enabled,
-            tools::PLAN_TASK_TRACKER => config.plan_mode,
             _ => true,
         }
     }
@@ -1051,6 +1050,26 @@ mod tests {
         });
 
         assert!(names.is_empty());
+    }
+
+    #[test]
+    fn plan_task_tracker_stays_visible_outside_plan_mode() {
+        let registration = registration(tools::PLAN_TASK_TRACKER)
+            .with_description("Track plan tasks")
+            .with_parameter_schema(json!({"type":"object"}));
+
+        let catalog = SessionToolCatalog::rebuild_from_registrations(vec![registration]);
+        let names = catalog.public_tool_names(SessionToolsConfig {
+            surface: SessionSurface::Interactive,
+            capability_level: CapabilityLevel::CodeSearch,
+            documentation_mode: ToolDocumentationMode::Full,
+            plan_mode: false,
+            request_user_input_enabled: true,
+            model_capabilities: ToolModelCapabilities::default(),
+            deferred_tool_policy: DeferredToolPolicy::default(),
+        });
+
+        assert_eq!(names, vec![tools::PLAN_TASK_TRACKER.to_string()]);
     }
 
     #[test]

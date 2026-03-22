@@ -86,6 +86,11 @@ async fn test_prompt_config_hash() {
 async fn test_cache_friendly_mode_moves_volatile_context_to_runtime_section() {
     let prompt_builder = IncrementalSystemPrompt::new();
     let base_prompt = "Stable base prompt";
+    let agent_config = vtcode_config::core::AgentConfig {
+        include_temporal_context: true,
+        temporal_context_use_utc: true,
+        ..Default::default()
+    };
 
     let context_a = SystemPromptContext {
         conversation_length: 2,
@@ -121,10 +126,24 @@ async fn test_cache_friendly_mode_moves_volatile_context_to_runtime_section() {
     };
 
     let prompt_a = prompt_builder
-        .get_system_prompt(base_prompt, 1, context_a.hash(), 0, &context_a, None)
+        .get_system_prompt(
+            base_prompt,
+            1,
+            context_a.hash(),
+            0,
+            &context_a,
+            Some(&agent_config),
+        )
         .await;
     let prompt_b = prompt_builder
-        .get_system_prompt(base_prompt, 1, context_b.hash(), 0, &context_b, None)
+        .get_system_prompt(
+            base_prompt,
+            1,
+            context_b.hash(),
+            0,
+            &context_b,
+            Some(&agent_config),
+        )
         .await;
 
     let marker = "\n[Runtime Context]\n";
@@ -133,6 +152,8 @@ async fn test_cache_friendly_mode_moves_volatile_context_to_runtime_section() {
 
     assert!(prompt_a.contains("[Runtime Context]"));
     assert!(prompt_b.contains("[Runtime Context]"));
+    assert!(prompt_a.contains("Time (UTC):"));
+    assert!(prompt_b.contains("Time (UTC):"));
     assert_eq!(prefix_a, prefix_b);
 }
 
@@ -518,4 +539,54 @@ async fn test_editor_context_changes_invalidate_cached_prompt() {
     assert_ne!(prompt_without_editor, prompt_with_editor);
     assert!(!prompt_without_editor.contains("## Active Editor Context"));
     assert!(prompt_with_editor.contains("## Active Editor Context"));
+}
+
+#[tokio::test]
+async fn test_cache_friendly_editor_context_moves_to_runtime_tail() {
+    let prompt_builder = IncrementalSystemPrompt::new();
+    let base_prompt = "Stable base prompt";
+    let context_a = SystemPromptContext {
+        conversation_length: 0,
+        tool_usage_count: 0,
+        error_count: 0,
+        token_usage_ratio: 0.0,
+        full_auto: false,
+        plan_mode: false,
+        discovered_skills: Vec::new(),
+        context_window_size: None,
+        current_token_usage: None,
+        supports_context_awareness: false,
+        token_budget_guidance: "",
+        prompt_cache_shaping_mode: PromptCacheShapingMode::TrailingRuntimeContext,
+        editor_context_block: Some(
+            "## Active Editor Context\n- Active file: src/main.rs\n- Language: Rust".to_string(),
+        ),
+        active_instruction_directory: None,
+    };
+    let context_b = SystemPromptContext {
+        editor_context_block: Some(
+            "## Active Editor Context\n- Active file: src/lib.rs\n- Language: Rust".to_string(),
+        ),
+        ..context_a.clone()
+    };
+
+    let prompt_a = prompt_builder
+        .get_system_prompt(base_prompt, 1, context_a.hash(), 0, &context_a, None)
+        .await;
+    let prompt_b = prompt_builder
+        .get_system_prompt(base_prompt, 1, context_b.hash(), 0, &context_b, None)
+        .await;
+
+    let marker = "\n[Runtime Context]\n";
+    let prefix_a = prompt_a.split(marker).next().unwrap_or("");
+    let prefix_b = prompt_b.split(marker).next().unwrap_or("");
+
+    assert_eq!(prefix_a, prefix_b);
+    assert!(!prefix_a.contains("## Active Editor Context"));
+    assert!(prompt_a.contains("## Active Editor Context"));
+    assert!(prompt_b.contains("## Active Editor Context"));
+    assert!(prompt_a.find("[Runtime Context]") < prompt_a.find("## Active Editor Context"));
+    assert!(prompt_b.find("[Runtime Context]") < prompt_b.find("## Active Editor Context"));
+    assert!(prompt_a.contains("- Active file: src/main.rs"));
+    assert!(prompt_b.contains("- Active file: src/lib.rs"));
 }

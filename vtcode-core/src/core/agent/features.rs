@@ -71,8 +71,8 @@ impl FeatureSet {
         }
     }
 
-    pub fn request_user_input_enabled(&self, plan_mode: bool, interactive_session: bool) -> bool {
-        interactive_session && (plan_mode || self.request_user_input.enabled)
+    pub fn request_user_input_enabled(&self, _plan_mode: bool, interactive_session: bool) -> bool {
+        interactive_session && self.request_user_input.enabled
     }
 
     pub fn auto_compaction_enabled(&self, supports_server_compaction: bool) -> bool {
@@ -81,12 +81,11 @@ impl FeatureSet {
 
     pub fn tool_enabled_for_mode(
         tool_name: &str,
-        plan_mode: bool,
+        _plan_mode: bool,
         request_user_input_enabled: bool,
     ) -> bool {
         match tool_name {
             tools::REQUEST_USER_INPUT => request_user_input_enabled,
-            tools::PLAN_TASK_TRACKER => plan_mode,
             _ => true,
         }
     }
@@ -123,7 +122,7 @@ mod tests {
         assert!(features.allows_tool_name(tools::REQUEST_USER_INPUT, true, true));
         assert!(!features.allows_tool_name(tools::REQUEST_USER_INPUT, true, false));
         assert!(features.allows_tool_name(tools::PLAN_TASK_TRACKER, true, false));
-        assert!(!features.allows_tool_name(tools::PLAN_TASK_TRACKER, false, true));
+        assert!(features.allows_tool_name(tools::PLAN_TASK_TRACKER, false, true));
     }
 
     #[test]
@@ -134,7 +133,7 @@ mod tests {
         let features = FeatureSet::from_config(Some(&cfg));
 
         assert!(!features.request_user_input_enabled(false, true));
-        assert!(features.request_user_input_enabled(true, true));
+        assert!(!features.request_user_input_enabled(true, true));
     }
 
     #[test]
