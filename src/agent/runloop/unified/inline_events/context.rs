@@ -175,7 +175,8 @@ impl<'a> InlineEventContext<'a> {
         Ok(action)
     }
 
-    fn handle_interrupt(&self) -> InlineLoopAction {
+    fn handle_interrupt(&mut self) -> InlineLoopAction {
+        let _ = self.modal.handle_cancel(self.state.renderer());
         self.state.interrupts().action_for_interrupt()
     }
 

@@ -249,6 +249,9 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 session.mark_dirty();
                 return None;
             }
+            if session.has_active_overlay() {
+                session.close_overlay();
+            }
             session.mark_dirty();
             Some(InlineEvent::Interrupt)
         }
@@ -257,6 +260,9 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 session.core.mouse_selection.request_copy();
                 session.mark_dirty();
                 return None;
+            }
+            if session.has_active_overlay() {
+                session.close_overlay();
             }
             session.mark_dirty();
             Some(InlineEvent::Interrupt)

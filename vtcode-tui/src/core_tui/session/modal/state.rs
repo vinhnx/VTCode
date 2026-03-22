@@ -362,7 +362,7 @@ impl ModalState {
             }
             KeyCode::Char(ch) if modifiers.control || modifiers.alt => match ch {
                 'c' | 'C' if modifiers.control => {
-                    ModalListKeyResult::Cancel(InlineEvent::Overlay(OverlayEvent::Cancelled))
+                    ModalListKeyResult::Cancel(InlineEvent::Interrupt)
                 }
                 'n' | 'N' | 'j' | 'J' => {
                     list.select_next();
@@ -383,7 +383,7 @@ impl ModalState {
                 _ => ModalListKeyResult::NotHandled,
             },
             KeyCode::Char('\u{3}') => {
-                ModalListKeyResult::Cancel(InlineEvent::Overlay(OverlayEvent::Cancelled))
+                ModalListKeyResult::Cancel(InlineEvent::Interrupt)
             }
             _ => ModalListKeyResult::NotHandled,
         }
@@ -1218,10 +1218,10 @@ impl WizardModalState {
                 ModalListKeyResult::Cancel(InlineEvent::Overlay(OverlayEvent::Cancelled))
             }
             KeyCode::Char('c') | KeyCode::Char('C') if modifiers.control => {
-                ModalListKeyResult::Cancel(InlineEvent::Overlay(OverlayEvent::Cancelled))
+                ModalListKeyResult::Cancel(InlineEvent::Interrupt)
             }
             KeyCode::Char('\u{3}') => {
-                ModalListKeyResult::Cancel(InlineEvent::Overlay(OverlayEvent::Cancelled))
+                ModalListKeyResult::Cancel(InlineEvent::Interrupt)
             }
             // Up/Down/Tab: delegate to current step's list
             KeyCode::Up | KeyCode::Down | KeyCode::Tab | KeyCode::BackTab => {

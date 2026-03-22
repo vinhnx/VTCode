@@ -55,7 +55,3 @@ humidapp
 vtchat.io
 
 ===
-
-check control+c to make sure it dismiss current active modal and active subprocess. for now, control+c seems not working in auth flow and when modal is open. we should make sure control+c can dismiss any active modal and also kill any active subprocess to allow users to quickly recover from any stuck state.
-
-===
