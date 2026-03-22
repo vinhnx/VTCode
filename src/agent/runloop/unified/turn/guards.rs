@@ -389,17 +389,23 @@ pub(crate) async fn handle_turn_balancer(
 
     // NL2Repo-Bench: Navigation Loop Detection
     if repeated_tool_attempts.consecutive_navigations >= NAVIGATION_LOOP_THRESHOLD {
+        let recovery_reason = format!(
+            "Navigation loop detected after {} consecutive read/search steps. Tools are disabled on the next pass; summarize findings and propose the next concrete action.",
+            repeated_tool_attempts.consecutive_navigations
+        );
+        ctx.activate_recovery(recovery_reason.clone());
         ctx.renderer
             .line(
                 MessageStyle::Warning,
-                "[!] Navigation Loop: Pause to synthesize or act.",
+                "[!] Navigation Loop: scheduling a recovery synthesis pass.",
             )
             .unwrap_or(());
-        ctx.working_history.push(uni::Message::system(
-            navigation_loop_guidance(ctx.session_stats.is_plan_mode()).to_string(),
-        ));
-        repeated_tool_attempts.consecutive_navigations = 0;
-        return TurnHandlerOutcome::Continue;
+        ctx.working_history.push(uni::Message::system(format!(
+            "{} {}",
+            recovery_reason,
+            navigation_loop_guidance(ctx.session_stats.is_plan_mode())
+        )));
+        return apply_balancer_recovery(repeated_tool_attempts);
     }
 
     // --- Turn balancer: cap low-signal churn ---
@@ -410,6 +416,41 @@ pub(crate) async fn handle_turn_balancer(
         1_usize << ((step_count / 4).ilog2())
     };
 
+    let effective_repeat_limit = tool_repeat_limit.max(3);
+    let repeated_low_signal = repeated_tool_attempts.max_low_signal_count();
+    if repeated_low_signal >= effective_repeat_limit
+        && repeated_tool_attempts.consecutive_navigations >= effective_repeat_limit
+    {
+        let recovery_reason = format!(
+            "Repeated low-signal navigation calls reached the per-turn fast-path cap ({}). Tools are disabled on the next pass; summarize only from collected evidence.",
+            effective_repeat_limit
+        );
+        ctx.activate_recovery(recovery_reason.clone());
+        ctx.renderer
+            .line(
+                MessageStyle::Info,
+                "[!] Turn balancer: repeated low-signal navigation detected; scheduling an early recovery pass.",
+            )
+            .unwrap_or(());
+        ctx.working_history
+            .push(uni::Message::system(recovery_reason));
+        {
+            let mut ledger = ctx.decision_ledger.write().await;
+            ledger.record_decision(
+                "Turn balancer: Early recovery intervention".to_string(),
+                vtcode_core::core::decision_tracker::Action::Response {
+                    content:
+                        "Repeated low-signal navigation was detected; an early tool-free recovery pass was scheduled."
+                            .to_string(),
+                    response_type:
+                        vtcode_core::core::decision_tracker::ResponseType::ContextSummary,
+                },
+                None,
+            );
+        }
+        return apply_balancer_recovery(repeated_tool_attempts);
+    }
+
     if !step_count.is_multiple_of(check_interval) {
         return TurnHandlerOutcome::Continue;
     }
@@ -417,7 +458,7 @@ pub(crate) async fn handle_turn_balancer(
     // Exclude read-only tools from repeated count (they're legitimate exploration)
     let max_repeated = repeated_tool_attempts
         .max_count_filtered(is_readonly_signature)
-        .max(repeated_tool_attempts.max_low_signal_count());
+        .max(repeated_low_signal);
 
     if crate::agent::runloop::unified::turn::utils::should_trigger_turn_balancer(
         step_count,
@@ -474,7 +515,7 @@ mod tests {
     use crate::agent::runloop::unified::turn::context::TurnHandlerOutcome;
     use crate::agent::runloop::unified::turn::context::TurnLoopResult;
     use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
-        LoopTracker, update_repetition_tracker,
+        LoopTracker, NAVIGATION_LOOP_THRESHOLD, update_repetition_tracker,
     };
     use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
     use serde_json::json;
@@ -595,6 +636,43 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn navigation_loop_schedules_recovery_and_progress_only_recovery_text_blocks() {
+        let mut backing = TestTurnProcessingBacking::new(8).await;
+        let mut ctx = backing.turn_processing_context();
+        let mut tracker = LoopTracker::new();
+        tracker.consecutive_navigations = NAVIGATION_LOOP_THRESHOLD;
+
+        let balancer_outcome = super::handle_turn_balancer(&mut ctx, 1, &mut tracker, 8, 3).await;
+        assert!(matches!(balancer_outcome, TurnHandlerOutcome::Continue));
+        assert_eq!(tracker.consecutive_navigations, 0);
+        assert!(ctx.is_recovery_active());
+        assert!(ctx.working_history.iter().any(|message| {
+            message
+                .content
+                .as_text()
+                .contains("Navigation loop detected")
+        }));
+        assert!(ctx.consume_recovery_pass());
+
+        let recovery_outcome = ctx
+            .handle_text_response(
+                "I'll inspect one more file and then summarize.".to_string(),
+                Vec::new(),
+                None,
+                None,
+                false,
+            )
+            .await
+            .expect("recovery response should be handled");
+
+        assert!(matches!(
+            recovery_outcome,
+            TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. })
+        ));
+        assert!(!ctx.is_recovery_active());
+    }
+
+    #[tokio::test]
     async fn low_signal_search_churn_schedules_recovery_and_progress_only_recovery_text_blocks() {
         let mut backing = TestTurnProcessingBacking::new(8).await;
         let legacy_detector = backing.legacy_loop_detector();
@@ -684,6 +762,64 @@ mod tests {
                 .expect("legacy loop detector should lock")
                 .is_hard_limit_exceeded(tool_names::UNIFIED_SEARCH)
         );
+    }
+
+    #[tokio::test]
+    async fn early_low_signal_search_churn_schedules_recovery_before_turn_window() {
+        let mut backing = TestTurnProcessingBacking::new(20).await;
+        let mut ctx = backing.turn_processing_context();
+        let mut tracker = LoopTracker::new();
+        let miss = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
+            output: json!({"matches": []}),
+            stdout: None,
+            modified_files: vec![],
+            command_success: true,
+        });
+
+        update_repetition_tracker(
+            &mut tracker,
+            &miss,
+            tool_names::UNIFIED_SEARCH,
+            &json!({
+                "action": "structural",
+                "pattern": "fn $name(...) -> Result<$T, $E>",
+                "lang": "rust",
+                "globs": ["vtcode-tui/**/*.rs"]
+            }),
+        );
+        update_repetition_tracker(
+            &mut tracker,
+            &miss,
+            tool_names::UNIFIED_SEARCH,
+            &json!({
+                "action": "grep",
+                "pattern": "-> Result",
+                "path": "vtcode-tui",
+                "globs": ["vtcode-tui/**/*.rs"]
+            }),
+        );
+        update_repetition_tracker(
+            &mut tracker,
+            &miss,
+            tool_names::UNIFIED_SEARCH,
+            &json!({
+                "action": "grep",
+                "pattern": "Result<",
+                "path": "vtcode-tui",
+                "globs": ["vtcode-tui/**/*.rs"]
+            }),
+        );
+
+        let balancer_outcome = super::handle_turn_balancer(&mut ctx, 3, &mut tracker, 20, 3).await;
+        assert!(matches!(balancer_outcome, TurnHandlerOutcome::Continue));
+        assert!(ctx.is_recovery_active());
+        assert_eq!(tracker.consecutive_navigations, 0);
+        assert!(ctx.working_history.iter().any(|message| {
+            message
+                .content
+                .as_text()
+                .contains("Repeated low-signal navigation calls reached the per-turn fast-path cap")
+        }));
     }
 
     #[test]

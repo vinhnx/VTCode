@@ -379,6 +379,9 @@ pub(crate) async fn validate_tool_call<'a>(
         &canonical_tool_name,
         &preflight_args,
     );
+    if !preflight.readonly_classification {
+        ctx.harness_state.reset_file_read_family_streak();
+    }
     let parallel_safe_after_preflight = vtcode_core::tools::tool_intent::is_parallel_safe_call(
         &canonical_tool_name,
         &effective_args,

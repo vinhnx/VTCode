@@ -1044,6 +1044,100 @@ async fn repeated_identical_readonly_call_in_same_turn_reuses_recent_result() {
 }
 
 #[tokio::test]
+async fn repeated_same_file_read_variants_activate_recovery_before_fourth_read() {
+    let mut backing = TestContextBacking::new(4).await;
+    let sample_path = backing.sample_file.to_string_lossy().to_string();
+
+    let read_args = vec![
+        json!({
+            "action": "read",
+            "path": sample_path.clone()
+        }),
+        json!({
+            "action": "read",
+            "path": sample_path.clone(),
+            "line_start": 1,
+            "line_end": 1
+        }),
+        json!({
+            "action": "read",
+            "path": sample_path.clone(),
+            "offset": 0,
+            "limit": 1
+        }),
+        json!({
+            "action": "read",
+            "path": sample_path.clone(),
+            "line_start": 1,
+            "line_end": 2
+        }),
+    ];
+
+    let mut repeated_tool_attempts = LoopTracker::new();
+    let mut turn_modified_files = BTreeSet::new();
+    let mut tp_ctx = backing.turn_processing_context();
+    let mut outcome_ctx = ToolOutcomeContext {
+        ctx: &mut tp_ctx,
+        repeated_tool_attempts: &mut repeated_tool_attempts,
+        turn_modified_files: &mut turn_modified_files,
+    };
+
+    for (idx, args) in read_args.into_iter().enumerate().take(3) {
+        let outcome = handle_single_tool_call(
+            &mut outcome_ctx,
+            &format!("read_variant_{idx}"),
+            tool_names::UNIFIED_FILE,
+            args,
+        )
+        .await
+        .expect("read variant should complete");
+
+        assert!(outcome.is_none());
+    }
+
+    assert_eq!(outcome_ctx.ctx.tool_registry.execution_history_len(), 3);
+    assert_eq!(
+        outcome_ctx
+            .ctx
+            .harness_state
+            .consecutive_same_file_read_family_calls,
+        3
+    );
+
+    let blocked = handle_single_tool_call(
+        &mut outcome_ctx,
+        "read_variant_blocked",
+        tool_names::UNIFIED_FILE,
+        json!({
+            "action": "read",
+            "path": sample_path,
+            "line_start": 1,
+            "line_end": 2
+        }),
+    )
+    .await
+    .expect("fourth read attempt should be handled");
+
+    assert!(matches!(blocked, Some(TurnHandlerOutcome::Continue)));
+    assert_eq!(outcome_ctx.ctx.tool_registry.execution_history_len(), 3);
+    assert_eq!(
+        outcome_ctx
+            .ctx
+            .harness_state
+            .consecutive_same_file_read_family_calls,
+        4
+    );
+    assert!(outcome_ctx.ctx.is_recovery_active());
+    assert!(
+        outcome_ctx
+            .ctx
+            .working_history
+            .iter()
+            .any(|message| { message.content.as_text().contains("repeated_read_family") })
+    );
+}
+
+#[tokio::test]
 async fn denied_tool_permission_emits_policy_response_without_budget_burn() {
     let mut backing = TestContextBacking::new(2).await;
     let valid_file = backing.sample_file.clone();

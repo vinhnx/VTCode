@@ -86,6 +86,8 @@ pub(crate) struct HarnessTurnState {
     pub consecutive_spool_chunk_reads: usize,
     pub consecutive_same_shell_command_runs: usize,
     pub last_shell_command_signature: Option<String>,
+    pub consecutive_same_file_read_family_calls: usize,
+    last_file_read_family_signature: Option<String>,
     seen_successful_readonly_signatures: HashSet<String>,
     streamed_tool_call_item_ids: HashMap<String, String>,
     pub seen_task_tracker_create_signatures: HashSet<String>,
@@ -120,6 +122,8 @@ impl HarnessTurnState {
             consecutive_spool_chunk_reads: 0,
             consecutive_same_shell_command_runs: 0,
             last_shell_command_signature: None,
+            consecutive_same_file_read_family_calls: 0,
+            last_file_read_family_signature: None,
             seen_successful_readonly_signatures: HashSet::new(),
             streamed_tool_call_item_ids: HashMap::new(),
             seen_task_tracker_create_signatures: HashSet::new(),
@@ -289,6 +293,24 @@ impl HarnessTurnState {
     pub(crate) fn reset_shell_command_run_streak(&mut self) {
         self.last_shell_command_signature = None;
         self.consecutive_same_shell_command_runs = 0;
+    }
+
+    pub(crate) fn record_file_read_family_call(&mut self, signature: String) -> usize {
+        if self.last_file_read_family_signature.as_deref() == Some(signature.as_str()) {
+            self.consecutive_same_file_read_family_calls = self
+                .consecutive_same_file_read_family_calls
+                .saturating_add(1);
+        } else {
+            self.last_file_read_family_signature = Some(signature);
+            self.consecutive_same_file_read_family_calls = 1;
+        }
+
+        self.consecutive_same_file_read_family_calls
+    }
+
+    pub(crate) fn reset_file_read_family_streak(&mut self) {
+        self.last_file_read_family_signature = None;
+        self.consecutive_same_file_read_family_calls = 0;
     }
 
     pub(crate) fn record_task_tracker_create_signature(&mut self, signature: String) -> bool {
@@ -703,6 +725,33 @@ mod tests {
         state.reset_shell_command_run_streak();
         assert_eq!(state.consecutive_same_shell_command_runs, 0);
         assert!(state.last_shell_command_signature.is_none());
+    }
+
+    #[test]
+    fn harness_state_tracks_file_read_family_streak() {
+        let mut state = HarnessTurnState::new(
+            TurnRunId("run-1".to_string()),
+            TurnId("turn-1".to_string()),
+            4,
+            10,
+            1,
+        );
+
+        assert_eq!(
+            state.record_file_read_family_call("unified_file::read::src/lib.rs".to_string()),
+            1
+        );
+        assert_eq!(
+            state.record_file_read_family_call("unified_file::read::src/lib.rs".to_string()),
+            2
+        );
+        assert_eq!(
+            state.record_file_read_family_call("unified_file::read::src/main.rs".to_string()),
+            1
+        );
+
+        state.reset_file_read_family_streak();
+        assert_eq!(state.consecutive_same_file_read_family_calls, 0);
     }
 
     #[test]

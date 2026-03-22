@@ -11,10 +11,14 @@ use crate::agent::runloop::unified::turn::context::{
 };
 use crate::agent::runloop::unified::turn::tool_outcomes::helpers::signature_key_for;
 
-use super::looping::{shell_run_signature, spool_chunk_read_path, task_tracker_create_signature};
+use super::looping::{
+    low_signal_family_key, shell_run_signature, spool_chunk_read_path,
+    task_tracker_create_signature,
+};
 use super::{ValidationResult, build_failure_error_content};
 
 const SPOOL_CHUNK_GREP_PATTERN: &str = "warning|error|TODO";
+const MAX_CONSECUTIVE_SAME_FILE_READ_FAMILY_CALLS: usize = 4;
 
 pub(crate) fn max_consecutive_blocked_tool_calls_per_turn(
     ctx: &TurnProcessingContext<'_>,
@@ -96,6 +100,32 @@ fn build_repeated_shell_run_error_content(max_repeated_runs: usize) -> String {
     .to_string()
 }
 
+fn repeated_file_read_family_key(canonical_tool_name: &str, args: &Value) -> Option<String> {
+    if spool_chunk_read_path(canonical_tool_name, args).is_some() {
+        return None;
+    }
+
+    match canonical_tool_name {
+        tool_names::READ_FILE | tool_names::UNIFIED_FILE => {
+            low_signal_family_key(canonical_tool_name, args)
+        }
+        _ => None,
+    }
+}
+
+fn build_repeated_file_read_family_error_content(target: &str) -> String {
+    super::super::execution_result::build_error_content(
+        format!(
+            "Repeated reads of '{}' with limited progress detected. Reuse the collected output, summarize findings, or narrow the range before reading again.",
+            target
+        ),
+        None,
+        None,
+        "repeated_read_family",
+    )
+    .to_string()
+}
+
 pub(super) fn enforce_duplicate_task_tracker_create_guard<'a>(
     ctx: &mut TurnProcessingContext<'a>,
     tool_call_id: &str,
@@ -132,6 +162,26 @@ pub(super) fn enforce_repeated_read_only_call_guard(
 ) -> Option<ValidationResult> {
     if !readonly_classification {
         return None;
+    }
+
+    if let Some(family_key) = repeated_file_read_family_key(canonical_tool_name, effective_args) {
+        let streak = ctx
+            .harness_state
+            .record_file_read_family_call(family_key.clone());
+        if streak >= MAX_CONSECUTIVE_SAME_FILE_READ_FAMILY_CALLS {
+            let target = family_key.rsplit("::").next().unwrap_or("current file");
+            let block_reason = format!(
+                "Repeated read-only exploration of '{}' hit the per-turn family cap ({}). Scheduling a final recovery pass without more tools.",
+                target, MAX_CONSECUTIVE_SAME_FILE_READ_FAMILY_CALLS
+            );
+            ctx.activate_recovery(block_reason.clone());
+            ctx.push_tool_response(
+                tool_call_id,
+                build_repeated_file_read_family_error_content(target),
+            );
+            ctx.push_system_message(block_reason);
+            return Some(ValidationResult::Blocked);
+        }
     }
 
     let signature = signature_key_for(canonical_tool_name, effective_args);
