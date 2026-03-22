@@ -20,7 +20,8 @@ use crate::agent::runloop::unified::reasoning::resolve_reasoning_visibility;
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
 use crate::agent::runloop::unified::turn::turn_helpers::supports_responses_chaining;
 use crate::agent::runloop::unified::ui_interaction::{
-    StreamProgressEvent, StreamSpinnerOptions, stream_and_render_response_with_options_and_progress,
+    PlaceholderSpinner, StreamProgressEvent, StreamSpinnerOptions,
+    stream_and_render_response_with_options_and_progress,
 };
 use crate::agent::runloop::unified::ui_interaction_stream::render_stream_with_options_and_copilot_runtime_impl;
 use crate::agent::runloop::unified::wait_feedback::{
@@ -61,6 +62,45 @@ fn llm_timeout_warning_delay(timeout_budget: Duration) -> Option<Duration> {
         WAIT_TIMEOUT_WARNING_FRACTION,
         WAIT_TIMEOUT_WARNING_HEADROOM,
     )
+}
+
+async fn run_standard_stream_attempt(
+    ctx: &mut TurnProcessingContext<'_>,
+    request: uni::LLMRequest,
+    request_timeout_secs: u64,
+    spinner: &PlaceholderSpinner,
+    stream_options: StreamSpinnerOptions,
+    progress: &mut (dyn FnMut(StreamProgressEvent) + Send),
+) -> Result<(uni::LLMResponse, bool)> {
+    let stream_future = stream_and_render_response_with_options_and_progress(
+        &**ctx.provider_client,
+        request,
+        spinner,
+        ctx.renderer,
+        ctx.ctrl_c_state,
+        ctx.ctrl_c_notify,
+        stream_options,
+        Some(progress),
+    );
+    let res = tokio::time::timeout(Duration::from_secs(request_timeout_secs), stream_future).await;
+
+    match res {
+        Ok(Ok((response, emitted_tokens))) => Ok((response, emitted_tokens)),
+        Ok(Err(err)) => Err(anyhow::Error::new(err)),
+        Err(_) => Err(anyhow::anyhow!(
+            "LLM request timed out after {} seconds",
+            request_timeout_secs
+        )),
+    }
+}
+
+fn finish_streaming_bridge_success(
+    ctx: &mut TurnProcessingContext<'_>,
+    stream_bridge: &mut HarnessStreamingBridge,
+) {
+    ctx.harness_state
+        .remember_streamed_tool_call_items(stream_bridge.take_streamed_tool_call_items());
+    stream_bridge.complete_open_items();
 }
 
 /// Execute an LLM request and return the response.
@@ -169,7 +209,6 @@ pub(crate) async fn execute_llm_request(
             action_suggestion.clone()
         };
 
-        use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
         let _spinner = PlaceholderSpinner::new(
             ctx.handle,
             ctx.input_status_state.left.clone(),
@@ -215,140 +254,88 @@ pub(crate) async fn execute_llm_request(
                 strip_proposed_plan_blocks: turn_snapshot.plan_mode,
             };
             let mut progress = |event: StreamProgressEvent| stream_bridge.on_progress(event);
-            if turn_snapshot.provider_name == vtcode_core::copilot::COPILOT_PROVIDER_KEY {
-                let mut runtime_host = CopilotRuntimeHost::new(
-                    ctx.tool_registry,
-                    ctx.tool_result_cache,
-                    ctx.session,
-                    ctx.session_stats,
-                    ctx.mcp_panel_state,
-                    ctx.handle,
-                    ctx.ctrl_c_state,
-                    ctx.ctrl_c_notify,
-                    ctx.default_placeholder.clone(),
-                    ctx.approval_recorder,
-                    ctx.decision_ledger,
-                    ctx.tool_permission_cache,
-                    ctx.safety_validator,
-                    ctx.lifecycle_hooks,
-                    ctx.vt_cfg,
-                    ctx.traj,
-                    ctx.harness_state,
-                    runtime_tools.as_ref(),
-                    ctx.skip_confirmations,
-                    ctx.harness_emitter,
-                    format!("{}-step-{}", ctx.harness_state.turn_id.0, step_count),
-                );
-                let exposed_tools = runtime_host.exposed_tools().to_vec();
-
-                if let Some(start_prompt_session) = ctx
-                    .provider_client
-                    .as_ref()
-                    .start_copilot_prompt_session(request.clone(), &exposed_tools)
-                {
-                    let prompt_session = start_prompt_session.await?;
-                    let (mut stream, mut runtime_requests) =
-                        prompt_session_to_stream(request.model.clone(), prompt_session);
-                    match render_stream_with_options_and_copilot_runtime_impl(
-                        &turn_snapshot.provider_name,
-                        &mut stream,
-                        None,
-                        Some(&mut runtime_requests),
-                        Some(&mut runtime_host),
-                        Some(Duration::from_secs(request_timeout_secs)),
-                        &_spinner,
-                        ctx.renderer,
+            let stream_result =
+                if turn_snapshot.provider_name == vtcode_core::copilot::COPILOT_PROVIDER_KEY {
+                    let mut runtime_host = CopilotRuntimeHost::new(
+                        ctx.tool_registry,
+                        ctx.tool_result_cache,
+                        ctx.session,
+                        ctx.session_stats,
+                        ctx.mcp_panel_state,
+                        ctx.handle,
                         ctx.ctrl_c_state,
                         ctx.ctrl_c_notify,
-                        stream_options,
-                        Some(&mut progress),
-                    )
-                    .await
+                        ctx.default_placeholder.clone(),
+                        ctx.approval_recorder,
+                        ctx.decision_ledger,
+                        ctx.tool_permission_cache,
+                        ctx.safety_validator,
+                        ctx.lifecycle_hooks,
+                        ctx.vt_cfg,
+                        ctx.traj,
+                        ctx.harness_state,
+                        runtime_tools.as_ref(),
+                        ctx.skip_confirmations,
+                        ctx.harness_emitter,
+                        format!("{}-step-{}", ctx.harness_state.turn_id.0, step_count),
+                    );
+                    let exposed_tools = runtime_host.exposed_tools().to_vec();
+
+                    if let Some(start_prompt_session) = ctx
+                        .provider_client
+                        .as_ref()
+                        .start_copilot_prompt_session(request.clone(), &exposed_tools)
                     {
-                        Ok((response, emitted_tokens)) => {
-                            ctx.harness_state.remember_streamed_tool_call_items(
-                                stream_bridge.take_streamed_tool_call_items(),
-                            );
-                            stream_bridge.complete_open_items();
-                            Ok((response, emitted_tokens))
-                        }
-                        Err(err) => {
-                            stream_bridge.abort();
-                            Err(anyhow::Error::new(err))
-                        }
+                        let prompt_session = start_prompt_session.await?;
+                        let (mut stream, mut runtime_requests) =
+                            prompt_session_to_stream(request.model.clone(), prompt_session);
+                        render_stream_with_options_and_copilot_runtime_impl(
+                            &turn_snapshot.provider_name,
+                            &mut stream,
+                            None,
+                            Some(&mut runtime_requests),
+                            Some(&mut runtime_host),
+                            Some(Duration::from_secs(request_timeout_secs)),
+                            &_spinner,
+                            ctx.renderer,
+                            ctx.ctrl_c_state,
+                            ctx.ctrl_c_notify,
+                            stream_options,
+                            Some(&mut progress),
+                        )
+                        .await
+                        .map_err(anyhow::Error::new)
+                    } else {
+                        run_standard_stream_attempt(
+                            ctx,
+                            request.clone(),
+                            request_timeout_secs,
+                            &_spinner,
+                            stream_options,
+                            &mut progress,
+                        )
+                        .await
                     }
                 } else {
-                    let stream_future = stream_and_render_response_with_options_and_progress(
-                        &**ctx.provider_client,
+                    run_standard_stream_attempt(
+                        ctx,
                         request.clone(),
+                        request_timeout_secs,
                         &_spinner,
-                        ctx.renderer,
-                        ctx.ctrl_c_state,
-                        ctx.ctrl_c_notify,
                         stream_options,
-                        Some(&mut progress),
-                    );
-                    let res = tokio::time::timeout(
-                        Duration::from_secs(request_timeout_secs),
-                        stream_future,
+                        &mut progress,
                     )
-                    .await;
+                    .await
+                };
 
-                    match res {
-                        Ok(Ok((response, emitted_tokens))) => {
-                            ctx.harness_state.remember_streamed_tool_call_items(
-                                stream_bridge.take_streamed_tool_call_items(),
-                            );
-                            stream_bridge.complete_open_items();
-                            Ok((response, emitted_tokens))
-                        }
-                        Ok(Err(err)) => {
-                            stream_bridge.abort();
-                            Err(anyhow::Error::new(err))
-                        }
-                        Err(_) => {
-                            stream_bridge.abort();
-                            Err(anyhow::anyhow!(
-                                "LLM request timed out after {} seconds",
-                                request_timeout_secs
-                            ))
-                        }
-                    }
+            match stream_result {
+                Ok((response, emitted_tokens)) => {
+                    finish_streaming_bridge_success(ctx, &mut stream_bridge);
+                    Ok((response, emitted_tokens))
                 }
-            } else {
-                let stream_future = stream_and_render_response_with_options_and_progress(
-                    &**ctx.provider_client,
-                    request.clone(),
-                    &_spinner,
-                    ctx.renderer,
-                    ctx.ctrl_c_state,
-                    ctx.ctrl_c_notify,
-                    stream_options,
-                    Some(&mut progress),
-                );
-                let res =
-                    tokio::time::timeout(Duration::from_secs(request_timeout_secs), stream_future)
-                        .await;
-
-                match res {
-                    Ok(Ok((response, emitted_tokens))) => {
-                        ctx.harness_state.remember_streamed_tool_call_items(
-                            stream_bridge.take_streamed_tool_call_items(),
-                        );
-                        stream_bridge.complete_open_items();
-                        Ok((response, emitted_tokens))
-                    }
-                    Ok(Err(err)) => {
-                        stream_bridge.abort();
-                        Err(anyhow::Error::new(err))
-                    }
-                    Err(_) => {
-                        stream_bridge.abort();
-                        Err(anyhow::anyhow!(
-                            "LLM request timed out after {} seconds",
-                            request_timeout_secs
-                        ))
-                    }
+                Err(err) => {
+                    stream_bridge.abort();
+                    Err(err)
                 }
             }
         } else if ctx.ctrl_c_state.is_cancel_requested() || ctx.ctrl_c_state.is_exit_requested() {

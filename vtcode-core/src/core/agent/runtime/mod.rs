@@ -43,6 +43,7 @@ pub enum RuntimeControl {
     StopRequested,
 }
 
+#[doc(hidden)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RuntimeModelProgress {
     OutputDelta(String),
@@ -59,13 +60,12 @@ pub enum RuntimeModelProgress {
 }
 
 #[derive(Debug, Clone)]
-pub struct RuntimeModelOutput {
-    pub response: LLMResponse,
-    pub streamed: bool,
+struct RuntimeModelOutput {
+    response: LLMResponse,
 }
 
 #[async_trait]
-pub trait RuntimeModelAdapter {
+trait RuntimeModelAdapter {
     async fn execute(
         &mut self,
         request: LLMRequest,
@@ -110,8 +110,6 @@ impl RuntimeModelAdapter for ProviderRuntimeModelAdapter<'_> {
 
         let mut final_usage = ProviderUsage::default();
         let mut completed_response: Option<LLMResponse> = None;
-        let mut streamed = false;
-
         while let Some(event_result) = stream.next().await {
             if matches!(
                 self.steering.poll_turn_control().await,
@@ -130,24 +128,20 @@ impl RuntimeModelAdapter for ProviderRuntimeModelAdapter<'_> {
                 }) {
                     response.usage = None;
                 }
-                return Ok(RuntimeModelOutput { response, streamed });
+                return Ok(RuntimeModelOutput { response });
             }
 
             match event_result? {
                 NormalizedStreamEvent::TextDelta { delta } => {
-                    streamed = true;
                     on_progress(RuntimeModelProgress::OutputDelta(delta));
                 }
                 NormalizedStreamEvent::ReasoningDelta { delta } => {
-                    streamed = true;
                     on_progress(RuntimeModelProgress::ReasoningDelta(delta));
                 }
                 NormalizedStreamEvent::ToolCallStart { call_id, name } => {
-                    streamed = true;
                     on_progress(RuntimeModelProgress::ToolCallStarted { call_id, name });
                 }
                 NormalizedStreamEvent::ToolCallDelta { call_id, delta } => {
-                    streamed = true;
                     on_progress(RuntimeModelProgress::ToolCallDelta { call_id, delta });
                 }
                 NormalizedStreamEvent::Usage { usage } => {
@@ -180,7 +174,7 @@ impl RuntimeModelAdapter for ProviderRuntimeModelAdapter<'_> {
             response.usage = Some(final_usage);
         }
 
-        Ok(RuntimeModelOutput { response, streamed })
+        Ok(RuntimeModelOutput { response })
     }
 }
 
@@ -295,12 +289,12 @@ pub struct TurnExecution {
     pub response: LLMResponse,
     pub content: String,
     pub reasoning: Option<String>,
-    pub streamed: bool,
 }
 
 const MIN_REASONING_UPDATE_BYTES: usize = 256;
 const MAX_REASONING_UPDATE_EVENTS: usize = 2;
 
+#[doc(hidden)]
 pub struct StreamingLifecycleBridge {
     event_sink: Option<EventSink>,
     assistant_item_id: String,
@@ -672,10 +666,8 @@ impl AgentRuntime {
         let mut full_reasoning = String::new();
         let mut on_progress =
             |event| self.record_model_progress(event, &mut full_text, &mut full_reasoning);
-        let RuntimeModelOutput {
-            mut response,
-            streamed,
-        } = adapter.execute(request, timeout, &mut on_progress).await?;
+        let RuntimeModelOutput { mut response } =
+            adapter.execute(request, timeout, &mut on_progress).await?;
 
         merge_stream_and_completed_text(&mut full_text, response.content.as_deref());
         merge_stream_and_completed_text(&mut full_reasoning, response.reasoning.as_deref());
@@ -758,7 +750,6 @@ impl AgentRuntime {
             } else {
                 Some(full_reasoning)
             },
-            streamed,
         })
     }
 
@@ -962,11 +953,10 @@ mod tests {
             turn.response.reasoning.as_deref(),
             Some("**why** this works")
         );
-        assert!(!turn.streamed);
     }
 
     #[tokio::test]
-    async fn run_turn_once_marks_delta_streams_as_streamed() {
+    async fn provider_runtime_model_adapter_emits_delta_progress() {
         let response = LLMResponse {
             content: Some("hello world".to_string()),
             model: "test-model".to_string(),
@@ -979,22 +969,30 @@ mod tests {
             text_delta: "hello world".to_string(),
             reasoning_delta: "trace".to_string(),
         };
-        let state = AgentSessionState::new("session".to_string(), 16, 4, 128_000);
-        let mut runtime = AgentRuntime::new(state, None, None);
+        let mut steering = RuntimeSteering::default();
         let mut provider_box: Box<dyn LLMProvider> = Box::new(provider);
         let request = LLMRequest {
             model: "test-model".to_string(),
             ..Default::default()
         };
 
-        let turn = runtime
-            .run_turn_once(&mut provider_box, request, None)
+        let mut adapter = ProviderRuntimeModelAdapter::new(&mut provider_box, &mut steering);
+        let mut seen_progress = Vec::new();
+        let mut callback = |event| seen_progress.push(event);
+        let output = adapter
+            .execute(request, None, &mut callback)
             .await
-            .expect("run_turn_once should succeed");
+            .expect("adapter execution should succeed");
 
-        assert_eq!(turn.content, "hello world");
-        assert_eq!(turn.reasoning.as_deref(), Some("trace"));
-        assert!(turn.streamed);
+        assert_eq!(output.response.content.as_deref(), Some("hello world"));
+        assert_eq!(output.response.reasoning.as_deref(), Some("trace"));
+        assert_eq!(
+            seen_progress,
+            vec![
+                RuntimeModelProgress::ReasoningDelta("trace".to_string()),
+                RuntimeModelProgress::OutputDelta("hello world".to_string()),
+            ]
+        );
     }
 
     #[test]
