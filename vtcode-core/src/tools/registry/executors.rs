@@ -1942,7 +1942,7 @@ impl ToolRegistry {
                 .map(|source| (source.len(), source.starts_with("base64:")))
                 .unwrap_or((0, false));
 
-        tracing::debug!(
+        tracing::trace!(
             tool = "unified_file",
             action,
             payload_bytes = serialized_payload_size_bytes(args),

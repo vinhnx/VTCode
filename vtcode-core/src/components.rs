@@ -374,7 +374,7 @@ pub struct TracingLogging;
 
 impl<Ctx> LoggingProvider<Ctx> for TracingLogging {
     fn on_start(_ctx: &Ctx, tool_name: &str, _args: &Value) {
-        tracing::debug!(tool = %tool_name, "CGP tool execution started");
+        tracing::trace!(tool = %tool_name, "CGP tool execution started");
     }
 
     fn on_cache_hit(_ctx: &Ctx, tool_name: &str, _args: &Value) {
@@ -382,7 +382,7 @@ impl<Ctx> LoggingProvider<Ctx> for TracingLogging {
     }
 
     fn on_success(_ctx: &Ctx, tool_name: &str, duration: Duration, attempt: u32, from_cache: bool) {
-        tracing::debug!(
+        tracing::trace!(
             tool = %tool_name,
             duration_ms = duration.as_millis() as u64,
             attempt,

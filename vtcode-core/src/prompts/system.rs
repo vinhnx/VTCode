@@ -193,7 +193,7 @@ pub async fn compose_system_instruction_text(
     let resolved_layers = resolve_system_prompt_layers(_project_root).await;
     let base_prompt = apply_system_prompt_layers(static_base_prompt, &resolved_layers);
 
-    tracing::debug!(
+    tracing::trace!(
         mode = ?prompt_mode,
         base_tokens_approx = base_prompt.len() / 4, // rough token estimate
         "Selected system prompt mode"

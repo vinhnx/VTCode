@@ -6,7 +6,7 @@
 use anyhow::Result;
 use std::path::Path;
 use tokio::fs;
-use tracing::{debug, info, warn};
+use tracing::{debug, trace, warn};
 
 /// Directory structure for dynamic context discovery
 pub struct DynamicContextDirs {
@@ -67,7 +67,7 @@ pub async fn initialize_dynamic_context(
                 "Failed to create dynamic context directory"
             );
         } else {
-            debug!(path = %dir.display(), "Created dynamic context directory");
+            trace!(path = %dir.display(), "Created dynamic context directory");
         }
     }
 
@@ -84,7 +84,7 @@ pub async fn initialize_dynamic_context(
         create_initial_terminals_index(&dirs.terminals).await;
     }
 
-    info!(
+    debug!(
         workspace = %workspace.display(),
         "Initialized dynamic context discovery directories"
     );

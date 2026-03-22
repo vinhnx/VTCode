@@ -396,7 +396,7 @@ impl ToolPolicyGateway {
     pub fn take_preapproved(&mut self, name: &str) -> bool {
         let canonical = canonical_tool_name(name);
         let was_preapproved = self.preapproved_tools.remove(&*canonical);
-        tracing::debug!(
+        tracing::trace!(
             "take_preapproved: tool='{}', canonical='{}', was_preapproved={}, remaining={:?}",
             name,
             canonical,
@@ -410,7 +410,7 @@ impl ToolPolicyGateway {
         let canonical = canonical_tool_name(name);
         let canonical_owned = canonical.into_owned();
         self.preapproved_tools.insert(canonical_owned.clone());
-        tracing::debug!(
+        tracing::trace!(
             "preapprove: tool='{}', canonical='{}', preapproved_tools={:?}",
             name,
             canonical_owned,

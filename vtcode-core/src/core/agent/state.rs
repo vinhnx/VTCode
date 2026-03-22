@@ -700,7 +700,7 @@ pub fn recover_history_from_crash(messages: &mut Vec<Message>) {
     }
 
     if report.is_valid() {
-        tracing::info!("History invariants are valid");
+        tracing::debug!("History invariants are valid");
     }
 }
 

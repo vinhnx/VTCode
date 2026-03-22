@@ -51,7 +51,7 @@ impl ToolRegistry {
             }
 
             if seeded > 0 {
-                tracing::debug!(seeded, "Seeded default tool policies from tool assembly");
+                tracing::trace!(seeded, "Seeded default tool policies from tool assembly");
             }
         }
     }

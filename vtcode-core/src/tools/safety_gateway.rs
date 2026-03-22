@@ -564,7 +564,7 @@ impl SafetyGateway {
             .map(|id| id.short())
             .unwrap_or_else(|| "unknown".to_string());
 
-        tracing::debug!(
+        tracing::trace!(
             invocation_id = %inv_id,
             tool = %tool_name,
             "SafetyGateway: checking safety"
@@ -608,7 +608,7 @@ impl SafetyGateway {
         let inv_id = invocation_id
             .map(|id| id.short())
             .unwrap_or_else(|| "unknown".to_string());
-        tracing::debug!(
+        tracing::trace!(
             invocation_id = %inv_id,
             tool = %tool_name,
             "SafetyGateway: checking and recording safety"
@@ -698,7 +698,7 @@ impl SafetyGateway {
         }
 
         if self.is_preapproved(tool_name).await {
-            tracing::debug!(
+            tracing::trace!(
                 invocation_id = %inv_id,
                 tool = %tool_name,
                 "SafetyGateway: tool preapproved"
@@ -707,7 +707,7 @@ impl SafetyGateway {
         }
 
         if ctx.trust_level.can_bypass_approval() {
-            tracing::debug!(
+            tracing::trace!(
                 invocation_id = %inv_id,
                 tool = %tool_name,
                 trust_level = ?ctx.trust_level,

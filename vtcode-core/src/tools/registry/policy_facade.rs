@@ -345,7 +345,7 @@ impl ToolRegistry {
         // Allow all when TUI mode is active (approval already captured by modal)
         if is_tui_mode() {
             gateway.preapprove(&normalized_name);
-            tracing::debug!(tool = %normalized_name, "Preapproved tool in TUI mode");
+            tracing::trace!(tool = %normalized_name, "Preapproved tool in TUI mode");
             return;
         }
 

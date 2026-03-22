@@ -5,7 +5,7 @@ impl ToolRegistry {
         let snapshot =
             crate::tools::search_runtime::snapshot_for_workspace(self.inventory.workspace_root());
 
-        tracing::debug!(
+        tracing::trace!(
             ripgrep_ready = snapshot.ripgrep_ready,
             ast_grep_ready = snapshot.ast_grep_ready,
             search_tools = ?snapshot.search_tools,

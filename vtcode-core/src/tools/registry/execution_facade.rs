@@ -8,7 +8,7 @@ use std::cell::RefCell;
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime};
 use tokio::task::Id as TokioTaskId;
-use tracing::{debug, trace, warn};
+use tracing::{trace, warn};
 use vtcode_commons::ErrorCategory;
 
 use crate::config::constants::tools;
@@ -410,7 +410,6 @@ impl ToolRegistry {
         let args_for_recording = args.clone();
         // Capture harness context snapshot for structured telemetry and history
         let context_snapshot = self.harness_context_snapshot();
-        let context_payload = context_snapshot.to_json();
         let record_failure = |tool_name: String,
                               is_mcp_tool: bool,
                               mcp_provider: Option<String>,
@@ -516,7 +515,7 @@ impl ToolRegistry {
         };
 
         if readonly_classification {
-            debug!(tool = %tool_name, "Validation classified tool as read-only");
+            trace!(tool = %tool_name, "Validation classified tool as read-only");
         }
 
         // Defense-in-depth: prevalidated fast path skips full preflight, but plan-mode
@@ -593,7 +592,7 @@ impl ToolRegistry {
         );
         let _span_guard = execution_span.enter();
 
-        debug!(
+        trace!(
             tool = %tool_name,
             session_id = %context_snapshot.session_id,
             task_id = %context_snapshot.task_id.as_deref().unwrap_or(""),
@@ -1025,7 +1024,7 @@ impl ToolRegistry {
             return Ok(payload);
         }
 
-        debug!(
+        trace!(
             tool = %tool_name,
             requested = %name,
             is_mcp = is_mcp_tool,
@@ -1033,14 +1032,6 @@ impl ToolRegistry {
             alias = %if tool_name == name { "" } else { name },
             mcp_provider = %mcp_provider.as_deref().unwrap_or(""),
             "Resolved tool route"
-        );
-        trace!(
-            tool = %tool_name,
-            requested = %name,
-            mcp_provider = %mcp_provider.as_deref().unwrap_or(""),
-            mcp_tool = %mcp_tool_name.as_deref().unwrap_or(""),
-            context = %context_payload,
-            "Tool execution context and routing finalized"
         );
 
         // Start PTY session if needed (using RAII guard for automatic cleanup)
@@ -1195,7 +1186,7 @@ impl ToolRegistry {
         };
 
         let result = if let Some(limit) = effective_timeout {
-            debug!(
+            trace!(
                 tool = %tool_name_owned,
                 category = %timeout_category.label(),
                 timeout_ms = %limit.as_millis(),
