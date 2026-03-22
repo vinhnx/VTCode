@@ -165,59 +165,66 @@ pub(super) async fn handle_steering_messages(
     let ctrl_c_state = ctx.ctrl_c_state;
     let ctrl_c_notify = ctx.ctrl_c_notify;
 
-    if let Some(receiver) = ctx.steering_receiver.as_mut() {
-        loop {
-            let mut pending = Vec::new();
-            while let Ok(message) = receiver.try_recv() {
-                pending.push(message);
-            }
+    let Some(mut receiver) = ctx.runtime_steering.take_receiver() else {
+        return Ok(false);
+    };
 
-            if pending.is_empty() {
-                break;
-            }
+    let steering_result: Result<bool> = loop {
+        let mut pending = Vec::new();
+        while let Ok(message) = receiver.try_recv() {
+            pending.push(message);
+        }
 
-            if pending
-                .iter()
-                .any(|message| matches!(message, SteeringMessage::SteerStop))
-            {
-                cancel_for_steering_stop(tool_registry, result).await;
-                display_status(renderer, "Stop requested by steering signal.")?;
-                return Ok(true);
-            }
+        if pending.is_empty() {
+            break Ok(false);
+        }
 
-            if let Some(pause_index) = pending
-                .iter()
-                .position(|message| matches!(message, SteeringMessage::Pause))
-            {
-                for message in pending.drain(..pause_index) {
-                    if let SteeringMessage::FollowUpInput(input) = message {
-                        queue_follow_up_input(renderer, ctx.deferred_follow_up_inputs, input)?;
-                    }
-                }
-                pending.remove(0);
-                if handle_pause_signal(
-                    renderer,
-                    tool_registry,
-                    ctrl_c_state,
-                    ctrl_c_notify,
-                    receiver,
-                    ctx.deferred_follow_up_inputs,
-                    result,
-                    pending,
-                )
-                .await?
-                {
-                    return Ok(true);
-                }
-                continue;
-            }
+        if pending
+            .iter()
+            .any(|message| matches!(message, SteeringMessage::SteerStop))
+        {
+            cancel_for_steering_stop(tool_registry, result).await;
+            display_status(renderer, "Stop requested by steering signal.")?;
+            break Ok(true);
+        }
 
-            for message in pending {
+        if let Some(pause_index) = pending
+            .iter()
+            .position(|message| matches!(message, SteeringMessage::Pause))
+        {
+            for message in pending.drain(..pause_index) {
                 if let SteeringMessage::FollowUpInput(input) = message {
-                    queue_follow_up_input(renderer, ctx.deferred_follow_up_inputs, input)?;
+                    queue_follow_up_input(renderer, ctx.runtime_steering, input)?;
                 }
+            }
+            pending.remove(0);
+            if handle_pause_signal(
+                renderer,
+                tool_registry,
+                ctrl_c_state,
+                ctrl_c_notify,
+                &mut receiver,
+                ctx.runtime_steering,
+                result,
+                pending,
+            )
+            .await?
+            {
+                break Ok(true);
+            }
+            continue;
+        }
+
+        for message in pending {
+            if let SteeringMessage::FollowUpInput(input) = message {
+                queue_follow_up_input(renderer, ctx.runtime_steering, input)?;
             }
         }
+    };
+
+    ctx.runtime_steering.set_receiver(Some(receiver));
+    if steering_result? {
+        return Ok(true);
     }
 
     Ok(false)
@@ -225,11 +232,11 @@ pub(super) async fn handle_steering_messages(
 
 fn queue_follow_up_input(
     renderer: &mut vtcode_core::utils::ansi::AnsiRenderer,
-    deferred_follow_up_inputs: &mut std::collections::VecDeque<String>,
+    runtime_steering: &mut vtcode_core::core::agent::runtime::RuntimeSteering,
     input: String,
 ) -> Result<()> {
     display_status(renderer, &format!("Queued Follow-up Input: {}", input))?;
-    deferred_follow_up_inputs.push_back(input);
+    runtime_steering.queue_follow_up_input(input);
     Ok(())
 }
 
@@ -249,7 +256,7 @@ async fn handle_pause_signal(
     ctrl_c_state: &crate::agent::runloop::unified::state::CtrlCState,
     ctrl_c_notify: &tokio::sync::Notify,
     receiver: &mut tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>,
-    deferred_follow_up_inputs: &mut std::collections::VecDeque<String>,
+    runtime_steering: &mut vtcode_core::core::agent::runtime::RuntimeSteering,
     result: &mut TurnLoopResult,
     pending: Vec<SteeringMessage>,
 ) -> Result<bool> {
@@ -266,7 +273,7 @@ async fn handle_pause_signal(
                 return Ok(true);
             }
             SteeringMessage::FollowUpInput(input) => {
-                queue_follow_up_input(renderer, deferred_follow_up_inputs, input)?;
+                queue_follow_up_input(renderer, runtime_steering, input)?;
             }
             SteeringMessage::Pause => {}
         }
@@ -288,7 +295,7 @@ async fn handle_pause_signal(
                 return Ok(true);
             }
             Ok(SteeringMessage::FollowUpInput(input)) => {
-                queue_follow_up_input(renderer, deferred_follow_up_inputs, input)?;
+                queue_follow_up_input(renderer, runtime_steering, input)?;
             }
             Ok(SteeringMessage::Pause) => {}
             Err(TryRecvError::Disconnected) => return Ok(false),

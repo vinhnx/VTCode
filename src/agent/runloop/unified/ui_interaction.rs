@@ -701,20 +701,7 @@ pub(crate) struct StreamSpinnerOptions {
     pub strip_proposed_plan_blocks: bool,
 }
 
-#[derive(Debug, Clone)]
-pub(crate) enum StreamProgressEvent {
-    OutputDelta(String),
-    ReasoningDelta(String),
-    ReasoningStage(String),
-    ToolCallStarted {
-        call_id: String,
-        name: Option<String>,
-    },
-    ToolCallDelta {
-        call_id: String,
-        delta: String,
-    },
-}
+pub(crate) use vtcode_core::core::agent::runtime::RuntimeModelProgress as StreamProgressEvent;
 
 #[cfg(test)]
 pub(crate) async fn stream_and_render_response(

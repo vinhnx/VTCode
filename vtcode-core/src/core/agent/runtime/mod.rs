@@ -8,6 +8,7 @@ use crate::llm::provider::{
 };
 use crate::llm::providers::gemini::wire::{Content, Part};
 use anyhow::Result;
+use async_trait::async_trait;
 use futures::StreamExt;
 use std::collections::VecDeque;
 use tokio::sync::mpsc::UnboundedReceiver;
@@ -42,9 +43,156 @@ pub enum RuntimeControl {
     StopRequested,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RuntimeModelProgress {
+    OutputDelta(String),
+    ReasoningDelta(String),
+    ReasoningStage(String),
+    ToolCallStarted {
+        call_id: String,
+        name: Option<String>,
+    },
+    ToolCallDelta {
+        call_id: String,
+        delta: String,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub struct RuntimeModelOutput {
+    pub response: LLMResponse,
+    pub streamed: bool,
+}
+
+#[async_trait]
+pub trait RuntimeModelAdapter {
+    async fn execute(
+        &mut self,
+        request: LLMRequest,
+        timeout: Option<std::time::Duration>,
+        on_progress: &mut (dyn FnMut(RuntimeModelProgress) + Send),
+    ) -> Result<RuntimeModelOutput>;
+}
+
+struct ProviderRuntimeModelAdapter<'a> {
+    provider: &'a mut Box<dyn LLMProvider>,
+    steering: &'a mut RuntimeSteering,
+}
+
+impl<'a> ProviderRuntimeModelAdapter<'a> {
+    fn new(provider: &'a mut Box<dyn LLMProvider>, steering: &'a mut RuntimeSteering) -> Self {
+        Self { provider, steering }
+    }
+}
+
+#[async_trait]
+impl RuntimeModelAdapter for ProviderRuntimeModelAdapter<'_> {
+    async fn execute(
+        &mut self,
+        request: LLMRequest,
+        timeout: Option<std::time::Duration>,
+        on_progress: &mut (dyn FnMut(RuntimeModelProgress) + Send),
+    ) -> Result<RuntimeModelOutput> {
+        let request_model = request.model.clone();
+        let mut stream = if let Some(duration) = timeout {
+            match tokio::time::timeout(duration, self.provider.stream_normalized(request)).await {
+                Ok(result) => result?,
+                Err(_) => {
+                    return Err(anyhow::anyhow!(
+                        "Stream request timed out after {:?}",
+                        duration
+                    ));
+                }
+            }
+        } else {
+            self.provider.stream_normalized(request).await?
+        };
+
+        let mut final_usage = ProviderUsage::default();
+        let mut completed_response: Option<LLMResponse> = None;
+        let mut streamed = false;
+
+        while let Some(event_result) = stream.next().await {
+            if matches!(
+                self.steering.poll_turn_control().await,
+                RuntimeControl::StopRequested
+            ) {
+                let mut response = LLMResponse {
+                    model: request_model.clone(),
+                    finish_reason: FinishReason::Error("Cancelled".to_string()),
+                    usage: Some(final_usage.clone()),
+                    ..Default::default()
+                };
+                if response.usage.as_ref().is_some_and(|usage| {
+                    usage.prompt_tokens == 0
+                        && usage.completion_tokens == 0
+                        && usage.total_tokens == 0
+                }) {
+                    response.usage = None;
+                }
+                return Ok(RuntimeModelOutput { response, streamed });
+            }
+
+            match event_result? {
+                NormalizedStreamEvent::TextDelta { delta } => {
+                    streamed = true;
+                    on_progress(RuntimeModelProgress::OutputDelta(delta));
+                }
+                NormalizedStreamEvent::ReasoningDelta { delta } => {
+                    streamed = true;
+                    on_progress(RuntimeModelProgress::ReasoningDelta(delta));
+                }
+                NormalizedStreamEvent::ToolCallStart { call_id, name } => {
+                    streamed = true;
+                    on_progress(RuntimeModelProgress::ToolCallStarted { call_id, name });
+                }
+                NormalizedStreamEvent::ToolCallDelta { call_id, delta } => {
+                    streamed = true;
+                    on_progress(RuntimeModelProgress::ToolCallDelta { call_id, delta });
+                }
+                NormalizedStreamEvent::Usage { usage } => {
+                    final_usage = usage;
+                }
+                NormalizedStreamEvent::Done { response } => {
+                    let mut response = *response;
+                    if response.usage.is_none()
+                        && (final_usage.prompt_tokens > 0
+                            || final_usage.completion_tokens > 0
+                            || final_usage.total_tokens > 0)
+                    {
+                        response.usage = Some(final_usage.clone());
+                    }
+                    completed_response = Some(response);
+                    break;
+                }
+            }
+        }
+
+        let mut response = completed_response.unwrap_or_default();
+        if response.model.is_empty() {
+            response.model = request_model;
+        }
+        if response.usage.is_none()
+            && (final_usage.prompt_tokens > 0
+                || final_usage.completion_tokens > 0
+                || final_usage.total_tokens > 0)
+        {
+            response.usage = Some(final_usage);
+        }
+
+        Ok(RuntimeModelOutput { response, streamed })
+    }
+}
+
 pub struct RuntimeSteering {
     steering_receiver: Option<UnboundedReceiver<SteeringMessage>>,
     queued_follow_up_inputs: VecDeque<String>,
+}
+
+impl Default for RuntimeSteering {
+    fn default() -> Self {
+        Self::new(None)
+    }
 }
 
 impl RuntimeSteering {
@@ -70,6 +218,10 @@ impl RuntimeSteering {
 
     pub fn pop_follow_up_input(&mut self) -> Option<String> {
         self.queued_follow_up_inputs.pop_front()
+    }
+
+    pub fn queue_follow_up_input(&mut self, input: String) {
+        self.queued_follow_up_inputs.push_back(input);
     }
 
     pub async fn poll_turn_control(&mut self) -> RuntimeControl {
@@ -143,6 +295,181 @@ pub struct TurnExecution {
     pub response: LLMResponse,
     pub content: String,
     pub reasoning: Option<String>,
+    pub streamed: bool,
+}
+
+const MIN_REASONING_UPDATE_BYTES: usize = 256;
+const MAX_REASONING_UPDATE_EVENTS: usize = 2;
+
+pub struct StreamingLifecycleBridge {
+    event_sink: Option<EventSink>,
+    assistant_item_id: String,
+    reasoning_item_id: String,
+    lifecycle: SharedLifecycleEmitter,
+    tool_call_item_ids: hashbrown::HashMap<String, String>,
+    reasoning_stage: Option<String>,
+    reasoning_update_events: usize,
+    last_reasoning_emit_len: usize,
+}
+
+impl StreamingLifecycleBridge {
+    #[must_use]
+    pub fn new(event_sink: Option<EventSink>, turn_id: &str, step: usize, attempt: usize) -> Self {
+        Self {
+            event_sink,
+            assistant_item_id: format!("{turn_id}-step-{step}-assistant-stream-{attempt}"),
+            reasoning_item_id: format!("{turn_id}-step-{step}-reasoning-stream-{attempt}"),
+            lifecycle: SharedLifecycleEmitter::default(),
+            tool_call_item_ids: hashbrown::HashMap::new(),
+            reasoning_stage: None,
+            reasoning_update_events: 0,
+            last_reasoning_emit_len: 0,
+        }
+    }
+
+    pub fn on_progress(&mut self, event: RuntimeModelProgress) {
+        match event {
+            RuntimeModelProgress::OutputDelta(delta) => self.push_assistant_delta(&delta),
+            RuntimeModelProgress::ReasoningDelta(delta) => self.push_reasoning_delta(&delta),
+            RuntimeModelProgress::ReasoningStage(stage) => self.update_reasoning_stage(stage),
+            RuntimeModelProgress::ToolCallStarted { call_id, name } => {
+                self.start_tool_call(call_id, name);
+            }
+            RuntimeModelProgress::ToolCallDelta { call_id, delta } => {
+                self.push_tool_call_delta(call_id, &delta);
+            }
+        }
+    }
+
+    pub fn abort(&mut self) {
+        self.lifecycle.complete_open_text_items();
+        self.lifecycle
+            .complete_open_tool_calls_with_status(ToolCallStatus::Failed);
+        self.emit_pending_events();
+    }
+
+    pub fn complete_open_items(&mut self) {
+        self.lifecycle.complete_open_text_items();
+        self.emit_pending_events();
+    }
+
+    #[must_use]
+    pub fn take_streamed_tool_call_items(&mut self) -> hashbrown::HashMap<String, String> {
+        std::mem::take(&mut self.tool_call_item_ids)
+    }
+
+    fn push_assistant_delta(&mut self, delta: &str) {
+        if !self.lifecycle.append_assistant_delta(delta) {
+            return;
+        }
+
+        let _ = self
+            .lifecycle
+            .emit_assistant_snapshot(Some(self.assistant_item_id.clone()));
+        self.emit_pending_events();
+    }
+
+    fn push_reasoning_delta(&mut self, delta: &str) {
+        if !self.lifecycle.append_reasoning_delta(delta) {
+            return;
+        }
+
+        if !self.lifecycle.reasoning_started() {
+            if self
+                .lifecycle
+                .emit_reasoning_snapshot(Some(self.reasoning_item_id.clone()))
+            {
+                self.last_reasoning_emit_len = self.lifecycle.reasoning_len();
+                self.emit_pending_events();
+            }
+            return;
+        }
+
+        if !self.should_emit_reasoning_update(false) {
+            return;
+        }
+
+        if self
+            .lifecycle
+            .emit_reasoning_snapshot(Some(self.reasoning_item_id.clone()))
+        {
+            self.record_reasoning_update();
+            self.emit_pending_events();
+        }
+    }
+
+    fn update_reasoning_stage(&mut self, stage: String) {
+        let stage_changed = self.reasoning_stage.as_deref() != Some(stage.as_str());
+        self.reasoning_stage = Some(stage);
+        if !stage_changed
+            || !self
+                .lifecycle
+                .set_reasoning_stage(self.reasoning_stage.clone())
+        {
+            return;
+        }
+
+        if !self.lifecycle.reasoning_started() || !self.should_emit_reasoning_update(true) {
+            return;
+        }
+
+        if self.lifecycle.emit_reasoning_stage_update() {
+            self.record_reasoning_update();
+            self.emit_pending_events();
+        }
+    }
+
+    fn should_emit_reasoning_update(&self, stage_changed: bool) -> bool {
+        if self.reasoning_update_events >= MAX_REASONING_UPDATE_EVENTS {
+            return false;
+        }
+
+        stage_changed
+            || self
+                .lifecycle
+                .reasoning_len()
+                .saturating_sub(self.last_reasoning_emit_len)
+                >= MIN_REASONING_UPDATE_BYTES
+    }
+
+    fn record_reasoning_update(&mut self) {
+        self.reasoning_update_events += 1;
+        self.last_reasoning_emit_len = self.lifecycle.reasoning_len();
+    }
+
+    fn start_tool_call(&mut self, call_id: String, name: Option<String>) {
+        let item_id = format!("{}-tool-call-{call_id}", self.assistant_item_id);
+        self.tool_call_item_ids
+            .insert(call_id.clone(), item_id.clone());
+        let _ = self
+            .lifecycle
+            .start_tool_call(&call_id, name, Some(item_id));
+        self.emit_pending_events();
+    }
+
+    fn push_tool_call_delta(&mut self, call_id: String, delta: &str) {
+        if !self.lifecycle.append_tool_call_delta(
+            &call_id,
+            delta,
+            None,
+            Some(format!("{}-tool-call-{call_id}", self.assistant_item_id)),
+        ) {
+            return;
+        }
+        self.emit_pending_events();
+    }
+
+    fn emit_pending_events(&mut self) {
+        let Some(sink) = &self.event_sink else {
+            let _ = self.lifecycle.drain_events();
+            return;
+        };
+
+        for event in self.lifecycle.drain_events() {
+            let mut callback = sink.lock();
+            callback(&event);
+        }
+    }
 }
 
 pub struct AgentRuntime {
@@ -267,7 +594,7 @@ impl AgentRuntime {
     fn finalize_tool_call_lifecycle(
         &mut self,
         tool_calls: Option<&[ToolCall]>,
-        finish_reason: &str,
+        _finish_reason: &str,
     ) {
         if let Some(tool_calls) = tool_calls {
             for call in tool_calls {
@@ -287,119 +614,81 @@ impl AgentRuntime {
             return;
         }
 
-        if finish_reason == "cancelled" {
-            self.lifecycle
-                .complete_open_tool_calls_with_status(ToolCallStatus::Failed);
-        } else {
-            self.lifecycle
-                .complete_open_tool_calls_with_status(ToolCallStatus::Failed);
+        self.lifecycle
+            .complete_open_tool_calls_with_status(ToolCallStatus::Failed);
+    }
+
+    fn record_model_progress(
+        &mut self,
+        event: RuntimeModelProgress,
+        full_text: &mut String,
+        full_reasoning: &mut String,
+    ) {
+        match event {
+            RuntimeModelProgress::OutputDelta(delta) => {
+                full_text.push_str(&delta);
+                if self.lifecycle.append_assistant_delta(&delta) {
+                    let _ = self.lifecycle.emit_assistant_snapshot(None);
+                    self.emit_pending_lifecycle_events();
+                }
+            }
+            RuntimeModelProgress::ReasoningDelta(delta) => {
+                full_reasoning.push_str(&delta);
+                if self.lifecycle.append_reasoning_delta(&delta) {
+                    let _ = self.lifecycle.emit_reasoning_snapshot(None);
+                    self.emit_pending_lifecycle_events();
+                }
+            }
+            RuntimeModelProgress::ReasoningStage(stage) => {
+                if self.lifecycle.set_reasoning_stage(Some(stage)) {
+                    let _ = self.lifecycle.emit_reasoning_stage_update();
+                    self.emit_pending_lifecycle_events();
+                }
+            }
+            RuntimeModelProgress::ToolCallStarted { call_id, name } => {
+                let _ = self.lifecycle.start_tool_call(&call_id, name, None);
+                self.emit_pending_lifecycle_events();
+            }
+            RuntimeModelProgress::ToolCallDelta { call_id, delta } => {
+                if self
+                    .lifecycle
+                    .append_tool_call_delta(&call_id, &delta, None, None)
+                {
+                    self.emit_pending_lifecycle_events();
+                }
+            }
         }
     }
 
-    pub async fn run_turn_once(
+    async fn run_turn_once_with_adapter<A: RuntimeModelAdapter + ?Sized>(
         &mut self,
-        provider: &mut Box<dyn LLMProvider>,
+        adapter: &mut A,
         request: LLMRequest,
         timeout: Option<std::time::Duration>,
     ) -> Result<TurnExecution> {
         let request_model = request.model.clone();
         let start_time = std::time::Instant::now();
-        let mut stream = if let Some(duration) = timeout {
-            match tokio::time::timeout(duration, provider.stream_normalized(request)).await {
-                Ok(result) => result?,
-                Err(_) => {
-                    return Err(anyhow::anyhow!(
-                        "Stream request timed out after {:?}",
-                        duration
-                    ));
-                }
-            }
-        } else {
-            provider.stream_normalized(request).await?
-        };
-
         let mut full_text = String::new();
         let mut full_reasoning = String::new();
-        let mut finish_reason = String::from("stop");
-        let mut final_usage = ProviderUsage::default();
-        let mut aggregated_tool_calls: Option<Vec<ToolCall>> = None;
-        let mut completed_response: Option<LLMResponse> = None;
+        let mut on_progress =
+            |event| self.record_model_progress(event, &mut full_text, &mut full_reasoning);
+        let RuntimeModelOutput {
+            mut response,
+            streamed,
+        } = adapter.execute(request, timeout, &mut on_progress).await?;
 
-        while let Some(event_result) = stream.next().await {
-            if matches!(
-                self.steering.poll_turn_control().await,
-                RuntimeControl::StopRequested
-            ) {
-                finish_reason = "cancelled".to_string();
-                break;
-            }
+        merge_stream_and_completed_text(&mut full_text, response.content.as_deref());
+        merge_stream_and_completed_text(&mut full_reasoning, response.reasoning.as_deref());
 
-            match event_result? {
-                NormalizedStreamEvent::TextDelta { delta } => {
-                    full_text.push_str(&delta);
-                    if self.lifecycle.append_assistant_delta(&delta) {
-                        let _ = self.lifecycle.emit_assistant_snapshot(None);
-                        self.emit_pending_lifecycle_events();
-                    }
-                }
-                NormalizedStreamEvent::ReasoningDelta { delta } => {
-                    full_reasoning.push_str(&delta);
-                    if self.lifecycle.append_reasoning_delta(&delta) {
-                        let _ = self.lifecycle.emit_reasoning_snapshot(None);
-                        self.emit_pending_lifecycle_events();
-                    }
-                }
-                NormalizedStreamEvent::ToolCallStart { call_id, name } => {
-                    let _ = self.lifecycle.start_tool_call(&call_id, name, None);
-                    self.emit_pending_lifecycle_events();
-                }
-                NormalizedStreamEvent::ToolCallDelta { call_id, delta } => {
-                    if self
-                        .lifecycle
-                        .append_tool_call_delta(&call_id, &delta, None, None)
-                    {
-                        self.emit_pending_lifecycle_events();
-                    }
-                }
-                NormalizedStreamEvent::Usage { usage } => {
-                    final_usage = usage;
-                }
-                NormalizedStreamEvent::Done { response } => {
-                    let mut response = *response;
-                    if response.usage.is_none()
-                        && (final_usage.prompt_tokens > 0
-                            || final_usage.completion_tokens > 0
-                            || final_usage.total_tokens > 0)
-                    {
-                        response.usage = Some(final_usage.clone());
-                    }
-
-                    finish_reason = match response.finish_reason.clone() {
-                        FinishReason::Stop => "stop".to_string(),
-                        FinishReason::ToolCalls => "tool_calls".to_string(),
-                        FinishReason::Length => "length".to_string(),
-                        FinishReason::Error(message) => message,
-                        _ => "unknown".to_string(),
-                    };
-                    final_usage = response.usage.clone().unwrap_or_default();
-                    aggregated_tool_calls = response.tool_calls.clone();
-                    completed_response = Some(response);
-                }
-            }
-        }
-
-        merge_stream_and_completed_text(
-            &mut full_text,
-            completed_response
-                .as_ref()
-                .and_then(|response| response.content.as_deref()),
-        );
-        merge_stream_and_completed_text(
-            &mut full_reasoning,
-            completed_response
-                .as_ref()
-                .and_then(|response| response.reasoning.as_deref()),
-        );
+        let finish_reason = match response.finish_reason.clone() {
+            FinishReason::Stop => "stop".to_string(),
+            FinishReason::ToolCalls => "tool_calls".to_string(),
+            FinishReason::Length => "length".to_string(),
+            FinishReason::Error(message) => message,
+            _ => "unknown".to_string(),
+        };
+        let final_usage = response.usage.clone().unwrap_or_default();
+        let mut aggregated_tool_calls = response.tool_calls.clone();
 
         self.finalize_assistant_lifecycle(&full_text);
         self.finalize_reasoning_lifecycle(&full_reasoning);
@@ -442,7 +731,6 @@ impl AgentRuntime {
         });
         self.state.last_processed_message_idx = self.state.conversation.len();
 
-        let mut response = completed_response.unwrap_or_default();
         if response.model.is_empty() {
             response.model = request_model;
         }
@@ -453,13 +741,13 @@ impl AgentRuntime {
             Some(full_reasoning.clone())
         };
         response.tool_calls = aggregated_tool_calls.clone();
-        response.usage = Some(final_usage);
+        response.usage = Some(final_usage.clone());
         response.finish_reason = if finish_reason == "tool_calls" {
             FinishReason::ToolCalls
-        } else if finish_reason == "cancelled" {
+        } else if finish_reason == "Cancelled" || finish_reason == "cancelled" {
             FinishReason::Error("Cancelled".to_string())
         } else {
-            FinishReason::Stop
+            response.finish_reason
         };
 
         Ok(TurnExecution {
@@ -470,7 +758,23 @@ impl AgentRuntime {
             } else {
                 Some(full_reasoning)
             },
+            streamed,
         })
+    }
+
+    pub async fn run_turn_once(
+        &mut self,
+        provider: &mut Box<dyn LLMProvider>,
+        request: LLMRequest,
+        timeout: Option<std::time::Duration>,
+    ) -> Result<TurnExecution> {
+        let mut steering = std::mem::take(&mut self.steering);
+        let mut adapter = ProviderRuntimeModelAdapter::new(provider, &mut steering);
+        let result = self
+            .run_turn_once_with_adapter(&mut adapter, request, timeout)
+            .await;
+        self.steering = steering;
+        result
     }
 }
 
@@ -487,6 +791,13 @@ mod tests {
     #[derive(Clone)]
     struct CompletedOnlyStreamProvider {
         response: LLMResponse,
+    }
+
+    #[derive(Clone)]
+    struct DeltaStreamProvider {
+        response: LLMResponse,
+        text_delta: String,
+        reasoning_delta: String,
     }
 
     #[async_trait]
@@ -520,6 +831,54 @@ mod tests {
                     response: Box::new(self.response.clone()),
                 },
             )])))
+        }
+
+        fn supported_models(&self) -> Vec<String> {
+            vec!["test-model".to_string()]
+        }
+
+        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+            Ok(())
+        }
+    }
+
+    #[async_trait]
+    impl LLMProvider for DeltaStreamProvider {
+        fn name(&self) -> &str {
+            "delta-provider"
+        }
+
+        fn supports_streaming(&self) -> bool {
+            true
+        }
+
+        async fn generate(&self, _request: LLMRequest) -> Result<LLMResponse, LLMError> {
+            Ok(self.response.clone())
+        }
+
+        async fn stream(&self, _request: LLMRequest) -> Result<LLMStream, LLMError> {
+            Ok(Box::pin(stream::iter(vec![Ok(
+                LLMStreamEvent::Completed {
+                    response: Box::new(self.response.clone()),
+                },
+            )])))
+        }
+
+        async fn stream_normalized(
+            &self,
+            _request: LLMRequest,
+        ) -> Result<LLMNormalizedStream, LLMError> {
+            Ok(Box::pin(stream::iter(vec![
+                Ok(NormalizedStreamEvent::ReasoningDelta {
+                    delta: self.reasoning_delta.clone(),
+                }),
+                Ok(NormalizedStreamEvent::TextDelta {
+                    delta: self.text_delta.clone(),
+                }),
+                Ok(NormalizedStreamEvent::Done {
+                    response: Box::new(self.response.clone()),
+                }),
+            ])))
         }
 
         fn supported_models(&self) -> Vec<String> {
@@ -602,6 +961,54 @@ mod tests {
         assert_eq!(
             turn.response.reasoning.as_deref(),
             Some("**why** this works")
+        );
+        assert!(!turn.streamed);
+    }
+
+    #[tokio::test]
+    async fn run_turn_once_marks_delta_streams_as_streamed() {
+        let response = LLMResponse {
+            content: Some("hello world".to_string()),
+            model: "test-model".to_string(),
+            finish_reason: FinishReason::Stop,
+            reasoning: Some("trace".to_string()),
+            ..Default::default()
+        };
+        let provider = DeltaStreamProvider {
+            response,
+            text_delta: "hello world".to_string(),
+            reasoning_delta: "trace".to_string(),
+        };
+        let state = AgentSessionState::new("session".to_string(), 16, 4, 128_000);
+        let mut runtime = AgentRuntime::new(state, None, None);
+        let mut provider_box: Box<dyn LLMProvider> = Box::new(provider);
+        let request = LLMRequest {
+            model: "test-model".to_string(),
+            ..Default::default()
+        };
+
+        let turn = runtime
+            .run_turn_once(&mut provider_box, request, None)
+            .await
+            .expect("run_turn_once should succeed");
+
+        assert_eq!(turn.content, "hello world");
+        assert_eq!(turn.reasoning.as_deref(), Some("trace"));
+        assert!(turn.streamed);
+    }
+
+    #[test]
+    fn streaming_lifecycle_bridge_tracks_tool_call_item_ids() {
+        let mut bridge = StreamingLifecycleBridge::new(None, "turn_tool_map", 5, 2);
+        bridge.on_progress(RuntimeModelProgress::ToolCallStarted {
+            call_id: "call_42".to_string(),
+            name: Some("shell".to_string()),
+        });
+
+        let item_ids = bridge.take_streamed_tool_call_items();
+        assert_eq!(
+            item_ids.get("call_42").map(String::as_str),
+            Some("turn_tool_map-step-5-assistant-stream-2-tool-call-call_42")
         );
     }
 }

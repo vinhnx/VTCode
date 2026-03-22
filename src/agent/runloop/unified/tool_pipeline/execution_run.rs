@@ -111,7 +111,8 @@ pub(crate) async fn run_tool_call_with_args(
 ) -> Result<ToolPipelineOutcome, anyhow::Error> {
     let mut canonical_name = requested_name.to_string();
     let tool_call_id = tool_item_id.as_str();
-    let (safety_invocation_id, harness_item_id) = resolve_harness_item_identity(&tool_item_id);
+    let (safety_invocation_id, fallback_harness_item_id) =
+        resolve_harness_item_identity(&tool_item_id);
 
     if !prevalidated {
         if let Some(max_tool_calls) = ctx.harness_state.exhausted_tool_call_limit() {
@@ -164,8 +165,12 @@ pub(crate) async fn run_tool_call_with_args(
     let name = canonical_name.as_str();
 
     let harness_emitter = ctx.harness_emitter;
-    let mut tool_started_emitted = false;
-    if let Some(emitter) = harness_emitter {
+    let streamed_harness_item_id = ctx
+        .harness_state
+        .take_streamed_tool_call_item_id(tool_call_id);
+    let mut tool_started_emitted = streamed_harness_item_id.is_some();
+    let harness_item_id = streamed_harness_item_id.unwrap_or(fallback_harness_item_id);
+    if !tool_started_emitted && let Some(emitter) = harness_emitter {
         let _ = emitter.emit(tool_started_event(
             harness_item_id.clone(),
             name,
@@ -202,19 +207,6 @@ pub(crate) async fn run_tool_call_with_args(
     }
 
     if !prevalidated {
-        ctx.harness_state.record_tool_call();
-        if ctx.harness_state.should_emit_tool_budget_warning(0.75) {
-            let used = ctx.harness_state.tool_calls;
-            let max = ctx.harness_state.max_tool_calls;
-            let remaining = ctx.harness_state.remaining_tool_calls();
-            tracing::info!(
-                used,
-                max,
-                remaining,
-                "Tool-call budget warning threshold reached in tool pipeline path"
-            );
-            ctx.harness_state.mark_tool_budget_warning_emitted();
-        }
         if let Some(permission_failure) = check_tool_permission(
             ctx,
             name,
@@ -229,6 +221,20 @@ pub(crate) async fn run_tool_call_with_args(
         .await
         {
             return Ok(finish_with_status(permission_failure, false));
+        }
+
+        ctx.harness_state.record_tool_call();
+        if ctx.harness_state.should_emit_tool_budget_warning(0.75) {
+            let used = ctx.harness_state.tool_calls;
+            let max = ctx.harness_state.max_tool_calls;
+            let remaining = ctx.harness_state.remaining_tool_calls();
+            tracing::info!(
+                used,
+                max,
+                remaining,
+                "Tool-call budget warning threshold reached in tool pipeline path"
+            );
+            ctx.harness_state.mark_tool_budget_warning_emitted();
         }
     }
 

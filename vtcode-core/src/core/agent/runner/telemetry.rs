@@ -4,7 +4,6 @@ use super::types::ToolFailureContext;
 use crate::core::agent::events::ExecEventRecorder;
 use crate::core::agent::session::AgentSessionState;
 use crate::exec::events::ToolCallStatus;
-use crate::llm::provider::LLMRequest;
 use crate::llm::providers::gemini::wire::{Content, Part};
 use crate::utils::colors::style;
 use serde::Serialize;
@@ -42,76 +41,6 @@ impl AgentRunner {
             grounded_fact_count,
             previous_response_chain_present,
         }
-    }
-
-    pub(super) fn emit_llm_request_started(&self, request: &LLMRequest, turn: usize) {
-        let fields = self.observability_fields(
-            &request.model,
-            turn,
-            0,
-            false,
-            "none",
-            0,
-            request.previous_response_id.is_some(),
-        );
-        tracing::info!(
-            provider = %fields.provider,
-            model = %fields.model,
-            turn = fields.turn,
-            tool_count = fields.tool_count,
-            parallelized = fields.parallelized,
-            compaction_mode = fields.compaction_mode,
-            grounded_fact_count = fields.grounded_fact_count,
-            previous_response_chain_present = fields.previous_response_chain_present,
-            "LLM request started"
-        );
-    }
-
-    pub(super) fn emit_llm_request_finished(&self, request: &LLMRequest, turn: usize) {
-        let fields = self.observability_fields(
-            &request.model,
-            turn,
-            0,
-            false,
-            "none",
-            0,
-            request.previous_response_id.is_some(),
-        );
-        tracing::info!(
-            provider = %fields.provider,
-            model = %fields.model,
-            turn = fields.turn,
-            tool_count = fields.tool_count,
-            parallelized = fields.parallelized,
-            compaction_mode = fields.compaction_mode,
-            grounded_fact_count = fields.grounded_fact_count,
-            previous_response_chain_present = fields.previous_response_chain_present,
-            "LLM request finished"
-        );
-    }
-
-    pub(super) fn emit_streaming_fallback(&self, request: &LLMRequest, turn: usize, reason: &str) {
-        let fields = self.observability_fields(
-            &request.model,
-            turn,
-            0,
-            false,
-            "none",
-            0,
-            request.previous_response_id.is_some(),
-        );
-        tracing::warn!(
-            provider = %fields.provider,
-            model = %fields.model,
-            turn = fields.turn,
-            tool_count = fields.tool_count,
-            parallelized = fields.parallelized,
-            compaction_mode = fields.compaction_mode,
-            grounded_fact_count = fields.grounded_fact_count,
-            previous_response_chain_present = fields.previous_response_chain_present,
-            reason = %reason,
-            "LLM streaming fallback triggered"
-        );
     }
 
     pub(super) fn emit_tool_batch(

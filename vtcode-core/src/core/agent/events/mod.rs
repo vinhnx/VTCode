@@ -22,6 +22,13 @@ use uuid::Uuid;
 /// Callback type alias for streaming structured events.
 pub type EventSink = Arc<Mutex<Box<dyn FnMut(&ThreadEvent) + Send>>>;
 
+pub fn event_sink<F>(callback: F) -> EventSink
+where
+    F: FnMut(&ThreadEvent) + Send + 'static,
+{
+    Arc::new(Mutex::new(Box::new(callback)))
+}
+
 #[derive(Debug, Clone)]
 pub struct ActiveCommandHandle {
     id: String,

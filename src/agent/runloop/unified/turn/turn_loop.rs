@@ -1,6 +1,5 @@
 use anyhow::Result;
 use std::collections::BTreeSet;
-use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
@@ -21,7 +20,7 @@ use crate::agent::runloop::unified::turn::turn_loop_helpers::{
 };
 use vtcode_core::acp::ToolPermissionCache;
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::core::agent::steering::SteeringMessage;
+use vtcode_core::core::agent::runtime::RuntimeSteering;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::exec::events::Usage as HarnessUsage;
@@ -86,8 +85,7 @@ pub(crate) struct TurnLoopContext<'a> {
     pub traj: &'a TrajectoryLogger,
     pub skip_confirmations: bool,
     pub full_auto: bool,
-    pub steering_receiver: &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
-    pub deferred_follow_up_inputs: &'a mut VecDeque<String>,
+    pub runtime_steering: &'a mut RuntimeSteering,
 }
 
 impl<'a> TurnLoopContext<'a> {
@@ -131,8 +129,7 @@ impl<'a> TurnLoopContext<'a> {
         traj: &'a TrajectoryLogger,
         skip_confirmations: bool,
         full_auto: bool,
-        steering_receiver: &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
-        deferred_follow_up_inputs: &'a mut VecDeque<String>,
+        runtime_steering: &'a mut RuntimeSteering,
     ) -> Self {
         Self {
             renderer,
@@ -171,8 +168,7 @@ impl<'a> TurnLoopContext<'a> {
             traj,
             skip_confirmations,
             full_auto,
-            steering_receiver,
-            deferred_follow_up_inputs,
+            runtime_steering,
         }
     }
 
@@ -246,8 +242,7 @@ impl<'a> TurnLoopContext<'a> {
             full_auto: self.full_auto,
             harness_state: self.harness_state,
             harness_emitter: self.harness_emitter,
-            steering_receiver: self.steering_receiver,
-            deferred_follow_up_inputs: self.deferred_follow_up_inputs,
+            runtime_steering: self.runtime_steering,
         };
 
         crate::agent::runloop::unified::turn::context::TurnProcessingContext::from_parts(

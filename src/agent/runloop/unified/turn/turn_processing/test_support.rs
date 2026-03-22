@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -10,6 +9,7 @@ use vtcode_core::acp::ToolPermissionCache;
 use vtcode_core::config::types::{
     AgentConfig, ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
 };
+use vtcode_core::core::agent::runtime::RuntimeSteering;
 use vtcode_core::core::agent::steering::SteeringMessage;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::trajectory::TrajectoryLogger;
@@ -108,8 +108,7 @@ pub(crate) struct TestTurnProcessingBacking {
     working_history: Vec<uni::Message>,
     tool_catalog: Arc<ToolCatalogState>,
     default_placeholder: Option<String>,
-    steering_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
-    deferred_follow_up_inputs: VecDeque<String>,
+    runtime_steering: RuntimeSteering,
     config: AgentConfig,
     provider_client: Box<dyn uni::LLMProvider>,
     traj: TrajectoryLogger,
@@ -215,8 +214,7 @@ impl TestTurnProcessingBacking {
             working_history: Vec::new(),
             tool_catalog,
             default_placeholder: None,
-            steering_receiver: None,
-            deferred_follow_up_inputs: VecDeque::new(),
+            runtime_steering: RuntimeSteering::default(),
             config,
             provider_client: Box::new(NoopProvider),
             traj: TrajectoryLogger::disabled(),
@@ -232,11 +230,17 @@ impl TestTurnProcessingBacking {
         &mut self,
         receiver: tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>,
     ) {
-        self.steering_receiver = Some(receiver);
+        self.runtime_steering.set_receiver(Some(receiver));
     }
 
-    pub(crate) fn deferred_follow_up_inputs(&self) -> Vec<String> {
-        self.deferred_follow_up_inputs.iter().cloned().collect()
+    pub(crate) fn deferred_follow_up_inputs(&mut self) -> Vec<String> {
+        let mut inputs = Vec::new();
+        let mut steering = std::mem::take(&mut self.runtime_steering);
+        while let Some(input) = steering.pop_follow_up_input() {
+            inputs.push(input);
+        }
+        self.runtime_steering = steering;
+        inputs
     }
 
     pub(crate) fn legacy_loop_detector(
@@ -295,8 +299,7 @@ impl TestTurnProcessingBacking {
             &self.traj,
             true,
             false,
-            &mut self.steering_receiver,
-            &mut self.deferred_follow_up_inputs,
+            &mut self.runtime_steering,
         )
     }
 
@@ -345,8 +348,7 @@ impl TestTurnProcessingBacking {
             full_auto: false,
             harness_state: &mut self.harness_state,
             harness_emitter: None,
-            steering_receiver: &mut self.steering_receiver,
-            deferred_follow_up_inputs: &mut self.deferred_follow_up_inputs,
+            runtime_steering: &mut self.runtime_steering,
         };
 
         TurnProcessingContext::from_parts(TurnProcessingContextParts {

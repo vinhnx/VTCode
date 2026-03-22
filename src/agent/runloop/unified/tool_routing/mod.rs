@@ -137,10 +137,6 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         skip_confirmations,
     } = ctx;
 
-    if skip_confirmations {
-        return Ok(ToolPermissionFlow::Approved);
-    }
-
     // Generate cache key - use command text for shell tools to enable granular session approval
     let cache_key = cache_key(tool_name, tool_args);
 
@@ -255,6 +251,10 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
             );
             return Ok(ToolPermissionFlow::Approved);
         }
+    }
+
+    if skip_confirmations {
+        return Ok(ToolPermissionFlow::Approved);
     }
 
     let should_prompt = hook_requires_prompt
