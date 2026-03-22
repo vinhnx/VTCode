@@ -55,3 +55,9 @@ humidapp
 vtchat.io
 
 ===
+
+Compaction & Branch Summarization
+
+https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/compaction.md
+
+https://deepwiki.com/search/compaction-branch-summarizatio_b552d7b1-d14c-4024-8655-8735bb95a157?mode=fast
