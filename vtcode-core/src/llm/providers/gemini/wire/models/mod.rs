@@ -18,6 +18,25 @@ pub struct SystemInstruction {
     pub parts: Vec<Part>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerToolCall {
+    #[serde(rename = "toolType", alias = "tool_type")]
+    pub tool_type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub args: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerToolResponse {
+    #[serde(rename = "toolType", alias = "tool_type")]
+    pub tool_type: String,
+    pub response: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+}
+
 impl Content {
     pub fn user_text(text: impl Into<String>) -> Self {
         Content {
@@ -101,6 +120,38 @@ pub enum Part {
         thought_signature: Option<String>,
     },
     #[serde(rename_all = "camelCase")]
+    ToolCall {
+        #[serde(rename = "toolCall")]
+        tool_call: ServerToolCall,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[serde(rename = "thoughtSignature", alias = "thought_signature")]
+        thought_signature: Option<String>,
+    },
+    #[serde(rename_all = "camelCase")]
+    ToolResponse {
+        #[serde(rename = "toolResponse")]
+        tool_response: ServerToolResponse,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[serde(rename = "thoughtSignature", alias = "thought_signature")]
+        thought_signature: Option<String>,
+    },
+    #[serde(rename_all = "camelCase")]
+    ExecutableCode {
+        #[serde(rename = "executableCode")]
+        executable_code: Value,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[serde(rename = "thoughtSignature", alias = "thought_signature")]
+        thought_signature: Option<String>,
+    },
+    #[serde(rename_all = "camelCase")]
+    CodeExecutionResult {
+        #[serde(rename = "codeExecutionResult")]
+        code_execution_result: Value,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[serde(rename = "thoughtSignature", alias = "thought_signature")]
+        thought_signature: Option<String>,
+    },
+    #[serde(rename_all = "camelCase")]
     InlineData {
         #[serde(rename = "inline_data")]
         inline_data: InlineData,
@@ -129,12 +180,52 @@ impl Part {
             _ => None,
         }
     }
+
+    pub fn thought_signature(&self) -> Option<&str> {
+        match self {
+            Part::FunctionCall {
+                thought_signature, ..
+            }
+            | Part::FunctionResponse {
+                thought_signature, ..
+            }
+            | Part::ToolCall {
+                thought_signature, ..
+            }
+            | Part::ToolResponse {
+                thought_signature, ..
+            }
+            | Part::ExecutableCode {
+                thought_signature, ..
+            }
+            | Part::CodeExecutionResult {
+                thought_signature, ..
+            }
+            | Part::Text {
+                thought_signature, ..
+            } => thought_signature.as_deref(),
+            Part::InlineData { .. } | Part::CacheControl { .. } => None,
+        }
+    }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Tool {
-    #[serde(rename = "functionDeclarations")]
-    pub function_declarations: Vec<FunctionDeclaration>,
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        rename = "functionDeclarations"
+    )]
+    pub function_declarations: Option<Vec<FunctionDeclaration>>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "googleSearch")]
+    pub google_search: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "googleMaps")]
+    pub google_maps: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "urlContext")]
+    pub url_context: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "fileSearch")]
+    pub file_search: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "codeExecution")]
+    pub code_execution: Option<Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -151,16 +242,34 @@ pub struct FunctionDeclaration {
     pub parameters: Value,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ToolConfig {
-    #[serde(rename = "functionCallingConfig")]
-    pub function_calling_config: super::function_calling::FunctionCallingConfig,
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        rename = "functionCallingConfig"
+    )]
+    pub function_calling_config: Option<super::function_calling::FunctionCallingConfig>,
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        rename = "includeServerSideToolInvocations"
+    )]
+    pub include_server_side_tool_invocations: Option<bool>,
 }
 
 impl ToolConfig {
     pub fn auto() -> Self {
         Self {
-            function_calling_config: super::function_calling::FunctionCallingConfig::auto(),
+            function_calling_config: Some(super::function_calling::FunctionCallingConfig::auto()),
+            include_server_side_tool_invocations: None,
+        }
+    }
+
+    pub fn validated() -> Self {
+        Self {
+            function_calling_config: Some(
+                super::function_calling::FunctionCallingConfig::validated(),
+            ),
+            include_server_side_tool_invocations: None,
         }
     }
 }

@@ -26,7 +26,9 @@
     "unified_file": "allow",
     "list_skills": "allow",
     "load_skill_resource": "allow",
-    "load_skill": "allow"
+    "load_skill": "allow",
+    "list_files": "allow",
+    "read_file": "allow"
   },
   "constraints": {
     "curl": {
@@ -257,6 +259,8 @@
       "tree -L 3 src/agent/ '2>/dev/null' '||' find src/agent -type f -name '*.rs' '|' sort|sandbox_permissions=\"use_default\"|additional_permissions=null",
       "find src -type f -name '*.rs' '|' grep -i agent '|' grep -i loop '|' head -10|sandbox_permissions=\"use_default\"|additional_permissions=null",
       "ls -la src/agent/runloop/unified/turn/session/|sandbox_permissions=\"use_default\"|additional_permissions=null"
-    ]
+    ],
+    "prefixes": [],
+    "regexes": []
   }
 }

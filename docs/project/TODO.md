@@ -53,3 +53,23 @@ kiweuro
 writedownapp
 humidapp
 vtchat.io
+
+===
+
+check control+c to make sure it dismiss current active modal and active subprocess. for now, control+c seems not working in auth flow and when modal is open. we should make sure control+c can dismiss any active modal and also kill any active subprocess to allow users to quickly recover from any stuck state.
+
+===
+
+Now let me review all code against rust-skills. Issues I see:
+
+trace_writer.rs: Write impl has duplicated lock+error logic (anti-clone-excessive, DRY). The Write trait requires &mut self but we use interior mutability — the Mutex makes &mut unnecessary. Can simplify.
+
+trace_writer.rs: flush_trace_log is a public module-level function but FlushableWriter::flush also exists as an inherent method with the same semantics — the inherent flush method takes &self but the Write::flush takes &mut self. This is fine but the inherent flush should delegate.
+
+trace_flush.rs: Using Box<dyn Fn()> allocates — can use a function pointer fn() instead since we only pass flush_trace_log (a plain fn). Per anti-type-erasure: avoid Box<dyn Trait> when concrete type works.
+
+tracing.rs: install_tracing_stack takes PathBuf by value but only needs &Path (own-borrow-over-clone, own-slice-over-vec). The set_runtime_debug_log_path takes a PathBuf though, so we'd need to check.
+
+factory.rs: The builtins HashSet allocates 14 Strings every call. Should use &str with a static/const set (mem-avoid-format, anti-format-hot-path).
+
+is_session_file: Good, but can use matches!() for clarity.

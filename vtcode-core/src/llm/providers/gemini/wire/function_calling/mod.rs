@@ -35,6 +35,13 @@ impl FunctionCallingConfig {
         }
     }
 
+    pub fn validated() -> Self {
+        Self {
+            mode: "VALIDATED".to_owned(),
+            allowed_function_names: None,
+        }
+    }
+
     pub fn none() -> Self {
         Self {
             mode: "NONE".to_owned(),

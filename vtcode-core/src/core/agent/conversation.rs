@@ -9,6 +9,8 @@ use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::fmt::Write;
 
+const GEMINI_PRESERVED_PARTS_PREFIX: &str = "__vtcode_gemini_parts__:";
+
 /// Build the initial conversation payload (without the system instruction message).
 pub fn build_conversation(task: &Task, contexts: &[ContextItem]) -> Vec<Content> {
     let mut conversation = Vec::with_capacity(3);
@@ -86,6 +88,10 @@ pub fn messages_from_conversation(conversation: &[Content]) -> Vec<Message> {
                     let response_str = function_response.response.to_string();
                     tool_responses.push(Message::tool_response(id, response_str));
                 }
+                Part::ToolCall { .. }
+                | Part::ToolResponse { .. }
+                | Part::ExecutableCode { .. }
+                | Part::CodeExecutionResult { .. } => {}
                 Part::CacheControl { .. } => {}
             }
         }
@@ -117,6 +123,10 @@ pub fn messages_from_conversation(conversation: &[Content]) -> Vec<Message> {
 
         if !tool_calls.is_empty() {
             message.tool_calls = Some(tool_calls);
+        }
+
+        if let Some(raw_parts_detail) = preserved_parts_detail(&content.parts) {
+            message = message.with_reasoning_details(Some(vec![json!(raw_parts_detail)]));
         }
 
         messages.push(message);
@@ -218,26 +228,38 @@ pub fn conversation_from_messages(messages: &[Message]) -> Vec<Content> {
                 }
             }
             MessageRole::Assistant => {
-                let mut parts = parts_from_message_content(&message.content);
-                if let Some(tool_calls) = &message.tool_calls {
-                    for tool_call in tool_calls {
-                        let Some(function) = &tool_call.function else {
-                            continue;
-                        };
+                let parts = preserved_parts_from_message(message).unwrap_or_else(|| {
+                    let mut rebuilt_parts = parts_from_message_content(&message.content);
+                    if let Some(tool_calls) = &message.tool_calls {
+                        for tool_call in tool_calls {
+                            let Some(function) = &tool_call.function else {
+                                continue;
+                            };
 
-                        let id = (!tool_call.id.is_empty()).then(|| tool_call.id.clone());
-                        if let Some(call_id) = id.as_ref() {
-                            tool_names_by_call_id.insert(call_id.clone(), function.name.clone());
+                            let id = (!tool_call.id.is_empty()).then(|| tool_call.id.clone());
+                            if let Some(call_id) = id.as_ref() {
+                                tool_names_by_call_id
+                                    .insert(call_id.clone(), function.name.clone());
+                            }
+
+                            rebuilt_parts.push(Part::FunctionCall {
+                                function_call: FunctionCall {
+                                    name: function.name.clone(),
+                                    args: tool_call_arguments(&function.arguments),
+                                    id,
+                                },
+                                thought_signature: tool_call.thought_signature.clone(),
+                            });
                         }
+                    }
+                    rebuilt_parts
+                });
 
-                        parts.push(Part::FunctionCall {
-                            function_call: FunctionCall {
-                                name: function.name.clone(),
-                                args: tool_call_arguments(&function.arguments),
-                                id,
-                            },
-                            thought_signature: tool_call.thought_signature.clone(),
-                        });
+                for part in &parts {
+                    if let Part::FunctionCall { function_call, .. } = part
+                        && let Some(call_id) = function_call.id.as_ref()
+                    {
+                        tool_names_by_call_id.insert(call_id.clone(), function_call.name.clone());
                     }
                 }
 
@@ -287,6 +309,44 @@ pub fn conversation_from_messages(messages: &[Message]) -> Vec<Content> {
     }
 
     conversation
+}
+
+fn preserved_parts_from_message(message: &Message) -> Option<Vec<Part>> {
+    let details = message.reasoning_details.as_ref()?;
+    for detail in details {
+        let Some(text) = detail.as_str() else {
+            continue;
+        };
+        let Some(payload) = text.strip_prefix(GEMINI_PRESERVED_PARTS_PREFIX) else {
+            continue;
+        };
+        if let Ok(parts) = serde_json::from_str::<Vec<Part>>(payload) {
+            return Some(parts);
+        }
+    }
+    None
+}
+
+fn preserved_parts_detail(parts: &[Part]) -> Option<String> {
+    let should_preserve = parts.iter().any(|part| {
+        part.thought_signature().is_some()
+            || matches!(
+                part,
+                Part::ToolCall { .. }
+                    | Part::ToolResponse { .. }
+                    | Part::ExecutableCode { .. }
+                    | Part::CodeExecutionResult { .. }
+                    | Part::FunctionResponse { .. }
+                    | Part::InlineData { .. }
+            )
+    });
+    if !should_preserve {
+        return None;
+    }
+
+    serde_json::to_string(parts)
+        .ok()
+        .map(|serialized| format!("{GEMINI_PRESERVED_PARTS_PREFIX}{serialized}"))
 }
 
 #[cfg(test)]

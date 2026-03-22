@@ -553,6 +553,12 @@ impl StreamingProcessor {
                 Part::FunctionResponse { .. } => {
                     _has_valid_content = true;
                 }
+                Part::ToolCall { .. }
+                | Part::ToolResponse { .. }
+                | Part::ExecutableCode { .. }
+                | Part::CodeExecutionResult { .. } => {
+                    _has_valid_content = true;
+                }
                 Part::CacheControl { .. } => {}
             }
         }

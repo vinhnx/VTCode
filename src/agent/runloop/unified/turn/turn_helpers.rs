@@ -103,6 +103,7 @@ pub(crate) fn display_status(renderer: &mut AnsiRenderer, message: &str) -> Resu
 pub(crate) fn supports_responses_chaining(provider_name: &str) -> bool {
     provider_name.eq_ignore_ascii_case("openai")
         || provider_name.eq_ignore_ascii_case("openresponses")
+        || provider_name.eq_ignore_ascii_case("gemini")
 }
 
 /// Check if operation should continue based on ctrl-c state

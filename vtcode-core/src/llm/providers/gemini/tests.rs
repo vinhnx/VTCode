@@ -1,5 +1,7 @@
+use super::helpers::InteractionStreamState;
 use super::wire::{
-    Candidate, Content, FunctionCall as GeminiFunctionCall, GenerateContentResponse, Part,
+    Candidate, Content, FunctionCall as GeminiFunctionCall, GenerateContentResponse, Interaction,
+    InteractionContent, InteractionInput, InteractionOutput, InteractionResult, Part,
     ServerToolCall, ServerToolResponse,
 };
 use super::*;
@@ -246,6 +248,524 @@ fn convert_to_gemini_request_keeps_apply_patch_as_function_tool() {
             .name,
         "apply_patch"
     );
+}
+
+#[test]
+fn convert_to_interaction_request_serializes_built_in_and_function_tools() {
+    let provider = GeminiProvider::new("test-key".to_string());
+    let request = LLMRequest {
+        messages: vec![Message::user(
+            "What is the northernmost city in the United States?".to_string(),
+        )],
+        tools: Some(Arc::new(vec![
+            ToolDefinition::web_search(json!({})),
+            ToolDefinition::function(
+                "get_weather".to_string(),
+                "Gets the weather".to_string(),
+                json!({
+                    "type": "object",
+                    "properties": {
+                        "location": { "type": "string" }
+                    },
+                    "required": ["location"]
+                }),
+            ),
+        ])),
+        model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
+        ..Default::default()
+    };
+
+    let interaction_request = provider
+        .convert_to_interaction_request(&request)
+        .expect("interaction request should build");
+
+    assert!(matches!(
+        interaction_request.input,
+        InteractionInput::Text(ref text)
+            if text == "What is the northernmost city in the United States?"
+    ));
+
+    let tools = interaction_request.tools.expect("tools should be present");
+    assert!(tools.iter().any(|tool| tool.tool_type == "google_search"));
+    assert!(tools.iter().any(|tool| {
+        tool.tool_type == "function" && tool.name.as_deref() == Some("get_weather")
+    }));
+    assert_eq!(
+        interaction_request.tool_choice.expect("tool choice").mode,
+        "validated"
+    );
+}
+
+#[test]
+fn convert_to_interaction_request_preserves_built_in_tool_config() {
+    let provider = GeminiProvider::new("test-key".to_string());
+    let request = LLMRequest {
+        messages: vec![Message::user("Search for an image".to_string())],
+        tools: Some(Arc::new(vec![
+            ToolDefinition::web_search(json!({
+                "search_types": ["web_search", "image_search"]
+            })),
+            ToolDefinition::file_search(json!({
+                "file_search_store_names": ["fileSearchStores/my-store-name"]
+            })),
+        ])),
+        model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
+        ..Default::default()
+    };
+
+    let interaction_request = provider
+        .convert_to_interaction_request(&request)
+        .expect("interaction request should build");
+    let tools = interaction_request.tools.expect("tools should be present");
+
+    let google_search = tools
+        .iter()
+        .find(|tool| tool.tool_type == "google_search")
+        .expect("google_search tool");
+    assert_eq!(
+        google_search.extra.get("search_types"),
+        Some(&json!(["web_search", "image_search"]))
+    );
+
+    let file_search = tools
+        .iter()
+        .find(|tool| tool.tool_type == "file_search")
+        .expect("file_search tool");
+    assert_eq!(
+        file_search.extra.get("file_search_store_names"),
+        Some(&json!(["fileSearchStores/my-store-name"]))
+    );
+}
+
+#[test]
+fn convert_to_interaction_request_uses_function_result_for_chained_turns() {
+    let provider = GeminiProvider::new("test-key".to_string());
+    let mut assistant_message = Message::assistant(String::new());
+    assistant_message.tool_calls = Some(vec![ToolCall::function(
+        "call_weather_1".to_string(),
+        "get_weather".to_string(),
+        json!({ "location": "Utqiagvik, Alaska" }).to_string(),
+    )]);
+
+    let request = LLMRequest {
+        messages: vec![
+            Message::user("Check the weather".to_string()),
+            assistant_message,
+            Message::tool_response(
+                "call_weather_1".to_string(),
+                json!({ "response": "Very cold. 22 degrees Fahrenheit." }).to_string(),
+            ),
+        ],
+        tools: Some(Arc::new(vec![ToolDefinition::function(
+            "get_weather".to_string(),
+            "Gets the weather".to_string(),
+            json!({
+                "type": "object",
+                "properties": {
+                    "location": { "type": "string" }
+                }
+            }),
+        )])),
+        model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
+        previous_response_id: Some("interaction_123".to_string()),
+        ..Default::default()
+    };
+
+    let interaction_request = provider
+        .convert_to_interaction_request(&request)
+        .expect("interaction request should build");
+
+    assert_eq!(
+        interaction_request.previous_interaction_id.as_deref(),
+        Some("interaction_123")
+    );
+
+    match interaction_request.input {
+        InteractionInput::Content(content) => match content.as_slice() {
+            [
+                InteractionContent::FunctionResult {
+                    call_id,
+                    name,
+                    result,
+                    ..
+                },
+            ] => {
+                assert_eq!(call_id, "call_weather_1");
+                assert_eq!(name.as_deref(), Some("get_weather"));
+                assert_eq!(
+                    result,
+                    &InteractionResult::Json(
+                        json!({ "response": "Very cold. 22 degrees Fahrenheit." })
+                    )
+                );
+            }
+            other => panic!("expected single function_result content, got {other:?}"),
+        },
+        other => panic!("expected content delta input, got {other:?}"),
+    }
+}
+
+#[test]
+fn convert_to_interaction_request_supports_multimodal_function_results() {
+    let provider = GeminiProvider::new("test-key".to_string());
+    let mut assistant_message = Message::assistant(String::new());
+    assistant_message.tool_calls = Some(vec![ToolCall::function(
+        "call_screenshot_1".to_string(),
+        "take_screenshot".to_string(),
+        json!({ "url": "https://google.com" }).to_string(),
+    )]);
+
+    let request = LLMRequest {
+        messages: vec![
+            Message::user("Take a screenshot".to_string()),
+            assistant_message,
+            Message {
+                role: MessageRole::Tool,
+                content: MessageContent::parts(vec![
+                    crate::llm::provider::ContentPart::Text {
+                        text: "Screenshot captured successfully.".to_string(),
+                    },
+                    crate::llm::provider::ContentPart::Image {
+                        data: "ZmFrZQ==".to_string(),
+                        mime_type: "image/png".to_string(),
+                        content_type: "image".to_string(),
+                    },
+                ]),
+                tool_call_id: Some("call_screenshot_1".to_string()),
+                ..Default::default()
+            },
+        ],
+        tools: Some(Arc::new(vec![ToolDefinition::function(
+            "take_screenshot".to_string(),
+            "Takes a screenshot".to_string(),
+            json!({
+                "type": "object",
+                "properties": {
+                    "url": { "type": "string" }
+                },
+                "required": ["url"]
+            }),
+        )])),
+        model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
+        previous_response_id: Some("interaction_123".to_string()),
+        ..Default::default()
+    };
+
+    let interaction_request = provider
+        .convert_to_interaction_request(&request)
+        .expect("interaction request should build");
+
+    match interaction_request.input {
+        InteractionInput::Content(content) => match content.as_slice() {
+            [InteractionContent::FunctionResult { result, .. }] => match result {
+                InteractionResult::Content(items) => {
+                    assert!(matches!(
+                        items.as_slice(),
+                        [
+                            InteractionContent::Text { text },
+                            InteractionContent::Image { mime_type, data }
+                        ] if text == "Screenshot captured successfully."
+                            && mime_type == "image/png"
+                            && data == "ZmFrZQ=="
+                    ));
+                }
+                other => panic!("expected multimodal content result, got {other:?}"),
+            },
+            other => panic!("expected single function_result content, got {other:?}"),
+        },
+        other => panic!("expected content delta input, got {other:?}"),
+    }
+}
+
+#[test]
+fn convert_from_interaction_response_extracts_request_id_and_tool_calls() {
+    let response = Interaction {
+        id: "interaction_456".to_string(),
+        model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
+        status: Some("requires_action".to_string()),
+        outputs: vec![
+            InteractionOutput {
+                output_type: "text".to_string(),
+                text: Some("Looking it up.".to_string()),
+                summary: None,
+                id: None,
+                name: None,
+                arguments: None,
+                signature: None,
+                function_call: None,
+            },
+            InteractionOutput {
+                output_type: "function_call".to_string(),
+                text: None,
+                summary: None,
+                id: Some("call_weather_2".to_string()),
+                name: Some("get_weather".to_string()),
+                arguments: Some(json!({ "location": "Utqiagvik, Alaska" })),
+                signature: Some("sig_123".to_string()),
+                function_call: None,
+            },
+        ],
+        usage: None,
+    };
+
+    let llm_response = GeminiProvider::convert_from_interaction_response(
+        response,
+        models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
+    )
+    .expect("interaction response should parse");
+
+    assert_eq!(llm_response.request_id.as_deref(), Some("interaction_456"));
+    assert_eq!(llm_response.content.as_deref(), Some("Looking it up."));
+    assert_eq!(llm_response.finish_reason, FinishReason::ToolCalls);
+    let tool_calls = llm_response.tool_calls.expect("tool call should exist");
+    assert_eq!(tool_calls.len(), 1);
+    assert_eq!(
+        tool_calls[0].function.as_ref().expect("function").name,
+        "get_weather"
+    );
+    assert_eq!(tool_calls[0].thought_signature.as_deref(), Some("sig_123"));
+}
+
+#[test]
+fn convert_from_interaction_response_prefers_thought_summaries() {
+    let response = Interaction {
+        id: "interaction_789".to_string(),
+        model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
+        status: Some("completed".to_string()),
+        outputs: vec![
+            InteractionOutput {
+                output_type: "thought".to_string(),
+                text: None,
+                summary: Some("Checked the available evidence.".to_string()),
+                id: None,
+                name: None,
+                arguments: None,
+                signature: Some("thought_sig_1".to_string()),
+                function_call: None,
+            },
+            InteractionOutput {
+                output_type: "text".to_string(),
+                text: Some("Final answer.".to_string()),
+                summary: None,
+                id: None,
+                name: None,
+                arguments: None,
+                signature: None,
+                function_call: None,
+            },
+        ],
+        usage: None,
+    };
+
+    let llm_response = GeminiProvider::convert_from_interaction_response(
+        response,
+        models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
+    )
+    .expect("interaction response should parse");
+
+    assert_eq!(
+        llm_response.reasoning.as_deref(),
+        Some("Checked the available evidence.")
+    );
+    assert_eq!(llm_response.content.as_deref(), Some("Final answer."));
+    assert_eq!(llm_response.request_id.as_deref(), Some("interaction_789"));
+    assert_eq!(
+        llm_response.reasoning_details.as_ref().map(Vec::len),
+        Some(1)
+    );
+}
+
+#[test]
+fn interaction_stream_payload_reconstructs_text_reasoning_and_tool_calls() {
+    let mut state = InteractionStreamState::default();
+
+    let events = GeminiProvider::apply_interaction_stream_payload(
+        &mut state,
+        &json!({
+            "event_type": "interaction.start",
+            "interaction": {
+                "id": "interaction_stream_1",
+                "status": "in_progress"
+            }
+        }),
+    )
+    .expect("start event should parse");
+    assert!(events.is_empty());
+
+    let events = GeminiProvider::apply_interaction_stream_payload(
+        &mut state,
+        &json!({
+            "event_type": "content.start",
+            "index": 0,
+            "content": {
+                "type": "thought"
+            }
+        }),
+    )
+    .expect("thought start should parse");
+    assert!(events.is_empty());
+
+    let events = GeminiProvider::apply_interaction_stream_payload(
+        &mut state,
+        &json!({
+            "event_type": "content.delta",
+            "index": 0,
+            "delta": {
+                "type": "thought_summary",
+                "content": {
+                    "text": "Looked up the city first."
+                }
+            }
+        }),
+    )
+    .expect("thought delta should parse");
+    assert!(matches!(
+        events.as_slice(),
+        [LLMStreamEvent::Reasoning { delta }] if delta == "Looked up the city first."
+    ));
+
+    let events = GeminiProvider::apply_interaction_stream_payload(
+        &mut state,
+        &json!({
+            "event_type": "content.delta",
+            "index": 0,
+            "delta": {
+                "type": "thought_signature",
+                "signature": "thought_sig_stream"
+            }
+        }),
+    )
+    .expect("thought signature should parse");
+    assert!(events.is_empty());
+
+    let events = GeminiProvider::apply_interaction_stream_payload(
+        &mut state,
+        &json!({
+            "event_type": "content.start",
+            "index": 1,
+            "content": {
+                "type": "text"
+            }
+        }),
+    )
+    .expect("text start should parse");
+    assert!(events.is_empty());
+
+    let events = GeminiProvider::apply_interaction_stream_payload(
+        &mut state,
+        &json!({
+            "event_type": "content.delta",
+            "index": 1,
+            "delta": {
+                "type": "text",
+                "text": "Looking it up."
+            }
+        }),
+    )
+    .expect("text delta should parse");
+    assert!(matches!(
+        events.as_slice(),
+        [LLMStreamEvent::Token { delta }] if delta == "Looking it up."
+    ));
+
+    let events = GeminiProvider::apply_interaction_stream_payload(
+        &mut state,
+        &json!({
+            "event_type": "content.start",
+            "index": 2,
+            "content": {
+                "type": "function_call"
+            }
+        }),
+    )
+    .expect("function start should parse");
+    assert!(events.is_empty());
+
+    let events = GeminiProvider::apply_interaction_stream_payload(
+        &mut state,
+        &json!({
+            "event_type": "content.delta",
+            "index": 2,
+            "delta": {
+                "type": "function_call",
+                "id": "call_weather_stream",
+                "name": "get_weather",
+                "arguments": {
+                    "location": "Utqiagvik, Alaska"
+                },
+                "signature": "tool_sig_stream"
+            }
+        }),
+    )
+    .expect("function delta should parse");
+    assert!(events.is_empty());
+
+    let events = GeminiProvider::apply_interaction_stream_payload(
+        &mut state,
+        &json!({
+            "event_type": "interaction.complete",
+            "interaction": {
+                "id": "interaction_stream_1",
+                "status": "requires_action",
+                "usage": {
+                    "total_input_tokens": 12,
+                    "total_output_tokens": 8,
+                    "total_tokens": 20
+                }
+            }
+        }),
+    )
+    .expect("complete event should parse");
+    assert!(events.is_empty());
+    assert!(state.completed);
+
+    let llm_response = GeminiProvider::finalize_interaction_stream_state(
+        state,
+        models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
+    )
+    .expect("finalized interaction stream should parse");
+
+    assert_eq!(
+        llm_response.request_id.as_deref(),
+        Some("interaction_stream_1")
+    );
+    assert_eq!(llm_response.content.as_deref(), Some("Looking it up."));
+    assert_eq!(
+        llm_response.reasoning.as_deref(),
+        Some("Looked up the city first.")
+    );
+    assert_eq!(llm_response.finish_reason, FinishReason::ToolCalls);
+    assert_eq!(
+        llm_response.usage.as_ref().map(|u| u.total_tokens),
+        Some(20)
+    );
+    let tool_calls = llm_response.tool_calls.expect("tool call should exist");
+    assert_eq!(tool_calls.len(), 1);
+    assert_eq!(
+        tool_calls[0].function.as_ref().expect("function").name,
+        "get_weather"
+    );
+    assert_eq!(
+        tool_calls[0].thought_signature.as_deref(),
+        Some("tool_sig_stream")
+    );
+}
+
+#[test]
+fn validate_request_rejects_store_false_with_previous_interaction_id() {
+    let provider = GeminiProvider::new("test-key".to_string());
+    let request = LLMRequest {
+        messages: vec![Message::user("hello".to_string())],
+        model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
+        previous_response_id: Some("interaction_123".to_string()),
+        response_store: Some(false),
+        ..Default::default()
+    };
+
+    let error = provider
+        .validate_request(&request)
+        .expect_err("request should be rejected");
+    assert!(error.to_string().contains("cannot set store=false"));
 }
 
 #[test]

@@ -442,7 +442,6 @@ impl AgentRunner {
                     .await?;
                 event_recorder.record_thread_events(runtime.take_emitted_events());
                 let response = turn_output.response;
-
                 self.runner_println(format_args!(
                     "{} {} {} received response, processing...",
                     agent_prefix,

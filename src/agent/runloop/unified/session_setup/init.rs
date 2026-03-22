@@ -129,6 +129,7 @@ fn tool_definition_name(tool: &uni::ToolDefinition) -> Option<&str> {
     tool.function
         .as_ref()
         .map(|function| function.name.as_str())
+        .or_else(|| (!tool.tool_type.is_empty()).then_some(tool.function_name()))
 }
 
 pub(crate) async fn initialize_session(
@@ -555,5 +556,18 @@ mod tests {
         );
 
         assert_eq!(names, vec!["unified_search"]);
+    }
+
+    #[test]
+    fn prompt_visible_tool_names_include_native_tool_types() {
+        let tool_defs = vec![
+            ToolDefinition::web_search(json!({})),
+            ToolDefinition::google_maps(json!({})),
+            ToolDefinition::url_context(json!({})),
+        ];
+
+        let names = prompt_visible_tool_names("gemini", None, &tool_defs);
+
+        assert_eq!(names, vec!["web_search", "google_maps", "url_context"]);
     }
 }

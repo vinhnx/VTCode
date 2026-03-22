@@ -53,6 +53,44 @@ fn mcp_tool_definition_requires_object_config() {
 }
 
 #[test]
+fn google_maps_tool_definition_requires_object_config() {
+    assert!(
+        ToolDefinition::google_maps(json!({"center": "sf"}))
+            .validate()
+            .is_ok()
+    );
+    assert!(
+        ToolDefinition::google_maps(json!(["sf"]))
+            .validate()
+            .is_err()
+    );
+}
+
+#[test]
+fn url_context_tool_definition_requires_object_config() {
+    assert!(
+        ToolDefinition::url_context(json!({"urls": ["https://example.com"]}))
+            .validate()
+            .is_ok()
+    );
+    assert!(
+        ToolDefinition::url_context(json!("https://example.com"))
+            .validate()
+            .is_err()
+    );
+}
+
+#[test]
+fn code_execution_tool_definition_requires_object_config() {
+    assert!(ToolDefinition::code_execution(json!({})).validate().is_ok());
+    assert!(
+        ToolDefinition::code_execution(json!("enabled"))
+            .validate()
+            .is_err()
+    );
+}
+
+#[test]
 fn anthropic_web_search_tool_definition_accepts_object_config() {
     let tool = ToolDefinition {
         tool_type: "web_search_20250305".to_string(),

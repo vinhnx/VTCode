@@ -1,4 +1,6 @@
+use super::helpers::InteractionStreamState;
 use super::*;
+use crate::llm::providers::shared::{StreamAssemblyError, extract_data_payload, find_sse_boundary};
 
 #[async_trait]
 impl LLMProvider for GeminiProvider {
@@ -47,6 +49,32 @@ impl LLMProvider for GeminiProvider {
 
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
         let model = request.model.clone();
+        if self.should_use_interactions(&request) {
+            let interaction_request = self.convert_to_interaction_request(&request)?;
+            let url = format!("{}/interactions", self.base_url);
+            let response = self
+                .http_client
+                .post(&url)
+                .header("x-goog-api-key", self.api_key.as_ref())
+                .json(&interaction_request)
+                .send()
+                .await
+                .map_err(|e| format_network_error("Gemini", &e))?;
+
+            if !response.status().is_success() {
+                let status = response.status();
+                let error_text = response.text().await.unwrap_or_default();
+                return Err(Self::handle_http_error(status, &error_text));
+            }
+
+            let interaction_response: Interaction = response
+                .json()
+                .await
+                .map_err(|e| format_parse_error("Gemini", &e))?;
+
+            return Self::convert_from_interaction_response(interaction_response, model);
+        }
+
         let gemini_request = self.convert_to_gemini_request(&request)?;
 
         let url = format!("{}/models/{}:generateContent", self.base_url, request.model);
@@ -75,6 +103,89 @@ impl LLMProvider for GeminiProvider {
     }
 
     async fn stream(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {
+        if self.should_use_interactions(&request) {
+            let model = request.model.clone();
+            let interaction_request = self.convert_to_interaction_request(&request)?;
+            let url = format!("{}/interactions?alt=sse", self.base_url);
+            let response = self
+                .http_client
+                .post(&url)
+                .header("x-goog-api-key", self.api_key.as_ref())
+                .json(&interaction_request)
+                .send()
+                .await
+                .map_err(|e| format_network_error("Gemini", &e))?;
+
+            if !response.status().is_success() {
+                let status = response.status();
+                let error_text = response.text().await.unwrap_or_default();
+                return Err(Self::handle_http_error(status, &error_text));
+            }
+
+            let stream = {
+                try_stream! {
+                    let mut body_stream = response.bytes_stream();
+                    let mut buffer = String::new();
+                    let mut state = InteractionStreamState::default();
+
+                    while let Some(chunk_result) = body_stream.next().await {
+                        let chunk = chunk_result.map_err(|err| {
+                            let formatted_error = error_display::format_llm_error(
+                                "Gemini",
+                                &format!("Streaming error: {}", err),
+                            );
+                            LLMError::Network {
+                                message: formatted_error,
+                                metadata: None,
+                            }
+                        })?;
+
+                        buffer.push_str(&String::from_utf8_lossy(&chunk));
+
+                        while let Some((split_idx, delimiter_len)) = find_sse_boundary(&buffer) {
+                            let event = buffer[..split_idx].to_string();
+                            buffer.drain(..split_idx + delimiter_len);
+
+                            let Some(data_payload) = extract_data_payload(&event) else {
+                                continue;
+                            };
+
+                            let trimmed_payload = data_payload.trim();
+                            if trimmed_payload.is_empty() || trimmed_payload == "[DONE]" {
+                                continue;
+                            }
+
+                            let payload: Value = serde_json::from_str(trimmed_payload)
+                                .map_err(|err| {
+                                    StreamAssemblyError::InvalidPayload(err.to_string())
+                                        .into_llm_error("Gemini")
+                                })?;
+
+                            for stream_event in Self::apply_interaction_stream_payload(&mut state, &payload)? {
+                                yield stream_event;
+                            }
+                        }
+                    }
+
+                    if !state.completed {
+                        let formatted_error = error_display::format_llm_error(
+                            "Gemini",
+                            "Interactions stream ended without an interaction.complete event",
+                        );
+                        Err(LLMError::Provider {
+                            message: formatted_error,
+                            metadata: None,
+                        })?;
+                    }
+
+                    let response =
+                        Self::finalize_interaction_stream_state(state, model)?;
+                    yield LLMStreamEvent::Completed { response: Box::new(response) };
+                }
+            };
+            return Ok(Box::pin(stream));
+        }
+
         let model = request.model.clone();
         let gemini_request = self.convert_to_gemini_request(&request)?;
 
@@ -201,6 +312,17 @@ impl LLMProvider for GeminiProvider {
     }
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
+        if request.previous_response_id.is_some() && request.response_store == Some(false) {
+            let formatted_error = error_display::format_llm_error(
+                "Gemini",
+                "Interactions with previous_interaction_id cannot set store=false",
+            );
+            return Err(LLMError::InvalidRequest {
+                message: formatted_error,
+                metadata: None,
+            });
+        }
+
         if !models::google::SUPPORTED_MODELS
             .iter()
             .any(|m| *m == request.model)

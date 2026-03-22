@@ -3,11 +3,57 @@ use super::*;
 use crate::config::constants::models;
 use crate::llm::error_display;
 use crate::llm::provider::LLMError;
-use crate::llm::provider::{ContentPart, MessageContent};
+use crate::llm::provider::{ContentPart, MessageContent, ToolDefinition};
 use crate::llm::providers::common::{
     collect_history_system_directives, merge_system_prompt_with_history_directives,
 };
 use crate::prompts::system::default_system_prompt;
+use serde_json::Map;
+use std::collections::BTreeMap;
+
+const GEMINI_PRESERVED_PARTS_PREFIX: &str = "__vtcode_gemini_parts__:";
+
+struct GeminiToolSpec {
+    generate_tools: Option<Vec<Tool>>,
+    interaction_tools: Option<Vec<InteractionTool>>,
+    uses_server_side_tools: bool,
+    has_function_tools: bool,
+}
+
+#[derive(Debug, Clone, Default)]
+pub(super) struct InteractionStreamOutputBuilder {
+    pub output_type: String,
+    pub text: String,
+    pub summary: String,
+    pub id: Option<String>,
+    pub name: Option<String>,
+    pub arguments: Option<Value>,
+    pub signature: Option<String>,
+}
+
+impl InteractionStreamOutputBuilder {
+    fn into_output(self) -> InteractionOutput {
+        InteractionOutput {
+            output_type: self.output_type,
+            text: (!self.text.is_empty()).then_some(self.text),
+            id: self.id,
+            name: self.name,
+            arguments: self.arguments,
+            signature: self.signature,
+            function_call: None,
+            summary: (!self.summary.is_empty()).then_some(self.summary),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub(super) struct InteractionStreamState {
+    pub interaction_id: Option<String>,
+    pub status: Option<String>,
+    pub outputs: BTreeMap<usize, InteractionStreamOutputBuilder>,
+    pub usage: Option<wire::interactions::InteractionUsage>,
+    pub completed: bool,
+}
 
 impl GeminiProvider {
     const HISTORY_DIRECTIVES_SECTION_HEADER: &str = "[History Directives]";
@@ -126,47 +172,8 @@ impl GeminiProvider {
                 continue;
             }
 
-            let mut parts: Vec<Part> = Vec::new();
-            if message.role != MessageRole::Tool {
-                parts.extend(parts_from_message_content(&message.content));
-            }
-
-            if message.role == MessageRole::Assistant
-                && let Some(tool_calls) = &message.tool_calls
-            {
-                let is_gemini3 = request.model.contains("gemini-3");
-                for tool_call in tool_calls {
-                    if let Some(ref func) = tool_call.function {
-                        let parsed_args =
-                            serde_json::from_str(&func.arguments).unwrap_or_else(|_| json!({}));
-
-                        // Gemini 3 models require thought_signature on function call parts.
-                        // If the streaming response didn't include it, use the validator skip
-                        // token to prevent 400 errors. This is documented by Google as a
-                        // fallback for cases where signatures are unavailable.
-                        // See: https://ai.google.dev/gemini-api/docs/thought-signatures
-                        let thought_signature =
-                            if is_gemini3 && tool_call.thought_signature.is_none() {
-                                tracing::trace!(
-                                    function_name = %func.name,
-                                    "Gemini 3: using skip_thought_signature_validator fallback"
-                                );
-                                Some("skip_thought_signature_validator".to_string())
-                            } else {
-                                tool_call.thought_signature.clone()
-                            };
-
-                        parts.push(Part::FunctionCall {
-                            function_call: GeminiFunctionCall {
-                                name: func.name.clone(),
-                                args: parsed_args,
-                                id: Some(tool_call.id.clone()),
-                            },
-                            thought_signature,
-                        });
-                    }
-                }
-            }
+            let mut parts: Vec<Part> = preserved_gemini_parts_from_message(message)
+                .unwrap_or_else(|| build_message_parts(message, request.model.as_str()));
 
             if message.role == MessageRole::Tool {
                 if let Some(tool_call_id) = &message.tool_call_id {
@@ -212,36 +219,11 @@ impl GeminiProvider {
             }
         }
 
-        let tools: Option<Vec<Tool>> = request.tools.as_ref().map(|definitions| {
-            let mut seen = hashbrown::HashSet::new();
-            definitions
-                .iter()
-                .filter_map(|tool| {
-                    let func = tool.function.as_ref()?;
-                    if !seen.insert(func.name.clone()) {
-                        return None;
-                    }
-                    Some(Tool {
-                        function_declarations: vec![FunctionDeclaration {
-                            name: func.name.clone(),
-                            description: func.description.clone(),
-                            parameters: sanitize_function_parameters(func.parameters.clone()),
-                        }],
-                    })
-                })
-                .collect()
-        });
+        let tool_spec = collect_gemini_tool_spec(request.tools.as_deref());
+        let tools = tool_spec.generate_tools;
+        let uses_server_side_tools = tool_spec.uses_server_side_tools;
 
-        let mut generation_config = GenerationConfig {
-            max_output_tokens: request.max_tokens,
-            temperature: request.temperature,
-            top_p: request.top_p,
-            top_k: request.top_k,
-            presence_penalty: request.presence_penalty,
-            frequency_penalty: request.frequency_penalty,
-            stop_sequences: request.stop_sequences.clone(),
-            ..Default::default()
-        };
+        let generation_config = build_generation_config(self, request);
 
         // For Gemini 3 Pro, Google recommends keeping temperature at 1.0 default
         if let Some(temp) = request.temperature {
@@ -252,73 +234,47 @@ impl GeminiProvider {
             }
         }
 
-        // Support for structured output (JSON mode)
-        if let Some(format) = &request.output_format {
-            generation_config.response_mime_type = Some("application/json".to_string());
-            if format.is_object() {
-                generation_config.response_schema = Some(format.clone());
-            }
-        }
-
         let has_tools = request
             .tools
             .as_ref()
             .map(|defs| !defs.is_empty())
             .unwrap_or(false);
+        let has_function_tools = tool_spec.has_function_tools;
         let tool_config = if has_tools || request.tool_choice.is_some() {
-            Some(match request.tool_choice.as_ref() {
-                Some(ToolChoice::None) => ToolConfig {
-                    function_calling_config: FunctionCallingConfig::none(),
-                },
-                Some(ToolChoice::Any) => ToolConfig {
-                    function_calling_config: FunctionCallingConfig::any(),
-                },
-                Some(ToolChoice::Specific(spec)) => {
-                    let mut config = FunctionCallingConfig::any();
-                    if spec.tool_type == "function" {
-                        config.allowed_function_names = Some(vec![spec.function.name.clone()]);
+            let function_calling_config = if has_function_tools {
+                Some(match request.tool_choice.as_ref() {
+                    Some(ToolChoice::None) => FunctionCallingConfig::none(),
+                    Some(ToolChoice::Any) => FunctionCallingConfig::any(),
+                    Some(ToolChoice::Specific(spec)) => {
+                        let mut config = if uses_server_side_tools {
+                            FunctionCallingConfig::validated()
+                        } else {
+                            FunctionCallingConfig::any()
+                        };
+                        if spec.tool_type == "function" {
+                            config.allowed_function_names = Some(vec![spec.function.name.clone()]);
+                        }
+                        config
                     }
-                    ToolConfig {
-                        function_calling_config: config,
+                    _ => {
+                        if uses_server_side_tools {
+                            FunctionCallingConfig::validated()
+                        } else {
+                            FunctionCallingConfig::auto()
+                        }
                     }
-                }
-                _ => ToolConfig::auto(),
+                })
+            } else {
+                None
+            };
+
+            Some(ToolConfig {
+                function_calling_config,
+                include_server_side_tool_invocations: uses_server_side_tools.then_some(true),
             })
         } else {
             None
         };
-
-        if let Some(effort) = request.reasoning_effort {
-            if self.supports_reasoning_effort(&request.model) {
-                let is_gemini3_flash = request.model.contains("gemini-3-flash");
-                let thinking_level = match effort {
-                    ReasoningEffortLevel::None => Some("low"),
-                    ReasoningEffortLevel::Minimal => {
-                        if is_gemini3_flash {
-                            Some("minimal")
-                        } else {
-                            Some("low")
-                        }
-                    }
-                    ReasoningEffortLevel::Low => Some("low"),
-                    ReasoningEffortLevel::Medium => {
-                        if is_gemini3_flash {
-                            Some("medium")
-                        } else {
-                            Some("high")
-                        }
-                    }
-                    ReasoningEffortLevel::High => Some("high"),
-                    ReasoningEffortLevel::XHigh => Some("high"),
-                };
-
-                if let Some(level) = thinking_level {
-                    generation_config.thinking_config = Some(ThinkingConfig {
-                        thinking_level: Some(level.to_string()),
-                    });
-                }
-            }
-        }
 
         Ok(GenerateContentRequest {
             contents,
@@ -360,6 +316,57 @@ impl GeminiProvider {
         })
     }
 
+    pub(super) fn should_use_interactions(&self, request: &LLMRequest) -> bool {
+        if request.previous_response_id.is_some() {
+            return true;
+        }
+
+        request.model.contains("gemini-3")
+            && collect_gemini_tool_spec(request.tools.as_deref()).uses_server_side_tools
+    }
+
+    pub(super) fn convert_to_interaction_request(
+        &self,
+        request: &LLMRequest,
+    ) -> Result<InteractionRequest, LLMError> {
+        let history_system_directives = collect_history_system_directives(request);
+        let base_system_prompt = request
+            .system_prompt
+            .as_ref()
+            .map(|prompt| prompt.as_str())
+            .or_else(|| self.prompt_cache_enabled.then_some(default_system_prompt()));
+        let merged_system_prompt = merge_system_prompt_with_history_directives(
+            base_system_prompt,
+            &history_system_directives,
+            Self::HISTORY_DIRECTIVES_SECTION_HEADER,
+        );
+
+        let tool_spec = collect_gemini_tool_spec(request.tools.as_deref());
+        let generation_config = build_generation_config(self, request);
+        let interaction_input = build_interaction_input(request)?;
+
+        Ok(InteractionRequest {
+            model: request.model.clone(),
+            input: interaction_input,
+            tools: tool_spec.interaction_tools,
+            system_instruction: merged_system_prompt,
+            response_format: request.output_format.clone(),
+            response_mime_type: request
+                .output_format
+                .as_ref()
+                .map(|_| "application/json".to_string()),
+            stream: request.stream.then_some(true),
+            store: request.response_store,
+            generation_config: Some(generation_config.into()),
+            tool_choice: build_interaction_tool_choice(
+                request.tool_choice.as_ref(),
+                tool_spec.has_function_tools,
+                tool_spec.uses_server_side_tools,
+            ),
+            previous_interaction_id: request.previous_response_id.clone(),
+        })
+    }
+
     pub(super) fn convert_from_gemini_response(
         response: GenerateContentResponse,
         model: String,
@@ -389,6 +396,7 @@ impl GeminiProvider {
             });
         }
 
+        let raw_parts = candidate.content.parts.clone();
         let mut text_content = String::new();
         let mut tool_calls = Vec::new();
         // Track thought signature from text parts to attach to subsequent function calls
@@ -441,6 +449,10 @@ impl GeminiProvider {
                     });
                 }
                 Part::FunctionResponse { .. } => {}
+                Part::ToolCall { .. } => {}
+                Part::ToolResponse { .. } => {}
+                Part::ExecutableCode { .. } => {}
+                Part::CodeExecutionResult { .. } => {}
                 Part::CacheControl { .. } => {}
             }
         }
@@ -493,11 +505,235 @@ impl GeminiProvider {
             usage: None,
             finish_reason,
             reasoning: extracted_reasoning,
-            reasoning_details: None,
+            reasoning_details: preserved_gemini_parts_detail(&raw_parts),
             tool_references: Vec::new(),
             request_id: None,
             organization_id: None,
         })
+    }
+
+    pub(super) fn convert_from_interaction_response(
+        response: Interaction,
+        model: String,
+    ) -> Result<LLMResponse, LLMError> {
+        let mut text_content = String::new();
+        let mut tool_calls = Vec::new();
+        let mut thought_summaries = Vec::new();
+        let mut thought_details = Vec::new();
+
+        for output in response.outputs {
+            match output.output_type.as_str() {
+                "text" => {
+                    if let Some(text) = output.text {
+                        text_content.push_str(&text);
+                    }
+                }
+                "thought" => {
+                    let summary = output.summary.or(output.text).unwrap_or_default();
+                    if !summary.trim().is_empty() {
+                        thought_summaries.push(summary.clone());
+                    }
+                    thought_details.push(
+                        json!({
+                            "type": "thought",
+                            "signature": output.signature,
+                            "summary": summary,
+                        })
+                        .to_string(),
+                    );
+                }
+                "function_call" => {
+                    let (name, arguments, id, signature) =
+                        if let Some(function_call) = output.function_call {
+                            (
+                                function_call.name,
+                                function_call.arguments,
+                                function_call.id.or(output.id),
+                                function_call.signature.or(output.signature),
+                            )
+                        } else {
+                            (
+                                output.name.unwrap_or_default(),
+                                output.arguments.unwrap_or(Value::Null),
+                                output.id,
+                                output.signature,
+                            )
+                        };
+
+                    let call_id = id.unwrap_or_else(|| {
+                        format!(
+                            "call_{}_{}",
+                            std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .as_nanos(),
+                            tool_calls.len()
+                        )
+                    });
+
+                    tool_calls.push(ToolCall {
+                        id: call_id,
+                        call_type: "function".to_string(),
+                        function: Some(FunctionCall {
+                            namespace: None,
+                            name,
+                            arguments: serde_json::to_string(&arguments)
+                                .unwrap_or_else(|_| "{}".to_string()),
+                        }),
+                        text: None,
+                        thought_signature: signature,
+                    });
+                }
+                _ => {}
+            }
+        }
+
+        let finish_reason = if tool_calls.is_empty() {
+            FinishReason::Stop
+        } else {
+            FinishReason::ToolCalls
+        };
+        let (reasoning_segments, cleaned) =
+            crate::llm::providers::split_reasoning_from_text(&text_content);
+        let extracted_reasoning = if reasoning_segments.is_empty() {
+            None
+        } else {
+            Some(
+                reasoning_segments
+                    .into_iter()
+                    .map(|segment| segment.text)
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            )
+            .filter(|value| !value.trim().is_empty())
+        };
+        let content = cleaned
+            .or_else(|| (!text_content.trim().is_empty()).then_some(text_content))
+            .filter(|value| !value.trim().is_empty());
+        let reasoning = if thought_summaries.is_empty() {
+            extracted_reasoning
+        } else {
+            Some(thought_summaries.join("\n"))
+        };
+        let reasoning_details = if thought_details.is_empty() {
+            None
+        } else {
+            Some(thought_details)
+        };
+
+        Ok(LLMResponse {
+            content,
+            tool_calls: (!tool_calls.is_empty()).then_some(tool_calls),
+            model,
+            usage: response.usage.map(|usage| vtcode_commons::llm::Usage {
+                prompt_tokens: usage.total_input_tokens.unwrap_or_default(),
+                completion_tokens: usage.total_output_tokens.unwrap_or_default(),
+                total_tokens: usage.total_tokens.unwrap_or_default(),
+                cached_prompt_tokens: usage.total_cached_tokens,
+                cache_creation_tokens: None,
+                cache_read_tokens: usage.total_cached_tokens,
+            }),
+            finish_reason,
+            reasoning,
+            reasoning_details,
+            tool_references: Vec::new(),
+            request_id: Some(response.id),
+            organization_id: None,
+        })
+    }
+
+    pub(super) fn apply_interaction_stream_payload(
+        state: &mut InteractionStreamState,
+        payload: &Value,
+    ) -> Result<Vec<LLMStreamEvent>, LLMError> {
+        let mut events = Vec::new();
+        let Some(event_type) = payload.get("event_type").and_then(Value::as_str) else {
+            return Ok(events);
+        };
+
+        match event_type {
+            "interaction.start" | "interaction.status_update" | "interaction.complete" => {
+                let interaction = interaction_object(payload);
+                if let Some(id) = interaction.get("id").and_then(Value::as_str) {
+                    state.interaction_id = Some(id.to_string());
+                }
+                if let Some(status) = interaction.get("status").and_then(Value::as_str) {
+                    state.status = Some(status.to_string());
+                }
+                if let Some(usage) = interaction.get("usage")
+                    && let Ok(usage) = serde_json::from_value(usage.clone())
+                {
+                    state.usage = Some(usage);
+                }
+                if event_type == "interaction.complete" {
+                    state.completed = true;
+                }
+            }
+            "content.start" => {
+                let index = payload
+                    .get("index")
+                    .and_then(Value::as_u64)
+                    .unwrap_or_default() as usize;
+                let builder = state.outputs.entry(index).or_default();
+                if let Some(output_type) = payload
+                    .get("content")
+                    .and_then(Value::as_object)
+                    .and_then(|content| content.get("type"))
+                    .and_then(Value::as_str)
+                {
+                    builder.output_type = output_type.to_string();
+                }
+            }
+            "content.delta" => {
+                let index = payload
+                    .get("index")
+                    .and_then(Value::as_u64)
+                    .unwrap_or_default() as usize;
+                let Some(delta) = payload.get("delta").and_then(Value::as_object) else {
+                    return Ok(events);
+                };
+                let builder = state.outputs.entry(index).or_default();
+                apply_interaction_delta(builder, delta, &mut events);
+            }
+            "content.stop" => {}
+            "error" => {
+                let error_message = payload
+                    .get("error")
+                    .and_then(Value::as_object)
+                    .and_then(|error| error.get("message"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("Unknown Gemini interactions streaming error");
+                let formatted = error_display::format_llm_error("Gemini", error_message);
+                return Err(LLMError::Provider {
+                    message: formatted,
+                    metadata: None,
+                });
+            }
+            _ => {}
+        }
+
+        Ok(events)
+    }
+
+    pub(super) fn finalize_interaction_stream_state(
+        state: InteractionStreamState,
+        model: String,
+    ) -> Result<LLMResponse, LLMError> {
+        let interaction = Interaction {
+            id: state
+                .interaction_id
+                .unwrap_or_else(|| "interaction_stream".to_string()),
+            model: model.clone(),
+            status: state.status,
+            outputs: state
+                .outputs
+                .into_values()
+                .map(InteractionStreamOutputBuilder::into_output)
+                .collect(),
+            usage: state.usage,
+        };
+
+        Self::convert_from_interaction_response(interaction, model)
     }
 
     pub(super) fn convert_from_streaming_response(
@@ -663,5 +899,589 @@ fn parts_from_message_content(content: &MessageContent) -> Vec<Part> {
             }
             converted
         }
+    }
+}
+
+fn build_interaction_content(content: &MessageContent) -> Vec<InteractionContent> {
+    match content {
+        MessageContent::Text(text) => {
+            if text.is_empty() {
+                Vec::new()
+            } else {
+                vec![InteractionContent::Text { text: text.clone() }]
+            }
+        }
+        MessageContent::Parts(parts) => {
+            let mut converted = Vec::new();
+            for part in parts {
+                match part {
+                    ContentPart::Text { text } => {
+                        if !text.is_empty() {
+                            converted.push(InteractionContent::Text { text: text.clone() });
+                        }
+                    }
+                    ContentPart::Image {
+                        data, mime_type, ..
+                    } => converted.push(InteractionContent::Image {
+                        data: data.clone(),
+                        mime_type: mime_type.clone(),
+                    }),
+                    ContentPart::File {
+                        filename,
+                        file_id,
+                        file_url,
+                        ..
+                    } => {
+                        let fallback = filename
+                            .clone()
+                            .or_else(|| file_id.clone())
+                            .or_else(|| file_url.clone())
+                            .unwrap_or_else(|| "attached file".to_string());
+                        converted.push(InteractionContent::Text {
+                            text: format!("[File input not directly supported: {fallback}]"),
+                        });
+                    }
+                }
+            }
+            converted
+        }
+    }
+}
+
+fn build_message_parts(message: &Message, model: &str) -> Vec<Part> {
+    let mut parts = Vec::new();
+    if message.role != MessageRole::Tool {
+        parts.extend(parts_from_message_content(&message.content));
+    }
+
+    if message.role == MessageRole::Assistant
+        && let Some(tool_calls) = &message.tool_calls
+    {
+        let is_gemini3 = model.contains("gemini-3");
+        for tool_call in tool_calls {
+            if let Some(ref func) = tool_call.function {
+                let parsed_args =
+                    serde_json::from_str(&func.arguments).unwrap_or_else(|_| json!({}));
+
+                let thought_signature = if is_gemini3 && tool_call.thought_signature.is_none() {
+                    tracing::trace!(
+                        function_name = %func.name,
+                        "Gemini 3: using skip_thought_signature_validator fallback"
+                    );
+                    Some("skip_thought_signature_validator".to_string())
+                } else {
+                    tool_call.thought_signature.clone()
+                };
+
+                parts.push(Part::FunctionCall {
+                    function_call: GeminiFunctionCall {
+                        name: func.name.clone(),
+                        args: parsed_args,
+                        id: Some(tool_call.id.clone()),
+                    },
+                    thought_signature,
+                });
+            }
+        }
+    }
+
+    parts
+}
+
+fn preserved_gemini_parts_from_message(message: &Message) -> Option<Vec<Part>> {
+    let details = message.reasoning_details.as_ref()?;
+    for detail in details {
+        let Some(text) = detail.as_str() else {
+            continue;
+        };
+        let Some(payload) = text.strip_prefix(GEMINI_PRESERVED_PARTS_PREFIX) else {
+            continue;
+        };
+        if let Ok(parts) = serde_json::from_str::<Vec<Part>>(payload) {
+            return Some(parts);
+        }
+    }
+    None
+}
+
+fn preserved_gemini_parts_detail(parts: &[Part]) -> Option<Vec<String>> {
+    if !parts_require_roundtrip_history(parts) {
+        return None;
+    }
+
+    serde_json::to_string(parts)
+        .ok()
+        .map(|serialized| vec![format!("{GEMINI_PRESERVED_PARTS_PREFIX}{serialized}")])
+}
+
+fn parts_require_roundtrip_history(parts: &[Part]) -> bool {
+    parts.iter().any(|part| {
+        part.thought_signature().is_some()
+            || matches!(
+                part,
+                Part::ToolCall { .. }
+                    | Part::ToolResponse { .. }
+                    | Part::ExecutableCode { .. }
+                    | Part::CodeExecutionResult { .. }
+                    | Part::FunctionResponse { .. }
+                    | Part::InlineData { .. }
+            )
+    })
+}
+
+fn gemini_built_in_tool(tool: &ToolDefinition) -> Option<Tool> {
+    match tool.tool_type.as_str() {
+        "web_search" | "google_search" => Some(Tool {
+            google_search: Some(tool.web_search.clone().unwrap_or_else(|| json!({}))),
+            ..Tool::default()
+        }),
+        "google_maps" => Some(Tool {
+            google_maps: Some(tool.hosted_tool_config.clone().unwrap_or_else(|| json!({}))),
+            ..Tool::default()
+        }),
+        "url_context" => Some(Tool {
+            url_context: Some(tool.hosted_tool_config.clone().unwrap_or_else(|| json!({}))),
+            ..Tool::default()
+        }),
+        "file_search" => Some(Tool {
+            file_search: Some(tool.hosted_tool_config.clone().unwrap_or_else(|| json!({}))),
+            ..Tool::default()
+        }),
+        "code_execution" => Some(Tool {
+            code_execution: Some(tool.hosted_tool_config.clone().unwrap_or_else(|| json!({}))),
+            ..Tool::default()
+        }),
+        other if other.starts_with("code_execution_") => Some(Tool {
+            code_execution: Some(json!({})),
+            ..Tool::default()
+        }),
+        _ => None,
+    }
+}
+
+fn gemini_interaction_built_in_tool(tool: &ToolDefinition) -> Option<InteractionTool> {
+    let (tool_type, config) = match tool.tool_type.as_str() {
+        "web_search" | "google_search" => ("google_search", tool.web_search.as_ref()),
+        "google_maps" => ("google_maps", tool.hosted_tool_config.as_ref()),
+        "url_context" => ("url_context", tool.hosted_tool_config.as_ref()),
+        "file_search" => ("file_search", tool.hosted_tool_config.as_ref()),
+        "code_execution" => ("code_execution", tool.hosted_tool_config.as_ref()),
+        other if other.starts_with("code_execution_") => ("code_execution", None),
+        _ => return None,
+    };
+
+    Some(InteractionTool::built_in(tool_type, config))
+}
+
+fn collect_gemini_tool_spec(definitions: Option<&Vec<ToolDefinition>>) -> GeminiToolSpec {
+    let Some(definitions) = definitions else {
+        return GeminiToolSpec {
+            generate_tools: None,
+            interaction_tools: None,
+            uses_server_side_tools: false,
+            has_function_tools: false,
+        };
+    };
+
+    let mut generate_tools = Vec::new();
+    let mut interaction_tools = Vec::new();
+    let mut function_declarations = Vec::new();
+    let mut seen = hashbrown::HashSet::new();
+    let mut uses_server_side_tools = false;
+    let mut has_function_tools = false;
+
+    for tool in definitions {
+        if let Some(built_in_tool) = gemini_built_in_tool(tool) {
+            uses_server_side_tools = true;
+            generate_tools.push(built_in_tool);
+        }
+        if let Some(interaction_tool) = gemini_interaction_built_in_tool(tool) {
+            interaction_tools.push(interaction_tool);
+        }
+
+        let Some(func) = tool.function.as_ref() else {
+            continue;
+        };
+        has_function_tools = true;
+        if !seen.insert(func.name.clone()) {
+            continue;
+        }
+
+        let parameters = sanitize_function_parameters(func.parameters.clone());
+        function_declarations.push(FunctionDeclaration {
+            name: func.name.clone(),
+            description: func.description.clone(),
+            parameters: parameters.clone(),
+        });
+        interaction_tools.push(InteractionTool::function(
+            func.name.clone(),
+            func.description.clone(),
+            parameters,
+        ));
+    }
+
+    if !function_declarations.is_empty() {
+        generate_tools.push(Tool {
+            function_declarations: Some(function_declarations),
+            ..Tool::default()
+        });
+    }
+
+    GeminiToolSpec {
+        generate_tools: (!generate_tools.is_empty()).then_some(generate_tools),
+        interaction_tools: (!interaction_tools.is_empty()).then_some(interaction_tools),
+        uses_server_side_tools,
+        has_function_tools,
+    }
+}
+
+fn build_generation_config(provider: &GeminiProvider, request: &LLMRequest) -> GenerationConfig {
+    let mut generation_config = GenerationConfig {
+        max_output_tokens: request.max_tokens,
+        temperature: request.temperature,
+        top_p: request.top_p,
+        top_k: request.top_k,
+        presence_penalty: request.presence_penalty,
+        frequency_penalty: request.frequency_penalty,
+        stop_sequences: request.stop_sequences.clone(),
+        ..Default::default()
+    };
+
+    if let Some(format) = &request.output_format {
+        generation_config.response_mime_type = Some("application/json".to_string());
+        if format.is_object() {
+            generation_config.response_schema = Some(format.clone());
+        }
+    }
+
+    if let Some(effort) = request.reasoning_effort
+        && provider.supports_reasoning_effort(&request.model)
+    {
+        let is_gemini3_flash = request.model.contains("gemini-3-flash");
+        let thinking_level = match effort {
+            ReasoningEffortLevel::None => Some("low"),
+            ReasoningEffortLevel::Minimal => {
+                if is_gemini3_flash {
+                    Some("minimal")
+                } else {
+                    Some("low")
+                }
+            }
+            ReasoningEffortLevel::Low => Some("low"),
+            ReasoningEffortLevel::Medium => {
+                if is_gemini3_flash {
+                    Some("medium")
+                } else {
+                    Some("high")
+                }
+            }
+            ReasoningEffortLevel::High | ReasoningEffortLevel::XHigh => Some("high"),
+        };
+
+        if let Some(level) = thinking_level {
+            generation_config.thinking_config = Some(ThinkingConfig {
+                thinking_level: Some(level.to_string()),
+            });
+        }
+    }
+
+    generation_config
+}
+
+fn build_interaction_tool_choice(
+    tool_choice: Option<&ToolChoice>,
+    has_function_tools: bool,
+    uses_server_side_tools: bool,
+) -> Option<InteractionToolChoice> {
+    if !has_function_tools {
+        return None;
+    }
+
+    let mut choice = match tool_choice {
+        Some(ToolChoice::None) => InteractionToolChoice::new("none"),
+        Some(ToolChoice::Any) => InteractionToolChoice::new("any"),
+        Some(ToolChoice::Specific(spec)) => {
+            let mut choice = InteractionToolChoice::new("validated");
+            if spec.tool_type == "function" {
+                choice.tools = Some(vec![spec.function.name.clone()]);
+            }
+            choice
+        }
+        _ => {
+            if uses_server_side_tools {
+                InteractionToolChoice::new("validated")
+            } else {
+                InteractionToolChoice::new("auto")
+            }
+        }
+    };
+
+    if choice.tools.as_ref().is_some_and(|tools| tools.is_empty()) {
+        choice.tools = None;
+    }
+
+    Some(choice)
+}
+
+fn build_interaction_input(request: &LLMRequest) -> Result<InteractionInput, LLMError> {
+    let relevant_messages = if request.previous_response_id.is_some() {
+        interaction_delta_messages(&request.messages)
+    } else {
+        request.messages.clone()
+    };
+    let turns = build_interaction_turns(&relevant_messages, &request.messages)?;
+
+    if request.previous_response_id.is_none() {
+        if let [turn] = turns.as_slice()
+            && turn.role == "user"
+        {
+            return Ok(match &turn.content {
+                InteractionTurnContent::Text(text) => InteractionInput::Text(text.clone()),
+                InteractionTurnContent::Content(content) => {
+                    InteractionInput::Content(content.clone())
+                }
+            });
+        }
+        return Ok(InteractionInput::Turns(turns));
+    }
+
+    if let [turn] = turns.as_slice()
+        && turn.role == "user"
+    {
+        return Ok(match &turn.content {
+            InteractionTurnContent::Text(text) => InteractionInput::Text(text.clone()),
+            InteractionTurnContent::Content(content) => InteractionInput::Content(content.clone()),
+        });
+    }
+
+    Ok(InteractionInput::Turns(turns))
+}
+
+fn interaction_delta_messages(messages: &[Message]) -> Vec<Message> {
+    let start = messages
+        .iter()
+        .rposition(|message| message.role == MessageRole::Assistant)
+        .map_or(0, |index| index.saturating_add(1));
+    let delta = messages[start..].to_vec();
+    if delta.is_empty() {
+        messages.to_vec()
+    } else {
+        delta
+    }
+}
+
+fn build_interaction_turns(
+    messages: &[Message],
+    full_messages: &[Message],
+) -> Result<Vec<InteractionTurn>, LLMError> {
+    let mut call_map: HashMap<String, String> = HashMap::new();
+    for message in full_messages {
+        if message.role == MessageRole::Assistant
+            && let Some(tool_calls) = &message.tool_calls
+        {
+            for tool_call in tool_calls {
+                if let Some(func) = &tool_call.function {
+                    call_map.insert(tool_call.id.clone(), func.name.clone());
+                }
+            }
+        }
+    }
+
+    let mut turns = Vec::new();
+    for message in messages {
+        if message.role == MessageRole::System {
+            continue;
+        }
+
+        let mut content = if message.role == MessageRole::Tool {
+            Vec::new()
+        } else {
+            build_interaction_content(&message.content)
+        };
+        if message.role == MessageRole::Assistant
+            && let Some(tool_calls) = &message.tool_calls
+        {
+            for tool_call in tool_calls {
+                if let Some(func) = &tool_call.function {
+                    content.push(InteractionContent::FunctionCall {
+                        id: tool_call.id.clone(),
+                        name: func.name.clone(),
+                        arguments: serde_json::from_str(&func.arguments).unwrap_or(Value::Null),
+                        signature: tool_call.thought_signature.clone(),
+                    });
+                }
+            }
+        }
+        if message.role == MessageRole::Tool {
+            let tool_call_id =
+                message
+                    .tool_call_id
+                    .clone()
+                    .ok_or_else(|| LLMError::InvalidRequest {
+                        message: "Gemini interactions require tool_call_id for tool messages"
+                            .to_string(),
+                        metadata: None,
+                    })?;
+            content.push(InteractionContent::FunctionResult {
+                call_id: tool_call_id.clone(),
+                name: call_map.get(&tool_call_id).cloned(),
+                result: interaction_result_from_message_content(&message.content),
+                is_error: None,
+                signature: None,
+            });
+        }
+        if content.is_empty() {
+            continue;
+        }
+
+        let role = if message.role == MessageRole::Assistant {
+            "model"
+        } else {
+            "user"
+        };
+        let content = match content.as_slice() {
+            [InteractionContent::Text { text }] => InteractionTurnContent::Text(text.clone()),
+            _ => InteractionTurnContent::Content(content),
+        };
+        turns.push(InteractionTurn {
+            role: role.to_string(),
+            content,
+        });
+    }
+
+    Ok(turns)
+}
+
+fn interaction_result_from_message_content(content: &MessageContent) -> InteractionResult {
+    match content {
+        MessageContent::Text(text) => interaction_result_from_text(text),
+        MessageContent::Parts(_) => {
+            let parts = build_interaction_content(content);
+            if let [InteractionContent::Text { text }] = parts.as_slice() {
+                interaction_result_from_text(text)
+            } else {
+                InteractionResult::Content(parts)
+            }
+        }
+    }
+}
+
+fn interaction_result_from_text(text: &str) -> InteractionResult {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return InteractionResult::String(String::new());
+    }
+
+    if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
+        if let Some(content) = interaction_result_content_array(&value) {
+            return InteractionResult::Content(content);
+        }
+        if value.is_object() {
+            return InteractionResult::Json(value);
+        }
+    }
+
+    InteractionResult::String(text.to_string())
+}
+
+fn interaction_result_content_array(value: &Value) -> Option<Vec<InteractionContent>> {
+    let items = value.as_array()?;
+    let mut content = Vec::with_capacity(items.len());
+    for item in items {
+        let item_type = item.get("type")?.as_str()?;
+        match item_type {
+            "text" => content.push(InteractionContent::Text {
+                text: item.get("text")?.as_str()?.to_string(),
+            }),
+            "image" => {
+                let mime_type = item.get("mime_type")?.as_str()?.to_string();
+                let data = item.get("data")?.as_str()?.to_string();
+                content.push(InteractionContent::Image { data, mime_type });
+            }
+            _ => return None,
+        }
+    }
+
+    Some(content)
+}
+
+fn interaction_object(payload: &Value) -> &Map<String, Value> {
+    payload
+        .get("interaction")
+        .and_then(Value::as_object)
+        .or_else(|| payload.as_object())
+        .expect("stream payload should be an object")
+}
+
+fn apply_interaction_delta(
+    builder: &mut InteractionStreamOutputBuilder,
+    delta: &Map<String, Value>,
+    events: &mut Vec<LLMStreamEvent>,
+) {
+    let delta_type = delta
+        .get("type")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+
+    match delta_type {
+        "text" => {
+            builder.output_type = "text".to_string();
+            if let Some(text) = delta.get("text").and_then(Value::as_str) {
+                builder.text.push_str(text);
+                events.push(LLMStreamEvent::Token {
+                    delta: text.to_string(),
+                });
+            }
+        }
+        "thought" => {
+            builder.output_type = "thought".to_string();
+            if let Some(text) = delta
+                .get("thought")
+                .and_then(Value::as_str)
+                .or_else(|| delta.get("text").and_then(Value::as_str))
+            {
+                builder.summary.push_str(text);
+                events.push(LLMStreamEvent::Reasoning {
+                    delta: text.to_string(),
+                });
+            }
+        }
+        "thought_summary" => {
+            builder.output_type = "thought".to_string();
+            if let Some(text) = delta
+                .get("content")
+                .and_then(Value::as_object)
+                .and_then(|content| content.get("text"))
+                .and_then(Value::as_str)
+                .or_else(|| delta.get("text").and_then(Value::as_str))
+            {
+                builder.summary.push_str(text);
+                events.push(LLMStreamEvent::Reasoning {
+                    delta: text.to_string(),
+                });
+            }
+        }
+        "thought_signature" => {
+            builder.output_type = "thought".to_string();
+            if let Some(signature) = delta.get("signature").and_then(Value::as_str) {
+                builder.signature = Some(signature.to_string());
+            }
+        }
+        "function_call" => {
+            builder.output_type = "function_call".to_string();
+            if let Some(id) = delta.get("id").and_then(Value::as_str) {
+                builder.id = Some(id.to_string());
+            }
+            if let Some(name) = delta.get("name").and_then(Value::as_str) {
+                builder.name = Some(name.to_string());
+            }
+            if let Some(arguments) = delta.get("arguments") {
+                builder.arguments = Some(arguments.clone());
+            }
+            if let Some(signature) = delta.get("signature").and_then(Value::as_str) {
+                builder.signature = Some(signature.to_string());
+            }
+        }
+        _ => {}
     }
 }

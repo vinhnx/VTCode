@@ -301,9 +301,30 @@ impl ToolDefinition {
         tool
     }
 
+    /// Create a Gemini Google Maps grounding tool definition.
+    pub fn google_maps(config: Value) -> Self {
+        let mut tool = Self::empty("google_maps");
+        tool.hosted_tool_config = Some(config);
+        tool
+    }
+
+    /// Create a Gemini URL Context tool definition.
+    pub fn url_context(config: Value) -> Self {
+        let mut tool = Self::empty("url_context");
+        tool.hosted_tool_config = Some(config);
+        tool
+    }
+
     /// Create an OpenAI Responses file search tool definition.
     pub fn file_search(config: Value) -> Self {
         let mut tool = Self::empty("file_search");
+        tool.hosted_tool_config = Some(config);
+        tool
+    }
+
+    /// Create a Gemini Code Execution tool definition.
+    pub fn code_execution(config: Value) -> Self {
+        let mut tool = Self::empty("code_execution");
         tool.hosted_tool_config = Some(config);
         tool
     }
@@ -344,7 +365,9 @@ impl ToolDefinition {
             "custom" => self.validate_custom(),
             "grammar" => self.validate_grammar(),
             "web_search" => self.validate_web_search(),
-            "file_search" | "mcp" => self.validate_hosted_tool_config(),
+            "google_maps" | "url_context" | "file_search" | "mcp" | "code_execution" => {
+                self.validate_hosted_tool_config()
+            }
             "tool_search" => Ok(()),
             "tool_search_tool_regex_20251119" | "tool_search_tool_bm25_20251119" => {
                 self.validate_function()
@@ -353,7 +376,7 @@ impl ToolDefinition {
             other if other.starts_with("code_execution_") => Ok(()),
             other if other.starts_with("memory_") => Ok(()),
             other => Err(format!(
-                "Unsupported tool type: {}. Supported types: function, apply_patch, shell, custom, grammar, web_search, file_search, mcp, tool_search, tool_search_tool_*, web_search_*, code_execution_*, memory_*",
+                "Unsupported tool type: {}. Supported types: function, apply_patch, shell, custom, grammar, web_search, google_maps, url_context, file_search, mcp, code_execution, tool_search, tool_search_tool_*, web_search_*, code_execution_*, memory_*",
                 other
             )),
         }
