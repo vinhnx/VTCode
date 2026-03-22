@@ -186,14 +186,6 @@ impl std::fmt::Debug for NativePlugin {
     }
 }
 
-// SAFETY: `NativePlugin` owns the library handle for its full lifetime, and all
-// state exposed through this type is either immutable or accessed under
-// `execution_lock`. Moving the wrapper to another thread does not invalidate the
-// loaded library or any function pointers.
-unsafe impl Send for NativePlugin {}
-// SAFETY: shared access is serialized through `execution_lock`, so VT Code never
-// issues overlapping ABI v1 plugin calls through the same `NativePlugin`.
-unsafe impl Sync for NativePlugin {}
 
 fn canonicalize_existing_path(path: &Path, label: &str) -> Result<PathBuf> {
     path.canonicalize()
