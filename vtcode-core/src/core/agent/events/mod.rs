@@ -305,12 +305,25 @@ impl ExecEventRecorder {
         detail: &str,
     ) {
         let handle = self.tool_started(tool_name, arguments, tool_call_id);
+        let call_item_id = handle.id.clone();
         self.record(tool_invocation_completed_event(
-            handle.id,
+            call_item_id.clone(),
             tool_name,
             arguments,
             tool_call_id,
             crate::exec::events::ToolCallStatus::Failed,
+        ));
+        self.record(tool_output_started_event(
+            call_item_id.clone(),
+            tool_call_id,
+        ));
+        self.record(tool_output_completed_event(
+            call_item_id,
+            tool_call_id,
+            crate::exec::events::ToolCallStatus::Failed,
+            None,
+            None,
+            detail,
         ));
         let error_item_id = self.next_item_id();
         self.record(error_item_completed_event(
@@ -459,22 +472,29 @@ mod tests {
     }
 
     #[test]
-    fn rejected_tool_call_emits_no_tool_output_item() {
+    fn rejected_tool_call_emits_failed_tool_output_item() {
         let mut recorder = make_recorder();
         recorder.tool_rejected("read_file", None, Some("call_1"), "Tool permission denied");
 
         let events = recorder.into_events();
-        let tool_output_count = events
+        let tool_outputs = events
             .iter()
-            .filter(|event| match event {
-                ThreadEvent::ItemCompleted(ItemCompletedEvent { item }) => {
-                    matches!(item.details, ThreadItemDetails::ToolOutput(_))
-                }
-                _ => false,
+            .filter_map(|event| match event {
+                ThreadEvent::ItemCompleted(ItemCompletedEvent { item }) => match &item.details {
+                    ThreadItemDetails::ToolOutput(details) => Some(details),
+                    _ => None,
+                },
+                _ => None,
             })
-            .count();
+            .collect::<Vec<_>>();
 
-        assert_eq!(tool_output_count, 0);
+        assert_eq!(tool_outputs.len(), 1);
+        assert_eq!(tool_outputs[0].tool_call_id.as_deref(), Some("call_1"));
+        assert_eq!(
+            tool_outputs[0].status,
+            crate::exec::events::ToolCallStatus::Failed
+        );
+        assert_eq!(tool_outputs[0].output, "Tool permission denied");
     }
 
     #[test]

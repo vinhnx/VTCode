@@ -576,6 +576,7 @@ pub(crate) async fn run_turn_loop(
                 turn_processing_ctx.session_stats.is_plan_mode(),
                 allow_plan_interview,
                 turn_config.request_user_input_enabled,
+                !tool_free_recovery,
                 Some(&validation_cache),
                 Some(turn_processing_ctx.tool_registry),
             )

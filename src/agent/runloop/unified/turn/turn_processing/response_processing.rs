@@ -19,6 +19,7 @@ pub(crate) fn process_llm_response(
     plan_mode_active: bool,
     allow_plan_interview: bool,
     request_user_input_enabled: bool,
+    allow_tool_calls: bool,
     validation_cache: Option<
         &std::sync::Arc<vtcode_core::tools::validation_cache::ValidationCache>,
     >,
@@ -32,7 +33,11 @@ pub(crate) fn process_llm_response(
     let reasoning_details = response.reasoning_details.clone();
     let mut final_text = response.content.clone();
     let mut proposed_plan: Option<String> = None;
-    let mut tool_calls = response.tool_calls.clone().unwrap_or_default();
+    let mut tool_calls = if allow_tool_calls {
+        response.tool_calls.clone().unwrap_or_default()
+    } else {
+        Vec::new()
+    };
     let mut interpreted_textual_call = false;
     let mut is_harmony = false;
     let reasoning_segment_count = reasoning.len();
@@ -64,7 +69,8 @@ pub(crate) fn process_llm_response(
         proposed_plan = extraction.plan_text;
     }
 
-    if tool_calls.is_empty()
+    if allow_tool_calls
+        && tool_calls.is_empty()
         && let Some(text) = final_text.as_deref()
         && !text.trim().is_empty()
         && let Some((name, args)) =
@@ -115,7 +121,8 @@ pub(crate) fn process_llm_response(
         }
     }
 
-    if !interpreted_textual_call
+    if allow_tool_calls
+        && !interpreted_textual_call
         && allow_plan_interview
         && request_user_input_enabled
         && tool_calls.is_empty()
@@ -612,9 +619,18 @@ mod tests {
         };
 
         let mut renderer = AnsiRenderer::stdout();
-        let result =
-            process_llm_response(&response, &mut renderer, 0, false, true, true, None, None)
-                .expect("processing should succeed");
+        let result = process_llm_response(
+            &response,
+            &mut renderer,
+            0,
+            false,
+            true,
+            true,
+            true,
+            None,
+            None,
+        )
+        .expect("processing should succeed");
 
         match result {
             TurnProcessingResult::ToolCalls { tool_calls, .. } => {
@@ -649,6 +665,7 @@ mod tests {
             false,
             false,
             true,
+            true,
             None,
             Some(&tool_registry),
         )
@@ -678,9 +695,18 @@ mod tests {
         };
 
         let mut renderer = AnsiRenderer::stdout();
-        let result =
-            process_llm_response(&response, &mut renderer, 0, false, false, true, None, None)
-                .expect("processing should succeed");
+        let result = process_llm_response(
+            &response,
+            &mut renderer,
+            0,
+            false,
+            false,
+            true,
+            true,
+            None,
+            None,
+        )
+        .expect("processing should succeed");
 
         match result {
             TurnProcessingResult::TextResponse { text, .. } => {
@@ -706,9 +732,18 @@ mod tests {
         };
 
         let mut renderer = AnsiRenderer::stdout();
-        let result =
-            process_llm_response(&response, &mut renderer, 0, true, false, true, None, None)
-                .expect("processing should succeed");
+        let result = process_llm_response(
+            &response,
+            &mut renderer,
+            0,
+            true,
+            false,
+            true,
+            true,
+            None,
+            None,
+        )
+        .expect("processing should succeed");
 
         match result {
             TurnProcessingResult::TextResponse {
@@ -740,9 +775,18 @@ mod tests {
         };
 
         let mut renderer = AnsiRenderer::stdout();
-        let result =
-            process_llm_response(&response, &mut renderer, 0, true, false, true, None, None)
-                .expect("processing should succeed");
+        let result = process_llm_response(
+            &response,
+            &mut renderer,
+            0,
+            true,
+            false,
+            true,
+            true,
+            None,
+            None,
+        )
+        .expect("processing should succeed");
 
         match result {
             TurnProcessingResult::TextResponse {
@@ -799,9 +843,18 @@ Outro"#
         };
 
         let mut renderer = AnsiRenderer::stdout();
-        let result =
-            process_llm_response(&response, &mut renderer, 0, true, false, true, None, None)
-                .expect("processing should succeed");
+        let result = process_llm_response(
+            &response,
+            &mut renderer,
+            0,
+            true,
+            false,
+            true,
+            true,
+            None,
+            None,
+        )
+        .expect("processing should succeed");
 
         match result {
             TurnProcessingResult::TextResponse {
@@ -895,9 +948,18 @@ Open questions for alignment:
         };
 
         let mut renderer = AnsiRenderer::stdout();
-        let result =
-            process_llm_response(&response, &mut renderer, 1, true, true, true, None, None)
-                .expect("processing should succeed");
+        let result = process_llm_response(
+            &response,
+            &mut renderer,
+            1,
+            true,
+            true,
+            true,
+            true,
+            None,
+            None,
+        )
+        .expect("processing should succeed");
 
         match result {
             TurnProcessingResult::ToolCalls { tool_calls, .. } => {
@@ -936,9 +998,18 @@ Open questions for alignment:
         };
 
         let mut renderer = AnsiRenderer::stdout();
-        let result =
-            process_llm_response(&response, &mut renderer, 0, false, false, true, None, None)
-                .expect("processing should succeed");
+        let result = process_llm_response(
+            &response,
+            &mut renderer,
+            0,
+            false,
+            false,
+            true,
+            true,
+            None,
+            None,
+        )
+        .expect("processing should succeed");
 
         match result {
             TurnProcessingResult::ToolCalls {
@@ -958,6 +1029,87 @@ Open questions for alignment:
                 assert!(!tool_calls[0].is_command_execution());
             }
             _ => panic!("Expected tool calls"),
+        }
+    }
+
+    #[test]
+    fn process_llm_response_keeps_textual_tool_request_as_text_when_tool_calls_disabled() {
+        let response = LLMResponse {
+            content: Some("unified_search({\"action\":\"list\",\"path\":\"src\"})".to_string()),
+            tool_calls: None,
+            model: "test".to_string(),
+            usage: None,
+            finish_reason: FinishReason::Stop,
+            reasoning: None,
+            reasoning_details: None,
+            tool_references: Vec::new(),
+            request_id: None,
+            organization_id: None,
+        };
+
+        let mut renderer = AnsiRenderer::stdout();
+        let result = process_llm_response(
+            &response,
+            &mut renderer,
+            0,
+            false,
+            false,
+            true,
+            false,
+            None,
+            None,
+        )
+        .expect("processing should succeed");
+
+        match result {
+            TurnProcessingResult::TextResponse { text, .. } => {
+                assert_eq!(
+                    text,
+                    "unified_search({\"action\":\"list\",\"path\":\"src\"})"
+                );
+            }
+            _ => panic!("Expected text response when tool calls are disabled"),
+        }
+    }
+
+    #[test]
+    fn process_llm_response_ignores_structured_tool_calls_when_tool_calls_disabled() {
+        let response = LLMResponse {
+            content: Some("Final synthesis only.".to_string()),
+            tool_calls: Some(vec![vtcode_core::llm::provider::ToolCall::function(
+                "call_1".to_string(),
+                "unified_search".to_string(),
+                r#"{"action":"list","path":"src"}"#.to_string(),
+            )]),
+            model: "test".to_string(),
+            usage: None,
+            finish_reason: FinishReason::ToolCalls,
+            reasoning: None,
+            reasoning_details: None,
+            tool_references: Vec::new(),
+            request_id: None,
+            organization_id: None,
+        };
+
+        let mut renderer = AnsiRenderer::stdout();
+        let result = process_llm_response(
+            &response,
+            &mut renderer,
+            0,
+            false,
+            false,
+            true,
+            false,
+            None,
+            None,
+        )
+        .expect("processing should succeed");
+
+        match result {
+            TurnProcessingResult::TextResponse { text, .. } => {
+                assert_eq!(text, "Final synthesis only.");
+            }
+            _ => panic!("Expected text response when tool calls are disabled"),
         }
     }
 }

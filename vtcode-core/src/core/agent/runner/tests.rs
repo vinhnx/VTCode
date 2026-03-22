@@ -3,13 +3,18 @@ use crate::config::VTCodeConfig;
 use crate::config::constants::tools;
 use crate::config::models::ModelId;
 use crate::config::types::CapabilityLevel;
+use crate::core::agent::events::ExecEventRecorder;
+use crate::core::agent::runtime::AgentRuntime;
 use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::state::TaskRunState;
 use crate::core::agent::state::record_turn_duration;
+use crate::core::agent::steering::SteeringMessage;
 use crate::core::agent::task::{Task, TaskOutcome, TaskResults};
 use crate::core::agent::types::AgentType;
 use crate::core::threads::ThreadBootstrap;
-use crate::exec::events::{HarnessEventKind, ItemCompletedEvent, ThreadEvent, ThreadItemDetails};
+use crate::exec::events::{
+    HarnessEventKind, ItemCompletedEvent, ThreadEvent, ThreadItemDetails, ToolCallStatus,
+};
 use crate::llm::provider::{
     FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, ToolCall,
 };
@@ -640,6 +645,42 @@ fn harness_paths(results: &TaskResults, kind: HarnessEventKind) -> Vec<String> {
         .collect()
 }
 
+fn completed_tool_invocation_item_id(events: &[ThreadEvent], tool_call_id: &str) -> Option<String> {
+    events.iter().find_map(|event| match event {
+        ThreadEvent::ItemCompleted(ItemCompletedEvent { item }) => match &item.details {
+            ThreadItemDetails::ToolInvocation(details)
+                if details.tool_call_id.as_deref() == Some(tool_call_id) =>
+            {
+                Some(item.id.clone())
+            }
+            _ => None,
+        },
+        _ => None,
+    })
+}
+
+fn completed_tool_output_count(
+    events: &[ThreadEvent],
+    tool_call_id: &str,
+    status: ToolCallStatus,
+    call_item_id: &str,
+) -> usize {
+    events
+        .iter()
+        .filter(|event| match event {
+            ThreadEvent::ItemCompleted(ItemCompletedEvent { item }) => match &item.details {
+                ThreadItemDetails::ToolOutput(details) => {
+                    details.tool_call_id.as_deref() == Some(tool_call_id)
+                        && details.status == status
+                        && details.call_id == call_item_id
+                }
+                _ => false,
+            },
+            _ => false,
+        })
+        .count()
+}
+
 #[tokio::test]
 async fn exec_full_auto_continues_until_tracker_is_completed() {
     let temp = TempDir::new().expect("tempdir");
@@ -860,4 +901,118 @@ async fn tool_loop_limit_writes_blocked_handoff_artifacts() {
         assert!(content.contains("tool_loop_limit_reached"));
         assert!(content.contains("Stopped after reaching tool loop limit"));
     }
+}
+
+#[tokio::test]
+async fn denied_tool_call_emits_one_failed_output_for_runtime_invocation() {
+    let temp = TempDir::new().expect("tempdir");
+    let mut runner = make_runner(&temp, VTCodeConfig::default(), "thread-denied-tool-output").await;
+    runner
+        .enable_full_auto(&[tools::UNIFIED_FILE.to_string()])
+        .await;
+
+    let response = tool_call_response(
+        tools::UNIFIED_EXEC,
+        json!({
+            "action": "run",
+            "command": "echo vtcode",
+        }),
+    );
+    let provider = QueuedProvider::new(vec![response]);
+    let mut provider_box: Box<dyn LLMProvider> = Box::new(provider);
+
+    let mut runtime = AgentRuntime::new(
+        AgentSessionState::new("session-denied".to_string(), 16, 4, 128_000),
+        None,
+        None,
+    );
+    let request = LLMRequest {
+        model: "gpt-5.3-codex".to_string(),
+        ..Default::default()
+    };
+    let turn = runtime
+        .run_turn_once(&mut provider_box, request, None)
+        .await
+        .expect("turn should succeed");
+
+    let tool_calls = turn.response.tool_calls.expect("tool call response");
+    let tool_call_id = tool_calls[0].id.clone();
+    let mut recorder = ExecEventRecorder::new("thread-denied-tool-output", None, None);
+    recorder.record_thread_events(runtime.take_emitted_events());
+
+    runner
+        .execute_sequential_tool_calls(tool_calls, &mut runtime, &mut recorder, "[single]", false)
+        .await
+        .expect("tool execution should finish");
+
+    let events = recorder.into_events();
+    let call_item_id =
+        completed_tool_invocation_item_id(&events, &tool_call_id).expect("completed invocation");
+    assert_eq!(
+        completed_tool_output_count(
+            &events,
+            &tool_call_id,
+            ToolCallStatus::Failed,
+            &call_item_id
+        ),
+        1
+    );
+}
+
+#[tokio::test]
+async fn steer_stop_closes_open_tool_calls_with_failed_output_items() {
+    let temp = TempDir::new().expect("tempdir");
+    let mut runner = make_runner(&temp, VTCodeConfig::default(), "thread-stop-tool-output").await;
+
+    fs::write(temp.path().join("note.txt"), "hello\n").expect("workspace file");
+
+    let response = tool_call_response(
+        tools::READ_FILE,
+        json!({
+            "path": "note.txt",
+        }),
+    );
+    let provider = QueuedProvider::new(vec![response]);
+    let mut provider_box: Box<dyn LLMProvider> = Box::new(provider);
+
+    let (steering_tx, steering_rx) = tokio::sync::mpsc::unbounded_channel();
+    let mut runtime = AgentRuntime::new(
+        AgentSessionState::new("session-stop".to_string(), 16, 4, 128_000),
+        None,
+        Some(steering_rx),
+    );
+    let request = LLMRequest {
+        model: "gpt-5.3-codex".to_string(),
+        ..Default::default()
+    };
+    let turn = runtime
+        .run_turn_once(&mut provider_box, request, None)
+        .await
+        .expect("turn should succeed");
+
+    let tool_calls = turn.response.tool_calls.expect("tool call response");
+    let tool_call_id = tool_calls[0].id.clone();
+    let mut recorder = ExecEventRecorder::new("thread-stop-tool-output", None, None);
+    recorder.record_thread_events(runtime.take_emitted_events());
+    steering_tx
+        .send(SteeringMessage::SteerStop)
+        .expect("steer stop should queue");
+
+    runner
+        .execute_sequential_tool_calls(tool_calls, &mut runtime, &mut recorder, "[single]", false)
+        .await
+        .expect("tool execution should finish");
+
+    let events = recorder.into_events();
+    let call_item_id =
+        completed_tool_invocation_item_id(&events, &tool_call_id).expect("completed invocation");
+    assert_eq!(
+        completed_tool_output_count(
+            &events,
+            &tool_call_id,
+            ToolCallStatus::Failed,
+            &call_item_id
+        ),
+        1
+    );
 }

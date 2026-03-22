@@ -4,7 +4,7 @@ use super::types::ToolFailureContext;
 use crate::config::constants::tools;
 use crate::core::agent::events::{ExecEventRecorder, tool_invocation_completed_event};
 use crate::core::agent::runtime::{AgentRuntime, RuntimeControl};
-use crate::exec::events::ToolCallStatus;
+use crate::exec::events::{ItemCompletedEvent, ThreadEvent, ThreadItemDetails, ToolCallStatus};
 use crate::llm::provider::ToolCall;
 use anyhow::{Result, anyhow};
 use tokio::time::Duration;
@@ -70,12 +70,42 @@ fn reject_tool_call(
 ) {
     if runtime.tool_call_item_id(tool_call_id).is_some() {
         runtime.complete_tool_call(tool_call_id, ToolCallStatus::Failed);
-        event_recorder.record_thread_events(runtime.take_emitted_events());
+        let lifecycle_events = runtime.take_emitted_events();
+        event_recorder.record_thread_events(lifecycle_events.clone());
+        emit_failed_tool_outputs_for_completed_invocations(
+            event_recorder,
+            &lifecycle_events,
+            detail,
+        );
         event_recorder.warning(detail);
         return;
     }
 
     event_recorder.tool_rejected(tool_name, args, Some(tool_call_id), detail);
+}
+
+fn emit_failed_tool_outputs_for_completed_invocations(
+    event_recorder: &mut ExecEventRecorder,
+    lifecycle_events: &[ThreadEvent],
+    detail: &str,
+) {
+    for event in lifecycle_events {
+        let ThreadEvent::ItemCompleted(ItemCompletedEvent { item }) = event else {
+            continue;
+        };
+        let ThreadItemDetails::ToolInvocation(details) = &item.details else {
+            continue;
+        };
+        event_recorder.tool_output_started(&item.id, details.tool_call_id.as_deref());
+        event_recorder.tool_output_finished(
+            &item.id,
+            details.tool_call_id.as_deref(),
+            details.status.clone(),
+            None,
+            detail,
+            None,
+        );
+    }
 }
 
 impl AgentRunner {
@@ -298,7 +328,13 @@ impl AgentRunner {
                 RuntimeControl::StopRequested
             ) {
                 runtime.complete_open_tool_calls(ToolCallStatus::Failed);
-                event_recorder.record_thread_events(runtime.take_emitted_events());
+                let lifecycle_events = runtime.take_emitted_events();
+                event_recorder.record_thread_events(lifecycle_events.clone());
+                emit_failed_tool_outputs_for_completed_invocations(
+                    event_recorder,
+                    &lifecycle_events,
+                    "Tool execution interrupted by steering signal.",
+                );
                 warn!(agent = %agent_prefix, "Stopped by steering signal");
                 return Ok(());
             }

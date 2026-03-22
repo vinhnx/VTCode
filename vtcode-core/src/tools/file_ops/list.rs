@@ -1,4 +1,5 @@
 use super::FileOpsTool;
+use super::path_policy::PathSuggestionKind;
 use crate::tools::builder::ToolResponseBuilder;
 use crate::tools::traits::FileTool;
 use crate::tools::types::ListInput;
@@ -93,7 +94,11 @@ impl FileOpsTool {
                 is_dir = base.is_dir(),
                 "Path does not exist or is neither file nor directory"
             );
-            return Err(anyhow!("Path '{}' does not exist", input.path));
+            return Err(anyhow!(
+                "Path '{}' does not exist{}",
+                input.path,
+                self.missing_path_suggestion_suffix(&input.path, PathSuggestionKind::Any),
+            ));
         }
 
         // Apply max_items cap first for token efficiency - AGENTS.md requires max 5 items
@@ -337,5 +342,44 @@ impl FileOpsTool {
             ));
         }
         out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tools::grep_file::GrepSearchManager;
+    use crate::tools::types::ListInput;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[tokio::test]
+    async fn missing_list_path_suggests_similar_workspace_path() {
+        let temp_dir = TempDir::new().expect("workspace tempdir");
+        fs::create_dir_all(temp_dir.path().join("src/agent")).expect("create agent dir");
+        let grep_manager =
+            std::sync::Arc::new(GrepSearchManager::new(temp_dir.path().to_path_buf()));
+        let file_ops = FileOpsTool::new(temp_dir.path().to_path_buf(), grep_manager);
+
+        let err = file_ops
+            .execute_basic_list(&ListInput {
+                path: "src/agnt".to_string(),
+                max_items: 20,
+                page: None,
+                per_page: None,
+                response_format: None,
+                include_hidden: false,
+                mode: None,
+                name_pattern: None,
+                content_pattern: None,
+                file_extensions: None,
+                case_sensitive: None,
+            })
+            .await
+            .expect_err("missing path should fail")
+            .to_string();
+
+        assert!(err.contains("Did you mean"));
+        assert!(err.contains("src/agent"));
     }
 }

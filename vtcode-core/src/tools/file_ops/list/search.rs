@@ -1,4 +1,5 @@
 use super::FileOpsTool;
+use crate::tools::file_ops::path_policy::PathSuggestionKind;
 use crate::tools::grep_file::GrepSearchInput;
 use crate::tools::traits::FileTool;
 use crate::tools::types::ListInput;
@@ -19,9 +20,10 @@ impl FileOpsTool {
         // Check if path exists before walking
         if !search_path.exists() {
             return Err(anyhow!(
-                "Path '{}' does not exist. Workspace root: {}",
+                "Path '{}' does not exist. Workspace root: {}{}",
                 input.path,
-                self.workspace_root.display()
+                self.workspace_root.display(),
+                self.missing_path_suggestion_suffix(&input.path, PathSuggestionKind::Any),
             ));
         }
 

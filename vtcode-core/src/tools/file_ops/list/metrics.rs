@@ -1,4 +1,5 @@
 use super::FileOpsTool;
+use crate::tools::file_ops::path_policy::PathSuggestionKind;
 use crate::tools::traits::FileTool;
 use crate::tools::types::ListInput;
 use anyhow::{Result, anyhow};
@@ -12,7 +13,11 @@ impl FileOpsTool {
         let search_root = self.workspace_root.join(&input.path);
 
         if !search_root.exists() {
-            return Err(anyhow!("Path '{}' does not exist", input.path));
+            return Err(anyhow!(
+                "Path '{}' does not exist{}",
+                input.path,
+                self.missing_path_suggestion_suffix(&input.path, PathSuggestionKind::Any),
+            ));
         }
 
         if self.should_exclude(&search_root).await {

@@ -264,6 +264,7 @@ mod tests {
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
         let available = registry.available_tools().await;
 
+        assert!(available.contains(&tools::UNIFIED_SEARCH.to_string()));
         assert!(available.contains(&tools::UNIFIED_FILE.to_string()));
         assert!(available.contains(&tools::UNIFIED_EXEC.to_string()));
         assert!(!available.contains(&tools::READ_FILE.to_string()));

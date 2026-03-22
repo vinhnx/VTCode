@@ -1,5 +1,6 @@
 use super::FileOpsTool;
 use super::is_image_path;
+use super::path_policy::PathSuggestionKind;
 mod legacy;
 mod logging;
 mod segments;
@@ -620,13 +621,14 @@ impl FileOpsTool {
         }
 
         Err(anyhow!(
-            "Error: File not found: {}. Tried paths: {}.",
+            "Error: File not found: {}. Tried paths: {}.{}",
             path_str,
             potential_paths
                 .iter()
                 .map(|p| self.workspace_relative_display(p))
                 .collect::<Vec<_>>()
-                .join(", ")
+                .join(", "),
+            self.missing_path_suggestion_suffix(path_str, PathSuggestionKind::File)
         ))
     }
 }
@@ -1019,6 +1021,24 @@ mod read_tests {
         assert!(err.contains("Session output file not found"));
         assert!(err.contains("unified_exec"));
         assert!(err.contains("run-123abc"));
+    }
+
+    #[tokio::test]
+    async fn test_missing_file_suggests_similar_workspace_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_root = temp_dir.path().to_path_buf();
+        fs::create_dir_all(workspace_root.join("src")).unwrap();
+        fs::write(workspace_root.join("src/tool_exec.rs"), "fn main() {}\n").unwrap();
+        let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
+        let file_ops = FileOpsTool::new(workspace_root, grep_manager);
+
+        let args = json!({
+            "path": "src/tool_exe.rs"
+        });
+        let err = file_ops.read_file(args).await.unwrap_err().to_string();
+
+        assert!(err.contains("Did you mean"));
+        assert!(err.contains("src/tool_exec.rs"));
     }
 
     #[tokio::test]

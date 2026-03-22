@@ -403,6 +403,7 @@ pub fn classify_error_message(msg: &str) -> ErrorCategory {
             "directory not found",
             "resource not found",
             "path not found",
+            "does not exist",
             "enoent",
         ],
     ) {
@@ -699,6 +700,10 @@ mod tests {
     fn resource_not_found() {
         assert_eq!(
             classify_error_message("no such file or directory: /tmp/missing"),
+            ErrorCategory::ResourceNotFound
+        );
+        assert_eq!(
+            classify_error_message("Path 'vtcode-core/src/agent' does not exist"),
             ErrorCategory::ResourceNotFound
         );
     }

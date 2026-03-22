@@ -1,4 +1,5 @@
 use super::FileOpsTool;
+use crate::tools::file_ops::path_policy::PathSuggestionKind;
 use crate::tools::traits::FileTool;
 use crate::tools::types::ListInput;
 use anyhow::{Result, anyhow};
@@ -10,6 +11,14 @@ use walkdir::WalkDir;
 
 pub(super) async fn execute_tree_view(tool: &FileOpsTool, input: &ListInput) -> Result<Value> {
     let search_path = tool.workspace_root.join(&input.path);
+
+    if !search_path.exists() {
+        return Err(anyhow!(
+            "Path '{}' does not exist{}",
+            input.path,
+            tool.missing_path_suggestion_suffix(&input.path, PathSuggestionKind::Any),
+        ));
+    }
 
     if tool.should_exclude(&search_path).await {
         return Err(anyhow!(

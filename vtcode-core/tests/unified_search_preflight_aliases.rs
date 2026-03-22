@@ -41,6 +41,24 @@ async fn preflight_infers_action_for_humanized_search_text_alias() -> Result<()>
 }
 
 #[tokio::test]
+async fn preflight_infers_structural_action_for_structural_search_alias() -> Result<()> {
+    let temp_dir = TempDir::new()?;
+    let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+    let outcome = registry.preflight_validate_call(
+        "structural search",
+        &json!({
+            "pattern": "fn $NAME() {}",
+            "path": ".",
+            "lang": "rust"
+        }),
+    )?;
+
+    assert_eq!(outcome.normalized_tool_name, tools::UNIFIED_SEARCH);
+    Ok(())
+}
+
+#[tokio::test]
 async fn preflight_rejects_removed_repo_browser_list_alias() -> Result<()> {
     let temp_dir = TempDir::new()?;
     let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;

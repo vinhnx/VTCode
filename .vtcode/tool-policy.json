@@ -202,7 +202,17 @@
       "unified_exec",
       "cargo fmt -- --check|sandbox_permissions=\"use_default\"|additional_permissions=null",
       "cargo check use tty|sandbox_permissions=\"use_default\"|additional_permissions=null",
-      "cargo clippy --workspace --all-targets -- -D warnings|sandbox_permissions=\"use_default\"|additional_permissions=null"
+      "cargo clippy --workspace --all-targets -- -D warnings|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "bash -lc 'ls -R'|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "bash -lc 'ls -R vtcode-core/src/agent/runloop | head'|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "bash -lc 'ls -R vtcode-core/src/agent | head -n 200'|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "bash -lc 'ls -R vtcode-core/src/agent | head -n 50'|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "bash -lc 'sed -n '\\''1,200p'\\'' vtcode-core/src/agent/runloop/mod.rs'|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "bash -lc 'ls -R vtcode-core/src/agent'|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "bash -lc 'find vtcode-core/src/agent -maxdepth 2 -type f | head -n 50'|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "bash -lc 'find vtcode-core/src/agent -type f -maxdepth 2 -print'|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "bash -lc 'find vtcode-core/src/agent -maxdepth 2 -type f -print'|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "bash -lc 'find vtcode-core/src/agent -type f | wc -l'|sandbox_permissions=\"use_default\"|additional_permissions=null"
     ]
   }
 }

@@ -132,7 +132,7 @@ pub(super) fn builtin_tool_registrations(
             ToolRegistry::unified_search_executor,
         )
         .with_description(
-            "Unified discovery tool: structural code search, grep text search, list, tool discovery, errors, agent status, web fetch, and skills.",
+            "Unified discovery tool: structural code search, grep text search, list, tool discovery, errors, agent status, web fetch, and skills. Use `action=list` for file discovery before falling back to shell listing. Paths are relative to the workspace root.",
         )
         .with_parameter_schema(unified_search_parameters())
         .with_permission(ToolPolicy::Allow)
@@ -196,7 +196,7 @@ pub(super) fn builtin_tool_registrations(
             ToolRegistry::unified_file_executor,
         )
         .with_description(
-            "Unified file ops: read, write, edit, patch, delete, move, copy. For edit, `old_str` must match exactly. For patch, use VT Code patch format (`*** Begin Patch`), not unified diff.",
+            "Unified file ops: read, write, edit, patch, delete, move, copy. Use `action=read` for file contents instead of shell `cat`/`sed` during normal repo browsing. Paths are relative to the workspace root. For edit, `old_str` must match exactly. For patch, use VT Code patch format (`*** Begin Patch`), not unified diff.",
         )
         .with_parameter_schema(unified_file_parameters())
         .with_aliases([
@@ -362,5 +362,59 @@ mod tests {
             .find(|registration| registration.name() == tools::UNIFIED_SEARCH)
             .expect("unified_search registration should exist");
         assert!(unified_search.native_cgp_factory().is_none());
+    }
+
+    #[test]
+    fn unified_builtins_preserve_public_aliases() {
+        let plan_state = PlanModeState::new(PathBuf::from("/workspace"));
+        let registrations = builtin_tool_registrations(Some(&plan_state));
+
+        let unified_search = registrations
+            .iter()
+            .find(|registration| registration.name() == tools::UNIFIED_SEARCH)
+            .expect("unified_search registration should exist");
+        assert!(unified_search.expose_in_llm());
+        for alias in [tools::GREP_FILE, tools::LIST_FILES, "structural search"] {
+            assert!(
+                unified_search
+                    .metadata()
+                    .aliases()
+                    .iter()
+                    .any(|item| item == alias),
+                "expected unified_search alias {alias}"
+            );
+        }
+
+        let unified_exec = registrations
+            .iter()
+            .find(|registration| registration.name() == tools::UNIFIED_EXEC)
+            .expect("unified_exec registration should exist");
+        assert!(unified_exec.expose_in_llm());
+        for alias in [tools::EXEC_COMMAND, tools::WRITE_STDIN, tools::RUN_PTY_CMD] {
+            assert!(
+                unified_exec
+                    .metadata()
+                    .aliases()
+                    .iter()
+                    .any(|item| item == alias),
+                "expected unified_exec alias {alias}"
+            );
+        }
+
+        let unified_file = registrations
+            .iter()
+            .find(|registration| registration.name() == tools::UNIFIED_FILE)
+            .expect("unified_file registration should exist");
+        assert!(unified_file.expose_in_llm());
+        for alias in [tools::READ_FILE, tools::WRITE_FILE, tools::EDIT_FILE] {
+            assert!(
+                unified_file
+                    .metadata()
+                    .aliases()
+                    .iter()
+                    .any(|item| item == alias),
+                "expected unified_file alias {alias}"
+            );
+        }
     }
 }

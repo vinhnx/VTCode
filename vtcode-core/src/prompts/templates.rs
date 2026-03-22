@@ -43,7 +43,7 @@ impl PromptTemplates {
 
     /// Get tool usage prompt
     pub fn tool_usage_prompt() -> &'static str {
-        "Tools: unified_search (grep/list/structural/tools/errors/agent/web/skill; default to structural for code search and grep for plain text), unified_file (read/write/edit/patch), unified_exec (run/write/poll/inspect/list/close/code), request_user_input (interactive chat when enabled; always available in Plan mode), and apply_patch (first-class patch tool when exposed by the model). Treat read_file/write_file/edit_file/grep_file/PTy helpers as compatibility aliases or internal routes; prefer the canonical public tools, and prefer `rg` over shell `grep` when command search is required."
+        "Tools: unified_search (grep/list/structural/tools/errors/agent/web/skill; default to structural for code search and grep for plain text), unified_file (read/write/edit/patch), unified_exec (run/write/poll/inspect/list/close/code), request_user_input (interactive chat when enabled; always available in Plan mode), and apply_patch (first-class patch tool when exposed by the model). Paths for unified_search and unified_file are relative to the workspace root. Use unified_search `action=list` for file discovery and unified_file `action=read` for file contents; avoid using unified_exec with `ls`, `find`, `cat`, or `sed` for ordinary repo browsing when the public tools can express the task. Treat read_file/write_file/edit_file/grep_file/PTy helpers as compatibility aliases or internal routes; prefer the canonical public tools, and prefer `rg` over shell `grep` when command search is required."
     }
 
     /// Get workspace context prompt
@@ -76,5 +76,14 @@ mod tests {
         let prompt = PromptTemplates::skills_available_prompt();
         assert!(prompt.contains("routing hints"));
         assert!(prompt.contains("Use the <skill> skill"));
+    }
+
+    #[test]
+    fn tool_usage_prompt_prefers_public_repo_browsing_tools() {
+        let prompt = PromptTemplates::tool_usage_prompt();
+        assert!(prompt.contains("relative to the workspace root"));
+        assert!(prompt.contains("action=list"));
+        assert!(prompt.contains("action=read"));
+        assert!(prompt.contains("avoid using unified_exec"));
     }
 }

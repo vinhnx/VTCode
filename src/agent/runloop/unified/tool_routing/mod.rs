@@ -563,17 +563,32 @@ pub(crate) async fn prompt_tool_loop_limit_increase<S: UiSession + ?Sized>(
 #[cfg(test)]
 mod tests {
     use super::{
-        approval_learning_target,
+        ToolPermissionFlow, ToolPermissionsContext, approval_learning_target,
         approval_persistence::shell_command_has_persisted_approval_prefix,
-        approval_policy_rejects_prompt, build_tool_risk_context,
+        approval_policy_rejects_prompt, build_tool_risk_context, ensure_tool_permission,
         persist_shell_approval_prefix_rule, tool_display_labels,
         trusted_auto_allows_history_based_approval, trusted_auto_allows_immediate_approval,
     };
     use serde_json::json;
+    use std::sync::Arc;
+    use tokio::sync::{Notify, RwLock};
+    use vtcode_core::acp::{PermissionGrant, ToolPermissionCache};
+    use vtcode_core::config::constants::tools;
     use vtcode_core::config::loader::ConfigManager;
     use vtcode_core::exec_policy::{AskForApproval, RejectConfig};
     use vtcode_core::tools::RiskLevel;
     use vtcode_core::tools::registry::ToolRegistry;
+    use vtcode_core::utils::ansi::AnsiRenderer;
+    use vtcode_tui::app::{InlineHandle, InlineSession};
+
+    fn create_headless_session() -> InlineSession {
+        let (command_tx, _command_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (_event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
+        InlineSession {
+            handle: InlineHandle::new_for_tests(command_tx),
+            events: event_rx,
+        }
+    }
 
     #[test]
     fn trusted_auto_rejects_explicit_shell_escalation() {
@@ -823,5 +838,48 @@ mod tests {
             &["echo".to_string(), "hi".to_string()],
             "sandbox_permissions=\"require_escalated\"|additional_permissions=null"
         ));
+    }
+
+    #[tokio::test]
+    async fn skip_confirmations_does_not_bypass_cached_tool_denial() {
+        let temp_dir = tempfile::TempDir::new().expect("temp dir");
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        let mut session = create_headless_session();
+        let handle = session.clone_inline_handle();
+        let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
+        let ctrl_c_state = Arc::new(crate::agent::runloop::unified::state::CtrlCState::new());
+        let ctrl_c_notify = Arc::new(Notify::new());
+        let permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
+        permission_cache
+            .write()
+            .await
+            .cache_grant(tools::READ_FILE.to_string(), PermissionGrant::Denied);
+
+        let flow = ensure_tool_permission(
+            ToolPermissionsContext {
+                tool_registry: &registry,
+                renderer: &mut renderer,
+                handle: &handle,
+                session: &mut session,
+                default_placeholder: None,
+                ctrl_c_state: &ctrl_c_state,
+                ctrl_c_notify: &ctrl_c_notify,
+                hooks: None,
+                justification: None,
+                approval_recorder: None,
+                decision_ledger: None,
+                tool_permission_cache: Some(&permission_cache),
+                hitl_notification_bell: false,
+                autonomous_mode: false,
+                approval_policy: AskForApproval::OnRequest,
+                skip_confirmations: true,
+            },
+            tools::READ_FILE,
+            None,
+        )
+        .await
+        .expect("permission flow");
+
+        assert_eq!(flow, ToolPermissionFlow::Denied);
     }
 }
