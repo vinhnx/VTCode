@@ -248,7 +248,10 @@ impl ExecEventRecorder {
             crate::exec::events::ToolCallStatus::Failed,
         ));
         let error_item_id = self.next_item_id();
-        self.record(error_item_completed_event(error_item_id, detail.to_string()));
+        self.record(error_item_completed_event(
+            error_item_id,
+            detail.to_string(),
+        ));
     }
 
     pub fn command_started(&mut self, command: &str) -> ActiveCommandHandle {

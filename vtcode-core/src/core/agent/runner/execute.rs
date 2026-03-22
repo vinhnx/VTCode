@@ -13,9 +13,8 @@ use crate::core::agent::conversation::{
     build_conversation, build_messages_from_conversation, conversation_from_messages,
 };
 use crate::core::agent::events::ExecEventRecorder;
+use crate::core::agent::runtime::{AgentRuntime, RuntimeControl};
 use crate::core::agent::session::AgentSessionState;
-use crate::core::agent::session::controller::AgentSessionController;
-use crate::core::agent::steering::SteeringMessage;
 use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
 use crate::exec::events::HarnessEventKind;
 use crate::llm::provider::{LLMRequest, Message, ToolCall};
@@ -149,7 +148,8 @@ impl AgentRunner {
             );
         }
 
-        let result = {
+        let steering_receiver = self.steering_receiver.lock().take();
+        let runtime_setup = {
             // Agent execution status
             let agent_prefix = format!("[{}]", self.agent_type);
             // OPTIMIZATION: Avoid cloning session_id repeatedly by using reference
@@ -227,17 +227,14 @@ impl AgentRunner {
             session_state.messages = conversation_messages;
             session_state.last_processed_message_idx = session_state.conversation.len();
 
-            let mut controller = AgentSessionController::new(
-                session_state,
-                None, // Unified event sink can be added later
-            );
+            let mut runtime = AgentRuntime::new(session_state, None, steering_receiver);
 
             if let Err(err) = self.tool_registry.initialize_async().await {
                 warn!(
                     error = %err,
                     "Tool registry initialization failed at task start"
                 );
-                controller
+                runtime
                     .state
                     .warnings
                     .push(format!("Tool registry init failed: {err}"));
@@ -256,82 +253,72 @@ impl AgentRunner {
             );
             continuation_controller.prepare(task).await?;
 
-            // Agent execution loop uses max_turns for conversation flow
+            (
+                agent_prefix,
+                event_recorder,
+                run_started_at,
+                is_simple_task,
+                tools,
+                system_instruction,
+                preserve_recent_turns,
+                max_tool_loops,
+                max_context_tokens,
+                runtime,
+                continuation_controller,
+            )
+        };
+
+        let (
+            agent_prefix,
+            mut event_recorder,
+            run_started_at,
+            is_simple_task,
+            tools,
+            system_instruction,
+            preserve_recent_turns,
+            max_tool_loops,
+            max_context_tokens,
+            mut runtime,
+            mut continuation_controller,
+        ) = runtime_setup;
+
+        let result = {
             for turn in 0..self.max_turns {
-                // Check for steering messages before starting the turn
-                if let Some(msg) = self.check_steering() {
-                    match msg {
-                        SteeringMessage::SteerStop => {
-                            self.runner_println(format_args!(
-                                "{} {}",
-                                agent_prefix,
-                                style("Stopped by steering signal.").red().bold()
-                            ));
-                            controller.state.outcome = TaskOutcome::Cancelled;
-                            break;
-                        }
-                        SteeringMessage::Pause => {
-                            self.runner_println(format_args!(
-                                "{} {}",
-                                agent_prefix,
-                                style("Paused by steering signal. Waiting for Resume...")
-                                    .yellow()
-                                    .bold()
-                            ));
-                            // Wait for resume
-                            loop {
-                                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-                                if let Some(SteeringMessage::Resume) = self.check_steering() {
-                                    self.runner_println(format_args!(
-                                        "{} {}",
-                                        agent_prefix,
-                                        style("Resumed by steering signal.").green().bold()
-                                    ));
-                                    break;
-                                } else if let Some(SteeringMessage::SteerStop) =
-                                    self.check_steering()
-                                {
-                                    controller.state.outcome = TaskOutcome::Cancelled;
-                                    break;
-                                }
-                            }
-                            if matches!(controller.state.outcome, TaskOutcome::Cancelled) {
-                                break;
-                            }
-                        }
-                        SteeringMessage::Resume => {} // Already running
-                        SteeringMessage::FollowUpInput(input) => {
-                            self.runner_println(format_args!(
-                                "{} {}: {}",
-                                agent_prefix,
-                                style("Follow-up Input").cyan().bold(),
-                                input
-                            ));
-                            controller.state.add_user_message(input);
-                        }
-                    }
-                }
-
-                // Check context utilization before each turn
-                let utilization = controller.state.utilization();
-                if utilization > 0.90 {
-                    // At 90%+ utilization, warn and consider stopping
-                    warn!("Context at {:.1}% - approaching limit", utilization * 100.0);
-                    controller.state.warnings.push(format!(
-                        "Token budget at {}% - approaching context limit",
-                        (utilization * 100.0) as u32
+                if matches!(
+                    runtime.poll_turn_control().await,
+                    RuntimeControl::StopRequested
+                ) {
+                    self.runner_println(format_args!(
+                        "{} {}",
+                        agent_prefix,
+                        style("Stopped by steering signal.").red().bold()
                     ));
-                    // Continue but warn - actual compaction handled by ContextOptimizer internally
-                }
-
-                if controller.state.is_completed {
-                    controller.state.outcome = TaskOutcome::Success;
+                    runtime.state.outcome = TaskOutcome::Cancelled;
                     break;
                 }
 
-                controller.state.stats.turns_executed = turn + 1;
-                let turn_started_at = std::time::Instant::now();
-                let mut turn_recorded = false;
+                if let Some(input) = runtime.run_until_idle() {
+                    self.runner_println(format_args!(
+                        "{} {}: {}",
+                        agent_prefix,
+                        style("Follow-up Input").cyan().bold(),
+                        input
+                    ));
+                }
+
+                let utilization = runtime.state.utilization();
+                if utilization > 0.90 {
+                    warn!("Context at {:.1}% - approaching limit", utilization * 100.0);
+                    runtime.state.warnings.push(format!(
+                        "Token budget at {}% - approaching context limit",
+                        (utilization * 100.0) as u32
+                    ));
+                }
+
+                if runtime.state.is_completed {
+                    runtime.state.outcome = TaskOutcome::Success;
+                    break;
+                }
 
                 self.runner_println(format_args!(
                     "{} {} is processing turn {}...",
@@ -364,9 +351,8 @@ impl AgentRunner {
                     Some(2000)
                 };
 
-                // Context compaction before the request
                 self.summarize_conversation_if_needed(
-                    &mut controller.state,
+                    &mut runtime.state,
                     preserve_recent_turns,
                     utilization,
                 );
@@ -386,17 +372,14 @@ impl AgentRunner {
 
                 let provider_kind = turn_model
                     .parse::<ModelId>()
-                    .map(|m| m.provider())
+                    .map(|model| model.provider())
                     .unwrap_or(ModelProvider::Gemini);
 
-                // Optimize: Only rebuild messages for Gemini incrementally from last processed index
                 if matches!(provider_kind, ModelProvider::Gemini)
-                    && controller.state.conversation.len()
-                        > controller.state.last_processed_message_idx
+                    && runtime.state.conversation.len() > runtime.state.last_processed_message_idx
                 {
-                    // Incremental append instead of full rebuild
-                    for content in &controller.state.conversation
-                        [controller.state.last_processed_message_idx..]
+                    for content in
+                        &runtime.state.conversation[runtime.state.last_processed_message_idx..]
                     {
                         let mut text = String::new();
                         for part in &content.parts {
@@ -414,10 +397,9 @@ impl AgentRunner {
                             "model" => Message::assistant(text),
                             _ => Message::user(text),
                         };
-                        controller.state.messages.push(message);
+                        runtime.state.messages.push(message);
                     }
-                    controller.state.last_processed_message_idx =
-                        controller.state.conversation.len();
+                    runtime.state.last_processed_message_idx = runtime.state.conversation.len();
                 }
 
                 let reasoning_effort =
@@ -435,8 +417,9 @@ impl AgentRunner {
                 } else {
                     Some(0.7)
                 };
+
                 let request = LLMRequest {
-                    messages: controller.state.messages.clone(),
+                    messages: runtime.state.messages.clone(),
                     system_prompt: Some(Arc::clone(&system_instruction)),
                     tools: Some(Arc::clone(&tools)),
                     model: turn_model.clone(),
@@ -450,21 +433,14 @@ impl AgentRunner {
                 };
                 let previous_response_chain_present = request.previous_response_id.is_some();
 
-                let mut steering_captured = self.steering_receiver.lock().take();
-
-                let (response, _content, _reasoning) = controller
-                    .run_turn(
+                let turn_output = runtime
+                    .run_turn_once(
                         &mut self.provider_client,
                         request,
-                        &mut steering_captured,
-                        Some(std::time::Duration::from_secs(60)), // Standard timeout
+                        Some(std::time::Duration::from_secs(60)),
                     )
                     .await?;
-
-                // Put steering back for next turn
-                if let Some(rx) = steering_captured {
-                    *self.steering_receiver.lock() = Some(rx);
-                }
+                let response = turn_output.response;
 
                 self.runner_println(format_args!(
                     "{} {} {} received response, processing...",
@@ -483,7 +459,7 @@ impl AgentRunner {
                     response
                         .tool_calls
                         .as_ref()
-                        .is_some_and(|tc| !tc.is_empty()),
+                        .is_some_and(|tool_calls| !tool_calls.is_empty()),
                 );
 
                 let response_text = response.content_string();
@@ -495,28 +471,26 @@ impl AgentRunner {
                 let mut effective_tool_calls = response.tool_calls.clone();
                 let mut forced_continuation = false;
 
-                // HP-4: Detect textual commands in empty/near-empty responses if no structured tool calls
                 if effective_tool_calls.is_none()
                     && response.content_text().len() < 150
                     && let Some(args_value) = detect_textual_exec_tool_call(response.content_text())
                 {
-                    let tc = ToolCall::function(
+                    effective_tool_calls = Some(vec![ToolCall::function(
                         format!("call_text_{}", turn),
                         tools::UNIFIED_EXEC.to_string(),
                         args_value.to_string(),
-                    );
-                    effective_tool_calls = Some(vec![tc]);
+                    )]);
                 }
 
                 let is_gemini = matches!(provider_kind, ModelProvider::Gemini);
 
-                if !controller.state.is_completed
+                if !runtime.state.is_completed
                     && effective_tool_calls
                         .as_ref()
                         .is_none_or(|tool_calls| tool_calls.is_empty())
                     && !response.content_text().is_empty()
                 {
-                    if check_for_response_loop(response.content_text(), &mut controller.state) {
+                    if check_for_response_loop(response.content_text(), &mut runtime.state) {
                         self.runner_println(format_args!(
                             "[{}] {}",
                             self.agent_type,
@@ -526,10 +500,7 @@ impl AgentRunner {
                             .red()
                             .bold()
                         ));
-                        controller.state.outcome = TaskOutcome::LoopDetected;
-                        controller
-                            .state
-                            .record_turn(&turn_started_at, &mut turn_recorded);
+                        runtime.state.outcome = TaskOutcome::LoopDetected;
                         break;
                     }
 
@@ -540,12 +511,12 @@ impl AgentRunner {
                             style("Completion indicator detected.").green().bold()
                         ));
                         match continuation_controller
-                            .assess_completion(task, &controller.state)
+                            .assess_completion(task, &runtime.state)
                             .await?
                         {
                             CompletionAssessment::Accept => {
-                                controller.state.is_completed = true;
-                                controller.state.outcome = TaskOutcome::Success;
+                                runtime.state.is_completed = true;
+                                runtime.state.outcome = TaskOutcome::Success;
                                 break;
                             }
                             CompletionAssessment::SkipAccept { reason } => {
@@ -556,8 +527,8 @@ impl AgentRunner {
                                     None,
                                     None,
                                 );
-                                controller.state.is_completed = true;
-                                controller.state.outcome = TaskOutcome::Success;
+                                runtime.state.is_completed = true;
+                                runtime.state.outcome = TaskOutcome::Success;
                                 break;
                             }
                             CompletionAssessment::Continue { reason, prompt } => {
@@ -568,7 +539,7 @@ impl AgentRunner {
                                     None,
                                     None,
                                 );
-                                controller.state.add_user_message(prompt);
+                                runtime.state.add_user_message(prompt);
                                 forced_continuation = true;
                             }
                             CompletionAssessment::Verify { commands } => {
@@ -628,8 +599,8 @@ impl AgentRunner {
                                 {
                                     CompletionAssessment::Accept
                                     | CompletionAssessment::SkipAccept { .. } => {
-                                        controller.state.is_completed = true;
-                                        controller.state.outcome = TaskOutcome::Success;
+                                        runtime.state.is_completed = true;
+                                        runtime.state.outcome = TaskOutcome::Success;
                                         break;
                                     }
                                     CompletionAssessment::Continue { reason, prompt } => {
@@ -640,7 +611,7 @@ impl AgentRunner {
                                             None,
                                             None,
                                         );
-                                        controller.state.add_user_message(prompt);
+                                        runtime.state.add_user_message(prompt);
                                         forced_continuation = true;
                                     }
                                     CompletionAssessment::Verify { .. } => {}
@@ -652,12 +623,12 @@ impl AgentRunner {
 
                 if let Some(tool_calls) = effective_tool_calls
                     .as_ref()
-                    .filter(|tc| !tc.is_empty())
+                    .filter(|tool_calls| !tool_calls.is_empty())
                     .cloned()
                 {
                     self.handle_tool_calls(
                         tool_calls,
-                        &mut controller.state,
+                        &mut runtime,
                         &mut event_recorder,
                         &agent_prefix,
                         is_gemini,
@@ -668,58 +639,55 @@ impl AgentRunner {
 
                 let had_effective_shell_tool_call =
                     effective_tool_calls.as_ref().is_some_and(|calls| {
-                        calls.iter().any(|tc| {
-                            tc.function.as_ref().map(|f| f.name.as_str())
+                        calls.iter().any(|call| {
+                            call.function
+                                .as_ref()
+                                .map(|function| function.name.as_str())
                                 == Some(tools::UNIFIED_EXEC)
                         })
                     });
                 let had_tool_call = response
                     .tool_calls
                     .as_ref()
-                    .is_some_and(|tc| !tc.is_empty())
+                    .is_some_and(|tool_calls| !tool_calls.is_empty())
                     || had_effective_shell_tool_call;
+
                 if had_tool_call {
-                    let loops = controller.state.register_tool_loop();
-                    if tool_loop_limit_reached(loops, controller.state.constraints.max_tool_loops) {
+                    let loops = runtime.state.register_tool_loop();
+                    if tool_loop_limit_reached(loops, runtime.state.constraints.max_tool_loops) {
                         let warning_message = format!(
                             "Reached tool-call limit of {} iterations; pausing autonomous loop",
-                            controller.state.constraints.max_tool_loops
+                            runtime.state.constraints.max_tool_loops
                         );
                         self.record_warning(
                             &agent_prefix,
-                            &mut controller.state,
+                            &mut runtime.state,
                             &mut event_recorder,
                             warning_message,
                         );
-                        controller.state.mark_tool_loop_limit_hit();
-                        controller
-                            .state
-                            .record_turn(&turn_started_at, &mut turn_recorded);
+                        runtime.state.mark_tool_loop_limit_hit();
                         break;
                     }
-                    controller.state.consecutive_idle_turns = 0;
+                    runtime.state.consecutive_idle_turns = 0;
                 } else {
-                    controller.state.reset_tool_loop_guard();
+                    runtime.state.reset_tool_loop_guard();
                     if forced_continuation {
-                        controller.state.consecutive_idle_turns = 0;
-                    } else if !controller.state.is_completed {
-                        controller.state.consecutive_idle_turns =
-                            controller.state.consecutive_idle_turns.saturating_add(1);
-                        if controller.state.consecutive_idle_turns >= IDLE_TURN_LIMIT {
+                        runtime.state.consecutive_idle_turns = 0;
+                    } else if !runtime.state.is_completed {
+                        runtime.state.consecutive_idle_turns =
+                            runtime.state.consecutive_idle_turns.saturating_add(1);
+                        if runtime.state.consecutive_idle_turns >= IDLE_TURN_LIMIT {
                             let warning_message = format!(
                                 "No tool calls or completion for {} consecutive turns; halting to avoid idle loop",
-                                controller.state.consecutive_idle_turns
+                                runtime.state.consecutive_idle_turns
                             );
                             self.record_warning(
                                 &agent_prefix,
-                                &mut controller.state,
+                                &mut runtime.state,
                                 &mut event_recorder,
                                 warning_message,
                             );
-                            controller.state.outcome = TaskOutcome::StoppedNoAction;
-                            controller
-                                .state
-                                .record_turn(&turn_started_at, &mut turn_recorded);
+                            runtime.state.outcome = TaskOutcome::StoppedNoAction;
                             break;
                         }
                     }
@@ -727,27 +695,23 @@ impl AgentRunner {
 
                 let should_continue = forced_continuation
                     || had_tool_call
-                    || (!controller.state.is_completed && (turn + 1) < self.max_turns);
-
-                // Record turn duration for the successfully completed turn
-                controller
-                    .state
-                    .record_turn(&turn_started_at, &mut turn_recorded);
+                    || runtime.has_pending_follow_up_inputs()
+                    || (!runtime.state.is_completed && (turn + 1) < self.max_turns);
 
                 if !should_continue {
-                    if controller.state.is_completed {
-                        controller.state.outcome = TaskOutcome::Success;
+                    if runtime.state.is_completed {
+                        runtime.state.outcome = TaskOutcome::Success;
                     } else if (turn + 1) >= self.max_turns {
-                        controller.state.outcome =
+                        runtime.state.outcome =
                             TaskOutcome::turn_limit_reached(self.max_turns, turn + 1);
                     } else {
-                        controller.state.outcome = TaskOutcome::StoppedNoAction;
+                        runtime.state.outcome = TaskOutcome::StoppedNoAction;
                     }
                     break;
                 }
             }
 
-            controller.state.finalize_outcome(self.max_turns);
+            runtime.state.finalize_outcome(self.max_turns);
 
             let total_duration_ms = run_started_at.elapsed().as_millis();
 
@@ -755,29 +719,29 @@ impl AgentRunner {
             self.runner_println(format_args!("{} Done", agent_prefix));
 
             // Generate meaningful summary based on agent actions
-            let average_turn_duration_ms = if controller.state.turn_count > 0 {
-                Some(controller.state.turn_total_ms as f64 / controller.state.turn_count as f64)
+            let average_turn_duration_ms = if runtime.state.turn_count > 0 {
+                Some(runtime.state.turn_total_ms as f64 / runtime.state.turn_count as f64)
             } else {
                 None
             };
 
-            let max_turn_duration_ms = if controller.state.turn_count > 0 {
-                Some(controller.state.turn_max_ms)
+            let max_turn_duration_ms = if runtime.state.turn_count > 0 {
+                Some(runtime.state.turn_max_ms)
             } else {
                 None
             };
 
-            let outcome = controller.state.outcome.clone(); // Clone to avoid moving
+            let outcome = runtime.state.outcome.clone();
             self.thread_handle
-                .replace_messages(controller.state.messages.clone());
+                .replace_messages(runtime.state.messages.clone());
             let summary = self.generate_task_summary(
                 task,
-                &controller.state.modified_files,
-                &controller.state.executed_commands,
-                &controller.state.warnings,
-                &controller.state.messages,
-                controller.state.stats.turns_executed,
-                controller.state.max_tool_loop_streak,
+                &runtime.state.modified_files,
+                &runtime.state.executed_commands,
+                &runtime.state.warnings,
+                &runtime.state.messages,
+                runtime.state.stats.turns_executed,
+                runtime.state.max_tool_loop_streak,
                 max_tool_loops,
                 outcome,
                 total_duration_ms,
@@ -796,12 +760,12 @@ impl AgentRunner {
                 ));
             }
 
-            if controller.state.outcome.is_hard_block() {
+            if runtime.state.outcome.is_hard_block() {
                 match write_blocked_handoff(
                     &self._workspace,
                     &self.session_id,
-                    controller.state.outcome.code(),
-                    &controller.state.outcome.description(),
+                    runtime.state.outcome.code(),
+                    &runtime.state.outcome.description(),
                     &[],
                 ) {
                     Ok(artifacts) => emit_blocked_handoff_events(
@@ -817,13 +781,34 @@ impl AgentRunner {
                 }
             }
 
-            record_terminal_turn_event(&mut event_recorder, &controller.state.outcome);
+            record_terminal_turn_event(&mut event_recorder, &runtime.state.outcome);
             let thread_events = event_recorder.into_events();
+            let steering_receiver = runtime.take_steering_receiver();
+            let state = std::mem::replace(
+                &mut runtime.state,
+                AgentSessionState::new(
+                    self.session_id.clone(),
+                    self.max_turns,
+                    max_tool_loops,
+                    max_context_tokens,
+                ),
+            );
 
-            // Return task results
-            Ok(controller
-                .state
-                .into_results(summary, thread_events, total_duration_ms))
+            Ok((
+                state.into_results(summary, thread_events, total_duration_ms),
+                steering_receiver,
+            ))
+        };
+
+        let result = match result {
+            Ok((task_results, steering_receiver)) => {
+                *self.steering_receiver.lock() = steering_receiver;
+                Ok(task_results)
+            }
+            Err(err) => {
+                *self.steering_receiver.lock() = runtime.take_steering_receiver();
+                Err(err)
+            }
         };
 
         self.tool_registry.set_harness_task(None);

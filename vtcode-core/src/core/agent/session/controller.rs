@@ -1,62 +1,160 @@
-//! Unified controller for driving agent sessions.
+//! Compatibility wrapper over the shared agent runtime.
 
 use crate::core::agent::events::unified::AgentEvent;
+use crate::core::agent::runtime::AgentRuntime;
 use crate::core::agent::session::AgentSessionState;
-use crate::llm::provider::{LLMProvider, LLMRequest, NormalizedStreamEvent, Usage};
+use crate::exec::events::{ThreadEvent, ThreadItemDetails, ToolCallStatus, Usage};
+use crate::llm::provider::{LLMProvider, LLMRequest};
 use anyhow::Result;
-use std::collections::HashSet;
+use parking_lot::Mutex as ParkingMutex;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-fn merge_stream_and_completed_text(accumulated: &mut String, completed: Option<&str>) {
-    let Some(completed_text) = completed else {
-        return;
-    };
-    if completed_text.is_empty() {
-        return;
+fn merged_delta(previous: &mut String, current: &str) -> Option<String> {
+    if current.is_empty() || previous == current {
+        return None;
     }
-    if accumulated.is_empty() {
-        accumulated.push_str(completed_text);
-        return;
-    }
-    if completed_text == accumulated.as_str() {
-        return;
-    }
-    if let Some(suffix) = completed_text.strip_prefix(accumulated.as_str()) {
-        accumulated.push_str(suffix);
-        return;
-    }
-    // If final payload differs from streamed deltas, prefer final provider payload.
-    *accumulated = completed_text.to_string();
+
+    let delta = current
+        .strip_prefix(previous.as_str())
+        .map(str::to_string)
+        .unwrap_or_else(|| current.to_string());
+    previous.clear();
+    previous.push_str(current);
+    Some(delta)
 }
 
-/// A sink for unified agent events.
+#[derive(Default)]
+struct LegacyEventAdapter {
+    item_text: HashMap<String, String>,
+    reasoning_stage: HashMap<String, Option<String>>,
+}
+
+impl LegacyEventAdapter {
+    fn adapt(&mut self, event: &ThreadEvent) -> Vec<AgentEvent> {
+        match event {
+            ThreadEvent::ItemStarted(started) => {
+                self.adapt_item_event(&started.item.id, &started.item.details, false, true)
+            }
+            ThreadEvent::ItemUpdated(updated) => {
+                self.adapt_item_event(&updated.item.id, &updated.item.details, false, false)
+            }
+            ThreadEvent::ItemCompleted(completed) => {
+                self.adapt_item_event(&completed.item.id, &completed.item.details, true, false)
+            }
+            ThreadEvent::Error(error) => vec![AgentEvent::Error {
+                message: error.message.clone(),
+            }],
+            _ => Vec::new(),
+        }
+    }
+
+    fn adapt_item_event(
+        &mut self,
+        item_id: &str,
+        details: &ThreadItemDetails,
+        completed: bool,
+        emit_tool_start: bool,
+    ) -> Vec<AgentEvent> {
+        let mut events = Vec::new();
+
+        match details {
+            ThreadItemDetails::AgentMessage(message) => {
+                let previous = self.item_text.entry(item_id.to_string()).or_default();
+                if let Some(delta) = merged_delta(previous, &message.text) {
+                    events.push(AgentEvent::OutputDelta { delta });
+                }
+            }
+            ThreadItemDetails::Reasoning(reasoning) => {
+                let previous_stage = self.reasoning_stage.entry(item_id.to_string()).or_default();
+                if reasoning.stage != *previous_stage {
+                    if let Some(stage) = reasoning.stage.clone() {
+                        events.push(AgentEvent::ThinkingStage { stage });
+                    }
+                    *previous_stage = reasoning.stage.clone();
+                }
+
+                let previous = self.item_text.entry(item_id.to_string()).or_default();
+                if let Some(delta) = merged_delta(previous, &reasoning.text) {
+                    events.push(AgentEvent::ThinkingDelta { delta });
+                }
+            }
+            ThreadItemDetails::ToolInvocation(tool) if !completed && emit_tool_start => {
+                events.push(AgentEvent::ToolCallStarted {
+                    id: tool
+                        .tool_call_id
+                        .clone()
+                        .unwrap_or_else(|| item_id.to_string()),
+                    name: tool.tool_name.clone(),
+                    args: tool
+                        .arguments
+                        .as_ref()
+                        .map(serde_json::Value::to_string)
+                        .unwrap_or_else(|| "{}".to_string()),
+                });
+            }
+            ThreadItemDetails::ToolInvocation(tool) if completed => {
+                events.push(AgentEvent::ToolCallCompleted {
+                    id: tool
+                        .tool_call_id
+                        .clone()
+                        .unwrap_or_else(|| item_id.to_string()),
+                    result: tool
+                        .arguments
+                        .as_ref()
+                        .map(serde_json::Value::to_string)
+                        .unwrap_or_else(|| "{}".to_string()),
+                    is_success: matches!(tool.status, ToolCallStatus::Completed),
+                });
+            }
+            ThreadItemDetails::Error(error) => {
+                events.push(AgentEvent::Error {
+                    message: error.message.clone(),
+                });
+            }
+            _ => {}
+        }
+
+        if completed {
+            self.item_text.remove(item_id);
+            self.reasoning_stage.remove(item_id);
+        }
+
+        events
+    }
+}
+
+/// A sink for legacy unified agent events.
 pub type AgentEventSink = Arc<Mutex<Box<dyn FnMut(AgentEvent) + Send>>>;
 
-/// Controller that drives an agent session using the unified event model.
+/// Compatibility wrapper that forwards turn execution into `AgentRuntime`.
 pub struct AgentSessionController {
-    /// The current state of the session.
-    pub state: AgentSessionState,
-
-    /// The event sink for emitting unified events.
+    pub runtime: AgentRuntime,
     event_sink: Option<AgentEventSink>,
 }
 
-use futures::StreamExt;
-
 impl AgentSessionController {
-    /// Create a new controller with the given state
     pub fn new(state: AgentSessionState, event_sink: Option<AgentEventSink>) -> Self {
-        Self { state, event_sink }
+        Self {
+            runtime: AgentRuntime::new(state, None, None),
+            event_sink,
+        }
     }
 
-    /// Set an event handler for this controller
     pub fn set_event_handler(&mut self, sink: AgentEventSink) {
         self.event_sink = Some(sink);
     }
 
-    /// Emit a unified agent event.
-    pub fn emit(&mut self, event: AgentEvent) {
+    pub fn state(&self) -> &AgentSessionState {
+        &self.runtime.state
+    }
+
+    pub fn state_mut(&mut self) -> &mut AgentSessionState {
+        &mut self.runtime.state
+    }
+
+    fn emit(&mut self, event: AgentEvent) {
         if let Some(sink) = &self.event_sink {
             let mut callback = match sink.lock() {
                 Ok(guard) => guard,
@@ -66,7 +164,6 @@ impl AgentSessionController {
         }
     }
 
-    /// Drive a single turn in the session.
     pub async fn run_turn(
         &mut self,
         provider: &mut Box<dyn LLMProvider>,
@@ -76,231 +173,71 @@ impl AgentSessionController {
         >,
         timeout: Option<std::time::Duration>,
     ) -> Result<(crate::llm::provider::LLMResponse, String, Option<String>)> {
-        let turn_id = format!("turn_{}", self.state.stats.turns_executed);
         self.emit(AgentEvent::TurnStarted {
-            id: turn_id.clone(),
+            id: format!("turn_{}", self.runtime.state.stats.turns_executed + 1),
         });
-        let request_model = request.model.clone();
 
-        let start_time = std::time::Instant::now();
-        let mut stream = if let Some(t) = timeout {
-            match tokio::time::timeout(t, provider.stream_normalized(request)).await {
-                Ok(res) => res?,
-                Err(_) => return Err(anyhow::anyhow!("Stream request timed out after {:?}", t)),
-            }
-        } else {
-            provider.stream_normalized(request).await?
-        };
+        let thread_sink = self.event_sink.as_ref().map(|legacy_sink| {
+            let legacy_sink = Arc::clone(legacy_sink);
+            let adapter = Arc::new(Mutex::new(LegacyEventAdapter::default()));
+            let adapter_ref = Arc::clone(&adapter);
+            Arc::new(ParkingMutex::new(Box::new(move |event: &ThreadEvent| {
+                let mut adapter = match adapter_ref.lock() {
+                    Ok(guard) => guard,
+                    Err(poisoned) => poisoned.into_inner(),
+                };
+                let mapped = adapter.adapt(event);
+                drop(adapter);
 
-        let mut full_text = String::new();
-        let mut full_reasoning = String::new();
-        let mut finish_reason = String::from("stop");
-        let mut final_usage = Usage::default();
-        let mut aggregated_tool_calls: Option<Vec<crate::llm::provider::ToolCall>> = None;
-        let mut completed_response: Option<crate::llm::provider::LLMResponse> = None;
-        let mut emitted_tool_calls = HashSet::new();
-
-        while let Some(event_result) = stream.next().await {
-            // Check steering
-            if let Some(rx) = steering {
-                match rx.try_recv() {
-                    Ok(crate::core::agent::steering::SteeringMessage::SteerStop) => {
-                        finish_reason = "cancelled".to_string();
-                        break;
-                    }
-                    Ok(crate::core::agent::steering::SteeringMessage::Pause) => {
-                        self.emit(AgentEvent::ThinkingStage {
-                            stage: "Paused".to_string(),
-                        });
-                        // Wait for resume
-                        loop {
-                            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-                            match rx.try_recv() {
-                                Ok(crate::core::agent::steering::SteeringMessage::Resume) => break,
-                                Ok(crate::core::agent::steering::SteeringMessage::SteerStop) => {
-                                    finish_reason = "cancelled".to_string();
-                                    break;
-                                }
-                                _ => {}
-                            }
-                        }
-                        if finish_reason == "cancelled" {
-                            break;
-                        }
-                        self.emit(AgentEvent::ThinkingStage {
-                            stage: "Resumed".to_string(),
-                        });
-                    }
-                    Ok(crate::core::agent::steering::SteeringMessage::FollowUpInput(input)) => {
-                        // Follow-up input is added to state, ensuring next turn handles it.
-                        self.state.add_user_message(input);
-                    }
-                    _ => {}
-                }
-            }
-
-            match event_result? {
-                NormalizedStreamEvent::TextDelta { delta } => {
-                    full_text.push_str(&delta);
-                    self.emit(AgentEvent::OutputDelta { delta });
-                }
-                NormalizedStreamEvent::ReasoningDelta { delta } => {
-                    full_reasoning.push_str(&delta);
-                    self.emit(AgentEvent::ThinkingDelta { delta });
-                }
-                NormalizedStreamEvent::ToolCallStart { call_id, name } => {
-                    if emitted_tool_calls.insert(call_id.clone()) {
-                        self.emit(AgentEvent::ToolCallStarted {
-                            id: call_id,
-                            name: name.unwrap_or_default(),
-                            args: "{}".to_string(),
-                        });
-                    }
-                }
-                NormalizedStreamEvent::ToolCallDelta { .. } => {}
-                NormalizedStreamEvent::Usage { usage } => {
-                    final_usage = usage;
-                }
-                NormalizedStreamEvent::Done { response } => {
-                    let mut response = *response;
-                    if response.usage.is_none()
-                        && (final_usage.prompt_tokens > 0
-                            || final_usage.completion_tokens > 0
-                            || final_usage.total_tokens > 0)
-                    {
-                        response.usage = Some(final_usage.clone());
-                    }
-                    finish_reason = match response.finish_reason.clone() {
-                        crate::llm::provider::FinishReason::Stop => "stop".to_string(),
-                        crate::llm::provider::FinishReason::ToolCalls => "tool_calls".to_string(),
-                        crate::llm::provider::FinishReason::Length => "length".to_string(),
-                        crate::llm::provider::FinishReason::Error(s) => s,
-                        _ => "unknown".to_string(),
+                for mapped_event in mapped {
+                    let mut callback = match legacy_sink.lock() {
+                        Ok(guard) => guard,
+                        Err(poisoned) => poisoned.into_inner(),
                     };
-                    final_usage = response.usage.clone().unwrap_or_default();
-                    aggregated_tool_calls = response.tool_calls.clone();
-
-                    // Handle tool calls in the response
-                    if let Some(tool_calls) = &response.tool_calls {
-                        for call in tool_calls {
-                            if emitted_tool_calls.insert(call.id.clone()) {
-                                self.emit(AgentEvent::ToolCallStarted {
-                                    id: call.id.clone(),
-                                    name: call
-                                        .function
-                                        .as_ref()
-                                        .map(|f| f.name.clone())
-                                        .unwrap_or_default(),
-                                    args: call
-                                        .function
-                                        .as_ref()
-                                        .map(|f| f.arguments.clone())
-                                        .unwrap_or_else(|| "{}".to_string()),
-                                });
-                            }
-                        }
-                    }
-
-                    completed_response = Some(response);
+                    callback(mapped_event);
                 }
-            }
-        }
-
-        merge_stream_and_completed_text(
-            &mut full_text,
-            completed_response
-                .as_ref()
-                .and_then(|resp| resp.content.as_deref()),
-        );
-        merge_stream_and_completed_text(
-            &mut full_reasoning,
-            completed_response
-                .as_ref()
-                .and_then(|resp| resp.reasoning.as_deref()),
-        );
-
-        let mut turn_recorded = false;
-        self.state.record_turn(&start_time, &mut turn_recorded);
-
-        // Update stats with final usage
-        if final_usage.prompt_tokens > 0 || final_usage.completion_tokens > 0 {
-            self.state.stats.merge_usage(final_usage.clone());
-        }
-
-        aggregated_tool_calls = aggregated_tool_calls.filter(|calls| !calls.is_empty());
-
-        // Create and push assistant message
-        let mut assistant_msg = crate::llm::provider::Message::assistant(full_text.clone());
-        if !full_reasoning.is_empty() {
-            assistant_msg = assistant_msg.with_reasoning(Some(full_reasoning.clone()));
-        }
-
-        // Handle tool calls in the response summary
-        match aggregated_tool_calls.as_ref() {
-            Some(calls) => {
-                assistant_msg = assistant_msg
-                    .with_tool_calls(calls.clone())
-                    .with_phase(Some(crate::llm::provider::AssistantPhase::Commentary));
-            }
-            None => {
-                assistant_msg = assistant_msg
-                    .with_phase(Some(crate::llm::provider::AssistantPhase::FinalAnswer));
-            }
-        }
-
-        self.state.messages.push(assistant_msg.clone());
-
-        // Handle Gemini content conversion if needed (legacy)
-        let parts = vec![crate::llm::providers::gemini::wire::Part::Text {
-            text: full_text.clone(),
-            thought_signature: None,
-        }];
-        self.state
-            .conversation
-            .push(crate::llm::providers::gemini::wire::Content {
-                role: "model".to_string(),
-                parts,
-            });
-        self.state.last_processed_message_idx = self.state.conversation.len();
-
-        self.emit(AgentEvent::TurnCompleted {
-            finish_reason: finish_reason.clone(),
-            usage: crate::exec::events::Usage {
-                input_tokens: final_usage.prompt_tokens as u64,
-                output_tokens: final_usage.completion_tokens as u64,
-                cached_input_tokens: final_usage.cache_read_tokens_or_fallback() as u64,
-            },
+            })
+                as Box<dyn FnMut(&ThreadEvent) + Send>))
         });
 
-        let mut response = completed_response.unwrap_or_default();
-        if response.model.is_empty() {
-            response.model = request_model;
-        }
-        response.content = Some(full_text.clone());
-        response.reasoning = if full_reasoning.is_empty() {
-            None
-        } else {
-            Some(full_reasoning.clone())
-        };
-        response.tool_calls = aggregated_tool_calls.clone();
-        response.usage = Some(final_usage);
-        response.finish_reason = if finish_reason == "tool_calls" {
-            crate::llm::provider::FinishReason::ToolCalls
-        } else if finish_reason == "cancelled" {
-            crate::llm::provider::FinishReason::Error("Cancelled".to_string())
-        } else {
-            crate::llm::provider::FinishReason::Stop
-        };
+        self.runtime.set_event_handler(thread_sink);
+        self.runtime.set_steering_receiver(steering.take());
+        let result = self.runtime.run_turn_once(provider, request, timeout).await;
+        *steering = self.runtime.take_steering_receiver();
+        self.runtime.set_event_handler(None);
 
-        Ok((
-            response,
-            full_text,
-            if full_reasoning.is_empty() {
-                None
-            } else {
-                Some(full_reasoning)
-            },
-        ))
+        match result {
+            Ok(turn) => {
+                let usage = turn
+                    .response
+                    .usage
+                    .clone()
+                    .map(|usage| Usage {
+                        input_tokens: usage.prompt_tokens as u64,
+                        output_tokens: usage.completion_tokens as u64,
+                        cached_input_tokens: usage.cache_read_tokens_or_fallback() as u64,
+                    })
+                    .unwrap_or_default();
+                let finish_reason = match turn.response.finish_reason.clone() {
+                    crate::llm::provider::FinishReason::Stop => "stop".to_string(),
+                    crate::llm::provider::FinishReason::ToolCalls => "tool_calls".to_string(),
+                    crate::llm::provider::FinishReason::Length => "length".to_string(),
+                    crate::llm::provider::FinishReason::Error(message) => message,
+                    _ => "unknown".to_string(),
+                };
+                self.emit(AgentEvent::TurnCompleted {
+                    finish_reason,
+                    usage,
+                });
+                Ok((turn.response, turn.content, turn.reasoning))
+            }
+            Err(err) => {
+                self.emit(AgentEvent::Error {
+                    message: err.to_string(),
+                });
+                Err(err)
+            }
+        }
     }
 }
 
@@ -313,7 +250,7 @@ mod tests {
 
     use crate::llm::provider::{
         AssistantPhase, LLMError, LLMNormalizedStream, LLMResponse, LLMStream, LLMStreamEvent,
-        NormalizedStreamEvent, ToolCall,
+        NormalizedStreamEvent, ToolCall, Usage,
     };
 
     #[derive(Clone)]
@@ -338,6 +275,17 @@ mod tests {
         async fn stream(&self, _request: LLMRequest) -> Result<LLMStream, LLMError> {
             Ok(Box::pin(stream::iter(vec![Ok(
                 LLMStreamEvent::Completed {
+                    response: Box::new(self.response.clone()),
+                },
+            )])))
+        }
+
+        async fn stream_normalized(
+            &self,
+            _request: LLMRequest,
+        ) -> Result<LLMNormalizedStream, LLMError> {
+            Ok(Box::pin(stream::iter(vec![Ok(
+                NormalizedStreamEvent::Done {
                     response: Box::new(self.response.clone()),
                 },
             )])))
@@ -424,6 +372,29 @@ mod tests {
                 ])))
             }
 
+            async fn stream_normalized(
+                &self,
+                _request: LLMRequest,
+            ) -> Result<LLMNormalizedStream, LLMError> {
+                Ok(Box::pin(stream::iter(vec![
+                    Ok(NormalizedStreamEvent::TextDelta {
+                        delta: "prefix ".to_string(),
+                    }),
+                    Ok(NormalizedStreamEvent::ReasoningDelta {
+                        delta: "reasoning ".to_string(),
+                    }),
+                    Ok(NormalizedStreamEvent::Done {
+                        response: Box::new(LLMResponse {
+                            content: Some("prefix **suffix**".to_string()),
+                            reasoning: Some("reasoning _suffix_".to_string()),
+                            model: "test-model".to_string(),
+                            finish_reason: crate::llm::provider::FinishReason::Stop,
+                            ..Default::default()
+                        }),
+                    }),
+                ])))
+            }
+
             fn supported_models(&self) -> Vec<String> {
                 vec!["test-model".to_string()]
             }
@@ -484,7 +455,7 @@ mod tests {
             .expect("run_turn should succeed");
 
         let last = controller
-            .state
+            .state()
             .messages
             .last()
             .expect("assistant message should be recorded");
@@ -519,7 +490,7 @@ mod tests {
             .expect("run_turn should succeed");
 
         let last = controller
-            .state
+            .state()
             .messages
             .last()
             .expect("assistant message should be recorded");

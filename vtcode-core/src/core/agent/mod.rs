@@ -13,6 +13,7 @@ pub mod error_recovery;
 pub mod events;
 pub mod features;
 pub mod runner;
+pub mod runtime;
 pub mod session;
 pub mod session_config;
 pub mod snapshots;

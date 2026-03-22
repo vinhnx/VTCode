@@ -8,8 +8,8 @@ use crate::llm::provider::LLMRequest;
 use crate::llm::providers::gemini::wire::{Content, Part};
 use crate::utils::colors::style;
 use crate::utils::error_messages::ERR_TOOL_DENIED;
-use serde_json::Value;
 use serde::Serialize;
+use serde_json::Value;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub(super) struct ObservabilityFields {

@@ -3,8 +3,7 @@ use super::constants::{LOOP_THROTTLE_BASE_MS, LOOP_THROTTLE_MAX_MS};
 use super::types::ToolFailureContext;
 use crate::config::constants::tools;
 use crate::core::agent::events::ExecEventRecorder;
-use crate::core::agent::session::AgentSessionState;
-use crate::core::agent::steering::SteeringMessage;
+use crate::core::agent::runtime::{AgentRuntime, RuntimeControl};
 use crate::exec::events::ToolCallStatus;
 use crate::llm::provider::ToolCall;
 use anyhow::{Result, anyhow};
@@ -16,7 +15,7 @@ impl AgentRunner {
     pub(super) async fn execute_parallel_tool_calls(
         &self,
         tool_calls: Vec<ToolCall>,
-        session_state: &mut AgentSessionState,
+        runtime: &mut AgentRuntime,
         event_recorder: &mut ExecEventRecorder,
         agent_prefix: &str,
         is_gemini: bool,
@@ -41,7 +40,7 @@ impl AgentRunner {
                         Some(call.id.as_str()),
                         &error_msg,
                     );
-                    session_state.push_tool_error(
+                    runtime.state.push_tool_error(
                         call.id.clone(),
                         &requested_name,
                         error_msg,
@@ -50,7 +49,7 @@ impl AgentRunner {
                     continue;
                 }
             };
-            let args = self.normalize_tool_args(&requested_name, &args, session_state);
+            let args = self.normalize_tool_args(&requested_name, &args, &mut runtime.state);
             let name = match self.validate_and_normalize_tool_name(&requested_name, &args) {
                 Ok(name) => name,
                 Err(err) => {
@@ -63,7 +62,7 @@ impl AgentRunner {
                         Some(call.id.as_str()),
                         &error_msg,
                     );
-                    session_state.push_tool_error(
+                    runtime.state.push_tool_error(
                         call.id.clone(),
                         &requested_name,
                         error_msg,
@@ -72,7 +71,7 @@ impl AgentRunner {
                     continue;
                 }
             };
-            if self.check_for_loop(&name, &args, session_state) {
+            if self.check_for_loop(&name, &args, &mut runtime.state) {
                 return Ok(());
             }
             prepared_calls.push((call, name, args));
@@ -92,7 +91,7 @@ impl AgentRunner {
             if !self.is_valid_tool(&name).await {
                 self.record_tool_denied(
                     agent_prefix,
-                    session_state,
+                    &mut runtime.state,
                     event_recorder,
                     &call_id,
                     &name,
@@ -126,9 +125,11 @@ impl AgentRunner {
                     let optimized_result = self.optimize_tool_result(&name, result).await;
                     let tool_result = serde_json::to_string(&optimized_result)?;
 
-                    self.update_last_paths_from_args(&name, &args, session_state);
+                    self.update_last_paths_from_args(&name, &args, &mut runtime.state);
 
-                    session_state.push_tool_result(call_id, &name, tool_result, is_gemini);
+                    runtime
+                        .state
+                        .push_tool_result(call_id, &name, tool_result, is_gemini);
                     event_recorder.tool_finished(
                         &tool_event,
                         ToolCallStatus::Completed,
@@ -142,20 +143,22 @@ impl AgentRunner {
                     error!(agent = %agent_prefix, tool = %name, error = %e, "Tool execution failed");
                     let err_lower = error_msg.to_lowercase();
                     if err_lower.contains("rate limit") {
-                        session_state.warnings.push(
+                        runtime.state.warnings.push(
                             "Tool was rate limited; halting further tool calls this turn.".into(),
                         );
-                        session_state.mark_tool_loop_limit_hit();
+                        runtime.state.mark_tool_loop_limit_hit();
                         halt_turn = true;
                     } else if err_lower.contains("denied by policy")
                         || err_lower.contains("not permitted while full-auto")
                     {
-                        session_state.warnings.push(
+                        runtime.state.warnings.push(
                             "Tool denied by policy; halting further tool calls this turn.".into(),
                         );
                         halt_turn = true;
                     }
-                    session_state.push_tool_error(call_id, &name, error_msg, is_gemini);
+                    runtime
+                        .state
+                        .push_tool_error(call_id, &name, error_msg, is_gemini);
                     event_recorder.tool_finished(
                         &tool_event,
                         ToolCallStatus::Failed,
@@ -180,40 +183,18 @@ impl AgentRunner {
     pub(super) async fn execute_sequential_tool_calls(
         &mut self,
         tool_calls: Vec<ToolCall>,
-        session_state: &mut AgentSessionState,
+        runtime: &mut AgentRuntime,
         event_recorder: &mut ExecEventRecorder,
         agent_prefix: &str,
         is_gemini: bool,
     ) -> Result<()> {
         for call in tool_calls {
-            // Check for steering messages before each tool call
-            if let Some(msg) = self.check_steering() {
-                match msg {
-                    SteeringMessage::SteerStop => {
-                        warn!(agent = %agent_prefix, "Stopped by steering signal");
-                        return Ok(());
-                    }
-                    SteeringMessage::Pause => {
-                        warn!(agent = %agent_prefix, "Paused by steering signal. Waiting for Resume...");
-                        // Wait for resume
-                        loop {
-                            tokio::time::sleep(Duration::from_millis(100)).await;
-                            if let Some(SteeringMessage::Resume) = self.check_steering() {
-                                if !self.quiet {
-                                    info!(agent = %agent_prefix, "Resumed by steering signal");
-                                }
-                                break;
-                            } else if let Some(SteeringMessage::SteerStop) = self.check_steering() {
-                                return Ok(());
-                            }
-                        }
-                    }
-                    SteeringMessage::Resume => {}
-                    SteeringMessage::FollowUpInput(_) => {
-                        // Follow-up input during tool calls is queued and handled after turn completion.
-                        info!(agent = %agent_prefix, "Follow-up input queued for next turn");
-                    }
-                }
+            if matches!(
+                runtime.poll_tool_control().await,
+                RuntimeControl::StopRequested
+            ) {
+                warn!(agent = %agent_prefix, "Stopped by steering signal");
+                return Ok(());
             }
 
             let requested_name = match call.function.as_ref() {
@@ -232,7 +213,7 @@ impl AgentRunner {
                         Some(call.id.as_str()),
                         &error_msg,
                     );
-                    session_state.push_tool_error(
+                    runtime.state.push_tool_error(
                         call.id.clone(),
                         &requested_name,
                         error_msg,
@@ -241,7 +222,7 @@ impl AgentRunner {
                     continue;
                 }
             };
-            let args = self.normalize_tool_args(&requested_name, &args, session_state);
+            let args = self.normalize_tool_args(&requested_name, &args, &mut runtime.state);
             let name = match self.validate_and_normalize_tool_name(&requested_name, &args) {
                 Ok(name) => name,
                 Err(err) => {
@@ -254,7 +235,7 @@ impl AgentRunner {
                         Some(call.id.as_str()),
                         &error_msg,
                     );
-                    session_state.push_tool_error(
+                    runtime.state.push_tool_error(
                         call.id.clone(),
                         &requested_name,
                         error_msg,
@@ -264,7 +245,7 @@ impl AgentRunner {
                 }
             };
 
-            if self.check_for_loop(&name, &args, session_state) {
+            if self.check_for_loop(&name, &args, &mut runtime.state) {
                 break;
             }
 
@@ -279,7 +260,7 @@ impl AgentRunner {
             if !self.is_valid_tool(&name).await {
                 self.record_tool_denied(
                     agent_prefix,
-                    session_state,
+                    &mut runtime.state,
                     event_recorder,
                     &call.id,
                     &name,
@@ -308,9 +289,11 @@ impl AgentRunner {
                     let optimized_result = self.optimize_tool_result(&name, result).await;
                     let tool_result = serde_json::to_string(&optimized_result)?;
 
-                    self.update_last_paths_from_args(&name, &args, session_state);
+                    self.update_last_paths_from_args(&name, &args, &mut runtime.state);
 
-                    session_state.push_tool_result(call.id.clone(), &name, tool_result, is_gemini);
+                    runtime
+                        .state
+                        .push_tool_result(call.id.clone(), &name, tool_result, is_gemini);
                     event_recorder.tool_finished(
                         &tool_event,
                         ToolCallStatus::Completed,
@@ -322,7 +305,7 @@ impl AgentRunner {
                     if name == tools::WRITE_FILE
                         && let Some(filepath) = args.get("path").and_then(|p| p.as_str())
                     {
-                        session_state.modified_files.push(filepath.to_owned());
+                        runtime.state.modified_files.push(filepath.to_owned());
                         event_recorder.file_change_completed(filepath);
                     }
                 }
@@ -330,13 +313,13 @@ impl AgentRunner {
                     let err_msg = e.to_string();
                     let err_lower = err_msg.to_lowercase();
                     if err_lower.contains("rate limit") {
-                        session_state.warnings.push(
+                        runtime.state.warnings.push(
                             "Tool was rate limited; halting further tool calls this turn.".into(),
                         );
-                        session_state.mark_tool_loop_limit_hit();
+                        runtime.state.mark_tool_loop_limit_hit();
                         let mut failure_ctx = ToolFailureContext {
                             agent_prefix,
-                            session_state,
+                            session_state: &mut runtime.state,
                             event_recorder,
                             tool_event: &tool_event,
                             is_gemini,
@@ -352,12 +335,12 @@ impl AgentRunner {
                     } else if err_lower.contains("denied by policy")
                         || err_lower.contains("not permitted while full-auto")
                     {
-                        session_state.warnings.push(
+                        runtime.state.warnings.push(
                             "Tool denied by policy; halting further tool calls this turn.".into(),
                         );
                         let mut failure_ctx = ToolFailureContext {
                             agent_prefix,
-                            session_state,
+                            session_state: &mut runtime.state,
                             event_recorder,
                             tool_event: &tool_event,
                             is_gemini,
@@ -373,7 +356,7 @@ impl AgentRunner {
                     } else {
                         let mut failure_ctx = ToolFailureContext {
                             agent_prefix,
-                            session_state,
+                            session_state: &mut runtime.state,
                             event_recorder,
                             tool_event: &tool_event,
                             is_gemini,
