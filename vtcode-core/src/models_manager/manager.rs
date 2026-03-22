@@ -22,8 +22,8 @@ use crate::config::models::Provider;
 /// Cache file name
 const MODEL_CACHE_FILE: &str = "models_cache.json";
 
-/// Default cache TTL (5 minutes)
-const DEFAULT_MODEL_CACHE_TTL: Duration = Duration::from_secs(300);
+/// Default cache TTL (2 minutes)
+const DEFAULT_MODEL_CACHE_TTL: Duration = Duration::from_secs(120);
 
 /// Default model for Gemini provider
 const GEMINI_DEFAULT_MODEL: &str = "gemini-3-flash-preview";

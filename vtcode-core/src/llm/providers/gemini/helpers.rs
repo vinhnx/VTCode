@@ -4,9 +4,14 @@ use crate::config::constants::models;
 use crate::llm::error_display;
 use crate::llm::provider::LLMError;
 use crate::llm::provider::{ContentPart, MessageContent};
+use crate::llm::providers::common::{
+    collect_history_system_directives, merge_system_prompt_with_history_directives,
+};
 use crate::prompts::system::default_system_prompt;
 
 impl GeminiProvider {
+    const HISTORY_DIRECTIVES_SECTION_HEADER: &str = "[History Directives]";
+
     pub(super) fn is_gemini_3_pro_model(model: &str) -> bool {
         model.contains("gemini-3") && model.contains("pro") && !model.contains("flash")
     }
@@ -115,6 +120,7 @@ impl GeminiProvider {
         }
 
         let mut contents: Vec<Content> = Vec::new();
+        let history_system_directives = collect_history_system_directives(request);
         for message in &request.messages {
             if message.role == MessageRole::System {
                 continue;
@@ -319,11 +325,16 @@ impl GeminiProvider {
             tools,
             tool_config,
             system_instruction: {
-                let text = request
+                let base_system_prompt = request
                     .system_prompt
                     .as_ref()
-                    .map(|text| (**text).clone())
-                    .unwrap_or_else(|| default_system_prompt().to_string());
+                    .map(|prompt| prompt.as_str())
+                    .or_else(|| self.prompt_cache_enabled.then_some(default_system_prompt()));
+                let merged_system_prompt = merge_system_prompt_with_history_directives(
+                    base_system_prompt,
+                    &history_system_directives,
+                    Self::HISTORY_DIRECTIVES_SECTION_HEADER,
+                );
 
                 if self.prompt_cache_enabled
                     && matches!(
@@ -332,12 +343,15 @@ impl GeminiProvider {
                     )
                 {
                     if let Some(ttl) = self.prompt_cache_settings.explicit_ttl_seconds {
-                        Some(SystemInstruction::with_ttl(text, ttl))
+                        merged_system_prompt.map(|text| SystemInstruction::with_ttl(text, ttl))
                     } else {
-                        Some(SystemInstruction::new(text))
+                        merged_system_prompt.map(SystemInstruction::new)
                     }
-                } else if request.system_prompt.is_some() || self.prompt_cache_enabled {
-                    Some(SystemInstruction::new(text))
+                } else if request.system_prompt.is_some()
+                    || self.prompt_cache_enabled
+                    || !history_system_directives.is_empty()
+                {
+                    merged_system_prompt.map(SystemInstruction::new)
                 } else {
                     None
                 }

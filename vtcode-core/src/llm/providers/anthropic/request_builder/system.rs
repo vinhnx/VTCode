@@ -1,5 +1,6 @@
-use crate::llm::provider::{LLMRequest, MessageRole};
+use crate::llm::provider::LLMRequest;
 use crate::llm::providers::anthropic_types::CacheControl;
+use crate::llm::providers::common::collect_history_system_directives;
 use serde_json::{Value, json};
 
 pub(crate) struct SystemPromptBuildResult {
@@ -17,13 +18,7 @@ fn has_runtime_context_section(prompt: &str) -> bool {
 }
 
 fn append_history_system_directives(final_system_prompt: &mut String, request: &LLMRequest) {
-    let directives = request
-        .messages
-        .iter()
-        .filter(|msg| msg.role == MessageRole::System)
-        .map(|msg| msg.content.as_text().trim().to_string())
-        .filter(|text| !text.is_empty())
-        .collect::<Vec<_>>();
+    let directives = collect_history_system_directives(request);
 
     if directives.is_empty() {
         return;

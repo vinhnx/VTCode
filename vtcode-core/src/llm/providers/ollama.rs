@@ -34,8 +34,9 @@ pub use url::{base_url_to_host_root, is_openai_compatible_base_url};
 use semver::Version;
 
 use super::common::{
-    assistant_interleaved_history_text, extract_reasoning_text_from_detail_values,
-    extract_reasoning_text_from_serialized_details, is_minimax_m2_model, override_base_url,
+    assistant_interleaved_history_text, collect_history_system_directives,
+    extract_reasoning_text_from_detail_values, extract_reasoning_text_from_serialized_details,
+    is_minimax_m2_model, merge_system_prompt_with_history_directives, override_base_url,
     parse_client_prompt_common, resolve_model, serialize_reasoning_detail_values,
 };
 use super::error_handling::{format_network_error, format_parse_error};
@@ -244,38 +245,12 @@ pub struct OllamaProvider {
 impl OllamaProvider {
     fn merged_system_prompt(request: &LLMRequest) -> Option<String> {
         const HISTORY_DIRECTIVES_SECTION_HEADER: &str = "[History Directives]";
-
-        let mut system_prompt = request
-            .system_prompt
-            .as_ref()
-            .map(|prompt| prompt.trim().to_string())
-            .filter(|prompt| !prompt.is_empty())
-            .unwrap_or_default();
-
-        let directives = request
-            .messages
-            .iter()
-            .filter(|message| message.role == MessageRole::System)
-            .map(|message| message.content.as_text().trim().to_string())
-            .filter(|text| !text.is_empty())
-            .collect::<Vec<_>>();
-
-        if directives.is_empty() {
-            return (!system_prompt.is_empty()).then_some(system_prompt);
-        }
-
-        if !system_prompt.is_empty() {
-            system_prompt.push('\n');
-        }
-        system_prompt.push_str(HISTORY_DIRECTIVES_SECTION_HEADER);
-        system_prompt.push('\n');
-        for directive in directives {
-            system_prompt.push_str("- ");
-            system_prompt.push_str(&directive);
-            system_prompt.push('\n');
-        }
-
-        Some(system_prompt)
+        let directives = collect_history_system_directives(request);
+        merge_system_prompt_with_history_directives(
+            request.system_prompt.as_ref().map(|prompt| prompt.as_str()),
+            &directives,
+            HISTORY_DIRECTIVES_SECTION_HEADER,
+        )
     }
 
     pub fn new(api_key: String) -> Self {

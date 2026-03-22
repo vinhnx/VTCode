@@ -202,6 +202,10 @@ pub fn create_provider_with_config(
 /// removed first, then the new set is registered. Built-in providers are
 /// never touched.
 pub fn register_custom_providers(custom_providers: &[vtcode_config::core::CustomProviderConfig]) {
+    if custom_providers.is_empty() {
+        return;
+    }
+
     use crate::llm::providers::OpenAIProvider;
 
     let Ok(mut factory) = get_factory().lock() else {

@@ -24,7 +24,6 @@ impl OpenAIProvider {
         let mut tool_call_authors: HashMap<String, String> = HashMap::with_capacity(16);
 
         // 1. Add standard system message as per Harmony spec
-        let current_date = chrono::Local::now().format("%Y-%m-%d").to_string();
         let reasoning_effort = match request.reasoning_effort {
             Some(ReasoningEffortLevel::Low) => ReasoningEffort::Low,
             Some(ReasoningEffortLevel::Medium) => ReasoningEffort::Medium,
@@ -32,9 +31,7 @@ impl OpenAIProvider {
             _ => ReasoningEffort::Medium,
         };
 
-        let system_content = SystemContent::new()
-            .with_conversation_start_date(&current_date)
-            .with_reasoning_effort(reasoning_effort);
+        let system_content = SystemContent::new().with_reasoning_effort(reasoning_effort);
 
         // Note: The identity and valid channels are typically handled by the SystemContent renderer
         // in openai-harmony, but we can also add them to instructions if needed.
@@ -546,5 +543,77 @@ impl OpenAIProvider {
     /// Parse harmony tool call from raw text content
     pub(crate) fn parse_harmony_tool_call_from_text(text: &str) -> Option<(String, Value)> {
         harmony::parse_harmony_tool_call_from_text(text)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::llm::provider::{LLMRequest, Message};
+    use openai_harmony::chat::Content as HarmonyContent;
+
+    fn test_provider() -> OpenAIProvider {
+        OpenAIProvider::new("test-key".to_string())
+    }
+
+    #[test]
+    fn convert_to_harmony_conversation_omits_dynamic_conversation_start_date() {
+        let provider = test_provider();
+        let request = LLMRequest {
+            messages: vec![Message::user("hello".to_string())],
+            model: "gpt-oss-20b".to_string(),
+            ..Default::default()
+        };
+
+        let conversation = provider
+            .convert_to_harmony_conversation(&request)
+            .expect("conversion should succeed");
+
+        let first_message = conversation
+            .messages
+            .first()
+            .expect("system message should be present");
+        let system_content = first_message
+            .content
+            .first()
+            .expect("system content should be present");
+
+        match system_content {
+            HarmonyContent::SystemContent(system) => {
+                assert_eq!(system.conversation_start_date, None);
+                assert_eq!(system.reasoning_effort, Some(ReasoningEffort::Medium));
+            }
+            other => panic!("expected harmony system content, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn convert_to_harmony_conversation_preserves_history_system_messages() {
+        let provider = test_provider();
+        let request = LLMRequest {
+            messages: vec![
+                Message::system("Reuse prior tool outputs.".to_string()),
+                Message::user("hello".to_string()),
+            ],
+            model: "gpt-oss-20b".to_string(),
+            ..Default::default()
+        };
+
+        let conversation = provider
+            .convert_to_harmony_conversation(&request)
+            .expect("conversion should succeed");
+
+        assert_eq!(conversation.messages.len(), 4);
+        let history_system_message = &conversation.messages[2];
+        assert_eq!(history_system_message.author.role, HarmonyRole::System);
+
+        match history_system_message
+            .content
+            .first()
+            .expect("history system content should be present")
+        {
+            HarmonyContent::Text(text) => assert_eq!(text.text, "Reuse prior tool outputs."),
+            other => panic!("expected text history system content, got {other:?}"),
+        }
     }
 }
