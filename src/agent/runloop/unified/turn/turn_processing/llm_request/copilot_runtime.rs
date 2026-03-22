@@ -456,7 +456,7 @@ impl<'a> CopilotRuntimeHost<'a> {
         let _ = emitter.emit(tool_started_event(
             item_id.clone(),
             tool_name,
-            arguments,
+            Some(arguments),
             raw_tool_call_id,
         ));
         let _ = emitter.emit(tool_output_started_event(item_id, raw_tool_call_id));
@@ -478,7 +478,7 @@ impl<'a> CopilotRuntimeHost<'a> {
         let _ = emitter.emit(tool_invocation_completed_event(
             item_id.clone(),
             tool_name,
-            arguments,
+            Some(arguments),
             raw_tool_call_id,
             status.clone(),
         ));

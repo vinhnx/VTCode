@@ -3,11 +3,12 @@ use super::constants::ROLE_USER;
 use super::types::ToolFailureContext;
 use crate::core::agent::events::ExecEventRecorder;
 use crate::core::agent::session::AgentSessionState;
-use crate::exec::events::CommandExecutionStatus;
+use crate::exec::events::ToolCallStatus;
 use crate::llm::provider::LLMRequest;
 use crate::llm::providers::gemini::wire::{Content, Part};
 use crate::utils::colors::style;
 use crate::utils::error_messages::ERR_TOOL_DENIED;
+use serde_json::Value;
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -183,11 +184,12 @@ impl AgentRunner {
                 failure_text
             );
         }
-        failure_ctx.event_recorder.command_finished(
-            failure_ctx.command_event,
-            CommandExecutionStatus::Failed,
+        failure_ctx.event_recorder.tool_finished(
+            failure_ctx.tool_event,
+            ToolCallStatus::Failed,
             None,
             &failure_text,
+            None,
         );
         failure_ctx.event_recorder.warning(&failure_text);
         // Move failure_text into warnings first, then reference for conversation
@@ -223,7 +225,7 @@ impl AgentRunner {
         event_recorder: &mut ExecEventRecorder,
         call_id: &str,
         tool_name: &str,
-        command_event: Option<&crate::core::agent::events::ActiveCommandHandle>,
+        arguments: Option<&Value>,
         is_gemini: bool,
     ) {
         let detail = format!("{ERR_TOOL_DENIED}: {tool_name}");
@@ -238,12 +240,7 @@ impl AgentRunner {
         session_state.warnings.push(detail.clone());
 
         session_state.push_tool_error(call_id.to_string(), tool_name, detail.clone(), is_gemini);
-
-        if let Some(event) = command_event {
-            event_recorder.command_finished(event, CommandExecutionStatus::Failed, None, &detail);
-        } else {
-            event_recorder.warning(&detail);
-        }
+        event_recorder.tool_rejected(tool_name, arguments, Some(call_id), &detail);
     }
 }
 

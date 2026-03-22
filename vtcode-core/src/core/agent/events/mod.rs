@@ -1,17 +1,23 @@
 //! Event recording utilities for the agent runner.
 
+mod lifecycle;
 pub mod unified;
+pub use lifecycle::{
+    SharedLifecycleEmitter, error_item_completed_event, tool_invocation_completed_event,
+    tool_output_completed_event, tool_output_item_id, tool_output_started_event,
+    tool_output_updated_event, tool_started_event,
+};
 pub use unified::AgentEvent;
 
 use crate::core::threads::{SubmissionId, ThreadRuntimeHandle};
 use crate::exec::events::{
-    AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, ErrorItem, FileChangeItem,
-    FileUpdateChange, HarnessEventItem, HarnessEventKind, ItemCompletedEvent, ItemStartedEvent,
-    ItemUpdatedEvent, PatchApplyStatus, PatchChangeKind, ReasoningItem, ThreadEvent, ThreadItem,
-    ThreadItemDetails, ThreadStartedEvent, TurnCompletedEvent, TurnFailedEvent, TurnStartedEvent,
-    Usage,
+    CommandExecutionItem, CommandExecutionStatus, ErrorItem, FileChangeItem, FileUpdateChange,
+    HarnessEventItem, HarnessEventKind, ItemCompletedEvent, ItemStartedEvent, PatchApplyStatus,
+    PatchChangeKind, ThreadEvent, ThreadItem, ThreadItemDetails, ThreadStartedEvent,
+    TurnCompletedEvent, TurnFailedEvent, TurnStartedEvent, Usage,
 };
 use parking_lot::Mutex;
+use serde_json::Value;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -25,23 +31,22 @@ pub struct ActiveCommandHandle {
 }
 
 #[derive(Debug, Clone)]
-struct StreamingAgentMessage {
+pub struct ActiveToolHandle {
     id: String,
-    buffer: String,
+    tool_name: String,
+    arguments: Option<Value>,
+    tool_call_id: Option<String>,
 }
 
 /// Helper responsible for recording execution events and relaying them to optional sinks.
 #[derive(Default)]
 pub struct ExecEventRecorder {
     events: Vec<ThreadEvent>,
-    next_item_index: u64,
     event_sink: Option<EventSink>,
     thread_handle: Option<ThreadRuntimeHandle>,
     active_submission_id: Option<SubmissionId>,
     active_turn_id: Option<String>,
-    active_assistant_message: Option<StreamingAgentMessage>,
-    active_reasoning: Option<StreamingAgentMessage>,
-    current_reasoning_stage: Option<String>,
+    lifecycle: SharedLifecycleEmitter,
 }
 
 impl ExecEventRecorder {
@@ -53,14 +58,11 @@ impl ExecEventRecorder {
         let thread_id = thread_id.into();
         let mut recorder = Self {
             events: Vec::new(),
-            next_item_index: 0,
             event_sink,
             thread_handle,
             active_submission_id: None,
             active_turn_id: None,
-            active_assistant_message: None,
-            active_reasoning: None,
-            current_reasoning_stage: None,
+            lifecycle: SharedLifecycleEmitter::default(),
         };
         recorder.record_with_context(
             None,
@@ -94,10 +96,14 @@ impl ExecEventRecorder {
         self.events.push(event);
     }
 
+    fn record_pending_lifecycle_events(&mut self) {
+        for event in self.lifecycle.drain_events() {
+            self.record(event);
+        }
+    }
+
     fn next_item_id(&mut self) -> String {
-        let id = self.next_item_index;
-        self.next_item_index += 1;
-        format!("item_{id}")
+        self.lifecycle.next_item_id()
     }
 
     pub fn turn_started(&mut self) {
@@ -135,140 +141,114 @@ impl ExecEventRecorder {
     }
 
     pub fn agent_message(&mut self, text: &str) {
-        if text.trim().is_empty() {
-            return;
-        }
-        let item = ThreadItem {
-            id: self.next_item_id(),
-            details: ThreadItemDetails::AgentMessage(AgentMessageItem { text: text.into() }),
-        };
-        self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
+        self.lifecycle.emit_completed_agent_message(text);
+        self.record_pending_lifecycle_events();
     }
 
     pub fn agent_message_stream_update(&mut self, text: &str) -> bool {
-        if text.trim().is_empty() {
+        if text.trim().is_empty() || !self.lifecycle.replace_assistant_text(text) {
             return false;
         }
-
-        if let Some(active) = self.active_assistant_message.as_mut() {
-            active.buffer = text.into();
-            let item = ThreadItem {
-                id: active.id.clone(),
-                details: ThreadItemDetails::AgentMessage(AgentMessageItem {
-                    text: active.buffer.clone(),
-                }),
-            };
-            self.record(ThreadEvent::ItemUpdated(ItemUpdatedEvent { item }));
-            true
-        } else {
-            let id = self.next_item_id();
-            let text_owned = text.to_string();
-            let item = ThreadItem {
-                id: id.clone(),
-                details: ThreadItemDetails::AgentMessage(AgentMessageItem {
-                    text: text_owned.clone(),
-                }),
-            };
-            self.record(ThreadEvent::ItemStarted(ItemStartedEvent { item }));
-            self.active_assistant_message = Some(StreamingAgentMessage {
-                id,
-                buffer: text_owned,
-            });
-            true
-        }
+        let emitted = self.lifecycle.emit_assistant_snapshot(None);
+        self.record_pending_lifecycle_events();
+        emitted
     }
 
     pub fn agent_message_stream_complete(&mut self) {
-        if let Some(active) = self.active_assistant_message.take() {
-            let item = ThreadItem {
-                id: active.id,
-                details: ThreadItemDetails::AgentMessage(AgentMessageItem {
-                    text: active.buffer,
-                }),
-            };
-            self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
-        }
+        let _ = self.lifecycle.complete_assistant_stream();
+        self.record_pending_lifecycle_events();
     }
 
     pub fn reasoning(&mut self, text: &str) {
-        if text.trim().is_empty() {
-            return;
-        }
-        let item = ThreadItem {
-            id: self.next_item_id(),
-            details: ThreadItemDetails::Reasoning(ReasoningItem {
-                text: text.to_string(),
-                stage: self.current_reasoning_stage.clone(),
-            }),
-        };
-        self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
+        self.lifecycle.emit_completed_reasoning(text);
+        self.record_pending_lifecycle_events();
     }
 
     pub fn set_reasoning_stage(&mut self, stage: &str) {
-        let stage_owned = Some(stage.to_string());
-        if self.current_reasoning_stage == stage_owned {
+        if !self.lifecycle.set_reasoning_stage(Some(stage.to_string())) {
             return;
         }
-        self.current_reasoning_stage = stage_owned;
-        // If we have an active reasoning stream, update it with the new stage
-        if let Some(active) = &self.active_reasoning {
-            let item = ThreadItem {
-                id: active.id.clone(),
-                details: ThreadItemDetails::Reasoning(ReasoningItem {
-                    text: active.buffer.clone(),
-                    stage: self.current_reasoning_stage.clone(),
-                }),
-            };
-            self.record(ThreadEvent::ItemUpdated(ItemUpdatedEvent { item }));
-        }
+        let _ = self.lifecycle.emit_reasoning_stage_update();
+        self.record_pending_lifecycle_events();
     }
 
     pub fn reasoning_stream_update(&mut self, text: &str) -> bool {
-        if text.trim().is_empty() {
+        if text.trim().is_empty() || !self.lifecycle.replace_reasoning_text(text) {
             return false;
         }
-
-        if let Some(active) = self.active_reasoning.as_mut() {
-            active.buffer = text.into();
-            let item = ThreadItem {
-                id: active.id.clone(),
-                details: ThreadItemDetails::Reasoning(ReasoningItem {
-                    text: active.buffer.clone(),
-                    stage: self.current_reasoning_stage.clone(),
-                }),
-            };
-            self.record(ThreadEvent::ItemUpdated(ItemUpdatedEvent { item }));
-            true
-        } else {
-            let id = self.next_item_id();
-            let text_owned = text.to_string();
-            let item = ThreadItem {
-                id: id.clone(),
-                details: ThreadItemDetails::Reasoning(ReasoningItem {
-                    text: text_owned.clone(),
-                    stage: self.current_reasoning_stage.clone(),
-                }),
-            };
-            self.record(ThreadEvent::ItemStarted(ItemStartedEvent { item }));
-            self.active_reasoning = Some(StreamingAgentMessage {
-                id,
-                buffer: text_owned,
-            });
-            true
-        }
+        let emitted = self.lifecycle.emit_reasoning_snapshot(None);
+        self.record_pending_lifecycle_events();
+        emitted
     }
 
     pub fn reasoning_stream_complete(&mut self) {
-        if let Some(active) = self.active_reasoning.take() {
-            let item = ThreadItem {
-                id: active.id,
-                details: ThreadItemDetails::Reasoning(ReasoningItem {
-                    text: active.buffer,
-                    stage: self.current_reasoning_stage.clone(),
-                }),
-            };
-            self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
-        }
+        let _ = self.lifecycle.complete_reasoning_stream();
+        self.record_pending_lifecycle_events();
+    }
+
+    pub fn tool_started(
+        &mut self,
+        tool_name: &str,
+        arguments: Option<&Value>,
+        tool_call_id: Option<&str>,
+    ) -> ActiveToolHandle {
+        let handle = ActiveToolHandle {
+            id: self.next_item_id(),
+            tool_name: tool_name.to_string(),
+            arguments: arguments.cloned(),
+            tool_call_id: tool_call_id.map(str::to_string),
+        };
+        self.record(tool_started_event(
+            handle.id.clone(),
+            &handle.tool_name,
+            handle.arguments.as_ref(),
+            handle.tool_call_id.as_deref(),
+        ));
+        handle
+    }
+
+    pub fn tool_finished(
+        &mut self,
+        handle: &ActiveToolHandle,
+        status: crate::exec::events::ToolCallStatus,
+        exit_code: Option<i32>,
+        aggregated_output: &str,
+        spool_path: Option<&str>,
+    ) {
+        self.record(tool_invocation_completed_event(
+            handle.id.clone(),
+            &handle.tool_name,
+            handle.arguments.as_ref(),
+            handle.tool_call_id.as_deref(),
+            status.clone(),
+        ));
+        self.record(tool_output_completed_event(
+            handle.id.clone(),
+            handle.tool_call_id.as_deref(),
+            status,
+            exit_code,
+            spool_path,
+            aggregated_output,
+        ));
+    }
+
+    pub fn tool_rejected(
+        &mut self,
+        tool_name: &str,
+        arguments: Option<&Value>,
+        tool_call_id: Option<&str>,
+        detail: &str,
+    ) {
+        let handle = self.tool_started(tool_name, arguments, tool_call_id);
+        self.record(tool_invocation_completed_event(
+            handle.id,
+            tool_name,
+            arguments,
+            tool_call_id,
+            crate::exec::events::ToolCallStatus::Failed,
+        ));
+        let error_item_id = self.next_item_id();
+        self.record(error_item_completed_event(error_item_id, detail.to_string()));
     }
 
     pub fn command_started(&mut self, command: &str) -> ActiveCommandHandle {
@@ -357,25 +337,8 @@ impl ExecEventRecorder {
     }
 
     pub fn into_events(mut self) -> Vec<ThreadEvent> {
-        if let Some(active) = self.active_assistant_message.take() {
-            let item = ThreadItem {
-                id: active.id,
-                details: ThreadItemDetails::AgentMessage(AgentMessageItem {
-                    text: active.buffer,
-                }),
-            };
-            self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
-        }
-        if let Some(active) = self.active_reasoning.take() {
-            let item = ThreadItem {
-                id: active.id,
-                details: ThreadItemDetails::Reasoning(ReasoningItem {
-                    text: active.buffer,
-                    stage: self.current_reasoning_stage.clone(),
-                }),
-            };
-            self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
-        }
+        self.lifecycle.complete_open_items();
+        self.record_pending_lifecycle_events();
         self.events
     }
 }
@@ -425,6 +388,25 @@ mod tests {
             }
             _ => panic!("unexpected event variant"),
         }
+    }
+
+    #[test]
+    fn rejected_tool_call_emits_no_tool_output_item() {
+        let mut recorder = make_recorder();
+        recorder.tool_rejected("read_file", None, Some("call_1"), "Tool permission denied");
+
+        let events = recorder.into_events();
+        let tool_output_count = events
+            .iter()
+            .filter(|event| match event {
+                ThreadEvent::ItemCompleted(ItemCompletedEvent { item }) => {
+                    matches!(item.details, ThreadItemDetails::ToolOutput(_))
+                }
+                _ => false,
+            })
+            .count();
+
+        assert_eq!(tool_output_count, 0);
     }
 
     #[test]

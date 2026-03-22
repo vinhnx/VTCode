@@ -169,17 +169,18 @@ pub(crate) async fn run_tool_call_with_args(
         let _ = emitter.emit(tool_started_event(
             harness_item_id.clone(),
             name,
-            args_val,
+            Some(args_val),
             Some(tool_call_id),
         ));
         tool_started_emitted = true;
     }
     let max_tool_retries = ctx.harness_state.max_tool_retries as usize;
-    let finish_with_status = |status: ToolExecutionStatus| {
+    let finish_with_status = |status: ToolExecutionStatus, tool_execution_started: bool| {
         let outcome = ToolPipelineOutcome::from_status(status);
         emit_tool_completion_for_status(
             harness_emitter,
             tool_started_emitted,
+            tool_execution_started,
             &harness_item_id,
             tool_call_id,
             name,
@@ -190,11 +191,14 @@ pub(crate) async fn run_tool_call_with_args(
     };
 
     if !ctx.session_stats.is_plan_mode() && name == tools::PLAN_TASK_TRACKER {
-        return Ok(finish_with_status(ToolExecutionStatus::Failure {
-            error: anyhow!(
-                "plan_task_tracker is a Plan Mode compatibility alias. Use task_tracker in Edit mode, or switch to Plan Mode."
-            ),
-        }));
+        return Ok(finish_with_status(
+            ToolExecutionStatus::Failure {
+                error: anyhow!(
+                    "plan_task_tracker is a Plan Mode compatibility alias. Use task_tracker in Edit mode, or switch to Plan Mode."
+                ),
+            },
+            false,
+        ));
     }
 
     if !prevalidated {
@@ -224,7 +228,7 @@ pub(crate) async fn run_tool_call_with_args(
         )
         .await
         {
-            return Ok(finish_with_status(permission_failure));
+            return Ok(finish_with_status(permission_failure, false));
         }
     }
 
@@ -260,7 +264,7 @@ pub(crate) async fn run_tool_call_with_args(
             },
             Err(error) => ToolExecutionStatus::Failure { error },
         };
-        return Ok(finish_with_status(status));
+        return Ok(finish_with_status(status, true));
     }
 
     if let Some(outcome) = handle_enter_plan_mode(
@@ -277,6 +281,7 @@ pub(crate) async fn run_tool_call_with_args(
         emit_tool_completion_for_status(
             harness_emitter,
             tool_started_emitted,
+            true,
             &harness_item_id,
             tool_call_id,
             name,
@@ -299,6 +304,7 @@ pub(crate) async fn run_tool_call_with_args(
         emit_tool_completion_for_status(
             harness_emitter,
             tool_started_emitted,
+            true,
             &harness_item_id,
             tool_call_id,
             name,
@@ -360,6 +366,7 @@ pub(crate) async fn run_tool_call_with_args(
     emit_tool_completion_for_status(
         harness_emitter,
         tool_started_emitted,
+        true,
         &harness_item_id,
         tool_call_id,
         name,
@@ -465,6 +472,7 @@ async fn apply_post_execution_side_effects(
                     emit_tool_completion_status(
                         harness_emitter,
                         tool_started_emitted,
+                        true,
                         tool_item_id,
                         tool_call_id,
                         name,

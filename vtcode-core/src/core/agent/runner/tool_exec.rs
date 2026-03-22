@@ -5,7 +5,7 @@ use crate::config::constants::tools;
 use crate::core::agent::events::ExecEventRecorder;
 use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::steering::SteeringMessage;
-use crate::exec::events::CommandExecutionStatus;
+use crate::exec::events::ToolCallStatus;
 use crate::llm::provider::ToolCall;
 use anyhow::{Result, anyhow};
 use tokio::time::Duration;
@@ -35,6 +35,12 @@ impl AgentRunner {
                     let error_msg =
                         format!("Invalid arguments for tool '{}': {}", requested_name, err);
                     error!(agent = %agent_prefix, tool = %requested_name, error = %err, "Invalid tool arguments");
+                    event_recorder.tool_rejected(
+                        &requested_name,
+                        None,
+                        Some(call.id.as_str()),
+                        &error_msg,
+                    );
                     session_state.push_tool_error(
                         call.id.clone(),
                         &requested_name,
@@ -51,6 +57,12 @@ impl AgentRunner {
                     let error_msg =
                         format!("Invalid arguments for tool '{}': {}", requested_name, err);
                     error!(agent = %agent_prefix, tool = %requested_name, error = %err, "Tool admission failed");
+                    event_recorder.tool_rejected(
+                        &requested_name,
+                        Some(&args),
+                        Some(call.id.as_str()),
+                        &error_msg,
+                    );
                     session_state.push_tool_error(
                         call.id.clone(),
                         &requested_name,
@@ -84,12 +96,13 @@ impl AgentRunner {
                     event_recorder,
                     &call_id,
                     &name,
-                    None,
+                    Some(&args),
                     is_gemini,
                 );
                 continue;
             }
 
+            let tool_event = event_recorder.tool_started(&name, Some(&args), Some(&call_id));
             let runner = self;
             let args_clone = args.clone();
             futures.push(async move {
@@ -97,14 +110,13 @@ impl AgentRunner {
                     .execute_tool_internal(&name, &args_clone)
                     .await
                     .map_err(|e| anyhow!("Tool '{}' failed: {}", name, e));
-                (name, call_id, args_clone, result)
+                (name, call_id, args_clone, tool_event, result)
             });
         }
 
         let results = join_all(futures).await;
         let mut halt_turn = false;
-        for (name, call_id, args, result) in results {
-            let command_event = event_recorder.command_started(&name);
+        for (name, call_id, args, tool_event, result) in results {
             match result {
                 Ok(result) => {
                     if !self.quiet {
@@ -117,11 +129,12 @@ impl AgentRunner {
                     self.update_last_paths_from_args(&name, &args, session_state);
 
                     session_state.push_tool_result(call_id, &name, tool_result, is_gemini);
-                    event_recorder.command_finished(
-                        &command_event,
-                        CommandExecutionStatus::Completed,
+                    event_recorder.tool_finished(
+                        &tool_event,
+                        ToolCallStatus::Completed,
                         None,
                         "",
+                        None,
                     );
                 }
                 Err(e) => {
@@ -143,11 +156,12 @@ impl AgentRunner {
                         halt_turn = true;
                     }
                     session_state.push_tool_error(call_id, &name, error_msg, is_gemini);
-                    event_recorder.command_finished(
-                        &command_event,
-                        CommandExecutionStatus::Failed,
+                    event_recorder.tool_finished(
+                        &tool_event,
+                        ToolCallStatus::Failed,
                         None,
                         &e.to_string(),
+                        None,
                     );
                     if halt_turn {
                         break;
@@ -212,6 +226,12 @@ impl AgentRunner {
                     let error_msg =
                         format!("Invalid arguments for tool '{}': {}", requested_name, err);
                     error!(agent = %agent_prefix, tool = %requested_name, error = %err, "Invalid tool arguments");
+                    event_recorder.tool_rejected(
+                        &requested_name,
+                        None,
+                        Some(call.id.as_str()),
+                        &error_msg,
+                    );
                     session_state.push_tool_error(
                         call.id.clone(),
                         &requested_name,
@@ -228,6 +248,12 @@ impl AgentRunner {
                     let error_msg =
                         format!("Invalid arguments for tool '{}': {}", requested_name, err);
                     error!(agent = %agent_prefix, tool = %requested_name, error = %err, "Tool admission failed");
+                    event_recorder.tool_rejected(
+                        &requested_name,
+                        Some(&args),
+                        Some(call.id.as_str()),
+                        &error_msg,
+                    );
                     session_state.push_tool_error(
                         call.id.clone(),
                         &requested_name,
@@ -250,7 +276,6 @@ impl AgentRunner {
                 );
             }
 
-            let command_event = event_recorder.command_started(&name);
             if !self.is_valid_tool(&name).await {
                 self.record_tool_denied(
                     agent_prefix,
@@ -258,11 +283,13 @@ impl AgentRunner {
                     event_recorder,
                     &call.id,
                     &name,
-                    Some(&command_event),
+                    Some(&args),
                     is_gemini,
                 );
                 continue;
             }
+
+            let tool_event = event_recorder.tool_started(&name, Some(&args), Some(&call.id));
 
             let repeat_count = self.loop_detector.lock().get_call_count(&name);
             if repeat_count > 1 {
@@ -284,11 +311,12 @@ impl AgentRunner {
                     self.update_last_paths_from_args(&name, &args, session_state);
 
                     session_state.push_tool_result(call.id.clone(), &name, tool_result, is_gemini);
-                    event_recorder.command_finished(
-                        &command_event,
-                        CommandExecutionStatus::Completed,
+                    event_recorder.tool_finished(
+                        &tool_event,
+                        ToolCallStatus::Completed,
                         None,
                         "",
+                        None,
                     );
 
                     if name == tools::WRITE_FILE
@@ -310,7 +338,7 @@ impl AgentRunner {
                             agent_prefix,
                             session_state,
                             event_recorder,
-                            command_event: &command_event,
+                            tool_event: &tool_event,
                             is_gemini,
                         };
                         self.record_tool_failure(
@@ -331,7 +359,7 @@ impl AgentRunner {
                             agent_prefix,
                             session_state,
                             event_recorder,
-                            command_event: &command_event,
+                            tool_event: &tool_event,
                             is_gemini,
                         };
                         self.record_tool_failure(
@@ -347,7 +375,7 @@ impl AgentRunner {
                             agent_prefix,
                             session_state,
                             event_recorder,
-                            command_event: &command_event,
+                            tool_event: &tool_event,
                             is_gemini,
                         };
                         self.record_tool_failure(

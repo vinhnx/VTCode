@@ -20,6 +20,8 @@ Harness primitives in VT Code map to the runtime like this:
 - **Continuation**: exec/full-auto now uses a harness-managed continuation controller that accepts completion only when tracker state is complete and verification commands pass.
 - **Traces / archives**: thread events, session archives, checkpoints, Open Responses emission, and optional harness event logs capture what happened for resume, audit, and downstream tooling.
 
+`vtcode-exec-events::ThreadEvent` is the authoritative runtime event contract across exec mode, harness logs, and interactive lifecycle emission. Compatibility adapters may exist for older internal event models, but they are not the source of truth.
+
 The harness configuration is intentionally split across three existing surfaces instead of a new top-level subsystem:
 
 - `agent.harness` controls continuation, event logging, and per-turn safety limits.

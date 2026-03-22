@@ -9,12 +9,19 @@ use chrono::Utc;
 #[cfg(test)]
 use std::path::Path;
 use vtcode_config::OpenResponsesConfig;
+use vtcode_core::core::agent::events::{
+    tool_invocation_completed_event as shared_tool_invocation_completed_event,
+    tool_output_completed_event as shared_tool_output_completed_event,
+    tool_output_started_event as shared_tool_output_started_event,
+    tool_output_updated_event as shared_tool_output_updated_event,
+    tool_started_event as shared_tool_started_event,
+};
 #[cfg(test)]
 use vtcode_core::exec::events::ThreadStartedEvent;
 use vtcode_core::exec::events::{
-    HarnessEventItem, HarnessEventKind, ItemCompletedEvent, ItemStartedEvent, ThreadEvent,
-    ThreadItem, ThreadItemDetails, ToolCallStatus, ToolInvocationItem, ToolOutputItem,
-    TurnCompletedEvent, TurnFailedEvent, TurnStartedEvent, Usage, VersionedThreadEvent,
+    HarnessEventItem, HarnessEventKind, ItemCompletedEvent, ThreadEvent, ThreadItem,
+    ThreadItemDetails, ToolCallStatus, TurnCompletedEvent, TurnFailedEvent, TurnStartedEvent,
+    Usage, VersionedThreadEvent,
 };
 use vtcode_core::open_responses::{OpenResponsesIntegration, SequencedEvent};
 use vtcode_core::utils::file_utils::ensure_dir_exists_sync;
@@ -182,92 +189,30 @@ pub(crate) fn default_harness_log_dir() -> Option<PathBuf> {
     Some(vtcode_core::utils::session_debug::default_sessions_dir())
 }
 
-fn tool_output_item_id(call_item_id: &str) -> String {
-    format!("{call_item_id}:output")
-}
-
-fn tool_invocation_item(
-    item_id: String,
-    tool_name: &str,
-    args: &Value,
-    tool_call_id: Option<&str>,
-    status: ToolCallStatus,
-) -> ThreadItem {
-    ThreadItem {
-        id: item_id,
-        details: ThreadItemDetails::ToolInvocation(ToolInvocationItem {
-            tool_name: tool_name.to_string(),
-            arguments: Some(args.clone()),
-            tool_call_id: tool_call_id.map(str::to_string),
-            status,
-        }),
-    }
-}
-
-fn tool_output_item(
-    call_item_id: &str,
-    tool_call_id: Option<&str>,
-    status: ToolCallStatus,
-    exit_code: Option<i32>,
-    spool_path: Option<&str>,
-    output: impl Into<String>,
-) -> ThreadItem {
-    ThreadItem {
-        id: tool_output_item_id(call_item_id),
-        details: ThreadItemDetails::ToolOutput(ToolOutputItem {
-            call_id: call_item_id.to_string(),
-            tool_call_id: tool_call_id.map(str::to_string),
-            spool_path: spool_path.map(str::to_string),
-            output: output.into(),
-            exit_code,
-            status,
-        }),
-    }
-}
-
 pub(crate) fn tool_started_event(
     item_id: String,
     tool_name: &str,
-    args: &Value,
+    args: Option<&Value>,
     tool_call_id: Option<&str>,
 ) -> ThreadEvent {
-    ThreadEvent::ItemStarted(ItemStartedEvent {
-        item: tool_invocation_item(
-            item_id,
-            tool_name,
-            args,
-            tool_call_id,
-            ToolCallStatus::InProgress,
-        ),
-    })
+    shared_tool_started_event(item_id, tool_name, args, tool_call_id)
 }
 
 pub(crate) fn tool_invocation_completed_event(
     item_id: String,
     tool_name: &str,
-    args: &Value,
+    args: Option<&Value>,
     tool_call_id: Option<&str>,
     status: ToolCallStatus,
 ) -> ThreadEvent {
-    ThreadEvent::ItemCompleted(ItemCompletedEvent {
-        item: tool_invocation_item(item_id, tool_name, args, tool_call_id, status),
-    })
+    shared_tool_invocation_completed_event(item_id, tool_name, args, tool_call_id, status)
 }
 
 pub(crate) fn tool_output_started_event(
     call_item_id: String,
     tool_call_id: Option<&str>,
 ) -> ThreadEvent {
-    ThreadEvent::ItemStarted(ItemStartedEvent {
-        item: tool_output_item(
-            &call_item_id,
-            tool_call_id,
-            ToolCallStatus::InProgress,
-            None,
-            None,
-            String::new(),
-        ),
-    })
+    shared_tool_output_started_event(call_item_id, tool_call_id)
 }
 
 pub(crate) fn tool_output_completed_event(
@@ -278,34 +223,22 @@ pub(crate) fn tool_output_completed_event(
     spool_path: Option<&str>,
     output: impl Into<String>,
 ) -> ThreadEvent {
-    ThreadEvent::ItemCompleted(ItemCompletedEvent {
-        item: tool_output_item(
-            &call_item_id,
-            tool_call_id,
-            status,
-            exit_code,
-            spool_path,
-            output,
-        ),
-    })
+    shared_tool_output_completed_event(
+        call_item_id,
+        tool_call_id,
+        status,
+        exit_code,
+        spool_path,
+        output,
+    )
 }
 
-#[cfg(test)]
 pub(crate) fn tool_updated_event(
     call_item_id: String,
     tool_call_id: Option<&str>,
     output: impl Into<String>,
 ) -> ThreadEvent {
-    ThreadEvent::ItemUpdated(vtcode_core::exec::events::ItemUpdatedEvent {
-        item: tool_output_item(
-            &call_item_id,
-            tool_call_id,
-            ToolCallStatus::InProgress,
-            None,
-            None,
-            output,
-        ),
-    })
+    shared_tool_output_updated_event(call_item_id, tool_call_id, output)
 }
 
 pub(crate) fn turn_started_event() -> ThreadEvent {
@@ -347,6 +280,7 @@ mod tests {
     use super::*;
     use serde_json::json;
     use tempfile::TempDir;
+    use vtcode_core::exec::events::ItemStartedEvent;
 
     #[test]
     fn resolve_event_log_path_appends_jsonl_when_directory() {
@@ -457,10 +391,11 @@ mod tests {
 
     #[test]
     fn tool_started_event_captures_arguments() {
+        let args = json!({ "path": "README.md" });
         let event = tool_started_event(
             "tool-1".to_string(),
             "read_file",
-            &json!({ "path": "README.md" }),
+            Some(&args),
             Some("tool_call_0"),
         );
 
@@ -479,10 +414,11 @@ mod tests {
 
     #[test]
     fn tool_invocation_completed_event_captures_raw_tool_call_id() {
+        let args = json!({ "path": "README.md" });
         let event = tool_invocation_completed_event(
             "tool-1".to_string(),
             "read_file",
-            &json!({ "path": "README.md" }),
+            Some(&args),
             Some("tool_call_0"),
             ToolCallStatus::Completed,
         );

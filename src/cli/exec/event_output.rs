@@ -6,7 +6,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 use vtcode_core::core::agent::task::TaskResults;
 use vtcode_core::exec::events::{
-    CommandExecutionStatus, ThreadEvent, ThreadItem, ThreadItemDetails,
+    CommandExecutionStatus, ThreadEvent, ThreadItem, ThreadItemDetails, ToolCallStatus,
 };
 use vtcode_core::utils::colors::style;
 
@@ -243,6 +243,11 @@ pub(super) fn human_event_line(event: &ThreadEvent) -> Option<String> {
                 style("[COMMAND]").cyan().bold(),
                 details.command
             )),
+            ThreadItemDetails::ToolInvocation(details) => Some(format!(
+                "{} {}",
+                style("[TOOL]").cyan().bold(),
+                details.tool_name
+            )),
             _ => None,
         },
         ThreadEvent::ItemCompleted(completed) => match &completed.item.details {
@@ -258,6 +263,15 @@ pub(super) fn human_event_line(event: &ThreadEvent) -> Option<String> {
                     style("[COMMAND FAILED]").red().bold(),
                     details.command,
                     exit_suffix
+                ))
+            }
+            ThreadItemDetails::ToolInvocation(details)
+                if matches!(details.status, ToolCallStatus::Failed) =>
+            {
+                Some(format!(
+                    "{} {}",
+                    style("[TOOL FAILED]").red().bold(),
+                    details.tool_name
                 ))
             }
             ThreadItemDetails::Harness(item) => {

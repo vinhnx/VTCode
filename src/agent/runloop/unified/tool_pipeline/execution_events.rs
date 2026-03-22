@@ -1,7 +1,8 @@
-use crate::agent::runloop::unified::inline_events::harness::{
-    HarnessEventEmitter, tool_invocation_completed_event, tool_output_completed_event,
-};
+use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
 use serde_json::Value;
+use vtcode_core::core::agent::events::{
+    error_item_completed_event, tool_invocation_completed_event, tool_output_completed_event,
+};
 use vtcode_core::exec::events::ToolCallStatus;
 
 use super::status::ToolExecutionStatus;
@@ -39,6 +40,7 @@ fn aggregated_output_from_value(output: &Value) -> ToolOutputEventPayload {
 pub(super) fn emit_tool_completion_status(
     harness_emitter: Option<&HarnessEventEmitter>,
     tool_started_emitted: bool,
+    tool_execution_started: bool,
     tool_item_id: &str,
     tool_call_id: &str,
     tool_name: &str,
@@ -57,24 +59,32 @@ pub(super) fn emit_tool_completion_status(
         let _ = emitter.emit(tool_invocation_completed_event(
             tool_item_id.to_string(),
             tool_name,
-            args,
+            Some(args),
             Some(tool_call_id),
             status.clone(),
         ));
-        let _ = emitter.emit(tool_output_completed_event(
-            tool_item_id.to_string(),
-            Some(tool_call_id),
-            status,
-            exit_code,
-            spool_path,
-            aggregated_output,
-        ));
+        if tool_execution_started {
+            let _ = emitter.emit(tool_output_completed_event(
+                tool_item_id.to_string(),
+                Some(tool_call_id),
+                status,
+                exit_code,
+                spool_path,
+                aggregated_output,
+            ));
+        } else if !aggregated_output.is_empty() {
+            let _ = emitter.emit(error_item_completed_event(
+                format!("{tool_item_id}:error"),
+                aggregated_output,
+            ));
+        }
     }
 }
 
 pub(super) fn emit_tool_completion_for_status(
     harness_emitter: Option<&HarnessEventEmitter>,
     tool_started_emitted: bool,
+    tool_execution_started: bool,
     tool_item_id: &str,
     tool_call_id: &str,
     tool_name: &str,
@@ -126,6 +136,7 @@ pub(super) fn emit_tool_completion_for_status(
     emit_tool_completion_status(
         harness_emitter,
         tool_started_emitted,
+        tool_execution_started,
         tool_item_id,
         tool_call_id,
         tool_name,

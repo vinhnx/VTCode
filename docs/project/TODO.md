@@ -53,3 +53,7 @@ kiweuro
 writedownapp
 humidapp
 vtchat.io
+
+--
+
+keep apply plan https://deepwiki.com/badlogic/pi-mono/3-pi-agent-core:-agent-framework

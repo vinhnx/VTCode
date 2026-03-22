@@ -10,7 +10,7 @@ use vtcode_core::tools::tool_intent;
 
 use crate::agent::runloop::tool_output::resolve_stdout_tail_limit;
 use crate::agent::runloop::unified::inline_events::harness::{
-    HarnessEventEmitter, tool_output_started_event,
+    HarnessEventEmitter, tool_output_started_event, tool_updated_event,
 };
 use crate::agent::runloop::unified::progress::ProgressReporter;
 use crate::agent::runloop::unified::state::CtrlCState;
@@ -52,6 +52,7 @@ impl Drop for ProgressCallbackGuard<'_> {
 
 struct StreamingToolOutput {
     started_emitted: bool,
+    output: String,
 }
 
 #[derive(Clone)]
@@ -71,6 +72,7 @@ impl StreamingOutputCoalescer {
         Self {
             state: Arc::new(StdMutex::new(StreamingToolOutput {
                 started_emitted: false,
+                output: String::new(),
             })),
             harness_emitter,
             tool_item_id,
@@ -82,26 +84,32 @@ impl StreamingOutputCoalescer {
         if chunk.is_empty() {
             return;
         }
-        self.emit_started_if_needed();
+        let (emit_started, output) = {
+            let mut state = self
+                .state
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let emit_started = !state.started_emitted;
+            state.started_emitted = true;
+            state.output.push_str(chunk);
+            (emit_started, state.output.clone())
+        };
+
+        if emit_started {
+            let _ = self.harness_emitter.emit(tool_output_started_event(
+                self.tool_item_id.clone(),
+                Some(self.tool_call_id.as_str()),
+            ));
+        }
+
+        let _ = self.harness_emitter.emit(tool_updated_event(
+            self.tool_item_id.clone(),
+            Some(self.tool_call_id.as_str()),
+            output,
+        ));
     }
 
     fn flush(&self) {}
-
-    fn emit_started_if_needed(&self) {
-        let mut state = self
-            .state
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if state.started_emitted {
-            return;
-        }
-
-        state.started_emitted = true;
-        let _ = self.harness_emitter.emit(tool_output_started_event(
-            self.tool_item_id.clone(),
-            Some(self.tool_call_id.as_str()),
-        ));
-    }
 }
 
 fn build_streaming_progress_callback(
@@ -531,7 +539,7 @@ mod tests {
     }
 
     #[test]
-    fn coalescer_emits_started_event_only_once() {
+    fn coalescer_emits_started_and_updated_events() {
         let temp_dir = TempDir::new().expect("create temp dir");
         let harness_path = temp_dir.path().join("events.jsonl");
         let emitter = HarnessEventEmitter::new(harness_path.clone()).expect("emitter");
@@ -544,10 +552,19 @@ mod tests {
 
         let content = std::fs::read_to_string(harness_path).expect("read harness events");
         let lines = content.lines().collect::<Vec<_>>();
-        assert_eq!(lines.len(), 1);
+        assert_eq!(lines.len(), 3);
 
-        let event: serde_json::Value = serde_json::from_str(lines[0]).expect("parse event");
-        assert_eq!(event["event"]["type"].as_str(), Some("item.started"));
-        assert_eq!(event["event"]["item"]["output"].as_str(), Some(""));
+        let started: serde_json::Value = serde_json::from_str(lines[0]).expect("parse event");
+        assert_eq!(started["event"]["type"].as_str(), Some("item.started"));
+        assert_eq!(started["event"]["item"]["output"].as_str(), Some(""));
+
+        let first_update: serde_json::Value = serde_json::from_str(lines[1]).expect("parse event");
+        assert_eq!(first_update["event"]["type"].as_str(), Some("item.updated"));
+        assert_eq!(first_update["event"]["item"]["output"].as_str(), Some("abc"));
+
+        let second_update: serde_json::Value =
+            serde_json::from_str(lines[2]).expect("parse event");
+        assert_eq!(second_update["event"]["type"].as_str(), Some("item.updated"));
+        assert_eq!(second_update["event"]["item"]["output"].as_str(), Some("abcdef"));
     }
 }
