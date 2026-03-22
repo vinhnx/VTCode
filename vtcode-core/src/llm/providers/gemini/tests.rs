@@ -1,5 +1,6 @@
 use super::wire::{
     Candidate, Content, FunctionCall as GeminiFunctionCall, GenerateContentResponse, Part,
+    ServerToolCall, ServerToolResponse,
 };
 use super::*;
 use crate::config::constants::models;
@@ -229,8 +230,22 @@ fn convert_to_gemini_request_keeps_apply_patch_as_function_tool() {
         .expect("conversion should succeed");
     let tools = gemini_request.tools.expect("tools should be present");
     assert_eq!(tools.len(), 1);
-    assert_eq!(tools[0].function_declarations.len(), 1);
-    assert_eq!(tools[0].function_declarations[0].name, "apply_patch");
+    assert_eq!(
+        tools[0]
+            .function_declarations
+            .as_ref()
+            .expect("function declarations")
+            .len(),
+        1
+    );
+    assert_eq!(
+        tools[0]
+            .function_declarations
+            .as_ref()
+            .expect("function declarations")[0]
+            .name,
+        "apply_patch"
+    );
 }
 
 #[test]
@@ -935,6 +950,230 @@ fn convert_to_gemini_request_includes_json_mode() {
         config.response_mime_type.as_deref(),
         Some("application/json")
     );
+}
+
+#[test]
+fn convert_to_gemini_request_combines_google_search_with_function_tools() {
+    let provider = GeminiProvider::new("test-key".to_string());
+    let request = LLMRequest {
+        messages: vec![Message::user("Search and then inspect weather".to_string())],
+        tools: Some(Arc::new(vec![
+            ToolDefinition::web_search(json!({})),
+            ToolDefinition::function(
+                "get_weather".to_string(),
+                "Get the weather for a city".to_string(),
+                json!({
+                    "type": "object",
+                    "properties": {
+                        "city": { "type": "string" }
+                    },
+                    "required": ["city"]
+                }),
+            ),
+        ])),
+        model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
+        ..Default::default()
+    };
+
+    let gemini_request = provider
+        .convert_to_gemini_request(&request)
+        .expect("conversion should succeed");
+
+    let tools = gemini_request.tools.expect("tools should be present");
+    assert!(
+        tools.iter().any(|tool| tool.google_search.is_some()),
+        "google_search built-in tool should be preserved"
+    );
+    assert!(
+        tools.iter().any(|tool| {
+            tool.function_declarations
+                .as_ref()
+                .is_some_and(|declarations| {
+                    declarations.iter().any(|decl| decl.name == "get_weather")
+                })
+        }),
+        "function declarations should be preserved alongside built-in tools"
+    );
+
+    let tool_config = gemini_request
+        .tool_config
+        .expect("tool config should be present");
+    assert_eq!(tool_config.include_server_side_tool_invocations, Some(true));
+    assert_eq!(
+        tool_config
+            .function_calling_config
+            .as_ref()
+            .map(|config| config.mode.as_str()),
+        Some("VALIDATED")
+    );
+}
+
+#[test]
+fn convert_from_gemini_response_preserves_server_side_tool_parts() {
+    let response = GenerateContentResponse {
+        candidates: vec![Candidate {
+            content: Content {
+                role: "model".to_string(),
+                parts: vec![
+                    Part::ToolCall {
+                        tool_call: ServerToolCall {
+                            tool_type: "GOOGLE_SEARCH_WEB".to_string(),
+                            args: Some(json!({
+                                "queries": ["northernmost city in the United States"]
+                            })),
+                            id: Some("search_1".to_string()),
+                        },
+                        thought_signature: Some("tool_sig".to_string()),
+                    },
+                    Part::ToolResponse {
+                        tool_response: ServerToolResponse {
+                            tool_type: "GOOGLE_SEARCH_WEB".to_string(),
+                            response: json!({
+                                "search_suggestions": ["Utqiaġvik, Alaska"]
+                            }),
+                            id: Some("search_1".to_string()),
+                        },
+                        thought_signature: Some("tool_sig".to_string()),
+                    },
+                    Part::FunctionCall {
+                        function_call: GeminiFunctionCall {
+                            name: "get_weather".to_string(),
+                            args: json!({ "city": "Utqiaġvik, Alaska" }),
+                            id: Some("call_weather".to_string()),
+                        },
+                        thought_signature: Some("function_sig".to_string()),
+                    },
+                ],
+            },
+            finish_reason: Some("FUNCTION_CALL".to_string()),
+        }],
+        prompt_feedback: None,
+        usage_metadata: None,
+    };
+
+    let llm_response = GeminiProvider::convert_from_gemini_response(
+        response,
+        models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
+    )
+    .expect("conversion should succeed");
+
+    assert_eq!(
+        llm_response.tool_calls.as_ref().expect("tool calls")[0]
+            .function
+            .as_ref()
+            .expect("function")
+            .name,
+        "get_weather"
+    );
+
+    let preserved = llm_response
+        .reasoning_details
+        .as_ref()
+        .expect("raw parts should be preserved");
+    assert_eq!(preserved.len(), 1);
+    assert!(
+        preserved[0].starts_with("__vtcode_gemini_parts__:"),
+        "raw parts should be serialized with the Gemini preservation prefix"
+    );
+}
+
+#[test]
+fn convert_to_gemini_request_replays_preserved_raw_parts() {
+    let provider = GeminiProvider::new("test-key".to_string());
+    let preserved_parts = vec![
+        Part::ToolCall {
+            tool_call: ServerToolCall {
+                tool_type: "GOOGLE_SEARCH_WEB".to_string(),
+                args: Some(json!({ "queries": ["northernmost city in the United States"] })),
+                id: Some("search_1".to_string()),
+            },
+            thought_signature: Some("tool_sig".to_string()),
+        },
+        Part::ToolResponse {
+            tool_response: ServerToolResponse {
+                tool_type: "GOOGLE_SEARCH_WEB".to_string(),
+                response: json!({ "search_suggestions": ["Utqiaġvik, Alaska"] }),
+                id: Some("search_1".to_string()),
+            },
+            thought_signature: Some("tool_sig".to_string()),
+        },
+        Part::FunctionCall {
+            function_call: GeminiFunctionCall {
+                name: "get_weather".to_string(),
+                args: json!({ "city": "Utqiaġvik, Alaska" }),
+                id: Some("call_weather".to_string()),
+            },
+            thought_signature: Some("function_sig".to_string()),
+        },
+    ];
+
+    let assistant_message = Message::assistant_with_tools(
+        String::new(),
+        vec![ToolCall::function(
+            "call_weather".to_string(),
+            "get_weather".to_string(),
+            json!({ "city": "Utqiaġvik, Alaska" }).to_string(),
+        )],
+    )
+    .with_reasoning_details(Some(vec![json!(format!(
+        "__vtcode_gemini_parts__:{}",
+        serde_json::to_string(&preserved_parts).expect("serialize preserved parts")
+    ))]));
+
+    let request = LLMRequest {
+        messages: vec![
+            Message::user("Find the northernmost city and weather".to_string()),
+            assistant_message,
+            Message::tool_response(
+                "call_weather".to_string(),
+                json!({ "response": "Very cold. 22 degrees Fahrenheit." }).to_string(),
+            ),
+        ],
+        tools: Some(Arc::new(vec![
+            ToolDefinition::web_search(json!({})),
+            ToolDefinition::function(
+                "get_weather".to_string(),
+                "Get the weather for a city".to_string(),
+                json!({
+                    "type": "object",
+                    "properties": {
+                        "city": { "type": "string" }
+                    },
+                    "required": ["city"]
+                }),
+            ),
+        ])),
+        model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
+        ..Default::default()
+    };
+
+    let gemini_request = provider
+        .convert_to_gemini_request(&request)
+        .expect("conversion should succeed");
+
+    assert_eq!(gemini_request.contents.len(), 3);
+    assert_eq!(
+        gemini_request.contents[1].parts.len(),
+        preserved_parts.len()
+    );
+    assert!(matches!(
+        &gemini_request.contents[1].parts[0],
+        Part::ToolCall {
+            tool_call,
+            thought_signature
+        } if tool_call.tool_type == "GOOGLE_SEARCH_WEB"
+            && tool_call.id.as_deref() == Some("search_1")
+            && thought_signature.as_deref() == Some("tool_sig")
+    ));
+    assert!(matches!(
+        &gemini_request.contents[1].parts[2],
+        Part::FunctionCall {
+            function_call,
+            thought_signature
+        } if function_call.name == "get_weather"
+            && function_call.id.as_deref() == Some("call_weather")
+            && thought_signature.as_deref() == Some("function_sig")
+    ));
 }
 #[cfg(test)]
 mod caching_tests {

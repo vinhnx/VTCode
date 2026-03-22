@@ -37,6 +37,7 @@ pub mod stop_hints;
 pub mod styling;
 pub mod telemetry;
 pub mod tokens;
+pub mod trace_flush;
 pub mod unicode;
 pub mod utils;
 pub mod validation;

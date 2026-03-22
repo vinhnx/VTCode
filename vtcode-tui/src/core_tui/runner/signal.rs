@@ -21,6 +21,7 @@ impl SignalCleanupGuard {
         let thread = std::thread::spawn(move || {
             if signals.forever().next().is_some() {
                 let _ = crate::ui::tui::panic_hook::restore_tui();
+                vtcode_commons::trace_flush::flush_trace_log();
                 std::process::exit(130);
             }
         });

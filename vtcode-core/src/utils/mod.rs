@@ -130,6 +130,7 @@ pub mod session_debug;
 pub mod style_helpers;
 pub mod terminal_color_probe;
 pub mod tokens;
+pub mod trace_writer;
 pub mod transcript;
 pub mod tty;
 pub mod unicode_monitor;

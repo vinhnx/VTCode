@@ -243,6 +243,7 @@ where
     finalize_result?;
 
     clear_tui_log_sender();
+    vtcode_commons::trace_flush::flush_trace_log();
 
     Ok(())
 }

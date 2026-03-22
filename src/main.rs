@@ -203,6 +203,7 @@ async fn run(prepared: PreparedRun) -> Result<()> {
 
     let dispatch_result = cli::dispatch(&args, &startup, print_mode, potential_prompt).await;
     perform_queued_runtime_relaunch();
+    vtcode_core::utils::trace_writer::flush_trace_log();
     dispatch_result?;
 
     Ok(())

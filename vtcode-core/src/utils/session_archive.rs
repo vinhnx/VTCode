@@ -1524,10 +1524,7 @@ fn sanitize_component(value: &str) -> String {
 }
 
 fn is_session_file(path: &Path) -> bool {
-    let ext = path
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .unwrap_or("");
+    let ext = path.extension().and_then(|ext| ext.to_str()).unwrap_or("");
     // Prune all session artifacts: .json (session), .jsonl (harness), .log (debug)
     ext.eq_ignore_ascii_case(SESSION_FILE_EXTENSION)
         || ext.eq_ignore_ascii_case("jsonl")

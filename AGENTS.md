@@ -87,6 +87,28 @@ vtcode/                          # Binary entrypoint (src/main.rs)
 
 **Docs**: `.md` in `./docs/` only (`README.md` exception).
 
+### Logging & Tracing Guidelines
+
+**Architecture**: Shared buffered writer in `vtcode-core/src/utils/trace_writer.rs` (`FlushableWriter`) with flush hook in `vtcode-commons/src/trace_flush.rs`. Tracing setup is centralized in `src/main_helpers/tracing.rs` via `install_tracing_stack()`.
+
+**Level discipline** — choose the right level for each log:
+- `error!` — Unrecoverable failures that need operator attention
+- `warn!` — Degraded behavior (rate limits, circuit breakers, loop detection, config issues)
+- `info!` — Key lifecycle milestones (session start/end, approval decisions, feature activation)
+- `debug!` — Useful for troubleshooting (provider registration, cache hits, config loading)
+- `trace!` — Per-invocation internals (tool routing, policy checks, safety gateway, CGP lifecycle, payload diagnostics)
+
+**Rules**:
+- Never log at `info!` for per-tool-invocation events — use `trace!`
+- Never log at `debug!` for routine happy-path checks (read-only classification, preapproval) — use `trace!`
+- Keep `info!` for events that appear ≤ once per session phase (init, shutdown, mode change)
+- Actionable logs only: if the reader can't act on it, downgrade or remove it
+- No-op paths should be silent: early-return without logging when there's nothing to do (e.g., empty custom providers list)
+
+**Flush on exit**: Always call `vtcode_commons::trace_flush::flush_trace_log()` (or `vtcode_core::utils::trace_writer::flush_trace_log()`) before `process::exit()` or at shutdown. Signal handlers and TUI runner already do this.
+
+**Session file retention**: All session artifacts (`.json`, `.jsonl`, `.log`) are pruned by `session_archive` retention (default: 100 files, 14 days, 100 MB). Debug logs have separate rotation at 50 MB / 7 days.
+
 ## Testing
 
 **Organization**: Unit tests inline (`#[cfg(test)]`), integration in `tests/`, benchmarks in `benches/`, snapshots via [`insta`](https://insta.rs).
