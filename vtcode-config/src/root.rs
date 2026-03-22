@@ -569,8 +569,8 @@ impl Default for PtyConfig {
 #[serde(rename_all = "snake_case")]
 pub enum PtyEmulationBackend {
     #[default]
-    Ghostty,
     LegacyVt100,
+    Ghostty,
 }
 
 impl PtyEmulationBackend {

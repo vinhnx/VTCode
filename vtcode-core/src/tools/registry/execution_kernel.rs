@@ -48,6 +48,11 @@ fn is_missing_apply_patch_payload(args: &Value) -> bool {
 }
 
 fn is_missing_required_arg(tool_name: &str, args: &Value, key: &str) -> bool {
+    if tool_name == tool_names::READ_FILE && key == "path" {
+        return ["path", "file_path", "filepath", "target_path"]
+            .iter()
+            .all(|candidate| is_missing_arg_value(args, candidate));
+    }
     if tool_name == tool_names::EDIT_FILE {
         return match key {
             "old_str" => {
@@ -285,6 +290,24 @@ pub(super) fn preflight_validate_resolved_call(
         .as_ref()
         .get("path")
         .and_then(|v| v.as_str())
+        .or_else(|| {
+            validation_args
+                .as_ref()
+                .get("file_path")
+                .and_then(|v| v.as_str())
+        })
+        .or_else(|| {
+            validation_args
+                .as_ref()
+                .get("filepath")
+                .and_then(|v| v.as_str())
+        })
+        .or_else(|| {
+            validation_args
+                .as_ref()
+                .get("target_path")
+                .and_then(|v| v.as_str())
+        })
         && let Err(err) = paths::validate_path_safety(path)
     {
         failures.push(format!("Path security check failed: {}", err));
@@ -595,6 +618,21 @@ mod tests {
         assert_eq!(
             normalized.get("action").and_then(|v| v.as_str()),
             Some("grep")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn unified_search_schema_args_infers_list_action_from_glob_pattern() -> Result<()> {
+        let args = json!({
+            "pattern": "**/*.rs",
+            "path": "src"
+        });
+
+        let normalized = normalize_tool_args(tool_names::UNIFIED_SEARCH, &args, None)?;
+        assert_eq!(
+            normalized.get("action").and_then(|v| v.as_str()),
+            Some("list")
         );
         Ok(())
     }

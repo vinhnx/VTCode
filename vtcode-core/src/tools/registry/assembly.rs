@@ -124,7 +124,9 @@ fn build_public_routes(catalog: &SessionToolCatalog) -> FxHashMap<String, Public
         );
         public_routes.insert(entry.public_name.clone(), resolution.clone());
         for alias in &entry.aliases {
-            public_routes.insert(alias.clone(), resolution.clone());
+            public_routes
+                .entry(alias.clone())
+                .or_insert_with(|| resolution.clone());
         }
     }
 

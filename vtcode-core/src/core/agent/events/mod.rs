@@ -2,9 +2,10 @@
 
 mod lifecycle;
 pub use lifecycle::{
-    SharedLifecycleEmitter, error_item_completed_event, tool_invocation_completed_event,
-    tool_output_completed_event, tool_output_item_id, tool_output_started_event,
-    tool_output_updated_event, tool_started_event,
+    SharedLifecycleEmitter, ToolOutputPayload, error_item_completed_event,
+    tool_invocation_completed_event, tool_output_completed_event, tool_output_item_id,
+    tool_output_payload_from_value, tool_output_started_event, tool_output_updated_event,
+    tool_started_event,
 };
 
 use crate::core::threads::{SubmissionId, ThreadRuntimeHandle};

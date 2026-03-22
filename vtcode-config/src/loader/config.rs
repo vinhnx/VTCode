@@ -677,7 +677,7 @@ stdout_tail_lines = 20
 scrollback_lines = 400
 
 # Terminal emulation backend for PTY snapshots
-emulation_backend = "ghostty"
+emulation_backend = "legacy_vt100"
 
 # Optional preferred shell for PTY sessions (falls back to $SHELL when unset)
 # preferred_shell = "/bin/zsh"

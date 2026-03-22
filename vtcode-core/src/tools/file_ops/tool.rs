@@ -48,6 +48,27 @@ impl FileOpsTool {
         &self.edited_file_monitor
     }
 
+    fn normalize_list_mode(mode: &str) -> Option<&'static str> {
+        if mode.eq_ignore_ascii_case("list")
+            || mode.eq_ignore_ascii_case("file")
+            || mode.eq_ignore_ascii_case("files")
+        {
+            Some("list")
+        } else if mode.eq_ignore_ascii_case("recursive") {
+            Some("recursive")
+        } else if mode.eq_ignore_ascii_case("find_name") {
+            Some("find_name")
+        } else if mode.eq_ignore_ascii_case("find_content") {
+            Some("find_content")
+        } else if mode.eq_ignore_ascii_case("largest") {
+            Some("largest")
+        } else if mode.eq_ignore_ascii_case("tree") {
+            Some("tree")
+        } else {
+            None
+        }
+    }
+
     /// Get relative path from workspace root, avoiding allocation when possible
     #[inline]
     pub(super) fn relative_path<'a>(&self, path: &'a Path) -> Cow<'a, str> {
@@ -95,8 +116,22 @@ impl Tool for FileOpsTool {
             ));
         }
 
-        let mode_clone = input.mode.clone();
-        let mode = mode_clone.as_deref().unwrap_or("list");
+        let should_promote_glob_to_recursive = input.mode.is_none()
+            && input
+                .glob_pattern
+                .as_deref()
+                .map(str::trim)
+                .is_some_and(|pattern| {
+                    !pattern.is_empty() && (pattern.contains('/') || pattern.contains("**"))
+                });
+        if should_promote_glob_to_recursive {
+            input.mode = Some("recursive".to_string());
+        }
+
+        let raw_mode = input.mode.as_deref().unwrap_or("list").trim().to_string();
+        let mode = Self::normalize_list_mode(&raw_mode).unwrap_or(raw_mode.as_str());
+        input.mode = Some(mode.to_string());
+
         self.execute_mode(mode, serde_json::to_value(input)?).await
     }
 
@@ -174,6 +209,11 @@ mod tests {
     use super::*;
     use crate::config::constants::diff;
     use crate::tools::file_ops::diff_preview::{build_diff_preview, diff_preview_error_skip};
+    use crate::tools::grep_file::GrepSearchManager;
+    use serde_json::json;
+    use std::fs;
+    use std::sync::Arc;
+    use tempfile::TempDir;
 
     #[test]
     fn diff_preview_reports_truncation_and_omission() {
@@ -198,5 +238,64 @@ mod tests {
         assert_eq!(preview["reason"], Value::String("failed".to_string()));
         assert_eq!(preview["detail"], Value::String("InvalidData".to_string()));
         assert_eq!(preview["skipped"], Value::Bool(true));
+    }
+
+    #[tokio::test]
+    async fn globbed_list_pattern_promotes_to_recursive_mode() {
+        let temp_dir = TempDir::new().expect("workspace tempdir");
+        fs::create_dir_all(temp_dir.path().join("src/nested")).expect("create nested src");
+        fs::write(temp_dir.path().join("src/lib.rs"), "pub fn lib() {}\n").expect("write lib");
+        fs::write(
+            temp_dir.path().join("src/nested/mod.rs"),
+            "pub fn nested() {}\n",
+        )
+        .expect("write nested");
+        fs::write(temp_dir.path().join("src/notes.md"), "# notes\n").expect("write notes");
+
+        let grep_manager = Arc::new(GrepSearchManager::new(temp_dir.path().to_path_buf()));
+        let file_ops = FileOpsTool::new(temp_dir.path().to_path_buf(), grep_manager);
+
+        let result = file_ops
+            .execute(json!({
+                "path": "src",
+                "pattern": "**/*.rs",
+                "response_format": "detailed"
+            }))
+            .await
+            .expect("recursive glob list should succeed");
+
+        assert_eq!(result["mode"], json!("recursive"));
+        assert_eq!(result["pattern"], json!("**/*.rs"));
+
+        let items = result["items"].as_array().expect("items array");
+        assert_eq!(items.len(), 2);
+        assert!(items.iter().all(|item| {
+            item["path"]
+                .as_str()
+                .is_some_and(|path| path.ends_with(".rs"))
+        }));
+    }
+
+    #[tokio::test]
+    async fn file_mode_alias_executes_basic_list() {
+        let temp_dir = TempDir::new().expect("workspace tempdir");
+        fs::create_dir_all(temp_dir.path().join("src")).expect("create src");
+        fs::write(temp_dir.path().join("src/lib.rs"), "pub fn lib() {}\n").expect("write lib");
+
+        let grep_manager = Arc::new(GrepSearchManager::new(temp_dir.path().to_path_buf()));
+        let file_ops = FileOpsTool::new(temp_dir.path().to_path_buf(), grep_manager);
+
+        let result = file_ops
+            .execute(json!({
+                "path": "src",
+                "mode": "file"
+            }))
+            .await
+            .expect("file alias should behave like list");
+
+        assert_eq!(result["mode"], json!("list"));
+        let items = result["items"].as_array().expect("items array");
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["path"], json!("src/lib.rs"));
     }
 }

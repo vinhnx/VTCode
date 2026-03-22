@@ -4,8 +4,8 @@ use crate::config::constants::tools;
 use crate::config::types::CapabilityLevel;
 use crate::tool_policy::ToolPolicy;
 use crate::tools::handlers::session_tool_catalog::{
-    apply_patch_parameters, unified_exec_parameters, unified_file_parameters,
-    unified_search_parameters,
+    apply_patch_parameters, list_files_parameters, read_file_parameters, unified_exec_parameters,
+    unified_file_parameters, unified_search_parameters,
 };
 use crate::tools::handlers::{
     EnterPlanModeTool, ExitPlanModeTool, PlanModeState, PlanTaskTrackerTool, TaskTrackerTool,
@@ -228,6 +228,23 @@ pub(super) fn builtin_tool_registrations(
             false,
             ToolRegistry::read_file_executor,
         )
+        .with_description(
+            "Read file contents with chunked ranges or indentation-aware block selection. Exposed as a first-class browse tool for the harness surface.",
+        )
+        .with_parameter_schema(read_file_parameters())
+        .with_permission(ToolPolicy::Allow)
+        .with_llm_visibility(false),
+        ToolRegistration::new(
+            tools::LIST_FILES,
+            CapabilityLevel::CodeSearch,
+            false,
+            ToolRegistry::list_files_executor,
+        )
+        .with_description(
+            "List files and directories with pagination. Exposed as a first-class browse tool for the harness surface.",
+        )
+        .with_parameter_schema(list_files_parameters())
+        .with_permission(ToolPolicy::Allow)
         .with_llm_visibility(false),
         ToolRegistration::new(
             tools::WRITE_FILE,

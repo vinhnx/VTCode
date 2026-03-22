@@ -245,6 +245,9 @@ impl SessionToolCatalog {
             if let Some(entry) = ToolCatalogEntry::from_registration(&registration) {
                 entries.push(entry);
             }
+            if let Some(entry) = ToolCatalogEntry::agent_runner_legacy_entry(&registration) {
+                entries.push(entry);
+            }
         }
 
         entries.sort_by(|left, right| left.public_name.cmp(&right.public_name));
@@ -428,6 +431,38 @@ impl ToolCatalogEntry {
         ))
     }
 
+    fn agent_runner_legacy_entry(registration: &ToolRegistration) -> Option<Self> {
+        let public_name = match registration.name() {
+            tools::READ_FILE | tools::LIST_FILES => registration.name(),
+            _ => return None,
+        };
+
+        let metadata = registration.metadata();
+        let description = metadata.description()?.to_string();
+        let parameters = metadata
+            .parameter_schema()
+            .cloned()
+            .unwrap_or_else(default_parameter_schema);
+        let default_permission = metadata.default_permission().unwrap_or(ToolPolicy::Prompt);
+        let supports_parallel_tool_calls = registration_supports_parallel_tool_calls(registration);
+        let aliases = metadata.aliases().to_vec();
+        let kind = registration_catalog_kind(registration);
+        let source = registration_catalog_source(registration, kind);
+
+        Some(Self::new(
+            public_name.to_string(),
+            registration.name().to_string(),
+            description,
+            parameters,
+            aliases,
+            registration.capability(),
+            default_permission,
+            supports_parallel_tool_calls,
+            source,
+            kind,
+        ))
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn new(
         public_name: String,
@@ -526,6 +561,9 @@ fn is_core_tool_entry(entry: &ToolCatalogEntry, config: &SessionToolsConfig) -> 
         | tools::LIST_SKILLS
         | tools::LOAD_SKILL
         | tools::LOAD_SKILL_RESOURCE => true,
+        tools::READ_FILE | tools::LIST_FILES if config.surface == SessionSurface::AgentRunner => {
+            true
+        }
         tools::REQUEST_USER_INPUT => config.request_user_input_enabled,
         tools::APPLY_PATCH => config.model_capabilities.supports_apply_patch_tool,
         _ => false,
@@ -534,7 +572,8 @@ fn is_core_tool_entry(entry: &ToolCatalogEntry, config: &SessionToolsConfig) -> 
 
 fn surface_allows_tool(surface: SessionSurface, tool_name: &str) -> bool {
     match surface {
-        SessionSurface::Interactive | SessionSurface::AgentRunner => true,
+        SessionSurface::Interactive => !matches!(tool_name, tools::READ_FILE | tools::LIST_FILES),
+        SessionSurface::AgentRunner => true,
         SessionSurface::Acp => matches!(
             tool_name,
             tools::UNIFIED_SEARCH | tools::UNIFIED_FILE | tools::UNIFIED_EXEC
@@ -682,6 +721,44 @@ pub(crate) fn unified_file_parameters() -> Value {
     })
 }
 
+pub(crate) fn read_file_parameters() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "path": {"type": "string", "description": "File path (relative to workspace root). Accepts file_path/filepath/target_path aliases."},
+            "offset": {"type": "integer", "description": "1-indexed line offset for chunked reads.", "minimum": 1},
+            "limit": {"type": "integer", "description": "Maximum number of lines to return for the current chunk.", "minimum": 1},
+            "mode": {"type": "string", "enum": ["slice", "indentation"], "description": "Read mode. Use indentation for block-aware reads.", "default": "slice"},
+            "indentation": {
+                "description": "Indentation-aware block selection.",
+                "anyOf": [
+                    {"type": "boolean"},
+                    {
+                        "type": "object",
+                        "properties": {
+                            "anchor_line": {"type": "integer", "description": "Optional explicit anchor line; defaults to offset when omitted."},
+                            "max_levels": {"type": "integer", "description": "Maximum indentation depth to collect; 0 means unlimited."},
+                            "include_siblings": {"type": "boolean", "description": "Include sibling blocks at the same indentation level."},
+                            "include_header": {"type": "boolean", "description": "Include header lines above the anchor block."},
+                            "max_lines": {"type": "integer", "description": "Optional hard cap on returned lines; defaults to the global limit."}
+                        },
+                        "additionalProperties": false
+                    }
+                ]
+            },
+            "offset_lines": {"type": "integer", "description": "Legacy alias for line offset.", "minimum": 1},
+            "page_size_lines": {"type": "integer", "description": "Legacy alias for line chunk size.", "minimum": 1},
+            "offset_bytes": {"type": "integer", "description": "Byte offset for binary or byte-paged reads.", "minimum": 0},
+            "page_size_bytes": {"type": "integer", "description": "Byte page size for binary or byte-paged reads.", "minimum": 1},
+            "max_bytes": {"type": "integer", "description": "Maximum bytes to return.", "minimum": 1},
+            "max_lines": {"type": "integer", "description": "Maximum lines to return in legacy mode.", "minimum": 1},
+            "chunk_lines": {"type": "integer", "description": "Legacy alias for chunk size in lines.", "minimum": 1},
+            "max_tokens": {"type": "integer", "description": "Optional token budget for large reads.", "minimum": 1},
+            "condense": {"type": "boolean", "description": "Condense long outputs to head/tail.", "default": true}
+        }
+    })
+}
+
 pub(crate) fn unified_search_parameters() -> Value {
     json!({
         "type": "object",
@@ -691,7 +768,7 @@ pub(crate) fn unified_search_parameters() -> Value {
                 "enum": ["grep", "list", "structural", "tools", "errors", "agent", "web", "skill"],
                 "description": "Action to perform. Default to `structural` for code or syntax-aware search, `grep` for raw text, and `list` for file discovery. Refine and retry `grep` or `structural` here before switching tools."
             },
-            "pattern": {"type": "string", "description": "For `grep` or `errors`, regex or literal text. For `structural`, valid parseable code for the selected language, not a raw code fragment; if a fragment fails, retry `action='structural'` with a larger parseable pattern such as a full function signature."},
+            "pattern": {"type": "string", "description": "For `grep` or `errors`, regex or literal text. For `list`, a glob filter for returned paths or names; nested globs such as `**/*.rs` promote `list` to recursive discovery. For `structural`, valid parseable code for the selected language, not a raw code fragment; if a fragment fails, retry `action='structural'` with a larger parseable pattern such as a full function signature."},
             "path": {"type": "string", "description": "Directory or file path to search in.", "default": "."},
             "lang": {"type": "string", "description": "Language for structural search. Set it whenever the code language is known; required for debug_query."},
             "selector": {"type": "string", "description": "ast-grep selector for structural search when the real match is a subnode inside the parseable pattern."},
@@ -733,6 +810,30 @@ pub(crate) fn unified_search_parameters() -> Value {
             "scope": {"type": "string", "description": "Scope for 'errors' action (archive|all).", "default": "archive"},
             "max_bytes": {"type": "integer", "description": "Maximum bytes to fetch for 'web' action.", "default": 500000},
             "timeout_secs": {"type": "integer", "description": "Timeout in seconds.", "default": 30}
+        }
+    })
+}
+
+pub(crate) fn list_files_parameters() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "path": {"type": "string", "description": "Directory or file path to inspect.", "default": "."},
+            "mode": {
+                "type": "string",
+                "enum": ["list", "recursive", "tree", "find_name", "find_content", "largest", "file", "files"],
+                "description": "Listing mode. Use page/per_page to continue paginated results.",
+                "default": "list"
+            },
+            "pattern": {"type": "string", "description": "Optional glob-style path filter."},
+            "name_pattern": {"type": "string", "description": "Optional name filter for list/find_name modes."},
+            "content_pattern": {"type": "string", "description": "Content query for find_content mode."},
+            "page": {"type": "integer", "description": "1-indexed results page.", "minimum": 1},
+            "per_page": {"type": "integer", "description": "Items per page.", "minimum": 1},
+            "max_results": {"type": "integer", "description": "Maximum total results to consider before pagination.", "minimum": 1},
+            "include_hidden": {"type": "boolean", "description": "Include dotfiles and hidden entries.", "default": false},
+            "response_format": {"type": "string", "enum": ["concise", "detailed"], "description": "Verbosity of the listing output.", "default": "concise"},
+            "case_sensitive": {"type": "boolean", "description": "Case-sensitive name matching.", "default": false}
         }
     })
 }
@@ -1047,11 +1148,80 @@ mod tests {
             "schema should explain structural pattern requirements"
         );
         assert!(
+            params["properties"]["pattern"]["description"]
+                .as_str()
+                .expect("pattern description")
+                .contains("glob filter"),
+            "schema should explain list glob filtering"
+        );
+        assert!(
             params["properties"]["action"]["description"]
                 .as_str()
                 .expect("action description")
                 .contains("Refine and retry `grep` or `structural`"),
             "schema should keep search refinement inside unified_search"
+        );
+    }
+
+    #[test]
+    fn agent_runner_exposes_read_and_list_legacy_browse_tools() {
+        let read_file = registration(tools::READ_FILE)
+            .with_llm_visibility(false)
+            .with_description("Read file contents in chunks")
+            .with_parameter_schema(read_file_parameters());
+        let list_files = registration(tools::LIST_FILES)
+            .with_llm_visibility(false)
+            .with_description("List files with pagination")
+            .with_parameter_schema(list_files_parameters());
+        let unified_file = registration(tools::UNIFIED_FILE)
+            .with_description("Unified file ops")
+            .with_parameter_schema(unified_file_parameters());
+        let unified_search = registration(tools::UNIFIED_SEARCH)
+            .with_description("Unified search")
+            .with_parameter_schema(unified_search_parameters());
+
+        let catalog = SessionToolCatalog::rebuild_from_registrations(vec![
+            read_file,
+            list_files,
+            unified_file,
+            unified_search,
+        ]);
+
+        let interactive_names = catalog.public_tool_names(SessionToolsConfig::full_public(
+            SessionSurface::Interactive,
+            CapabilityLevel::CodeSearch,
+            ToolDocumentationMode::Full,
+            ToolModelCapabilities::default(),
+        ));
+        assert!(!interactive_names.contains(&tools::READ_FILE.to_string()));
+        assert!(!interactive_names.contains(&tools::LIST_FILES.to_string()));
+
+        let agent_runner_names = catalog.public_tool_names(SessionToolsConfig::full_public(
+            SessionSurface::AgentRunner,
+            CapabilityLevel::CodeSearch,
+            ToolDocumentationMode::Full,
+            ToolModelCapabilities::default(),
+        ));
+        assert!(agent_runner_names.contains(&tools::READ_FILE.to_string()));
+        assert!(agent_runner_names.contains(&tools::LIST_FILES.to_string()));
+    }
+
+    #[test]
+    fn legacy_browse_tool_schemas_expose_chunking_and_pagination_fields() {
+        let read_params = read_file_parameters();
+        assert!(read_params["properties"]["offset"].is_object());
+        assert!(read_params["properties"]["limit"].is_object());
+        assert!(read_params["properties"]["page_size_lines"].is_object());
+
+        let list_params = list_files_parameters();
+        assert!(list_params["properties"]["page"].is_object());
+        assert!(list_params["properties"]["per_page"].is_object());
+        assert!(
+            list_params["properties"]["mode"]["enum"]
+                .as_array()
+                .expect("mode enum")
+                .iter()
+                .any(|value| value == "recursive")
         );
     }
 

@@ -8,24 +8,21 @@ fn shell_zsh_fork_disabled_allows_missing_zsh_path() {
 }
 
 #[test]
-fn pty_defaults_to_ghostty_backend() {
+fn pty_defaults_to_legacy_vt100_backend() {
     let config = PtyConfig::default();
-    assert_eq!(config.emulation_backend, PtyEmulationBackend::Ghostty);
+    assert_eq!(config.emulation_backend, PtyEmulationBackend::LegacyVt100);
 }
 
 #[test]
-fn pty_deserializes_legacy_vt100_backend() -> Result<()> {
+fn pty_deserializes_ghostty_backend() -> Result<()> {
     let config: VTCodeConfig = toml::from_str(
         r#"
 [pty]
-emulation_backend = "legacy_vt100"
+emulation_backend = "ghostty"
 "#,
     )?;
 
-    assert_eq!(
-        config.pty.emulation_backend,
-        PtyEmulationBackend::LegacyVt100
-    );
+    assert_eq!(config.pty.emulation_backend, PtyEmulationBackend::Ghostty);
     Ok(())
 }
 

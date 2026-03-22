@@ -1963,6 +1963,10 @@ impl ToolRegistry {
         Box::pin(async move { tool.read_file(args).await })
     }
 
+    pub(super) fn list_files_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move { self.list_files(args).await })
+    }
+
     pub(super) fn write_file_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         let tool = self.inventory.file_ops_tool().clone();
         Box::pin(async move { tool.write_file(args).await })

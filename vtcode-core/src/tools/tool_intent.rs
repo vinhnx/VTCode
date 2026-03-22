@@ -437,6 +437,28 @@ fn has_meaningful_search_field(args: &serde_json::Map<String, Value>, key: &str)
     }
 }
 
+fn looks_like_list_glob_pattern(args: &serde_json::Map<String, Value>) -> bool {
+    let pattern = get_field_case_insensitive(args, "pattern")
+        .or_else(|| get_field_case_insensitive(args, "query"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|pattern| !pattern.is_empty());
+    let Some(pattern) = pattern else {
+        return false;
+    };
+
+    let has_glob_wildcards =
+        pattern.contains('*') || pattern.contains('?') || pattern.contains('[');
+    if !has_glob_wildcards {
+        return false;
+    }
+
+    pattern.contains('/')
+        || pattern.contains('\\')
+        || pattern.starts_with("*.")
+        || pattern.contains("*.")
+}
+
 fn unified_search_action_from_object(args: &serde_json::Map<String, Value>) -> Option<&str> {
     get_field_case_insensitive(args, "action")
         .and_then(|value| value.as_str())
@@ -449,9 +471,12 @@ fn unified_search_action_from_object(args: &serde_json::Map<String, Value>) -> O
                 || has_meaningful_search_field(args, "strictness")
                 || has_meaningful_search_field(args, "debug_query")
                 || has_meaningful_search_field(args, "globs");
+            let has_path = has_meaningful_search_field(args, "path");
 
             if has_pattern && has_structural_hint {
                 Some("structural")
+            } else if has_pattern && has_path && looks_like_list_glob_pattern(args) {
+                Some("list")
             } else if has_pattern {
                 Some("grep")
             } else if get_field_case_insensitive(args, "keyword").is_some() {
@@ -583,6 +608,10 @@ pub fn normalize_unified_search_args(args: &Value) -> Value {
             "sub_action"
         } else if key.eq_ignore_ascii_case("name") {
             "name"
+        } else if key.eq_ignore_ascii_case("name_pattern")
+            || key.eq_ignore_ascii_case("name-pattern")
+        {
+            "name_pattern"
         } else {
             key
         };
@@ -603,7 +632,14 @@ pub fn normalize_unified_search_args(args: &Value) -> Value {
     let action = normalized
         .get("action")
         .and_then(Value::as_str)
-        .unwrap_or_default();
+        .unwrap_or_default()
+        .to_string();
+    let keyword_alias = normalized
+        .get("keyword")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
     let pattern_alias = normalized
         .get("pattern")
         .and_then(Value::as_str)
@@ -618,24 +654,24 @@ pub fn normalize_unified_search_args(args: &Value) -> Value {
                 .filter(|value| !value.is_empty())
                 .map(str::to_string)
         })
-        .or_else(|| {
-            if action.eq_ignore_ascii_case("grep") {
-                normalized
-                    .get("keyword")
-                    .and_then(Value::as_str)
-                    .map(str::trim)
-                    .filter(|value| !value.is_empty())
-                    .map(str::to_string)
-            } else {
-                None
-            }
-        });
+        .or_else(|| keyword_alias.clone());
 
     if action.eq_ignore_ascii_case("grep")
         && !normalized.contains_key("pattern")
-        && let Some(pattern) = pattern_alias
+        && let Some(pattern) = pattern_alias.clone()
     {
         normalized.insert("pattern".to_string(), Value::String(pattern));
+    }
+
+    if action.eq_ignore_ascii_case("list")
+        && !normalized.contains_key("pattern")
+        && !normalized.contains_key("name_pattern")
+    {
+        if let Some(keyword) = keyword_alias {
+            normalized.insert("name_pattern".to_string(), Value::String(keyword));
+        } else if let Some(pattern) = pattern_alias {
+            normalized.insert("pattern".to_string(), Value::String(pattern));
+        }
     }
 
     Value::Object(normalized)
@@ -896,6 +932,18 @@ mod tests {
     }
 
     #[test]
+    fn normalize_unified_search_args_infers_list_for_glob_patterns() {
+        let normalized = normalize_unified_search_args(&json!({
+            "Pattern": "**/*.rs",
+            "Path": "src"
+        }));
+
+        assert_eq!(normalized["pattern"], "**/*.rs");
+        assert_eq!(normalized["path"], "src");
+        assert_eq!(normalized["action"], "list");
+    }
+
+    #[test]
     fn normalize_unified_search_args_unwraps_arguments_object() {
         let normalized = normalize_unified_search_args(&json!({
             "arguments": {
@@ -961,6 +1009,21 @@ mod tests {
         assert_eq!(normalized["action"], "grep");
         assert_eq!(normalized["pattern"], "system prompt");
         assert_eq!(normalized["path"], "src");
+    }
+
+    #[test]
+    fn normalize_unified_search_args_maps_keyword_to_name_pattern_for_list() {
+        let normalized = normalize_unified_search_args(&json!({
+            "action": "list",
+            "keyword": "agent",
+            "path": "vtcode-core/src",
+            "mode": "file"
+        }));
+
+        assert_eq!(normalized["action"], "list");
+        assert_eq!(normalized["name_pattern"], "agent");
+        assert_eq!(normalized["path"], "vtcode-core/src");
+        assert_eq!(normalized["mode"], "file");
     }
 
     #[test]

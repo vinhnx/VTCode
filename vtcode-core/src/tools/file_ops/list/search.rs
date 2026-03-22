@@ -1,4 +1,4 @@
-use super::FileOpsTool;
+use super::{FileOpsTool, compile_list_glob, list_entry_matches};
 use crate::tools::file_ops::path_policy::PathSuggestionKind;
 use crate::tools::grep_file::GrepSearchInput;
 use crate::tools::traits::FileTool;
@@ -11,10 +11,12 @@ use walkdir::WalkDir;
 impl FileOpsTool {
     /// Execute recursive file search
     pub(crate) async fn execute_recursive_search(&self, input: &ListInput) -> Result<Value> {
-        // Allow recursive listing without pattern by defaulting to "*" (match all)
-        static DEFAULT_PATTERN: &str = "*";
-        let pattern = input.name_pattern.as_deref().unwrap_or(DEFAULT_PATTERN);
-        let pattern_lower = pattern.to_lowercase();
+        let list_glob = compile_list_glob(input)?;
+        let pattern = input
+            .glob_pattern
+            .as_deref()
+            .or(input.name_pattern.as_deref())
+            .unwrap_or("*");
         let search_path = self.workspace_root.join(&input.path);
 
         // Check if path exists before walking
@@ -30,14 +32,9 @@ impl FileOpsTool {
         // Pre-allocate with max_items capacity to avoid reallocations - AGENTS.md max 5 items
         let mut items = Vec::with_capacity(input.max_items.min(5));
         let mut count = 0;
-        let mut total_found = 0;
+        let mut matched_total = 0;
 
         for entry in WalkDir::new(&search_path).max_depth(10) {
-            if count >= input.max_items {
-                total_found += 1;
-                continue; // Keep counting but don't add more items
-            }
-
             let entry = entry.map_err(|e| anyhow!("Walk error: {}", e))?;
             let path = entry.path();
 
@@ -50,47 +47,45 @@ impl FileOpsTool {
                 continue;
             }
 
-            // Pattern matching - handle "*" as wildcard for all files
-            let matches = if pattern == "*" {
-                true // Match all files when pattern is "*"
-            } else if input.case_sensitive.unwrap_or(true) {
-                name.contains(pattern)
-            } else {
-                name.to_lowercase().contains(&pattern_lower)
-            };
+            let relative_path = self.relative_path_json(path);
+            if !list_entry_matches(input, &relative_path, &name, list_glob.as_ref()) {
+                continue;
+            }
 
-            if matches {
-                // Extension filtering
-                if let Some(ref extensions) = input.file_extensions {
-                    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                        if !extensions.iter().any(|e| e == ext) {
-                            continue;
-                        }
-                    } else {
+            // Extension filtering
+            if let Some(ref extensions) = input.file_extensions {
+                if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                    if !extensions.iter().any(|e| e == ext) {
                         continue;
                     }
+                } else {
+                    continue;
                 }
-
-                let is_dir = entry.file_type().is_dir();
-                items.push(json!({
-                    "name": name,
-                    "path": self.relative_path_json(path),
-                    "type": if is_dir { "directory" } else { "file" },
-                    "depth": entry.depth()
-                }));
-                count += 1;
             }
-            total_found += 1;
+
+            matched_total += 1;
+            if count >= input.max_items {
+                continue;
+            }
+
+            let is_dir = entry.file_type().is_dir();
+            items.push(json!({
+                "name": name,
+                "path": relative_path,
+                "type": if is_dir { "directory" } else { "file" },
+                "depth": entry.depth()
+            }));
+            count += 1;
         }
 
         // Add overflow indication if we found more items than max_items
         let mut result = self.paginate_and_format(items, count, input, "recursive", Some(pattern));
-        if total_found > input.max_items
+        if matched_total > input.max_items
             && let Some(obj) = result.as_object_mut()
         {
             obj.insert(
                 "overflow".to_string(),
-                json!(format!("[+{} more items]", total_found - input.max_items)),
+                json!(format!("[+{} more items]", matched_total - input.max_items)),
             );
         }
         Ok(result)

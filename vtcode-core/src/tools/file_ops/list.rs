@@ -4,18 +4,60 @@ use crate::tools::builder::ToolResponseBuilder;
 use crate::tools::traits::FileTool;
 use crate::tools::types::ListInput;
 use anyhow::{Context, Result, anyhow};
+use glob::Pattern;
 use serde_json::{Value, json};
+use std::path::Path;
 use tracing::{info, warn};
 
 mod metrics;
 mod search;
 mod tree;
 
+pub(super) fn compile_list_glob(input: &ListInput) -> Result<Option<Pattern>> {
+    let Some(pattern) = input
+        .glob_pattern
+        .as_deref()
+        .map(str::trim)
+        .filter(|pattern| !pattern.is_empty())
+    else {
+        return Ok(None);
+    };
+
+    Pattern::new(pattern)
+        .with_context(|| format!("invalid list glob pattern '{}'", pattern))
+        .map(Some)
+}
+
+pub(super) fn list_entry_matches(
+    input: &ListInput,
+    relative_path: &str,
+    name: &str,
+    glob_pattern: Option<&Pattern>,
+) -> bool {
+    if let Some(pattern) = glob_pattern {
+        return pattern.matches_path(Path::new(relative_path))
+            || pattern.matches(relative_path)
+            || pattern.matches(name);
+    }
+
+    let pattern = input.name_pattern.as_deref().unwrap_or("*");
+    if pattern == "*" {
+        return true;
+    }
+
+    if input.case_sensitive.unwrap_or(true) {
+        name.contains(pattern)
+    } else {
+        name.to_lowercase().contains(&pattern.to_lowercase())
+    }
+}
+
 impl FileOpsTool {
     pub(super) async fn execute_basic_list(&self, input: &ListInput) -> Result<Value> {
         use crate::tools::cache::FILE_CACHE;
 
         let base = self.workspace_root.join(&input.path);
+        let list_glob = compile_list_glob(input)?;
 
         if self.should_exclude(&base).await {
             return Err(anyhow!(
@@ -25,7 +67,12 @@ impl FileOpsTool {
         }
 
         // Try to get result from cache first for directories
-        let cache_key = format!("dir_list:{}:hidden={}", input.path, input.include_hidden);
+        let cache_key = format!(
+            "dir_list:{}:hidden={}:glob={}",
+            input.path,
+            input.include_hidden,
+            input.glob_pattern.as_deref().unwrap_or("")
+        );
         if base.is_dir()
             && let Some(cached_result) = FILE_CACHE.get_directory(&cache_key).await
         {
@@ -38,9 +85,25 @@ impl FileOpsTool {
             let file_name = base
                 .file_name()
                 .ok_or_else(|| anyhow!("Invalid file name for path: {}", input.path))?;
+            let file_name = file_name.to_string_lossy().into_owned();
+            let relative_path = self.relative_path_json(&base);
+            if !list_entry_matches(input, &relative_path, &file_name, list_glob.as_ref()) {
+                return Ok(json!({
+                    "success": true,
+                    "items": [],
+                    "count": 0,
+                    "total": 0,
+                    "page": input.page.unwrap_or(1).max(1),
+                    "per_page": input.per_page.unwrap_or(20).max(1),
+                    "has_more": false,
+                    "mode": "list",
+                    "response_format": input.response_format.as_deref().unwrap_or("concise"),
+                    "pattern": input.glob_pattern.as_deref().unwrap_or("")
+                }));
+            }
             all_items.push(json!({
-                "name": file_name.to_string_lossy(),
-                "path": input.path,
+                "name": file_name,
+                "path": relative_path,
                 "type": "file"
             }));
         } else if base.is_dir() {
@@ -78,7 +141,10 @@ impl FileOpsTool {
                     .with_context(|| format!("Failed to read file type for: {}", path.display()))?
                     .is_dir();
 
-                let relative_path = self.relative_path(&path);
+                let relative_path = self.relative_path_json(&path);
+                if !list_entry_matches(input, &relative_path, &name, list_glob.as_ref()) {
+                    continue;
+                }
 
                 all_items.push(json!({
                     "name": name,
@@ -235,6 +301,14 @@ impl FileOpsTool {
         if let Some(msg) = guidance {
             builder = builder.message(msg);
         }
+        if let Some(pattern) = input
+            .glob_pattern
+            .as_deref()
+            .map(str::trim)
+            .filter(|pattern| !pattern.is_empty())
+        {
+            builder = builder.field("pattern", json!(pattern));
+        }
 
         let out = builder.build_json();
 
@@ -369,6 +443,7 @@ mod tests {
                 per_page: None,
                 response_format: None,
                 include_hidden: false,
+                glob_pattern: None,
                 mode: None,
                 name_pattern: None,
                 content_pattern: None,

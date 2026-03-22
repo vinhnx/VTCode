@@ -866,7 +866,7 @@ stdout_tail_lines = 20
 scrollback_lines = 400
 
 # Terminal emulation backend for PTY snapshots and screen extraction
-emulation_backend = "ghostty"
+emulation_backend = "legacy_vt100"
 
 # Maximum bytes of output to retain per PTY session (default: 50MB)
 # Prevents memory explosion on commands with extremely large output (e.g., git diff on large repos)

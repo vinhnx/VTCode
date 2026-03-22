@@ -2,7 +2,9 @@ use super::AgentRunner;
 use super::constants::{LOOP_THROTTLE_BASE_MS, LOOP_THROTTLE_MAX_MS};
 use super::types::ToolFailureContext;
 use crate::config::constants::tools;
-use crate::core::agent::events::{ExecEventRecorder, tool_invocation_completed_event};
+use crate::core::agent::events::{
+    ExecEventRecorder, tool_invocation_completed_event, tool_output_payload_from_value,
+};
 use crate::core::agent::runtime::{AgentRuntime, RuntimeControl};
 use crate::exec::events::{ItemCompletedEvent, ThreadEvent, ThreadItemDetails, ToolCallStatus};
 use crate::llm::provider::ToolCall;
@@ -106,6 +108,23 @@ fn emit_failed_tool_outputs_for_completed_invocations(
             None,
         );
     }
+}
+
+fn finish_successful_tool_output(
+    event_recorder: &mut ExecEventRecorder,
+    call_item_id: &str,
+    tool_call_id: &str,
+    output: &serde_json::Value,
+) {
+    let payload = tool_output_payload_from_value(output);
+    event_recorder.tool_output_finished(
+        call_item_id,
+        Some(tool_call_id),
+        ToolCallStatus::Completed,
+        None,
+        &payload.aggregated_output,
+        payload.spool_path.as_deref(),
+    );
 }
 
 impl AgentRunner {
@@ -251,13 +270,11 @@ impl AgentRunner {
                     );
                     event_recorder
                         .tool_output_started(&tool_call_item.call_item_id, Some(&call_id));
-                    event_recorder.tool_output_finished(
+                    finish_successful_tool_output(
+                        event_recorder,
                         &tool_call_item.call_item_id,
-                        Some(&call_id),
-                        ToolCallStatus::Completed,
-                        None,
-                        "",
-                        None,
+                        &call_id,
+                        &optimized_result,
                     );
                 }
                 Err(e) => {
@@ -458,13 +475,11 @@ impl AgentRunner {
                         &tool_call_item,
                         ToolCallStatus::Completed,
                     );
-                    event_recorder.tool_output_finished(
+                    finish_successful_tool_output(
+                        event_recorder,
                         &tool_call_item.call_item_id,
-                        Some(&call.id),
-                        ToolCallStatus::Completed,
-                        None,
-                        "",
-                        None,
+                        &call.id,
+                        &optimized_result,
                     );
 
                     if name == tools::WRITE_FILE

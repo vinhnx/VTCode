@@ -17,7 +17,7 @@
   "policies": {
     "apply_patch": "allow",
     "unified_search": "allow",
-    "enter_plan_mode": "prompt",
+    "enter_plan_mode": "allow",
     "exit_plan_mode": "prompt",
     "plan_task_tracker": "prompt",
     "request_user_input": "allow",
@@ -26,7 +26,9 @@
     "unified_file": "allow",
     "list_skills": "allow",
     "load_skill_resource": "allow",
-    "load_skill": "allow"
+    "load_skill": "allow",
+    "list_files": "allow",
+    "read_file": "allow"
   },
   "constraints": {
     "curl": {
@@ -212,7 +214,44 @@
       "bash -lc 'find vtcode-core/src/agent -maxdepth 2 -type f | head -n 50'|sandbox_permissions=\"use_default\"|additional_permissions=null",
       "bash -lc 'find vtcode-core/src/agent -type f -maxdepth 2 -print'|sandbox_permissions=\"use_default\"|additional_permissions=null",
       "bash -lc 'find vtcode-core/src/agent -maxdepth 2 -type f -print'|sandbox_permissions=\"use_default\"|additional_permissions=null",
-      "bash -lc 'find vtcode-core/src/agent -type f | wc -l'|sandbox_permissions=\"use_default\"|additional_permissions=null"
+      "bash -lc 'find vtcode-core/src/agent -type f | wc -l'|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "ls -la /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-tui/src/|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "ls -la /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-tui/src/session/|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "ls /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-tui/src/|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "ls|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "ls vtcode-tui/src/|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "find /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-tui/src -type f -name '*.rs' '|' head -50|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "ls -laR /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-tui/src/|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "find /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-tui/src -type d '|' head -30|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "ls -la /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-tui/src/agent/|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "find /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode -path '*/agent*' -name '*.rs' '2>/dev/null' '|' head -40|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "ls -la /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-tui/src/agent/runloop/|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "ls /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-tui/src/agent/runloop|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "find /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-tui/src/agent/runloop -type f|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "grep -r 'pub.*async fn dispatch' /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src '--include=*.rs' '2>/dev/null'|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "ls /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src/cli/|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "ls -la /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src/cli/|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "find /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src -type f -name '*.rs' '2>/dev/null' '|' head -30|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "pwd|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "ls -la /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src/|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "find /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode -name '*.rs' -path '*agent*' '2>/dev/null'|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "find /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode -type f -name '*.rs' '2>/dev/null' '|' xargs grep -l 'pub async fn run' '2>/dev/null' '|' head -20|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "wc -l /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-tui/src/agent/runloop/session.rs|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "ls -la /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-tui/src/agent/runloop/turn/|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "find /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode -type f -name '*.rs' '|' xargs grep -l 'runloop\\|agent_loop' '2>/dev/null' '|' head -20|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "find /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-tui/src -type f -name '*.rs' '|' xargs grep -l 'runloop\\|RunLoop' '2>/dev/null'|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "find /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-tui/src -type f -name '*.rs' '2>/dev/null'|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "ls /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-tui/src/core_tui/|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "ls /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-tui/src/core_tui/session/|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "cat /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-tui/src/core_tui/runner/mod.rs|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "ls /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/core/|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "ls /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/core/agent/|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "ls /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/core/agent/session/|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "find /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode -type d -name '*runloop*' -o -type d -name '*run_loop*' -o -type d -name '*agentloop*' '2>/dev/null'|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "ls -la /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src/agent/runloop/|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "ls /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src/agent/runloop/unified/|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "ls /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src/agent/runloop/unified/turn/|sandbox_permissions=\"use_default\"|additional_permissions=null",
+      "ls /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src/agent/runloop/unified/turn/session_loop_runner/|sandbox_permissions=\"use_default\"|additional_permissions=null"
     ]
   }
 }

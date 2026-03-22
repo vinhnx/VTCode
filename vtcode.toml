@@ -65,13 +65,13 @@ read_file = true
 # Environment variable that stores the API key for the active provider
 # Default: "OPENAI_API_KEY"
 # Type: `string`
-api_key_env = "OLLAMA_API_KEY"
+api_key_env = "MINIMAX_API_KEY"
 
 # Enable autonomous mode - auto-approve safe tools with reduced HITL prompts When true, the agent
 # operates with fewer confirmation prompts for safe tools.
 # Default: false
 # Type: `boolean`
-autonomous_mode = true
+autonomous_mode = false
 
 # Preferred storage backend for credentials (OAuth tokens, API keys, etc.) - `keyring`: Use
 # OS-specific secure storage (macOS Keychain, Windows Credential Manager, Linux Secret Service). This
@@ -92,7 +92,7 @@ default_editing_mode = "edit"
 # Default model to use
 # Default: "gpt-5.3-codex"
 # Type: `string`
-default_model = "nemotron-3-super:cloud"
+default_model = "MiniMax-M2.7"
 
 # Enable an extra self-review pass to refine final responses
 # Default: false
@@ -156,7 +156,7 @@ project_doc_max_bytes = 16384
 # Possible values: anthropic, gemini, openai, openrouter, zai
 # Default: "openai"
 # Type: `string`
-provider = "ollama"
+provider = "minimax"
 
 # Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh) Applies
 # to: Claude, GPT-5 family, Gemini, Qwen3, DeepSeek with reasoning capability
@@ -2142,7 +2142,7 @@ shell_zsh_fork = false
 # Default: 20
 # Type: `integer`
 stdout_tail_lines = 20
-emulation_backend = "ghostty"
+emulation_backend = "legacy_vt100"
 
 
 # Sandboxing
@@ -2687,7 +2687,7 @@ edit_file = "allow"
 
 enter_plan = "prompt"
 
-enter_plan_mode = "prompt"
+enter_plan_mode = "allow"
 
 exec_code = "allow"
 

@@ -4,6 +4,8 @@ use crate::config::types::CapabilityLevel;
 const TOOL_UNIFIED_EXEC: &str = "unified_exec";
 const TOOL_UNIFIED_FILE: &str = "unified_file";
 const TOOL_UNIFIED_SEARCH: &str = "unified_search";
+const TOOL_READ_FILE: &str = "read_file";
+const TOOL_LIST_FILES: &str = "list_files";
 const TOOL_APPLY_PATCH: &str = "apply_patch";
 
 /// Generate dynamic guidelines based on available tools and capability level
@@ -42,6 +44,8 @@ pub fn generate_tool_guidelines(
     let has_exec = active_tools.contains(&TOOL_UNIFIED_EXEC);
     let has_file = active_tools.contains(&TOOL_UNIFIED_FILE);
     let has_search = active_tools.contains(&TOOL_UNIFIED_SEARCH);
+    let has_read_file = active_tools.contains(&TOOL_READ_FILE);
+    let has_list_files = active_tools.contains(&TOOL_LIST_FILES);
     let has_apply_patch = active_tools.contains(&TOOL_APPLY_PATCH);
 
     let mut lines = Vec::new();
@@ -56,6 +60,16 @@ pub fn generate_tool_guidelines(
     if has_search && has_exec {
         lines.push(
             "- Rule: Prefer `unified_search` over `unified_exec` for exploration.".to_string(),
+        );
+    }
+    if has_list_files {
+        lines.push(
+            "- Rule: Prefer `list_files` for directory discovery; use `page` and `per_page` to continue instead of shell listing.".to_string(),
+        );
+    }
+    if has_read_file {
+        lines.push(
+            "- Rule: Prefer `read_file` for file contents; use `offset` and `limit` to continue large reads in chunks.".to_string(),
         );
     }
     if has_exec {
@@ -99,6 +113,8 @@ fn render_tool_line(tool: &str) -> String {
     match tool {
         TOOL_UNIFIED_SEARCH => "- `unified_search`: code/text search. Prefer `action='structural'` for code, set `lang` when known, and use `action='grep'` for plain text.".to_string(),
         TOOL_UNIFIED_FILE => "- `unified_file`: file reads and edits. Read before `edit`; use `write` for new files.".to_string(),
+        TOOL_READ_FILE => "- `read_file`: chunked file reads. Use `offset` and `limit` to continue large files without re-reading everything.".to_string(),
+        TOOL_LIST_FILES => "- `list_files`: paginated file discovery. Use `page` and `per_page` for traversal; keep `unified_search` for grep/structural search.".to_string(),
         TOOL_UNIFIED_EXEC => "- `unified_exec`: shell commands and verification. prefer `rg` over shell `grep`; use it for `git diff` and checks.".to_string(),
         TOOL_APPLY_PATCH => "- `apply_patch`: surgical patches. Keep anchors stable and patches small.".to_string(),
         _ => format!("- `{tool}`: available in this session."),
@@ -125,8 +141,12 @@ fn render_tool_line(tool: &str) -> String {
 /// assert_eq!(infer_capability_level(&tools), CapabilityLevel::Editing);
 /// ```
 pub fn infer_capability_level(available_tools: &[String]) -> CapabilityLevel {
-    let has_search = available_tools.iter().any(|t| t == TOOL_UNIFIED_SEARCH);
-    let has_file = available_tools.iter().any(|t| t == TOOL_UNIFIED_FILE);
+    let has_search = available_tools
+        .iter()
+        .any(|t| t == TOOL_UNIFIED_SEARCH || t == TOOL_LIST_FILES);
+    let has_file = available_tools
+        .iter()
+        .any(|t| t == TOOL_UNIFIED_FILE || t == TOOL_READ_FILE);
     let has_exec = available_tools.iter().any(|t| t == TOOL_UNIFIED_EXEC);
 
     if has_search {
@@ -204,6 +224,16 @@ mod tests {
             guidelines.contains("`apply_patch`: surgical patches"),
             "Should mention apply_patch availability"
         );
+    }
+
+    #[test]
+    fn test_harness_browse_tool_guidance() {
+        let tools = vec!["list_files".to_string(), "read_file".to_string()];
+        let guidelines = generate_tool_guidelines(&tools, None);
+        assert!(guidelines.contains("Prefer `list_files`"));
+        assert!(guidelines.contains("Prefer `read_file`"));
+        assert!(guidelines.contains("`offset` and `limit`"));
+        assert!(guidelines.contains("`page` and `per_page`"));
     }
 
     #[test]

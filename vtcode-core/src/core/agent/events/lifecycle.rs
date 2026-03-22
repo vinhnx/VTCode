@@ -21,6 +21,238 @@ struct ToolCallStreamState {
     started: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ToolOutputPayload {
+    pub aggregated_output: String,
+    pub spool_path: Option<String>,
+}
+
+fn pluralize<'a>(count: u64, singular: &'a str, plural: &'a str) -> &'a str {
+    if count == 1 { singular } else { plural }
+}
+
+fn trimmed_string_field<'a>(output: &'a Value, key: &str) -> Option<&'a str> {
+    output
+        .get(key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+}
+
+fn sample_strings_from_objects(items: &[Value], keys: &[&str], limit: usize) -> Vec<String> {
+    let mut samples = Vec::new();
+
+    for item in items {
+        let Some(value) = keys
+            .iter()
+            .find_map(|key| item.get(*key).and_then(Value::as_str))
+            .map(str::trim)
+            .filter(|text| !text.is_empty())
+        else {
+            continue;
+        };
+
+        if samples.iter().any(|sample| sample == value) {
+            continue;
+        }
+
+        samples.push(value.to_string());
+        if samples.len() >= limit {
+            break;
+        }
+    }
+
+    samples
+}
+
+fn match_path_text(item: &Value) -> Option<&str> {
+    item.get("path")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+        .or_else(|| {
+            item.get("file")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|text| !text.is_empty())
+        })
+        .or_else(|| {
+            item.get("data")
+                .and_then(Value::as_object)
+                .and_then(|data| data.get("path"))
+                .and_then(Value::as_object)
+                .and_then(|path| path.get("text"))
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|text| !text.is_empty())
+        })
+}
+
+fn sample_match_paths(matches: &[Value], limit: usize) -> Vec<String> {
+    let mut samples = Vec::new();
+
+    for item in matches {
+        let Some(path) = match_path_text(item) else {
+            continue;
+        };
+
+        if samples.iter().any(|sample| sample == path) {
+            continue;
+        }
+
+        samples.push(path.to_string());
+        if samples.len() >= limit {
+            break;
+        }
+    }
+
+    samples
+}
+
+fn summarize_list_items(output: &Value, items: &[Value]) -> String {
+    let total = output
+        .get("total")
+        .or_else(|| output.get("count"))
+        .and_then(Value::as_u64)
+        .unwrap_or(items.len() as u64);
+
+    let (files, directories) = items
+        .iter()
+        .fold((0u64, 0u64), |(files, directories), item| {
+            match item.get("type").and_then(Value::as_str) {
+                Some("file") => (files + 1, directories),
+                Some("directory") => (files, directories + 1),
+                _ => (files, directories),
+            }
+        });
+
+    let mut summary = format!("Listed {total} {}", pluralize(total, "item", "items"));
+    if files > 0 || directories > 0 {
+        summary.push_str(&format!(
+            " ({files} {}, {directories} {})",
+            pluralize(files, "file", "files"),
+            pluralize(directories, "directory", "directories"),
+        ));
+    }
+
+    let samples = sample_strings_from_objects(items, &["path", "name"], 3);
+    if !samples.is_empty() {
+        summary.push_str(&format!(": {}", samples.join(", ")));
+    }
+
+    summary
+}
+
+fn summarize_file_list(output: &Value, files: &[Value]) -> String {
+    let total = output
+        .get("total")
+        .and_then(Value::as_u64)
+        .unwrap_or(files.len() as u64);
+    let mut summary = format!("Listed {total} {}", pluralize(total, "file", "files"));
+
+    let samples = files
+        .iter()
+        .filter_map(Value::as_str)
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+        .take(3)
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    if !samples.is_empty() {
+        summary.push_str(&format!(": {}", samples.join(", ")));
+    }
+
+    summary
+}
+
+fn summarize_matches(output: &Value, matches: &[Value]) -> String {
+    let total = output
+        .get("total_match_count")
+        .or_else(|| output.get("matched_count"))
+        .or_else(|| output.get("count"))
+        .and_then(Value::as_u64)
+        .unwrap_or(matches.len() as u64);
+
+    if total == 0 {
+        return "No matches found".to_string();
+    }
+
+    let mut summary = format!("Found {total} {}", pluralize(total, "match", "matches"));
+
+    let samples = sample_match_paths(matches, 3);
+    if !samples.is_empty() {
+        summary.push_str(&format!(" in {}", samples.join(", ")));
+    } else if let Some(path) = trimmed_string_field(output, "path") {
+        summary.push_str(&format!(" in {path}"));
+    }
+
+    summary
+}
+
+fn append_unique_line(lines: &mut Vec<String>, line: &str) {
+    if !lines.iter().any(|existing| existing == line) {
+        lines.push(line.to_string());
+    }
+}
+
+pub fn tool_output_payload_from_value(output: &Value) -> ToolOutputPayload {
+    if let Some(spool_path) = output.get("spool_path").and_then(Value::as_str) {
+        return ToolOutputPayload {
+            aggregated_output: String::new(),
+            spool_path: Some(spool_path.to_string()),
+        };
+    }
+
+    let mut primary_text = Vec::new();
+    for key in ["output", "stdout", "stderr", "content"] {
+        if let Some(text) = trimmed_string_field(output, key) {
+            append_unique_line(&mut primary_text, text);
+        }
+    }
+
+    if !primary_text.is_empty() {
+        return ToolOutputPayload {
+            aggregated_output: primary_text.join("\n"),
+            spool_path: None,
+        };
+    }
+
+    let structured_summary = if let Some(items) = output.get("items").and_then(Value::as_array) {
+        Some(summarize_list_items(output, items))
+    } else if let Some(files) = output.get("files").and_then(Value::as_array) {
+        Some(summarize_file_list(output, files))
+    } else if let Some(matches) = output.get("matches").and_then(Value::as_array) {
+        Some(summarize_matches(output, matches))
+    } else {
+        output
+            .as_object()
+            .map(|obj| {
+                obj.keys()
+                    .filter(|key| key.as_str() != "success")
+                    .take(4)
+                    .cloned()
+                    .collect::<Vec<_>>()
+            })
+            .filter(|keys| !keys.is_empty())
+            .map(|keys| format!("Structured result with fields: {}", keys.join(", ")))
+    };
+
+    let mut parts = Vec::new();
+    if let Some(summary) = structured_summary.as_deref() {
+        append_unique_line(&mut parts, summary);
+    }
+    for key in ["message", "hint"] {
+        if let Some(text) = trimmed_string_field(output, key) {
+            append_unique_line(&mut parts, text);
+        }
+    }
+
+    ToolOutputPayload {
+        aggregated_output: parts.join("\n"),
+        spool_path: None,
+    }
+}
+
 /// Shared lifecycle state for assistant text, reasoning, and model-emitted tool calls.
 #[derive(Debug, Default)]
 pub struct SharedLifecycleEmitter {
@@ -564,6 +796,8 @@ fn progress_tool_arguments(arguments: &str) -> Value {
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
+
     use super::*;
 
     #[test]
@@ -592,5 +826,104 @@ mod tests {
         assert_eq!(details.tool_call_id.as_deref(), Some("call_1"));
         assert_eq!(details.output, "abc");
         assert_eq!(details.status, ToolCallStatus::InProgress);
+    }
+
+    #[test]
+    fn tool_output_payload_preserves_spool_reference() {
+        let payload = tool_output_payload_from_value(&json!({
+            "spool_path": ".vtcode/context/tool_outputs/run-1.txt",
+            "output": "ignored"
+        }));
+
+        assert_eq!(payload.aggregated_output, "");
+        assert_eq!(
+            payload.spool_path.as_deref(),
+            Some(".vtcode/context/tool_outputs/run-1.txt")
+        );
+    }
+
+    #[test]
+    fn tool_output_payload_summarizes_list_results() {
+        let payload = tool_output_payload_from_value(&json!({
+            "items": [
+                {"name": "app.rs", "path": "vtcode-tui/src/app.rs", "type": "file"},
+                {"name": "core_tui", "path": "vtcode-tui/src/core_tui", "type": "directory"},
+                {"name": "lib.rs", "path": "vtcode-tui/src/lib.rs", "type": "file"}
+            ],
+            "count": 3,
+            "total": 11
+        }));
+
+        assert_eq!(payload.spool_path, None);
+        assert!(payload.aggregated_output.contains("Listed 11 items"));
+        assert!(payload.aggregated_output.contains("2 files, 1 directory"));
+        assert!(payload.aggregated_output.contains("vtcode-tui/src/app.rs"));
+    }
+
+    #[test]
+    fn tool_output_payload_combines_list_summary_with_message() {
+        let payload = tool_output_payload_from_value(&json!({
+            "items": [
+                {"name": "app.rs", "path": "vtcode-tui/src/app.rs", "type": "file"},
+                {"name": "core_tui", "path": "vtcode-tui/src/core_tui", "type": "directory"}
+            ],
+            "count": 2,
+            "total": 2,
+            "message": "[+3 more items]"
+        }));
+
+        assert!(payload.aggregated_output.contains("Listed 2 items"));
+        assert!(payload.aggregated_output.contains("[+3 more items]"));
+    }
+
+    #[test]
+    fn tool_output_payload_summarizes_match_results() {
+        let payload = tool_output_payload_from_value(&json!({
+            "matches": [
+                {"path": "src/main.rs", "line_number": 12},
+                {"file": "src/lib.rs", "line_number": 9}
+            ],
+            "total_match_count": 7
+        }));
+
+        assert_eq!(payload.spool_path, None);
+        assert!(payload.aggregated_output.contains("Found 7 matches"));
+        assert!(payload.aggregated_output.contains("src/main.rs"));
+        assert!(payload.aggregated_output.contains("src/lib.rs"));
+    }
+
+    #[test]
+    fn tool_output_payload_summarizes_nested_match_paths() {
+        let payload = tool_output_payload_from_value(&json!({
+            "matches": [
+                {
+                    "type": "match",
+                    "data": {
+                        "path": {"text": "vtcode-tui/src/core_tui/runner/mod.rs"},
+                        "line_number": 27,
+                        "lines": {"text": "runloop\n"}
+                    }
+                }
+            ],
+            "total_match_count": 1
+        }));
+
+        assert!(payload.aggregated_output.contains("Found 1 match"));
+        assert!(
+            payload
+                .aggregated_output
+                .contains("vtcode-tui/src/core_tui/runner/mod.rs")
+        );
+    }
+
+    #[test]
+    fn tool_output_payload_reports_empty_match_set() {
+        let payload = tool_output_payload_from_value(&json!({
+            "matches": [],
+            "path": "vtcode-core/src"
+        }));
+
+        assert_eq!(payload.aggregated_output, "No matches found");
+        assert_eq!(payload.spool_path, None);
     }
 }

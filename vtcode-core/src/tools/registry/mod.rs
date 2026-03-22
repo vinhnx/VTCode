@@ -818,6 +818,26 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn preflight_prefers_direct_harness_browse_tool_routes() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+        let read_outcome = registry.preflight_validate_call(
+            tools::READ_FILE,
+            &json!({"path": "vtcode-core/src/lib.rs"}),
+        )?;
+        assert_eq!(read_outcome.normalized_tool_name, tools::READ_FILE);
+
+        let list_outcome = registry.preflight_validate_call(
+            tools::LIST_FILES,
+            &json!({"path": "vtcode-core/src", "page": 1, "per_page": 20}),
+        )?;
+        assert_eq!(list_outcome.normalized_tool_name, tools::LIST_FILES);
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn preflight_normalizes_plan_mode_force_on_aliases() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;

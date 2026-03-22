@@ -1,41 +1,12 @@
 use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
 use serde_json::Value;
 use vtcode_core::core::agent::events::{
-    error_item_completed_event, tool_invocation_completed_event, tool_output_completed_event,
+    ToolOutputPayload, error_item_completed_event, tool_invocation_completed_event,
+    tool_output_completed_event, tool_output_payload_from_value,
 };
 use vtcode_core::exec::events::ToolCallStatus;
 
 use super::status::ToolExecutionStatus;
-
-struct ToolOutputEventPayload {
-    aggregated_output: String,
-    spool_path: Option<String>,
-}
-
-fn aggregated_output_from_value(output: &Value) -> ToolOutputEventPayload {
-    if let Some(spool_path) = output.get("spool_path").and_then(Value::as_str) {
-        return ToolOutputEventPayload {
-            aggregated_output: String::new(),
-            spool_path: Some(spool_path.to_string()),
-        };
-    }
-
-    let mut parts = Vec::new();
-
-    for key in ["output", "stdout", "stderr", "content"] {
-        if let Some(text) = output.get(key).and_then(Value::as_str) {
-            let trimmed = text.trim();
-            if !trimmed.is_empty() && !parts.iter().any(|part| part == trimmed) {
-                parts.push(trimmed.to_string());
-            }
-        }
-    }
-
-    ToolOutputEventPayload {
-        aggregated_output: parts.join("\n"),
-        spool_path: None,
-    }
-}
 
 pub(super) fn emit_tool_completion_status(
     harness_emitter: Option<&HarnessEventEmitter>,
@@ -106,12 +77,12 @@ pub(super) fn emit_tool_completion_for_status(
                 .get("exit_code")
                 .and_then(Value::as_i64)
                 .and_then(|code| i32::try_from(code).ok()),
-            aggregated_output_from_value(output),
+            tool_output_payload_from_value(output),
         ),
         ToolExecutionStatus::Failure { error } => (
             ToolCallStatus::Failed,
             None,
-            ToolOutputEventPayload {
+            ToolOutputPayload {
                 aggregated_output: error.to_string(),
                 spool_path: None,
             },
@@ -119,7 +90,7 @@ pub(super) fn emit_tool_completion_for_status(
         ToolExecutionStatus::Timeout { error } => (
             ToolCallStatus::Failed,
             None,
-            ToolOutputEventPayload {
+            ToolOutputPayload {
                 aggregated_output: error.message.clone(),
                 spool_path: None,
             },
@@ -127,7 +98,7 @@ pub(super) fn emit_tool_completion_for_status(
         ToolExecutionStatus::Cancelled => (
             ToolCallStatus::Failed,
             None,
-            ToolOutputEventPayload {
+            ToolOutputPayload {
                 aggregated_output: "Tool execution cancelled".to_string(),
                 spool_path: None,
             },
@@ -161,7 +132,7 @@ mod tests {
             "stderr": "warn"
         });
 
-        let payload = aggregated_output_from_value(&output);
+        let payload = tool_output_payload_from_value(&output);
         assert_eq!(payload.aggregated_output, "same\nwarn");
         assert_eq!(payload.spool_path, None);
     }
@@ -173,7 +144,7 @@ mod tests {
             "path": "README.md"
         });
 
-        let payload = aggregated_output_from_value(&output);
+        let payload = tool_output_payload_from_value(&output);
         assert_eq!(payload.aggregated_output, "file body");
         assert_eq!(payload.spool_path, None);
     }
@@ -185,12 +156,28 @@ mod tests {
             "spool_path": ".vtcode/context/tool_outputs/run-1.txt"
         });
 
-        let payload = aggregated_output_from_value(&output);
+        let payload = tool_output_payload_from_value(&output);
         assert_eq!(payload.aggregated_output, "");
         assert_eq!(
             payload.spool_path.as_deref(),
             Some(".vtcode/context/tool_outputs/run-1.txt")
         );
+    }
+
+    #[test]
+    fn structured_list_output_emits_compact_summary() {
+        let output = json!({
+            "items": [
+                {"path": "vtcode-tui/src/app.rs", "type": "file"},
+                {"path": "vtcode-tui/src/core_tui", "type": "directory"}
+            ],
+            "count": 2,
+            "total": 11
+        });
+
+        let payload = tool_output_payload_from_value(&output);
+        assert!(payload.aggregated_output.contains("Listed 11 items"));
+        assert!(payload.aggregated_output.contains("vtcode-tui/src/app.rs"));
     }
 
     #[test]
@@ -220,7 +207,7 @@ mod tests {
                     .get("exit_code")
                     .and_then(Value::as_i64)
                     .and_then(|code| i32::try_from(code).ok()),
-                aggregated_output_from_value(output),
+                tool_output_payload_from_value(output),
             ),
             _ => unreachable!("success status expected"),
         };

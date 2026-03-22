@@ -383,6 +383,7 @@ impl FileOpsTool {
             .iter()
             .find(|candidate| is_tool_output_spool_path(candidate.as_path()))
             .cloned();
+        let mut directory_candidate = None;
 
         for candidate_path in &potential_paths {
             if !tokio::fs::try_exists(candidate_path).await? {
@@ -399,6 +400,9 @@ impl FileOpsTool {
 
             let metadata = tokio::fs::metadata(&canonical).await?;
             if !metadata.is_file() {
+                if metadata.is_dir() && directory_candidate.is_none() {
+                    directory_candidate = Some(canonical);
+                }
                 continue;
             }
 
@@ -617,6 +621,15 @@ impl FileOpsTool {
             return Err(anyhow!(
                 "Error: Spool file not found (possibly expired): {}. Re-run the original tool command to regenerate this output.",
                 self.workspace_relative_display(&spool_path),
+            ));
+        }
+
+        if let Some(directory_path) = directory_candidate {
+            let display_path = self.workspace_relative_display(&directory_path);
+            return Err(anyhow!(
+                "Error: Path '{}' is a directory, not a file. Use unified_search with action=\"list\" and path=\"{}\" to inspect it, or set mode=\"recursive\" for nested discovery.",
+                display_path,
+                display_path,
             ));
         }
 
@@ -1039,6 +1052,24 @@ mod read_tests {
 
         assert!(err.contains("Did you mean"));
         assert!(err.contains("src/tool_exec.rs"));
+    }
+
+    #[tokio::test]
+    async fn test_directory_path_returns_actionable_list_guidance() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_root = temp_dir.path().to_path_buf();
+        fs::create_dir_all(workspace_root.join("src/agent")).unwrap();
+        let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
+        let file_ops = FileOpsTool::new(workspace_root, grep_manager);
+
+        let args = json!({
+            "path": "src"
+        });
+        let err = file_ops.read_file(args).await.unwrap_err().to_string();
+
+        assert!(err.contains("is a directory, not a file"));
+        assert!(err.contains("action=\"list\""));
+        assert!(err.contains("path=\"src\""));
     }
 
     #[tokio::test]

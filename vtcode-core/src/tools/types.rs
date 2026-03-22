@@ -193,6 +193,8 @@ pub struct ListInput {
     pub response_format: Option<String>,
     #[serde(default)]
     pub include_hidden: bool,
+    #[serde(default, alias = "pattern", alias = "query")]
+    pub glob_pattern: Option<String>,
     // Enhanced file discovery parameters
     #[serde(default)]
     pub mode: Option<String>, // "list", "recursive", "find_name", "find_content", "largest"

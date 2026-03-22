@@ -167,3 +167,7 @@ PLAYGROUNDs:
 A plugin that generates standalone HTML files for visual, interactive problem-solving Architecture visualisation, design tweaking, game balancing, inline writing critique
 
 The tip: think of a unique way of interacting with the model and ask it to express that
+
+==
+
+check auto-mode keep asking for permission for tools use?
