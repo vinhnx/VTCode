@@ -17,6 +17,8 @@ use crate::updater::{InlineUpdateOutcome, display_update_notice, run_inline_upda
 use std::sync::Arc;
 use vtcode_config::loader::SimpleConfigWatcher;
 use vtcode_core::core::agent::features::FeatureSet;
+use vtcode_core::core::agent::runtime::AgentRuntime;
+use vtcode_core::core::agent::session::AgentSessionState;
 use vtcode_core::core::interfaces::session::PlanModeEntrySource;
 use vtcode_tui::app::{
     InlineHandle, InlineListItem, InlineListSelection, InlineSession, ListOverlayRequest,
@@ -580,7 +582,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             mut tool_registry,
             tools,
             tool_catalog,
-            mut conversation_history,
+            conversation_history,
             execution,
             metadata,
             async_mcp_manager,
@@ -592,6 +594,26 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         let traj = metadata.trajectory;
         let telemetry = metadata.telemetry;
         let error_recovery = metadata.error_recovery;
+        let max_tool_loops = vt_cfg
+            .as_ref()
+            .map(|cfg| cfg.tools.max_tool_loops)
+            .filter(|limit| *limit > 0)
+            .unwrap_or(vtcode_core::config::constants::defaults::DEFAULT_MAX_TOOL_LOOPS);
+        let max_context_tokens = vt_cfg
+            .as_ref()
+            .map(|cfg| cfg.context.max_context_tokens)
+            .unwrap_or_else(vtcode_config::context::default_max_context_tokens);
+        let mut runtime = AgentRuntime::new(
+            AgentSessionState::new(
+                SessionId::new().0,
+                config.max_conversation_turns,
+                max_tool_loops,
+                max_context_tokens,
+            ),
+            None,
+            None,
+        );
+        runtime.state.messages = conversation_history;
         let tool_result_cache = execution.tool_result_cache;
         let tool_permission_cache = execution.tool_permission_cache;
         let approval_recorder = execution.approval_recorder;
@@ -665,6 +687,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             ),
         );
         let mut queued_inputs: VecDeque<String> = VecDeque::with_capacity(8);
+        let mut deferred_follow_up_inputs: VecDeque<String> = VecDeque::with_capacity(8);
         let mut agent_touched_paths = std::collections::BTreeSet::new();
         let mut ctrl_c_notice_displayed = false;
         let mut mcp_catalog_initialized = tool_registry.mcp_client().is_some();
@@ -702,7 +725,15 @@ pub(super) async fn run_single_agent_loop_unified_impl(
 
         if !startup_update_requested_restart {
             loop {
-                let interaction_outcome = {
+                use crate::agent::runloop::unified::turn::session::interaction_loop::InteractionOutcome;
+
+                let interaction_outcome = if let Some(input) = deferred_follow_up_inputs.pop_front()
+                {
+                    InteractionOutcome::Continue {
+                        input,
+                        prompt_message_index: None,
+                    }
+                } else {
                     let mut interaction_turn_metadata_cache = None;
                     let mut interaction_ctx = crate::agent::runloop::unified::turn::session::interaction_loop::InteractionLoopContext {
                     renderer: &mut renderer,
@@ -721,7 +752,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     tool_registry: &mut tool_registry,
                     tools: &tools,
                     tool_catalog: &tool_catalog,
-                    conversation_history: &mut conversation_history,
+                    conversation_history: &mut runtime.state.messages,
                     agent_touched_paths: &mut agent_touched_paths,
                     decision_ledger: &decision_ledger,
                     context_manager: &mut context_manager,
@@ -750,6 +781,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     turn_metadata_cache: &mut interaction_turn_metadata_cache,
                     harness_config: harness_config.clone(),
                     steering_receiver,
+                    deferred_follow_up_inputs: &mut deferred_follow_up_inputs,
                     startup_update_notice_rx: &mut startup_update_notice_rx,
                 };
 
@@ -772,7 +804,6 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     &mut interaction_state,
                 ).await?
                 };
-                use crate::agent::runloop::unified::turn::session::interaction_loop::InteractionOutcome;
                 let (next_turn_input, completed_turn_prompt_message_index) =
                     match interaction_outcome {
                         InteractionOutcome::Exit { reason } => {
@@ -831,16 +862,16 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                                 execution_directive.push_str("\n\nApproved plan context:\n");
                                 execution_directive.push_str(&seed);
                             }
-                            conversation_history.push(vtcode_core::llm::provider::Message::system(
-                                execution_directive,
-                            ));
+                            runtime.state.messages.push(
+                                vtcode_core::llm::provider::Message::system(execution_directive),
+                            );
                             (PLAN_APPROVED_EXECUTION_INPUT.to_string(), None)
                         }
                     };
                 if next_turn_input.trim().is_empty() {
                     continue;
                 }
-                let mut working_history = std::mem::take(&mut conversation_history);
+                let mut working_history = std::mem::take(&mut runtime.state.messages);
                 let mut transient_system_note_indices = Vec::with_capacity(2);
                 if let Some(note) = {
                     let stale_paths = tool_registry.edited_file_monitor().stale_tracked_paths();
@@ -935,6 +966,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         skip_confirmations,
                         full_auto,
                         steering_receiver,
+                        &mut deferred_follow_up_inputs,
                     );
 
                     let result = timeout(
@@ -1044,7 +1076,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         .iter()
                         .map(|path| normalize_workspace_path(config.workspace.as_path(), path)),
                 );
-                conversation_history = working_history;
+                runtime.state.messages = working_history;
                 let outcome_result = outcome.result.clone();
                 let turn_elapsed = turn_started_at.elapsed();
                 let show_turn_timer = vt_cfg
@@ -1055,7 +1087,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 if let Err(err) = crate::agent::runloop::unified::turn::apply_turn_outcome(
                     outcome,
                     crate::agent::runloop::unified::turn::TurnOutcomeContext {
-                        conversation_history: &mut conversation_history,
+                        conversation_history: &mut runtime.state.messages,
                         completed_turn_prompt: Some(next_turn_input.as_str()),
                         completed_turn_prompt_message_index,
                         renderer: &mut renderer,
@@ -1103,7 +1135,9 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     .await;
                 tool_result_cache.write().await.check_pressure_and_evict();
                 if let Some(archive) = session_archive.as_ref() {
-                    let mut recent_messages: Vec<SessionMessage> = conversation_history
+                    let mut recent_messages: Vec<SessionMessage> = runtime
+                        .state
+                        .messages
                         .iter()
                         .rev()
                         .take(RECENT_MESSAGE_LIMIT)
@@ -1118,7 +1152,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
 
                     if let Err(err) = archive
                         .persist_progress_async(SessionProgressArgs {
-                            total_messages: conversation_history.len(),
+                            total_messages: runtime.state.messages.len(),
                             distinct_tools: distinct_tools.clone(),
                             recent_messages,
                             turn_number: progress_turn,
@@ -1172,7 +1206,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             session_end_reason,
             &mut session_archive,
             &session_stats,
-            &conversation_history,
+            &runtime.state.messages,
             linked_directories,
             async_mcp_manager.as_deref(),
             &handle,

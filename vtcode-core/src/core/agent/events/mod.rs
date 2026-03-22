@@ -1,13 +1,11 @@
 //! Event recording utilities for the agent runner.
 
 mod lifecycle;
-pub mod unified;
 pub use lifecycle::{
     SharedLifecycleEmitter, error_item_completed_event, tool_invocation_completed_event,
     tool_output_completed_event, tool_output_item_id, tool_output_started_event,
     tool_output_updated_event, tool_started_event,
 };
-pub use unified::AgentEvent;
 
 use crate::core::threads::{SubmissionId, ThreadRuntimeHandle};
 use crate::exec::events::{
@@ -36,6 +34,13 @@ pub struct ActiveToolHandle {
     tool_name: String,
     arguments: Option<Value>,
     tool_call_id: Option<String>,
+}
+
+impl ActiveToolHandle {
+    #[must_use]
+    pub fn item_id(&self) -> &str {
+        &self.id
+    }
 }
 
 /// Helper responsible for recording execution events and relaying them to optional sinks.
@@ -94,6 +99,19 @@ impl ExecEventRecorder {
             handle.record_event(submission_id, turn_id, event.clone());
         }
         self.events.push(event);
+    }
+
+    pub fn record_thread_event(&mut self, event: ThreadEvent) {
+        self.record(event);
+    }
+
+    pub fn record_thread_events<I>(&mut self, events: I)
+    where
+        I: IntoIterator<Item = ThreadEvent>,
+    {
+        for event in events {
+            self.record(event);
+        }
     }
 
     fn record_pending_lifecycle_events(&mut self) {
@@ -225,6 +243,45 @@ impl ExecEventRecorder {
         self.record(tool_output_completed_event(
             handle.id.clone(),
             handle.tool_call_id.as_deref(),
+            status,
+            exit_code,
+            spool_path,
+            aggregated_output,
+        ));
+    }
+
+    pub fn tool_output_started(&mut self, call_item_id: &str, tool_call_id: Option<&str>) {
+        self.record(tool_output_started_event(
+            call_item_id.to_string(),
+            tool_call_id,
+        ));
+    }
+
+    pub fn tool_output_updated(
+        &mut self,
+        call_item_id: &str,
+        tool_call_id: Option<&str>,
+        output: &str,
+    ) {
+        self.record(tool_output_updated_event(
+            call_item_id.to_string(),
+            tool_call_id,
+            output,
+        ));
+    }
+
+    pub fn tool_output_finished(
+        &mut self,
+        call_item_id: &str,
+        tool_call_id: Option<&str>,
+        status: crate::exec::events::ToolCallStatus,
+        exit_code: Option<i32>,
+        aggregated_output: &str,
+        spool_path: Option<&str>,
+    ) {
+        self.record(tool_output_completed_event(
+            call_item_id.to_string(),
+            tool_call_id,
             status,
             exit_code,
             spool_path,

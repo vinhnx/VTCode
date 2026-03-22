@@ -1208,6 +1208,6 @@ mod tests {
 
         assert!(saw_started);
         assert!(saw_updated);
-        assert!(saw_completed);
+        assert!(!saw_completed);
     }
 }

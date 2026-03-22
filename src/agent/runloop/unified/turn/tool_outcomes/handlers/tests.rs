@@ -124,6 +124,7 @@ struct TestContextBacking {
     tool_catalog: Arc<ToolCatalogState>,
     default_placeholder: Option<String>,
     steering_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
+    deferred_follow_up_inputs: std::collections::VecDeque<String>,
     config: AgentConfig,
     provider_client: Box<dyn uni::LLMProvider>,
     traj: TrajectoryLogger,
@@ -181,6 +182,7 @@ impl TestContextBacking {
         let tool_catalog = Arc::new(ToolCatalogState::new());
         let default_placeholder = None;
         let steering_receiver = None;
+        let deferred_follow_up_inputs = std::collections::VecDeque::new();
         let config = AgentConfig {
             model: "noop-model".to_string(),
             api_key: "test-key".to_string(),
@@ -239,6 +241,7 @@ impl TestContextBacking {
             tool_catalog,
             default_placeholder,
             steering_receiver,
+            deferred_follow_up_inputs,
             config,
             provider_client,
             traj,
@@ -292,6 +295,7 @@ impl TestContextBacking {
             harness_state: &mut self.harness_state,
             harness_emitter: None,
             steering_receiver: &mut self.steering_receiver,
+            deferred_follow_up_inputs: &mut self.deferred_follow_up_inputs,
         };
 
         TurnProcessingContext::from_parts(TurnProcessingContextParts {

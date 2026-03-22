@@ -157,7 +157,7 @@ fn emit_loop_hard_cap_break_metric(
 
 pub(super) async fn handle_steering_messages(
     ctx: &mut TurnLoopContext<'_>,
-    working_history: &mut Vec<uni::Message>,
+    _working_history: &mut Vec<uni::Message>,
     result: &mut TurnLoopResult,
 ) -> Result<bool> {
     let renderer = &mut *ctx.renderer;
@@ -191,7 +191,7 @@ pub(super) async fn handle_steering_messages(
             {
                 for message in pending.drain(..pause_index) {
                     if let SteeringMessage::FollowUpInput(input) = message {
-                        append_follow_up_input(renderer, working_history, input)?;
+                        queue_follow_up_input(renderer, ctx.deferred_follow_up_inputs, input)?;
                     }
                 }
                 pending.remove(0);
@@ -201,7 +201,7 @@ pub(super) async fn handle_steering_messages(
                     ctrl_c_state,
                     ctrl_c_notify,
                     receiver,
-                    working_history,
+                    ctx.deferred_follow_up_inputs,
                     result,
                     pending,
                 )
@@ -214,7 +214,7 @@ pub(super) async fn handle_steering_messages(
 
             for message in pending {
                 if let SteeringMessage::FollowUpInput(input) = message {
-                    append_follow_up_input(renderer, working_history, input)?;
+                    queue_follow_up_input(renderer, ctx.deferred_follow_up_inputs, input)?;
                 }
             }
         }
@@ -223,13 +223,13 @@ pub(super) async fn handle_steering_messages(
     Ok(false)
 }
 
-fn append_follow_up_input(
+fn queue_follow_up_input(
     renderer: &mut vtcode_core::utils::ansi::AnsiRenderer,
-    working_history: &mut Vec<uni::Message>,
+    deferred_follow_up_inputs: &mut std::collections::VecDeque<String>,
     input: String,
 ) -> Result<()> {
-    display_status(renderer, &format!("Follow-up Input: {}", input))?;
-    working_history.push(uni::Message::user(input));
+    display_status(renderer, &format!("Queued Follow-up Input: {}", input))?;
+    deferred_follow_up_inputs.push_back(input);
     Ok(())
 }
 
@@ -249,7 +249,7 @@ async fn handle_pause_signal(
     ctrl_c_state: &crate::agent::runloop::unified::state::CtrlCState,
     ctrl_c_notify: &tokio::sync::Notify,
     receiver: &mut tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>,
-    working_history: &mut Vec<uni::Message>,
+    deferred_follow_up_inputs: &mut std::collections::VecDeque<String>,
     result: &mut TurnLoopResult,
     pending: Vec<SteeringMessage>,
 ) -> Result<bool> {
@@ -266,7 +266,7 @@ async fn handle_pause_signal(
                 return Ok(true);
             }
             SteeringMessage::FollowUpInput(input) => {
-                append_follow_up_input(renderer, working_history, input)?;
+                queue_follow_up_input(renderer, deferred_follow_up_inputs, input)?;
             }
             SteeringMessage::Pause => {}
         }
@@ -288,7 +288,7 @@ async fn handle_pause_signal(
                 return Ok(true);
             }
             Ok(SteeringMessage::FollowUpInput(input)) => {
-                append_follow_up_input(renderer, working_history, input)?;
+                queue_follow_up_input(renderer, deferred_follow_up_inputs, input)?;
             }
             Ok(SteeringMessage::Pause) => {}
             Err(TryRecvError::Disconnected) => return Ok(false),
@@ -951,7 +951,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn steering_follow_up_inputs_append_in_order() {
+    async fn steering_follow_up_inputs_queue_in_order() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
         sender
@@ -974,10 +974,7 @@ mod tests {
 
         assert!(!handled);
         assert!(matches!(result, TurnLoopResult::Completed));
-        let inputs: Vec<String> = working_history
-            .iter()
-            .map(|message| message.content.as_text().to_string())
-            .collect();
+        let inputs = backing.deferred_follow_up_inputs();
         assert_eq!(inputs, vec!["first".to_string(), "second".to_string()]);
     }
 
@@ -1008,10 +1005,7 @@ mod tests {
 
         assert!(!handled);
         assert!(matches!(result, TurnLoopResult::Completed));
-        let inputs: Vec<String> = working_history
-            .iter()
-            .map(|message| message.content.as_text().to_string())
-            .collect();
+        let inputs = backing.deferred_follow_up_inputs();
         assert_eq!(inputs, vec!["refine search".to_string()]);
     }
 
@@ -1039,10 +1033,7 @@ mod tests {
 
         assert!(!handled);
         assert!(matches!(result, TurnLoopResult::Completed));
-        let inputs: Vec<String> = working_history
-            .iter()
-            .map(|message| message.content.as_text().to_string())
-            .collect();
+        let inputs = backing.deferred_follow_up_inputs();
         assert_eq!(inputs, vec!["use the queued note".to_string()]);
     }
 
@@ -1068,5 +1059,6 @@ mod tests {
         assert!(handled);
         assert!(matches!(result, TurnLoopResult::Cancelled));
         assert!(working_history.is_empty());
+        assert!(backing.deferred_follow_up_inputs().is_empty());
     }
 }

@@ -440,6 +440,7 @@ impl AgentRunner {
                         Some(std::time::Duration::from_secs(60)),
                     )
                     .await?;
+                event_recorder.record_thread_events(runtime.take_emitted_events());
                 let response = turn_output.response;
 
                 self.runner_println(format_args!(
@@ -448,10 +449,6 @@ impl AgentRunner {
                     self.agent_type,
                     style("(RECV)").green().bold()
                 ));
-
-                if let Some(reasoning) = response.reasoning.as_ref() {
-                    event_recorder.reasoning(reasoning);
-                }
 
                 self.warn_on_empty_response(
                     &agent_prefix,
@@ -464,7 +461,6 @@ impl AgentRunner {
 
                 let response_text = response.content_string();
                 if !response_text.trim().is_empty() {
-                    event_recorder.agent_message(&response_text);
                     self.emit_final_assistant_message(&self.agent_type, &response_text);
                 }
 
@@ -635,6 +631,7 @@ impl AgentRunner {
                         previous_response_chain_present,
                     )
                     .await?;
+                    event_recorder.record_thread_events(runtime.take_emitted_events());
                 }
 
                 let had_effective_shell_tool_call =

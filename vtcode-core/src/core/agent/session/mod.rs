@@ -1,7 +1,5 @@
 //! Centralized agent session state management.
 
-pub mod controller;
-
 use crate::core::agent::task::{TaskOutcome, TaskResults};
 use crate::exec::events::Usage;
 use crate::llm::provider::Message;

@@ -1,5 +1,6 @@
 use anyhow::Result;
 use std::collections::BTreeSet;
+use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
@@ -86,6 +87,7 @@ pub(crate) struct TurnLoopContext<'a> {
     pub skip_confirmations: bool,
     pub full_auto: bool,
     pub steering_receiver: &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
+    pub deferred_follow_up_inputs: &'a mut VecDeque<String>,
 }
 
 impl<'a> TurnLoopContext<'a> {
@@ -130,6 +132,7 @@ impl<'a> TurnLoopContext<'a> {
         skip_confirmations: bool,
         full_auto: bool,
         steering_receiver: &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
+        deferred_follow_up_inputs: &'a mut VecDeque<String>,
     ) -> Self {
         Self {
             renderer,
@@ -169,6 +172,7 @@ impl<'a> TurnLoopContext<'a> {
             skip_confirmations,
             full_auto,
             steering_receiver,
+            deferred_follow_up_inputs,
         }
     }
 
@@ -243,6 +247,7 @@ impl<'a> TurnLoopContext<'a> {
             harness_state: self.harness_state,
             harness_emitter: self.harness_emitter,
             steering_receiver: self.steering_receiver,
+            deferred_follow_up_inputs: self.deferred_follow_up_inputs,
         };
 
         crate::agent::runloop::unified::turn::context::TurnProcessingContext::from_parts(

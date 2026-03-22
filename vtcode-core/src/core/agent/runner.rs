@@ -483,16 +483,6 @@ impl AgentRunner {
         })
     }
 
-    /// Check for pending steering messages
-    pub fn check_steering(&self) -> Option<SteeringMessage> {
-        let mut guard = self.steering_receiver.lock();
-        if let Some(rx) = guard.as_mut() {
-            rx.try_recv().ok()
-        } else {
-            None
-        }
-    }
-
     /// Enable or disable console output for this runner.
     pub fn set_quiet(&mut self, quiet: bool) {
         self.quiet = quiet;

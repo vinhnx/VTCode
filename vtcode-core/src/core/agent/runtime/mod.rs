@@ -1,9 +1,7 @@
 use crate::core::agent::events::{EventSink, SharedLifecycleEmitter};
 use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::steering::SteeringMessage;
-use crate::exec::events::{
-    ThreadEvent, ToolCallStatus, TurnCompletedEvent, TurnStartedEvent, Usage,
-};
+use crate::exec::events::{ThreadEvent, ToolCallStatus};
 use crate::llm::provider::{
     AssistantPhase, FinishReason, LLMProvider, LLMRequest, LLMResponse, NormalizedStreamEvent,
     ToolCall, Usage as ProviderUsage,
@@ -40,47 +38,28 @@ fn merge_stream_and_completed_text(accumulated: &mut String, completed: Option<&
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuntimeControl {
     Continue,
+    Resumed,
     StopRequested,
 }
 
-pub struct TurnExecution {
-    pub response: LLMResponse,
-    pub content: String,
-    pub reasoning: Option<String>,
-}
-
-pub struct AgentRuntime {
-    pub state: AgentSessionState,
-    event_sink: Option<EventSink>,
+pub struct RuntimeSteering {
     steering_receiver: Option<UnboundedReceiver<SteeringMessage>>,
-    lifecycle: SharedLifecycleEmitter,
     queued_follow_up_inputs: VecDeque<String>,
 }
 
-impl AgentRuntime {
-    pub fn new(
-        state: AgentSessionState,
-        event_sink: Option<EventSink>,
-        steering_receiver: Option<UnboundedReceiver<SteeringMessage>>,
-    ) -> Self {
+impl RuntimeSteering {
+    fn new(steering_receiver: Option<UnboundedReceiver<SteeringMessage>>) -> Self {
         Self {
-            state,
-            event_sink,
             steering_receiver,
-            lifecycle: SharedLifecycleEmitter::default(),
             queued_follow_up_inputs: VecDeque::new(),
         }
     }
 
-    pub fn set_event_handler(&mut self, sink: Option<EventSink>) {
-        self.event_sink = sink;
-    }
-
-    pub fn set_steering_receiver(&mut self, receiver: Option<UnboundedReceiver<SteeringMessage>>) {
+    pub fn set_receiver(&mut self, receiver: Option<UnboundedReceiver<SteeringMessage>>) {
         self.steering_receiver = receiver;
     }
 
-    pub fn take_steering_receiver(&mut self) -> Option<UnboundedReceiver<SteeringMessage>> {
+    pub fn take_receiver(&mut self) -> Option<UnboundedReceiver<SteeringMessage>> {
         self.steering_receiver.take()
     }
 
@@ -89,10 +68,8 @@ impl AgentRuntime {
         !self.queued_follow_up_inputs.is_empty()
     }
 
-    pub fn run_until_idle(&mut self) -> Option<String> {
-        let input = self.queued_follow_up_inputs.pop_front()?;
-        self.state.add_user_message(input.clone());
-        Some(input)
+    pub fn pop_follow_up_input(&mut self) -> Option<String> {
+        self.queued_follow_up_inputs.pop_front()
     }
 
     pub async fn poll_turn_control(&mut self) -> RuntimeControl {
@@ -104,24 +81,37 @@ impl AgentRuntime {
     }
 
     async fn poll_control(&mut self) -> RuntimeControl {
+        let mut paused = false;
+
         loop {
             let Some(receiver) = self.steering_receiver.as_mut() else {
-                return RuntimeControl::Continue;
+                return if paused {
+                    RuntimeControl::Resumed
+                } else {
+                    RuntimeControl::Continue
+                };
             };
 
             match receiver.try_recv() {
                 Ok(SteeringMessage::SteerStop) => return RuntimeControl::StopRequested,
                 Ok(SteeringMessage::Pause) => {
+                    paused = true;
                     if matches!(self.wait_for_resume().await, RuntimeControl::StopRequested) {
                         return RuntimeControl::StopRequested;
                     }
                 }
-                Ok(SteeringMessage::Resume) => {}
+                Ok(SteeringMessage::Resume) => {
+                    paused = true;
+                }
                 Ok(SteeringMessage::FollowUpInput(input)) => {
                     self.queued_follow_up_inputs.push_back(input);
                 }
                 Err(TryRecvError::Empty | TryRecvError::Disconnected) => {
-                    return RuntimeControl::Continue;
+                    return if paused {
+                        RuntimeControl::Resumed
+                    } else {
+                        RuntimeControl::Continue
+                    };
                 }
             }
         }
@@ -147,8 +137,95 @@ impl AgentRuntime {
             }
         }
     }
+}
+
+pub struct TurnExecution {
+    pub response: LLMResponse,
+    pub content: String,
+    pub reasoning: Option<String>,
+}
+
+pub struct AgentRuntime {
+    pub state: AgentSessionState,
+    steering: RuntimeSteering,
+    event_sink: Option<EventSink>,
+    lifecycle: SharedLifecycleEmitter,
+    emitted_events: Vec<ThreadEvent>,
+}
+
+impl AgentRuntime {
+    pub fn new(
+        state: AgentSessionState,
+        event_sink: Option<EventSink>,
+        steering_receiver: Option<UnboundedReceiver<SteeringMessage>>,
+    ) -> Self {
+        Self {
+            state,
+            steering: RuntimeSteering::new(steering_receiver),
+            event_sink,
+            lifecycle: SharedLifecycleEmitter::default(),
+            emitted_events: Vec::new(),
+        }
+    }
+
+    pub fn set_event_handler(&mut self, sink: Option<EventSink>) {
+        self.event_sink = sink;
+    }
+
+    pub fn set_steering_receiver(&mut self, receiver: Option<UnboundedReceiver<SteeringMessage>>) {
+        self.steering.set_receiver(receiver);
+    }
+
+    pub fn take_steering_receiver(&mut self) -> Option<UnboundedReceiver<SteeringMessage>> {
+        self.steering.take_receiver()
+    }
+
+    pub fn split_mut(&mut self) -> (&mut AgentSessionState, &mut RuntimeSteering) {
+        (&mut self.state, &mut self.steering)
+    }
+
+    #[must_use]
+    pub fn has_pending_follow_up_inputs(&self) -> bool {
+        self.steering.has_pending_follow_up_inputs()
+    }
+
+    pub fn run_until_idle(&mut self) -> Option<String> {
+        let input = self.steering.pop_follow_up_input()?;
+        self.state.add_user_message(input.clone());
+        Some(input)
+    }
+
+    pub async fn poll_turn_control(&mut self) -> RuntimeControl {
+        self.steering.poll_turn_control().await
+    }
+
+    pub async fn poll_tool_control(&mut self) -> RuntimeControl {
+        self.steering.poll_tool_control().await
+    }
+
+    pub fn take_emitted_events(&mut self) -> Vec<ThreadEvent> {
+        std::mem::take(&mut self.emitted_events)
+    }
+
+    #[must_use]
+    pub fn tool_call_item_id(&self, call_id: &str) -> Option<String> {
+        self.lifecycle
+            .tool_call_item_id(call_id)
+            .map(str::to_string)
+    }
+
+    pub fn complete_tool_call(&mut self, call_id: &str, status: ToolCallStatus) {
+        let _ = self.lifecycle.complete_tool_call(call_id, status);
+        self.emit_pending_lifecycle_events();
+    }
+
+    pub fn complete_open_tool_calls(&mut self, status: ToolCallStatus) {
+        self.lifecycle.complete_open_tool_calls_with_status(status);
+        self.emit_pending_lifecycle_events();
+    }
 
     fn emit_event(&mut self, event: ThreadEvent) {
+        self.emitted_events.push(event.clone());
         if let Some(sink) = &self.event_sink {
             let mut callback = sink.lock();
             callback(&event);
@@ -190,7 +267,7 @@ impl AgentRuntime {
     fn finalize_tool_call_lifecycle(
         &mut self,
         tool_calls: Option<&[ToolCall]>,
-        status: ToolCallStatus,
+        finish_reason: &str,
     ) {
         if let Some(tool_calls) = tool_calls {
             for call in tool_calls {
@@ -206,11 +283,17 @@ impl AgentRuntime {
                         None,
                     );
                 }
-                let _ = self.lifecycle.complete_tool_call(&call.id, status.clone());
             }
+            return;
         }
 
-        self.lifecycle.complete_open_items_with_tool_status(status);
+        if finish_reason == "cancelled" {
+            self.lifecycle
+                .complete_open_tool_calls_with_status(ToolCallStatus::Failed);
+        } else {
+            self.lifecycle
+                .complete_open_tool_calls_with_status(ToolCallStatus::Failed);
+        }
     }
 
     pub async fn run_turn_once(
@@ -219,8 +302,6 @@ impl AgentRuntime {
         request: LLMRequest,
         timeout: Option<std::time::Duration>,
     ) -> Result<TurnExecution> {
-        self.emit_event(ThreadEvent::TurnStarted(TurnStartedEvent::default()));
-
         let request_model = request.model.clone();
         let start_time = std::time::Instant::now();
         let mut stream = if let Some(duration) = timeout {
@@ -245,7 +326,10 @@ impl AgentRuntime {
         let mut completed_response: Option<LLMResponse> = None;
 
         while let Some(event_result) = stream.next().await {
-            if matches!(self.poll_control().await, RuntimeControl::StopRequested) {
+            if matches!(
+                self.steering.poll_turn_control().await,
+                RuntimeControl::StopRequested
+            ) {
                 finish_reason = "cancelled".to_string();
                 break;
             }
@@ -319,24 +403,8 @@ impl AgentRuntime {
 
         self.finalize_assistant_lifecycle(&full_text);
         self.finalize_reasoning_lifecycle(&full_reasoning);
-        self.finalize_tool_call_lifecycle(
-            aggregated_tool_calls.as_deref(),
-            if finish_reason == "cancelled" {
-                ToolCallStatus::Failed
-            } else {
-                ToolCallStatus::Completed
-            },
-        );
+        self.finalize_tool_call_lifecycle(aggregated_tool_calls.as_deref(), &finish_reason);
         self.emit_pending_lifecycle_events();
-
-        let turn_usage = Usage {
-            input_tokens: final_usage.prompt_tokens as u64,
-            output_tokens: final_usage.completion_tokens as u64,
-            cached_input_tokens: final_usage.cache_read_tokens_or_fallback() as u64,
-        };
-        self.emit_event(ThreadEvent::TurnCompleted(TurnCompletedEvent {
-            usage: turn_usage.clone(),
-        }));
 
         let mut turn_recorded = false;
         self.state.record_turn(&start_time, &mut turn_recorded);

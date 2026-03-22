@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -108,6 +109,7 @@ pub(crate) struct TestTurnProcessingBacking {
     tool_catalog: Arc<ToolCatalogState>,
     default_placeholder: Option<String>,
     steering_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
+    deferred_follow_up_inputs: VecDeque<String>,
     config: AgentConfig,
     provider_client: Box<dyn uni::LLMProvider>,
     traj: TrajectoryLogger,
@@ -214,6 +216,7 @@ impl TestTurnProcessingBacking {
             tool_catalog,
             default_placeholder: None,
             steering_receiver: None,
+            deferred_follow_up_inputs: VecDeque::new(),
             config,
             provider_client: Box::new(NoopProvider),
             traj: TrajectoryLogger::disabled(),
@@ -230,6 +233,10 @@ impl TestTurnProcessingBacking {
         receiver: tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>,
     ) {
         self.steering_receiver = Some(receiver);
+    }
+
+    pub(crate) fn deferred_follow_up_inputs(&self) -> Vec<String> {
+        self.deferred_follow_up_inputs.iter().cloned().collect()
     }
 
     pub(crate) fn legacy_loop_detector(
@@ -289,6 +296,7 @@ impl TestTurnProcessingBacking {
             true,
             false,
             &mut self.steering_receiver,
+            &mut self.deferred_follow_up_inputs,
         )
     }
 
@@ -338,6 +346,7 @@ impl TestTurnProcessingBacking {
             harness_state: &mut self.harness_state,
             harness_emitter: None,
             steering_receiver: &mut self.steering_receiver,
+            deferred_follow_up_inputs: &mut self.deferred_follow_up_inputs,
         };
 
         TurnProcessingContext::from_parts(TurnProcessingContextParts {

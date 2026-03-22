@@ -2,13 +2,81 @@ use super::AgentRunner;
 use super::constants::{LOOP_THROTTLE_BASE_MS, LOOP_THROTTLE_MAX_MS};
 use super::types::ToolFailureContext;
 use crate::config::constants::tools;
-use crate::core::agent::events::ExecEventRecorder;
+use crate::core::agent::events::{ExecEventRecorder, tool_invocation_completed_event};
 use crate::core::agent::runtime::{AgentRuntime, RuntimeControl};
 use crate::exec::events::ToolCallStatus;
 use crate::llm::provider::ToolCall;
 use anyhow::{Result, anyhow};
 use tokio::time::Duration;
 use tracing::{error, info, warn};
+
+struct ToolCallItemRef {
+    call_item_id: String,
+    synthetic_invocation: bool,
+}
+
+fn resolve_tool_call_item(
+    runtime: &AgentRuntime,
+    event_recorder: &mut ExecEventRecorder,
+    tool_name: &str,
+    args: &serde_json::Value,
+    tool_call_id: &str,
+) -> ToolCallItemRef {
+    if let Some(call_item_id) = runtime.tool_call_item_id(tool_call_id) {
+        return ToolCallItemRef {
+            call_item_id,
+            synthetic_invocation: false,
+        };
+    }
+
+    let handle = event_recorder.tool_started(tool_name, Some(args), Some(tool_call_id));
+    ToolCallItemRef {
+        call_item_id: handle.item_id().to_string(),
+        synthetic_invocation: true,
+    }
+}
+
+fn complete_tool_invocation(
+    runtime: &mut AgentRuntime,
+    event_recorder: &mut ExecEventRecorder,
+    tool_call_id: &str,
+    tool_name: &str,
+    args: &serde_json::Value,
+    tool_call_item: &ToolCallItemRef,
+    status: ToolCallStatus,
+) {
+    if tool_call_item.synthetic_invocation {
+        event_recorder.record_thread_event(tool_invocation_completed_event(
+            tool_call_item.call_item_id.clone(),
+            tool_name,
+            Some(args),
+            Some(tool_call_id),
+            status,
+        ));
+        return;
+    }
+
+    runtime.complete_tool_call(tool_call_id, status);
+    event_recorder.record_thread_events(runtime.take_emitted_events());
+}
+
+fn reject_tool_call(
+    runtime: &mut AgentRuntime,
+    event_recorder: &mut ExecEventRecorder,
+    tool_name: &str,
+    args: Option<&serde_json::Value>,
+    tool_call_id: &str,
+    detail: &str,
+) {
+    if runtime.tool_call_item_id(tool_call_id).is_some() {
+        runtime.complete_tool_call(tool_call_id, ToolCallStatus::Failed);
+        event_recorder.record_thread_events(runtime.take_emitted_events());
+        event_recorder.warning(detail);
+        return;
+    }
+
+    event_recorder.tool_rejected(tool_name, args, Some(tool_call_id), detail);
+}
 
 impl AgentRunner {
     /// Execute multiple tool calls in parallel. Only safe for read-only operations.
@@ -34,10 +102,12 @@ impl AgentRunner {
                     let error_msg =
                         format!("Invalid arguments for tool '{}': {}", requested_name, err);
                     error!(agent = %agent_prefix, tool = %requested_name, error = %err, "Invalid tool arguments");
-                    event_recorder.tool_rejected(
+                    reject_tool_call(
+                        runtime,
+                        event_recorder,
                         &requested_name,
                         None,
-                        Some(call.id.as_str()),
+                        call.id.as_str(),
                         &error_msg,
                     );
                     runtime.state.push_tool_error(
@@ -56,10 +126,12 @@ impl AgentRunner {
                     let error_msg =
                         format!("Invalid arguments for tool '{}': {}", requested_name, err);
                     error!(agent = %agent_prefix, tool = %requested_name, error = %err, "Tool admission failed");
-                    event_recorder.tool_rejected(
+                    reject_tool_call(
+                        runtime,
+                        event_recorder,
                         &requested_name,
                         Some(&args),
-                        Some(call.id.as_str()),
+                        call.id.as_str(),
                         &error_msg,
                     );
                     runtime.state.push_tool_error(
@@ -89,19 +161,27 @@ impl AgentRunner {
             let call_id = call.id.clone();
 
             if !self.is_valid_tool(&name).await {
-                self.record_tool_denied(
-                    agent_prefix,
-                    &mut runtime.state,
+                let detail = format!("Tool execution denied: {name}");
+                if !self.quiet {
+                    warn!(agent = %agent_prefix, tool = %name, message = %detail);
+                }
+                runtime.state.warnings.push(detail.clone());
+                runtime
+                    .state
+                    .push_tool_error(call_id.clone(), &name, detail.clone(), is_gemini);
+                reject_tool_call(
+                    runtime,
                     event_recorder,
-                    &call_id,
                     &name,
                     Some(&args),
-                    is_gemini,
+                    &call_id,
+                    &detail,
                 );
                 continue;
             }
 
-            let tool_event = event_recorder.tool_started(&name, Some(&args), Some(&call_id));
+            let tool_call_item =
+                resolve_tool_call_item(runtime, event_recorder, &name, &args, &call_id);
             let runner = self;
             let args_clone = args.clone();
             futures.push(async move {
@@ -109,13 +189,13 @@ impl AgentRunner {
                     .execute_tool_internal(&name, &args_clone)
                     .await
                     .map_err(|e| anyhow!("Tool '{}' failed: {}", name, e));
-                (name, call_id, args_clone, tool_event, result)
+                (name, call_id, args_clone, tool_call_item, result)
             });
         }
 
         let results = join_all(futures).await;
         let mut halt_turn = false;
-        for (name, call_id, args, tool_event, result) in results {
+        for (name, call_id, args, tool_call_item, result) in results {
             match result {
                 Ok(result) => {
                     if !self.quiet {
@@ -129,9 +209,21 @@ impl AgentRunner {
 
                     runtime
                         .state
-                        .push_tool_result(call_id, &name, tool_result, is_gemini);
-                    event_recorder.tool_finished(
-                        &tool_event,
+                        .push_tool_result(call_id.clone(), &name, tool_result, is_gemini);
+                    complete_tool_invocation(
+                        runtime,
+                        event_recorder,
+                        &call_id,
+                        &name,
+                        &args,
+                        &tool_call_item,
+                        ToolCallStatus::Completed,
+                    );
+                    event_recorder
+                        .tool_output_started(&tool_call_item.call_item_id, Some(&call_id));
+                    event_recorder.tool_output_finished(
+                        &tool_call_item.call_item_id,
+                        Some(&call_id),
                         ToolCallStatus::Completed,
                         None,
                         "",
@@ -158,9 +250,21 @@ impl AgentRunner {
                     }
                     runtime
                         .state
-                        .push_tool_error(call_id, &name, error_msg, is_gemini);
-                    event_recorder.tool_finished(
-                        &tool_event,
+                        .push_tool_error(call_id.clone(), &name, error_msg, is_gemini);
+                    complete_tool_invocation(
+                        runtime,
+                        event_recorder,
+                        &call_id,
+                        &name,
+                        &args,
+                        &tool_call_item,
+                        ToolCallStatus::Failed,
+                    );
+                    event_recorder
+                        .tool_output_started(&tool_call_item.call_item_id, Some(&call_id));
+                    event_recorder.tool_output_finished(
+                        &tool_call_item.call_item_id,
+                        Some(&call_id),
                         ToolCallStatus::Failed,
                         None,
                         &e.to_string(),
@@ -193,6 +297,8 @@ impl AgentRunner {
                 runtime.poll_tool_control().await,
                 RuntimeControl::StopRequested
             ) {
+                runtime.complete_open_tool_calls(ToolCallStatus::Failed);
+                event_recorder.record_thread_events(runtime.take_emitted_events());
                 warn!(agent = %agent_prefix, "Stopped by steering signal");
                 return Ok(());
             }
@@ -207,10 +313,12 @@ impl AgentRunner {
                     let error_msg =
                         format!("Invalid arguments for tool '{}': {}", requested_name, err);
                     error!(agent = %agent_prefix, tool = %requested_name, error = %err, "Invalid tool arguments");
-                    event_recorder.tool_rejected(
+                    reject_tool_call(
+                        runtime,
+                        event_recorder,
                         &requested_name,
                         None,
-                        Some(call.id.as_str()),
+                        call.id.as_str(),
                         &error_msg,
                     );
                     runtime.state.push_tool_error(
@@ -229,10 +337,12 @@ impl AgentRunner {
                     let error_msg =
                         format!("Invalid arguments for tool '{}': {}", requested_name, err);
                     error!(agent = %agent_prefix, tool = %requested_name, error = %err, "Tool admission failed");
-                    event_recorder.tool_rejected(
+                    reject_tool_call(
+                        runtime,
+                        event_recorder,
                         &requested_name,
                         Some(&args),
-                        Some(call.id.as_str()),
+                        call.id.as_str(),
                         &error_msg,
                     );
                     runtime.state.push_tool_error(
@@ -258,19 +368,28 @@ impl AgentRunner {
             }
 
             if !self.is_valid_tool(&name).await {
-                self.record_tool_denied(
-                    agent_prefix,
-                    &mut runtime.state,
+                let detail = format!("Tool execution denied: {name}");
+                if !self.quiet {
+                    warn!(agent = %agent_prefix, tool = %name, message = %detail);
+                }
+                runtime.state.warnings.push(detail.clone());
+                runtime
+                    .state
+                    .push_tool_error(call.id.clone(), &name, detail.clone(), is_gemini);
+                reject_tool_call(
+                    runtime,
                     event_recorder,
-                    &call.id,
                     &name,
                     Some(&args),
-                    is_gemini,
+                    &call.id,
+                    &detail,
                 );
                 continue;
             }
 
-            let tool_event = event_recorder.tool_started(&name, Some(&args), Some(&call.id));
+            let tool_call_item =
+                resolve_tool_call_item(runtime, event_recorder, &name, &args, &call.id);
+            event_recorder.tool_output_started(&tool_call_item.call_item_id, Some(&call.id));
 
             let repeat_count = self.loop_detector.lock().get_call_count(&name);
             if repeat_count > 1 {
@@ -294,8 +413,18 @@ impl AgentRunner {
                     runtime
                         .state
                         .push_tool_result(call.id.clone(), &name, tool_result, is_gemini);
-                    event_recorder.tool_finished(
-                        &tool_event,
+                    complete_tool_invocation(
+                        runtime,
+                        event_recorder,
+                        &call.id,
+                        &name,
+                        &args,
+                        &tool_call_item,
+                        ToolCallStatus::Completed,
+                    );
+                    event_recorder.tool_output_finished(
+                        &tool_call_item.call_item_id,
+                        Some(&call.id),
                         ToolCallStatus::Completed,
                         None,
                         "",
@@ -317,11 +446,21 @@ impl AgentRunner {
                             "Tool was rate limited; halting further tool calls this turn.".into(),
                         );
                         runtime.state.mark_tool_loop_limit_hit();
+                        complete_tool_invocation(
+                            runtime,
+                            event_recorder,
+                            &call.id,
+                            &name,
+                            &args,
+                            &tool_call_item,
+                            ToolCallStatus::Failed,
+                        );
                         let mut failure_ctx = ToolFailureContext {
                             agent_prefix,
                             session_state: &mut runtime.state,
                             event_recorder,
-                            tool_event: &tool_event,
+                            tool_call_id: &call.id,
+                            call_item_id: Some(tool_call_item.call_item_id.as_str()),
                             is_gemini,
                         };
                         self.record_tool_failure(
@@ -338,11 +477,21 @@ impl AgentRunner {
                         runtime.state.warnings.push(
                             "Tool denied by policy; halting further tool calls this turn.".into(),
                         );
+                        complete_tool_invocation(
+                            runtime,
+                            event_recorder,
+                            &call.id,
+                            &name,
+                            &args,
+                            &tool_call_item,
+                            ToolCallStatus::Failed,
+                        );
                         let mut failure_ctx = ToolFailureContext {
                             agent_prefix,
                             session_state: &mut runtime.state,
                             event_recorder,
-                            tool_event: &tool_event,
+                            tool_call_id: &call.id,
+                            call_item_id: Some(tool_call_item.call_item_id.as_str()),
                             is_gemini,
                         };
                         self.record_tool_failure(
@@ -354,11 +503,21 @@ impl AgentRunner {
                         tokio::time::sleep(Duration::from_millis(250)).await;
                         break;
                     } else {
+                        complete_tool_invocation(
+                            runtime,
+                            event_recorder,
+                            &call.id,
+                            &name,
+                            &args,
+                            &tool_call_item,
+                            ToolCallStatus::Failed,
+                        );
                         let mut failure_ctx = ToolFailureContext {
                             agent_prefix,
                             session_state: &mut runtime.state,
                             event_recorder,
-                            tool_event: &tool_event,
+                            tool_call_id: &call.id,
+                            call_item_id: Some(tool_call_item.call_item_id.as_str()),
                             is_gemini,
                         };
                         self.record_tool_failure(

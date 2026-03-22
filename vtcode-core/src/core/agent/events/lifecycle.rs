@@ -266,6 +266,13 @@ impl SharedLifecycleEmitter {
         true
     }
 
+    #[must_use]
+    pub fn tool_call_item_id(&self, call_id: &str) -> Option<&str> {
+        self.tool_calls
+            .get(call_id)
+            .map(|buffer| buffer.item_id.as_str())
+    }
+
     pub fn sync_tool_call_arguments(
         &mut self,
         call_id: &str,
@@ -303,12 +310,21 @@ impl SharedLifecycleEmitter {
     }
 
     pub fn complete_open_items(&mut self) {
-        self.complete_open_items_with_tool_status(ToolCallStatus::Completed);
+        self.complete_open_text_items();
+        self.complete_open_tool_calls_with_status(ToolCallStatus::Completed);
+    }
+
+    pub fn complete_open_text_items(&mut self) {
+        let _ = self.complete_assistant_stream();
+        let _ = self.complete_reasoning_stream();
     }
 
     pub fn complete_open_items_with_tool_status(&mut self, status: ToolCallStatus) {
-        let _ = self.complete_assistant_stream();
-        let _ = self.complete_reasoning_stream();
+        self.complete_open_text_items();
+        self.complete_open_tool_calls_with_status(status);
+    }
+
+    pub fn complete_open_tool_calls_with_status(&mut self, status: ToolCallStatus) {
         let call_ids = self.tool_calls.keys().cloned().collect::<Vec<_>>();
         for call_id in call_ids {
             let _ = self.complete_tool_call(&call_id, status.clone());

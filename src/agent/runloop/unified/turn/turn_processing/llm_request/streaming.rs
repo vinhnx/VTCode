@@ -51,7 +51,11 @@ impl<'a> HarnessStreamingBridge<'a> {
     }
 
     pub(super) fn abort(&mut self) {
-        self.complete_open_items();
+        self.lifecycle.complete_open_text_items();
+        self.lifecycle.complete_open_tool_calls_with_status(
+            vtcode_core::exec::events::ToolCallStatus::Failed,
+        );
+        self.emit_pending_events();
     }
 
     fn push_assistant_delta(&mut self, delta: &str) {
@@ -116,7 +120,7 @@ impl<'a> HarnessStreamingBridge<'a> {
     }
 
     pub(super) fn complete_open_items(&mut self) {
-        self.lifecycle.complete_open_items();
+        self.lifecycle.complete_open_text_items();
         self.emit_pending_events();
     }
 

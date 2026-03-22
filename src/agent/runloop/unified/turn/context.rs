@@ -1,6 +1,7 @@
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Notify;
@@ -231,6 +232,7 @@ pub(crate) struct TurnProcessingState<'a> {
     pub harness_emitter:
         Option<&'a crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter>,
     pub steering_receiver: &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
+    pub deferred_follow_up_inputs: &'a mut VecDeque<String>,
 }
 
 pub(crate) struct TurnProcessingContextParts<'a> {
@@ -288,6 +290,7 @@ pub(crate) struct TurnProcessingContext<'a> {
     pub harness_emitter:
         Option<&'a crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter>,
     pub steering_receiver: &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
+    pub deferred_follow_up_inputs: &'a mut VecDeque<String>,
 }
 
 impl<'a> TurnProcessingContext<'a> {
@@ -338,6 +341,7 @@ impl<'a> TurnProcessingContext<'a> {
             harness_state: state.harness_state,
             harness_emitter: state.harness_emitter,
             steering_receiver: state.steering_receiver,
+            deferred_follow_up_inputs: state.deferred_follow_up_inputs,
         }
     }
 
@@ -387,6 +391,7 @@ impl<'a> TurnProcessingContext<'a> {
             harness_state: self.harness_state,
             harness_emitter: self.harness_emitter,
             steering_receiver: self.steering_receiver,
+            deferred_follow_up_inputs: self.deferred_follow_up_inputs,
         };
 
         TurnProcessingContextParts {
@@ -447,6 +452,7 @@ impl<'a> TurnProcessingContext<'a> {
             state.skip_confirmations,
             state.full_auto,
             state.steering_receiver,
+            state.deferred_follow_up_inputs,
         )
     }
 

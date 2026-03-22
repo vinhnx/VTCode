@@ -7,9 +7,7 @@ use crate::exec::events::ToolCallStatus;
 use crate::llm::provider::LLMRequest;
 use crate::llm::providers::gemini::wire::{Content, Part};
 use crate::utils::colors::style;
-use crate::utils::error_messages::ERR_TOOL_DENIED;
 use serde::Serialize;
-use serde_json::Value;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub(super) struct ObservabilityFields {
@@ -184,13 +182,16 @@ impl AgentRunner {
                 failure_text
             );
         }
-        failure_ctx.event_recorder.tool_finished(
-            failure_ctx.tool_event,
-            ToolCallStatus::Failed,
-            None,
-            &failure_text,
-            None,
-        );
+        if let Some(call_item_id) = failure_ctx.call_item_id {
+            failure_ctx.event_recorder.tool_output_finished(
+                call_item_id,
+                Some(failure_ctx.tool_call_id),
+                ToolCallStatus::Failed,
+                None,
+                &failure_text,
+                None,
+            );
+        }
         failure_ctx.event_recorder.warning(&failure_text);
         // Move failure_text into warnings first, then reference for conversation
         failure_ctx
@@ -215,32 +216,6 @@ impl AgentRunner {
                 }],
             });
         }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub(super) fn record_tool_denied(
-        &self,
-        agent_prefix: &str,
-        session_state: &mut AgentSessionState,
-        event_recorder: &mut ExecEventRecorder,
-        call_id: &str,
-        tool_name: &str,
-        arguments: Option<&Value>,
-        is_gemini: bool,
-    ) {
-        let detail = format!("{ERR_TOOL_DENIED}: {tool_name}");
-        if !self.quiet {
-            println!(
-                "{} {} {}",
-                agent_prefix,
-                style("(WARN)").red().bold(),
-                detail
-            );
-        }
-        session_state.warnings.push(detail.clone());
-
-        session_state.push_tool_error(call_id.to_string(), tool_name, detail.clone(), is_gemini);
-        event_recorder.tool_rejected(tool_name, arguments, Some(call_id), &detail);
     }
 }
 

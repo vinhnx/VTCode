@@ -82,6 +82,7 @@ pub(crate) struct InteractionLoopContext<'a> {
     pub turn_metadata_cache: &'a mut Option<Option<serde_json::Value>>,
     pub harness_config: vtcode_config::core::agent::AgentHarnessConfig,
     pub steering_receiver: &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
+    pub deferred_follow_up_inputs: &'a mut VecDeque<String>,
     pub startup_update_notice_rx:
         &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<StartupUpdateNotice>>,
 }
@@ -138,6 +139,7 @@ impl<'a> InteractionLoopContext<'a> {
             harness_state,
             harness_emitter: self.harness_emitter,
             steering_receiver: self.steering_receiver,
+            deferred_follow_up_inputs: self.deferred_follow_up_inputs,
         };
 
         crate::agent::runloop::unified::turn::context::TurnProcessingContext::from_parts(
