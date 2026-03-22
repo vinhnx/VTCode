@@ -2,6 +2,53 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.93.1 - 2026-03-22
+
+### Highlights
+#### Features
+
+- Add thread safety primitives including `SendWrapper` and enable optional concurrency for native plugins via a `thread_safe` flag. (86c0c612) 
+### Other Changes
+#### Other
+
+- Delete checksums.txt (0d1ffdfd) (@vinhnx)
+- Delete skills-lock.json (610fc7b7) (@vinhnx)
+- Implement JSON-RPC-over-stdio transport for subprocess agents and refactor authentication methods (090bfc3f) 
+- Enhance ToolCall struct with optional namespace and update related parsing logic (ff97daba) 
+- Refactor RejectConfig documentation and update related tests for clarity (541eac42) 
+- Enhance RejectConfig documentation and update permission rejection logic (d7eb68f0) 
+- Add pod management functionality with model catalog and state handling (c029e115) 
+- Implement normalized streaming for OpenRouter provider and update response handling (b01aeb2f) 
+- Add prompt template support and enhance slash command handling (f23ff5c7) 
+- Prioritize modal key handling over copy-to-clipboard in process_key function (ff0a684a) 
+- Add MiniMax-M2.7 model support and update related configurations (70a0e776) 
+- Add tool invocation lifecycle events and refactor event recording (a67bf917) 
+- Refactor agent session controller and runtime for improved event handling and state management (9adda2cd) 
+- Refactor tool invocation handling and event recording in AgentRunner (9da2d85b) 
+- Refactor tool permission handling and streamline runtime steering integration (f91b0d32) 
+- Add run_standard_stream_attempt function and refactor streaming logic (09a5751f) 
+- Enhance tool permission handling, improve error messaging, and refine path suggestion logic (46521121) 
+- Add file read family tracking and recovery handling in tool outcomes (f88c2a3a) 
+- Implement glob pattern support for file listing and enhance related functionalities (62b7b831) 
+- Implement session mode management and approval caching for shell commands (eda2c70d) 
+- Implement transient UI components and refactor overlay handling (c7622e2d) 
+- Implement prompt cache lineage management and enhance runtime context handling (9e26d8de) 
+- Update session ID and timestamps in current_blocked.md; modify GPU type matching logic and add tests in catalog.rs; change API key and model settings in vtcode.toml (b5a2f974) 
+- Enhance system prompt handling by adding history directives and runtime context checks; add tests for new functionality (c406e88b) 
+- Refactor tool policies and update configuration for Ollama provider (eaaa2b83) 
+- Refactor logging levels from debug to trace for improved verbosity in various components (b8d75afb) 
+- Add history system directives handling and improve session configuration (d7f42900) 
+- Implement centralized logging and tracing system; add flush functionality and guidelines (8903d53c) 
+- Implement interaction support in GeminiProvider with error handling and streaming capabilities (2e1f34d8) 
+- Refactor path handling in tracing and debug logging; simplify flush logic in trace writer (2faf35a7) 
+- Refactor metrics handling to use ToolCatalogCacheMetrics struct for improved clarity and maintainability (495b5476) 
+- Refactor interrupt handling to ensure overlays are closed and improve user experience (6847f30f) 
+- Update TODO (8c9c3d55) 
+#### Refactors
+
+- Remove explicit unsafe Send and Sync implementations for NativePlugin. (5c96c9d3) 
+### Contributors
+@vinhnx
 ## 0.93.0 - 2026-03-22
 
 ### Highlights
