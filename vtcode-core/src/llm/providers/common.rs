@@ -9,6 +9,51 @@ use crate::llm::types as llm_types;
 use crate::llm::utils::extract_reasoning_content;
 use serde_json::{Value, json};
 
+/// Collects non-empty history system directives that should be preserved when a
+/// provider accepts a separate top-level system prompt but cannot reliably
+/// consume follow-up `system` chat messages.
+pub fn collect_history_system_directives(request: &LLMRequest) -> Vec<String> {
+    request
+        .messages
+        .iter()
+        .filter(|message| message.role == MessageRole::System)
+        .map(|message| message.content.as_text().trim().to_string())
+        .filter(|text| !text.is_empty())
+        .collect()
+}
+
+/// Merges a base system prompt with history directives using a simple bulleted
+/// section. Providers with custom cache shaping can reuse the collected
+/// directives and apply their own section placement.
+pub fn merge_system_prompt_with_history_directives(
+    base_prompt: Option<&str>,
+    directives: &[String],
+    section_header: &str,
+) -> Option<String> {
+    let mut system_prompt = base_prompt
+        .map(str::trim)
+        .filter(|prompt| !prompt.is_empty())
+        .map(str::to_owned)
+        .unwrap_or_default();
+
+    if directives.is_empty() {
+        return (!system_prompt.is_empty()).then_some(system_prompt);
+    }
+
+    if !system_prompt.is_empty() {
+        system_prompt.push('\n');
+    }
+    system_prompt.push_str(section_header);
+    system_prompt.push('\n');
+    for directive in directives {
+        system_prompt.push_str("- ");
+        system_prompt.push_str(directive);
+        system_prompt.push('\n');
+    }
+
+    Some(system_prompt)
+}
+
 /// Serializes tool definitions to OpenAI-compatible JSON format.
 /// Used by DeepSeek, ZAI, Moonshot, and other OpenAI-compatible providers.
 /// For OpenAI-specific features (GPT-5.1 native tools), use OpenAIProvider's serialize_tools.

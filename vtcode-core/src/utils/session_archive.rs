@@ -24,8 +24,8 @@ pub const SESSION_DIR_ENV: &str = "VT_SESSION_DIR";
 pub const SESSION_MAX_FILES_ENV: &str = "VT_SESSION_MAX_FILES";
 pub const SESSION_MAX_AGE_DAYS_ENV: &str = "VT_SESSION_MAX_AGE_DAYS";
 pub const SESSION_MAX_SIZE_MB_ENV: &str = "VT_SESSION_MAX_SIZE_MB";
-const DEFAULT_SESSION_MAX_FILES: usize = 50;
-const DEFAULT_SESSION_MAX_AGE_DAYS: u64 = 30;
+const DEFAULT_SESSION_MAX_FILES: usize = 100;
+const DEFAULT_SESSION_MAX_AGE_DAYS: u64 = 14;
 const DEFAULT_SESSION_MAX_SIZE_MB: u64 = 100;
 const BYTES_PER_MB: u64 = 1024 * 1024;
 const SECONDS_PER_DAY: u64 = 24 * 60 * 60;
@@ -1524,10 +1524,14 @@ fn sanitize_component(value: &str) -> String {
 }
 
 fn is_session_file(path: &Path) -> bool {
-    path.extension()
+    let ext = path
+        .extension()
         .and_then(|ext| ext.to_str())
-        .map(|ext| ext.eq_ignore_ascii_case(SESSION_FILE_EXTENSION))
-        .unwrap_or(false)
+        .unwrap_or("");
+    // Prune all session artifacts: .json (session), .jsonl (harness), .log (debug)
+    ext.eq_ignore_ascii_case(SESSION_FILE_EXTENSION)
+        || ext.eq_ignore_ascii_case("jsonl")
+        || ext.eq_ignore_ascii_case("log")
 }
 
 #[cfg(test)]

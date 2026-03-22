@@ -91,6 +91,78 @@ fn convert_to_gemini_request_maps_history_and_system_prompt() {
 }
 
 #[test]
+fn convert_to_gemini_request_hoists_history_system_directives_into_system_instruction() {
+    let provider = GeminiProvider::new("test-key".to_string());
+    let request = LLMRequest {
+        messages: vec![
+            Message::system("Reuse the latest tool outputs before reading again.".to_string()),
+            Message::user("explore architecture".to_string()),
+        ],
+        system_prompt: Some(Arc::new("Stable system instructions".to_string())),
+        model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
+        ..Default::default()
+    };
+
+    let gemini_request = provider
+        .convert_to_gemini_request(&request)
+        .expect("conversion should succeed");
+
+    let system_instruction = gemini_request
+        .system_instruction
+        .expect("system instruction should be present");
+    let text = match system_instruction.parts.as_slice() {
+        [
+            Part::Text {
+                text,
+                thought_signature: _,
+            },
+        ] => text,
+        parts => panic!("expected single text system instruction part, got {parts:?}"),
+    };
+
+    assert!(text.contains("Stable system instructions"));
+    assert!(text.contains("[History Directives]"));
+    assert!(text.contains("- Reuse the latest tool outputs before reading again."));
+    assert_eq!(gemini_request.contents.len(), 1);
+    assert_eq!(gemini_request.contents[0].role, "user");
+}
+
+#[test]
+fn convert_to_gemini_request_promotes_history_system_directives_without_base_system_prompt() {
+    let provider = GeminiProvider::new("test-key".to_string());
+    let request = LLMRequest {
+        messages: vec![
+            Message::system("Summarize the latest tool outputs instead of rereading.".to_string()),
+            Message::user("explore architecture".to_string()),
+        ],
+        model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
+        ..Default::default()
+    };
+
+    let gemini_request = provider
+        .convert_to_gemini_request(&request)
+        .expect("conversion should succeed");
+
+    let system_instruction = gemini_request
+        .system_instruction
+        .expect("history directives should promote a system instruction");
+    let text = match system_instruction.parts.as_slice() {
+        [
+            Part::Text {
+                text,
+                thought_signature: _,
+            },
+        ] => text,
+        parts => panic!("expected single text system instruction part, got {parts:?}"),
+    };
+
+    assert!(text.contains("[History Directives]"));
+    assert!(text.contains("- Summarize the latest tool outputs instead of rereading."));
+    assert_eq!(gemini_request.contents.len(), 1);
+    assert_eq!(gemini_request.contents[0].role, "user");
+}
+
+#[test]
 fn convert_from_gemini_response_extracts_tool_calls() {
     let response = GenerateContentResponse {
         candidates: vec![Candidate {
