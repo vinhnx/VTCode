@@ -95,11 +95,21 @@ impl PodProfile {
             return true;
         }
 
-        pod.gpus.iter().any(|gpu| {
-            self.gpu_types
-                .iter()
-                .any(|gpu_type| gpu.name.to_lowercase().contains(&gpu_type.to_lowercase()))
-        })
+        let gpu_types = self
+            .gpu_types
+            .iter()
+            .map(|gpu_type| gpu_type.to_lowercase())
+            .collect::<Vec<_>>();
+
+        pod.gpus
+            .iter()
+            .filter(|gpu| {
+                let gpu_name = gpu.name.to_lowercase();
+                gpu_types.iter().any(|gpu_type| gpu_name.contains(gpu_type))
+            })
+            .take(self.gpu_count)
+            .count()
+            >= self.gpu_count
     }
 
     pub fn matches_gpu_count(&self, count: usize) -> bool {
@@ -139,5 +149,36 @@ mod tests {
         };
 
         assert!(profile.matches_pod(&pod));
+    }
+
+    #[test]
+    fn profile_requires_enough_matching_gpu_types() {
+        let profile = PodProfile {
+            name: "dual-a100".to_string(),
+            model: "model".to_string(),
+            gpu_count: 2,
+            gpu_types: vec!["A100".to_string()],
+            command_template: default_command_template(),
+            vllm_args: vec![],
+            env: BTreeMap::new(),
+        };
+        let pod = PodState {
+            name: "pod".to_string(),
+            ssh: "ssh root@example.com".to_string(),
+            models_path: None,
+            gpus: vec![
+                PodGpu {
+                    id: 0,
+                    name: "NVIDIA A100-SXM4-80GB".to_string(),
+                },
+                PodGpu {
+                    id: 1,
+                    name: "NVIDIA RTX 4090".to_string(),
+                },
+            ],
+            models: BTreeMap::new(),
+        };
+
+        assert!(!profile.matches_pod(&pod));
     }
 }
