@@ -167,11 +167,3 @@ PLAYGROUNDs:
 A plugin that generates standalone HTML files for visual, interactive problem-solving Architecture visualisation, design tweaking, game balancing, inline writing critique
 
 The tip: think of a unique way of interacting with the model and ask it to express that
-
-==
-
-1/ check auto-mode keep asking for permission for tools use (HITL) ->
-2/ also shift+tab to trust auto mode keep switch back to default edit mode -> hence repeated prompt for tools
-3/ implement inline list /mode for full 3 modes and interactive selection 4. check .vtcode/tool-policy.json and improve
-5/ maybe regexp and shell command prefix and improve policy allow list for tools usage instead of binary allow/deny.
-6/ reference codex: https://deepwiki.com/search/how-does-the-tool-policy-modes_981fc82b-7738-4a30-82cf-0e952627bd9c?mode=fast

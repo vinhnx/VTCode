@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use super::overlay::{ListOverlayRequest, ModalOverlayRequest, OverlayEvent, OverlayRequest};
+use super::overlay::{
+    FilePaletteTransientRequest, ListOverlayRequest, ModalOverlayRequest,
+    TaskPanelTransientRequest, TransientEvent, TransientRequest,
+};
 use crate::core_tui::session::config::AppearanceConfig;
 use crate::core_tui::types::{
     EditingMode, InlineHeaderContext, InlineLinkRange, InlineListItem, InlineListSearchConfig,
@@ -63,19 +66,12 @@ pub enum InlineCommand {
     SetInputEnabled(bool),
     SetInput(String),
     ApplySuggestedPrompt(String),
-    SetTaskPanelVisible(bool),
-    SetTaskPanelLines(Vec<String>),
     ClearInput,
     ForceRedraw,
-    ShowOverlay {
-        request: Box<OverlayRequest>,
+    ShowTransient {
+        request: Box<TransientRequest>,
     },
-    CloseOverlay,
-    LoadFilePalette {
-        files: Vec<String>,
-        workspace: std::path::PathBuf,
-    },
-    OpenHistoryPicker,
+    CloseTransient,
     ClearScreen,
     SuspendEventLoop,
     ResumeEventLoop,
@@ -98,7 +94,7 @@ pub enum InlineEvent {
     ProcessLatestQueued,
     /// Edit the newest queued input (pop into input buffer)
     EditQueue,
-    Overlay(OverlayEvent),
+    Transient(TransientEvent),
     Cancel,
     Exit,
     Interrupt,
@@ -130,7 +126,7 @@ impl From<crate::core_tui::types::InlineEvent> for InlineEvent {
             crate::core_tui::types::InlineEvent::Steer(text) => Self::Steer(text),
             crate::core_tui::types::InlineEvent::ProcessLatestQueued => Self::ProcessLatestQueued,
             crate::core_tui::types::InlineEvent::EditQueue => Self::EditQueue,
-            crate::core_tui::types::InlineEvent::Overlay(event) => Self::Overlay(event.into()),
+            crate::core_tui::types::InlineEvent::Overlay(event) => Self::Transient(event.into()),
             crate::core_tui::types::InlineEvent::Cancel => Self::Cancel,
             crate::core_tui::types::InlineEvent::Exit => Self::Exit,
             crate::core_tui::types::InlineEvent::Interrupt => Self::Interrupt,
@@ -288,14 +284,6 @@ impl InlineHandle {
         self.send_command(InlineCommand::ApplySuggestedPrompt(content));
     }
 
-    pub fn set_task_panel_visible(&self, visible: bool) {
-        self.send_command(InlineCommand::SetTaskPanelVisible(visible));
-    }
-
-    pub fn set_task_panel_lines(&self, lines: Vec<String>) {
-        self.send_command(InlineCommand::SetTaskPanelLines(lines));
-    }
-
     pub fn clear_input(&self) {
         self.send_command(InlineCommand::ClearInput);
     }
@@ -318,8 +306,8 @@ impl InlineHandle {
         self.send_command(InlineCommand::SetAutonomousMode(enabled));
     }
 
-    pub fn show_overlay(&self, request: OverlayRequest) {
-        self.send_command(InlineCommand::ShowOverlay {
+    pub fn show_transient(&self, request: TransientRequest) {
+        self.send_command(InlineCommand::ShowTransient {
             request: Box::new(request),
         });
     }
@@ -330,7 +318,7 @@ impl InlineHandle {
         lines: Vec<String>,
         secure_prompt: Option<SecurePromptConfig>,
     ) {
-        self.show_overlay(OverlayRequest::Modal(ModalOverlayRequest {
+        self.show_transient(TransientRequest::Modal(ModalOverlayRequest {
             title,
             lines,
             secure_prompt,
@@ -345,7 +333,7 @@ impl InlineHandle {
         selected: Option<InlineListSelection>,
         search: Option<InlineListSearchConfig>,
     ) {
-        self.show_overlay(OverlayRequest::List(ListOverlayRequest {
+        self.show_transient(TransientRequest::List(ListOverlayRequest {
             title,
             lines,
             items,
@@ -356,24 +344,49 @@ impl InlineHandle {
         }));
     }
 
-    pub fn close_overlay(&self) {
-        self.send_command(InlineCommand::CloseOverlay);
+    pub fn configure_file_palette(&self, files: Vec<String>, workspace: std::path::PathBuf) {
+        self.show_transient(TransientRequest::FilePalette(FilePaletteTransientRequest {
+            files,
+            workspace,
+            visible: None,
+        }));
+    }
+
+    pub fn show_history_picker(&self) {
+        self.show_transient(TransientRequest::HistoryPicker);
+    }
+
+    pub fn show_task_panel(&self) {
+        self.show_transient(TransientRequest::TaskPanel(TaskPanelTransientRequest {
+            lines: Vec::new(),
+            visible: Some(true),
+        }));
+    }
+
+    pub fn hide_task_panel(&self) {
+        self.show_transient(TransientRequest::TaskPanel(TaskPanelTransientRequest {
+            lines: Vec::new(),
+            visible: Some(false),
+        }));
+    }
+
+    pub fn update_task_panel(&self, lines: Vec<String>) {
+        self.show_transient(TransientRequest::TaskPanel(TaskPanelTransientRequest {
+            lines,
+            visible: None,
+        }));
+    }
+
+    pub fn close_transient(&self) {
+        self.send_command(InlineCommand::CloseTransient);
     }
 
     pub fn close_modal(&self) {
-        self.close_overlay();
+        self.close_transient();
     }
 
     pub fn clear_screen(&self) {
         self.send_command(InlineCommand::ClearScreen);
-    }
-
-    pub fn load_file_palette(&self, files: Vec<String>, workspace: std::path::PathBuf) {
-        self.send_command(InlineCommand::LoadFilePalette { files, workspace });
-    }
-
-    pub fn open_history_picker(&self) {
-        self.send_command(InlineCommand::OpenHistoryPicker);
     }
 
     pub fn set_skip_confirmations(&self, skip: bool) {

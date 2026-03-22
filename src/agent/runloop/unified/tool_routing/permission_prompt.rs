@@ -8,7 +8,7 @@ use vtcode_core::core::interfaces::ui::UiSession;
 use vtcode_core::notifications::{NotificationEvent, send_global_notification};
 use vtcode_core::sandboxing::SandboxPermissions as CoreSandboxPermissions;
 use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_tui::app::{InlineHandle, ListOverlayRequest, OverlayRequest, OverlaySubmission};
+use vtcode_tui::app::{InlineHandle, ListOverlayRequest, TransientRequest, TransientSubmission};
 
 use crate::agent::runloop::tool_output::format_unified_diff_lines;
 use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
@@ -583,7 +583,7 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     let outcome = show_overlay_and_wait(
         handle,
         session,
-        OverlayRequest::List(ListOverlayRequest {
+        TransientRequest::List(ListOverlayRequest {
             title: "Tool Permission Required".to_string(),
             lines: description_lines,
             footer_hint: None,
@@ -595,22 +595,22 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
         ctrl_c_state,
         ctrl_c_notify,
         |submission| match submission {
-            OverlaySubmission::Selection(InlineListSelection::ToolApproval(true)) => {
+            TransientSubmission::Selection(InlineListSelection::ToolApproval(true)) => {
                 Some(HitlDecision::Approved)
             }
-            OverlaySubmission::Selection(InlineListSelection::ToolApprovalSession) => {
+            TransientSubmission::Selection(InlineListSelection::ToolApprovalSession) => {
                 Some(HitlDecision::ApprovedSession)
             }
-            OverlaySubmission::Selection(InlineListSelection::ToolApprovalPermanent) => {
+            TransientSubmission::Selection(InlineListSelection::ToolApprovalPermanent) => {
                 Some(HitlDecision::ApprovedPermanent)
             }
-            OverlaySubmission::Selection(InlineListSelection::ToolApprovalDenyOnce) => {
+            TransientSubmission::Selection(InlineListSelection::ToolApprovalDenyOnce) => {
                 Some(HitlDecision::DeniedOnce)
             }
-            OverlaySubmission::Selection(InlineListSelection::ToolApproval(false)) => {
+            TransientSubmission::Selection(InlineListSelection::ToolApproval(false)) => {
                 Some(HitlDecision::Denied)
             }
-            OverlaySubmission::Selection(_) => Some(HitlDecision::Denied),
+            TransientSubmission::Selection(_) => Some(HitlDecision::Denied),
             _ => None,
         },
     )

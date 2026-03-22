@@ -3,13 +3,12 @@ use ratatui::layout::{Constraint, Layout, Rect};
 use crate::config::constants::ui;
 
 use super::{Session, render, slash};
+use crate::core_tui::app::session::transient::TransientSurface;
 use crate::core_tui::session::list_panel;
-use crate::core_tui::session::render as core_render;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum BottomPanelKind {
     None,
-    InlineModal,
     FilePalette,
     HistoryPicker,
     SlashPalette,
@@ -40,61 +39,41 @@ pub(super) fn resolve_bottom_panel_spec(
         };
     }
 
-    if session.inline_lists_visible() {
-        let split_context = SplitContext {
-            width: viewport.width,
-            max_panel_height,
-        };
-        if modal_eligible_for_inline_bottom(session) {
-            if let Some(panel) = panel_from_split(
-                session,
-                split_context,
-                BottomPanelKind::InlineModal,
-                split_inline_modal_area_probe,
-            ) {
-                return panel;
-            }
-        } else if session.file_palette_active {
-            if let Some(panel) = panel_from_split(
-                session,
-                split_context,
-                BottomPanelKind::FilePalette,
-                render::split_inline_file_palette_area,
-            ) {
-                return panel;
-            }
-        } else if session.history_picker_state.active {
-            if let Some(panel) = panel_from_split(
-                session,
-                split_context,
-                BottomPanelKind::HistoryPicker,
-                render::split_inline_history_picker_area,
-            ) {
-                return panel;
-            }
-        } else if !session.slash_palette.is_empty()
-            && let Some(panel) = panel_from_split(
-                session,
-                split_context,
-                BottomPanelKind::SlashPalette,
-                slash::split_inline_slash_area,
-            )
-        {
-            return panel;
-        }
-    }
+    let split_context = SplitContext {
+        width: viewport.width,
+        max_panel_height,
+    };
 
-    if session.show_task_panel
-        && let Some(panel) = panel_from_split(
+    let visible_surface = session.visible_bottom_docked_surface();
+    let panel = match visible_surface {
+        Some(TransientSurface::FilePalette) => panel_from_split(
             session,
-            SplitContext {
-                width: viewport.width,
-                max_panel_height,
-            },
+            split_context,
+            BottomPanelKind::FilePalette,
+            render::split_inline_file_palette_area,
+        ),
+        Some(TransientSurface::HistoryPicker) => panel_from_split(
+            session,
+            split_context,
+            BottomPanelKind::HistoryPicker,
+            render::split_inline_history_picker_area,
+        ),
+        Some(TransientSurface::SlashPalette) => panel_from_split(
+            session,
+            split_context,
+            BottomPanelKind::SlashPalette,
+            slash::split_inline_slash_area,
+        ),
+        Some(TransientSurface::TaskPanel) => panel_from_split(
+            session,
+            split_context,
             BottomPanelKind::TaskPanel,
             split_inline_task_panel_area,
-        )
-    {
+        ),
+        Some(TransientSurface::FloatingOverlay | TransientSurface::DiffPreview) | None => None,
+    };
+
+    if let Some(panel) = panel {
         return panel;
     }
 
@@ -136,17 +115,6 @@ fn normalize_panel_height(raw_height: u16, max_panel_height: u16) -> u16 {
         .min(max_panel_height)
         .max(1);
     raw_height.max(min_floor).min(max_panel_height)
-}
-
-fn modal_eligible_for_inline_bottom(session: &Session) -> bool {
-    session.wizard_overlay().is_some()
-        || session
-            .modal_state()
-            .is_some_and(|modal| modal.list.is_some())
-}
-
-fn split_inline_modal_area_probe(session: &mut Session, area: Rect) -> (Rect, Option<Rect>) {
-    core_render::split_inline_modal_area(session, area)
 }
 
 fn split_inline_task_panel_area(session: &mut Session, area: Rect) -> (Rect, Option<Rect>) {

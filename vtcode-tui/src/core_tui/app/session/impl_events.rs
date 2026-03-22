@@ -209,7 +209,7 @@ impl Session {
             return false;
         }
 
-        if self.file_palette_active {
+        if self.file_palette_visible() {
             let Some(palette) = self.file_palette.as_mut() else {
                 return true;
             };
@@ -222,7 +222,7 @@ impl Session {
             return true;
         }
 
-        if self.history_picker_state.active {
+        if self.history_picker_visible() {
             if down {
                 self.history_picker_state.move_down();
             } else {
@@ -251,7 +251,7 @@ impl Session {
             return false;
         }
 
-        if self.file_palette_active {
+        if self.file_palette_visible() {
             let Some(layout) = render::file_palette_panel_layout(self) else {
                 return true;
             };
@@ -287,7 +287,7 @@ impl Session {
             return true;
         }
 
-        if self.history_picker_state.active {
+        if self.history_picker_visible() {
             let Some(layout) = render::history_picker_panel_layout(self) else {
                 return true;
             };
@@ -299,9 +299,10 @@ impl Session {
                     .scroll_offset()
                     .saturating_add(local_index);
                 if self.history_picker_state.selected_index() == Some(actual_index) {
+                    let was_active = self.history_picker_visible();
                     self.history_picker_state
                         .accept(&mut self.core.input_manager);
-                    self.update_input_triggers();
+                    self.finish_history_picker_interaction(was_active);
                     self.mark_dirty();
                 } else if self.history_picker_state.select_index(actual_index) {
                     self.mark_dirty();

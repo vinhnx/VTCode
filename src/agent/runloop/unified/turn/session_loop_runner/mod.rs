@@ -22,7 +22,7 @@ use vtcode_core::core::agent::session::AgentSessionState;
 use vtcode_core::core::interfaces::session::PlanModeEntrySource;
 use vtcode_tui::app::{
     InlineHandle, InlineListItem, InlineListSelection, InlineSession, ListOverlayRequest,
-    OverlayRequest, OverlaySubmission,
+    TransientRequest, TransientSubmission,
 };
 
 const PLAN_APPROVED_EXECUTION_DIRECTIVE: &str = "Plan was approved. Start implementation immediately: execute the plan step by step beginning with the first pending step. Do not ask for another implementation confirmation.";
@@ -311,7 +311,7 @@ async fn prompt_startup_plan_mode(
     ctrl_c_state: &Arc<crate::agent::runloop::unified::state::CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
 ) -> Result<bool> {
-    let overlay = OverlayRequest::List(ListOverlayRequest {
+    let overlay = TransientRequest::List(ListOverlayRequest {
         title: "Enter Plan Mode?".to_string(),
         lines: vec![
             "Your configuration sets default editing mode to Plan.".to_string(),
@@ -354,17 +354,17 @@ async fn prompt_startup_plan_mode(
         ctrl_c_state,
         ctrl_c_notify,
         |submission| match submission {
-            OverlaySubmission::Selection(InlineListSelection::ConfigAction(action))
+            TransientSubmission::Selection(InlineListSelection::ConfigAction(action))
                 if action == STARTUP_PLAN_MODE_ENTER_ACTION =>
             {
                 Some(true)
             }
-            OverlaySubmission::Selection(InlineListSelection::ConfigAction(action))
+            TransientSubmission::Selection(InlineListSelection::ConfigAction(action))
                 if action == STARTUP_PLAN_MODE_STAY_ACTION =>
             {
                 Some(false)
             }
-            OverlaySubmission::Selection(_) => Some(false),
+            TransientSubmission::Selection(_) => Some(false),
             _ => None,
         },
     )

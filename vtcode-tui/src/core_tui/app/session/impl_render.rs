@@ -21,34 +21,15 @@ impl Session {
         let layout = self
             .core
             .build_frame_layout(viewport, metrics, panel.height);
-
-        let modal_in_bottom = matches!(panel.kind, BottomPanelKind::InlineModal);
-        let (transcript_area, modal_area) = if modal_in_bottom {
-            (layout.main_area, None)
-        } else {
-            core_render::split_inline_modal_area(self, layout.main_area)
-        };
         self.core.set_modal_list_area(None);
+        let transcript_area = layout.main_area;
         let (input_area, bottom_panel_area) =
             split_input_and_bottom_panel_area(layout.input_area, panel.height);
         self.core.set_bottom_panel_area(bottom_panel_area);
         self.core.render_base_frame(frame, &layout, transcript_area);
         self.core.render_input(frame, input_area);
-        let mut rendered_bottom_modal = false;
-        if !modal_in_bottom {
-            if let Some(modal_area) = modal_area {
-                core_render::render_modal(self, frame, modal_area);
-            } else {
-                core_render::render_modal(self, frame, layout.viewport);
-            }
-        }
         if let Some(panel_area) = bottom_panel_area {
             match panel.kind {
-                BottomPanelKind::InlineModal => {
-                    frame.render_widget(Clear, panel_area);
-                    core_render::render_modal(self, frame, panel_area);
-                    rendered_bottom_modal = true;
-                }
                 BottomPanelKind::FilePalette => {
                     render::render_file_palette(self, frame, panel_area);
                 }
@@ -66,8 +47,13 @@ impl Session {
                 }
             }
         }
-        if modal_in_bottom && !rendered_bottom_modal {
-            core_render::render_modal(self, frame, layout.viewport);
+
+        if self.has_active_overlay() {
+            core_render::render_modal(
+                self,
+                frame,
+                core_render::floating_modal_area(layout.viewport),
+            );
         }
 
         if self.diff_preview_state().is_some() {

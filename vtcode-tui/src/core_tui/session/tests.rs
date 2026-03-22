@@ -70,6 +70,18 @@ fn app_session_with_input(input: &str, cursor: usize) -> AppSession {
     session
 }
 
+fn load_app_file_palette(session: &mut AppSession, files: Vec<String>, workspace: PathBuf) {
+    session.handle_command(app_types::InlineCommand::ShowTransient {
+        request: Box::new(app_types::TransientRequest::FilePalette(
+            app_types::FilePaletteTransientRequest {
+                files,
+                workspace,
+                visible: None,
+            },
+        )),
+    });
+}
+
 fn session_with_slash_palette_commands() -> AppSession {
     AppSession::new_with_logs(
         InlineTheme::default(),
@@ -1323,10 +1335,11 @@ fn file_palette_insertion_uses_at_alias_in_input() {
 #[test]
 fn set_input_command_activates_file_palette_for_at_query() {
     let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
-    session.handle_command(app_types::InlineCommand::LoadFilePalette {
-        files: vec!["src/main.rs".to_string()],
-        workspace: PathBuf::from("."),
-    });
+    load_app_file_palette(
+        &mut session,
+        vec!["src/main.rs".to_string()],
+        PathBuf::from("."),
+    );
 
     assert!(!session.file_palette_active);
     session.handle_command(app_types::InlineCommand::SetInput("@src".to_string()));
@@ -1936,6 +1949,50 @@ fn history_picker_trigger_auto_shows_inline_lists() {
 }
 
 #[test]
+fn slash_palette_keeps_base_input_and_cursor_active() {
+    let mut session = session_with_slash_palette_commands();
+
+    let _ = session.process_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+
+    assert!(session.core.input_enabled());
+    assert!(
+        session
+            .core
+            .build_input_widget_data(VIEW_WIDTH, 1)
+            .cursor_should_be_visible
+    );
+}
+
+#[test]
+fn history_picker_restores_base_input_and_draft_on_cancel() {
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.core.set_input("draft command".to_string());
+
+    let _ = session.process_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
+
+    assert!(session.history_picker_state.active);
+    assert!(!session.core.input_enabled());
+    assert!(
+        !session
+            .core
+            .build_input_widget_data(VIEW_WIDTH, 1)
+            .cursor_should_be_visible
+    );
+
+    let _ = session.process_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+
+    assert!(!session.history_picker_state.active);
+    assert!(session.core.input_enabled());
+    assert!(
+        session
+            .core
+            .build_input_widget_data(VIEW_WIDTH, 1)
+            .cursor_should_be_visible
+    );
+    assert_eq!(session.core.input_manager.content(), "draft command");
+}
+
+#[test]
 fn slash_panel_renders_search_field_above_results() {
     let mut session = session_with_slash_palette_commands();
     for key in [
@@ -1957,6 +2014,38 @@ fn slash_panel_renders_search_field_above_results() {
         .expect("slash result should render");
 
     assert!(search_index < item_index);
+}
+
+#[test]
+fn slash_panel_height_stays_fixed_for_short_results() {
+    let mut short_session = session_with_slash_palette_commands();
+    for key in [
+        KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE),
+    ] {
+        let _ = short_session.process_key(key);
+    }
+
+    let _ = rendered_app_session_lines(&mut short_session, 20);
+    let short_height = short_session
+        .core
+        .bottom_panel_area()
+        .expect("short slash panel area")
+        .height;
+
+    let mut full_session = session_with_slash_palette_commands();
+    let _ = full_session.process_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+    let _ = rendered_app_session_lines(&mut full_session, 20);
+    let full_height = full_session
+        .core
+        .bottom_panel_area()
+        .expect("full slash panel area")
+        .height;
+
+    assert_eq!(
+        short_height, full_height,
+        "slash panel height should stay fixed regardless of result count"
+    );
 }
 
 #[test]
@@ -2076,15 +2165,16 @@ fn clicking_selected_slash_row_applies_command() {
 fn clicking_selected_file_palette_row_inserts_reference() {
     let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
     let workspace = vtcode_tui_workspace_root();
-    session.handle_command(app_types::InlineCommand::LoadFilePalette {
-        files: vec![
+    load_app_file_palette(
+        &mut session,
+        vec![
             workspace
                 .join("src/core_tui/session.rs")
                 .display()
                 .to_string(),
         ],
-        workspace: workspace.clone(),
-    });
+        workspace.clone(),
+    );
     session.handle_command(app_types::InlineCommand::SetInput("@".to_string()));
 
     let _ = rendered_app_session_lines(&mut session, 20);
@@ -2111,6 +2201,8 @@ fn clicking_selected_file_palette_row_inserts_reference() {
 #[test]
 fn clicking_selected_history_row_accepts_entry() {
     let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.task_panel_lines = vec!["Active task".to_string()];
+    session.set_task_panel_visible(true);
     session.core.set_input("cargo test".to_string());
     let _ = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     session.core.set_input("git status".to_string());
@@ -2138,6 +2230,11 @@ fn clicking_selected_history_row_accepts_entry() {
 
     assert!(!session.history_picker_state.active);
     assert_eq!(session.core.input_manager.content(), expected);
+    let lines = rendered_app_session_lines(&mut session, 20);
+    assert!(
+        lines.iter().any(|line| line.contains("Active task")),
+        "task panel should resume after the history picker closes"
+    );
 }
 
 #[test]
@@ -2278,10 +2375,11 @@ fn backspace_deletes_selected_input_range() {
 #[test]
 fn file_palette_renders_search_field_above_results() {
     let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
-    session.handle_command(app_types::InlineCommand::LoadFilePalette {
-        files: vec!["src/main.rs".to_string(), "src/lib.rs".to_string()],
-        workspace: PathBuf::from("."),
-    });
+    load_app_file_palette(
+        &mut session,
+        vec!["src/main.rs".to_string(), "src/lib.rs".to_string()],
+        PathBuf::from("."),
+    );
     session.handle_command(app_types::InlineCommand::SetInput("@src".to_string()));
 
     let lines = rendered_app_session_lines(&mut session, 20);
@@ -2300,16 +2398,38 @@ fn file_palette_renders_search_field_above_results() {
 #[test]
 fn file_palette_trigger_auto_shows_inline_lists() {
     let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
-    session.handle_command(app_types::InlineCommand::LoadFilePalette {
-        files: vec!["src/main.rs".to_string()],
-        workspace: PathBuf::from("."),
-    });
+    load_app_file_palette(
+        &mut session,
+        vec!["src/main.rs".to_string()],
+        PathBuf::from("."),
+    );
     let _ = session.process_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::CONTROL));
     assert!(!session.inline_lists_visible());
 
     session.handle_command(app_types::InlineCommand::SetInput("@src".to_string()));
     assert!(session.inline_lists_visible());
     assert!(session.file_palette_active);
+}
+
+#[test]
+fn file_palette_keeps_base_input_and_cursor_active() {
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
+    load_app_file_palette(
+        &mut session,
+        vec!["src/main.rs".to_string()],
+        PathBuf::from("."),
+    );
+
+    session.handle_command(app_types::InlineCommand::SetInput("@src".to_string()));
+
+    assert!(session.file_palette_visible());
+    assert!(session.core.input_enabled());
+    assert!(
+        session
+            .core
+            .build_input_widget_data(VIEW_WIDTH, 1)
+            .cursor_should_be_visible
+    );
 }
 
 #[test]
@@ -2604,8 +2724,8 @@ fn diff_overlay_edit_approval_keys_remain_unchanged() {
     let apply = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(matches!(
         apply,
-        Some(app_types::InlineEvent::Overlay(
-            app_types::OverlayEvent::Submitted(app_types::OverlaySubmission::DiffApply)
+        Some(app_types::InlineEvent::Transient(
+            app_types::TransientEvent::Submitted(app_types::TransientSubmission::DiffApply)
         ))
     ));
 
@@ -2617,8 +2737,8 @@ fn diff_overlay_edit_approval_keys_remain_unchanged() {
     let reject = session.process_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(matches!(
         reject,
-        Some(app_types::InlineEvent::Overlay(
-            app_types::OverlayEvent::Submitted(app_types::OverlaySubmission::DiffReject)
+        Some(app_types::InlineEvent::Transient(
+            app_types::TransientEvent::Submitted(app_types::TransientSubmission::DiffReject)
         ))
     ));
 }
@@ -2631,8 +2751,8 @@ fn diff_overlay_conflict_mode_maps_enter_reload_and_escape() {
     let proceed = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(matches!(
         proceed,
-        Some(app_types::InlineEvent::Overlay(
-            app_types::OverlayEvent::Submitted(app_types::OverlaySubmission::DiffProceed)
+        Some(app_types::InlineEvent::Transient(
+            app_types::TransientEvent::Submitted(app_types::TransientSubmission::DiffProceed)
         ))
     ));
 
@@ -2640,8 +2760,8 @@ fn diff_overlay_conflict_mode_maps_enter_reload_and_escape() {
     let reload = session.process_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE));
     assert!(matches!(
         reload,
-        Some(app_types::InlineEvent::Overlay(
-            app_types::OverlayEvent::Submitted(app_types::OverlaySubmission::DiffReload)
+        Some(app_types::InlineEvent::Transient(
+            app_types::TransientEvent::Submitted(app_types::TransientSubmission::DiffReload)
         ))
     ));
 
@@ -2649,8 +2769,8 @@ fn diff_overlay_conflict_mode_maps_enter_reload_and_escape() {
     let abort = session.process_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(matches!(
         abort,
-        Some(app_types::InlineEvent::Overlay(
-            app_types::OverlayEvent::Submitted(app_types::OverlaySubmission::DiffAbort)
+        Some(app_types::InlineEvent::Transient(
+            app_types::TransientEvent::Submitted(app_types::TransientSubmission::DiffAbort)
         ))
     ));
 }
@@ -2677,8 +2797,8 @@ fn diff_overlay_readonly_review_maps_enter_and_escape_to_back() {
     let enter = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(matches!(
         enter,
-        Some(app_types::InlineEvent::Overlay(
-            app_types::OverlayEvent::Submitted(app_types::OverlaySubmission::DiffAbort)
+        Some(app_types::InlineEvent::Transient(
+            app_types::TransientEvent::Submitted(app_types::TransientSubmission::DiffAbort)
         ))
     ));
 
@@ -2686,8 +2806,8 @@ fn diff_overlay_readonly_review_maps_enter_and_escape_to_back() {
     let escape = session.process_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(matches!(
         escape,
-        Some(app_types::InlineEvent::Overlay(
-            app_types::OverlayEvent::Submitted(app_types::OverlaySubmission::DiffAbort)
+        Some(app_types::InlineEvent::Transient(
+            app_types::TransientEvent::Submitted(app_types::TransientSubmission::DiffAbort)
         ))
     ));
 }
@@ -2704,6 +2824,52 @@ fn diff_overlay_readonly_review_ignores_reload_shortcut() {
         session.diff_preview_state().map(|preview| preview.mode),
         Some(app_types::DiffPreviewMode::ReadonlyReview)
     ));
+}
+
+#[test]
+fn diff_preview_suspends_task_panel_and_restores_it_on_close() {
+    let mut session = AppSession::new(InlineTheme::default(), None, 30);
+    session.task_panel_lines = vec!["Queued task".to_string()];
+    session.set_task_panel_visible(true);
+
+    let backend = TestBackend::new(VIEW_WIDTH, 30);
+    let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
+    terminal
+        .draw(|frame| session.render(frame))
+        .expect("failed to render task panel");
+    assert!(session.core.bottom_panel_area().is_some());
+
+    show_diff_overlay(&mut session, app_types::DiffPreviewMode::ReadonlyReview);
+    assert!(!session.core.input_enabled());
+    assert!(
+        !session
+            .core
+            .build_input_widget_data(VIEW_WIDTH, 1)
+            .cursor_should_be_visible
+    );
+
+    terminal
+        .draw(|frame| session.render(frame))
+        .expect("failed to render diff preview");
+    assert!(
+        session.core.bottom_panel_area().is_none(),
+        "floating diff preview should hide the lower bottom panel"
+    );
+
+    session.close_diff_overlay();
+    assert!(session.core.input_enabled());
+    assert!(
+        session
+            .core
+            .build_input_widget_data(VIEW_WIDTH, 1)
+            .cursor_should_be_visible
+    );
+
+    let lines = rendered_app_session_lines(&mut session, 30);
+    assert!(
+        lines.iter().any(|line| line.contains("Queued task")),
+        "task panel should resume after closing diff preview"
+    );
 }
 
 #[test]
@@ -2857,7 +3023,7 @@ fn show_plan_confirmation_overlay(session: &mut Session, plan: app_types::PlanCo
 }
 
 #[test]
-fn show_list_modal_uses_bottom_inline_panel_min_height() {
+fn show_list_modal_renders_as_floating_transient_without_bottom_panel() {
     let mut session = AppSession::new(InlineTheme::default(), None, 30);
     let item = InlineListItem {
         title: "Option A".to_string(),
@@ -2867,8 +3033,8 @@ fn show_list_modal_uses_bottom_inline_panel_min_height() {
         selection: Some(InlineListSelection::SlashCommand("a".to_string())),
         search_value: Some("Option A".to_string()),
     };
-    session.handle_command(app_types::InlineCommand::ShowOverlay {
-        request: Box::new(app_types::OverlayRequest::List(
+    session.handle_command(app_types::InlineCommand::ShowTransient {
+        request: Box::new(app_types::TransientRequest::List(
             app_types::ListOverlayRequest {
                 title: "Pick one".to_string(),
                 lines: vec!["Choose an option".to_string()],
@@ -2881,10 +3047,6 @@ fn show_list_modal_uses_bottom_inline_panel_min_height() {
         )),
     });
 
-    let input_width = VIEW_WIDTH.saturating_sub(2);
-    let base_input_height =
-        Session::input_block_height_for_lines(session.core.desired_input_lines(input_width));
-
     let backend = TestBackend::new(VIEW_WIDTH, 30);
     let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
     terminal
@@ -2892,8 +3054,105 @@ fn show_list_modal_uses_bottom_inline_panel_min_height() {
         .expect("failed to render list modal");
 
     assert!(
-        session.core.input_height >= base_input_height + ui::INLINE_LIST_PANEL_MIN_HEIGHT,
-        "list modal should reserve min panel height below input"
+        session.has_active_overlay(),
+        "floating list modal should remain active after rendering"
+    );
+    assert!(
+        session.core.bottom_panel_area().is_none(),
+        "floating list modal should not render in the bottom panel"
+    );
+}
+
+#[test]
+fn show_list_modal_uses_bottom_half_of_terminal() {
+    let mut session = AppSession::new(InlineTheme::default(), None, 30);
+    let item = InlineListItem {
+        title: "Option A".to_string(),
+        subtitle: None,
+        badge: None,
+        indent: 0,
+        selection: Some(InlineListSelection::SlashCommand("a".to_string())),
+        search_value: Some("Option A".to_string()),
+    };
+    session.handle_command(app_types::InlineCommand::ShowTransient {
+        request: Box::new(app_types::TransientRequest::List(
+            app_types::ListOverlayRequest {
+                title: "Pick one".to_string(),
+                lines: vec!["Choose an option".to_string()],
+                footer_hint: None,
+                items: vec![item],
+                selected: None,
+                search: None,
+                hotkeys: Vec::new(),
+            },
+        )),
+    });
+
+    let lines = rendered_app_session_lines(&mut session, 30);
+    assert!(
+        lines.get(15).is_some_and(|line| line.contains("Pick one")),
+        "floating modal title should start at the halfway row"
+    );
+
+    let modal_area = session.core.modal_list_area().expect("modal list area");
+    assert!(
+        modal_area.y >= 15,
+        "floating modal list should render in the lower half of the terminal, got y={}",
+        modal_area.y
+    );
+}
+
+#[test]
+fn closing_top_transient_restores_previous_bottom_panel() {
+    let mut session = AppSession::new(InlineTheme::default(), None, 30);
+    session.set_task_panel_visible(true);
+
+    let backend = TestBackend::new(VIEW_WIDTH, 30);
+    let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
+    terminal
+        .draw(|frame| session.render(frame))
+        .expect("failed to render task panel");
+    assert!(
+        session.core.bottom_panel_area().is_some(),
+        "task panel should occupy the bottom panel when visible"
+    );
+
+    session.handle_command(app_types::InlineCommand::ShowTransient {
+        request: Box::new(app_types::TransientRequest::List(
+            app_types::ListOverlayRequest {
+                title: "Pick one".to_string(),
+                lines: vec!["Choose an option".to_string()],
+                footer_hint: None,
+                items: vec![InlineListItem {
+                    title: "Option A".to_string(),
+                    subtitle: None,
+                    badge: None,
+                    indent: 0,
+                    selection: Some(InlineListSelection::SlashCommand("a".to_string())),
+                    search_value: None,
+                }],
+                selected: None,
+                search: None,
+                hotkeys: Vec::new(),
+            },
+        )),
+    });
+
+    terminal
+        .draw(|frame| session.render(frame))
+        .expect("failed to render stacked transients");
+    assert!(
+        session.core.bottom_panel_area().is_none(),
+        "floating transient should hide the lower bottom panel while it is on top"
+    );
+
+    session.close_transient();
+    terminal
+        .draw(|frame| session.render(frame))
+        .expect("failed to render restored bottom panel");
+    assert!(
+        session.core.bottom_panel_area().is_some(),
+        "closing the top transient should restore the previous bottom panel"
     );
 }
 

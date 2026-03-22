@@ -290,7 +290,7 @@ async fn handle_success_common(
         record_mcp_success_event(ctx.mcp_panel_state, tool_name, args_val);
     } else if is_task_tracker_tool(name) && ctx.renderer.supports_inline_ui() {
         let block_lines = task_tracker_block_lines(args_val, payload.output);
-        ctx.handle.set_task_panel_lines(block_lines.clone());
+        ctx.handle.update_task_panel(block_lines.clone());
         apply_task_tracker_block(ctx.handle, ctx.harness_state, block_lines);
     } else {
         render_tool_output_common(
@@ -770,7 +770,7 @@ mod tests {
         let mut saw_replace = false;
         let mut saw_task_panel_update = false;
         while let Ok(command) = receiver.try_recv() {
-            if matches!(command, InlineCommand::SetTaskPanelLines(_)) {
+            if matches!(command, InlineCommand::ShowTransient { .. }) {
                 saw_task_panel_update = true;
             }
             if matches!(

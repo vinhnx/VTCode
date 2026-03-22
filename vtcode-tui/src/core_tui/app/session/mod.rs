@@ -9,6 +9,7 @@ pub(super) use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::core_tui::app::types::{
     DiffOverlayRequest, DiffPreviewState, InlineCommand, InlineEvent, SlashCommandItem,
+    TaskPanelTransientRequest, TransientRequest,
 };
 use crate::core_tui::runner::TuiSessionDriver;
 use crate::core_tui::session::Session as CoreSessionState;
@@ -24,11 +25,15 @@ mod palette;
 pub mod render;
 pub mod slash;
 pub mod slash_palette;
+mod transient;
 pub mod trust;
 
 use self::file_palette::FilePalette;
 use self::history_picker::HistoryPickerState;
 use self::slash_palette::SlashPalette;
+use self::transient::{
+    TransientFocusPolicy, TransientHost, TransientSurface, TransientVisibilityChange,
+};
 
 /// App-level session that layers VT Code features on top of the core session.
 pub struct AppSession {
@@ -42,6 +47,7 @@ pub struct AppSession {
     pub(crate) task_panel_lines: Vec<String>,
     pub(crate) diff_preview_state: Option<DiffPreviewState>,
     pub(crate) diff_overlay_queue: VecDeque<DiffOverlayRequest>,
+    pub(crate) transient_host: TransientHost,
 }
 
 pub(super) type Session = AppSession;
@@ -76,6 +82,7 @@ impl AppSession {
             task_panel_lines: Vec::new(),
             diff_preview_state: None,
             diff_overlay_queue: VecDeque::new(),
+            transient_host: TransientHost::default(),
         }
     }
 
@@ -121,10 +128,6 @@ impl AppSession {
 
     pub(crate) fn update_input_triggers(&mut self) {
         if !self.core.input_enabled() {
-            if self.file_palette_active {
-                self.close_file_palette();
-            }
-            slash::clear_slash_suggestions(self);
             return;
         }
 
@@ -132,23 +135,138 @@ impl AppSession {
         slash::update_slash_suggestions(self);
     }
 
+    pub(super) fn show_transient_surface(&mut self, surface: TransientSurface) -> bool {
+        let change = self.transient_host.show(surface);
+        if !change.changed() {
+            return false;
+        }
+
+        self.apply_transient_visibility_change(change);
+        true
+    }
+
+    pub(super) fn close_transient_surface(&mut self, surface: TransientSurface) -> bool {
+        let change = self.transient_host.hide(surface);
+        if !change.changed() {
+            return false;
+        }
+
+        self.apply_transient_visibility_change(change);
+        true
+    }
+
+    pub(super) fn finish_history_picker_interaction(&mut self, was_active: bool) {
+        if was_active && !self.history_picker_state.active {
+            self.close_transient_surface(TransientSurface::HistoryPicker);
+            self.update_input_triggers();
+        }
+    }
+
     pub(crate) fn set_task_panel_visible(&mut self, visible: bool) {
         if self.show_task_panel != visible {
             self.show_task_panel = visible;
+            if visible {
+                self.show_transient_surface(TransientSurface::TaskPanel);
+            } else {
+                self.close_transient_surface(TransientSurface::TaskPanel);
+            }
             self.core.mark_dirty();
         }
     }
 
-    pub(crate) fn set_task_panel_lines(&mut self, lines: Vec<String>) {
-        self.task_panel_lines = lines;
-        self.core.mark_dirty();
+    pub(crate) fn visible_transient_surface(&self) -> Option<TransientSurface> {
+        self.transient_host.top()
+    }
+
+    pub(crate) fn visible_bottom_docked_surface(&self) -> Option<TransientSurface> {
+        self.transient_host.visible_bottom_docked()
+    }
+
+    pub(crate) fn history_picker_visible(&self) -> bool {
+        self.history_picker_state.active
+            && self
+                .transient_host
+                .is_visible(TransientSurface::HistoryPicker)
+    }
+
+    pub(crate) fn file_palette_visible(&self) -> bool {
+        self.file_palette_active
+            && self
+                .transient_host
+                .is_visible(TransientSurface::FilePalette)
+    }
+
+    pub(crate) fn slash_palette_visible(&self) -> bool {
+        !self.slash_palette.is_empty()
+            && self
+                .transient_host
+                .is_visible(TransientSurface::SlashPalette)
+    }
+
+    pub(crate) fn has_active_overlay(&self) -> bool {
+        self.core.has_active_overlay()
+            && self
+                .transient_host
+                .is_visible(TransientSurface::FloatingOverlay)
+    }
+
+    pub(crate) fn modal_state(&self) -> Option<&crate::core_tui::session::modal::ModalState> {
+        self.has_active_overlay()
+            .then(|| self.core.modal_state())
+            .flatten()
+    }
+
+    pub(crate) fn modal_state_mut(
+        &mut self,
+    ) -> Option<&mut crate::core_tui::session::modal::ModalState> {
+        if !self.has_active_overlay() {
+            return None;
+        }
+        self.core.modal_state_mut()
+    }
+
+    pub(crate) fn wizard_overlay(
+        &self,
+    ) -> Option<&crate::core_tui::session::modal::WizardModalState> {
+        self.has_active_overlay()
+            .then(|| self.core.wizard_overlay())
+            .flatten()
+    }
+
+    pub(crate) fn wizard_overlay_mut(
+        &mut self,
+    ) -> Option<&mut crate::core_tui::session::modal::WizardModalState> {
+        if !self.has_active_overlay() {
+            return None;
+        }
+        self.core.wizard_overlay_mut()
+    }
+
+    pub(crate) fn close_overlay(&mut self) {
+        if !self.has_active_overlay() {
+            return;
+        }
+
+        self.core.close_overlay();
+        if !self.core.has_active_overlay() {
+            self.close_transient_surface(TransientSurface::FloatingOverlay);
+        }
     }
 
     pub(crate) fn diff_preview_state(&self) -> Option<&DiffPreviewState> {
-        self.diff_preview_state.as_ref()
+        self.transient_host
+            .is_visible(TransientSurface::DiffPreview)
+            .then_some(())
+            .and(self.diff_preview_state.as_ref())
     }
 
     pub(crate) fn diff_preview_state_mut(&mut self) -> Option<&mut DiffPreviewState> {
+        if !self
+            .transient_host
+            .is_visible(TransientSurface::DiffPreview)
+        {
+            return None;
+        }
         self.diff_preview_state.as_mut()
     }
 
@@ -167,8 +285,7 @@ impl AppSession {
         );
         state.current_hunk = request.current_hunk;
         self.diff_preview_state = Some(state);
-        self.core.set_input_enabled(false);
-        self.core.set_cursor_visible(false);
+        self.show_transient_surface(TransientSurface::DiffPreview);
         self.core.mark_dirty();
     }
 
@@ -177,26 +294,126 @@ impl AppSession {
             return;
         }
         self.diff_preview_state = None;
-        self.core.set_input_enabled(true);
-        self.core.set_cursor_visible(true);
         if let Some(next) = self.diff_overlay_queue.pop_front() {
             self.show_diff_overlay(next);
             return;
         }
+        self.close_transient_surface(TransientSurface::DiffPreview);
         self.core.mark_dirty();
+    }
+
+    pub(crate) fn close_history_picker(&mut self) {
+        if !self.history_picker_state.active {
+            return;
+        }
+        self.history_picker_state
+            .cancel(&mut self.core.input_manager);
+        self.close_transient_surface(TransientSurface::HistoryPicker);
+        self.update_input_triggers();
+        self.mark_dirty();
+    }
+
+    pub(crate) fn show_transient(&mut self, request: TransientRequest) {
+        match request {
+            TransientRequest::Modal(request) => {
+                self.core
+                    .show_overlay(crate::core_tui::types::OverlayRequest::Modal(
+                        request.into(),
+                    ));
+                self.show_transient_surface(TransientSurface::FloatingOverlay);
+            }
+            TransientRequest::List(request) => {
+                self.core
+                    .show_overlay(crate::core_tui::types::OverlayRequest::List(request.into()));
+                self.show_transient_surface(TransientSurface::FloatingOverlay);
+            }
+            TransientRequest::Wizard(request) => {
+                self.core
+                    .show_overlay(crate::core_tui::types::OverlayRequest::Wizard(
+                        request.into(),
+                    ));
+                self.show_transient_surface(TransientSurface::FloatingOverlay);
+            }
+            TransientRequest::Diff(request) => {
+                self.show_diff_overlay(request);
+            }
+            TransientRequest::FilePalette(request) => {
+                self.load_file_palette(request.files, request.workspace);
+                match request.visible {
+                    Some(true) => {
+                        self.ensure_inline_lists_visible_for_trigger();
+                        self.file_palette_active = true;
+                        self.show_transient_surface(TransientSurface::FilePalette);
+                    }
+                    Some(false) => {
+                        self.close_file_palette();
+                    }
+                    None => {}
+                }
+            }
+            TransientRequest::HistoryPicker => {
+                events::open_history_picker(self);
+            }
+            TransientRequest::SlashPalette => {
+                self.ensure_inline_lists_visible_for_trigger();
+                self.show_transient_surface(TransientSurface::SlashPalette);
+            }
+            TransientRequest::TaskPanel(TaskPanelTransientRequest { lines, visible }) => {
+                if !lines.is_empty() {
+                    self.task_panel_lines = lines;
+                }
+                if let Some(visible) = visible {
+                    self.set_task_panel_visible(visible);
+                } else {
+                    self.core.mark_dirty();
+                }
+            }
+        }
+        self.core.mark_dirty();
+    }
+
+    pub(crate) fn close_transient(&mut self) {
+        match self.visible_transient_surface() {
+            Some(TransientSurface::FloatingOverlay) => self.close_overlay(),
+            Some(TransientSurface::DiffPreview) => self.close_diff_overlay(),
+            Some(TransientSurface::HistoryPicker) => self.close_history_picker(),
+            Some(TransientSurface::FilePalette) => self.close_file_palette(),
+            Some(TransientSurface::SlashPalette) => slash::clear_slash_suggestions(self),
+            Some(TransientSurface::TaskPanel) => self.set_task_panel_visible(false),
+            None => {}
+        }
+    }
+
+    pub(crate) fn sync_transient_focus(&mut self) {
+        let Some(surface) = self.visible_transient_surface() else {
+            self.core.set_input_enabled(true);
+            self.core.set_cursor_visible(true);
+            return;
+        };
+
+        match surface.focus_policy() {
+            TransientFocusPolicy::Modal | TransientFocusPolicy::CapturedInput => {
+                self.core.set_input_enabled(false);
+                self.core.set_cursor_visible(false);
+            }
+            TransientFocusPolicy::SharedInput | TransientFocusPolicy::Passive => {
+                self.core.set_input_enabled(true);
+                self.core.set_cursor_visible(true);
+            }
+        }
+    }
+
+    fn apply_transient_visibility_change(&mut self, change: TransientVisibilityChange) {
+        if change.previous_visible == Some(TransientSurface::FilePalette)
+            || change.current_visible == Some(TransientSurface::FilePalette)
+        {
+            self.core.needs_full_clear = true;
+        }
+        self.sync_transient_focus();
     }
 
     pub fn handle_command(&mut self, command: InlineCommand) {
         match command {
-            InlineCommand::SetTaskPanelVisible(visible) => {
-                self.set_task_panel_visible(visible);
-            }
-            InlineCommand::SetTaskPanelLines(lines) => {
-                self.set_task_panel_lines(lines);
-            }
-            InlineCommand::LoadFilePalette { files, workspace } => {
-                self.load_file_palette(files, workspace);
-            }
             InlineCommand::SetInput(value) => {
                 self.core
                     .handle_command(crate::core_tui::types::InlineCommand::SetInput(value));
@@ -213,38 +430,8 @@ impl AppSession {
                     .handle_command(crate::core_tui::types::InlineCommand::ClearInput);
                 self.update_input_triggers();
             }
-            InlineCommand::OpenHistoryPicker => {
-                events::open_history_picker(self);
-            }
-            InlineCommand::CloseOverlay => {
-                if self.diff_preview_state.is_some() {
-                    self.close_diff_overlay();
-                } else {
-                    self.core
-                        .handle_command(crate::core_tui::types::InlineCommand::CloseOverlay);
-                }
-            }
-            InlineCommand::ShowOverlay { request } => match *request {
-                crate::core_tui::app::types::OverlayRequest::Diff(request) => {
-                    self.show_diff_overlay(request);
-                }
-                crate::core_tui::app::types::OverlayRequest::Modal(request) => {
-                    self.core
-                        .show_overlay(crate::core_tui::types::OverlayRequest::Modal(
-                            request.into(),
-                        ));
-                }
-                crate::core_tui::app::types::OverlayRequest::List(request) => {
-                    self.core
-                        .show_overlay(crate::core_tui::types::OverlayRequest::List(request.into()));
-                }
-                crate::core_tui::app::types::OverlayRequest::Wizard(request) => {
-                    self.core
-                        .show_overlay(crate::core_tui::types::OverlayRequest::Wizard(
-                            request.into(),
-                        ));
-                }
-            },
+            InlineCommand::CloseTransient => self.close_transient(),
+            InlineCommand::ShowTransient { request } => self.show_transient(*request),
             _ => {
                 if let Some(core_cmd) = to_core_command(&command) {
                     self.core.handle_command(core_cmd);
@@ -337,7 +524,6 @@ fn to_core_command(command: &InlineCommand) -> Option<crate::core_tui::types::In
         }
         InlineCommand::ClearInput => CoreCommand::ClearInput,
         InlineCommand::ForceRedraw => CoreCommand::ForceRedraw,
-        InlineCommand::CloseOverlay => CoreCommand::CloseOverlay,
         InlineCommand::ClearScreen => CoreCommand::ClearScreen,
         InlineCommand::SuspendEventLoop => CoreCommand::SuspendEventLoop,
         InlineCommand::ResumeEventLoop => CoreCommand::ResumeEventLoop,
@@ -347,11 +533,7 @@ fn to_core_command(command: &InlineCommand) -> Option<crate::core_tui::types::In
         InlineCommand::SetSkipConfirmations(skip) => CoreCommand::SetSkipConfirmations(*skip),
         InlineCommand::Shutdown => CoreCommand::Shutdown,
         InlineCommand::SetReasoningStage(stage) => CoreCommand::SetReasoningStage(stage.clone()),
-        InlineCommand::SetTaskPanelVisible(_)
-        | InlineCommand::SetTaskPanelLines(_)
-        | InlineCommand::LoadFilePalette { .. }
-        | InlineCommand::OpenHistoryPicker
-        | InlineCommand::ShowOverlay { .. } => return None,
+        InlineCommand::ShowTransient { .. } | InlineCommand::CloseTransient => return None,
     })
 }
 
@@ -421,11 +603,7 @@ impl TuiSessionDriver for AppSession {
     }
 
     fn has_active_navigation_ui(&self) -> bool {
-        self.core.has_active_overlay()
-            || self.diff_preview_state.is_some()
-            || self.file_palette_active
-            || self.history_picker_state.active
-            || slash::slash_navigation_available(self)
+        self.transient_host.has_active_navigation_surface()
     }
 
     fn apply_coalesced_scroll(&mut self, line_delta: i32, page_delta: i32) {

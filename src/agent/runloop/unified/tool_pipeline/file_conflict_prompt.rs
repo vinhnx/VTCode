@@ -12,7 +12,7 @@ use vtcode_core::tools::registry::ToolRegistry;
 use vtcode_core::tools::result_cache::ToolResultCache;
 use vtcode_tui::app::{
     DiffOverlayRequest, DiffPreviewMode, InlineHandle, InlineListItem, InlineListSelection,
-    ListOverlayRequest, OverlayRequest, OverlaySubmission,
+    ListOverlayRequest, TransientRequest, TransientSubmission,
 };
 
 use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
@@ -202,7 +202,7 @@ where
     let outcome = show_overlay_and_wait(
         handle,
         session,
-        OverlayRequest::List(ListOverlayRequest {
+        TransientRequest::List(ListOverlayRequest {
             title: "File Changed On Disk".to_string(),
             lines,
             footer_hint: None,
@@ -214,13 +214,13 @@ where
         ctrl_c_state,
         ctrl_c_notify,
         |submission| match submission {
-            OverlaySubmission::Selection(InlineListSelection::FileConflictReload) => {
+            TransientSubmission::Selection(InlineListSelection::FileConflictReload) => {
                 Some(InlineListSelection::FileConflictReload)
             }
-            OverlaySubmission::Selection(InlineListSelection::FileConflictAbort) => {
+            TransientSubmission::Selection(InlineListSelection::FileConflictAbort) => {
                 Some(InlineListSelection::FileConflictAbort)
             }
-            OverlaySubmission::Selection(InlineListSelection::FileConflictViewDiff)
+            TransientSubmission::Selection(InlineListSelection::FileConflictViewDiff)
                 if can_show_diff =>
             {
                 Some(InlineListSelection::FileConflictViewDiff)
@@ -243,7 +243,7 @@ where
             show_overlay_and_wait(
                 handle,
                 session,
-                OverlayRequest::Diff(DiffOverlayRequest {
+                TransientRequest::Diff(DiffOverlayRequest {
                     file_path: conflict.display_path.clone(),
                     before: conflict.disk_content.clone().unwrap_or_default(),
                     after: conflict.intended_content.clone().unwrap_or_default(),
@@ -254,9 +254,9 @@ where
                 ctrl_c_state,
                 ctrl_c_notify,
                 |submission| match submission {
-                    OverlaySubmission::DiffProceed => Some(ConflictResolution::Proceed),
-                    OverlaySubmission::DiffReload => Some(ConflictResolution::Reload),
-                    OverlaySubmission::DiffAbort => Some(ConflictResolution::Abort),
+                    TransientSubmission::DiffProceed => Some(ConflictResolution::Proceed),
+                    TransientSubmission::DiffReload => Some(ConflictResolution::Reload),
+                    TransientSubmission::DiffAbort => Some(ConflictResolution::Abort),
                     _ => None,
                 },
             )
@@ -352,7 +352,7 @@ mod tests {
     use vtcode_core::config::constants::tools;
     use vtcode_core::core::interfaces::ui::UiSession;
     use vtcode_core::tools::result_cache::ToolResultCache;
-    use vtcode_tui::app::{InlineCommand, InlineEvent, OverlayEvent};
+    use vtcode_tui::app::{InlineCommand, InlineEvent, TransientEvent};
 
     use crate::agent::runloop::unified::state::CtrlCState;
 
@@ -418,8 +418,8 @@ mod tests {
 
         let (mut session, event_tx, _commands) = test_session();
         let handle = session.inline_handle().clone();
-        event_tx.send(InlineEvent::Overlay(OverlayEvent::Submitted(
-            OverlaySubmission::Selection(InlineListSelection::FileConflictReload),
+        event_tx.send(InlineEvent::Transient(TransientEvent::Submitted(
+            TransientSubmission::Selection(InlineListSelection::FileConflictReload),
         )))?;
 
         let status = resolve_file_conflict_status(
@@ -466,8 +466,8 @@ mod tests {
 
         let (mut session, event_tx, _commands) = test_session();
         let handle = session.inline_handle().clone();
-        event_tx.send(InlineEvent::Overlay(OverlayEvent::Submitted(
-            OverlaySubmission::Selection(InlineListSelection::FileConflictAbort),
+        event_tx.send(InlineEvent::Transient(TransientEvent::Submitted(
+            TransientSubmission::Selection(InlineListSelection::FileConflictAbort),
         )))?;
 
         let status = resolve_file_conflict_status(
@@ -518,11 +518,11 @@ mod tests {
 
         let (mut session, event_tx, _commands) = test_session();
         let handle = session.inline_handle().clone();
-        event_tx.send(InlineEvent::Overlay(OverlayEvent::Submitted(
-            OverlaySubmission::Selection(InlineListSelection::FileConflictViewDiff),
+        event_tx.send(InlineEvent::Transient(TransientEvent::Submitted(
+            TransientSubmission::Selection(InlineListSelection::FileConflictViewDiff),
         )))?;
-        event_tx.send(InlineEvent::Overlay(OverlayEvent::Submitted(
-            OverlaySubmission::DiffProceed,
+        event_tx.send(InlineEvent::Transient(TransientEvent::Submitted(
+            TransientSubmission::DiffProceed,
         )))?;
 
         let status = resolve_file_conflict_status(
@@ -569,14 +569,14 @@ mod tests {
 
         let (mut session, event_tx, _commands) = test_session();
         let handle = session.inline_handle().clone();
-        event_tx.send(InlineEvent::Overlay(OverlayEvent::Submitted(
-            OverlaySubmission::Selection(InlineListSelection::FileConflictViewDiff),
+        event_tx.send(InlineEvent::Transient(TransientEvent::Submitted(
+            TransientSubmission::Selection(InlineListSelection::FileConflictViewDiff),
         )))?;
-        event_tx.send(InlineEvent::Overlay(OverlayEvent::Submitted(
-            OverlaySubmission::DiffProceed,
+        event_tx.send(InlineEvent::Transient(TransientEvent::Submitted(
+            TransientSubmission::DiffProceed,
         )))?;
-        event_tx.send(InlineEvent::Overlay(OverlayEvent::Submitted(
-            OverlaySubmission::Selection(InlineListSelection::FileConflictReload),
+        event_tx.send(InlineEvent::Transient(TransientEvent::Submitted(
+            TransientSubmission::Selection(InlineListSelection::FileConflictReload),
         )))?;
 
         let status = resolve_file_conflict_status(

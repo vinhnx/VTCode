@@ -13,6 +13,7 @@ use super::{
     file_palette::{FilePalette, extract_file_reference},
 };
 use crate::core_tui::app::session::slash;
+use crate::core_tui::app::session::transient::TransientSurface;
 
 impl AppSession {
     /// Load the file palette with files from the workspace
@@ -35,7 +36,7 @@ impl AppSession {
                 if !self.file_palette_active {
                     self.ensure_inline_lists_visible_for_trigger();
                     self.file_palette_active = true;
-                    self.core.needs_full_clear = true;
+                    self.show_transient_surface(TransientSurface::FilePalette);
                     self.mark_dirty();
                 }
             } else if self.file_palette_active {
@@ -47,7 +48,7 @@ impl AppSession {
     /// Close the file palette and clean up resources
     pub(super) fn close_file_palette(&mut self) {
         self.file_palette_active = false;
-        self.core.needs_full_clear = true;
+        self.close_transient_surface(TransientSurface::FilePalette);
 
         // Clean up resources when closing to free memory
         if let Some(palette) = self.file_palette.as_mut() {
@@ -59,7 +60,7 @@ impl AppSession {
     ///
     /// Returns true if the key was handled by the palette
     pub(super) fn handle_file_palette_key(&mut self, key: &KeyEvent) -> bool {
-        if !self.file_palette_active {
+        if !self.file_palette_visible() {
             return false;
         }
 

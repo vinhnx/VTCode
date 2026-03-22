@@ -176,8 +176,8 @@ pub(super) async fn handle_clear_conversation(
     ctx.conversation_history.clear();
     *ctx.session_stats = SessionStats::default();
     ctx.session_stats.vim_mode_enabled = vim_mode_enabled;
-    ctx.handle.set_task_panel_visible(false);
-    ctx.handle.set_task_panel_lines(Vec::new());
+    ctx.handle.hide_task_panel();
+    ctx.handle.update_task_panel(Vec::new());
     {
         let mut ledger = ctx.decision_ledger.write().await;
         *ledger = DecisionTracker::new();

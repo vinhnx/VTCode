@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use super::diff::{DiffHunk, DiffPreviewMode, TrustMode};
 use crate::core_tui::types::{
     InlineListItem, InlineListSearchConfig, InlineListSelection, SecurePromptConfig,
@@ -19,7 +21,7 @@ pub struct ListOverlayRequest {
     pub items: Vec<InlineListItem>,
     pub selected: Option<InlineListSelection>,
     pub search: Option<InlineListSearchConfig>,
-    pub hotkeys: Vec<OverlayHotkey>,
+    pub hotkeys: Vec<TransientHotkey>,
 }
 
 #[derive(Clone, Debug)]
@@ -42,26 +44,43 @@ pub struct DiffOverlayRequest {
 }
 
 #[derive(Clone, Debug)]
-pub enum OverlayRequest {
+pub struct FilePaletteTransientRequest {
+    pub files: Vec<String>,
+    pub workspace: PathBuf,
+    pub visible: Option<bool>,
+}
+
+#[derive(Clone, Debug)]
+pub struct TaskPanelTransientRequest {
+    pub lines: Vec<String>,
+    pub visible: Option<bool>,
+}
+
+#[derive(Clone, Debug)]
+pub enum TransientRequest {
     Modal(ModalOverlayRequest),
     List(ListOverlayRequest),
     Wizard(WizardOverlayRequest),
     Diff(DiffOverlayRequest),
+    FilePalette(FilePaletteTransientRequest),
+    HistoryPicker,
+    SlashPalette,
+    TaskPanel(TaskPanelTransientRequest),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct OverlayHotkey {
-    pub key: OverlayHotkeyKey,
-    pub action: OverlayHotkeyAction,
+pub struct TransientHotkey {
+    pub key: TransientHotkeyKey,
+    pub action: TransientHotkeyAction,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum OverlayHotkeyKey {
+pub enum TransientHotkeyKey {
     CtrlChar(char),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum OverlayHotkeyAction {
+pub enum TransientHotkeyAction {
     LaunchEditor,
     FocusJobOutput,
     InterruptJob,
@@ -69,13 +88,13 @@ pub enum OverlayHotkeyAction {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum OverlayEvent {
-    SelectionChanged(OverlaySelectionChange),
-    Submitted(OverlaySubmission),
+pub enum TransientEvent {
+    SelectionChanged(TransientSelectionChange),
+    Submitted(TransientSubmission),
     Cancelled,
 }
 
-impl From<crate::core_tui::types::OverlayEvent> for OverlayEvent {
+impl From<crate::core_tui::types::OverlayEvent> for TransientEvent {
     fn from(value: crate::core_tui::types::OverlayEvent) -> Self {
         match value {
             crate::core_tui::types::OverlayEvent::SelectionChanged(change) => {
@@ -90,13 +109,13 @@ impl From<crate::core_tui::types::OverlayEvent> for OverlayEvent {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum OverlaySelectionChange {
+pub enum TransientSelectionChange {
     List(InlineListSelection),
     DiffTrustMode { mode: TrustMode },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum OverlaySubmission {
+pub enum TransientSubmission {
     Selection(InlineListSelection),
     Wizard(Vec<InlineListSelection>),
     DiffApply,
@@ -104,29 +123,29 @@ pub enum OverlaySubmission {
     DiffProceed,
     DiffReload,
     DiffAbort,
-    Hotkey(OverlayHotkeyAction),
+    Hotkey(TransientHotkeyAction),
 }
 
-impl From<OverlayHotkeyKey> for crate::core_tui::types::OverlayHotkeyKey {
-    fn from(value: OverlayHotkeyKey) -> Self {
+impl From<TransientHotkeyKey> for crate::core_tui::types::OverlayHotkeyKey {
+    fn from(value: TransientHotkeyKey) -> Self {
         match value {
-            OverlayHotkeyKey::CtrlChar(ch) => Self::CtrlChar(ch),
+            TransientHotkeyKey::CtrlChar(ch) => Self::CtrlChar(ch),
         }
     }
 }
 
-impl From<OverlayHotkeyAction> for crate::core_tui::types::OverlayHotkeyAction {
-    fn from(value: OverlayHotkeyAction) -> Self {
+impl From<TransientHotkeyAction> for crate::core_tui::types::OverlayHotkeyAction {
+    fn from(value: TransientHotkeyAction) -> Self {
         match value {
-            OverlayHotkeyAction::LaunchEditor => Self::LaunchEditor,
-            OverlayHotkeyAction::FocusJobOutput => Self::FocusJobOutput,
-            OverlayHotkeyAction::InterruptJob => Self::InterruptJob,
-            OverlayHotkeyAction::PreviewJobSnapshot => Self::PreviewJobSnapshot,
+            TransientHotkeyAction::LaunchEditor => Self::LaunchEditor,
+            TransientHotkeyAction::FocusJobOutput => Self::FocusJobOutput,
+            TransientHotkeyAction::InterruptJob => Self::InterruptJob,
+            TransientHotkeyAction::PreviewJobSnapshot => Self::PreviewJobSnapshot,
         }
     }
 }
 
-impl From<crate::core_tui::types::OverlayHotkeyAction> for OverlayHotkeyAction {
+impl From<crate::core_tui::types::OverlayHotkeyAction> for TransientHotkeyAction {
     fn from(value: crate::core_tui::types::OverlayHotkeyAction) -> Self {
         match value {
             crate::core_tui::types::OverlayHotkeyAction::LaunchEditor => Self::LaunchEditor,
@@ -139,7 +158,7 @@ impl From<crate::core_tui::types::OverlayHotkeyAction> for OverlayHotkeyAction {
     }
 }
 
-impl From<crate::core_tui::types::OverlaySelectionChange> for OverlaySelectionChange {
+impl From<crate::core_tui::types::OverlaySelectionChange> for TransientSelectionChange {
     fn from(value: crate::core_tui::types::OverlaySelectionChange) -> Self {
         match value {
             crate::core_tui::types::OverlaySelectionChange::List(selection) => {
@@ -149,7 +168,7 @@ impl From<crate::core_tui::types::OverlaySelectionChange> for OverlaySelectionCh
     }
 }
 
-impl From<crate::core_tui::types::OverlaySubmission> for OverlaySubmission {
+impl From<crate::core_tui::types::OverlaySubmission> for TransientSubmission {
     fn from(value: crate::core_tui::types::OverlaySubmission) -> Self {
         match value {
             crate::core_tui::types::OverlaySubmission::Selection(selection) => {
@@ -165,8 +184,8 @@ impl From<crate::core_tui::types::OverlaySubmission> for OverlaySubmission {
     }
 }
 
-impl From<OverlayHotkey> for crate::core_tui::types::OverlayHotkey {
-    fn from(value: OverlayHotkey) -> Self {
+impl From<TransientHotkey> for crate::core_tui::types::OverlayHotkey {
+    fn from(value: TransientHotkey) -> Self {
         Self {
             key: value.key.into(),
             action: value.action.into(),

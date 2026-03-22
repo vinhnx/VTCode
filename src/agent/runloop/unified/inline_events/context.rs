@@ -5,8 +5,8 @@ use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider::{self as uni};
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_tui::app::{
-    InlineEvent, InlineHandle, InlineHeaderContext, OverlayEvent, OverlayHotkeyAction,
-    OverlaySelectionChange, OverlaySubmission,
+    InlineEvent, InlineHandle, InlineHeaderContext, TransientEvent, TransientHotkeyAction,
+    TransientSelectionChange, TransientSubmission,
 };
 
 use crate::agent::runloop::model_picker::ModelPickerState;
@@ -82,56 +82,56 @@ impl<'a> InlineEventContext<'a> {
                 queue.edit_latest();
                 InlineLoopAction::Continue
             }
-            InlineEvent::Overlay(overlay_event) => match overlay_event {
-                OverlayEvent::SelectionChanged(OverlaySelectionChange::List(selection)) => self
+            InlineEvent::Transient(overlay_event) => match overlay_event {
+                TransientEvent::SelectionChanged(TransientSelectionChange::List(selection)) => self
                     .modal
                     .handle_preview(self.state.renderer(), selection)?,
-                OverlayEvent::SelectionChanged(OverlaySelectionChange::DiffTrustMode {
+                TransientEvent::SelectionChanged(TransientSelectionChange::DiffTrustMode {
                     ..
                 }) => {
                     self.state.reset_interrupt_state();
                     self.input_processor().passive()
                 }
-                OverlayEvent::Submitted(OverlaySubmission::Selection(selection)) => {
+                TransientEvent::Submitted(TransientSubmission::Selection(selection)) => {
                     self.state.reset_interrupt_state();
                     self.modal
                         .handle_submit(self.state.renderer(), selection)
                         .await?
                 }
-                OverlayEvent::Submitted(OverlaySubmission::Wizard(_)) => {
+                TransientEvent::Submitted(TransientSubmission::Wizard(_)) => {
                     self.state.reset_interrupt_state();
                     self.input_processor().passive()
                 }
-                OverlayEvent::Submitted(OverlaySubmission::DiffApply) => {
+                TransientEvent::Submitted(TransientSubmission::DiffApply) => {
                     self.state.reset_interrupt_state();
                     InlineLoopAction::DiffApproved
                 }
-                OverlayEvent::Submitted(OverlaySubmission::DiffReject) => {
+                TransientEvent::Submitted(TransientSubmission::DiffReject) => {
                     self.state.reset_interrupt_state();
                     InlineLoopAction::DiffRejected
                 }
-                OverlayEvent::Submitted(
-                    OverlaySubmission::DiffProceed
-                    | OverlaySubmission::DiffReload
-                    | OverlaySubmission::DiffAbort,
+                TransientEvent::Submitted(
+                    TransientSubmission::DiffProceed
+                    | TransientSubmission::DiffReload
+                    | TransientSubmission::DiffAbort,
                 ) => {
                     self.state.reset_interrupt_state();
                     self.input_processor().passive()
                 }
-                OverlayEvent::Submitted(OverlaySubmission::Hotkey(action)) => {
+                TransientEvent::Submitted(TransientSubmission::Hotkey(action)) => {
                     self.state.reset_interrupt_state();
                     match action {
-                        OverlayHotkeyAction::LaunchEditor => {
+                        TransientHotkeyAction::LaunchEditor => {
                             self.input_processor().submit("/edit".to_string())
                         }
-                        OverlayHotkeyAction::FocusJobOutput
-                        | OverlayHotkeyAction::InterruptJob
-                        | OverlayHotkeyAction::PreviewJobSnapshot => {
+                        TransientHotkeyAction::FocusJobOutput
+                        | TransientHotkeyAction::InterruptJob
+                        | TransientHotkeyAction::PreviewJobSnapshot => {
                             self.input_processor().passive()
                         }
                     }
                 }
-                OverlayEvent::Cancelled => {
+                TransientEvent::Cancelled => {
                     self.state.reset_interrupt_state();
                     self.modal.handle_cancel(self.state.renderer())?
                 }

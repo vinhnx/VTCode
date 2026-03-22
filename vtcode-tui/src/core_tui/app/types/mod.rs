@@ -6,9 +6,10 @@ mod slash;
 
 pub use diff::{DiffHunk, DiffPreviewMode, DiffPreviewState, TrustMode};
 pub use overlay::{
-    DiffOverlayRequest, ListOverlayRequest, ModalOverlayRequest, OverlayEvent, OverlayHotkey,
-    OverlayHotkeyAction, OverlayHotkeyKey, OverlayRequest, OverlaySelectionChange,
-    OverlaySubmission, WizardOverlayRequest,
+    DiffOverlayRequest, FilePaletteTransientRequest, ListOverlayRequest, ModalOverlayRequest,
+    TaskPanelTransientRequest, TransientEvent, TransientHotkey, TransientHotkeyAction,
+    TransientHotkeyKey, TransientRequest, TransientSelectionChange, TransientSubmission,
+    WizardOverlayRequest,
 };
 pub use plan::{PlanContent, PlanPhase, PlanStep};
 pub use protocol::{InlineCommand, InlineEvent, InlineEventCallback, InlineHandle, InlineSession};

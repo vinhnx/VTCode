@@ -15,11 +15,7 @@ struct FilePaletteRenderRow {
 }
 
 pub(crate) fn file_palette_panel_layout(session: &Session) -> Option<ListPanelLayout> {
-    if session.has_active_overlay()
-        || !session.inline_lists_visible()
-        || session.history_picker_state.active
-        || !session.file_palette_active
-    {
+    if !session.file_palette_visible() || !session.inline_lists_visible() {
         return None;
     }
 
@@ -56,11 +52,10 @@ pub fn split_inline_file_palette_area(session: &mut Session, area: Rect) -> (Rec
 }
 
 pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
-    if !session.file_palette_active
-        || !session.inline_lists_visible()
+    if !session.inline_lists_visible()
         || area.height == 0
         || area.width == 0
-        || session.has_active_overlay()
+        || !session.file_palette_visible()
     {
         return;
     }

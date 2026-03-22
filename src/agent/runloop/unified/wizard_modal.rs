@@ -4,8 +4,8 @@ use anyhow::Result;
 use tokio::sync::Notify;
 
 use vtcode_tui::app::{
-    InlineHandle, InlineListSearchConfig, InlineListSelection, InlineSession, OverlayRequest,
-    OverlaySubmission, WizardModalMode, WizardOverlayRequest, WizardStep,
+    InlineHandle, InlineListSearchConfig, InlineListSelection, InlineSession, TransientRequest,
+    TransientSubmission, WizardModalMode, WizardOverlayRequest, WizardStep,
 };
 
 use super::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
@@ -30,7 +30,7 @@ pub(crate) async fn show_wizard_modal_and_wait(
     let outcome = show_overlay_and_wait(
         handle,
         session,
-        OverlayRequest::Wizard(WizardOverlayRequest {
+        TransientRequest::Wizard(WizardOverlayRequest {
             title,
             steps,
             current_step,
@@ -40,7 +40,7 @@ pub(crate) async fn show_wizard_modal_and_wait(
         ctrl_c_state,
         ctrl_c_notify,
         |submission| match submission {
-            OverlaySubmission::Wizard(selections) => Some(selections),
+            TransientSubmission::Wizard(selections) => Some(selections),
             _ => None,
         },
     )

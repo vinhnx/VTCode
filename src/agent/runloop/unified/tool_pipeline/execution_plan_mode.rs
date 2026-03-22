@@ -8,7 +8,7 @@ use vtcode_core::core::interfaces::session::PlanModeEntrySource;
 use vtcode_core::tools::handlers::plan_mode::PlanLifecyclePhase;
 use vtcode_tui::app::PlanContent;
 use vtcode_tui::app::{
-    InlineListItem, InlineListSelection, ListOverlayRequest, OverlayRequest, OverlaySubmission,
+    InlineListItem, InlineListSelection, ListOverlayRequest, TransientRequest, TransientSubmission,
 };
 
 use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
@@ -318,7 +318,7 @@ async fn handle_enter_pending_confirmation(
         .plan_mode_state()
         .set_phase(PlanLifecyclePhase::EnterPendingApproval);
 
-    let overlay = OverlayRequest::List(ListOverlayRequest {
+    let overlay = TransientRequest::List(ListOverlayRequest {
         title: "Enter Plan Mode?".to_string(),
         lines: build_enter_plan_mode_lines(output),
         footer_hint: Some(
@@ -364,17 +364,17 @@ async fn handle_enter_pending_confirmation(
         ctrl_c_state,
         ctrl_c_notify,
         |submission| match submission {
-            OverlaySubmission::Selection(InlineListSelection::ConfigAction(action))
+            TransientSubmission::Selection(InlineListSelection::ConfigAction(action))
                 if action == ENTER_PLAN_MODE_APPROVE_ACTION =>
             {
                 Some(EnterPlanModeConfirmation::Enter)
             }
-            OverlaySubmission::Selection(InlineListSelection::ConfigAction(action))
+            TransientSubmission::Selection(InlineListSelection::ConfigAction(action))
                 if action == ENTER_PLAN_MODE_STAY_ACTION =>
             {
                 Some(EnterPlanModeConfirmation::Stay)
             }
-            OverlaySubmission::Selection(_) => Some(EnterPlanModeConfirmation::Stay),
+            TransientSubmission::Selection(_) => Some(EnterPlanModeConfirmation::Stay),
             _ => None,
         },
     )

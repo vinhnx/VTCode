@@ -4,7 +4,9 @@ use anyhow::Result;
 use tokio::sync::Notify;
 use tokio::task;
 use vtcode_core::core::interfaces::ui::UiSession;
-use vtcode_tui::app::{InlineEvent, InlineHandle, OverlayEvent, OverlayRequest, OverlaySubmission};
+use vtcode_tui::app::{
+    InlineEvent, InlineHandle, TransientEvent, TransientRequest, TransientSubmission,
+};
 
 use super::state::{CtrlCSignal, CtrlCState};
 use super::stop_requests::request_local_stop;
@@ -19,16 +21,16 @@ pub(crate) enum OverlayWaitOutcome<T> {
 pub(crate) async fn show_overlay_and_wait<S, T, F>(
     handle: &InlineHandle,
     session: &mut S,
-    request: OverlayRequest,
+    request: TransientRequest,
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
     map_submission: F,
 ) -> Result<OverlayWaitOutcome<T>>
 where
     S: UiSession + ?Sized,
-    F: FnMut(OverlaySubmission) -> Option<T>,
+    F: FnMut(TransientSubmission) -> Option<T>,
 {
-    handle.show_overlay(request);
+    handle.show_transient(request);
     handle.force_redraw();
     task::yield_now().await;
     wait_for_overlay_submission(handle, session, ctrl_c_state, ctrl_c_notify, map_submission).await
@@ -43,7 +45,7 @@ pub(crate) async fn wait_for_overlay_submission<S, T, F>(
 ) -> Result<OverlayWaitOutcome<T>>
 where
     S: UiSession + ?Sized,
-    F: FnMut(OverlaySubmission) -> Option<T>,
+    F: FnMut(TransientSubmission) -> Option<T>,
 {
     loop {
         if ctrl_c_state.is_cancel_requested() {
@@ -80,13 +82,13 @@ where
                     CtrlCSignal::Cancel => OverlayWaitOutcome::Interrupted,
                 });
             }
-            InlineEvent::Overlay(OverlayEvent::Submitted(submission)) => {
+            InlineEvent::Transient(TransientEvent::Submitted(submission)) => {
                 ctrl_c_state.reset();
                 if let Some(mapped) = map_submission(submission) {
                     return Ok(OverlayWaitOutcome::Submitted(mapped));
                 }
             }
-            InlineEvent::Overlay(OverlayEvent::Cancelled) | InlineEvent::Cancel => {
+            InlineEvent::Transient(TransientEvent::Cancelled) | InlineEvent::Cancel => {
                 ctrl_c_state.reset();
                 return Ok(OverlayWaitOutcome::Cancelled);
             }
@@ -96,14 +98,14 @@ where
                 return Ok(OverlayWaitOutcome::Exit);
             }
             InlineEvent::Submit(_) | InlineEvent::QueueSubmit(_) => continue,
-            InlineEvent::Overlay(_) => {}
+            InlineEvent::Transient(_) => {}
             _ => {}
         }
     }
 }
 
 async fn close_overlay(handle: &InlineHandle) {
-    handle.close_overlay();
+    handle.close_transient();
     handle.force_redraw();
     task::yield_now().await;
 }

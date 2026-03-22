@@ -7,7 +7,7 @@ use vtcode_core::tools::terminal_app::{TerminalAppLauncher, TerminalCommandStrat
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_tui::app::{
     InlineHandle, InlineHeaderContext, InlineHeaderHighlight, InlineListItem, InlineListSelection,
-    InlineMessageKind, InlineSession, ListOverlayRequest, OverlayRequest, OverlaySubmission,
+    InlineMessageKind, InlineSession, ListOverlayRequest, TransientRequest, TransientSubmission,
 };
 
 use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
@@ -90,8 +90,8 @@ pub(crate) fn display_update_notice(
     handle.force_redraw();
 }
 
-fn build_update_prompt_request(notice: &StartupUpdateNotice) -> OverlayRequest {
-    OverlayRequest::List(ListOverlayRequest {
+fn build_update_prompt_request(notice: &StartupUpdateNotice) -> TransientRequest {
+    TransientRequest::List(ListOverlayRequest {
         title: "Update available".to_string(),
         lines: vec![
             format!(
@@ -153,19 +153,19 @@ fn relaunch_preference(notice: &StartupUpdateNotice) -> RelaunchPreference {
     }
 }
 
-fn map_update_prompt_submission(submission: OverlaySubmission) -> Option<UpdatePromptChoice> {
+fn map_update_prompt_submission(submission: TransientSubmission) -> Option<UpdatePromptChoice> {
     match submission {
-        OverlaySubmission::Selection(InlineListSelection::ConfigAction(action))
+        TransientSubmission::Selection(InlineListSelection::ConfigAction(action))
             if action == UPDATE_AND_RESTART_ACTION =>
         {
             Some(UpdatePromptChoice::UpdateAndRestart)
         }
-        OverlaySubmission::Selection(InlineListSelection::ConfigAction(action))
+        TransientSubmission::Selection(InlineListSelection::ConfigAction(action))
             if action == STAY_CURRENT_ACTION =>
         {
             Some(UpdatePromptChoice::StayCurrent)
         }
-        OverlaySubmission::Selection(_) => Some(UpdatePromptChoice::StayCurrent),
+        TransientSubmission::Selection(_) => Some(UpdatePromptChoice::StayCurrent),
         _ => None,
     }
 }

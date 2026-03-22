@@ -204,7 +204,7 @@ pub(crate) async fn initialize_session_ui(
         match load_workspace_files(workspace_for_indexer).await {
             Ok(files) => {
                 if !files.is_empty() {
-                    handle_for_indexer.load_file_palette(files, workspace_for_palette);
+                    handle_for_indexer.configure_file_palette(files, workspace_for_palette);
                 } else {
                     tracing::debug!("No files found in workspace for file palette");
                 }

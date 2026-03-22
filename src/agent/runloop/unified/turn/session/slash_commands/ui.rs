@@ -4,7 +4,7 @@ use vtcode_core::core::threads::{SessionQueryScope, list_recent_sessions_in_scop
 use vtcode_core::ui::inline_theme_from_core_styles;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::MessageStyle;
-use vtcode_tui::app::{InlineListItem, InlineListSelection, OverlaySubmission};
+use vtcode_tui::app::{InlineListItem, InlineListSelection, TransientSubmission};
 
 use crate::agent::runloop::model_picker::{ModelPickerStart, ModelPickerState};
 use crate::agent::runloop::slash_commands::{SessionPaletteMode, StatuslineTargetMode};
@@ -54,7 +54,7 @@ pub(super) async fn wait_for_list_modal_selection(
         ctx.ctrl_c_state,
         ctx.ctrl_c_notify,
         |submission| match submission {
-            OverlaySubmission::Selection(selection) => Some(selection),
+            TransientSubmission::Selection(selection) => Some(selection),
             _ => None,
         },
     )
@@ -160,7 +160,7 @@ pub(crate) async fn handle_start_history_picker(
         return Ok(SlashCommandControl::Continue);
     }
 
-    ctx.handle.open_history_picker();
+    ctx.handle.show_history_picker();
     Ok(SlashCommandControl::Continue)
 }
 

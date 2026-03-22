@@ -10,8 +10,8 @@ use tokio::sync::Notify;
 
 use vtcode_tui::app::{
     InlineHandle, InlineListItem, InlineListSelection, InlineMessageKind, InlineSession,
-    ListOverlayRequest, OverlayHotkey, OverlayHotkeyAction, OverlayHotkeyKey, OverlayRequest,
-    OverlaySubmission, PlanContent,
+    ListOverlayRequest, PlanContent, TransientHotkey, TransientHotkeyAction, TransientHotkeyKey,
+    TransientRequest, TransientSubmission,
 };
 
 use super::overlay_prompt::{OverlayWaitOutcome, wait_for_overlay_submission};
@@ -74,7 +74,7 @@ fn render_confirmation_prompt(handle: &InlineHandle, plan: &PlanContent) {
     );
 }
 
-fn build_plan_confirmation_request(plan: &PlanContent, draft_incomplete: bool) -> OverlayRequest {
+fn build_plan_confirmation_request(plan: &PlanContent, draft_incomplete: bool) -> TransientRequest {
     let mut lines: Vec<String> = plan
         .raw_content
         .lines()
@@ -125,16 +125,16 @@ fn build_plan_confirmation_request(plan: &PlanContent, draft_incomplete: bool) -
         InlineListSelection::PlanApprovalAutoAccept
     };
 
-    OverlayRequest::List(ListOverlayRequest {
+    TransientRequest::List(ListOverlayRequest {
         title: "Ready to code?".to_string(),
         lines,
         footer_hint,
         items,
         selected: Some(selected),
         search: None,
-        hotkeys: vec![OverlayHotkey {
-            key: OverlayHotkeyKey::CtrlChar('g'),
-            action: OverlayHotkeyAction::LaunchEditor,
+        hotkeys: vec![TransientHotkey {
+            key: TransientHotkeyKey::CtrlChar('g'),
+            action: TransientHotkeyAction::LaunchEditor,
         }],
     })
 }
@@ -150,7 +150,7 @@ pub(crate) async fn execute_plan_confirmation(
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
 ) -> Result<PlanConfirmationOutcome> {
-    handle.show_overlay(build_plan_confirmation_request(
+    handle.show_transient(build_plan_confirmation_request(
         &plan_content,
         draft_incomplete,
     ));
@@ -158,20 +158,20 @@ pub(crate) async fn execute_plan_confirmation(
     let outcome =
         wait_for_overlay_submission(handle, session, ctrl_c_state, ctrl_c_notify, |submission| {
             match submission {
-                OverlaySubmission::Selection(InlineListSelection::PlanApprovalExecute) => {
+                TransientSubmission::Selection(InlineListSelection::PlanApprovalExecute) => {
                     Some(PlanConfirmationOutcome::Execute)
                 }
-                OverlaySubmission::Selection(InlineListSelection::PlanApprovalAutoAccept) => {
+                TransientSubmission::Selection(InlineListSelection::PlanApprovalAutoAccept) => {
                     Some(PlanConfirmationOutcome::AutoAccept)
                 }
-                OverlaySubmission::Selection(InlineListSelection::PlanApprovalEditPlan) => {
+                TransientSubmission::Selection(InlineListSelection::PlanApprovalEditPlan) => {
                     Some(PlanConfirmationOutcome::EditPlan)
                 }
-                OverlaySubmission::Hotkey(OverlayHotkeyAction::LaunchEditor) => {
+                TransientSubmission::Hotkey(TransientHotkeyAction::LaunchEditor) => {
                     handle.set_input("/edit".to_string());
                     Some(PlanConfirmationOutcome::EditPlan)
                 }
-                OverlaySubmission::Selection(_) => Some(PlanConfirmationOutcome::Cancel),
+                TransientSubmission::Selection(_) => Some(PlanConfirmationOutcome::Cancel),
                 _ => None,
             }
         })

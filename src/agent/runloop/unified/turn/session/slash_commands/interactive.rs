@@ -1,9 +1,9 @@
 use anyhow::Result;
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_tui::app::{
-    InlineListItem, InlineListSearchConfig, InlineListSelection, ListOverlayRequest, OverlayEvent,
-    OverlayHotkey, OverlayHotkeyAction, OverlayHotkeyKey, OverlayRequest, OverlaySelectionChange,
-    OverlaySubmission,
+    InlineListItem, InlineListSearchConfig, InlineListSelection, ListOverlayRequest,
+    TransientEvent, TransientHotkey, TransientHotkeyAction, TransientHotkeyKey, TransientRequest,
+    TransientSelectionChange, TransientSubmission,
 };
 
 use super::ui::{ensure_selection_ui_available, wait_for_list_modal_selection};
@@ -79,7 +79,11 @@ pub(crate) async fn handle_toggle_tasks_panel(
 ) -> Result<SlashCommandControl> {
     let visible = !ctx.session_stats.task_panel_visible;
     ctx.session_stats.task_panel_visible = visible;
-    ctx.handle.set_task_panel_visible(visible);
+    if visible {
+        ctx.handle.show_task_panel();
+    } else {
+        ctx.handle.hide_task_panel();
+    }
     let message = if visible {
         "TODO panel enabled."
     } else {
@@ -106,7 +110,7 @@ pub(crate) async fn handle_show_jobs_panel(
     let items = jobs.iter().map(background_job_item).collect::<Vec<_>>();
     let selected = items.first().and_then(|item| item.selection.clone());
     ctx.handle
-        .show_overlay(OverlayRequest::List(ListOverlayRequest {
+        .show_transient(TransientRequest::List(ListOverlayRequest {
             title: "Jobs".to_string(),
             lines: vec![
             "Active/background command sessions.".to_string(),
@@ -124,17 +128,17 @@ pub(crate) async fn handle_show_jobs_panel(
                 placeholder: Some("command, cwd, status".to_string()),
             }),
             hotkeys: vec![
-                OverlayHotkey {
-                    key: OverlayHotkeyKey::CtrlChar('r'),
-                    action: OverlayHotkeyAction::FocusJobOutput,
+                TransientHotkey {
+                    key: TransientHotkeyKey::CtrlChar('r'),
+                    action: TransientHotkeyAction::FocusJobOutput,
                 },
-                OverlayHotkey {
-                    key: OverlayHotkeyKey::CtrlChar('p'),
-                    action: OverlayHotkeyAction::PreviewJobSnapshot,
+                TransientHotkey {
+                    key: TransientHotkeyKey::CtrlChar('p'),
+                    action: TransientHotkeyAction::PreviewJobSnapshot,
                 },
-                OverlayHotkey {
-                    key: OverlayHotkeyKey::CtrlChar('x'),
-                    action: OverlayHotkeyAction::InterruptJob,
+                TransientHotkey {
+                    key: TransientHotkeyKey::CtrlChar('x'),
+                    action: TransientHotkeyAction::InterruptJob,
                 },
             ],
         }));
@@ -189,7 +193,7 @@ async fn wait_for_jobs_modal_action(
     let mut current_selection = initial_selection;
     loop {
         if ctrl_c_state.is_cancel_requested() {
-            handle.close_overlay();
+            handle.close_transient();
             handle.force_redraw();
             return None;
         }
@@ -201,19 +205,19 @@ async fn wait_for_jobs_modal_action(
         };
 
         let Some(event) = maybe_event else {
-            handle.close_overlay();
+            handle.close_transient();
             handle.force_redraw();
             return None;
         };
 
         match event {
-            vtcode_tui::app::InlineEvent::Overlay(OverlayEvent::SelectionChanged(
-                OverlaySelectionChange::List(selection),
+            vtcode_tui::app::InlineEvent::Transient(TransientEvent::SelectionChanged(
+                TransientSelectionChange::List(selection),
             )) => {
                 current_selection = Some(selection);
             }
-            vtcode_tui::app::InlineEvent::Overlay(OverlayEvent::Submitted(
-                OverlaySubmission::Selection(selection),
+            vtcode_tui::app::InlineEvent::Transient(TransientEvent::Submitted(
+                TransientSubmission::Selection(selection),
             )) => {
                 ctrl_c_state.reset();
                 return Some(JobModalAction {
@@ -221,14 +225,14 @@ async fn wait_for_jobs_modal_action(
                     selection: Some(selection),
                 });
             }
-            vtcode_tui::app::InlineEvent::Overlay(OverlayEvent::Submitted(
-                OverlaySubmission::Hotkey(action),
+            vtcode_tui::app::InlineEvent::Transient(TransientEvent::Submitted(
+                TransientSubmission::Hotkey(action),
             )) => {
                 ctrl_c_state.reset();
                 let kind = match action {
-                    OverlayHotkeyAction::FocusJobOutput => JobModalActionKind::Focus,
-                    OverlayHotkeyAction::PreviewJobSnapshot => JobModalActionKind::Preview,
-                    OverlayHotkeyAction::InterruptJob => JobModalActionKind::Interrupt,
+                    TransientHotkeyAction::FocusJobOutput => JobModalActionKind::Focus,
+                    TransientHotkeyAction::PreviewJobSnapshot => JobModalActionKind::Preview,
+                    TransientHotkeyAction::InterruptJob => JobModalActionKind::Interrupt,
                     _ => continue,
                 };
                 return Some(JobModalAction {
@@ -236,14 +240,14 @@ async fn wait_for_jobs_modal_action(
                     selection: current_selection.clone(),
                 });
             }
-            vtcode_tui::app::InlineEvent::Overlay(OverlayEvent::Cancelled)
+            vtcode_tui::app::InlineEvent::Transient(TransientEvent::Cancelled)
             | vtcode_tui::app::InlineEvent::Cancel
             | vtcode_tui::app::InlineEvent::Exit => {
                 ctrl_c_state.reset();
                 return None;
             }
             vtcode_tui::app::InlineEvent::Interrupt => {
-                handle.close_overlay();
+                handle.close_transient();
                 handle.force_redraw();
                 return None;
             }
@@ -415,15 +419,15 @@ mod tests {
         let ctrl_c_notify = Arc::new(Notify::new());
 
         event_tx
-            .send(InlineEvent::Overlay(OverlayEvent::SelectionChanged(
-                OverlaySelectionChange::List(InlineListSelection::ConfigAction(
+            .send(InlineEvent::Transient(TransientEvent::SelectionChanged(
+                TransientSelectionChange::List(InlineListSelection::ConfigAction(
                     "job:session-2".to_string(),
                 )),
             )))
             .expect("selection change");
         event_tx
-            .send(InlineEvent::Overlay(OverlayEvent::Submitted(
-                OverlaySubmission::Hotkey(OverlayHotkeyAction::InterruptJob),
+            .send(InlineEvent::Transient(TransientEvent::Submitted(
+                TransientSubmission::Hotkey(TransientHotkeyAction::InterruptJob),
             )))
             .expect("hotkey submission");
 

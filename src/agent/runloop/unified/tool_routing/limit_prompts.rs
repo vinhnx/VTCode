@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use tokio::sync::Notify;
 use vtcode_core::core::interfaces::ui::UiSession;
-use vtcode_tui::app::{InlineHandle, ListOverlayRequest, OverlayRequest, OverlaySubmission};
+use vtcode_tui::app::{InlineHandle, ListOverlayRequest, TransientRequest, TransientSubmission};
 
 use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
 use crate::agent::runloop::unified::state::CtrlCState;
@@ -159,7 +159,7 @@ async fn prompt_limit_increase_modal<S: UiSession + ?Sized>(
     let outcome = show_overlay_and_wait(
         handle,
         session,
-        OverlayRequest::List(ListOverlayRequest {
+        TransientRequest::List(ListOverlayRequest {
             title,
             lines: description_lines,
             footer_hint: None,
@@ -171,10 +171,10 @@ async fn prompt_limit_increase_modal<S: UiSession + ?Sized>(
         ctrl_c_state,
         ctrl_c_notify,
         |submission| match submission {
-            OverlaySubmission::Selection(InlineListSelection::SessionLimitIncrease(inc)) => {
+            TransientSubmission::Selection(InlineListSelection::SessionLimitIncrease(inc)) => {
                 Some(inc)
             }
-            OverlaySubmission::Selection(_) => None,
+            TransientSubmission::Selection(_) => None,
             _ => None,
         },
     )

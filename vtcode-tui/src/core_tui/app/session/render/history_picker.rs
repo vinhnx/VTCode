@@ -71,11 +71,7 @@ impl SharedListWidgetModel for HistoryPickerPanelModel {
 }
 
 pub(crate) fn history_picker_panel_layout(session: &Session) -> Option<ListPanelLayout> {
-    if session.has_active_overlay()
-        || !session.inline_lists_visible()
-        || session.file_palette_active
-        || !session.history_picker_state.active
-    {
+    if !session.history_picker_visible() || !session.inline_lists_visible() {
         return None;
     }
 
@@ -117,9 +113,7 @@ pub fn render_history_picker(session: &mut Session, frame: &mut Frame<'_>, area:
     if area.height == 0
         || area.width == 0
         || !session.inline_lists_visible()
-        || !session.history_picker_state.active
-        || session.has_active_overlay()
-        || session.file_palette_active
+        || !session.history_picker_visible()
     {
         session.history_picker_state.navigator.set_visible_rows(0);
         return;

@@ -18,7 +18,7 @@ use vtcode_core::core::agent::snapshots::{
 };
 use vtcode_core::llm::provider::{self as uni, LLMRequest, LLMResponse};
 use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_tui::app::{InlineEvent, InlineHandle, OverlayEvent, OverlaySubmission};
+use vtcode_tui::app::{InlineEvent, InlineHandle, TransientEvent, TransientSubmission};
 
 #[derive(Clone)]
 struct DummyProvider;
@@ -246,7 +246,7 @@ async fn plan_confirmation_events_map_to_expected_actions() {
 
     let execute = context
         .process_event(
-            InlineEvent::Overlay(OverlayEvent::Submitted(OverlaySubmission::Selection(
+            InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Selection(
                 vtcode_tui::app::InlineListSelection::PlanApprovalExecute,
             ))),
             &mut queue,
@@ -255,7 +255,7 @@ async fn plan_confirmation_events_map_to_expected_actions() {
         .expect("process execute");
     let auto = context
         .process_event(
-            InlineEvent::Overlay(OverlayEvent::Submitted(OverlaySubmission::Selection(
+            InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Selection(
                 vtcode_tui::app::InlineListSelection::PlanApprovalAutoAccept,
             ))),
             &mut queue,
@@ -264,7 +264,7 @@ async fn plan_confirmation_events_map_to_expected_actions() {
         .expect("process auto");
     let edit = context
         .process_event(
-            InlineEvent::Overlay(OverlayEvent::Submitted(OverlaySubmission::Selection(
+            InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Selection(
                 vtcode_tui::app::InlineListSelection::PlanApprovalEditPlan,
             ))),
             &mut queue,
@@ -272,7 +272,10 @@ async fn plan_confirmation_events_map_to_expected_actions() {
         .await
         .expect("process edit plan");
     let cancel = context
-        .process_event(InlineEvent::Overlay(OverlayEvent::Cancelled), &mut queue)
+        .process_event(
+            InlineEvent::Transient(TransientEvent::Cancelled),
+            &mut queue,
+        )
         .await
         .expect("process cancel");
 

@@ -1,12 +1,12 @@
 use super::*;
-use ratatui::crossterm::event::{KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind};
+use ratatui::crossterm::event::KeyModifiers;
 use std::sync::Arc;
-use std::time::Instant;
 
 use super::super::types::{
-    ContentPart, DiffPreviewMode, InlineTextStyle, OverlayEvent, OverlaySelectionChange,
-    OverlaySubmission,
+    ContentPart, DiffPreviewMode, InlineTextStyle, TransientEvent, TransientSelectionChange,
+    TransientSubmission,
 };
+use crate::core_tui::app::session::transient::TransientSurface;
 use crate::core_tui::app::types::InlineMessageKind;
 use crate::core_tui::session::modal::{ModalKeyModifiers, ModalListKeyResult};
 use crate::core_tui::session::reverse_search;
@@ -26,6 +26,11 @@ pub(super) fn handle_paste(session: &mut Session, content: &str) {
     if session.core.input_enabled() {
         session.insert_paste_text(content);
         session.update_input_triggers();
+        session.mark_dirty();
+    } else if session.history_picker_visible() {
+        let history = input_history_entries(session);
+        session.history_picker_state.search_query.push_str(content);
+        session.history_picker_state.update_search(&history);
         session.mark_dirty();
     } else if let Some(modal) = session.modal_state_mut()
         && let (Some(list), Some(search)) = (modal.list.as_mut(), modal.search.as_mut())
@@ -74,85 +79,6 @@ fn copy_selected_input_if_requested(
     false
 }
 
-#[allow(dead_code)]
-pub(super) fn handle_event(
-    session: &mut Session,
-    event: CrosstermEvent,
-    events: &UnboundedSender<InlineEvent>,
-    callback: Option<&(dyn Fn(&InlineEvent) + Send + Sync + 'static)>,
-) {
-    match event {
-        CrosstermEvent::Key(key) => {
-            if matches!(key.kind, KeyEventKind::Press)
-                && let Some(outbound) = process_key(session, key)
-            {
-                emit_inline_event(&outbound, events, callback);
-            }
-        }
-        CrosstermEvent::Mouse(MouseEvent {
-            kind, column, row, ..
-        }) => match kind {
-            MouseEventKind::ScrollDown => {
-                session.core.mouse_selection.clear_click_history();
-                // Check if history picker is active - delegate scrolling to picker
-                if session.history_picker_state.active {
-                    session.history_picker_state.move_down();
-                    session.mark_dirty();
-                } else {
-                    session.scroll_line_down();
-                    session.mark_dirty();
-                }
-            }
-            MouseEventKind::ScrollUp => {
-                session.core.mouse_selection.clear_click_history();
-                // Check if history picker is active - delegate scrolling to picker
-                if session.history_picker_state.active {
-                    session.history_picker_state.move_up();
-                    session.mark_dirty();
-                } else {
-                    session.scroll_line_up();
-                    session.mark_dirty();
-                }
-            }
-            MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
-                if session
-                    .core
-                    .mouse_selection
-                    .register_click(column, row, Instant::now())
-                {
-                    let _ = session.core.select_transcript_word_at(column, row);
-                    session.core.mouse_selection.clear_click_history();
-                } else {
-                    session.core.mouse_selection.start_selection(column, row);
-                }
-                session.mark_dirty();
-            }
-            MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
-                session.core.mouse_selection.update_selection(column, row);
-                session.mark_dirty();
-            }
-            MouseEventKind::Up(crossterm::event::MouseButton::Left) => {
-                session.core.mouse_selection.finish_selection(column, row);
-                session.mark_dirty();
-            }
-            _ => {}
-        },
-        CrosstermEvent::Paste(content) => {
-            handle_paste(session, &content);
-        }
-        CrosstermEvent::Resize(_, rows) => {
-            session.apply_view_rows(rows);
-            session.mark_dirty();
-        }
-        CrosstermEvent::FocusGained => {
-            // No-op: focus tracking is host/application concern.
-        }
-        CrosstermEvent::FocusLost => {
-            // No-op: focus tracking is host/application concern.
-        }
-    }
-}
-
 pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<InlineEvent> {
     let modifiers = key.modifiers;
     let has_control = modifiers.contains(KeyModifiers::CONTROL);
@@ -179,8 +105,8 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         if let Some(action) = modal.hotkey_action(&key, modal_modifiers) {
             session.close_overlay();
             session.mark_dirty();
-            return Some(InlineEvent::Overlay(OverlayEvent::Submitted(
-                OverlaySubmission::Hotkey(action.into()),
+            return Some(InlineEvent::Transient(TransientEvent::Submitted(
+                TransientSubmission::Hotkey(action.into()),
             )));
         }
 
@@ -255,16 +181,16 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
     // Handle history picker (Ctrl+R) - Visual fuzzy search for command history
     if has_control
         && matches!(key.code, KeyCode::Char('r') | KeyCode::Char('R'))
-        && !session.history_picker_state.active
+        && !session.history_picker_visible()
     {
         open_history_picker(session);
         return None;
     }
 
     // Handle history picker if active
-    if session.inline_lists_visible() && session.history_picker_state.active {
+    if session.inline_lists_visible() && session.history_picker_visible() {
         let history = input_history_entries(session);
-        let was_active = session.history_picker_state.active;
+        let was_active = session.history_picker_visible();
         let handled = history_picker::handle_history_picker_key(
             &key,
             &mut session.history_picker_state,
@@ -272,9 +198,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             &history,
         );
         if handled {
-            if was_active && !session.history_picker_state.active {
-                session.update_input_triggers();
-            }
+            session.finish_history_picker_interaction(was_active);
             session.mark_dirty();
             return None;
         }
@@ -481,7 +405,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
 
-            if session.file_palette_active {
+            if session.file_palette_visible() {
                 if let Some(palette) = session.file_palette.as_ref()
                     && let Some(entry) = palette.get_selected()
                 {
@@ -753,6 +677,7 @@ pub(super) fn open_history_picker(session: &mut Session) {
     }
 
     session.ensure_inline_lists_visible_for_trigger();
+    session.show_transient_surface(TransientSurface::HistoryPicker);
     session
         .history_picker_state
         .open(&session.core.input_manager);
@@ -938,37 +863,41 @@ pub(super) fn handle_diff_preview_key(
         KeyCode::Enter => {
             session.close_diff_overlay();
             session.mark_dirty();
-            Some(InlineEvent::Overlay(OverlayEvent::Submitted(match mode {
-                DiffPreviewMode::EditApproval => OverlaySubmission::DiffApply,
-                DiffPreviewMode::FileConflict => OverlaySubmission::DiffProceed,
-                DiffPreviewMode::ReadonlyReview => OverlaySubmission::DiffAbort,
-            })))
+            Some(InlineEvent::Transient(TransientEvent::Submitted(
+                match mode {
+                    DiffPreviewMode::EditApproval => TransientSubmission::DiffApply,
+                    DiffPreviewMode::FileConflict => TransientSubmission::DiffProceed,
+                    DiffPreviewMode::ReadonlyReview => TransientSubmission::DiffAbort,
+                },
+            )))
         }
         KeyCode::Char('r') | KeyCode::Char('R')
             if matches!(mode, DiffPreviewMode::FileConflict) =>
         {
             session.close_diff_overlay();
             session.mark_dirty();
-            Some(InlineEvent::Overlay(OverlayEvent::Submitted(
-                OverlaySubmission::DiffReload,
+            Some(InlineEvent::Transient(TransientEvent::Submitted(
+                TransientSubmission::DiffReload,
             )))
         }
         KeyCode::Esc => {
             session.close_diff_overlay();
             session.mark_dirty();
-            Some(InlineEvent::Overlay(OverlayEvent::Submitted(match mode {
-                DiffPreviewMode::EditApproval => OverlaySubmission::DiffReject,
-                DiffPreviewMode::FileConflict => OverlaySubmission::DiffAbort,
-                DiffPreviewMode::ReadonlyReview => OverlaySubmission::DiffAbort,
-            })))
+            Some(InlineEvent::Transient(TransientEvent::Submitted(
+                match mode {
+                    DiffPreviewMode::EditApproval => TransientSubmission::DiffReject,
+                    DiffPreviewMode::FileConflict => TransientSubmission::DiffAbort,
+                    DiffPreviewMode::ReadonlyReview => TransientSubmission::DiffAbort,
+                },
+            )))
         }
         KeyCode::Char('1') if matches!(mode, DiffPreviewMode::EditApproval) => {
             let diff_state = session.diff_preview_state_mut()?;
             diff_state.trust_mode = crate::core_tui::app::types::TrustMode::Once;
             let mode = diff_state.trust_mode;
             session.mark_dirty();
-            Some(InlineEvent::Overlay(OverlayEvent::SelectionChanged(
-                OverlaySelectionChange::DiffTrustMode { mode },
+            Some(InlineEvent::Transient(TransientEvent::SelectionChanged(
+                TransientSelectionChange::DiffTrustMode { mode },
             )))
         }
         KeyCode::Char('2') if matches!(mode, DiffPreviewMode::EditApproval) => {
@@ -976,8 +905,8 @@ pub(super) fn handle_diff_preview_key(
             diff_state.trust_mode = crate::core_tui::app::types::TrustMode::Session;
             let mode = diff_state.trust_mode;
             session.mark_dirty();
-            Some(InlineEvent::Overlay(OverlayEvent::SelectionChanged(
-                OverlaySelectionChange::DiffTrustMode { mode },
+            Some(InlineEvent::Transient(TransientEvent::SelectionChanged(
+                TransientSelectionChange::DiffTrustMode { mode },
             )))
         }
         KeyCode::Char('3') if matches!(mode, DiffPreviewMode::EditApproval) => {
@@ -985,8 +914,8 @@ pub(super) fn handle_diff_preview_key(
             diff_state.trust_mode = crate::core_tui::app::types::TrustMode::Always;
             let mode = diff_state.trust_mode;
             session.mark_dirty();
-            Some(InlineEvent::Overlay(OverlayEvent::SelectionChanged(
-                OverlaySelectionChange::DiffTrustMode { mode },
+            Some(InlineEvent::Transient(TransientEvent::SelectionChanged(
+                TransientSelectionChange::DiffTrustMode { mode },
             )))
         }
         KeyCode::Char('4') if matches!(mode, DiffPreviewMode::EditApproval) => {
@@ -994,8 +923,8 @@ pub(super) fn handle_diff_preview_key(
             diff_state.trust_mode = crate::core_tui::app::types::TrustMode::AutoTrust;
             let mode = diff_state.trust_mode;
             session.mark_dirty();
-            Some(InlineEvent::Overlay(OverlayEvent::SelectionChanged(
-                OverlaySelectionChange::DiffTrustMode { mode },
+            Some(InlineEvent::Transient(TransientEvent::SelectionChanged(
+                TransientSelectionChange::DiffTrustMode { mode },
             )))
         }
         _ => None,

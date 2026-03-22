@@ -2,6 +2,7 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{prelude::*, widgets::Clear};
 
 use crate::config::constants::ui;
+use crate::core_tui::app::session::transient::TransientSurface;
 use crate::core_tui::session::inline_list::{InlineListRow, selection_padding};
 use crate::core_tui::session::list_panel::{
     ListPanelLayout, SharedListPanelSections, SharedListPanelStyles, SharedSearchField,
@@ -36,7 +37,7 @@ pub(crate) fn split_inline_slash_area(session: &mut Session, area: Rect) -> (Rec
 pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
     if area.height == 0
         || area.width == 0
-        || session.has_active_overlay()
+        || !session.slash_palette_visible()
         || !session.inline_lists_visible()
     {
         session.slash_palette.clear_visible_rows();
@@ -135,10 +136,8 @@ fn slash_palette_instructions(session: &Session) -> Vec<Line<'static>> {
 }
 
 pub(crate) fn slash_panel_layout(session: &Session) -> Option<ListPanelLayout> {
-    if session.has_active_overlay()
+    if !session.slash_palette_visible()
         || !session.inline_lists_visible()
-        || session.file_palette_active
-        || session.history_picker_state.active
         || session.slash_palette.is_empty()
     {
         return None;
@@ -151,13 +150,7 @@ pub(crate) fn slash_panel_layout(session: &Session) -> Option<ListPanelLayout> {
     )
     .is_some();
     let fixed_rows = fixed_section_rows(1, info_rows, has_search_row);
-    let desired_list_rows = rows_to_u16(
-        session
-            .slash_palette
-            .suggestions()
-            .len()
-            .min(ui::INLINE_LIST_MAX_ROWS),
-    );
+    let desired_list_rows = rows_to_u16(ui::INLINE_LIST_MAX_ROWS);
     Some(ListPanelLayout::new(fixed_rows, desired_list_rows))
 }
 
@@ -168,14 +161,15 @@ pub(super) fn handle_slash_palette_change(session: &mut Session) {
 }
 
 pub(super) fn clear_slash_suggestions(session: &mut Session) {
-    if session.slash_palette.clear() {
+    let changed = session.slash_palette.clear();
+    session.close_transient_surface(TransientSurface::SlashPalette);
+    if changed {
         handle_slash_palette_change(session);
     }
 }
 
 pub(super) fn update_slash_suggestions(session: &mut Session) {
     if !session.core.input_enabled() {
-        clear_slash_suggestions(session);
         return;
     }
 
@@ -194,6 +188,11 @@ pub(super) fn update_slash_suggestions(session: &mut Session) {
     {
         SlashPaletteUpdate::NoChange => {}
         SlashPaletteUpdate::Cleared | SlashPaletteUpdate::Changed { .. } => {
+            if !session.slash_palette.is_empty() {
+                session.show_transient_surface(TransientSurface::SlashPalette);
+            } else {
+                session.close_transient_surface(TransientSurface::SlashPalette);
+            }
             handle_slash_palette_change(session);
         }
     }
@@ -207,11 +206,8 @@ pub(crate) fn slash_navigation_available(session: &Session) -> bool {
     .is_some();
     session.core.input_enabled()
         && session.inline_lists_visible()
-        && !session.slash_palette.is_empty()
+        && session.slash_palette_visible()
         && has_prefix
-        && !session.has_active_overlay()
-        && !session.file_palette_active
-        && !session.history_picker_state.active
 }
 
 pub(super) fn move_slash_selection_up(session: &mut Session) -> bool {

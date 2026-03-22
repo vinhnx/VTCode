@@ -8,7 +8,7 @@ use tokio::sync::Notify;
 use vtcode_core::core::agent::error_recovery::{ErrorType, RecoveryDiagnostics};
 use vtcode_tui::app::{
     InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection, InlineSession,
-    ListOverlayRequest, OverlayRequest, OverlaySubmission,
+    ListOverlayRequest, TransientRequest, TransientSubmission,
 };
 
 use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
@@ -247,7 +247,7 @@ pub(crate) async fn execute_recovery_prompt(
     let outcome = show_overlay_and_wait(
         handle,
         session,
-        OverlayRequest::List(ListOverlayRequest {
+        TransientRequest::List(ListOverlayRequest {
             title,
             lines: split_question_lines(&parsed.question),
             footer_hint: None,
@@ -259,7 +259,7 @@ pub(crate) async fn execute_recovery_prompt(
         ctrl_c_state,
         ctrl_c_notify,
         |submission| match submission {
-            OverlaySubmission::Selection(InlineListSelection::AskUserChoice {
+            TransientSubmission::Selection(InlineListSelection::AskUserChoice {
                 tab_id,
                 choice_id,
                 ..

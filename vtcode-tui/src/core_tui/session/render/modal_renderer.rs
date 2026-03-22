@@ -167,6 +167,16 @@ pub fn split_inline_modal_area(session: &Session, area: Rect) -> (Rect, Option<R
     (chunks[0], Some(chunks[1]))
 }
 
+pub(crate) fn floating_modal_area(area: Rect) -> Rect {
+    if area.width == 0 || area.height == 0 {
+        return area;
+    }
+
+    let height = (area.height / 2).max(1);
+    let y = area.y.saturating_add(area.height.saturating_sub(height));
+    Rect::new(area.x, y, area.width, height)
+}
+
 pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
     if area.width == 0 || area.height == 0 {
         session.set_modal_list_area(None);
@@ -331,5 +341,26 @@ mod tests {
             styles.title,
             session.styles.accent_style().add_modifier(Modifier::BOLD)
         );
+    }
+
+    #[test]
+    fn floating_modal_area_uses_bottom_half_of_viewport() {
+        let area = floating_modal_area(Rect::new(3, 5, 80, 31));
+
+        assert_eq!(area, Rect::new(3, 21, 80, 15));
+    }
+
+    #[test]
+    fn floating_modal_area_uses_exact_half_for_even_height() {
+        let area = floating_modal_area(Rect::new(0, 0, 80, 30));
+
+        assert_eq!(area, Rect::new(0, 15, 80, 15));
+    }
+
+    #[test]
+    fn floating_modal_area_preserves_single_row_viewport() {
+        let area = floating_modal_area(Rect::new(0, 0, 80, 1));
+
+        assert_eq!(area, Rect::new(0, 0, 80, 1));
     }
 }
