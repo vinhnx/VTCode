@@ -36,13 +36,13 @@ pub mod slug;
 pub mod stop_hints;
 pub mod styling;
 pub mod telemetry;
+pub mod thread_safety;
 pub mod tokens;
 pub mod trace_flush;
 pub mod unicode;
 pub mod utils;
 pub mod validation;
 pub mod vtcodegitignore;
-pub mod thread_safety;
 pub use colors::{blend_colors, color_from_hex, contrasting_color, is_light_color, style};
 pub use error_category::{
     BackoffStrategy, ErrorCategory, Retryability, classify_anyhow_error, classify_error_message,

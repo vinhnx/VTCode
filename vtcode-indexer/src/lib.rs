@@ -51,6 +51,19 @@ pub trait IndexStorage: Send + Sync {
         }
         Ok(())
     }
+
+    /// Persist a batch of indexed file entries borrowed from the in-memory cache.
+    ///
+    /// Defaults to cloning the borrowed entries and delegating to
+    /// [`IndexStorage::persist_batch`] so existing custom storage backends remain
+    /// compatible.
+    fn persist_batch_refs(&self, index_dir: &Path, entries: &[&FileIndex]) -> Result<()> {
+        let owned = entries
+            .iter()
+            .map(|entry| (*entry).clone())
+            .collect::<Vec<_>>();
+        self.persist_batch(index_dir, &owned)
+    }
 }
 
 /// Directory traversal filter hook for [`SimpleIndexer`].
@@ -103,26 +116,39 @@ impl IndexStorage for MarkdownIndexStorage {
     }
 
     fn persist_batch(&self, index_dir: &Path, entries: &[FileIndex]) -> Result<()> {
-        fs::create_dir_all(index_dir)?;
-        let temp_path = index_dir.join(".index.md.tmp");
-        let final_path = index_dir.join("index.md");
-        let file = fs::File::create(&temp_path)?;
-        let mut writer = BufWriter::new(file);
-
-        writeln!(writer, "# Workspace File Index")?;
-        writeln!(writer)?;
-        writeln!(writer, "- **Entries**: {}", entries.len())?;
-        writeln!(writer)?;
-
-        for entry in entries {
-            write_markdown_entry(&mut writer, entry)?;
-        }
-
-        writer.flush()?;
-        fs::rename(temp_path, final_path)?;
-        cleanup_legacy_markdown_entries(index_dir)?;
-        Ok(())
+        persist_markdown_snapshot(index_dir, entries.iter())
     }
+
+    fn persist_batch_refs(&self, index_dir: &Path, entries: &[&FileIndex]) -> Result<()> {
+        persist_markdown_snapshot(index_dir, entries.iter().copied())
+    }
+}
+
+fn persist_markdown_snapshot<'a>(
+    index_dir: &Path,
+    entries: impl IntoIterator<Item = &'a FileIndex>,
+) -> Result<()> {
+    let entries = entries.into_iter().collect::<Vec<_>>();
+
+    fs::create_dir_all(index_dir)?;
+    let temp_path = index_dir.join(".index.md.tmp");
+    let final_path = index_dir.join("index.md");
+    let file = fs::File::create(&temp_path)?;
+    let mut writer = BufWriter::new(file);
+
+    writeln!(writer, "# Workspace File Index")?;
+    writeln!(writer)?;
+    writeln!(writer, "- **Entries**: {}", entries.len())?;
+    writeln!(writer)?;
+
+    for entry in entries {
+        write_markdown_entry(&mut writer, entry)?;
+    }
+
+    writer.flush()?;
+    fs::rename(temp_path, final_path)?;
+    cleanup_legacy_markdown_entries(index_dir)?;
+    Ok(())
 }
 
 /// Default traversal filter powered by [`SimpleIndexerConfig`].
@@ -356,23 +382,13 @@ impl SimpleIndexer {
         let cache_key = file_path.to_string_lossy().into_owned();
 
         if self.storage.prefers_snapshot_persistence() {
-            let mut next_cache = self.index_cache.clone();
-
-            if file_path.exists() && self.should_process_file_path(file_path) {
-                if let Some(index) = self.build_file_index(file_path)? {
-                    next_cache.insert(index.path.clone(), index);
-                } else {
-                    next_cache.remove(cache_key.as_str());
-                }
+            let next_entry = if file_path.exists() && self.should_process_file_path(file_path) {
+                self.build_file_index(file_path)?
             } else {
-                next_cache.remove(cache_key.as_str());
-            }
+                None
+            };
 
-            let mut snapshot = next_cache.values().cloned().collect::<Vec<_>>();
-            snapshot.sort_unstable_by(|left, right| left.path.cmp(&right.path));
-            self.storage
-                .persist_batch(self.config.index_dir(), &snapshot)?;
-            self.index_cache = next_cache;
+            self.apply_snapshot_file_update(cache_key, next_entry)?;
             return Ok(());
         }
 
@@ -413,16 +429,7 @@ impl SimpleIndexer {
         }
 
         if self.storage.prefers_snapshot_persistence() {
-            let mut persisted_entries = self
-                .index_cache
-                .iter()
-                .filter(|(path, _)| !Path::new(path).starts_with(dir_path))
-                .map(|(_, entry)| entry.clone())
-                .collect::<Vec<_>>();
-            persisted_entries.extend(entries.iter().cloned());
-            persisted_entries.sort_unstable_by(|left, right| left.path.cmp(&right.path));
-            self.storage
-                .persist_batch(self.config.index_dir(), &persisted_entries)?;
+            self.apply_snapshot_directory_update(dir_path, &entries)?;
         } else {
             entries.sort_unstable_by(|left, right| left.path.cmp(&right.path));
             self.storage
@@ -746,6 +753,78 @@ impl SimpleIndexer {
                 .cloned()
                 .map(|entry| (entry.path.clone(), entry)),
         );
+    }
+
+    fn apply_snapshot_file_update(
+        &mut self,
+        cache_key: String,
+        next_entry: Option<FileIndex>,
+    ) -> Result<()> {
+        let previous_entry = match next_entry {
+            Some(entry) => self.index_cache.insert(cache_key.clone(), entry),
+            None => self.index_cache.remove(cache_key.as_str()),
+        };
+
+        if let Err(err) = self.persist_current_snapshot() {
+            match previous_entry {
+                Some(entry) => {
+                    self.index_cache.insert(cache_key, entry);
+                }
+                None => {
+                    self.index_cache.remove(cache_key.as_str());
+                }
+            }
+            return Err(err);
+        }
+
+        Ok(())
+    }
+
+    fn apply_snapshot_directory_update(
+        &mut self,
+        dir_path: &Path,
+        entries: &[FileIndex],
+    ) -> Result<()> {
+        let previous_entries = self.take_cached_entries(dir_path);
+        self.index_cache.extend(
+            entries
+                .iter()
+                .cloned()
+                .map(|entry| (entry.path.clone(), entry)),
+        );
+
+        if let Err(err) = self.persist_current_snapshot() {
+            self.index_cache
+                .retain(|path, _| !Path::new(path).starts_with(dir_path));
+            self.index_cache.extend(
+                previous_entries
+                    .into_iter()
+                    .map(|entry| (entry.path.clone(), entry)),
+            );
+            return Err(err);
+        }
+
+        Ok(())
+    }
+
+    fn take_cached_entries(&mut self, dir_path: &Path) -> Vec<FileIndex> {
+        let keys = self
+            .index_cache
+            .keys()
+            .filter(|path| Path::new(path).starts_with(dir_path))
+            .cloned()
+            .collect::<Vec<_>>();
+
+        keys.into_iter()
+            .filter_map(|path| self.index_cache.remove(path.as_str()))
+            .collect()
+    }
+
+    fn persist_current_snapshot(&self) -> Result<()> {
+        let mut snapshot = self.index_cache.values().collect::<Vec<_>>();
+        snapshot.sort_unstable_by(|left, right| left.path.cmp(&right.path));
+        self.storage
+            .persist_batch_refs(self.config.index_dir(), &snapshot)
     }
 }
 
@@ -1268,6 +1347,131 @@ mod tests {
             .map(|entry| entry.file_name().to_string_lossy().into_owned())
             .collect::<Vec<_>>();
         assert_eq!(files, vec!["index.md".to_string()]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn snapshot_storage_uses_default_ref_batch_persistence() -> Result<()> {
+        #[derive(Clone, Default)]
+        struct SnapshotMemoryStorage {
+            snapshots: Arc<Mutex<Vec<Vec<FileIndex>>>>,
+        }
+
+        impl SnapshotMemoryStorage {
+            fn new(snapshots: Arc<Mutex<Vec<Vec<FileIndex>>>>) -> Self {
+                Self { snapshots }
+            }
+        }
+
+        impl IndexStorage for SnapshotMemoryStorage {
+            fn init(&self, _index_dir: &Path) -> Result<()> {
+                Ok(())
+            }
+
+            fn persist(&self, _index_dir: &Path, _entry: &FileIndex) -> Result<()> {
+                Ok(())
+            }
+
+            fn prefers_snapshot_persistence(&self) -> bool {
+                true
+            }
+
+            fn persist_batch(&self, _index_dir: &Path, entries: &[FileIndex]) -> Result<()> {
+                self.snapshots
+                    .lock()
+                    .expect("lock poisoned")
+                    .push(entries.to_vec());
+                Ok(())
+            }
+        }
+
+        let temp = tempdir()?;
+        let workspace = temp.path();
+        let file_path = workspace.join("notes.txt");
+        fs::write(&file_path, "remember this")?;
+
+        let snapshots = Arc::new(Mutex::new(Vec::new()));
+        let storage = SnapshotMemoryStorage::new(snapshots.clone());
+
+        let config = SimpleIndexerConfig::new(workspace.to_path_buf());
+        let mut indexer = SimpleIndexer::with_config(config).with_storage(Arc::new(storage));
+        indexer.index_file(&file_path)?;
+
+        let snapshots = snapshots.lock().expect("lock poisoned");
+        assert_eq!(snapshots.len(), 1);
+        assert_eq!(snapshots[0].len(), 1);
+        assert_eq!(
+            snapshots[0][0].path,
+            workspace.join("notes.txt").to_string_lossy().into_owned()
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn snapshot_index_file_rolls_back_cache_when_persist_fails() -> Result<()> {
+        #[derive(Clone, Default)]
+        struct FlakySnapshotStorage {
+            persist_count: Arc<Mutex<usize>>,
+        }
+
+        impl IndexStorage for FlakySnapshotStorage {
+            fn init(&self, _index_dir: &Path) -> Result<()> {
+                Ok(())
+            }
+
+            fn persist(&self, _index_dir: &Path, _entry: &FileIndex) -> Result<()> {
+                Ok(())
+            }
+
+            fn prefers_snapshot_persistence(&self) -> bool {
+                true
+            }
+
+            fn persist_batch(&self, _index_dir: &Path, _entries: &[FileIndex]) -> Result<()> {
+                let mut count = self.persist_count.lock().expect("lock poisoned");
+                *count += 1;
+                if *count == 2 {
+                    anyhow::bail!("simulated snapshot persistence failure");
+                }
+                Ok(())
+            }
+        }
+
+        let temp = tempdir()?;
+        let workspace = temp.path();
+        let first = workspace.join("first.txt");
+        let second = workspace.join("second.txt");
+        fs::write(&first, "one")?;
+        fs::write(&second, "two")?;
+
+        let config = SimpleIndexerConfig::new(workspace.to_path_buf());
+        let storage = Arc::new(FlakySnapshotStorage::default());
+        let mut indexer = SimpleIndexer::with_config(config).with_storage(storage);
+
+        indexer.index_file(&first)?;
+        assert!(
+            indexer
+                .find_files("first\\.txt$")?
+                .iter()
+                .any(|path| path.ends_with("first.txt"))
+        );
+
+        let err = indexer
+            .index_file(&second)
+            .expect_err("second persist should fail");
+        assert!(
+            err.to_string()
+                .contains("simulated snapshot persistence failure")
+        );
+        assert!(
+            indexer
+                .find_files("first\\.txt$")?
+                .iter()
+                .any(|path| path.ends_with("first.txt"))
+        );
+        assert!(indexer.find_files("second\\.txt$")?.is_empty());
 
         Ok(())
     }

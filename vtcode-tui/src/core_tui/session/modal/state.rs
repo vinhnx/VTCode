@@ -382,9 +382,7 @@ impl ModalState {
                 }
                 _ => ModalListKeyResult::NotHandled,
             },
-            KeyCode::Char('\u{3}') => {
-                ModalListKeyResult::Cancel(InlineEvent::Interrupt)
-            }
+            KeyCode::Char('\u{3}') => ModalListKeyResult::Cancel(InlineEvent::Interrupt),
             _ => ModalListKeyResult::NotHandled,
         }
     }
@@ -1220,9 +1218,7 @@ impl WizardModalState {
             KeyCode::Char('c') | KeyCode::Char('C') if modifiers.control => {
                 ModalListKeyResult::Cancel(InlineEvent::Interrupt)
             }
-            KeyCode::Char('\u{3}') => {
-                ModalListKeyResult::Cancel(InlineEvent::Interrupt)
-            }
+            KeyCode::Char('\u{3}') => ModalListKeyResult::Cancel(InlineEvent::Interrupt),
             // Up/Down/Tab: delegate to current step's list
             KeyCode::Up | KeyCode::Down | KeyCode::Tab | KeyCode::BackTab => {
                 if let Some(step) = self.steps.get_mut(self.current_step) {

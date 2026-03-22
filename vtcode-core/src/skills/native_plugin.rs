@@ -192,7 +192,6 @@ impl std::fmt::Debug for NativePlugin {
     }
 }
 
-
 fn canonicalize_existing_path(path: &Path, label: &str) -> Result<PathBuf> {
     path.canonicalize()
         .with_context(|| format!("Failed to resolve {label} '{}'", path.display()))
@@ -286,7 +285,8 @@ impl NativePlugin {
     pub fn execute(&self, ctx: &PluginContext) -> Result<PluginResult> {
         let input_json =
             serde_json::to_string(ctx).context("Failed to serialize plugin context")?;
-        let input_cstr = CString::new(input_json).context("Plugin context contains internal null bytes")?;
+        let input_cstr =
+            CString::new(input_json).context("Plugin context contains internal null bytes")?;
 
         // Serialization logic from Antithesis Part 2 (Challenge 2):
         // If the plugin is not explicitly marked as thread-safe, we must serialize
@@ -973,9 +973,7 @@ mod tests {
             .map(|_| {
                 let plugin = Arc::clone(&plugin);
                 let ctx = ctx.clone();
-                std::thread::spawn(move || {
-                    plugin.execute(&ctx).expect("parallel plugin execution")
-                })
+                std::thread::spawn(move || plugin.execute(&ctx).expect("parallel plugin execution"))
             })
             .collect::<Vec<_>>();
 
