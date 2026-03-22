@@ -1,7 +1,7 @@
 use crate::exec::events::{
     AgentMessageItem, ErrorItem, ItemCompletedEvent, ItemStartedEvent, ItemUpdatedEvent,
-    ReasoningItem, ThreadEvent, ThreadItem, ThreadItemDetails, ToolCallStatus,
-    ToolInvocationItem, ToolOutputItem,
+    ReasoningItem, ThreadEvent, ThreadItem, ThreadItemDetails, ToolCallStatus, ToolInvocationItem,
+    ToolOutputItem,
 };
 use serde_json::Value;
 use std::collections::HashMap;
@@ -58,6 +58,11 @@ impl SharedLifecycleEmitter {
 
     pub fn replace_assistant_text(&mut self, text: &str) -> bool {
         replace_stream_text(&mut self.assistant, text)
+    }
+
+    #[must_use]
+    pub fn assistant_started(&self) -> bool {
+        self.assistant.started
     }
 
     pub fn append_assistant_delta(&mut self, delta: &str) -> bool {
@@ -261,12 +266,52 @@ impl SharedLifecycleEmitter {
         true
     }
 
+    pub fn sync_tool_call_arguments(
+        &mut self,
+        call_id: &str,
+        arguments: &str,
+        tool_name: Option<String>,
+        item_id: Option<String>,
+    ) -> bool {
+        if !self.tool_calls.contains_key(call_id) {
+            let _ = self.start_tool_call(call_id, tool_name.clone(), item_id);
+        }
+
+        let Some(buffer) = self.tool_calls.get_mut(call_id) else {
+            return false;
+        };
+
+        if buffer.name.is_none() {
+            buffer.name = tool_name;
+        }
+
+        if buffer.arguments == arguments {
+            return false;
+        }
+
+        buffer.arguments.clear();
+        buffer.arguments.push_str(arguments);
+        let arguments = progress_tool_arguments(&buffer.arguments);
+        self.pending_events.push(tool_invocation_updated_event(
+            buffer.item_id.clone(),
+            buffer.name.as_deref().unwrap_or_default(),
+            Some(&arguments),
+            Some(call_id),
+            ToolCallStatus::InProgress,
+        ));
+        true
+    }
+
     pub fn complete_open_items(&mut self) {
+        self.complete_open_items_with_tool_status(ToolCallStatus::Completed);
+    }
+
+    pub fn complete_open_items_with_tool_status(&mut self, status: ToolCallStatus) {
         let _ = self.complete_assistant_stream();
         let _ = self.complete_reasoning_stream();
         let call_ids = self.tool_calls.keys().cloned().collect::<Vec<_>>();
         for call_id in call_ids {
-            let _ = self.complete_tool_call(&call_id, ToolCallStatus::Completed);
+            let _ = self.complete_tool_call(&call_id, status.clone());
         }
     }
 
@@ -433,10 +478,7 @@ pub fn tool_invocation_completed_event(
 }
 
 #[must_use]
-pub fn tool_output_started_event(
-    call_item_id: String,
-    tool_call_id: Option<&str>,
-) -> ThreadEvent {
+pub fn tool_output_started_event(call_item_id: String, tool_call_id: Option<&str>) -> ThreadEvent {
     ThreadEvent::ItemStarted(ItemStartedEvent {
         item: tool_output_item(
             &call_item_id,

@@ -560,11 +560,19 @@ mod tests {
 
         let first_update: serde_json::Value = serde_json::from_str(lines[1]).expect("parse event");
         assert_eq!(first_update["event"]["type"].as_str(), Some("item.updated"));
-        assert_eq!(first_update["event"]["item"]["output"].as_str(), Some("abc"));
+        assert_eq!(
+            first_update["event"]["item"]["output"].as_str(),
+            Some("abc")
+        );
 
-        let second_update: serde_json::Value =
-            serde_json::from_str(lines[2]).expect("parse event");
-        assert_eq!(second_update["event"]["type"].as_str(), Some("item.updated"));
-        assert_eq!(second_update["event"]["item"]["output"].as_str(), Some("abcdef"));
+        let second_update: serde_json::Value = serde_json::from_str(lines[2]).expect("parse event");
+        assert_eq!(
+            second_update["event"]["type"].as_str(),
+            Some("item.updated")
+        );
+        assert_eq!(
+            second_update["event"]["item"]["output"].as_str(),
+            Some("abcdef")
+        );
     }
 }

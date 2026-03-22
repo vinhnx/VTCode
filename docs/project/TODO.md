@@ -57,3 +57,113 @@ vtchat.io
 --
 
 keep apply plan https://deepwiki.com/badlogic/pi-mono/3-pi-agent-core:-agent-framework
+
+==
+
+PROMPT CACHING:
+
+Claude Code's entire harness is built around prompt caching. They declare SEVs when cache hit rate drops
+
+It's a prefix match. Order matters enormously
+
+Their prompt layout:
+
+> Static system prompt + tools (globally cached)
+> CLAUDE.md (cached per project)
+> Session context (cached per session)
+> Conversation messages
+
+What kills the cache:
+
+> Timestamps in static prompts
+> Shuffling tool order
+> Adding/removing tools mid-session
+> Switching models mid-conversation
+
+Instead of editing the system prompt, they inject <system-reminder> in the next user message which preserves the cache completely
+
+Plan Mode: the obvious approach is swapping to read-only tools
+
+That breaks the cache, instead they keep ALL tools loaded and use EnterPlanMode/ExitPlanMode as tools themselves
+
+Bonus: the model can enter plan mode on its own when it detects a hard problem
+
+For unused MCP tools: they don't remove them, they send lightweight stubs with defer_loading: true
+
+Full schemas load only when the model discovers them via ToolSearch
+
+Compaction (context overflow): they fork with the exact same prefix so the cache is reused
+
+Only new tokens are the compaction prompt itself
+
+Switching from Opus to Haiku mid-session? Actually MORE expensive because you rebuild the entire cache Use subagents with handoff messages instead
+
+TOOL DESIGN:
+
+The AskUserQuestion tool took 3 attempts:
+
+> Adding questions to ExitPlanTool confused the model > Modified markdown output was inconsistent
+> Dedicated tool with structured output worked.
+
+Claude actually liked calling it
+
+Even the best designed tool fails if the model doesn't understand how to call it
+
+Todos got replaced by Tasks as models improved
+
+Early Claude Code needed reminders every 5 turns Smarter models found this limiting and stuck rigidly to the list
+
+Tasks support dependencies, cross-subagent updates, and can be altered/deleted
+
+The takeaway: tools your model once needed might now be constraining it
+
+Search went from RAG → Grep → Skills with progressive disclosure
+
+Over a year Claude went from needing context handed to it to doing nested search across multiple layers on its own
+
+Claude Code has ~20 tools. The bar to add a new one is high Every tool is one more option the model has to think about
+
+SKILLS:
+
+Skills are not markdown files. They're folders with scripts, assets, data, config options, and dynamic hooks
+
+9 categories they've identified:
+
+> Library & API Reference
+> Product Verification
+> Data & Analysis
+> Business Automation
+> Code Scaffolding
+> Code Quality & Review
+> CI/CD & Deployment
+> Runbooks
+> Infrastructure Ops
+
+What makes a skill great:
+
+> Don't state the obvious. Focus on what pushes Claude out of default patterns
+> Gotchas section is the highest-signal content. Built from real failure points over time
+> Use the file system for progressive disclosure. Reference docs, templates, scripts
+> Don't railroad with rigid steps. Give information and flexibility
+> Description field is for the model. It's what Claude scans to decide if a skill matches
+> Skills can store memory: logs, JSON, SQLite. Use ${CLAUDE_PLUGIN_DATA} for persistence
+> Give Claude scripts so it composes instead of reconstructing boilerplate
+> On-demand hooks: /careful blocks destructive commands, /freeze locks edits to a directory
+
+Distribute via repos for small teams, plugin marketplace at scale Let skills prove themselves organically before promoting
+
+FILE SYSTEM + BASH:
+
+Every agent benefits from a file system It represents state the agent reads into context and uses to verify its own work
+
+You don't need to remember everything You need to know how to find it
+
+His advice after dozens of calls with companies building general agents: "Use the bash tool more"
+
+Instead of fetching 100 emails via tool calls and hoping the model figures it out Save to files. Search. Ground in code. Take multiple passes. Verify.
+
+PLAYGROUNDs:
+
+A plugin that generates standalone HTML files for visual, interactive problem-solving Architecture visualisation, design tweaking, game balancing, inline writing critique
+
+The tip: think of a unique way of interacting with the model and ask it to express that
