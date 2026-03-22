@@ -136,11 +136,30 @@ impl ToolRegistry {
             .await
     }
 
+    pub async fn persist_approval_cache_prefix(&self, prefix_entry: &str) -> Result<()> {
+        self.policy_gateway
+            .write()
+            .await
+            .add_approval_cache_prefix(prefix_entry)
+            .await
+    }
+
     pub async fn has_persisted_approval(&self, approval_key: &str) -> bool {
         self.policy_gateway
             .read()
             .await
             .has_approval_cache_key(approval_key)
+    }
+
+    pub async fn find_persisted_shell_approval_prefix(
+        &self,
+        command_words: &[String],
+        scope_signature: &str,
+    ) -> Option<String> {
+        self.policy_gateway
+            .read()
+            .await
+            .matching_shell_approval_prefix(command_words, scope_signature)
     }
 
     pub async fn get_tool_policy(&self, tool_name: &str) -> ToolPolicy {

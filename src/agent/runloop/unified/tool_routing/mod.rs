@@ -188,7 +188,7 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         .unwrap_or_else(|| tool_name.to_string());
 
     let persisted_shell_approval =
-        persisted_shell_approval(tool_registry, &normalized_tool_name, tool_args);
+        persisted_shell_approval(tool_registry, &normalized_tool_name, tool_args).await;
 
     let mut shell_approval_reason = tool_registry
         .shell_run_approval_reason(&normalized_tool_name, tool_args)
@@ -394,7 +394,9 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
                     tool_name,
                     tool_args,
                     prefix_rule.as_slice(),
-                ) {
+                )
+                .await
+                {
                     Ok(rendered_rule) => {
                         tracing::info!(
                             tool = %tool_name,
@@ -741,6 +743,7 @@ mod tests {
             Some(&args),
             &["cargo".to_string(), "test".to_string()],
         )
+        .await
         .expect("persist approval prefix");
         assert_eq!(
             rendered,
@@ -767,6 +770,20 @@ mod tests {
             ],
             "sandbox_permissions=\"require_escalated\"|additional_permissions=null"
         ));
+        assert!(
+            registry
+                .find_persisted_shell_approval_prefix(
+                    &[
+                        "cargo".to_string(),
+                        "test".to_string(),
+                        "-p".to_string(),
+                        "vtcode".to_string()
+                    ],
+                    "sandbox_permissions=\"require_escalated\"|additional_permissions=null",
+                )
+                .await
+                .is_some()
+        );
     }
 
     #[tokio::test]

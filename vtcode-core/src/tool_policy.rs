@@ -9,6 +9,7 @@ use anyhow::{Context, Result};
 use dialoguer::console::style;
 use hashbrown::{HashMap, HashSet};
 use indexmap::{IndexMap, IndexSet};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -34,6 +35,10 @@ const AUTO_ALLOW_TOOLS: &[&str] = &[
     "git_diff",
     "git_log",
 ];
+
+const SHELL_APPROVAL_SCOPE_MARKER: &str = "|sandbox_permissions=";
+const DEFAULT_APPROVAL_SCOPE_SIGNATURE: &str =
+    "sandbox_permissions=\"use_default\"|additional_permissions=null";
 
 /// Tool execution policy
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -101,6 +106,12 @@ pub struct ApprovalCacheConfig {
     /// Stable approval keys that should bypass future prompts
     #[serde(default)]
     pub allowed: IndexSet<String>,
+    /// Shell command prefixes that should bypass future prompts in the same scope
+    #[serde(default)]
+    pub prefixes: IndexSet<String>,
+    /// Regex patterns matched against approval keys for advanced manual policy tuning
+    #[serde(default)]
+    pub regexes: IndexSet<String>,
 }
 
 /// Stored MCP policy state, persisted alongside standard tool policies
@@ -955,6 +966,8 @@ impl ToolPolicyManager {
             }
         }
         self.config.approval_cache.allowed.clear();
+        self.config.approval_cache.prefixes.clear();
+        self.config.approval_cache.regexes.clear();
         self.save_config().await
     }
 
@@ -982,6 +995,8 @@ impl ToolPolicyManager {
             }
         }
         self.config.approval_cache.allowed.clear();
+        self.config.approval_cache.prefixes.clear();
+        self.config.approval_cache.regexes.clear();
         self.save_config().await
     }
 
@@ -999,6 +1014,13 @@ impl ToolPolicyManager {
     /// Check whether an explicit approval key is remembered for this workspace.
     pub fn has_approval_cache_key(&self, approval_key: &str) -> bool {
         self.config.approval_cache.allowed.contains(approval_key)
+            || self
+                .config
+                .approval_cache
+                .regexes
+                .iter()
+                .filter_map(|pattern| Regex::new(pattern).ok())
+                .any(|regex| regex.is_match(approval_key))
     }
 
     /// Persist an explicit approval key for future prompts in this workspace.
@@ -1014,10 +1036,53 @@ impl ToolPolicyManager {
         Ok(())
     }
 
+    /// Persist a shell prefix approval entry for future prompts in this workspace.
+    pub async fn add_approval_cache_prefix(
+        &mut self,
+        prefix_entry: impl Into<String>,
+    ) -> Result<()> {
+        if self
+            .config
+            .approval_cache
+            .prefixes
+            .insert(prefix_entry.into())
+        {
+            self.save_config().await?;
+        }
+        Ok(())
+    }
+
+    /// Check whether a persisted shell prefix approval matches the command words and scope.
+    pub fn matching_shell_approval_prefix(
+        &self,
+        command_words: &[String],
+        scope_signature: &str,
+    ) -> Option<String> {
+        self.config
+            .approval_cache
+            .prefixes
+            .iter()
+            .find_map(|entry| {
+                let (prefix_text, entry_scope_signature) =
+                    split_shell_approval_entry(entry.as_str());
+                let prefix_words = shell_words::split(prefix_text).ok()?;
+                let entry_scope_signature =
+                    entry_scope_signature.unwrap_or(DEFAULT_APPROVAL_SCOPE_SIGNATURE);
+                (entry_scope_signature == scope_signature
+                    && shell_command_words_match_prefix(command_words, &prefix_words))
+                .then(|| entry.clone())
+            })
+    }
+
     /// Remove all persisted approval cache entries.
     pub async fn clear_approval_cache(&mut self) -> Result<()> {
-        if !self.config.approval_cache.allowed.is_empty() {
+        if !self.config.approval_cache.allowed.is_empty()
+            || !self.config.approval_cache.prefixes.is_empty()
+            || !self.config.approval_cache.regexes.is_empty()
+        {
             self.config.approval_cache.allowed.clear();
+            self.config.approval_cache.prefixes.clear();
+            self.config.approval_cache.regexes.clear();
             self.save_config().await?;
         }
         Ok(())
@@ -1129,6 +1194,23 @@ impl ToolPolicyManager {
     pub fn config_path(&self) -> &Path {
         &self.config_path
     }
+}
+
+fn split_shell_approval_entry(entry: &str) -> (&str, Option<&str>) {
+    if let Some(index) = entry.find(SHELL_APPROVAL_SCOPE_MARKER) {
+        let (prefix, scoped) = entry.split_at(index);
+        (prefix, Some(&scoped[1..]))
+    } else {
+        (entry, None)
+    }
+}
+
+fn shell_command_words_match_prefix(command_words: &[String], prefix_words: &[String]) -> bool {
+    command_words.len() >= prefix_words.len()
+        && prefix_words
+            .iter()
+            .zip(command_words.iter())
+            .all(|(prefix, command)| prefix == command)
 }
 
 /// Scoped, optional constraints for a tool to align with safe defaults
@@ -1262,6 +1344,64 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn approval_cache_prefixes_match_shell_prefixes() {
+        let dir = tempdir().unwrap();
+        let config_path = dir.path().join("tool-policy.json");
+        let mut manager = ToolPolicyManager::new_with_config_path(&config_path)
+            .await
+            .expect("manager");
+
+        manager
+            .add_approval_cache_prefix(
+                "cargo test|sandbox_permissions=\"use_default\"|additional_permissions=null",
+            )
+            .await
+            .expect("persist prefix");
+
+        let reloaded = ToolPolicyManager::new_with_config_path(&config_path)
+            .await
+            .expect("reload manager");
+        let command_words = vec![
+            "cargo".to_string(),
+            "test".to_string(),
+            "-p".to_string(),
+            "vtcode-core".to_string(),
+        ];
+
+        assert!(
+            reloaded
+                .matching_shell_approval_prefix(
+                    &command_words,
+                    "sandbox_permissions=\"use_default\"|additional_permissions=null",
+                )
+                .is_some()
+        );
+    }
+
+    #[tokio::test]
+    async fn approval_cache_regexes_match_keys() {
+        let dir = tempdir().unwrap();
+        let config_path = dir.path().join("tool-policy.json");
+        let mut manager = ToolPolicyManager::new_with_config_path(&config_path)
+            .await
+            .expect("manager");
+
+        manager
+            .config
+            .approval_cache
+            .regexes
+            .insert("^cargo (check|fmt)\\|sandbox_permissions=\\\"use_default\\\".*$".to_string());
+        manager.save_config().await.expect("save regex");
+
+        let reloaded = ToolPolicyManager::new_with_config_path(&config_path)
+            .await
+            .expect("reload manager");
+        assert!(reloaded.has_approval_cache_key(
+            "cargo check|sandbox_permissions=\"use_default\"|additional_permissions=null"
+        ));
+    }
+
+    #[tokio::test]
     async fn reset_to_prompt_clears_approval_cache() {
         let dir = tempdir().unwrap();
         let config_path = dir.path().join("tool-policy.json");
@@ -1273,11 +1413,24 @@ mod tests {
             .add_approval_cache_key("read_file")
             .await
             .expect("persist approval");
+        manager
+            .add_approval_cache_prefix(
+                "cargo check|sandbox_permissions=\"use_default\"|additional_permissions=null",
+            )
+            .await
+            .expect("persist prefix");
+        manager
+            .config
+            .approval_cache
+            .regexes
+            .insert("^cargo check.*$".to_string());
         manager.reset_all_to_prompt().await.expect("reset policies");
 
         let reloaded = ToolPolicyManager::new_with_config_path(&config_path)
             .await
             .expect("reload manager");
         assert!(!reloaded.has_approval_cache_key("read_file"));
+        assert!(reloaded.config.approval_cache.prefixes.is_empty());
+        assert!(reloaded.config.approval_cache.regexes.is_empty());
     }
 }

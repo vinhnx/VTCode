@@ -59,7 +59,9 @@ pub(super) use interactive::{
     handle_show_jobs_panel, handle_toggle_tasks_panel, handle_trigger_prompt_suggestions,
 };
 pub(super) use mcp::handle_manage_mcp;
-pub(super) use modes::{handle_cycle_mode, handle_toggle_plan_mode};
+pub(super) use modes::{
+    handle_cycle_mode, handle_set_mode, handle_start_mode_selection, handle_toggle_plan_mode,
+};
 pub(super) use oauth::{
     handle_oauth_login, handle_oauth_logout, handle_refresh_oauth, handle_show_auth_status,
     handle_start_oauth_provider_picker,

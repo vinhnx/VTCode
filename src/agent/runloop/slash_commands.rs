@@ -42,6 +42,13 @@ pub(crate) enum StatuslineTargetMode {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SessionModeCommand {
+    Edit,
+    TrustedAuto,
+    Plan,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum OAuthProviderAction {
     Login,
     Logout,
@@ -136,7 +143,13 @@ pub(crate) enum SlashCommandOutcome {
         enable: Option<bool>,
         prompt: Option<String>,
     },
-    /// /mode command - cycle through Edit → Trusted Auto → Plan → Edit
+    /// /mode command - open interactive mode selection
+    StartModeSelection,
+    /// /mode edit|auto|plan
+    SetMode {
+        mode: SessionModeCommand,
+    },
+    /// /mode cycle - cycle through Edit → Trusted Auto → Plan → Edit
     CycleMode,
     /// /login command - OAuth login for a provider
     OAuthLogin {
@@ -608,8 +621,8 @@ fn parse_doctor_args(
 #[cfg(test)]
 mod tests {
     use super::{
-        DoctorCommand, SlashCommandOutcome, handle_slash_command, parse_doctor_args,
-        parse_update_args,
+        DoctorCommand, SessionModeCommand, SlashCommandOutcome, handle_slash_command,
+        parse_doctor_args, parse_update_args,
     };
     use vtcode_core::utils::ansi::AnsiRenderer;
     use vtcode_tui::app::InlineHandle;
@@ -775,6 +788,26 @@ mod tests {
             .await
             .expect("jobs should parse");
         assert!(matches!(jobs, SlashCommandOutcome::ShowJobsPanel));
+
+        let mode = handle_slash_command("mode", &mut renderer, &workspace)
+            .await
+            .expect("mode should parse");
+        assert!(matches!(mode, SlashCommandOutcome::StartModeSelection));
+
+        let trusted_auto = handle_slash_command("mode auto", &mut renderer, &workspace)
+            .await
+            .expect("mode auto should parse");
+        assert!(matches!(
+            trusted_auto,
+            SlashCommandOutcome::SetMode {
+                mode: SessionModeCommand::TrustedAuto
+            }
+        ));
+
+        let cycle = handle_slash_command("mode cycle", &mut renderer, &workspace)
+            .await
+            .expect("mode cycle should parse");
+        assert!(matches!(cycle, SlashCommandOutcome::CycleMode));
     }
 
     #[tokio::test]

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use vtcode_core::config::WorkspaceTrustLevel;
 use vtcode_core::core::interfaces::session::PlanModeEntrySource;
 use vtcode_tui::app::EditingMode;
 
@@ -128,6 +129,7 @@ impl SessionStats {
     }
 
     /// Cycle to the next mode: Edit -> Trusted Auto -> Plan -> Edit
+    #[cfg(test)]
     pub(crate) fn cycle_mode(&mut self) -> SessionMode {
         match self.current_mode() {
             SessionMode::Edit => {
@@ -311,6 +313,18 @@ impl SessionStats {
     }
 }
 
+pub(crate) fn should_enforce_safe_mode_prompts(
+    full_auto: bool,
+    autonomous_mode: bool,
+    workspace_trust_level: Option<WorkspaceTrustLevel>,
+) -> bool {
+    if full_auto || autonomous_mode {
+        return false;
+    }
+
+    !matches!(workspace_trust_level, Some(WorkspaceTrustLevel::FullAuto))
+}
+
 pub(crate) fn is_follow_up_prompt_like(input: &str) -> bool {
     let normalized = input
         .trim()
@@ -469,7 +483,11 @@ mod tests {
     use std::thread;
     use std::time::Duration;
 
-    use super::{CtrlCSignal, CtrlCState, SessionMode, SessionStats, is_follow_up_prompt_like};
+    use super::{
+        CtrlCSignal, CtrlCState, SessionMode, SessionStats, is_follow_up_prompt_like,
+        should_enforce_safe_mode_prompts,
+    };
+    use vtcode_core::config::WorkspaceTrustLevel;
     use vtcode_core::config::constants::tools;
     use vtcode_tui::app::EditingMode;
 
@@ -594,6 +612,30 @@ mod tests {
         assert_eq!(stats.cycle_mode(), SessionMode::Edit);
         assert_eq!(stats.current_mode(), SessionMode::Edit);
         assert!(!stats.is_autonomous_mode());
+    }
+
+    #[test]
+    fn safe_mode_prompts_are_disabled_for_trusted_auto() {
+        assert!(!should_enforce_safe_mode_prompts(
+            false,
+            true,
+            Some(WorkspaceTrustLevel::ToolsPolicy),
+        ));
+    }
+
+    #[test]
+    fn safe_mode_prompts_follow_workspace_trust_for_edit_mode() {
+        assert!(should_enforce_safe_mode_prompts(
+            false,
+            false,
+            Some(WorkspaceTrustLevel::ToolsPolicy),
+        ));
+        assert!(!should_enforce_safe_mode_prompts(
+            false,
+            false,
+            Some(WorkspaceTrustLevel::FullAuto),
+        ));
+        assert!(should_enforce_safe_mode_prompts(false, false, None));
     }
 
     #[test]

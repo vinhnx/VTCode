@@ -10,6 +10,7 @@ use crate::agent::runloop::unified::async_mcp_manager::{
     AsyncMcpManager, McpInitStatus, approval_policy_from_human_in_the_loop,
 };
 use crate::agent::runloop::unified::prompts::read_system_prompt;
+use crate::agent::runloop::unified::state::should_enforce_safe_mode_prompts;
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
 use crate::agent::runloop::welcome::prepare_session_bootstrap;
@@ -214,7 +215,9 @@ pub(crate) async fn initialize_session(
             .await
             .context("Failed to determine workspace trust level for tool policy")?,
     };
-    apply_workspace_trust_prompt_policy(&mut tool_registry, full_auto, workspace_trust_level).await;
+    let autonomous_mode = full_auto || vt_cfg.is_some_and(|cfg| cfg.agent.autonomous_mode);
+    apply_workspace_trust_prompt_policy(&mut tool_registry, autonomous_mode, workspace_trust_level)
+        .await;
 
     // CGP Phase 5: Wrap registered tools through the CGP approval → sandbox → middleware pipeline.
     let cgp_mode = if full_auto {
@@ -490,17 +493,11 @@ async fn maybe_attach_mcp_client(
 
 async fn apply_workspace_trust_prompt_policy(
     tool_registry: &mut ToolRegistry,
-    full_auto: bool,
+    autonomous_mode: bool,
     workspace_trust_level: Option<WorkspaceTrustLevel>,
 ) {
-    let enforce_safe_mode_prompts = if full_auto {
-        false
-    } else {
-        match workspace_trust_level {
-            Some(WorkspaceTrustLevel::FullAuto) => false,
-            Some(WorkspaceTrustLevel::ToolsPolicy) | None => true,
-        }
-    };
+    let enforce_safe_mode_prompts =
+        should_enforce_safe_mode_prompts(false, autonomous_mode, workspace_trust_level);
     tool_registry
         .set_enforce_safe_mode_prompts(enforce_safe_mode_prompts)
         .await;

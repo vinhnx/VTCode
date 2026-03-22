@@ -10,6 +10,7 @@ use crate::agent::runloop::unified::inline_events::harness::{
     turn_completed_event, turn_failed_event, turn_started_event,
 };
 use crate::agent::runloop::unified::run_loop_context::HarnessTurnState;
+use crate::agent::runloop::unified::run_loop_context::RecoveryMode;
 use crate::agent::runloop::unified::run_loop_context::TurnPhase;
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
@@ -41,6 +42,14 @@ use vtcode_core::config::types::AgentConfig;
 use vtcode_core::core::agent::error_recovery::ErrorType;
 
 const RECOVERY_SYNTHESIS_MAX_TOKENS: u32 = 320;
+const POST_TOOL_RECOVERY_REASON: &str = "Model follow-up failed after tool activity. Tools are disabled on the next pass; provide a direct textual response from the current context and reuse the latest tool outputs already in history.";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PostToolFailureRecovery {
+    NotApplicable,
+    RetryToolFree,
+    StopAfterDirective,
+}
 
 pub(crate) struct TurnLoopOutcome {
     pub result: TurnLoopResult,
@@ -292,16 +301,19 @@ fn has_turn_usage(usage: &HarnessUsage) -> bool {
 
 const POST_TOOL_RESUME_DIRECTIVE: &str = "Previous turn already completed tool execution. Reuse the latest tool outputs in history instead of rerunning the same exploration. If those tool outputs include `critical_note`, `next_action`, or `rerun_hint`, follow that guidance first.";
 
-fn ensure_post_tool_resume_directive(working_history: &mut Vec<uni::Message>) {
+fn ensure_recent_system_message(working_history: &mut Vec<uni::Message>, content: &str) {
     let already_present = working_history.iter().rev().take(3).any(|message| {
-        message.role == uni::MessageRole::System
-            && message.content.as_text() == POST_TOOL_RESUME_DIRECTIVE
+        message.role == uni::MessageRole::System && message.content.as_text() == content
     });
     if already_present {
         return;
     }
 
-    working_history.push(uni::Message::system(POST_TOOL_RESUME_DIRECTIVE.to_string()));
+    working_history.push(uni::Message::system(content.to_string()));
+}
+
+fn ensure_post_tool_resume_directive(working_history: &mut Vec<uni::Message>) {
+    ensure_recent_system_message(working_history, POST_TOOL_RESUME_DIRECTIVE);
 }
 
 fn maybe_recover_after_post_tool_llm_failure(
@@ -311,11 +323,12 @@ fn maybe_recover_after_post_tool_llm_failure(
     step_count: usize,
     turn_history_start_len: usize,
     failure_stage: &'static str,
-) -> Result<bool> {
+    allow_tool_free_retry: bool,
+) -> Result<PostToolFailureRecovery> {
     let has_partial_tool_progress =
         has_tool_response_since(working_history, turn_history_start_len);
     if !has_partial_tool_progress {
-        return Ok(false);
+        return Ok(PostToolFailureRecovery::NotApplicable);
     }
 
     let err_cat = vtcode_commons::classify_anyhow_error(err);
@@ -341,15 +354,27 @@ fn maybe_recover_after_post_tool_llm_failure(
     }
     ensure_post_tool_resume_directive(working_history);
 
+    let action = if err_cat.is_retryable() && allow_tool_free_retry {
+        ensure_recent_system_message(working_history, POST_TOOL_RECOVERY_REASON);
+        renderer.line(
+            MessageStyle::Info,
+            "[!] Follow-up failed after tool execution; scheduling a final tool-free recovery pass.",
+        )?;
+        PostToolFailureRecovery::RetryToolFree
+    } else {
+        PostToolFailureRecovery::StopAfterDirective
+    };
+
     tracing::warn!(
         error = %err,
         step = step_count,
         stage = failure_stage,
         category = ?err_cat,
         retryable = err_cat.is_retryable(),
+        recovery_action = ?action,
         "Recovered turn after post-tool LLM phase failure"
     );
-    Ok(true)
+    Ok(action)
 }
 
 // For `TurnLoopContext`, we will reuse the generic `handle_pipeline_output` via an adapter below.
@@ -497,17 +522,36 @@ pub(crate) async fn run_turn_loop(
                     restore_status_right.clone(),
                 );
 
-                let recovered = maybe_recover_after_post_tool_llm_failure(
+                match maybe_recover_after_post_tool_llm_failure(
                     turn_processing_ctx.renderer,
                     turn_processing_ctx.working_history,
                     &err,
                     step_count,
                     turn_history_start_len,
                     "execute_llm_request",
-                )?;
-                if recovered {
-                    result = TurnLoopResult::Completed;
-                    break;
+                    !tool_free_recovery,
+                )? {
+                    PostToolFailureRecovery::NotApplicable => {}
+                    PostToolFailureRecovery::RetryToolFree => {
+                        turn_processing_ctx.activate_recovery_with_mode(
+                            POST_TOOL_RECOVERY_REASON.to_string(),
+                            RecoveryMode::ToolFreeSynthesis,
+                        );
+                        continue;
+                    }
+                    PostToolFailureRecovery::StopAfterDirective => {
+                        if tool_free_recovery {
+                            result = TurnLoopResult::Blocked {
+                                reason: Some(
+                                    "Recovery mode could not complete the final synthesis pass."
+                                        .to_string(),
+                                ),
+                            };
+                        } else {
+                            result = TurnLoopResult::Completed;
+                        }
+                        break;
+                    }
                 }
 
                 if tool_free_recovery {
@@ -602,17 +646,38 @@ pub(crate) async fn run_turn_loop(
                         ErrorType::Other,
                     );
                 }
-                let recovered = maybe_recover_after_post_tool_llm_failure(
+                let tool_free_recovery = turn_processing_ctx.recovery_pass_used()
+                    && turn_processing_ctx.recovery_is_tool_free();
+                match maybe_recover_after_post_tool_llm_failure(
                     turn_processing_ctx.renderer,
                     turn_processing_ctx.working_history,
                     &err,
                     step_count,
                     turn_history_start_len,
                     "process_llm_response",
-                )?;
-                if recovered {
-                    result = TurnLoopResult::Completed;
-                    break;
+                    !tool_free_recovery,
+                )? {
+                    PostToolFailureRecovery::NotApplicable => {}
+                    PostToolFailureRecovery::RetryToolFree => {
+                        turn_processing_ctx.activate_recovery_with_mode(
+                            POST_TOOL_RECOVERY_REASON.to_string(),
+                            RecoveryMode::ToolFreeSynthesis,
+                        );
+                        continue;
+                    }
+                    PostToolFailureRecovery::StopAfterDirective => {
+                        if tool_free_recovery {
+                            result = TurnLoopResult::Blocked {
+                                reason: Some(
+                                    "Recovery mode could not complete the final synthesis pass."
+                                        .to_string(),
+                                ),
+                            };
+                        } else {
+                            result = TurnLoopResult::Completed;
+                        }
+                        break;
+                    }
                 }
                 return Err(err);
             }
@@ -685,16 +750,38 @@ pub(crate) async fn run_turn_loop(
                     format!("{:#}", err),
                     ErrorType::ToolExecution,
                 );
-                if maybe_recover_after_post_tool_llm_failure(
+                let tool_free_recovery = ctx.harness_state.recovery_pass_used()
+                    && ctx.harness_state.recovery_is_tool_free();
+                match maybe_recover_after_post_tool_llm_failure(
                     ctx.renderer,
                     working_history,
                     &err,
                     step_count,
                     turn_history_start_len,
                     "handle_turn_processing_result",
+                    !tool_free_recovery,
                 )? {
-                    result = TurnLoopResult::Completed;
-                    break;
+                    PostToolFailureRecovery::NotApplicable => {}
+                    PostToolFailureRecovery::RetryToolFree => {
+                        ctx.harness_state.activate_recovery_with_mode(
+                            POST_TOOL_RECOVERY_REASON.to_string(),
+                            RecoveryMode::ToolFreeSynthesis,
+                        );
+                        continue;
+                    }
+                    PostToolFailureRecovery::StopAfterDirective => {
+                        if tool_free_recovery {
+                            result = TurnLoopResult::Blocked {
+                                reason: Some(
+                                    "Recovery mode could not complete the final synthesis pass."
+                                        .to_string(),
+                                ),
+                            };
+                        } else {
+                            result = TurnLoopResult::Completed;
+                        }
+                        break;
+                    }
                 }
                 return Err(err);
             }
@@ -886,9 +973,10 @@ async fn maybe_run_external_turn_complete_notify(
 #[cfg(test)]
 mod tests {
     use super::{
-        HarnessUsage, POST_TOOL_RESUME_DIRECTIVE, accumulate_turn_usage,
-        ensure_post_tool_resume_directive, has_tool_response_since, has_turn_usage,
-        maybe_recover_after_post_tool_llm_failure, run_turn_loop,
+        HarnessUsage, POST_TOOL_RECOVERY_REASON, POST_TOOL_RESUME_DIRECTIVE,
+        PostToolFailureRecovery, accumulate_turn_usage, ensure_post_tool_resume_directive,
+        has_tool_response_since, has_turn_usage, maybe_recover_after_post_tool_llm_failure,
+        run_turn_loop,
     };
     use crate::agent::runloop::unified::turn::context::TurnLoopResult;
     use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
@@ -951,7 +1039,7 @@ mod tests {
     }
 
     #[test]
-    fn recovery_after_post_tool_follow_up_failure_adds_resume_directive_once() {
+    fn retryable_post_tool_follow_up_failure_schedules_tool_free_recovery_once() {
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let handle = InlineHandle::new_for_tests(tx);
         let mut renderer = AnsiRenderer::with_inline_ui(handle, Default::default());
@@ -964,27 +1052,29 @@ mod tests {
             ),
         ];
 
-        let recovered = maybe_recover_after_post_tool_llm_failure(
+        let action = maybe_recover_after_post_tool_llm_failure(
             &mut renderer,
             &mut history,
             &anyhow!("Network error"),
             2,
             1,
             "streaming",
+            true,
         )
         .expect("recovery should succeed");
-        assert!(recovered);
+        assert_eq!(action, PostToolFailureRecovery::RetryToolFree);
 
-        let recovered_again = maybe_recover_after_post_tool_llm_failure(
+        let action_again = maybe_recover_after_post_tool_llm_failure(
             &mut renderer,
             &mut history,
             &anyhow!("Network error"),
             3,
             1,
             "streaming",
+            true,
         )
         .expect("repeat recovery should succeed");
-        assert!(recovered_again);
+        assert_eq!(action_again, PostToolFailureRecovery::RetryToolFree);
 
         let directive_count = history
             .iter()
@@ -994,6 +1084,44 @@ mod tests {
             })
             .count();
         assert_eq!(directive_count, 1);
+
+        let recovery_reason_count = history
+            .iter()
+            .filter(|message| {
+                message.role == uni::MessageRole::System
+                    && message.content.as_text() == POST_TOOL_RECOVERY_REASON
+            })
+            .count();
+        assert_eq!(recovery_reason_count, 1);
+    }
+
+    #[test]
+    fn retryable_post_tool_follow_up_failure_stops_after_recovery_pass_is_spent() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let handle = InlineHandle::new_for_tests(tx);
+        let mut renderer = AnsiRenderer::with_inline_ui(handle, Default::default());
+        let mut history = vec![
+            uni::Message::user("summarize the tool output".to_string()),
+            uni::Message::assistant("".to_string()),
+            uni::Message::tool_response("call_1".to_string(), "{\"ok\":true}".to_string()),
+        ];
+
+        let action = maybe_recover_after_post_tool_llm_failure(
+            &mut renderer,
+            &mut history,
+            &anyhow!("Network error"),
+            2,
+            1,
+            "streaming",
+            false,
+        )
+        .expect("recovery classification should succeed");
+
+        assert_eq!(action, PostToolFailureRecovery::StopAfterDirective);
+        assert!(!history.iter().any(|message| {
+            message.role == uni::MessageRole::System
+                && message.content.as_text() == POST_TOOL_RECOVERY_REASON
+        }));
     }
 
     #[test]

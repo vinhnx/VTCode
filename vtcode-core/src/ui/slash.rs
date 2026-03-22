@@ -157,7 +157,7 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
         },
         SlashCommandInfo {
             name: "mode",
-            description: "Cycle through Edit -> Plan modes",
+            description: "Open the session mode picker or switch directly (usage: /mode [edit|auto|plan|cycle])",
         },
         SlashCommandInfo {
             name: "docs",

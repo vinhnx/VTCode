@@ -161,6 +161,8 @@ pub(crate) async fn handle_outcome(
             }
             Ok(control)
         }
+        SlashCommandOutcome::StartModeSelection => handlers::handle_start_mode_selection(ctx).await,
+        SlashCommandOutcome::SetMode { mode } => handlers::handle_set_mode(ctx, mode).await,
         SlashCommandOutcome::CycleMode => handlers::handle_cycle_mode(ctx).await,
         SlashCommandOutcome::OAuthLogin { provider } => {
             handlers::handle_oauth_login(ctx, provider).await

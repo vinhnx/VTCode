@@ -467,6 +467,7 @@ pub(crate) fn should_submit_immediately_from_palette(session: &Session) -> bool 
         command,
         "/files"
             | "/ide"
+            | "/mode"
             | "/status"
             | "/stop"
             | "/pause"
@@ -550,6 +551,9 @@ mod tests {
         assert!(should_submit_immediately_from_palette(&session));
 
         session.set_input("   /status   ".to_string());
+        assert!(should_submit_immediately_from_palette(&session));
+
+        session.set_input("/mode".to_string());
         assert!(should_submit_immediately_from_palette(&session));
 
         session.set_input("/history".to_string());

@@ -200,7 +200,7 @@ pub(super) async fn render_help(
         )?;
         renderer.line(
             MessageStyle::Info,
-            "  Shift+Tab – Cycle Edit, Trusted Auto, and Plan modes",
+            "  Shift+Tab – Open the Edit/Trusted Auto/Plan mode picker",
         )?;
         renderer.line(MessageStyle::Info, "")?;
         renderer.line(MessageStyle::Info, "Multiline input:")?;

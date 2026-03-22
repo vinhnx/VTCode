@@ -14,7 +14,7 @@ use crate::cli::auth::{
 
 use super::SlashCommandOutcome;
 use super::parsing::parse_review_spec;
-use super::{OAuthProviderAction, SessionPaletteMode};
+use super::{OAuthProviderAction, SessionModeCommand, SessionPaletteMode};
 
 fn parse_session_palette_args(
     args: &str,
@@ -290,14 +290,47 @@ pub(super) fn handle_mode_command(
     args: &str,
     renderer: &mut AnsiRenderer,
 ) -> Result<SlashCommandOutcome> {
-    if !args.trim().is_empty() {
-        renderer.line(
-            MessageStyle::Error,
-            "Usage: /mode - Cycle through Edit -> Trusted Auto -> Plan modes",
-        )?;
-        return Ok(SlashCommandOutcome::Handled);
+    let trimmed = args.trim();
+    if trimmed.is_empty() {
+        return Ok(SlashCommandOutcome::StartModeSelection);
     }
-    Ok(SlashCommandOutcome::CycleMode)
+
+    match trimmed.to_ascii_lowercase().as_str() {
+        "edit" => Ok(SlashCommandOutcome::SetMode {
+            mode: SessionModeCommand::Edit,
+        }),
+        "auto" | "trusted" | "trusted-auto" | "trusted_auto" => Ok(SlashCommandOutcome::SetMode {
+            mode: SessionModeCommand::TrustedAuto,
+        }),
+        "plan" => Ok(SlashCommandOutcome::SetMode {
+            mode: SessionModeCommand::Plan,
+        }),
+        "cycle" | "next" | "toggle" => Ok(SlashCommandOutcome::CycleMode),
+        _ => {
+            renderer.line(MessageStyle::Error, "Usage: /mode [edit|auto|plan|cycle]")?;
+            renderer.line(
+                MessageStyle::Info,
+                "  /mode        - Open the interactive mode picker",
+            )?;
+            renderer.line(
+                MessageStyle::Info,
+                "  /mode edit   - Standard edit mode with normal confirmations",
+            )?;
+            renderer.line(
+                MessageStyle::Info,
+                "  /mode auto   - Trusted Auto mode with low-risk auto-approval",
+            )?;
+            renderer.line(
+                MessageStyle::Info,
+                "  /mode plan   - Read-only planning mode",
+            )?;
+            renderer.line(
+                MessageStyle::Info,
+                "  /mode cycle  - Cycle Edit -> Trusted Auto -> Plan",
+            )?;
+            Ok(SlashCommandOutcome::Handled)
+        }
+    }
 }
 
 pub(super) fn handle_login_command(

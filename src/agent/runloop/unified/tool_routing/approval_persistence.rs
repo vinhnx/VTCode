@@ -58,26 +58,33 @@ pub(super) fn shell_command_has_persisted_approval_prefix(
         })
 }
 
-pub(super) fn persisted_shell_approval(
+pub(super) async fn persisted_shell_approval(
     tool_registry: &ToolRegistry,
     normalized_tool_name: &str,
     tool_args: Option<&Value>,
 ) -> Option<(Vec<String>, String)> {
-    extract_shell_approval_command_prefix_words(normalized_tool_name, tool_args)
-        .zip(extract_shell_approval_scope_signature(
-            normalized_tool_name,
-            tool_args,
-        ))
-        .filter(|(command_words, scope_signature)| {
-            shell_command_has_persisted_approval_prefix(
-                tool_registry,
-                command_words,
-                scope_signature,
-            )
-        })
+    let (command_words, scope_signature) =
+        extract_shell_approval_command_prefix_words(normalized_tool_name, tool_args).zip(
+            extract_shell_approval_scope_signature(normalized_tool_name, tool_args),
+        )?;
+
+    if tool_registry
+        .find_persisted_shell_approval_prefix(&command_words, &scope_signature)
+        .await
+        .is_some()
+        || shell_command_has_persisted_approval_prefix(
+            tool_registry,
+            &command_words,
+            &scope_signature,
+        )
+    {
+        Some((command_words, scope_signature))
+    } else {
+        None
+    }
 }
 
-pub(super) fn persist_shell_approval_prefix_rule(
+pub(super) async fn persist_shell_approval_prefix_rule(
     tool_registry: &ToolRegistry,
     tool_name: &str,
     tool_args: Option<&Value>,
@@ -86,6 +93,10 @@ pub(super) fn persist_shell_approval_prefix_rule(
     let rendered_rule =
         render_shell_persistent_approval_prefix_entry(tool_name, tool_args, prefix_rule)
             .context("Failed to render shell approval prefix entry")?;
+    tool_registry
+        .persist_approval_cache_prefix(&rendered_rule)
+        .await
+        .context("Failed to persist shell approval prefix to tool policy")?;
     let workspace_root = tool_registry.workspace_root().clone();
     let mut manager = ConfigManager::load_from_workspace(&workspace_root).with_context(|| {
         format!(

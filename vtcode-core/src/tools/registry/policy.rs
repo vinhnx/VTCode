@@ -192,10 +192,28 @@ impl ToolPolicyGateway {
         }
     }
 
+    pub async fn add_approval_cache_prefix(&mut self, prefix_entry: &str) -> Result<()> {
+        if let Some(ref mut manager) = self.tool_policy {
+            manager.add_approval_cache_prefix(prefix_entry).await
+        } else {
+            Err(anyhow::anyhow!("Tool policy manager not initialized"))
+        }
+    }
+
     pub fn has_approval_cache_key(&self, approval_key: &str) -> bool {
         self.tool_policy
             .as_ref()
             .is_some_and(|manager| manager.has_approval_cache_key(approval_key))
+    }
+
+    pub fn matching_shell_approval_prefix(
+        &self,
+        command_words: &[String],
+        scope_signature: &str,
+    ) -> Option<String> {
+        self.tool_policy.as_ref().and_then(|manager| {
+            manager.matching_shell_approval_prefix(command_words, scope_signature)
+        })
     }
 
     pub fn get_tool_policy(&self, tool_name: &str) -> ToolPolicy {
