@@ -266,6 +266,9 @@ pub(crate) async fn execute_llm_request(
                     .await
                     {
                         Ok((response, emitted_tokens)) => {
+                            ctx.harness_state.remember_streamed_tool_call_items(
+                                stream_bridge.take_streamed_tool_call_items(),
+                            );
                             stream_bridge.complete_open_items();
                             Ok((response, emitted_tokens))
                         }
@@ -293,6 +296,9 @@ pub(crate) async fn execute_llm_request(
 
                     match res {
                         Ok(Ok((response, emitted_tokens))) => {
+                            ctx.harness_state.remember_streamed_tool_call_items(
+                                stream_bridge.take_streamed_tool_call_items(),
+                            );
                             stream_bridge.complete_open_items();
                             Ok((response, emitted_tokens))
                         }
@@ -326,6 +332,9 @@ pub(crate) async fn execute_llm_request(
 
                 match res {
                     Ok(Ok((response, emitted_tokens))) => {
+                        ctx.harness_state.remember_streamed_tool_call_items(
+                            stream_bridge.take_streamed_tool_call_items(),
+                        );
                         stream_bridge.complete_open_items();
                         Ok((response, emitted_tokens))
                     }
@@ -1209,5 +1218,20 @@ mod tests {
         assert!(saw_started);
         assert!(saw_updated);
         assert!(!saw_completed);
+    }
+
+    #[test]
+    fn harness_streaming_bridge_tracks_streamed_tool_call_item_ids() {
+        let mut bridge = HarnessStreamingBridge::new(None, "turn_tool_map", 5, 2);
+        bridge.on_progress(StreamProgressEvent::ToolCallStarted {
+            call_id: "call_42".to_string(),
+            name: Some("shell".to_string()),
+        });
+
+        let item_ids = bridge.take_streamed_tool_call_items();
+        assert_eq!(
+            item_ids.get("call_42").map(String::as_str),
+            Some("turn_tool_map-step-5-assistant-stream-2-tool-call-call_42")
+        );
     }
 }

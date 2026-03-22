@@ -611,7 +611,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 max_context_tokens,
             ),
             None,
-            None,
+            steering_receiver.take(),
         );
         runtime.state.messages = conversation_history;
         let tool_result_cache = execution.tool_result_cache;
@@ -687,7 +687,6 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             ),
         );
         let mut queued_inputs: VecDeque<String> = VecDeque::with_capacity(8);
-        let mut deferred_follow_up_inputs: VecDeque<String> = VecDeque::with_capacity(8);
         let mut agent_touched_paths = std::collections::BTreeSet::new();
         let mut ctrl_c_notice_displayed = false;
         let mut mcp_catalog_initialized = tool_registry.mcp_client().is_some();
@@ -727,14 +726,14 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             loop {
                 use crate::agent::runloop::unified::turn::session::interaction_loop::InteractionOutcome;
 
-                let interaction_outcome = if let Some(input) = deferred_follow_up_inputs.pop_front()
-                {
+                let interaction_outcome = if let Some(input) = runtime.run_until_idle() {
                     InteractionOutcome::Continue {
                         input,
                         prompt_message_index: None,
                     }
                 } else {
                     let mut interaction_turn_metadata_cache = None;
+                    let (session_state, runtime_steering) = runtime.split_mut();
                     let mut interaction_ctx = crate::agent::runloop::unified::turn::session::interaction_loop::InteractionLoopContext {
                     renderer: &mut renderer,
                     session: &mut session,
@@ -752,7 +751,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     tool_registry: &mut tool_registry,
                     tools: &tools,
                     tool_catalog: &tool_catalog,
-                    conversation_history: &mut runtime.state.messages,
+                    conversation_history: &mut session_state.messages,
                     agent_touched_paths: &mut agent_touched_paths,
                     decision_ledger: &decision_ledger,
                     context_manager: &mut context_manager,
@@ -780,8 +779,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     last_forced_redraw: &mut last_forced_redraw,
                     turn_metadata_cache: &mut interaction_turn_metadata_cache,
                     harness_config: harness_config.clone(),
-                    steering_receiver,
-                    deferred_follow_up_inputs: &mut deferred_follow_up_inputs,
+                    runtime_steering,
                     startup_update_notice_rx: &mut startup_update_notice_rx,
                 };
 
@@ -871,7 +869,8 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 if next_turn_input.trim().is_empty() {
                     continue;
                 }
-                let mut working_history = std::mem::take(&mut runtime.state.messages);
+                let (session_state, runtime_steering) = runtime.split_mut();
+                let mut working_history = std::mem::take(&mut session_state.messages);
                 let mut transient_system_note_indices = Vec::with_capacity(2);
                 if let Some(note) = {
                     let stale_paths = tool_registry.edited_file_monitor().stale_tracked_paths();
@@ -965,8 +964,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         &traj,
                         skip_confirmations,
                         full_auto,
-                        steering_receiver,
-                        &mut deferred_follow_up_inputs,
+                        runtime_steering,
                     );
 
                     let result = timeout(

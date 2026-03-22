@@ -7,7 +7,6 @@ use crate::config::types::{ReasoningEffortLevel, VerbosityLevel};
 use crate::core::agent::events::EventSink;
 use crate::core::agent::features::FeatureSet;
 use crate::core::agent::session_config::ResolvedSessionConfig;
-use crate::core::agent::state::ApiFailureTracker;
 use crate::core::agent::steering::SteeringMessage;
 use crate::core::threads::{ThreadBootstrap, ThreadRuntimeHandle, build_thread_archive_metadata};
 
@@ -37,7 +36,6 @@ use anyhow::{Result, anyhow};
 use parking_lot::{Mutex, RwLock};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Instant;
 use tracing::{info, warn};
 use vtcode_config::auth::OpenAIChatGptAuthHandle;
 
@@ -50,7 +48,6 @@ mod execute_tools;
 mod helpers;
 mod optimizer;
 mod output;
-mod provider_response;
 mod retry;
 mod summarize;
 mod summary;
@@ -106,14 +103,8 @@ pub struct AgentRunner {
     loop_detector: Mutex<LoopDetector>,
     /// Cached shell policy patterns to avoid recompilation
 
-    /// API failure tracking for exponential backoff
-    failure_tracker: Mutex<ApiFailureTracker>,
     /// Context optimizer for token budget management
     context_optimizer: tokio::sync::Mutex<ContextOptimizer>,
-    /// Tracks recent streaming failures to avoid repeated double-requests
-    streaming_failures: Mutex<u8>,
-    /// Records when streaming last failed for cooldown-based re-enablement
-    streaming_last_failure: Mutex<Option<Instant>>,
     /// Receiver for steering messages (e.g., stop, pause)
     steering_receiver: Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>>,
     /// Optional restricted tool definitions used instead of the default registry projection.
@@ -473,10 +464,7 @@ impl AgentRunner {
             thread_handle,
             max_turns,
             loop_detector: Mutex::new(loop_detector),
-            failure_tracker: Mutex::new(ApiFailureTracker::new()),
             context_optimizer: tokio::sync::Mutex::new(ContextOptimizer::new()),
-            streaming_failures: Mutex::new(0),
-            streaming_last_failure: Mutex::new(None),
             steering_receiver: Mutex::new(steering_receiver),
             tool_definitions_override: RwLock::new(None),
             tool_arg_transform: None,

@@ -7,6 +7,7 @@ use tokio::sync::Notify;
 
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig;
+use vtcode_core::core::agent::runtime::RuntimeSteering;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_tui::app::InlineHandle;
@@ -14,7 +15,6 @@ use vtcode_tui::app::InlineHandle;
 use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::model_picker::ModelPickerState;
 use crate::updater::StartupUpdateNotice;
-use vtcode_core::core::agent::steering::SteeringMessage;
 use vtcode_core::hooks::{LifecycleHookEngine, SessionEndReason};
 
 use crate::agent::runloop::unified::async_mcp_manager::AsyncMcpManager;
@@ -81,8 +81,7 @@ pub(crate) struct InteractionLoopContext<'a> {
     pub last_forced_redraw: &'a mut std::time::Instant,
     pub turn_metadata_cache: &'a mut Option<Option<serde_json::Value>>,
     pub harness_config: vtcode_config::core::agent::AgentHarnessConfig,
-    pub steering_receiver: &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
-    pub deferred_follow_up_inputs: &'a mut VecDeque<String>,
+    pub runtime_steering: &'a mut RuntimeSteering,
     pub startup_update_notice_rx:
         &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<StartupUpdateNotice>>,
 }
@@ -138,8 +137,7 @@ impl<'a> InteractionLoopContext<'a> {
             full_auto: self.full_auto,
             harness_state,
             harness_emitter: self.harness_emitter,
-            steering_receiver: self.steering_receiver,
-            deferred_follow_up_inputs: self.deferred_follow_up_inputs,
+            runtime_steering: self.runtime_steering,
         };
 
         crate::agent::runloop::unified::turn::context::TurnProcessingContext::from_parts(

@@ -2,7 +2,7 @@ use crate::agent::runloop::mcp_events::McpPanelState;
 use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
 use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
-use hashbrown::HashSet;
+use hashbrown::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
@@ -87,6 +87,7 @@ pub(crate) struct HarnessTurnState {
     pub consecutive_same_shell_command_runs: usize,
     pub last_shell_command_signature: Option<String>,
     seen_successful_readonly_signatures: HashSet<String>,
+    streamed_tool_call_item_ids: HashMap<String, String>,
     pub seen_task_tracker_create_signatures: HashSet<String>,
     pub replaceable_task_tracker_block: Option<Vec<String>>,
     pub tool_budget_warning_emitted: bool,
@@ -120,6 +121,7 @@ impl HarnessTurnState {
             consecutive_same_shell_command_runs: 0,
             last_shell_command_signature: None,
             seen_successful_readonly_signatures: HashSet::new(),
+            streamed_tool_call_item_ids: HashMap::new(),
             seen_task_tracker_create_signatures: HashSet::new(),
             replaceable_task_tracker_block: None,
             tool_budget_warning_emitted: false,
@@ -303,6 +305,17 @@ impl HarnessTurnState {
 
     pub(crate) fn has_successful_readonly_signature(&self, signature: &str) -> bool {
         self.seen_successful_readonly_signatures.contains(signature)
+    }
+
+    pub(crate) fn remember_streamed_tool_call_items<I>(&mut self, items: I)
+    where
+        I: IntoIterator<Item = (String, String)>,
+    {
+        self.streamed_tool_call_item_ids.extend(items);
+    }
+
+    pub(crate) fn take_streamed_tool_call_item_id(&mut self, tool_call_id: &str) -> Option<String> {
+        self.streamed_tool_call_item_ids.remove(tool_call_id)
     }
 
     pub(crate) fn replaceable_task_tracker_count(&self) -> Option<usize> {

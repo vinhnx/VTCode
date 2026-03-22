@@ -36,7 +36,7 @@ use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::types::{
     AgentConfig, ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
 };
-use vtcode_core::core::agent::steering::SteeringMessage;
+use vtcode_core::core::agent::runtime::RuntimeSteering;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::llm::provider as uni;
@@ -123,8 +123,7 @@ struct TestContextBacking {
     working_history: Vec<uni::Message>,
     tool_catalog: Arc<ToolCatalogState>,
     default_placeholder: Option<String>,
-    steering_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
-    deferred_follow_up_inputs: std::collections::VecDeque<String>,
+    runtime_steering: RuntimeSteering,
     config: AgentConfig,
     provider_client: Box<dyn uni::LLMProvider>,
     traj: TrajectoryLogger,
@@ -181,8 +180,6 @@ impl TestContextBacking {
         let working_history = Vec::new();
         let tool_catalog = Arc::new(ToolCatalogState::new());
         let default_placeholder = None;
-        let steering_receiver = None;
-        let deferred_follow_up_inputs = std::collections::VecDeque::new();
         let config = AgentConfig {
             model: "noop-model".to_string(),
             api_key: "test-key".to_string(),
@@ -240,8 +237,7 @@ impl TestContextBacking {
             working_history,
             tool_catalog,
             default_placeholder,
-            steering_receiver,
-            deferred_follow_up_inputs,
+            runtime_steering: RuntimeSteering::default(),
             config,
             provider_client,
             traj,
@@ -294,8 +290,7 @@ impl TestContextBacking {
             full_auto: false,
             harness_state: &mut self.harness_state,
             harness_emitter: None,
-            steering_receiver: &mut self.steering_receiver,
-            deferred_follow_up_inputs: &mut self.deferred_follow_up_inputs,
+            runtime_steering: &mut self.runtime_steering,
         };
 
         TurnProcessingContext::from_parts(TurnProcessingContextParts {
