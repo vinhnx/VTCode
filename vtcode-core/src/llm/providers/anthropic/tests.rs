@@ -698,6 +698,85 @@ mod request_builder_tests {
     }
 
     #[test]
+    fn test_convert_to_anthropic_format_splits_editor_only_runtime_context_without_caching_tail() {
+        let request = LLMRequest {
+            model: models::CLAUDE_SONNET_4_6.to_string(),
+            system_prompt: Some(Arc::new(
+                "stable system instructions\n[Runtime Context]\n## Active Editor Context\n- Active file: src/main.rs"
+                    .to_string(),
+            )),
+            messages: vec![Message::user("hello".to_string())],
+            ..Default::default()
+        };
+        let cache_settings = AnthropicPromptCacheSettings::default();
+        let anthropic_config = AnthropicConfig::default();
+        let ctx = RequestBuilderContext {
+            prompt_cache_enabled: true,
+            prompt_cache_settings: &cache_settings,
+            anthropic_config: &anthropic_config,
+            model: models::anthropic::DEFAULT_MODEL,
+        };
+
+        let payload = convert_to_anthropic_format(&request, &ctx).expect("payload conversion");
+
+        assert!(payload["system"].is_array());
+        assert_eq!(payload["system"][0]["cache_control"]["ttl"], "1h");
+        assert!(
+            payload["system"][1]["text"]
+                .as_str()
+                .unwrap_or("")
+                .contains("## Active Editor Context")
+        );
+        assert!(payload["system"][1].get("cache_control").is_none());
+        assert!(payload.get("cache_control").is_none());
+    }
+
+    #[test]
+    fn test_convert_to_anthropic_format_hoists_history_system_directives_into_system_prompt() {
+        let request = LLMRequest {
+            model: models::CLAUDE_SONNET_4_6.to_string(),
+            system_prompt: Some(Arc::new("stable system instructions".to_string())),
+            messages: vec![
+                Message::user("explore architecture".to_string()),
+                Message::system(
+                    "Previous turn already completed tool execution. Reuse the latest tool outputs in history instead of rerunning the same exploration.".to_string(),
+                ),
+            ],
+            ..Default::default()
+        };
+        let cache_settings = AnthropicPromptCacheSettings::default();
+        let anthropic_config = AnthropicConfig::default();
+        let ctx = RequestBuilderContext {
+            prompt_cache_enabled: true,
+            prompt_cache_settings: &cache_settings,
+            anthropic_config: &anthropic_config,
+            model: models::anthropic::DEFAULT_MODEL,
+        };
+
+        let payload = convert_to_anthropic_format(&request, &ctx).expect("payload conversion");
+
+        assert!(payload["system"].is_array());
+        assert!(
+            payload["system"][1]["text"]
+                .as_str()
+                .unwrap_or("")
+                .contains("[History Directives]")
+        );
+        assert!(
+            payload["system"][1]["text"]
+                .as_str()
+                .unwrap_or("")
+                .contains("Previous turn already completed tool execution")
+        );
+        assert_eq!(
+            payload["messages"].as_array().map_or(0, |msgs| msgs.len()),
+            1
+        );
+        assert_eq!(payload["messages"][0]["role"], "user");
+        assert!(payload["system"][1].get("cache_control").is_none());
+    }
+
+    #[test]
     fn test_convert_to_anthropic_format_includes_native_web_search_tool() {
         let request = LLMRequest {
             model: models::CLAUDE_OPUS_4_6.to_string(),

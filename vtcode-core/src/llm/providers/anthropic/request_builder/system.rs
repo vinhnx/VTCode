@@ -1,4 +1,4 @@
-use crate::llm::provider::LLMRequest;
+use crate::llm::provider::{LLMRequest, MessageRole};
 use crate::llm::providers::anthropic_types::CacheControl;
 use serde_json::{Value, json};
 
@@ -9,13 +9,57 @@ pub(crate) struct SystemPromptBuildResult {
 }
 
 const RUNTIME_CONTEXT_SECTION_HEADER: &str = "[Runtime Context]";
+const HISTORY_DIRECTIVES_SECTION_HEADER: &str = "[History Directives]";
+
+fn has_runtime_context_section(prompt: &str) -> bool {
+    prompt.starts_with(&format!("{RUNTIME_CONTEXT_SECTION_HEADER}\n"))
+        || prompt.contains(&format!("\n{RUNTIME_CONTEXT_SECTION_HEADER}\n"))
+}
+
+fn append_history_system_directives(final_system_prompt: &mut String, request: &LLMRequest) {
+    let directives = request
+        .messages
+        .iter()
+        .filter(|msg| msg.role == MessageRole::System)
+        .map(|msg| msg.content.as_text().trim().to_string())
+        .filter(|text| !text.is_empty())
+        .collect::<Vec<_>>();
+
+    if directives.is_empty() {
+        return;
+    }
+
+    if !has_runtime_context_section(final_system_prompt) {
+        if !final_system_prompt.is_empty() && !final_system_prompt.ends_with('\n') {
+            final_system_prompt.push('\n');
+        }
+        final_system_prompt.push_str(RUNTIME_CONTEXT_SECTION_HEADER);
+        final_system_prompt.push('\n');
+    } else if !final_system_prompt.ends_with('\n') {
+        final_system_prompt.push('\n');
+    }
+
+    final_system_prompt.push_str(HISTORY_DIRECTIVES_SECTION_HEADER);
+    final_system_prompt.push('\n');
+    for directive in directives {
+        final_system_prompt.push_str("- ");
+        final_system_prompt.push_str(&directive);
+        final_system_prompt.push('\n');
+    }
+}
 
 fn split_runtime_context_section(prompt: &str) -> Option<(String, String)> {
     let marker = format!("\n{RUNTIME_CONTEXT_SECTION_HEADER}\n");
-    let split_at = prompt.rfind(&marker)?;
-    let (stable_prefix, runtime_section) = prompt.split_at(split_at);
-    let runtime_section = runtime_section.trim_start_matches('\n').trim().to_string();
-    if runtime_section.is_empty() || !runtime_section.contains("- turns:") {
+    let (stable_prefix, runtime_section) = if let Some(split_at) = prompt.rfind(&marker) {
+        let (stable_prefix, runtime_section) = prompt.split_at(split_at);
+        (stable_prefix, runtime_section.trim_start_matches('\n'))
+    } else if prompt.starts_with(&format!("{RUNTIME_CONTEXT_SECTION_HEADER}\n")) {
+        ("", prompt)
+    } else {
+        return None;
+    };
+    let runtime_section = runtime_section.trim().to_string();
+    if runtime_section.is_empty() {
         return None;
     }
     Some((stable_prefix.trim().to_string(), runtime_section))
@@ -58,6 +102,8 @@ pub(crate) fn build_system_prompt(
             final_system_prompt.push_str("\nBefore providing your final answer, think through the problem in <thinking> tags. Then, provide your final response in <answer> tags.");
         }
     }
+
+    append_history_system_directives(&mut final_system_prompt, request);
 
     if final_system_prompt.is_empty() {
         return SystemPromptBuildResult {
