@@ -60,9 +60,9 @@ pub fn runtime_debug_log_path() -> Option<PathBuf> {
     with_runtime_debug_context(|context| context.debug_log_path.clone())
 }
 
-pub fn set_runtime_debug_log_path(path: PathBuf) {
+pub fn set_runtime_debug_log_path(path: impl Into<PathBuf>) {
     with_runtime_debug_context(|context| {
-        context.debug_log_path = Some(path);
+        context.debug_log_path = Some(path.into());
     });
 }
 

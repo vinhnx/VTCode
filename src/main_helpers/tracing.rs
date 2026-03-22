@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use std::path::Path;
 use vtcode_core::utils::error_log_collector::ErrorLogCollectorLayer;
 use vtcode_core::utils::session_debug::{
     DEFAULT_MAX_DEBUG_LOG_AGE_DAYS, DEFAULT_MAX_DEBUG_LOG_SIZE_MB, current_debug_session_id,
@@ -18,14 +19,11 @@ fn maybe_tui_log_layer() -> Option<vtcode_tui::log::TuiLogLayer> {
 /// Build the common tracing stack: buffered file writer + TUI layer + error collector.
 ///
 /// Returns `Ok(())` on success, or an error if subscriber init fails.
-fn install_tracing_stack(
-    log_file: std::path::PathBuf,
-    env_filter: tracing_subscriber::EnvFilter,
-) -> Result<()> {
+fn install_tracing_stack(log_file: &Path, env_filter: tracing_subscriber::EnvFilter) -> Result<()> {
     use tracing_subscriber::{fmt::format::FmtSpan, prelude::*};
 
-    set_runtime_debug_log_path(log_file.clone());
-    let writer = FlushableWriter::open(&log_file)
+    set_runtime_debug_log_path(log_file);
+    let writer = FlushableWriter::open(log_file)
         .with_context(|| format!("Failed to open trace log: {}", log_file.display()))?;
 
     let fmt_layer = tracing_subscriber::fmt::layer()
@@ -53,7 +51,7 @@ pub(crate) async fn initialize_tracing() -> Result<bool> {
             DEFAULT_MAX_DEBUG_LOG_AGE_DAYS,
         )?;
 
-        if let Err(err) = install_tracing_stack(log_file, env_filter) {
+        if let Err(err) = install_tracing_stack(&log_file, env_filter) {
             tracing::warn!(error = %err, "tracing already initialized; skipping env tracing setup");
         }
 
@@ -107,7 +105,7 @@ pub(crate) fn initialize_tracing_from_config(
         debug_cfg.max_debug_log_age_days,
     )?;
 
-    match install_tracing_stack(log_file.clone(), env_filter) {
+    match install_tracing_stack(&log_file, env_filter) {
         Ok(()) => {
             tracing::info!(
                 "Debug tracing enabled: targets={}, level={}, log_file={}",
