@@ -826,26 +826,18 @@ pub(crate) fn collect_tool_references_from_tool_search_output(
             }
         }
         Value::Object(object) => {
-            let has_nested_tools = object.get("tools").and_then(Value::as_array);
-            if let Some(tools) = has_nested_tools {
+            if let Some(tools) = object.get("tools").and_then(Value::as_array) {
                 for tool in tools {
                     collect_tool_references_from_tool_search_output(tool, tool_references);
                 }
-            } else {
-                if let Some(tool_name) = object.get("tool_name").and_then(Value::as_str) {
-                    push_unique_tool_reference(tool_references, tool_name);
-                } else if let Some(function) = object.get("function").and_then(Value::as_object)
-                    && let Some(tool_name) = function.get("name").and_then(Value::as_str)
-                {
-                    push_unique_tool_reference(tool_references, tool_name);
-                } else if let Some(tool_name) = object.get("name").and_then(Value::as_str) {
-                    push_unique_tool_reference(tool_references, tool_name);
-                } else {
-                    match object.get("type").and_then(Value::as_str) {
-                        Some("function") | Some("tool") | Some("function_tool") => {}
-                        _ => {}
-                    }
-                }
+            } else if let Some(tool_name) = object.get("tool_name").and_then(Value::as_str) {
+                push_unique_tool_reference(tool_references, tool_name);
+            } else if let Some(function) = object.get("function").and_then(Value::as_object)
+                && let Some(tool_name) = function.get("name").and_then(Value::as_str)
+            {
+                push_unique_tool_reference(tool_references, tool_name);
+            } else if let Some(tool_name) = object.get("name").and_then(Value::as_str) {
+                push_unique_tool_reference(tool_references, tool_name);
             }
 
             if let Some(tool_refs) = object.get("tool_references").and_then(Value::as_array) {

@@ -1,4 +1,3 @@
-use assert_cmd::Command;
 use predicates::str::contains;
 use tempfile::tempdir;
 
@@ -6,8 +5,7 @@ use tempfile::tempdir;
 fn pods_list_dispatches_through_the_binary() {
     let home = tempdir().expect("create temp home");
 
-    Command::cargo_bin("vtcode")
-        .expect("binary exists")
+    assert_cmd::cargo::cargo_bin_cmd!("vtcode")
         .env("HOME", home.path())
         .args(["pods", "list"])
         .assert()

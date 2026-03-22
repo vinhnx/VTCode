@@ -15,7 +15,7 @@ use crate::agent::runloop::unified::turn::compaction::build_server_compaction_co
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
 use crate::agent::runloop::unified::turn::turn_helpers::supports_responses_chaining;
 
-use super::metrics::emit_tool_catalog_cache_metrics;
+use super::metrics::{ToolCatalogCacheMetrics, emit_tool_catalog_cache_metrics};
 
 pub(super) fn is_openai_prompt_cache_enabled(
     provider_name: &str,
@@ -378,18 +378,20 @@ pub(super) async fn build_turn_request(
     );
     emit_tool_catalog_cache_metrics(
         ctx,
-        step_count,
-        active_model,
-        prompt_output.tool_catalog_cache_hit,
-        turn_snapshot.plan_mode,
-        turn_snapshot.request_user_input_enabled,
-        prompt_output
-            .current_tools
-            .as_ref()
-            .map_or(0, |defs| defs.len()),
-        stable_prefix_hash,
-        tool_catalog_hash,
-        prefix_change_reason,
+        ToolCatalogCacheMetrics {
+            step_count,
+            model: active_model,
+            cache_hit: prompt_output.tool_catalog_cache_hit,
+            plan_mode: turn_snapshot.plan_mode,
+            request_user_input_enabled: turn_snapshot.request_user_input_enabled,
+            available_tools: prompt_output
+                .current_tools
+                .as_ref()
+                .map_or(0, |defs| defs.len()),
+            stable_prefix_hash,
+            tool_catalog_hash,
+            prefix_change_reason,
+        },
     );
     let previous_response_id = if supports_responses_chaining(&turn_snapshot.provider_name) {
         ctx.session_stats

@@ -97,7 +97,7 @@ impl ResolvedModel {
 
     pub fn description(&self) -> Option<Cow<'_, str>> {
         if let Some(catalog) = self.catalog {
-            return (!catalog.description.is_empty()).then(|| Cow::Borrowed(catalog.description));
+            return (!catalog.description.is_empty()).then_some(Cow::Borrowed(catalog.description));
         }
         self.dynamic.as_ref().and_then(|dynamic| {
             dynamic

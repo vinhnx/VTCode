@@ -690,6 +690,10 @@ fn parse_context_size(value: &str) -> Result<u32> {
         .with_context(|| format!("invalid context size '{value}'"))
 }
 
+fn default_command_template() -> String {
+    "vllm serve {{MODEL_ID}} --served-model-name {{NAME}} --port {{PORT}} {{VLLM_ARGS}}".to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -876,8 +880,4 @@ mod tests {
                 .any(|pair| pair == ["--gpu-memory-utilization", "0.90"])
         );
     }
-}
-
-fn default_command_template() -> String {
-    "vllm serve {{MODEL_ID}} --served-model-name {{NAME}} --port {{PORT}} {{VLLM_ARGS}}".to_string()
 }
