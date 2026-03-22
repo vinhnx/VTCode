@@ -8,6 +8,9 @@ pub(super) fn emit_tool_catalog_cache_metrics(
     plan_mode: bool,
     request_user_input_enabled: bool,
     available_tools: usize,
+    stable_prefix_hash: u64,
+    tool_catalog_hash: Option<u64>,
+    prefix_change_reason: &str,
 ) {
     tracing::info!(
         target: "vtcode.turn.metrics",
@@ -20,6 +23,9 @@ pub(super) fn emit_tool_catalog_cache_metrics(
         plan_mode,
         request_user_input_enabled,
         available_tools,
+        stable_prefix_hash,
+        tool_catalog_hash,
+        prefix_change_reason,
         "turn metric"
     );
 
@@ -32,6 +38,9 @@ pub(super) fn emit_tool_catalog_cache_metrics(
         plan_mode: bool,
         request_user_input_enabled: bool,
         available_tools: usize,
+        stable_prefix_hash: u64,
+        tool_catalog_hash: Option<u64>,
+        prefix_change_reason: &'a str,
         ts: i64,
     }
 
@@ -43,6 +52,9 @@ pub(super) fn emit_tool_catalog_cache_metrics(
         plan_mode,
         request_user_input_enabled,
         available_tools,
+        stable_prefix_hash,
+        tool_catalog_hash,
+        prefix_change_reason,
         ts: chrono::Utc::now().timestamp(),
     });
 }

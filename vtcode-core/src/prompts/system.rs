@@ -279,7 +279,7 @@ fn render_environment_addenda(
             lines.push("- Sources: prefer MCP before external fetches when available.".to_string());
         }
 
-        if cfg.agent.include_temporal_context {
+        if cfg.agent.include_temporal_context && !cfg.prompt_cache.cache_friendly_prompt_shaping {
             lines.push(
                 generate_temporal_context(cfg.agent.temporal_context_use_utc)
                     .trim()
@@ -413,6 +413,9 @@ fn cache_key(project_root: &Path, vtcode_config: Option<&crate::config::VTCodeCo
         // Config fields that affect prompt generation
         cfg.agent.include_working_directory.hash(&mut hasher);
         cfg.agent.include_temporal_context.hash(&mut hasher);
+        cfg.prompt_cache
+            .cache_friendly_prompt_shaping
+            .hash(&mut hasher);
         cfg.agent
             .include_structured_reasoning_tags
             .hash(&mut hasher);
@@ -995,6 +998,7 @@ mod tests {
     async fn test_temporal_context_inclusion() {
         let mut config = VTCodeConfig::default();
         config.agent.include_temporal_context = true;
+        config.prompt_cache.cache_friendly_prompt_shaping = false;
         config.agent.temporal_context_use_utc = false; // Local time
 
         let result =
@@ -1018,6 +1022,7 @@ mod tests {
     async fn test_temporal_context_utc_format() {
         let mut config = VTCodeConfig::default();
         config.agent.include_temporal_context = true;
+        config.prompt_cache.cache_friendly_prompt_shaping = false;
         config.agent.temporal_context_use_utc = true; // UTC format
 
         let result =
@@ -1044,6 +1049,21 @@ mod tests {
         assert!(
             !result.contains("Time:"),
             "Should not include temporal context when disabled"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_cache_friendly_temporal_context_stays_out_of_base_prompt() {
+        let mut config = VTCodeConfig::default();
+        config.agent.include_temporal_context = true;
+        config.prompt_cache.cache_friendly_prompt_shaping = true;
+
+        let result =
+            compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
+
+        assert!(
+            !result.contains("Time:"),
+            "Stable system prompt should omit temporal context when cache-friendly shaping is enabled"
         );
     }
 

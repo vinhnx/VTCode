@@ -365,6 +365,7 @@ pub async fn prepare_archived_session(
     intent: ArchivedSessionIntent,
     reserved_identifier: Option<String>,
 ) -> Result<PreparedArchivedSession> {
+    let metadata = preserve_prompt_cache_lineage_if_compatible(metadata, &source.snapshot.metadata);
     let mut bootstrap = ThreadBootstrap::from_listing(source.clone());
     bootstrap.metadata = Some(metadata.clone());
 
@@ -396,6 +397,19 @@ pub async fn prepare_archived_session(
         thread_id,
         archive,
     })
+}
+
+fn preserve_prompt_cache_lineage_if_compatible(
+    mut metadata: SessionArchiveMetadata,
+    source: &SessionArchiveMetadata,
+) -> SessionArchiveMetadata {
+    let is_compatible = metadata.workspace_path == source.workspace_path
+        && metadata.provider == source.provider
+        && metadata.model == source.model;
+    if is_compatible && let Some(lineage_id) = source.prompt_cache_lineage_id.as_ref() {
+        metadata.prompt_cache_lineage_id = Some(lineage_id.clone());
+    }
+    metadata
 }
 
 pub fn messages_from_session_listing(listing: &SessionListing) -> Vec<Message> {
@@ -445,6 +459,7 @@ pub fn build_thread_archive_metadata(
         theme,
         reasoning_effort,
     )
+    .ensure_prompt_cache_lineage_id()
 }
 
 #[cfg(test)]
@@ -709,6 +724,130 @@ mod tests {
                 .ends_with(Path::new("session-forked.json"))
         );
         assert_eq!(prepared.bootstrap.messages[0].content.as_text(), "hello");
+    }
+
+    #[test]
+    fn prepare_archived_session_preserves_prompt_cache_lineage_when_compatible() {
+        let _guard = SESSION_DIR_TEST_GUARD
+            .lock()
+            .expect("session dir test guard");
+        let tmp = TempDir::new().expect("temp dir");
+        override_sessions_dir_for_tests(tmp.path());
+
+        let listing = SessionListing {
+            path: tmp.path().join("session-source.json"),
+            snapshot: SessionSnapshot {
+                metadata: SessionArchiveMetadata::new(
+                    "ws",
+                    tmp.path().join("workspace").display().to_string(),
+                    "model",
+                    "provider",
+                    "theme",
+                    "medium",
+                )
+                .with_prompt_cache_lineage_id("lineage-source"),
+                started_at: Utc::now(),
+                ended_at: Utc::now(),
+                total_messages: 1,
+                distinct_tools: Vec::new(),
+                transcript: Vec::new(),
+                messages: vec![SessionMessage::new(MessageRole::User, "hello")],
+                progress: None,
+                error_logs: Vec::new(),
+            },
+        };
+
+        let runtime = tokio::runtime::Runtime::new().expect("runtime");
+        let prepared = runtime
+            .block_on(prepare_archived_session(
+                listing,
+                tmp.path().join("workspace"),
+                SessionArchiveMetadata::new(
+                    "ws",
+                    tmp.path().join("workspace").display().to_string(),
+                    "model",
+                    "provider",
+                    "theme",
+                    "medium",
+                )
+                .with_prompt_cache_lineage_id("lineage-new"),
+                ArchivedSessionIntent::ResumeInPlace,
+                None,
+            ))
+            .expect("prepare resume");
+
+        clear_sessions_dir_override_for_tests();
+
+        assert_eq!(
+            prepared
+                .bootstrap
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.prompt_cache_lineage_id.as_deref()),
+            Some("lineage-source")
+        );
+    }
+
+    #[test]
+    fn prepare_archived_session_resets_prompt_cache_lineage_on_model_change() {
+        let _guard = SESSION_DIR_TEST_GUARD
+            .lock()
+            .expect("session dir test guard");
+        let tmp = TempDir::new().expect("temp dir");
+        override_sessions_dir_for_tests(tmp.path());
+
+        let listing = SessionListing {
+            path: tmp.path().join("session-source.json"),
+            snapshot: SessionSnapshot {
+                metadata: SessionArchiveMetadata::new(
+                    "ws",
+                    tmp.path().join("workspace").display().to_string(),
+                    "model-a",
+                    "provider",
+                    "theme",
+                    "medium",
+                )
+                .with_prompt_cache_lineage_id("lineage-source"),
+                started_at: Utc::now(),
+                ended_at: Utc::now(),
+                total_messages: 1,
+                distinct_tools: Vec::new(),
+                transcript: Vec::new(),
+                messages: vec![SessionMessage::new(MessageRole::User, "hello")],
+                progress: None,
+                error_logs: Vec::new(),
+            },
+        };
+
+        let runtime = tokio::runtime::Runtime::new().expect("runtime");
+        let prepared = runtime
+            .block_on(prepare_archived_session(
+                listing,
+                tmp.path().join("workspace"),
+                SessionArchiveMetadata::new(
+                    "ws",
+                    tmp.path().join("workspace").display().to_string(),
+                    "model-b",
+                    "provider",
+                    "theme",
+                    "medium",
+                )
+                .with_prompt_cache_lineage_id("lineage-new"),
+                ArchivedSessionIntent::ResumeInPlace,
+                None,
+            ))
+            .expect("prepare resume");
+
+        clear_sessions_dir_override_for_tests();
+
+        assert_eq!(
+            prepared
+                .bootstrap
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.prompt_cache_lineage_id.as_deref()),
+            Some("lineage-new")
+        );
     }
 
     #[test]

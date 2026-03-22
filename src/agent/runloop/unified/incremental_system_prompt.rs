@@ -7,6 +7,15 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+fn append_temporal_context_runtime(prompt: &mut String, use_utc: bool) {
+    use std::fmt::Write;
+
+    let time_line = vtcode_core::prompts::generate_temporal_context(use_utc)
+        .trim()
+        .replacen("Current date and time", "- Time", 1);
+    let _ = writeln!(prompt, "{}", time_line);
+}
+
 fn append_plan_mode_notice(prompt: &mut String) {
     if prompt.contains(vtcode_core::prompts::system::PLAN_MODE_READ_ONLY_HEADER) {
         return;
@@ -223,10 +232,6 @@ impl IncrementalSystemPrompt {
             );
         }
 
-        if let Some(editor_context_block) = context.editor_context_block.as_deref() {
-            let _ = writeln!(prompt, "\n{}", editor_context_block);
-        }
-
         let cache_friendly_mode = context.prompt_cache_shaping_mode.is_enabled();
         let mut runtime_tail = String::new();
         if cache_friendly_mode {
@@ -235,8 +240,12 @@ impl IncrementalSystemPrompt {
                 || context.conversation_length > 0
                 || context.tool_usage_count > 0
                 || context.token_usage_ratio > 0.0;
-            if has_runtime_context || context.full_auto || context.plan_mode {
+            let has_editor_context = context.editor_context_block.is_some();
+            if has_runtime_context || context.full_auto || context.plan_mode || has_editor_context {
                 let _ = writeln!(runtime_tail, "\n[Runtime Context]");
+                if let Some(editor_context_block) = context.editor_context_block.as_deref() {
+                    let _ = writeln!(runtime_tail, "{}", editor_context_block);
+                }
                 if retry_attempts > 0 {
                     let _ = writeln!(
                         runtime_tail,
@@ -258,6 +267,12 @@ impl IncrementalSystemPrompt {
                 if has_runtime_context {
                     append_context_metrics(&mut runtime_tail, context);
                 }
+                if agent_config.is_some_and(|cfg| cfg.include_temporal_context) {
+                    append_temporal_context_runtime(
+                        &mut runtime_tail,
+                        agent_config.is_some_and(|cfg| cfg.temporal_context_use_utc),
+                    );
+                }
                 if context.full_auto {
                     append_full_auto_notice(&mut runtime_tail, context.plan_mode);
                 }
@@ -266,6 +281,9 @@ impl IncrementalSystemPrompt {
                 }
             }
         } else {
+            if let Some(editor_context_block) = context.editor_context_block.as_deref() {
+                let _ = writeln!(prompt, "\n{}", editor_context_block);
+            }
             if retry_attempts > 0 {
                 let _ = writeln!(
                     runtime_tail,

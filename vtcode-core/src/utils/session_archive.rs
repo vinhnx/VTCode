@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 use std::process;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use uuid::Uuid;
 
 const SESSION_FILE_PREFIX: &str = "session";
 const SESSION_FILE_EXTENSION: &str = "json";
@@ -149,6 +150,8 @@ pub struct SessionArchiveMetadata {
     /// Names of skills loaded in this session
     #[serde(default)]
     pub loaded_skills: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt_cache_lineage_id: Option<String>,
 }
 
 impl SessionArchiveMetadata {
@@ -169,6 +172,7 @@ impl SessionArchiveMetadata {
             reasoning_effort: reasoning_effort.into(),
             debug_log_path: None,
             loaded_skills: Vec::new(),
+            prompt_cache_lineage_id: None,
         }
     }
 
@@ -181,6 +185,18 @@ impl SessionArchiveMetadata {
     /// Set debug log path associated with this archive.
     pub fn with_debug_log_path(mut self, path: Option<String>) -> Self {
         self.debug_log_path = path;
+        self
+    }
+
+    pub fn with_prompt_cache_lineage_id(mut self, lineage_id: impl Into<String>) -> Self {
+        self.prompt_cache_lineage_id = Some(lineage_id.into());
+        self
+    }
+
+    pub fn ensure_prompt_cache_lineage_id(mut self) -> Self {
+        if self.prompt_cache_lineage_id.is_none() {
+            self.prompt_cache_lineage_id = Some(format!("lineage-{}", Uuid::new_v4()));
+        }
         self
     }
 }
@@ -873,6 +889,7 @@ async fn create_fork_archive(
         reasoning_effort: source_snapshot.metadata.reasoning_effort.clone(),
         debug_log_path: source_snapshot.metadata.debug_log_path.clone(),
         loaded_skills: source_snapshot.metadata.loaded_skills.clone(),
+        prompt_cache_lineage_id: source_snapshot.metadata.prompt_cache_lineage_id.clone(),
     };
 
     let path = if let Some(session_identifier) = explicit_identifier {

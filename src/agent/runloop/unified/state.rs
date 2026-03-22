@@ -62,6 +62,10 @@ pub(crate) struct SessionStats {
     previous_response_id: Option<String>,
     previous_response_provider: Option<String>,
     previous_response_model: Option<String>,
+    prompt_cache_lineage_id: Option<String>,
+    last_prompt_cache_model: Option<String>,
+    last_stable_prefix_hash: Option<u64>,
+    last_tool_catalog_hash: Option<u64>,
     recent_touched_files: VecDeque<String>,
 }
 
@@ -257,6 +261,41 @@ impl SessionStats {
             return self.previous_response_id.clone();
         }
         None
+    }
+
+    pub(crate) fn set_prompt_cache_lineage_id(&mut self, lineage_id: Option<String>) {
+        self.prompt_cache_lineage_id = lineage_id;
+    }
+
+    pub(crate) fn prompt_cache_lineage_id(&self) -> Option<&str> {
+        self.prompt_cache_lineage_id.as_deref()
+    }
+
+    pub(crate) fn record_prompt_cache_fingerprint(
+        &mut self,
+        model: &str,
+        stable_prefix_hash: u64,
+        tool_catalog_hash: Option<u64>,
+    ) -> &'static str {
+        let reason = if self.last_prompt_cache_model.as_deref() != Some(model) {
+            "model"
+        } else {
+            match (
+                self.last_stable_prefix_hash == Some(stable_prefix_hash),
+                self.last_tool_catalog_hash == tool_catalog_hash,
+            ) {
+                (true, true) => "unchanged",
+                (false, true) => "system_prompt",
+                (true, false) => "tool_catalog",
+                (false, false) => "system_prompt+tool_catalog",
+            }
+        };
+
+        self.last_prompt_cache_model = Some(model.to_string());
+        self.last_stable_prefix_hash = Some(stable_prefix_hash);
+        self.last_tool_catalog_hash = tool_catalog_hash;
+
+        reason
     }
 
     pub(crate) fn set_previous_response_chain(
@@ -621,6 +660,36 @@ mod tests {
             true,
             Some(WorkspaceTrustLevel::ToolsPolicy),
         ));
+    }
+
+    #[test]
+    fn prompt_cache_fingerprint_reports_expected_change_reasons() {
+        let mut stats = SessionStats::default();
+
+        assert_eq!(
+            stats.record_prompt_cache_fingerprint("gpt-5", 11, Some(22)),
+            "model"
+        );
+        assert_eq!(
+            stats.record_prompt_cache_fingerprint("gpt-5", 11, Some(22)),
+            "unchanged"
+        );
+        assert_eq!(
+            stats.record_prompt_cache_fingerprint("gpt-5", 33, Some(22)),
+            "system_prompt"
+        );
+        assert_eq!(
+            stats.record_prompt_cache_fingerprint("gpt-5", 33, Some(44)),
+            "tool_catalog"
+        );
+        assert_eq!(
+            stats.record_prompt_cache_fingerprint("gpt-5", 55, Some(66)),
+            "system_prompt+tool_catalog"
+        );
+        assert_eq!(
+            stats.record_prompt_cache_fingerprint("gpt-5-mini", 55, Some(66)),
+            "model"
+        );
     }
 
     #[test]

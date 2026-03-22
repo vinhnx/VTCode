@@ -894,23 +894,49 @@ mod tests {
 
     #[test]
     fn openai_prompt_cache_key_uses_stable_session_identifier() {
-        let run_id = "run-abc-123";
-        let first = build_openai_prompt_cache_key(true, &OpenAIPromptCacheKeyMode::Session, run_id);
-        let second =
-            build_openai_prompt_cache_key(true, &OpenAIPromptCacheKeyMode::Session, run_id);
+        let lineage_id = "lineage-abc-123";
+        let first = build_openai_prompt_cache_key(
+            true,
+            &OpenAIPromptCacheKeyMode::Session,
+            Some(lineage_id),
+            "gpt-5",
+        );
+        let second = build_openai_prompt_cache_key(
+            true,
+            &OpenAIPromptCacheKeyMode::Session,
+            Some(lineage_id),
+            "gpt-5",
+        );
 
-        assert_eq!(first, Some("vtcode:openai:run-abc-123".to_string()));
+        assert_eq!(
+            first,
+            Some("vtcode:openai:lineage-abc-123:gpt-5".to_string())
+        );
         assert_eq!(first, second);
     }
 
     #[test]
     fn openai_prompt_cache_key_honors_off_mode_or_disabled_cache() {
         assert_eq!(
-            build_openai_prompt_cache_key(true, &OpenAIPromptCacheKeyMode::Off, "run-1"),
+            build_openai_prompt_cache_key(
+                true,
+                &OpenAIPromptCacheKeyMode::Off,
+                Some("lineage-1"),
+                "gpt-5",
+            ),
             None
         );
         assert_eq!(
-            build_openai_prompt_cache_key(false, &OpenAIPromptCacheKeyMode::Session, "run-1"),
+            build_openai_prompt_cache_key(
+                false,
+                &OpenAIPromptCacheKeyMode::Session,
+                Some("lineage-1"),
+                "gpt-5",
+            ),
+            None
+        );
+        assert_eq!(
+            build_openai_prompt_cache_key(true, &OpenAIPromptCacheKeyMode::Session, None, "gpt-5",),
             None
         );
     }

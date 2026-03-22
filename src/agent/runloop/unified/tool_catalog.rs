@@ -313,7 +313,7 @@ mod tests {
     }
 
     #[test]
-    fn filter_tools_for_mode_hides_only_plan_specific_tools_in_edit_mode() {
+    fn filter_tools_for_mode_keeps_plan_tracker_visible_in_edit_mode() {
         let tools = Arc::new(vec![
             function_tool(tool_names::UNIFIED_SEARCH),
             function_tool(tool_names::PLAN_TASK_TRACKER),
@@ -331,7 +331,7 @@ mod tests {
         assert!(names.contains(&tool_names::UNIFIED_SEARCH));
         assert!(names.contains(&tool_names::TASK_TRACKER));
         assert!(names.contains(&tool_names::REQUEST_USER_INPUT));
-        assert!(!names.contains(&tool_names::PLAN_TASK_TRACKER));
+        assert!(names.contains(&tool_names::PLAN_TASK_TRACKER));
     }
 
     #[test]
@@ -354,6 +354,25 @@ mod tests {
         assert!(names.contains(&tool_names::PLAN_TASK_TRACKER));
         assert!(names.contains(&tool_names::REQUEST_USER_INPUT));
         assert!(names.contains(&tool_names::TASK_TRACKER));
+    }
+
+    #[test]
+    fn serialized_tool_catalog_is_identical_between_edit_and_plan_mode() {
+        let tools = Arc::new(vec![
+            function_tool(tool_names::UNIFIED_SEARCH),
+            function_tool(tool_names::PLAN_TASK_TRACKER),
+            function_tool(tool_names::REQUEST_USER_INPUT),
+            function_tool(tool_names::TASK_TRACKER),
+        ]);
+
+        let edit_mode =
+            filter_tools_for_mode(Some(Arc::clone(&tools)), false, true).expect("edit-mode tools");
+        let plan_mode = filter_tools_for_mode(Some(tools), true, true).expect("plan-mode tools");
+
+        assert_eq!(
+            serde_json::to_string(edit_mode.as_ref()).expect("serialize edit-mode tools"),
+            serde_json::to_string(plan_mode.as_ref()).expect("serialize plan-mode tools")
+        );
     }
 
     #[test]
