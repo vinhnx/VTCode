@@ -12,6 +12,23 @@ use vtcode_config::auth::OpenAIChatGptAuthHandle;
 
 type ProviderFactory = Box<dyn Fn(ProviderConfig) -> Box<dyn LLMProvider> + Send + Sync>;
 
+const BUILTIN_PROVIDER_KEYS: &[&str] = &[
+    "openai",
+    "anthropic",
+    "gemini",
+    "copilot",
+    "deepseek",
+    "openrouter",
+    "ollama",
+    "lmstudio",
+    "moonshot",
+    "zai",
+    "minimax",
+    "huggingface",
+    "litellm",
+    "openresponses",
+];
+
 /// LLM provider factory and registry
 pub struct LLMFactory {
     providers: HashMap<String, ProviderFactory>,
@@ -213,31 +230,10 @@ pub fn register_custom_providers(custom_providers: &[vtcode_config::core::Custom
         return;
     };
 
-    // Collect built-in provider keys to avoid removing them
-    let builtins: hashbrown::HashSet<String> = [
-        "openai",
-        "anthropic",
-        "gemini",
-        "copilot",
-        "deepseek",
-        "openrouter",
-        "ollama",
-        "lmstudio",
-        "moonshot",
-        "zai",
-        "minimax",
-        "huggingface",
-        "litellm",
-        "openresponses",
-    ]
-    .iter()
-    .map(|s| s.to_string())
-    .collect();
-
     // Remove previously registered custom providers (anything not built-in)
     let registered: Vec<String> = factory.list_providers();
     for key in &registered {
-        if !builtins.contains(key) {
+        if !BUILTIN_PROVIDER_KEYS.contains(&key.as_str()) {
             factory.remove_provider(key);
         }
     }

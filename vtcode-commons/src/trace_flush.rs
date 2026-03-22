@@ -7,13 +7,11 @@
 
 use std::sync::OnceLock;
 
-type FlushFn = Box<dyn Fn() + Send + Sync>;
-
-static FLUSH_HOOK: OnceLock<FlushFn> = OnceLock::new();
+static FLUSH_HOOK: OnceLock<fn()> = OnceLock::new();
 
 /// Register a flush callback. Called once during tracing initialization.
-pub fn register_trace_flush_hook(f: impl Fn() + Send + Sync + 'static) {
-    let _ = FLUSH_HOOK.set(Box::new(f));
+pub fn register_trace_flush_hook(f: fn()) {
+    let _ = FLUSH_HOOK.set(f);
 }
 
 /// Flush the global trace log writer.

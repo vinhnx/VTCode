@@ -481,7 +481,7 @@ mod tests {
 
         configure_runtime_debug_context("debug-session".to_string(), Some("session-1".to_string()));
         let path = PathBuf::from("/tmp/debug-session.log");
-        set_runtime_debug_log_path(path.clone());
+        set_runtime_debug_log_path(&path);
         let model_id = ModelId::from_str("gpt-5").expect("model id");
         let metadata = build_exec_archive_metadata(Path::new("."), &model_id, &vt_cfg, &config);
 

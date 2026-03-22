@@ -7,7 +7,7 @@
 use std::fs::{File, OpenOptions};
 use std::io::{BufWriter, Write};
 use std::path::Path;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
 use anyhow::{Context, Result};
 
@@ -49,31 +49,29 @@ impl FlushableWriter {
 
     /// Flush the internal buffer to disk.
     pub fn flush(&self) {
-        if let Ok(mut guard) = self.inner.lock() {
-            let _ = guard.flush();
-        }
+        let _ = self.flush_locked();
+    }
+
+    fn lock_writer(&self) -> std::io::Result<MutexGuard<'_, BufWriter<File>>> {
+        self.inner
+            .lock()
+            .map_err(|_| std::io::Error::other("trace writer lock poisoned"))
+    }
+
+    fn flush_locked(&self) -> std::io::Result<()> {
+        let mut guard = self.lock_writer()?;
+        guard.flush()
     }
 }
 
 impl Write for FlushableWriter {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        match self.inner.lock() {
-            Ok(mut guard) => guard.write(buf),
-            Err(_) => Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "trace writer lock poisoned",
-            )),
-        }
+        let mut guard = self.lock_writer()?;
+        guard.write(buf)
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        match self.inner.lock() {
-            Ok(mut guard) => guard.flush(),
-            Err(_) => Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "trace writer lock poisoned",
-            )),
-        }
+        self.flush_locked()
     }
 }
 
