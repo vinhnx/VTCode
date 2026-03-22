@@ -42,6 +42,7 @@ pub mod unicode;
 pub mod utils;
 pub mod validation;
 pub mod vtcodegitignore;
+pub mod thread_safety;
 pub use colors::{blend_colors, color_from_hex, contrasting_color, is_light_color, style};
 pub use error_category::{
     BackoffStrategy, ErrorCategory, Retryability, classify_anyhow_error, classify_error_message,

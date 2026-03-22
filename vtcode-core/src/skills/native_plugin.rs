@@ -99,6 +99,10 @@ pub struct PluginMetadata {
     pub when_not_to_use: Option<String>,
     /// Allowed tools for this plugin
     pub allowed_tools: Option<Vec<String>>,
+    /// Whether the plugin is thread-safe (Sync).
+    /// If false, VT Code serializes all calls to this plugin instance.
+    #[serde(default)]
+    pub thread_safe: bool,
 }
 
 /// C-compatible plugin metadata for FFI
@@ -140,8 +144,10 @@ pub struct NativePlugin {
     execute_fn: PluginExecuteFn,
     /// Optional plugin-owned deallocator for returned strings
     free_string_fn: Option<PluginFreeStringFn>,
-    /// Serialize ABI v1 plugin calls until per-plugin concurrency is explicit.
+    /// Serialize calls if the plugin is not reentrant.
     execution_lock: Mutex<()>,
+    /// Optimized thread-safety flag from metadata.
+    thread_safe: bool,
 }
 
 fn ensure_non_null_c_string_ptr(
@@ -267,11 +273,12 @@ impl NativePlugin {
 
         Ok(Self {
             _library: library,
-            metadata,
+            metadata: metadata.clone(), // Clone metadata to store it
             path,
             execute_fn: execute_fn_ptr,
             free_string_fn,
             execution_lock: Mutex::new(()),
+            thread_safe: metadata.thread_safe, // Store the thread_safe flag
         })
     }
 
@@ -279,20 +286,35 @@ impl NativePlugin {
     pub fn execute(&self, ctx: &PluginContext) -> Result<PluginResult> {
         let input_json =
             serde_json::to_string(ctx).context("Failed to serialize plugin context")?;
+        let input_cstr = CString::new(input_json).context("Plugin context contains internal null bytes")?;
 
-        let input_cstr =
-            CString::new(input_json).context("Failed to create C string from input JSON")?;
+        // Serialization logic from Antithesis Part 2 (Challenge 2):
+        // If the plugin is not explicitly marked as thread-safe, we must serialize
+        // access through the execution lock to prevent unsynchronized shared access.
+        if !self.thread_safe {
+            let _execution_guard = self
+                .execution_lock
+                .lock()
+                .map_err(|_| anyhow!("native plugin execution lock poisoned"))?;
 
-        let _execution_guard = self
-            .execution_lock
-            .lock()
-            .map_err(|_| anyhow!("native plugin execution lock poisoned"))?;
+            self.execute_ffi(input_cstr)
+        } else {
+            // Reentrant plugins can skip the lock for multi-threaded performance.
+            self.execute_ffi(input_cstr)
+        }
+    }
 
+    /// Internal FFI bridge for plugin execution.
+    ///
+    /// # Safety
+    ///
+    /// This function performs the raw FFI call. Callers must ensure that
+    /// if the plugin is not thread-safe, it is called under a lock.
+    fn execute_ffi(&self, input_cstr: CString) -> Result<PluginResult> {
         // SAFETY:
         // 1. The `input_cstr` pointer is valid for the duration of this call.
         // 2. The `execute_fn` obeys the plugin ABI and expects a nul-terminated string.
-        // 3. VT Code holds `execution_lock`, so this plugin instance will not observe
-        //    overlapping ABI v1 calls from multiple threads.
+        // 3. VT Code either holds `execution_lock` or the plugin is explicitly reentrant (thread_safe: true).
         let result_ptr = ensure_non_null_c_string_ptr(
             unsafe { (self.execute_fn)(input_cstr.as_ptr()) },
             "Plugin execute function",
@@ -885,11 +907,13 @@ mod tests {
                 when_to_use: None,
                 when_not_to_use: None,
                 allowed_tools: None,
+                thread_safe: false,
             },
             path: PathBuf::from("/tmp/serialized-plugin"),
             execute_fn: test_execute_with_delay,
             free_string_fn: Some(test_free_string),
             execution_lock: Mutex::new(()),
+            thread_safe: false,
         });
         let ctx = PluginContext {
             input: HashMap::new(),
@@ -911,5 +935,56 @@ mod tests {
         }
 
         assert_eq!(TEST_EXECUTE_MAX_CONCURRENCY.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn test_native_plugin_allows_parallel_execution() {
+        TEST_EXECUTE_ACTIVE_CALLS.store(0, Ordering::SeqCst);
+        TEST_EXECUTE_MAX_CONCURRENCY.store(0, Ordering::SeqCst);
+
+        let plugin = Arc::new(NativePlugin {
+            _library: current_process_library(),
+            metadata: PluginMetadata {
+                name: "parallel".to_string(),
+                description: "reentrant test plugin".to_string(),
+                version: "1.0.0".to_string(),
+                author: None,
+                abi_version: PLUGIN_ABI_VERSION,
+                when_to_use: None,
+                when_not_to_use: None,
+                allowed_tools: None,
+                thread_safe: true, // OPT-IN to parallel execution
+            },
+            path: PathBuf::from("/tmp/parallel-plugin"),
+            execute_fn: test_execute_with_delay,
+            free_string_fn: Some(test_free_string),
+            execution_lock: Mutex::new(()),
+            thread_safe: true,
+        });
+
+        let ctx = PluginContext {
+            input: HashMap::new(),
+            workspace_root: None,
+            config: HashMap::new(),
+        };
+
+        let num_threads = 4;
+        let handles = (0..num_threads)
+            .map(|_| {
+                let plugin = Arc::clone(&plugin);
+                let ctx = ctx.clone();
+                std::thread::spawn(move || {
+                    plugin.execute(&ctx).expect("parallel plugin execution")
+                })
+            })
+            .collect::<Vec<_>>();
+
+        for handle in handles {
+            let result = handle.join().expect("thread join");
+            assert!(result.success);
+        }
+
+        // With thread_safe: true, we expect max concurrency > 1
+        assert!(TEST_EXECUTE_MAX_CONCURRENCY.load(Ordering::SeqCst) > 1);
     }
 }
