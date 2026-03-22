@@ -242,6 +242,42 @@ pub struct OllamaProvider {
 }
 
 impl OllamaProvider {
+    fn merged_system_prompt(request: &LLMRequest) -> Option<String> {
+        const HISTORY_DIRECTIVES_SECTION_HEADER: &str = "[History Directives]";
+
+        let mut system_prompt = request
+            .system_prompt
+            .as_ref()
+            .map(|prompt| prompt.trim().to_string())
+            .filter(|prompt| !prompt.is_empty())
+            .unwrap_or_default();
+
+        let directives = request
+            .messages
+            .iter()
+            .filter(|message| message.role == MessageRole::System)
+            .map(|message| message.content.as_text().trim().to_string())
+            .filter(|text| !text.is_empty())
+            .collect::<Vec<_>>();
+
+        if directives.is_empty() {
+            return (!system_prompt.is_empty()).then_some(system_prompt);
+        }
+
+        if !system_prompt.is_empty() {
+            system_prompt.push('\n');
+        }
+        system_prompt.push_str(HISTORY_DIRECTIVES_SECTION_HEADER);
+        system_prompt.push('\n');
+        for directive in directives {
+            system_prompt.push_str("- ");
+            system_prompt.push_str(&directive);
+            system_prompt.push('\n');
+        }
+
+        Some(system_prompt)
+    }
+
     pub fn new(api_key: String) -> Self {
         Self::with_model(api_key, models::ollama::DEFAULT_MODEL.to_string())
     }
@@ -441,12 +477,10 @@ impl OllamaProvider {
         let mut tool_names: HashMap<String, String> = HashMap::new();
         let minimax_tool_followup_compat = Self::minimax_tool_followup_compat_mode(request);
 
-        if let Some(system) = &request.system_prompt
-            && !system.trim().is_empty()
-        {
+        if let Some(system) = Self::merged_system_prompt(request) {
             messages.push(OllamaChatMessage {
                 role: "system".to_string(),
-                content: Some(system.to_string()),
+                content: Some(system),
                 tool_calls: None,
                 tool_call_id: None,
                 tool_name: None,
@@ -463,6 +497,7 @@ impl OllamaProvider {
                 Self::extract_content_and_images(&message.content)
             };
             match message.role {
+                MessageRole::System => continue,
                 MessageRole::Tool => {
                     let tool_name = message
                         .tool_call_id
@@ -1382,6 +1417,88 @@ mod tests {
             Some(tool_call_id.as_str())
         );
         assert_eq!(payload.think, Some(Value::String("low".to_string())));
+    }
+
+    #[test]
+    fn build_payload_hoists_history_system_directives_into_system_prompt() {
+        let provider = test_provider();
+        let request = LLMRequest {
+            model: models::ollama::MINIMAX_M25_CLOUD.to_string(),
+            system_prompt: Some(std::sync::Arc::new(
+                "stable system instructions".to_string(),
+            )),
+            messages: vec![
+                Message::user("explore architecture".to_string()),
+                Message::system(
+                    "Previous turn already completed tool execution. Reuse the latest tool outputs in history instead of rerunning the same exploration.".to_string(),
+                ),
+            ],
+            ..Default::default()
+        };
+
+        let payload = provider.build_payload(&request, false).unwrap();
+        assert_eq!(payload.messages.len(), 2);
+        assert_eq!(payload.messages[0].role, "system");
+        assert!(
+            payload.messages[0]
+                .content
+                .as_deref()
+                .unwrap_or("")
+                .contains("stable system instructions")
+        );
+        assert!(
+            payload.messages[0]
+                .content
+                .as_deref()
+                .unwrap_or("")
+                .contains("[History Directives]")
+        );
+        assert!(
+            payload.messages[0]
+                .content
+                .as_deref()
+                .unwrap_or("")
+                .contains("Previous turn already completed tool execution")
+        );
+        assert_eq!(payload.messages[1].role, "user");
+        assert_eq!(
+            payload.messages[1].content.as_deref(),
+            Some("explore architecture")
+        );
+    }
+
+    #[test]
+    fn build_payload_promotes_history_system_directive_without_base_system_prompt() {
+        let provider = test_provider();
+        let request = LLMRequest {
+            model: models::ollama::MINIMAX_M25_CLOUD.to_string(),
+            messages: vec![
+                Message::system(
+                    "Repeated read-only exploration hit the per-turn family cap. Scheduling a final recovery pass without more tools.".to_string(),
+                ),
+                Message::user("summarize the architecture".to_string()),
+            ],
+            ..Default::default()
+        };
+
+        let payload = provider.build_payload(&request, false).unwrap();
+        assert_eq!(payload.messages.len(), 2);
+        assert_eq!(payload.messages[0].role, "system");
+        assert!(
+            payload.messages[0]
+                .content
+                .as_deref()
+                .unwrap_or("")
+                .contains("[History Directives]")
+        );
+        assert!(
+            payload.messages[0]
+                .content
+                .as_deref()
+                .unwrap_or("")
+                .contains("Repeated read-only exploration hit the per-turn family cap")
+        );
+        assert_eq!(payload.messages[1].role, "user");
     }
 
     #[test]
