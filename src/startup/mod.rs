@@ -18,8 +18,8 @@ pub(crate) use dependency_advisories::{SearchToolsBundleNotice, take_search_tool
 use resume::{resolve_session_resume, validate_resume_all_usage};
 use theme::determine_theme;
 use validation::{
-    apply_permission_mode_override, validate_full_auto_configuration,
-    validate_startup_configuration,
+    apply_cli_permission_overrides, apply_permission_mode_override,
+    validate_full_auto_configuration, validate_startup_configuration,
 };
 use vtcode_config::auth::{OpenAIChatGptAuthHandle, resolve_openai_auth};
 use vtcode_core::cli::args::{Cli, Commands};
@@ -96,6 +96,7 @@ impl StartupContext {
         if let Some(ref permission_mode) = args.permission_mode {
             apply_permission_mode_override(&mut config, permission_mode)?;
         }
+        apply_cli_permission_overrides(&mut config, &args.allowed_tools, &args.disallowed_tools);
 
         // Validate configuration against models database
         validate_startup_configuration(&config, &loaded.workspace, args.quiet)?;
