@@ -119,7 +119,20 @@ pub(super) fn persist_mode_settings(
 }
 
 pub(super) async fn handle_show_settings(
+    ctx: SlashCommandContext<'_>,
+) -> Result<SlashCommandControl> {
+    handle_show_settings_at_path(ctx, None).await
+}
+
+pub(super) async fn handle_show_permissions(
+    ctx: SlashCommandContext<'_>,
+) -> Result<SlashCommandControl> {
+    handle_show_settings_at_path(ctx, Some("permissions")).await
+}
+
+async fn handle_show_settings_at_path(
     mut ctx: SlashCommandContext<'_>,
+    view_path: Option<&str>,
 ) -> Result<SlashCommandControl> {
     if !ui::ensure_selection_ui_available(&mut ctx, "configuring settings")? {
         return Ok(SlashCommandControl::Continue);
@@ -135,7 +148,8 @@ pub(super) async fn handle_show_settings(
 
     let workspace_path = ctx.config.workspace.clone();
     let vt_snapshot = ctx.vt_cfg.clone();
-    let settings_state = create_settings_palette_state(&workspace_path, &vt_snapshot)?;
+    let mut settings_state = create_settings_palette_state(&workspace_path, &vt_snapshot)?;
+    settings_state.view_path = view_path.map(str::to_string);
 
     if show_settings_palette(ctx.renderer, &settings_state, None)? {
         *ctx.palette_state = Some(ActivePalette::Settings {

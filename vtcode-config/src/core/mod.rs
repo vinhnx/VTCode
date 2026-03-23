@@ -23,7 +23,7 @@ pub use commands::CommandsConfig;
 pub use custom_provider::CustomProviderConfig;
 pub use dotfile_protection::DotfileProtectionConfig;
 pub use model::ModelConfig;
-pub use permissions::PermissionsConfig;
+pub use permissions::{PermissionMode, PermissionsConfig};
 pub use plugins::{PluginRuntimeConfig, PluginTrustLevel};
 pub use prompt_cache::{
     AnthropicPromptCacheSettings, DeepSeekPromptCacheSettings, GeminiPromptCacheMode,

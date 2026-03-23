@@ -63,10 +63,10 @@ pub use core::{
     MicroVMSandboxConfig, ModelConfig, NetworkAllowlistEntryConfig, NetworkConfig,
     OpenAIAuthConfig, OpenAIConfig, OpenAIHostedShellConfig, OpenAIHostedShellEnvironment,
     OpenAIHostedSkill, OpenAIPreferredMethod, OpenAIServiceTier, OpenResponsesConfig,
-    OpenRouterAuthConfig, PluginRuntimeConfig, PluginTrustLevel, PromptCachingConfig,
-    ProviderPromptCachingConfig, ResourceLimitsConfig, ResourceLimitsPreset, SandboxConfig,
-    SandboxMode, SeccompConfig, SeccompProfilePreset, SecurityConfig, SensitivePathsConfig,
-    SkillsConfig, SkillsRenderMode, ToolPolicy, ToolsConfig, WebFetchConfig,
+    OpenRouterAuthConfig, PermissionMode, PluginRuntimeConfig, PluginTrustLevel,
+    PromptCachingConfig, ProviderPromptCachingConfig, ResourceLimitsConfig, ResourceLimitsPreset,
+    SandboxConfig, SandboxMode, SeccompConfig, SeccompProfilePreset, SecurityConfig,
+    SensitivePathsConfig, SkillsConfig, SkillsRenderMode, ToolPolicy, ToolsConfig, WebFetchConfig,
 };
 pub use debug::{DebugConfig, TraceLevel};
 pub use defaults::{

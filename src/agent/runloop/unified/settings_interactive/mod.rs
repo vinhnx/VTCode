@@ -104,6 +104,9 @@ pub(crate) fn show_settings_palette(
         if !heading.summary.is_empty() {
             lines.push(heading.summary.into_owned());
         }
+        if view_path == "permissions" {
+            lines.push(format_permission_summary(&state.draft));
+        }
     } else {
         lines.push("Choose a section to edit.".to_string());
     }
@@ -126,6 +129,23 @@ pub(crate) fn show_settings_palette(
     );
 
     Ok(true)
+}
+
+fn format_permission_summary(config: &VTCodeConfig) -> String {
+    let mode = match config.permissions.default_mode {
+        vtcode_core::config::PermissionMode::Default => "default",
+        vtcode_core::config::PermissionMode::AcceptEdits => "accept_edits",
+        vtcode_core::config::PermissionMode::Plan => "plan",
+        vtcode_core::config::PermissionMode::DontAsk => "dont_ask",
+        vtcode_core::config::PermissionMode::BypassPermissions => "bypass_permissions",
+    };
+
+    format!(
+        "Effective mode: {mode} | deny: {} | ask: {} | allow: {}",
+        config.permissions.deny.len(),
+        config.permissions.ask.len(),
+        config.permissions.allow.len()
+    )
 }
 
 pub(crate) fn apply_settings_action(
@@ -472,5 +492,20 @@ mod tests {
 
         assert_eq!(state.source_path, source_path);
         assert_eq!(state.draft.agent.theme, "ansi");
+    }
+
+    #[test]
+    fn permission_view_summary_includes_mode_and_rule_counts() {
+        let mut config = VTCodeConfig::default();
+        config.permissions.default_mode = vtcode_core::config::PermissionMode::DontAsk;
+        config.permissions.allow = vec!["Read".to_string()];
+        config.permissions.ask = vec!["Bash".to_string(), "Write".to_string()];
+        config.permissions.deny = vec!["Edit".to_string()];
+
+        let summary = format_permission_summary(&config);
+        assert!(summary.contains("Effective mode: dont_ask"));
+        assert!(summary.contains("deny: 1"));
+        assert!(summary.contains("ask: 2"));
+        assert!(summary.contains("allow: 1"));
     }
 }

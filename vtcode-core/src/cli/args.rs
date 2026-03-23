@@ -247,7 +247,7 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub ide: bool,
 
-    /// Begin in a specified permission mode (ask, suggest, auto-approved, full-auto, plan)
+    /// Begin in a specified permission mode (default, accept_edits, dont_ask, bypass_permissions, plus legacy ask/suggest/auto-approved/full-auto/plan)
     #[arg(long, global = true, value_name = "MODE")]
     pub permission_mode: Option<String>,
 

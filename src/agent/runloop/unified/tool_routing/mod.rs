@@ -14,8 +14,13 @@ use tokio::sync::{Notify, RwLock};
 
 use serde_json::Value;
 use vtcode_core::acp::{PermissionGrant, ToolPermissionCache};
+use vtcode_core::command_safety::parse_bash_lc_commands;
+use vtcode_core::config::{PermissionMode, PermissionsConfig};
 use vtcode_core::core::interfaces::ui::UiSession;
 use vtcode_core::exec_policy::AskForApproval;
+use vtcode_core::permissions::{
+    PermissionRuleDecision, build_permission_request, evaluate_permissions,
+};
 use vtcode_core::tool_policy::ToolPolicy;
 use vtcode_core::tools::registry::{ToolPermissionDecision, ToolRegistry};
 use vtcode_core::tools::{JustificationExtractor, ToolRiskScorer};
@@ -30,7 +35,10 @@ use approval_policy::{
     trusted_auto_allows_history_based_approval, trusted_auto_allows_immediate_approval,
 };
 use hook_messages::render_hook_messages;
-use permission_prompt::prompt_tool_permission;
+use permission_prompt::{
+    extract_shell_approval_command_words, extract_shell_permission_scope_signature,
+    prompt_tool_permission,
+};
 use shell_approval::{
     approval_learning_target, exact_shell_approval_target, persistent_approval_target,
     tool_display_labels,
@@ -111,6 +119,77 @@ pub(crate) struct ToolPermissionsContext<'a, S: UiSession + ?Sized> {
     pub autonomous_mode: bool,
     pub approval_policy: AskForApproval,
     pub skip_confirmations: bool,
+    pub permissions_config: Option<&'a PermissionsConfig>,
+}
+
+fn current_permission_mode(config: Option<&PermissionsConfig>) -> PermissionMode {
+    config
+        .map(|config| config.default_mode)
+        .unwrap_or(PermissionMode::Default)
+}
+
+fn segmented_shell_approval_keys(
+    normalized_tool_name: &str,
+    tool_args: Option<&Value>,
+) -> Option<Vec<String>> {
+    let scope_signature =
+        extract_shell_permission_scope_signature(normalized_tool_name, tool_args)?;
+    let command_words = extract_shell_approval_command_words(normalized_tool_name, tool_args)?;
+    let segments = parse_bash_lc_commands(&command_words).or_else(|| {
+        vtcode_core::command_safety::shell_parser::parse_shell_commands(&shell_words::join(
+            command_words.iter().map(String::as_str),
+        ))
+        .ok()
+    })?;
+
+    let keys = segments
+        .into_iter()
+        .filter(|segment| !segment.is_empty())
+        .take(5)
+        .map(|segment| {
+            let rendered = shell_words::join(segment.iter().map(String::as_str));
+            format!("{rendered}|{scope_signature}")
+        })
+        .collect::<Vec<_>>();
+
+    (!keys.is_empty()).then_some(keys)
+}
+
+async fn persisted_segment_approval_hit_key(
+    tool_registry: &ToolRegistry,
+    normalized_tool_name: &str,
+    tool_args: Option<&Value>,
+) -> Option<String> {
+    let keys = segmented_shell_approval_keys(normalized_tool_name, tool_args)?;
+
+    for key in &keys {
+        if !tool_registry.has_persisted_approval(key).await {
+            return None;
+        }
+    }
+
+    Some(keys.join(", "))
+}
+
+async fn persist_segment_approval_cache_keys(
+    tool_registry: &ToolRegistry,
+    tool_name: &str,
+    normalized_tool_name: &str,
+    tool_args: Option<&Value>,
+) {
+    let Some(approval_keys) = segmented_shell_approval_keys(normalized_tool_name, tool_args) else {
+        return;
+    };
+
+    for approval_key in approval_keys {
+        persist_approval_cache_key(
+            tool_registry,
+            tool_name,
+            &approval_key,
+            "Failed to persist segmented shell approval cache entry",
+        )
+        .await;
+    }
 }
 
 pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
@@ -135,6 +214,7 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         autonomous_mode,
         approval_policy,
         skip_confirmations,
+        permissions_config,
     } = ctx;
 
     // Generate cache key - use command text for shell tools to enable granular session approval
@@ -172,12 +252,6 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         }
     }
 
-    let policy_decision = tool_registry.evaluate_tool_policy(tool_name).await?;
-
-    if policy_decision == ToolPermissionDecision::Deny {
-        return Ok(ToolPermissionFlow::Denied);
-    }
-
     let normalized_tool_name = tool_args
         .and_then(|args| {
             tool_registry
@@ -186,6 +260,55 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
                 .map(|outcome| outcome.normalized_tool_name)
         })
         .unwrap_or_else(|| tool_name.to_string());
+
+    let current_dir =
+        std::env::current_dir().unwrap_or_else(|_| tool_registry.workspace_root().clone());
+    let permission_mode = current_permission_mode(permissions_config);
+    let permission_request = build_permission_request(
+        tool_registry.workspace_root(),
+        &current_dir,
+        &normalized_tool_name,
+        tool_args,
+    );
+    let unified_decision = permissions_config
+        .map(|config| {
+            evaluate_permissions(
+                config,
+                tool_registry.workspace_root(),
+                &current_dir,
+                &permission_request,
+            )
+        })
+        .unwrap_or(PermissionRuleDecision::NoMatch);
+
+    if unified_decision == PermissionRuleDecision::Deny {
+        return Ok(ToolPermissionFlow::Denied);
+    }
+
+    if permission_mode == PermissionMode::DontAsk
+        && unified_decision != PermissionRuleDecision::Allow
+    {
+        return Ok(ToolPermissionFlow::Denied);
+    }
+
+    if permission_mode == PermissionMode::AcceptEdits
+        && unified_decision == PermissionRuleDecision::NoMatch
+        && permission_request.builtin_file_mutation
+        && !hook_requires_prompt
+    {
+        return Ok(ToolPermissionFlow::Approved);
+    }
+
+    let policy_decision = match unified_decision {
+        PermissionRuleDecision::Allow => ToolPermissionDecision::Allow,
+        PermissionRuleDecision::Ask => ToolPermissionDecision::Prompt,
+        PermissionRuleDecision::Deny => ToolPermissionDecision::Deny,
+        PermissionRuleDecision::NoMatch => tool_registry.evaluate_tool_policy(tool_name).await?,
+    };
+
+    if policy_decision == ToolPermissionDecision::Deny {
+        return Ok(ToolPermissionFlow::Denied);
+    }
 
     let persisted_shell_approval =
         persisted_shell_approval(tool_registry, &normalized_tool_name, tool_args).await;
@@ -220,6 +343,21 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         tool_args,
         &display_labels.learning_label,
     );
+
+    if let Some(approval_key) =
+        persisted_segment_approval_hit_key(tool_registry, &normalized_tool_name, tool_args).await
+    {
+        tool_registry.mark_tool_preapproved(tool_name).await;
+        if let Some(cache) = tool_permission_cache {
+            let mut permission_cache = cache.write().await;
+            permission_cache.cache_grant(cache_key.clone(), PermissionGrant::Permanent);
+        }
+        tracing::debug!(
+            approval_key = %approval_key,
+            "Using persisted segmented shell approval cache entries"
+        );
+        return Ok(ToolPermissionFlow::Approved);
+    }
 
     if let Some(approval_key) = persisted_approval_hit_key(
         tool_registry,
@@ -257,17 +395,30 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         return Ok(ToolPermissionFlow::Approved);
     }
 
+    let requires_protected_write_prompt = permission_request.requires_protected_write_prompt();
     let should_prompt = hook_requires_prompt
         || policy_decision == ToolPermissionDecision::Prompt
-        || shell_approval_reason.is_some();
+        || shell_approval_reason.is_some()
+        || (permission_mode == PermissionMode::BypassPermissions
+            && requires_protected_write_prompt);
 
     if !should_prompt {
         return Ok(ToolPermissionFlow::Approved);
     }
 
-    let requires_rule_prompt =
-        hook_requires_prompt || policy_decision == ToolPermissionDecision::Prompt;
+    let requires_rule_prompt = hook_requires_prompt
+        || policy_decision == ToolPermissionDecision::Prompt
+        || requires_protected_write_prompt;
     let requires_sandbox_prompt = shell_approval_reason.is_some();
+
+    if permission_mode == PermissionMode::BypassPermissions
+        && should_prompt
+        && !requires_sandbox_prompt
+        && !requires_protected_write_prompt
+    {
+        return Ok(ToolPermissionFlow::Approved);
+    }
+
     if approval_policy_rejects_prompt(
         approval_policy,
         requires_rule_prompt,
@@ -432,6 +583,13 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
                 )
                 .await;
             }
+            persist_segment_approval_cache_keys(
+                tool_registry,
+                tool_name,
+                &normalized_tool_name,
+                tool_args,
+            )
+            .await;
 
             if let Some(cache) = tool_permission_cache {
                 let mut perm_cache = cache.write().await;
@@ -568,8 +726,9 @@ mod tests {
         ToolPermissionFlow, ToolPermissionsContext, approval_learning_target,
         approval_persistence::shell_command_has_persisted_approval_prefix,
         approval_policy_rejects_prompt, build_tool_risk_context, ensure_tool_permission,
-        persist_shell_approval_prefix_rule, tool_display_labels,
-        trusted_auto_allows_history_based_approval, trusted_auto_allows_immediate_approval,
+        persist_segment_approval_cache_keys, persist_shell_approval_prefix_rule,
+        tool_display_labels, trusted_auto_allows_history_based_approval,
+        trusted_auto_allows_immediate_approval,
     };
     use serde_json::json;
     use std::sync::Arc;
@@ -577,6 +736,7 @@ mod tests {
     use vtcode_core::acp::{PermissionGrant, ToolPermissionCache};
     use vtcode_core::config::constants::tools;
     use vtcode_core::config::loader::ConfigManager;
+    use vtcode_core::config::{PermissionMode, PermissionsConfig};
     use vtcode_core::exec_policy::{AskForApproval, RejectConfig};
     use vtcode_core::tools::RiskLevel;
     use vtcode_core::tools::registry::ToolRegistry;
@@ -890,6 +1050,7 @@ mod tests {
                 autonomous_mode: false,
                 approval_policy: AskForApproval::OnRequest,
                 skip_confirmations: true,
+                permissions_config: None,
             },
             tools::READ_FILE,
             None,
@@ -898,5 +1059,172 @@ mod tests {
         .expect("permission flow");
 
         assert_eq!(flow, ToolPermissionFlow::Denied);
+    }
+
+    #[tokio::test]
+    async fn dont_ask_mode_denies_non_allowed_requests() {
+        let temp_dir = tempfile::TempDir::new().expect("temp dir");
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        let mut session = create_headless_session();
+        let handle = session.clone_inline_handle();
+        let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
+        let ctrl_c_state = Arc::new(crate::agent::runloop::unified::state::CtrlCState::new());
+        let ctrl_c_notify = Arc::new(Notify::new());
+        let permissions = PermissionsConfig {
+            default_mode: PermissionMode::DontAsk,
+            ..PermissionsConfig::default()
+        };
+
+        let flow = ensure_tool_permission(
+            ToolPermissionsContext {
+                tool_registry: &registry,
+                renderer: &mut renderer,
+                handle: &handle,
+                session: &mut session,
+                default_placeholder: None,
+                ctrl_c_state: &ctrl_c_state,
+                ctrl_c_notify: &ctrl_c_notify,
+                hooks: None,
+                justification: None,
+                approval_recorder: None,
+                decision_ledger: None,
+                tool_permission_cache: None,
+                hitl_notification_bell: false,
+                autonomous_mode: false,
+                approval_policy: AskForApproval::OnRequest,
+                skip_confirmations: false,
+                permissions_config: Some(&permissions),
+            },
+            tools::READ_FILE,
+            Some(&json!({"path": "README.md"})),
+        )
+        .await
+        .expect("permission flow");
+
+        assert_eq!(flow, ToolPermissionFlow::Denied);
+    }
+
+    #[tokio::test]
+    async fn accept_edits_mode_auto_allows_builtin_file_mutations() {
+        let temp_dir = tempfile::TempDir::new().expect("temp dir");
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        let mut session = create_headless_session();
+        let handle = session.clone_inline_handle();
+        let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
+        let ctrl_c_state = Arc::new(crate::agent::runloop::unified::state::CtrlCState::new());
+        let ctrl_c_notify = Arc::new(Notify::new());
+        let permissions = PermissionsConfig {
+            default_mode: PermissionMode::AcceptEdits,
+            ..PermissionsConfig::default()
+        };
+
+        let flow = ensure_tool_permission(
+            ToolPermissionsContext {
+                tool_registry: &registry,
+                renderer: &mut renderer,
+                handle: &handle,
+                session: &mut session,
+                default_placeholder: None,
+                ctrl_c_state: &ctrl_c_state,
+                ctrl_c_notify: &ctrl_c_notify,
+                hooks: None,
+                justification: None,
+                approval_recorder: None,
+                decision_ledger: None,
+                tool_permission_cache: None,
+                hitl_notification_bell: false,
+                autonomous_mode: false,
+                approval_policy: AskForApproval::Reject(RejectConfig {
+                    sandbox_approval: true,
+                    rules: true,
+                    request_permissions: true,
+                    mcp_elicitations: true,
+                }),
+                skip_confirmations: false,
+                permissions_config: Some(&permissions),
+            },
+            tools::UNIFIED_FILE,
+            Some(&json!({"action": "write", "path": "notes.md", "content": "hello"})),
+        )
+        .await
+        .expect("permission flow");
+
+        assert_eq!(flow, ToolPermissionFlow::Approved);
+    }
+
+    #[tokio::test]
+    async fn bypass_permissions_keeps_protected_write_prompts() {
+        let temp_dir = tempfile::TempDir::new().expect("temp dir");
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        let mut session = create_headless_session();
+        let handle = session.clone_inline_handle();
+        let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
+        let ctrl_c_state = Arc::new(crate::agent::runloop::unified::state::CtrlCState::new());
+        let ctrl_c_notify = Arc::new(Notify::new());
+        let permissions = PermissionsConfig {
+            default_mode: PermissionMode::BypassPermissions,
+            ..PermissionsConfig::default()
+        };
+
+        let flow = ensure_tool_permission(
+            ToolPermissionsContext {
+                tool_registry: &registry,
+                renderer: &mut renderer,
+                handle: &handle,
+                session: &mut session,
+                default_placeholder: None,
+                ctrl_c_state: &ctrl_c_state,
+                ctrl_c_notify: &ctrl_c_notify,
+                hooks: None,
+                justification: None,
+                approval_recorder: None,
+                decision_ledger: None,
+                tool_permission_cache: None,
+                hitl_notification_bell: false,
+                autonomous_mode: false,
+                approval_policy: AskForApproval::Reject(RejectConfig {
+                    sandbox_approval: true,
+                    rules: true,
+                    request_permissions: true,
+                    mcp_elicitations: true,
+                }),
+                skip_confirmations: false,
+                permissions_config: Some(&permissions),
+            },
+            tools::UNIFIED_FILE,
+            Some(&json!({"action": "write", "path": ".vtcode/settings.toml", "content": "hello"})),
+        )
+        .await
+        .expect("permission flow");
+
+        assert_eq!(flow, ToolPermissionFlow::Denied);
+    }
+
+    #[tokio::test]
+    async fn permanent_shell_approval_persists_segmented_commands() {
+        let temp_dir = tempfile::TempDir::new().expect("temp dir");
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        let args = json!({
+            "action": "run",
+            "command": ["/bin/zsh", "-lc", "git status && cargo check"],
+        });
+
+        persist_segment_approval_cache_keys(&registry, "unified_exec", "unified_exec", Some(&args))
+            .await;
+
+        assert!(
+            registry
+                .has_persisted_approval(
+                    "git status|sandbox_permissions=\"use_default\"|additional_permissions=null"
+                )
+                .await
+        );
+        assert!(
+            registry
+                .has_persisted_approval(
+                    "cargo check|sandbox_permissions=\"use_default\"|additional_permissions=null"
+                )
+                .await
+        );
     }
 }

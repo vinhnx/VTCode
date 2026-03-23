@@ -350,10 +350,17 @@ python3 scripts/generate_config_field_reference.py
 | `optimization.tool_registry.max_concurrent_tools` | `integer` | yes | `-` | Maximum concurrent tool executions |
 | `optimization.tool_registry.use_optimized_registry` | `boolean` | yes | `-` | Enable optimized registry |
 | `output_style.active_style` | `string` | no | `"default"` | - |
+| `permissions.allow` | `array` | no | `[]` | Rules that allow matching tool calls without prompting |
+| `permissions.allow[]` | `string` | no | `-` | Permission rule entry such as `Read(/src/**)` or `Bash(cargo test *)` |
+| `permissions.ask` | `array` | no | `[]` | Rules that require an interactive prompt when they match |
+| `permissions.ask[]` | `string` | no | `-` | Permission rule entry such as `Write(/docs/**)` or `mcp__context7__*` |
 | `permissions.audit_directory` | `string` | no | `"~/.vtcode/audit"` | Directory for audit logs (created if not exists) Defaults to ~/.vtcode/audit |
 | `permissions.audit_enabled` | `boolean` | no | `true` | Enable audit logging of all permission decisions |
 | `permissions.cache_enabled` | `boolean` | no | `true` | Enable permission decision caching to avoid redundant evaluations |
 | `permissions.cache_ttl_seconds` | `integer` | no | `300` | Cache time-to-live in seconds (how long to cache decisions) Default: 300 seconds (5 minutes) |
+| `permissions.default_mode` | `string` | no | `"default"` | Default unified permission mode. Options: `"default"`, `"accept_edits"`, `"plan"`, `"dont_ask"`, `"bypass_permissions"` plus legacy aliases `"ask"`, `"suggest"`, `"auto-approved"`, `"full-auto"` |
+| `permissions.deny` | `array` | no | `[]` | Rules that deny matching tool calls |
+| `permissions.deny[]` | `string` | no | `-` | Permission rule entry such as `Edit(/.git/**)` or `Bash(git push *)` |
 | `permissions.enabled` | `boolean` | no | `true` | Enable the enhanced permission system (resolver + audit logger + cache) |
 | `permissions.log_allowed_commands` | `boolean` | no | `true` | Log allowed commands to audit trail |
 | `permissions.log_denied_commands` | `boolean` | no | `true` | Log denied commands to audit trail |

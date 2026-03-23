@@ -11,6 +11,7 @@ VT Code uses a configuration file named `vtcode.toml` that can be placed at the 
 - [Execution environment](#execution-environment)
 - [MCP integration](#mcp-integration)
 - [Security and approvals](#security-and-approvals)
+- [Permissions guide](../guides/permissions.md)
 - [Participant system](#participant-system)
 - [Profiles and overrides](#profiles-and-overrides)
 - [Reference table](#config-reference)

@@ -308,6 +308,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Registry architecture, Adding a new tool, Safety guidelines, Testing checklist
   - **User Questions**: "What can you tell me about Tool Registry Guide?", "How does Registry architecture work?", "How does Adding a new tool work?"
 
+- **File**: `docs/guides/permissions.md`
+  - **Content**: Unified Permissions
+  - **Topics**: Modes, Rule grammar, Path matching, Notes
+  - **User Questions**: "What can you tell me about Unified Permissions?", "How does Modes work?", "How does Rule grammar work?"
+
 - **File**: `docs/guides/async-architecture.md`
   - **Content**: VT Code Async Architecture Guide
   - **Topics**: When Should VT Code Use Async?, Architecture: Async vs. Synchronous Paths, Key Async Patterns in VT Code, Anti-Patterns to Avoid, Integration with Event Loop

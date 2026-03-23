@@ -392,6 +392,7 @@ impl<'a> CopilotRuntimeHost<'a> {
                 autonomous_mode: self.session_stats.is_autonomous_mode(),
                 approval_policy: self.approval_policy,
                 skip_confirmations: self.skip_confirmations,
+                permissions_config: self.vt_cfg.map(|cfg| &cfg.permissions),
             },
             tool_name,
             Some(arguments),

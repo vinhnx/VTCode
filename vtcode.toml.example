@@ -628,6 +628,27 @@ allow_regex = []
 # Regular expression patterns for denied commands (if needed)
 deny_regex = []
 
+# Unified permission rules
+[permissions]
+# Standard mode prompts when matching rules or legacy policy require approval.
+default_mode = "default"
+
+# Rules are evaluated in order: deny -> ask -> allow.
+deny = [
+  "Edit(/.git/**)",
+]
+
+ask = [
+  "Bash(git commit *)",
+  "Write(/docs/**)",
+]
+
+allow = [
+  "Read",
+  "Bash(cargo check)",
+  "mcp__context7__*",
+]
+
 # Security configuration - Safety settings for automated operations
 [security]
 # Require human confirmation for potentially dangerous actions

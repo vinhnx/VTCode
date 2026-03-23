@@ -69,6 +69,7 @@ pub(crate) enum SlashCommandOutcome {
     },
 
     ShowSettings,
+    ShowPermissions,
     Exit,
     NewSession,
     OpenDocs,
@@ -305,6 +306,7 @@ pub(crate) async fn handle_slash_command(
             })
         }
         "config" | "settings" | "setttings" => Ok(SlashCommandOutcome::ShowSettings),
+        "permissions" => Ok(SlashCommandOutcome::ShowPermissions),
         "vim" => {
             let enable = match args {
                 "" | "toggle" => None,
@@ -901,5 +903,17 @@ mod tests {
             SlashCommandOutcome::SubmitPrompt { ref prompt }
                 if prompt == "/totally-unknown keep this raw"
         ));
+    }
+
+    #[tokio::test]
+    async fn permissions_slash_command_opens_permissions_view() {
+        let workspace = tempfile::TempDir::new().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let outcome = handle_slash_command("permissions", &mut renderer, workspace.path())
+            .await
+            .expect("permissions should parse");
+
+        assert!(matches!(outcome, SlashCommandOutcome::ShowPermissions));
     }
 }

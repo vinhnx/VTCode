@@ -201,6 +201,7 @@ fn build_tool_permissions_context<'ctx, 'a>(
             .map(approval_policy_from_human_in_the_loop)
             .unwrap_or(AskForApproval::OnRequest),
         skip_confirmations: ctx.skip_confirmations,
+        permissions_config: ctx.vt_cfg.map(|cfg| &cfg.permissions),
     }
 }
 

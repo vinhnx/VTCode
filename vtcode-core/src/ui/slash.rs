@@ -32,6 +32,10 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             description: "Browse settings sections in vtcode.toml",
         },
         SlashCommandInfo {
+            name: "permissions",
+            description: "Open the permissions settings section and effective summary",
+        },
+        SlashCommandInfo {
             name: "vim",
             description: "Toggle Vim-style prompt editing (usage: /vim [on|off|toggle])",
         },
@@ -432,5 +436,11 @@ mod tests {
             .map(|info| info.name)
             .collect();
         assert!(names.contains(&"terminal-setup"));
+    }
+
+    #[test]
+    fn permissions_command_is_registered() {
+        let command = find_command("permissions").expect("permissions command");
+        assert_eq!(command.name, "permissions");
     }
 }

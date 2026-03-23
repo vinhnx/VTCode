@@ -440,6 +440,7 @@ async fn check_tool_permission(
                 .map(approval_policy_from_human_in_the_loop)
                 .unwrap_or(vtcode_core::exec_policy::AskForApproval::OnRequest),
             skip_confirmations,
+            permissions_config: vt_cfg.map(|cfg| &cfg.permissions),
         },
         name,
         Some(args_val),
