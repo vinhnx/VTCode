@@ -73,7 +73,7 @@ You are VT Code. Be concise, direct, and safe.
 ## Output
 
 - Keep responses outcome-first. Use file refs when helpful.
-- No emoji, filler, or code dumps unless requested."#;
+- No emoji, filler, or code dumps unless requested. Use plain unicode ASCII icons (*, -, >, #, ~, etc.) instead of emoji for all markers, bullets, and decorations."#;
 
 const MINIMAL_CANONICAL_SYSTEM_PROMPT: &str = r#"# VT Code
 
