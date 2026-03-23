@@ -49,18 +49,6 @@ pub(super) fn resolve_prompt_cache_shaping_mode(
     }
 }
 
-pub(super) fn resolve_openai_prompt_cache_key(
-    openai_prompt_cache_enabled: bool,
-    prompt_cache_key_mode: &OpenAIPromptCacheKeyMode,
-    prompt_cache_lineage_id: Option<&str>,
-) -> Option<String> {
-    build_openai_prompt_cache_key(
-        openai_prompt_cache_enabled,
-        prompt_cache_key_mode,
-        prompt_cache_lineage_id,
-    )
-}
-
 fn hash_value<T: Hash>(value: &T) -> u64 {
     let mut hasher = DefaultHasher::new();
     value.hash(&mut hasher);
@@ -357,7 +345,7 @@ pub(super) async fn build_turn_request(
             None
         }
     };
-    let prompt_cache_key = resolve_openai_prompt_cache_key(
+    let prompt_cache_key = build_openai_prompt_cache_key(
         turn_snapshot.openai_prompt_cache_enabled,
         &turn_snapshot.openai_prompt_cache_key_mode,
         ctx.session_stats.prompt_cache_lineage_id(),

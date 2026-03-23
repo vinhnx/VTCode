@@ -35,10 +35,7 @@ use request_builder::{
     update_previous_response_chain_after_success,
 };
 #[cfg(test)]
-use request_builder::{
-    is_openai_prompt_cache_enabled, resolve_openai_prompt_cache_key,
-    resolve_prompt_cache_shaping_mode,
-};
+use request_builder::{is_openai_prompt_cache_enabled, resolve_prompt_cache_shaping_mode};
 #[cfg(test)]
 use retry::is_retryable_llm_error;
 #[cfg(test)]
@@ -50,6 +47,8 @@ use retry::{
     switch_to_non_streaming_retry_mode,
 };
 use streaming::HarnessStreamingBridge;
+#[cfg(test)]
+use vtcode_core::config::build_openai_prompt_cache_key;
 
 pub(crate) use retry::llm_attempt_timeout_secs;
 
@@ -898,12 +897,12 @@ mod tests {
     #[test]
     fn openai_prompt_cache_key_uses_stable_session_identifier() {
         let lineage_id = "lineage-abc-123";
-        let first = resolve_openai_prompt_cache_key(
+        let first = build_openai_prompt_cache_key(
             true,
             &OpenAIPromptCacheKeyMode::Session,
             Some(lineage_id),
         );
-        let second = resolve_openai_prompt_cache_key(
+        let second = build_openai_prompt_cache_key(
             true,
             &OpenAIPromptCacheKeyMode::Session,
             Some(lineage_id),
@@ -916,15 +915,11 @@ mod tests {
     #[test]
     fn openai_prompt_cache_key_honors_off_mode_or_disabled_cache() {
         assert_eq!(
-            resolve_openai_prompt_cache_key(
-                true,
-                &OpenAIPromptCacheKeyMode::Off,
-                Some("lineage-1"),
-            ),
+            build_openai_prompt_cache_key(true, &OpenAIPromptCacheKeyMode::Off, Some("lineage-1"),),
             None
         );
         assert_eq!(
-            resolve_openai_prompt_cache_key(
+            build_openai_prompt_cache_key(
                 false,
                 &OpenAIPromptCacheKeyMode::Session,
                 Some("lineage-1"),
@@ -932,7 +927,7 @@ mod tests {
             None
         );
         assert_eq!(
-            resolve_openai_prompt_cache_key(true, &OpenAIPromptCacheKeyMode::Session, None,),
+            build_openai_prompt_cache_key(true, &OpenAIPromptCacheKeyMode::Session, None,),
             None
         );
     }
