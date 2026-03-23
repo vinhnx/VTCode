@@ -69,6 +69,50 @@ pub(super) fn apply_permission_mode_override(config: &mut VTCodeConfig, mode: &s
     Ok(())
 }
 
+pub(super) fn apply_cli_permission_overrides(
+    config: &mut VTCodeConfig,
+    allowed_tools: &[String],
+    disallowed_tools: &[String],
+) {
+    for entry in iter_permission_entries(allowed_tools) {
+        if entry_uses_rule_grammar(entry) {
+            push_unique_permission_entry(&mut config.permissions.allow, entry);
+        } else {
+            push_unique_permission_entry(&mut config.permissions.allowed_tools, entry);
+        }
+    }
+
+    for entry in iter_permission_entries(disallowed_tools) {
+        if entry_uses_rule_grammar(entry) {
+            push_unique_permission_entry(&mut config.permissions.deny, entry);
+        } else {
+            push_unique_permission_entry(&mut config.permissions.disallowed_tools, entry);
+        }
+    }
+}
+
+fn iter_permission_entries(entries: &[String]) -> impl Iterator<Item = &str> {
+    entries
+        .iter()
+        .flat_map(|value| value.split(','))
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+}
+
+fn push_unique_permission_entry(target: &mut Vec<String>, entry: &str) {
+    if !target.iter().any(|existing| existing == entry) {
+        target.push(entry.to_string());
+    }
+}
+
+fn entry_uses_rule_grammar(entry: &str) -> bool {
+    entry.contains(['(', ')', '/', '*', ':'])
+        || entry
+            .chars()
+            .next()
+            .is_some_and(|first| first.is_ascii_uppercase())
+}
+
 pub(super) fn parse_cli_config_entries(
     entries: &[String],
 ) -> (Option<PathBuf>, Vec<(String, String)>) {
@@ -267,6 +311,59 @@ mod tests {
             overrides,
             vec![("agent.provider".to_owned(), "openai".to_owned())]
         );
+    }
+
+    #[test]
+    fn cli_permission_overrides_append_unique_entries() {
+        let mut config = VTCodeConfig::default();
+        config.permissions.allowed_tools = vec!["read_file".to_string()];
+
+        apply_cli_permission_overrides(
+            &mut config,
+            &[
+                "read_file,unified_search".to_string(),
+                "unified_exec".to_string(),
+            ],
+            &["apply_patch".to_string(), "unified_exec".to_string()],
+        );
+
+        assert_eq!(
+            config.permissions.allowed_tools,
+            vec![
+                "read_file".to_string(),
+                "unified_search".to_string(),
+                "unified_exec".to_string()
+            ]
+        );
+        assert_eq!(
+            config.permissions.disallowed_tools,
+            vec!["apply_patch".to_string(), "unified_exec".to_string()]
+        );
+    }
+
+    #[test]
+    fn cli_permission_overrides_preserve_rule_shaped_entries() {
+        let mut config = VTCodeConfig::default();
+
+        apply_cli_permission_overrides(
+            &mut config,
+            &[
+                "Read(/docs/**)".to_string(),
+                "Bash(cargo check)".to_string(),
+            ],
+            &["Edit(/.git/**)".to_string()],
+        );
+
+        assert_eq!(
+            config.permissions.allow,
+            vec![
+                "Read(/docs/**)".to_string(),
+                "Bash(cargo check)".to_string()
+            ]
+        );
+        assert_eq!(config.permissions.allowed_tools, Vec::<String>::new());
+        assert_eq!(config.permissions.deny, vec!["Edit(/.git/**)".to_string()]);
+        assert_eq!(config.permissions.disallowed_tools, Vec::<String>::new());
     }
 
     #[test]

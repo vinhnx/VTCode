@@ -18,6 +18,27 @@ pub enum PermissionRuleDecision {
     NoMatch,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct PermissionRuleMatches {
+    pub deny: bool,
+    pub ask: bool,
+    pub allow: bool,
+}
+
+impl PermissionRuleMatches {
+    pub const fn decision(self) -> PermissionRuleDecision {
+        if self.deny {
+            PermissionRuleDecision::Deny
+        } else if self.ask {
+            PermissionRuleDecision::Ask
+        } else if self.allow {
+            PermissionRuleDecision::Allow
+        } else {
+            PermissionRuleDecision::NoMatch
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PermissionRequestKind {
     Bash { command: String },
@@ -69,7 +90,7 @@ pub fn evaluate_permissions(
     workspace_root: &Path,
     current_dir: &Path,
     request: &PermissionRequest,
-) -> PermissionRuleDecision {
+) -> PermissionRuleMatches {
     let evaluator = PermissionEvaluator::new(config, workspace_root, current_dir);
     evaluator.evaluate(request)
 }
@@ -83,23 +104,24 @@ struct PermissionEvaluator {
 impl PermissionEvaluator {
     fn new(config: &PermissionsConfig, workspace_root: &Path, current_dir: &Path) -> Self {
         Self {
-            deny: compile_rules(&config.deny, workspace_root, current_dir),
+            deny: compile_rules(&config.deny, workspace_root, current_dir)
+                .into_iter()
+                .chain(compile_exact_tool_rules(&config.disallowed_tools))
+                .collect(),
             ask: compile_rules(&config.ask, workspace_root, current_dir),
-            allow: compile_rules(&config.allow, workspace_root, current_dir),
+            allow: compile_rules(&config.allow, workspace_root, current_dir)
+                .into_iter()
+                .chain(compile_exact_tool_rules(&config.allowed_tools))
+                .collect(),
         }
     }
 
-    fn evaluate(&self, request: &PermissionRequest) -> PermissionRuleDecision {
-        if self.deny.iter().any(|rule| rule.matches(request)) {
-            return PermissionRuleDecision::Deny;
+    fn evaluate(&self, request: &PermissionRequest) -> PermissionRuleMatches {
+        PermissionRuleMatches {
+            deny: self.deny.iter().any(|rule| rule.matches(request)),
+            ask: self.ask.iter().any(|rule| rule.matches(request)),
+            allow: self.allow.iter().any(|rule| rule.matches(request)),
         }
-        if self.ask.iter().any(|rule| rule.matches(request)) {
-            return PermissionRuleDecision::Ask;
-        }
-        if self.allow.iter().any(|rule| rule.matches(request)) {
-            return PermissionRuleDecision::Allow;
-        }
-        PermissionRuleDecision::NoMatch
     }
 }
 
@@ -111,6 +133,16 @@ fn compile_rules(
     rules
         .iter()
         .filter_map(|rule| CompiledPermissionRule::compile(rule, workspace_root, current_dir))
+        .collect()
+}
+
+fn compile_exact_tool_rules(rules: &[String]) -> Vec<CompiledPermissionRule> {
+    rules
+        .iter()
+        .map(String::as_str)
+        .map(str::trim)
+        .filter(|rule| !rule.is_empty())
+        .map(|rule| CompiledPermissionRule::ExactTool(rule.to_string()))
         .collect()
 }
 
@@ -590,7 +622,7 @@ mod tests {
         };
 
         assert_eq!(
-            evaluate_permissions(&config, &workspace, &cwd, &request),
+            evaluate_permissions(&config, &workspace, &cwd, &request).decision(),
             PermissionRuleDecision::Deny
         );
     }
@@ -612,7 +644,7 @@ mod tests {
         };
 
         assert_eq!(
-            evaluate_permissions(&config, &workspace, &cwd, &request),
+            evaluate_permissions(&config, &workspace, &cwd, &request).decision(),
             PermissionRuleDecision::Allow
         );
     }
@@ -634,7 +666,7 @@ mod tests {
         };
 
         assert_eq!(
-            evaluate_permissions(&config, &workspace, &cwd, &request),
+            evaluate_permissions(&config, &workspace, &cwd, &request).decision(),
             PermissionRuleDecision::Ask
         );
     }
@@ -657,7 +689,7 @@ mod tests {
         };
 
         assert_eq!(
-            evaluate_permissions(&config, &workspace, &cwd, &request),
+            evaluate_permissions(&config, &workspace, &cwd, &request).decision(),
             PermissionRuleDecision::Allow
         );
     }
@@ -705,7 +737,7 @@ mod tests {
         );
 
         assert_eq!(
-            evaluate_permissions(&config, &workspace, &cwd, &request),
+            evaluate_permissions(&config, &workspace, &cwd, &request).decision(),
             PermissionRuleDecision::Ask
         );
     }
@@ -730,8 +762,34 @@ mod tests {
         );
 
         assert_eq!(
-            evaluate_permissions(&config, &workspace, &cwd, &request),
+            evaluate_permissions(&config, &workspace, &cwd, &request).decision(),
             PermissionRuleDecision::Ask
         );
+    }
+
+    #[test]
+    fn exact_compat_tool_lists_feed_rule_tiers() {
+        let (_temp, workspace, cwd) = workspace_roots();
+        let config = PermissionsConfig {
+            allowed_tools: vec!["read_file".to_string()],
+            disallowed_tools: vec!["unified_exec".to_string()],
+            ..PermissionsConfig::default()
+        };
+
+        let read_request = PermissionRequest {
+            exact_tool_name: "read_file".to_string(),
+            kind: PermissionRequestKind::Read { paths: vec![] },
+            builtin_file_mutation: false,
+            protected_write_paths: Vec::new(),
+        };
+        let exec_request = PermissionRequest {
+            exact_tool_name: "unified_exec".to_string(),
+            kind: PermissionRequestKind::Other,
+            builtin_file_mutation: false,
+            protected_write_paths: Vec::new(),
+        };
+
+        assert!(evaluate_permissions(&config, &workspace, &cwd, &read_request).allow);
+        assert!(evaluate_permissions(&config, &workspace, &cwd, &exec_request).deny);
     }
 }

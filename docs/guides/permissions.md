@@ -5,6 +5,8 @@ VT Code supports a top-level `[permissions]` table in `vtcode.toml` for authored
 ```toml
 [permissions]
 default_mode = "default"
+allowed_tools = ["read_file"]
+disallowed_tools = ["unified_exec"]
 deny = ["Edit(/.git/**)"]
 ask = ["Bash(git commit *)", "Write(/docs/**)"]
 allow = ["Read", "Bash(cargo check)", "mcp__context7__*"]
@@ -22,6 +24,9 @@ Legacy aliases remain accepted for compatibility: `ask`, `suggest`, `auto-approv
 
 ## Rule grammar
 
+- `allowed_tools` / `disallowed_tools` accept exact VT Code tool ids for Claude-style compatibility.
+- `allow` / `ask` / `deny` remain the richer VT Code rule grammar and take precedence when they match more specifically.
+
 - `Bash` or `Bash(cargo test *)`
 - `Read` or `Read(/src/**/*.rs)`
 - `Edit` or `Edit(/docs/**)`
@@ -30,7 +35,7 @@ Legacy aliases remain accepted for compatibility: `ask`, `suggest`, `auto-approv
 - `mcp__context7`, `mcp__context7__*`, `mcp__context7__search-docs`
 - Exact VT Code tool ids such as `apply_patch` or `unified_exec`
 
-Rules are evaluated in order: `deny`, then `ask`, then `allow`. The first matching tier wins.
+Rules are evaluated by tier: deny first, then ask, then allow. Claude-style exact tool lists feed the deny/allow tiers alongside VT Code's richer authored rules.
 
 ## Path matching
 

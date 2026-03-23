@@ -34,6 +34,14 @@ pub struct PermissionsConfig {
     #[serde(default)]
     pub default_mode: PermissionMode,
 
+    /// Claude-style compatibility allow-list for exact tool ids.
+    #[serde(default)]
+    pub allowed_tools: Vec<String>,
+
+    /// Claude-style compatibility deny-list for exact tool ids.
+    #[serde(default)]
+    pub disallowed_tools: Vec<String>,
+
     /// Rules that allow matching tool calls without prompting.
     #[serde(default)]
     pub allow: Vec<String>,
@@ -136,6 +144,8 @@ impl Default for PermissionsConfig {
     fn default() -> Self {
         Self {
             default_mode: PermissionMode::default(),
+            allowed_tools: Vec::new(),
+            disallowed_tools: Vec::new(),
             allow: Vec::new(),
             ask: Vec::new(),
             deny: Vec::new(),
@@ -208,5 +218,22 @@ mod tests {
         )
         .expect("permissions config");
         assert_eq!(config.default_mode, PermissionMode::BypassPermissions);
+    }
+
+    #[test]
+    fn parses_claude_compat_tool_lists() {
+        let config: PermissionsConfig = toml::from_str(
+            r#"
+            allowed_tools = ["read_file", "unified_search"]
+            disallowed_tools = ["unified_exec"]
+            "#,
+        )
+        .expect("permissions config");
+
+        assert_eq!(
+            config.allowed_tools,
+            vec!["read_file".to_string(), "unified_search".to_string()]
+        );
+        assert_eq!(config.disallowed_tools, vec!["unified_exec".to_string()]);
     }
 }
