@@ -47,43 +47,59 @@ You are VT Code. Be concise, direct, and safe.
 
 ## Core Contract
 
-- Start with the repo: read `AGENTS.md`, inspect code, and follow local patterns.
-- Instruction and skill sections are indexes; open files when wording matters.
-- Act without asking when the next step is safe and reversible.
-- Ask only for material behavior, API, UX, credential, or external-action changes.
-- If context is missing, say so plainly and do not guess; finish any unblocked portion first.
-- Do not guess at performance bottlenecks; measure before optimizing.
-- Prefer simple, readable changes over clever abstractions.
-- Prefer simple algorithms and data structures unless measurement justifies more complexity.
-- Let data shape the design before reaching for clever control flow.
+- Start with `AGENTS.md`; inspect code and match local patterns.
+- Open indexed instruction or skill files when wording matters.
+- Act on safe, reversible steps without asking; ask only for material behavior, API, UX, credential, or external-action changes.
+- If context is missing, say so plainly, do not guess, and finish any unblocked portion first.
+- Prefer simple changes; measure before optimizing performance.
 - Use `@file` and `/add-dir` to focus the right code.
 - Verify changes yourself; never claim a check passed unless you ran it.
-- Respect approval gates, keep destructive or external actions explicit, and never print or commit secrets.
+- Respect approval gates and keep destructive or external actions explicit.
 - For research or citation-sensitive work, use retrieved evidence and label inference clearly.
 
 ## Execution Contract
 
-- Return exactly the requested sections or format, in order; keep outputs compact and information-dense.
+- Return exactly the requested sections or format; keep outputs concise and information-dense.
 - User instructions override default tone, format, and initiative unless they conflict with safety or honesty.
-- If intent is clear and the next step is safe and reversible, proceed without asking.
-- Ask only for irreversible actions, external side effects, missing sensitive inputs, or choices that materially change the outcome.
-- Use tools when they materially improve correctness, completeness, or grounding.
-- Do not skip prerequisite lookups, discovery, or verification just because the likely final action seems obvious.
-- Treat the task as incomplete until every requested deliverable is done or explicitly marked blocked with the missing dependency.
-- If a lookup is empty, partial, or suspiciously narrow, retry with a different query or source before concluding nothing exists.
-- Before finalizing, check requirements, grounding, format, and whether the next step needs permission.
-- For long-running work, keep commentary/progress separate from the final answer and do not treat an intermediate update as completion.
+- Use tools when they improve correctness, completeness, or grounding; do not skip lookup, discovery, or verification.
+- Treat the task as incomplete until every requested deliverable is done or explicitly blocked.
+- Retry empty, partial, or suspiciously narrow lookups with a different query or source before concluding nothing exists.
+- Before finalizing, check requirements, grounding, format, and permissions.
 
 ## Interaction
 
-- Keep user updates brief and high-signal: one sentence on outcome, one on next step.
-- Update the user when starting a major phase or when the plan changes, not for every routine tool call.
-- Use shell only through the terminal tool and use direct edit/patch tools instead of bash for file edits when available.
+- Keep user updates brief and high-signal.
 
 ## Output
 
-- Keep responses compact and outcome-first. Use file refs when helpful.
+- Keep responses outcome-first. Use file refs when helpful.
 - No emoji, filler, or code dumps unless requested."#;
+
+const MINIMAL_CANONICAL_SYSTEM_PROMPT: &str = r#"# VT Code
+
+You are VT Code. Be concise, direct, and safe.
+
+## Core Contract
+
+- Start with `AGENTS.md`; inspect code first.
+- If context is missing, say so plainly, do not guess, and finish any unblocked portion first.
+- Take only safe, reversible steps without asking.
+- Verify changes yourself and use retrieved evidence for citation-sensitive work.
+
+## Execution Contract
+
+- Return exactly the requested sections or format; keep outputs concise.
+- Use tools for lookup, discovery, and verification before concluding.
+- Treat the task as incomplete until every requested deliverable is done or blocked.
+- Before finalizing, check requirements, grounding, format, and permissions.
+- Keep user updates brief and high-signal."#;
+
+const ACCURACY_OPTIMIZATION_ADDENDUM: &str = r#"## Accuracy Optimization
+
+- Start simple with success criteria or eval examples when accuracy matters.
+- Missing, stale, or proprietary knowledge means optimize context; inconsistent format, style, or reasoning means optimize instructions or training.
+- Treat prompting, retrieval, and fine-tuning as additive levers; avoid noisy long context.
+- For high-stakes tasks, prefer clarification or human review over guessing."#;
 
 const DEFAULT_MODE_DELTA: &str = r#"## Mode
 
@@ -226,6 +242,9 @@ pub async fn compose_system_instruction_text(
     if should_include_structured_reasoning(vtcode_config, prompt_mode) {
         append_prompt_section(&mut instruction, STRUCTURED_REASONING_INSTRUCTIONS);
     }
+    if should_include_accuracy_optimization(prompt_mode) {
+        append_prompt_section(&mut instruction, ACCURACY_OPTIMIZATION_ADDENDUM);
+    }
 
     if let Some(ctx) = prompt_context {
         let guidelines = generate_tool_guidelines(&ctx.available_tools, ctx.capability_level);
@@ -251,24 +270,20 @@ fn append_prompt_section(prompt: &mut String, section: &str) {
 
 fn static_mode_prompt(prompt_mode: SystemPromptMode) -> &'static str {
     match prompt_mode {
-        SystemPromptMode::Default => {
-            DEFAULT_SYSTEM_PROMPT.get_or_init(|| build_mode_prompt(DEFAULT_MODE_DELTA))
-        }
-        SystemPromptMode::Minimal => {
-            MINIMAL_SYSTEM_PROMPT.get_or_init(|| build_mode_prompt(MINIMAL_MODE_DELTA))
-        }
-        SystemPromptMode::Lightweight => {
-            DEFAULT_LIGHTWEIGHT_PROMPT.get_or_init(|| build_mode_prompt(LIGHTWEIGHT_MODE_DELTA))
-        }
-        SystemPromptMode::Specialized => {
-            DEFAULT_SPECIALIZED_PROMPT.get_or_init(|| build_mode_prompt(SPECIALIZED_MODE_DELTA))
-        }
+        SystemPromptMode::Default => DEFAULT_SYSTEM_PROMPT
+            .get_or_init(|| build_mode_prompt(CANONICAL_SYSTEM_PROMPT, DEFAULT_MODE_DELTA)),
+        SystemPromptMode::Minimal => MINIMAL_SYSTEM_PROMPT
+            .get_or_init(|| build_mode_prompt(MINIMAL_CANONICAL_SYSTEM_PROMPT, MINIMAL_MODE_DELTA)),
+        SystemPromptMode::Lightweight => DEFAULT_LIGHTWEIGHT_PROMPT
+            .get_or_init(|| build_mode_prompt(CANONICAL_SYSTEM_PROMPT, LIGHTWEIGHT_MODE_DELTA)),
+        SystemPromptMode::Specialized => DEFAULT_SPECIALIZED_PROMPT
+            .get_or_init(|| build_mode_prompt(CANONICAL_SYSTEM_PROMPT, SPECIALIZED_MODE_DELTA)),
     }
 }
 
-fn build_mode_prompt(mode_delta: &str) -> String {
-    let mut prompt = String::with_capacity(CANONICAL_SYSTEM_PROMPT.len() + mode_delta.len() + 2);
-    prompt.push_str(CANONICAL_SYSTEM_PROMPT);
+fn build_mode_prompt(base_prompt: &str, mode_delta: &str) -> String {
+    let mut prompt = String::with_capacity(base_prompt.len() + mode_delta.len() + 2);
+    prompt.push_str(base_prompt);
     prompt.push_str("\n\n");
     prompt.push_str(mode_delta);
     prompt
@@ -350,6 +365,10 @@ fn should_include_structured_reasoning(
         mode,
         SystemPromptMode::Default | SystemPromptMode::Specialized
     )
+}
+
+fn should_include_accuracy_optimization(mode: SystemPromptMode) -> bool {
+    matches!(mode, SystemPromptMode::Default)
 }
 
 /// Generate the stable base system instruction with configuration-aware sections.
@@ -842,6 +861,38 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_prompts_include_accuracy_optimization_contract() {
+        let runtime = tokio::runtime::Runtime::new().expect("runtime");
+        let config = VTCodeConfig::default();
+        let prompt = runtime.block_on(compose_system_instruction_text(
+            &PathBuf::from("."),
+            Some(&config),
+            None,
+        ));
+
+        assert!(
+            prompt.contains("## Accuracy Optimization"),
+            "Runtime prompt should include the accuracy optimization section"
+        );
+        assert!(
+            prompt.contains("Missing, stale, or proprietary knowledge means optimize context"),
+            "Prompt should distinguish context failures from behavior failures"
+        );
+        assert!(
+            prompt.contains("Treat prompting, retrieval, and fine-tuning as additive levers"),
+            "Prompt should treat optimization levers as additive"
+        );
+        assert!(
+            prompt.contains("avoid noisy long context"),
+            "Prompt should warn against noisy retrieval/context"
+        );
+        assert!(
+            prompt.contains("clarification or human review"),
+            "Prompt should prefer safer fallbacks for high-stakes tasks"
+        );
+    }
+
     #[tokio::test]
     async fn test_generated_prompts_keep_mode_deltas_bounded() {
         let project_root = PathBuf::from(".");
@@ -1237,6 +1288,7 @@ mod tests {
         let mut config = VTCodeConfig::default();
         config.agent.include_temporal_context = true;
         config.agent.include_working_directory = true;
+        config.prompt_cache.cache_friendly_prompt_shaping = false;
 
         let mut ctx = PromptContext::default();
         ctx.add_tool("unified_file".to_string());

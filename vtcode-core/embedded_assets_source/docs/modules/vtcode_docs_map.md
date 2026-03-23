@@ -556,7 +556,7 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/context/context_engineering.md`
   - **Content**: Context Engineering in VT Code
-  - **Topics**: Overview, Context Engineering vs Prompt Engineering, Core Principles, Context Strategy, Configuration
+  - **Topics**: Overview, Context Engineering vs Prompt Engineering, Accuracy Optimization Loop, Core Principles, Context Strategy
   - **User Questions**: "What can you tell me about Context Engineering in VT Code?", "How does Overview work?", "How does Context Engineering vs Prompt Engineering work?"
 
 - **File**: `docs/harness/CORE_BELIEFS.md`

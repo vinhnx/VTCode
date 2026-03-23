@@ -39,6 +39,42 @@ Context engineering is about **iterative curation** - deciding what context to p
 
 **Key Insight:** Unlike prompt engineering where you craft a prompt once, context engineering is **iterative** - the curation phase happens each time we decide what to pass to the model.
 
+## Accuracy Optimization Loop
+
+VT Code treats LLM optimization as a diagnosis problem, not a fixed ladder from prompt engineering to RAG to fine-tuning.
+
+### Start with a baseline
+
+Before adding more machinery:
+
+-   Define what "correct" means for the task.
+-   Start with the simplest prompt that can work.
+-   Keep a small eval set of realistic prompts and expected outcomes.
+-   Review failures before changing the system.
+
+### Choose the right lever
+
+When an eval fails, classify the issue before changing the stack:
+
+-   **Context problem**: The model is missing domain knowledge, using stale facts, or needs proprietary information. Improve context selection, retrieval, or source quality.
+-   **Behavior problem**: The model has the right facts but formats inconsistently, ignores instructions, uses the wrong tone, or reasons unreliably. Improve instructions, examples, decomposition, or training.
+
+These levers stack, but they do different jobs. VT Code should not add retrieval or longer prompts unless the failure suggests a context problem.
+
+### Retrieval and long-context guidance
+
+-   Retrieved context should be relevant enough to change the answer.
+-   Extra but irrelevant context can lower accuracy by drowning out the key facts.
+-   Long-context setups must still be evaluated at different context sizes because important details can get lost in the middle.
+
+### Production stance
+
+For high-stakes flows, optimize not only for answer quality but for failure handling:
+
+-   Ask clarifying questions when confidence is low.
+-   Fall back to narrower, safer actions when context is incomplete.
+-   Prefer human review or explicit escalation over confident guessing.
+
 ## Core Principles
 
 ### 1. **Minimal Token Usage ("Right Altitude" Prompts)**
