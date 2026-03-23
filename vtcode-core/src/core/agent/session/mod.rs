@@ -4,6 +4,7 @@ use crate::core::agent::task::{TaskOutcome, TaskResults};
 use crate::exec::events::Usage;
 use crate::llm::provider::Message;
 use crate::llm::providers::gemini::wire::{Content, FunctionResponse, Part};
+use hashbrown::HashMap;
 use std::time::{Duration, Instant};
 use vtcode_exec_events::ThreadEvent;
 
@@ -46,6 +47,8 @@ pub struct AgentSessionState {
     pub consecutive_tool_loops: usize,
     pub tool_loop_limit_hit: bool,
     pub last_processed_message_idx: usize,
+    /// Responses-style continuation pointers keyed by normalized provider/model pairs.
+    pub previous_response_ids: HashMap<(String, String), String>,
 
     // Legacy / Stats fields for compatibility
     pub consecutive_idle_turns: usize,
@@ -93,8 +96,6 @@ pub struct SessionConstraints {
     pub max_context_tokens: usize,
 }
 
-use hashbrown::HashMap;
-
 impl AgentSessionState {
     pub fn new(
         session_id: String,
@@ -124,6 +125,7 @@ impl AgentSessionState {
             consecutive_tool_loops: 0,
             tool_loop_limit_hit: false,
             last_processed_message_idx: 0,
+            previous_response_ids: HashMap::new(),
             consecutive_idle_turns: 0,
             max_tool_loop_streak: 0,
             turn_count: 0,
@@ -177,6 +179,39 @@ impl AgentSessionState {
 
     pub fn reset_tool_loop_guard(&mut self) {
         self.consecutive_tool_loops = 0;
+    }
+
+    pub fn previous_response_id_for(&self, provider: &str, model: &str) -> Option<String> {
+        previous_response_chain_key(provider, model)
+            .and_then(|key| self.previous_response_ids.get(&key).cloned())
+    }
+
+    pub fn set_previous_response_chain(
+        &mut self,
+        provider: &str,
+        model: &str,
+        response_id: Option<&str>,
+    ) {
+        let Some(key) = previous_response_chain_key(provider, model) else {
+            return;
+        };
+        let Some(response_id) = response_id.map(str::trim).filter(|value| !value.is_empty()) else {
+            self.previous_response_ids.remove(&key);
+            return;
+        };
+
+        self.previous_response_ids
+            .insert(key, response_id.to_string());
+    }
+
+    pub fn clear_previous_response_chain_for(&mut self, provider: &str, model: &str) {
+        if let Some(key) = previous_response_chain_key(provider, model) {
+            self.previous_response_ids.remove(&key);
+        }
+    }
+
+    pub fn clear_previous_response_chain(&mut self) {
+        self.previous_response_ids.clear();
     }
 
     pub fn mark_tool_loop_limit_hit(&mut self) {
@@ -336,6 +371,50 @@ impl AgentSessionState {
         }
         self.messages
             .push(Message::tool_response(call_id, error_msg));
+    }
+}
+
+fn previous_response_chain_key(provider: &str, model: &str) -> Option<(String, String)> {
+    let provider = provider.trim().to_ascii_lowercase();
+    let model = model.trim();
+    if provider.is_empty() || model.is_empty() {
+        return None;
+    }
+
+    Some((provider, model.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AgentSessionState;
+
+    #[test]
+    fn previous_response_chain_is_scoped_to_provider_and_model() {
+        let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+
+        state.set_previous_response_chain("openai", "gpt-5.2", Some("resp_123"));
+        state.set_previous_response_chain("openai", "gpt-5.4", Some("resp_456"));
+
+        assert_eq!(
+            state.previous_response_id_for("openai", "gpt-5.2"),
+            Some("resp_123".to_string())
+        );
+        assert_eq!(
+            state.previous_response_id_for("openai", "gpt-5.4"),
+            Some("resp_456".to_string())
+        );
+        assert_eq!(state.previous_response_id_for("gemini", "gpt-5.2"), None);
+
+        state.clear_previous_response_chain_for("openai", "gpt-5.2");
+
+        assert_eq!(state.previous_response_id_for("openai", "gpt-5.2"), None);
+        assert_eq!(
+            state.previous_response_id_for("openai", "gpt-5.4"),
+            Some("resp_456".to_string())
+        );
+
+        state.clear_previous_response_chain();
+        assert_eq!(state.previous_response_id_for("openai", "gpt-5.4"), None);
     }
 }
 

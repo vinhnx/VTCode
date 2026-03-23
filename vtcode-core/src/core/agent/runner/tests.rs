@@ -534,6 +534,51 @@ impl LLMProvider for QueuedProvider {
     }
 }
 
+#[derive(Clone)]
+struct RecordingQueuedProvider {
+    responses: Arc<Mutex<VecDeque<LLMResponse>>>,
+    requests: Arc<Mutex<Vec<LLMRequest>>>,
+}
+
+impl RecordingQueuedProvider {
+    fn new(responses: Vec<LLMResponse>) -> Self {
+        Self {
+            responses: Arc::new(Mutex::new(responses.into())),
+            requests: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    fn recorded_requests(&self) -> Vec<LLMRequest> {
+        self.requests.lock().clone()
+    }
+}
+
+#[async_trait]
+impl LLMProvider for RecordingQueuedProvider {
+    fn name(&self) -> &str {
+        "openai"
+    }
+
+    async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+        self.requests.lock().push(request);
+        self.responses
+            .lock()
+            .pop_front()
+            .ok_or(LLMError::InvalidRequest {
+                message: "RecordingQueuedProvider has no queued responses".to_string(),
+                metadata: None,
+            })
+    }
+
+    fn supported_models(&self) -> Vec<String> {
+        vec!["gpt-5.3-codex".to_string()]
+    }
+
+    fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+        Ok(())
+    }
+}
+
 fn task(title: &str, id: &str) -> Task {
     Task {
         id: id.to_string(),
@@ -564,6 +609,16 @@ fn tool_call_response(tool_name: &str, args: serde_json::Value) -> LLMResponse {
         finish_reason: FinishReason::ToolCalls,
         ..Default::default()
     }
+}
+
+fn tool_call_response_with_request_id(
+    tool_name: &str,
+    args: serde_json::Value,
+    request_id: &str,
+) -> LLMResponse {
+    let mut response = tool_call_response(tool_name, args);
+    response.request_id = Some(request_id.to_string());
+    response
 }
 
 fn workspace_root(temp: &TempDir) -> PathBuf {
@@ -718,6 +773,54 @@ async fn exec_full_auto_continues_until_tracker_is_completed() {
     let tracker =
         fs::read_to_string(workspace.join(".vtcode/tasks/current_task.md")).expect("tracker file");
     assert!(tracker.contains("- [x] Finish tracker step"));
+}
+
+#[tokio::test]
+async fn runner_reuses_openai_response_chain_and_session_cache_key() {
+    let temp = TempDir::new().expect("tempdir");
+    let workspace = workspace_root(&temp);
+    seed_tracker(&workspace, json!(["Cache-aware tracker step"])).await;
+
+    let mut runner = make_runner(&temp, VTCodeConfig::default(), "thread-cache-lineage").await;
+    runner
+        .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
+        .await;
+    let provider = RecordingQueuedProvider::new(vec![
+        tool_call_response_with_request_id(
+            tools::TASK_TRACKER,
+            json!({
+                "action": "update",
+                "index": 1,
+                "status": "completed",
+            }),
+            "resp_first_turn",
+        ),
+        text_response("All work is complete."),
+        text_response("All work is complete."),
+        text_response("All work is complete."),
+    ]);
+    let recorded = provider.clone();
+    runner.provider_client = Box::new(provider);
+
+    let result = runner
+        .execute_task(&task("Cache-aware continuation", "exec-task"), &[])
+        .await
+        .expect("task result");
+
+    assert!(result.turns_executed >= 2);
+
+    let requests = recorded.recorded_requests();
+    assert!(requests.len() >= 2);
+    assert_eq!(requests[0].previous_response_id, None);
+    assert_eq!(
+        requests[0].prompt_cache_key.as_deref(),
+        Some("vtcode:openai:thread-cache-lineage")
+    );
+    assert_eq!(
+        requests[1].previous_response_id.as_deref(),
+        Some("resp_first_turn")
+    );
+    assert_eq!(requests[1].prompt_cache_key, requests[0].prompt_cache_key);
 }
 
 #[tokio::test]

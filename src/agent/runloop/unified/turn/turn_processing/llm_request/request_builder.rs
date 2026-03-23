@@ -4,7 +4,9 @@ use std::fmt::Write as _;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
-use vtcode_core::config::{OpenAIPromptCacheKeyMode, PromptCachingConfig};
+use vtcode_core::config::{
+    OpenAIPromptCacheKeyMode, PromptCachingConfig, build_openai_prompt_cache_key,
+};
 use vtcode_core::core::agent::features::FeatureSet;
 use vtcode_core::llm::provider::{self as uni, ParallelToolConfig};
 use vtcode_core::prompts::upsert_harness_limits_section;
@@ -47,22 +49,16 @@ pub(super) fn resolve_prompt_cache_shaping_mode(
     }
 }
 
-pub(super) fn build_openai_prompt_cache_key(
+pub(super) fn resolve_openai_prompt_cache_key(
     openai_prompt_cache_enabled: bool,
     prompt_cache_key_mode: &OpenAIPromptCacheKeyMode,
     prompt_cache_lineage_id: Option<&str>,
-    model: &str,
 ) -> Option<String> {
-    if !openai_prompt_cache_enabled {
-        return None;
-    }
-
-    match prompt_cache_key_mode {
-        OpenAIPromptCacheKeyMode::Session => {
-            prompt_cache_lineage_id.map(|lineage_id| format!("vtcode:openai:{lineage_id}:{model}"))
-        }
-        OpenAIPromptCacheKeyMode::Off => None,
-    }
+    build_openai_prompt_cache_key(
+        openai_prompt_cache_enabled,
+        prompt_cache_key_mode,
+        prompt_cache_lineage_id,
+    )
 }
 
 fn hash_value<T: Hash>(value: &T) -> u64 {
@@ -297,8 +293,6 @@ pub(super) fn update_previous_response_chain_after_success(
 ) {
     if supports_responses_chaining(provider_name) {
         session_stats.set_previous_response_chain(provider_name, active_model, response_request_id);
-    } else {
-        session_stats.clear_previous_response_chain();
     }
 }
 
@@ -363,11 +357,10 @@ pub(super) async fn build_turn_request(
             None
         }
     };
-    let prompt_cache_key = build_openai_prompt_cache_key(
+    let prompt_cache_key = resolve_openai_prompt_cache_key(
         turn_snapshot.openai_prompt_cache_enabled,
         &turn_snapshot.openai_prompt_cache_key_mode,
         ctx.session_stats.prompt_cache_lineage_id(),
-        active_model,
     );
     let stable_prefix_hash = stable_system_prefix_hash(&prompt_output.system_prompt);
     let tool_catalog_hash = tool_catalog_hash(prompt_output.current_tools.as_ref());

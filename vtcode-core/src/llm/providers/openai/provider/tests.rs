@@ -2295,7 +2295,7 @@ fn responses_payload_excludes_prompt_cache_retention_when_not_set() {
 #[test]
 fn responses_payload_includes_prompt_cache_retention_streaming() {
     let mut pc = PromptCachingConfig::default();
-    pc.providers.openai.prompt_cache_retention = Some("12h".to_owned());
+    pc.providers.openai.prompt_cache_retention = Some("24h".to_owned());
 
     let provider = OpenAIProvider::from_config(
         Some("key".to_string()),
@@ -2319,14 +2319,14 @@ fn responses_payload_includes_prompt_cache_retention_streaming() {
         payload
             .get("prompt_cache_retention")
             .and_then(Value::as_str),
-        Some("12h")
+        Some("24h")
     );
 }
 
 #[test]
 fn responses_payload_excludes_retention_for_non_responses_model() {
     let mut pc = PromptCachingConfig::default();
-    pc.providers.openai.prompt_cache_retention = Some("9999s".to_string());
+    pc.providers.openai.prompt_cache_retention = Some("24h".to_string());
 
     let provider = OpenAIProvider::from_config(
         Some("key".to_string()),
@@ -2351,7 +2351,7 @@ fn responses_payload_excludes_retention_for_non_responses_model() {
 #[test]
 fn provider_from_config_respects_prompt_cache_retention() {
     let mut pc = PromptCachingConfig::default();
-    pc.providers.openai.prompt_cache_retention = Some("72h".to_owned());
+    pc.providers.openai.prompt_cache_retention = Some("in_memory".to_owned());
     let provider = OpenAIProvider::from_config(
         Some("key".to_string()),
         None,
@@ -2366,7 +2366,7 @@ fn provider_from_config_respects_prompt_cache_retention() {
 
     assert_eq!(
         provider.prompt_cache_settings.prompt_cache_retention,
-        Some("72h".to_owned())
+        Some("in_memory".to_owned())
     );
 }
 

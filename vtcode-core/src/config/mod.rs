@@ -37,7 +37,7 @@ pub use core::{
     AgentConfig, AgentOnboardingConfig, AutomationConfig, CommandsConfig, EditorToolConfig,
     FullAutoConfig, GatekeeperConfig, ModelConfig, OpenAIPromptCacheKeyMode, PermissionMode,
     PermissionsConfig, PromptCachingConfig, ProviderPromptCachingConfig, SecurityConfig,
-    ToolPolicy, ToolsConfig,
+    ToolPolicy, ToolsConfig, build_openai_prompt_cache_key,
 };
 pub use core::{PluginRuntimeConfig, PluginTrustLevel};
 pub use defaults::{

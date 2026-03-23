@@ -393,7 +393,7 @@ python3 scripts/generate_config_field_reference.py
 | `prompt_cache.providers.openai.idle_expiration_seconds` | `integer` | no | `3600` | - |
 | `prompt_cache.providers.openai.min_prefix_tokens` | `integer` | no | `1024` | - |
 | `prompt_cache.providers.openai.prompt_cache_key_mode` | `string` | no | `"session"` | Strategy for generating OpenAI `prompt_cache_key`. Session mode derives one stable key per VT Code conversation. |
-| `prompt_cache.providers.openai.prompt_cache_retention` | `null \| string` | no | `null` | Optional prompt cache retention string to pass directly into OpenAI Responses API Example: "24h" or "1d". If set, VT Code will include `prompt_cache_retention` in the request body to extend the model-side prompt caching window. |
+| `prompt_cache.providers.openai.prompt_cache_retention` | `null \| string` | no | `null` | Optional prompt cache retention string to pass directly into OpenAI Responses API. Supported values are `"in_memory"` and `"24h"`. If set, VT Code will include `prompt_cache_retention` in the request body. |
 | `prompt_cache.providers.openai.surface_metrics` | `boolean` | no | `true` | - |
 | `prompt_cache.providers.openrouter.enabled` | `boolean` | no | `true` | - |
 | `prompt_cache.providers.openrouter.propagate_provider_capabilities` | `boolean` | no | `true` | Propagate provider cache instructions automatically |

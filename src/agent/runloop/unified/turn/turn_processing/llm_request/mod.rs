@@ -30,14 +30,14 @@ use crate::agent::runloop::unified::wait_feedback::{
 };
 use copilot_runtime::{CopilotRuntimeHost, prompt_session_to_stream};
 use metrics::emit_llm_retry_metrics;
-#[cfg(test)]
-use request_builder::{
-    build_openai_prompt_cache_key, is_openai_prompt_cache_enabled,
-    resolve_prompt_cache_shaping_mode,
-};
 use request_builder::{
     build_turn_request, capture_turn_request_snapshot, interrupted_provider_error,
     update_previous_response_chain_after_success,
+};
+#[cfg(test)]
+use request_builder::{
+    is_openai_prompt_cache_enabled, resolve_openai_prompt_cache_key,
+    resolve_prompt_cache_shaping_mode,
 };
 #[cfg(test)]
 use retry::is_retryable_llm_error;
@@ -489,7 +489,10 @@ pub(crate) async fn execute_llm_request(
                     {
                         request.previous_response_id = None;
                         dropped_previous_response_id_for_retry = true;
-                        ctx.session_stats.clear_previous_response_chain();
+                        ctx.session_stats.clear_previous_response_chain_for(
+                            &turn_snapshot.provider_name,
+                            &request.model,
+                        );
                         crate::agent::runloop::unified::turn::turn_helpers::display_status(
                             ctx.renderer,
                             "Retrying without previous response chain after provider error.",
@@ -895,48 +898,41 @@ mod tests {
     #[test]
     fn openai_prompt_cache_key_uses_stable_session_identifier() {
         let lineage_id = "lineage-abc-123";
-        let first = build_openai_prompt_cache_key(
+        let first = resolve_openai_prompt_cache_key(
             true,
             &OpenAIPromptCacheKeyMode::Session,
             Some(lineage_id),
-            "gpt-5",
         );
-        let second = build_openai_prompt_cache_key(
+        let second = resolve_openai_prompt_cache_key(
             true,
             &OpenAIPromptCacheKeyMode::Session,
             Some(lineage_id),
-            "gpt-5",
         );
 
-        assert_eq!(
-            first,
-            Some("vtcode:openai:lineage-abc-123:gpt-5".to_string())
-        );
+        assert_eq!(first, Some("vtcode:openai:lineage-abc-123".to_string()));
         assert_eq!(first, second);
     }
 
     #[test]
     fn openai_prompt_cache_key_honors_off_mode_or_disabled_cache() {
         assert_eq!(
-            build_openai_prompt_cache_key(
+            resolve_openai_prompt_cache_key(
                 true,
                 &OpenAIPromptCacheKeyMode::Off,
                 Some("lineage-1"),
-                "gpt-5",
             ),
             None
         );
         assert_eq!(
-            build_openai_prompt_cache_key(
+            resolve_openai_prompt_cache_key(
                 false,
                 &OpenAIPromptCacheKeyMode::Session,
                 Some("lineage-1"),
-                "gpt-5",
             ),
             None
         );
         assert_eq!(
-            build_openai_prompt_cache_key(true, &OpenAIPromptCacheKeyMode::Session, None, "gpt-5",),
+            resolve_openai_prompt_cache_key(true, &OpenAIPromptCacheKeyMode::Session, None,),
             None
         );
     }

@@ -4,6 +4,7 @@ use super::continuation::{
     CompletionAssessment, ContinuationController, VerificationResult, is_review_like_task,
 };
 use super::helpers::detect_textual_exec_tool_call;
+use crate::config::build_openai_prompt_cache_key;
 use crate::config::constants::tools;
 use crate::config::models::{ModelId, Provider as ModelProvider};
 use crate::config::types::{ReasoningEffortLevel, SystemPromptMode, VerbosityLevel};
@@ -79,6 +80,12 @@ fn summarize_verification_output(result: &serde_json::Value) -> String {
             }
         })
         .unwrap_or_default()
+}
+
+fn supports_responses_chaining(provider_name: &str) -> bool {
+    provider_name.eq_ignore_ascii_case("openai")
+        || provider_name.eq_ignore_ascii_case("openresponses")
+        || provider_name.eq_ignore_ascii_case("gemini")
 }
 
 impl AgentRunner {
@@ -328,6 +335,7 @@ impl AgentRunner {
                 ));
 
                 let turn_model = self.get_selected_model();
+                let provider_name = self.provider_client.name().to_string();
                 if std::env::var_os("VTCODE_DEBUG_PROVIDER").is_some() {
                     eprintln!(
                         "vtcode-debug: turn provider_client={} turn_model={}",
@@ -429,6 +437,25 @@ impl AgentRunner {
                     parallel_tool_config,
                     reasoning_effort,
                     verbosity: turn_verbosity,
+                    previous_response_id: if supports_responses_chaining(&provider_name) {
+                        runtime
+                            .state
+                            .previous_response_id_for(&provider_name, &turn_model)
+                    } else {
+                        None
+                    },
+                    prompt_cache_key: build_openai_prompt_cache_key(
+                        provider_name.eq_ignore_ascii_case("openai")
+                            && self.config().prompt_cache.enabled
+                            && self.config().prompt_cache.providers.openai.enabled,
+                        &self
+                            .config()
+                            .prompt_cache
+                            .providers
+                            .openai
+                            .prompt_cache_key_mode,
+                        Some(&self.session_id),
+                    ),
                     ..Default::default()
                 };
                 let previous_response_chain_present = request.previous_response_id.is_some();
@@ -442,6 +469,13 @@ impl AgentRunner {
                     .await?;
                 event_recorder.record_thread_events(runtime.take_emitted_events());
                 let response = turn_output.response;
+                if supports_responses_chaining(&provider_name) {
+                    runtime.state.set_previous_response_chain(
+                        &provider_name,
+                        &turn_model,
+                        response.request_id.as_deref(),
+                    );
+                }
                 self.runner_println(format_args!(
                     "{} {} {} received response, processing...",
                     agent_prefix,

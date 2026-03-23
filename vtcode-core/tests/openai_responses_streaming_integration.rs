@@ -10,7 +10,7 @@ fn mock_openai_base_url(server: &Server) -> String {
 
 #[tokio::test]
 async fn mock_responses_api_streaming_includes_prompt_cache_retention() {
-    let expect_body = json!({ "prompt_cache_retention": "48h", "stream": true });
+    let expect_body = json!({ "prompt_cache_retention": "24h", "stream": true });
 
     let mut server = Server::new_async().await;
 
@@ -24,7 +24,7 @@ async fn mock_responses_api_streaming_includes_prompt_cache_retention() {
         .create();
 
     let mut pc = PromptCachingConfig::default();
-    pc.providers.openai.prompt_cache_retention = Some("48h".to_string());
+    pc.providers.openai.prompt_cache_retention = Some("24h".to_string());
 
     let base_url = mock_openai_base_url(&server);
     let provider = OpenAIProvider::from_config(

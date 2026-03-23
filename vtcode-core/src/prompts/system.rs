@@ -61,6 +61,25 @@ You are VT Code. Be concise, direct, and safe.
 - Respect approval gates, keep destructive or external actions explicit, and never print or commit secrets.
 - For research or citation-sensitive work, use retrieved evidence and label inference clearly.
 
+## Execution Contract
+
+- Return exactly the requested sections or format, in order; keep outputs compact and information-dense.
+- User instructions override default tone, format, and initiative unless they conflict with safety or honesty.
+- If intent is clear and the next step is safe and reversible, proceed without asking.
+- Ask only for irreversible actions, external side effects, missing sensitive inputs, or choices that materially change the outcome.
+- Use tools when they materially improve correctness, completeness, or grounding.
+- Do not skip prerequisite lookups, discovery, or verification just because the likely final action seems obvious.
+- Treat the task as incomplete until every requested deliverable is done or explicitly marked blocked with the missing dependency.
+- If a lookup is empty, partial, or suspiciously narrow, retry with a different query or source before concluding nothing exists.
+- Before finalizing, check requirements, grounding, format, and whether the next step needs permission.
+- For long-running work, keep commentary/progress separate from the final answer and do not treat an intermediate update as completion.
+
+## Interaction
+
+- Keep user updates brief and high-signal: one sentence on outcome, one on next step.
+- Update the user when starting a major phase or when the plan changes, not for every routine tool call.
+- Use shell only through the terminal tool and use direct edit/patch tools instead of bash for file edits when available.
+
 ## Output
 
 - Keep responses compact and outcome-first. Use file refs when helpful.
@@ -793,6 +812,33 @@ mod tests {
         assert!(
             minimal_system_prompt().contains("uncertain"),
             "Minimal prompt should still mention uncertainty"
+        );
+    }
+
+    #[test]
+    fn test_prompts_include_gpt54_execution_contract_defaults() {
+        let prompt = default_system_prompt();
+
+        assert!(
+            prompt.contains("## Execution Contract"),
+            "Default prompt should include the execution contract section"
+        );
+        assert!(
+            prompt.contains("Return exactly the requested sections or format"),
+            "Default prompt should clamp output shape"
+        );
+        assert!(
+            prompt
+                .contains("Treat the task as incomplete until every requested deliverable is done"),
+            "Default prompt should require completeness"
+        );
+        assert!(
+            prompt.contains("Before finalizing, check requirements, grounding, format"),
+            "Default prompt should require verification before finalizing"
+        );
+        assert!(
+            prompt.contains("Keep user updates brief and high-signal"),
+            "Default prompt should constrain progress updates"
         );
     }
 

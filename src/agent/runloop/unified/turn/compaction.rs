@@ -578,7 +578,7 @@ async fn compact_history_segment_in_place(
         persistence,
     )?;
     *history = compacted;
-    session_stats.clear_previous_response_chain();
+    session_stats.clear_previous_response_chain_for(provider.name(), model);
     context_manager
         .cap_token_usage_after_compaction(configured_compaction_threshold(vt_cfg, provider, model));
     if let Some(ref envelope) = envelope {

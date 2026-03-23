@@ -809,7 +809,7 @@ cache_friendly_prompt_shaping = true
     # "session" creates one stable key per VT Code conversation.
     prompt_cache_key_mode = "session"
     # Optional: server-side prompt cache retention for OpenAI Responses API
-    # Example: "24h" (leave commented out for default behavior)
+    # Supported values: "in_memory" or "24h" (leave commented out for default behavior)
     # prompt_cache_retention = "24h"
 
 # Prompt cache configuration for Anthropic

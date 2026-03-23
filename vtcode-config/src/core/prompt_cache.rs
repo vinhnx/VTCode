@@ -1,9 +1,7 @@
 use crate::constants::prompt_cache;
 use anyhow::Context;
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 /// Global prompt caching configuration loaded from vtcode.toml
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -137,9 +135,10 @@ pub struct OpenAIPromptCacheSettings {
     #[serde(default = "default_openai_prompt_cache_key_mode")]
     pub prompt_cache_key_mode: OpenAIPromptCacheKeyMode,
 
-    /// Optional prompt cache retention string to pass directly into OpenAI Responses API
-    /// Example: "24h" or "1d". If set, VT Code will include `prompt_cache_retention`
-    /// in the request body to extend the model-side prompt caching window.
+    /// Optional prompt cache retention string to pass directly into OpenAI Responses API.
+    /// Supported values are "in_memory" and "24h". If set, VT Code will include
+    /// `prompt_cache_retention` in the request body to extend the model-side prompt
+    /// caching window or request the explicit in-memory policy.
     #[serde(default)]
     pub prompt_cache_retention: Option<String>,
 }
@@ -161,10 +160,31 @@ impl OpenAIPromptCacheSettings {
     /// Validate OpenAI provider prompt cache settings. Returns Err if the retention value is invalid.
     pub fn validate(&self) -> anyhow::Result<()> {
         if let Some(ref retention) = self.prompt_cache_retention {
-            parse_retention_duration(retention)
+            validate_openai_retention_policy(retention)
                 .with_context(|| format!("Invalid prompt_cache_retention: {}", retention))?;
         }
         Ok(())
+    }
+}
+
+/// Build a stable OpenAI `prompt_cache_key` for requests that should share
+/// provider-side cache routing.
+#[must_use]
+pub fn build_openai_prompt_cache_key(
+    prompt_cache_enabled: bool,
+    prompt_cache_key_mode: &OpenAIPromptCacheKeyMode,
+    lineage_id: Option<&str>,
+) -> Option<String> {
+    if !prompt_cache_enabled {
+        return None;
+    }
+
+    let lineage_id = lineage_id.map(str::trim).filter(|value| !value.is_empty());
+    match prompt_cache_key_mode {
+        OpenAIPromptCacheKeyMode::Session => {
+            lineage_id.map(|lineage_id| format!("vtcode:openai:{lineage_id}"))
+        }
+        OpenAIPromptCacheKeyMode::Off => None,
     }
 }
 
@@ -492,53 +512,19 @@ fn resolve_default_cache_dir() -> PathBuf {
     PathBuf::from(prompt_cache::DEFAULT_CACHE_DIR)
 }
 
-/// Parse a duration string into a std::time::Duration
-/// Acceptable formats: <number>[s|m|h|d], e.g., "30s", "5m", "24h", "1d".
-fn parse_retention_duration(input: &str) -> anyhow::Result<Duration> {
+/// Validate the OpenAI Responses API prompt cache retention policy.
+/// The public API currently accepts only `in_memory` and `24h`.
+fn validate_openai_retention_policy(input: &str) -> anyhow::Result<()> {
     let input = input.trim();
     if input.is_empty() {
         anyhow::bail!("Empty retention string");
     }
 
-    // Strict format: number + unit (s|m|h|d)
-    let re =
-        Regex::new(r"^(\d+)([smhdSMHD])$").context("Failed to compile retention format regex")?;
-    let caps = re
-        .captures(input)
-        .ok_or_else(|| anyhow::anyhow!("Invalid retention format; use <number>[s|m|h|d]"))?;
-
-    let value_str = caps
-        .get(1)
-        .map(|m| m.as_str())
-        .ok_or_else(|| anyhow::anyhow!("Retention value capture missing"))?;
-    let unit = caps
-        .get(2)
-        .map(|m| m.as_str())
-        .ok_or_else(|| anyhow::anyhow!("Retention unit capture missing"))?
-        .chars()
-        .next()
-        .ok_or_else(|| anyhow::anyhow!("Retention unit is empty"))?
-        .to_ascii_lowercase();
-    let value: u64 = value_str
-        .parse()
-        .with_context(|| format!("Invalid numeric value in retention: {}", value_str))?;
-
-    let seconds = match unit {
-        's' => value,
-        'm' => value * 60,
-        'h' => value * 60 * 60,
-        'd' => value * 24 * 60 * 60,
-        _ => anyhow::bail!("Invalid retention unit; expected s,m,h,d"),
-    };
-
-    // Enforce a reasonable retention window: at least 1s and max 30 days
-    const MIN_SECONDS: u64 = 1;
-    const MAX_SECONDS: u64 = 30 * 24 * 60 * 60; // 30 days
-    if !((MIN_SECONDS..=MAX_SECONDS).contains(&seconds)) {
-        anyhow::bail!("prompt_cache_retention must be between 1s and 30d");
+    if matches!(input, "in_memory" | "24h") {
+        return Ok(());
     }
 
-    Ok(Duration::from_secs(seconds))
+    anyhow::bail!("prompt_cache_retention must be one of: in_memory, 24h");
 }
 
 impl PromptCachingConfig {
@@ -615,24 +601,13 @@ mod tests {
     }
 
     #[test]
-    fn parse_retention_duration_valid_and_invalid() {
-        assert_eq!(
-            parse_retention_duration("24h").unwrap(),
-            Duration::from_secs(86400)
-        );
-        assert_eq!(
-            parse_retention_duration("5m").unwrap(),
-            Duration::from_secs(300)
-        );
-        assert_eq!(
-            parse_retention_duration("1s").unwrap(),
-            Duration::from_secs(1)
-        );
-        assert!(parse_retention_duration("0s").is_err());
-        assert!(parse_retention_duration("31d").is_err());
-        assert!(parse_retention_duration("abc").is_err());
-        assert!(parse_retention_duration("").is_err());
-        assert!(parse_retention_duration("10x").is_err());
+    fn validate_openai_retention_policy_valid_and_invalid() {
+        assert!(validate_openai_retention_policy("24h").is_ok());
+        assert!(validate_openai_retention_policy("in_memory").is_ok());
+        assert!(validate_openai_retention_policy("5m").is_err());
+        assert!(validate_openai_retention_policy("1d").is_err());
+        assert!(validate_openai_retention_policy("abc").is_err());
+        assert!(validate_openai_retention_policy("").is_err());
     }
 
     #[test]
@@ -655,6 +630,33 @@ prompt_cache_key_mode = "off"
         assert_eq!(
             parsed.providers.openai.prompt_cache_key_mode,
             OpenAIPromptCacheKeyMode::Off
+        );
+    }
+
+    #[test]
+    fn build_openai_prompt_cache_key_uses_trimmed_lineage_id() {
+        let key = build_openai_prompt_cache_key(
+            true,
+            &OpenAIPromptCacheKeyMode::Session,
+            Some(" lineage-abc "),
+        );
+
+        assert_eq!(key.as_deref(), Some("vtcode:openai:lineage-abc"));
+    }
+
+    #[test]
+    fn build_openai_prompt_cache_key_honors_disabled_or_off_mode() {
+        assert_eq!(
+            build_openai_prompt_cache_key(false, &OpenAIPromptCacheKeyMode::Session, Some("id")),
+            None
+        );
+        assert_eq!(
+            build_openai_prompt_cache_key(true, &OpenAIPromptCacheKeyMode::Off, Some("id")),
+            None
+        );
+        assert_eq!(
+            build_openai_prompt_cache_key(true, &OpenAIPromptCacheKeyMode::Session, Some("  ")),
+            None
         );
     }
 
