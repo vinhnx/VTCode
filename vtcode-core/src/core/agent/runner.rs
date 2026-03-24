@@ -55,6 +55,7 @@ mod telemetry;
 mod tool_access;
 mod tool_args;
 mod tool_exec;
+mod tool_execution_guard;
 mod types;
 mod validation;
 

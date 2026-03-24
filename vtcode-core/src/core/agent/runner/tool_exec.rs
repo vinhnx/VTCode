@@ -1,5 +1,6 @@
 use super::AgentRunner;
 use super::constants::{LOOP_THROTTLE_BASE_MS, LOOP_THROTTLE_MAX_MS};
+use super::tool_execution_guard::ToolExecutionGuard;
 use super::types::ToolFailureContext;
 use crate::config::constants::tools;
 use crate::core::agent::events::{
@@ -279,8 +280,8 @@ impl AgentRunner {
                     );
                 }
                 Err(e) => {
-                    let error_msg = format!("Error executing {}: {}", name, e);
-                    let category = vtcode_commons::classify_error_message(&error_msg);
+                    let category = vtcode_commons::classify_anyhow_error(&e);
+                    let failure_text = self.user_facing_tool_error_message(&name, &e);
                     error!(agent = %agent_prefix, tool = %name, error = %e, category = ?category, "Tool execution failed");
                     if matches!(category, ErrorCategory::RateLimit) {
                         runtime.state.warnings.push(
@@ -297,10 +298,12 @@ impl AgentRunner {
                         );
                         halt_turn = true;
                     }
-                    let user_hint = format!("[{}] {}", category.user_label(), error_msg);
-                    runtime
-                        .state
-                        .push_tool_error(call_id.clone(), &name, user_hint, is_gemini);
+                    runtime.state.push_tool_error(
+                        call_id.clone(),
+                        &name,
+                        failure_text.clone(),
+                        is_gemini,
+                    );
                     complete_tool_invocation(
                         runtime,
                         event_recorder,
@@ -317,7 +320,7 @@ impl AgentRunner {
                         Some(&call_id),
                         ToolCallStatus::Failed,
                         None,
-                        &e.to_string(),
+                        &failure_text,
                         None,
                     );
                     if halt_turn {
@@ -327,7 +330,6 @@ impl AgentRunner {
             }
         }
         if halt_turn {
-            tokio::time::sleep(Duration::from_millis(250)).await;
             return Ok(());
         }
         Ok(())
@@ -455,8 +457,11 @@ impl AgentRunner {
             }
 
             // Use internal execution since is_valid_tool was already called above
+            let mut guard =
+                ToolExecutionGuard::new(&name, &call.id, runtime.state.error_recovery.clone());
             match self.execute_tool_internal(&name, &args).await {
                 Ok(result) => {
+                    guard.mark_completed();
                     if !self.quiet {
                         info!(agent = %agent_prefix, tool = %name, "Tool executed successfully");
                     }
@@ -493,8 +498,8 @@ impl AgentRunner {
                     }
                 }
                 Err(e) => {
-                    let err_msg = e.to_string();
-                    let category = vtcode_commons::classify_error_message(&err_msg);
+                    guard.mark_completed();
+                    let category = vtcode_commons::classify_anyhow_error(&e);
 
                     // Determine halt behavior based on error category
                     let should_halt = matches!(
@@ -538,7 +543,6 @@ impl AgentRunner {
                     self.record_tool_failure(&mut failure_ctx, &name, &e, Some(call.id.as_str()));
 
                     if should_halt {
-                        tokio::time::sleep(Duration::from_millis(250)).await;
                         break;
                     }
                 }

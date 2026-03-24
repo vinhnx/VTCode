@@ -112,7 +112,7 @@ impl PipeSessionManager {
                         let text = String::from_utf8_lossy(&chunk);
                         let mut guard = output_clone.lock().await;
                         guard.push_str(&text);
-                        let _ = output_activity_tx.send_modify(|version| *version += 1);
+                        output_activity_tx.send_modify(|version| *version += 1);
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
                     Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
@@ -123,7 +123,7 @@ impl PipeSessionManager {
         let exit_activity_tx = activity_tx.clone();
         let exit_task = tokio::spawn(async move {
             let _ = exit_rx.await;
-            let _ = exit_activity_tx.send_modify(|version| *version += 1);
+            exit_activity_tx.send_modify(|version| *version += 1);
         });
 
         let handle = Arc::new(spawned.session);

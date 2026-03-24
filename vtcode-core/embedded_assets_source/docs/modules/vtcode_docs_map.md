@@ -574,11 +574,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Summary of Improvements
   - **User Questions**: "What can you tell me about Enhanced Skills Usage Guide for VT Code?", "How does Summary of Improvements work?"
 
-- **File**: `docs/project/TODO.md`
-  - **Content**: Error Handling Enhancement in Agent Loop
-  - **Topics**: Proposed Changes, Verification Plan
-  - **User Questions**: "What can you tell me about Error Handling Enhancement in Agent Loop?", "How does Proposed Changes work?", "How does Verification Plan work?"
-
 - **File**: `docs/harness/EXEC_PLANS.md`
   - **Content**: Execution Plans
   - **Topics**: Why Exec Plans?, Exec Plans vs Plan Mode, Directory Structure, Mandatory Sections, Template
@@ -703,6 +698,10 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Content**: Styling Quick Start Guide
   - **Topics**: For CLI Output, For TUI Widgets, Unified Theme, Color Reference, Common Patterns
   - **User Questions**: "What can you tell me about Styling Quick Start Guide?", "How does For CLI Output work?", "How does For TUI Widgets work?"
+
+- **File**: `docs/project/TODO.md`
+  - **Content**: TODO.md
+  - **User Questions**: "What can you tell me about TODO.md?"
 
 - **File**: `docs/harness/TECH_DEBT_TRACKER.md`
   - **Content**: Tech Debt Tracker

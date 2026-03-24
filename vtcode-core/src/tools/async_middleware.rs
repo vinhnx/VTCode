@@ -490,6 +490,7 @@ mod tests {
     use super::*;
     use std::future::Future;
     use std::pin::Pin;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     type BoxedToolFuture = Pin<Box<dyn Future<Output = ToolResult> + Send>>;
     type BoxedExecutor = Box<dyn Fn(ToolRequest) -> BoxedToolFuture + Send + Sync>;
@@ -549,5 +550,88 @@ mod tests {
         let result2 = cache.execute(request, executor2).await;
         assert!(result2.from_cache);
         assert_eq!(result2.output, Some("result1".to_string())); // Returns cached value
+    }
+
+    #[tokio::test]
+    async fn async_retry_skips_non_retryable_errors() {
+        let obs = Arc::new(ObservabilityContext::noop());
+        let middleware = AsyncRetryMiddleware::new(3, 1, 2, obs);
+        let attempts = Arc::new(AtomicUsize::new(0));
+
+        let executor_attempts = attempts.clone();
+        let executor: BoxedExecutor = Box::new(move |_req: ToolRequest| {
+            let executor_attempts = executor_attempts.clone();
+            Box::pin(async move {
+                executor_attempts.fetch_add(1, Ordering::SeqCst);
+                ToolResult {
+                    success: false,
+                    output: None,
+                    error: Some("invalid api key".to_string()),
+                    duration_ms: 0,
+                    from_cache: false,
+                }
+            })
+        });
+
+        let result = middleware
+            .execute(
+                ToolRequest {
+                    tool_name: "auth_tool".to_string(),
+                    arguments: "{}".to_string(),
+                    context: "{}".to_string(),
+                },
+                executor,
+            )
+            .await;
+
+        assert!(!result.success);
+        assert_eq!(attempts.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn async_retry_retries_retryable_errors_until_success() {
+        let obs = Arc::new(ObservabilityContext::noop());
+        let middleware = AsyncRetryMiddleware::new(3, 1, 2, obs);
+        let attempts = Arc::new(AtomicUsize::new(0));
+
+        let executor_attempts = attempts.clone();
+        let executor: BoxedExecutor = Box::new(move |_req: ToolRequest| {
+            let executor_attempts = executor_attempts.clone();
+            Box::pin(async move {
+                let attempt = executor_attempts.fetch_add(1, Ordering::SeqCst);
+                if attempt < 2 {
+                    ToolResult {
+                        success: false,
+                        output: None,
+                        error: Some("429 Too Many Requests".to_string()),
+                        duration_ms: 0,
+                        from_cache: false,
+                    }
+                } else {
+                    ToolResult {
+                        success: true,
+                        output: Some("ok".to_string()),
+                        error: None,
+                        duration_ms: 0,
+                        from_cache: false,
+                    }
+                }
+            })
+        });
+
+        let result = middleware
+            .execute(
+                ToolRequest {
+                    tool_name: "rate_limited_tool".to_string(),
+                    arguments: "{}".to_string(),
+                    context: "{}".to_string(),
+                },
+                executor,
+            )
+            .await;
+
+        assert!(result.success);
+        assert_eq!(result.output.as_deref(), Some("ok"));
+        assert_eq!(attempts.load(Ordering::SeqCst), 3);
     }
 }

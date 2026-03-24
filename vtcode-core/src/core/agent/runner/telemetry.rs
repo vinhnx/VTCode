@@ -21,6 +21,27 @@ pub(super) struct ObservabilityFields {
 }
 
 impl AgentRunner {
+    pub(super) fn user_facing_tool_error_message(
+        &self,
+        _tool_name: &str,
+        error: &anyhow::Error,
+    ) -> String {
+        let category = vtcode_commons::classify_anyhow_error(error);
+        let raw_message = error.to_string();
+        let normalized_message = raw_message
+            .strip_prefix('[')
+            .and_then(|rest| rest.split_once("] ").map(|(_, message)| message))
+            .unwrap_or(raw_message.as_str());
+
+        let mut message = format!("[{}] {}", category.user_label(), normalized_message);
+        if let Some(suggestion) = category.recovery_suggestions().into_iter().next() {
+            message.push_str(" Hint: ");
+            message.push_str(suggestion.as_ref());
+        }
+
+        message
+    }
+
     pub(super) fn observability_fields(
         &self,
         model: &str,
@@ -102,7 +123,7 @@ impl AgentRunner {
         error: &anyhow::Error,
         tool_response_id: Option<&str>,
     ) {
-        let failure_text = format!("Tool {} failed: {}", tool_name, error);
+        let failure_text = self.user_facing_tool_error_message(tool_name, error);
         if !self.quiet {
             println!(
                 "{} {} {}",

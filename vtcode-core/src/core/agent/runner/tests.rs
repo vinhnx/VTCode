@@ -18,9 +18,12 @@ use crate::exec::events::{
 use crate::llm::provider::{
     FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, ToolCall,
 };
+use crate::tool_policy::ToolPolicy;
 use crate::tools::Tool;
+use crate::tools::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig};
 use crate::tools::handlers::{PlanModeState, TaskTrackerTool};
 use crate::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
+use crate::tools::registry::ToolRegistration;
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use serde_json::json;
@@ -29,6 +32,7 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
 #[test]
@@ -38,7 +42,7 @@ fn record_turn_duration_records_once() {
     let mut max_ms = 0u128;
     let mut count = 0usize;
     let mut recorded = false;
-    let start = std::time::Instant::now();
+    let start = Instant::now();
 
     record_turn_duration(
         &mut durations,
@@ -579,6 +583,64 @@ impl LLMProvider for RecordingQueuedProvider {
     }
 }
 
+struct PolicyDeniedTool;
+
+#[async_trait]
+impl Tool for PolicyDeniedTool {
+    async fn execute(&self, _args: serde_json::Value) -> anyhow::Result<serde_json::Value> {
+        Err(anyhow::anyhow!("denied by policy"))
+    }
+
+    fn name(&self) -> &'static str {
+        "policy_denied_tool"
+    }
+
+    fn description(&self) -> &'static str {
+        "Fails with a policy violation for testing"
+    }
+
+    fn parameter_schema(&self) -> Option<serde_json::Value> {
+        Some(json!({"type": "object"}))
+    }
+
+    fn default_permission(&self) -> ToolPolicy {
+        ToolPolicy::Allow
+    }
+
+    fn is_mutating(&self) -> bool {
+        false
+    }
+}
+
+struct MarkerTool;
+
+#[async_trait]
+impl Tool for MarkerTool {
+    async fn execute(&self, _args: serde_json::Value) -> anyhow::Result<serde_json::Value> {
+        Ok(json!({"success": true, "marker": true}))
+    }
+
+    fn name(&self) -> &'static str {
+        "marker_tool"
+    }
+
+    fn description(&self) -> &'static str {
+        "Successful marker tool for testing"
+    }
+
+    fn parameter_schema(&self) -> Option<serde_json::Value> {
+        Some(json!({"type": "object"}))
+    }
+
+    fn default_permission(&self) -> ToolPolicy {
+        ToolPolicy::Allow
+    }
+
+    fn is_mutating(&self) -> bool {
+        false
+    }
+}
+
 fn task(title: &str, id: &str) -> Task {
     Task {
         id: id.to_string(),
@@ -1063,6 +1125,234 @@ async fn denied_tool_call_emits_one_failed_output_for_runtime_invocation() {
         ),
         1
     );
+}
+
+#[tokio::test]
+async fn denied_parallel_tool_halt_returns_promptly() {
+    let temp = TempDir::new().expect("tempdir");
+    let mut runner = make_runner(&temp, VTCodeConfig::default(), "thread-denied-parallel").await;
+    runner
+        .enable_full_auto(&[tools::UNIFIED_FILE.to_string()])
+        .await;
+
+    let tool_calls = tool_call_response(
+        tools::UNIFIED_EXEC,
+        json!({
+            "action": "run",
+            "command": "echo vtcode",
+        }),
+    )
+    .tool_calls
+    .expect("tool call response");
+
+    let mut runtime = AgentRuntime::new(
+        AgentSessionState::new("session-denied-parallel".to_string(), 16, 4, 128_000),
+        None,
+        None,
+    );
+    let mut recorder = ExecEventRecorder::new("thread-denied-parallel", None, None);
+
+    let start = Instant::now();
+    runner
+        .execute_parallel_tool_calls(tool_calls, &mut runtime, &mut recorder, "[parallel]", false)
+        .await
+        .expect("tool execution should finish");
+
+    assert!(start.elapsed() < Duration::from_millis(200));
+}
+
+#[tokio::test]
+async fn denied_sequential_tool_halt_returns_promptly() {
+    let temp = TempDir::new().expect("tempdir");
+    let mut runner = make_runner(&temp, VTCodeConfig::default(), "thread-denied-sequential").await;
+    runner
+        .enable_full_auto(&[tools::UNIFIED_FILE.to_string()])
+        .await;
+
+    let tool_calls = tool_call_response(
+        tools::UNIFIED_EXEC,
+        json!({
+            "action": "run",
+            "command": "echo vtcode",
+        }),
+    )
+    .tool_calls
+    .expect("tool call response");
+
+    let mut runtime = AgentRuntime::new(
+        AgentSessionState::new("session-denied-sequential".to_string(), 16, 4, 128_000),
+        None,
+        None,
+    );
+    let mut recorder = ExecEventRecorder::new("thread-denied-sequential", None, None);
+
+    let start = Instant::now();
+    runner
+        .execute_sequential_tool_calls(
+            tool_calls,
+            &mut runtime,
+            &mut recorder,
+            "[sequential]",
+            false,
+        )
+        .await
+        .expect("tool execution should finish");
+
+    assert!(start.elapsed() < Duration::from_millis(200));
+}
+
+#[tokio::test]
+async fn execute_tool_internal_blocks_open_circuit_breaker() {
+    let temp = TempDir::new().expect("tempdir");
+    let runner = make_runner(&temp, VTCodeConfig::default(), "thread-open-circuit").await;
+    let breaker = Arc::new(CircuitBreaker::new(CircuitBreakerConfig {
+        failure_threshold: 1,
+        ..CircuitBreakerConfig::default()
+    }));
+    runner
+        .tool_registry
+        .set_shared_circuit_breaker(breaker.clone());
+    breaker.record_failure_category_for_tool(
+        tools::READ_FILE,
+        vtcode_commons::ErrorCategory::ExecutionError,
+    );
+
+    let err = runner
+        .execute_tool_internal(tools::READ_FILE, &json!({"path": "note.txt"}))
+        .await
+        .expect_err("open circuit should deny execution");
+
+    assert!(
+        err.to_string()
+            .contains("temporarily disabled by circuit breaker")
+    );
+}
+
+#[tokio::test]
+async fn sequential_policy_failure_halts_following_tool_calls() {
+    let temp = TempDir::new().expect("tempdir");
+    let mut runner = make_runner(&temp, VTCodeConfig::default(), "thread-policy-halt").await;
+    runner
+        .tool_registry
+        .register_tool(
+            ToolRegistration::from_tool_instance(
+                "policy_denied_tool",
+                CapabilityLevel::CodeSearch,
+                PolicyDeniedTool,
+            )
+            .with_permission(ToolPolicy::Allow),
+        )
+        .await
+        .expect("register policy tool");
+    runner
+        .tool_registry
+        .register_tool(
+            ToolRegistration::from_tool_instance(
+                "marker_tool",
+                CapabilityLevel::CodeSearch,
+                MarkerTool,
+            )
+            .with_permission(ToolPolicy::Allow),
+        )
+        .await
+        .expect("register marker tool");
+    runner
+        .tool_registry
+        .allow_all_tools()
+        .await
+        .expect("allow tools");
+
+    let tool_calls = vec![
+        ToolCall::function(
+            "call-policy".to_string(),
+            "policy_denied_tool".to_string(),
+            json!({}).to_string(),
+        ),
+        ToolCall::function(
+            "call-marker".to_string(),
+            "marker_tool".to_string(),
+            json!({}).to_string(),
+        ),
+    ];
+
+    let mut runtime = AgentRuntime::new(
+        AgentSessionState::new("session-policy-halt".to_string(), 16, 4, 128_000),
+        None,
+        None,
+    );
+    let mut recorder = ExecEventRecorder::new("thread-policy-halt", None, None);
+
+    runner
+        .execute_sequential_tool_calls(tool_calls, &mut runtime, &mut recorder, "[single]", false)
+        .await
+        .expect("tool execution should finish");
+
+    assert!(
+        runtime.state.warnings.iter().any(
+            |warning| warning == "Tool denied by policy; halting further tool calls this turn."
+        )
+    );
+    assert!(
+        !runtime
+            .state
+            .executed_commands
+            .iter()
+            .any(|tool| tool == "marker_tool")
+    );
+
+    let events = recorder.into_events();
+    assert!(completed_tool_invocation_item_id(&events, "call-policy").is_some());
+    assert!(completed_tool_invocation_item_id(&events, "call-marker").is_none());
+}
+
+#[tokio::test]
+async fn sequential_tool_failures_record_categorized_user_message() {
+    let temp = TempDir::new().expect("tempdir");
+    let mut runner = make_runner(&temp, VTCodeConfig::default(), "thread-policy-message").await;
+    runner
+        .tool_registry
+        .register_tool(
+            ToolRegistration::from_tool_instance(
+                "policy_denied_tool",
+                CapabilityLevel::CodeSearch,
+                PolicyDeniedTool,
+            )
+            .with_permission(ToolPolicy::Allow),
+        )
+        .await
+        .expect("register policy tool");
+    runner
+        .tool_registry
+        .allow_all_tools()
+        .await
+        .expect("allow tools");
+
+    let tool_calls = vec![ToolCall::function(
+        "call-policy".to_string(),
+        "policy_denied_tool".to_string(),
+        json!({}).to_string(),
+    )];
+
+    let mut runtime = AgentRuntime::new(
+        AgentSessionState::new("session-policy-message".to_string(), 16, 4, 128_000),
+        None,
+        None,
+    );
+    let mut recorder = ExecEventRecorder::new("thread-policy-message", None, None);
+
+    runner
+        .execute_sequential_tool_calls(tool_calls, &mut runtime, &mut recorder, "[single]", false)
+        .await
+        .expect("tool execution should finish");
+
+    let tool_error = runtime
+        .state
+        .messages
+        .last()
+        .and_then(|message| message.content.as_ref())
+        .expect("tool error recorded");
+    assert!(tool_error.contains("[Blocked by policy]"));
+    assert!(tool_error.contains("Hint: Review workspace policies and restrictions"));
 }
 
 #[tokio::test]

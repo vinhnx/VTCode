@@ -1,10 +1,13 @@
 //! Centralized agent session state management.
 
+use crate::core::agent::error_recovery::ErrorRecoveryState;
 use crate::core::agent::task::{TaskOutcome, TaskResults};
 use crate::exec::events::Usage;
 use crate::llm::provider::Message;
 use crate::llm::providers::gemini::wire::{Content, FunctionResponse, Part};
 use hashbrown::HashMap;
+use parking_lot::Mutex;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use vtcode_exec_events::ThreadEvent;
 
@@ -53,6 +56,8 @@ pub struct AgentSessionState {
     pub last_processed_message_idx: usize,
     /// Responses-style continuation pointers keyed by normalized provider/model pairs.
     pub previous_response_ids: HashMap<(String, String), String>,
+    /// Agent-local recent error diagnostics for interrupted or repeated tool failures.
+    pub error_recovery: Arc<Mutex<ErrorRecoveryState>>,
 
     // Legacy / Stats fields for compatibility
     pub consecutive_idle_turns: usize,
@@ -139,6 +144,7 @@ impl AgentSessionState {
             tool_loop_limit_hit: false,
             last_processed_message_idx: 0,
             previous_response_ids: HashMap::new(),
+            error_recovery: Arc::new(Mutex::new(ErrorRecoveryState::default())),
             consecutive_idle_turns: 0,
             max_tool_loop_streak: 0,
             turn_count: 0,

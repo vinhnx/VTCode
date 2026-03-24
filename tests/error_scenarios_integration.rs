@@ -9,6 +9,8 @@
 
 #[cfg(test)]
 mod error_scenarios {
+    use std::time::Duration;
+
     use vtcode_commons::{BackoffStrategy, ErrorCategory, Retryability};
 
     // -----------------------------------------------------------------------
@@ -223,6 +225,41 @@ mod error_scenarios {
                 label
             );
         }
+    }
+
+    #[test]
+    fn retry_policy_surfaces_circuit_open_backoff() {
+        let policy = vtcode_core::retry::RetryPolicy::default();
+        let decision = policy.decision_for_category(
+            ErrorCategory::CircuitOpen,
+            0,
+            Some(Duration::from_secs(7)),
+        );
+
+        assert!(decision.retryable);
+        assert_eq!(decision.delay, Some(Duration::from_secs(7)));
+        assert_eq!(decision.category, ErrorCategory::CircuitOpen);
+    }
+
+    #[test]
+    fn circuit_breaker_blocks_requests_after_threshold() {
+        let breaker = vtcode_core::tools::circuit_breaker::CircuitBreaker::new(
+            vtcode_core::tools::circuit_breaker::CircuitBreakerConfig {
+                failure_threshold: 1,
+                ..vtcode_core::tools::circuit_breaker::CircuitBreakerConfig::default()
+            },
+        );
+
+        breaker.record_failure_category_for_tool("read_file", ErrorCategory::ExecutionError);
+
+        assert!(!breaker.allow_request_for_tool("read_file"));
+        let diagnostics = breaker.get_diagnostics("read_file");
+        assert!(diagnostics.is_open);
+        assert_eq!(diagnostics.tool_name, "read_file");
+        assert_eq!(
+            diagnostics.last_error_category,
+            Some(ErrorCategory::ExecutionError)
+        );
     }
 
     // -----------------------------------------------------------------------
