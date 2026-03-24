@@ -13,6 +13,8 @@ too-many-arguments-threshold = 9
 # Disallow specific methods that should be avoided
 disallowed-methods = [
     { path = "std::panic::panic_any", reason = "Use anyhow/thiserror for error handling instead" },
+    { path = "std::iter::Iterator::for_each", reason = "prefer `for` for side-effects (F-COMBINATOR)" },
+    { path = "std::iter::Iterator::try_for_each", reason = "prefer `for` for side-effects (F-COMBINATOR)" },
 ]
 
 # Allow absolute paths from specific crates (for project structure)

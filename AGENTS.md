@@ -87,6 +87,38 @@ vtcode/                          # Binary entrypoint (src/main.rs)
 
 **Docs**: `.md` in `./docs/` only (`README.md` exception).
 
+### Rust Style (epage)
+
+Based on [epage's Rust Style Guide](https://epage.github.io/dev/rust-style/). Code is technical writing — lead with salient details (inverted pyramid), guide the reader through structure.
+
+#### Project Structure
+
+- **P-MOD**: Prefer `mod.rs` over `name.rs` when splitting into directories. Keeps modules atomic for browsing/renaming. Enforced via `clippy.self_named_module_files`.
+- **P-DIR-MOD**: Directory root modules (`mod.rs`, `lib.rs`) only re-export. All definitions live in topically named files.
+- **P-PRELUDE-MOD**: Prelude modules only re-export.
+- **P-PATH-MOD**: Avoid `#[path]`; use standard module lookup.
+- **P-API**: API should be a subset of file layout — a reader should navigate from API to source by path.
+- **P-VISIBILITY**: Limit visibility to module-scope (no `pub(_)`), `pub(crate)`, or `pub`. If not fully abstracted within a module, use `pub(crate)`.
+
+#### File Structure
+
+- **M-PRIV-PUB-USE**: Private imports first, then public re-exports (group `pub use` with the public API).
+- **M-PRIV-USE**: Limit private imports to heavily-used items where intent is clear from the name. Import traits anonymously (`use Trait as _`).
+- **M-SINGLE-USE**: Import items individually, not compound (`use a::B; use a::C;` not `use a::{B, C};`).
+- **M-ITEM-TOC**: Central/titular item first in a module — it provides context and a TOC for the rest.
+- **M-TYPE-ASSOC**: Type definition immediately followed by its `impl` block, before the next type.
+- **M-ASSOC-TRAIT**: Associated functions (`impl Foo {}`) before trait impls (`impl Display for Foo {}`).
+- **M-CALLER-CALLEE**: Caller before callee. The weaker the callee's abstraction, the closer it should follow.
+- **M-PUB-PRIV**: Public items before private items in modules, structs, and impl blocks.
+
+#### Function Structure
+
+- **F-GROUP**: Use blank lines to group related logic ("paragraphs" of a function).
+- **F-OUT**: Open blocks with output variable declarations to announce intent.
+- **F-VISUAL**: Blocks (`if`/`else`/`match`) should reflect business logic. Use early returns for bookkeeping, not business paths. Prefer combinators for non-business transformations.
+- **F-PURE-MUT**: Pure expressions xor mutable statements — don't mix mutation with expression-based logic.
+- **F-COMBINATOR**: Closures in combinators (`map`, `filter`, etc.) must be pure. Use `for` loops for side effects — `for_each`/`try_for_each` are disallowed via `clippy.toml`.
+
 ### Logging & Tracing Guidelines
 
 **Architecture**: Shared buffered writer in `vtcode-core/src/utils/trace_writer.rs` (`FlushableWriter`) with flush hook in `vtcode-commons/src/trace_flush.rs`. Tracing setup is centralized in `src/main_helpers/tracing.rs` via `install_tracing_stack()`.
