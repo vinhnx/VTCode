@@ -4,6 +4,7 @@ use super::ui_interaction::{
 };
 use futures::stream;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::{Notify, mpsc};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::AnsiRenderer;
@@ -346,6 +347,44 @@ async fn placeholder_spinner_restores_previous_input_status() {
     assert_eq!(
         last_status,
         Some((Some("provider".to_string()), Some("model".to_string())))
+    );
+}
+
+#[tokio::test]
+async fn placeholder_spinner_applies_message_updates_before_next_tick() {
+    let (tx, mut rx) = mpsc::unbounded_channel::<InlineCommand>();
+    let handle = InlineHandle::new_for_tests(tx);
+    let spinner = PlaceholderSpinner::with_progress(&handle, None, None, "Loading...", None);
+
+    let _ = rx.recv().await;
+    spinner.update_message("Still working");
+
+    let updated_status = tokio::time::timeout(Duration::from_millis(100), async {
+        loop {
+            match rx.recv().await {
+                Some(InlineCommand::SetInputStatus { left, .. })
+                    if left
+                        .as_deref()
+                        .map(|text| text.contains("Still working"))
+                        .unwrap_or(false) =>
+                {
+                    return left;
+                }
+                Some(_) => continue,
+                None => panic!("spinner status channel closed unexpectedly"),
+            }
+        }
+    })
+    .await
+    .expect("spinner message update should not wait for the polling interval");
+
+    spinner.finish();
+
+    assert!(
+        updated_status
+            .as_deref()
+            .map(|text| text.contains("Still working"))
+            .unwrap_or(false)
     );
 }
 
