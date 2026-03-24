@@ -7,7 +7,7 @@ class Vtcode < Formula
   on_macos do
     if Hardware::CPU.arm?
       url "https://github.com/vinhnx/vtcode/releases/download/#{version}/vtcode-#{version}-aarch64-apple-darwin.tar.gz"
-      sha256 "451bb9168585d98b0d8aaa228e0060945411498ca703797fe59b88d3fac4b904"
+      sha256 "57cd86db71b70d6acfd0f5fd56d131a3caa6f7ebe520b04fde043889570e214e"
     else
       url "https://github.com/vinhnx/vtcode/releases/download/#{version}/vtcode-#{version}-x86_64-apple-darwin.tar.gz"
       sha256 "4fd4b4ac6c02023671b74e5207a1df1327a4af01343a7048948422996a341161"
