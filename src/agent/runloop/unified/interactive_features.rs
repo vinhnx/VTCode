@@ -31,6 +31,18 @@ pub(crate) struct BackgroundJobSummary {
     pub(crate) status: String,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PromptSuggestionSource {
+    Llm,
+    Local,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct InlinePromptSuggestion {
+    pub(crate) prompt: String,
+    pub(crate) source: PromptSuggestionSource,
+}
+
 static PROMPT_SUGGESTION_CACHE: LazyLock<Mutex<HashMap<String, Vec<PromptSuggestion>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 const PROMPT_SUGGESTION_CACHE_LIMIT: usize = 64;
@@ -89,6 +101,41 @@ pub(crate) async fn generate_prompt_suggestions(
     }
 
     resolved
+}
+
+pub(crate) async fn generate_inline_prompt_suggestion(
+    provider: &dyn uni::LLMProvider,
+    config: &CoreAgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
+    workspace: &Path,
+    history: &[uni::Message],
+    session_stats: &SessionStats,
+    tool_registry: &ToolRegistry,
+    draft: &str,
+) -> Option<InlinePromptSuggestion> {
+    if vt_cfg
+        .map(|cfg| cfg.agent.prompt_suggestions.enabled)
+        .unwrap_or(true)
+        == false
+    {
+        return None;
+    }
+
+    let route = resolve_prompt_suggestion_route(config, vt_cfg);
+    if let Some(prompt) =
+        llm_inline_prompt_suggestion(provider, config, vt_cfg, &route, history, draft).await
+    {
+        return Some(InlinePromptSuggestion {
+            prompt,
+            source: PromptSuggestionSource::Llm,
+        });
+    }
+
+    deterministic_inline_prompt_suggestion(workspace, history, session_stats, tool_registry, draft)
+        .map(|prompt| InlinePromptSuggestion {
+            prompt,
+            source: PromptSuggestionSource::Local,
+        })
 }
 
 fn deterministic_prompt_suggestions(
@@ -183,6 +230,32 @@ fn deterministic_prompt_suggestions(
     dedupe_prompt_suggestions(suggestions)
 }
 
+fn deterministic_inline_prompt_suggestion(
+    workspace: &Path,
+    history: &[uni::Message],
+    session_stats: &SessionStats,
+    tool_registry: &ToolRegistry,
+    draft: &str,
+) -> Option<String> {
+    let suggestions =
+        deterministic_prompt_suggestions(workspace, history, session_stats, tool_registry);
+    if suggestions.is_empty() {
+        return None;
+    }
+
+    if draft.trim().is_empty() {
+        return suggestions
+            .first()
+            .map(|suggestion| suggestion.prompt.clone());
+    }
+
+    let normalized = draft.to_lowercase();
+    suggestions
+        .into_iter()
+        .map(|suggestion| suggestion.prompt)
+        .find(|prompt| prompt.to_lowercase().starts_with(&normalized))
+}
+
 async fn llm_prompt_suggestions(
     provider: &dyn uni::LLMProvider,
     config: &CoreAgentConfig,
@@ -195,31 +268,67 @@ async fn llm_prompt_suggestions(
         return Vec::new();
     }
 
-    let routed = llm_prompt_suggestions_with_route(route, config, vt_cfg, history).await;
-    if !routed.is_empty() {
-        return routed;
+    if route.model == config.model {
+        return llm_prompt_suggestions_from_provider(
+            provider,
+            &route.model,
+            route.temperature,
+            history,
+        )
+        .await;
     }
 
-    llm_prompt_suggestions_from_provider(
-        provider,
-        &config.model,
-        DEFAULT_PROMPT_SUGGESTION_TEMPERATURE,
+    let Some(provider) = create_prompt_suggestion_provider(route, config, vt_cfg) else {
+        return Vec::new();
+    };
+
+    llm_prompt_suggestions_from_provider(&*provider, &route.model, route.temperature, history).await
+}
+
+async fn llm_inline_prompt_suggestion(
+    provider: &dyn uni::LLMProvider,
+    config: &CoreAgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
+    route: &PromptSuggestionRoute,
+    history: &[uni::Message],
+    draft: &str,
+) -> Option<String> {
+    let context = recent_history_summary(history);
+    if context.trim().is_empty() && draft.trim().is_empty() {
+        return None;
+    }
+
+    if route.model == config.model {
+        return llm_inline_prompt_suggestion_from_provider(
+            provider,
+            &route.model,
+            route.temperature,
+            history,
+            draft,
+        )
+        .await;
+    }
+
+    let Some(provider) = create_prompt_suggestion_provider(route, config, vt_cfg) else {
+        return None;
+    };
+
+    llm_inline_prompt_suggestion_from_provider(
+        &*provider,
+        &route.model,
+        route.temperature,
         history,
+        draft,
     )
     .await
 }
 
-async fn llm_prompt_suggestions_with_route(
+fn create_prompt_suggestion_provider(
     route: &PromptSuggestionRoute,
     config: &CoreAgentConfig,
     vt_cfg: Option<&VTCodeConfig>,
-    history: &[uni::Message],
-) -> Vec<PromptSuggestion> {
-    if route.model == config.model {
-        return Vec::new();
-    }
-
-    let Ok(provider) = create_provider_with_config(
+) -> Option<Box<dyn uni::LLMProvider>> {
+    create_provider_with_config(
         &route.provider_name,
         ProviderConfig {
             api_key: Some(config.api_key.clone()),
@@ -234,11 +343,8 @@ async fn llm_prompt_suggestions_with_route(
             model_behavior: vt_cfg.map(|cfg| cfg.model.clone()),
             workspace_root: Some(config.workspace.clone()),
         },
-    ) else {
-        return Vec::new();
-    };
-
-    llm_prompt_suggestions_from_provider(&*provider, &route.model, route.temperature, history).await
+    )
+    .ok()
 }
 
 async fn llm_prompt_suggestions_from_provider(
@@ -296,6 +402,78 @@ async fn llm_prompt_suggestions_from_provider(
         .collect::<Vec<_>>();
 
     dedupe_prompt_suggestions(suggestions)
+}
+
+async fn llm_inline_prompt_suggestion_from_provider(
+    provider: &dyn uni::LLMProvider,
+    model: &str,
+    temperature: f32,
+    history: &[uni::Message],
+    draft: &str,
+) -> Option<String> {
+    let request = build_inline_prompt_suggestion_request(model, temperature, history, draft);
+    if !provider.supports_non_streaming(&request.model)
+        || provider.validate_request(&request).is_err()
+    {
+        return None;
+    }
+
+    let Ok(response) = provider.generate(request).await else {
+        return None;
+    };
+    let content = response.content?;
+    normalize_inline_prompt_suggestion(&content, draft)
+}
+
+fn build_inline_prompt_suggestion_request(
+    model: &str,
+    temperature: f32,
+    history: &[uni::Message],
+    draft: &str,
+) -> uni::LLMRequest {
+    let context = recent_history_summary(history);
+    let user_prompt = if draft.trim().is_empty() {
+        format!(
+            "Recent session context:\n{context}\n\nDraft: <empty>\nReturn exactly one short continuation the user would type next."
+        )
+    } else {
+        format!(
+            "Recent session context:\n{context}\n\nCurrent draft:\n{draft}\n\nReturn exactly one continuation that starts with the exact draft text and extends it."
+        )
+    };
+
+    uni::LLMRequest {
+        messages: vec![uni::Message::user(user_prompt)],
+        system_prompt: Some(std::sync::Arc::new(
+            "Predict the user's next chat prompt for VT Code. Match the user's phrasing, keep it concise, and return plain text only. Do not add bullets, numbering, quotes, explanations, or assistant voice. If a draft is provided, the response must begin with the exact draft text."
+                .to_string(),
+        )),
+        model: model.to_string(),
+        max_tokens: Some(48),
+        temperature: Some(temperature),
+        tool_choice: Some(uni::ToolChoice::None),
+        ..Default::default()
+    }
+}
+
+fn normalize_inline_prompt_suggestion(content: &str, draft: &str) -> Option<String> {
+    let trimmed = content.lines().find_map(|line| {
+        let candidate = line
+            .trim()
+            .trim_start_matches('-')
+            .trim_start_matches('•')
+            .trim();
+        (!candidate.is_empty()).then(|| candidate.to_string())
+    })?;
+
+    if draft.trim().is_empty() {
+        return Some(trimmed);
+    }
+
+    trimmed
+        .to_lowercase()
+        .starts_with(&draft.to_lowercase())
+        .then_some(trimmed)
 }
 
 pub(crate) fn collect_background_jobs(tool_registry: &ToolRegistry) -> Vec<BackgroundJobSummary> {
@@ -376,20 +554,17 @@ fn resolve_prompt_suggestion_route(
     let Some(vt_cfg) = vt_cfg else {
         return fallback;
     };
-    if !vt_cfg.agent.small_model.enabled {
-        return fallback;
-    }
-
-    let model = if vt_cfg.agent.small_model.model.trim().is_empty() {
+    let prompt_suggestions_cfg = &vt_cfg.agent.prompt_suggestions;
+    let model = if prompt_suggestions_cfg.model.trim().is_empty() {
         auto_small_model(&provider_name, &config.model)
     } else {
-        vt_cfg.agent.small_model.model.clone()
+        prompt_suggestions_cfg.model.clone()
     };
 
     PromptSuggestionRoute {
         provider_name,
         model,
-        temperature: vt_cfg.agent.small_model.temperature,
+        temperature: prompt_suggestions_cfg.temperature,
     }
 }
 
@@ -483,11 +658,61 @@ fn git_status_fragment(workspace: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use async_trait::async_trait;
     use std::path::PathBuf;
+    use std::sync::{Arc, Mutex};
     use vtcode_core::config::PromptCachingConfig;
     use vtcode_core::config::loader::VTCodeConfig;
     use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
     use vtcode_core::config::types::ModelSelectionSource;
+    use vtcode_core::llm::provider::{FinishReason, LLMError, LLMRequest, LLMResponse};
+
+    #[derive(Clone)]
+    struct RecordingProvider {
+        requests: Arc<Mutex<Vec<LLMRequest>>>,
+        response: Option<String>,
+    }
+
+    impl RecordingProvider {
+        fn with_response(response: &str) -> Self {
+            Self {
+                requests: Arc::new(Mutex::new(Vec::new())),
+                response: Some(response.to_string()),
+            }
+        }
+
+        fn recorded_requests(&self) -> Vec<LLMRequest> {
+            self.requests.lock().expect("requests lock").clone()
+        }
+    }
+
+    #[async_trait]
+    impl uni::LLMProvider for RecordingProvider {
+        fn name(&self) -> &str {
+            "openai"
+        }
+
+        async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+            self.requests
+                .lock()
+                .expect("requests lock")
+                .push(request.clone());
+            Ok(LLMResponse {
+                content: self.response.clone(),
+                model: request.model,
+                finish_reason: FinishReason::Stop,
+                ..Default::default()
+            })
+        }
+
+        fn supported_models(&self) -> Vec<String> {
+            vec!["gpt-5-mini".to_string()]
+        }
+
+        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+            Ok(())
+        }
+    }
 
     fn prompt_config(provider: &str, model: &str) -> CoreAgentConfig {
         CoreAgentConfig {
@@ -519,9 +744,8 @@ mod tests {
         let config = prompt_config("openai", "gpt-5.4");
 
         let mut vt_cfg = VTCodeConfig::default();
-        vt_cfg.agent.small_model.enabled = true;
-        vt_cfg.agent.small_model.model = "gpt-5-mini".to_string();
-        vt_cfg.agent.small_model.temperature = 0.2;
+        vt_cfg.agent.prompt_suggestions.model = "gpt-5-mini".to_string();
+        vt_cfg.agent.prompt_suggestions.temperature = 0.2;
 
         let route = resolve_prompt_suggestion_route(&config, Some(&vt_cfg));
         assert_eq!(route.provider_name, "openai");
@@ -530,14 +754,129 @@ mod tests {
     }
 
     #[test]
-    fn prompt_suggestion_route_auto_selects_efficient_variant() {
-        let config = prompt_config("anthropic", "claude-sonnet-4.6");
+    fn prompt_suggestion_route_auto_selects_lightweight_sibling() {
+        let config = prompt_config("openai", "gpt-5.4");
 
-        let mut vt_cfg = VTCodeConfig::default();
-        vt_cfg.agent.small_model.enabled = true;
-
+        let vt_cfg = VTCodeConfig::default();
         let route = resolve_prompt_suggestion_route(&config, Some(&vt_cfg));
-        assert_eq!(route.provider_name, "anthropic");
-        assert_eq!(route.model, ModelId::ClaudeHaiku45.as_str());
+        assert_eq!(route.provider_name, "openai");
+        assert_eq!(route.model, ModelId::GPT5Mini.as_str());
+    }
+
+    #[test]
+    fn deterministic_inline_prompt_suggestion_uses_first_suggestion_for_empty_draft() {
+        let session_stats = SessionStats::default();
+        let runtime = tokio::runtime::Runtime::new().expect("runtime");
+        let tool_registry = runtime.block_on(ToolRegistry::new(PathBuf::from(".")));
+
+        let suggestion = deterministic_inline_prompt_suggestion(
+            Path::new("."),
+            &[],
+            &session_stats,
+            &tool_registry,
+            "",
+        )
+        .expect("suggestion");
+
+        assert!(!suggestion.trim().is_empty());
+    }
+
+    #[test]
+    fn deterministic_inline_prompt_suggestion_matches_draft_prefix() {
+        let session_stats = SessionStats::default();
+        let runtime = tokio::runtime::Runtime::new().expect("runtime");
+        let tool_registry = runtime.block_on(ToolRegistry::new(PathBuf::from(".")));
+
+        let suggestion = deterministic_inline_prompt_suggestion(
+            Path::new("."),
+            &[],
+            &session_stats,
+            &tool_registry,
+            "Review the current diff, call",
+        )
+        .expect("suggestion");
+
+        assert_eq!(
+            suggestion,
+            "Review the current diff, call out the highest-risk issue, and suggest the next change."
+        );
+    }
+
+    #[test]
+    fn deterministic_inline_prompt_suggestion_preserves_trailing_space_prefix() {
+        let session_stats = SessionStats::default();
+        let runtime = tokio::runtime::Runtime::new().expect("runtime");
+        let tool_registry = runtime.block_on(ToolRegistry::new(PathBuf::from(".")));
+
+        let suggestion = deterministic_inline_prompt_suggestion(
+            Path::new("."),
+            &[],
+            &session_stats,
+            &tool_registry,
+            "Review the current diff ",
+        );
+
+        assert!(suggestion.is_none());
+    }
+
+    #[test]
+    fn normalize_inline_prompt_suggestion_requires_matching_prefix_for_partial_draft() {
+        assert_eq!(
+            normalize_inline_prompt_suggestion("Review the current diff", "Review the current"),
+            Some("Review the current diff".to_string())
+        );
+        assert_eq!(
+            normalize_inline_prompt_suggestion("Start a new plan", "Review the current"),
+            None
+        );
+    }
+
+    #[test]
+    fn normalize_inline_prompt_suggestion_preserves_trailing_space_prefix() {
+        assert_eq!(
+            normalize_inline_prompt_suggestion("Review the currentdiff", "Review the current "),
+            None
+        );
+        assert_eq!(
+            normalize_inline_prompt_suggestion(
+                "Review the current diff and summarize it",
+                "Review the current diff "
+            ),
+            Some("Review the current diff and summarize it".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn inline_prompt_suggestion_uses_route_temperature_on_active_provider() {
+        let provider = RecordingProvider::with_response("Review the current diff in detail");
+        let config = prompt_config("openai", "gpt-5-mini");
+        let mut vt_cfg = VTCodeConfig::default();
+        vt_cfg.agent.prompt_suggestions.temperature = 0.15;
+
+        let suggestion = generate_inline_prompt_suggestion(
+            &provider,
+            &config,
+            Some(&vt_cfg),
+            Path::new("."),
+            &[uni::Message::user(
+                "Please keep reviewing the diff".to_string(),
+            )],
+            &SessionStats::default(),
+            &ToolRegistry::new(PathBuf::from(".")).await,
+            "Review the current diff ",
+        )
+        .await
+        .expect("inline suggestion");
+
+        assert_eq!(suggestion.source, PromptSuggestionSource::Llm);
+        assert_eq!(
+            suggestion.prompt,
+            "Review the current diff in detail".to_string()
+        );
+
+        let requests = provider.recorded_requests();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].model, "gpt-5-mini");
+        assert_eq!(requests[0].temperature, Some(0.15));
     }
 }

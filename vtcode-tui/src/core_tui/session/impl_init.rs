@@ -147,6 +147,7 @@ impl Session {
 
             // --- Prompt Suggestions ---
             suggested_prompt_state: SuggestedPromptState::default(),
+            inline_prompt_suggestion: InlinePromptSuggestionState::default(),
 
             // --- Thinking Indicator ---
             thinking_spinner: ThinkingSpinner::new(),

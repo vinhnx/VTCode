@@ -332,6 +332,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         }
         KeyCode::BackTab => {
             // Shift+Tab: Toggle editing mode
+            session.clear_inline_prompt_suggestion();
             session.mark_dirty();
             Some(InlineEvent::ToggleMode)
         }
@@ -381,6 +382,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             let edit_queue_modifier = has_alt || (raw_meta && !has_super);
             if edit_queue_modifier && !session.queued_inputs.is_empty() {
                 if let Some(latest) = session.pop_latest_queued_input() {
+                    session.clear_inline_prompt_suggestion();
                     session.input_manager.set_content(latest);
                     session.input_compact_mode = session.input_compact_placeholder().is_some();
                     session.scroll_manager.set_offset(0);
@@ -396,6 +398,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         }
         KeyCode::Down => {
             if session.navigate_history_next() {
+                session.clear_inline_prompt_suggestion();
                 session.mark_dirty();
                 Some(InlineEvent::HistoryNext)
             } else {
@@ -477,6 +480,10 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
 
+            if session.accept_inline_prompt_suggestion() {
+                return None;
+            }
+
             let Some(submitted) = take_submitted_input(session) else {
                 session.mark_dirty();
                 return None;
@@ -513,6 +520,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         }
         KeyCode::Left => {
             if session.input_enabled {
+                session.clear_inline_prompt_suggestion();
                 if has_shift && has_command {
                     session.select_to_start();
                 } else if has_shift {
@@ -530,6 +538,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         }
         KeyCode::Right => {
             if session.input_enabled {
+                session.clear_inline_prompt_suggestion();
                 if has_shift && has_command {
                     session.select_to_end();
                 } else if has_shift {
@@ -547,6 +556,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         }
         KeyCode::Home => {
             if session.input_enabled {
+                session.clear_inline_prompt_suggestion();
                 if has_shift {
                     session.select_to_start();
                 } else {
@@ -558,6 +568,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         }
         KeyCode::End => {
             if session.input_enabled {
+                session.clear_inline_prompt_suggestion();
                 if has_shift {
                     session.select_to_end();
                 } else {
@@ -577,8 +588,11 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             }
 
             if has_alt && matches!(ch, 'p' | 'P') {
+                session.clear_inline_prompt_suggestion();
                 session.mark_dirty();
-                return Some(InlineEvent::Submit("/suggest".to_string()));
+                return Some(InlineEvent::RequestInlinePromptSuggestion(
+                    session.input_manager.content().to_string(),
+                ));
             }
 
             if ch == '?'
@@ -592,6 +606,9 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             }
 
             if ch == '\t' {
+                if session.accept_inline_prompt_suggestion() {
+                    return None;
+                }
                 let Some(submitted) = take_submitted_input(session) else {
                     session.mark_dirty();
                     return None;
@@ -644,7 +661,8 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
 
 fn quick_help_lines() -> Vec<String> {
     vec![
-        "Enter / Tab: Queue the current message.".to_string(),
+        "Enter queues; Tab queues or accepts an inline suggestion.".to_string(),
+        "Alt+P: Generate an inline prompt suggestion.".to_string(),
         "Ctrl+Enter: Run now while idle, or steer the active task.".to_string(),
         "Shift+Enter: Insert a newline.".to_string(),
         "/vim: Toggle Vim-style prompt editing.".to_string(),
@@ -674,6 +692,7 @@ fn take_submitted_input(session: &mut Session) -> Option<String> {
 fn clear_submitted_input(session: &mut Session) {
     session.input_manager.clear();
     session.clear_suggested_prompt_state();
+    session.clear_inline_prompt_suggestion();
     session.input_compact_mode = false;
     session.scroll_manager.set_offset(0);
 }

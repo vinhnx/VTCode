@@ -14,7 +14,9 @@ pub mod security;
 pub mod skills;
 pub mod tools;
 
-pub use agent::{AgentConfig, AgentOnboardingConfig, OpenResponsesConfig};
+pub use agent::{
+    AgentConfig, AgentOnboardingConfig, AgentPromptSuggestionsConfig, OpenResponsesConfig,
+};
 pub use auth::{
     AuthConfig, CopilotAuthConfig, OpenAIAuthConfig, OpenAIPreferredMethod, OpenRouterAuthConfig,
 };

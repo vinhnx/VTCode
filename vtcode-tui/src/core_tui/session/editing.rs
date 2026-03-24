@@ -1,4 +1,4 @@
-use super::Session;
+use super::{InlinePromptSuggestionSource, Session};
 use crate::config::constants::ui;
 /// Text editing and cursor movement operations for Session
 ///
@@ -13,7 +13,35 @@ use unicode_segmentation::UnicodeSegmentation;
 impl Session {
     pub(crate) fn refresh_input_edit_state(&mut self) {
         self.clear_suggested_prompt_state();
+        self.clear_inline_prompt_suggestion();
         self.input_compact_mode = self.input_compact_placeholder().is_some();
+    }
+
+    pub(crate) fn set_inline_prompt_suggestion(&mut self, suggestion: String, llm_generated: bool) {
+        let trimmed = suggestion.trim();
+        if trimmed.is_empty() {
+            self.clear_inline_prompt_suggestion();
+            return;
+        }
+
+        self.inline_prompt_suggestion.suggestion = Some(trimmed.to_string());
+        self.inline_prompt_suggestion.source = Some(if llm_generated {
+            InlinePromptSuggestionSource::Llm
+        } else {
+            InlinePromptSuggestionSource::Local
+        });
+        self.mark_dirty();
+    }
+
+    pub(crate) fn accept_inline_prompt_suggestion(&mut self) -> bool {
+        let Some(suffix) = self.visible_inline_prompt_suggestion_suffix() else {
+            return false;
+        };
+
+        self.input_manager.insert_text(&suffix);
+        self.clear_inline_prompt_suggestion();
+        self.mark_dirty();
+        true
     }
 
     /// Insert a character at the current cursor position

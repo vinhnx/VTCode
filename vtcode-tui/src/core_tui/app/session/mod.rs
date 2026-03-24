@@ -314,6 +314,7 @@ impl AppSession {
     }
 
     pub(crate) fn show_transient(&mut self, request: TransientRequest) {
+        self.core.clear_inline_prompt_suggestion();
         match request {
             TransientRequest::Modal(request) => {
                 self.core
@@ -425,6 +426,24 @@ impl AppSession {
                 );
                 self.update_input_triggers();
             }
+            InlineCommand::SetInlinePromptSuggestion {
+                suggestion,
+                llm_generated,
+            } => {
+                self.core.handle_command(
+                    crate::core_tui::types::InlineCommand::SetInlinePromptSuggestion {
+                        suggestion,
+                        llm_generated,
+                    },
+                );
+                self.update_input_triggers();
+            }
+            InlineCommand::ClearInlinePromptSuggestion => {
+                self.core.handle_command(
+                    crate::core_tui::types::InlineCommand::ClearInlinePromptSuggestion,
+                );
+                self.update_input_triggers();
+            }
             InlineCommand::ClearInput => {
                 self.core
                     .handle_command(crate::core_tui::types::InlineCommand::ClearInput);
@@ -522,6 +541,14 @@ fn to_core_command(command: &InlineCommand) -> Option<crate::core_tui::types::In
         InlineCommand::ApplySuggestedPrompt(value) => {
             CoreCommand::ApplySuggestedPrompt(value.clone())
         }
+        InlineCommand::SetInlinePromptSuggestion {
+            suggestion,
+            llm_generated,
+        } => CoreCommand::SetInlinePromptSuggestion {
+            suggestion: suggestion.clone(),
+            llm_generated: *llm_generated,
+        },
+        InlineCommand::ClearInlinePromptSuggestion => CoreCommand::ClearInlinePromptSuggestion,
         InlineCommand::ClearInput => CoreCommand::ClearInput,
         InlineCommand::ForceRedraw => CoreCommand::ForceRedraw,
         InlineCommand::ClearScreen => CoreCommand::ClearScreen,

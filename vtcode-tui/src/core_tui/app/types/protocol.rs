@@ -66,6 +66,11 @@ pub enum InlineCommand {
     SetInputEnabled(bool),
     SetInput(String),
     ApplySuggestedPrompt(String),
+    SetInlinePromptSuggestion {
+        suggestion: String,
+        llm_generated: bool,
+    },
+    ClearInlinePromptSuggestion,
     ClearInput,
     ForceRedraw,
     ShowTransient {
@@ -110,6 +115,7 @@ pub enum InlineEvent {
     OpenUrl(String),
     LaunchEditor,
     ForceCancelPtySession,
+    RequestInlinePromptSuggestion(String),
     /// Toggle editing mode (Shift+Tab cycles through Edit -> Trusted Auto -> Plan -> Edit).
     ToggleMode,
     HistoryPrevious,
@@ -144,6 +150,9 @@ impl From<crate::core_tui::types::InlineEvent> for InlineEvent {
             crate::core_tui::types::InlineEvent::LaunchEditor => Self::LaunchEditor,
             crate::core_tui::types::InlineEvent::ForceCancelPtySession => {
                 Self::ForceCancelPtySession
+            }
+            crate::core_tui::types::InlineEvent::RequestInlinePromptSuggestion(draft) => {
+                Self::RequestInlinePromptSuggestion(draft)
             }
             crate::core_tui::types::InlineEvent::ToggleMode => Self::ToggleMode,
             crate::core_tui::types::InlineEvent::HistoryPrevious => Self::HistoryPrevious,
@@ -282,6 +291,17 @@ impl InlineHandle {
 
     pub fn apply_suggested_prompt(&self, content: String) {
         self.send_command(InlineCommand::ApplySuggestedPrompt(content));
+    }
+
+    pub fn set_inline_prompt_suggestion(&self, suggestion: String, llm_generated: bool) {
+        self.send_command(InlineCommand::SetInlinePromptSuggestion {
+            suggestion,
+            llm_generated,
+        });
+    }
+
+    pub fn clear_inline_prompt_suggestion(&self) {
+        self.send_command(InlineCommand::ClearInlinePromptSuggestion);
     }
 
     pub fn clear_input(&self) {

@@ -63,6 +63,11 @@ static SECTION_HEADINGS: &[(&str, &str, &str)] = &[
         "Compatibility events and response item mapping.",
     ),
     (
+        "agent.prompt_suggestions",
+        "Prompt Suggestions",
+        "Inline composer suggestions and lightweight model routing.",
+    ),
+    (
         "agent.small_model",
         "Small Model Helpers",
         "Low-cost model settings for lightweight side tasks.",

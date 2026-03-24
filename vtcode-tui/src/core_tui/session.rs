@@ -113,6 +113,18 @@ pub(crate) struct SuggestedPromptState {
     pub(crate) active: bool,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum InlinePromptSuggestionSource {
+    Llm,
+    Local,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct InlinePromptSuggestionState {
+    pub(crate) suggestion: Option<String>,
+    pub(crate) source: Option<InlinePromptSuggestionSource>,
+}
+
 pub(crate) enum ActiveOverlay {
     Modal(Box<ModalState>),
     Wizard(Box<WizardModalState>),
@@ -249,6 +261,7 @@ pub struct Session {
 
     // --- Prompt Suggestions ---
     pub(crate) suggested_prompt_state: SuggestedPromptState,
+    pub(crate) inline_prompt_suggestion: InlinePromptSuggestionState,
 
     // --- Thinking Indicator ---
     pub(crate) thinking_spinner: ThinkingSpinner,

@@ -3,6 +3,7 @@ use vtcode_core::hooks::SessionEndReason;
 pub(crate) enum InlineLoopAction {
     Continue,
     Submit(String),
+    RequestInlinePromptSuggestion(String),
     Exit(SessionEndReason),
     ResumeSession(String), // Session identifier to resume
     ForkSession {

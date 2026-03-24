@@ -71,6 +71,10 @@ python3 scripts/generate_config_field_reference.py
 | `agent.open_responses.include_extensions` | `boolean` | no | `true` | Include VT Code extension items (vtcode:file_change, vtcode:web_search, etc.) When false, extension items are omitted from the Open Responses output |
 | `agent.open_responses.include_reasoning` | `boolean` | no | `true` | Include reasoning items in Open Responses output When true, model reasoning/thinking is exposed as reasoning items |
 | `agent.open_responses.map_tool_calls` | `boolean` | no | `true` | Map internal tool calls to Open Responses function_call items When true, command executions and MCP tool calls are represented as function_call items |
+| `agent.prompt_suggestions.enabled` | `boolean` | no | `true` | Enable inline prompt suggestions in the chat composer. `Alt+P` requests a ghost-text completion instead of opening the `/suggest` picker. |
+| `agent.prompt_suggestions.model` | `string` | no | `""` | Lightweight model to use for prompt suggestions. Leave empty to auto-select an efficient sibling of the main model. |
+| `agent.prompt_suggestions.show_cost_notice` | `boolean` | no | `true` | Show a one-time reminder that LLM-backed prompt suggestions can consume tokens. |
+| `agent.prompt_suggestions.temperature` | `number` | no | `0.30000001192092896` | Temperature for inline prompt suggestion generation. Lower values keep suggestions stable and completion-like. |
 | `agent.project_doc_max_bytes` | `integer` | no | `16384` | Maximum bytes of AGENTS.md content to load from project hierarchy |
 | `agent.provider` | `string` | no | `"openai"` | AI provider for single agent mode (gemini, openai, anthropic, openrouter, zai) |
 | `agent.reasoning_effort` | `string` | no | `"none"` | Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh) Applies to: Claude, GPT-5 family, Gemini, Qwen3, DeepSeek with reasoning capability |

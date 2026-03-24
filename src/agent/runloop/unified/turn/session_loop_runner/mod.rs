@@ -748,6 +748,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         let mut queued_inputs: VecDeque<String> = VecDeque::with_capacity(8);
         let mut agent_touched_paths = std::collections::BTreeSet::new();
         let mut ctrl_c_notice_displayed = false;
+        let mut inline_prompt_cost_notice_shown = false;
         let mut mcp_catalog_initialized = tool_registry.mcp_client().is_some();
         let mut last_known_mcp_tools: Vec<String> = Vec::with_capacity(16);
         let mut pending_mcp_refresh = false;
@@ -854,6 +855,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         mcp_catalog_initialized: &mut mcp_catalog_initialized,
                         last_mcp_refresh: &mut last_mcp_refresh,
                         ctrl_c_notice_displayed: &mut ctrl_c_notice_displayed,
+                        inline_prompt_cost_notice_shown: &mut inline_prompt_cost_notice_shown,
                     };
 
                     crate::agent::runloop::unified::turn::session::interaction_loop::run_interaction_loop(

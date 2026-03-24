@@ -138,6 +138,7 @@ impl Session {
                     crate::utils::transcript::display_error(&content);
                 } else {
                     self.clear_suggested_prompt_state();
+                    self.clear_inline_prompt_suggestion();
                     self.input_manager.set_content(content);
                     self.input_compact_mode = self.input_compact_placeholder().is_some();
                     self.scroll_manager.set_offset(0);
@@ -147,6 +148,15 @@ impl Session {
                 self.apply_suggested_prompt(content);
                 self.scroll_manager.set_offset(0);
             }
+            InlineCommand::SetInlinePromptSuggestion {
+                suggestion,
+                llm_generated,
+            } => {
+                self.set_inline_prompt_suggestion(suggestion, llm_generated);
+            }
+            InlineCommand::ClearInlinePromptSuggestion => {
+                self.clear_inline_prompt_suggestion();
+            }
             InlineCommand::ClearInput => {
                 command::clear_input(self);
             }
@@ -154,6 +164,7 @@ impl Session {
                 self.mark_dirty();
             }
             InlineCommand::ShowOverlay { request } => {
+                self.clear_inline_prompt_suggestion();
                 self.show_overlay(*request);
             }
             InlineCommand::CloseOverlay => {
@@ -168,6 +179,7 @@ impl Session {
                 // Handled by drive_terminal
             }
             InlineCommand::SetEditingMode(mode) => {
+                self.clear_inline_prompt_suggestion();
                 self.header_context.editing_mode = mode;
                 self.needs_redraw = true;
             }

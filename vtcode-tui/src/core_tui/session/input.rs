@@ -465,7 +465,17 @@ impl Session {
             let mut spans = Vec::new();
             spans.push(Span::styled(self.prompt_prefix.clone(), prompt_style));
 
-            if let Some(placeholder) = &self.placeholder {
+            if let Some(suffix) = self.visible_inline_prompt_suggestion_suffix() {
+                let ghost_style = ratatui_style_from_inline(
+                    &InlineTextStyle {
+                        color: Some(AnsiColorEnum::Rgb(PLACEHOLDER_COLOR)),
+                        bg_color: None,
+                        effects: Effects::DIMMED | Effects::ITALIC,
+                    },
+                    Some(AnsiColorEnum::Rgb(PLACEHOLDER_COLOR)),
+                );
+                spans.push(Span::styled(suffix, ghost_style));
+            } else if let Some(placeholder) = &self.placeholder {
                 let placeholder_style = self.placeholder_style.clone().unwrap_or(InlineTextStyle {
                     color: Some(AnsiColorEnum::Rgb(PLACEHOLDER_COLOR)),
                     bg_color: None,
@@ -534,6 +544,20 @@ impl Session {
                 }
             }
             lines.push(Line::from(spans));
+        }
+
+        if let Some(suffix) = self.visible_inline_prompt_suggestion_suffix() {
+            let ghost_style = ratatui_style_from_inline(
+                &InlineTextStyle {
+                    color: Some(AnsiColorEnum::Rgb(PLACEHOLDER_COLOR)),
+                    bg_color: None,
+                    effects: Effects::DIMMED | Effects::ITALIC,
+                },
+                Some(AnsiColorEnum::Rgb(PLACEHOLDER_COLOR)),
+            );
+            if let Some(line) = lines.get_mut(cursor_y as usize) {
+                line.spans.push(Span::styled(suffix, ghost_style));
+            }
         }
 
         if lines.is_empty() {
@@ -689,6 +713,19 @@ impl Session {
         }
 
         None
+    }
+
+    pub(crate) fn visible_inline_prompt_suggestion_suffix(&self) -> Option<String> {
+        if !self.input_enabled
+            || self.has_active_overlay()
+            || self.input_compact_mode
+            || self.input_manager.cursor() != self.input_manager.content().len()
+        {
+            return None;
+        }
+
+        let suggestion = self.inline_prompt_suggestion.suggestion.as_deref()?;
+        inline_prompt_suggestion_suffix(self.input_manager.content(), suggestion)
     }
 
     fn render_input_status_line(&self, width: u16) -> Option<Line<'static>> {
@@ -883,6 +920,20 @@ impl Session {
     pub fn build_input_status_widget_data(&self, width: u16) -> Option<Vec<Span<'static>>> {
         self.render_input_status_line(width).map(|line| line.spans)
     }
+}
+
+fn inline_prompt_suggestion_suffix(current: &str, suggestion: &str) -> Option<String> {
+    if current.trim().is_empty() {
+        return Some(suggestion.to_string());
+    }
+
+    let suggestion_lower = suggestion.to_lowercase();
+    let current_lower = current.to_lowercase();
+    if !suggestion_lower.starts_with(&current_lower) {
+        return None;
+    }
+
+    Some(suggestion.chars().skip(current.chars().count()).collect())
 }
 
 fn compact_image_label(content: &str) -> Option<String> {

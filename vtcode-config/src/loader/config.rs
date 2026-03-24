@@ -434,6 +434,20 @@ instruction_files = []
 # Toggle during session with Shift+Tab or /plan command
 default_editing_mode = "edit"
 
+# Inline prompt suggestions for the chat composer
+[agent.prompt_suggestions]
+# Enable Alt+P ghost-text suggestions in the composer
+enabled = true
+
+# Lightweight model for prompt suggestions (leave empty to auto-pick)
+model = ""
+
+# Lower values keep suggestions stable and completion-like
+temperature = 0.3
+
+# Show a one-time note that LLM-backed suggestions can consume tokens
+show_cost_notice = true
+
 # Onboarding configuration - Customize the startup experience
 [agent.onboarding]
 # Enable the onboarding welcome message on startup

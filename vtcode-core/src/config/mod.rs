@@ -34,10 +34,11 @@ pub use api::{
 pub use api_keys::ApiKeySources;
 pub use context::{ContextFeaturesConfig, LedgerConfig};
 pub use core::{
-    AgentConfig, AgentOnboardingConfig, AutomationConfig, CommandsConfig, EditorToolConfig,
-    FullAutoConfig, GatekeeperConfig, ModelConfig, OpenAIPromptCacheKeyMode, PermissionMode,
-    PermissionsConfig, PromptCachingConfig, ProviderPromptCachingConfig, SecurityConfig,
-    ToolPolicy, ToolsConfig, build_openai_prompt_cache_key,
+    AgentConfig, AgentOnboardingConfig, AgentPromptSuggestionsConfig, AutomationConfig,
+    CommandsConfig, EditorToolConfig, FullAutoConfig, GatekeeperConfig, ModelConfig,
+    OpenAIPromptCacheKeyMode, PermissionMode, PermissionsConfig, PromptCachingConfig,
+    ProviderPromptCachingConfig, SecurityConfig, ToolPolicy, ToolsConfig,
+    build_openai_prompt_cache_key,
 };
 pub use core::{PluginRuntimeConfig, PluginTrustLevel};
 pub use defaults::{

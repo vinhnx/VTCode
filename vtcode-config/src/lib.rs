@@ -57,8 +57,8 @@ pub use acp::{
 pub use api_keys::ApiKeySources;
 pub use context::{ContextFeaturesConfig, DynamicContextConfig, LedgerConfig};
 pub use core::{
-    AgentConfig, AgentOnboardingConfig, AuthConfig, AutomationConfig, BundledSkillsConfig,
-    CommandsConfig, CopilotAuthConfig, DockerSandboxConfig, EditorToolConfig,
+    AgentConfig, AgentOnboardingConfig, AgentPromptSuggestionsConfig, AuthConfig, AutomationConfig,
+    BundledSkillsConfig, CommandsConfig, CopilotAuthConfig, DockerSandboxConfig, EditorToolConfig,
     ExternalSandboxConfig, ExternalSandboxType, FullAutoConfig, GatekeeperConfig,
     MicroVMSandboxConfig, ModelConfig, NetworkAllowlistEntryConfig, NetworkConfig,
     OpenAIAuthConfig, OpenAIConfig, OpenAIHostedShellConfig, OpenAIHostedShellEnvironment,

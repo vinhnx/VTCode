@@ -24,6 +24,9 @@ use crate::agent::runloop::unified::display::display_user_message;
 use crate::agent::runloop::unified::inline_events::{
     InlineEventLoopResources, InlineInterruptCoordinator, InlineLoopAction, poll_inline_loop_action,
 };
+use crate::agent::runloop::unified::interactive_features::{
+    PromptSuggestionSource, generate_inline_prompt_suggestion,
+};
 use crate::agent::runloop::unified::model_selection::finalize_model_selection;
 use crate::agent::runloop::unified::session_setup::{
     apply_ide_context_snapshot, ide_context_status_label_from_bridge,
@@ -196,6 +199,53 @@ fn append_file_reference_metadata(
             uni::MessageContent::parts(parts)
         }
     }
+}
+
+async fn handle_inline_prompt_suggestion_request(
+    ctx: &mut InteractionLoopContext<'_>,
+    state: &mut InteractionState<'_>,
+    draft: &str,
+) -> Result<()> {
+    let Some(suggestion) = generate_inline_prompt_suggestion(
+        ctx.provider_client.as_ref(),
+        ctx.config,
+        ctx.vt_cfg.as_ref(),
+        &ctx.config.workspace,
+        ctx.conversation_history,
+        ctx.session_stats,
+        ctx.tool_registry,
+        draft,
+    )
+    .await
+    else {
+        ctx.handle.clear_inline_prompt_suggestion();
+        ctx.renderer.line(
+            MessageStyle::Info,
+            "No inline prompt suggestion is available for the current draft.",
+        )?;
+        return Ok(());
+    };
+
+    if suggestion.source == PromptSuggestionSource::Llm
+        && ctx
+            .vt_cfg
+            .as_ref()
+            .map(|cfg| cfg.agent.prompt_suggestions.show_cost_notice)
+            .unwrap_or(true)
+        && !*state.inline_prompt_cost_notice_shown
+    {
+        ctx.renderer.line(
+            MessageStyle::Info,
+            "Inline prompt suggestions may use tokens when VT Code calls your configured LLM provider.",
+        )?;
+        *state.inline_prompt_cost_notice_shown = true;
+    }
+
+    ctx.handle.set_inline_prompt_suggestion(
+        suggestion.prompt,
+        suggestion.source == PromptSuggestionSource::Llm,
+    );
+    Ok(())
 }
 
 fn build_file_reference_metadata(input: &str, workspace: &Path) -> Option<String> {
@@ -517,6 +567,10 @@ pub(super) async fn run_interaction_loop_impl(
         let mut input_owned = match inline_action {
             InlineLoopAction::Continue => continue,
             InlineLoopAction::Submit(text) => text,
+            InlineLoopAction::RequestInlinePromptSuggestion(draft) => {
+                handle_inline_prompt_suggestion_request(ctx, state, &draft).await?;
+                continue;
+            }
             InlineLoopAction::Exit(reason) => {
                 return Ok(InteractionOutcome::Exit { reason });
             }

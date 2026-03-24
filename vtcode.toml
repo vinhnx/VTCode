@@ -245,6 +245,12 @@ ui_surface = "auto"
 # Type: `string`
 verbosity = "medium"
 
+[agent.prompt_suggestions]
+enabled = true
+model = "MiniMax-M2.5"
+temperature = 0.3
+show_cost_notice = true
+
 # Checkpoints
 # Automatic turn snapshots and retention limits.
 [agent.checkpointing]

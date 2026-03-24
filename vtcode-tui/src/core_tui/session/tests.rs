@@ -4497,12 +4497,72 @@ fn suggested_prompt_state_clears_after_manual_edit() {
 }
 
 #[test]
-fn alt_p_submits_suggest_command() {
+fn alt_p_requests_inline_prompt_suggestion() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.set_input("Review the current".to_string());
 
     let event = session.process_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::ALT));
 
-    assert!(matches!(event, Some(InlineEvent::Submit(ref value)) if value == "/suggest"));
+    assert!(matches!(
+        event,
+        Some(InlineEvent::RequestInlinePromptSuggestion(ref value))
+            if value == "Review the current"
+    ));
+}
+
+#[test]
+fn tab_accepts_visible_inline_prompt_suggestion() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.set_input("Review the current".to_string());
+    session.set_inline_prompt_suggestion("Review the current diff".to_string(), true);
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+
+    assert!(event.is_none());
+    assert_eq!(session.input_manager.content(), "Review the current diff");
+    assert!(session.inline_prompt_suggestion.suggestion.is_none());
+}
+
+#[test]
+fn tab_accepts_inline_prompt_suggestion_with_trailing_space_prefix() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.set_input("Review the current diff ".to_string());
+    session
+        .set_inline_prompt_suggestion("Review the current diff and summarize it".to_string(), true);
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+
+    assert!(event.is_none());
+    assert_eq!(
+        session.input_manager.content(),
+        "Review the current diff and summarize it"
+    );
+    assert!(session.inline_prompt_suggestion.suggestion.is_none());
+}
+
+#[test]
+fn tab_queues_when_no_inline_prompt_suggestion_is_visible() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.set_input("Review the current diff".to_string());
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+
+    assert!(matches!(
+        event,
+        Some(InlineEvent::QueueSubmit(ref value)) if value == "Review the current diff"
+    ));
+}
+
+#[test]
+fn inline_prompt_suggestion_clears_after_cursor_movement() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.set_input("Review the current".to_string());
+    session.set_inline_prompt_suggestion("Review the current diff".to_string(), false);
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+
+    assert!(event.is_none());
+    assert!(session.inline_prompt_suggestion.suggestion.is_none());
 }
 
 #[test]

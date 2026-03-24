@@ -162,6 +162,7 @@ pub(crate) struct InteractionState<'a> {
     pub mcp_catalog_initialized: &'a mut bool,
     pub last_mcp_refresh: &'a mut Instant,
     pub ctrl_c_notice_displayed: &'a mut bool,
+    pub inline_prompt_cost_notice_shown: &'a mut bool,
 }
 
 pub(crate) enum InteractionOutcome {

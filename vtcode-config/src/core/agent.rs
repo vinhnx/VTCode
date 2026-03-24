@@ -114,6 +114,10 @@ pub struct AgentConfig {
     #[serde(default)]
     pub small_model: AgentSmallModelConfig,
 
+    /// Inline prompt suggestion configuration for the chat composer
+    #[serde(default)]
+    pub prompt_suggestions: AgentPromptSuggestionsConfig,
+
     /// Session onboarding and welcome message configuration
     #[serde(default)]
     pub onboarding: AgentOnboardingConfig,
@@ -446,6 +450,7 @@ impl Default for AgentConfig {
             refine_prompts_max_passes: default_refine_max_passes(),
             refine_prompts_model: String::new(),
             small_model: AgentSmallModelConfig::default(),
+            prompt_suggestions: AgentPromptSuggestionsConfig::default(),
             onboarding: AgentOnboardingConfig::default(),
             project_doc_max_bytes: default_project_doc_max_bytes(),
             project_doc_fallback_filenames: Vec::new(),
@@ -907,6 +912,54 @@ const fn default_small_model_for_web_summary() -> bool {
 
 #[inline]
 const fn default_small_model_for_git_history() -> bool {
+    true
+}
+
+/// Inline prompt suggestion configuration for the chat composer.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AgentPromptSuggestionsConfig {
+    /// Enable inline prompt suggestions in the chat composer.
+    #[serde(default = "default_prompt_suggestions_enabled")]
+    pub enabled: bool,
+
+    /// Lightweight model to use for suggestions.
+    /// Leave empty to auto-select an efficient sibling of the main model.
+    #[serde(default)]
+    pub model: String,
+
+    /// Temperature for inline prompt suggestion generation.
+    #[serde(default = "default_prompt_suggestions_temperature")]
+    pub temperature: f32,
+
+    /// Whether VT Code should remind users that LLM-backed suggestions consume tokens.
+    #[serde(default = "default_prompt_suggestions_show_cost_notice")]
+    pub show_cost_notice: bool,
+}
+
+impl Default for AgentPromptSuggestionsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_prompt_suggestions_enabled(),
+            model: String::new(),
+            temperature: default_prompt_suggestions_temperature(),
+            show_cost_notice: default_prompt_suggestions_show_cost_notice(),
+        }
+    }
+}
+
+#[inline]
+const fn default_prompt_suggestions_enabled() -> bool {
+    true
+}
+
+#[inline]
+const fn default_prompt_suggestions_temperature() -> f32 {
+    0.3
+}
+
+#[inline]
+const fn default_prompt_suggestions_show_cost_notice() -> bool {
     true
 }
 

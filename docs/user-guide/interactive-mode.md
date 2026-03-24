@@ -26,7 +26,7 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 | `Up/Down arrows` | Navigate through command history. | Recall previous prompts or commands. |
 | `Esc` + `Esc` | Open the rewind picker for checkpoint restore or summarize actions. | Idle context only (while no task/PTY is running). |
 | `Enter` | Queue the current input. | Plain input box only. |
-| `Tab` | Queue the current input. | Plain input box only; list and slash UIs keep their existing tab behavior. |
+| `Tab` | Accept the visible inline suggestion, otherwise queue the current input. | Plain input box only; list and slash UIs keep their existing tab behavior. |
 | `Ctrl+Enter` | Process now or steer now. | Idle: runs the current draft, or the newest queued message if the draft is empty. Active: steers the current turn with the current draft. |
 | `Shift+Tab` or `Alt+M` | Cycle permission modes. | Switches Auto-Accept Mode, Plan Mode, and normal mode. |
 
@@ -50,7 +50,7 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 | `/` at start of input | Issue a slash command. | Run `/help` or `/slash-commands` in a session to list everything available. |
 | `!` at start of input | Enter Bash mode. | Runs shell commands directly and streams their output. |
 | `@` within input | Open file picker. | Triggers file path autocomplete and picker to quickly reference files in your message. |
-| `Alt+P` / `Option+P` | Open prompt suggestions. | Equivalent to `/suggest`; inserts the selected prompt into the composer without auto-submitting. |
+| `Alt+P` / `Option+P` | Generate an inline prompt suggestion. | Shows a ghost-text completion in the composer; `Tab` accepts it. |
 
 ### Session Context Commands
 
@@ -74,7 +74,9 @@ VT Code supports an optional Vim-style prompt editor.
 ## Prompt Suggestions, Tasks, and Jobs
 
 - `/suggest` opens a prompt-suggestion picker built from recent session context such as task state, active jobs, recent errors, and recent file activity.
-- When `agent.small_model` is enabled, VT Code routes `/suggest` generation through that smaller model tier first and falls back to deterministic suggestions if generation fails.
+- `Alt+P` requests one inline ghost-text suggestion for the current draft. If a ghost suggestion is visible, `Tab` accepts it; otherwise `Tab` keeps its normal queue behavior.
+- VT Code routes prompt suggestion generation through `agent.prompt_suggestions` and falls back to deterministic local suggestions when the provider, model, or endpoint cannot service the request.
+- LLM-backed prompt suggestions can consume tokens. When `agent.prompt_suggestions.show_cost_notice = true`, VT Code shows a one-time reminder in the session before the first LLM-backed inline suggestion.
 - Picking a suggestion inserts it into the composer. Empty drafts are replaced; non-empty drafts keep their content and append the suggestion after a blank line.
 - `/tasks` toggles the dedicated TODO panel. It is fed directly from `task_tracker` and `plan_task_tracker` output and remains independent from the `Ctrl+T` log toggle.
 - `/jobs` opens the active/background jobs picker for PTY-backed command sessions.

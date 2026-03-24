@@ -150,6 +150,10 @@ impl<'a> InlineEventContext<'a> {
                 // Ctrl+E pressed: submit /edit command
                 self.input_processor().submit("/edit".to_string())
             }
+            InlineEvent::RequestInlinePromptSuggestion(draft) => {
+                self.state.reset_interrupt_state();
+                InlineLoopAction::RequestInlinePromptSuggestion(draft)
+            }
             InlineEvent::OpenFileInEditor(path) => {
                 self.input_processor().submit(format!("/edit {}", path))
             }

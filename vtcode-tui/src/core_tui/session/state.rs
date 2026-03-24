@@ -20,12 +20,20 @@ use super::super::types::{
 };
 use super::status_requires_shimmer;
 use super::{
-    ActiveOverlay, Session, SuggestedPromptState,
+    ActiveOverlay, InlinePromptSuggestionState, Session, SuggestedPromptState,
     modal::{ModalListState, ModalSearchState, ModalState, WizardModalState},
 };
 use crate::config::constants::ui;
 
 impl Session {
+    pub(crate) fn clear_inline_prompt_suggestion(&mut self) {
+        if self.inline_prompt_suggestion.suggestion.is_none() {
+            return;
+        }
+        self.inline_prompt_suggestion = InlinePromptSuggestionState::default();
+        self.mark_dirty();
+    }
+
     pub(crate) fn clear_suggested_prompt_state(&mut self) {
         if !self.suggested_prompt_state.active {
             return;
