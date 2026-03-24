@@ -269,17 +269,14 @@ impl RuntimeSteering {
                 return RuntimeControl::Continue;
             };
 
-            match receiver.try_recv() {
-                Ok(SteeringMessage::Resume) => return RuntimeControl::Continue,
-                Ok(SteeringMessage::SteerStop) => return RuntimeControl::StopRequested,
-                Ok(SteeringMessage::FollowUpInput(input)) => {
+            match receiver.recv().await {
+                Some(SteeringMessage::Resume) => return RuntimeControl::Continue,
+                Some(SteeringMessage::SteerStop) => return RuntimeControl::StopRequested,
+                Some(SteeringMessage::FollowUpInput(input)) => {
                     self.queued_follow_up_inputs.push_back(input);
                 }
-                Ok(SteeringMessage::Pause) => {}
-                Err(TryRecvError::Disconnected) => return RuntimeControl::Continue,
-                Err(TryRecvError::Empty) => {
-                    tokio::time::sleep(tokio::time::Duration::from_millis(30)).await;
-                }
+                Some(SteeringMessage::Pause) => {}
+                None => return RuntimeControl::Continue,
             }
         }
     }
@@ -918,6 +915,47 @@ mod tests {
                 .map(|message| message.get_text_content().into_owned()),
             Some("second".to_string())
         );
+        assert!(!runtime.has_pending_follow_up_inputs());
+    }
+
+    #[tokio::test]
+    async fn paused_runtime_resumes_and_preserves_follow_up_inputs() {
+        let state = AgentSessionState::new("session".to_string(), 16, 4, 128_000);
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut runtime = AgentRuntime::new(state, None, Some(receiver));
+
+        sender
+            .send(SteeringMessage::Pause)
+            .expect("pause should send");
+        sender
+            .send(SteeringMessage::FollowUpInput("queued while paused".to_string()))
+            .expect("follow-up should send");
+        sender
+            .send(SteeringMessage::Resume)
+            .expect("resume should send");
+
+        assert_eq!(runtime.poll_turn_control().await, RuntimeControl::Resumed);
+        assert!(runtime.has_pending_follow_up_inputs());
+        assert_eq!(
+            runtime.run_until_idle().as_deref(),
+            Some("queued while paused")
+        );
+    }
+
+    #[tokio::test]
+    async fn paused_runtime_stop_request_wins() {
+        let state = AgentSessionState::new("session".to_string(), 16, 4, 128_000);
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut runtime = AgentRuntime::new(state, None, Some(receiver));
+
+        sender
+            .send(SteeringMessage::Pause)
+            .expect("pause should send");
+        sender
+            .send(SteeringMessage::SteerStop)
+            .expect("stop should send");
+
+        assert_eq!(runtime.poll_turn_control().await, RuntimeControl::StopRequested);
         assert!(!runtime.has_pending_follow_up_inputs());
     }
 

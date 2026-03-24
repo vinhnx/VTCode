@@ -7,7 +7,6 @@ use crate::agent::runloop::unified::plan_mode_state::{
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use crate::agent::runloop::unified::turn::turn_helpers::{display_error, display_status};
 use crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext;
-use tokio::sync::mpsc::error::TryRecvError;
 use vtcode_core::config::constants::defaults::{
     DEFAULT_MAX_CONVERSATION_TURNS, DEFAULT_MAX_REPEATED_TOOL_CALLS, DEFAULT_MAX_TOOL_LOOPS,
 };
@@ -285,25 +284,24 @@ async fn handle_pause_signal(
     }
 
     loop {
-        match receiver.try_recv() {
-            Ok(SteeringMessage::Resume) => {
-                display_status(renderer, "Resumed by steering signal.")?;
-                return Ok(false);
-            }
-            Ok(SteeringMessage::SteerStop) => {
-                cancel_for_steering_stop(tool_registry, result).await;
-                return Ok(true);
-            }
-            Ok(SteeringMessage::FollowUpInput(input)) => {
-                queue_follow_up_input(renderer, runtime_steering, input)?;
-            }
-            Ok(SteeringMessage::Pause) => {}
-            Err(TryRecvError::Disconnected) => return Ok(false),
-            Err(TryRecvError::Empty) => {}
-        }
-
         tokio::select! {
-            _ = tokio::time::sleep(tokio::time::Duration::from_millis(30)) => {}
+            message = receiver.recv() => {
+                match message {
+                    Some(SteeringMessage::Resume) => {
+                        display_status(renderer, "Resumed by steering signal.")?;
+                        return Ok(false);
+                    }
+                    Some(SteeringMessage::SteerStop) => {
+                        cancel_for_steering_stop(tool_registry, result).await;
+                        return Ok(true);
+                    }
+                    Some(SteeringMessage::FollowUpInput(input)) => {
+                        queue_follow_up_input(renderer, runtime_steering, input)?;
+                    }
+                    Some(SteeringMessage::Pause) => {}
+                    None => return Ok(false),
+                }
+            }
             _ = ctrl_c_notify.notified() => {
                 if ctrl_c_state.is_exit_requested() {
                     *result = TurnLoopResult::Exit;
