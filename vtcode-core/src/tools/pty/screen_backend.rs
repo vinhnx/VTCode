@@ -1,6 +1,6 @@
 use anyhow::Result;
 use portable_pty::PtySize;
-use tracing::{debug, warn};
+use tracing::warn;
 use vt100::Parser;
 use vtcode_ghostty_vt_sys::{GhosttyRenderRequest, render_terminal_snapshot};
 
@@ -65,24 +65,11 @@ impl PreparedScreenSnapshot {
         match self.backend {
             PtyEmulationBackend::Ghostty => {
                 if raw_vt_snapshot.was_truncated {
-                    debug!(
-                        configured_backend = self.backend.as_str(),
-                        active_backend = PtyEmulationBackend::LegacyVt100.as_str(),
-                        reason = "raw_vt_buffer_truncated",
-                        "PTY snapshot backend resolved"
-                    );
                     return self.legacy_snapshot(fallback_scrollback);
                 }
 
                 match self.snapshot_with_ghostty(size, &raw_vt_snapshot.bytes) {
-                    Ok(snapshot) => {
-                        debug!(
-                            configured_backend = self.backend.as_str(),
-                            active_backend = self.backend.as_str(),
-                            "PTY snapshot backend resolved"
-                        );
-                        snapshot
-                    }
+                    Ok(snapshot) => snapshot,
                     Err(error) => {
                         warn!(
                             configured_backend = self.backend.as_str(),
@@ -95,11 +82,6 @@ impl PreparedScreenSnapshot {
                 }
             }
             PtyEmulationBackend::LegacyVt100 => {
-                debug!(
-                    configured_backend = self.backend.as_str(),
-                    active_backend = self.backend.as_str(),
-                    "PTY snapshot backend resolved"
-                );
                 self.legacy_snapshot(fallback_scrollback)
             }
         }
