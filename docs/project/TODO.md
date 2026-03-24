@@ -54,25 +54,6 @@ writedownapp
 humidapp
 vtchat.io
 
-===
-
 --
 
-implement user chat input prompt suggestion prompt
-
-**The prompt suggestion (tab completion) is NOT a base model endpoint.** It uses the Messages API (`/v1/messages`).
-
-Here's the evidence:
-
-1. **The feature is called "Speculation" internally.** It predicts what you'll type next and speculatively pre-runs it. The setting is `promptSuggestionEnabled` / "Prompt suggestions" in settings.
-2. **The prompt is instruct-style** (lines 125136–125175 in the strings):
-   _"FIRST: Look at the user's recent messages and original request. Your job is to predict what THEY would type - not what you think they should do."_
-   _"2–12 words. User's phrasing. Never evaluate, never Claude-voice."_
-3. **It calls `PU()` → `ML()`, the same Messages API pipeline used for the main conversation.** The function signature takes `promptMessages`, `systemPrompt`, `canUseTool`, etc. — all Messages API constructs. It goes through `/v1/messages`, not `/v1/complete`.
-4. **The `/v1/complete` in the binary** is just the Anthropic SDK bundled with support for the legacy completions API (for claude-1.x/2.x models). It's not used by this feature.
-5. **No separate model override** — `Ht(T)` passes through the same context (`systemPrompt`, `userContext`, `toolUseContext`) without specifying a different model, so it appears to use whatever model the session is configured with.
-
-```
-
---
-```
+build subagent (research deepwiki codex, pi-mono)
