@@ -11,6 +11,7 @@ use crate::llm::provider::ToolCall;
 use anyhow::{Result, anyhow};
 use tokio::time::Duration;
 use tracing::{error, info, warn};
+use vtcode_commons::ErrorCategory;
 
 struct ToolCallItemRef {
     call_item_id: String,
@@ -279,25 +280,27 @@ impl AgentRunner {
                 }
                 Err(e) => {
                     let error_msg = format!("Error executing {}: {}", name, e);
-                    error!(agent = %agent_prefix, tool = %name, error = %e, "Tool execution failed");
-                    let err_lower = error_msg.to_lowercase();
-                    if err_lower.contains("rate limit") {
+                    let category = vtcode_commons::classify_error_message(&error_msg);
+                    error!(agent = %agent_prefix, tool = %name, error = %e, category = ?category, "Tool execution failed");
+                    if matches!(category, ErrorCategory::RateLimit) {
                         runtime.state.warnings.push(
                             "Tool was rate limited; halting further tool calls this turn.".into(),
                         );
                         runtime.state.mark_tool_loop_limit_hit();
                         halt_turn = true;
-                    } else if err_lower.contains("denied by policy")
-                        || err_lower.contains("not permitted while full-auto")
-                    {
+                    } else if matches!(
+                        category,
+                        ErrorCategory::PolicyViolation | ErrorCategory::PlanModeViolation
+                    ) {
                         runtime.state.warnings.push(
                             "Tool denied by policy; halting further tool calls this turn.".into(),
                         );
                         halt_turn = true;
                     }
+                    let user_hint = format!("[{}] {}", category.user_label(), error_msg);
                     runtime
                         .state
-                        .push_tool_error(call_id.clone(), &name, error_msg, is_gemini);
+                        .push_tool_error(call_id.clone(), &name, user_hint, is_gemini);
                     complete_tool_invocation(
                         runtime,
                         event_recorder,
@@ -491,92 +494,57 @@ impl AgentRunner {
                 }
                 Err(e) => {
                     let err_msg = e.to_string();
-                    let err_lower = err_msg.to_lowercase();
-                    if err_lower.contains("rate limit") {
+                    let category = vtcode_commons::classify_error_message(&err_msg);
+
+                    // Determine halt behavior based on error category
+                    let should_halt = matches!(
+                        category,
+                        ErrorCategory::RateLimit
+                            | ErrorCategory::PolicyViolation
+                            | ErrorCategory::PlanModeViolation
+                    );
+
+                    if matches!(category, ErrorCategory::RateLimit) {
                         runtime.state.warnings.push(
                             "Tool was rate limited; halting further tool calls this turn.".into(),
                         );
                         runtime.state.mark_tool_loop_limit_hit();
-                        complete_tool_invocation(
-                            runtime,
-                            event_recorder,
-                            &call.id,
-                            &name,
-                            &args,
-                            &tool_call_item,
-                            ToolCallStatus::Failed,
-                        );
-                        let mut failure_ctx = ToolFailureContext {
-                            agent_prefix,
-                            session_state: &mut runtime.state,
-                            event_recorder,
-                            tool_call_id: &call.id,
-                            call_item_id: Some(tool_call_item.call_item_id.as_str()),
-                            is_gemini,
-                        };
-                        self.record_tool_failure(
-                            &mut failure_ctx,
-                            &name,
-                            &e,
-                            Some(call.id.as_str()),
-                        );
-                        tokio::time::sleep(Duration::from_millis(250)).await;
-                        break;
-                    } else if err_lower.contains("denied by policy")
-                        || err_lower.contains("not permitted while full-auto")
-                    {
+                    } else if matches!(
+                        category,
+                        ErrorCategory::PolicyViolation | ErrorCategory::PlanModeViolation
+                    ) {
                         runtime.state.warnings.push(
                             "Tool denied by policy; halting further tool calls this turn.".into(),
                         );
-                        complete_tool_invocation(
-                            runtime,
-                            event_recorder,
-                            &call.id,
-                            &name,
-                            &args,
-                            &tool_call_item,
-                            ToolCallStatus::Failed,
-                        );
-                        let mut failure_ctx = ToolFailureContext {
-                            agent_prefix,
-                            session_state: &mut runtime.state,
-                            event_recorder,
-                            tool_call_id: &call.id,
-                            call_item_id: Some(tool_call_item.call_item_id.as_str()),
-                            is_gemini,
-                        };
-                        self.record_tool_failure(
-                            &mut failure_ctx,
-                            &name,
-                            &e,
-                            Some(call.id.as_str()),
-                        );
+                    }
+
+                    complete_tool_invocation(
+                        runtime,
+                        event_recorder,
+                        &call.id,
+                        &name,
+                        &args,
+                        &tool_call_item,
+                        ToolCallStatus::Failed,
+                    );
+                    let mut failure_ctx = ToolFailureContext {
+                        agent_prefix,
+                        session_state: &mut runtime.state,
+                        event_recorder,
+                        tool_call_id: &call.id,
+                        call_item_id: Some(tool_call_item.call_item_id.as_str()),
+                        is_gemini,
+                    };
+                    self.record_tool_failure(
+                        &mut failure_ctx,
+                        &name,
+                        &e,
+                        Some(call.id.as_str()),
+                    );
+
+                    if should_halt {
                         tokio::time::sleep(Duration::from_millis(250)).await;
                         break;
-                    } else {
-                        complete_tool_invocation(
-                            runtime,
-                            event_recorder,
-                            &call.id,
-                            &name,
-                            &args,
-                            &tool_call_item,
-                            ToolCallStatus::Failed,
-                        );
-                        let mut failure_ctx = ToolFailureContext {
-                            agent_prefix,
-                            session_state: &mut runtime.state,
-                            event_recorder,
-                            tool_call_id: &call.id,
-                            call_item_id: Some(tool_call_item.call_item_id.as_str()),
-                            is_gemini,
-                        };
-                        self.record_tool_failure(
-                            &mut failure_ctx,
-                            &name,
-                            &e,
-                            Some(call.id.as_str()),
-                        );
                     }
                 }
             }
