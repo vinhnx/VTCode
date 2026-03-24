@@ -248,3 +248,13 @@ cargo nextest run
 ### Manual Verification
 
 No manual testing needed — all changes are covered by existing + new automated tests. The changes are internal refactors that unify code paths through already-tested infrastructure (`ErrorCategory`, [RetryPolicy](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/retry.rs#13-21), [CircuitBreaker](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/tools/circuit_breaker.rs#124-130)).
+
+---
+
+auto-mode
+
+https://code.claude.com/docs/en/permission-modes#eliminate-prompts-with-auto-mode
+
+https://claude.com/blog/auto-mode
+
+https://claude.com/product/claude-code#auto-mode
