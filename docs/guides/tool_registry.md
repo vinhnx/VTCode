@@ -40,6 +40,13 @@ the long-term surface to preserve.
 
 ## Adding a new tool
 
+First decide whether this should be a built-in VT Code tool at all.
+
+- If the capability is external or org-specific, prefer MCP or a plugin/skill
+  manifest instead of adding a new compile-time tool trait implementation.
+- Add a built-in registry tool when VT Code must own the runtime behavior,
+  policy surface, or UX directly.
+
 1.  Implement the tool logic (usually by implementing the `Tool` trait or by
     exposing an async helper on `ToolRegistry`).
 2.  Create a `ToolRegistration`:
@@ -79,6 +86,8 @@ output to guide self-diagnostic and self-fix logic.
 -   Prefer the canonical public tools in prompts and docs:
     `unified_search`, `unified_exec`, `unified_file`, `request_user_input`, and
     `apply_patch`.
+-   Prefer MCP or manifest-driven extension for third-party capabilities before
+    expanding VT Code's compile-time tool surface.
 -   For file edits, prefer `unified_file` for read/write/edit flows and reserve
     `apply_patch` for patch payloads that benefit from first-class patch
     handling.

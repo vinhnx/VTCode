@@ -87,6 +87,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Supported Models, Configuration, How It Works, Token Budget, Interleaved Thinking
   - **User Questions**: "What can you tell me about Extended Thinking for Anthropic Models?", "How does Supported Models work?", "How does Configuration work?"
 
+- **File**: `docs/development/EXTENSION_BOUNDARIES.md`
+  - **Content**: Extension Boundaries in VT Code
+  - **Topics**: Why This Exists, Default Extension Order, What Counts As Internal, What Counts As External, Review Checklist
+  - **User Questions**: "What can you tell me about Extension Boundaries in VT Code?", "How does Why This Exists work?", "How does Default Extension Order work?"
+
 - **File**: `docs/development/fuzzing.md`
   - **Content**: Fuzzing Guide
   - **Topics**: Scope, Basic Commands, Corpus and Artifacts, Reproducing a Crash, Coverage (Optional)
