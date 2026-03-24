@@ -10,9 +10,9 @@ below to configure, launch, and validate the integration end to end.
 
 ## Setup overview
 
-1. Build VT Code (release profile recommended for editor workflows).
+1. Build VT Code (`target/debug` is fine for local development; `target/release` is recommended for regular editor workflows).
 2. Enable the ACP bridge in `vtcode.toml` or via environment overrides.
-3. Wire the binary into Zed's `settings.json` under `agent_servers`.
+3. Wire either the VT Code binary or a small wrapper script into Zed's `settings.json` under `agent_servers`.
 4. Start an external agent session in Zed and confirm ACP logs report healthy traffic.
 
 ## Prerequisites
@@ -31,6 +31,14 @@ cargo build --release
 ```
 
 Record the resulting binary path (`target/release/vtcode`) or add it to your `PATH`.
+
+For local repository development, this is also fine:
+
+```bash
+cargo build -p vtcode
+```
+
+That produces `target/debug/vtcode`, which is usually the simplest binary to point Zed at while iterating on ACP fixes.
 
 ## Configure VT Code for ACP
 
@@ -77,6 +85,15 @@ locations. You can also mirror Codex CLI behaviour with inline overrides such as
 `--config agent.provider="openai"` when launching the bridge. Successful startup leaves the process
 waiting on stdio; stop it with `Ctrl+C`.
 
+For a source checkout, test the same binary Zed will use:
+
+```bash
+./target/debug/vtcode --config /absolute/path/to/vtcode.toml acp
+```
+
+If you see a crash or panic here, fix that before debugging Zed itself. Zed can only report
+"server shut down unexpectedly" after the process exits; it will not explain VT Code panics for you.
+
 ## Register VT Code in Zed
 
 Edit `settings.json` (Command Palette → `zed: open settings`) and add a custom agent entry:
@@ -101,6 +118,44 @@ Edit `settings.json` (Command Palette → `zed: open settings`) and add a custom
 - Rename the key from `vtcode` if you want a different label in Zed.
 - Trim `command` to just `"vtcode"` when the binary is on `PATH`.
 - Add CLI flags such as `--config` or `--log-level debug` to `args` if required.
+
+### Recommended development wrapper
+
+When running VT Code from a local repo checkout, prefer a wrapper script over pointing Zed at an
+installed copy in `~/.local/bin`. A wrapper keeps the binary path, config path, provider overrides,
+and working directory in one place.
+
+Example:
+
+```sh
+#!/bin/sh
+set -eu
+
+REPO="/absolute/path/to/VTCode"
+cd "$REPO"
+
+exec "$REPO/target/debug/vtcode" \
+  --config "$REPO/vtcode.toml" \
+  acp
+```
+
+Then register that wrapper in Zed:
+
+```jsonc
+{
+    "agent_servers": {
+        "vtcode": {
+            "type": "custom",
+            "command": "/absolute/path/to/VTCode/scripts/zed-vtcode-acp.sh",
+            "args": [],
+            "env": {}
+        }
+    }
+}
+```
+
+This avoids a common failure mode where Zed launches an older installed binary that does not match
+the source tree you are editing.
 
 ## Use it inside Zed
 
@@ -197,6 +252,25 @@ sha256 = "replace-with-real-sha256"
    logs to ensure the packaged binary behaves the same as your development build.
 4. Repeat on every supported platform (macOS, Linux, Windows) before publishing the extension to the
    marketplace, verifying the correct archive is fetched and the shell wrapper behaves as expected.
+
+## Troubleshooting launch failures
+
+Use this order:
+
+1. Run the exact ACP command manually in a terminal.
+2. Confirm the same binary path works outside Zed before changing editor settings.
+3. Check `~/Library/Logs/Zed/Zed.log` for `agent_servers::acp` lines.
+4. On macOS, check `~/Library/Logs/DiagnosticReports/` if the process is killed before it prints errors.
+
+Common cases:
+
+| Symptom | Likely cause | Fix |
+| --- | --- | --- |
+| `server shut down unexpectedly` in Zed, but no useful ACP stderr | VT Code crashed very early | Run `vtcode acp` manually and inspect the generated crash report |
+| `zsh:1: no such file or directory: .local/bin/vtcode` | Relative `command` path in Zed | Use an absolute path or a wrapper script |
+| `Failed to create workspace .vtcode directory at /.vtcode` | Zed launched VT Code with `/` as cwd | Set `cwd` correctly or use a wrapper that runs `cd /path/to/repo` first |
+| `Authentication not found for OpenAI` during ACP startup | ACP is booting with the wrong config or provider | Pass `--config /absolute/path/to/vtcode.toml` or use a wrapper script |
+| Process is killed immediately on macOS | Local binary signature/install issue | Rebuild locally and point Zed at `target/debug/vtcode` or a wrapper |
 
 ### Keep protocol alignment
 

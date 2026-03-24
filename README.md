@@ -101,7 +101,12 @@ VT Code supports multiple agent protocols for integration:
 
 #### Agent Client Protocol (ACP)
 
-VT Code can integrate with code editors like Zed. To configure ACP, refer to the [ACP docs](./docs/guides/zed-acp.md).
+VT Code can integrate with code editors like Zed. For setup and troubleshooting, refer to the
+[ACP docs](./docs/guides/zed-acp.md).
+
+For local development, prefer pointing Zed at a small wrapper script that runs the repo build
+(`target/debug/vtcode` or `target/release/vtcode`) with an explicit `--config` path, instead of
+relying on an older installed binary in `~/.local/bin`.
 
 #### Agent2Agent (A2A) Protocol
 
