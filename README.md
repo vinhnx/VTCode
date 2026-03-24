@@ -42,11 +42,22 @@ irm https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.ps1 | i
 cargo install vtcode
 
 # Homebrew (macOS/Linux)
+# From homebrew/core (official):
 brew install vtcode
+
+# From vinhnx/tap (development/bleeding edge):
+brew tap vinhnx/tap
+brew install vtcode
+
+# If switching between taps, uninstall first:
+brew uninstall vtcode
+brew install vtcode  # or: brew install vinhnx/tap/vtcode
 
 # Optional: install the search tools bundle later
 vtcode dependencies install search-tools
 ```
+
+> **Note:** If you encounter "installed from different tap" errors, uninstall the existing formula first: `brew uninstall vtcode`, then install from your preferred tap.
 
 **See [Installation Guide](./docs/installation/) and [Native Installer Guide](./docs/installation/NATIVE_INSTALLERS.md) for more options and troubleshooting.**
 

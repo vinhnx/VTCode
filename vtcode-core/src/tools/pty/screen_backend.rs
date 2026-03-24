@@ -81,9 +81,7 @@ impl PreparedScreenSnapshot {
                     }
                 }
             }
-            PtyEmulationBackend::LegacyVt100 => {
-                self.legacy_snapshot(fallback_scrollback)
-            }
+            PtyEmulationBackend::LegacyVt100 => self.legacy_snapshot(fallback_scrollback),
         }
     }
 

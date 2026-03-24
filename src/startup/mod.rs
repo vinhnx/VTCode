@@ -318,10 +318,7 @@ fn command_skips_provider_auth(command: Option<&Commands>) -> bool {
 }
 
 fn can_start_without_provider_auth(command: Option<&Commands>) -> bool {
-    matches!(
-        command,
-        None | Some(Commands::AgentClientProtocol { .. })
-    )
+    matches!(command, None | Some(Commands::AgentClientProtocol { .. }))
 }
 
 #[cfg(test)]
