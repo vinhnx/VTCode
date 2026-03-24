@@ -318,7 +318,10 @@ fn command_skips_provider_auth(command: Option<&Commands>) -> bool {
 }
 
 fn can_start_without_provider_auth(command: Option<&Commands>) -> bool {
-    command.is_none()
+    matches!(
+        command,
+        None | Some(Commands::AgentClientProtocol { .. })
+    )
 }
 
 #[cfg(test)]
@@ -352,6 +355,15 @@ mod validation_tests {
         assert!(!can_start_without_provider_auth(Some(&Commands::Login {
             provider: "openai".to_string(),
         })));
+    }
+
+    #[test]
+    fn acp_can_start_without_provider_auth() {
+        assert!(can_start_without_provider_auth(Some(
+            &Commands::AgentClientProtocol {
+                target: vtcode_core::cli::args::AgentClientProtocolTarget::Zed,
+            },
+        )));
     }
 
     #[test]

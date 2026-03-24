@@ -86,22 +86,16 @@ impl OutputStyleManager {
 
     fn parse_output_style(content: &str) -> Result<OutputStyle, Box<dyn std::error::Error>> {
         // Look for frontmatter (between --- and ---)
-        if let Some(frontmatter_end) = content.find("\n---\n") {
-            let frontmatter_start = if content.starts_with("---\n") {
-                0
-            } else {
-                content.find("---\n").unwrap_or(0)
-            };
-            let frontmatter = &content[frontmatter_start..frontmatter_end + 4];
-
-            // Parse the frontmatter
-            let frontmatter_content = &frontmatter[4..frontmatter.len() - 4]; // Remove the ---\n and \n---
+        if let Some(frontmatter_body) = content.strip_prefix("---\n")
+            && let Some(frontmatter_end) = frontmatter_body.find("\n---\n")
+        {
+            let frontmatter_content = &frontmatter_body[..frontmatter_end];
             let config: OutputStyleFileConfig = serde_yaml::from_str(frontmatter_content)?;
 
             // Get the content after the frontmatter
-            let content_start = frontmatter_end + 5; // Skip past "\n---\n"
-            let actual_content = if content_start < content.len() {
-                &content[content_start..]
+            let content_start = frontmatter_end + 5; // Skip past body + "\n---\n"
+            let actual_content = if content_start < frontmatter_body.len() {
+                &frontmatter_body[content_start..]
             } else {
                 ""
             };
@@ -184,6 +178,14 @@ This is a test output style."#;
         );
         assert!(!style.config.keep_coding_instructions);
         assert!(style.content.contains("This is a test output style"));
+    }
+
+    #[test]
+    fn test_parse_output_style_with_bare_frontmatter_fence() {
+        let style = OutputStyleManager::parse_output_style("---").unwrap();
+
+        assert_eq!(style.config.name, "default");
+        assert_eq!(style.content, "---");
     }
 
     #[test]
