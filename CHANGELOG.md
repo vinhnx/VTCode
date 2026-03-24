@@ -2,6 +2,37 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.93.2 - 2026-03-24
+
+### Highlights
+#### Bug Fixes
+
+- Tighten prompt cache continuity and retention handling (7afbe9f0) 
+- Update sha256 checksum for macOS ARM architecture (39e5ace9) 
+- Update macOS ARM checksum and enhance Homebrew publishing script (58d1989a) 
+- Stabilize Zed ACP startup and transcripts (72f91134) 
+#### Documentation
+
+- Add Rust style guidelines and update Clippy disallowed methods (5bedfa98) 
+- Clarify Zed ACP local development setup (266a146c) 
+#### Features
+
+- Add configurable permissions mode (358f53fe) 
+- Add Claude-style compatibility for allowed and disallowed tools in permissions (bad5ba15) 
+### Other Changes
+#### Other
+
+- Update system prompt to specify use of plain ASCII icons for markers and bullets (3a8993f0) 
+- Add terminal management features and enhance session handling (8b07cb90) 
+- Update screen_backend.rs (9271147d) 
+#### Refactors
+
+- Simplify key handling in modal state (bfec2be3) 
+- Reuse shared OpenAI prompt cache key helper (68fe597f) 
+- Tighten system prompts and document accuracy tuning (450dcef2) 
+- Update tool policies and enhance prompt suggestions in TODO (36313870) 
+### Contributors
+@vinhnx
 ## 0.93.1 - 2026-03-22
 
 ### Highlights
