@@ -235,6 +235,13 @@ impl CopilotProvider {
                                         ),
                                     }))
                                 }
+                                CopilotRuntimeRequest::TerminalCreate(_)
+                                | CopilotRuntimeRequest::TerminalOutput(_)
+                                | CopilotRuntimeRequest::TerminalRelease(_)
+                                | CopilotRuntimeRequest::TerminalKill(_)
+                                | CopilotRuntimeRequest::TerminalWaitForExit(_) => {
+                                    continue;
+                                }
                                 CopilotRuntimeRequest::ObservedToolCall(_) => {
                                     continue;
                                 }

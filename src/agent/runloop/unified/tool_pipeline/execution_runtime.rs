@@ -219,6 +219,7 @@ pub(super) async fn execute_with_cache_and_streaming(
             progress_reporter.clone(),
             tail_limit,
             stream_command,
+            registry.pty_config().clone(),
         );
         let (callback, coalescer) = build_streaming_progress_callback(
             callback,

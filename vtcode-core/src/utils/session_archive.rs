@@ -146,6 +146,8 @@ pub struct SessionArchiveMetadata {
     pub theme: String,
     pub reasoning_effort: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_mode: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub debug_log_path: Option<String>,
     /// Names of skills loaded in this session
     #[serde(default)]
@@ -170,6 +172,7 @@ impl SessionArchiveMetadata {
             provider: provider.into(),
             theme: theme.into(),
             reasoning_effort: reasoning_effort.into(),
+            session_mode: None,
             debug_log_path: None,
             loaded_skills: Vec::new(),
             prompt_cache_lineage_id: None,
@@ -887,6 +890,7 @@ async fn create_fork_archive(
         provider: source_snapshot.metadata.provider.clone(),
         theme: source_snapshot.metadata.theme.clone(),
         reasoning_effort: source_snapshot.metadata.reasoning_effort.clone(),
+        session_mode: source_snapshot.metadata.session_mode.clone(),
         debug_log_path: source_snapshot.metadata.debug_log_path.clone(),
         loaded_skills: source_snapshot.metadata.loaded_skills.clone(),
         prompt_cache_lineage_id: source_snapshot.metadata.prompt_cache_lineage_id.clone(),

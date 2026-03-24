@@ -1564,6 +1564,23 @@ impl ToolRegistry {
         self.execute_unified_exec_internal(args, false).await
     }
 
+    pub(super) async fn execute_harness_unified_exec_terminal_run_raw(
+        &self,
+        args: Value,
+    ) -> Result<Value> {
+        let mut args = crate::tools::command_args::normalize_shell_args(&args)
+            .map_err(|error| anyhow!(error))?;
+        if let Some(payload) = args.as_object_mut() {
+            payload
+                .entry("action".to_string())
+                .or_insert_with(|| json!("run"));
+            payload
+                .entry("tty".to_string())
+                .or_insert_with(|| json!(true));
+        }
+        self.execute_command_session_run_pty(args, true).await
+    }
+
     pub(super) async fn execute_unified_exec_internal(
         &self,
         args: Value,
@@ -1605,7 +1622,7 @@ impl ToolRegistry {
     ) -> Result<Value> {
         let tty = args.get("tty").and_then(Value::as_bool).unwrap_or(false);
         if tty {
-            self.execute_command_session_run_pty(args).await
+            self.execute_command_session_run_pty(args, false).await
         } else {
             self.execute_run_pipe_cmd(args, settle_noninteractive_exec)
                 .await
@@ -2074,7 +2091,11 @@ impl ToolRegistry {
     // INTERNAL IMPLEMENTATIONS
     // ============================================================
 
-    async fn execute_command_session_run_pty(&self, args: Value) -> Result<Value> {
+    async fn execute_command_session_run_pty(
+        &self,
+        args: Value,
+        retain_completed_session: bool,
+    ) -> Result<Value> {
         let payload = args
             .as_object()
             .ok_or_else(|| anyhow!("command execution requires a JSON object"))?;
@@ -2205,6 +2226,7 @@ impl ToolRegistry {
             session_env = bridge.env_vars(&wrapper_executable);
             zsh_exec_bridge = Some(bridge);
         }
+        session_env.extend(parse_exec_env_overrides(payload)?);
 
         let session_id = generate_session_id("run");
         self.exec_sessions
@@ -2261,7 +2283,7 @@ impl ToolRegistry {
             Some(&session_id),
         );
 
-        if capture.exit_code.is_some() {
+        if capture.exit_code.is_some() && !retain_completed_session {
             self.prune_completed_exec_session(&session_id).await?;
         }
         if is_git_diff {
@@ -2391,7 +2413,8 @@ impl ToolRegistry {
         ));
 
         let session_id = generate_session_id("run");
-        let session_env = self.build_pipe_session_env(&shell_program, HashMap::new());
+        let session_env =
+            self.build_pipe_session_env(&shell_program, parse_exec_env_overrides(payload)?);
         let session_metadata = self
             .exec_sessions
             .create_pipe_session(session_id.clone(), command, working_dir_path, session_env)
@@ -3354,6 +3377,49 @@ fn parse_command_parts(
     }
 
     Ok((parts, raw_command))
+}
+
+fn parse_exec_env_overrides(
+    payload: &serde_json::Map<String, Value>,
+) -> Result<HashMap<String, String>> {
+    let Some(env_value) = payload.get("env") else {
+        return Ok(HashMap::new());
+    };
+
+    match env_value {
+        Value::Object(map) => map
+            .iter()
+            .map(|(key, value)| {
+                let value = value
+                    .as_str()
+                    .ok_or_else(|| anyhow!("env values must be strings"))?;
+                Ok((key.clone(), value.to_string()))
+            })
+            .collect(),
+        Value::Array(entries) => {
+            let mut env = HashMap::new();
+            for entry in entries {
+                let object = entry
+                    .as_object()
+                    .ok_or_else(|| anyhow!("env entries must be objects"))?;
+                let name = object
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .ok_or_else(|| anyhow!("env entries must include a non-empty name"))?;
+                let value = object
+                    .get("value")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| anyhow!("env entries must include a string value"))?;
+                env.insert(name.to_string(), value.to_string());
+            }
+            Ok(env)
+        }
+        _ => Err(anyhow!(
+            "env must be an object or array of {{name, value}} entries"
+        )),
+    }
 }
 
 fn is_git_diff_command(parts: &[String]) -> bool {

@@ -1,5 +1,9 @@
 use agent_client_protocol as acp;
+use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_core::core::interfaces::SessionMode;
+
+pub(crate) const SESSION_CONFIG_MODE_ID: &str = "mode";
+pub(crate) const SESSION_CONFIG_THOUGHT_LEVEL_ID: &str = "thought_level";
 
 pub(crate) fn session_mode_description(mode: SessionMode) -> &'static str {
     match mode {
@@ -40,6 +44,71 @@ pub(crate) fn acp_session_modes() -> Vec<acp::SessionMode> {
 
 pub(crate) fn session_mode_id(mode: SessionMode) -> acp::SessionModeId {
     acp::SessionModeId::new(mode.as_str())
+}
+
+fn session_mode_name(mode: SessionMode) -> &'static str {
+    match mode {
+        SessionMode::Ask => "Ask",
+        SessionMode::Architect => "Architect",
+        SessionMode::Code => "Code",
+    }
+}
+
+fn reasoning_effort_name(level: ReasoningEffortLevel) -> &'static str {
+    match level {
+        ReasoningEffortLevel::None => "None",
+        ReasoningEffortLevel::Minimal => "Minimal",
+        ReasoningEffortLevel::Low => "Low",
+        ReasoningEffortLevel::Medium => "Medium",
+        ReasoningEffortLevel::High => "High",
+        ReasoningEffortLevel::XHigh => "Extra High",
+    }
+}
+
+pub(crate) fn session_config_options(
+    current_mode: SessionMode,
+    reasoning_effort: ReasoningEffortLevel,
+    include_thought_level: bool,
+) -> Vec<acp::SessionConfigOption> {
+    let mode_options = [SessionMode::Ask, SessionMode::Architect, SessionMode::Code]
+        .into_iter()
+        .map(|mode| acp::SessionConfigSelectOption::new(mode.as_str(), session_mode_name(mode)))
+        .collect::<Vec<_>>();
+
+    let thought_level_options = ReasoningEffortLevel::allowed_values()
+        .iter()
+        .filter_map(|value| {
+            ReasoningEffortLevel::parse(value).map(|level| {
+                acp::SessionConfigSelectOption::new(level.as_str(), reasoning_effort_name(level))
+            })
+        })
+        .collect::<Vec<_>>();
+
+    let mut config_options = Vec::with_capacity(2);
+    config_options.push(
+        acp::SessionConfigOption::select(
+            SESSION_CONFIG_MODE_ID,
+            "Mode",
+            current_mode.as_str(),
+            mode_options,
+        )
+        .description("Controls whether VT Code answers, plans, or edits.")
+        .category(acp::SessionConfigOptionCategory::Mode),
+    );
+    if include_thought_level {
+        config_options.push(
+            acp::SessionConfigOption::select(
+                SESSION_CONFIG_THOUGHT_LEVEL_ID,
+                "Thought level",
+                reasoning_effort.as_str(),
+                thought_level_options,
+            )
+            .description("Controls how much reasoning effort VT Code requests from the model.")
+            .category(acp::SessionConfigOptionCategory::ThoughtLevel),
+        );
+    }
+
+    config_options
 }
 
 pub(crate) fn text_chunk(text: impl Into<String>) -> acp::ContentChunk {

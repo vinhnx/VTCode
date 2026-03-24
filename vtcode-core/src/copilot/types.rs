@@ -1,4 +1,5 @@
 use std::future::Future;
+use std::path::PathBuf;
 use std::pin::Pin;
 
 use serde_json::Value;
@@ -114,6 +115,65 @@ pub struct CopilotObservedToolCall {
     pub status: CopilotObservedToolCallStatus,
     pub arguments: Option<Value>,
     pub output: Option<String>,
+    pub terminal_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CopilotTerminalEnvVar {
+    pub name: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CopilotTerminalCreateRequest {
+    pub session_id: String,
+    pub command: String,
+    pub args: Vec<String>,
+    pub env: Vec<CopilotTerminalEnvVar>,
+    pub cwd: Option<PathBuf>,
+    pub output_byte_limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CopilotTerminalCreateResponse {
+    pub terminal_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CopilotTerminalOutputRequest {
+    pub session_id: String,
+    pub terminal_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CopilotTerminalReleaseRequest {
+    pub session_id: String,
+    pub terminal_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CopilotTerminalKillRequest {
+    pub session_id: String,
+    pub terminal_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CopilotTerminalWaitForExitRequest {
+    pub session_id: String,
+    pub terminal_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CopilotTerminalExitStatus {
+    pub exit_code: Option<u32>,
+    pub signal: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CopilotTerminalOutputResponse {
+    pub output: String,
+    pub truncated: bool,
+    pub exit_status: Option<CopilotTerminalExitStatus>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

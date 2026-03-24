@@ -284,7 +284,7 @@ pub fn register_custom_providers(custom_providers: &[vtcode_config::core::Custom
             ))
         });
 
-        tracing::debug!(
+        tracing::trace!(
             provider = cp.name,
             display_name = cp.display_name,
             "Registered custom OpenAI-compatible provider"

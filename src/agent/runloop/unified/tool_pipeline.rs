@@ -23,6 +23,7 @@ pub(crate) use execution::{
 };
 pub(crate) use execution_run::should_settle_noninteractive_unified_exec;
 pub(crate) use hitl::execute_hitl_tool;
+pub(crate) use pty_stream::PtyStreamRuntime;
 pub(crate) use status::{ToolBatchOutcome, ToolExecutionStatus, ToolPipelineOutcome};
 
 /// Default timeout for tool execution if no policy is configured

@@ -7,7 +7,9 @@ mod transport;
 mod types;
 
 pub use acp_client::{
-    CopilotAcpClient, CopilotRuntimeRequest, PendingPermissionRequest, PendingToolCallRequest,
+    CopilotAcpClient, CopilotRuntimeRequest, PendingPermissionRequest,
+    PendingTerminalCreateRequest, PendingTerminalKillRequest, PendingTerminalOutputRequest,
+    PendingTerminalReleaseRequest, PendingTerminalWaitForExitRequest, PendingToolCallRequest,
     PromptCompletion, PromptSession, PromptSessionCancelHandle, PromptUpdate,
 };
 pub use auth::{login, login_with_events, logout, logout_with_events, probe_auth_status};
@@ -17,6 +19,9 @@ pub use types::{
     CopilotAuthEvent, CopilotAuthStatus, CopilotAuthStatusKind, CopilotDiscoveredModel,
     CopilotObservedToolCall, CopilotObservedToolCallStatus, CopilotPermissionDecision,
     CopilotPermissionRequest, CopilotPromptSessionFuture, CopilotShellCommandSummary,
-    CopilotToolCallFailure, CopilotToolCallRequest, CopilotToolCallResponse,
-    CopilotToolCallSuccess, CopilotToolUse,
+    CopilotTerminalCreateRequest, CopilotTerminalCreateResponse, CopilotTerminalEnvVar,
+    CopilotTerminalExitStatus, CopilotTerminalKillRequest, CopilotTerminalOutputRequest,
+    CopilotTerminalOutputResponse, CopilotTerminalReleaseRequest,
+    CopilotTerminalWaitForExitRequest, CopilotToolCallFailure, CopilotToolCallRequest,
+    CopilotToolCallResponse, CopilotToolCallSuccess, CopilotToolUse,
 };

@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use tokio::{sync::mpsc, task::JoinHandle};
+use vtcode_core::config::PtyConfig;
 use vtcode_core::tools::registry::ToolProgressCallback;
 use vtcode_tui::app::{InlineHandle, InlineMessageKind};
 
@@ -24,6 +25,7 @@ impl PtyStreamRuntime {
         progress_reporter: ProgressReporter,
         tail_limit: usize,
         command_prompt: Option<String>,
+        pty_config: PtyConfig,
     ) -> (Self, ToolProgressCallback) {
         let (tx, mut rx) = mpsc::unbounded_channel::<String>();
         let active = Arc::new(AtomicBool::new(true));
@@ -31,7 +33,7 @@ impl PtyStreamRuntime {
         let effective_tail_limit = tail_limit.clamp(1, Self::MAX_LIVE_STREAM_LINES);
 
         let task = tokio::spawn(async move {
-            let mut state = PtyStreamState::new(command_prompt);
+            let mut state = PtyStreamState::new(command_prompt, pty_config);
             let (replace_count, segments, link_ranges, _) =
                 state.render_segments("", effective_tail_limit);
             if !segments.is_empty() && worker_active.load(Ordering::Relaxed) {

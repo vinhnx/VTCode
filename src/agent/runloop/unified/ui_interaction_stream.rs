@@ -1031,6 +1031,7 @@ mod tests {
                     status: CopilotObservedToolCallStatus::Pending,
                     arguments: None,
                     output: None,
+                    terminal_id: None,
                 },
             ))
             .expect("send runtime request");

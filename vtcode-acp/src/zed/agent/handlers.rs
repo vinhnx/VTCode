@@ -1,6 +1,7 @@
 use super::super::constants::*;
 use super::super::helpers::{
-    acp_session_modes, agent_implementation_info, session_mode_id, text_chunk,
+    SESSION_CONFIG_MODE_ID, SESSION_CONFIG_THOUGHT_LEVEL_ID, acp_session_modes,
+    agent_implementation_info, session_mode_id, text_chunk,
 };
 use super::super::types::{PlanProgress, ToolRuntime};
 use super::ZedAgent;
@@ -9,6 +10,7 @@ use anyhow::Result;
 use futures::StreamExt;
 use serde_json::json;
 use tracing::warn;
+use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_core::core::interfaces::SessionMode;
 use vtcode_core::llm::factory::ProviderConfig;
 use vtcode_core::llm::factory::{create_provider_for_model, create_provider_with_config};
@@ -55,13 +57,19 @@ impl acp::Agent for ZedAgent {
         _args: acp::NewSessionRequest,
     ) -> Result<acp::NewSessionResponse, acp::Error> {
         let session_id = self.register_session();
+        let session = self
+            .session_handle(&session_id)
+            .ok_or_else(acp::Error::internal_error)?;
         let available_modes = acp_session_modes();
+        let config_options = self.current_session_config_options(&session);
 
         self.send_available_commands_update(&session_id).await?;
 
         let modes = acp::SessionModeState::new(session_mode_id(SessionMode::Code), available_modes);
 
-        Ok(acp::NewSessionResponse::new(session_id).modes(modes))
+        Ok(acp::NewSessionResponse::new(session_id)
+            .modes(modes)
+            .config_options(config_options))
     }
 
     async fn load_session(
@@ -84,8 +92,11 @@ impl acp::Agent for ZedAgent {
             session_mode_id(session.data.borrow().current_mode),
             acp_session_modes(),
         );
+        let config_options = self.current_session_config_options(&session);
 
-        Ok(acp::LoadSessionResponse::new().modes(modes))
+        Ok(acp::LoadSessionResponse::new()
+            .modes(modes)
+            .config_options(config_options))
     }
 
     async fn prompt(&self, args: acp::PromptRequest) -> Result<acp::PromptResponse, acp::Error> {
@@ -138,8 +149,9 @@ impl acp::Agent for ZedAgent {
         };
 
         let supports_streaming = provider.supports_streaming();
+        let session_reasoning_effort = session.data.borrow().reasoning_effort;
         let reasoning_effort = if provider.supports_reasoning_effort(&self.config.model) {
-            Some(self.config.reasoning_effort)
+            Some(session_reasoning_effort)
         } else {
             None
         };
@@ -427,6 +439,66 @@ impl acp::Agent for ZedAgent {
             .await?;
 
         Ok(acp::SetSessionModeResponse::new())
+    }
+
+    async fn set_session_config_option(
+        &self,
+        args: acp::SetSessionConfigOptionRequest,
+    ) -> Result<acp::SetSessionConfigOptionResponse, acp::Error> {
+        let Some(session) = self.session_handle(&args.session_id) else {
+            return Err(acp::Error::invalid_params().data(json!({ "reason": "unknown_session" })));
+        };
+
+        match args.config_id.0.as_ref() {
+            SESSION_CONFIG_MODE_ID => {
+                let Some(mode) = SessionMode::parse(args.value.0.as_ref()) else {
+                    return Err(acp::Error::invalid_params().data(json!({
+                        "reason": "unknown_mode",
+                        "mode_id": args.value.0,
+                    })));
+                };
+
+                let _ = self
+                    .apply_session_mode(&args.session_id, &session, mode)
+                    .await?;
+            }
+            SESSION_CONFIG_THOUGHT_LEVEL_ID => {
+                if !self.model_supports_thought_level() {
+                    return Err(acp::Error::invalid_params().data(json!({
+                        "reason": "unsupported_config_option",
+                        "config_id": args.config_id.0,
+                    })));
+                }
+                let Some(reasoning_effort) = ReasoningEffortLevel::parse(args.value.0.as_ref())
+                else {
+                    return Err(acp::Error::invalid_params().data(json!({
+                        "reason": "unknown_thought_level",
+                        "value": args.value.0,
+                    })));
+                };
+
+                if self.update_session_reasoning_effort(&session, reasoning_effort) {
+                    let config_options = self.current_session_config_options(&session);
+                    self.send_update(
+                        &args.session_id,
+                        acp::SessionUpdate::ConfigOptionUpdate(acp::ConfigOptionUpdate::new(
+                            config_options,
+                        )),
+                    )
+                    .await?;
+                }
+            }
+            _ => {
+                return Err(acp::Error::invalid_params().data(json!({
+                    "reason": "unknown_config_option",
+                    "config_id": args.config_id.0,
+                })));
+            }
+        }
+
+        Ok(acp::SetSessionConfigOptionResponse::new(
+            self.current_session_config_options(&session),
+        ))
     }
 
     async fn cancel(&self, args: acp::CancelNotification) -> Result<(), acp::Error> {

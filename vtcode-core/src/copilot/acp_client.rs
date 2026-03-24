@@ -14,7 +14,11 @@ use super::transport::StdioTransport;
 use super::types::{
     CopilotAcpCompatibilityState, CopilotObservedToolCall, CopilotObservedToolCallStatus,
     CopilotPermissionDecision, CopilotPermissionRequest, CopilotShellCommandSummary,
-    CopilotToolCallFailure, CopilotToolCallRequest, CopilotToolCallResponse,
+    CopilotTerminalCreateRequest, CopilotTerminalCreateResponse, CopilotTerminalEnvVar,
+    CopilotTerminalExitStatus, CopilotTerminalKillRequest, CopilotTerminalOutputRequest,
+    CopilotTerminalOutputResponse, CopilotTerminalReleaseRequest,
+    CopilotTerminalWaitForExitRequest, CopilotToolCallFailure, CopilotToolCallRequest,
+    CopilotToolCallResponse,
 };
 use crate::llm::provider::ToolDefinition;
 
@@ -72,6 +76,11 @@ impl PromptSession {
 pub enum CopilotRuntimeRequest {
     Permission(PendingPermissionRequest),
     ToolCall(PendingToolCallRequest),
+    TerminalCreate(PendingTerminalCreateRequest),
+    TerminalOutput(PendingTerminalOutputRequest),
+    TerminalRelease(PendingTerminalReleaseRequest),
+    TerminalKill(PendingTerminalKillRequest),
+    TerminalWaitForExit(PendingTerminalWaitForExitRequest),
     ObservedToolCall(CopilotObservedToolCall),
     CompatibilityNotice(CopilotCompatibilityNotice),
 }
@@ -102,6 +111,76 @@ impl PendingToolCallRequest {
         self.response_tx
             .send(response)
             .map_err(|_| anyhow!("copilot tool response channel closed"))
+    }
+}
+
+#[derive(Debug)]
+pub struct PendingTerminalCreateRequest {
+    pub request: CopilotTerminalCreateRequest,
+    response_tx: tokio::sync::oneshot::Sender<CopilotTerminalCreateResponse>,
+}
+
+impl PendingTerminalCreateRequest {
+    pub fn respond(self, response: CopilotTerminalCreateResponse) -> Result<()> {
+        self.response_tx
+            .send(response)
+            .map_err(|_| anyhow!("copilot terminal create response channel closed"))
+    }
+}
+
+#[derive(Debug)]
+pub struct PendingTerminalOutputRequest {
+    pub request: CopilotTerminalOutputRequest,
+    response_tx: tokio::sync::oneshot::Sender<CopilotTerminalOutputResponse>,
+}
+
+impl PendingTerminalOutputRequest {
+    pub fn respond(self, response: CopilotTerminalOutputResponse) -> Result<()> {
+        self.response_tx
+            .send(response)
+            .map_err(|_| anyhow!("copilot terminal output response channel closed"))
+    }
+}
+
+#[derive(Debug)]
+pub struct PendingTerminalReleaseRequest {
+    pub request: CopilotTerminalReleaseRequest,
+    response_tx: tokio::sync::oneshot::Sender<()>,
+}
+
+impl PendingTerminalReleaseRequest {
+    pub fn respond(self) -> Result<()> {
+        self.response_tx
+            .send(())
+            .map_err(|_| anyhow!("copilot terminal release response channel closed"))
+    }
+}
+
+#[derive(Debug)]
+pub struct PendingTerminalKillRequest {
+    pub request: CopilotTerminalKillRequest,
+    response_tx: tokio::sync::oneshot::Sender<()>,
+}
+
+impl PendingTerminalKillRequest {
+    pub fn respond(self) -> Result<()> {
+        self.response_tx
+            .send(())
+            .map_err(|_| anyhow!("copilot terminal kill response channel closed"))
+    }
+}
+
+#[derive(Debug)]
+pub struct PendingTerminalWaitForExitRequest {
+    pub request: CopilotTerminalWaitForExitRequest,
+    response_tx: tokio::sync::oneshot::Sender<CopilotTerminalExitStatus>,
+}
+
+impl PendingTerminalWaitForExitRequest {
+    pub fn respond(self, response: CopilotTerminalExitStatus) -> Result<()> {
+        self.response_tx
+            .send(response)
+            .map_err(|_| anyhow!("copilot terminal wait response channel closed"))
     }
 }
 
@@ -393,7 +472,7 @@ impl CopilotAcpClient {
                             "readTextFile": false,
                             "writeTextFile": false,
                         },
-                        "terminal": false,
+                        "terminal": true,
                     },
                     "clientInfo": {
                         "name": "vtcode",
@@ -539,6 +618,11 @@ fn handle_acp_message(inner: &Arc<CopilotAcpClientInner>, message: Value) -> Res
         "permission.request" => handle_permission_request(inner, &message)?,
         "session/request_permission" => handle_legacy_permission_request(inner, &message)?,
         "tool.call" => handle_tool_call_request(inner, &message)?,
+        "terminal/create" => handle_terminal_create_request(inner, &message)?,
+        "terminal/output" => handle_terminal_output_request(inner, &message)?,
+        "terminal/release" => handle_terminal_release_request(inner, &message)?,
+        "terminal/kill" => handle_terminal_kill_request(inner, &message)?,
+        "terminal/wait_for_exit" => handle_terminal_wait_for_exit_request(inner, &message)?,
         client_method => {
             if let Some(id) = request_id(&message) {
                 let error_message = unsupported_client_capability_message(client_method);
@@ -791,6 +875,422 @@ fn handle_tool_call_request(inner: &Arc<CopilotAcpClientInner>, message: &Value)
     }
 }
 
+fn handle_terminal_create_request(
+    inner: &Arc<CopilotAcpClientInner>,
+    message: &Value,
+) -> Result<()> {
+    let Some(id) = request_id(message) else {
+        return Ok(());
+    };
+
+    let params = message.get("params").cloned().unwrap_or(Value::Null);
+    let request = parse_terminal_create_request(&params)?;
+    let (response_tx, response_rx) = tokio::sync::oneshot::channel();
+    let dispatched = match enqueue_runtime_request(
+        inner,
+        CopilotRuntimeRequest::TerminalCreate(PendingTerminalCreateRequest {
+            request,
+            response_tx,
+        }),
+    ) {
+        Ok(dispatched) => dispatched,
+        Err(err) if is_runtime_request_channel_closed_error(&err) => false,
+        Err(err) => return Err(err),
+    };
+
+    if dispatched {
+        let inner = inner.clone();
+        tokio::spawn(async move {
+            match response_rx.await {
+                Ok(response) => {
+                    let _ = inner
+                        .transport
+                        .respond(id, build_terminal_create_result(response))
+                        .map_err(|e| {
+                            tracing::warn!("copilot acp terminal/create respond failed: {e}")
+                        });
+                }
+                Err(_) => {
+                    let _ = inner.transport.respond_error(
+                        id,
+                        -32000,
+                        "VT Code could not create the requested terminal.",
+                    );
+                }
+            }
+        });
+        Ok(())
+    } else {
+        inner
+            .transport
+            .respond_error(
+                id,
+                -32000,
+                "VT Code could not create the requested terminal because the Copilot runtime is unavailable.",
+            )
+            .map_err(anyhow::Error::from)
+    }
+}
+
+fn handle_terminal_output_request(
+    inner: &Arc<CopilotAcpClientInner>,
+    message: &Value,
+) -> Result<()> {
+    let Some(id) = request_id(message) else {
+        return Ok(());
+    };
+
+    let params = message.get("params").cloned().unwrap_or(Value::Null);
+    let request = parse_terminal_request(&params, |session_id, terminal_id| {
+        CopilotTerminalOutputRequest {
+            session_id,
+            terminal_id,
+        }
+    })?;
+    let (response_tx, response_rx) = tokio::sync::oneshot::channel();
+    let dispatched = match enqueue_runtime_request(
+        inner,
+        CopilotRuntimeRequest::TerminalOutput(PendingTerminalOutputRequest {
+            request,
+            response_tx,
+        }),
+    ) {
+        Ok(dispatched) => dispatched,
+        Err(err) if is_runtime_request_channel_closed_error(&err) => false,
+        Err(err) => return Err(err),
+    };
+
+    if dispatched {
+        let inner = inner.clone();
+        tokio::spawn(async move {
+            match response_rx.await {
+                Ok(response) => {
+                    let _ = inner
+                        .transport
+                        .respond(id, build_terminal_output_result(response))
+                        .map_err(|e| {
+                            tracing::warn!("copilot acp terminal/output respond failed: {e}")
+                        });
+                }
+                Err(_) => {
+                    let _ = inner.transport.respond_error(
+                        id,
+                        -32000,
+                        "VT Code could not read the requested terminal output.",
+                    );
+                }
+            }
+        });
+        Ok(())
+    } else {
+        inner
+            .transport
+            .respond_error(
+                id,
+                -32000,
+                "VT Code could not read the requested terminal output because the Copilot runtime is unavailable.",
+            )
+            .map_err(anyhow::Error::from)
+    }
+}
+
+fn handle_terminal_release_request(
+    inner: &Arc<CopilotAcpClientInner>,
+    message: &Value,
+) -> Result<()> {
+    let Some(id) = request_id(message) else {
+        return Ok(());
+    };
+
+    let params = message.get("params").cloned().unwrap_or(Value::Null);
+    let request = parse_terminal_request(&params, |session_id, terminal_id| {
+        CopilotTerminalReleaseRequest {
+            session_id,
+            terminal_id,
+        }
+    })?;
+    let (response_tx, response_rx) = tokio::sync::oneshot::channel();
+    let dispatched = match enqueue_runtime_request(
+        inner,
+        CopilotRuntimeRequest::TerminalRelease(PendingTerminalReleaseRequest {
+            request,
+            response_tx,
+        }),
+    ) {
+        Ok(dispatched) => dispatched,
+        Err(err) if is_runtime_request_channel_closed_error(&err) => false,
+        Err(err) => return Err(err),
+    };
+
+    if dispatched {
+        let inner = inner.clone();
+        tokio::spawn(async move {
+            match response_rx.await {
+                Ok(()) => {
+                    let _ = inner.transport.respond(id, json!({})).map_err(|e| {
+                        tracing::warn!("copilot acp terminal/release respond failed: {e}")
+                    });
+                }
+                Err(_) => {
+                    let _ = inner.transport.respond_error(
+                        id,
+                        -32000,
+                        "VT Code could not release the requested terminal.",
+                    );
+                }
+            }
+        });
+        Ok(())
+    } else {
+        inner
+            .transport
+            .respond_error(
+                id,
+                -32000,
+                "VT Code could not release the requested terminal because the Copilot runtime is unavailable.",
+            )
+            .map_err(anyhow::Error::from)
+    }
+}
+
+fn handle_terminal_kill_request(inner: &Arc<CopilotAcpClientInner>, message: &Value) -> Result<()> {
+    let Some(id) = request_id(message) else {
+        return Ok(());
+    };
+
+    let params = message.get("params").cloned().unwrap_or(Value::Null);
+    let request = parse_terminal_request(&params, |session_id, terminal_id| {
+        CopilotTerminalKillRequest {
+            session_id,
+            terminal_id,
+        }
+    })?;
+    let (response_tx, response_rx) = tokio::sync::oneshot::channel();
+    let dispatched = match enqueue_runtime_request(
+        inner,
+        CopilotRuntimeRequest::TerminalKill(PendingTerminalKillRequest {
+            request,
+            response_tx,
+        }),
+    ) {
+        Ok(dispatched) => dispatched,
+        Err(err) if is_runtime_request_channel_closed_error(&err) => false,
+        Err(err) => return Err(err),
+    };
+
+    if dispatched {
+        let inner = inner.clone();
+        tokio::spawn(async move {
+            match response_rx.await {
+                Ok(()) => {
+                    let _ = inner.transport.respond(id, json!({})).map_err(|e| {
+                        tracing::warn!("copilot acp terminal/kill respond failed: {e}")
+                    });
+                }
+                Err(_) => {
+                    let _ = inner.transport.respond_error(
+                        id,
+                        -32000,
+                        "VT Code could not kill the requested terminal command.",
+                    );
+                }
+            }
+        });
+        Ok(())
+    } else {
+        inner
+            .transport
+            .respond_error(
+                id,
+                -32000,
+                "VT Code could not kill the requested terminal command because the Copilot runtime is unavailable.",
+            )
+            .map_err(anyhow::Error::from)
+    }
+}
+
+fn handle_terminal_wait_for_exit_request(
+    inner: &Arc<CopilotAcpClientInner>,
+    message: &Value,
+) -> Result<()> {
+    let Some(id) = request_id(message) else {
+        return Ok(());
+    };
+
+    let params = message.get("params").cloned().unwrap_or(Value::Null);
+    let request = parse_terminal_request(&params, |session_id, terminal_id| {
+        CopilotTerminalWaitForExitRequest {
+            session_id,
+            terminal_id,
+        }
+    })?;
+    let (response_tx, response_rx) = tokio::sync::oneshot::channel();
+    let dispatched = match enqueue_runtime_request(
+        inner,
+        CopilotRuntimeRequest::TerminalWaitForExit(PendingTerminalWaitForExitRequest {
+            request,
+            response_tx,
+        }),
+    ) {
+        Ok(dispatched) => dispatched,
+        Err(err) if is_runtime_request_channel_closed_error(&err) => false,
+        Err(err) => return Err(err),
+    };
+
+    if dispatched {
+        let inner = inner.clone();
+        tokio::spawn(async move {
+            match response_rx.await {
+                Ok(response) => {
+                    let _ = inner
+                        .transport
+                        .respond(id, build_terminal_wait_for_exit_result(response))
+                        .map_err(|e| {
+                            tracing::warn!("copilot acp terminal/wait_for_exit respond failed: {e}")
+                        });
+                }
+                Err(_) => {
+                    let _ = inner.transport.respond_error(
+                        id,
+                        -32000,
+                        "VT Code could not wait for the requested terminal.",
+                    );
+                }
+            }
+        });
+        Ok(())
+    } else {
+        inner
+            .transport
+            .respond_error(
+                id,
+                -32000,
+                "VT Code could not wait for the requested terminal because the Copilot runtime is unavailable.",
+            )
+            .map_err(anyhow::Error::from)
+    }
+}
+
+fn parse_terminal_create_request(params: &Value) -> Result<CopilotTerminalCreateRequest> {
+    let session_id = params
+        .get("sessionId")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string();
+    let command = params
+        .get("command")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .ok_or_else(|| anyhow!("copilot terminal/create missing command"))?;
+    let args = params
+        .get("args")
+        .and_then(Value::as_array)
+        .map(|values| {
+            values
+                .iter()
+                .map(|value| {
+                    value
+                        .as_str()
+                        .map(str::to_string)
+                        .ok_or_else(|| anyhow!("copilot terminal args must be strings"))
+                })
+                .collect::<Result<Vec<_>>>()
+        })
+        .transpose()?
+        .unwrap_or_default();
+    let env = params
+        .get("env")
+        .and_then(Value::as_array)
+        .map(|values| {
+            values
+                .iter()
+                .map(|value| {
+                    let object = value
+                        .as_object()
+                        .ok_or_else(|| anyhow!("copilot terminal env entries must be objects"))?;
+                    let name = object
+                        .get("name")
+                        .and_then(Value::as_str)
+                        .map(str::to_string)
+                        .ok_or_else(|| anyhow!("copilot terminal env entries require a name"))?;
+                    let value = object
+                        .get("value")
+                        .and_then(Value::as_str)
+                        .map(str::to_string)
+                        .ok_or_else(|| anyhow!("copilot terminal env entries require a value"))?;
+                    Ok(CopilotTerminalEnvVar { name, value })
+                })
+                .collect::<Result<Vec<_>>>()
+        })
+        .transpose()?
+        .unwrap_or_default();
+    let cwd = params.get("cwd").and_then(Value::as_str).map(PathBuf::from);
+    let output_byte_limit = params
+        .get("outputByteLimit")
+        .and_then(Value::as_u64)
+        .map(|value| usize::try_from(value).unwrap_or(usize::MAX));
+
+    Ok(CopilotTerminalCreateRequest {
+        session_id,
+        command,
+        args,
+        env,
+        cwd,
+        output_byte_limit,
+    })
+}
+
+fn parse_terminal_request<T>(params: &Value, build: impl FnOnce(String, String) -> T) -> Result<T> {
+    let session_id = params
+        .get("sessionId")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string();
+    let terminal_id = params
+        .get("terminalId")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .ok_or_else(|| anyhow!("copilot terminal request missing terminalId"))?;
+    Ok(build(session_id, terminal_id))
+}
+
+fn build_terminal_create_result(response: CopilotTerminalCreateResponse) -> Value {
+    json!({
+        "terminalId": response.terminal_id,
+    })
+}
+
+fn build_terminal_output_result(response: CopilotTerminalOutputResponse) -> Value {
+    let exit_status = response.exit_status.map(build_terminal_exit_status_json);
+    let mut result = serde_json::Map::from_iter([
+        ("output".to_string(), Value::String(response.output)),
+        ("truncated".to_string(), Value::Bool(response.truncated)),
+    ]);
+    if let Some(exit_status) = exit_status {
+        result.insert("exitStatus".to_string(), exit_status);
+    }
+    Value::Object(result)
+}
+
+fn build_terminal_wait_for_exit_result(response: CopilotTerminalExitStatus) -> Value {
+    build_terminal_exit_status_json(response)
+}
+
+fn build_terminal_exit_status_json(status: CopilotTerminalExitStatus) -> Value {
+    let mut result = serde_json::Map::new();
+    result.insert(
+        "exitCode".to_string(),
+        status
+            .exit_code
+            .map_or(Value::Null, |value| Value::from(u64::from(value))),
+    );
+    result.insert(
+        "signal".to_string(),
+        status.signal.map_or(Value::Null, Value::String),
+    );
+    Value::Object(result)
+}
+
 // ---------------------------------------------------------------------------
 // Active prompt helpers
 // ---------------------------------------------------------------------------
@@ -916,10 +1416,8 @@ fn parse_observed_tool_call(update: &Value) -> Option<CopilotObservedToolCall> {
         update.get("sessionUpdate").and_then(Value::as_str),
     );
     let arguments = update.get("rawInput").cloned();
-    let output = update
-        .get("rawOutput")
-        .map(render_json_value)
-        .or_else(|| extract_tool_call_content_text(update.get("content")));
+    let output = extract_observed_tool_output(update);
+    let terminal_id = extract_tool_call_terminal_id(update.get("content"));
 
     Some(CopilotObservedToolCall {
         tool_call_id,
@@ -927,6 +1425,7 @@ fn parse_observed_tool_call(update: &Value) -> Option<CopilotObservedToolCall> {
         status,
         arguments,
         output,
+        terminal_id,
     })
 }
 
@@ -949,6 +1448,33 @@ fn parse_observed_tool_status(
     }
 }
 
+fn extract_observed_tool_output(update: &Value) -> Option<String> {
+    update
+        .get("rawOutput")
+        .and_then(extract_observed_tool_raw_output)
+        .or_else(|| extract_tool_call_content_text(update.get("content")))
+}
+
+fn extract_observed_tool_raw_output(raw_output: &Value) -> Option<String> {
+    match raw_output {
+        Value::String(text) => Some(text.clone()).filter(|text| !text.trim().is_empty()),
+        Value::Object(object) => object
+            .get("content")
+            .and_then(Value::as_str)
+            .filter(|text| !text.trim().is_empty())
+            .map(ToString::to_string)
+            .or_else(|| {
+                object
+                    .get("detailedContent")
+                    .and_then(Value::as_str)
+                    .filter(|text| !text.trim().is_empty())
+                    .map(ToString::to_string)
+            })
+            .or_else(|| Some(render_json_value(raw_output))),
+        _ => Some(render_json_value(raw_output)),
+    }
+}
+
 fn extract_tool_call_content_text(content: Option<&Value>) -> Option<String> {
     content
         .and_then(Value::as_array)
@@ -961,6 +1487,24 @@ fn extract_tool_call_content_text(content: Option<&Value>) -> Option<String> {
                     .and_then(Value::as_str)
                     .filter(|value| *value == "text")
                     .and_then(|_| content.get("text"))
+                    .and_then(Value::as_str)
+                    .map(ToString::to_string)
+            })
+        })
+}
+
+fn extract_tool_call_terminal_id(content: Option<&Value>) -> Option<String> {
+    content
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .find_map(|item| {
+            item.get("content").and_then(|content| {
+                content
+                    .get("type")
+                    .and_then(Value::as_str)
+                    .filter(|value| *value == "terminal")
+                    .and_then(|_| content.get("terminalId"))
                     .and_then(Value::as_str)
                     .map(ToString::to_string)
             })
@@ -1501,6 +2045,140 @@ mod tests {
         assert_eq!(observed.tool_name, "Reading configuration file");
         assert_eq!(observed.status, CopilotObservedToolCallStatus::Completed);
         assert_eq!(observed.output.as_deref(), Some("Done"));
+        assert_eq!(observed.terminal_id, None);
+    }
+
+    #[test]
+    fn parses_observed_tool_call_terminal_content() {
+        let observed = parse_observed_tool_call(&json!({
+            "sessionUpdate": "tool_call_update",
+            "toolCallId": "call_terminal",
+            "title": "Run cargo check",
+            "status": "in_progress",
+            "content": [
+                {
+                    "type": "content",
+                    "content": {
+                        "type": "terminal",
+                        "terminalId": "run-123"
+                    }
+                }
+            ]
+        }))
+        .expect("observed terminal tool call");
+
+        assert_eq!(observed.terminal_id.as_deref(), Some("run-123"));
+    }
+
+    #[test]
+    fn parses_observed_tool_call_raw_output_text_payload() {
+        let observed = parse_observed_tool_call(&json!({
+            "sessionUpdate": "tool_call_update",
+            "toolCallId": "call_output",
+            "title": "Run cargo check",
+            "status": "completed",
+            "rawOutput": {
+                "content": "Checking vtcode\nFinished `dev` profile\n<exited with exit code 0>",
+                "detailedContent": "ignored fallback"
+            }
+        }))
+        .expect("observed raw output");
+
+        assert_eq!(
+            observed.output.as_deref(),
+            Some("Checking vtcode\nFinished `dev` profile\n<exited with exit code 0>")
+        );
+    }
+
+    #[test]
+    fn parses_observed_tool_call_raw_output_detailed_content_fallback() {
+        let observed = parse_observed_tool_call(&json!({
+            "sessionUpdate": "tool_call_update",
+            "toolCallId": "call_output_fallback",
+            "title": "Run cargo fmt",
+            "status": "completed",
+            "rawOutput": {
+                "content": "",
+                "detailedContent": "\n<exited with exit code 0>"
+            }
+        }))
+        .expect("observed raw output fallback");
+
+        assert_eq!(
+            observed.output.as_deref(),
+            Some("\n<exited with exit code 0>")
+        );
+    }
+
+    #[tokio::test]
+    async fn handle_terminal_create_request_dispatches_runtime_request() {
+        let (write_tx, mut write_rx) = mpsc::unbounded_channel();
+        let (updates, _updates_rx) = mpsc::unbounded_channel::<PromptUpdate>();
+        let (runtime_requests, mut runtime_requests_rx) =
+            mpsc::unbounded_channel::<CopilotRuntimeRequest>();
+
+        let inner = Arc::new(CopilotAcpClientInner {
+            transport: StdioTransport::new_for_testing(write_tx, Duration::from_secs(1)),
+            active_prompt: StdMutex::new(Some(ActivePrompt {
+                updates,
+                runtime_requests,
+            })),
+            session_id: StdMutex::new(None),
+            compatibility_state: StdMutex::new(CopilotAcpCompatibilityState::FullTools),
+        });
+
+        handle_terminal_create_request(
+            &inner,
+            &json!({
+                "jsonrpc": "2.0",
+                "id": 12,
+                "method": "terminal/create",
+                "params": {
+                    "sessionId": "session_1",
+                    "command": "cargo",
+                    "args": ["check"],
+                    "env": [
+                        {
+                            "name": "RUST_LOG",
+                            "value": "debug"
+                        }
+                    ],
+                    "cwd": "/tmp/acp"
+                }
+            }),
+        )
+        .expect("dispatch terminal/create");
+
+        let runtime_request = runtime_requests_rx
+            .recv()
+            .await
+            .expect("runtime request available");
+        let CopilotRuntimeRequest::TerminalCreate(request) = runtime_request else {
+            panic!("expected terminal/create runtime request");
+        };
+        assert_eq!(request.request.session_id, "session_1");
+        assert_eq!(request.request.command, "cargo");
+        assert_eq!(request.request.args, vec!["check"]);
+        assert_eq!(
+            request.request.env,
+            vec![CopilotTerminalEnvVar {
+                name: "RUST_LOG".to_string(),
+                value: "debug".to_string(),
+            }]
+        );
+        request
+            .respond(CopilotTerminalCreateResponse {
+                terminal_id: "run-123".to_string(),
+            })
+            .expect("respond terminal/create");
+
+        let payload = timeout(Duration::from_secs(1), write_rx.recv())
+            .await
+            .expect("terminal/create response timeout")
+            .expect("terminal/create response payload");
+        let payload: Value = serde_json::from_str(&payload).expect("valid json payload");
+        assert_eq!(payload["id"], 12);
+        assert_eq!(payload["result"]["terminalId"], "run-123");
     }
 
     #[test]

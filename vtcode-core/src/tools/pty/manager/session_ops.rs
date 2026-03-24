@@ -100,6 +100,21 @@ impl PtyManager {
             .map(|opt| opt.map(exit_status_code))
     }
 
+    pub fn terminate_session(&self, session_id: &str) -> Result<()> {
+        let handle = self.session_handle(session_id)?;
+
+        {
+            let mut writer_guard = handle.writer.lock();
+            if let Some(mut writer) = writer_guard.take() {
+                let _ = writer.write_all(b"exit\n");
+                let _ = writer.flush();
+            }
+        }
+
+        handle.graceful_terminate();
+        Ok(())
+    }
+
     /// Sync all terminal sessions to files for dynamic context discovery
     ///
     /// This implements Cursor-style dynamic context discovery:

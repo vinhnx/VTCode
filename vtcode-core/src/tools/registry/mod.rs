@@ -523,6 +523,42 @@ mod tests {
         Ok(())
     }
 
+    #[tokio::test]
+    async fn harness_terminal_runs_retain_completed_sessions_until_close() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+        let response = registry
+            .execute_harness_unified_exec_terminal_run(json!({
+                "action": "run",
+                "command": ["/bin/sh", "-lc", "printf vtcode-terminal"],
+                "tty": true,
+                "yield_time_ms": 200,
+            }))
+            .await?;
+
+        let session_id = response["session_id"]
+            .as_str()
+            .expect("terminal run should expose session_id")
+            .to_string();
+        assert_eq!(response["exit_code"], 0);
+        assert_eq!(response["output"].as_str(), Some("vtcode-terminal"));
+        assert_eq!(
+            registry.harness_exec_session_completed(&session_id).await?,
+            Some(0)
+        );
+
+        registry.close_harness_exec_session(&session_id).await?;
+        assert!(
+            registry
+                .harness_exec_session_completed(&session_id)
+                .await
+                .is_err()
+        );
+
+        Ok(())
+    }
+
     fn delayed_exec_args(tty: bool, yield_time_ms: u64) -> Value {
         json!({
             "action": "run",

@@ -12,6 +12,7 @@ mod tests {
     use std::time::Duration;
     use tokio::sync::oneshot;
     use tokio::time::timeout;
+    use vtcode_core::config::PtyConfig;
     use vtcode_tui::app::InlineSegment;
 
     use super::runtime::PtyStreamRuntime;
@@ -36,30 +37,34 @@ mod tests {
             .join("")
     }
 
+    fn test_pty_config() -> PtyConfig {
+        PtyConfig::default()
+    }
+
     #[test]
     fn pty_stream_state_streams_incremental_chunks() {
-        let mut state = PtyStreamState::new(None);
+        let mut state = PtyStreamState::new(None, test_pty_config());
         state.apply_chunk("line1\nline2", 5);
         let rendered = state.render_lines(5);
         assert_eq!(
             rendered,
             vec!["  └ line1".to_string(), "    line2".to_string()]
         );
-        assert_eq!(state.last_display_line(), Some("line2".to_string()));
+        assert_eq!(state.last_display_line(5), Some("line2".to_string()));
     }
 
     #[test]
     fn pty_stream_state_handles_carriage_return_overwrite() {
-        let mut state = PtyStreamState::new(None);
+        let mut state = PtyStreamState::new(None, test_pty_config());
         state.apply_chunk("start\rreplace\n", 5);
         let rendered = state.render_lines(5);
         assert_eq!(rendered, vec!["  └ replace".to_string()]);
-        assert_eq!(state.last_display_line(), Some("replace".to_string()));
+        assert_eq!(state.last_display_line(5), Some("replace".to_string()));
     }
 
     #[test]
     fn pty_stream_state_applies_tail_truncation() {
-        let mut state = PtyStreamState::new(None);
+        let mut state = PtyStreamState::new(None, test_pty_config());
         state.apply_chunk("a\nb\nc\nd\ne\nf\ng\n", 5);
         let rendered = state.render_lines(5);
         assert_eq!(
@@ -67,9 +72,7 @@ mod tests {
             vec![
                 "  └ a".to_string(),
                 "    b".to_string(),
-                "    c".to_string(),
-                "    … +1 line".to_string(),
-                "    e".to_string(),
+                "    … +3 lines".to_string(),
                 "    f".to_string(),
                 "    g".to_string(),
             ]
@@ -78,26 +81,30 @@ mod tests {
 
     #[test]
     fn pty_stream_state_formats_hidden_line_summary() {
-        let mut state = PtyStreamState::new(None);
+        let mut state = PtyStreamState::new(None, test_pty_config());
         state.apply_chunk("a\nb\nc\nd\ne\nf\ng\nh\n", 5);
         let rendered = state.render_lines(5);
-        assert!(rendered.contains(&"    … +2 lines".to_string()));
+        assert!(rendered.contains(&"    … +4 lines".to_string()));
     }
 
     #[test]
-    fn pty_stream_state_deduplicates_consecutive_lines() {
-        let mut state = PtyStreamState::new(None);
+    fn pty_stream_state_preserves_consecutive_duplicate_lines() {
+        let mut state = PtyStreamState::new(None, test_pty_config());
         state.apply_chunk("same\nsame\nnext\n", 5);
         let rendered = state.render_lines(5);
         assert_eq!(
             rendered,
-            vec!["  └ same".to_string(), "    next".to_string()]
+            vec![
+                "  └ same".to_string(),
+                "    same".to_string(),
+                "    next".to_string(),
+            ]
         );
     }
 
     #[test]
     fn pty_stream_state_preserves_indentation_and_blank_lines() {
-        let mut state = PtyStreamState::new(None);
+        let mut state = PtyStreamState::new(None, test_pty_config());
         state.apply_chunk("  fn main() {\n\n    println!(\"hi\");\n  }\n", 8);
         let rendered = state.render_lines(8);
         assert_eq!(
@@ -113,14 +120,14 @@ mod tests {
 
     #[test]
     fn pty_stream_state_renders_command_prompt_without_output() {
-        let state = PtyStreamState::new(Some("cargo check".to_string()));
+        let state = PtyStreamState::new(Some("cargo check".to_string()), test_pty_config());
         let rendered = state.render_lines(5);
         assert_eq!(rendered, vec!["• Ran cargo check".to_string()]);
     }
 
     #[test]
     fn pty_stream_state_keeps_command_prompt_with_truncated_tail() {
-        let mut state = PtyStreamState::new(Some("cargo check".to_string()));
+        let mut state = PtyStreamState::new(Some("cargo check".to_string()), test_pty_config());
         state.apply_chunk("a\nb\nc\nd\ne\nf\ng\n", 5);
         let rendered = state.render_lines(5);
         assert_eq!(
@@ -129,9 +136,7 @@ mod tests {
                 "• Ran cargo check".to_string(),
                 "  └ a".to_string(),
                 "    b".to_string(),
-                "    c".to_string(),
-                "    … +1 line".to_string(),
-                "    e".to_string(),
+                "    … +3 lines".to_string(),
                 "    f".to_string(),
                 "    g".to_string(),
             ]
@@ -140,7 +145,10 @@ mod tests {
 
     #[test]
     fn normalizes_command_prompt_whitespace() {
-        let state = PtyStreamState::new(Some("  cargo   check \n -p  vtcode  ".to_string()));
+        let state = PtyStreamState::new(
+            Some("  cargo   check \n -p  vtcode  ".to_string()),
+            test_pty_config(),
+        );
         let rendered = state.render_lines(5);
         assert_eq!(rendered, vec!["• Ran cargo check -p vtcode".to_string()]);
     }
@@ -148,11 +156,23 @@ mod tests {
     #[test]
     fn wraps_long_command_header() {
         let command = "cargo test -p vtcode run_command_preview_ build_tool_summary_formats_run_command_as_ran";
-        let state = PtyStreamState::new(Some(command.to_string()));
+        let state = PtyStreamState::new(Some(command.to_string()), test_pty_config());
         let rendered = state.render_lines(5);
         assert_eq!(rendered.len(), 2);
         assert!(rendered[0].starts_with("• Ran cargo test -p vtcode run_command_preview_"));
         assert!(rendered[1].starts_with("  │ build_tool_summary_formats_run_command_as_ran"));
+    }
+
+    #[test]
+    fn pty_stream_state_uses_terminal_snapshot_for_screen_rewrites() {
+        let mut state = PtyStreamState::new(None, test_pty_config());
+        state.apply_chunk("before\n\x1b[2J\x1b[Hmenu\nitem\n", 6);
+
+        assert_eq!(
+            state.render_lines(6),
+            vec!["  └ menu".to_string(), "    item".to_string()]
+        );
+        assert_eq!(state.last_display_line(6), Some("item".to_string()));
     }
 
     #[test]
@@ -244,7 +264,7 @@ mod tests {
 
     #[test]
     fn pty_stream_state_preserves_osc8_links_across_control_only_chunks() {
-        let mut state = PtyStreamState::new(None);
+        let mut state = PtyStreamState::new(None, test_pty_config());
         state.apply_chunk("\u{1b}]8;;https://example.com/docs\u{1b}\\", 5);
 
         let (_, segments, link_ranges, _) = state.render_segments("docs\u{1b}]8;;\u{1b}\\\n", 5);

@@ -1,5 +1,7 @@
 use std::collections::{BTreeSet, HashMap};
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
 use async_stream::stream;
@@ -8,37 +10,47 @@ use serde_json::{Value, json};
 use tokio::sync::RwLock;
 use vtcode_config::auth::CopilotAuthConfig;
 use vtcode_core::acp::{PermissionGrant, ToolPermissionCache};
+use vtcode_core::config::PtyConfig;
 use vtcode_core::copilot::{
     CopilotAcpCompatibilityState, CopilotObservedToolCall, CopilotObservedToolCallStatus,
     CopilotPermissionDecision, CopilotPermissionRequest, CopilotRuntimeRequest,
-    CopilotToolCallFailure, CopilotToolCallRequest, CopilotToolCallResponse,
-    CopilotToolCallSuccess, PromptSession, PromptSessionCancelHandle, PromptUpdate,
+    CopilotTerminalCreateRequest, CopilotTerminalCreateResponse, CopilotTerminalEnvVar,
+    CopilotTerminalExitStatus, CopilotTerminalOutputResponse, CopilotToolCallFailure,
+    CopilotToolCallRequest, CopilotToolCallResponse, CopilotToolCallSuccess, PromptSession,
+    PromptSessionCancelHandle, PromptUpdate,
 };
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::exec::events::ToolCallStatus;
 use vtcode_core::exec_policy::AskForApproval;
 use vtcode_core::llm::provider::{self as uni, LLMStreamEvent, LLMStreamEvent::Completed};
 use vtcode_core::llm::provider::{LLMResponse, ToolDefinition};
-use vtcode_core::tools::registry::ToolRegistry;
+use vtcode_core::tools::registry::{ToolProgressCallback, ToolRegistry};
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_tui::app::{InlineHandle, InlineSession};
 
 use crate::agent::runloop::mcp_events::McpPanelState;
+use crate::agent::runloop::tool_output::resolve_stdout_tail_limit;
 use crate::agent::runloop::unified::async_mcp_manager::approval_policy_from_human_in_the_loop;
 use crate::agent::runloop::unified::inline_events::harness::{
     HarnessEventEmitter, tool_invocation_completed_event, tool_output_completed_event,
-    tool_output_started_event, tool_started_event,
+    tool_output_started_event, tool_started_event, tool_updated_event,
+};
+use crate::agent::runloop::unified::progress::{
+    ProgressReporter, ProgressUpdateGuard, spawn_elapsed_time_updater,
 };
 use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, RunLoopContext};
 use crate::agent::runloop::unified::state::CtrlCState;
 use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output;
-use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, run_tool_call_with_args};
+use crate::agent::runloop::unified::tool_pipeline::{
+    PtyStreamRuntime, ToolExecutionStatus, run_tool_call_with_args,
+};
 use crate::agent::runloop::unified::tool_routing::{
     HitlDecision, ToolPermissionFlow, ToolPermissionsContext, ensure_tool_permission,
     prompt_external_tool_permission,
 };
+use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
 use crate::agent::runloop::unified::ui_interaction_stream::CopilotRuntimeRequestHandler;
 
 pub(super) struct CopilotRuntimeHost<'a> {
@@ -67,6 +79,7 @@ pub(super) struct CopilotRuntimeHost<'a> {
     harness_emitter: Option<&'a HarnessEventEmitter>,
     harness_item_prefix: String,
     observed_tool_calls: HashMap<String, ObservedToolCallState>,
+    local_terminal_sessions: HashMap<String, LocalTerminalSession>,
     compatibility_notice_shown: bool,
 }
 
@@ -135,6 +148,7 @@ impl<'a> CopilotRuntimeHost<'a> {
             harness_emitter,
             harness_item_prefix,
             observed_tool_calls: HashMap::new(),
+            local_terminal_sessions: HashMap::new(),
             compatibility_notice_shown: false,
         }
     }
@@ -493,10 +507,171 @@ impl<'a> CopilotRuntimeHost<'a> {
         ));
     }
 
+    fn emit_tool_output_updated_event(&self, tool_call_id: &str, tool_name: &str, output: &str) {
+        let Some(emitter) = self.harness_emitter else {
+            return;
+        };
+        let item_id = harness_call_item_id(&self.harness_item_prefix, tool_call_id, tool_name);
+        let raw_tool_call_id = raw_tool_call_id(tool_call_id);
+        let _ = emitter.emit(tool_updated_event(item_id, raw_tool_call_id, output));
+    }
+
+    async fn handle_terminal_create(
+        &mut self,
+        request: CopilotTerminalCreateRequest,
+    ) -> Result<CopilotTerminalCreateResponse> {
+        let command_display = terminal_command_display(&request.command, &request.args);
+        let response = self
+            .tool_registry
+            .execute_harness_unified_exec_terminal_run(terminal_run_args(&request))
+            .await
+            .context("copilot local terminal create")?;
+
+        let terminal_id = response
+            .get("session_id")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .ok_or_else(|| anyhow!("copilot local terminal create missing session_id"))?;
+        let initial_output = response
+            .get("output")
+            .and_then(Value::as_str)
+            .map(str::to_string);
+        let initial_exit_status = response
+            .get("exit_code")
+            .and_then(Value::as_i64)
+            .and_then(terminal_exit_status_from_code);
+        let initial_session_completed = initial_exit_status.is_some();
+        let released = Arc::new(AtomicBool::new(false));
+        let exit_notify = Arc::new(tokio::sync::Notify::new());
+        let state = Arc::new(Mutex::new(LocalTerminalSessionState::new(
+            request.output_byte_limit,
+        )));
+        {
+            let mut session_state = lock_local_terminal_state(&state);
+            if let Some(output) = initial_output.as_deref() {
+                session_state.append_output(output);
+            }
+            session_state.exit_status = initial_exit_status.clone();
+        }
+        if initial_session_completed {
+            exit_notify.notify_waiters();
+        }
+
+        let task = tokio::spawn(run_local_terminal_session(LocalTerminalTaskContext {
+            tool_registry: self.tool_registry.clone(),
+            exec_session_id: terminal_id.clone(),
+            released: Arc::clone(&released),
+            exit_notify: Arc::clone(&exit_notify),
+            state: Arc::clone(&state),
+            harness_emitter: self.harness_emitter.cloned(),
+            harness_item_prefix: self.harness_item_prefix.clone(),
+            handle: self.handle.clone(),
+            tail_limit: resolve_stdout_tail_limit(self.vt_cfg),
+            command_display,
+            initial_output,
+            pty_config: self.tool_registry.pty_config().clone(),
+        }));
+
+        self.local_terminal_sessions.insert(
+            terminal_id.clone(),
+            LocalTerminalSession {
+                exec_session_id: terminal_id.clone(),
+                released,
+                exit_notify,
+                state,
+                task,
+            },
+        );
+
+        Ok(CopilotTerminalCreateResponse { terminal_id })
+    }
+
+    async fn handle_terminal_output(
+        &self,
+        terminal_id: &str,
+    ) -> Result<CopilotTerminalOutputResponse> {
+        let session = self
+            .local_terminal_sessions
+            .get(terminal_id)
+            .ok_or_else(|| anyhow!("copilot terminal '{terminal_id}' not found"))?;
+        Ok(session.snapshot_output())
+    }
+
+    async fn handle_terminal_release(&mut self, terminal_id: &str) -> Result<()> {
+        let Some(session) = self.local_terminal_sessions.remove(terminal_id) else {
+            return Ok(());
+        };
+        session.released.store(true, Ordering::Relaxed);
+        session.exit_notify.notify_waiters();
+        let _ = self
+            .tool_registry
+            .close_harness_exec_session(&session.exec_session_id)
+            .await;
+        session.task.abort();
+        Ok(())
+    }
+
+    async fn handle_terminal_kill(&self, terminal_id: &str) -> Result<()> {
+        let session = self
+            .local_terminal_sessions
+            .get(terminal_id)
+            .ok_or_else(|| anyhow!("copilot terminal '{terminal_id}' not found"))?;
+        self.tool_registry
+            .terminate_harness_exec_session(&session.exec_session_id)
+            .await
+            .with_context(|| format!("copilot terminal kill '{}'", session.exec_session_id))
+    }
+
+    async fn handle_terminal_wait_for_exit(
+        &self,
+        terminal_id: &str,
+    ) -> Result<CopilotTerminalExitStatus> {
+        let session = self
+            .local_terminal_sessions
+            .get(terminal_id)
+            .ok_or_else(|| anyhow!("copilot terminal '{terminal_id}' not found"))?;
+        Ok(session.wait_for_exit().await)
+    }
+
     fn handle_observed_tool_call(&mut self, update: CopilotObservedToolCall) {
+        if let Some(terminal_id) = update.terminal_id.as_deref()
+            && let Some(session) = self.local_terminal_sessions.get(terminal_id)
+        {
+            let bind_result = session.bind_observed_tool_call(&update);
+            if bind_result.emit_started {
+                self.record_tool_use(&bind_result.association.tool_name);
+                self.emit_tool_started_event(
+                    &bind_result.association.tool_call_id,
+                    &bind_result.association.tool_name,
+                    &bind_result.association.arguments,
+                );
+            }
+            if let Some(output) = bind_result.buffered_output.as_deref() {
+                self.emit_tool_output_updated_event(
+                    &bind_result.association.tool_call_id,
+                    &bind_result.association.tool_name,
+                    output,
+                );
+            }
+            if let Some(status) = bind_result.finish_status {
+                self.emit_tool_finished_event(
+                    &bind_result.association.tool_call_id,
+                    &bind_result.association.tool_name,
+                    &bind_result.association.arguments,
+                    status,
+                    bind_result.buffered_output,
+                );
+            }
+            return;
+        }
+
         let tool_call_id = update.tool_call_id.clone();
         let mut started_tool_name = None;
+        let mut output_update = None;
         let mut finished = None;
+        let mut finished_stream = None;
+        let tail_limit = resolve_stdout_tail_limit(self.vt_cfg);
+        let command_display = observed_tool_command_display(&update);
         {
             let state = self
                 .observed_tool_calls
@@ -508,6 +683,32 @@ impl<'a> CopilotRuntimeHost<'a> {
             if !state.started {
                 state.started = true;
                 started_tool_name = Some(state.tool_name.clone());
+            }
+            if state.pty_stream.is_none()
+                && let Some(command_display) = command_display.as_ref()
+            {
+                state.pty_stream = Some(ObservedToolPtyStream::start(
+                    self.handle,
+                    tail_limit,
+                    command_display.clone(),
+                    self.tool_registry.pty_config().clone(),
+                ));
+            }
+            if let Some(output) = update
+                .output
+                .as_deref()
+                .filter(|text| !text.trim().is_empty())
+                && state.last_output.as_deref() != Some(output)
+            {
+                if let Some(stream) = state.pty_stream.as_ref()
+                    && let Some(delta) =
+                        observed_tool_output_delta(state.last_output.as_deref(), output)
+                    && !delta.is_empty()
+                {
+                    stream.push_output(delta);
+                }
+                state.last_output = Some(output.to_string());
+                output_update = Some((state.tool_name.clone(), output.to_string()));
             }
             if !state.finished
                 && matches!(
@@ -523,8 +724,12 @@ impl<'a> CopilotRuntimeHost<'a> {
                     CopilotObservedToolCallStatus::Pending
                     | CopilotObservedToolCallStatus::InProgress => ToolCallStatus::InProgress,
                 };
+                finished_stream = state.pty_stream.take();
                 finished = Some((state.tool_name.clone(), status));
             }
+        }
+        if let Some(stream) = finished_stream {
+            stream.finish();
         }
         if let Some(tool_name) = started_tool_name {
             self.record_tool_use(&tool_name);
@@ -533,6 +738,9 @@ impl<'a> CopilotRuntimeHost<'a> {
                 &tool_name,
                 update.arguments.as_ref().unwrap_or(&Value::Null),
             );
+        }
+        if let Some((tool_name, output)) = output_update {
+            self.emit_tool_output_updated_event(&tool_call_id, &tool_name, &output);
         }
         if let Some((tool_name, status)) = finished {
             self.emit_tool_finished_event(
@@ -588,6 +796,39 @@ impl CopilotRuntimeRequestHandler for CopilotRuntimeHost<'_> {
                     .map_err(map_runtime_error)?;
                 request_event.respond(response).map_err(map_runtime_error)?;
             }
+            CopilotRuntimeRequest::TerminalCreate(request_event) => {
+                let response = self
+                    .handle_terminal_create(request_event.request.clone())
+                    .await
+                    .map_err(map_runtime_error)?;
+                request_event.respond(response).map_err(map_runtime_error)?;
+            }
+            CopilotRuntimeRequest::TerminalOutput(request_event) => {
+                let response = self
+                    .handle_terminal_output(&request_event.request.terminal_id)
+                    .await
+                    .map_err(map_runtime_error)?;
+                request_event.respond(response).map_err(map_runtime_error)?;
+            }
+            CopilotRuntimeRequest::TerminalRelease(request_event) => {
+                self.handle_terminal_release(&request_event.request.terminal_id)
+                    .await
+                    .map_err(map_runtime_error)?;
+                request_event.respond().map_err(map_runtime_error)?;
+            }
+            CopilotRuntimeRequest::TerminalKill(request_event) => {
+                self.handle_terminal_kill(&request_event.request.terminal_id)
+                    .await
+                    .map_err(map_runtime_error)?;
+                request_event.respond().map_err(map_runtime_error)?;
+            }
+            CopilotRuntimeRequest::TerminalWaitForExit(request_event) => {
+                let response = self
+                    .handle_terminal_wait_for_exit(&request_event.request.terminal_id)
+                    .await
+                    .map_err(map_runtime_error)?;
+                request_event.respond(response).map_err(map_runtime_error)?;
+            }
             CopilotRuntimeRequest::ObservedToolCall(update) => {
                 self.handle_observed_tool_call(update);
             }
@@ -600,10 +841,20 @@ impl CopilotRuntimeRequestHandler for CopilotRuntimeHost<'_> {
     }
 }
 
+impl Drop for CopilotRuntimeHost<'_> {
+    fn drop(&mut self) {
+        for (_, session) in self.local_terminal_sessions.drain() {
+            session.abort();
+        }
+    }
+}
+
 struct ObservedToolCallState {
     tool_name: String,
     started: bool,
     finished: bool,
+    last_output: Option<String>,
+    pty_stream: Option<ObservedToolPtyStream>,
 }
 
 impl ObservedToolCallState {
@@ -612,7 +863,224 @@ impl ObservedToolCallState {
             tool_name,
             started: false,
             finished: false,
+            last_output: None,
+            pty_stream: None,
         }
+    }
+}
+
+struct ObservedToolPtyStream {
+    _progress_reporter: ProgressReporter,
+    _spinner: PlaceholderSpinner,
+    _runtime: PtyStreamRuntime,
+    callback: ToolProgressCallback,
+}
+
+impl ObservedToolPtyStream {
+    fn start(
+        handle: &InlineHandle,
+        tail_limit: usize,
+        command_display: String,
+        pty_config: PtyConfig,
+    ) -> Self {
+        let progress_reporter = ProgressReporter::new();
+        let spinner = PlaceholderSpinner::with_progress(
+            handle,
+            Some(String::new()),
+            Some(String::new()),
+            format!("Running command: {command_display}"),
+            Some(&progress_reporter),
+        );
+        let (runtime, callback) = PtyStreamRuntime::start(
+            handle.clone(),
+            progress_reporter.clone(),
+            tail_limit,
+            Some(command_display),
+            pty_config,
+        );
+
+        Self {
+            _progress_reporter: progress_reporter,
+            _spinner: spinner,
+            _runtime: runtime,
+            callback,
+        }
+    }
+
+    fn push_output(&self, chunk: &str) {
+        (self.callback)("unified_exec", chunk);
+    }
+
+    fn finish(self) {
+        self._spinner.finish();
+        let progress_reporter = self._progress_reporter.clone();
+        let mut runtime = self._runtime;
+        drop(self.callback);
+
+        tokio::spawn(async move {
+            progress_reporter.complete().await;
+            let _ = runtime.sender.take();
+            if let Some(task) = runtime.task.take() {
+                let _ = task.await;
+            }
+            runtime.active.store(false, Ordering::Relaxed);
+        });
+    }
+}
+
+#[derive(Clone)]
+struct LocalTerminalAssociation {
+    tool_call_id: String,
+    tool_name: String,
+    arguments: Value,
+}
+
+struct LocalTerminalSessionState {
+    output: String,
+    truncated: bool,
+    output_byte_limit: Option<usize>,
+    exit_status: Option<CopilotTerminalExitStatus>,
+    association: Option<LocalTerminalAssociation>,
+    tool_started: bool,
+    tool_finished: bool,
+}
+
+impl LocalTerminalSessionState {
+    fn new(output_byte_limit: Option<usize>) -> Self {
+        Self {
+            output: String::new(),
+            truncated: false,
+            output_byte_limit,
+            exit_status: None,
+            association: None,
+            tool_started: false,
+            tool_finished: false,
+        }
+    }
+
+    fn append_output(&mut self, chunk: &str) {
+        if chunk.is_empty() {
+            return;
+        }
+        self.output.push_str(chunk);
+        if let Some(limit) = self.output_byte_limit
+            && self.output.len() > limit
+        {
+            let mut drain_until = self.output.len() - limit;
+            while drain_until < self.output.len() && !self.output.is_char_boundary(drain_until) {
+                drain_until += 1;
+            }
+            if drain_until > 0 {
+                self.output.drain(..drain_until);
+                self.truncated = true;
+            }
+        }
+    }
+}
+
+struct LocalTerminalSession {
+    exec_session_id: String,
+    released: Arc<AtomicBool>,
+    exit_notify: Arc<tokio::sync::Notify>,
+    state: Arc<Mutex<LocalTerminalSessionState>>,
+    task: tokio::task::JoinHandle<()>,
+}
+
+struct LocalTerminalBindResult {
+    association: LocalTerminalAssociation,
+    emit_started: bool,
+    buffered_output: Option<String>,
+    finish_status: Option<ToolCallStatus>,
+}
+
+struct LocalTerminalTaskContext {
+    tool_registry: ToolRegistry,
+    exec_session_id: String,
+    released: Arc<AtomicBool>,
+    exit_notify: Arc<tokio::sync::Notify>,
+    state: Arc<Mutex<LocalTerminalSessionState>>,
+    harness_emitter: Option<HarnessEventEmitter>,
+    harness_item_prefix: String,
+    handle: InlineHandle,
+    tail_limit: usize,
+    command_display: String,
+    initial_output: Option<String>,
+    pty_config: PtyConfig,
+}
+
+impl LocalTerminalSession {
+    fn bind_observed_tool_call(&self, update: &CopilotObservedToolCall) -> LocalTerminalBindResult {
+        let mut state = lock_local_terminal_state(&self.state);
+        let association = if let Some(association) = state.association.as_mut() {
+            if association.tool_name == "copilot_tool" && update.tool_name != "copilot_tool" {
+                association.tool_name = update.tool_name.clone();
+            }
+            if association.arguments.is_null()
+                && let Some(arguments) = update.arguments.clone()
+            {
+                association.arguments = arguments;
+            }
+            association.clone()
+        } else {
+            let association = LocalTerminalAssociation {
+                tool_call_id: update.tool_call_id.clone(),
+                tool_name: update.tool_name.clone(),
+                arguments: update.arguments.clone().unwrap_or(Value::Null),
+            };
+            state.association = Some(association.clone());
+            association
+        };
+
+        let emit_started = if state.tool_started {
+            false
+        } else {
+            state.tool_started = true;
+            true
+        };
+        let buffered_output = emit_started
+            .then(|| state.output.clone())
+            .filter(|output| !output.trim().is_empty());
+        let finish_status = if let Some(exit_status) = state.exit_status.clone() {
+            if state.tool_finished {
+                None
+            } else {
+                state.tool_finished = true;
+                Some(local_terminal_tool_status(&exit_status))
+            }
+        } else {
+            None
+        };
+
+        LocalTerminalBindResult {
+            association,
+            emit_started,
+            buffered_output,
+            finish_status,
+        }
+    }
+
+    fn snapshot_output(&self) -> CopilotTerminalOutputResponse {
+        let state = lock_local_terminal_state(&self.state);
+        CopilotTerminalOutputResponse {
+            output: state.output.clone(),
+            truncated: state.truncated,
+            exit_status: state.exit_status.clone(),
+        }
+    }
+
+    async fn wait_for_exit(&self) -> CopilotTerminalExitStatus {
+        loop {
+            if let Some(exit_status) = lock_local_terminal_state(&self.state).exit_status.clone() {
+                return exit_status;
+            }
+            self.exit_notify.notified().await;
+        }
+    }
+
+    fn abort(self) {
+        self.released.store(true, Ordering::Relaxed);
+        self.exit_notify.notify_waiters();
+        self.task.abort();
     }
 }
 
@@ -669,6 +1137,7 @@ pub(super) fn prompt_session_to_stream(
                             yield Ok(LLMStreamEvent::Token { delta });
                         }
                         Some(PromptUpdate::Thought(delta)) => {
+                            let delta = normalize_copilot_reasoning_delta(&reasoning, delta);
                             reasoning.push_str(&delta);
                             yield Ok(LLMStreamEvent::Reasoning { delta });
                         }
@@ -700,6 +1169,7 @@ pub(super) fn prompt_session_to_stream(
                                 yield Ok(LLMStreamEvent::Token { delta });
                             }
                             PromptUpdate::Thought(delta) => {
+                                let delta = normalize_copilot_reasoning_delta(&reasoning, delta);
                                 reasoning.push_str(&delta);
                                 yield Ok(LLMStreamEvent::Reasoning { delta });
                             }
@@ -723,6 +1193,388 @@ pub(super) fn prompt_session_to_stream(
     };
 
     (Box::pin(stream), runtime_requests)
+}
+
+async fn run_local_terminal_session(task: LocalTerminalTaskContext) {
+    let LocalTerminalTaskContext {
+        tool_registry,
+        exec_session_id,
+        released,
+        exit_notify,
+        state,
+        harness_emitter,
+        harness_item_prefix,
+        handle,
+        tail_limit,
+        command_display,
+        initial_output,
+        pty_config,
+    } = task;
+    let progress_reporter = ProgressReporter::new();
+    progress_reporter.set_total(100).await;
+    progress_reporter.set_progress(40).await;
+    progress_reporter
+        .set_message(format!("Running command: {command_display}"))
+        .await;
+    let _elapsed_guard = ProgressUpdateGuard::new(spawn_elapsed_time_updater(
+        progress_reporter.clone(),
+        format!("command: {command_display}"),
+        500,
+    ));
+    let spinner = PlaceholderSpinner::with_progress(
+        &handle,
+        Some(String::new()),
+        Some(String::new()),
+        format!("Running command: {command_display}"),
+        Some(&progress_reporter),
+    );
+    let (pty_stream_runtime, progress_callback) = PtyStreamRuntime::start(
+        handle,
+        progress_reporter.clone(),
+        tail_limit,
+        Some(command_display),
+        pty_config,
+    );
+
+    if let Some(initial_output) = initial_output.as_deref() {
+        progress_callback("unified_exec", initial_output);
+    }
+
+    loop {
+        if released.load(Ordering::Relaxed) {
+            break;
+        }
+
+        match tool_registry
+            .read_harness_exec_session_output(&exec_session_id, true)
+            .await
+        {
+            Ok(Some(chunk)) if !chunk.is_empty() => {
+                progress_callback("unified_exec", &chunk);
+                if let Some((tool_call_id, tool_name, output)) =
+                    update_local_terminal_output(&state, &chunk)
+                {
+                    emit_terminal_output_event(
+                        harness_emitter.as_ref(),
+                        &harness_item_prefix,
+                        &tool_call_id,
+                        &tool_name,
+                        &output,
+                    );
+                }
+            }
+            Ok(Some(_)) | Ok(None) => {}
+            Err(err) => {
+                tracing::warn!(
+                    terminal_id = %exec_session_id,
+                    error = %err,
+                    "Failed to read Copilot local terminal output"
+                );
+                break;
+            }
+        }
+
+        match tool_registry
+            .harness_exec_session_completed(&exec_session_id)
+            .await
+        {
+            Ok(Some(code)) => {
+                let exit_status = terminal_exit_status_from_code(i64::from(code));
+                let finish = finalize_local_terminal_exit(&state, exit_status.clone());
+                if let Some((tool_call_id, tool_name, arguments, output, status)) = finish {
+                    emit_terminal_finished_event(
+                        harness_emitter.as_ref(),
+                        &harness_item_prefix,
+                        &tool_call_id,
+                        &tool_name,
+                        &arguments,
+                        status,
+                        output,
+                    );
+                }
+                progress_reporter.set_progress(100).await;
+                progress_reporter.complete().await;
+                exit_notify.notify_waiters();
+                break;
+            }
+            Ok(None) => {}
+            Err(err) => {
+                tracing::warn!(
+                    terminal_id = %exec_session_id,
+                    error = %err,
+                    "Failed to poll Copilot local terminal exit state"
+                );
+                break;
+            }
+        }
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+
+    pty_stream_runtime.shutdown().await;
+    spinner.finish();
+}
+
+fn terminal_run_args(request: &CopilotTerminalCreateRequest) -> Value {
+    json!({
+        "action": "run",
+        "command": request.command,
+        "args": request.args,
+        "cwd": request.cwd.as_ref().map(|path| path.to_string_lossy().to_string()),
+        "tty": true,
+        "yield_time_ms": 100,
+        "env": terminal_env_payload(&request.env),
+    })
+}
+
+fn terminal_env_payload(env: &[CopilotTerminalEnvVar]) -> Value {
+    if env.is_empty() {
+        Value::Array(Vec::new())
+    } else {
+        Value::Array(
+            env.iter()
+                .map(|entry| {
+                    json!({
+                        "name": entry.name,
+                        "value": entry.value,
+                    })
+                })
+                .collect(),
+        )
+    }
+}
+
+fn terminal_command_display(command: &str, args: &[String]) -> String {
+    if args.is_empty() {
+        command.to_string()
+    } else {
+        let mut parts = Vec::with_capacity(1 + args.len());
+        parts.push(command.to_string());
+        parts.extend(args.iter().cloned());
+        shell_words::join(parts.iter().map(String::as_str))
+    }
+}
+
+fn terminal_exit_status_from_code(code: i64) -> Option<CopilotTerminalExitStatus> {
+    u32::try_from(code)
+        .ok()
+        .map(|exit_code| CopilotTerminalExitStatus {
+            exit_code: Some(exit_code),
+            signal: None,
+        })
+}
+
+fn local_terminal_tool_status(status: &CopilotTerminalExitStatus) -> ToolCallStatus {
+    match status.exit_code {
+        Some(0) => ToolCallStatus::Completed,
+        Some(_) | None => ToolCallStatus::Failed,
+    }
+}
+
+fn update_local_terminal_output(
+    state: &Arc<Mutex<LocalTerminalSessionState>>,
+    chunk: &str,
+) -> Option<(String, String, String)> {
+    let mut state = lock_local_terminal_state(state);
+    state.append_output(chunk);
+    let association = state.association.clone()?;
+    if !state.tool_started || chunk.trim().is_empty() {
+        return None;
+    }
+    Some((
+        association.tool_call_id,
+        association.tool_name,
+        state.output.clone(),
+    ))
+}
+
+fn finalize_local_terminal_exit(
+    state: &Arc<Mutex<LocalTerminalSessionState>>,
+    exit_status: Option<CopilotTerminalExitStatus>,
+) -> Option<(String, String, Value, String, ToolCallStatus)> {
+    let mut state = lock_local_terminal_state(state);
+    state.exit_status = exit_status;
+    let association = state.association.clone()?;
+    if state.tool_finished {
+        return None;
+    }
+    let exit_status = state.exit_status.clone()?;
+    state.tool_finished = true;
+    Some((
+        association.tool_call_id,
+        association.tool_name,
+        association.arguments,
+        state.output.clone(),
+        local_terminal_tool_status(&exit_status),
+    ))
+}
+
+fn emit_terminal_output_event(
+    emitter: Option<&HarnessEventEmitter>,
+    harness_item_prefix: &str,
+    tool_call_id: &str,
+    tool_name: &str,
+    output: &str,
+) {
+    let Some(emitter) = emitter else {
+        return;
+    };
+    let item_id = harness_call_item_id(harness_item_prefix, tool_call_id, tool_name);
+    let raw_tool_call_id = raw_tool_call_id(tool_call_id);
+    let _ = emitter.emit(tool_updated_event(item_id, raw_tool_call_id, output));
+}
+
+fn emit_terminal_finished_event(
+    emitter: Option<&HarnessEventEmitter>,
+    harness_item_prefix: &str,
+    tool_call_id: &str,
+    tool_name: &str,
+    arguments: &Value,
+    status: ToolCallStatus,
+    output: String,
+) {
+    let Some(emitter) = emitter else {
+        return;
+    };
+    let item_id = harness_call_item_id(harness_item_prefix, tool_call_id, tool_name);
+    let raw_tool_call_id = raw_tool_call_id(tool_call_id);
+    let _ = emitter.emit(tool_invocation_completed_event(
+        item_id.clone(),
+        tool_name,
+        Some(arguments),
+        raw_tool_call_id,
+        status.clone(),
+    ));
+    let _ = emitter.emit(tool_output_completed_event(
+        item_id,
+        raw_tool_call_id,
+        status,
+        None,
+        None,
+        output,
+    ));
+}
+
+fn lock_local_terminal_state(
+    state: &Arc<Mutex<LocalTerminalSessionState>>,
+) -> MutexGuard<'_, LocalTerminalSessionState> {
+    state
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+fn normalize_copilot_reasoning_delta(existing: &str, delta: String) -> String {
+    let delta = collapse_reasoning_single_newlines(delta);
+    if existing.is_empty()
+        || existing.chars().last().is_some_and(char::is_whitespace)
+        || delta.chars().next().is_some_and(char::is_whitespace)
+        || delta
+            .chars()
+            .next()
+            .is_some_and(is_reasoning_closing_punctuation)
+    {
+        delta
+    } else {
+        format!(" {delta}")
+    }
+}
+
+fn collapse_reasoning_single_newlines(delta: String) -> String {
+    let chars: Vec<char> = delta.chars().collect();
+    let mut normalized = String::with_capacity(delta.len());
+
+    for (index, ch) in chars.iter().copied().enumerate() {
+        if ch != '\n' {
+            normalized.push(ch);
+            continue;
+        }
+
+        let prev = index.checked_sub(1).and_then(|idx| chars.get(idx)).copied();
+        let next = chars.get(index + 1).copied();
+
+        if prev.is_some() && next.is_some() && prev != Some('\n') && next != Some('\n') {
+            if next.is_some_and(char::is_whitespace) || prev.is_some_and(char::is_whitespace) {
+                continue;
+            }
+            if next.is_some_and(is_reasoning_closing_punctuation) {
+                continue;
+            }
+            normalized.push(' ');
+            continue;
+        }
+
+        normalized.push('\n');
+    }
+
+    normalized
+}
+
+fn is_reasoning_closing_punctuation(ch: char) -> bool {
+    matches!(ch, '.' | ',' | ';' | ':' | '!' | '?' | ')' | ']' | '}')
+}
+
+fn observed_tool_command_display(update: &CopilotObservedToolCall) -> Option<String> {
+    observed_tool_command_from_args(update.arguments.as_ref()).or_else(|| {
+        update
+            .tool_name
+            .strip_prefix("Run ")
+            .map(str::trim)
+            .filter(|text| !text.is_empty())
+            .map(ToString::to_string)
+    })
+}
+
+fn observed_tool_command_from_args(arguments: Option<&Value>) -> Option<String> {
+    let arguments = arguments?;
+    for key in ["command", "cmd", "raw_command"] {
+        let value = arguments.get(key)?;
+        match value {
+            Value::String(text) if !text.trim().is_empty() => return Some(text.to_string()),
+            Value::Array(parts) => {
+                let command = parts
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                if !command.trim().is_empty() {
+                    return Some(command);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn observed_tool_output_delta<'a>(previous: Option<&str>, current: &'a str) -> Option<&'a str> {
+    if current.is_empty() {
+        return None;
+    }
+
+    match previous {
+        None => Some(current),
+        Some(previous) if previous == current => None,
+        Some(previous) if current.starts_with(previous) => Some(&current[previous.len()..]),
+        Some(previous) => {
+            let prefix_len = common_prefix_len(previous, current);
+            if prefix_len == 0 || prefix_len >= current.len() {
+                Some(current)
+            } else {
+                Some(&current[prefix_len..])
+            }
+        }
+    }
+}
+
+fn common_prefix_len(left: &str, right: &str) -> usize {
+    let mut bytes = 0;
+    for (left_char, right_char) in left.chars().zip(right.chars()) {
+        if left_char != right_char {
+            break;
+        }
+        bytes += left_char.len_utf8();
+    }
+    bytes
 }
 
 fn filter_copilot_tools(
@@ -1002,11 +1854,15 @@ mod tests {
     use super::{
         CopilotRuntimeHost, auto_approve_builtin_permission, denied_tool_execution_response,
         filter_copilot_tools, harness_call_item_id, map_builtin_permission_prompt_decision,
-        map_copilot_finish_reason, summarize_permission_request,
+        map_copilot_finish_reason, normalize_copilot_reasoning_delta, summarize_permission_request,
     };
     use serde_json::json;
     use std::sync::Arc;
-    use vtcode_core::copilot::{CopilotPermissionRequest, CopilotToolCallResponse};
+    use std::time::Duration;
+    use vtcode_core::copilot::{
+        CopilotObservedToolCall, CopilotObservedToolCallStatus, CopilotPermissionRequest,
+        CopilotTerminalCreateRequest, CopilotTerminalEnvVar, CopilotToolCallResponse,
+    };
     use vtcode_core::core::decision_tracker::DecisionTracker;
     use vtcode_core::core::trajectory::TrajectoryLogger;
     use vtcode_core::llm::provider::{FinishReason, ToolDefinition};
@@ -1014,9 +1870,10 @@ mod tests {
     use vtcode_core::tools::{ApprovalRecorder, ToolResultCache};
     use vtcode_core::utils::ansi::AnsiRenderer;
     use vtcode_core::utils::transcript;
-    use vtcode_tui::app::{InlineHandle, InlineSession};
+    use vtcode_tui::app::{InlineCommand, InlineHandle, InlineSession};
 
     use crate::agent::runloop::mcp_events::McpPanelState;
+    use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
     use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, TurnId, TurnRunId};
     use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
     use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
@@ -1032,6 +1889,38 @@ mod tests {
             handle: InlineHandle::new_for_tests(command_tx),
             events: event_rx,
         }
+    }
+
+    fn collect_inline_output(
+        receiver: &mut tokio::sync::mpsc::UnboundedReceiver<InlineCommand>,
+    ) -> String {
+        let mut lines: Vec<String> = Vec::new();
+        while let Ok(command) = receiver.try_recv() {
+            match command {
+                InlineCommand::AppendLine { segments, .. } => {
+                    lines.push(
+                        segments
+                            .into_iter()
+                            .map(|segment| segment.text)
+                            .collect::<String>(),
+                    );
+                }
+                InlineCommand::ReplaceLast {
+                    lines: replacement_lines,
+                    ..
+                } => {
+                    for line in replacement_lines {
+                        lines.push(
+                            line.into_iter()
+                                .map(|segment| segment.text)
+                                .collect::<String>(),
+                        );
+                    }
+                }
+                _ => {}
+            }
+        }
+        lines.join("\n")
     }
 
     #[test]
@@ -1216,6 +2105,339 @@ mod tests {
         });
 
         assert_eq!(approval, None);
+    }
+
+    #[test]
+    fn copilot_reasoning_delta_normalizes_chunk_boundaries() {
+        assert_eq!(
+            normalize_copilot_reasoning_delta(
+                "The user wants me to run `cargo check` and report what I see.",
+                "Running cargo check".to_string()
+            ),
+            " Running cargo check"
+        );
+        assert_eq!(
+            normalize_copilot_reasoning_delta("prefix\n", "next".to_string()),
+            "next"
+        );
+    }
+
+    #[test]
+    fn copilot_reasoning_delta_collapses_single_newlines_inside_chunk() {
+        assert_eq!(
+            normalize_copilot_reasoning_delta(
+                "Run",
+                " cargo fmt and report the\n results\n.\nRunning cargo fmt".to_string()
+            ),
+            " cargo fmt and report the results. Running cargo fmt"
+        );
+    }
+
+    #[tokio::test]
+    async fn observed_tool_calls_emit_incremental_output_updates() {
+        let temp = TempDir::new().expect("temp workspace");
+        let workspace = temp.path().to_path_buf();
+        let harness_path = workspace.join("harness.jsonl");
+
+        let mut tool_registry = ToolRegistry::new(workspace.clone()).await;
+        let tool_result_cache = Arc::new(RwLock::new(ToolResultCache::new(8)));
+        let mut session = create_headless_session();
+        let handle = session.clone_inline_handle();
+        let approval_recorder = ApprovalRecorder::new(workspace.clone());
+        let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
+        let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
+        let safety_validator = Arc::new(RwLock::new(ToolCallSafetyValidator::new()));
+        let ctrl_c_state = Arc::new(CtrlCState::new());
+        let ctrl_c_notify = Arc::new(Notify::new());
+        let traj = TrajectoryLogger::new(&workspace);
+        let mut session_stats = SessionStats::default();
+        let mut mcp_panel_state = McpPanelState::default();
+        let mut harness_state = HarnessTurnState::new(
+            TurnRunId("run-test".to_string()),
+            TurnId("turn-test".to_string()),
+            8,
+            60,
+            0,
+        );
+        let emitter = HarnessEventEmitter::new(harness_path.clone()).expect("harness emitter");
+
+        let mut runtime_host = CopilotRuntimeHost::new(
+            &mut tool_registry,
+            &tool_result_cache,
+            &mut session,
+            &mut session_stats,
+            &mut mcp_panel_state,
+            &handle,
+            &ctrl_c_state,
+            &ctrl_c_notify,
+            None,
+            &approval_recorder,
+            &decision_ledger,
+            &tool_permission_cache,
+            &safety_validator,
+            None,
+            None,
+            &traj,
+            &mut harness_state,
+            None,
+            true,
+            Some(&emitter),
+            "turn-test-step-1".to_string(),
+        );
+
+        runtime_host.handle_observed_tool_call(CopilotObservedToolCall {
+            tool_call_id: "call_1".to_string(),
+            tool_name: "Run cargo check on the workspace".to_string(),
+            status: CopilotObservedToolCallStatus::InProgress,
+            arguments: Some(json!({"command": "cargo check"})),
+            output: Some("Compiling vtcode-core".to_string()),
+            terminal_id: None,
+        });
+        runtime_host.handle_observed_tool_call(CopilotObservedToolCall {
+            tool_call_id: "call_1".to_string(),
+            tool_name: "Run cargo check on the workspace".to_string(),
+            status: CopilotObservedToolCallStatus::Completed,
+            arguments: Some(json!({"command": "cargo check"})),
+            output: Some("Compiling vtcode-core\nFinished `dev` profile".to_string()),
+            terminal_id: None,
+        });
+
+        let payload = std::fs::read_to_string(harness_path).expect("read harness log");
+        let events: Vec<serde_json::Value> = payload
+            .lines()
+            .map(|line| serde_json::from_str(line).expect("parse harness event"))
+            .collect();
+
+        assert!(events.iter().any(|entry| {
+            entry["event"]["type"] == "item.updated"
+                && entry["event"]["item"]["type"] == "tool_output"
+                && entry["event"]["item"]["output"] == "Compiling vtcode-core"
+                && entry["event"]["item"]["status"] == "in_progress"
+        }));
+        assert!(events.iter().any(|entry| {
+            entry["event"]["type"] == "item.completed"
+                && entry["event"]["item"]["type"] == "tool_output"
+                && entry["event"]["item"]["status"] == "completed"
+                && entry["event"]["item"]["output"]
+                    .as_str()
+                    .is_some_and(|output| output.contains("Finished `dev` profile"))
+        }));
+    }
+
+    #[tokio::test]
+    async fn observed_shell_tool_calls_stream_into_inline_pty_ui() {
+        let temp = TempDir::new().expect("temp workspace");
+        let workspace = temp.path().to_path_buf();
+
+        let mut tool_registry = ToolRegistry::new(workspace.clone()).await;
+        let tool_result_cache = Arc::new(RwLock::new(ToolResultCache::new(8)));
+        let (command_tx, mut command_rx) = unbounded_channel();
+        let (_event_tx, event_rx) = unbounded_channel();
+        let mut session = InlineSession {
+            handle: InlineHandle::new_for_tests(command_tx),
+            events: event_rx,
+        };
+        let handle = session.clone_inline_handle();
+        let approval_recorder = ApprovalRecorder::new(workspace.clone());
+        let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
+        let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
+        let safety_validator = Arc::new(RwLock::new(ToolCallSafetyValidator::new()));
+        let ctrl_c_state = Arc::new(CtrlCState::new());
+        let ctrl_c_notify = Arc::new(Notify::new());
+        let traj = TrajectoryLogger::new(&workspace);
+        let mut session_stats = SessionStats::default();
+        let mut mcp_panel_state = McpPanelState::default();
+        let mut harness_state = HarnessTurnState::new(
+            TurnRunId("run-test".to_string()),
+            TurnId("turn-test".to_string()),
+            8,
+            60,
+            0,
+        );
+
+        let mut runtime_host = CopilotRuntimeHost::new(
+            &mut tool_registry,
+            &tool_result_cache,
+            &mut session,
+            &mut session_stats,
+            &mut mcp_panel_state,
+            &handle,
+            &ctrl_c_state,
+            &ctrl_c_notify,
+            None,
+            &approval_recorder,
+            &decision_ledger,
+            &tool_permission_cache,
+            &safety_validator,
+            None,
+            None,
+            &traj,
+            &mut harness_state,
+            None,
+            true,
+            None,
+            "turn-test-step-1".to_string(),
+        );
+
+        runtime_host.handle_observed_tool_call(CopilotObservedToolCall {
+            tool_call_id: "call_shell".to_string(),
+            tool_name: "Run cargo check on workspace".to_string(),
+            status: CopilotObservedToolCallStatus::InProgress,
+            arguments: Some(json!({
+                "command": "cd /tmp && cargo check 2>&1",
+                "description": "Run cargo check on workspace",
+                "mode": "sync",
+            })),
+            output: Some("Checking vtcode-core\n".to_string()),
+            terminal_id: None,
+        });
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        runtime_host.handle_observed_tool_call(CopilotObservedToolCall {
+            tool_call_id: "call_shell".to_string(),
+            tool_name: "Run cargo check on workspace".to_string(),
+            status: CopilotObservedToolCallStatus::Completed,
+            arguments: Some(json!({
+                "command": "cd /tmp && cargo check 2>&1",
+                "description": "Run cargo check on workspace",
+                "mode": "sync",
+            })),
+            output: Some("Checking vtcode-core\nFinished `dev` profile\n".to_string()),
+            terminal_id: None,
+        });
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        let inline_output = collect_inline_output(&mut command_rx);
+        assert!(inline_output.contains("• Ran cd /tmp && cargo check 2>&1"));
+        assert!(inline_output.contains("Checking vtcode-core"));
+        assert!(inline_output.contains("Finished `dev` profile"));
+    }
+
+    #[tokio::test]
+    async fn copilot_terminal_sessions_bind_local_pty_output_and_release_cleanly() {
+        let temp = TempDir::new().expect("temp workspace");
+        let workspace = temp.path().to_path_buf();
+        let harness_path = workspace.join("harness-terminal.jsonl");
+
+        let mut tool_registry = ToolRegistry::new(workspace.clone()).await;
+        let tool_result_cache = Arc::new(RwLock::new(ToolResultCache::new(8)));
+        let mut session = create_headless_session();
+        let handle = session.clone_inline_handle();
+        let approval_recorder = ApprovalRecorder::new(workspace.clone());
+        let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
+        let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
+        let safety_validator = Arc::new(RwLock::new(ToolCallSafetyValidator::new()));
+        let ctrl_c_state = Arc::new(CtrlCState::new());
+        let ctrl_c_notify = Arc::new(Notify::new());
+        let traj = TrajectoryLogger::new(&workspace);
+        let mut session_stats = SessionStats::default();
+        let mut mcp_panel_state = McpPanelState::default();
+        let mut harness_state = HarnessTurnState::new(
+            TurnRunId("run-test".to_string()),
+            TurnId("turn-test".to_string()),
+            8,
+            60,
+            0,
+        );
+        let emitter = HarnessEventEmitter::new(harness_path.clone()).expect("harness emitter");
+
+        let mut runtime_host = CopilotRuntimeHost::new(
+            &mut tool_registry,
+            &tool_result_cache,
+            &mut session,
+            &mut session_stats,
+            &mut mcp_panel_state,
+            &handle,
+            &ctrl_c_state,
+            &ctrl_c_notify,
+            None,
+            &approval_recorder,
+            &decision_ledger,
+            &tool_permission_cache,
+            &safety_validator,
+            None,
+            None,
+            &traj,
+            &mut harness_state,
+            None,
+            true,
+            Some(&emitter),
+            "turn-test-step-1".to_string(),
+        );
+
+        let response = runtime_host
+            .handle_terminal_create(CopilotTerminalCreateRequest {
+                session_id: "session-terminal".to_string(),
+                command: "/bin/sh".to_string(),
+                args: vec!["-lc".to_string(), "printf \"$ACP_TEST_TOKEN\"".to_string()],
+                env: vec![CopilotTerminalEnvVar {
+                    name: "ACP_TEST_TOKEN".to_string(),
+                    value: "vtcode-terminal".to_string(),
+                }],
+                cwd: None,
+                output_byte_limit: Some(1024),
+            })
+            .await
+            .expect("create local terminal");
+
+        let exit_status = runtime_host
+            .handle_terminal_wait_for_exit(&response.terminal_id)
+            .await
+            .expect("wait for local terminal exit");
+        assert_eq!(exit_status.exit_code, Some(0));
+
+        let output = runtime_host
+            .handle_terminal_output(&response.terminal_id)
+            .await
+            .expect("read local terminal output");
+        assert_eq!(output.output, "vtcode-terminal");
+        assert!(!output.truncated);
+        assert_eq!(output.exit_status, Some(exit_status.clone()));
+
+        runtime_host.handle_observed_tool_call(CopilotObservedToolCall {
+            tool_call_id: "call_terminal".to_string(),
+            tool_name: "Run cargo check on the workspace".to_string(),
+            status: CopilotObservedToolCallStatus::InProgress,
+            arguments: Some(json!({"command": "cargo check"})),
+            output: Some("ignored remote output".to_string()),
+            terminal_id: Some(response.terminal_id.clone()),
+        });
+
+        let payload = std::fs::read_to_string(&harness_path).expect("read harness log");
+        let events: Vec<serde_json::Value> = payload
+            .lines()
+            .map(|line| serde_json::from_str(line).expect("parse harness event"))
+            .collect();
+
+        assert!(events.iter().any(|entry| {
+            entry["event"]["type"] == "item.started"
+                && entry["event"]["item"]["type"] == "tool_invocation"
+                && entry["event"]["item"]["tool_name"] == "Run cargo check on the workspace"
+        }));
+        assert!(events.iter().any(|entry| {
+            entry["event"]["type"] == "item.updated"
+                && entry["event"]["item"]["type"] == "tool_output"
+                && entry["event"]["item"]["output"] == "vtcode-terminal"
+        }));
+        assert!(events.iter().any(|entry| {
+            entry["event"]["type"] == "item.completed"
+                && entry["event"]["item"]["type"] == "tool_output"
+                && entry["event"]["item"]["status"] == "completed"
+                && entry["event"]["item"]["output"] == "vtcode-terminal"
+        }));
+
+        runtime_host
+            .handle_terminal_release(&response.terminal_id)
+            .await
+            .expect("release local terminal");
+        assert!(
+            runtime_host
+                .handle_terminal_output(&response.terminal_id)
+                .await
+                .is_err()
+        );
     }
 
     #[tokio::test]

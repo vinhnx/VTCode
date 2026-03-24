@@ -231,6 +231,14 @@ impl ThreadRuntimeHandle {
         self.inner.session.lock().snapshot()
     }
 
+    pub fn metadata(&self) -> Option<SessionArchiveMetadata> {
+        self.inner.session.lock().metadata.clone()
+    }
+
+    pub fn replace_metadata(&self, metadata: Option<SessionArchiveMetadata>) {
+        self.inner.session.lock().metadata = metadata;
+    }
+
     pub fn archive_listing(&self) -> Option<SessionListing> {
         self.inner.session.lock().archive_listing.clone()
     }

@@ -3,6 +3,7 @@ use std::cell::{Cell, RefCell};
 use std::mem::discriminant;
 use std::rc::Rc;
 use tokio::sync::oneshot;
+use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_core::core::interfaces::SessionMode;
 use vtcode_core::core::threads::ThreadRuntimeHandle;
 
@@ -164,6 +165,7 @@ pub(crate) struct SessionData {
     pub(crate) thread: ThreadRuntimeHandle,
     pub(crate) tool_notice_sent: bool,
     pub(crate) current_mode: SessionMode,
+    pub(crate) reasoning_effort: ReasoningEffortLevel,
 }
 
 pub(crate) struct NotificationEnvelope {

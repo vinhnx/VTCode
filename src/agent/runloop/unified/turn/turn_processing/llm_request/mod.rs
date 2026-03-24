@@ -305,6 +305,7 @@ pub(crate) async fn execute_llm_request(
                         .await
                         .map_err(anyhow::Error::new)
                     } else {
+                        drop(runtime_host);
                         run_standard_stream_attempt(
                             ctx,
                             request.clone(),

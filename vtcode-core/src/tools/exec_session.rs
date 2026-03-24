@@ -184,6 +184,12 @@ impl PipeSessionManager {
         }
     }
 
+    async fn terminate_session(&self, session_id: &str) -> Result<()> {
+        let record = self.session_record(session_id).await?;
+        record.handle.terminate();
+        Ok(())
+    }
+
     async fn close_session(&self, session_id: &str) -> Result<VTCodeExecSession> {
         let record = {
             let mut sessions = self.sessions.write().await;
@@ -394,6 +400,14 @@ impl ExecSessionManager {
         match record.backend {
             ExecSessionBackend::Pipe => self.pipe_sessions.is_session_completed(session_id).await,
             ExecSessionBackend::Pty => self.pty_sessions.manager().is_session_completed(session_id),
+        }
+    }
+
+    pub(crate) async fn terminate_session(&self, session_id: &str) -> Result<()> {
+        let record = self.session_record(session_id).await?;
+        match record.backend {
+            ExecSessionBackend::Pipe => self.pipe_sessions.terminate_session(session_id).await,
+            ExecSessionBackend::Pty => self.pty_sessions.manager().terminate_session(session_id),
         }
     }
 

@@ -42,8 +42,12 @@ mod tests {
     use crate::tooling::{
         TOOL_LIST_FILES_ITEMS_KEY, TOOL_LIST_FILES_RESULT_KEY, TOOL_LIST_FILES_URI_ARG,
     };
+    use crate::zed::helpers::{SESSION_CONFIG_MODE_ID, SESSION_CONFIG_THOUGHT_LEVEL_ID};
     use crate::zed::types::NotificationEnvelope;
-    use agent_client_protocol::{Agent, LoadSessionRequest, SessionModeId, ToolCallStatus};
+    use agent_client_protocol::{
+        Agent, LoadSessionRequest, NewSessionRequest, SessionConfigKind, SessionModeId,
+        SetSessionConfigOptionRequest, ToolCallStatus,
+    };
     use assert_fs::TempDir;
     use serde_json::{Value, json};
     use std::collections::BTreeMap;
@@ -63,9 +67,9 @@ mod tests {
 
     async fn build_agent(workspace: &Path) -> ZedAgent {
         let core_config = CoreAgentConfig {
-            model: "test-model".to_string(),
+            model: "gpt-5.4".to_string(),
             api_key: String::new(),
-            provider: "test-provider".to_string(),
+            provider: "openai".to_string(),
             api_key_env: "TEST_API_KEY".to_string(),
             workspace: workspace.to_path_buf(),
             verbose: false,
@@ -179,6 +183,7 @@ mod tests {
             let session = agent.session_handle(&session_id).unwrap();
             let mut data = session.data.borrow_mut();
             data.current_mode = SessionMode::Architect;
+            data.reasoning_effort = ReasoningEffortLevel::High;
         }
 
         let args = LoadSessionRequest::new(session_id, temp.path());
@@ -188,6 +193,124 @@ mod tests {
             response.modes.unwrap().current_mode_id,
             SessionModeId::new("architect")
         );
+        let config_options = response.config_options.unwrap();
+        assert_eq!(config_options.len(), 2);
+        assert!(config_options.iter().any(|option| {
+            option.id == agent_client_protocol::SessionConfigId::new(SESSION_CONFIG_MODE_ID)
+                && matches!(
+                    &option.kind,
+                    SessionConfigKind::Select(select)
+                        if select.current_value
+                            == agent_client_protocol::SessionConfigValueId::new("architect")
+                )
+        }));
+        assert!(config_options.iter().any(|option| {
+            option.id
+                == agent_client_protocol::SessionConfigId::new(SESSION_CONFIG_THOUGHT_LEVEL_ID)
+                && matches!(
+                    &option.kind,
+                    SessionConfigKind::Select(select)
+                        if select.current_value
+                            == agent_client_protocol::SessionConfigValueId::new("high")
+                )
+        }));
+    }
+
+    #[tokio::test]
+    async fn new_session_returns_config_options() {
+        let temp = TempDir::new().unwrap();
+        let agent = build_agent(temp.path()).await;
+
+        let response = agent
+            .new_session(NewSessionRequest::new(temp.path()))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            response.modes.unwrap().current_mode_id,
+            SessionModeId::new("code")
+        );
+        let config_options = response.config_options.unwrap();
+        assert_eq!(config_options.len(), 2);
+        assert!(config_options.iter().any(|option| {
+            option.id == agent_client_protocol::SessionConfigId::new(SESSION_CONFIG_MODE_ID)
+                && matches!(
+                    &option.kind,
+                    SessionConfigKind::Select(select)
+                        if select.current_value
+                            == agent_client_protocol::SessionConfigValueId::new("code")
+                )
+        }));
+        assert!(config_options.iter().any(|option| {
+            option.id
+                == agent_client_protocol::SessionConfigId::new(SESSION_CONFIG_THOUGHT_LEVEL_ID)
+                && matches!(
+                    &option.kind,
+                    SessionConfigKind::Select(select)
+                        if select.current_value
+                            == agent_client_protocol::SessionConfigValueId::new("low")
+                )
+        }));
+    }
+
+    #[tokio::test]
+    async fn set_session_config_option_updates_mode() {
+        let temp = TempDir::new().unwrap();
+        let agent = build_agent(temp.path()).await;
+        let session_id = agent.register_session();
+
+        let response = agent
+            .set_session_config_option(SetSessionConfigOptionRequest::new(
+                session_id.clone(),
+                SESSION_CONFIG_MODE_ID,
+                "architect",
+            ))
+            .await
+            .unwrap();
+
+        let session = agent.session_handle(&session_id).unwrap();
+        assert_eq!(session.data.borrow().current_mode, SessionMode::Architect);
+        assert!(response.config_options.iter().any(|option| {
+            option.id == agent_client_protocol::SessionConfigId::new(SESSION_CONFIG_MODE_ID)
+                && matches!(
+                    &option.kind,
+                    SessionConfigKind::Select(select)
+                        if select.current_value
+                            == agent_client_protocol::SessionConfigValueId::new("architect")
+                )
+        }));
+    }
+
+    #[tokio::test]
+    async fn set_session_config_option_updates_reasoning_effort() {
+        let temp = TempDir::new().unwrap();
+        let agent = build_agent(temp.path()).await;
+        let session_id = agent.register_session();
+
+        let response = agent
+            .set_session_config_option(SetSessionConfigOptionRequest::new(
+                session_id.clone(),
+                SESSION_CONFIG_THOUGHT_LEVEL_ID,
+                "xhigh",
+            ))
+            .await
+            .unwrap();
+
+        let session = agent.session_handle(&session_id).unwrap();
+        assert_eq!(
+            session.data.borrow().reasoning_effort,
+            ReasoningEffortLevel::XHigh
+        );
+        assert!(response.config_options.iter().any(|option| {
+            option.id
+                == agent_client_protocol::SessionConfigId::new(SESSION_CONFIG_THOUGHT_LEVEL_ID)
+                && matches!(
+                    &option.kind,
+                    SessionConfigKind::Select(select)
+                        if select.current_value
+                            == agent_client_protocol::SessionConfigValueId::new("xhigh")
+                )
+        }));
     }
 
     #[tokio::test]
