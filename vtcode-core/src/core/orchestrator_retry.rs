@@ -13,19 +13,20 @@ use std::time::{Duration, Instant};
 use tokio::time::sleep;
 use tracing::{info, warn};
 
-/// Configuration for retry behavior
+/// Configuration for retry behavior.
+///
+/// This is a thin wrapper kept for backward compatibility. New code should
+/// construct [`RetryPolicy`] directly.
+#[deprecated(note = "Use RetryPolicy directly for new code")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RetryConfig {
-    /// Maximum number of retries per task
     pub max_retries: u32,
-    /// Initial delay in seconds
     pub initial_delay_secs: u64,
-    /// Maximum delay in seconds (cap for exponential backoff)
     pub max_delay_secs: u64,
-    /// Backoff multiplier (delay *= multiplier each retry)
     pub backoff_multiplier: f64,
 }
 
+#[allow(deprecated)]
 impl Default for RetryConfig {
     fn default() -> Self {
         Self {
@@ -34,6 +35,18 @@ impl Default for RetryConfig {
             max_delay_secs: 60,
             backoff_multiplier: 2.0,
         }
+    }
+}
+
+#[allow(deprecated)]
+impl From<RetryConfig> for RetryPolicy {
+    fn from(config: RetryConfig) -> Self {
+        RetryPolicy::from_retries(
+            config.max_retries,
+            Duration::from_secs(config.initial_delay_secs),
+            Duration::from_secs(config.max_delay_secs),
+            config.backoff_multiplier,
+        )
     }
 }
 
@@ -47,10 +60,13 @@ pub struct RetryStats {
     pub total_backoff_time: Duration,
 }
 
-/// Retry manager for orchestrator operations
+/// Retry manager for orchestrator operations.
+///
+/// Uses [`RetryPolicy`] directly for retry decisions, eliminating the
+/// redundant `RetryConfig` → `RetryPolicy` conversion overhead.
 #[derive(Debug)]
 pub struct RetryManager {
-    config: RetryConfig,
+    policy: RetryPolicy,
     stats: RetryStats,
 }
 
@@ -64,17 +80,28 @@ impl RetryManager {
     /// Create a new retry manager with default configuration
     pub fn new() -> Self {
         Self {
-            config: RetryConfig::default(),
+            policy: RetryPolicy::from_retries(
+                5,
+                Duration::from_secs(1),
+                Duration::from_secs(60),
+                2.0,
+            ),
             stats: RetryStats::default(),
         }
     }
 
-    /// Create a new retry manager with custom configuration
-    pub fn with_config(config: RetryConfig) -> Self {
+    /// Create a new retry manager with a custom retry policy
+    pub fn with_policy(policy: RetryPolicy) -> Self {
         Self {
-            config,
+            policy,
             stats: RetryStats::default(),
         }
+    }
+
+    /// Create a new retry manager with custom configuration (backward compat)
+    #[allow(deprecated)]
+    pub fn with_config(config: RetryConfig) -> Self {
+        Self::with_policy(config.into())
     }
 
     /// Get the current retry statistics
@@ -102,7 +129,7 @@ impl RetryManager {
         T: Clone,
     {
         let start_time = Instant::now();
-        let policy = self.policy();
+        let policy = &self.policy;
         let mut last_error: Option<VtCodeError> = None;
 
         // Try with primary model first
@@ -236,15 +263,6 @@ impl RetryManager {
             ))
         }))
     }
-
-    fn policy(&self) -> RetryPolicy {
-        RetryPolicy::from_retries(
-            self.config.max_retries,
-            Duration::from_secs(self.config.initial_delay_secs),
-            Duration::from_secs(self.config.max_delay_secs),
-            self.config.backoff_multiplier,
-        )
-    }
 }
 
 /// Check if a response is considered empty or invalid
@@ -276,6 +294,7 @@ pub fn is_retryable_error(error: &anyhow::Error) -> bool {
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use super::*;
     use crate::error::{ErrorCode, VtCodeError};

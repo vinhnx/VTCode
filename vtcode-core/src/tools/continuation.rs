@@ -1,8 +1,17 @@
 use serde_json::{Value, json};
 
-pub const NEXT_CONTINUE_PROMPT: &str = "Use `next_continue_args`.";
-pub const NEXT_READ_PROMPT: &str = "Use `next_read_args`.";
+pub const NEXT_CONTINUE_PROMPT: &str = "Reuse `next_continue_args`.";
+pub const NEXT_READ_PROMPT: &str = "Reuse `next_read_args`.";
 pub const DEFAULT_NEXT_READ_LIMIT: usize = 40;
+
+const SESSION_ID_KEY: &str = "session_id";
+const COMPACT_SESSION_ID_KEY: &str = "s";
+const PATH_KEY: &str = "path";
+const COMPACT_PATH_KEY: &str = "p";
+const OFFSET_KEY: &str = "offset";
+const COMPACT_OFFSET_KEY: &str = "o";
+const LIMIT_KEY: &str = "limit";
+const COMPACT_LIMIT_KEY: &str = "l";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PtyContinuationArgs {
@@ -18,13 +27,18 @@ impl PtyContinuationArgs {
 
     pub fn from_value(value: &Value) -> Option<Self> {
         value
-            .get("session_id")
+            .get(SESSION_ID_KEY)
+            .or_else(|| value.get(COMPACT_SESSION_ID_KEY))
             .and_then(Value::as_str)
             .map(Self::new)
     }
 
     pub fn to_value(&self) -> Value {
-        json!({ "session_id": self.session_id })
+        json!({ SESSION_ID_KEY: self.session_id })
+    }
+
+    pub fn to_compact_value(&self) -> Value {
+        json!({ COMPACT_SESSION_ID_KEY: self.session_id })
     }
 }
 
@@ -45,10 +59,19 @@ impl ReadChunkContinuationArgs {
     }
 
     pub fn from_value(value: &Value) -> Option<Self> {
-        let path = value.get("path").and_then(Value::as_str)?.to_string();
-        let offset = value.get("offset").and_then(value_to_usize)?.max(1);
+        let path = value
+            .get(PATH_KEY)
+            .or_else(|| value.get(COMPACT_PATH_KEY))
+            .and_then(Value::as_str)?
+            .to_string();
+        let offset = value
+            .get(OFFSET_KEY)
+            .or_else(|| value.get(COMPACT_OFFSET_KEY))
+            .and_then(value_to_usize)?
+            .max(1);
         let limit = value
-            .get("limit")
+            .get(LIMIT_KEY)
+            .or_else(|| value.get(COMPACT_LIMIT_KEY))
             .and_then(value_to_usize)
             .unwrap_or(DEFAULT_NEXT_READ_LIMIT)
             .max(1);
@@ -61,9 +84,17 @@ impl ReadChunkContinuationArgs {
 
     pub fn to_value(&self) -> Value {
         json!({
-            "path": self.path,
-            "offset": self.offset,
-            "limit": self.limit
+            PATH_KEY: self.path,
+            OFFSET_KEY: self.offset,
+            LIMIT_KEY: self.limit
+        })
+    }
+
+    pub fn to_compact_value(&self) -> Value {
+        json!({
+            COMPACT_PATH_KEY: self.path,
+            COMPACT_OFFSET_KEY: self.offset,
+            COMPACT_LIMIT_KEY: self.limit
         })
     }
 }
@@ -97,6 +128,16 @@ mod tests {
     }
 
     #[test]
+    fn pty_continuation_accepts_compact_form() {
+        let parsed = PtyContinuationArgs::from_value(&json!({
+            "s": "run-123"
+        }))
+        .unwrap();
+
+        assert_eq!(parsed.session_id, "run-123");
+    }
+
+    #[test]
     fn read_chunk_continuation_round_trips() {
         let args = ReadChunkContinuationArgs::new("out.txt", 41, 40);
         let payload = args.to_value();
@@ -121,12 +162,38 @@ mod tests {
     }
 
     #[test]
+    fn read_chunk_continuation_accepts_compact_form() {
+        let parsed = ReadChunkContinuationArgs::from_value(&json!({
+            "p": "out.txt",
+            "o": 2,
+            "l": 3
+        }))
+        .unwrap();
+
+        assert_eq!(parsed.path, "out.txt");
+        assert_eq!(parsed.offset, 2);
+        assert_eq!(parsed.limit, 3);
+    }
+
+    #[test]
     fn read_chunk_progress_reads_canonical_args() {
         let result = json!({
             "next_read_args": {
                 "path": "out.txt",
                 "offset": 81,
                 "limit": 40
+            }
+        });
+        assert_eq!(read_chunk_progress_from_result(&result), Some((81, 40)));
+    }
+
+    #[test]
+    fn read_chunk_progress_reads_compact_args() {
+        let result = json!({
+            "next_read_args": {
+                "p": "out.txt",
+                "o": 81,
+                "l": 40
             }
         });
         assert_eq!(read_chunk_progress_from_result(&result), Some((81, 40)));

@@ -20,7 +20,6 @@ const STREAM_TIMEOUT_FALLBACK_PROVIDERS: &[&str] = &[
     "moonshot",
     "zai",
     "openrouter",
-    "lmstudio",
 ];
 
 const RECENT_TOOL_RESPONSE_WINDOW: usize = 10;
@@ -56,7 +55,9 @@ pub(super) fn compact_tool_messages_for_retry(messages: &[uni::Message]) -> Vec<
         }
 
         let text = message.content.as_text();
-        if text.chars().count() <= TOOL_RETRY_MAX_CHARS {
+        // Fast path: byte length ≤ max chars guarantees char count ≤ max chars
+        // (every char is ≥ 1 byte), avoiding the O(n) char scan.
+        if text.len() <= TOOL_RETRY_MAX_CHARS || text.chars().count() <= TOOL_RETRY_MAX_CHARS {
             compacted.push(message.clone());
             continue;
         }

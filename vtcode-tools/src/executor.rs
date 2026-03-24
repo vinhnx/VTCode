@@ -1,6 +1,7 @@
 //! Production ToolExecutor: Cache + Middleware + Patterns integrated.
 //!
 //! Drop-in replacement for tool execution with full observability.
+//! Stats tracking uses lock-free `AtomicU64` counters to avoid contention.
 
 use crate::cache::LruCache;
 use crate::middleware::{MiddlewareChain, MiddlewareResult, ToolRequest, ToolResponse};
@@ -35,6 +36,65 @@ pub struct ExecutorStats {
     pub patterns_detected: usize,
 }
 
+/// Lock-free atomic counters for executor stats.
+///
+/// Avoids RwLock contention on the hot path. Duration tracking uses
+/// total + count so the average is computed accurately on read.
+struct AtomicStats {
+    total_calls: AtomicU64,
+    successful_calls: AtomicU64,
+    failed_calls: AtomicU64,
+    cache_hits: AtomicU64,
+    cache_misses: AtomicU64,
+    total_duration_ms: AtomicU64,
+    duration_count: AtomicU64,
+}
+
+impl AtomicStats {
+    fn new() -> Self {
+        Self {
+            total_calls: AtomicU64::new(0),
+            successful_calls: AtomicU64::new(0),
+            failed_calls: AtomicU64::new(0),
+            cache_hits: AtomicU64::new(0),
+            cache_misses: AtomicU64::new(0),
+            total_duration_ms: AtomicU64::new(0),
+            duration_count: AtomicU64::new(0),
+        }
+    }
+
+    #[inline]
+    fn record_success(&self, duration_ms: u64) {
+        self.successful_calls.fetch_add(1, Ordering::Relaxed);
+        self.total_duration_ms
+            .fetch_add(duration_ms, Ordering::Relaxed);
+        self.duration_count.fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[inline]
+    fn record_failure(&self, duration_ms: u64) {
+        self.failed_calls.fetch_add(1, Ordering::Relaxed);
+        self.total_duration_ms
+            .fetch_add(duration_ms, Ordering::Relaxed);
+        self.duration_count.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn snapshot(&self) -> ExecutorStats {
+        let count = self.duration_count.load(Ordering::Relaxed);
+        let total = self.total_duration_ms.load(Ordering::Relaxed);
+        let avg = if count > 0 { total / count } else { 0 };
+        ExecutorStats {
+            total_calls: self.total_calls.load(Ordering::Relaxed),
+            successful_calls: self.successful_calls.load(Ordering::Relaxed),
+            failed_calls: self.failed_calls.load(Ordering::Relaxed),
+            cache_hits: self.cache_hits.load(Ordering::Relaxed),
+            cache_misses: self.cache_misses.load(Ordering::Relaxed),
+            avg_duration_ms: avg,
+            patterns_detected: 0, // filled in by caller
+        }
+    }
+}
+
 /// Production tool executor with cache, middleware, and pattern detection.
 pub struct CachedToolExecutor {
     /// Response cache (key = "tool_name:args_json")
@@ -43,8 +103,8 @@ pub struct CachedToolExecutor {
     middleware: MiddlewareChain,
     /// Pattern detector for workflow analysis
     patterns: Arc<RwLock<PatternDetector>>,
-    /// Internal stats tracking
-    stats: Arc<RwLock<ExecutorStats>>,
+    /// Lock-free stats tracking
+    stats: Arc<AtomicStats>,
 }
 
 impl CachedToolExecutor {
@@ -62,15 +122,7 @@ impl CachedToolExecutor {
         let cache = Arc::new(LruCache::<Value>::new(cache_capacity, cache_ttl));
         let middleware = MiddlewareChain::new();
         let patterns = Arc::new(RwLock::new(PatternDetector::new(pattern_window)));
-        let stats = Arc::new(RwLock::new(ExecutorStats {
-            total_calls: 0,
-            successful_calls: 0,
-            failed_calls: 0,
-            cache_hits: 0,
-            cache_misses: 0,
-            avg_duration_ms: 0,
-            patterns_detected: 0,
-        }));
+        let stats = Arc::new(AtomicStats::new());
 
         Self {
             cache,
@@ -104,11 +156,8 @@ impl CachedToolExecutor {
         let start = std::time::Instant::now();
         let cache_key = make_cache_key(tool_name, &args);
 
-        // Update stats (single write)
-        {
-            let mut stats = self.stats.write().await;
-            stats.total_calls += 1;
-        }
+        // Atomic increment — no lock needed
+        self.stats.total_calls.fetch_add(1, Ordering::Relaxed);
 
         // Create request — reuse the shared `args` (already an Arc)
         let owned_args = Arc::clone(&args);
@@ -129,9 +178,8 @@ impl CachedToolExecutor {
         // Check cache
         if let Some(result) = self.cache.get(&cache_key).await {
             let duration_ms = start.elapsed().as_millis() as u64;
-            let mut stats = self.stats.write().await;
-            stats.successful_calls += 1;
-            stats.cache_hits += 1;
+            self.stats.record_success(duration_ms);
+            self.stats.cache_hits.fetch_add(1, Ordering::Relaxed);
 
             let res = ToolResponse {
                 id: req.id.clone(),
@@ -153,14 +201,10 @@ impl CachedToolExecutor {
             return Ok(Arc::clone(&result));
         }
 
-        // Update stats: cache miss
-        {
-            let mut stats = self.stats.write().await;
-            stats.cache_misses += 1;
-        }
+        // Atomic increment — no lock needed
+        self.stats.cache_misses.fetch_add(1, Ordering::Relaxed);
 
         // Execute tool (caller provides actual execution)
-        // This is where your tool registry would call the actual tool
         let timeout_secs = execution::DEFAULT_TIMEOUT_SECS;
         let result = match timeout(
             Duration::from_secs(timeout_secs),
@@ -199,12 +243,8 @@ impl CachedToolExecutor {
         // Cache result (Arc clone is cheap - pass Arc directly into cache)
         self.cache.insert_arc(cache_key, Arc::clone(&arc_res)).await;
 
-        // Update stats
-        {
-            let mut stats = self.stats.write().await;
-            stats.successful_calls += 1;
-            stats.avg_duration_ms = (stats.avg_duration_ms + duration_ms) / 2;
-        }
+        // Atomic stats update — no lock needed
+        self.stats.record_success(duration_ms);
 
         let res = ToolResponse {
             id: req.id.clone(),
@@ -256,11 +296,7 @@ impl CachedToolExecutor {
         req: &ToolRequest,
         err: &UnifiedToolError,
     ) {
-        {
-            let mut stats = self.stats.write().await;
-            stats.failed_calls += 1;
-            stats.avg_duration_ms = (stats.avg_duration_ms + elapsed.as_millis() as u64) / 2;
-        }
+        self.stats.record_failure(elapsed.as_millis() as u64);
 
         let _ = self.middleware.on_error(req, err).await;
         self.record_pattern(tool_name, false, elapsed.as_millis() as u64)
@@ -280,7 +316,7 @@ impl CachedToolExecutor {
 
     /// Get current executor statistics.
     pub async fn stats(&self) -> ExecutorStats {
-        let mut stats = self.stats.read().await.clone();
+        let mut stats = self.stats.snapshot();
         let patterns = self.patterns.read().await;
         stats.patterns_detected = patterns.patterns().len();
         stats
@@ -465,11 +501,12 @@ mod tests {
     async fn test_executor_patterns() -> anyhow::Result<()> {
         let executor = CachedToolExecutor::new();
 
-        // Record pattern: A -> B -> A -> B
-        executor.execute("tool_a", serde_json::json!({})).await?;
-        executor.execute("tool_b", serde_json::json!({})).await?;
-        executor.execute("tool_a", serde_json::json!({})).await?;
-        executor.execute("tool_b", serde_json::json!({})).await?;
+        // Record a repeating A -> B pattern with enough events
+        // to trigger pattern analysis (ANALYZE_INTERVAL = 10).
+        for _ in 0..6 {
+            executor.execute("tool_a", serde_json::json!({})).await?;
+            executor.execute("tool_b", serde_json::json!({})).await?;
+        }
 
         let patterns = executor.patterns().await;
         assert!(!patterns.is_empty());

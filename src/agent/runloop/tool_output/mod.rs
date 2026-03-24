@@ -786,7 +786,7 @@ mod tests {
         assert!(inline_output.contains("unified_file (action='read')"));
         assert!(inline_output.contains("unified_search (action='grep')"));
         assert!(!inline_output.contains("read_file/grep_file"));
-        assert!(inline_output.contains("Use `next_continue_args`."));
+        assert!(inline_output.contains("Reuse `next_continue_args`."));
     }
 
     #[tokio::test]

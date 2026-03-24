@@ -116,16 +116,18 @@ mod tests {
         let mut detector = PatternDetector::new(2);
         let now = std::time::Instant::now();
 
-        // Simulate realistic workflow: find -> grep -> find -> grep
-        let tools = vec!["find_files", "grep_file", "find_files", "grep_file"];
+        // Simulate realistic workflow: find -> grep -> find -> grep repeated to cross interval
+        let tools = vec!["find_files", "grep_file"];
 
-        for tool in tools {
-            detector.record_event(vtcode_tools::ToolEvent {
-                tool_name: tool.to_string(),
-                success: true,
-                duration_ms: 50,
-                timestamp: now,
-            });
+        for _ in 0..6 {
+            for tool in &tools {
+                detector.record_event(vtcode_tools::ToolEvent {
+                    tool_name: tool.to_string(),
+                    success: true,
+                    duration_ms: 50,
+                    timestamp: now,
+                });
+            }
         }
 
         let patterns = detector.patterns();
@@ -150,62 +152,57 @@ mod tests {
         let mut detector = PatternDetector::new(2);
         let now = std::time::Instant::now();
 
-        // Simulate a realistic development workflow:
-        // 1. list_files
-        // 2. grep_file (same as previous)
-        // 3. list_files (same as #1)
-        // 4. grep_file (same as #2)
-
+        // Simulate a realistic development workflow repeated to cross ANALYZE_INTERVAL:
         let workflows = vec![
             ("list_files", r#"{"path": "/src"}"#, true),
             ("grep_file", r#"{"pattern": "fn main"}"#, true),
-            ("list_files", r#"{"path": "/src"}"#, true), // Cache hit
-            ("grep_file", r#"{"pattern": "fn main"}"#, true), // Cache hit
         ];
 
-        for (tool, args, _success) in workflows {
-            let cache_key = {
-                let mut hasher = DefaultHasher::new();
-                hasher.write(args.as_bytes());
-                format!("{}:{}", tool, hasher.finish())
-            };
+        for _ in 0..6 {
+            for (tool, args, _success) in &workflows {
+                let cache_key = {
+                    let mut hasher = DefaultHasher::new();
+                    hasher.write(args.as_bytes());
+                    format!("{}:{}", tool, hasher.finish())
+                };
 
-            // Try cache
-            let is_cached = cache.get(&cache_key).await.is_some();
+                // Try cache
+                let is_cached = cache.get(&cache_key).await.is_some();
 
-            if !is_cached {
-                // Simulate execution and cache
-                cache
-                    .insert_arc(cache_key, Arc::new(format!("result from {}", tool)))
-                    .await;
+                if !is_cached {
+                    // Simulate execution and cache
+                    cache
+                        .insert_arc(cache_key, Arc::new(format!("result from {}", tool)))
+                        .await;
+                }
+
+                // Record in pattern detector
+                detector.record_event(vtcode_tools::ToolEvent {
+                    tool_name: tool.to_string(),
+                    success: true,
+                    duration_ms: 50,
+                    timestamp: now,
+                });
+
+                // Update metrics
+                let req = ToolRequest {
+                    id: format!("workflow-{}", tool),
+                    tool_name: tool.to_string(),
+                    args: serde_json::json!(args),
+                    metadata: Some(Default::default()),
+                };
+
+                chain.before_execute(&req).await?;
+                let res = ToolResponse {
+                    id: format!("workflow-{}", tool),
+                    success: true,
+                    result: Some(serde_json::json!({"status": "ok"})),
+                    error: None,
+                    duration_ms: Some(50),
+                    cache_hit: Some(is_cached),
+                };
+                chain.after_execute(&req, &res).await?;
             }
-
-            // Record in pattern detector
-            detector.record_event(vtcode_tools::ToolEvent {
-                tool_name: tool.to_string(),
-                success: true,
-                duration_ms: 50,
-                timestamp: now,
-            });
-
-            // Update metrics
-            let req = ToolRequest {
-                id: format!("workflow-{}", tool),
-                tool_name: tool.to_string(),
-                args: serde_json::json!(args),
-                metadata: Some(Default::default()),
-            };
-
-            chain.before_execute(&req).await?;
-            let res = ToolResponse {
-                id: format!("workflow-{}", tool),
-                success: true,
-                result: Some(serde_json::json!({"status": "ok"})),
-                error: None,
-                duration_ms: Some(50),
-                cache_hit: Some(is_cached),
-            };
-            chain.after_execute(&req, &res).await?;
         }
 
         // Verify cache effectiveness
@@ -214,7 +211,7 @@ mod tests {
 
         // Verify metrics
         let metrics_snapshot = metrics.snapshot().await;
-        assert_eq!(metrics_snapshot.total_calls, 4);
+        assert_eq!(metrics_snapshot.total_calls, 12);
         assert!(metrics_snapshot.cache_hits > 0);
 
         // Verify patterns detected

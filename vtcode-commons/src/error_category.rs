@@ -290,6 +290,7 @@ pub fn classify_anyhow_error(err: &anyhow::Error) -> ErrorCategory {
 ///
 /// Marker groups are checked in priority order to handle overlapping patterns
 /// (e.g., "tool permission denied by policy" → `PolicyViolation`, not `PermissionDenied`).
+#[inline]
 pub fn classify_error_message(msg: &str) -> ErrorCategory {
     let msg = if msg.as_bytes().iter().any(|b| b.is_ascii_uppercase()) {
         Cow::Owned(msg.to_ascii_lowercase())
@@ -524,6 +525,7 @@ pub fn classify_error_message(msg: &str) -> ErrorCategory {
 ///
 /// This is a focused classifier for LLM provider errors, combining
 /// non-retryable and retryable marker checks for the request retry path.
+#[inline]
 pub fn is_retryable_llm_error_message(msg: &str) -> bool {
     let category = classify_error_message(msg);
     category.is_retryable()

@@ -1,9 +1,16 @@
 //! Pattern detection with sequence analysis and ML feature engineering.
 //!
 //! Analyzes tool call sequences to detect patterns, anomalies, and trends.
+//! Events are capped at `MAX_EVENTS` to prevent unbounded memory growth.
+//! Analysis is amortized: patterns are recomputed every `ANALYZE_INTERVAL` events.
 
 use hashbrown::HashMap;
 use serde_json::{Value, json};
+
+/// Maximum number of stored events before oldest are evicted.
+const MAX_EVENTS: usize = 500;
+/// Re-analyze patterns every N events to amortize cost.
+const ANALYZE_INTERVAL: usize = 10;
 
 /// A single tool call event.
 #[derive(Clone, Debug)]
@@ -30,6 +37,8 @@ pub struct PatternDetector {
     events: Vec<ToolEvent>,
     patterns: HashMap<String, DetectedPattern>,
     sequence_length: usize,
+    /// Counter tracking events since last full analysis.
+    events_since_analysis: usize,
 }
 
 impl PatternDetector {
@@ -39,13 +48,26 @@ impl PatternDetector {
             events: Vec::with_capacity(64),
             patterns: HashMap::with_capacity(16),
             sequence_length,
+            events_since_analysis: 0,
         }
     }
 
     /// Add an event to the detector.
     pub fn record_event(&mut self, event: ToolEvent) {
+        // Evict oldest events when capacity is reached.
+        if self.events.len() >= MAX_EVENTS {
+            let drain_count = MAX_EVENTS / 10; // Remove 10% at a time
+            self.events.drain(..drain_count);
+        }
+
         self.events.push(event);
-        self.analyze();
+        self.events_since_analysis += 1;
+
+        // Only re-analyze every ANALYZE_INTERVAL events to amortize cost.
+        if self.events_since_analysis >= ANALYZE_INTERVAL {
+            self.analyze();
+            self.events_since_analysis = 0;
+        }
     }
 
     /// Analyze events for patterns.
@@ -150,6 +172,7 @@ impl PatternDetector {
     pub fn reset(&mut self) {
         self.events.clear();
         self.patterns.clear();
+        self.events_since_analysis = 0;
     }
 
     /// Export patterns as JSON for analysis.
@@ -210,31 +233,21 @@ mod tests {
 
         let now = Instant::now();
 
-        // Record a repeating pattern: (A, B) repeats 3 times.
-        detector.record_event(ToolEvent {
-            tool_name: "tool_a".into(),
-            success: true,
-            duration_ms: 100,
-            timestamp: now,
-        });
-        detector.record_event(ToolEvent {
-            tool_name: "tool_b".into(),
-            success: true,
-            duration_ms: 50,
-            timestamp: now,
-        });
-        detector.record_event(ToolEvent {
-            tool_name: "tool_a".into(),
-            success: true,
-            duration_ms: 100,
-            timestamp: now,
-        });
-        detector.record_event(ToolEvent {
-            tool_name: "tool_b".into(),
-            success: true,
-            duration_ms: 50,
-            timestamp: now,
-        });
+        // Record a repeating pattern: (A, B) repeats enough times to trigger analysis
+        for _ in 0..6 {
+            detector.record_event(ToolEvent {
+                tool_name: "tool_a".into(),
+                success: true,
+                duration_ms: 100,
+                timestamp: now,
+            });
+            detector.record_event(ToolEvent {
+                tool_name: "tool_b".into(),
+                success: true,
+                duration_ms: 50,
+                timestamp: now,
+            });
+        }
 
         let patterns = detector.patterns();
         assert!(!patterns.is_empty());

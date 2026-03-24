@@ -496,7 +496,6 @@ pub(crate) fn compact_model_tool_payload(output: serde_json::Value) -> serde_jso
             .as_ref()
             .map(|next_continue| next_continue.session_id.as_str())
     });
-    let has_spool_path = obj.contains_key("spool_path");
     let loop_detected = obj
         .get("loop_detected")
         .and_then(serde_json::Value::as_bool)
@@ -520,7 +519,10 @@ pub(crate) fn compact_model_tool_payload(output: serde_json::Value) -> serde_jso
         .get("stderr")
         .and_then(serde_json::Value::as_str)
         .is_some();
-    let output_value = obj.get("output");
+    let output_trimmed = obj
+        .get("output")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim_end);
 
     let mut sanitized = serde_json::Map::with_capacity(obj.len());
     for (key, value) in obj {
@@ -529,9 +531,9 @@ pub(crate) fn compact_model_tool_payload(output: serde_json::Value) -> serde_jso
             | "rows" | "cols" | "wall_time" => true,
             "success" => value.as_bool().unwrap_or(false),
             "status" => value.as_str().is_some_and(|status| status == "success"),
-            "spool_hint" | "spooled_bytes" | "spooled_to_file" => has_spool_path,
+            "spool_hint" | "spooled_bytes" | "spooled_to_file" => true,
             "id" => session_id.is_some_and(|sid| value == sid),
-            "working_directory" => is_exec_like,
+            "working_directory" => is_exec_like || value.is_null(),
             "critical_note" => !keep_exec_success_critical_note,
             "next_action" => !keep_next_action,
             "has_more" | "preferred_next_action" => {
@@ -562,7 +564,10 @@ pub(crate) fn compact_model_tool_payload(output: serde_json::Value) -> serde_jso
             "truncated" | "auto_recovered" | "loop_detected" | "query_truncated" => {
                 is_false_bool(value)
             }
-            "stdout" => output_value.is_some_and(|output| output == value),
+            "stdout" => {
+                (is_exec_like && output_trimmed.is_some())
+                    || output_trimmed == value.as_str().map(str::trim_end)
+            }
             "process_id" => is_exec_like || process_session_id.is_some_and(|sid| value == sid),
             "is_exited" => {
                 is_exec_like
@@ -577,10 +582,10 @@ pub(crate) fn compact_model_tool_payload(output: serde_json::Value) -> serde_jso
             continue;
         }
 
-        let cloned_value = if key == "next_continue_args" {
-            compact_next_continue_args(value)
-        } else {
-            value.clone()
+        let cloned_value = match key.as_str() {
+            "next_continue_args" => compact_next_continue_args(value),
+            "next_read_args" => compact_next_read_args(value),
+            _ => value.clone(),
         };
         sanitized.insert(key.clone(), cloned_value);
     }
@@ -649,17 +654,36 @@ fn compact_next_continue_args(value: &serde_json::Value) -> serde_json::Value {
     let Some(obj) = value.as_object() else {
         return value.clone();
     };
-    if obj
-        .get("action")
-        .and_then(serde_json::Value::as_str)
-        .is_none_or(|action| action != "continue")
-    {
+    let Some(parsed) = PtyContinuationArgs::from_value(value) else {
         return value.clone();
-    }
+    };
 
-    let mut compacted = serde_json::Map::with_capacity(obj.len().saturating_sub(1));
+    let mut compacted = match parsed.to_compact_value() {
+        serde_json::Value::Object(map) => map,
+        _ => return value.clone(),
+    };
     for (key, nested_value) in obj {
-        if key != "action" {
+        if key != "action" && key != "session_id" && key != "s" {
+            compacted.insert(key.clone(), nested_value.clone());
+        }
+    }
+    serde_json::Value::Object(compacted)
+}
+
+fn compact_next_read_args(value: &serde_json::Value) -> serde_json::Value {
+    let Some(obj) = value.as_object() else {
+        return value.clone();
+    };
+    let Some(parsed) = ReadChunkContinuationArgs::from_value(value) else {
+        return value.clone();
+    };
+
+    let mut compacted = match parsed.to_compact_value() {
+        serde_json::Value::Object(map) => map,
+        _ => return value.clone(),
+    };
+    for (key, nested_value) in obj {
+        if !matches!(key.as_str(), "path" | "offset" | "limit" | "p" | "o" | "l") {
             compacted.insert(key.clone(), nested_value.clone());
         }
     }
@@ -1281,7 +1305,7 @@ mod tests {
         assert!(parsed.get("session_id").is_none());
         assert_eq!(
             parsed.get("next_continue_args"),
-            Some(&serde_json::json!({"session_id":"run-1"}))
+            Some(&serde_json::json!({"s":"run-1"}))
         );
     }
 
@@ -1319,9 +1343,9 @@ mod tests {
         assert_eq!(
             parsed.get("next_read_args"),
             Some(&serde_json::json!({
-                "path": ".vtcode/context/tool_outputs/unified_exec_1.txt",
-                "offset": 81,
-                "limit": 40
+                "p": ".vtcode/context/tool_outputs/unified_exec_1.txt",
+                "o": 81,
+                "l": 40
             }))
         );
     }
@@ -1344,7 +1368,7 @@ mod tests {
         assert_eq!(
             parsed.get("next_continue_args"),
             Some(&serde_json::json!({
-                "session_id": "run-1",
+                "s": "run-1",
                 "cursor": 42
             }))
         );
@@ -1383,9 +1407,9 @@ mod tests {
         assert_eq!(
             parsed.get("next_read_args"),
             Some(&serde_json::json!({
-                "path": ".vtcode/context/tool_outputs/unified_exec_loop.txt",
-                "offset": 81,
-                "limit": 40
+                "p": ".vtcode/context/tool_outputs/unified_exec_loop.txt",
+                "o": 81,
+                "l": 40
             }))
         );
         assert!(parsed.get("reused_spooled_output").is_none());

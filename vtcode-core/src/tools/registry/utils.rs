@@ -8,37 +8,68 @@ pub(super) fn normalize_tool_output(mut val: Value) -> Value {
         return json!({ "success": true, "result": val });
     };
     obj.entry("success").or_insert(json!(true));
-    let is_command_like_output = is_command_like_output(obj);
-    let is_git_diff_output = obj
-        .get("content_type")
-        .and_then(|value| value.as_str())
-        .map(|value| value == "git_diff")
-        .unwrap_or(false);
+    let should_remove_stdout = {
+        let is_command_like = is_command_like_output(obj);
+        let is_git_diff = obj
+            .get("content_type")
+            .and_then(|value| value.as_str())
+            .is_some_and(|value| value == "git_diff");
 
-    if let Some(stdout) = obj.get_mut("stdout")
+        let out_trim = obj
+            .get("output")
+            .and_then(|v| v.as_str())
+            .map(str::trim_end);
+        let std_trim = obj
+            .get("stdout")
+            .and_then(|v| v.as_str())
+            .map(str::trim_end);
+
+        out_trim.is_some() && (is_git_diff || is_command_like || out_trim == std_trim)
+    };
+
+    if should_remove_stdout {
+        obj.remove("stdout");
+    } else if let Some(stdout) = obj.get_mut("stdout")
         && let Some(s) = stdout.as_str()
     {
         *stdout = json!(s.trim_end());
-    }
-
-    if is_git_diff_output || is_command_like_output {
-        let output_trimmed = obj
-            .get("output")
-            .and_then(|value| value.as_str())
-            .map(str::trim_end);
-        let stdout_trimmed = obj
-            .get("stdout")
-            .and_then(|value| value.as_str())
-            .map(str::trim_end);
-        if output_trimmed.is_some() && output_trimmed == stdout_trimmed {
-            obj.remove("stdout");
-        }
     }
 
     if let Some(stderr) = obj.get_mut("stderr")
         && let Some(s) = stderr.as_str()
     {
         *stderr = json!(s.trim_end());
+    }
+
+    if obj.get("working_directory").is_some_and(Value::is_null) {
+        obj.remove("working_directory");
+    }
+
+    if obj
+        .get("id")
+        .zip(obj.get("session_id"))
+        .is_some_and(|(id, sid)| id == sid)
+    {
+        obj.remove("id");
+    }
+
+    if obj
+        .get("process_id")
+        .zip(obj.get("session_id"))
+        .is_some_and(|(process_id, sid)| process_id == sid)
+    {
+        obj.remove("process_id");
+    }
+
+    for deprecated_key in [
+        "follow_up_prompt",
+        "next_poll_args",
+        "preferred_next_action",
+        "spool_hint",
+        "spooled_bytes",
+        "spooled_to_file",
+    ] {
+        obj.remove(deprecated_key);
     }
     obj.remove("raw_output");
     val
@@ -146,5 +177,35 @@ mod tests {
 
         assert_eq!(normalized["output"], "preview");
         assert!(normalized.get("raw_output").is_none());
+    }
+
+    #[test]
+    fn drops_redundant_exec_metadata_fields() {
+        let normalized = normalize_tool_output(json!({
+            "output": "preview\n",
+            "stdout": "preview\n",
+            "session_id": "run-123",
+            "id": "run-123",
+            "process_id": "run-123",
+            "working_directory": null,
+            "spool_hint": "read the spool",
+            "spooled_bytes": 4096,
+            "spooled_to_file": true,
+            "follow_up_prompt": "continue",
+            "next_poll_args": {"session_id": "run-123"},
+            "preferred_next_action": "poll"
+        }));
+
+        assert_eq!(normalized["output"], "preview\n");
+        assert!(normalized.get("stdout").is_none());
+        assert!(normalized.get("id").is_none());
+        assert!(normalized.get("process_id").is_none());
+        assert!(normalized.get("working_directory").is_none());
+        assert!(normalized.get("spool_hint").is_none());
+        assert!(normalized.get("spooled_bytes").is_none());
+        assert!(normalized.get("spooled_to_file").is_none());
+        assert!(normalized.get("follow_up_prompt").is_none());
+        assert!(normalized.get("next_poll_args").is_none());
+        assert!(normalized.get("preferred_next_action").is_none());
     }
 }
