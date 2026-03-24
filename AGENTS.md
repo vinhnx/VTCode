@@ -230,6 +230,15 @@ cargo clippy --workspace --all-targets -- -D warnings && cargo fmt --check && ca
 
 ## Agent Execution Guidelines
 
+## Summary Instructions
+
+When VT Code compacts or summarizes a conversation, preserve:
+
+- The current task objective and acceptance criteria
+- File paths that were read or modified
+- Test results and error messages
+- Decisions made and the reasoning behind them
+
 ### Task Execution
 
 - **Complete autonomously**: Resolve fully before yielding; no intermediate confirmations

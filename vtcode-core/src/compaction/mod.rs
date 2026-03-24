@@ -35,7 +35,7 @@ impl Default for CompactionConfig {
         Self {
             trigger_threshold: TOKEN_BUDGET_HIGH_THRESHOLD,
             target_threshold: DEFAULT_COMPACTION_TARGET_THRESHOLD,
-            summary_prompt: "Summarize the conversation so far using this exact structure:\n\n## Goal\n[What the user is trying to accomplish]\n\n## Constraints & Preferences\n- [Requirements, preferences, or constraints from the user]\n\n## Progress\n### Done\n- [Completed work]\n\n### In Progress\n- [Current work]\n\n### Blocked\n- [Blocking issues, if any]\n\n## Key Decisions\n- **[Decision]**: [Reason]\n\n## Next Steps\n1. [Most important next step]\n\n## Critical Context\n- [Facts needed to continue]\n\nKeep it concise and actionable. Preserve important file paths, commands, decisions, and open questions."
+            summary_prompt: "Summarize the conversation so far using this exact structure:\n\n## Goal\n[What the user is trying to accomplish]\n\n## Constraints & Preferences\n- [Requirements, preferences, or constraints from the user]\n\n## Progress\n### Done\n- [Completed work]\n\n### In Progress\n- [Current work]\n\n### Blocked\n- [Blocking issues, if any]\n\n## Key Decisions\n- **[Decision]**: [Reason]\n\n## Next Steps\n1. [Most important next step]\n\n## Critical Context\n- [Facts needed to continue]\n\nKeep it concise and actionable. Always preserve the current task objective and acceptance criteria, file paths that were read or modified, test results and error messages, and decisions with their reasoning."
                 .to_string(),
             keep_last_messages: DEFAULT_COMPACTION_KEEP_LAST_MESSAGES,
             retained_user_message_tokens: DEFAULT_RETAINED_USER_MESSAGE_TOKENS,
@@ -315,5 +315,15 @@ mod tests {
         );
         assert_eq!(compacted[1].content.as_text(), "first request");
         assert_eq!(compacted[2].content.as_text(), "second request");
+    }
+
+    #[test]
+    fn default_summary_prompt_preserves_required_compaction_context() {
+        let prompt = CompactionConfig::default().summary_prompt;
+
+        assert!(prompt.contains("acceptance criteria"));
+        assert!(prompt.contains("file paths that were read or modified"));
+        assert!(prompt.contains("test results and error messages"));
+        assert!(prompt.contains("decisions with their reasoning"));
     }
 }
