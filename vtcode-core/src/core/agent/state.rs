@@ -341,6 +341,8 @@ impl TaskRunState {
             modified_files: self.modified_files,
             executed_commands: self.executed_commands,
             summary,
+            stop_reason: None,
+            total_cost_usd: None,
             warnings: self.warnings,
             thread_events,
             outcome: completion_outcome,

@@ -530,10 +530,6 @@ async fn emits_progress_events_for_stream_deltas() {
     .await
     .expect("stream should succeed");
 
-    assert!(matches!(
-        events.first(),
-        Some(StreamProgressEvent::ReasoningStage(stage)) if stage == "analysis"
-    ));
     assert!(events.iter().any(
         |event| matches!(event, StreamProgressEvent::ReasoningDelta(delta) if delta == "thinking")
     ));

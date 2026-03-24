@@ -9,6 +9,6 @@ mod tests;
 
 pub use engine::LifecycleHookEngine;
 pub use types::{
-    HookMessage, HookMessageLevel, NotificationHookType, PreToolHookDecision, SessionEndReason,
-    SessionStartTrigger,
+    HookMessage, HookMessageLevel, NotificationHookType, PreCompactHookOutcome,
+    PreToolHookDecision, SessionEndReason, SessionStartTrigger,
 };

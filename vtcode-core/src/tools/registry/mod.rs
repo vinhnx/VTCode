@@ -201,6 +201,7 @@ mod tests {
     use futures::future::BoxFuture;
     use serde_json::Value;
     use serde_json::json;
+    use std::fs;
     use std::time::Duration;
     use tempfile::TempDir;
 
@@ -333,7 +334,7 @@ mod tests {
         registry.allow_all_tools().await?;
 
         let test_file = temp_dir.path().join("alias-read.txt");
-        std::fs::write(&test_file, "via alias\n")?;
+        fs::write(&test_file, "via alias\n")?;
 
         let public_names = registry
             .public_tool_names(SessionSurface::Interactive, CapabilityLevel::CodeSearch)
@@ -459,8 +460,7 @@ mod tests {
             ))
             .await?;
 
-        let config: ToolPolicyConfig =
-            serde_json::from_str(&std::fs::read_to_string(&policy_path)?)?;
+        let config: ToolPolicyConfig = serde_json::from_str(&fs::read_to_string(&policy_path)?)?;
         assert!(
             config
                 .available_tools
@@ -469,8 +469,7 @@ mod tests {
 
         registry.unregister_tool(CUSTOM_TOOL_NAME).await?;
 
-        let config: ToolPolicyConfig =
-            serde_json::from_str(&std::fs::read_to_string(&policy_path)?)?;
+        let config: ToolPolicyConfig = serde_json::from_str(&fs::read_to_string(&policy_path)?)?;
         assert!(
             !config
                 .available_tools
@@ -730,6 +729,47 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn mutating_tools_clear_recent_read_reuse_history() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        registry.allow_all_tools().await?;
+        registry.execution_history.set_loop_detection_limits(5, 2);
+
+        let test_file = temp_dir.path().join("test.txt");
+        fs::write(&test_file, "original")?;
+
+        let read_args = json!({
+            "path": test_file.to_string_lossy(),
+            "max_bytes": 1000,
+        });
+        let write_args = json!({
+            "path": test_file.to_string_lossy(),
+            "content": "modified",
+            "mode": "overwrite",
+        });
+
+        let first = registry
+            .execute_tool_ref(tools::READ_FILE, &read_args)
+            .await?;
+        assert_eq!(first["content"], "original");
+
+        let second = registry
+            .execute_tool(tools::READ_FILE, read_args.clone())
+            .await?;
+        assert_eq!(second["content"], "original");
+
+        let write_result = registry.execute_tool(tools::WRITE_FILE, write_args).await?;
+        assert_eq!(write_result["success"], json!(true));
+
+        let after_write = registry.execute_tool(tools::READ_FILE, read_args).await?;
+        assert_eq!(after_write["content"], "modified");
+        assert_ne!(after_write.get("reused_recent_result"), Some(&json!(true)));
+        assert_ne!(after_write.get("loop_detected"), Some(&json!(true)));
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn prevalidated_execution_enforces_plan_mode_guards() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
@@ -762,9 +802,9 @@ mod tests {
         registry.plan_mode_state().enable();
 
         let plans_dir = temp_dir.path().join(".vtcode").join("plans");
-        std::fs::create_dir_all(&plans_dir)?;
+        fs::create_dir_all(&plans_dir)?;
         let plan_file = plans_dir.join("adaptive-test.md");
-        std::fs::write(&plan_file, "# Adaptive test\n")?;
+        fs::write(&plan_file, "# Adaptive test\n")?;
         registry
             .plan_mode_state()
             .set_plan_file(Some(plan_file))
@@ -948,7 +988,7 @@ mod tests {
     #[tokio::test]
     async fn execute_public_repo_browser_alias_routes_through_public_assembly() -> Result<()> {
         let temp_dir = TempDir::new()?;
-        std::fs::write(temp_dir.path().join("public-route.txt"), "public route\n")?;
+        fs::write(temp_dir.path().join("public-route.txt"), "public route\n")?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
         registry.allow_all_tools().await?;
 
@@ -1198,7 +1238,7 @@ mod tests {
 
         assert_eq!(response.get("success").and_then(Value::as_bool), Some(true));
 
-        let file_contents = std::fs::read_to_string(temp_dir.path().join("patched_via_alias.txt"))?;
+        let file_contents = fs::read_to_string(temp_dir.path().join("patched_via_alias.txt"))?;
         assert_eq!(file_contents, "patched\n");
 
         Ok(())
@@ -1218,7 +1258,7 @@ mod tests {
 
         assert_eq!(response.get("success").and_then(Value::as_bool), Some(true));
 
-        let file_contents = std::fs::read_to_string(temp_dir.path().join("patched_via_input.txt"))?;
+        let file_contents = fs::read_to_string(temp_dir.path().join("patched_via_input.txt"))?;
         assert_eq!(file_contents, "patched\n");
 
         Ok(())

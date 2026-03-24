@@ -6,7 +6,7 @@ use tokio::sync::{Notify, RwLock};
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::decision_tracker::DecisionTracker;
-use vtcode_core::hooks::SessionEndReason;
+use vtcode_core::hooks::{LifecycleHookEngine, SessionEndReason};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::ToolRegistry;
 use vtcode_tui::app::{InlineHandle, InlineHeaderContext, InlineSession};
@@ -16,6 +16,7 @@ use crate::agent::runloop::model_picker::ModelPickerState;
 pub(crate) use crate::agent::runloop::slash_commands::SlashCommandOutcome;
 use crate::agent::runloop::unified::async_mcp_manager::AsyncMcpManager;
 use crate::agent::runloop::unified::context_manager::ContextManager;
+use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
 use crate::agent::runloop::unified::palettes::ActivePalette;
 use crate::agent::runloop::unified::session_setup::IdeContextBridge;
 use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
@@ -35,6 +36,7 @@ pub(crate) enum SlashCommandControl {
 }
 
 pub(crate) struct SlashCommandContext<'a> {
+    pub(crate) thread_id: &'a str,
     pub(crate) renderer: &'a mut AnsiRenderer,
     pub(crate) handle: &'a InlineHandle,
     pub(crate) session: &'a mut InlineSession,
@@ -63,6 +65,8 @@ pub(crate) struct SlashCommandContext<'a> {
     pub(crate) loaded_skills:
         &'a Arc<RwLock<hashbrown::HashMap<String, vtcode_core::skills::types::Skill>>>,
     pub(crate) checkpoint_manager: Option<&'a vtcode_core::core::agent::snapshots::SnapshotManager>,
+    pub(crate) lifecycle_hooks: Option<&'a LifecycleHookEngine>,
+    pub(crate) harness_emitter: Option<&'a HarnessEventEmitter>,
 }
 
 pub(crate) async fn handle_outcome(

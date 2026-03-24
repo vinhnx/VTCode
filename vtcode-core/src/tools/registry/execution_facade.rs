@@ -1265,6 +1265,10 @@ impl ToolRegistry {
                     .await;
                 let normalized_value = normalize_tool_output(processed_value);
 
+                if !readonly_classification {
+                    self.execution_history.clear();
+                }
+
                 self.execution_history
                     .add_record(ToolExecutionRecord::success(
                         tool_name_owned,

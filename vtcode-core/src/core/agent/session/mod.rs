@@ -28,6 +28,10 @@ pub struct AgentSessionState {
 
     /// Outcome of the session if completed.
     pub outcome: TaskOutcome,
+    /// Provider stop reason associated with the last model turn, when available.
+    pub stop_reason: Option<String>,
+    /// Estimated total API cost in USD for the session, when available.
+    pub total_cost_usd: Option<f64>,
 
     /// Whether the session has completed.
     pub is_completed: bool,
@@ -85,6 +89,13 @@ impl SessionStats {
                 .cached_input_tokens
                 .saturating_add(cached as u64);
         }
+        let cache_creation = usage.cache_creation_tokens_or_zero();
+        if cache_creation > 0 {
+            self.total_usage.cache_creation_tokens = self
+                .total_usage
+                .cache_creation_tokens
+                .saturating_add(cache_creation as u64);
+        }
     }
 }
 
@@ -114,6 +125,8 @@ impl AgentSessionState {
                 max_context_tokens,
             },
             outcome: TaskOutcome::Unknown,
+            stop_reason: None,
+            total_cost_usd: None,
             is_completed: false,
             current_stage: None,
             created_contexts: Vec::with_capacity(16),
@@ -308,6 +321,8 @@ impl AgentSessionState {
             modified_files: self.modified_files,
             executed_commands: self.executed_commands,
             summary,
+            stop_reason: self.stop_reason,
+            total_cost_usd: self.total_cost_usd,
             warnings: self.warnings,
             thread_events,
             outcome: self.outcome,

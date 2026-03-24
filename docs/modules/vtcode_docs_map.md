@@ -223,6 +223,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Overview, Key Features, Usage, Generated Content Structure, Example Output
   - **User Questions**: "What can you tell me about Agent Initialization Guide?", "How does Overview work?", "How does Key Features work?"
 
+- **File**: `docs/guides/agent-loop-contract.md`
+  - **Content**: Agent Loop Contract
+  - **Topics**: Message and Event Mapping, Terminal Thread Result, Compaction Boundary, Budget and Limits, Hooks
+  - **User Questions**: "What can you tell me about Agent Loop Contract?", "How does Message and Event Mapping work?", "How does Terminal Thread Result work?"
+
 - **File**: `docs/guides/cargo-unmaintained.md`
   - **Content**: Cargo-Unmaintained
   - **Topics**: Overview, Usage, Configuration, Exit Codes, Common Options

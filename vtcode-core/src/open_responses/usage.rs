@@ -133,6 +133,7 @@ mod tests {
         let exec_usage = vtcode_exec_events::Usage {
             input_tokens: 1000,
             cached_input_tokens: 500,
+            cache_creation_tokens: 0,
             output_tokens: 200,
         };
         let usage = OpenUsage::from_exec_usage(&exec_usage);

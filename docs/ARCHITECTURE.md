@@ -27,6 +27,8 @@ Harness primitives in VT Code map to the runtime like this:
 
 `vtcode-exec-events::ThreadEvent` is the authoritative runtime event contract across exec mode, harness logs, and interactive lifecycle emission. Item lifecycle events come from the shared runtime/event builders, while outer `TurnStarted` / `TurnCompleted` / `TurnFailed` events remain wrapper-owned submission boundaries. Follow-up inputs are queued in the runtime and injected one-at-a-time only after a turn reaches an idle boundary.
 
+For the public loop semantics and the Agent SDK concept mapping, see [Agent Loop Contract](./guides/agent-loop-contract.md).
+
 The harness configuration is intentionally split across three existing surfaces instead of a new top-level subsystem:
 
 - `agent.harness` controls continuation, event logging, and per-turn safety limits.

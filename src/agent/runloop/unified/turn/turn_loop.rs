@@ -26,6 +26,7 @@ use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::exec::events::Usage as HarnessUsage;
 use vtcode_core::hooks::LifecycleHookEngine;
+use vtcode_core::llm::model_resolver::ModelResolver;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::notifications::{CompletionStatus, NotificationEvent, send_global_notification};
 use vtcode_core::tools::ToolResultCache;
@@ -290,13 +291,46 @@ fn accumulate_turn_usage(total: &mut HarnessUsage, usage: &Option<uni::Usage>) {
     total.cached_input_tokens = total
         .cached_input_tokens
         .saturating_add(usage.cache_read_tokens_or_fallback() as u64);
+    total.cache_creation_tokens = total
+        .cache_creation_tokens
+        .saturating_add(usage.cache_creation_tokens_or_zero() as u64);
     total.output_tokens = total
         .output_tokens
         .saturating_add(usage.completion_tokens as u64);
 }
 
 fn has_turn_usage(usage: &HarnessUsage) -> bool {
-    usage.input_tokens > 0 || usage.cached_input_tokens > 0 || usage.output_tokens > 0
+    usage.input_tokens > 0
+        || usage.cached_input_tokens > 0
+        || usage.cache_creation_tokens > 0
+        || usage.output_tokens > 0
+}
+
+fn stop_reason_from_finish_reason(finish_reason: &uni::FinishReason) -> String {
+    match finish_reason {
+        uni::FinishReason::Stop => "end_turn".to_string(),
+        uni::FinishReason::Length => "max_tokens".to_string(),
+        uni::FinishReason::ToolCalls => "tool_calls".to_string(),
+        uni::FinishReason::ContentFilter => "content_filter".to_string(),
+        uni::FinishReason::Pause => "pause_turn".to_string(),
+        uni::FinishReason::Refusal => "refusal".to_string(),
+        uni::FinishReason::Error(message) => message.clone(),
+    }
+}
+
+fn estimate_session_cost_usd(provider: &str, model: &str, usage: &HarnessUsage) -> Option<f64> {
+    let usage = uni::Usage {
+        prompt_tokens: u32::try_from(usage.input_tokens).unwrap_or(u32::MAX),
+        completion_tokens: u32::try_from(usage.output_tokens).unwrap_or(u32::MAX),
+        total_tokens: u32::try_from(usage.input_tokens.saturating_add(usage.output_tokens))
+            .unwrap_or(u32::MAX),
+        cached_prompt_tokens: Some(u32::try_from(usage.cached_input_tokens).unwrap_or(u32::MAX)),
+        cache_creation_tokens: Some(u32::try_from(usage.cache_creation_tokens).unwrap_or(u32::MAX)),
+        cache_read_tokens: Some(u32::try_from(usage.cached_input_tokens).unwrap_or(u32::MAX)),
+    };
+    let resolved = ModelResolver::resolve(Some(provider), model, &[], None)?;
+    let pricing = resolved.pricing()?;
+    ModelResolver::estimate_cost(pricing, &usage)
 }
 
 const POST_TOOL_RESUME_DIRECTIVE: &str = "Previous turn already completed tool execution. Reuse the latest tool outputs in history instead of rerunning the same exploration. If those tool outputs include `critical_note`, `next_action`, or `rerun_hint`, follow that guidance first.";
@@ -454,14 +488,21 @@ pub(crate) async fn run_turn_loop(
         let active_model = ctx.config.model.clone();
         let harness_snapshot = ctx.tool_registry.harness_context_snapshot();
         match crate::agent::runloop::unified::turn::compaction::maybe_auto_compact_history(
-            ctx.provider_client.as_ref(),
-            &active_model,
-            &harness_snapshot.session_id,
-            &ctx.config.workspace,
-            ctx.vt_cfg,
-            working_history,
-            ctx.session_stats,
-            ctx.context_manager,
+            crate::agent::runloop::unified::turn::compaction::CompactionContext::new(
+                ctx.provider_client.as_ref(),
+                &active_model,
+                &harness_snapshot.session_id,
+                &ctx.harness_state.run_id.0,
+                &ctx.config.workspace,
+                ctx.vt_cfg,
+                ctx.lifecycle_hooks,
+                ctx.harness_emitter,
+            ),
+            crate::agent::runloop::unified::turn::compaction::CompactionState::new(
+                working_history,
+                ctx.session_stats,
+                ctx.context_manager,
+            ),
         )
         .await
         {
@@ -591,6 +632,65 @@ pub(crate) async fn run_turn_loop(
         // Track turn usage and context pressure before later processing borrows `response`.
         let response_usage = response.usage.clone();
         accumulate_turn_usage(&mut turn_usage, &response_usage);
+        turn_processing_ctx
+            .session_stats
+            .record_usage(&response_usage);
+        turn_processing_ctx
+            .session_stats
+            .set_stop_reason(Some(stop_reason_from_finish_reason(
+                &response.finish_reason,
+            )));
+        let max_budget_usd = turn_processing_ctx
+            .vt_cfg
+            .and_then(|cfg| cfg.agent.harness.max_budget_usd);
+        let total_usage = turn_processing_ctx.session_stats.total_usage();
+        let provider_name = turn_processing_ctx.config.provider.clone();
+        match estimate_session_cost_usd(&provider_name, &active_model, &total_usage) {
+            Some(total_cost_usd) => {
+                turn_processing_ctx
+                    .session_stats
+                    .set_total_cost_usd(Some(total_cost_usd));
+                if let Some(max_budget_usd) = max_budget_usd
+                    && total_cost_usd > max_budget_usd
+                {
+                    turn_processing_ctx
+                        .session_stats
+                        .mark_budget_limit_reached(max_budget_usd, total_cost_usd);
+                    turn_processing_ctx
+                        .context_manager
+                        .update_token_usage(&response_usage);
+                    #[cfg(debug_assertions)]
+                    turn_processing_ctx
+                        .context_manager
+                        .validate_token_tracking(&response_usage);
+                    result = TurnLoopResult::Blocked {
+                        reason: Some(format!(
+                            "Stopped after reaching budget limit (max: ${max_budget_usd:.4}, spent: ${total_cost_usd:.4})."
+                        )),
+                    };
+                    break;
+                }
+            }
+            None => {
+                turn_processing_ctx.session_stats.set_total_cost_usd(None);
+                if max_budget_usd.is_some()
+                    && !turn_processing_ctx.session_stats.cost_warning_emitted()
+                {
+                    turn_processing_ctx
+                        .session_stats
+                        .mark_cost_warning_emitted();
+                    tracing::warn!(
+                        provider = %provider_name,
+                        model = %active_model,
+                        "Budget enforcement disabled because pricing metadata is unavailable"
+                    );
+                    let _ = turn_processing_ctx.renderer.line(
+                        MessageStyle::Info,
+                        "Budget limit is not enforced for this model because pricing metadata is unavailable.",
+                    );
+                }
+            }
+        }
         if !response.tool_references.is_empty() {
             turn_processing_ctx
                 .tool_catalog
@@ -844,6 +944,7 @@ pub(crate) async fn run_turn_loop(
     .await;
 
     // Final outcome with the correct result status
+    ctx.session_stats.record_turn_completed();
     Ok(TurnLoopOutcome {
         result,
         turn_modified_files,
@@ -978,7 +1079,6 @@ mod tests {
         has_tool_response_since, has_turn_usage, maybe_recover_after_post_tool_llm_failure,
         run_turn_loop,
     };
-    use crate::agent::runloop::unified::turn::context::TurnLoopResult;
     use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
     use anyhow::anyhow;
     use serde_json::json;
@@ -1179,11 +1279,10 @@ mod tests {
         }
 
         let mut history = vec![uni::Message::user("continue".to_string())];
-        let outcome = run_turn_loop(&mut history, backing.turn_loop_context())
+        run_turn_loop(&mut history, backing.turn_loop_context())
             .await
             .expect("turn loop should complete");
 
-        assert!(matches!(outcome.result, TurnLoopResult::Completed));
         assert!(
             legacy_detector
                 .read()

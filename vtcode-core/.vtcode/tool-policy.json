@@ -20,7 +20,9 @@
     "task_tracker": "allow",
     "unified_exec": "allow",
     "unified_file": "allow",
-    "unified_search": "allow"
+    "unified_search": "allow",
+    "list_files": "allow",
+    "read_file": "allow"
   },
   "constraints": {},
   "mcp": {
@@ -166,6 +168,8 @@
     "providers": {}
   },
   "approval_cache": {
-    "allowed": []
+    "allowed": [],
+    "prefixes": [],
+    "regexes": []
   }
 }

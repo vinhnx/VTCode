@@ -40,6 +40,10 @@ pub struct LifecycleHooksConfig {
     #[serde(default)]
     pub post_tool_use: Vec<HookGroupConfig>,
 
+    /// Commands to run immediately before VT Code compacts conversation history
+    #[serde(default)]
+    pub pre_compact: Vec<HookGroupConfig>,
+
     /// Commands to run when the agent indicates task completion (pre-exit)
     #[serde(default)]
     pub task_completion: Vec<HookGroupConfig>,
@@ -60,6 +64,7 @@ impl LifecycleHooksConfig {
             && self.user_prompt_submit.is_empty()
             && self.pre_tool_use.is_empty()
             && self.post_tool_use.is_empty()
+            && self.pre_compact.is_empty()
             && self.task_completion.is_empty()
             && self.task_completed.is_empty()
             && self.notification.is_empty()
@@ -122,6 +127,7 @@ impl LifecycleHooksConfig {
         validate_groups(&self.user_prompt_submit, "user_prompt_submit")?;
         validate_groups(&self.pre_tool_use, "pre_tool_use")?;
         validate_groups(&self.post_tool_use, "post_tool_use")?;
+        validate_groups(&self.pre_compact, "pre_compact")?;
         validate_groups(&self.task_completion, "task_completion")?;
         validate_groups(&self.task_completed, "task_completed")?;
         validate_groups(&self.notification, "notification")?;

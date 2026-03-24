@@ -113,10 +113,9 @@ pub(crate) async fn generate_inline_prompt_suggestion(
     tool_registry: &ToolRegistry,
     draft: &str,
 ) -> Option<InlinePromptSuggestion> {
-    if vt_cfg
+    if !vt_cfg
         .map(|cfg| cfg.agent.prompt_suggestions.enabled)
         .unwrap_or(true)
-        == false
     {
         return None;
     }
@@ -309,9 +308,7 @@ async fn llm_inline_prompt_suggestion(
         .await;
     }
 
-    let Some(provider) = create_prompt_suggestion_provider(route, config, vt_cfg) else {
-        return None;
-    };
+    let provider = create_prompt_suggestion_provider(route, config, vt_cfg)?;
 
     llm_inline_prompt_suggestion_from_provider(
         &*provider,

@@ -1,6 +1,7 @@
 use anyhow::Result;
 use serde_json::{Value, json};
 
+use crate::exec::events::{CompactionMode, CompactionTrigger};
 use crate::hooks::lifecycle::types::{NotificationHookType, SessionEndReason};
 
 use super::LifecycleHookEngine;
@@ -96,6 +97,29 @@ impl LifecycleHookEngine {
             "notification_type": notification_type.as_str(),
             "title": title,
             "message": message,
+            "transcript_path": transcript_path,
+        }))
+    }
+
+    pub(super) async fn build_pre_compact_payload(
+        &self,
+        trigger: CompactionTrigger,
+        mode: CompactionMode,
+        original_message_count: usize,
+        compacted_message_count: usize,
+        history_artifact_path: Option<&str>,
+    ) -> Result<Value> {
+        let cwd = self.inner.workspace.to_string_lossy().into_owned();
+        let transcript_path = self.current_transcript_path().await;
+        Ok(json!({
+            "session_id": self.inner.session_id,
+            "cwd": cwd,
+            "hook_event_name": "PreCompact",
+            "trigger": trigger,
+            "mode": mode,
+            "original_message_count": original_message_count,
+            "compacted_message_count": compacted_message_count,
+            "history_artifact_path": history_artifact_path,
             "transcript_path": transcript_path,
         }))
     }

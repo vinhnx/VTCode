@@ -71,6 +71,11 @@ pub struct PostToolHookOutcome {
     pub block_reason: Option<String>,
 }
 
+#[derive(Default)]
+pub struct PreCompactHookOutcome {
+    pub messages: Vec<HookMessage>,
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub enum PreToolHookDecision {
     #[default]
@@ -80,10 +85,13 @@ pub enum PreToolHookDecision {
     Ask,
 }
 
+use crate::exec::events::ThreadCompletionSubtype;
+
 #[derive(Debug, Clone, Copy)]
 pub enum SessionStartTrigger {
     Startup,
     Resume,
+    Compact,
 }
 
 impl SessionStartTrigger {
@@ -91,6 +99,7 @@ impl SessionStartTrigger {
         match self {
             Self::Startup => "startup",
             Self::Resume => "resume",
+            Self::Compact => "compact",
         }
     }
 }
@@ -112,6 +121,26 @@ impl SessionEndReason {
             Self::Cancelled => "cancelled",
             Self::Error => "error",
             Self::NewSession => "new_session",
+        }
+    }
+
+    pub fn thread_completion_status(
+        self,
+        budget_limit_reached: bool,
+    ) -> (&'static str, ThreadCompletionSubtype) {
+        if budget_limit_reached {
+            return (
+                "budget_limit_reached",
+                ThreadCompletionSubtype::ErrorMaxBudgetUsd,
+            );
+        }
+
+        match self {
+            Self::Completed => ("completed", ThreadCompletionSubtype::Success),
+            Self::Exit => ("exit", ThreadCompletionSubtype::Cancelled),
+            Self::Cancelled => ("cancelled", ThreadCompletionSubtype::Cancelled),
+            Self::Error => ("error", ThreadCompletionSubtype::ErrorDuringExecution),
+            Self::NewSession => ("new_session", ThreadCompletionSubtype::Success),
         }
     }
 }

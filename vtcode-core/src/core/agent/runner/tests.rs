@@ -950,7 +950,10 @@ async fn plan_mode_runs_skip_continuation_and_finish_single_pass() {
 #[tokio::test]
 async fn exec_only_policy_skips_when_full_auto_is_disabled() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner = make_runner(&temp, VTCodeConfig::default(), "thread-exec-only-skip").await;
+    let mut vt_cfg = VTCodeConfig::default();
+    vt_cfg.agent.harness.continuation_policy =
+        vtcode_config::core::agent::ContinuationPolicy::ExecOnly;
+    let mut runner = make_runner(&temp, vt_cfg, "thread-exec-only-skip").await;
     runner.provider_client = Box::new(QueuedProvider::new(vec![text_response(
         "The task is complete.",
     )]));
