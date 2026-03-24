@@ -68,6 +68,51 @@ user_chat_input_prompt_suggestion_prompt
 
 /Users/vinhnguyenxuan/Documents/vtcode-resources/idea/user_chat_input_prompt_suggestion_prompt.jpg
 
+```
+Here's the extracted text:
+
+---
+
+**Here's what I found:**
+
+**The prompt suggestion (tab completion) is NOT a base model endpoint.** It uses the Messages API (`/v1/messages`).
+
+Here's the evidence:
+
+1. **The feature is called "Speculation" internally.** It predicts what you'll type next and speculatively pre-runs it. The setting is `promptSuggestionEnabled` / "Prompt suggestions" in settings.
+2. **The prompt is instruct-style** (lines 125136–125175 in the strings):
+*"FIRST: Look at the user's recent messages and original request. Your job is to predict what THEY would type - not what you think they should do."*
+*"2–12 words. User's phrasing. Never evaluate, never Claude-voice."*
+3. **It calls `PU()` → `ML()`, the same Messages API pipeline used for the main conversation.** The function signature takes `promptMessages`, `systemPrompt`, `canUseTool`, etc. — all Messages API constructs. It goes through `/v1/messages`, not `/v1/complete`.
+4. **The `/v1/complete` in the binary** is just the Anthropic SDK bundled with support for the legacy completions API (for claude-1.x/2.x models). It's not used by this feature.
+5. **No separate model override** — `Ht(T)` passes through the same context (`systemPrompt`, `userContext`, `toolUseContext`) without specifying a different model, so it appears to use whatever model the session is configured with.
+```
+
 --
 
 https://epage.github.io/dev/rust-style/
+
+--
+
+check vtcode as custom agent server ACP in zed doesn't work
+
+config in ~/.config/zed/settings.json
+
+```
+"agent_servers": {
+    "vtcode": {
+      "type": "custom",
+      "command": "/Users/vinhnguyenxuan/.local/bin/vtcode",
+      "args": ["acp"],
+      "env": {
+        "VT_ACP_ENABLED": "1",
+        "VT_ACP_ZED_ENABLED": "1",
+        "RUST_LOG": "info",
+      },
+    },
+  },
+```
+
+error:
+failed to launch:
+interal error: "server shut down unexpectedly"
