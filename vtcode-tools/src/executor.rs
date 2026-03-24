@@ -102,7 +102,7 @@ pub struct CachedToolExecutor {
     /// Composable middleware chain
     middleware: MiddlewareChain,
     /// Pattern detector for workflow analysis
-    patterns: Arc<RwLock<PatternDetector>>,
+    patterns: Arc<parking_lot::RwLock<PatternDetector>>,
     /// Lock-free stats tracking
     stats: Arc<AtomicStats>,
 }
