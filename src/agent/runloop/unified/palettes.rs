@@ -26,6 +26,7 @@ const THEME_SELECT_HINT: &str = "↑/↓ choose • Enter apply • Esc cancel";
 const THEME_SEARCH_LABEL: &str = "Search themes";
 const THEME_SEARCH_PLACEHOLDER: &str = "name, id, or appearance";
 const SESSION_FORK_PALETTE_TITLE: &str = "Fork session";
+const SESSION_FORK_MODE_PALETTE_TITLE: &str = "Fork mode";
 const SESSION_RESUME_PALETTE_TITLE: &str = "Resume session";
 const SESSIONS_HINT_PRIMARY: &str = "Use ↑/↓ to browse sessions.";
 const SESSIONS_FORK_HINT_SECONDARY: &str = "Enter to fork session • Esc to close.";
@@ -33,6 +34,7 @@ const SESSIONS_RESUME_HINT_SECONDARY: &str = "Enter to resume session • Esc to
 const SESSIONS_LATEST_BADGE: &str = "Latest";
 const SESSIONS_SEARCH_LABEL: &str = "Search sessions";
 const SESSIONS_SEARCH_PLACEHOLDER: &str = "workspace, provider, model, date";
+const FORK_MODE_HINT_SECONDARY: &str = "Enter to confirm • Esc to go back.";
 
 #[derive(Clone)]
 pub(crate) enum ActivePalette {
@@ -42,6 +44,12 @@ pub(crate) enum ActivePalette {
     },
     Sessions {
         mode: SessionPaletteMode,
+        listings: Vec<SessionListing>,
+        limit: usize,
+        show_all: bool,
+    },
+    ForkMode {
+        session_id: String,
         listings: Vec<SessionListing>,
         limit: usize,
         show_all: bool,
@@ -233,6 +241,57 @@ pub(crate) fn show_sessions_palette(
     Ok(true)
 }
 
+pub(crate) fn show_fork_mode_palette(
+    renderer: &mut AnsiRenderer,
+    session_id: &str,
+) -> Result<bool> {
+    let items = vec![
+        InlineListItem {
+            title: "Copy full history".to_string(),
+            subtitle: Some("Start the fork with the full archived transcript.".to_string()),
+            badge: Some("Default".to_string()),
+            indent: 0,
+            selection: Some(InlineListSelection::SessionForkMode {
+                session_id: session_id.to_string(),
+                summarize: false,
+            }),
+            search_value: Some("copy full history fork transcript".to_string()),
+        },
+        InlineListItem {
+            title: "Start summarized fork".to_string(),
+            subtitle: Some(
+                "Compact the source session into summary plus retained user prompts.".to_string(),
+            ),
+            badge: Some("Summary".to_string()),
+            indent: 0,
+            selection: Some(InlineListSelection::SessionForkMode {
+                session_id: session_id.to_string(),
+                summarize: true,
+            }),
+            search_value: Some("summary summarized compact fork handoff".to_string()),
+        },
+    ];
+
+    let lines = vec![
+        format!("Selected session: {session_id}"),
+        "Choose how the forked session should start.".to_string(),
+        FORK_MODE_HINT_SECONDARY.to_string(),
+    ];
+
+    renderer.show_list_modal(
+        SESSION_FORK_MODE_PALETTE_TITLE,
+        lines,
+        items,
+        Some(InlineListSelection::SessionForkMode {
+            session_id: session_id.to_string(),
+            summarize: false,
+        }),
+        None,
+    );
+
+    Ok(true)
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn refresh_runtime_config_from_manager(
     renderer: &mut AnsiRenderer,
@@ -365,6 +424,23 @@ pub(crate) async fn handle_palette_selection(
                 Ok(None)
             }
         }
+        ActivePalette::ForkMode {
+            session_id,
+            listings,
+            limit,
+            show_all,
+        } => {
+            if show_fork_mode_palette(renderer, &session_id)? {
+                Ok(Some(ActivePalette::ForkMode {
+                    session_id,
+                    listings,
+                    limit,
+                    show_all,
+                }))
+            } else {
+                Ok(None)
+            }
+        }
         ActivePalette::Settings {
             mut state,
             esc_armed: _,
@@ -488,6 +564,29 @@ pub(crate) fn handle_palette_cancel(
                 renderer.line(MessageStyle::Info, "Closed session browser.")?;
             }
             Ok(None)
+        }
+        ActivePalette::ForkMode {
+            listings,
+            limit,
+            show_all,
+            ..
+        } => {
+            if show_sessions_palette(
+                renderer,
+                SessionPaletteMode::Fork,
+                &listings,
+                limit,
+                show_all,
+            )? {
+                Ok(Some(ActivePalette::Sessions {
+                    mode: SessionPaletteMode::Fork,
+                    listings,
+                    limit,
+                    show_all,
+                }))
+            } else {
+                Ok(None)
+            }
         }
         ActivePalette::Settings {
             mut state,

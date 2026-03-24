@@ -215,6 +215,40 @@ api_timeout = 120   # 2 minutes
 participant_timeout = 30  # 30 seconds
 ```
 
+## Context compaction and session history
+
+VT Code has two compaction paths:
+
+- provider-native compaction for providers that support Responses/API-managed compaction
+- local fallback compaction for other providers
+
+Local fallback compaction no longer keeps a mixed recent tail. VT Code rebuilds the preserved history as:
+
+1. one structured summary message
+2. retained recent real user messages
+3. the session memory envelope
+
+Summarized session forks reuse that same handoff shape when you choose a summarized fork from `/fork` or pass `--summarize` on a forked CLI flow.
+
+### Relevant settings
+
+```toml
+[agent.harness]
+auto_compaction_enabled = true
+auto_compaction_threshold_tokens = 120000
+
+[context.dynamic]
+enabled = true
+persist_history = true
+```
+
+Notes:
+
+- `agent.harness.auto_compaction_enabled` enables automatic compaction when prompt-side token pressure crosses the configured threshold.
+- `agent.harness.auto_compaction_threshold_tokens` applies to both provider-native compaction and VT Code's local fallback compaction.
+- `context.dynamic.persist_history = true` lets VT Code persist compaction artifacts and the session memory envelope so later resumes and summarized forks can reuse that context.
+- There is currently no config knob for the retained-user-message budget used by local fallback compaction or summarized forks.
+
 ## MCP integration
 
 ### mcp

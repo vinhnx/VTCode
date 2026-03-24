@@ -45,8 +45,15 @@ impl SessionContinuation {
 
     pub(crate) fn custom_suffix(&self) -> Option<&str> {
         match &self.intent {
-            ArchivedSessionIntent::ForkNewArchive { custom_suffix } => custom_suffix.as_deref(),
+            ArchivedSessionIntent::ForkNewArchive { custom_suffix, .. } => custom_suffix.as_deref(),
             ArchivedSessionIntent::ResumeInPlace => None,
+        }
+    }
+
+    pub(crate) fn summarize_fork(&self) -> bool {
+        match &self.intent {
+            ArchivedSessionIntent::ForkNewArchive { summarize, .. } => *summarize,
+            ArchivedSessionIntent::ResumeInPlace => false,
         }
     }
 

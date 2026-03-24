@@ -53,6 +53,7 @@ pub(crate) struct StartupContext {
     pub(crate) session_resume: Option<SessionResumeMode>,
     pub(crate) resume_show_all: bool,
     pub(crate) custom_session_id: Option<String>,
+    pub(crate) summarize_fork: bool,
     pub(crate) plan_mode_entry_source: PlanModeEntrySource,
 }
 
@@ -203,6 +204,7 @@ impl StartupContext {
             session_resume,
             resume_show_all: args.all,
             custom_session_id,
+            summarize_fork: args.summarize,
             plan_mode_entry_source,
         })
     }
@@ -453,6 +455,25 @@ mod validation_tests {
         assert!(err.to_string().contains(
             "--all can only be used with resume, continue, fork-session, or exec resume"
         ));
+    }
+
+    #[test]
+    fn validate_resume_all_usage_accepts_summarized_interactive_fork_via_session_suffix() {
+        let args = Cli::parse_from([
+            "vtcode",
+            "--resume",
+            "--session-id",
+            "fork-copy",
+            "--summarize",
+        ]);
+
+        let (_, session_resume) = resolve_session_resume(&args).expect("session resume");
+
+        assert!(matches!(
+            session_resume,
+            Some(SessionResumeMode::Interactive)
+        ));
+        assert!(validate_resume_all_usage(&args, session_resume.as_ref()).is_ok());
     }
 
     #[tokio::test]

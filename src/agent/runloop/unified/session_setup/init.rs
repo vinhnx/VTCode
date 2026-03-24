@@ -402,7 +402,7 @@ async fn determine_mcp_bootstrap_error(manager: Option<&Arc<AsyncMcpManager>>) -
     }
 }
 
-fn create_provider_client(
+pub(crate) fn create_provider_client(
     config: &CoreAgentConfig,
     vt_cfg: Option<&VTCodeConfig>,
 ) -> Result<Box<dyn uni::LLMProvider>> {

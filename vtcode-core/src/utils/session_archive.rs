@@ -154,6 +154,17 @@ pub struct SessionArchiveMetadata {
     pub loaded_skills: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub prompt_cache_lineage_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_session_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fork_mode: Option<SessionForkMode>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionForkMode {
+    FullCopy,
+    Summarized,
 }
 
 impl SessionArchiveMetadata {
@@ -176,6 +187,8 @@ impl SessionArchiveMetadata {
             debug_log_path: None,
             loaded_skills: Vec::new(),
             prompt_cache_lineage_id: None,
+            parent_session_id: None,
+            fork_mode: None,
         }
     }
 
@@ -200,6 +213,16 @@ impl SessionArchiveMetadata {
         if self.prompt_cache_lineage_id.is_none() {
             self.prompt_cache_lineage_id = Some(format!("lineage-{}", Uuid::new_v4()));
         }
+        self
+    }
+
+    pub fn with_parent_session_id(mut self, session_id: impl Into<String>) -> Self {
+        self.parent_session_id = Some(session_id.into());
+        self
+    }
+
+    pub fn with_fork_mode(mut self, fork_mode: SessionForkMode) -> Self {
+        self.fork_mode = Some(fork_mode);
         self
     }
 }
@@ -894,6 +917,8 @@ async fn create_fork_archive(
         debug_log_path: source_snapshot.metadata.debug_log_path.clone(),
         loaded_skills: source_snapshot.metadata.loaded_skills.clone(),
         prompt_cache_lineage_id: source_snapshot.metadata.prompt_cache_lineage_id.clone(),
+        parent_session_id: None,
+        fork_mode: None,
     };
 
     let path = if let Some(session_identifier) = explicit_identifier {

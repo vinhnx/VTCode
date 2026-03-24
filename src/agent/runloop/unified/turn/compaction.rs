@@ -23,6 +23,18 @@ enum MemoryEnvelopePersistence {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MemoryEnvelopePlacement {
+    Start,
+    BeforeLastUserOrSummary,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct CompactionEnvelopeMode {
+    persistence: MemoryEnvelopePersistence,
+    placement: MemoryEnvelopePlacement,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct CompactionOutcome {
     pub original_len: usize,
     pub compacted_len: usize,
@@ -133,6 +145,14 @@ fn memory_envelope_message(envelope: &SessionMemoryEnvelope) -> Message {
     }
 
     Message::system(text)
+}
+
+fn is_compaction_summary_message(message: &Message) -> bool {
+    message.role == MessageRole::System
+        && message
+            .content
+            .as_text()
+            .starts_with("Previous conversation summary:\n")
 }
 
 fn strip_existing_memory_envelope(history: &mut Vec<Message>) {
@@ -424,9 +444,33 @@ fn load_latest_memory_envelope(
     Some(envelope)
 }
 
-fn apply_memory_envelope(compacted: &mut Vec<Message>, envelope: &SessionMemoryEnvelope) {
+fn insert_memory_envelope_message(
+    history: &mut Vec<Message>,
+    envelope: &SessionMemoryEnvelope,
+    placement: MemoryEnvelopePlacement,
+) {
+    let message = memory_envelope_message(envelope);
+    match placement {
+        MemoryEnvelopePlacement::Start => history.insert(0, message),
+        MemoryEnvelopePlacement::BeforeLastUserOrSummary => {
+            let insert_at = history
+                .iter()
+                .rposition(|item| {
+                    item.role == MessageRole::User || is_compaction_summary_message(item)
+                })
+                .unwrap_or(0);
+            history.insert(insert_at, message);
+        }
+    }
+}
+
+fn apply_memory_envelope(
+    compacted: &mut Vec<Message>,
+    envelope: &SessionMemoryEnvelope,
+    placement: MemoryEnvelopePlacement,
+) {
     strip_existing_memory_envelope(compacted);
-    compacted.insert(0, memory_envelope_message(envelope));
+    insert_memory_envelope_message(compacted, envelope, placement);
 }
 
 pub(crate) fn inject_latest_memory_envelope(
@@ -439,8 +483,71 @@ pub(crate) fn inject_latest_memory_envelope(
     };
 
     strip_existing_memory_envelope(history);
-    history.insert(0, memory_envelope_message(&envelope));
+    insert_memory_envelope_message(history, &envelope, MemoryEnvelopePlacement::Start);
     true
+}
+
+fn merge_touched_files(
+    prior_envelope: Option<&SessionMemoryEnvelope>,
+    touched_files: &[String],
+) -> Vec<String> {
+    let mut merged = prior_envelope
+        .map(|envelope| envelope.touched_files.clone())
+        .unwrap_or_default();
+
+    for path in touched_files {
+        if let Some(existing_idx) = merged.iter().position(|item| item == path) {
+            merged.remove(existing_idx);
+        }
+        merged.push(path.clone());
+    }
+
+    merged
+}
+
+fn merge_grounded_facts(
+    prior_envelope: Option<&SessionMemoryEnvelope>,
+    original_history: &[Message],
+) -> Vec<GroundedFactRecord> {
+    let mut merged = prior_envelope
+        .map(|envelope| envelope.grounded_facts.clone())
+        .unwrap_or_default();
+
+    for fact in dedup_latest_facts(original_history) {
+        let normalized = normalize_whitespace(&fact.fact).to_ascii_lowercase();
+        if let Some(existing_idx) = merged
+            .iter()
+            .position(|entry| normalize_whitespace(&entry.fact).to_ascii_lowercase() == normalized)
+        {
+            merged.remove(existing_idx);
+        }
+        merged.push(fact);
+    }
+
+    let keep_from = merged.len().saturating_sub(5);
+    merged.into_iter().skip(keep_from).collect()
+}
+
+fn build_session_memory_envelope(
+    session_id: &str,
+    original_history: &[Message],
+    touched_files: &[String],
+    compacted: &[Message],
+    history_artifact_path: Option<&PathBuf>,
+    prior_envelope: Option<&SessionMemoryEnvelope>,
+    task_summary: Option<String>,
+) -> SessionMemoryEnvelope {
+    SessionMemoryEnvelope {
+        session_id: session_id.to_string(),
+        summary: extract_compaction_summary(compacted, original_history),
+        task_summary,
+        grounded_facts: merge_grounded_facts(prior_envelope, original_history),
+        touched_files: merge_touched_files(prior_envelope, touched_files),
+        history_artifact_path: history_artifact_path
+            .map(|path| path.display().to_string())
+            .or_else(|| prior_envelope.and_then(|envelope| envelope.history_artifact_path.clone())),
+        generated_at: Utc::now().to_rfc3339(),
+    }
 }
 
 fn persist_memory_envelope(
@@ -451,6 +558,8 @@ fn persist_memory_envelope(
     touched_files: &[String],
     compacted: &mut Vec<Message>,
     persistence: MemoryEnvelopePersistence,
+    placement: MemoryEnvelopePlacement,
+    seed_envelope: Option<&SessionMemoryEnvelope>,
 ) -> Result<Option<SessionMemoryEnvelope>> {
     let should_persist = should_persist_memory_envelope(vt_cfg);
     if original_history.is_empty()
@@ -477,17 +586,21 @@ fn persist_memory_envelope(
         } else {
             None
         };
-    let envelope = SessionMemoryEnvelope {
-        session_id: session_id.to_string(),
-        summary: extract_compaction_summary(compacted, original_history),
-        task_summary,
-        grounded_facts: dedup_latest_facts(original_history),
-        touched_files: touched_files.to_vec(),
-        history_artifact_path: history_artifact_path
-            .as_ref()
-            .map(|path| path.display().to_string()),
-        generated_at: Utc::now().to_rfc3339(),
+    let loaded_prior_envelope = if seed_envelope.is_none() {
+        load_latest_memory_envelope(workspace_root, session_id)
+    } else {
+        None
     };
+    let prior_envelope = seed_envelope.or(loaded_prior_envelope.as_ref());
+    let envelope = build_session_memory_envelope(
+        session_id,
+        original_history,
+        touched_files,
+        compacted,
+        history_artifact_path.as_ref(),
+        prior_envelope,
+        task_summary,
+    );
 
     if let Some(history_artifact_path) = history_artifact_path {
         let envelope_path =
@@ -502,9 +615,59 @@ fn persist_memory_envelope(
             .with_context(|| format!("write memory envelope {}", envelope_path.display()))?;
     }
 
-    apply_memory_envelope(compacted, &envelope);
+    apply_memory_envelope(compacted, &envelope, placement);
 
     Ok(Some(envelope))
+}
+
+pub(crate) async fn build_summarized_fork_history(
+    provider: &dyn LLMProvider,
+    model: &str,
+    source_session_id: &str,
+    target_session_id: &str,
+    workspace_root: &Path,
+    vt_cfg: Option<&VTCodeConfig>,
+    source_history: &[Message],
+) -> Result<Vec<Message>> {
+    if source_history.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut source_history = source_history.to_vec();
+    let source_envelope = load_latest_memory_envelope(workspace_root, source_session_id);
+    if let Some(envelope) = source_envelope.as_ref() {
+        strip_existing_memory_envelope(&mut source_history);
+        insert_memory_envelope_message(
+            &mut source_history,
+            envelope,
+            MemoryEnvelopePlacement::Start,
+        );
+    }
+
+    let mut compacted = vtcode_core::compaction::compact_history(
+        provider,
+        model,
+        &source_history,
+        &CompactionConfig {
+            always_summarize: true,
+            ..CompactionConfig::default()
+        },
+    )
+    .await?;
+
+    let _ = persist_memory_envelope(
+        workspace_root,
+        target_session_id,
+        vt_cfg,
+        &source_history,
+        &[],
+        &mut compacted,
+        MemoryEnvelopePersistence::InMemoryOnly,
+        MemoryEnvelopePlacement::Start,
+        source_envelope.as_ref(),
+    )?;
+
+    Ok(compacted)
 }
 
 pub(crate) async fn compact_history_in_place(
@@ -526,7 +689,10 @@ pub(crate) async fn compact_history_in_place(
         history,
         session_stats,
         context_manager,
-        MemoryEnvelopePersistence::PersistToDisk,
+        CompactionEnvelopeMode {
+            persistence: MemoryEnvelopePersistence::PersistToDisk,
+            placement: MemoryEnvelopePlacement::Start,
+        },
     )
     .await
 }
@@ -540,7 +706,7 @@ async fn compact_history_segment_in_place(
     history: &mut Vec<Message>,
     session_stats: &mut SessionStats,
     context_manager: &mut ContextManager,
-    persistence: MemoryEnvelopePersistence,
+    envelope_mode: CompactionEnvelopeMode,
 ) -> Result<Option<CompactionOutcome>> {
     strip_existing_memory_envelope(history);
     let original_len = history.len();
@@ -575,7 +741,9 @@ async fn compact_history_segment_in_place(
         &original_history,
         &touched_files,
         &mut compacted,
-        persistence,
+        envelope_mode.persistence,
+        envelope_mode.placement,
+        None,
     )?;
     *history = compacted;
     session_stats.clear_previous_response_chain_for(provider.name(), model);
@@ -636,7 +804,10 @@ pub(crate) async fn compact_history_from_index_in_place(
             history,
             session_stats,
             context_manager,
-            MemoryEnvelopePersistence::InMemoryOnly,
+            CompactionEnvelopeMode {
+                persistence: MemoryEnvelopePersistence::InMemoryOnly,
+                placement: MemoryEnvelopePlacement::Start,
+            },
         )
         .await;
     }
@@ -652,7 +823,10 @@ pub(crate) async fn compact_history_from_index_in_place(
         &mut suffix,
         session_stats,
         context_manager,
-        MemoryEnvelopePersistence::InMemoryOnly,
+        CompactionEnvelopeMode {
+            persistence: MemoryEnvelopePersistence::InMemoryOnly,
+            placement: MemoryEnvelopePlacement::Start,
+        },
     )
     .await?
     else {
@@ -698,7 +872,7 @@ pub(crate) async fn maybe_auto_compact_history(
         return Ok(None);
     }
 
-    compact_history_in_place(
+    compact_history_segment_in_place(
         provider,
         model,
         session_id,
@@ -707,6 +881,10 @@ pub(crate) async fn maybe_auto_compact_history(
         history,
         session_stats,
         context_manager,
+        CompactionEnvelopeMode {
+            persistence: MemoryEnvelopePersistence::PersistToDisk,
+            placement: MemoryEnvelopePlacement::BeforeLastUserOrSummary,
+        },
     )
     .await
 }
@@ -715,9 +893,10 @@ pub(crate) async fn maybe_auto_compact_history(
 mod tests {
     use super::{
         GroundedFactRecord, build_server_compaction_context_management,
-        compact_history_from_index_in_place, compact_history_in_place,
-        inject_latest_memory_envelope, latest_memory_envelope_path_for_session,
-        maybe_auto_compact_history, resolve_compaction_threshold,
+        build_summarized_fork_history, compact_history_from_index_in_place,
+        compact_history_in_place, inject_latest_memory_envelope,
+        latest_memory_envelope_path_for_session, maybe_auto_compact_history,
+        resolve_compaction_threshold,
     };
     use crate::agent::runloop::unified::context_manager::ContextManager;
     use crate::agent::runloop::unified::state::SessionStats;
@@ -729,7 +908,9 @@ mod tests {
     use tokio::sync::RwLock;
     use vtcode_commons::llm::Usage;
     use vtcode_core::config::loader::VTCodeConfig;
-    use vtcode_core::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, Message};
+    use vtcode_core::llm::provider::{
+        LLMError, LLMProvider, LLMRequest, LLMResponse, Message, MessageRole,
+    };
 
     struct LocalCompactionProvider;
 
@@ -757,9 +938,53 @@ mod tests {
     }
 
     fn test_history() -> Vec<Message> {
-        (0..12)
-            .map(|index| Message::user(format!("message-{index}")))
-            .collect()
+        vec![
+            Message::user("message-0".to_string()),
+            Message::assistant("assistant-0".to_string()),
+            Message::tool_response("call-0".to_string(), "tool-0".to_string()),
+            Message::user("message-1".to_string()),
+            Message::assistant("assistant-1".to_string()),
+            Message::tool_response("call-1".to_string(), "tool-1".to_string()),
+            Message::user("message-2".to_string()),
+            Message::assistant("assistant-2".to_string()),
+            Message::tool_response("call-2".to_string(), "tool-2".to_string()),
+            Message::user("message-3".to_string()),
+            Message::assistant("assistant-3".to_string()),
+            Message::tool_response("call-3".to_string(), "tool-3".to_string()),
+        ]
+    }
+
+    fn assert_local_compaction_history(history: &[Message], envelope_index: usize) {
+        assert_eq!(history.len(), 6);
+        assert!(
+            history[envelope_index]
+                .content
+                .as_text()
+                .contains("[Session Memory Envelope]")
+        );
+        assert_eq!(
+            history.len(),
+            history
+                .iter()
+                .filter(|message| {
+                    message.role == MessageRole::System || message.role == MessageRole::User
+                })
+                .count()
+        );
+        assert!(history.iter().any(|message| {
+            message.role == MessageRole::System
+                && message
+                    .content
+                    .as_text()
+                    .contains("Previous conversation summary")
+        }));
+        assert_eq!(
+            history
+                .iter()
+                .filter(|message| message.role == MessageRole::User)
+                .count(),
+            4
+        );
     }
 
     fn test_context_manager() -> ContextManager {
@@ -801,13 +1026,8 @@ mod tests {
         .expect("history should compact");
 
         assert_eq!(outcome.original_len, 12);
-        assert_eq!(outcome.compacted_len, 11);
-        assert!(
-            history[0]
-                .content
-                .as_text()
-                .contains("[Session Memory Envelope]")
-        );
+        assert_eq!(outcome.compacted_len, 5);
+        assert_local_compaction_history(&history, 0);
         assert_eq!(
             session_stats.previous_response_id_for("stub", "stub-model"),
             None
@@ -850,13 +1070,15 @@ mod tests {
         .expect("history should compact");
 
         assert_eq!(outcome.original_len, 12);
-        assert_eq!(outcome.compacted_len, 11);
+        assert_eq!(outcome.compacted_len, 5);
+        assert_local_compaction_history(&history, 4);
         assert!(
             history[0]
                 .content
                 .as_text()
-                .contains("[Session Memory Envelope]")
+                .contains("Previous conversation summary")
         );
+        assert_eq!(history[5].role, MessageRole::User);
         assert_eq!(
             session_stats.previous_response_id_for("stub", "stub-model"),
             None
@@ -897,12 +1119,19 @@ mod tests {
 
         assert_eq!(&history[..1], preserved_prefix.as_slice());
         assert_eq!(outcome.original_len, 12);
-        assert!(outcome.compacted_len <= outcome.original_len);
+        assert_eq!(outcome.compacted_len, 5);
+        assert_eq!(history.len(), 6);
         assert!(
             history[1]
                 .content
                 .as_text()
                 .contains("[Session Memory Envelope]")
+        );
+        assert!(
+            history[2]
+                .content
+                .as_text()
+                .contains("Previous conversation summary")
         );
         assert!(latest_memory_envelope_path_for_session(temp.path(), "session-alpha").is_none());
     }
@@ -1152,7 +1381,7 @@ mod tests {
         .expect("history should compact");
 
         assert_eq!(outcome.original_len, 12);
-        assert_eq!(outcome.compacted_len, 11);
+        assert_eq!(outcome.compacted_len, 5);
         assert_eq!(
             history
                 .iter()
@@ -1163,6 +1392,67 @@ mod tests {
                 .count(),
             1
         );
+    }
+
+    #[tokio::test]
+    async fn summarized_fork_history_reuses_compaction_pipeline_and_prior_envelope() {
+        let temp = tempdir().expect("tempdir");
+        let history_dir = temp.path().join(".vtcode").join("history");
+        fs::create_dir_all(&history_dir).expect("history dir");
+        let source_envelope = super::SessionMemoryEnvelope {
+            session_id: "session-source".to_string(),
+            summary: "Prior source summary".to_string(),
+            task_summary: Some("Tracker: keep going".to_string()),
+            grounded_facts: vec![GroundedFactRecord {
+                fact: "src/lib.rs was updated".to_string(),
+                source: "tool:write_file".to_string(),
+            }],
+            touched_files: vec!["src/lib.rs".to_string()],
+            history_artifact_path: Some(".vtcode/history/session-source_0001.jsonl".to_string()),
+            generated_at: "2026-03-14T00:00:00Z".to_string(),
+        };
+        fs::write(
+            history_dir.join("session-source_0001.memory.json"),
+            serde_json::to_string_pretty(&source_envelope).expect("serialize envelope"),
+        )
+        .expect("write envelope");
+
+        let compacted = build_summarized_fork_history(
+            &LocalCompactionProvider,
+            "stub-model",
+            "session-source",
+            "session-target",
+            temp.path(),
+            Some(&VTCodeConfig::default()),
+            &test_history(),
+        )
+        .await
+        .expect("summarized fork history");
+
+        assert_eq!(compacted.len(), 6);
+        assert!(
+            compacted[0]
+                .content
+                .as_text()
+                .contains("[Session Memory Envelope]")
+        );
+        assert!(compacted[0].content.as_text().contains("src/lib.rs"));
+        assert!(
+            compacted[1]
+                .content
+                .as_text()
+                .contains("Previous conversation summary")
+        );
+        assert_eq!(
+            compacted
+                .iter()
+                .filter(|message| message.role == MessageRole::User)
+                .count(),
+            4
+        );
+        assert!(compacted.iter().all(
+            |message| message.role == MessageRole::System || message.role == MessageRole::User
+        ));
     }
 
     #[test]

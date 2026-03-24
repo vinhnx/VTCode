@@ -7,6 +7,7 @@ mod ui;
 
 pub(crate) use ide_context::{IdeContextBridge, preferred_display_language_for_workspace};
 pub(crate) use init::active_deferred_tool_policy;
+pub(crate) use init::create_provider_client;
 pub(crate) use init::initialize_session;
 pub(crate) use init::refresh_tool_snapshot;
 pub(crate) use init::resolve_provider_label;

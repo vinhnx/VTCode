@@ -68,5 +68,13 @@ pub(super) fn validate_resume_all_usage(
         bail!("--all can only be used with resume, continue, fork-session, or exec resume");
     }
 
+    if args.summarize {
+        let is_fork_operation = matches!(session_resume, Some(SessionResumeMode::Fork(_)))
+            || (args.session_id.is_some() && session_resume.is_some());
+        if !is_fork_operation {
+            bail!("--summarize can only be used with forked session flows");
+        }
+    }
+
     Ok(())
 }

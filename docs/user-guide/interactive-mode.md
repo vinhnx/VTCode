@@ -52,6 +52,14 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 | `@` within input | Open file picker. | Triggers file path autocomplete and picker to quickly reference files in your message. |
 | `Alt+P` / `Option+P` | Open prompt suggestions. | Equivalent to `/suggest`; inserts the selected prompt into the composer without auto-submitting. |
 
+### Session Context Commands
+
+- `/compact` compacts the current session history when you want to shed context manually.
+- For providers with native Responses compaction, VT Code uses the provider-owned compacted state.
+- For local fallback compaction, VT Code rebuilds history around one structured summary plus retained recent user messages, then injects the session memory envelope.
+- `/fork` opens the archived-session picker. After selecting a session, VT Code now asks whether the new session should start from the full copied transcript or from a summarized fork.
+- A summarized fork starts from the same compacted handoff shape VT Code uses for local compaction: structured summary, retained user prompts, and the memory envelope.
+
 ## Vim Mode
 
 VT Code supports an optional Vim-style prompt editor.
@@ -82,6 +90,8 @@ When a task is already running, VT Code keeps the active turn alive and lets you
 - `/pause` pauses the active run at the next model/tool/approval boundary.
 - `/resume` resumes a paused run while it is active. When idle, `/resume` still opens archived sessions.
 - `/stop` still cancels the active run immediately.
+- `/compact` still works only while the session is idle; it rewrites the stored conversation context for the next turn instead of interrupting the active run.
+- `/fork` is available while idle and creates a new archived session, leaving the current session unchanged.
 - `Ctrl+B` still backgrounds the current shell run.
 - Foreground `!` commands keep their status in the input/status area, and `Esc` collapses verbose output without killing the job.
 

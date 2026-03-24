@@ -1,8 +1,9 @@
 use crate::exec::events::ThreadEvent;
 use crate::llm::provider::Message;
 use crate::utils::session_archive::{
-    SessionArchive, SessionArchiveMetadata, SessionListing, find_session_by_identifier,
-    list_recent_sessions, reserve_session_archive_identifier, session_listing_matches_workspace,
+    SessionArchive, SessionArchiveMetadata, SessionForkMode, SessionListing,
+    find_session_by_identifier, list_recent_sessions, reserve_session_archive_identifier,
+    session_listing_matches_workspace,
 };
 use anyhow::{Result, anyhow};
 use parking_lot::Mutex;
@@ -118,7 +119,10 @@ pub enum SessionQueryScope {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArchivedSessionIntent {
     ResumeInPlace,
-    ForkNewArchive { custom_suffix: Option<String> },
+    ForkNewArchive {
+        custom_suffix: Option<String>,
+        summarize: bool,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -373,13 +377,14 @@ pub async fn prepare_archived_session(
     intent: ArchivedSessionIntent,
     reserved_identifier: Option<String>,
 ) -> Result<PreparedArchivedSession> {
-    let metadata = preserve_prompt_cache_lineage_if_compatible(metadata, &source.snapshot.metadata);
+    let mut metadata =
+        preserve_prompt_cache_lineage_if_compatible(metadata, &source.snapshot.metadata);
     let mut bootstrap = ThreadBootstrap::from_listing(source.clone());
     bootstrap.metadata = Some(metadata.clone());
 
     let thread_id = match &intent {
         ArchivedSessionIntent::ResumeInPlace => source.identifier(),
-        ArchivedSessionIntent::ForkNewArchive { custom_suffix } => {
+        ArchivedSessionIntent::ForkNewArchive { custom_suffix, .. } => {
             if let Some(identifier) = reserved_identifier {
                 identifier
             } else {
@@ -388,6 +393,16 @@ pub async fn prepare_archived_session(
             }
         }
     };
+
+    if let ArchivedSessionIntent::ForkNewArchive { summarize, .. } = &intent {
+        metadata.parent_session_id = Some(source.identifier());
+        metadata.fork_mode = Some(if *summarize {
+            SessionForkMode::Summarized
+        } else {
+            SessionForkMode::FullCopy
+        });
+        bootstrap.metadata = Some(metadata.clone());
+    }
 
     let archive = match intent {
         ArchivedSessionIntent::ResumeInPlace => {
@@ -716,6 +731,7 @@ mod tests {
                 ),
                 ArchivedSessionIntent::ForkNewArchive {
                     custom_suffix: Some("branch".to_string()),
+                    summarize: false,
                 },
                 Some("session-forked".to_string()),
             ))
@@ -732,6 +748,22 @@ mod tests {
                 .ends_with(Path::new("session-forked.json"))
         );
         assert_eq!(prepared.bootstrap.messages[0].content.as_text(), "hello");
+        assert_eq!(
+            prepared
+                .bootstrap
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.parent_session_id.as_deref()),
+            Some("session-source")
+        );
+        assert_eq!(
+            prepared
+                .bootstrap
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.fork_mode),
+            Some(SessionForkMode::FullCopy)
+        );
     }
 
     #[test]

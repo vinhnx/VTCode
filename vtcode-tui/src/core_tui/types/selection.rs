@@ -21,6 +21,10 @@ pub enum InlineListSelection {
     CustomModel,
     Theme(String),
     Session(String),
+    SessionForkMode {
+        session_id: String,
+        summarize: bool,
+    },
     ConfigAction(String),
     SlashCommand(String),
     ToolApproval(bool),

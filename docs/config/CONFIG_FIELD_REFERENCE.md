@@ -37,8 +37,8 @@ python3 scripts/generate_config_field_reference.py
 | `agent.default_model` | `string` | no | `"gpt-5.3-codex"` | Default model to use |
 | `agent.enable_self_review` | `boolean` | no | `false` | Enable an extra self-review pass to refine final responses |
 | `agent.enable_split_tool_results` | `boolean` | no | `true` | Enable split tool results for massive token savings (Phase 4) When enabled, tools return dual-channel output: - llm_content: Concise summary sent to LLM (token-optimized, 53-95% reduction) - ui_content: Rich output displayed to user (full details preserved) Applies to: unified_search, unified_file, unified_exec Default: true (opt-out for compatibility), recommended for production use |
-| `agent.harness.auto_compaction_enabled` | `boolean` | no | `false` | Enable automatic context compaction when token pressure crosses threshold. Disabled by default. When disabled, no automatic compaction is triggered. |
-| `agent.harness.auto_compaction_threshold_tokens` | `integer \| null` | no | `null` | Optional absolute compact threshold (tokens). VT Code uses it for Responses server-side compaction when supported, and for local fallback compaction otherwise. When unset, VT Code derives a threshold from the provider context window. |
+| `agent.harness.auto_compaction_enabled` | `boolean` | no | `false` | Enable automatic context compaction when token pressure crosses threshold. Disabled by default. When enabled, VT Code uses provider-native Responses compaction when available and local fallback compaction otherwise. |
+| `agent.harness.auto_compaction_threshold_tokens` | `integer \| null` | no | `null` | Optional absolute compact threshold (tokens). VT Code uses it for Responses server-side compaction when supported, and for local fallback compaction otherwise. When unset, VT Code derives a threshold from the provider context window. Local fallback compaction rebuilds history around a structured summary plus retained user messages. |
 | `agent.harness.continuation_policy` | `string` | no | `"all"` | Controls harness-managed continuation loops. Options: `"off"`, `"exec_only"` (exec/full-auto only), or `"all"` (default; also allow interactive sessions). |
 | `agent.harness.event_log_path` | `null \| string` | no | `null` | Optional JSONL event log path for harness events |
 | `agent.harness.max_tool_calls_per_turn` | `integer` | no | `0` | Maximum number of tool calls allowed per turn. Set to `0` to disable the cap. |
@@ -147,7 +147,7 @@ python3 scripts/generate_config_field_reference.py
 | `custom_providers[].name` | `string` | yes | `-` | Stable provider key used for routing and persistence (e.g., "mycorp"). Must be lowercase alphanumeric with optional hyphens/underscores. |
 | `context.dynamic.enabled` | `boolean` | no | `true` | Enable dynamic context discovery features |
 | `context.dynamic.max_spooled_files` | `integer` | no | `100` | Maximum number of spooled files to keep |
-| `context.dynamic.persist_history` | `boolean` | no | `true` | Enable persisting conversation history during summarization |
+| `context.dynamic.persist_history` | `boolean` | no | `true` | Enable persisting compaction history artifacts and session memory envelopes. These artifacts are reused by later resumes and summarized fork handoffs. |
 | `context.dynamic.spool_max_age_secs` | `integer` | no | `3600` | Maximum age in seconds for spooled tool output files before cleanup |
 | `context.dynamic.sync_mcp_tools` | `boolean` | no | `true` | Enable syncing MCP tool descriptions to .vtcode/mcp/tools/ |
 | `context.dynamic.sync_skills` | `boolean` | no | `true` | Enable generating skill index in .agents/skills/INDEX.md |

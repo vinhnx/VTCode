@@ -197,7 +197,7 @@ impl<'a> InlineEventLoop<'a> {
             InlineLoopAction::Continue => None,
             InlineLoopAction::Submit(_) => None,
             InlineLoopAction::ResumeSession(_) => None,
-            InlineLoopAction::ForkSession(_) => None,
+            InlineLoopAction::ForkSession { .. } => None,
             InlineLoopAction::PlanApproved { .. } => None,
             InlineLoopAction::PlanEditRequested => None,
             InlineLoopAction::DiffApproved => None,

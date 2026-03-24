@@ -66,6 +66,49 @@ Ask: Search for TODO|FIXME across the repo with 2 lines of context in .rs files
 -   `write_file(path, content, mode?)` — mode: `overwrite`, `append`, or `skip_if_exists`
 -   `edit_file(path, old_str, new_str)` — tolerant to whitespace differences and detects rename conflicts
 
+## Session resume and forks
+
+VT Code can reopen archived sessions, continue the latest one, or fork a previous session into a new archive.
+
+### Resume the latest or a specific session
+
+```bash
+vtcode --continue
+vtcode --resume session-123
+vtcode --resume          # interactive picker
+```
+
+### Fork from an archived session
+
+```bash
+vtcode --fork-session session-123
+vtcode --fork-session session-123 --session-id bugfix-branch
+vtcode --resume session-123 --session-id bugfix-branch
+vtcode --continue --session-id followup-branch
+```
+
+Notes:
+
+- `--session-id` turns `--resume ...` or `--continue` into a fork instead of an in-place resume.
+- `--resume` with no ID plus `--session-id ...` opens the interactive picker and then forks the selected session.
+- `--all` expands the picker/search scope across workspaces for resume and fork flows.
+
+### Start a summarized fork
+
+```bash
+vtcode --fork-session session-123 --summarize
+vtcode --resume session-123 --session-id handoff --summarize
+vtcode --resume --session-id handoff --summarize   # interactive picker, summarized fork
+```
+
+Summarized forks do not copy the full transcript. VT Code starts the child session from:
+
+- one structured conversation summary
+- retained recent real user messages
+- the session memory envelope
+
+Normal forks keep the full archived transcript unchanged.
+
 ## Quick Actions in Chat Input
 
 VT Code provides several quick actions directly in the chat input for faster workflow:
@@ -86,6 +129,12 @@ Configure the behaviour under **Settings › Extensions › VT Code**:
 -   `vtcode.terminal.autoRunChat` — Automatically run `vtcode chat` when the managed terminal opens.
 -   `vtcode.terminal.allowMultipleInstances` — Opt-in to creating new terminal sessions instead of reusing the shared VT Code terminal.
 -   `vtcode.agentTimeline.refreshDebounceMs` — Control how quickly the Agent Loop timeline reacts to incoming terminal output.
+
+### Slash-command notes
+
+- `/resume` opens archived sessions when the current run is idle.
+- `/fork` opens the session picker and then lets you choose between a full-copy fork and a summarized fork.
+- `/compact` manually compacts the current conversation context. On the local fallback path, VT Code keeps a structured summary plus retained user prompts instead of a mixed recent tail.
 
 ## stats (session metrics)
 

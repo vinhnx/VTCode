@@ -74,6 +74,7 @@ pub async fn dispatch(
                 mode,
                 startup.resume_show_all,
                 startup.custom_session_id.clone(),
+                startup.summarize_fork,
                 startup.skip_confirmations,
             )
             .await?;
@@ -157,6 +158,7 @@ mod tests {
             session_resume: None,
             resume_show_all: false,
             custom_session_id: None,
+            summarize_fork: false,
             plan_mode_entry_source:
                 vtcode_core::core::interfaces::session::PlanModeEntrySource::None,
         }
@@ -277,6 +279,7 @@ mod tests {
             SessionResumeMode::Specific(fake_id),
             false,
             None,
+            false,
             true,
         )
         .await;

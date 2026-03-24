@@ -136,27 +136,62 @@ impl<'a> PaletteCoordinator<'a> {
         full_auto: bool,
     ) -> Result<InlineLoopAction> {
         if let Some(active) = self.state.take() {
-            if let (
-                ActivePalette::Sessions { mode, .. },
-                InlineListSelection::Session(session_id),
-            ) = (&active, &selection)
-            {
-                match mode {
-                    SessionPaletteMode::Resume => {
-                        renderer.line(
-                            MessageStyle::Info,
-                            &format!("Resuming session: {}", session_id),
-                        )?;
-                        return Ok(InlineLoopAction::ResumeSession(session_id.clone()));
-                    }
-                    SessionPaletteMode::Fork => {
-                        renderer.line(
-                            MessageStyle::Info,
-                            &format!("Forking session: {}", session_id),
-                        )?;
-                        return Ok(InlineLoopAction::ForkSession(session_id.clone()));
-                    }
+            match (&active, &selection) {
+                (
+                    ActivePalette::Sessions {
+                        mode: SessionPaletteMode::Resume,
+                        ..
+                    },
+                    InlineListSelection::Session(session_id),
+                ) => {
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!("Resuming session: {}", session_id),
+                    )?;
+                    return Ok(InlineLoopAction::ResumeSession(session_id.clone()));
                 }
+                (
+                    ActivePalette::Sessions {
+                        mode: SessionPaletteMode::Fork,
+                        listings,
+                        limit,
+                        show_all,
+                    },
+                    InlineListSelection::Session(session_id),
+                ) => {
+                    crate::agent::runloop::unified::palettes::show_fork_mode_palette(
+                        renderer, session_id,
+                    )?;
+                    *self.state = Some(ActivePalette::ForkMode {
+                        session_id: session_id.clone(),
+                        listings: listings.clone(),
+                        limit: *limit,
+                        show_all: *show_all,
+                    });
+                    return Ok(InlineLoopAction::Continue);
+                }
+                (
+                    ActivePalette::ForkMode { .. },
+                    InlineListSelection::SessionForkMode {
+                        session_id,
+                        summarize,
+                    },
+                ) => {
+                    let mode_label = if *summarize {
+                        "summarized"
+                    } else {
+                        "full-copy"
+                    };
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!("Forking session: {} ({mode_label})", session_id),
+                    )?;
+                    return Ok(InlineLoopAction::ForkSession {
+                        session_id: session_id.clone(),
+                        summarize: *summarize,
+                    });
+                }
+                _ => {}
             }
 
             let restore = handle_palette_selection(

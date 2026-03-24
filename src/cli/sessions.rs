@@ -20,14 +20,17 @@ pub async fn handle_resume_session_command(
     mode: SessionResumeMode,
     show_all: bool,
     custom_session_id: Option<String>,
+    summarize_fork: bool,
     skip_confirmations: bool,
 ) -> Result<()> {
     let interactive_intent = match &mode {
         SessionResumeMode::Fork(_) => ArchivedSessionIntent::ForkNewArchive {
             custom_suffix: custom_session_id.clone(),
+            summarize: summarize_fork,
         },
         _ if custom_session_id.is_some() => ArchivedSessionIntent::ForkNewArchive {
             custom_suffix: custom_session_id.clone(),
+            summarize: summarize_fork,
         },
         _ => ArchivedSessionIntent::ResumeInPlace,
     };
@@ -128,7 +131,51 @@ async fn select_session_interactively(
         return Ok(None);
     };
 
+    let Some(intent) = maybe_choose_fork_mode(intent)? else {
+        return Ok(None);
+    };
     Ok(Some(convert_listing(&listings[index], intent)))
+}
+
+fn maybe_choose_fork_mode(intent: ArchivedSessionIntent) -> Result<Option<ArchivedSessionIntent>> {
+    let ArchivedSessionIntent::ForkNewArchive {
+        custom_suffix,
+        summarize,
+    } = intent
+    else {
+        return Ok(Some(intent));
+    };
+
+    if summarize {
+        return Ok(Some(ArchivedSessionIntent::ForkNewArchive {
+            custom_suffix,
+            summarize: true,
+        }));
+    }
+
+    let options = vec![
+        "Copy full history".to_string(),
+        "Start summarized fork".to_string(),
+        "Cancel".to_string(),
+    ];
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Choose how the forked session should start.")
+        .items(&options)
+        .default(0)
+        .interact()
+        .context("failed to select fork mode")?;
+
+    match selection {
+        0 => Ok(Some(ArchivedSessionIntent::ForkNewArchive {
+            custom_suffix,
+            summarize: false,
+        })),
+        1 => Ok(Some(ArchivedSessionIntent::ForkNewArchive {
+            custom_suffix,
+            summarize: true,
+        })),
+        _ => Ok(None),
+    }
 }
 
 fn convert_listing(listing: &SessionListing, intent: ArchivedSessionIntent) -> ResumeSession {
@@ -195,6 +242,11 @@ fn print_fork_summary(resume: &ResumeSession) {
         "{}",
         style(format!("Original archive: {}", resume.path().display())).green()
     );
+    if resume.summarize_fork() {
+        println!("{}", style("Fork mode: summarized history").green());
+    } else {
+        println!("{}", style("Fork mode: full history copy").green());
+    }
     println!("{}", style("Starting independent forked session").green());
 }
 

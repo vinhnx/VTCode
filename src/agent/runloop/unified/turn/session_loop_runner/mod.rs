@@ -176,6 +176,14 @@ fn prepare_resume_bootstrap_without_archive(
     if is_compatible && let Some(lineage_id) = source_metadata.prompt_cache_lineage_id.as_ref() {
         metadata.prompt_cache_lineage_id = Some(lineage_id.clone());
     }
+    if resume.is_fork() {
+        metadata.parent_session_id = Some(resume.identifier());
+        metadata.fork_mode = Some(if resume.summarize_fork() {
+            vtcode_core::utils::session_archive::SessionForkMode::Summarized
+        } else {
+            vtcode_core::utils::session_archive::SessionForkMode::FullCopy
+        });
+    }
 
     let mut bootstrap =
         vtcode_core::core::threads::ThreadBootstrap::from_listing(resume.listing().clone());
@@ -429,9 +437,19 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         );
         let reserved_archive_id = crate::main_helpers::runtime_archive_session_id();
         let history_enabled = vtcode_core::utils::session_archive::history_persistence_enabled();
+        let summarized_fork_provider = if resume_ref.is_some_and(|resume| resume.summarize_fork()) {
+            Some(
+                crate::agent::runloop::unified::session_setup::create_provider_client(
+                    &config,
+                    vt_cfg.as_ref(),
+                )?,
+            )
+        } else {
+            None
+        };
         let (thread_handle, session_archive) = if let Some(resume) = resume_ref {
             if history_enabled {
-                let prepared = vtcode_core::core::threads::prepare_archived_session(
+                let mut prepared = vtcode_core::core::threads::prepare_archived_session(
                     resume.listing().clone(),
                     config.workspace.clone(),
                     archive_metadata.clone(),
@@ -443,6 +461,19 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     },
                 )
                 .await?;
+                if let Some(provider) = summarized_fork_provider.as_deref() {
+                    prepared.bootstrap.messages =
+                        crate::agent::runloop::unified::turn::compaction::build_summarized_fork_history(
+                            provider,
+                            &config.model,
+                            &resume.identifier(),
+                            &prepared.thread_id,
+                            &config.workspace,
+                            vt_cfg.as_ref(),
+                            resume.history(),
+                        )
+                        .await?;
+                }
                 (
                     thread_manager.start_thread_with_identifier(
                         prepared.thread_id.clone(),
@@ -451,11 +482,24 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     Some(prepared.archive),
                 )
             } else {
-                let (bootstrap, thread_id) = prepare_resume_bootstrap_without_archive(
+                let (mut bootstrap, thread_id) = prepare_resume_bootstrap_without_archive(
                     resume,
                     archive_metadata.clone(),
                     reserved_archive_id.clone(),
                 );
+                if let Some(provider) = summarized_fork_provider.as_deref() {
+                    bootstrap.messages =
+                        crate::agent::runloop::unified::turn::compaction::build_summarized_fork_history(
+                            provider,
+                            &config.model,
+                            &resume.identifier(),
+                            &thread_id,
+                            &config.workspace,
+                            vt_cfg.as_ref(),
+                            resume.history(),
+                        )
+                        .await?;
+                }
                 (
                     thread_manager.start_thread_with_identifier(thread_id, bootstrap),
                     None,
@@ -1622,6 +1666,7 @@ mod tests {
     fn next_runtime_archive_id_request_reserves_for_fork_and_new_session() {
         let resume = resume_session(ArchivedSessionIntent::ForkNewArchive {
             custom_suffix: Some("branch".to_string()),
+            summarize: false,
         });
 
         assert_eq!(
@@ -1670,6 +1715,7 @@ mod tests {
     fn resume_bootstrap_without_archive_prefers_reserved_identifier_for_forks() {
         let resume = resume_session(ArchivedSessionIntent::ForkNewArchive {
             custom_suffix: Some("branch".to_string()),
+            summarize: false,
         });
         let (_, thread_id) = prepare_resume_bootstrap_without_archive(
             &resume,

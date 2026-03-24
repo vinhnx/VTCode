@@ -51,6 +51,7 @@ pub(crate) async fn handle_resume_session_command(
     mode: SessionResumeMode,
     show_all: bool,
     custom_session_id: Option<String>,
+    summarize_fork: bool,
     skip_confirmations: bool,
 ) -> Result<()> {
     sessions::handle_resume_session_command(
@@ -58,6 +59,7 @@ pub(crate) async fn handle_resume_session_command(
         mode,
         show_all,
         custom_session_id,
+        summarize_fork,
         skip_confirmations,
     )
     .await

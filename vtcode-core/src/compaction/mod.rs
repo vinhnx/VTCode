@@ -4,11 +4,14 @@ use std::fmt::Write;
 use vtcode_config::constants::context::TOKEN_BUDGET_HIGH_THRESHOLD;
 
 use crate::llm::provider::{LLMProvider, LLMRequest, Message, MessageRole};
+use crate::llm::utils::truncate_to_token_limit;
 
 pub mod summarizer;
 
 const DEFAULT_COMPACTION_TARGET_THRESHOLD: f64 = 0.50;
 const DEFAULT_COMPACTION_KEEP_LAST_MESSAGES: usize = 10;
+const DEFAULT_RETAINED_USER_MESSAGE_TOKENS: usize = 20_000;
+const SUMMARY_PREFIX: &str = "Previous conversation summary:\n";
 
 /// Compaction configuration for context window management.
 #[derive(Debug, Clone)]
@@ -19,8 +22,12 @@ pub struct CompactionConfig {
     pub target_threshold: f64,
     /// Prompt for summarization.
     pub summary_prompt: String,
-    /// Number of recent messages to keep verbatim.
+    /// Legacy short-circuit used to skip local compaction for tiny histories.
     pub keep_last_messages: usize,
+    /// Total token budget reserved for retaining real user messages verbatim.
+    pub retained_user_message_tokens: usize,
+    /// Force local summarization even for short histories and providers with native compaction.
+    pub always_summarize: bool,
 }
 
 impl Default for CompactionConfig {
@@ -28,9 +35,11 @@ impl Default for CompactionConfig {
         Self {
             trigger_threshold: TOKEN_BUDGET_HIGH_THRESHOLD,
             target_threshold: DEFAULT_COMPACTION_TARGET_THRESHOLD,
-            summary_prompt: "Summarize the conversation so far. Preserve decisions, file paths, commands, TODOs, and open questions. Keep it concise but actionable."
+            summary_prompt: "Summarize the conversation so far using this exact structure:\n\n## Goal\n[What the user is trying to accomplish]\n\n## Constraints & Preferences\n- [Requirements, preferences, or constraints from the user]\n\n## Progress\n### Done\n- [Completed work]\n\n### In Progress\n- [Current work]\n\n### Blocked\n- [Blocking issues, if any]\n\n## Key Decisions\n- **[Decision]**: [Reason]\n\n## Next Steps\n1. [Most important next step]\n\n## Critical Context\n- [Facts needed to continue]\n\nKeep it concise and actionable. Preserve important file paths, commands, decisions, and open questions."
                 .to_string(),
             keep_last_messages: DEFAULT_COMPACTION_KEEP_LAST_MESSAGES,
+            retained_user_message_tokens: DEFAULT_RETAINED_USER_MESSAGE_TOKENS,
+            always_summarize: false,
         }
     }
 }
@@ -42,11 +51,15 @@ pub async fn compact_history(
     history: &[Message],
     config: &CompactionConfig,
 ) -> Result<Vec<Message>> {
-    if history.len() <= config.keep_last_messages {
+    if history.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    if !config.always_summarize && history.len() <= config.keep_last_messages {
         return Ok(history.to_vec());
     }
 
-    if provider.supports_responses_compaction(model) {
+    if !config.always_summarize && provider.supports_responses_compaction(model) {
         return provider
             .compact_history(model, history)
             .await
@@ -66,16 +79,11 @@ pub async fn compact_history(
         .context("Failed to generate compaction summary")?;
 
     let summary = response.content.unwrap_or_default().trim().to_string();
-
-    let mut new_history = Vec::with_capacity(config.keep_last_messages + 1);
-    new_history.push(Message::system(format!(
-        "Previous conversation summary:\n{}",
-        summary
-    )));
-
-    let keep_start = history.len().saturating_sub(config.keep_last_messages);
-    new_history.extend_from_slice(&history[keep_start..]);
-    Ok(new_history)
+    Ok(build_local_compacted_history(
+        history,
+        &summary,
+        config.retained_user_message_tokens,
+    ))
 }
 
 fn build_summary_prompt(history: &[Message], instructions: &str) -> String {
@@ -105,15 +113,82 @@ fn build_summary_prompt(history: &[Message], instructions: &str) -> String {
     formatted
 }
 
+fn build_local_compacted_history(
+    history: &[Message],
+    summary: &str,
+    retained_user_message_tokens: usize,
+) -> Vec<Message> {
+    let retained_users = collect_retained_user_messages(history, retained_user_message_tokens);
+    let mut new_history = Vec::with_capacity(retained_users.len().saturating_add(1));
+    new_history.push(Message::system(format!(
+        "{SUMMARY_PREFIX}{}",
+        summary.trim()
+    )));
+    new_history.extend(retained_users);
+    new_history
+}
+
+fn collect_retained_user_messages(history: &[Message], token_budget: usize) -> Vec<Message> {
+    if token_budget == 0 {
+        return Vec::new();
+    }
+
+    let mut kept = Vec::new();
+    let mut remaining = token_budget;
+
+    for message in history.iter().rev() {
+        if !is_real_user_message(message) {
+            continue;
+        }
+
+        let estimated = message.estimate_tokens();
+        if estimated <= remaining {
+            kept.push(message.clone());
+            remaining = remaining.saturating_sub(estimated);
+            continue;
+        }
+
+        if let Some(truncated) = truncate_user_message(message, remaining) {
+            kept.push(truncated);
+        }
+        break;
+    }
+
+    kept.reverse();
+    kept
+}
+
+fn is_real_user_message(message: &Message) -> bool {
+    message.role == MessageRole::User && !message.content.trim().is_empty()
+}
+
+fn truncate_user_message(message: &Message, token_budget: usize) -> Option<Message> {
+    if token_budget <= 4 {
+        return None;
+    }
+
+    let available_content_tokens = token_budget.saturating_sub(4);
+    let truncated =
+        truncate_to_token_limit(message.content.as_text().as_ref(), available_content_tokens);
+    let trimmed = truncated.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    Some(Message::user(trimmed.to_string()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::{CompactionConfig, compact_history};
     use crate::llm::provider::{
-        AssistantPhase, LLMError, LLMProvider, LLMRequest, LLMResponse, Message,
+        LLMError, LLMProvider, LLMRequest, LLMResponse, Message, MessageRole,
     };
     use async_trait::async_trait;
 
     struct StubProvider;
+
+    struct NativeCompactionProvider;
 
     #[async_trait]
     impl LLMProvider for StubProvider {
@@ -134,15 +209,49 @@ mod tests {
         }
     }
 
+    #[async_trait]
+    impl LLMProvider for NativeCompactionProvider {
+        fn name(&self) -> &str {
+            "native"
+        }
+
+        async fn generate(&self, _request: LLMRequest) -> Result<LLMResponse, LLMError> {
+            Ok(LLMResponse::new("stub-model", "summary"))
+        }
+
+        fn supported_models(&self) -> Vec<String> {
+            vec!["stub-model".to_string()]
+        }
+
+        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+            Ok(())
+        }
+
+        fn supports_responses_compaction(&self, _model: &str) -> bool {
+            true
+        }
+
+        async fn compact_history(
+            &self,
+            _model: &str,
+            _history: &[Message],
+        ) -> Result<Vec<Message>, LLMError> {
+            Ok(vec![Message::system("provider compacted".to_string())])
+        }
+    }
+
     #[tokio::test]
-    async fn compact_history_preserves_assistant_phases_in_kept_tail() {
+    async fn compact_history_rebuilds_history_around_summary_and_users() {
         let history = vec![
-            Message::user("one".to_string()),
-            Message::assistant("working".to_string()).with_phase(Some(AssistantPhase::Commentary)),
-            Message::assistant("done".to_string()).with_phase(Some(AssistantPhase::FinalAnswer)),
+            Message::assistant("setup".to_string()),
+            Message::user("first request".to_string()),
+            Message::assistant("working".to_string()),
+            Message::tool_response("call-1".to_string(), "done".to_string()),
+            Message::user("second request".to_string()),
+            Message::assistant("final reply".to_string()),
         ];
         let config = CompactionConfig {
-            keep_last_messages: 2,
+            always_summarize: true,
             ..CompactionConfig::default()
         };
 
@@ -151,7 +260,60 @@ mod tests {
             .expect("compacted history");
 
         assert_eq!(compacted.len(), 3);
-        assert_eq!(compacted[1].phase, Some(AssistantPhase::Commentary));
-        assert_eq!(compacted[2].phase, Some(AssistantPhase::FinalAnswer));
+        assert_eq!(
+            compacted[0].content.as_text(),
+            "Previous conversation summary:\nsummary"
+        );
+        assert_eq!(compacted[1].content.as_text(), "first request");
+        assert_eq!(compacted[2].content.as_text(), "second request");
+        assert!(compacted.iter().all(|message| {
+            message.role == MessageRole::System || message.role == MessageRole::User
+        }));
+    }
+
+    #[tokio::test]
+    async fn compact_history_truncates_oldest_retained_user_message_to_budget() {
+        let history = vec![
+            Message::user("alpha beta gamma delta epsilon zeta".to_string()),
+            Message::assistant("ack".to_string()),
+            Message::user("newest request".to_string()),
+        ];
+        let config = CompactionConfig {
+            always_summarize: true,
+            retained_user_message_tokens: 8,
+            ..CompactionConfig::default()
+        };
+
+        let compacted = compact_history(&StubProvider, "stub-model", &history, &config)
+            .await
+            .expect("compacted history");
+
+        assert_eq!(compacted.len(), 2);
+        assert_eq!(compacted[1].content.as_text(), "newest request");
+    }
+
+    #[tokio::test]
+    async fn compact_history_forces_local_summary_when_always_summarize_is_enabled() {
+        let history = vec![
+            Message::user("first request".to_string()),
+            Message::assistant("working".to_string()),
+            Message::user("second request".to_string()),
+        ];
+        let config = CompactionConfig {
+            always_summarize: true,
+            ..CompactionConfig::default()
+        };
+
+        let compacted = compact_history(&NativeCompactionProvider, "stub-model", &history, &config)
+            .await
+            .expect("compacted history");
+
+        assert_eq!(compacted.len(), 3);
+        assert_eq!(
+            compacted[0].content.as_text(),
+            "Previous conversation summary:\nsummary"
+        );
+        assert_eq!(compacted[1].content.as_text(), "first request");
+        assert_eq!(compacted[2].content.as_text(), "second request");
     }
 }

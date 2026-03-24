@@ -223,6 +223,10 @@ pub struct Cli {
     #[arg(long = "session-id", global = true, value_name = "CUSTOM_SUFFIX")]
     pub session_id: Option<String>,
 
+    /// Use summarized history when forking a session
+    #[arg(long, global = true)]
+    pub summarize: bool,
+
     /// Override the default agent model for this session
     #[arg(long, global = true, value_name = "AGENT")]
     pub agent: Option<String>,
@@ -1027,6 +1031,13 @@ mod exec_command_tests {
     }
 
     #[test]
+    fn global_fork_flags_parse_summarize() {
+        let cli = Cli::parse_from(["vtcode", "--fork-session", "session-123", "--summarize"]);
+        assert_eq!(cli.fork_session.as_deref(), Some("session-123"));
+        assert!(cli.summarize);
+    }
+
+    #[test]
     fn review_defaults_to_current_diff() {
         let cli = Cli::parse_from(["vtcode", "review"]);
         let Some(Commands::Review(review)) = cli.command else {
@@ -1258,6 +1269,7 @@ impl Default for Cli {
             fork_session: None,
             all: false,
             session_id: None,
+            summarize: false,
             debug: false,
             enable_skills: false,                // Skills disabled by default
             tick_rate: 250,                      // Default tick rate: 250ms

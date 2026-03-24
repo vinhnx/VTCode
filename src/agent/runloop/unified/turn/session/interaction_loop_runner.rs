@@ -553,12 +553,16 @@ pub(super) async fn run_interaction_loop_impl(
                 }
                 continue;
             }
-            InlineLoopAction::ForkSession(session_id) => {
+            InlineLoopAction::ForkSession {
+                session_id,
+                summarize,
+            } => {
                 if let Some(outcome) = try_resume_archived_session(
                     ctx.renderer,
                     &session_id,
                     ArchivedSessionIntent::ForkNewArchive {
                         custom_suffix: None,
+                        summarize,
                     },
                     "Loading session for fork",
                     "Restarting from fork source",

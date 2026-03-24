@@ -27,7 +27,7 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/config/config.md`
   - **Content**: VT Code Configuration
-  - **Topics**: Quick navigation, Feature flags, Model selection, Execution environment, MCP integration
+  - **Topics**: Quick navigation, Feature flags, Model selection, Execution environment, Context compaction and session history
   - **User Questions**: "What can you tell me about VT Code Configuration?", "How does Quick navigation work?", "How does Feature flags work?"
 
 ### Development & Testing
@@ -938,7 +938,7 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/user-guide/commands.md`
   - **Content**: Command Reference
-  - **Topics**: grep_file (ripgrep-like), File operations, Quick Actions in Chat Input, stats (session metrics), schema (runtime tool introspection)
+  - **Topics**: grep_file (ripgrep-like), File operations, Session resume and forks, Quick Actions in Chat Input, stats (session metrics)
   - **User Questions**: "What can you tell me about Command Reference?", "How does grep_file (ripgrep-like) work?", "How does File operations work?"
 
 - **File**: `docs/user-guide/interactive-mode.md`

@@ -215,6 +215,7 @@ mod tests {
             session_resume: Some(SessionResumeMode::Specific("session-123".to_string())),
             resume_show_all: false,
             custom_session_id: None,
+            summarize_fork: false,
             plan_mode_entry_source:
                 vtcode_core::core::interfaces::session::PlanModeEntrySource::None,
         };
@@ -245,6 +246,7 @@ mod tests {
             session_resume: None,
             resume_show_all: false,
             custom_session_id: None,
+            summarize_fork: false,
             plan_mode_entry_source:
                 vtcode_core::core::interfaces::session::PlanModeEntrySource::None,
         };
