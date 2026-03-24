@@ -667,12 +667,33 @@ PYTHON_SCRIPT
 
 publish_homebrew_tap() {
     local version=$1
+    local x86_64_macos_sha=${2:-}
+    local aarch64_macos_sha=${3:-}
     local formula_path="homebrew/vtcode.rb"
 
-    local x86_64_macos_sha
-    x86_64_macos_sha=$(cat "dist/vtcode-$version-x86_64-apple-darwin.sha256" 2>/dev/null || echo "")
-    local aarch64_macos_sha
-    aarch64_macos_sha=$(cat "dist/vtcode-$version-aarch64-apple-darwin.sha256" 2>/dev/null || echo "")
+    # If checksums were not passed as arguments, try dist/ then GitHub release
+    if [[ -z "$x86_64_macos_sha" ]]; then
+        x86_64_macos_sha=$(cat "dist/vtcode-$version-x86_64-apple-darwin.sha256" 2>/dev/null | awk '{print $1}' || echo "")
+    fi
+    if [[ -z "$aarch64_macos_sha" ]]; then
+        aarch64_macos_sha=$(cat "dist/vtcode-$version-aarch64-apple-darwin.sha256" 2>/dev/null | awk '{print $1}' || echo "")
+    fi
+
+    # Last resort: download .sha256 files from the GitHub release
+    if [[ -z "$x86_64_macos_sha" || -z "$aarch64_macos_sha" ]]; then
+        print_info "Fetching checksums from GitHub release $version..."
+        local sha_tmp
+        sha_tmp=$(mktemp -d)
+        if gh release download "$version" --dir "$sha_tmp" --pattern "*.sha256" 2>/dev/null; then
+            if [[ -z "$x86_64_macos_sha" ]]; then
+                x86_64_macos_sha=$(cat "$sha_tmp/vtcode-$version-x86_64-apple-darwin.sha256" 2>/dev/null | awk '{print $1}' || echo "")
+            fi
+            if [[ -z "$aarch64_macos_sha" ]]; then
+                aarch64_macos_sha=$(cat "$sha_tmp/vtcode-$version-aarch64-apple-darwin.sha256" 2>/dev/null | awk '{print $1}' || echo "")
+            fi
+        fi
+        rm -rf "$sha_tmp"
+    fi
 
     if [[ -z "$x86_64_macos_sha" || -z "$aarch64_macos_sha" ]]; then
         print_error "Missing macOS checksums, cannot publish Homebrew tap"
@@ -1187,6 +1208,16 @@ main() {
             exit 1
         fi
 
+        # Extract checksums before cleanup for Homebrew formula update
+        local release_x86_sha=""
+        local release_arm_sha=""
+        if [[ -f "$binaries_dir/vtcode-$released_version-x86_64-apple-darwin.sha256" ]]; then
+            release_x86_sha=$(awk '{print $1}' "$binaries_dir/vtcode-$released_version-x86_64-apple-darwin.sha256")
+        fi
+        if [[ -f "$binaries_dir/vtcode-$released_version-aarch64-apple-darwin.sha256" ]]; then
+            release_arm_sha=$(awk '{print $1}' "$binaries_dir/vtcode-$released_version-aarch64-apple-darwin.sha256")
+        fi
+
         # Cleanup
         rm -rf "$binaries_dir"
     fi
@@ -1195,7 +1226,7 @@ main() {
     # 5. Publish Homebrew tap
     if [[ "$skip_binaries" == 'false' ]]; then
         print_info "Step 5: Publishing Homebrew formula to vinhnx/homebrew-tap..."
-        publish_homebrew_tap "$released_version"
+        publish_homebrew_tap "$released_version" "${release_x86_sha:-}" "${release_arm_sha:-}"
     fi
 
     # 6. Handle docs.rs rebuild
