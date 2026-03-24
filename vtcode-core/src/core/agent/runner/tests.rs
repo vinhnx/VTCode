@@ -18,12 +18,10 @@ use crate::exec::events::{
 use crate::llm::provider::{
     FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, ToolCall,
 };
-use crate::tool_policy::ToolPolicy;
 use crate::tools::Tool;
 use crate::tools::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig};
 use crate::tools::handlers::{PlanModeState, TaskTrackerTool};
 use crate::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
-use crate::tools::registry::ToolRegistration;
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use serde_json::json;
@@ -580,64 +578,6 @@ impl LLMProvider for RecordingQueuedProvider {
 
     fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
         Ok(())
-    }
-}
-
-struct PolicyDeniedTool;
-
-#[async_trait]
-impl Tool for PolicyDeniedTool {
-    async fn execute(&self, _args: serde_json::Value) -> anyhow::Result<serde_json::Value> {
-        Err(anyhow::anyhow!("denied by policy"))
-    }
-
-    fn name(&self) -> &'static str {
-        "policy_denied_tool"
-    }
-
-    fn description(&self) -> &'static str {
-        "Fails with a policy violation for testing"
-    }
-
-    fn parameter_schema(&self) -> Option<serde_json::Value> {
-        Some(json!({"type": "object"}))
-    }
-
-    fn default_permission(&self) -> ToolPolicy {
-        ToolPolicy::Allow
-    }
-
-    fn is_mutating(&self) -> bool {
-        false
-    }
-}
-
-struct MarkerTool;
-
-#[async_trait]
-impl Tool for MarkerTool {
-    async fn execute(&self, _args: serde_json::Value) -> anyhow::Result<serde_json::Value> {
-        Ok(json!({"success": true, "marker": true}))
-    }
-
-    fn name(&self) -> &'static str {
-        "marker_tool"
-    }
-
-    fn description(&self) -> &'static str {
-        "Successful marker tool for testing"
-    }
-
-    fn parameter_schema(&self) -> Option<serde_json::Value> {
-        Some(json!({"type": "object"}))
-    }
-
-    fn default_permission(&self) -> ToolPolicy {
-        ToolPolicy::Allow
-    }
-
-    fn is_mutating(&self) -> bool {
-        false
     }
 }
 
@@ -1231,47 +1171,37 @@ async fn execute_tool_internal_blocks_open_circuit_breaker() {
 #[tokio::test]
 async fn sequential_policy_failure_halts_following_tool_calls() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner = make_runner(&temp, VTCodeConfig::default(), "thread-policy-halt").await;
+    fs::write(temp.path().join("note.txt"), "hello\n").expect("workspace file");
+
+    let mut vt_cfg = VTCodeConfig::default();
+    vt_cfg.commands.deny_regex = vec!["^blocked-cmd$".to_string()];
+    let mut runner = make_runner(&temp, vt_cfg, "thread-policy-halt").await;
     runner
-        .tool_registry
-        .register_tool(
-            ToolRegistration::from_tool_instance(
-                "policy_denied_tool",
-                CapabilityLevel::CodeSearch,
-                PolicyDeniedTool,
-            )
-            .with_permission(ToolPolicy::Allow),
-        )
-        .await
-        .expect("register policy tool");
-    runner
-        .tool_registry
-        .register_tool(
-            ToolRegistration::from_tool_instance(
-                "marker_tool",
-                CapabilityLevel::CodeSearch,
-                MarkerTool,
-            )
-            .with_permission(ToolPolicy::Allow),
-        )
-        .await
-        .expect("register marker tool");
-    runner
-        .tool_registry
-        .allow_all_tools()
-        .await
-        .expect("allow tools");
+        .enable_full_auto(&[
+            tools::UNIFIED_EXEC.to_string(),
+            tools::READ_FILE.to_string(),
+        ])
+        .await;
+    assert!(runner.is_valid_tool(tools::UNIFIED_EXEC).await);
+    assert!(runner.is_valid_tool(tools::READ_FILE).await);
 
     let tool_calls = vec![
         ToolCall::function(
-            "call-policy".to_string(),
-            "policy_denied_tool".to_string(),
-            json!({}).to_string(),
+            "call-blocked".to_string(),
+            tools::UNIFIED_EXEC.to_string(),
+            json!({
+                "action": "run",
+                "command": "blocked-cmd",
+            })
+            .to_string(),
         ),
         ToolCall::function(
-            "call-marker".to_string(),
-            "marker_tool".to_string(),
-            json!({}).to_string(),
+            "call-read".to_string(),
+            tools::READ_FILE.to_string(),
+            json!({
+                "path": "note.txt",
+            })
+            .to_string(),
         ),
     ];
 
@@ -1290,47 +1220,42 @@ async fn sequential_policy_failure_halts_following_tool_calls() {
     assert!(
         runtime.state.warnings.iter().any(
             |warning| warning == "Tool denied by policy; halting further tool calls this turn."
-        )
+        ),
+        "warnings: {:?}",
+        runtime.state.warnings
     );
     assert!(
         !runtime
             .state
             .executed_commands
             .iter()
-            .any(|tool| tool == "marker_tool")
+            .any(|tool| tool == tools::READ_FILE)
     );
 
     let events = recorder.into_events();
-    assert!(completed_tool_invocation_item_id(&events, "call-policy").is_some());
-    assert!(completed_tool_invocation_item_id(&events, "call-marker").is_none());
+    assert!(completed_tool_invocation_item_id(&events, "call-blocked").is_some());
+    assert!(completed_tool_invocation_item_id(&events, "call-read").is_none());
 }
 
 #[tokio::test]
 async fn sequential_tool_failures_record_categorized_user_message() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner = make_runner(&temp, VTCodeConfig::default(), "thread-policy-message").await;
+    let mut vt_cfg = VTCodeConfig::default();
+    vt_cfg.commands.deny_regex = vec!["^blocked-cmd$".to_string()];
+    let mut runner = make_runner(&temp, vt_cfg, "thread-policy-message").await;
     runner
-        .tool_registry
-        .register_tool(
-            ToolRegistration::from_tool_instance(
-                "policy_denied_tool",
-                CapabilityLevel::CodeSearch,
-                PolicyDeniedTool,
-            )
-            .with_permission(ToolPolicy::Allow),
-        )
-        .await
-        .expect("register policy tool");
-    runner
-        .tool_registry
-        .allow_all_tools()
-        .await
-        .expect("allow tools");
+        .enable_full_auto(&[tools::UNIFIED_EXEC.to_string()])
+        .await;
+    assert!(runner.is_valid_tool(tools::UNIFIED_EXEC).await);
 
     let tool_calls = vec![ToolCall::function(
-        "call-policy".to_string(),
-        "policy_denied_tool".to_string(),
-        json!({}).to_string(),
+        "call-blocked".to_string(),
+        tools::UNIFIED_EXEC.to_string(),
+        json!({
+            "action": "run",
+            "command": "blocked-cmd",
+        })
+        .to_string(),
     )];
 
     let mut runtime = AgentRuntime::new(
@@ -1349,10 +1274,13 @@ async fn sequential_tool_failures_record_categorized_user_message() {
         .state
         .messages
         .last()
-        .and_then(|message| message.content.as_ref())
+        .map(|message| message.content.as_text().into_owned())
         .expect("tool error recorded");
-    assert!(tool_error.contains("[Blocked by policy]"));
-    assert!(tool_error.contains("Hint: Review workspace policies and restrictions"));
+    assert!(tool_error.contains("[Blocked by policy]"), "{tool_error}");
+    assert!(
+        tool_error.contains("Hint: Review workspace policies and restrictions"),
+        "{tool_error}"
+    );
 }
 
 #[tokio::test]

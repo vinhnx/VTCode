@@ -125,33 +125,31 @@ impl AgentRunner {
                 }));
             }
 
-            self.tool_registry.check_shell_policy(
-                &cmd_text,
-                &deny_regex_patterns,
-                &deny_glob_patterns,
-            )?;
+            self.tool_registry
+                .check_shell_policy(&cmd_text, &deny_regex_patterns, &deny_glob_patterns)
+                .map_err(|err| anyhow!("tool denied by policy: {err}"))?;
 
             info!(target = "policy", agent = ?self.agent_type, tool = resolved_tool_name, cmd = %cmd_text, "shell_policy_checked");
         }
 
         // Check shared circuit breaker before executing — fail fast when the
         // tool's circuit is open to avoid wasting resources on doomed requests.
-        if let Some(breaker) = self.tool_registry.shared_circuit_breaker() {
-            if !breaker.allow_request_for_tool(resolved_tool_name) {
-                let remaining = breaker
-                    .remaining_backoff(resolved_tool_name)
-                    .map(|d| format!(" (retry in {}s)", d.as_secs()))
-                    .unwrap_or_default();
-                warn!(
-                    tool = %resolved_tool_name,
-                    "tool execution blocked by circuit breaker"
-                );
-                return Err(anyhow!(
-                    "Tool '{}' temporarily disabled by circuit breaker{}",
-                    resolved_tool_name,
-                    remaining
-                ));
-            }
+        if let Some(breaker) = self.tool_registry.shared_circuit_breaker()
+            && !breaker.allow_request_for_tool(resolved_tool_name)
+        {
+            let remaining = breaker
+                .remaining_backoff(resolved_tool_name)
+                .map(|d| format!(" (retry in {}s)", d.as_secs()))
+                .unwrap_or_default();
+            warn!(
+                tool = %resolved_tool_name,
+                "tool execution blocked by circuit breaker"
+            );
+            return Err(anyhow!(
+                "Tool '{}' temporarily disabled by circuit breaker{}",
+                resolved_tool_name,
+                remaining
+            ));
         }
 
         // Canonical retry policy: 3 attempts (1 initial + 2 retries), exponential
@@ -196,7 +194,7 @@ impl AgentRunner {
 
         let category = last_error
             .as_ref()
-            .map(|e| vtcode_commons::classify_anyhow_error(e))
+            .map(vtcode_commons::classify_anyhow_error)
             .unwrap_or(vtcode_commons::ErrorCategory::ExecutionError);
         Err(anyhow!(
             "[{}] Tool '{}' failed after {} attempt(s): {}",
