@@ -247,69 +247,73 @@ impl CodeExecutor {
         let ipc_task: JoinHandle<Result<()>> = tokio::spawn(async move {
             let ipc_start = Instant::now();
 
-            while ipc_start.elapsed() < execution_timeout {
-                // Check for tool requests
-                if let Some(mut request) = ipc_handler.read_request().await? {
-                    debug!(
-                        tool_name = %request.tool_name,
-                        request_id = %request.id,
-                        "Processing tool request from code"
-                    );
+            loop {
+                let Some(remaining_timeout) = execution_timeout.checked_sub(ipc_start.elapsed())
+                else {
+                    break;
+                };
 
-                    // Process request for PII protection (tokenize if enabled)
-                    if let Err(e) = ipc_handler.process_request_for_pii(&mut request) {
-                        debug!(error = %e, "PII tokenization failed");
-                        let response = ToolResponse {
+                let Some(mut request) = ipc_handler.wait_for_request(remaining_timeout).await?
+                else {
+                    break;
+                };
+
+                debug!(
+                    tool_name = %request.tool_name,
+                    request_id = %request.id,
+                    "Processing tool request from code"
+                );
+
+                // Process request for PII protection (tokenize if enabled)
+                if let Err(e) = ipc_handler.process_request_for_pii(&mut request) {
+                    debug!(error = %e, "PII tokenization failed");
+                    let response = ToolResponse {
+                        id: request.id,
+                        success: false,
+                        result: None,
+                        error: Some(format!("PII processing error: {}", e)),
+                        duration_ms: None,
+                        cache_hit: None,
+                    };
+                    ipc_handler.write_response(response).await?;
+                    continue;
+                }
+
+                // Execute the tool
+                let result = match mcp_client
+                    .execute_mcp_tool(&request.tool_name, &request.args)
+                    .await
+                {
+                    Ok(result) => {
+                        debug!(tool_name = %request.tool_name, "Tool executed successfully");
+                        ToolResponse {
+                            id: request.id,
+                            success: true,
+                            result: Some(result),
+                            error: None,
+                            duration_ms: None,
+                            cache_hit: None,
+                        }
+                    }
+                    Err(e) => {
+                        debug!(
+                            tool_name = %request.tool_name,
+                            error = %e,
+                            "Tool execution failed"
+                        );
+                        ToolResponse {
                             id: request.id,
                             success: false,
                             result: None,
-                            error: Some(format!("PII processing error: {}", e)),
+                            error: Some(e.to_string()),
                             duration_ms: None,
                             cache_hit: None,
-                        };
-                        ipc_handler.write_response(response).await?;
-                        continue;
+                        }
                     }
+                };
 
-                    // Execute the tool
-                    let result = match mcp_client
-                        .execute_mcp_tool(&request.tool_name, &request.args)
-                        .await
-                    {
-                        Ok(result) => {
-                            debug!(tool_name = %request.tool_name, "Tool executed successfully");
-                            ToolResponse {
-                                id: request.id,
-                                success: true,
-                                result: Some(result),
-                                error: None,
-                                duration_ms: None,
-                                cache_hit: None,
-                            }
-                        }
-                        Err(e) => {
-                            debug!(
-                                tool_name = %request.tool_name,
-                                error = %e,
-                                "Tool execution failed"
-                            );
-                            ToolResponse {
-                                id: request.id,
-                                success: false,
-                                result: None,
-                                error: Some(e.to_string()),
-                                duration_ms: None,
-                                cache_hit: None,
-                            }
-                        }
-                    };
-
-                    // Write response (de-tokenizes if enabled)
-                    ipc_handler.write_response(result).await?;
-                } else {
-                    // No request yet, sleep and retry
-                    tokio::time::sleep(Duration::from_millis(50)).await;
-                }
+                // Write response (de-tokenizes if enabled)
+                ipc_handler.write_response(result).await?;
             }
 
             Ok(())

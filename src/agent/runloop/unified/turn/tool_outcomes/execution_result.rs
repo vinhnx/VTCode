@@ -1271,7 +1271,10 @@ mod tests {
         assert!(parsed.get("truncated").is_none());
         assert!(parsed.get("auto_recovered").is_none());
         assert!(parsed.get("query_truncated").is_none());
-        assert_eq!(parsed.get("stderr_preview"), Some(&serde_json::json!("warn")));
+        assert_eq!(
+            parsed.get("stderr_preview"),
+            Some(&serde_json::json!("warn"))
+        );
         assert!(parsed.get("stdout").is_none());
         assert!(parsed.get("next_poll_args").is_none());
         assert!(parsed.get("preferred_next_action").is_none());

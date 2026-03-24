@@ -535,12 +535,7 @@ impl AgentRunner {
                         call_item_id: Some(tool_call_item.call_item_id.as_str()),
                         is_gemini,
                     };
-                    self.record_tool_failure(
-                        &mut failure_ctx,
-                        &name,
-                        &e,
-                        Some(call.id.as_str()),
-                    );
+                    self.record_tool_failure(&mut failure_ctx, &name, &e, Some(call.id.as_str()));
 
                     if should_halt {
                         tokio::time::sleep(Duration::from_millis(250)).await;

@@ -928,7 +928,9 @@ mod tests {
             .send(SteeringMessage::Pause)
             .expect("pause should send");
         sender
-            .send(SteeringMessage::FollowUpInput("queued while paused".to_string()))
+            .send(SteeringMessage::FollowUpInput(
+                "queued while paused".to_string(),
+            ))
             .expect("follow-up should send");
         sender
             .send(SteeringMessage::Resume)
@@ -955,7 +957,10 @@ mod tests {
             .send(SteeringMessage::SteerStop)
             .expect("stop should send");
 
-        assert_eq!(runtime.poll_turn_control().await, RuntimeControl::StopRequested);
+        assert_eq!(
+            runtime.poll_turn_control().await,
+            RuntimeControl::StopRequested
+        );
         assert!(!runtime.has_pending_follow_up_inputs());
     }
 

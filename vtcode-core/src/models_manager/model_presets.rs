@@ -668,7 +668,6 @@ fn deepseek_presets() -> Vec<ModelPreset> {
     ]
 }
 
-
 fn zai_presets() -> Vec<ModelPreset> {
     vec![ModelPreset {
         id: "glm-5".to_string(),

@@ -2809,6 +2809,13 @@ impl ToolRegistry {
         self.exec_sessions.close_session(session_id).await
     }
 
+    async fn exec_session_activity_receiver(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<tokio::sync::watch::Receiver<u64>>> {
+        self.exec_sessions.activity_receiver(session_id).await
+    }
+
     fn handle_closed_exec_session(&self, session_metadata: &VTCodeExecSession) {
         if is_pty_exec_session(session_metadata) {
             self.decrement_active_pty_sessions();
@@ -3151,6 +3158,11 @@ impl ToolRegistry {
         let mut peeked_bytes = 0usize;
         let start = Instant::now();
         let poll_interval = Duration::from_millis(50);
+        let mut activity_rx = self
+            .exec_session_activity_receiver(session_id)
+            .await
+            .ok()
+            .flatten();
 
         // Get the progress callback for streaming output to the TUI
         let progress_callback = self.progress_callback();
@@ -3161,6 +3173,10 @@ impl ToolRegistry {
         let mut pending_lines = String::new();
 
         loop {
+            let observed_activity = activity_rx
+                .as_mut()
+                .map(|receiver| *receiver.borrow_and_update());
+
             if let Ok(Some(code)) = self.exec_session_completed(session_id).await {
                 if let Ok(Some(final_output)) = self
                     .next_exec_session_output(session_id, drain_output, &mut peeked_bytes)
@@ -3226,7 +3242,20 @@ impl ToolRegistry {
                 };
             }
 
-            tokio::time::sleep(poll_interval).await;
+            if let Some(observed_version) = observed_activity
+                && let Some(activity_rx) = activity_rx.as_mut()
+            {
+                if *activity_rx.borrow() != observed_version {
+                    continue;
+                }
+
+                tokio::select! {
+                    _ = activity_rx.changed() => {}
+                    _ = tokio::time::sleep(poll_interval) => {}
+                }
+            } else {
+                tokio::time::sleep(poll_interval).await;
+            }
         }
     }
 

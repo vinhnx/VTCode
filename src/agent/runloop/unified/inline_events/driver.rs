@@ -36,6 +36,7 @@ struct InlineEventLoop<'a> {
     header_context: &'a mut InlineHeaderContext,
     use_unicode: bool,
     conversation_history_len: usize,
+    idle_wake_delay: Duration,
 }
 
 enum StartupUpdateEvent {
@@ -64,6 +65,7 @@ impl<'a> InlineEventLoop<'a> {
             header_context,
             use_unicode,
             conversation_history_len,
+            idle_wake_delay,
         } = resources;
 
         Self {
@@ -84,6 +86,7 @@ impl<'a> InlineEventLoop<'a> {
             header_context,
             use_unicode,
             conversation_history_len,
+            idle_wake_delay,
         }
     }
 
@@ -92,8 +95,6 @@ impl<'a> InlineEventLoop<'a> {
         session: &mut InlineSession,
         ctrl_c_notify: &Notify,
     ) -> Result<InlineLoopAction> {
-        const INLINE_EVENT_POLL_TICK: Duration = Duration::from_millis(50);
-
         if let Some(action) = self.ensure_interrupt_notice()? {
             return Ok(action);
         }
@@ -121,7 +122,7 @@ impl<'a> InlineEventLoop<'a> {
                 None
             }
             _ = ctrl_c_notify.notified() => None,
-            _ = tokio::time::sleep(INLINE_EVENT_POLL_TICK) => None,
+            _ = tokio::time::sleep(self.idle_wake_delay) => None,
         };
 
         if let Some(action) = self.exit_action() {
@@ -227,6 +228,7 @@ pub(crate) struct InlineEventLoopResources<'a> {
     pub header_context: &'a mut InlineHeaderContext,
     pub use_unicode: bool,
     pub conversation_history_len: usize,
+    pub idle_wake_delay: Duration,
 }
 
 pub(crate) async fn poll_inline_loop_action(
@@ -257,7 +259,80 @@ async fn recv_startup_update_notice(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use async_trait::async_trait;
     use semver::Version;
+    use std::collections::VecDeque;
+    use tokio::sync::Notify;
+    use vtcode_core::config::core::PromptCachingConfig;
+    use vtcode_core::config::models::Provider;
+    use vtcode_core::config::types::{
+        AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel,
+        UiSurfacePreference,
+    };
+    use vtcode_core::core::agent::snapshots::{
+        DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
+    };
+    use vtcode_core::llm::provider::{LLMError, LLMRequest, LLMResponse};
+    use vtcode_tui::app::InlineEvent;
+
+    #[derive(Clone)]
+    struct DummyProvider;
+
+    #[async_trait]
+    impl uni::LLMProvider for DummyProvider {
+        fn name(&self) -> &str {
+            "dummy"
+        }
+
+        async fn generate(&self, _request: LLMRequest) -> Result<LLMResponse, LLMError> {
+            Ok(LLMResponse {
+                content: None,
+                model: "dummy-model".to_string(),
+                tool_calls: None,
+                usage: None,
+                finish_reason: uni::FinishReason::Stop,
+                reasoning: None,
+                reasoning_details: None,
+                organization_id: None,
+                request_id: None,
+                tool_references: vec![],
+            })
+        }
+
+        fn supported_models(&self) -> Vec<String> {
+            vec!["dummy-model".to_string()]
+        }
+
+        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+            Ok(())
+        }
+    }
+
+    fn runtime_config() -> CoreAgentConfig {
+        CoreAgentConfig {
+            model: vtcode_core::config::constants::models::google::GEMINI_3_FLASH_PREVIEW
+                .to_string(),
+            api_key: "test-key".to_string(),
+            provider: "gemini".to_string(),
+            api_key_env: Provider::Gemini.default_api_key_env().to_string(),
+            workspace: std::env::current_dir().expect("current_dir"),
+            verbose: false,
+            quiet: false,
+            theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
+            reasoning_effort: ReasoningEffortLevel::default(),
+            ui_surface: UiSurfacePreference::default(),
+            prompt_cache: PromptCachingConfig::default(),
+            model_source: ModelSelectionSource::WorkspaceConfig,
+            custom_api_keys: std::collections::BTreeMap::new(),
+            checkpointing_enabled: DEFAULT_CHECKPOINTS_ENABLED,
+            checkpointing_storage_dir: None,
+            checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
+            checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
+            max_conversation_turns: 1000,
+            model_behavior: None,
+            openai_chatgpt_auth: None,
+        }
+    }
 
     #[tokio::test]
     async fn closed_update_receiver_is_cleared() {
@@ -281,5 +356,64 @@ mod tests {
         let event = recv_startup_update_notice(&mut receiver).await;
         assert!(matches!(event, StartupUpdateEvent::Notice(_)));
         assert!(receiver.is_some());
+    }
+
+    #[tokio::test]
+    async fn poll_inline_loop_action_respects_idle_wake_delay() {
+        let (command_tx, _command_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (_event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel::<InlineEvent>();
+        let handle = InlineHandle::new_for_tests(command_tx);
+        let mut session = InlineSession {
+            handle: handle.clone(),
+            events: event_rx,
+        };
+        let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
+        let ctrl_c_state = crate::agent::runloop::unified::state::CtrlCState::new();
+        let interrupts = InlineInterruptCoordinator::new(&ctrl_c_state);
+        let mut ctrl_c_notice_displayed = false;
+        let default_placeholder = None;
+        let mut queued_inputs = VecDeque::new();
+        let mut prefer_latest_queued_input_once = false;
+        let mut model_picker_state = None;
+        let mut palette_state = None;
+        let mut config = runtime_config();
+        let mut vt_cfg = None;
+        let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
+        let session_bootstrap = SessionBootstrap::default();
+        let mut startup_update_notice_rx = None;
+        let mut header_context = InlineHeaderContext::default();
+        let ctrl_c_notify = Notify::new();
+
+        let resources = InlineEventLoopResources {
+            renderer: &mut renderer,
+            handle: &handle,
+            interrupts,
+            ctrl_c_notice_displayed: &mut ctrl_c_notice_displayed,
+            default_placeholder: &default_placeholder,
+            queued_inputs: &mut queued_inputs,
+            prefer_latest_queued_input_once: &mut prefer_latest_queued_input_once,
+            model_picker_state: &mut model_picker_state,
+            palette_state: &mut palette_state,
+            config: &mut config,
+            vt_cfg: &mut vt_cfg,
+            provider_client: &mut provider_client,
+            session_bootstrap: &session_bootstrap,
+            full_auto: false,
+            startup_update_notice_rx: &mut startup_update_notice_rx,
+            header_context: &mut header_context,
+            use_unicode: true,
+            conversation_history_len: 0,
+            idle_wake_delay: Duration::from_millis(5),
+        };
+
+        let action = tokio::time::timeout(
+            Duration::from_millis(50),
+            poll_inline_loop_action(&mut session, &ctrl_c_notify, resources),
+        )
+        .await
+        .expect("idle wake should return promptly")
+        .expect("poll should succeed");
+
+        assert!(matches!(action, InlineLoopAction::Continue));
     }
 }

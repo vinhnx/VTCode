@@ -15,14 +15,14 @@ use crate::llm::factory::{LLMFactory, ProviderConfig as FactoryProviderConfig};
 use crate::llm::provider::LLMProvider;
 use crate::llm::provider_config::{
     AnthropicProviderConfig, CopilotProviderConfig, DeepSeekProviderConfig, GeminiProviderConfig,
-    HuggingFaceProviderConfig, LmStudioProviderConfig,
-    MinimaxProviderConfig, MoonshotProviderConfig, OllamaProviderConfig, OpenAIProviderConfig,
+    HuggingFaceProviderConfig, LmStudioProviderConfig, MinimaxProviderConfig,
+    MoonshotProviderConfig, OllamaProviderConfig, OpenAIProviderConfig,
     OpenResponsesProviderConfig, OpenRouterProviderConfig, ZAIProviderConfig,
 };
 use crate::llm::providers::{
     AnthropicProvider, CopilotProvider, DeepSeekProvider, GeminiProvider, HuggingFaceProvider,
-    LmStudioProvider, MinimaxProvider, MoonshotProvider, OllamaProvider,
-    OpenAIProvider, OpenResponsesProvider, OpenRouterProvider, ZAIProvider,
+    LmStudioProvider, MinimaxProvider, MoonshotProvider, OllamaProvider, OpenAIProvider,
+    OpenResponsesProvider, OpenRouterProvider, ZAIProvider,
 };
 
 /// Marker component for static provider metadata.

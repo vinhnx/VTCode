@@ -173,11 +173,8 @@ impl AgentRunner {
             {
                 Ok(result) => return Ok(result),
                 Err(e) => {
-                    let decision = policy.decision_for_anyhow(
-                        &e,
-                        attempt,
-                        Some(resolved_tool_name),
-                    );
+                    let decision =
+                        policy.decision_for_anyhow(&e, attempt, Some(resolved_tool_name));
                     trace!(
                         tool = %resolved_tool_name,
                         attempt = attempt + 1,
@@ -223,8 +220,7 @@ mod tests {
     /// errors as retryable via the `ErrorCategory` classifier.
     #[test]
     fn policy_retries_transient_errors() {
-        let policy =
-            RetryPolicy::new(3, Duration::from_millis(200), Duration::from_secs(2), 2.0);
+        let policy = RetryPolicy::new(3, Duration::from_millis(200), Duration::from_secs(2), 2.0);
 
         let network_err = anyhow::anyhow!("network connection dropped");
         let decision = policy.decision_for_anyhow(&network_err, 0, Some("test_tool"));
@@ -244,12 +240,14 @@ mod tests {
     /// Verify that non-retryable errors fail fast without retry.
     #[test]
     fn policy_does_not_retry_permanent_errors() {
-        let policy =
-            RetryPolicy::new(3, Duration::from_millis(200), Duration::from_secs(2), 2.0);
+        let policy = RetryPolicy::new(3, Duration::from_millis(200), Duration::from_secs(2), 2.0);
 
         let policy_err = anyhow::anyhow!("tool denied by policy");
         let decision = policy.decision_for_anyhow(&policy_err, 0, Some("test_tool"));
-        assert!(!decision.retryable, "policy violations should not be retryable");
+        assert!(
+            !decision.retryable,
+            "policy violations should not be retryable"
+        );
 
         let auth_err = anyhow::anyhow!("invalid api key");
         let decision = policy.decision_for_anyhow(&auth_err, 0, Some("test_tool"));
@@ -269,8 +267,7 @@ mod tests {
     /// Verify that retryable decisions include backoff delays.
     #[test]
     fn policy_provides_backoff_delays() {
-        let policy =
-            RetryPolicy::new(3, Duration::from_millis(200), Duration::from_secs(2), 2.0);
+        let policy = RetryPolicy::new(3, Duration::from_millis(200), Duration::from_secs(2), 2.0);
 
         let err = anyhow::anyhow!("network connection dropped");
 

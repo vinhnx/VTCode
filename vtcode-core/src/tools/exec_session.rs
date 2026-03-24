@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use anyhow::{Context, Result, anyhow};
 use hashbrown::HashMap;
 use portable_pty::PtySize;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::{Mutex, RwLock, watch};
 use tokio::task::JoinHandle;
 use vtcode_bash_runner::{PipeSpawnOptions, ProcessHandle, spawn_pipe_process_with_options};
 
@@ -20,6 +20,8 @@ struct PipeSessionRecord {
     output: Arc<Mutex<String>>,
     pending_offset: AtomicUsize,
     output_task: Mutex<Option<JoinHandle<()>>>,
+    exit_task: Mutex<Option<JoinHandle<()>>>,
+    activity_tx: watch::Sender<u64>,
 }
 
 impl PipeSessionRecord {
@@ -28,6 +30,8 @@ impl PipeSessionRecord {
         handle: Arc<ProcessHandle>,
         output: Arc<Mutex<String>>,
         output_task: JoinHandle<()>,
+        exit_task: JoinHandle<()>,
+        activity_tx: watch::Sender<u64>,
     ) -> Self {
         Self {
             metadata,
@@ -35,6 +39,8 @@ impl PipeSessionRecord {
             output,
             pending_offset: AtomicUsize::new(0),
             output_task: Mutex::new(Some(output_task)),
+            exit_task: Mutex::new(Some(exit_task)),
+            activity_tx,
         }
     }
 }
@@ -97,6 +103,8 @@ impl PipeSessionManager {
         let output = Arc::new(Mutex::new(String::new()));
         let output_clone = Arc::clone(&output);
         let mut output_rx = spawned.output_rx;
+        let (activity_tx, _) = watch::channel(0u64);
+        let output_activity_tx = activity_tx.clone();
         let output_task = tokio::spawn(async move {
             loop {
                 match output_rx.recv().await {
@@ -104,11 +112,18 @@ impl PipeSessionManager {
                         let text = String::from_utf8_lossy(&chunk);
                         let mut guard = output_clone.lock().await;
                         guard.push_str(&text);
+                        let _ = output_activity_tx.send_modify(|version| *version += 1);
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
                     Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                 }
             }
+        });
+        let exit_rx = spawned.exit_rx;
+        let exit_activity_tx = activity_tx.clone();
+        let exit_task = tokio::spawn(async move {
+            let _ = exit_rx.await;
+            let _ = exit_activity_tx.send_modify(|version| *version += 1);
         });
 
         let handle = Arc::new(spawned.session);
@@ -117,6 +132,8 @@ impl PipeSessionManager {
             handle,
             output,
             output_task,
+            exit_task,
+            activity_tx,
         ));
 
         let mut sessions = self.sessions.write().await;
@@ -202,8 +219,16 @@ impl PipeSessionManager {
         if let Some(task) = record.output_task.lock().await.take() {
             task.abort();
         }
+        if let Some(task) = record.exit_task.lock().await.take() {
+            task.abort();
+        }
 
         Ok(record.metadata.clone())
+    }
+
+    async fn activity_receiver(&self, session_id: &str) -> Result<watch::Receiver<u64>> {
+        let record = self.session_record(session_id).await?;
+        Ok(record.activity_tx.subscribe())
     }
 
     async fn terminate_all_sessions(&self) -> Result<()> {
@@ -403,6 +428,21 @@ impl ExecSessionManager {
         }
     }
 
+    pub(crate) async fn activity_receiver(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<watch::Receiver<u64>>> {
+        let record = self.session_record(session_id).await?;
+        match record.backend {
+            ExecSessionBackend::Pipe => self
+                .pipe_sessions
+                .activity_receiver(session_id)
+                .await
+                .map(Some),
+            ExecSessionBackend::Pty => Ok(None),
+        }
+    }
+
     pub(crate) async fn terminate_session(&self, session_id: &str) -> Result<()> {
         let record = self.session_record(session_id).await?;
         match record.backend {
@@ -507,6 +547,7 @@ mod tests {
     use hashbrown::HashMap;
     use portable_pty::PtySize;
     use tempfile::tempdir;
+    use tokio::time::{Duration, timeout};
 
     use super::ExecSessionManager;
     use crate::config::PtyConfig;
@@ -587,6 +628,43 @@ mod tests {
             .await?;
         manager.close_session("run-3").await?;
 
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn pipe_session_activity_receiver_notifies_on_output() -> anyhow::Result<()> {
+        let temp_dir = tempdir()?;
+        let workspace_root = canonicalize_workspace(temp_dir.path());
+        let pty_sessions = PtySessionManager::new(workspace_root.clone(), PtyConfig::default());
+        let manager = ExecSessionManager::new(workspace_root.clone(), pty_sessions);
+
+        manager
+            .create_pipe_session(
+                "run-1".to_string(),
+                vec![
+                    "/bin/sh".to_string(),
+                    "-c".to_string(),
+                    "printf hello".to_string(),
+                ],
+                workspace_root,
+                HashMap::new(),
+            )
+            .await?;
+
+        let mut activity_rx = manager
+            .activity_receiver("run-1")
+            .await?
+            .expect("pipe sessions should expose activity receiver");
+
+        timeout(Duration::from_secs(2), activity_rx.changed()).await??;
+        let output = manager
+            .read_session_output("run-1", true)
+            .await?
+            .expect("session output");
+        assert!(output.contains("hello"));
+
+        manager.close_session("run-1").await?;
         Ok(())
     }
 }

@@ -57,6 +57,8 @@ use uuid::Uuid;
 
 use crate::tools::request_response::{ToolCallRequest, ToolCallResponse};
 
+const REQUEST_POLL_INTERVAL: Duration = Duration::from_millis(50);
+
 /// IPC request from executing code to executor.
 pub type ToolRequest = ToolCallRequest;
 
@@ -163,11 +165,11 @@ impl ToolIpcHandler {
                 return Ok(Some(request));
             }
 
-            if start.elapsed() > timeout {
+            let Some(remaining_timeout) = timeout.checked_sub(start.elapsed()) else {
                 return Ok(None);
-            }
+            };
 
-            sleep(Duration::from_millis(100)).await;
+            sleep(remaining_timeout.min(REQUEST_POLL_INTERVAL)).await;
         }
     }
 
@@ -181,6 +183,8 @@ impl ToolIpcHandler {
 mod tests {
     use super::*;
     use serde_json::json;
+    use tempfile::tempdir;
+    use tokio::time::Instant;
 
     #[test]
     fn serialize_tool_request() {
@@ -228,5 +232,49 @@ mod tests {
         assert!(json.contains("test-id"));
         assert!(json.contains("false"));
         assert!(json.contains("File not found"));
+    }
+
+    #[tokio::test]
+    async fn wait_for_request_reads_delayed_request() {
+        let temp_dir = tempdir().expect("temp dir should create");
+        let handler = ToolIpcHandler::new(temp_dir.path().to_path_buf());
+        let request = ToolRequest {
+            id: "test-id".into(),
+            tool_name: "read_file".into(),
+            args: json!({"path": "/tmp/test"}),
+            metadata: None,
+        };
+        let request_json =
+            serde_json::to_string(&request).expect("request should serialize to JSON");
+        let request_path = temp_dir.path().join("request.json");
+
+        tokio::spawn(async move {
+            sleep(Duration::from_millis(10)).await;
+            fs::write(request_path, request_json)
+                .await
+                .expect("request file should write");
+        });
+
+        let received = handler
+            .wait_for_request(Duration::from_millis(200))
+            .await
+            .expect("request wait should succeed");
+
+        assert_eq!(received.expect("request should arrive").id, "test-id");
+    }
+
+    #[tokio::test]
+    async fn wait_for_request_respects_short_timeout() {
+        let temp_dir = tempdir().expect("temp dir should create");
+        let handler = ToolIpcHandler::new(temp_dir.path().to_path_buf());
+        let start = Instant::now();
+
+        let received = handler
+            .wait_for_request(Duration::from_millis(5))
+            .await
+            .expect("request wait should succeed");
+
+        assert!(received.is_none());
+        assert!(start.elapsed() < Duration::from_millis(40));
     }
 }

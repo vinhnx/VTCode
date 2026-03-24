@@ -534,6 +534,7 @@ pub(super) async fn run_interaction_loop_impl(
 
         let interrupts = InlineInterruptCoordinator::new(ctx.ctrl_c_state.as_ref());
         let use_unicode = ctx.renderer.should_use_unicode_formatting();
+        let idle_wake_delay = STATUS_REFRESH_INTERVAL.saturating_sub(last_status_refresh.elapsed());
         let resources = InlineEventLoopResources {
             renderer: ctx.renderer,
             handle: ctx.handle,
@@ -553,6 +554,7 @@ pub(super) async fn run_interaction_loop_impl(
             header_context: ctx.header_context,
             use_unicode,
             conversation_history_len: ctx.conversation_history.len(),
+            idle_wake_delay,
         };
 
         let inline_action =
