@@ -58,6 +58,8 @@ vtchat.io
 
 Compaction & Branch Summarization
 
+https://deepwiki.com/search/compaction-branch-summarizatio_eddaabff-b1d4-4a0e-ba09-0aa0834ba27b?mode=fast
+
 https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/compaction.md
 
 https://deepwiki.com/search/compaction-branch-summarizatio_b552d7b1-d14c-4024-8655-8735bb95a157?mode=fast
@@ -89,30 +91,3 @@ Here's the evidence:
 ```
 
 --
-
-https://epage.github.io/dev/rust-style/
-
---
-
-check vtcode as custom agent server ACP in zed doesn't work
-
-config in ~/.config/zed/settings.json
-
-```
-"agent_servers": {
-    "vtcode": {
-      "type": "custom",
-      "command": "/Users/vinhnguyenxuan/.local/bin/vtcode",
-      "args": ["acp"],
-      "env": {
-        "VT_ACP_ENABLED": "1",
-        "VT_ACP_ZED_ENABLED": "1",
-        "RUST_LOG": "info",
-      },
-    },
-  },
-```
-
-error:
-failed to launch:
-interal error: "server shut down unexpectedly"

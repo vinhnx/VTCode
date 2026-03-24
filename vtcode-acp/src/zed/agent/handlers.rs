@@ -108,18 +108,6 @@ impl acp::Agent for ZedAgent {
 
         let user_message = self.resolve_prompt(&args.session_id, &args.prompt).await?;
 
-        for block in &args.prompt {
-            if let acp::ContentBlock::Text(text) = block {
-                self.send_update(
-                    &args.session_id,
-                    acp::SessionUpdate::UserMessageChunk(acp::ContentChunk::new(
-                        acp::ContentBlock::Text(acp::TextContent::new(text.text.clone())),
-                    )),
-                )
-                .await?;
-            }
-        }
-
         self.push_message(&session, Message::user(user_message.clone()));
 
         let provider = match create_provider_for_model(
