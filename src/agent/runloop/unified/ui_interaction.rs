@@ -11,7 +11,7 @@ use anstyle::Effects;
 use anyhow::Result;
 use tokio::sync::{Notify, RwLock, mpsc};
 use tokio::task;
-use tokio::time::sleep;
+use tokio::time::MissedTickBehavior;
 use vtcode_commons::stop_hints::with_stop_hint;
 
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
@@ -559,6 +559,35 @@ impl Drop for PlaceholderGuard {
 
 const SPINNER_UPDATE_INTERVAL_MS: u64 = 150;
 
+async fn build_spinner_display(
+    current_message: &str,
+    progress_reporter: Option<&ProgressReporter>,
+) -> String {
+    let progress_info = if let Some(progress_reporter) = progress_reporter {
+        let progress = progress_reporter.progress_info().await;
+        let mut parts = vec![progress.message.clone()];
+
+        if progress.total > 0 && progress.percentage > 0 {
+            parts.push(format!("{:.0}%", progress.percentage));
+        }
+
+        let eta = progress.eta_formatted();
+        if eta != "Calculating..." && eta != "0s" {
+            parts.push(eta);
+        }
+
+        parts.join("  ")
+    } else {
+        String::new()
+    };
+
+    if progress_info.is_empty() {
+        current_message.to_string()
+    } else {
+        format!("{}: {}", current_message, progress_info)
+    }
+}
+
 pub(crate) struct PlaceholderSpinner {
     handle: InlineHandle,
     restore_left: Option<String>,
@@ -586,7 +615,7 @@ impl PlaceholderSpinner {
         let restore_on_stop_left = restore_left.clone();
         let restore_on_stop_right = restore_right.clone();
         let status_right = restore_right.clone();
-        let progress_reporter_arc = progress_reporter.cloned().map(Arc::new);
+        let progress_reporter = progress_reporter.cloned();
 
         let (message_sender, mut message_receiver) = mpsc::unbounded_channel::<String>();
         let message_sender_clone = message_sender.clone();
@@ -597,41 +626,34 @@ impl PlaceholderSpinner {
         let task = task::spawn(async move {
             let mut current_message = message_with_hint;
             let mut last_display = initial_display;
+            let mut interval =
+                tokio::time::interval(Duration::from_millis(SPINNER_UPDATE_INTERVAL_MS));
+            interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+            let mut message_updates_enabled = true;
+
             while spinner_active.load(Ordering::SeqCst) {
-                while let Ok(new_message) = message_receiver.try_recv() {
-                    current_message = with_stop_hint(&new_message);
+                tokio::select! {
+                    _ = interval.tick() => {}
+                    maybe_message = message_receiver.recv(), if message_updates_enabled => {
+                        match maybe_message {
+                            Some(new_message) => {
+                                current_message = with_stop_hint(&new_message);
+                            }
+                            None => {
+                                message_updates_enabled = false;
+                                continue;
+                            }
+                        }
+                    }
                 }
 
-                let progress_info = if let Some(progress_reporter) = progress_reporter_arc.as_ref()
-                {
-                    let progress = progress_reporter.progress_info().await;
-                    let mut parts = vec![progress.message.clone()];
-
-                    if progress.total > 0 && progress.percentage > 0 {
-                        // Removed progress bar visualization from status bar
-                        parts.push(format!("{:.0}%", progress.percentage));
-                    }
-
-                    let eta = progress.eta_formatted();
-                    if eta != "Calculating..." && eta != "0s" {
-                        parts.push(eta);
-                    }
-                    parts.join("  ")
-                } else {
-                    String::new()
-                };
-
-                let display = if progress_info.is_empty() {
-                    current_message.clone()
-                } else {
-                    format!("{}: {}", current_message, progress_info)
-                };
+                let display =
+                    build_spinner_display(&current_message, progress_reporter.as_ref()).await;
 
                 if display != last_display {
                     spinner_handle.set_input_status(Some(display.clone()), status_right.clone());
                     last_display = display;
                 }
-                sleep(Duration::from_millis(SPINNER_UPDATE_INTERVAL_MS)).await;
             }
 
             spinner_handle.set_input_status(restore_on_stop_left, restore_on_stop_right);
