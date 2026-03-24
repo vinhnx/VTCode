@@ -284,7 +284,6 @@ impl ModelsManager {
             Provider::LmStudio => "local-model".to_string(),
             Provider::Moonshot => "qwen3-coder-next".to_string(),
             Provider::HuggingFace => "deepseek-ai/DeepSeek-V3-0324".to_string(),
-            Provider::LiteLLM => "litellm".to_string(),
         }
     }
 

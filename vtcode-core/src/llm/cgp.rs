@@ -15,13 +15,13 @@ use crate::llm::factory::{LLMFactory, ProviderConfig as FactoryProviderConfig};
 use crate::llm::provider::LLMProvider;
 use crate::llm::provider_config::{
     AnthropicProviderConfig, CopilotProviderConfig, DeepSeekProviderConfig, GeminiProviderConfig,
-    HuggingFaceProviderConfig, LiteLLMProviderConfig, LmStudioProviderConfig,
+    HuggingFaceProviderConfig, LmStudioProviderConfig,
     MinimaxProviderConfig, MoonshotProviderConfig, OllamaProviderConfig, OpenAIProviderConfig,
     OpenResponsesProviderConfig, OpenRouterProviderConfig, ZAIProviderConfig,
 };
 use crate::llm::providers::{
     AnthropicProvider, CopilotProvider, DeepSeekProvider, GeminiProvider, HuggingFaceProvider,
-    LiteLLMProvider, LmStudioProvider, MinimaxProvider, MoonshotProvider, OllamaProvider,
+    LmStudioProvider, MinimaxProvider, MoonshotProvider, OllamaProvider,
     OpenAIProvider, OpenResponsesProvider, OpenRouterProvider, ZAIProvider,
 };
 
@@ -249,7 +249,6 @@ macro_rules! impl_standard_provider_constructor {
 impl_standard_provider_constructor!(
     GeminiProvider,
     HuggingFaceProvider,
-    LiteLLMProvider,
     MinimaxProvider,
     DeepSeekProvider,
     OpenRouterProvider,
@@ -279,10 +278,6 @@ crate::delegate_components!(OpenAIProviderConfig {
 crate::delegate_components!(HuggingFaceProviderConfig {
     ProviderMetadataComponent => HuggingFaceProviderConfig,
     ProviderBuildComponent => StandardProviderBuild<HuggingFaceProvider>,
-});
-crate::delegate_components!(LiteLLMProviderConfig {
-    ProviderMetadataComponent => LiteLLMProviderConfig,
-    ProviderBuildComponent => StandardProviderBuild<LiteLLMProvider>,
 });
 crate::delegate_components!(DeepSeekProviderConfig {
     ProviderMetadataComponent => DeepSeekProviderConfig,
@@ -322,7 +317,6 @@ pub fn register_builtin_cgp_providers(factory: &mut LLMFactory) {
     factory.register_cgp_provider::<GeminiProviderConfig>();
     factory.register_cgp_provider::<OpenAIProviderConfig>();
     factory.register_cgp_provider::<HuggingFaceProviderConfig>();
-    factory.register_cgp_provider::<LiteLLMProviderConfig>();
     factory.register_cgp_provider::<AnthropicProviderConfig>();
     factory.register_cgp_provider::<CopilotProviderConfig>();
     factory.register_cgp_provider::<MinimaxProviderConfig>();
@@ -440,7 +434,6 @@ mod tests {
                 "deepseek",
                 "gemini",
                 "huggingface",
-                "litellm",
                 "lmstudio",
                 "minimax",
                 "moonshot",

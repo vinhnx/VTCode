@@ -312,14 +312,6 @@ pub fn find_family_for_model(slug: &str) -> ModelFamily {
         );
     }
 
-    // LiteLLM proxy models
-    if slug.starts_with("litellm/") || slug == "litellm" {
-        return model_family!(
-            slug, "litellm", Provider::LiteLLM,
-            context_window: Some(DEFAULT_CONTEXT_WINDOW),
-        );
-    }
-
     // Qwen models (via OpenRouter or Ollama)
     if slug.contains("qwen") {
         return model_family!(

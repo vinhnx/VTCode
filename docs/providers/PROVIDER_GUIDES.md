@@ -68,16 +68,6 @@ This index collects provider-specific guides for configuring VT Code with differ
 -   **Catalog:** Also ships with `lmstudio-community/meta-llama-3-8b-instruct`, `lmstudio-community/qwen2.5-7b-instruct`, `lmstudio-community/gemma-2-2b-it`, `lmstudio-community/gemma-2-9b-it`, and `lmstudio-community/phi-3.1-mini-4k-instruct`, plus any custom GGUF models you expose
 -   **Features:** Streaming, tool calling, structured output, and reasoning effort passthrough via the shared OpenAI surface
 
-## LiteLLM Proxy
-
--   **Guide:** [LiteLLM Provider Guide](./litellm.md)
--   **Official docs:** [LiteLLM Documentation](https://docs.litellm.ai/)
--   **What it is:** An OpenAI-compatible proxy for 100+ LLM providers (OpenAI, Anthropic, Bedrock, Vertex AI, vLLM, etc.)
--   **Default endpoint:** `http://localhost:4000` (override via `LITELLM_BASE_URL`)
--   **Environment:** `LITELLM_API_KEY` (optional if proxy has no auth); `LITELLM_BASE_URL` for custom host/port
--   **Model naming:** Use model names as configured in your LiteLLM `config.yaml`, or prefix with `litellm/`
--   **Features:** Streaming, tool calling, load balancing, cost tracking
-
 ## Anthropic API Compatibility Server
 
 VT Code provides compatibility with the Anthropic Messages API to help connect existing applications to VT Code, including tools like Claude Code.

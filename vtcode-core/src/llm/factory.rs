@@ -25,7 +25,6 @@ const BUILTIN_PROVIDER_KEYS: &[&str] = &[
     "zai",
     "minimax",
     "huggingface",
-    "litellm",
     "openresponses",
 ];
 
@@ -316,7 +315,6 @@ mod tests {
                 "deepseek",
                 "gemini",
                 "huggingface",
-                "litellm",
                 "lmstudio",
                 "minimax",
                 "moonshot",

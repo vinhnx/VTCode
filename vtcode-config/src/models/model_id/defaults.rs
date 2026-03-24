@@ -41,7 +41,6 @@ impl ModelId {
             Provider::OpenRouter => ModelId::OpenRouterQwen3Coder,
             Provider::Ollama => ModelId::OllamaGptOss20b,
             Provider::LmStudio => ModelId::GPT5,
-            Provider::LiteLLM => ModelId::GPT5,
             Provider::ZAI => ModelId::ZaiGlm5,
         }
     }
@@ -60,7 +59,6 @@ impl ModelId {
             Provider::OpenRouter => ModelId::OpenRouterQwen3Coder,
             Provider::Ollama => ModelId::OllamaGptOss20b,
             Provider::LmStudio => ModelId::GPT5,
-            Provider::LiteLLM => ModelId::GPT5,
             Provider::ZAI => ModelId::ZaiGlm5,
         }
     }

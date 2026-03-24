@@ -292,7 +292,6 @@ The zero-sized provider config types in
 - `OpenAIProviderConfig`
 - `AnthropicProviderConfig`
 - `HuggingFaceProviderConfig`
-- `LiteLLMProviderConfig`
 - `DeepSeekProviderConfig`
 - `MinimaxProviderConfig`
 - `OpenRouterProviderConfig`

@@ -390,11 +390,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Configuration, API Endpoints, Using Custom LM Studio Models, Tool Calling, Structured Output, and Streaming, Troubleshooting
   - **User Questions**: "What can you tell me about LM Studio Provider Guide?", "How does Configuration work?", "How does API Endpoints work?"
 
-- **File**: `docs/providers/litellm.md`
-  - **Content**: LiteLLM Provider Guide
-  - **Topics**: Configuration, Features, Troubleshooting, References
-  - **User Questions**: "What can you tell me about LiteLLM Provider Guide?", "How does Configuration work?", "How does Features work?"
-
 - **File**: `docs/providers/OLLAMA_INDEX.md`
   - **Content**: Ollama Integration Documentation Index
   - **Topics**: Quick Links, Modules Overview, Data Flow, Integration Roadmap, Common Patterns

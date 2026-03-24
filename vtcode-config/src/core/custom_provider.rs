@@ -98,7 +98,6 @@ impl CustomProviderConfig {
             "zai",
             "minimax",
             "huggingface",
-            "litellm",
             "openresponses",
         ];
         let lower = self.name.to_lowercase();

@@ -34,7 +34,7 @@ surface_metrics = true
 -   `idle_expiration_seconds` — how long (in seconds) a cached prefix can remain idle before expiry.
 -   `surface_metrics` — when enabled, OpenAI usage responses expose cache-hit statistics surfaced through VT Code’s usage telemetry.
 -   `prompt_cache_retention` — optional OpenAI Responses API retention policy for cached prefixes. Supported values are `"in_memory"` and `"24h"`.
--   Default: `None` (opt-in) - VT Code does not set `prompt_cache_retention` by default, so OpenAI keeps its default `in_memory` behavior unless you opt in explicitly.
+-   Default: `None` (opt-in) - VT Code does not set prompt_cache_retention by default; so OpenAI keeps its default `in_memory` behavior unless you opt in explicitly.
 -   Example CLI override to enable 24h retention for Responses model:
 
     ```bash

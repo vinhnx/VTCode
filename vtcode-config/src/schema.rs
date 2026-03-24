@@ -1,4 +1,3 @@
-#![cfg(feature = "schema")]
 
 use anyhow::{Context, Result};
 use schemars::{Schema, schema_for};

@@ -327,10 +327,9 @@ fn provider_precedence(provider: Provider) -> usize {
         Provider::Moonshot => 6,
         Provider::OpenRouter => 7,
         Provider::HuggingFace => 8,
-        Provider::LiteLLM => 9,
-        Provider::Copilot => 10,
-        Provider::Ollama => 11,
-        Provider::LmStudio => 12,
+        Provider::Copilot => 9,
+        Provider::Ollama => 10,
+        Provider::LmStudio => 11,
     }
 }
 
@@ -379,8 +378,6 @@ pub(crate) fn heuristic_provider_from_model(model: &str) -> Option<Provider> {
         Some(Provider::Gemini)
     } else if model.starts_with("glm-") {
         Some(Provider::ZAI)
-    } else if model.starts_with("litellm/") {
-        Some(Provider::LiteLLM)
     } else if model.starts_with("lmstudio-community/") {
         Some(Provider::LmStudio)
     } else if model.starts_with("moonshot-") || model.starts_with("kimi-") {

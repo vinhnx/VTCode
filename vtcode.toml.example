@@ -1303,11 +1303,6 @@ websocket_mode = false
 # Example: return encrypted reasoning state so VT Code can replay it on the next turn.
 # responses_include = ["reasoning.encrypted_content"]
 
-[provider.litellm]
-# LiteLLM is an OpenAI-compatible proxy for 100+ LLM providers.
-# See: https://docs.litellm.ai/
-# Base URL defaults to http://localhost:4000; override with LITELLM_BASE_URL env var.
-# API key defaults to LITELLM_API_KEY env var (optional if your proxy has no auth).
 
 [provider.anthropic]
 # DEPRECATED: Model name validation has been removed in v0.75.0+

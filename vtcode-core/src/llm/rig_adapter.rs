@@ -77,9 +77,6 @@ impl RigProviderCapabilities {
                 // The rig crate does not yet expose a dedicated Z.AI client.
                 // Skip instantiation while still marking the provider as verified.
             }
-            Provider::LiteLLM => {
-                // LiteLLM provides an OpenAI-compatible proxy; rig has no direct client.
-            }
         }
 
         Ok(RigValidationSummary {
@@ -187,11 +184,11 @@ mod tests {
         assert_eq!(openai.provider, Provider::OpenAI);
         assert_eq!(openai.model, "gpt-5");
 
-        let litellm = RigProviderCapabilities::new(Provider::LiteLLM, "proxy/model")
+        let deepseek = RigProviderCapabilities::new(Provider::DeepSeek, "deepseek-chat")
             .validate_model("test-key")
             .expect("no-op validation");
-        assert_eq!(litellm.provider, Provider::LiteLLM);
-        assert_eq!(litellm.model, "proxy/model");
+        assert_eq!(deepseek.provider, Provider::DeepSeek);
+        assert_eq!(deepseek.model, "deepseek-chat");
     }
 
     #[test]

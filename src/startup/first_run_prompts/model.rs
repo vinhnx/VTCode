@@ -50,7 +50,6 @@ pub(crate) fn default_model_for_provider(provider: Provider) -> &'static str {
         Provider::Moonshot => models::minimax::MINIMAX_M2_5,
         Provider::ZAI => models::zai::DEFAULT_MODEL,
         Provider::Minimax => models::minimax::MINIMAX_M2_5,
-        Provider::LiteLLM => models::litellm::DEFAULT_MODEL,
     }
 }
 

@@ -97,8 +97,6 @@ fn catalog_provider_key(provider: &str) -> &str {
         "minimax"
     } else if provider.eq_ignore_ascii_case("huggingface") {
         "huggingface"
-    } else if provider.eq_ignore_ascii_case("litellm") {
-        "litellm"
     } else {
         provider
     }
@@ -118,7 +116,6 @@ fn capability_provider_key(provider: Provider) -> &'static str {
         Provider::ZAI => "zai",
         Provider::Minimax => "minimax",
         Provider::HuggingFace => "huggingface",
-        Provider::LiteLLM => "litellm",
     }
 }
 

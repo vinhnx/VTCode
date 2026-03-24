@@ -76,15 +76,6 @@ define_provider_config!(
     ()
 );
 define_provider_config!(
-    LiteLLMProviderConfig,
-    "litellm",
-    "LiteLLM",
-    crate::config::constants::models::litellm::DEFAULT_MODEL,
-    crate::config::constants::urls::LITELLM_API_BASE,
-    Some(crate::config::constants::env_vars::LITELLM_BASE_URL),
-    ()
-);
-define_provider_config!(
     DeepSeekProviderConfig,
     "deepseek",
     "DeepSeek",
