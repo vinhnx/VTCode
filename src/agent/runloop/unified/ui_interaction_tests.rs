@@ -389,6 +389,45 @@ async fn placeholder_spinner_applies_message_updates_before_next_tick() {
 }
 
 #[tokio::test]
+async fn placeholder_spinner_uses_latest_message_update() {
+    let (tx, mut rx) = mpsc::unbounded_channel::<InlineCommand>();
+    let handle = InlineHandle::new_for_tests(tx);
+    let spinner = PlaceholderSpinner::with_progress(&handle, None, None, "Loading...", None);
+
+    let _ = rx.recv().await;
+    spinner.update_message("First update");
+    spinner.update_message("Final update");
+
+    let updated_status = tokio::time::timeout(Duration::from_millis(100), async {
+        loop {
+            match rx.recv().await {
+                Some(InlineCommand::SetInputStatus { left, .. })
+                    if left
+                        .as_deref()
+                        .map(|text| text.contains("Final update"))
+                        .unwrap_or(false) =>
+                {
+                    return left;
+                }
+                Some(_) => continue,
+                None => panic!("spinner status channel closed unexpectedly"),
+            }
+        }
+    })
+    .await
+    .expect("spinner should surface the latest message update");
+
+    spinner.finish();
+
+    assert!(
+        updated_status
+            .as_deref()
+            .map(|text| text.contains("Final update"))
+            .unwrap_or(false)
+    );
+}
+
+#[tokio::test]
 async fn renders_completed_only_content() {
     let provider = CompletedOnlyProvider {
         content: Some("hello world".to_string()),

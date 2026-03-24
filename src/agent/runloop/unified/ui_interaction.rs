@@ -9,7 +9,7 @@ use super::progress::ProgressReporter;
 use anstyle::Effects;
 
 use anyhow::Result;
-use tokio::sync::{Notify, RwLock, mpsc};
+use tokio::sync::{Notify, RwLock, watch};
 use tokio::task;
 use tokio::time::MissedTickBehavior;
 use vtcode_commons::stop_hints::with_stop_hint;
@@ -594,7 +594,7 @@ pub(crate) struct PlaceholderSpinner {
     restore_right: Option<String>,
     active: Arc<AtomicBool>,
     task: task::JoinHandle<()>,
-    message_sender: Option<mpsc::UnboundedSender<String>>,
+    message_sender: Option<watch::Sender<String>>,
     defer_restore: Arc<AtomicBool>,
 }
 
@@ -617,7 +617,7 @@ impl PlaceholderSpinner {
         let status_right = restore_right.clone();
         let progress_reporter = progress_reporter.cloned();
 
-        let (message_sender, mut message_receiver) = mpsc::unbounded_channel::<String>();
+        let (message_sender, mut message_receiver) = watch::channel(message_with_hint.clone());
         let message_sender_clone = message_sender.clone();
         let initial_display = message_with_hint.clone();
 
@@ -634,12 +634,12 @@ impl PlaceholderSpinner {
             while spinner_active.load(Ordering::SeqCst) {
                 tokio::select! {
                     _ = interval.tick() => {}
-                    maybe_message = message_receiver.recv(), if message_updates_enabled => {
-                        match maybe_message {
-                            Some(new_message) => {
-                                current_message = with_stop_hint(&new_message);
+                    changed = message_receiver.changed(), if message_updates_enabled => {
+                        match changed {
+                            Ok(()) => {
+                                current_message = message_receiver.borrow_and_update().clone();
                             }
-                            None => {
+                            Err(_) => {
                                 message_updates_enabled = false;
                                 continue;
                             }
@@ -687,7 +687,7 @@ impl PlaceholderSpinner {
 
     pub(crate) fn update_message(&self, message: impl Into<String>) {
         if let Some(sender) = &self.message_sender {
-            let _ = sender.send(message.into());
+            let _ = sender.send(with_stop_hint(&message.into()));
         }
     }
 

@@ -453,6 +453,20 @@ impl AsyncMiddleware for AsyncRetryMiddleware {
                 return result;
             }
 
+            // Skip retry for non-retryable errors (auth failures, policy
+            // violations, invalid parameters) to fail fast.
+            if let Some(ref error_msg) = result.error {
+                let category = vtcode_commons::classify_error_message(error_msg);
+                if !category.is_retryable() {
+                    tracing::debug!(
+                        attempt = attempt,
+                        category = ?category,
+                        "non-retryable error, skipping remaining attempts"
+                    );
+                    return result;
+                }
+            }
+
             self.obs_context.event(
                 crate::tools::EventType::FallbackAttempt,
                 "retry",
