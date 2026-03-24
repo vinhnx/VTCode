@@ -2,7 +2,12 @@
 
 ## Overview
 
-VT Code follows a modular, trait-based architecture designed for maintainability, extensibility, and performance.
+VT Code follows a modular architecture designed for maintainability,
+extensibility, and performance. Internally, VT Code uses Rust traits for
+runtime composition. Externally, VT Code prefers protocol- and manifest-driven
+extension seams such as MCP, skills, plugin manifests, and
+`[[custom_providers]]` so third-party integrations do not need to land new Rust
+impls in the core workspace.
 
 ## Model + Harness
 
@@ -153,7 +158,7 @@ pub trait CacheableTool: Tool {
 
 ## Design Principles
 
-1. **Trait-based Composability** - Tools implement multiple traits for different capabilities
+1. **Internal Traits, External Protocols** - Keep Rust traits as internal composition seams; prefer config, manifests, and protocols for third-party extension points
 2. **Mode-based Execution** - Single tools support multiple execution modes
 3. **Simplicity First** - Prefer simple algorithms and control flow until real workload data justifies more complexity
 4. **Data-Oriented Design** - Choose data structures and boundaries so the right algorithm is obvious
@@ -200,7 +205,7 @@ impl ModeTool for MyTool {
 -   **77% complexity reduction** from monolithic structure
 -   **Enhanced functionality** through mode-based execution
 -   **100% backward compatibility** maintained
--   **Plugin-ready architecture** for external development
+-   **Protocol-friendly extension model** for external development
 -   **Performance optimized** with intelligent caching
 
 ## RL Optimization Loop (Adaptive Action Selection)
