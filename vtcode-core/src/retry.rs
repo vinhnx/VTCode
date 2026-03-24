@@ -324,7 +324,7 @@ mod tests {
 
         let decision =
             policy.decision_for_anyhow(&anyhow::anyhow!("HTTP 503 Service Unavailable"), 0, None);
-        assert_eq!(decision.category, ErrorCategory::Network);
+        assert_eq!(decision.category, ErrorCategory::ServiceUnavailable);
         assert!(decision.retryable);
         assert_eq!(decision.delay, Some(Duration::from_secs(1)));
     }

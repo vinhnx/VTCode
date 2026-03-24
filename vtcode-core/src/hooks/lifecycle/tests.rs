@@ -252,6 +252,50 @@ async fn test_notification_hook_execution_uses_notification_type_matcher() {
 }
 
 #[tokio::test]
+async fn test_pre_compact_hook_execution_uses_trigger_matcher() {
+    let temp_dir = create_test_workspace();
+    let workspace = temp_dir.path();
+
+    let hooks_config = LifecycleHooksConfig {
+        pre_compact: vec![HookGroupConfig {
+            matcher: Some("auto".into()),
+            hooks: vec![HookCommandConfig {
+                kind: Default::default(),
+                command: "echo 'Compaction hook fired'".into(),
+                timeout_seconds: None,
+            }],
+        }],
+        ..Default::default()
+    };
+
+    let config = HooksConfig {
+        lifecycle: hooks_config,
+    };
+
+    let engine = LifecycleHookEngine::new(
+        workspace.to_path_buf(),
+        &config,
+        SessionStartTrigger::Startup,
+    )
+    .expect("Failed to create hook engine")
+    .unwrap();
+
+    let outcome = engine
+        .run_pre_compact(
+            crate::exec::events::CompactionTrigger::Auto,
+            crate::exec::events::CompactionMode::Local,
+            12,
+            5,
+            None,
+        )
+        .await
+        .expect("Failed to run pre-compact hook");
+
+    assert_eq!(outcome.messages.len(), 1);
+    assert!(outcome.messages[0].text.contains("Compaction hook fired"));
+}
+
+#[tokio::test]
 #[cfg_attr(
     not(target_os = "macos"),
     ignore = "Lifecycle hooks are for local development only"

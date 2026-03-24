@@ -1,5 +1,6 @@
 //! Task-related data structures shared across the agent runner modules.
 
+use crate::exec::events::ThreadCompletionSubtype;
 use crate::exec::events::ThreadEvent;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -39,7 +40,7 @@ pub struct ContextItem {
     pub content: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskOutcome {
     Success,
@@ -47,6 +48,10 @@ pub enum TaskOutcome {
     TurnLimitReached {
         max_turns: usize,
         actual_turns: usize,
+    },
+    BudgetLimitReached {
+        max_budget_usd: f64,
+        actual_cost_usd: f64,
     },
     ToolLoopLimitReached {
         max_tool_loops: usize,
@@ -80,6 +85,12 @@ impl TaskOutcome {
                 "Stopped after reaching turn limit (max: {}, reached: {})",
                 max_turns, actual_turns
             ),
+            Self::BudgetLimitReached {
+                max_budget_usd,
+                actual_cost_usd,
+            } => format!(
+                "Stopped after reaching budget limit (max: ${max_budget_usd:.4}, spent: ${actual_cost_usd:.4})"
+            ),
             Self::ToolLoopLimitReached {
                 max_tool_loops,
                 actual_tool_loops,
@@ -108,11 +119,25 @@ impl TaskOutcome {
             Self::Success => "success",
             Self::StoppedNoAction => "stopped_no_action",
             Self::TurnLimitReached { .. } => "turn_limit_reached",
+            Self::BudgetLimitReached { .. } => "budget_limit_reached",
             Self::ToolLoopLimitReached { .. } => "tool_loop_limit_reached",
             Self::LoopDetected => "loop_detected",
             Self::Cancelled => "cancelled",
             Self::Failed { .. } => "failed",
             Self::Unknown => "unknown",
+        }
+    }
+
+    pub fn thread_completion_subtype(&self) -> ThreadCompletionSubtype {
+        match self {
+            Self::Success | Self::StoppedNoAction => ThreadCompletionSubtype::Success,
+            Self::TurnLimitReached { .. } => ThreadCompletionSubtype::ErrorMaxTurns,
+            Self::BudgetLimitReached { .. } => ThreadCompletionSubtype::ErrorMaxBudgetUsd,
+            Self::Cancelled => ThreadCompletionSubtype::Cancelled,
+            Self::ToolLoopLimitReached { .. }
+            | Self::LoopDetected
+            | Self::Failed { .. }
+            | Self::Unknown => ThreadCompletionSubtype::ErrorDuringExecution,
         }
     }
 
@@ -124,6 +149,13 @@ impl TaskOutcome {
         Self::TurnLimitReached {
             max_turns,
             actual_turns,
+        }
+    }
+
+    pub fn budget_limit_reached(max_budget_usd: f64, actual_cost_usd: f64) -> Self {
+        Self::BudgetLimitReached {
+            max_budget_usd,
+            actual_cost_usd,
         }
     }
 
@@ -143,7 +175,7 @@ impl fmt::Display for TaskOutcome {
 
 #[cfg(test)]
 mod tests {
-    use super::TaskOutcome;
+    use super::{TaskOutcome, ThreadCompletionSubtype};
 
     #[test]
     fn tool_loop_limit_description_handles_disabled_limit() {
@@ -151,6 +183,37 @@ mod tests {
 
         assert!(description.contains("tool-loop safeguard halted execution"));
         assert!(description.contains("reached: 4"));
+    }
+
+    #[test]
+    fn thread_completion_subtype_matches_public_result_states() {
+        assert_eq!(
+            TaskOutcome::Success.thread_completion_subtype(),
+            ThreadCompletionSubtype::Success
+        );
+        assert_eq!(
+            TaskOutcome::StoppedNoAction.thread_completion_subtype(),
+            ThreadCompletionSubtype::Success
+        );
+        assert_eq!(
+            TaskOutcome::turn_limit_reached(3, 3).thread_completion_subtype(),
+            ThreadCompletionSubtype::ErrorMaxTurns
+        );
+        assert_eq!(
+            TaskOutcome::budget_limit_reached(1.0, 1.2).thread_completion_subtype(),
+            ThreadCompletionSubtype::ErrorMaxBudgetUsd
+        );
+        assert_eq!(
+            TaskOutcome::Cancelled.thread_completion_subtype(),
+            ThreadCompletionSubtype::Cancelled
+        );
+        assert_eq!(
+            (TaskOutcome::Failed {
+                reason: "boom".to_string()
+            })
+            .thread_completion_subtype(),
+            ThreadCompletionSubtype::ErrorDuringExecution
+        );
     }
 }
 
@@ -168,6 +231,12 @@ pub struct TaskResults {
     pub executed_commands: Vec<String>,
     /// Natural-language summary of the run assembled by the agent.
     pub summary: String,
+    /// Provider stop reason associated with the last model turn, when available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stop_reason: Option<String>,
+    /// Estimated total API cost in USD, when pricing metadata is available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total_cost_usd: Option<f64>,
     /// Collected warnings emitted while processing the task.
     #[serde(default)]
     pub warnings: Vec<String>,

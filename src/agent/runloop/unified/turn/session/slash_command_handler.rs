@@ -59,6 +59,7 @@ pub(crate) async fn handle_input_commands(
                 let command_result = match slash_commands::handle_outcome(
                     outcome,
                     SlashCommandContext {
+                        thread_id: ctx.thread_id,
                         renderer: ctx.renderer,
                         handle: ctx.handle,
                         session: ctx.session,
@@ -86,6 +87,8 @@ pub(crate) async fn handle_input_commands(
                         full_auto: ctx.full_auto,
                         loaded_skills: ctx.loaded_skills,
                         checkpoint_manager: ctx.checkpoint_manager,
+                        lifecycle_hooks: ctx.lifecycle_hooks,
+                        harness_emitter: ctx.harness_emitter,
                     },
                 )
                 .await

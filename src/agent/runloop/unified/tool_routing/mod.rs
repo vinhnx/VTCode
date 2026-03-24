@@ -393,6 +393,10 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         }
     }
 
+    if permission_mode == PermissionMode::DontAsk {
+        return Ok(ToolPermissionFlow::Denied);
+    }
+
     if policy_decision == ToolPermissionDecision::Allow
         && !requires_rule_prompt
         && !requires_sandbox_prompt
@@ -409,10 +413,6 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         || policy_decision == ToolPermissionDecision::Prompt;
     if !should_prompt {
         return Ok(ToolPermissionFlow::Approved);
-    }
-
-    if permission_mode == PermissionMode::DontAsk {
-        return Ok(ToolPermissionFlow::Denied);
     }
 
     if approval_policy_rejects_prompt(

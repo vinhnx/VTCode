@@ -139,6 +139,41 @@ impl ResponseBuilder {
                 emitter.response_failed(self.response.clone());
             }
 
+            ThreadEvent::ThreadCompleted(evt) => {
+                emitter.emit(ResponseStreamEvent::CustomEvent {
+                    response_id: self.response.id.clone(),
+                    event_type: "vtcode.thread_completed".to_string(),
+                    sequence_number: self.next_output_index as u64,
+                    data: json!({
+                        "thread_id": evt.thread_id,
+                        "session_id": evt.session_id,
+                        "subtype": evt.subtype.as_str(),
+                        "outcome_code": evt.outcome_code,
+                        "result": evt.result,
+                        "stop_reason": evt.stop_reason,
+                        "usage": evt.usage,
+                        "total_cost_usd": evt.total_cost_usd,
+                        "num_turns": evt.num_turns,
+                    }),
+                });
+            }
+
+            ThreadEvent::ThreadCompactBoundary(evt) => {
+                emitter.emit(ResponseStreamEvent::CustomEvent {
+                    response_id: self.response.id.clone(),
+                    event_type: "vtcode.thread_compact_boundary".to_string(),
+                    sequence_number: self.next_output_index as u64,
+                    data: json!({
+                        "thread_id": evt.thread_id,
+                        "trigger": evt.trigger.as_str(),
+                        "mode": evt.mode.as_str(),
+                        "original_message_count": evt.original_message_count,
+                        "compacted_message_count": evt.compacted_message_count,
+                        "history_artifact_path": evt.history_artifact_path,
+                    }),
+                });
+            }
+
             ThreadEvent::ItemStarted(evt) => {
                 self.handle_item_started(&evt.item, emitter);
             }
@@ -1216,6 +1251,7 @@ mod tests {
                 usage: Usage {
                     input_tokens: 100,
                     cached_input_tokens: 50,
+                    cache_creation_tokens: 0,
                     output_tokens: 25,
                 },
             }),

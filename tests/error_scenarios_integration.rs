@@ -86,9 +86,12 @@ mod error_scenarios {
             ("rate limit exceeded", ErrorCategory::RateLimit),
             (
                 "server is overloaded, try again later",
-                ErrorCategory::Network,
+                ErrorCategory::ServiceUnavailable,
             ),
-            ("service temporarily unavailable", ErrorCategory::Network),
+            (
+                "service temporarily unavailable",
+                ErrorCategory::ServiceUnavailable,
+            ),
         ];
 
         for (msg, expected) in cases {

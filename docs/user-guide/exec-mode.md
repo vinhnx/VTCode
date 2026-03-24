@@ -4,6 +4,8 @@ VT Code's exec mode lets you run autonomous tasks from the shell without startin
 `codex exec` guidance: commands run non-interactively, stream structured events, and can be resumed later. By default, `vtcode
 exec` prints progress, summaries, and outcomes to **stderr**. `stdout` remains silent unless you request structured output (via `--json`), allowing you to safely pipe the output to other tools without pollution.
 
+For the complete runtime lifecycle mapping, see [Agent Loop Contract](../guides/agent-loop-contract.md).
+
 ## Launching exec mode
 
 ```bash
@@ -53,6 +55,8 @@ verification, records a harness event, and forces a fresh continuation turn with
 Use `vtcode exec --json` to emit JSON Lines that match the non-interactive Codex schema:
 
 - `thread.started` – emitted once per session with a stable `thread_id`.
+- `thread.completed` – emitted once per session with terminal subtype, usage, stop reason, and optional `total_cost_usd`.
+- `thread.compact_boundary` – emitted when VT Code compacts history locally or through a provider compaction path.
 - `turn.started` / `turn.completed` – wrap each autonomous turn and include token usage on completion.
 - `turn.failed` – surfaces limit breaches or early exits together with the outcome description.
 - `item.started` / `item.updated` / `item.completed` – track the lifecycle of individual operations.
@@ -72,6 +76,10 @@ existing parsers without modification.
 
 If `--events` is not provided, exec mode also respects `agent.harness.event_log_path`. Relative or absolute file paths write JSONL
 events directly; directory paths get a timestamped `harness-<session>-<timestamp>.jsonl` file.
+
+`agent.harness.max_budget_usd` applies to exec mode as well as interactive runs.
+If model pricing metadata is unavailable, VT Code leaves `total_cost_usd` unset
+and skips budget enforcement for that session.
 
 ## Resuming sessions
 

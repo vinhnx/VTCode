@@ -17,7 +17,7 @@ use serde_json::Value;
 pub mod trace;
 
 /// Semantic version of the serialized event schema exported by this crate.
-pub const EVENT_SCHEMA_VERSION: &str = "0.3.0";
+pub const EVENT_SCHEMA_VERSION: &str = "0.4.0";
 
 /// Wraps a [`ThreadEvent`] with schema metadata so downstream consumers can
 /// negotiate compatibility before processing an event stream.
@@ -241,6 +241,12 @@ pub enum ThreadEvent {
     /// Indicates that a new execution thread has started.
     #[serde(rename = "thread.started")]
     ThreadStarted(ThreadStartedEvent),
+    /// Indicates that an execution thread has reached a terminal outcome.
+    #[serde(rename = "thread.completed")]
+    ThreadCompleted(ThreadCompletedEvent),
+    /// Indicates that conversation compaction replaced older history with a boundary.
+    #[serde(rename = "thread.compact_boundary")]
+    ThreadCompactBoundary(ThreadCompactBoundaryEvent),
     /// Marks the beginning of an execution turn.
     #[serde(rename = "turn.started")]
     TurnStarted(TurnStartedEvent),
@@ -272,6 +278,111 @@ pub enum ThreadEvent {
 pub struct ThreadStartedEvent {
     /// Unique identifier for the thread that was started.
     pub thread_id: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum ThreadCompletionSubtype {
+    Success,
+    ErrorMaxTurns,
+    ErrorMaxBudgetUsd,
+    ErrorDuringExecution,
+    Cancelled,
+}
+
+impl ThreadCompletionSubtype {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Success => "success",
+            Self::ErrorMaxTurns => "error_max_turns",
+            Self::ErrorMaxBudgetUsd => "error_max_budget_usd",
+            Self::ErrorDuringExecution => "error_during_execution",
+            Self::Cancelled => "cancelled",
+        }
+    }
+
+    pub const fn is_success(self) -> bool {
+        matches!(self, Self::Success)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum CompactionTrigger {
+    Manual,
+    Auto,
+}
+
+impl CompactionTrigger {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Manual => "manual",
+            Self::Auto => "auto",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum CompactionMode {
+    Provider,
+    Local,
+}
+
+impl CompactionMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Provider => "provider",
+            Self::Local => "local",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
+pub struct ThreadCompletedEvent {
+    /// Stable thread identifier for the session.
+    pub thread_id: String,
+    /// Stable session identifier for the runtime that produced the thread.
+    pub session_id: String,
+    /// Coarse result category aligned with SDK-style terminal states.
+    pub subtype: ThreadCompletionSubtype,
+    /// VT Code-specific detailed outcome code.
+    pub outcome_code: String,
+    /// Final assistant result text when the thread completed successfully.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result: Option<String>,
+    /// Provider stop reason or VT Code terminal reason when available.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stop_reason: Option<String>,
+    /// Aggregated token usage across the thread.
+    pub usage: Usage,
+    /// Optional estimated total API cost for the thread.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_cost_usd: Option<serde_json::Number>,
+    /// Number of turns executed before completion.
+    pub num_turns: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
+pub struct ThreadCompactBoundaryEvent {
+    /// Stable thread identifier for the session.
+    pub thread_id: String,
+    /// Whether compaction was triggered manually or automatically.
+    pub trigger: CompactionTrigger,
+    /// Whether the compaction boundary came from provider-native or local compaction.
+    pub mode: CompactionMode,
+    /// Number of messages before compaction.
+    pub original_message_count: usize,
+    /// Number of messages after compaction.
+    pub compacted_message_count: usize,
+    /// Optional persisted artifact containing the archived compaction summary/history.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub history_artifact_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -309,6 +420,8 @@ pub struct Usage {
     pub input_tokens: u64,
     /// Number of cached prompt tokens reused from previous turns.
     pub cached_input_tokens: u64,
+    /// Number of cache-creation tokens charged during the turn.
+    pub cache_creation_tokens: u64,
     /// Number of completion tokens generated by the model.
     pub output_tokens: u64,
 }
@@ -619,6 +732,7 @@ mod tests {
             usage: Usage {
                 input_tokens: 1,
                 cached_input_tokens: 2,
+                cache_creation_tokens: 0,
                 output_tokens: 3,
             },
         });
@@ -720,6 +834,50 @@ mod tests {
                     exit_code: Some(101),
                 }),
             },
+        });
+
+        let json = serde_json::to_string(&event)?;
+        let restored: ThreadEvent = serde_json::from_str(&json)?;
+
+        assert_eq!(restored, event);
+        Ok(())
+    }
+
+    #[test]
+    fn thread_completed_round_trip() -> Result<(), Box<dyn Error>> {
+        let event = ThreadEvent::ThreadCompleted(ThreadCompletedEvent {
+            thread_id: "thread-1".to_string(),
+            session_id: "session-1".to_string(),
+            subtype: ThreadCompletionSubtype::ErrorMaxBudgetUsd,
+            outcome_code: "budget_limit_reached".to_string(),
+            result: None,
+            stop_reason: Some("max_tokens".to_string()),
+            usage: Usage {
+                input_tokens: 10,
+                cached_input_tokens: 4,
+                cache_creation_tokens: 2,
+                output_tokens: 5,
+            },
+            total_cost_usd: serde_json::Number::from_f64(1.25),
+            num_turns: 3,
+        });
+
+        let json = serde_json::to_string(&event)?;
+        let restored: ThreadEvent = serde_json::from_str(&json)?;
+
+        assert_eq!(restored, event);
+        Ok(())
+    }
+
+    #[test]
+    fn compact_boundary_round_trip() -> Result<(), Box<dyn Error>> {
+        let event = ThreadEvent::ThreadCompactBoundary(ThreadCompactBoundaryEvent {
+            thread_id: "thread-1".to_string(),
+            trigger: CompactionTrigger::Auto,
+            mode: CompactionMode::Provider,
+            original_message_count: 12,
+            compacted_message_count: 5,
+            history_artifact_path: Some("/tmp/history.jsonl".to_string()),
         });
 
         let json = serde_json::to_string(&event)?;

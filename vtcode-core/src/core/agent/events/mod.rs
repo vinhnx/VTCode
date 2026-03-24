@@ -10,10 +10,11 @@ pub use lifecycle::{
 
 use crate::core::threads::{SubmissionId, ThreadRuntimeHandle};
 use crate::exec::events::{
-    CommandExecutionItem, CommandExecutionStatus, ErrorItem, FileChangeItem, FileUpdateChange,
-    HarnessEventItem, HarnessEventKind, ItemCompletedEvent, ItemStartedEvent, PatchApplyStatus,
-    PatchChangeKind, ThreadEvent, ThreadItem, ThreadItemDetails, ThreadStartedEvent,
-    TurnCompletedEvent, TurnFailedEvent, TurnStartedEvent, Usage,
+    CommandExecutionItem, CommandExecutionStatus, CompactionMode, CompactionTrigger, ErrorItem,
+    FileChangeItem, FileUpdateChange, HarnessEventItem, HarnessEventKind, ItemCompletedEvent,
+    ItemStartedEvent, PatchApplyStatus, PatchChangeKind, ThreadCompactBoundaryEvent,
+    ThreadCompletedEvent, ThreadCompletionSubtype, ThreadEvent, ThreadItem, ThreadItemDetails,
+    ThreadStartedEvent, TurnCompletedEvent, TurnFailedEvent, TurnStartedEvent, Usage,
 };
 use parking_lot::Mutex;
 use serde_json::Value;
@@ -55,6 +56,7 @@ impl ActiveToolHandle {
 /// Helper responsible for recording execution events and relaying them to optional sinks.
 #[derive(Default)]
 pub struct ExecEventRecorder {
+    thread_id: String,
     events: Vec<ThreadEvent>,
     event_sink: Option<EventSink>,
     thread_handle: Option<ThreadRuntimeHandle>,
@@ -71,6 +73,7 @@ impl ExecEventRecorder {
     ) -> Self {
         let thread_id = thread_id.into();
         let mut recorder = Self {
+            thread_id: thread_id.clone(),
             events: Vec::new(),
             event_sink,
             thread_handle,
@@ -157,6 +160,50 @@ impl ExecEventRecorder {
             usage: None,
         }));
         self.finish_turn();
+    }
+
+    pub fn thread_completed(
+        &mut self,
+        session_id: &str,
+        subtype: ThreadCompletionSubtype,
+        outcome_code: &str,
+        result: Option<&str>,
+        stop_reason: Option<&str>,
+        usage: Usage,
+        total_cost_usd: Option<serde_json::Number>,
+        num_turns: usize,
+    ) {
+        self.record(ThreadEvent::ThreadCompleted(ThreadCompletedEvent {
+            thread_id: self.thread_id.clone(),
+            session_id: session_id.to_string(),
+            subtype,
+            outcome_code: outcome_code.to_string(),
+            result: result.map(str::to_string),
+            stop_reason: stop_reason.map(str::to_string),
+            usage,
+            total_cost_usd,
+            num_turns,
+        }));
+    }
+
+    pub fn compact_boundary(
+        &mut self,
+        trigger: CompactionTrigger,
+        mode: CompactionMode,
+        original_message_count: usize,
+        compacted_message_count: usize,
+        history_artifact_path: Option<&str>,
+    ) {
+        self.record(ThreadEvent::ThreadCompactBoundary(
+            ThreadCompactBoundaryEvent {
+                thread_id: self.thread_id.clone(),
+                trigger,
+                mode,
+                original_message_count,
+                compacted_message_count,
+                history_artifact_path: history_artifact_path.map(str::to_string),
+            },
+        ));
     }
 
     fn finish_turn(&mut self) {

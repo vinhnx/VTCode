@@ -28,6 +28,7 @@ use std::path::PathBuf;
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) struct InteractionLoopContext<'a> {
+    pub thread_id: &'a str,
     pub renderer: &'a mut AnsiRenderer,
     pub session: &'a mut vtcode_tui::app::InlineSession,
     pub handle: &'a InlineHandle,

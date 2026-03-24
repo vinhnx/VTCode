@@ -1,3 +1,13 @@
+file_opener = "none"
+project_doc_fallback_filenames = []
+notify = []
+custom_providers = []
+
+[history]
+persistence = "file"
+
+[tui]
+
 [agent]
 provider = "openai"
 api_key_env = "OPENAI_API_KEY"
@@ -19,6 +29,7 @@ refine_prompts_enabled = false
 refine_prompts_max_passes = 1
 refine_prompts_model = ""
 project_doc_max_bytes = 16384
+project_doc_fallback_filenames = []
 instruction_max_bytes = 16384
 instruction_files = []
 credential_storage_mode = "keyring"
@@ -37,6 +48,12 @@ temperature = 0.3
 use_for_large_reads = true
 use_for_web_summary = true
 use_for_git_history = true
+
+[agent.prompt_suggestions]
+enabled = true
+model = ""
+temperature = 0.3
+show_cost_notice = true
 
 [agent.onboarding]
 enabled = true
@@ -86,10 +103,7 @@ max_tool_calls_per_turn = 0
 max_tool_wall_clock_secs = 600
 max_tool_retries = 2
 auto_compaction_enabled = false
-# Optional absolute compact threshold in tokens for server-side compaction or local fallback compaction.
-# auto_compaction_threshold_tokens = 200000
 continuation_policy = "all"
-# Defaults to ~/.vtcode/sessions/ when unset or empty.
 event_log_path = ""
 
 [agent.circuit_breaker]
@@ -112,6 +126,28 @@ callback_port = 8484
 auto_refresh = true
 flow_timeout_secs = 300
 
+[auth.openai]
+preferred_method = "auto"
+callback_port = 1455
+auto_refresh = true
+flow_timeout_secs = 300
+
+[auth.copilot]
+available_tools = [
+    "view",
+    "glob",
+    "grep",
+]
+excluded_tools = []
+vtcode_tool_allowlist = [
+    "unified_search",
+    "unified_file",
+    "unified_exec",
+    "apply_patch",
+]
+startup_timeout_secs = 20
+auth_timeout_secs = 300
+
 [tools]
 default_policy = "prompt"
 max_tool_loops = 0
@@ -131,6 +167,7 @@ enter_plan_mode = "prompt"
 exit_plan = "prompt"
 exit_plan_mode = "prompt"
 implement_plan = "prompt"
+list_files = "allow"
 mode_edit = "prompt"
 mode_plan = "prompt"
 plan_checklist = "prompt"
@@ -143,6 +180,7 @@ plan_start = "prompt"
 plan_task_tracker = "prompt"
 plan_tasks = "prompt"
 planner_mode = "prompt"
+read_file = "allow"
 request_user_input = "allow"
 resume_edit_mode = "prompt"
 search_replace = "prompt"
@@ -274,6 +312,7 @@ allow_list = [
     "docker",
     "docker-compose",
 ]
+approval_prefixes = []
 extra_path_entries = [
     "$HOME/.cargo/bin",
     "$HOME/.local/bin",
@@ -419,9 +458,14 @@ deny_regex = [
     'docker\s+run\s+.*--privileged',
     'kubectl\s+(delete|drain|uncordon)',
 ]
-approval_prefixes = []
 
 [permissions]
+default_mode = "default"
+allowed_tools = []
+disallowed_tools = []
+allow = []
+ask = []
+deny = []
 enabled = true
 resolve_commands = true
 audit_enabled = true
@@ -501,6 +545,7 @@ allow_tool_ansi = false
 inline_viewport_rows = 16
 reasoning_display_mode = "toggle"
 reasoning_visible_default = false
+vim_mode = false
 layout_mode = "auto"
 display_mode = "minimal"
 show_sidebar = true
@@ -558,6 +603,7 @@ command_timeout_seconds = 300
 stdout_tail_lines = 20
 scrollback_lines = 400
 max_scrollback_bytes = 25000000
+emulation_backend = "legacy_vt100"
 large_output_threshold_kb = 5000
 shell_zsh_fork = false
 
@@ -731,9 +777,6 @@ min_prefix_tokens = 1024
 idle_expiration_seconds = 3600
 surface_metrics = true
 prompt_cache_key_mode = "session"
-# Optional: server-side prompt cache retention for OpenAI Responses API
-# Example: "24h" (leave commented out for default behavior)
-# prompt_cache_retention = "24h"
 
 [prompt_cache.providers.anthropic]
 enabled = true
@@ -785,6 +828,11 @@ show_provider_names = true
 
 [mcp.ui.renderers]
 
+[mcp.requirements]
+enforce = false
+allowed_stdio_commands = []
+allowed_http_endpoints = []
+
 [mcp.server]
 enabled = false
 bind_address = "127.0.0.1"
@@ -793,11 +841,6 @@ transport = "sse"
 name = "vtcode-mcp-server"
 version = "0.81.3"
 exposed_tools = []
-
-[mcp.requirements]
-enforce = false
-allowed_stdio_commands = []
-allowed_http_endpoints = []
 
 [mcp.allowlist]
 enforce = false
@@ -833,14 +876,33 @@ list_files = true
 [acp.zed.auth]
 default_method = "agent"
 
+[ide_context]
+enabled = true
+inject_into_prompt = true
+show_in_tui = true
+include_selection_text = true
+provider_mode = "auto"
+
+[ide_context.providers.vscode_compatible]
+enabled = true
+
+[ide_context.providers.zed]
+enabled = true
+
+[ide_context.providers.generic]
+enabled = true
+
 [hooks.lifecycle]
+quiet_success_output = false
 session_start = []
 session_end = []
 user_prompt_submit = []
 pre_tool_use = []
 post_tool_use = []
+pre_compact = []
 task_completion = []
 task_completed = []
+notification = []
 
 [model]
 skip_loop_detection = false
@@ -849,8 +911,10 @@ loop_detection_interactive = true
 
 [provider.openai]
 websocket_mode = false
-# Optional native OpenAI service tier override. Leave commented out to use the Project default.
-# service_tier = "priority"
+
+[provider.openai.hosted_shell]
+enabled = false
+environment = "container_auto"
 
 [provider.openai.tool_search]
 enabled = true
@@ -880,6 +944,9 @@ max-skills-in-prompt = 10
 enable-auto-trigger = true
 enable-description-matching = true
 min-keyword-matches = 2
+
+[skills.bundled]
+enabled = true
 
 [output_style]
 active_style = "default"

@@ -147,6 +147,8 @@ mod tests {
             modified_files: vec!["src/main.rs".to_string()],
             executed_commands: vec!["git status".to_string()],
             summary: "done".to_string(),
+            stop_reason: None,
+            total_cost_usd: None,
             warnings: vec!["watch out".to_string()],
             thread_events: Vec::new(),
             outcome: TaskOutcome::Success,
@@ -294,6 +296,8 @@ mod tests {
             modified_files: Vec::new(),
             executed_commands: Vec::new(),
             summary: "Completed work".to_string(),
+            stop_reason: None,
+            total_cost_usd: None,
             warnings: Vec::new(),
             thread_events: vec![ThreadEvent::TurnCompleted(TurnCompletedEvent {
                 usage: Usage::default(),

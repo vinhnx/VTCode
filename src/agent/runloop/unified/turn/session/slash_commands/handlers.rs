@@ -214,18 +214,27 @@ pub(super) async fn handle_compact_conversation(
     }
 
     let harness_snapshot = ctx.tool_registry.harness_context_snapshot();
-    let outcome = match crate::agent::runloop::unified::turn::compaction::compact_history_in_place(
-        ctx.provider_client.as_ref(),
-        &ctx.config.model,
-        &harness_snapshot.session_id,
-        &ctx.config.workspace,
-        ctx.vt_cfg.as_ref(),
-        ctx.conversation_history,
-        ctx.session_stats,
-        ctx.context_manager,
-    )
-    .await
-    {
+    let outcome =
+        match crate::agent::runloop::unified::turn::compaction::compact_history_in_place_with_events(
+            crate::agent::runloop::unified::turn::compaction::CompactionContext::new(
+                ctx.provider_client.as_ref(),
+                &ctx.config.model,
+                &harness_snapshot.session_id,
+                ctx.thread_id,
+                &ctx.config.workspace,
+                ctx.vt_cfg.as_ref(),
+                ctx.lifecycle_hooks,
+                ctx.harness_emitter,
+            ),
+            crate::agent::runloop::unified::turn::compaction::CompactionState::new(
+                ctx.conversation_history,
+                ctx.session_stats,
+                ctx.context_manager,
+            ),
+            vtcode_core::exec::events::CompactionTrigger::Manual,
+        )
+        .await
+        {
         Ok(outcome) => outcome,
         Err(err) => {
             ctx.renderer

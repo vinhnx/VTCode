@@ -78,6 +78,7 @@ fn sample_timeline() -> Vec<ThreadEvent> {
             usage: Usage {
                 input_tokens: 128,
                 cached_input_tokens: 0,
+                cache_creation_tokens: 0,
                 output_tokens: 32,
             },
         }),

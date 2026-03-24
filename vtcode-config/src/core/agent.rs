@@ -300,6 +300,9 @@ pub struct AgentHarnessConfig {
     /// When unset, VT Code derives a threshold from the provider context window.
     #[serde(default)]
     pub auto_compaction_threshold_tokens: Option<u64>,
+    /// Optional maximum estimated API cost in USD before VT Code stops the session.
+    #[serde(default)]
+    pub max_budget_usd: Option<f64>,
     /// Controls whether harness-managed continuation loops are enabled.
     #[serde(default)]
     pub continuation_policy: ContinuationPolicy,
@@ -317,6 +320,7 @@ impl Default for AgentHarnessConfig {
             max_tool_retries: default_harness_max_tool_retries(),
             auto_compaction_enabled: default_harness_auto_compaction_enabled(),
             auto_compaction_threshold_tokens: None,
+            max_budget_usd: None,
             continuation_policy: ContinuationPolicy::default(),
             event_log_path: None,
         }

@@ -136,6 +136,17 @@ fn build_unrelated_dirty_worktree_note(
     )))
 }
 
+fn latest_assistant_result_text(
+    messages: &[vtcode_core::llm::provider::Message],
+) -> Option<String> {
+    messages
+        .iter()
+        .rev()
+        .find(|message| message.role == vtcode_core::llm::provider::MessageRole::Assistant)
+        .map(|message| message.content.as_text().trim().to_string())
+        .filter(|text| !text.is_empty())
+}
+
 fn live_reload_preserves_session_config(
     initial_vt_cfg: Option<&VTCodeConfig>,
     runtime_cfg: &CoreAgentConfig,
@@ -795,6 +806,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     let mut interaction_turn_metadata_cache = None;
                     let (session_state, runtime_steering) = runtime.split_mut();
                     let mut interaction_ctx = crate::agent::runloop::unified::turn::session::interaction_loop::InteractionLoopContext {
+                    thread_id: &turn_run_id.0,
                     renderer: &mut renderer,
                     session: &mut session,
                     handle: &handle,
@@ -1257,6 +1269,33 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             archive.set_loaded_skills(skill_names);
         }
         if let Some(emitter) = harness_emitter.as_ref() {
+            let harness_snapshot = tool_registry.harness_context_snapshot();
+            let (outcome_code, subtype) =
+                session_end_reason.thread_completion_status(session_stats.budget_limit().is_some());
+            let result = subtype
+                .is_success()
+                .then(|| latest_assistant_result_text(&runtime.state.messages))
+                .flatten();
+            let total_cost_usd = session_stats
+                .total_cost_usd()
+                .and_then(serde_json::Number::from_f64);
+            let event =
+                crate::agent::runloop::unified::inline_events::harness::thread_completed_event(
+                    turn_run_id.0.clone(),
+                    harness_snapshot.session_id,
+                    subtype,
+                    outcome_code,
+                    result,
+                    session_stats.stop_reason().map(str::to_string),
+                    session_stats.total_usage(),
+                    total_cost_usd,
+                    session_stats.total_turns(),
+                );
+            if let Err(err) = emitter.emit(event) {
+                tracing::debug!(error = %err, "harness thread.completed event emission failed");
+            }
+        }
+        if let Some(emitter) = harness_emitter.as_ref() {
             emitter.finish_open_responses();
         }
         let finalization_output = match finalize_session(
@@ -1420,8 +1459,8 @@ mod tests {
         archive::next_runtime_archive_id_request, archive::workspace_archive_label,
         build_partial_timeout_messages, build_tracked_file_freshness_note,
         build_unrelated_dirty_worktree_note, checkpoint_session_archive_start,
-        effective_max_tool_calls_for_turn, prepare_resume_bootstrap_without_archive,
-        resolve_effective_turn_timeout_secs,
+        effective_max_tool_calls_for_turn, latest_assistant_result_text,
+        prepare_resume_bootstrap_without_archive, resolve_effective_turn_timeout_secs,
     };
     use crate::agent::agents::ResumeSession;
     use crate::agent::runloop::git::normalize_workspace_path;
@@ -1433,6 +1472,8 @@ mod tests {
     use std::process::Command;
     use tempfile::TempDir;
     use vtcode_core::core::threads::ArchivedSessionIntent;
+    use vtcode_core::exec::events::ThreadCompletionSubtype;
+    use vtcode_core::hooks::SessionEndReason;
     use vtcode_core::llm::provider::MessageRole;
     use vtcode_core::utils::session_archive::{
         SessionArchive, SessionArchiveMetadata, SessionListing, SessionMessage, SessionSnapshot,
@@ -1779,6 +1820,55 @@ mod tests {
                 .as_ref()
                 .and_then(|meta| meta.prompt_cache_lineage_id.as_deref()),
             Some("lineage-123")
+        );
+    }
+
+    #[test]
+    fn thread_completion_status_matches_public_contract() {
+        assert_eq!(
+            SessionEndReason::Completed.thread_completion_status(false),
+            ("completed", ThreadCompletionSubtype::Success)
+        );
+        assert_eq!(
+            SessionEndReason::NewSession.thread_completion_status(false),
+            ("new_session", ThreadCompletionSubtype::Success)
+        );
+        assert_eq!(
+            SessionEndReason::Exit.thread_completion_status(false),
+            ("exit", ThreadCompletionSubtype::Cancelled)
+        );
+        assert_eq!(
+            SessionEndReason::Cancelled.thread_completion_status(false),
+            ("cancelled", ThreadCompletionSubtype::Cancelled)
+        );
+        assert_eq!(
+            SessionEndReason::Error.thread_completion_status(false),
+            ("error", ThreadCompletionSubtype::ErrorDuringExecution)
+        );
+        assert_eq!(
+            SessionEndReason::Completed.thread_completion_status(true),
+            (
+                "budget_limit_reached",
+                ThreadCompletionSubtype::ErrorMaxBudgetUsd
+            )
+        );
+    }
+
+    #[test]
+    fn latest_assistant_result_text_uses_latest_nonempty_assistant_message() {
+        let messages = vec![
+            vtcode_core::llm::provider::Message::user("hello".to_string()),
+            vtcode_core::llm::provider::Message::assistant(" first ".to_string()),
+            vtcode_core::llm::provider::Message::tool_response(
+                "call-1".to_string(),
+                "{\"ok\":true}".to_string(),
+            ),
+            vtcode_core::llm::provider::Message::assistant(" final answer ".to_string()),
+        ];
+
+        assert_eq!(
+            latest_assistant_result_text(&messages),
+            Some("final answer".to_string())
         );
     }
 

@@ -11,6 +11,7 @@ use tokio::sync::Mutex;
 use tokio::time;
 
 use crate::config::{HookCommandConfig, HooksConfig};
+use crate::exec::events::{CompactionMode, CompactionTrigger};
 
 use crate::hooks::lifecycle::compiled::CompiledLifecycleHooks;
 use crate::hooks::lifecycle::interpret::{
@@ -18,9 +19,9 @@ use crate::hooks::lifecycle::interpret::{
     interpret_session_start, interpret_user_prompt,
 };
 use crate::hooks::lifecycle::types::{
-    HookMessage, NotificationHookType, PostToolHookOutcome, PreToolHookDecision,
-    PreToolHookOutcome, SessionEndReason, SessionStartHookOutcome, SessionStartTrigger,
-    UserPromptHookOutcome,
+    HookMessage, NotificationHookType, PostToolHookOutcome, PreCompactHookOutcome,
+    PreToolHookDecision, PreToolHookOutcome, SessionEndReason, SessionStartHookOutcome,
+    SessionStartTrigger, UserPromptHookOutcome,
 };
 use crate::hooks::lifecycle::utils::{generate_session_id, path_to_string};
 
@@ -258,6 +259,57 @@ impl LifecycleHookEngine {
                     ),
                     Err(err) => outcome.messages.push(HookMessage::error(format!(
                         "PostToolUse hook `{}` failed: {err}",
+                        command.command
+                    ))),
+                }
+            }
+        }
+
+        Ok(outcome)
+    }
+
+    pub async fn run_pre_compact(
+        &self,
+        trigger: CompactionTrigger,
+        mode: CompactionMode,
+        original_message_count: usize,
+        compacted_message_count: usize,
+        history_artifact_path: Option<&str>,
+    ) -> Result<PreCompactHookOutcome> {
+        let mut outcome = PreCompactHookOutcome::default();
+
+        if self.inner.hooks.pre_compact.is_empty() {
+            return Ok(outcome);
+        }
+
+        let payload = self
+            .build_pre_compact_payload(
+                trigger,
+                mode,
+                original_message_count,
+                compacted_message_count,
+                history_artifact_path,
+            )
+            .await?;
+        let trigger_value = trigger.as_str().to_owned();
+
+        for group in &self.inner.hooks.pre_compact {
+            if !group.matcher.matches(&trigger_value) {
+                continue;
+            }
+
+            for command in &group.commands {
+                match self.execute_command("PreCompact", command, &payload).await {
+                    Ok(result) => {
+                        interpret_session_end(
+                            command,
+                            &result,
+                            &mut outcome.messages,
+                            self.inner.hooks.quiet_success_output,
+                        );
+                    }
+                    Err(err) => outcome.messages.push(HookMessage::error(format!(
+                        "PreCompact hook `{}` failed: {err}",
                         command.command
                     ))),
                 }

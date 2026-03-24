@@ -5,6 +5,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use vtcode_core::config::WorkspaceTrustLevel;
 use vtcode_core::core::interfaces::session::PlanModeEntrySource;
+use vtcode_core::exec::events::Usage as HarnessUsage;
 use vtcode_tui::app::EditingMode;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -65,6 +66,12 @@ pub(crate) struct SessionStats {
     last_stable_prefix_hash: Option<u64>,
     last_tool_catalog_hash: Option<u64>,
     recent_touched_files: VecDeque<String>,
+    total_usage: HarnessUsage,
+    total_cost_usd: Option<f64>,
+    cost_warning_emitted: bool,
+    stop_reason: Option<String>,
+    budget_limit: Option<(f64, f64)>,
+    total_turns: usize,
 }
 
 impl SessionStats {
@@ -80,6 +87,73 @@ impl SessionStats {
 
     pub(crate) fn sorted_tools(&self) -> Vec<String> {
         self.tools.iter().cloned().collect()
+    }
+
+    pub(crate) fn record_usage(&mut self, usage: &Option<vtcode_core::llm::provider::Usage>) {
+        let Some(usage) = usage else {
+            return;
+        };
+
+        self.total_usage.input_tokens = self
+            .total_usage
+            .input_tokens
+            .saturating_add(usage.prompt_tokens as u64);
+        self.total_usage.cached_input_tokens = self
+            .total_usage
+            .cached_input_tokens
+            .saturating_add(usage.cache_read_tokens_or_fallback() as u64);
+        self.total_usage.cache_creation_tokens = self
+            .total_usage
+            .cache_creation_tokens
+            .saturating_add(usage.cache_creation_tokens_or_zero() as u64);
+        self.total_usage.output_tokens = self
+            .total_usage
+            .output_tokens
+            .saturating_add(usage.completion_tokens as u64);
+    }
+
+    pub(crate) fn total_usage(&self) -> HarnessUsage {
+        self.total_usage.clone()
+    }
+
+    pub(crate) fn set_total_cost_usd(&mut self, cost: Option<f64>) {
+        self.total_cost_usd = cost;
+    }
+
+    pub(crate) fn total_cost_usd(&self) -> Option<f64> {
+        self.total_cost_usd
+    }
+
+    pub(crate) fn set_stop_reason(&mut self, reason: Option<String>) {
+        self.stop_reason = reason;
+    }
+
+    pub(crate) fn stop_reason(&self) -> Option<&str> {
+        self.stop_reason.as_deref()
+    }
+
+    pub(crate) fn cost_warning_emitted(&self) -> bool {
+        self.cost_warning_emitted
+    }
+
+    pub(crate) fn mark_cost_warning_emitted(&mut self) {
+        self.cost_warning_emitted = true;
+    }
+
+    pub(crate) fn mark_budget_limit_reached(&mut self, max_budget_usd: f64, actual_cost_usd: f64) {
+        self.budget_limit = Some((max_budget_usd, actual_cost_usd));
+    }
+
+    pub(crate) fn budget_limit(&self) -> Option<(f64, f64)> {
+        self.budget_limit
+    }
+
+    pub(crate) fn record_turn_completed(&mut self) {
+        self.total_turns = self.total_turns.saturating_add(1);
+    }
+
+    pub(crate) fn total_turns(&self) -> usize {
+        self.total_turns
     }
 
     /// Check if currently in Plan mode (read-only)

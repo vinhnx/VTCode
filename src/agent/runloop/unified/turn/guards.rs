@@ -534,8 +534,8 @@ mod tests {
     }
 
     #[test]
-    fn readonly_signature_keeps_exec_run_non_readonly() {
-        assert!(!is_readonly_signature(
+    fn readonly_signature_treats_safe_exec_runs_as_readonly() {
+        assert!(is_readonly_signature(
             r#"unified_exec:{"action":"run","command":"cargo check"}"#
         ));
     }

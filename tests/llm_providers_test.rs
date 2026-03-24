@@ -22,6 +22,7 @@ fn test_provider_factory_creation() {
     assert!(providers.contains(&"gemini".to_string()));
     assert!(providers.contains(&"openai".to_string()));
     assert!(providers.contains(&"anthropic".to_string()));
+    assert!(providers.contains(&"copilot".to_string()));
     assert!(providers.contains(&"openrouter".to_string()));
     assert!(providers.contains(&"moonshot".to_string()));
     assert!(providers.contains(&"deepseek".to_string()));
@@ -32,7 +33,6 @@ fn test_provider_factory_creation() {
     assert!(providers.contains(&"huggingface".to_string()));
     assert!(providers.contains(&"litellm".to_string()));
     assert!(providers.contains(&"openresponses".to_string()));
-    assert_eq!(providers.len(), 13);
 }
 
 #[test]

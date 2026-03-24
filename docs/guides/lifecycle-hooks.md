@@ -8,6 +8,8 @@ agent interprets hook output.
 
 Similar to Claude Code Hooks: https://docs.claude.com/en/docs/claude-code/hooks.
 
+For the surrounding runtime lifecycle and event mapping, see [Agent Loop Contract](./agent-loop-contract.md).
+
 ## Configuration Overview
 
 Hooks live under the `[hooks.lifecycle]` section in your project configuration
@@ -52,6 +54,8 @@ Matchers let you scope hooks to specific triggers:
 * **Session events** (`session_start`, `session_end`) – compared to the trigger
 string (`startup`, `resume`, `clear`, `compact`) or end reason (`clear`,
 `logout`, `prompt_input_exit`, `other`).
+* **PreCompact** (`pre_compact`) – compared to the compaction trigger
+(`manual` or `auto`).
 * **UserPromptSubmit** – compared against the entire prompt text. Use regular
 expressions to detect policies or keywords.
 * **PreToolUse / PostToolUse** – compared against the tool name. Match builtin
@@ -110,6 +114,27 @@ run setup scripts that prepare your development environment.
 Invoked when a session ends. The payload mirrors `SessionStart` but replaces
 `source` with `reason` indicating `clear`, `logout`, `prompt_input_exit`, or
 `other`. Use this hook to perform cleanup or logging.
+
+### PreCompact
+
+Runs before VT Code records a compaction boundary. Payload:
+
+```json
+{
+  "session_id": "...",
+  "cwd": "/path/to/project",
+  "hook_event_name": "PreCompact",
+  "trigger": "manual" | "auto",
+  "mode": "local" | "provider",
+  "original_message_count": 12,
+  "compacted_message_count": 5,
+  "history_artifact_path": "/path/to/history.jsonl" | null,
+  "transcript_path": "..." | null
+}
+```
+
+Use this hook to archive transcripts, copy compaction artifacts, or attach
+external metadata before VT Code emits `thread.compact_boundary`.
 
 ### UserPromptSubmit
 

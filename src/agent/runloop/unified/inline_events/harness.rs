@@ -19,9 +19,10 @@ use vtcode_core::core::agent::events::{
 #[cfg(test)]
 use vtcode_core::exec::events::ThreadStartedEvent;
 use vtcode_core::exec::events::{
-    HarnessEventItem, HarnessEventKind, ItemCompletedEvent, ThreadEvent, ThreadItem,
-    ThreadItemDetails, ToolCallStatus, TurnCompletedEvent, TurnFailedEvent, TurnStartedEvent,
-    Usage, VersionedThreadEvent,
+    CompactionMode, CompactionTrigger, HarnessEventItem, HarnessEventKind, ItemCompletedEvent,
+    ThreadCompactBoundaryEvent, ThreadCompletedEvent, ThreadCompletionSubtype, ThreadEvent,
+    ThreadItem, ThreadItemDetails, ToolCallStatus, TurnCompletedEvent, TurnFailedEvent,
+    TurnStartedEvent, Usage, VersionedThreadEvent,
 };
 use vtcode_core::open_responses::{OpenResponsesIntegration, SequencedEvent};
 use vtcode_core::utils::file_utils::ensure_dir_exists_sync;
@@ -256,6 +257,49 @@ pub(crate) fn turn_failed_event(message: impl Into<String>, usage: Option<Usage>
     })
 }
 
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn thread_completed_event(
+    thread_id: impl Into<String>,
+    session_id: impl Into<String>,
+    subtype: ThreadCompletionSubtype,
+    outcome_code: impl Into<String>,
+    result: Option<String>,
+    stop_reason: Option<String>,
+    usage: Usage,
+    total_cost_usd: Option<serde_json::Number>,
+    num_turns: usize,
+) -> ThreadEvent {
+    ThreadEvent::ThreadCompleted(ThreadCompletedEvent {
+        thread_id: thread_id.into(),
+        session_id: session_id.into(),
+        subtype,
+        outcome_code: outcome_code.into(),
+        result,
+        stop_reason,
+        usage,
+        total_cost_usd,
+        num_turns,
+    })
+}
+
+pub(crate) fn compact_boundary_event(
+    thread_id: impl Into<String>,
+    trigger: CompactionTrigger,
+    mode: CompactionMode,
+    original_message_count: usize,
+    compacted_message_count: usize,
+    history_artifact_path: Option<String>,
+) -> ThreadEvent {
+    ThreadEvent::ThreadCompactBoundary(ThreadCompactBoundaryEvent {
+        thread_id: thread_id.into(),
+        trigger,
+        mode,
+        original_message_count,
+        compacted_message_count,
+        history_artifact_path,
+    })
+}
+
 pub(crate) fn harness_event(
     event: HarnessEventKind,
     message: Option<String>,
@@ -355,6 +399,7 @@ mod tests {
             .emit(turn_completed_event(Usage {
                 input_tokens: 12,
                 cached_input_tokens: 3,
+                cache_creation_tokens: 0,
                 output_tokens: 5,
             }))
             .expect("emit completed");
@@ -377,6 +422,7 @@ mod tests {
         let event = turn_completed_event(Usage {
             input_tokens: 42,
             cached_input_tokens: 7,
+            cache_creation_tokens: 0,
             output_tokens: 9,
         });
 
@@ -386,6 +432,7 @@ mod tests {
 
         assert_eq!(usage.input_tokens, 42);
         assert_eq!(usage.cached_input_tokens, 7);
+        assert_eq!(usage.cache_creation_tokens, 0);
         assert_eq!(usage.output_tokens, 9);
     }
 

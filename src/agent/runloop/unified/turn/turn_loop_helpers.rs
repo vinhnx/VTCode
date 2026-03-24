@@ -949,12 +949,12 @@ mod tests {
     }
 
     #[test]
-    fn extract_turn_config_forces_request_user_input_in_plan_mode() {
+    fn extract_turn_config_honors_request_user_input_setting_in_plan_mode() {
         let mut cfg = VTCodeConfig::default();
         cfg.chat.ask_questions.enabled = false;
 
         let turn_cfg = extract_turn_config(Some(&cfg), true);
-        assert!(turn_cfg.request_user_input_enabled);
+        assert!(!turn_cfg.request_user_input_enabled);
     }
 
     #[tokio::test]

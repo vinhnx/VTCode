@@ -18,7 +18,8 @@ use crate::core::agent::runtime::{AgentRuntime, RuntimeControl};
 use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
 use crate::exec::events::HarnessEventKind;
-use crate::llm::provider::{LLMRequest, Message, ToolCall};
+use crate::llm::model_resolver::ModelResolver;
+use crate::llm::provider::{FinishReason, LLMRequest, Message, ToolCall};
 use crate::llm::providers::gemini::wire::Part;
 use crate::project_doc::build_instruction_appendix;
 use crate::prompts::PromptContext;
@@ -29,11 +30,22 @@ use serde_json::json;
 use std::sync::Arc;
 use tracing::warn;
 
-fn record_terminal_turn_event(event_recorder: &mut ExecEventRecorder, outcome: &TaskOutcome) {
+fn record_terminal_turn_event(
+    event_recorder: &mut ExecEventRecorder,
+    outcome: &TaskOutcome,
+    usage: vtcode_exec_events::Usage,
+) {
     if outcome.is_success() {
-        event_recorder.turn_completed();
+        event_recorder.record_thread_event(vtcode_exec_events::ThreadEvent::TurnCompleted(
+            vtcode_exec_events::TurnCompletedEvent { usage },
+        ));
     } else {
-        event_recorder.turn_failed(&outcome.description());
+        event_recorder.record_thread_event(vtcode_exec_events::ThreadEvent::TurnFailed(
+            vtcode_exec_events::TurnFailedEvent {
+                message: outcome.description(),
+                usage: Some(usage),
+            },
+        ));
     }
 }
 
@@ -86,6 +98,37 @@ fn supports_responses_chaining(provider_name: &str) -> bool {
     provider_name.eq_ignore_ascii_case("openai")
         || provider_name.eq_ignore_ascii_case("openresponses")
         || provider_name.eq_ignore_ascii_case("gemini")
+}
+
+fn stop_reason_from_finish_reason(finish_reason: &FinishReason) -> String {
+    match finish_reason {
+        FinishReason::Stop => "end_turn".to_string(),
+        FinishReason::Length => "max_tokens".to_string(),
+        FinishReason::ToolCalls => "tool_calls".to_string(),
+        FinishReason::ContentFilter => "content_filter".to_string(),
+        FinishReason::Pause => "pause_turn".to_string(),
+        FinishReason::Refusal => "refusal".to_string(),
+        FinishReason::Error(message) => message.clone(),
+    }
+}
+
+fn estimate_session_cost_usd(
+    provider: &str,
+    model: &str,
+    usage: &vtcode_exec_events::Usage,
+) -> Option<f64> {
+    let usage = crate::llm::provider::Usage {
+        prompt_tokens: u32::try_from(usage.input_tokens).unwrap_or(u32::MAX),
+        completion_tokens: u32::try_from(usage.output_tokens).unwrap_or(u32::MAX),
+        total_tokens: u32::try_from(usage.input_tokens.saturating_add(usage.output_tokens))
+            .unwrap_or(u32::MAX),
+        cached_prompt_tokens: Some(u32::try_from(usage.cached_input_tokens).unwrap_or(u32::MAX)),
+        cache_creation_tokens: Some(u32::try_from(usage.cache_creation_tokens).unwrap_or(u32::MAX)),
+        cache_read_tokens: Some(u32::try_from(usage.cached_input_tokens).unwrap_or(u32::MAX)),
+    };
+    let resolved = ModelResolver::resolve(Some(provider), model, &[], None)?;
+    let pricing = resolved.pricing()?;
+    ModelResolver::estimate_cost(pricing, &usage)
 }
 
 impl AgentRunner {
@@ -288,6 +331,8 @@ impl AgentRunner {
             mut runtime,
             mut continuation_controller,
         ) = runtime_setup;
+        let mut cost_warning_emitted = false;
+        let max_budget_usd = self.config().agent.harness.max_budget_usd;
 
         let result = {
             for turn in 0..self.max_turns {
@@ -469,12 +514,45 @@ impl AgentRunner {
                     .await?;
                 event_recorder.record_thread_events(runtime.take_emitted_events());
                 let response = turn_output.response;
+                runtime.state.stop_reason =
+                    Some(stop_reason_from_finish_reason(&response.finish_reason));
                 if supports_responses_chaining(&provider_name) {
                     runtime.state.set_previous_response_chain(
                         &provider_name,
                         &turn_model,
                         response.request_id.as_deref(),
                     );
+                }
+                match estimate_session_cost_usd(
+                    self.config().agent.provider.as_str(),
+                    &turn_model,
+                    &runtime.state.stats.total_usage,
+                ) {
+                    Some(total_cost_usd) => {
+                        runtime.state.total_cost_usd = Some(total_cost_usd);
+                        if let Some(max_budget_usd) = max_budget_usd
+                            && total_cost_usd > max_budget_usd
+                        {
+                            runtime.state.outcome =
+                                TaskOutcome::budget_limit_reached(max_budget_usd, total_cost_usd);
+                            break;
+                        }
+                    }
+                    None => {
+                        runtime.state.total_cost_usd = None;
+                        if max_budget_usd.is_some() && !cost_warning_emitted {
+                            cost_warning_emitted = true;
+                            let warning_message = format!(
+                                "Budget enforcement disabled for model `{turn_model}` because pricing metadata is unavailable"
+                            );
+                            warn!(
+                                provider = %self.config().agent.provider,
+                                model = %turn_model,
+                                "Budget enforcement disabled because pricing metadata is unavailable"
+                            );
+                            runtime.state.warnings.push(warning_message);
+                        }
+                    }
                 }
                 self.runner_println(format_args!(
                     "{} {} {} received response, processing...",
@@ -811,7 +889,29 @@ impl AgentRunner {
                 }
             }
 
-            record_terminal_turn_event(&mut event_recorder, &runtime.state.outcome);
+            let total_usage = runtime.state.stats.total_usage.clone();
+            record_terminal_turn_event(
+                &mut event_recorder,
+                &runtime.state.outcome,
+                total_usage.clone(),
+            );
+            event_recorder.thread_completed(
+                &self.session_id,
+                runtime.state.outcome.thread_completion_subtype(),
+                runtime.state.outcome.code(),
+                runtime
+                    .state
+                    .outcome
+                    .is_success()
+                    .then_some(summary.as_str()),
+                runtime.state.stop_reason.as_deref(),
+                total_usage,
+                runtime
+                    .state
+                    .total_cost_usd
+                    .and_then(serde_json::Number::from_f64),
+                runtime.state.stats.turns_executed,
+            );
             let thread_events = event_recorder.into_events();
             let steering_receiver = runtime.take_steering_receiver();
             let state = std::mem::replace(
@@ -863,6 +963,7 @@ mod tests {
             &TaskOutcome::Failed {
                 reason: "boom".to_string(),
             },
+            Default::default(),
         );
 
         let events = recorder.into_events();
@@ -887,7 +988,7 @@ mod tests {
         let mut recorder = ExecEventRecorder::new("thread", None, None);
         recorder.turn_started();
 
-        record_terminal_turn_event(&mut recorder, &TaskOutcome::Success);
+        record_terminal_turn_event(&mut recorder, &TaskOutcome::Success, Default::default());
 
         let events = recorder.into_events();
         assert_eq!(
