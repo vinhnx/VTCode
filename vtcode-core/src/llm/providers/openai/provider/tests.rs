@@ -5,7 +5,7 @@ use crate::config::core::{
     OpenAIHostedShellConfig, OpenAIHostedShellEnvironment, OpenAIHostedSkill,
     OpenAIHostedSkillVersion, OpenAIServiceTier,
 };
-use crate::llm::provider::{LLMProvider, ParallelToolConfig};
+use crate::llm::provider::{LLMProvider, NormalizedStreamEvent, ParallelToolConfig};
 use crate::tools::handlers::plan_mode::PlanModeState;
 use crate::tools::handlers::plan_task_tracker::PlanTaskTrackerTool;
 use crate::tools::handlers::task_tracker::TaskTrackerTool;
@@ -3237,4 +3237,176 @@ async fn gpt54_generate_uses_streaming_responses_path() {
         .expect("generation should succeed through streaming");
 
     assert_eq!(response.content.as_deref(), Some("done"));
+}
+
+#[tokio::test]
+async fn gpt5_stream_normalized_emits_live_tool_call_events() {
+    let server = MockServer::start().await;
+    let provider = test_provider(&server.uri(), models::openai::GPT_5);
+
+    Mock::given(method("POST"))
+        .and(path("/responses"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(
+                    concat!(
+                        "data: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"function_call\",\"id\":\"call_1\",\"name\":\"search_workspace\"}}\n\n",
+                        "data: {\"type\":\"response.function_call_arguments.delta\",\"item_id\":\"call_1\",\"delta\":\"{\\\"query\\\":\\\"vt\"}\n\n",
+                        "data: {\"type\":\"response.function_call_arguments.delta\",\"item_id\":\"call_1\",\"delta\":\"code\\\"}\"}\n\n",
+                        "data: {\"type\":\"response.output_text.delta\",\"delta\":\"done\"}\n\n",
+                        "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_tool_stream\",\"status\":\"completed\",\"output\":[",
+                        "{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"done\"}]}",
+                        "]}}\n\n",
+                        "data: [DONE]\n\n"
+                    ),
+                ),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let mut stream = provider
+        .stream_normalized(provider::LLMRequest {
+            messages: vec![provider::Message::user("Hello".to_string())],
+            model: models::openai::GPT_5.to_string(),
+            ..Default::default()
+        })
+        .await
+        .expect("normalized stream should succeed");
+
+    let mut events = Vec::new();
+    while let Some(event) = stream.next().await {
+        events.push(event.expect("stream event should parse"));
+    }
+
+    assert!(matches!(
+        events.as_slice(),
+        [
+            NormalizedStreamEvent::ToolCallStart { call_id, name },
+            NormalizedStreamEvent::ToolCallDelta { call_id: first_delta_id, delta: first_delta },
+            NormalizedStreamEvent::ToolCallDelta { call_id: second_delta_id, delta: second_delta },
+            NormalizedStreamEvent::TextDelta { delta },
+            NormalizedStreamEvent::Done { response }
+        ]
+        if call_id == "call_1"
+            && name.as_deref() == Some("search_workspace")
+            && first_delta_id == "call_1"
+            && first_delta == "{\"query\":\"vt"
+            && second_delta_id == "call_1"
+            && second_delta == "code\"}"
+            && delta == "done"
+            && response.content.as_deref() == Some("done")
+    ));
+}
+
+#[tokio::test]
+async fn gpt5_codex_stream_normalized_suppresses_reasoning_events() {
+    let server = MockServer::start().await;
+    let provider = test_provider(&server.uri(), models::openai::GPT_5_2_CODEX);
+
+    Mock::given(method("POST"))
+        .and(path("/responses"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(
+                    concat!(
+                        "data: {\"type\":\"response.reasoning_summary_text.delta\",\"delta\":\"hidden reasoning\"}\n\n",
+                        "data: {\"type\":\"response.output_text.delta\",\"delta\":\"done\"}\n\n",
+                        "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_reasoning_hidden\",\"status\":\"completed\",\"output\":[",
+                        "{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"hidden reasoning\"}]},",
+                        "{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"done\"}]}",
+                        "]}}\n\n",
+                        "data: [DONE]\n\n"
+                    ),
+                ),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let mut stream = provider
+        .stream_normalized(provider::LLMRequest {
+            messages: vec![provider::Message::user("Hello".to_string())],
+            model: models::openai::GPT_5_2_CODEX.to_string(),
+            ..Default::default()
+        })
+        .await
+        .expect("normalized stream should succeed");
+
+    let mut events = Vec::new();
+    while let Some(event) = stream.next().await {
+        events.push(event.expect("stream event should parse"));
+    }
+
+    assert!(matches!(
+        events.as_slice(),
+        [
+            NormalizedStreamEvent::TextDelta { delta },
+            NormalizedStreamEvent::Done { response }
+        ]
+        if delta == "done"
+            && response.content.as_deref() == Some("done")
+            && response.reasoning.is_none()
+            && response.reasoning_details.is_none()
+    ));
+}
+
+#[tokio::test]
+async fn stream_normalized_falls_back_to_chat_completions_when_responses_api_is_unsupported() {
+    let server = MockServer::start().await;
+    let provider = test_provider(&server.uri(), models::openai::GPT_5_2_CODEX);
+
+    Mock::given(method("POST"))
+        .and(path("/responses"))
+        .respond_with(ResponseTemplate::new(400).set_body_string(
+            "invalid api parameter: stream",
+        ))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(
+                    concat!(
+                        "data: {\"choices\":[{\"delta\":{\"content\":\"fallback\"}}]}\n\n",
+                        "data: {\"choices\":[{\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1,\"total_tokens\":2}}\n\n",
+                        "data: [DONE]\n\n"
+                    ),
+                ),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let mut stream = provider
+        .stream_normalized(provider::LLMRequest {
+            messages: vec![provider::Message::user("Hello".to_string())],
+            model: models::openai::GPT_5_2_CODEX.to_string(),
+            ..Default::default()
+        })
+        .await
+        .expect("normalized stream should succeed through fallback");
+
+    let mut events = Vec::new();
+    while let Some(event) = stream.next().await {
+        events.push(event.expect("stream event should parse"));
+    }
+
+    assert!(matches!(
+        events.as_slice(),
+        [
+            NormalizedStreamEvent::TextDelta { delta },
+            NormalizedStreamEvent::Usage { usage },
+            NormalizedStreamEvent::Done { response }
+        ]
+        if delta == "fallback"
+            && usage.total_tokens == 2
+            && response.content.as_deref() == Some("fallback")
+    ));
 }

@@ -5,8 +5,12 @@ use crate::llm::provider::{
 };
 pub use crate::llm::providers::ReasoningBuffer;
 use crate::llm::providers::common::extract_reasoning_text_from_serialized_details;
+mod responses_stream;
 mod tag_sanitizer;
 use crate::llm::providers::split_reasoning_from_text;
+pub use responses_stream::{
+    ResponsesNormalizedStreamOptions, create_responses_normalized_stream,
+};
 use serde_json::{Map, Value};
 pub use tag_sanitizer::TagStreamSanitizer;
 

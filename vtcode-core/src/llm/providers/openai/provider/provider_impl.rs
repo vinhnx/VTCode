@@ -1,7 +1,7 @@
 use super::OpenAIProvider;
 use crate::config::constants::models;
 use crate::llm::client::LLMClient;
-use crate::llm::provider;
+use crate::llm::provider::{self, LLMNormalizedStream};
 use crate::llm::types as llm_types;
 use async_trait::async_trait;
 
@@ -90,6 +90,13 @@ impl provider::LLMProvider for OpenAIProvider {
         request: provider::LLMRequest,
     ) -> Result<provider::LLMStream, provider::LLMError> {
         self.stream_request(request).await
+    }
+
+    async fn stream_normalized(
+        &self,
+        request: provider::LLMRequest,
+    ) -> Result<LLMNormalizedStream, provider::LLMError> {
+        self.stream_normalized_request(request).await
     }
 
     async fn generate(

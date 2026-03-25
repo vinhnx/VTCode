@@ -7,12 +7,13 @@ use crate::config::models::Provider as ModelProvider;
 use crate::llm::error_display;
 use crate::llm::provider::{
     FinishReason, LLMError, LLMNormalizedStream, LLMProvider, LLMRequest, LLMResponse, LLMStream,
-    LLMStreamEvent, Message, NormalizedStreamEvent, ToolCall,
+    LLMStreamEvent, Message, ToolCall,
 };
 use crate::llm::providers::common::{
     append_normalized_reasoning_detail_items, serialize_message_content_openai,
 };
 use crate::llm::providers::shared::{
+    ResponsesNormalizedStreamOptions, create_responses_normalized_stream,
     collect_tool_references_from_tool_search_output, function_output_value_from_message_content,
     parse_compacted_output_messages,
 };
@@ -21,7 +22,6 @@ use anyhow::Result;
 use async_stream::try_stream;
 use async_trait::async_trait;
 use futures::StreamExt;
-use hashbrown::HashSet;
 use reqwest::Client as HttpClient;
 use serde_json::{Value, json};
 
@@ -37,6 +37,115 @@ pub struct OpenResponsesProvider {
 }
 
 impl OpenResponsesProvider {
+    fn parse_native_response_payload(json: Value, model: String) -> Result<LLMResponse, LLMError> {
+        let output = json
+            .get("output")
+            .and_then(|o| o.as_array())
+            .ok_or_else(|| LLMError::Provider {
+                message: "Invalid response from OpenResponses: missing output".to_string(),
+                metadata: None,
+            })?;
+
+        let mut content = String::new();
+        let mut tool_calls = Vec::new();
+        let mut reasoning = None;
+        let mut tool_references = Vec::new();
+
+        for item_val in output {
+            let item_type = item_val.get("type").and_then(|t| t.as_str()).unwrap_or("");
+            match item_type {
+                "message" => {
+                    if let Some(content_parts) = item_val.get("content").and_then(|c| c.as_array())
+                    {
+                        for part in content_parts {
+                            if let Some(text) = part.get("text").and_then(|t| t.as_str()) {
+                                content.push_str(text);
+                            }
+                        }
+                    }
+                }
+                "reasoning" => {
+                    if let Some(text) = item_val.get("content").and_then(|t| t.as_str()) {
+                        reasoning = Some(text.to_string());
+                    }
+                }
+                "function_call" => {
+                    let id = item_val
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let name = item_val
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let arguments = item_val
+                        .get("arguments")
+                        .map(|v| v.to_string())
+                        .unwrap_or_else(|| "{}".to_string());
+                    let namespace = item_val
+                        .get("namespace")
+                        .and_then(|v| v.as_str())
+                        .map(ToOwned::to_owned);
+                    tool_calls.push(ToolCall::function_with_namespace(
+                        id, namespace, name, arguments,
+                    ));
+                }
+                "tool_search_output" => {
+                    collect_tool_references_from_tool_search_output(item_val, &mut tool_references);
+                }
+                _ => {}
+            }
+        }
+
+        let mut reasoning_details: Option<Vec<String>> = None;
+        let (final_reasoning, final_content) = if reasoning.is_none() && !content.is_empty() {
+            let (reasoning_parts, cleaned_content) =
+                crate::llm::utils::extract_reasoning_content(&content);
+            if reasoning_parts.is_empty() {
+                (None, Some(content))
+            } else {
+                crate::llm::providers::common::preserve_interleaved_content_in_reasoning_details(
+                    &mut reasoning_details,
+                    &content,
+                );
+                (
+                    Some(reasoning_parts.join("\n\n")),
+                    cleaned_content.or(Some(content)),
+                )
+            }
+        } else {
+            (reasoning, Some(content))
+        };
+
+        let finish_reason = match json.get("status").and_then(|s| s.as_str()) {
+            Some("completed") => FinishReason::Stop,
+            Some("incomplete") => FinishReason::Length,
+            _ => FinishReason::Stop,
+        };
+
+        Ok(LLMResponse {
+            content: final_content.filter(|c| !c.is_empty()),
+            tool_calls: if tool_calls.is_empty() {
+                None
+            } else {
+                Some(tool_calls)
+            },
+            model,
+            usage: None,
+            finish_reason,
+            reasoning: final_reasoning,
+            reasoning_details,
+            tool_references,
+            request_id: json
+                .get("id")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+            organization_id: None,
+        })
+    }
+
     fn output_item_to_value(item: crate::open_responses::OutputItem) -> Result<Value, LLMError> {
         serde_json::to_value(item).map_err(|e| LLMError::Provider {
             message: format!("Failed to serialize Open Responses input item: {e}"),
@@ -730,115 +839,7 @@ impl LLMProvider for OpenResponsesProvider {
             .await
             .map_err(|e| format_parse_error("OpenResponses", &e))?;
 
-        // Handle native Open Responses response structure
-        let output = json
-            .get("output")
-            .and_then(|o| o.as_array())
-            .ok_or_else(|| LLMError::Provider {
-                message: "Invalid response from OpenResponses: missing output".to_string(),
-                metadata: None,
-            })?;
-
-        let mut content = String::new();
-        let mut tool_calls = Vec::new();
-        let mut reasoning = None;
-        let mut tool_references = Vec::new();
-
-        for item_val in output {
-            let item_type = item_val.get("type").and_then(|t| t.as_str()).unwrap_or("");
-            match item_type {
-                "message" => {
-                    if let Some(content_parts) = item_val.get("content").and_then(|c| c.as_array())
-                    {
-                        for part in content_parts {
-                            if let Some(text) = part.get("text").and_then(|t| t.as_str()) {
-                                content.push_str(text);
-                            }
-                        }
-                    }
-                }
-                "reasoning" => {
-                    if let Some(text) = item_val.get("content").and_then(|t| t.as_str()) {
-                        reasoning = Some(text.to_string());
-                    }
-                }
-                "function_call" => {
-                    let id = item_val
-                        .get("id")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                    let name = item_val
-                        .get("name")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                    let arguments = item_val
-                        .get("arguments")
-                        .map(|v| v.to_string())
-                        .unwrap_or_else(|| "{}".to_string());
-                    let namespace = item_val
-                        .get("namespace")
-                        .and_then(|v| v.as_str())
-                        .map(ToOwned::to_owned);
-                    tool_calls.push(ToolCall::function_with_namespace(
-                        id, namespace, name, arguments,
-                    ));
-                }
-                "tool_search_output" => {
-                    collect_tool_references_from_tool_search_output(item_val, &mut tool_references);
-                }
-                _ => {}
-            }
-        }
-
-        // Fallback: Extract reasoning from content tags if not provided natively
-        // Handles <think></think>, <thought></thought>, <reasoning></reasoning>, <analysis></analysis>
-        let mut reasoning_details: Option<Vec<String>> = None;
-        let (final_reasoning, final_content) = if reasoning.is_none() && !content.is_empty() {
-            let (reasoning_parts, cleaned_content) =
-                crate::llm::utils::extract_reasoning_content(&content);
-            if reasoning_parts.is_empty() {
-                (None, Some(content))
-            } else {
-                crate::llm::providers::common::preserve_interleaved_content_in_reasoning_details(
-                    &mut reasoning_details,
-                    &content,
-                );
-                (
-                    Some(reasoning_parts.join("\n\n")),
-                    cleaned_content.or(Some(content)),
-                )
-            }
-        } else {
-            (reasoning, Some(content))
-        };
-
-        let finish_reason = match json.get("status").and_then(|s| s.as_str()) {
-            Some("completed") => FinishReason::Stop,
-            Some("incomplete") => FinishReason::Length,
-            _ => FinishReason::Stop,
-        };
-
-        Ok(LLMResponse {
-            content: final_content.filter(|c| !c.is_empty()),
-            tool_calls: if tool_calls.is_empty() {
-                None
-            } else {
-                Some(tool_calls)
-            },
-            model,
-            usage: None,
-            finish_reason,
-            reasoning: final_reasoning,
-            reasoning_details,
-            tool_references,
-            request_id: json
-                .get("id")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string()),
-            organization_id: None,
-        })
+        Self::parse_native_response_payload(json, model)
     }
 
     async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
@@ -996,101 +997,23 @@ impl LLMProvider for OpenResponsesProvider {
             });
         }
 
-        let stream = try_stream! {
-            let mut body_stream = response.bytes_stream();
-            let mut buffer = String::new();
-            let mut aggregator = crate::llm::providers::shared::StreamAggregator::new(model);
-            let mut seen_tool_calls = HashSet::new();
-
-            while let Some(chunk_result) = body_stream.next().await {
-                let chunk = chunk_result.map_err(|e| format_network_error("OpenResponses", &e))?;
-                buffer.push_str(&String::from_utf8_lossy(&chunk));
-
-                while let Some((split_idx, delimiter_len)) =
-                    crate::llm::providers::shared::find_sse_boundary(&buffer)
-                {
-                    let event_text = buffer[..split_idx].to_string();
-                    buffer.drain(..split_idx + delimiter_len);
-
-                    if let Some(data_payload) =
-                        crate::llm::providers::shared::extract_data_payload(&event_text)
-                    {
-                        let trimmed = data_payload.trim();
-                        if trimmed.is_empty() || trimmed == "[DONE]" {
-                            continue;
-                        }
-
-                        if let Ok(event) = serde_json::from_str::<Value>(trimmed) {
-                            let event_type = event.get("type").and_then(|t| t.as_str()).unwrap_or("");
-
-                            match event_type {
-                                "response.output_text.delta" => {
-                                    if let Some(delta) = event.get("delta").and_then(|v| v.as_str()) {
-                                        for ev in aggregator.handle_content(delta) {
-                                            if let LLMStreamEvent::Token { delta } = ev {
-                                                yield NormalizedStreamEvent::TextDelta { delta };
-                                            } else if let LLMStreamEvent::Reasoning { delta } = ev {
-                                                yield NormalizedStreamEvent::ReasoningDelta { delta };
-                                            }
-                                        }
-                                    }
-                                }
-                                "response.function_call_arguments.delta" => {
-                                    if let Some(delta) = event.get("delta").and_then(|v| v.as_str()) {
-                                        let call_id = event
-                                            .get("item_id")
-                                            .and_then(Value::as_str)
-                                            .filter(|value| !value.is_empty())
-                                            .unwrap_or("tool_call_0")
-                                            .to_string();
-                                        if seen_tool_calls.insert(call_id.clone()) {
-                                            yield NormalizedStreamEvent::ToolCallStart {
-                                                call_id: call_id.clone(),
-                                                name: None,
-                                            };
-                                        }
-                                        yield NormalizedStreamEvent::ToolCallDelta {
-                                            call_id: call_id.clone(),
-                                            delta: delta.to_string(),
-                                        };
-                                        let tc_json = json!([{
-                                            "index": 0,
-                                            "id": call_id,
-                                            "function": { "arguments": delta }
-                                        }]);
-                                        if let Some(tool_calls) = tc_json.as_array() {
-                                            aggregator.handle_tool_calls(tool_calls);
-                                        }
-                                    }
-                                }
-                                "response.reasoning.delta"
-                                | "response.reasoning_content.delta"
-                                | "response.reasoning_summary_text.delta" => {
-                                    if let Some(delta) = event.get("delta").and_then(|v| v.as_str()) {
-                                        yield NormalizedStreamEvent::ReasoningDelta {
-                                            delta: delta.to_string(),
-                                        };
-                                    }
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-                }
-            }
-
-            yield NormalizedStreamEvent::Done {
-                response: Box::new(aggregator.finalize()),
-            };
-        };
-
-        Ok(Box::pin(stream))
+        let emit_reasoning = self.supports_reasoning(&model);
+        Ok(create_responses_normalized_stream(
+            response,
+            ResponsesNormalizedStreamOptions {
+                provider_name: "OpenResponses",
+                model: model.clone(),
+                emit_reasoning,
+            },
+            move |value| Self::parse_native_response_payload(value, model.clone()),
+        ))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::llm::provider::NormalizedStreamEvent;
     use futures::StreamExt;
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -1429,7 +1352,8 @@ data: [DONE]\n\n",
                 ResponseTemplate::new(200)
                     .insert_header("content-type", "text/event-stream")
                     .set_body_string(
-                        "data: {\"type\":\"response.function_call_arguments.delta\",\"item_id\":\"call_1\",\"delta\":\"{\\\"pattern\\\":\\\"ph\"}\n\n\
+                        "data: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"function_call\",\"id\":\"call_1\",\"name\":\"search_workspace\"}}\n\n\
+data: {\"type\":\"response.function_call_arguments.delta\",\"item_id\":\"call_1\",\"delta\":\"{\\\"pattern\\\":\\\"ph\"}\n\n\
 data: {\"type\":\"response.function_call_arguments.delta\",\"item_id\":\"call_1\",\"delta\":\"ase\\\"}\"}\n\n\
 data: {\"type\":\"response.output_text.delta\",\"delta\":\"done\"}\n\n\
 data: [DONE]\n\n",
@@ -1463,7 +1387,7 @@ data: [DONE]\n\n",
                 NormalizedStreamEvent::Done { .. }
             ]
             if call_id == "call_1"
-                && name.is_none()
+                && name.as_deref() == Some("search_workspace")
                 && first_delta_id == "call_1"
                 && first_delta == "{\"pattern\":\"ph"
                 && second_delta_id == "call_1"

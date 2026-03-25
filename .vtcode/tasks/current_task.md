@@ -1,10 +1,10 @@
-# core agent loop exploration
+# Understand project purpose
 
-- [x] Map runloop modules
-  outcome: Identified runloop/unified modules for loop logic (session loop, turn loop, contexts) by listing directory contents.
-- [x] Trace session loop
-  outcome: Reviewed `session_loop_impl.rs` and runner to trace session lifecycle: initialization, interaction loop, turn execution, idle handling, finalization.
-- [x] Detail turn loop
-  outcome: Examined `turn/turn_loop.rs`: phases, guard hooks, tool dispatch, recovery, notifications.
-- [x] Summarize supporting components
-  outcome: Captured key roles for RunLoopContext, HarnessTurnState, and tool pipeline modules supporting loop behavior.
+- [x] Review high-level docs
+  files: README.md, AGENTS.md
+  outcome: Reviewed README.md for product overview and AGENTS.md for repo structure and instructions.
+- [x] Inspect repo structure and key components
+  files: Cargo.toml, src/, vtcode-core/, vtcode-llm/, vtcode-tui/, docs/
+  outcome: Inspected workspace members and key crates per AGENTS.md and repo listing.
+- [x] Summarize findings for user
+  outcome: Summarized project purpose and structure for user.
