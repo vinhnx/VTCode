@@ -59,6 +59,9 @@ workspace = true
 assert_fs = { workspace = true }
 tokio-test = "0.4"
 
+[package.metadata.cargo-machete]
+ignored = ["tokio-test", "winapi"]
+
 [[example]]
 name = "dry_run"
 required-features = ["dry-run"]

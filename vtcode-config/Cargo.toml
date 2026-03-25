@@ -16,18 +16,13 @@ categories = ["config", "development-tools"]
 
 [dependencies]
 anyhow = { workspace = true }
-base64 = { workspace = true }
 hashbrown = { workspace = true }
 dirs = { workspace = true }
 directories = "6.0"
-hostname = "0.4"
 indexmap = { workspace = true }
-keyring = { workspace = true }
 notify = "6.1.1"
 once_cell = { workspace = true }
 regex = { workspace = true }
-reqwest = { workspace = true }
-ring = { workspace = true }
 semver = { workspace = true, features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
@@ -37,7 +32,6 @@ toml = { workspace = true }
 thiserror = { workspace = true }
 toml_edit = "0.24.0"
 tracing = { workspace = true }
-urlencoding = "2.1"
 vtcode-commons = { path = "../vtcode-commons", version = "0.93.3" }
 vtcode-auth = { path = "../vtcode-auth", version = "0.93.3" }
 dotenvy = { workspace = true }
@@ -68,6 +62,9 @@ serde_json = { workspace = true }
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+
+[package.metadata.cargo-machete]
+ignored = ["nix"]
 
 [lints]
 workspace = true

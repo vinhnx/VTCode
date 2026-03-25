@@ -2216,6 +2216,7 @@ impl ToolRegistry {
             10_000,
         ));
 
+        let session_id = resolve_exec_run_session_id(payload)?;
         let mut session_env = HashMap::new();
         let mut zsh_exec_bridge = None;
         if self.pty_config().shell_zsh_fork {
@@ -2227,8 +2228,6 @@ impl ToolRegistry {
             zsh_exec_bridge = Some(bridge);
         }
         session_env.extend(parse_exec_env_overrides(payload)?);
-
-        let session_id = resolve_exec_run_session_id(payload)?;
         self.exec_sessions
             .create_pty_session(
                 session_id.clone(),
