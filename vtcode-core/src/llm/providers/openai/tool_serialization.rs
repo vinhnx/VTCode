@@ -3,7 +3,8 @@
 //! Keeps tool JSON shaping isolated from the main provider logic.
 
 use crate::config::core::{
-    OpenAIHostedShellConfig, OpenAIHostedShellEnvironment, OpenAIHostedSkill,
+    OpenAIHostedShellConfig, OpenAIHostedShellDomainSecret, OpenAIHostedShellEnvironment,
+    OpenAIHostedShellNetworkPolicy, OpenAIHostedShellNetworkPolicyType, OpenAIHostedSkill,
     OpenAIHostedSkillVersion,
 };
 use crate::llm::provider;
@@ -153,6 +154,52 @@ fn serialize_hosted_skill(skill: &OpenAIHostedSkill) -> Option<Value> {
     }
 }
 
+fn serialize_hosted_shell_domain_secret(secret: &OpenAIHostedShellDomainSecret) -> Option<Value> {
+    let domain = trim_non_empty_owned(&secret.domain)?;
+    let name = trim_non_empty_owned(&secret.name)?;
+    let value = trim_non_empty_owned(&secret.value)?;
+
+    Some(json!({
+        "domain": domain,
+        "name": name,
+        "value": value,
+    }))
+}
+
+fn serialize_openai_hosted_shell_network_policy(
+    policy: &OpenAIHostedShellNetworkPolicy,
+) -> Option<Value> {
+    match policy.policy_type {
+        OpenAIHostedShellNetworkPolicyType::Disabled => Some(json!({ "type": "disabled" })),
+        OpenAIHostedShellNetworkPolicyType::Allowlist => {
+            let allowed_domains: Vec<String> = policy
+                .allowed_domains
+                .iter()
+                .filter_map(|value| trim_non_empty_owned(value))
+                .collect();
+            if allowed_domains.is_empty() {
+                return None;
+            }
+
+            let mut payload = serde_json::Map::from_iter([
+                ("type".to_string(), json!("allowlist")),
+                ("allowed_domains".to_string(), json!(allowed_domains)),
+            ]);
+
+            let domain_secrets: Vec<Value> = policy
+                .domain_secrets
+                .iter()
+                .filter_map(serialize_hosted_shell_domain_secret)
+                .collect();
+            if !domain_secrets.is_empty() {
+                payload.insert("domain_secrets".to_string(), Value::Array(domain_secrets));
+            }
+
+            Some(Value::Object(payload))
+        }
+    }
+}
+
 fn serialize_openai_hosted_shell(config: &OpenAIHostedShellConfig) -> Option<Value> {
     if !config.enabled {
         return None;
@@ -163,7 +210,11 @@ fn serialize_openai_hosted_shell(config: &OpenAIHostedShellConfig) -> Option<Val
 
     match config.environment {
         OpenAIHostedShellEnvironment::ContainerAuto => {
-            environment.insert("network_policy".to_string(), json!({ "type": "disabled" }));
+            if let Some(network_policy) =
+                serialize_openai_hosted_shell_network_policy(&config.network_policy)
+            {
+                environment.insert("network_policy".to_string(), network_policy);
+            }
 
             let file_ids: Vec<String> = config
                 .file_ids

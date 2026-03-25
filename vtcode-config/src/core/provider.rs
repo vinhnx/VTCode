@@ -41,6 +41,125 @@ impl OpenAIHostedShellEnvironment {
     }
 }
 
+/// Hosted shell network access policy.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum OpenAIHostedShellNetworkPolicyType {
+    #[default]
+    Disabled,
+    Allowlist,
+}
+
+impl OpenAIHostedShellNetworkPolicyType {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Disabled => "disabled",
+            Self::Allowlist => "allowlist",
+        }
+    }
+}
+
+/// Per-domain secret injected by the OpenAI hosted shell runtime.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct OpenAIHostedShellDomainSecret {
+    pub domain: String,
+    pub name: String,
+    pub value: String,
+}
+
+impl OpenAIHostedShellDomainSecret {
+    pub fn validation_error(&self, index: usize) -> Option<String> {
+        let base = format!("provider.openai.hosted_shell.network_policy.domain_secrets[{index}]");
+
+        if self.domain.trim().is_empty() {
+            return Some(format!("`{base}.domain` must not be empty when set."));
+        }
+        if self.name.trim().is_empty() {
+            return Some(format!("`{base}.name` must not be empty when set."));
+        }
+        if self.value.trim().is_empty() {
+            return Some(format!("`{base}.value` must not be empty when set."));
+        }
+
+        None
+    }
+}
+
+/// Request-scoped network policy for OpenAI hosted shell environments.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Default)]
+pub struct OpenAIHostedShellNetworkPolicy {
+    #[serde(rename = "type", default)]
+    pub policy_type: OpenAIHostedShellNetworkPolicyType,
+
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub allowed_domains: Vec<String>,
+
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub domain_secrets: Vec<OpenAIHostedShellDomainSecret>,
+}
+
+impl OpenAIHostedShellNetworkPolicy {
+    pub const fn is_allowlist(&self) -> bool {
+        matches!(
+            self.policy_type,
+            OpenAIHostedShellNetworkPolicyType::Allowlist
+        )
+    }
+
+    pub fn first_invalid_message(&self) -> Option<String> {
+        match self.policy_type {
+            OpenAIHostedShellNetworkPolicyType::Disabled => {
+                if !self.allowed_domains.is_empty() || !self.domain_secrets.is_empty() {
+                    return Some(
+                        "`provider.openai.hosted_shell.network_policy.allowed_domains` and `provider.openai.hosted_shell.network_policy.domain_secrets` require `provider.openai.hosted_shell.network_policy.type = \"allowlist\"`."
+                            .to_string(),
+                    );
+                }
+            }
+            OpenAIHostedShellNetworkPolicyType::Allowlist => {
+                if let Some(index) = self
+                    .allowed_domains
+                    .iter()
+                    .position(|value| value.trim().is_empty())
+                {
+                    return Some(format!(
+                        "`provider.openai.hosted_shell.network_policy.allowed_domains[{index}]` must not be empty when set."
+                    ));
+                }
+
+                if self.allowed_domains.is_empty() {
+                    return Some(
+                        "`provider.openai.hosted_shell.network_policy.allowed_domains` must include at least one domain when `provider.openai.hosted_shell.network_policy.type = \"allowlist\"`."
+                            .to_string(),
+                    );
+                }
+
+                for (index, secret) in self.domain_secrets.iter().enumerate() {
+                    if let Some(message) = secret.validation_error(index) {
+                        return Some(message);
+                    }
+
+                    let secret_domain = secret.domain.trim();
+                    if !self
+                        .allowed_domains
+                        .iter()
+                        .any(|domain| domain.trim().eq_ignore_ascii_case(secret_domain))
+                    {
+                        return Some(format!(
+                            "`provider.openai.hosted_shell.network_policy.domain_secrets[{index}].domain` must also appear in `provider.openai.hosted_shell.network_policy.allowed_domains`."
+                        ));
+                    }
+                }
+            }
+        }
+
+        None
+    }
+}
+
 /// Reserved keyword values for hosted skill version selection.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
@@ -148,6 +267,10 @@ pub struct OpenAIHostedShellConfig {
     /// Hosted skills to mount when using `container_auto`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub skills: Vec<OpenAIHostedSkill>,
+
+    /// Request-scoped network policy for `container_auto` hosted shells.
+    #[serde(default)]
+    pub network_policy: OpenAIHostedShellNetworkPolicy,
 }
 
 impl OpenAIHostedShellConfig {
@@ -177,12 +300,26 @@ impl OpenAIHostedShellConfig {
         self.first_invalid_skill_message().is_none()
     }
 
+    pub fn first_invalid_network_policy_message(&self) -> Option<String> {
+        if self.uses_container_reference() {
+            return None;
+        }
+
+        self.network_policy.first_invalid_message()
+    }
+
+    pub fn has_valid_network_policy(&self) -> bool {
+        self.first_invalid_network_policy_message().is_none()
+    }
+
     pub fn has_valid_reference_target(&self) -> bool {
         !self.uses_container_reference() || self.container_id_ref().is_some()
     }
 
     pub fn is_valid_for_runtime(&self) -> bool {
-        self.has_valid_reference_target() && self.has_valid_skill_mounts()
+        self.has_valid_reference_target()
+            && self.has_valid_skill_mounts()
+            && self.has_valid_network_policy()
     }
 }
 
@@ -412,8 +549,10 @@ fn default_effort() -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        AnthropicConfig, OpenAIConfig, OpenAIHostedShellConfig, OpenAIHostedShellEnvironment,
-        OpenAIHostedSkill, OpenAIHostedSkillVersion, OpenAIServiceTier,
+        AnthropicConfig, OpenAIConfig, OpenAIHostedShellConfig, OpenAIHostedShellDomainSecret,
+        OpenAIHostedShellEnvironment, OpenAIHostedShellNetworkPolicy,
+        OpenAIHostedShellNetworkPolicyType, OpenAIHostedSkill, OpenAIHostedSkillVersion,
+        OpenAIServiceTier,
     };
 
     #[test]
@@ -536,6 +675,39 @@ sha256 = "deadbeef"
     }
 
     #[test]
+    fn openai_config_parses_hosted_shell_network_policy() {
+        let parsed: OpenAIConfig = toml::from_str(
+            r#"
+[hosted_shell]
+enabled = true
+
+[hosted_shell.network_policy]
+type = "allowlist"
+allowed_domains = ["httpbin.org"]
+
+[[hosted_shell.network_policy.domain_secrets]]
+domain = "httpbin.org"
+name = "API_KEY"
+value = "debug-secret-123"
+"#,
+        )
+        .expect("config should parse");
+
+        assert_eq!(
+            parsed.hosted_shell.network_policy,
+            OpenAIHostedShellNetworkPolicy {
+                policy_type: OpenAIHostedShellNetworkPolicyType::Allowlist,
+                allowed_domains: vec!["httpbin.org".to_string()],
+                domain_secrets: vec![OpenAIHostedShellDomainSecret {
+                    domain: "httpbin.org".to_string(),
+                    name: "API_KEY".to_string(),
+                    value: "debug-secret-123".to_string(),
+                }],
+            }
+        );
+    }
+
+    #[test]
     fn openai_config_parses_tool_search() {
         let parsed: OpenAIConfig = toml::from_str(
             r#"
@@ -573,6 +745,7 @@ always_available_tools = ["unified_search", "custom_tool"]
             container_id: Some("   ".to_string()),
             file_ids: Vec::new(),
             skills: Vec::new(),
+            network_policy: OpenAIHostedShellNetworkPolicy::default(),
         };
 
         assert!(!config.has_valid_reference_target());
@@ -590,6 +763,7 @@ always_available_tools = ["unified_search", "custom_tool"]
                 skill_id: "   ".to_string(),
                 version: OpenAIHostedSkillVersion::default(),
             }],
+            network_policy: OpenAIHostedShellNetworkPolicy::default(),
         };
 
         let message = config
@@ -612,10 +786,81 @@ always_available_tools = ["unified_search", "custom_tool"]
                 bundle_b64: "   ".to_string(),
                 sha256: None,
             }],
+            network_policy: OpenAIHostedShellNetworkPolicy::default(),
         };
 
         assert!(config.first_invalid_skill_message().is_none());
         assert!(config.has_valid_skill_mounts());
         assert!(config.is_valid_for_runtime());
+    }
+
+    #[test]
+    fn hosted_shell_reports_invalid_allowlist_without_domains() {
+        let config = OpenAIHostedShellConfig {
+            enabled: true,
+            environment: OpenAIHostedShellEnvironment::ContainerAuto,
+            container_id: None,
+            file_ids: Vec::new(),
+            skills: Vec::new(),
+            network_policy: OpenAIHostedShellNetworkPolicy {
+                policy_type: OpenAIHostedShellNetworkPolicyType::Allowlist,
+                allowed_domains: Vec::new(),
+                domain_secrets: Vec::new(),
+            },
+        };
+
+        let message = config
+            .first_invalid_network_policy_message()
+            .expect("invalid network policy should be reported");
+
+        assert!(message.contains("network_policy.allowed_domains"));
+        assert!(!config.has_valid_network_policy());
+        assert!(!config.is_valid_for_runtime());
+    }
+
+    #[test]
+    fn hosted_shell_reports_domain_secret_outside_allowlist() {
+        let config = OpenAIHostedShellConfig {
+            enabled: true,
+            environment: OpenAIHostedShellEnvironment::ContainerAuto,
+            container_id: None,
+            file_ids: Vec::new(),
+            skills: Vec::new(),
+            network_policy: OpenAIHostedShellNetworkPolicy {
+                policy_type: OpenAIHostedShellNetworkPolicyType::Allowlist,
+                allowed_domains: vec!["pypi.org".to_string()],
+                domain_secrets: vec![OpenAIHostedShellDomainSecret {
+                    domain: "httpbin.org".to_string(),
+                    name: "API_KEY".to_string(),
+                    value: "secret".to_string(),
+                }],
+            },
+        };
+
+        let message = config
+            .first_invalid_network_policy_message()
+            .expect("invalid domain secret should be reported");
+
+        assert!(message.contains("domain_secrets[0].domain"));
+        assert!(!config.has_valid_network_policy());
+    }
+
+    #[test]
+    fn hosted_shell_ignores_network_policy_validation_for_container_reference() {
+        let config = OpenAIHostedShellConfig {
+            enabled: true,
+            environment: OpenAIHostedShellEnvironment::ContainerReference,
+            container_id: Some("cntr_123".to_string()),
+            file_ids: Vec::new(),
+            skills: Vec::new(),
+            network_policy: OpenAIHostedShellNetworkPolicy {
+                policy_type: OpenAIHostedShellNetworkPolicyType::Allowlist,
+                allowed_domains: Vec::new(),
+                domain_secrets: Vec::new(),
+            },
+        };
+
+        assert!(config.first_invalid_network_policy_message().is_none());
+        assert!(config.has_valid_network_policy());
     }
 }

@@ -174,10 +174,29 @@ bundle_b64 = "UEsFBgAAAAAAAA=="
 sha256 = "deadbeef"
 ```
 
+To allow outbound access for trusted domains in the hosted container, configure a request-scoped allowlist and optional domain secrets:
+
+```toml
+[provider.openai.hosted_shell]
+enabled = true
+environment = "container_auto"
+
+[provider.openai.hosted_shell.network_policy]
+type = "allowlist"
+allowed_domains = ["httpbin.org"]
+
+[[provider.openai.hosted_shell.network_policy.domain_secrets]]
+domain = "httpbin.org"
+name = "API_KEY"
+value = "debug-secret-123"
+```
+
 Notes:
 
 - `provider.openai.hosted_shell` is only used for OpenAI Responses-capable models on the native OpenAI endpoint.
 - `environment = "container_reference"` reuses an existing OpenAI container and ignores `file_ids` and `skills`.
+- `provider.openai.hosted_shell.network_policy` currently applies only to `container_auto`.
+- `type = "allowlist"` requires at least one `allowed_domains` entry. Each `domain_secrets[*].domain` must also appear in `allowed_domains`.
 - `version` may be omitted for the default `"latest"` behavior, or set to a pinned integer/string version when your hosted skill deployment requires it.
 
 ## Execution environment
