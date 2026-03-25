@@ -297,10 +297,12 @@ pub fn check_openai_hosted_shell_compat(
     }
 
     if hosted_shell.uses_container_reference()
-        && (!hosted_shell.file_ids.is_empty() || !hosted_shell.skills.is_empty())
+        && (!hosted_shell.file_ids.is_empty()
+            || !hosted_shell.skills.is_empty()
+            || hosted_shell.network_policy.is_allowlist())
     {
         return Some(
-            "`provider.openai.hosted_shell.file_ids` and `provider.openai.hosted_shell.skills` are only used with `container_auto`. VT Code will ignore those fields while `container_reference` is selected."
+            "`provider.openai.hosted_shell.file_ids`, `provider.openai.hosted_shell.skills`, and allowlist `provider.openai.hosted_shell.network_policy` settings are only used with `container_auto`. VT Code will ignore those fields while `container_reference` is selected."
                 .to_string(),
         );
     }
@@ -308,6 +310,13 @@ pub fn check_openai_hosted_shell_compat(
     if let Some(message) = hosted_shell.first_invalid_skill_message() {
         return Some(format!(
             "{} VT Code will ignore hosted shell until the mounted skills are corrected.",
+            message
+        ));
+    }
+
+    if let Some(message) = hosted_shell.first_invalid_network_policy_message() {
+        return Some(format!(
+            "{} VT Code will ignore hosted shell until the hosted shell network policy is corrected.",
             message
         ));
     }
@@ -505,6 +514,13 @@ mod tests {
             crate::config::core::OpenAIHostedShellEnvironment::ContainerReference;
         cfg.provider.openai.hosted_shell.container_id = Some("cntr_123".to_string());
         cfg.provider.openai.hosted_shell.file_ids = vec!["file_123".to_string()];
+        cfg.provider.openai.hosted_shell.network_policy.policy_type =
+            vtcode_config::core::OpenAIHostedShellNetworkPolicyType::Allowlist;
+        cfg.provider
+            .openai
+            .hosted_shell
+            .network_policy
+            .allowed_domains = vec!["httpbin.org".to_string()];
 
         let msg = check_openai_hosted_shell_compat(
             &cfg,
@@ -575,6 +591,52 @@ mod tests {
             msg.as_deref()
                 .unwrap_or_default()
                 .contains("provider.openai.hosted_shell.skills[0].bundle_b64")
+        );
+    }
+
+    #[test]
+    fn hosted_shell_warning_for_empty_allowlist_domains() {
+        let mut cfg = VTCodeConfig::default();
+        cfg.provider.openai.hosted_shell.enabled = true;
+        cfg.provider.openai.hosted_shell.network_policy.policy_type =
+            vtcode_config::core::OpenAIHostedShellNetworkPolicyType::Allowlist;
+
+        let msg = check_openai_hosted_shell_compat(&cfg, "gpt-5", "openai");
+
+        assert!(
+            msg.as_deref()
+                .unwrap_or_default()
+                .contains("network_policy.allowed_domains")
+        );
+    }
+
+    #[test]
+    fn hosted_shell_warning_for_secret_domain_outside_allowlist() {
+        let mut cfg = VTCodeConfig::default();
+        cfg.provider.openai.hosted_shell.enabled = true;
+        cfg.provider.openai.hosted_shell.network_policy.policy_type =
+            vtcode_config::core::OpenAIHostedShellNetworkPolicyType::Allowlist;
+        cfg.provider
+            .openai
+            .hosted_shell
+            .network_policy
+            .allowed_domains = vec!["pypi.org".to_string()];
+        cfg.provider
+            .openai
+            .hosted_shell
+            .network_policy
+            .domain_secrets = vec![vtcode_config::core::OpenAIHostedShellDomainSecret {
+            domain: "httpbin.org".to_string(),
+            name: "API_KEY".to_string(),
+            value: "secret".to_string(),
+        }];
+
+        let msg = check_openai_hosted_shell_compat(&cfg, "gpt-5", "openai");
+
+        assert!(
+            msg.as_deref()
+                .unwrap_or_default()
+                .contains("domain_secrets[0].domain")
         );
     }
 

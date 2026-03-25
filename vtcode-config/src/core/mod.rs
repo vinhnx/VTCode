@@ -34,9 +34,10 @@ pub use prompt_cache::{
     ProviderPromptCachingConfig, ZaiPromptCacheSettings, build_openai_prompt_cache_key,
 };
 pub use provider::{
-    AnthropicConfig, OpenAIConfig, OpenAIHostedShellConfig, OpenAIHostedShellEnvironment,
-    OpenAIHostedSkill, OpenAIHostedSkillVersion, OpenAIServiceTier, OpenAIToolSearchConfig,
-    ToolSearchConfig,
+    AnthropicConfig, OpenAIConfig, OpenAIHostedShellConfig, OpenAIHostedShellDomainSecret,
+    OpenAIHostedShellEnvironment, OpenAIHostedShellNetworkPolicy,
+    OpenAIHostedShellNetworkPolicyType, OpenAIHostedSkill, OpenAIHostedSkillVersion,
+    OpenAIServiceTier, OpenAIToolSearchConfig, ToolSearchConfig,
 };
 pub use sandbox::{
     DockerSandboxConfig, ExternalSandboxConfig, ExternalSandboxType, MicroVMSandboxConfig,

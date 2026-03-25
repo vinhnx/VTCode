@@ -421,6 +421,13 @@ python3 scripts/generate_config_field_reference.py
 | `provider.openai.hosted_shell.environment` | `string` | no | `"container_auto"` | Hosted shell environment mode. Use `"container_auto"` to provision a new container with mounted files/skills, or `"container_reference"` to reuse an existing container ID. |
 | `provider.openai.hosted_shell.file_ids` | `array` | no | `[]` | OpenAI file IDs to mount when using `container_auto`. Ignored for `container_reference`. |
 | `provider.openai.hosted_shell.file_ids[]` | `string` | no | `-` | - |
+| `provider.openai.hosted_shell.network_policy.allowed_domains` | `array` | no | `[]` | Trusted outbound domains for `provider.openai.hosted_shell.network_policy.type = "allowlist"`. Only used with `container_auto`. |
+| `provider.openai.hosted_shell.network_policy.allowed_domains[]` | `string` | no | `-` | - |
+| `provider.openai.hosted_shell.network_policy.domain_secrets` | `array` | no | `[]` | Per-domain secret headers for hosted shell allowlists. Each secret domain must also appear in `allowed_domains`. Only used with `container_auto`. |
+| `provider.openai.hosted_shell.network_policy.domain_secrets[].domain` | `string` | no | `-` | Trusted destination domain that may receive the translated secret header. |
+| `provider.openai.hosted_shell.network_policy.domain_secrets[].name` | `string` | no | `-` | Placeholder name exposed to the model/runtime, for example `API_KEY`. |
+| `provider.openai.hosted_shell.network_policy.domain_secrets[].value` | `string` | no | `-` | Raw secret value sent by OpenAI's auth translation layer to the approved destination. |
+| `provider.openai.hosted_shell.network_policy.type` | `string` | no | `"disabled"` | Hosted shell network policy. Use `"disabled"` for no outbound access or `"allowlist"` to permit only `allowed_domains`. Only used with `container_auto`. |
 | `provider.openai.hosted_shell.skills` | `array` | no | `[]` | Hosted skill mounts for OpenAI hosted shell. Each entry must use `type = "skill_reference"` or `type = "inline"`. VT Code does not create or upload these hosted skills automatically. |
 | `provider.openai.hosted_shell.skills[].bundle_b64` | `string` | no | `-` | Base64-encoded zip bundle for `type = "inline"`. Must be non-empty when set. |
 | `provider.openai.hosted_shell.skills[].sha256` | `string \| null` | no | `-` | Optional SHA-256 digest for `type = "inline"` bundle caching/deduplication. |

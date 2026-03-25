@@ -2,7 +2,8 @@ use super::super::tool_serialization;
 use super::*;
 use crate::config::TimeoutsConfig;
 use crate::config::core::{
-    OpenAIHostedShellConfig, OpenAIHostedShellEnvironment, OpenAIHostedSkill,
+    OpenAIHostedShellConfig, OpenAIHostedShellDomainSecret, OpenAIHostedShellEnvironment,
+    OpenAIHostedShellNetworkPolicy, OpenAIHostedShellNetworkPolicyType, OpenAIHostedSkill,
     OpenAIHostedSkillVersion, OpenAIServiceTier,
 };
 use crate::llm::provider::{LLMProvider, NormalizedStreamEvent, ParallelToolConfig};
@@ -110,6 +111,7 @@ fn hosted_shell_openai_config() -> OpenAIConfig {
                 skill_id: "skill_123".to_string(),
                 version: OpenAIHostedSkillVersion::default(),
             }],
+            network_policy: OpenAIHostedShellNetworkPolicy::default(),
         },
         ..Default::default()
     }
@@ -431,6 +433,63 @@ fn responses_payload_uses_hosted_shell_when_enabled() {
 }
 
 #[test]
+fn responses_payload_serializes_hosted_shell_allowlist_and_domain_secrets() {
+    let provider = OpenAIProvider::from_config(
+        Some(String::new()),
+        None,
+        Some(models::openai::GPT_5.to_string()),
+        Some("https://api.openai.com/v1".to_string()),
+        None,
+        None,
+        None,
+        Some(OpenAIConfig {
+            hosted_shell: OpenAIHostedShellConfig {
+                enabled: true,
+                environment: OpenAIHostedShellEnvironment::ContainerAuto,
+                container_id: None,
+                file_ids: Vec::new(),
+                skills: Vec::new(),
+                network_policy: OpenAIHostedShellNetworkPolicy {
+                    policy_type: OpenAIHostedShellNetworkPolicyType::Allowlist,
+                    allowed_domains: vec!["httpbin.org".to_string()],
+                    domain_secrets: vec![OpenAIHostedShellDomainSecret {
+                        domain: "httpbin.org".to_string(),
+                        name: "API_KEY".to_string(),
+                        value: "debug-secret-123".to_string(),
+                    }],
+                },
+            },
+            ..Default::default()
+        }),
+        None,
+    );
+    let request = shell_request(models::openai::GPT_5);
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    let network_policy = &payload["tools"][0]["environment"]["network_policy"];
+    assert_eq!(network_policy["type"].as_str(), Some("allowlist"));
+    assert_eq!(
+        network_policy["allowed_domains"][0].as_str(),
+        Some("httpbin.org")
+    );
+    assert_eq!(
+        network_policy["domain_secrets"][0]["domain"].as_str(),
+        Some("httpbin.org")
+    );
+    assert_eq!(
+        network_policy["domain_secrets"][0]["name"].as_str(),
+        Some("API_KEY")
+    );
+    assert_eq!(
+        network_policy["domain_secrets"][0]["value"].as_str(),
+        Some("debug-secret-123")
+    );
+}
+
+#[test]
 fn responses_payload_omits_explicit_latest_string_version() {
     let provider = OpenAIProvider::from_config(
         Some(String::new()),
@@ -450,6 +509,7 @@ fn responses_payload_omits_explicit_latest_string_version() {
                     skill_id: "skill_123".to_string(),
                     version: OpenAIHostedSkillVersion::String(" latest ".to_string()),
                 }],
+                network_policy: OpenAIHostedShellNetworkPolicy::default(),
             },
             ..Default::default()
         }),
@@ -488,6 +548,7 @@ fn responses_payload_uses_container_reference_when_configured() {
                     skill_id: "skill_ignored".to_string(),
                     version: OpenAIHostedSkillVersion::default(),
                 }],
+                network_policy: OpenAIHostedShellNetworkPolicy::default(),
             },
             ..Default::default()
         }),
@@ -574,6 +635,7 @@ fn responses_payload_serializes_inline_hosted_skill_mount() {
                     bundle_b64: "UEsFBgAAAAAAAA==".to_string(),
                     sha256: Some("deadbeef".to_string()),
                 }],
+                network_policy: OpenAIHostedShellNetworkPolicy::default(),
             },
             ..Default::default()
         }),
@@ -611,6 +673,7 @@ fn missing_container_reference_id_keeps_local_shell_tool() {
                 container_id: Some("   ".to_string()),
                 file_ids: Vec::new(),
                 skills: Vec::new(),
+                network_policy: OpenAIHostedShellNetworkPolicy::default(),
             },
             ..Default::default()
         }),
@@ -655,6 +718,53 @@ fn invalid_hosted_skill_mount_keeps_local_shell_tool() {
                     skill_id: "   ".to_string(),
                     version: OpenAIHostedSkillVersion::default(),
                 }],
+                network_policy: OpenAIHostedShellNetworkPolicy::default(),
+            },
+            ..Default::default()
+        }),
+        None,
+    );
+    let request = shell_request(models::openai::GPT_5);
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    let tool_object = payload["tools"][0]
+        .as_object()
+        .expect("tool entry should be object");
+    assert_eq!(
+        tool_object.get("type").and_then(Value::as_str),
+        Some("function")
+    );
+    assert_eq!(
+        tool_object.get("name").and_then(Value::as_str),
+        Some("shell")
+    );
+}
+
+#[test]
+fn invalid_hosted_shell_network_policy_keeps_local_shell_tool() {
+    let provider = OpenAIProvider::from_config(
+        Some(String::new()),
+        None,
+        Some(models::openai::GPT_5.to_string()),
+        Some("https://api.openai.com/v1".to_string()),
+        None,
+        None,
+        None,
+        Some(OpenAIConfig {
+            hosted_shell: OpenAIHostedShellConfig {
+                enabled: true,
+                environment: OpenAIHostedShellEnvironment::ContainerAuto,
+                container_id: None,
+                file_ids: Vec::new(),
+                skills: Vec::new(),
+                network_policy: OpenAIHostedShellNetworkPolicy {
+                    policy_type: OpenAIHostedShellNetworkPolicyType::Allowlist,
+                    allowed_domains: Vec::new(),
+                    domain_secrets: Vec::new(),
+                },
             },
             ..Default::default()
         }),
