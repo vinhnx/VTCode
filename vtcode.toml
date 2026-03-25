@@ -104,6 +104,8 @@ max_tool_retries = 2
 auto_compaction_enabled = false
 continuation_policy = "all"
 event_log_path = ""
+orchestration_mode = "single"
+max_revision_rounds = 2
 
 [agent.circuit_breaker]
 enabled = true
@@ -223,6 +225,8 @@ unified_file = "allow"
 unified_search = "allow"
 web_fetch = "allow"
 write_file = "allow"
+vtcode-clippy = "prompt"
+vtcode-check = "prompt"
 
 [tools.web_fetch]
 mode = "restricted"

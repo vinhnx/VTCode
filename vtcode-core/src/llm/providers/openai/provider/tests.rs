@@ -962,6 +962,41 @@ fn responses_function_tools_strip_openai_schema_combinators_from_builtin_tools()
 }
 
 #[test]
+fn responses_function_tools_add_empty_properties_for_bare_object_schema() {
+    let provider =
+        OpenAIProvider::with_model(String::new(), models::openai::GPT_5_2_CODEX.to_string());
+    let request = provider::LLMRequest {
+        messages: vec![provider::Message::user("Hello".to_owned())],
+        tools: Some(Arc::new(vec![provider::ToolDefinition::function(
+            "vtcode-clippy".to_owned(),
+            "Run clippy on the workspace".to_owned(),
+            json!({
+                "type": "object",
+                "additionalProperties": true
+            }),
+        )])),
+        model: models::openai::GPT_5_2_CODEX.to_string(),
+        ..Default::default()
+    };
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    let parameters = payload["tools"]
+        .as_array()
+        .expect("tool array")
+        .iter()
+        .find(|tool| tool.get("name").and_then(Value::as_str) == Some("vtcode-clippy"))
+        .and_then(|tool| tool.get("parameters"))
+        .expect("vtcode-clippy parameters should be present");
+
+    assert_eq!(parameters["type"].as_str(), Some("object"));
+    assert_eq!(parameters["properties"], json!({}));
+    assert_eq!(parameters["additionalProperties"], json!(true));
+}
+
+#[test]
 fn responses_payload_serializes_hosted_web_search_tool() {
     let provider = OpenAIProvider::with_model(String::new(), models::openai::GPT_5.to_string());
     let request = provider::LLMRequest {

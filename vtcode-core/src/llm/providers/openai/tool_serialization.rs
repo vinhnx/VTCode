@@ -81,6 +81,12 @@ fn sanitize_openai_function_parameters(value: Value) -> Value {
                 *nested = next;
             }
 
+            if map.get("type").and_then(Value::as_str) == Some("object")
+                && !map.contains_key("properties")
+            {
+                map.insert("properties".to_string(), json!({}));
+            }
+
             Value::Object(map)
         }
         Value::Array(items) => Value::Array(

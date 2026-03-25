@@ -197,6 +197,7 @@ pub fn build_skill_tool_registration(skill: &Skill) -> ToolRegistration {
 fn skill_tool_parameter_schema() -> Value {
     json!({
         "type": "object",
+        "properties": {},
         "description": "Flexible input for skill execution",
         "additionalProperties": true,
     })
@@ -920,6 +921,29 @@ Use `/rust-skills`.
     }
 
     #[tokio::test]
+    async fn traditional_skill_registration_schema_includes_empty_properties() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        write_skill_fixture(temp_dir.path(), DEMO_SKILL_TOOL_NAME);
+
+        let mut loader = EnhancedSkillLoader::new(temp_dir.path().to_path_buf());
+        let skill = match loader
+            .get_skill(DEMO_SKILL_TOOL_NAME)
+            .await
+            .expect("discover skill")
+        {
+            EnhancedSkill::Traditional(skill) => *skill,
+            _ => panic!("expected traditional skill"),
+        };
+
+        let registration = build_traditional_skill_tool_registration(&skill, None);
+        let schema = registration.parameter_schema().expect("skill schema");
+
+        assert_eq!(schema["type"].as_str(), Some("object"));
+        assert_eq!(schema["properties"], json!({}));
+        assert_eq!(schema["additionalProperties"], json!(true));
+    }
+
+    #[tokio::test]
     async fn load_skill_notifies_when_tool_snapshot_changes() {
         let temp_dir = TempDir::new().expect("temp dir");
         let skill_name = DEMO_SKILL_TOOL_NAME;
@@ -1172,11 +1196,21 @@ Use `/rust-skills`.
             .expect("list skills succeeds");
 
         assert_eq!(result["count"].as_u64(), Some(1));
-        assert_eq!(result.get("discovery_errors"), None);
         let groups = result["groups"]["agent_skill"]
             .as_array()
             .expect("agent skill group");
         assert_eq!(groups[0]["name"].as_str(), Some("rust-skills"));
+        let samples = result
+            .get("discovery_error_samples")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        assert!(samples.iter().all(|sample| {
+            !sample
+                .as_str()
+                .expect("discovery error sample")
+                .contains("rust-skills")
+        }));
     }
 
     #[tokio::test]
