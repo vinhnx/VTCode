@@ -185,7 +185,6 @@ anstyle = { workspace = true }
 anstyle-crossterm = { workspace = true }
 colorchoice = "1.0"
 agent-client-protocol = { workspace = true }
-url = { workspace = true }
 shell-words = { workspace = true }
 dialoguer = { workspace = true }
 crossterm = { workspace = true }

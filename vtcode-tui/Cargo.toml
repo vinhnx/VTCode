@@ -63,6 +63,9 @@ vtcode-vim = { path = "../vtcode-vim", version = "0.93.3" }
 criterion = { workspace = true }
 insta = "1.39"
 
+[package.metadata.cargo-machete]
+ignored = ["insta"]
+
 [[bench]]
 name = "markdown_render"
 harness = false

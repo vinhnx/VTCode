@@ -687,6 +687,50 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn unified_exec_run_preserves_requested_session_id_for_follow_up_calls() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        registry.allow_all_tools().await?;
+
+        let mut run_args = long_running_exec_args(true, 10);
+        run_args
+            .as_object_mut()
+            .expect("run args should be an object")
+            .insert("session_id".to_string(), json!("check_sh"));
+
+        let initial = registry.execute_harness_unified_exec(run_args).await?;
+        assert_eq!(initial["session_id"], "check_sh");
+        assert_eq!(
+            initial["next_continue_args"],
+            json!({ "session_id": "check_sh" })
+        );
+
+        let response = registry
+            .execute_harness_unified_exec(json!({
+                "action": "poll",
+                "session_id": "check_sh",
+                "yield_time_ms": 10,
+            }))
+            .await?;
+
+        assert!(response.get("output").is_some());
+        assert!(
+            response.get("exit_code").is_some() || response.get("next_continue_args").is_some()
+        );
+
+        if response.get("exit_code").is_none() {
+            registry
+                .execute_harness_unified_exec(json!({
+                    "action": "close",
+                    "session_id": "check_sh",
+                }))
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn active_exec_continuations_bypass_identical_call_loop_detection() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
