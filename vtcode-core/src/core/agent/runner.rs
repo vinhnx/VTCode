@@ -47,6 +47,7 @@ mod execute_checks;
 mod execute_tools;
 mod helpers;
 mod optimizer;
+mod orchestration;
 mod output;
 mod retry;
 mod summarize;
@@ -486,6 +487,11 @@ impl AgentRunner {
     pub fn enable_plan_mode(&self) {
         self.tool_registry.enable_plan_mode();
         self.tool_registry.plan_mode_state().enable();
+    }
+
+    pub fn disable_plan_mode(&self) {
+        self.tool_registry.disable_plan_mode();
+        self.tool_registry.plan_mode_state().disable();
     }
 
     /// Attach a callback that will be invoked for each structured event as it is recorded.

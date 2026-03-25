@@ -6,6 +6,7 @@ pub fn check_completion_indicators(response_text: &str) -> bool {
     // High-confidence terminal markers that strongly indicate intent to stop.
     const COMPLETION_SENTENCES: &[&str] = &[
         "the task is complete",
+        "task is complete",
         "task has been completed",
         "i have successfully completed the task",
         "work is finished",
@@ -115,6 +116,7 @@ mod tests {
     #[test]
     fn test_completion_indicators() {
         assert!(check_completion_indicators("The task is complete"));
+        assert!(check_completion_indicators("Revision 1: task is complete."));
         assert!(check_completion_indicators(
             "I have successfully completed the task."
         ));

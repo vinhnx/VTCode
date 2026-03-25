@@ -8,6 +8,9 @@ use vtcode_config::constants::context::TOKEN_BUDGET_HIGH_THRESHOLD;
 use vtcode_core::compaction::CompactionConfig;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::context::history_files::{HistoryFileManager, messages_to_history_messages};
+use vtcode_core::core::agent::harness_artifacts::{
+    current_task_path, read_evaluation_summary, read_spec_summary,
+};
 use vtcode_core::hooks::LifecycleHookEngine;
 use vtcode_core::llm::provider::{LLMProvider, Message, MessageRole};
 
@@ -120,6 +123,8 @@ pub(crate) struct SessionMemoryEnvelope {
     pub session_id: String,
     pub summary: String,
     pub task_summary: Option<String>,
+    pub spec_summary: Option<String>,
+    pub evaluation_summary: Option<String>,
     pub grounded_facts: Vec<GroundedFactRecord>,
     pub touched_files: Vec<String>,
     pub history_artifact_path: Option<String>,
@@ -186,6 +191,20 @@ fn memory_envelope_message(envelope: &SessionMemoryEnvelope) -> Message {
     {
         text.push_str("\n\nTask Tracker:\n");
         text.push_str(task_summary.trim());
+    }
+
+    if let Some(spec_summary) = envelope.spec_summary.as_deref()
+        && !spec_summary.trim().is_empty()
+    {
+        text.push_str("\n\nSpec Summary:\n");
+        text.push_str(spec_summary.trim());
+    }
+
+    if let Some(evaluation_summary) = envelope.evaluation_summary.as_deref()
+        && !evaluation_summary.trim().is_empty()
+    {
+        text.push_str("\n\nEvaluation Summary:\n");
+        text.push_str(evaluation_summary.trim());
     }
 
     if !envelope.touched_files.is_empty() {
@@ -414,10 +433,7 @@ fn dedup_latest_facts(history: &[Message]) -> Vec<GroundedFactRecord> {
 }
 
 fn read_task_summary(workspace_root: &Path) -> Option<String> {
-    let tracker_path = workspace_root
-        .join(".vtcode")
-        .join("tasks")
-        .join("current_task.md");
+    let tracker_path = current_task_path(workspace_root);
     let content = fs::read_to_string(&tracker_path).ok()?;
 
     let title = content
@@ -598,6 +614,7 @@ fn merge_grounded_facts(
 
 fn build_session_memory_envelope(
     session_id: &str,
+    workspace_root: &Path,
     original_history: &[Message],
     touched_files: &[String],
     compacted: &[Message],
@@ -609,6 +626,10 @@ fn build_session_memory_envelope(
         session_id: session_id.to_string(),
         summary: extract_compaction_summary(compacted, original_history),
         task_summary,
+        spec_summary: read_spec_summary(workspace_root)
+            .or_else(|| prior_envelope.and_then(|envelope| envelope.spec_summary.clone())),
+        evaluation_summary: read_evaluation_summary(workspace_root)
+            .or_else(|| prior_envelope.and_then(|envelope| envelope.evaluation_summary.clone())),
         grounded_facts: merge_grounded_facts(prior_envelope, original_history),
         touched_files: merge_touched_files(prior_envelope, touched_files),
         history_artifact_path: history_artifact_path
@@ -662,6 +683,7 @@ fn persist_memory_envelope(
     let prior_envelope = seed_envelope.or(loaded_prior_envelope.as_ref());
     let envelope = build_session_memory_envelope(
         session_id,
+        workspace_root,
         original_history,
         touched_files,
         compacted,
@@ -1406,6 +1428,8 @@ mod tests {
             session_id: "resume-session".to_string(),
             summary: "Persisted summary".to_string(),
             task_summary: Some("Tracker: - [ ] Follow up".to_string()),
+            spec_summary: None,
+            evaluation_summary: None,
             grounded_facts: vec![GroundedFactRecord {
                 fact: "Cargo.toml declares vtcode-core".to_string(),
                 source: "tool:read_file".to_string(),
@@ -1445,6 +1469,8 @@ mod tests {
                 session_id: session_id.to_string(),
                 summary: summary.to_string(),
                 task_summary: None,
+                spec_summary: None,
+                evaluation_summary: None,
                 grounded_facts: Vec::new(),
                 touched_files: Vec::new(),
                 history_artifact_path: None,
@@ -1481,6 +1507,8 @@ mod tests {
                 session_id: "session-a".to_string(),
                 summary: summary.to_string(),
                 task_summary: None,
+                spec_summary: None,
+                evaluation_summary: None,
                 grounded_facts: Vec::new(),
                 touched_files: Vec::new(),
                 history_artifact_path: None,
@@ -1591,6 +1619,8 @@ mod tests {
                 session_id: session_id.to_string(),
                 summary: summary.to_string(),
                 task_summary: None,
+                spec_summary: None,
+                evaluation_summary: None,
                 grounded_facts: Vec::new(),
                 touched_files: Vec::new(),
                 history_artifact_path: None,
@@ -1663,6 +1693,8 @@ mod tests {
             session_id: "session-source".to_string(),
             summary: "Prior source summary".to_string(),
             task_summary: Some("Tracker: keep going".to_string()),
+            spec_summary: None,
+            evaluation_summary: None,
             grounded_facts: vec![GroundedFactRecord {
                 fact: "src/lib.rs was updated".to_string(),
                 source: "tool:write_file".to_string(),

@@ -3,6 +3,7 @@ use crate::agent::runloop::unified::turn::turn_loop::TurnLoopOutcome;
 use anyhow::Result;
 use std::time::Duration;
 use vtcode_core::core::agent::blocked_handoff::write_blocked_handoff;
+use vtcode_core::core::agent::harness_artifacts::existing_harness_artifact_paths;
 use vtcode_core::exec::events::HarnessEventKind;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::MessageStyle;
@@ -73,7 +74,7 @@ pub(crate) async fn apply_turn_outcome(
                 reason
                     .as_deref()
                     .unwrap_or("Turn blocked due to repeated failing behavior."),
-                &[],
+                &existing_harness_artifact_paths(ctx.workspace),
             ) {
                 Ok(artifacts) => {
                     for path in [&artifacts.current_path, &artifacts.archive_path] {

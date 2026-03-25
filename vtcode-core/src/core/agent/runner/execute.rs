@@ -4,6 +4,7 @@ use super::continuation::{
     CompletionAssessment, ContinuationController, VerificationResult, is_review_like_task,
 };
 use super::helpers::detect_textual_exec_tool_call;
+use super::orchestration::EvaluatorGateOutcome;
 use crate::config::build_openai_prompt_cache_key;
 use crate::config::constants::tools;
 use crate::config::models::{ModelId, Provider as ModelProvider};
@@ -14,6 +15,7 @@ use crate::core::agent::conversation::{
     build_conversation, build_messages_from_conversation, conversation_from_messages,
 };
 use crate::core::agent::events::ExecEventRecorder;
+use crate::core::agent::harness_artifacts::existing_harness_artifact_paths;
 use crate::core::agent::runtime::{AgentRuntime, RuntimeControl};
 use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
@@ -132,6 +134,51 @@ fn estimate_session_cost_usd(
 }
 
 impl AgentRunner {
+    async fn resolve_completion_acceptance(
+        &mut self,
+        effective_task: &Task,
+        session_state: &mut AgentSessionState,
+        event_recorder: &mut ExecEventRecorder,
+        orchestration_enabled: bool,
+        verification_results: &[VerificationResult],
+        revision_rounds_used: &mut usize,
+        max_revision_rounds: usize,
+        should_write_blocked_handoff: &mut bool,
+    ) -> Result<bool> {
+        if !orchestration_enabled {
+            session_state.is_completed = true;
+            session_state.outcome = TaskOutcome::Success;
+            return Ok(true);
+        }
+
+        match self
+            .apply_evaluator_gate(
+                effective_task,
+                session_state,
+                event_recorder,
+                verification_results,
+                revision_rounds_used,
+                max_revision_rounds,
+            )
+            .await?
+        {
+            EvaluatorGateOutcome::Accept => {
+                session_state.is_completed = true;
+                session_state.outcome = TaskOutcome::Success;
+                Ok(true)
+            }
+            EvaluatorGateOutcome::Continue { prompt } => {
+                session_state.add_user_message(prompt);
+                Ok(false)
+            }
+            EvaluatorGateOutcome::Exhausted { reason } => {
+                session_state.outcome = TaskOutcome::Failed { reason };
+                *should_write_blocked_handoff = true;
+                Ok(true)
+            }
+        }
+    }
+
     async fn run_verification_commands(
         &self,
         commands: &[String],
@@ -290,18 +337,33 @@ impl AgentRunner {
                     .push(format!("Tool registry init failed: {err}"));
             }
 
+            let review_like = is_review_like_task(task);
+            let full_auto_active = self
+                .tool_registry
+                .current_full_auto_allowlist()
+                .await
+                .is_some();
+            let orchestration_enabled =
+                self.harness_plan_build_evaluate_enabled(full_auto_active, review_like);
+            let planner_artifacts = if orchestration_enabled {
+                Some(self.run_planner_phase(task, &mut event_recorder).await?)
+            } else {
+                None
+            };
+            let effective_task = planner_artifacts
+                .as_ref()
+                .map(|artifacts| self.augment_generator_task(task, artifacts))
+                .unwrap_or_else(|| task.clone());
+
             let mut continuation_controller = ContinuationController::new(
                 self._workspace.clone(),
                 self.tool_registry.plan_mode_state(),
                 self.config().agent.harness.continuation_policy.clone(),
-                self.tool_registry
-                    .current_full_auto_allowlist()
-                    .await
-                    .is_some(),
+                full_auto_active,
                 self.tool_registry.is_plan_mode(),
-                is_review_like_task(task),
+                review_like,
             );
-            continuation_controller.prepare(task).await?;
+            continuation_controller.prepare(&effective_task).await?;
 
             (
                 agent_prefix,
@@ -315,6 +377,8 @@ impl AgentRunner {
                 max_context_tokens,
                 runtime,
                 continuation_controller,
+                effective_task,
+                orchestration_enabled,
             )
         };
 
@@ -330,9 +394,14 @@ impl AgentRunner {
             max_context_tokens,
             mut runtime,
             mut continuation_controller,
+            effective_task,
+            orchestration_enabled,
         ) = runtime_setup;
         let mut cost_warning_emitted = false;
         let max_budget_usd = self.config().agent.harness.max_budget_usd;
+        let max_revision_rounds = self.config().agent.harness.max_revision_rounds.max(1);
+        let mut revision_rounds_used = 0usize;
+        let mut should_write_blocked_handoff = false;
 
         let result = {
             for turn in 0..self.max_turns {
@@ -618,13 +687,26 @@ impl AgentRunner {
                             style("Completion indicator detected.").green().bold()
                         ));
                         match continuation_controller
-                            .assess_completion(task, &runtime.state)
+                            .assess_completion(&effective_task, &runtime.state)
                             .await?
                         {
                             CompletionAssessment::Accept => {
-                                runtime.state.is_completed = true;
-                                runtime.state.outcome = TaskOutcome::Success;
-                                break;
+                                if self
+                                    .resolve_completion_acceptance(
+                                        &effective_task,
+                                        &mut runtime.state,
+                                        &mut event_recorder,
+                                        orchestration_enabled,
+                                        &[],
+                                        &mut revision_rounds_used,
+                                        max_revision_rounds,
+                                        &mut should_write_blocked_handoff,
+                                    )
+                                    .await?
+                                {
+                                    break;
+                                }
+                                forced_continuation = true;
                             }
                             CompletionAssessment::SkipAccept { reason } => {
                                 event_recorder.harness_event(
@@ -706,9 +788,22 @@ impl AgentRunner {
                                 {
                                     CompletionAssessment::Accept
                                     | CompletionAssessment::SkipAccept { .. } => {
-                                        runtime.state.is_completed = true;
-                                        runtime.state.outcome = TaskOutcome::Success;
-                                        break;
+                                        if self
+                                            .resolve_completion_acceptance(
+                                                &effective_task,
+                                                &mut runtime.state,
+                                                &mut event_recorder,
+                                                orchestration_enabled,
+                                                &verification_results,
+                                                &mut revision_rounds_used,
+                                                max_revision_rounds,
+                                                &mut should_write_blocked_handoff,
+                                            )
+                                            .await?
+                                        {
+                                            break;
+                                        }
+                                        forced_continuation = true;
                                     }
                                     CompletionAssessment::Continue { reason, prompt } => {
                                         event_recorder.harness_event(
@@ -843,7 +938,7 @@ impl AgentRunner {
             self.thread_handle
                 .replace_messages(runtime.state.messages.clone());
             let summary = self.generate_task_summary(
-                task,
+                &effective_task,
                 &runtime.state.modified_files,
                 &runtime.state.executed_commands,
                 &runtime.state.warnings,
@@ -868,13 +963,14 @@ impl AgentRunner {
                 ));
             }
 
-            if runtime.state.outcome.is_hard_block() {
+            if runtime.state.outcome.is_hard_block() || should_write_blocked_handoff {
+                let relevant_paths = existing_harness_artifact_paths(&self._workspace);
                 match write_blocked_handoff(
                     &self._workspace,
                     &self.session_id,
                     runtime.state.outcome.code(),
                     &runtime.state.outcome.description(),
-                    &[],
+                    &relevant_paths,
                 ) {
                     Ok(artifacts) => emit_blocked_handoff_events(
                         &mut event_recorder,

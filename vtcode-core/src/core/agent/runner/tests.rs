@@ -599,6 +599,10 @@ fn text_response(text: &str) -> LLMResponse {
     }
 }
 
+fn json_response(value: serde_json::Value) -> LLMResponse {
+    text_response(&value.to_string())
+}
+
 fn tool_call_response(tool_name: &str, args: serde_json::Value) -> LLMResponse {
     LLMResponse {
         content: Some(format!("Calling {tool_name}")),
@@ -611,6 +615,38 @@ fn tool_call_response(tool_name: &str, args: serde_json::Value) -> LLMResponse {
         finish_reason: FinishReason::ToolCalls,
         ..Default::default()
     }
+}
+
+fn planner_response_json(verify_command: &str) -> serde_json::Value {
+    json!({
+        "spec_markdown": "# Execution Spec\n\nImplement the requested change with a resumable tracker.",
+        "task_title": "Planner seeded task",
+        "items": [{
+            "description": "Implement the requested change",
+            "outcome": "The requested change is implemented and tracked.",
+            "verify": [verify_command],
+        }]
+    })
+}
+
+fn evaluator_response_json(
+    verdict: &str,
+    summary: &str,
+    high_severity_findings: usize,
+) -> serde_json::Value {
+    json!({
+        "verdict": verdict,
+        "summary": summary,
+        "high_severity_findings": high_severity_findings,
+        "findings": [{
+            "severity": if high_severity_findings > 0 { "high" } else { "low" },
+            "title": summary,
+            "detail": summary,
+        }],
+        "unmet_contract_items": [],
+        "residual_risks": [],
+        "required_tracker_updates": [],
+    })
 }
 
 fn tool_call_response_with_request_id(
@@ -1009,6 +1045,220 @@ async fn tool_loop_limit_writes_blocked_handoff_artifacts() {
         assert!(content.contains("tool_loop_limit_reached"));
         assert!(content.contains("Stopped after reaching tool loop limit"));
     }
+}
+
+#[tokio::test]
+async fn plan_build_evaluate_exec_creates_spec_and_evaluation_artifacts() {
+    let temp = TempDir::new().expect("tempdir");
+    let workspace = workspace_root(&temp);
+
+    let mut vt_cfg = VTCodeConfig::default();
+    vt_cfg.agent.harness.orchestration_mode =
+        vtcode_config::core::agent::HarnessOrchestrationMode::PlanBuildEvaluate;
+    let mut runner = make_runner(&temp, vt_cfg, "thread-plan-build-evaluate").await;
+    runner
+        .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
+        .await;
+    runner.provider_client = Box::new(QueuedProvider::new(vec![
+        json_response(planner_response_json("pwd")),
+        tool_call_response(
+            tools::TASK_TRACKER,
+            json!({
+                "action": "update",
+                "index": 1,
+                "status": "completed",
+            }),
+        ),
+        text_response("The task is complete."),
+        json_response(evaluator_response_json(
+            "pass",
+            "Evaluator accepted the implementation.",
+            0,
+        )),
+    ]));
+
+    let result = runner
+        .execute_task(&task("Planner + evaluator", "exec-task"), &[])
+        .await
+        .expect("task result");
+
+    assert_eq!(result.outcome, TaskOutcome::Success);
+    assert!(
+        workspace.join(".vtcode/tasks/current_spec.md").exists(),
+        "planner should write current_spec.md"
+    );
+    assert!(
+        workspace
+            .join(".vtcode/tasks/current_evaluation.md")
+            .exists(),
+        "evaluator should write current_evaluation.md"
+    );
+    let tracker =
+        fs::read_to_string(workspace.join(".vtcode/tasks/current_task.md")).expect("tracker file");
+    assert!(tracker.contains("outcome: The requested change is implemented and tracked."));
+    assert!(tracker.contains("verify: pwd"));
+
+    let events = harness_events(&result);
+    assert!(events.contains(&HarnessEventKind::PlanningStarted));
+    assert!(events.contains(&HarnessEventKind::PlanningCompleted));
+    assert!(events.contains(&HarnessEventKind::EvaluationStarted));
+    assert!(events.contains(&HarnessEventKind::EvaluationPassed));
+}
+
+#[tokio::test]
+async fn evaluator_failure_forces_revision_before_success() {
+    let temp = TempDir::new().expect("tempdir");
+
+    let mut vt_cfg = VTCodeConfig::default();
+    vt_cfg.agent.harness.orchestration_mode =
+        vtcode_config::core::agent::HarnessOrchestrationMode::PlanBuildEvaluate;
+    vt_cfg.automation.full_auto.max_turns = 4;
+    let mut runner = make_runner(&temp, vt_cfg, "thread-evaluator-revision").await;
+    runner
+        .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
+        .await;
+    runner.provider_client = Box::new(QueuedProvider::new(vec![
+        json_response(planner_response_json("pwd")),
+        tool_call_response(
+            tools::TASK_TRACKER,
+            json!({
+                "action": "update",
+                "index": 1,
+                "status": "completed",
+            }),
+        ),
+        text_response("The task is complete."),
+        json_response(evaluator_response_json(
+            "fail",
+            "A high-severity issue remains.",
+            1,
+        )),
+        text_response("Revision 1: task is complete."),
+        json_response(evaluator_response_json(
+            "pass",
+            "All issues have been addressed.",
+            0,
+        )),
+    ]));
+
+    let result = runner
+        .execute_task(&task("Evaluator revision", "exec-task"), &[])
+        .await
+        .expect("task result");
+
+    assert_eq!(result.outcome, TaskOutcome::Success);
+    let events = harness_events(&result);
+    assert!(events.contains(&HarnessEventKind::EvaluationFailed));
+    assert!(events.contains(&HarnessEventKind::RevisionStarted));
+    assert!(events.contains(&HarnessEventKind::EvaluationPassed));
+}
+
+#[tokio::test]
+async fn evaluator_request_includes_verification_results() {
+    let temp = TempDir::new().expect("tempdir");
+
+    let mut vt_cfg = VTCodeConfig::default();
+    vt_cfg.agent.harness.orchestration_mode =
+        vtcode_config::core::agent::HarnessOrchestrationMode::PlanBuildEvaluate;
+    let mut runner = make_runner(&temp, vt_cfg, "thread-evaluator-verification").await;
+    runner
+        .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
+        .await;
+    let provider = RecordingQueuedProvider::new(vec![
+        json_response(planner_response_json("pwd")),
+        tool_call_response(
+            tools::TASK_TRACKER,
+            json!({
+                "action": "update",
+                "index": 1,
+                "status": "completed",
+            }),
+        ),
+        text_response("The task is complete."),
+        json_response(evaluator_response_json(
+            "pass",
+            "Verification evidence looks good.",
+            0,
+        )),
+    ]);
+    let recorded = provider.clone();
+    runner.provider_client = Box::new(provider);
+
+    let result = runner
+        .execute_task(&task("Evaluator verification evidence", "exec-task"), &[])
+        .await
+        .expect("task result");
+
+    assert_eq!(result.outcome, TaskOutcome::Success);
+
+    let requests = recorded.recorded_requests();
+    let evaluator_request = requests.last().expect("evaluator request");
+    let evaluator_prompt = evaluator_request
+        .messages
+        .first()
+        .map(|message| message.content.as_text().into_owned())
+        .expect("evaluator prompt");
+    assert!(evaluator_prompt.contains("Verification results:"));
+    assert!(evaluator_prompt.contains("[PASS] pwd (exit 0)"));
+}
+
+#[tokio::test]
+async fn evaluator_exhaustion_writes_blocked_handoff_with_artifact_paths() {
+    let temp = TempDir::new().expect("tempdir");
+    let workspace = workspace_root(&temp);
+
+    let mut vt_cfg = VTCodeConfig::default();
+    vt_cfg.agent.harness.orchestration_mode =
+        vtcode_config::core::agent::HarnessOrchestrationMode::PlanBuildEvaluate;
+    vt_cfg.agent.harness.max_revision_rounds = 1;
+    vt_cfg.automation.full_auto.max_turns = 4;
+    let mut runner = make_runner(&temp, vt_cfg, "thread-evaluator-exhaustion").await;
+    runner
+        .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
+        .await;
+    runner.provider_client = Box::new(QueuedProvider::new(vec![
+        json_response(planner_response_json("pwd")),
+        tool_call_response(
+            tools::TASK_TRACKER,
+            json!({
+                "action": "update",
+                "index": 1,
+                "status": "completed",
+            }),
+        ),
+        text_response("The task is complete."),
+        json_response(evaluator_response_json(
+            "fail",
+            "First evaluator rejection.",
+            1,
+        )),
+        text_response("Revision 1: task is complete."),
+        json_response(evaluator_response_json(
+            "fail",
+            "Second evaluator rejection.",
+            1,
+        )),
+    ]));
+
+    let result = runner
+        .execute_task(&task("Evaluator exhaustion", "exec-task"), &[])
+        .await
+        .expect("task result");
+
+    assert!(matches!(result.outcome, TaskOutcome::Failed { .. }));
+    let paths = harness_paths(&result, HarnessEventKind::BlockedHandoffWritten);
+    assert_eq!(paths.len(), 2);
+    for path in paths {
+        let content = fs::read_to_string(&path).expect("blocked handoff file");
+        assert!(content.contains("current_spec.md"));
+        assert!(content.contains("current_evaluation.md"));
+    }
+    assert!(workspace.join(".vtcode/tasks/current_spec.md").exists());
+    assert!(
+        workspace
+            .join(".vtcode/tasks/current_evaluation.md")
+            .exists()
+    );
 }
 
 #[tokio::test]

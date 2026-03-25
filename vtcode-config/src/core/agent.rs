@@ -279,6 +279,50 @@ impl<'de> Deserialize<'de> for ContinuationPolicy {
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(rename_all = "snake_case"))]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HarnessOrchestrationMode {
+    #[default]
+    Single,
+    PlanBuildEvaluate,
+}
+
+impl HarnessOrchestrationMode {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Single => "single",
+            Self::PlanBuildEvaluate => "plan_build_evaluate",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        let normalized = value.trim();
+        if normalized.eq_ignore_ascii_case("single") {
+            Some(Self::Single)
+        } else if normalized.eq_ignore_ascii_case("plan_build_evaluate")
+            || normalized.eq_ignore_ascii_case("plan-build-evaluate")
+            || normalized.eq_ignore_ascii_case("planner_generator_evaluator")
+            || normalized.eq_ignore_ascii_case("planner-generator-evaluator")
+        {
+            Some(Self::PlanBuildEvaluate)
+        } else {
+            None
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for HarnessOrchestrationMode {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = String::deserialize(deserializer)?;
+        Ok(Self::parse(&raw).unwrap_or_default())
+    }
+}
+
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AgentHarnessConfig {
     /// Maximum number of tool calls allowed per turn. Set to `0` to disable the cap.
@@ -310,6 +354,12 @@ pub struct AgentHarnessConfig {
     /// Defaults to `~/.vtcode/sessions/` when unset.
     #[serde(default)]
     pub event_log_path: Option<String>,
+    /// Select the exec/full-auto harness orchestration path.
+    #[serde(default)]
+    pub orchestration_mode: HarnessOrchestrationMode,
+    /// Maximum generator revision rounds after evaluator rejection.
+    #[serde(default = "default_harness_max_revision_rounds")]
+    pub max_revision_rounds: usize,
 }
 
 impl Default for AgentHarnessConfig {
@@ -323,6 +373,8 @@ impl Default for AgentHarnessConfig {
             max_budget_usd: None,
             continuation_policy: ContinuationPolicy::default(),
             event_log_path: None,
+            orchestration_mode: HarnessOrchestrationMode::default(),
+            max_revision_rounds: default_harness_max_revision_rounds(),
         }
     }
 }
@@ -619,6 +671,11 @@ const fn default_harness_max_tool_retries() -> u32 {
 #[inline]
 const fn default_harness_auto_compaction_enabled() -> bool {
     false
+}
+
+#[inline]
+const fn default_harness_max_revision_rounds() -> usize {
+    2
 }
 
 #[inline]
@@ -1184,6 +1241,46 @@ mod tests {
         let fallback: AgentHarnessConfig =
             toml::from_str("continuation_policy = \"unexpected\"").expect("fallback config");
         assert_eq!(fallback.continuation_policy, ContinuationPolicy::All);
+    }
+
+    #[test]
+    fn test_harness_orchestration_mode_defaults_and_parses() {
+        assert_eq!(
+            HarnessOrchestrationMode::default(),
+            HarnessOrchestrationMode::Single
+        );
+        assert_eq!(
+            HarnessOrchestrationMode::parse("single"),
+            Some(HarnessOrchestrationMode::Single)
+        );
+        assert_eq!(
+            HarnessOrchestrationMode::parse("plan_build_evaluate"),
+            Some(HarnessOrchestrationMode::PlanBuildEvaluate)
+        );
+        assert_eq!(
+            HarnessOrchestrationMode::parse("planner-generator-evaluator"),
+            Some(HarnessOrchestrationMode::PlanBuildEvaluate)
+        );
+        assert_eq!(HarnessOrchestrationMode::parse("unexpected"), None);
+    }
+
+    #[test]
+    fn test_harness_config_orchestration_deserializes_with_fallback() {
+        let parsed: AgentHarnessConfig =
+            toml::from_str("orchestration_mode = \"plan_build_evaluate\"")
+                .expect("valid harness config");
+        assert_eq!(
+            parsed.orchestration_mode,
+            HarnessOrchestrationMode::PlanBuildEvaluate
+        );
+        assert_eq!(parsed.max_revision_rounds, 2);
+
+        let fallback: AgentHarnessConfig =
+            toml::from_str("orchestration_mode = \"unexpected\"").expect("fallback config");
+        assert_eq!(
+            fallback.orchestration_mode,
+            HarnessOrchestrationMode::Single
+        );
     }
 
     #[test]

@@ -687,9 +687,15 @@ pub struct WebSearchItem {
 #[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum HarnessEventKind {
+    PlanningStarted,
+    PlanningCompleted,
     ContinuationStarted,
     ContinuationSkipped,
     BlockedHandoffWritten,
+    EvaluationStarted,
+    EvaluationPassed,
+    EvaluationFailed,
+    RevisionStarted,
     VerificationStarted,
     VerificationPassed,
     VerificationFailed,

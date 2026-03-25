@@ -2,6 +2,7 @@ use super::AgentRunner;
 use crate::core::agent::conversation::{
     build_messages_from_conversation, messages_from_conversation,
 };
+use crate::core::agent::harness_artifacts::{read_evaluation_summary, read_spec_summary};
 use crate::core::agent::session::AgentSessionState;
 use crate::llm::providers::gemini::wire::{Content, Part};
 use tracing::{info, warn};
@@ -79,6 +80,23 @@ impl AgentRunner {
             )
         } else {
             base_summary
+        };
+        let spec_summary = read_spec_summary(&self._workspace);
+        let evaluation_summary = read_evaluation_summary(&self._workspace);
+        let summary = match (spec_summary, evaluation_summary) {
+            (None, None) => summary,
+            (spec_summary, evaluation_summary) => {
+                let mut enriched = summary;
+                if let Some(spec_summary) = spec_summary {
+                    enriched.push_str("\n\n");
+                    enriched.push_str(&spec_summary);
+                }
+                if let Some(evaluation_summary) = evaluation_summary {
+                    enriched.push('\n');
+                    enriched.push_str(&evaluation_summary);
+                }
+                enriched
+            }
         };
 
         let mut new_conversation = Vec::with_capacity(1 + preserve_recent_turns);

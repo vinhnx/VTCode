@@ -276,6 +276,12 @@ pub(super) fn human_event_line(event: &ThreadEvent) -> Option<String> {
             }
             ThreadItemDetails::Harness(item) => {
                 let label = match item.event {
+                    vtcode_core::exec::events::HarnessEventKind::PlanningStarted => {
+                        style("[PLAN]").cyan().bold()
+                    }
+                    vtcode_core::exec::events::HarnessEventKind::PlanningCompleted => {
+                        style("[PLAN]").green().bold()
+                    }
                     vtcode_core::exec::events::HarnessEventKind::ContinuationStarted => {
                         style("[HARNESS]").cyan().bold()
                     }
@@ -284,6 +290,18 @@ pub(super) fn human_event_line(event: &ThreadEvent) -> Option<String> {
                     }
                     vtcode_core::exec::events::HarnessEventKind::BlockedHandoffWritten => {
                         style("[HANDOFF]").cyan().bold()
+                    }
+                    vtcode_core::exec::events::HarnessEventKind::EvaluationStarted => {
+                        style("[EVAL]").cyan().bold()
+                    }
+                    vtcode_core::exec::events::HarnessEventKind::EvaluationPassed => {
+                        style("[EVAL]").green().bold()
+                    }
+                    vtcode_core::exec::events::HarnessEventKind::EvaluationFailed => {
+                        style("[EVAL FAILED]").red().bold()
+                    }
+                    vtcode_core::exec::events::HarnessEventKind::RevisionStarted => {
+                        style("[REVISION]").cyan().bold()
                     }
                     vtcode_core::exec::events::HarnessEventKind::VerificationStarted => {
                         style("[VERIFY]").cyan().bold()
