@@ -131,18 +131,18 @@ class PerformanceAnalyzer:
     def print_summary(self):
         """Print comprehensive analysis report"""
         print("\n" + "="*70)
-        print("📊 VT CODE PERFORMANCE ANALYSIS REPORT")
+        print(" VT CODE PERFORMANCE ANALYSIS REPORT")
         print("="*70)
 
-        print(f"\n📁 Analysis of: {self.csv_file}")
+        print(f"\n Analysis of: {self.csv_file}")
         print(f"   Records analyzed: {len(self.metrics)}")
         if self.metrics:
             print(f"   Time range: {self.metrics[0]['timestamp_iso']} to {self.metrics[-1]['timestamp_iso']}")
 
         # Memory Analysis
-        print("\n" + "─"*70)
-        print("💾 MEMORY USAGE ANALYSIS")
-        print("─"*70)
+        print("\n" + ""*70)
+        print(" MEMORY USAGE ANALYSIS")
+        print(""*70)
         mem_stats = self.get_memory_stats()
 
         if mem_stats:
@@ -166,9 +166,9 @@ class PerformanceAnalyzer:
         print(f"    {symbol}: {leak_msg}")
 
         # CPU Analysis
-        print("\n" + "─"*70)
-        print("⚙️  CPU USAGE ANALYSIS")
-        print("─"*70)
+        print("\n" + ""*70)
+        print("  CPU USAGE ANALYSIS")
+        print(""*70)
         cpu_stats = self.get_cpu_stats()
 
         if cpu_stats:
@@ -191,9 +191,9 @@ class PerformanceAnalyzer:
             print("\n  v No significant CPU spikes detected")
 
         # Thread Analysis
-        print("\n" + "─"*70)
-        print("🧵 THREADING ANALYSIS")
-        print("─"*70)
+        print("\n" + ""*70)
+        print(" THREADING ANALYSIS")
+        print(""*70)
         thread_stats = self.get_thread_stats()
 
         if thread_stats:
@@ -203,41 +203,41 @@ class PerformanceAnalyzer:
             print(f"    Average:        {thread_stats['threads_avg']:.0f} threads")
 
         # Recommendations
-        print("\n" + "─"*70)
-        print("💡 RECOMMENDATIONS")
-        print("─"*70)
+        print("\n" + ""*70)
+        print(" RECOMMENDATIONS")
+        print(""*70)
 
         recommendations = []
 
         if mem_stats and mem_stats['rss_growth_percent'] > 20:
-            recommendations.append("  • High memory growth detected - consider implementing cache eviction")
+            recommendations.append("   High memory growth detected - consider implementing cache eviction")
 
         if cpu_stats and cpu_stats['cpu_avg'] > 50:
-            recommendations.append("  • High average CPU usage - profile to identify hot spots")
+            recommendations.append("   High average CPU usage - profile to identify hot spots")
 
         if spikes:
-            recommendations.append(f"  • {len(spikes)} CPU spikes detected - investigate during these periods")
+            recommendations.append(f"   {len(spikes)} CPU spikes detected - investigate during these periods")
 
         if thread_stats and thread_stats['threads_max'] > 100:
-            recommendations.append("  • High thread count - review thread pool configuration")
+            recommendations.append("   High thread count - review thread pool configuration")
 
         if not recommendations:
-            recommendations.append("  • Performance metrics look healthy!")
+            recommendations.append("   Performance metrics look healthy!")
 
         for rec in recommendations:
             print(rec)
 
         # Summary metrics
         print("\n" + "="*70)
-        print("📈 QUICK METRICS")
+        print(" QUICK METRICS")
         print("="*70)
 
         if mem_stats:
-            status = "🟡 WARNING" if mem_stats['rss_growth_percent'] > 15 else "🟢 GOOD"
+            status = " WARNING" if mem_stats['rss_growth_percent'] > 15 else " GOOD"
             print(f"Memory Trend:  {status} ({mem_stats['rss_growth_percent']:+.1f}%)")
 
         if cpu_stats:
-            status = "🟡 WARNING" if cpu_stats['cpu_avg'] > 50 else "🟢 GOOD"
+            status = " WARNING" if cpu_stats['cpu_avg'] > 50 else " GOOD"
             print(f"CPU Usage:     {status} ({cpu_stats['cpu_avg']:.1f}% avg)")
 
     def export_html_report(self, output_file: str = None):

@@ -8,38 +8,22 @@ import re
 from pathlib import Path
 
 def remove_emojis_from_file(file_path):
-    """Remove emojis from a single file."""
+    """Remove non-ASCII characters from a single file, assuming they are emojis/symbols."""
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        # Pattern to match most emojis
-        emoji_pattern = re.compile(
-            "["
-            "\U0001F600-\U0001F64F"  # emoticons
-            "\U0001F300-\U0001F5FF"  # symbols & pictographs
-            "\U0001F680-\U0001F6FF"  # transport & map symbols
-            "\U0001F700-\U0001F77F"  # alchemical symbols
-            "\U0001F780-\U0001F7FF"  # Geometric Shapes Extended
-            "\U0001F800-\U0001F8FF"  # Supplemental Arrows-C
-            "\U0001F900-\U0001F9FF"  # Supplemental Symbols and Pictographs
-            "\U0001FA00-\U0001FA6F"  # Chess Symbols
-            "\U0001FA70-\U0001FAFF"  # Symbols and Pictographs Extended-A
-            "\U00002702-\U000027B0"  # Dingbats
-            "\U000024C2-\U0001F251"
-            "]+", 
-            flags=re.UNICODE
-        )
-        
-        cleaned_content = emoji_pattern.sub(r"", content)
-        
-        # Also remove common emoji-like patterns
-        cleaned_content = re.sub(r'[]', '', cleaned_content)
+        # This replaces any non-ASCII character (ord > 127) with an empty string.
+        # This effectively removes almost all emojis, which are outside ASCII range.
+        cleaned_content = re.sub(r'[^\x00-\x7F]+', '', content)
         
         if content != cleaned_content:
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(cleaned_content)
             return True
+        return False
+    except UnicodeDecodeError:
+        # Ignore files that cannot be decoded as UTF-8 (likely binaries)
         return False
     except Exception as e:
         print(f"Error processing {file_path}: {e}")
@@ -56,8 +40,8 @@ def find_python_and_md_files():
     # Filter out unwanted directories
     filtered_files = []
     for file in py_files + md_files:
-        # Skip __pycache__ and .git directories
-        if "__pycache__" in str(file) or ".git" in str(file):
+        path_str = str(file)
+        if "__pycache__" in path_str or ".git" in path_str or "node_modules" in path_str or ".venv" in path_str:
             continue
         filtered_files.append(file)
     

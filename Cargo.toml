@@ -161,7 +161,6 @@ serde_json = { workspace = true }
 tokio = { workspace = true }
 webbrowser = "1.0"
 notify = "6.1.1" # For file watching functionality
-home = "0.5.9"   # For home directory detection
 tokio-util = { workspace = true, features = ["compat"] }
 serde = { workspace = true }
 toml = { workspace = true }
@@ -172,26 +171,20 @@ memchr = { workspace = true }
 mimalloc = { workspace = true }
 tempfile = { workspace = true }
 once_cell = { workspace = true }
-libc = { workspace = true }
 chrono = { workspace = true } # For timestamp handling in CLI
-path-clean = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 async-trait = { workspace = true }
 async-stream = "0.3"
-# Environment helpers
-dotenvy = { workspace = true }
 # Home directory detection
 dirs = { workspace = true }
 # Hashing for large output file paths
 sha2 = { workspace = true }
 # ANSI styling
 anstyle = { workspace = true }
-anstyle-git = { workspace = true }
 anstyle-crossterm = { workspace = true }
 colorchoice = "1.0"
 agent-client-protocol = { workspace = true }
-percent-encoding = "2.3"
 url = { workspace = true }
 shell-words = { workspace = true }
 dialoguer = { workspace = true }
@@ -207,7 +200,6 @@ reqwest = { workspace = true }
 semver = { workspace = true }
 thiserror = { workspace = true }
 axum = { version = "0.8" }
-zip = { version = "8.1", default-features = false, features = ["deflate"] }
 
 [features]
 default = ["tool-chat", "a2a-server"]
@@ -298,13 +290,6 @@ assert_cmd = "2.1"
 predicates = "3.1"
 insta = "1.39"
 serial_test = { workspace = true }
-
-[target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = [
-    "Win32_Foundation",
-    "Win32_System_SystemServices",
-    "Win32_System_Threading",
-] }
 
 [package.metadata.cargo-machete]
 ignored = ["anstyle-crossterm"]

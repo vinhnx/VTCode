@@ -405,8 +405,8 @@ let files = parse_response(response);
 
 **Phase 3b**: [wait] In Progress
 
-- 📝 This documentation file
-- 📋 Command palette integration
-- 📋 Zed keybinding examples
+-  This documentation file
+-  Command palette integration
+-  Zed keybinding examples
 
 **Next**: VS Code extension integration (Phase 3c)

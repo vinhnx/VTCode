@@ -2228,7 +2228,7 @@ impl ToolRegistry {
         }
         session_env.extend(parse_exec_env_overrides(payload)?);
 
-        let session_id = generate_session_id("run");
+        let session_id = resolve_exec_run_session_id(payload)?;
         self.exec_sessions
             .create_pty_session(
                 session_id.clone(),
@@ -2412,7 +2412,7 @@ impl ToolRegistry {
             10_000,
         ));
 
-        let session_id = generate_session_id("run");
+        let session_id = resolve_exec_run_session_id(payload)?;
         let session_env =
             self.build_pipe_session_env(&shell_program, parse_exec_env_overrides(payload)?);
         let session_metadata = self
@@ -3670,6 +3670,14 @@ fn generate_session_id(prefix: &str) -> String {
     format!("{}-{}", prefix, &uuid::Uuid::new_v4().to_string()[..8])
 }
 
+fn resolve_exec_run_session_id(payload: &serde_json::Map<String, Value>) -> Result<String> {
+    crate::tools::command_args::session_id_text_from_payload(payload)
+        .map(|session_id| validate_exec_session_id(session_id, "unified_exec run"))
+        .transpose()?
+        .map(str::to_string)
+        .map_or_else(|| Ok(generate_session_id("run")), Ok)
+}
+
 fn strip_ansi(text: &str) -> String {
     crate::utils::ansi_parser::strip_ansi(text)
 }
@@ -3948,7 +3956,7 @@ mod unified_action_error_tests {
         clamp_inspect_lines, clamp_max_matches, extract_run_session_id_from_read_file_error,
         extract_run_session_id_from_tool_output_path, filter_lines,
         missing_unified_exec_action_error, missing_unified_search_action_error,
-        summarized_arg_keys,
+        resolve_exec_run_session_id, summarized_arg_keys,
     };
     use crate::tools::types::VTCodeExecSession;
     use serde_json::json;
@@ -4010,6 +4018,35 @@ mod unified_action_error_tests {
             extract_run_session_id_from_read_file_error("no session"),
             None
         );
+    }
+
+    #[test]
+    fn resolve_exec_run_session_id_prefers_requested_session_id() {
+        let payload = json!({ "session_id": " check_sh " });
+        let payload = payload.as_object().expect("object");
+
+        assert_eq!(
+            resolve_exec_run_session_id(payload).expect("requested session id"),
+            "check_sh"
+        );
+    }
+
+    #[test]
+    fn resolve_exec_run_session_id_generates_default_when_missing() {
+        let payload = json!({});
+        let payload = payload.as_object().expect("object");
+        let session_id = resolve_exec_run_session_id(payload).expect("generated session id");
+
+        assert!(session_id.starts_with("run-"));
+    }
+
+    #[test]
+    fn resolve_exec_run_session_id_rejects_invalid_values() {
+        let payload = json!({ "session_id": "bad id" });
+        let payload = payload.as_object().expect("object");
+        let err = resolve_exec_run_session_id(payload).expect_err("invalid session id");
+
+        assert!(err.to_string().contains("Invalid session_id"));
     }
 
     #[test]

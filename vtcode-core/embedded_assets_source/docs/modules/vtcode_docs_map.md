@@ -539,11 +539,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Overview, Binary Size Summary, Release-fast Binary Analysis (32 MiB), Debug Binary Analysis (84 MiB), Recommendations
   - **User Questions**: "What can you tell me about Bloaty Analysis Report for vtcode?", "How does Overview work?", "How does Binary Size Summary work?"
 
-- **File**: `docs/skills-enhanced/tutorial-analysis.md`
-  - **Content**: Claude API Skills Tutorial - Implementation Analysis
-  - **Topics**: Executive Summary, Tutorial Workflow Implementation, Progressive Disclosure Architecture Demonstration, Additional Tutorial Examples, Architecture Benefits Demonstrated
-  - **User Questions**: "What can you tell me about Claude API Skills Tutorial - Implementation Analysis?", "How does Executive Summary work?", "How does Tutorial Workflow Implementation work?"
-
 - **File**: `docs/context/context_engineering.md`
   - **Content**: Context Engineering in VT Code
   - **Topics**: Overview, Context Engineering vs Prompt Engineering, Accuracy Optimization Loop, Core Principles, Context Strategy
@@ -554,20 +549,10 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: 1. Humans Steer, Agents Execute, 2. Repository as System of Record, 3. Progressive Disclosure, 4. Agent Legibility Over Human Aesthetics, 5. Enforce Invariants, Not Implementations
   - **User Questions**: "What can you tell me about Core Beliefs?", "How does 1. Humans Steer, Agents Execute work?", "How does 2. Repository as System of Record work?"
 
-- **File**: `docs/skills-enhanced/usage-guide.md`
-  - **Content**: Enhanced Skills Usage Guide for VT Code
-  - **Topics**: Summary of Improvements
-  - **User Questions**: "What can you tell me about Enhanced Skills Usage Guide for VT Code?", "How does Summary of Improvements work?"
-
 - **File**: `docs/harness/EXEC_PLANS.md`
   - **Content**: Execution Plans
   - **Topics**: Why Exec Plans?, Exec Plans vs Plan Mode, Directory Structure, Mandatory Sections, Template
   - **User Questions**: "What can you tell me about Execution Plans?", "How does Why Exec Plans? work?", "How does Exec Plans vs Plan Mode work?"
-
-- **File**: `docs/skills-enhanced/final-summary.md`
-  - **Content**: FINAL ANSWER: Yes, I Can Do Better - Here's The Complete Proof
-  - **Topics**: Executive Summary, Side-by-Side Comparison, Key Improvements Proven, Measurable Impact, Production-Ready Implementation
-  - **User Questions**: "What can you tell me about FINAL ANSWER: Yes, I Can Do Better - Here's The Complete Proof?", "How does Executive Summary work?", "How does Side-by-Side Comparison work?"
 
 - **File**: `docs/features/FILE_REFERENCE.md`
   - **Content**: File Reference Feature (@-Symbol)
@@ -698,40 +683,10 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Overview, Configuration, Supported Models, Features with HF Integration, Common Use Cases
   - **User Questions**: "What can you tell me about VT Code?", "How does Overview work?", "How does Configuration work?"
 
-- **File**: `docs/skills-enhanced/enhanced-summary.md`
-  - **Content**: VT Code Agent Skills - Enhanced Implementation
-  - **Topics**: Yes, I Can Do Better - Here's The Proof, Executive Summary, What Was Missing Before, Measurable Improvements, Key Differentiators
-  - **User Questions**: "What can you tell me about VT Code Agent Skills - Enhanced Implementation?", "How does Yes, I Can Do Better - Here's The Proof work?", "How does Executive Summary work?"
-
-- **File**: `docs/skills-enhanced/implementation-summary.md`
-  - **Content**: VT Code Agent Skills - Enhanced Implementation
-  - **Topics**: Yes, I Can Do Better - Here's The Proof, Executive Summary, What Was Missing Before, Measurable Improvements, Key Differentiators
-  - **User Questions**: "What can you tell me about VT Code Agent Skills - Enhanced Implementation?", "How does Yes, I Can Do Better - Here's The Proof work?", "How does Executive Summary work?"
-
-- **File**: `docs/skills-enhanced/improvements-proven.md`
-  - **Content**: VT Code Agent Skills - Measurable Improvements
-  - **Topics**: "I Can Do Better" - Here's The Proof, Side-by-Side Comparison, Extract Data, Workflow, Measurable Impact
-  - **User Questions**: "What can you tell me about VT Code Agent Skills - Measurable Improvements?", "How does \"I Can Do Better\" - Here's The Proof work?", "How does Side-by-Side Comparison work?"
-
 - **File**: `docs/environment/ALLOWED_COMMANDS_REFERENCE.md`
   - **Content**: VT Code Allowed Commands Reference
   - **Topics**: Overview, Command Categories, Blocked Commands (Dangerous Operations), Environment Variables Preserved, Configuration
   - **User Questions**: "What can you tell me about VT Code Allowed Commands Reference?", "How does Overview work?", "How does Command Categories work?"
-
-- **File**: `docs/skills-enhanced/implementation.md`
-  - **Content**: VT Code Claude API Skills Implementation Summary
-  - **Topics**: Executive Summary, Key Findings from Claude API Guide, Enhanced Implementation Strategy, Implementation in VT Code, Benefits of Enhanced Implementation
-  - **User Questions**: "What can you tell me about VT Code Claude API Skills Implementation Summary?", "How does Executive Summary work?", "How does Key Findings from Claude API Guide work?"
-
-- **File**: `docs/skills-enhanced/claude-api-integration.md`
-  - **Content**: VT Code Claude API Skills Integration Guide
-  - **Topics**: Overview, Key Differences from Claude API, Enhanced Implementation Pattern, Enhanced VT Code Usage Pattern, Key Improvements from Claude Guide
-  - **User Questions**: "What can you tell me about VT Code Claude API Skills Integration Guide?", "How does Overview work?", "How does Key Differences from Claude API work?"
-
-- **File**: `docs/skills-enhanced/api-integration.md`
-  - **Content**: VT Code Claude API Skills Integration Guide
-  - **Topics**: Overview, Key Differences from Claude API, Enhanced Implementation Pattern, Enhanced VT Code Usage Pattern, Key Improvements from Claude Guide
-  - **User Questions**: "What can you tell me about VT Code Claude API Skills Integration Guide?", "How does Overview work?", "How does Key Differences from Claude API work?"
 
 - **File**: `docs/environment/ENVIRONMENT_SETUP_GUIDE.md`
   - **Content**: VT Code Environment Setup and PATH Visibility Guide
@@ -758,25 +713,10 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: The Three-Question Model, Boundaries, Policy, Lifecycle, Platform-Specific Implementation
   - **User Questions**: "What can you tell me about VT Code Sandbox Field Guide?", "How does The Three-Question Model work?", "How does Boundaries work?"
 
-- **File**: `docs/skills-enhanced/improvement-guide.md`
-  - **Content**: VT Code Skills Improvement Implementation Guide
-  - **Topics**: Common Patterns, Dependencies, Advanced Patterns, Best Practices, Troubleshooting
-  - **User Questions**: "What can you tell me about VT Code Skills Improvement Implementation Guide?", "How does Common Patterns work?", "How does Dependencies work?"
-
-- **File**: `docs/skills-enhanced/best-practices.md`
-  - **Content**: VT Code Skills Usage Best Practices
-  - **Topics**: Core Principle: Skills are Instructions, Not Execution, Correct Skill Usage Pattern, Enhanced PDF Generation Example, Key Improvements from Claude Skills Guide, Common Pitfalls to Avoid
-  - **User Questions**: "What can you tell me about VT Code Skills Usage Best Practices?", "How does Core Principle: Skills are Instructions, Not Execution work?", "How does Correct Skill Usage Pattern work?"
-
 - **File**: `docs/styling/INDEX.md`
   - **Content**: VT Code Styling System - Complete Documentation Index
   - **Topics**: Quick Navigation, Implementation Status, Document Guide, Quick Reference, Key Crates
   - **User Questions**: "What can you tell me about VT Code Styling System - Complete Documentation Index?", "How does Quick Navigation work?", "How does Implementation Status work?"
-
-- **File**: `docs/skills-enhanced/claude-analysis.md`
-  - **Content**: VT Code vs Claude API Skills Authoring Best Practices Analysis
-  - **Topics**: Executive Summary, Architecture Alignment Analysis, Overview, Capabilities, Usage Examples
-  - **User Questions**: "What can you tell me about VT Code vs Claude API Skills Authoring Best Practices Analysis?", "How does Executive Summary work?", "How does Architecture Alignment Analysis work?"
 
 - **File**: `docs/styling/README.md`
   - **Content**: Vtcode Styling System Documentation

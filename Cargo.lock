@@ -2255,15 +2255,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
-name = "home"
-version = "0.5.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc627f471c528ff0c4a49e1d5e60450c8f6461dd6d10ba9dcd3a61d3dff7728d"
-dependencies = [
- "windows-sys 0.61.2",
-]
-
-[[package]]
 name = "hostname"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6241,7 +6232,6 @@ dependencies = [
  "agent-client-protocol",
  "anstyle",
  "anstyle-crossterm",
- "anstyle-git",
  "anyhow",
  "assert_cmd",
  "assert_fs",
@@ -6254,20 +6244,15 @@ dependencies = [
  "crossterm",
  "dialoguer",
  "dirs",
- "dotenvy",
  "futures",
  "hashbrown 0.15.5",
- "home",
  "indexmap 2.13.0",
  "insta",
  "itertools 0.14.0",
- "libc",
  "memchr",
  "mimalloc",
  "notify",
  "once_cell",
- "path-clean",
- "percent-encoding",
  "predicates",
  "rand 0.9.2",
  "ratatui",
@@ -6299,8 +6284,6 @@ dependencies = [
  "vtcode-tui",
  "walkdir",
  "webbrowser",
- "windows-sys 0.61.2",
- "zip",
 ]
 
 [[package]]
@@ -6722,7 +6705,6 @@ dependencies = [
  "tui-widget-list",
  "unicode-segmentation",
  "unicode-width 0.2.2",
- "url",
  "vtcode-commons",
  "vtcode-vim",
 ]

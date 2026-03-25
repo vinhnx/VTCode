@@ -137,12 +137,17 @@ pub fn interactive_input_text(args: &Value) -> Option<&str> {
         .filter(|value| !value.is_empty())
 }
 
-pub fn session_id_text(args: &Value) -> Option<&str> {
-    args.get("session_id")
-        .or_else(|| args.get("s"))
+pub fn session_id_text_from_payload(payload: &serde_json::Map<String, Value>) -> Option<&str> {
+    payload
+        .get("session_id")
+        .or_else(|| payload.get("s"))
         .and_then(Value::as_str)
         .map(str::trim)
         .filter(|value| !value.is_empty())
+}
+
+pub fn session_id_text(args: &Value) -> Option<&str> {
+    args.as_object().and_then(session_id_text_from_payload)
 }
 
 pub fn unified_exec_missing_required_args(args: &Value) -> Vec<&'static str> {
@@ -267,8 +272,9 @@ mod tests {
     use super::{
         command_text, command_words, has_indexed_command_parts, interactive_input_text,
         normalize_indexed_command_args, normalize_shell_args, normalized_command_value,
-        parse_indexed_command_parts, session_id_text, unified_exec_missing_required_args,
-        unified_exec_requires_command_safety, working_dir_text, working_dir_text_from_payload,
+        parse_indexed_command_parts, session_id_text, session_id_text_from_payload,
+        unified_exec_missing_required_args, unified_exec_requires_command_safety, working_dir_text,
+        working_dir_text_from_payload,
     };
     use serde_json::{Value, json};
 
@@ -392,6 +398,13 @@ mod tests {
     #[test]
     fn session_id_text_accepts_compact_alias() {
         assert_eq!(session_id_text(&json!({"s": " run-1 "})), Some("run-1"));
+    }
+
+    #[test]
+    fn session_id_text_from_payload_accepts_aliases() {
+        let value = json!({"s": " run-1 "});
+        let payload = value.as_object().expect("object");
+        assert_eq!(session_id_text_from_payload(payload), Some("run-1"));
     }
 
     #[test]

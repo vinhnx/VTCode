@@ -440,8 +440,8 @@ cargo test --test a2a_integration_tests
 
 - v **Phase 1**: Core types, task manager, server
 - v **Phase 2**: Integration tests, streaming, webhooks
-- 🚧 **Phase 3**: Advanced client features, authentication
-- 📋 **Phase 4**: Extended documentation, examples
+-  **Phase 3**: Advanced client features, authentication
+-  **Phase 4**: Extended documentation, examples
 
 ## Dependencies
 
