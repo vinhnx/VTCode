@@ -205,20 +205,9 @@ async fn render_tool_output_common(
     let inline_run_tool = renderer.supports_inline_ui() && is_run_pty_tool(name, args_val);
     let git_diff_payload = is_git_diff_payload(output);
 
-    if inline_run_tool && !git_diff_payload {
-        let has_stream_content = has_renderable_stream_content(output);
-        if !has_stream_content {
-            if command_success {
-                renderer.line(MessageStyle::ToolDetail, "(no output)")?;
-            } else if let Some(completion) = compact_run_completion_line(output, command_success) {
-                renderer.line(MessageStyle::ToolDetail, &completion)?;
-            }
-            return Ok(());
-        }
-    }
-
-    // Inline PTY streaming already renders a "• Ran <command>" header. Avoid duplicating
-    // it for git_diff payloads in post-tool summary rendering.
+    // Render the summary header ("• Ran <command>") for all tools.
+    // For inline PTY tools, this ensures the header is recorded in the transcript
+    // even if it was previously streamed via PTY-kind messages (which are excluded from transcript).
     if !(inline_run_tool && git_diff_payload) {
         let stream_label = crate::agent::runloop::unified::tool_summary::stream_label_from_output(
             output,
@@ -230,6 +219,18 @@ async fn render_tool_output_common(
             args_val,
             stream_label,
         )?;
+    }
+
+    if inline_run_tool && !git_diff_payload {
+        let has_stream_content = has_renderable_stream_content(output);
+        if !has_stream_content {
+            if command_success {
+                renderer.line(MessageStyle::ToolDetail, "(no output)")?;
+            } else if let Some(completion) = compact_run_completion_line(output, command_success) {
+                renderer.line(MessageStyle::ToolDetail, &completion)?;
+            }
+            return Ok(());
+        }
     }
 
     crate::agent::runloop::tool_output::render_tool_output(renderer, Some(name), output, vt_config)
@@ -575,10 +576,11 @@ mod tests {
 
         let transcript_lines = transcript::snapshot();
         let transcript_text = transcript_lines.join("\n");
-        assert!(transcript_text.contains("cargo check -p vtcode-core"));
-        assert!(transcript_text.contains("Large output was spooled to"));
+        let stripped_text = vtcode_core::utils::ansi_parser::strip_ansi(&transcript_text);
+        assert!(stripped_text.contains("cargo check -p vtcode-core"), "Transcript: {:?}", stripped_text);
+        assert!(stripped_text.contains("Large output was spooled to"), "Transcript: {:?}", stripped_text);
         assert!(
-            !transcript_text
+            !stripped_text
                 .contains("preview text that should stay out of transcript persistence")
         );
 
