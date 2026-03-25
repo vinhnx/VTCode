@@ -117,14 +117,14 @@ printf '%b' "  Your Binary:       "
 if [[ "$HAS_YOUR_BINARY" == "yes" ]]; then
     printf '%b\n' "${GREEN}✓ Available${NC}"
 else
-    printf '%b\n' "${YELLOW}⏳ Building...${NC}"
+    printf '%b\n' "${YELLOW} Building...${NC}"
 fi
 
 printf '%b' "  Checksums:       "
 if [[ "$HAS_CHECKSUMS" == "yes" ]]; then
     printf '%b\n' "${GREEN}✓ Available${NC}"
 else
-    printf '%b\n' "${YELLOW}⏳ Generating...${NC}"
+    printf '%b\n' "${YELLOW} Generating...${NC}"
 fi
 echo ""
 
@@ -137,7 +137,7 @@ if [[ "$HAS_YOUR_BINARY" == "yes" && "$HAS_CHECKSUMS" == "yes" ]]; then
     echo ""
     exit 0
 else
-    printf '%b\n' "${YELLOW}⏳ BUILDING${NC}"
+    printf '%b\n' "${YELLOW} BUILDING${NC}"
     echo ""
     echo "Binaries are still being built. Check back in 5-10 minutes."
     echo ""

@@ -198,7 +198,7 @@ impl SkillFileTracker {
         let mut summary = String::new();
 
         if !verified.is_empty() {
-            summary.push_str("✅ Generated Files:\n");
+            summary.push_str("v Generated Files:\n");
             for file in verified {
                 match file.status {
                     FileStatus::Found => {
@@ -225,7 +225,7 @@ impl SkillFileTracker {
             if !summary.is_empty() {
                 summary.push('\n');
             }
-            summary.push_str("⚠️  Missing Files:\n");
+            summary.push_str("[!]  Missing Files:\n");
             for file in missing {
                 summary.push_str(&format!("   ✗ {}\n", file.filename));
                 for suggestion in &file.suggestions {

@@ -29,19 +29,19 @@ The configuration file `cliff.toml` is located at the project root. It defines:
 
 The following conventional commit types are recognized:
 
-| Type | Section | Included |
-|------|---------|----------|
-| `feat` | Features | ✅ |
-| `fix` | Bug Fixes | ✅ |
-| `perf` | Performance | ✅ |
-| `refactor` | Refactors | ✅ |
-| `security` | Security | ✅ |
-| `docs` | Documentation | ✅ |
-| `test` | Tests | ✅ |
-| `build` | Build | ✅ |
-| `ci` | CI | ✅ |
-| `deps` | Dependencies | ✅ |
-| `chore` | Chores | ❌ (excluded) |
+| Type       | Section       | Included     |
+| ---------- | ------------- | ------------ |
+| `feat`     | Features      | v            |
+| `fix`      | Bug Fixes     | v            |
+| `perf`     | Performance   | v            |
+| `refactor` | Refactors     | v            |
+| `security` | Security      | v            |
+| `docs`     | Documentation | v            |
+| `test`     | Tests         | v            |
+| `build`    | Build         | v            |
+| `ci`       | CI            | v            |
+| `deps`     | Dependencies  | v            |
+| `chore`    | Chores        | x (excluded) |
 
 ## Usage
 
@@ -50,17 +50,20 @@ The following conventional commit types are recognized:
 git-cliff can operate in two modes:
 
 **Online mode (recommended):** Fetches GitHub usernames from commit metadata
+
 ```bash
 export GITHUB_TOKEN=$(gh auth token)  # Get token from gh CLI
 git-cliff --config cliff.toml --tag "0.82.4" --unreleased
 ```
 
 Benefits:
+
 - Shows actual GitHub usernames with @ prefix (e.g., `@vinhnx`)
 - Works with outside contributors automatically
 - No hardcoded email mappings needed
 
 **Offline mode:** Uses git commit author name (no API calls)
+
 ```bash
 git-cliff --config cliff.toml --tag "0.82.4" --unreleased
 ```

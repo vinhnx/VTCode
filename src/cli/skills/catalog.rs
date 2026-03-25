@@ -41,21 +41,21 @@ pub async fn handle_skills_list(options: &SkillsCommandOptions) -> Result<()> {
 
         match temp_loader.get_skill(&manifest.name).await {
             Ok(EnhancedSkill::Traditional(skill)) => {
-            let analysis = temp_loader.check_container_requirements(&skill);
-            let status = match analysis.requirement {
+                let analysis = temp_loader.check_container_requirements(&skill);
+                let status = match analysis.requirement {
                     ContainerSkillsRequirement::Required => {
                         warnings.push(format!(
-                            "❌ {} - Requires container skills (not compatible)",
+                            "x {} - Requires container skills (not compatible)",
                             manifest.name
                         ));
-                        "❌"
+                        "x"
                     }
                     ContainerSkillsRequirement::RequiredWithFallback => {
                         warnings.push(format!(
-                            "⚠️  {} - Has container skills fallback",
+                            "[!]  {} - Has container skills fallback",
                             manifest.name
                         ));
-                        "⚠️"
+                        "[!]"
                     }
                     _ => "✓",
                 };
@@ -68,11 +68,11 @@ pub async fn handle_skills_list(options: &SkillsCommandOptions) -> Result<()> {
             Ok(EnhancedSkill::CliTool(_)) | Ok(EnhancedSkill::NativePlugin(_)) => {}
             Err(_) => {
                 warnings.push(format!(
-                    "❌ {} - Requires container skills (validation failed)",
+                    "x {} - Requires container skills (validation failed)",
                     manifest.name
                 ));
                 skill_rows.push(TraditionalSkillRow {
-                    status: "❌",
+                    status: "x",
                     name: manifest.name.clone(),
                     description: manifest.description.clone(),
                 });

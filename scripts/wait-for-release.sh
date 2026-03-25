@@ -49,20 +49,20 @@ check_release() {
     local has_checksums=false
     local binary_asset=""
     local required_assets
-    
+
     response=$(curl -fsSL "$GITHUB_API" 2>/dev/null || echo "")
-    
+
     if [[ -z "$response" ]]; then
         return 1
     fi
-    
+
     # Check release state
     release_state=$(echo "$response" | grep -o '"draft":[^,]*' | cut -d: -f2 | tr -d ' ')
     if [[ "$release_state" == "true" ]]; then
         # Release still being created
         return 1
     fi
-    
+
     # Get required binary for this platform
     required_assets=$(get_required_assets)
     while IFS= read -r asset; do
@@ -73,21 +73,21 @@ check_release() {
             break
         fi
     done <<< "$required_assets"
-    
+
     # Check for checksums
     if echo "$response" | grep -q '"name": "checksums.txt"'; then
         has_checksums=true
     fi
-    
+
     if $has_binary && $has_checksums; then
         return 0  # All assets ready
     fi
-    
+
     if $has_binary; then
         log_warning "Binary ready, waiting for checksums.txt..."
         return 1
     fi
-    
+
     return 1  # Not ready yet
 }
 
@@ -99,16 +99,16 @@ show_status() {
     local asset_count
     local binary_asset=""
     local required_assets
-    
+
     response=$(curl -fsSL "$GITHUB_API" 2>/dev/null || echo "")
-    
+
     if [[ -z "$response" ]]; then
         log_warning "Cannot reach GitHub API, retrying..."
         return
     fi
-    
+
     asset_count=$(echo "$response" | grep -o '"name": "vtcode-' | wc -l)
-    
+
     if [[ $asset_count -gt 0 ]]; then
         required_assets=$(get_required_assets)
         while IFS= read -r asset; do
@@ -195,19 +195,19 @@ while [[ $ELAPSED -lt $MAX_WAIT ]]; do
         echo ""
         log_success "All binaries ready! ✨"
         echo ""
-        
+
         # Show platform-specific binary
         binary_asset=$(get_required_assets)
         log_success "Your platform binary: $binary_asset"
         echo ""
-        
+
         # Show next steps
         log_success "Ready to install!"
         echo ""
         log_info "Run the installer:"
         echo "  curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash"
         echo ""
-        
+
         if [[ "$AUTO_INSTALL" == "true" ]]; then
             log_info "Auto-installing in 5 seconds... (Ctrl+C to cancel)"
             sleep 5
@@ -217,16 +217,16 @@ while [[ $ELAPSED -lt $MAX_WAIT ]]; do
         else
             log_info "Alternatively, verify with: vtcode --version"
         fi
-        
+
         exit 0
     fi
-    
+
     # Show status
     show_status
-    
+
     # Progress indicator
-    printf '%b\r' "${BLUE}⏳${NC} Elapsed: ${ELAPSED}s / ${MAX_WAIT}s (Next check in ${POLL_INTERVAL}s)..." >&2
-    
+    printf '%b\r' "${BLUE}${NC} Elapsed: ${ELAPSED}s / ${MAX_WAIT}s (Next check in ${POLL_INTERVAL}s)..." >&2
+
     sleep "$POLL_INTERVAL"
     ELAPSED=$((ELAPSED + POLL_INTERVAL))
 done

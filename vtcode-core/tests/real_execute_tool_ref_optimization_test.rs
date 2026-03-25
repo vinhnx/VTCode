@@ -52,7 +52,7 @@ async fn test_execute_tool_ref_uses_optimizations() {
     // Verify results are consistent
     assert_eq!(result1.unwrap(), result2.unwrap());
 
-    println!("✅ execute_tool_ref optimization test passed");
+    println!("v execute_tool_ref optimization test passed");
     println!("   Cache size after first call: {}", cache_size_after_first);
     println!("   Cache capacity: {}", cache_capacity);
 }
@@ -80,7 +80,7 @@ async fn test_execute_tool_ref_memory_pool_integration() {
     let result = registry.execute_tool_ref("list_files", &args).await;
     assert!(result.is_ok());
 
-    println!("✅ execute_tool_ref memory pool integration test passed");
+    println!("v execute_tool_ref memory pool integration test passed");
 }
 
 #[tokio::test]
@@ -109,7 +109,7 @@ async fn test_execute_tool_ref_without_optimizations() {
     let result = registry.execute_tool_ref("list_files", &args).await;
     assert!(result.is_ok());
 
-    println!("✅ execute_tool_ref without optimizations test passed");
+    println!("v execute_tool_ref without optimizations test passed");
 }
 
 #[tokio::test]
@@ -137,7 +137,7 @@ async fn test_execute_tool_ref_hot_cache_effectiveness() {
     assert!(cache_size_1 <= 2);
     assert!(cache_size_2 <= 2);
 
-    println!("✅ execute_tool_ref hot cache effectiveness test passed");
+    println!("v execute_tool_ref hot cache effectiveness test passed");
     println!("   Cache size after first tool: {}", cache_size_1);
     println!("   Cache size after second tool: {}", cache_size_2);
 }
@@ -183,7 +183,7 @@ async fn test_execute_tool_ref_performance_comparison() {
     }
     let optimized_duration = start.elapsed();
 
-    println!("✅ execute_tool_ref performance comparison test completed");
+    println!("v execute_tool_ref performance comparison test completed");
     println!("   Unoptimized: {:?}", unoptimized_duration);
     println!("   Optimized: {:?}", optimized_duration);
     println!(

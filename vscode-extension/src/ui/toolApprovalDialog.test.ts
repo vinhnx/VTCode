@@ -87,12 +87,12 @@ describe("ToolApprovalDialog", () => {
                 expect.objectContaining({
                     modal: true,
                     detail: expect.stringContaining(
-                        'Command: echo "Hello World"'
+                        'Command: echo "Hello World"',
                     ),
                 }),
                 "Approve",
                 "Approve & Remember",
-                "Deny"
+                "Deny",
             );
         });
 
@@ -115,9 +115,9 @@ describe("ToolApprovalDialog", () => {
             expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
                 "VT Code wants to run: delete_file",
                 expect.objectContaining({
-                    detail: expect.stringContaining("⚠️"),
+                    detail: expect.stringContaining("[!]"),
                 }),
-                expect.anything()
+                expect.anything(),
             );
         });
     });
@@ -134,7 +134,7 @@ describe("ToolApprovalDialog", () => {
             (vscode.window.withProgress as jest.Mock).mockImplementation(
                 (options, callback) => {
                     return callback(mockProgress, mockToken);
-                }
+                },
             );
 
             const disposable = dialog.showToolProgress("test-tool", 1000);
@@ -149,7 +149,7 @@ describe("ToolApprovalDialog", () => {
             dialog.showToolSummary("test-tool", true, "Completed successfully");
 
             expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-                "test-tool completed successfully: Completed successfully"
+                "test-tool completed successfully: Completed successfully",
             );
         });
 
@@ -157,7 +157,7 @@ describe("ToolApprovalDialog", () => {
             dialog.showToolSummary("test-tool", false);
 
             expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-                "test-tool failed"
+                "test-tool failed",
             );
         });
 
@@ -165,7 +165,7 @@ describe("ToolApprovalDialog", () => {
             dialog.showToolSummary("test-tool", true);
 
             expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-                "test-tool completed successfully"
+                "test-tool completed successfully",
             );
         });
     });
@@ -189,7 +189,7 @@ describe("ToolApprovalDialog", () => {
                 expect.objectContaining({
                     detail: expect.stringContaining("Risk Level: 🔴 HIGH"),
                 }),
-                expect.anything()
+                expect.anything(),
             );
         });
 
@@ -211,7 +211,7 @@ describe("ToolApprovalDialog", () => {
                 expect.objectContaining({
                     detail: expect.stringContaining("Risk Level: 🟡 MEDIUM"),
                 }),
-                expect.anything()
+                expect.anything(),
             );
         });
 
@@ -233,7 +233,7 @@ describe("ToolApprovalDialog", () => {
                 expect.objectContaining({
                     detail: expect.stringContaining("Risk Level: 🟢 LOW"),
                 }),
-                expect.anything()
+                expect.anything(),
             );
         });
     });
@@ -260,7 +260,7 @@ describe("ToolApprovalDialog", () => {
                 expect.objectContaining({
                     detail: expect.stringContaining("Command: npm test"),
                 }),
-                expect.anything()
+                expect.anything(),
             );
         });
 
@@ -285,7 +285,7 @@ describe("ToolApprovalDialog", () => {
                 expect.objectContaining({
                     detail: expect.stringContaining("File: /src/test.ts"),
                 }),
-                expect.anything()
+                expect.anything(),
             );
         });
 
@@ -310,7 +310,7 @@ describe("ToolApprovalDialog", () => {
                 expect.objectContaining({
                     detail: expect.stringContaining("File: /src/new.ts"),
                 }),
-                expect.anything()
+                expect.anything(),
             );
         });
 
@@ -333,10 +333,10 @@ describe("ToolApprovalDialog", () => {
                 expect.any(String),
                 expect.objectContaining({
                     detail: expect.stringContaining(
-                        "⚠️ File will be permanently deleted"
+                        "[!] File will be permanently deleted",
                     ),
                 }),
-                expect.anything()
+                expect.anything(),
             );
         });
     });

@@ -37,15 +37,15 @@ if [[ -z "$VTCODE_PIDS" ]]; then
 else
     echo "Found $(echo "$VTCODE_PIDS" | wc -l) process(es):"
     echo ""
-    
+
     for PID in $VTCODE_PIDS; do
         echo "Process ID: $PID"
-        
+
         if [[ "$OS" == "Darwin" ]]; then
             # macOS
             ps -p $PID -o comm= -o rss= -o vsz= -o %cpu= | \
             awk '{printf "  Command:     %s\n  Memory RSS:  %.1f MB\n  Memory VSZ:  %.1f MB\n  CPU:         %s%%\n", $1, $2/1024, $3/1024, $4}'
-            
+
             # Get thread count
             THREADS=$(ps -p $PID -o nlwp=)
             echo "  Threads:     $THREADS"
@@ -53,12 +53,12 @@ else
             # Linux
             ps -p $PID -o comm= -o rss= -o vsz= -o %cpu= | \
             awk '{printf "  Command:     %s\n  Memory RSS:  %.1f MB\n  Memory VSZ:  %.1f MB\n  CPU:         %s%%\n", $1, $2/1024, $3/1024, $4}'
-            
+
             # Get thread count
             THREADS=$(ps -p $PID -o nlwp= | xargs)
             echo "  Threads:     $THREADS"
         fi
-        
+
         echo ""
     done
 fi
@@ -70,13 +70,13 @@ echo "────────────────────────�
 if [[ -d "target" ]]; then
     TARGET_SIZE=$(du -sh target 2>/dev/null | cut -f1)
     echo "Target directory: $TARGET_SIZE"
-    
+
     # Check for debug vs release
     if [[ -d "target/debug" ]]; then
         DEBUG_SIZE=$(du -sh target/debug 2>/dev/null | cut -f1)
         echo "  Debug:   $DEBUG_SIZE"
     fi
-    
+
     if [[ -d "target/release" ]]; then
         RELEASE_SIZE=$(du -sh target/release 2>/dev/null | cut -f1)
         echo "  Release: $RELEASE_SIZE"
@@ -117,7 +117,7 @@ echo "Lines of code:  $RUST_LINES"
 if [[ -f "Cargo.toml" ]]; then
     WORKSPACES=$(grep -c '^\[workspace\]' Cargo.toml 2>/dev/null || echo 0)
     MEMBERS=$(grep -c 'members' Cargo.toml 2>/dev/null || echo 0)
-    
+
     if [[ $WORKSPACES -gt 0 ]]; then
         echo "Workspace:      Yes"
         echo "Workspace type: Cargo workspace"
@@ -127,21 +127,21 @@ fi
 echo ""
 
 # Potential Issues
-echo "⚠️  Potential Issues"
+echo "[!]  Potential Issues"
 echo "─────────────────────────────────────────────────────────────"
 
 ISSUES=0
 
 # Check for debug profile in dev
 if grep -q 'opt-level = 0' Cargo.toml 2>/dev/null; then
-    echo "⚠️  Debug profile detected (opt-level = 0)"
+    echo "[!]  Debug profile detected (opt-level = 0)"
     echo "   → Use 'cargo build --release' for better performance"
     ISSUES=$((ISSUES + 1))
 fi
 
 # Check for LTO settings
 if ! grep -q 'lto' Cargo.toml 2>/dev/null; then
-    echo "⚠️  LTO not configured in Cargo.toml"
+    echo "[!]  LTO not configured in Cargo.toml"
     echo "   → Add 'lto = true' to [profile.release] for optimizations"
     ISSUES=$((ISSUES + 1))
 fi
@@ -149,7 +149,7 @@ fi
 # Check for unbounded caches
 if grep -r 'HashMap::new()' --include="*.rs" . 2>/dev/null | grep -v test | grep -q .; then
     HASHMAP_COUNT=$(grep -r 'HashMap::new()' --include="*.rs" . 2>/dev/null | grep -v test | wc -l)
-    echo "⚠️  Found $HASHMAP_COUNT unbounded HashMap allocations"
+    echo "[!]  Found $HASHMAP_COUNT unbounded HashMap allocations"
     echo "   → Consider adding size limits or TTL expiration"
     ISSUES=$((ISSUES + 1))
 fi
@@ -157,7 +157,7 @@ fi
 # Check for excessive cloning
 CLONE_COUNT=$(grep -r '\.clone()' --include="*.rs" . 2>/dev/null | grep -v test | wc -l)
 if [[ $CLONE_COUNT -gt 100 ]]; then
-    echo "⚠️  Found $CLONE_COUNT .clone() calls"
+    echo "[!]  Found $CLONE_COUNT .clone() calls"
     echo "   → Review for unnecessary allocations (use references when possible)"
     ISSUES=$((ISSUES + 1))
 fi
@@ -165,13 +165,13 @@ fi
 # Check for tree-sitter parsers
 PARSER_COUNT=$(grep -r 'tree_sitter::Parser::new()' --include="*.rs" . 2>/dev/null | wc -l)
 if [[ $PARSER_COUNT -gt 1 ]]; then
-    echo "⚠️  Found $PARSER_COUNT tree-sitter parser initializations"
+    echo "[!]  Found $PARSER_COUNT tree-sitter parser initializations"
     echo "   → Consider implementing a parser pool for reuse"
     ISSUES=$((ISSUES + 1))
 fi
 
 if [[ $ISSUES -eq 0 ]]; then
-    echo "✅ No obvious resource issues detected"
+    echo "v No obvious resource issues detected"
 fi
 
 echo ""
@@ -212,4 +212,4 @@ echo "     open docs/performance/CPU_MEMORY_DEBUGGING_GUIDE.md"
 echo ""
 
 echo "═══════════════════════════════════════════════════════════════"
-echo "✅ Diagnostic complete"
+echo "v Diagnostic complete"

@@ -119,9 +119,9 @@ impl SkillValidationReport {
         summary.push_str(&format!(
             "Status: {}\n",
             if self.is_valid {
-                "✅ Valid"
+                "v Valid"
             } else {
-                "❌ Invalid"
+                "x Invalid"
             }
         ));
         summary.push_str("\nIssues found:\n");
@@ -130,7 +130,7 @@ impl SkillValidationReport {
         summary.push_str(&format!("  Suggestions: {}\n", self.stats.suggestion_count));
 
         if !self.errors.is_empty() {
-            summary.push_str("\n❌ Errors:\n");
+            summary.push_str("\nx Errors:\n");
             for error in &self.errors {
                 summary.push_str(&format!("  - {}", error.message));
                 if let Some(field) = &error.field {
@@ -144,7 +144,7 @@ impl SkillValidationReport {
         }
 
         if !self.warnings.is_empty() {
-            summary.push_str("\n⚠️  Warnings:\n");
+            summary.push_str("\n[!]  Warnings:\n");
             for warning in &self.warnings {
                 summary.push_str(&format!("  - {}", warning.message));
                 if let Some(field) = &warning.field {

@@ -387,28 +387,26 @@ fn discover_metadata_under_root(root: &SkillRoot, outcome: &mut SkillLoadOutcome
                 match fs::read_to_string(&path)
                     .with_context(|| format!("reading {}", path.display()))
                 {
-                    Ok(contents) => {
-                        match crate::skills::manifest::parse_skill_content(&contents) {
-                            Ok((manifest, _)) => {
-                                outcome.skills.push(SkillMetadata {
-                                    name: manifest.name.clone(),
-                                    description: manifest.description.clone(),
-                                    short_description: None,
+                    Ok(contents) => match crate::skills::manifest::parse_skill_content(&contents) {
+                        Ok((manifest, _)) => {
+                            outcome.skills.push(SkillMetadata {
+                                name: manifest.name.clone(),
+                                description: manifest.description.clone(),
+                                short_description: None,
+                                path: path.clone(),
+                                scope: root.scope,
+                                manifest: Some(manifest),
+                            });
+                        }
+                        Err(err) => {
+                            if root.scope != SkillScope::System {
+                                outcome.errors.push(SkillErrorInfo {
                                     path: path.clone(),
-                                    scope: root.scope,
-                                    manifest: Some(manifest),
+                                    message: err.to_string(),
                                 });
                             }
-                            Err(err) => {
-                                if root.scope != SkillScope::System {
-                                    outcome.errors.push(SkillErrorInfo {
-                                        path: path.clone(),
-                                        message: err.to_string(),
-                                    });
-                                }
-                            }
                         }
-                    }
+                    },
                     Err(err) => {
                         if root.scope != SkillScope::System {
                             outcome.errors.push(SkillErrorInfo {
@@ -702,8 +700,10 @@ impl EnhancedSkillLoader {
     /// Create a new enhanced loader for workspace
     pub fn new(workspace_root: PathBuf) -> Self {
         let codex_home = default_codex_home();
-        let discovery =
-            SkillDiscovery::with_config(discovery_config_for_codex_home(&workspace_root, &codex_home));
+        let discovery = SkillDiscovery::with_config(discovery_config_for_codex_home(
+            &workspace_root,
+            &codex_home,
+        ));
         let plugin_loader = plugin_loader_for_workspace(&workspace_root, Some(&codex_home));
         Self {
             workspace_root,
@@ -957,10 +957,7 @@ pub fn discover_skill_metadata_lightweight_hermetic(
 mod tests {
     use super::*;
 
-    fn manifest(
-        name: &str,
-        description: &str,
-    ) -> SkillManifest {
+    fn manifest(name: &str, description: &str) -> SkillManifest {
         SkillManifest {
             name: name.to_string(),
             description: description.to_string(),
@@ -970,7 +967,10 @@ mod tests {
 
     #[test]
     fn detects_explicit_skill_mentions() {
-        let skills = vec![manifest("pdf-analyzer", "Analyze PDF files and extract tables")];
+        let skills = vec![manifest(
+            "pdf-analyzer",
+            "Analyze PDF files and extract tables",
+        )];
         let mentions = detect_skill_mentions("Use $pdf-analyzer for this file", &skills);
         assert_eq!(mentions, vec!["pdf-analyzer".to_string()]);
     }
@@ -982,8 +982,10 @@ mod tests {
             "Fetch data from API endpoints and summarize responses",
         )];
 
-        let mentions =
-            detect_skill_mentions("Fetch and summarize API responses for these endpoints", &skills);
+        let mentions = detect_skill_mentions(
+            "Fetch and summarize API responses for these endpoints",
+            &skills,
+        );
         assert_eq!(mentions, vec!["api-fetcher".to_string()]);
     }
 
@@ -994,14 +996,19 @@ mod tests {
             "Fetch data from API endpoints and summarize responses",
         )];
 
-        let mentions =
-            detect_skill_mentions("Please update this local markdown file and fix headings", &skills);
+        let mentions = detect_skill_mentions(
+            "Please update this local markdown file and fix headings",
+            &skills,
+        );
         assert!(mentions.is_empty());
     }
 
     #[test]
     fn auto_trigger_can_be_disabled() {
-        let skills = vec![manifest("sql-checker", "Validate SQL migration scripts for safety")];
+        let skills = vec![manifest(
+            "sql-checker",
+            "Validate SQL migration scripts for safety",
+        )];
         let options = SkillMentionDetectionOptions {
             enable_auto_trigger: false,
             ..Default::default()

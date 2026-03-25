@@ -43,10 +43,7 @@ pub(super) fn print_traditional_skills(rows: &[TraditionalSkillRow], warnings: &
     println!("{:-<70}", "");
 
     for row in rows {
-        println!(
-            "{} {}\n  {}\n",
-            row.status, row.name, row.description
-        );
+        println!("{} {}\n  {}\n", row.status, row.name, row.description);
     }
 
     if warnings.is_empty() {

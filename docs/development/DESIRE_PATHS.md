@@ -9,10 +9,12 @@ A desire path is a common pattern that emerges from how users actually behave, r
 **When an agent intuitively guesses wrong about a feature, we should improve the interface to make that guess right.**
 
 Instead of:
+
 - Documenting that agents are using the tool incorrectly
 - Rejecting intuitive commands
 
 We do:
+
 - Add aliases that match intuitive expectations
 - Implement flags agents naturally expect
 - Design interfaces that align with agent mental models
@@ -25,11 +27,11 @@ Over time, this compounds. Each small UX improvement reduces friction, and agent
 
 Agents intuitively try short command names. We've paved these paths:
 
-| Intuitive Guess | Mapped Command | Status |
-|---|---|---|
-| `cargo t` | `cargo test` | ✅ Implemented |
-| `cargo c` | `cargo check` | ✅ Implemented |
-| `cargo r` | `cargo run` | ✅ Implemented |
+| Intuitive Guess | Mapped Command | Status        |
+| --------------- | -------------- | ------------- |
+| `cargo t`       | `cargo test`   | v Implemented |
+| `cargo c`       | `cargo check`  | v Implemented |
+| `cargo r`       | `cargo run`    | v Implemented |
 
 **Location**: `.cargo/config.toml` → `[alias]` section
 
@@ -39,11 +41,11 @@ Agents intuitively try short command names. We've paved these paths:
 
 Agents expect these patterns to work without explanation:
 
-| Intuitive Usage | Behavior | Status |
-|---|---|---|
-| `cargo test function_name` | Run tests matching function name | ✅ Works natively |
-| `cargo test --lib` | Run unit tests only | ✅ Works natively |
-| `cargo test --integration` | Run integration tests only | ✅ Works natively |
+| Intuitive Usage            | Behavior                         | Status           |
+| -------------------------- | -------------------------------- | ---------------- |
+| `cargo test function_name` | Run tests matching function name | v Works natively |
+| `cargo test --lib`         | Run unit tests only              | v Works natively |
+| `cargo test --integration` | Run integration tests only       | v Works natively |
 
 These are native Cargo behaviors, but documented here for agent awareness.
 
@@ -54,6 +56,7 @@ These are patterns agents have tried or might try that aren't yet smooth:
 ### 1. Tool Operation Shortcuts
 
 **Current friction**:
+
 ```
 unified_search {
   "action": "grep",
@@ -63,6 +66,7 @@ unified_search {
 ```
 
 **Intuitive expectation**:
+
 ```
 unified_search grep "fn main" src/
 ```
@@ -72,10 +76,12 @@ unified_search grep "fn main" src/
 ### 2. Configuration Shortcuts
 
 **Current friction**:
+
 - Agents must know exact config file locations
 - Need to remember TOML structure
 
 **Intuitive expectation**:
+
 - `vtcode config set llm.model gpt-4`
 - `vtcode config get llm.model`
 - `vtcode config edit` (opens default editor)
@@ -85,6 +91,7 @@ unified_search grep "fn main" src/
 ## How to Report Friction
 
 If you notice an agent (or yourself) repeatedly guessing at:
+
 - A flag that doesn't exist
 - A command structure that's not intuitive
 - A subcommand name that's confusing
@@ -118,15 +125,18 @@ When implementing a new desire path:
 ### Example: Cargo Aliases Success
 
 **Before**: Agents would type `cargo test` (correct), but try `cargo t` (wrong)
+
 - Error: "Unknown subcommand"
 - Friction: Agent has to remember the full command
 
 **After**: Added `t`, `c`, `r` aliases in `.cargo/config.toml`
+
 - Result: Both `cargo test` and `cargo t` work
 - Friction: Eliminated
 - Bonus: Tool aligns with Unix conventions (short flags)
 
 This small change has compounding effects:
+
 - Agents build muscle memory faster
 - Tool feels more polished
 - Reduces cognitive load
@@ -149,6 +159,6 @@ By making suggestions and noting aliases in help text, we guide agents toward go
 
 ---
 
-**Last Updated**: Dec 30, 2025  
-**Philosophy Introduced By**: Amp AI Agent  
+**Last Updated**: Dec 30, 2025
+**Philosophy Introduced By**: Amp AI Agent
 **Based On**: Wikipedia's "Desire Path" concept

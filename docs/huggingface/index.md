@@ -4,8 +4,8 @@ A curated collection of tools and integrations built to work with Hugging Face I
 
 ## Featured Integrations
 
-| Tool | Description | Provider Support |
-|------|-------------|------------------|
+| Tool                   | Description                                                           | Provider Support                   |
+| ---------------------- | --------------------------------------------------------------------- | ---------------------------------- |
 | [VT Code](./vtcode.md) | AI coding agent with semantic code analysis and 53+ specialized tools | Inference API, Dedicated Endpoints |
 
 ## About This Directory
@@ -16,9 +16,9 @@ This directory contains documentation for tools that integrate with Hugging Face
 
 To be featured in this directory, integrations should:
 
-- ✅ Work with Hugging Face Inference Providers (Inference API or Dedicated Endpoints)
-- ✅ Be actively maintained with recent commits or releases
-- ✅ Have clear documentation showing how to connect to Inference Providers
+- v Work with Hugging Face Inference Providers (Inference API or Dedicated Endpoints)
+- v Be actively maintained with recent commits or releases
+- v Have clear documentation showing how to connect to Inference Providers
 
 ### How to Submit Your Integration
 
@@ -70,12 +70,14 @@ Step-by-step setup instructions with code examples.
 ### Choosing Between Inference API and Dedicated Endpoints
 
 **Hugging Face Inference API**
+
 - Best for: Getting started, testing, lower traffic volumes
 - No setup required beyond API token
 - Built-in rate limiting
 - Model selection from Hugging Face model hub
 
 **Dedicated Endpoints**
+
 - Best for: Production workloads, high traffic, custom models
 - Dedicated GPU resources
 - Custom fine-tuned models support
@@ -138,7 +140,7 @@ for chunk in client.chat_stream(messages):
 
 ## Contributing
 
-Found a bug or want to improve an integration? 
+Found a bug or want to improve an integration?
 
 - Open an issue on the [integration's repository](./vtcode.md#support)
 - Submit a PR with improvements

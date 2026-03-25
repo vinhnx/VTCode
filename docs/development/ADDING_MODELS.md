@@ -5,6 +5,7 @@ This guide documents the complete workflow for adding a new LLM model to VT Code
 ## Overview
 
 Adding a model requires updates in **three layers**:
+
 1. **Constants Layer** - Model strings & metadata
 2. **Configuration Layer** - Model palette configuration
 3. **Core Layer** - Runtime model resolution & capabilities
@@ -43,6 +44,7 @@ pub const GPT_5_4_MINI: &str = "gpt-5.4-mini";
 ```
 
 **When to update:**
+
 - `SUPPORTED_MODELS` - always, for API availability
 - `RESPONSES_API_MODELS` - if supports OpenAI Responses API
 - `REASONING_MODELS` - if supports reasoning parameter
@@ -70,6 +72,7 @@ pub const GPT_5_4_MINI: &str = "gpt-5.4-mini";
 ```
 
 **Fields to set:**
+
 - `id` - matches constant name
 - `name` - user-facing display name
 - `description` - brief capability summary
@@ -251,6 +254,7 @@ Input: ["text"]
 ### Bash Script (Future Enhancement)
 
 Could create `scripts/add_model.sh`:
+
 - Prompt for model details (name, provider, context, etc.)
 - Generate code snippets
 - Auto-insert into files at proper locations
@@ -263,6 +267,7 @@ The `build.rs` generates model capabilities from `docs/models.json`. Ensure JSON
 ### Testing
 
 Add model to integration test:
+
 ```rust
 #[test]
 fn test_gpt_5_4_nano_parsing() {
@@ -275,14 +280,16 @@ fn test_gpt_5_4_nano_parsing() {
 
 ## Common Mistakes
 
-❌ **Don't:**
+x **Don't:**
+
 - Add model only to JSON without enum
 - Use hyphens in enum names (`GPT-5-4-Nano`)
 - Forget to update `provider.rs` match
 - Forget to update `collection.rs` all_models list
 - Inconsistent naming across files
 
-✅ **Do:**
+v **Do:**
+
 - Keep naming consistent: `gpt-5.4-nano` (const), `GPT54Nano` (enum), `"GPT-5.4 Nano"` (display)
 - Update all 10 files in order
 - Run `cargo check` after each logical group

@@ -85,7 +85,10 @@ fn render_skills_lean(skills: &[SkillMetadata]) -> String {
             SkillScope::Admin => "admin",
         };
 
-        let line = format!("- {}: {} (file: {}, scope: {})", skill.name, skill.description, location, scope);
+        let line = format!(
+            "- {}: {} (file: {}, scope: {})",
+            skill.name, skill.description, location, scope
+        );
 
         let _ = writeln!(prompt, "{}", line);
     }
@@ -152,7 +155,6 @@ pub fn generate_skills_prompt_xml(skills: &[SkillMetadata]) -> String {
                     xml_escape(allowed_tools)
                 );
             }
-
         }
 
         xml.push_str("  </skill>\n");
@@ -265,7 +267,6 @@ mod tests {
         // Lean mode should include usage rules
         assert!(lean_prompt.contains("Usage Rules"));
         assert!(lean_prompt.contains("$SkillName"));
-
     }
 
     #[test]

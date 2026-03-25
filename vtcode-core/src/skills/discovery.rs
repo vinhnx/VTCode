@@ -517,7 +517,9 @@ fn default_skill_paths(workspace_root: &Path) -> Vec<PathBuf> {
     }
     #[cfg(unix)]
     paths.push(PathBuf::from("/etc/codex/skills"));
-    paths.push(crate::skills::system::system_cache_root_dir(&default_codex_home()));
+    paths.push(crate::skills::system::system_cache_root_dir(
+        &default_codex_home(),
+    ));
     paths
 }
 

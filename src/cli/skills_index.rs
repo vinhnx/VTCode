@@ -88,11 +88,7 @@ pub async fn generate_comprehensive_skills_index(workspace: &Path) -> Result<std
             for skill_ctx in &discovery_result.skills {
                 let manifest = skill_ctx.manifest();
                 let desc = manifest.description.replace('|', "\\|");
-                let _ = writeln!(
-                    content,
-                    "| `{}` | {} | {} |",
-                    manifest.name, desc, "Skill"
-                );
+                let _ = writeln!(content, "| `{}` | {} | {} |", manifest.name, desc, "Skill");
             }
             content.push('\n');
         }

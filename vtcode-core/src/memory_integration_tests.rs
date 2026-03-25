@@ -74,7 +74,7 @@ mod memory_integration {
         );
 
         println!(
-            "✅ PTY scrollback bounded: {:.1}MB / {:.1}MB max",
+            "v PTY scrollback bounded: {:.1}MB / {:.1}MB max",
             total_bytes as f64 / 1_000_000.0,
             MAX_BUFFER_SIZE as f64 / 1_000_000.0
         );
@@ -111,7 +111,7 @@ mod memory_integration {
         );
 
         println!(
-            "✅ Parse cache bounded: {} entries, {:.1}MB memory",
+            "v Parse cache bounded: {} entries, {:.1}MB memory",
             cache.len(),
             actual_memory as f64 / 1_000_000.0
         );
@@ -143,7 +143,7 @@ mod memory_integration {
 
         let stats = cache.stats();
         println!(
-            "✅ Cache eviction working: {} entries in cache, {} total evictions",
+            "v Cache eviction working: {} entries in cache, {} total evictions",
             stats.current_size, stats.evictions
         );
 
@@ -307,7 +307,7 @@ mod memory_integration {
         );
 
         println!(
-            "✅ Transcript width cache bounded: {} width caches (limit: {})",
+            "v Transcript width cache bounded: {} width caches (limit: {})",
             width_caches.len(),
             MAX_WIDTH_CACHES
         );

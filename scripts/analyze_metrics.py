@@ -4,12 +4,13 @@ analyze_metrics.py - Analyze VT Code performance metrics
 Usage: python3 scripts/analyze_metrics.py vtcode_performance_metrics.csv
 """
 
-import sys
 import csv
+import statistics
+import sys
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Tuple
-import statistics
+from typing import Dict, List, Tuple
+
 
 class PerformanceAnalyzer:
     def __init__(self, csv_file: str):
@@ -20,14 +21,14 @@ class PerformanceAnalyzer:
     def load_metrics(self):
         """Load metrics from CSV file"""
         if not Path(self.csv_file).exists():
-            print(f"❌ File not found: {self.csv_file}")
+            print(f"x File not found: {self.csv_file}")
             sys.exit(1)
 
         try:
             with open(self.csv_file, 'r') as f:
                 reader = csv.DictReader(f)
                 self.metrics = list(reader)
-                
+
             # Convert numeric fields
             for metric in self.metrics:
                 metric['rss_mb'] = float(metric['rss_mb'])
@@ -37,10 +38,10 @@ class PerformanceAnalyzer:
                 metric['cache_hits'] = int(metric['cache_hits'])
                 metric['cache_misses'] = int(metric['cache_misses'])
                 metric['tool_calls'] = int(metric['tool_calls'])
-                
-            print(f"✅ Loaded {len(self.metrics)} metric records")
+
+            print(f"v Loaded {len(self.metrics)} metric records")
         except Exception as e:
-            print(f"❌ Error loading metrics: {e}")
+            print(f"x Error loading metrics: {e}")
             sys.exit(1)
 
     def get_memory_stats(self) -> Dict:
@@ -99,10 +100,10 @@ class PerformanceAnalyzer:
             return False, "Insufficient data for leak detection"
 
         rss_values = [m['rss_mb'] for m in self.metrics]
-        
+
         # Check if memory consistently grows
         growth_rate = (rss_values[-1] - rss_values[0]) / max(rss_values[0], 1) * 100
-        
+
         if growth_rate > threshold_percent:
             return True, f"Memory growth of {growth_rate:.1f}% detected (threshold: {threshold_percent}%)"
         else:
@@ -112,11 +113,11 @@ class PerformanceAnalyzer:
         """Detect CPU usage spikes"""
         spikes = []
         cpu_values = [m['cpu_percent'] for m in self.metrics]
-        
+
         if cpu_values:
             avg_cpu = statistics.mean(cpu_values)
             threshold = avg_cpu * 1.5  # 50% above average
-            
+
             for i, metric in enumerate(self.metrics):
                 if metric['cpu_percent'] > threshold_percent:
                     spikes.append({
@@ -124,7 +125,7 @@ class PerformanceAnalyzer:
                         'timestamp': metric['timestamp_iso'],
                         'cpu_percent': metric['cpu_percent'],
                     })
-        
+
         return spikes
 
     def print_summary(self):
@@ -143,9 +144,9 @@ class PerformanceAnalyzer:
         print("💾 MEMORY USAGE ANALYSIS")
         print("─"*70)
         mem_stats = self.get_memory_stats()
-        
+
         if mem_stats:
-            print(f"\n  Resident Set Size (RSS - Physical Memory):")
+            print("\n  Resident Set Size (RSS - Physical Memory):")
             print(f"    Minimum:        {mem_stats['rss_min']:.1f} MB")
             print(f"    Maximum:        {mem_stats['rss_max']:.1f} MB")
             print(f"    Average:        {mem_stats['rss_avg']:.1f} MB")
@@ -153,15 +154,15 @@ class PerformanceAnalyzer:
             print(f"    Std Deviation:  {mem_stats['rss_stdev']:.1f} MB")
             print(f"    Total Growth:   {mem_stats['rss_growth']:.1f} MB ({mem_stats['rss_growth_percent']:.1f}%)")
 
-            print(f"\n  Virtual Memory Size (VSZ):")
+            print("\n  Virtual Memory Size (VSZ):")
             print(f"    Minimum:        {mem_stats['vsz_min']:.1f} MB")
             print(f"    Maximum:        {mem_stats['vsz_max']:.1f} MB")
             print(f"    Average:        {mem_stats['vsz_avg']:.1f} MB")
 
         # Leak Detection
-        print(f"\n  Memory Leak Detection:")
+        print("\n  Memory Leak Detection:")
         is_leak, leak_msg = self.detect_memory_leaks(threshold_percent=15.0)
-        symbol = "⚠️  WARNING" if is_leak else "✅ OK"
+        symbol = "[!]  WARNING" if is_leak else "v OK"
         print(f"    {symbol}: {leak_msg}")
 
         # CPU Analysis
@@ -169,9 +170,9 @@ class PerformanceAnalyzer:
         print("⚙️  CPU USAGE ANALYSIS")
         print("─"*70)
         cpu_stats = self.get_cpu_stats()
-        
+
         if cpu_stats:
-            print(f"\n  CPU Usage Percentage:")
+            print("\n  CPU Usage Percentage:")
             print(f"    Minimum:        {cpu_stats['cpu_min']:.1f}%")
             print(f"    Maximum:        {cpu_stats['cpu_max']:.1f}%")
             print(f"    Average:        {cpu_stats['cpu_avg']:.1f}%")
@@ -181,22 +182,22 @@ class PerformanceAnalyzer:
         # CPU Spikes
         spikes = self.detect_cpu_spikes(threshold_percent=80.0)
         if spikes:
-            print(f"\n  ⚠️  CPU Spikes Detected ({len(spikes)} events >80%):")
+            print(f"\n  [!]  CPU Spikes Detected ({len(spikes)} events >80%):")
             for spike in spikes[:5]:  # Show first 5
                 print(f"    Turn {spike['turn']}: {spike['cpu_percent']:.1f}% at {spike['timestamp']}")
             if len(spikes) > 5:
                 print(f"    ... and {len(spikes) - 5} more")
         else:
-            print(f"\n  ✅ No significant CPU spikes detected")
+            print("\n  v No significant CPU spikes detected")
 
         # Thread Analysis
         print("\n" + "─"*70)
         print("🧵 THREADING ANALYSIS")
         print("─"*70)
         thread_stats = self.get_thread_stats()
-        
+
         if thread_stats:
-            print(f"\n  Thread Count:")
+            print("\n  Thread Count:")
             print(f"    Minimum:        {int(thread_stats['threads_min'])} threads")
             print(f"    Maximum:        {int(thread_stats['threads_max'])} threads")
             print(f"    Average:        {thread_stats['threads_avg']:.0f} threads")
@@ -205,24 +206,24 @@ class PerformanceAnalyzer:
         print("\n" + "─"*70)
         print("💡 RECOMMENDATIONS")
         print("─"*70)
-        
+
         recommendations = []
-        
+
         if mem_stats and mem_stats['rss_growth_percent'] > 20:
             recommendations.append("  • High memory growth detected - consider implementing cache eviction")
-        
+
         if cpu_stats and cpu_stats['cpu_avg'] > 50:
             recommendations.append("  • High average CPU usage - profile to identify hot spots")
-        
+
         if spikes:
             recommendations.append(f"  • {len(spikes)} CPU spikes detected - investigate during these periods")
-        
+
         if thread_stats and thread_stats['threads_max'] > 100:
             recommendations.append("  • High thread count - review thread pool configuration")
-        
+
         if not recommendations:
             recommendations.append("  • Performance metrics look healthy!")
-        
+
         for rec in recommendations:
             print(rec)
 
@@ -230,11 +231,11 @@ class PerformanceAnalyzer:
         print("\n" + "="*70)
         print("📈 QUICK METRICS")
         print("="*70)
-        
+
         if mem_stats:
             status = "🟡 WARNING" if mem_stats['rss_growth_percent'] > 15 else "🟢 GOOD"
             print(f"Memory Trend:  {status} ({mem_stats['rss_growth_percent']:+.1f}%)")
-        
+
         if cpu_stats:
             status = "🟡 WARNING" if cpu_stats['cpu_avg'] > 50 else "🟢 GOOD"
             print(f"CPU Usage:     {status} ({cpu_stats['cpu_avg']:.1f}% avg)")
@@ -263,16 +264,16 @@ class PerformanceAnalyzer:
 <body>
     <h1>VT Code Performance Report</h1>
     <p>Generated: {datetime.now().isoformat()}</p>
-    
+
     <h2>Memory Usage Over Time</h2>
     <canvas id="memoryChart"></canvas>
-    
+
     <h2>CPU Usage Over Time</h2>
     <canvas id="cpuChart"></canvas>
 
     <script>
         const metrics = {self.metrics};
-        
+
         const ctx = document.getElementById('memoryChart').getContext('2d');
         new Chart(ctx, {{
             type: 'line',
@@ -319,8 +320,8 @@ class PerformanceAnalyzer:
 """
         with open(output_file, 'w') as f:
             f.write(html_content)
-        
-        print(f"\n✅ HTML report saved to: {output_file}")
+
+        print(f"\nv HTML report saved to: {output_file}")
 
 def main():
     if len(sys.argv) < 2:

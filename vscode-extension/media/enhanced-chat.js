@@ -234,7 +234,7 @@
 		actions.appendChild(deleteBtn);
 
 		if (msg.role === "assistant") {
-			const regenerateBtn = createActionButton("🔄", "Regenerate", () => {
+			const regenerateBtn = createActionButton("[wait]", "Regenerate", () => {
 				vscode.postMessage({ type: "regenerateResponse", messageId: msg.id });
 			});
 			actions.appendChild(regenerateBtn);

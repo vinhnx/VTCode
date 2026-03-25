@@ -153,16 +153,16 @@ Returns the agent's capability card:
 
 ```json
 {
-  "protocolVersion": "1.0",
-  "name": "VT Code Agent",
-  "description": "AI code assistant powered by VT Code",
-  "version": "0.54.1",
-  "url": "https://example.com",
-  "capabilities": {
-    "streaming": true,
-    "pushNotifications": true,
-    "stateTransitionHistory": true
-  }
+    "protocolVersion": "1.0",
+    "name": "VT Code Agent",
+    "description": "AI code assistant powered by VT Code",
+    "version": "0.54.1",
+    "url": "https://example.com",
+    "capabilities": {
+        "streaming": true,
+        "pushNotifications": true,
+        "stateTransitionHistory": true
+    }
 }
 ```
 
@@ -175,67 +175,72 @@ POST /a2a
 Send JSON-RPC requests for task management:
 
 **Create Task & Send Message**:
+
 ```json
 {
-  "jsonrpc": "2.0",
-  "method": "message/send",
-  "params": {
-    "message": {
-      "role": "user",
-      "parts": [{"type": "text", "text": "Help me refactor this code"}]
-    }
-  },
-  "id": "req-123"
+    "jsonrpc": "2.0",
+    "method": "message/send",
+    "params": {
+        "message": {
+            "role": "user",
+            "parts": [{ "type": "text", "text": "Help me refactor this code" }]
+        }
+    },
+    "id": "req-123"
 }
 ```
 
 **Stream Messages**:
+
 ```json
 {
-  "jsonrpc": "2.0",
-  "method": "message/stream",
-  "params": {
-    "taskId": "task-123",
-    "contextId": "ctx-123"
-  },
-  "id": "req-124"
+    "jsonrpc": "2.0",
+    "method": "message/stream",
+    "params": {
+        "taskId": "task-123",
+        "contextId": "ctx-123"
+    },
+    "id": "req-124"
 }
 ```
 
 **Get Task**:
+
 ```json
 {
-  "jsonrpc": "2.0",
-  "method": "tasks/get",
-  "params": {
-    "id": "task-123"
-  },
-  "id": "req-125"
+    "jsonrpc": "2.0",
+    "method": "tasks/get",
+    "params": {
+        "id": "task-123"
+    },
+    "id": "req-125"
 }
 ```
 
 **List Tasks**:
+
 ```json
 {
-  "jsonrpc": "2.0",
-  "method": "tasks/list",
-  "params": {
-    "contextId": "ctx-123",
-    "pageSize": 10
-  },
-  "id": "req-126"
+    "jsonrpc": "2.0",
+    "method": "tasks/list",
+    "params": {
+        "contextId": "ctx-123",
+        "pageSize": 10
+    },
+    "id": "req-126"
 }
 ```
 
 **Cancel Task**:
+
 ```json
 {
-  "jsonrpc": "2.0",
-  "method": "tasks/cancel",
-  "params": {
-    "taskId": "task-123"
-  },
-  "id": "req-127"
+    "jsonrpc": "2.0",
+    "method": "tasks/cancel",
+    "params": {
+        "taskId": "task-123"
+    },
+    "id": "req-127"
 }
 ```
 
@@ -249,13 +254,13 @@ Establish Server-Sent Events stream for real-time updates:
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "method": "message/stream",
-  "params": {
-    "taskId": "task-123",
-    "contextId": "ctx-123"
-  },
-  "id": "req-128"
+    "jsonrpc": "2.0",
+    "method": "message/stream",
+    "params": {
+        "taskId": "task-123",
+        "contextId": "ctx-123"
+    },
+    "id": "req-128"
 }
 ```
 
@@ -313,7 +318,7 @@ pub enum A2aErrorCode {
     MethodNotFound,         // -32601
     InvalidParams,          // -32602
     InternalError,          // -32603
-    
+
     // A2A-specific errors
     TaskNotFound,           // -32001
     TaskNotCancelable,      // -32002
@@ -342,22 +347,22 @@ use vtcode_core::a2a::TaskManager;
 #[tokio::main]
 async fn main() {
     let manager = TaskManager::new();
-    
+
     // Create task
     let task = manager.create_task(Some("conversation-1".to_string())).await;
     println!("Created task: {}", task.id);
-    
+
     // Update status
     manager.update_status(
         &task.id,
         TaskState::Working,
         Some(Message::agent_text("Processing your request..."))
     ).await.ok();
-    
+
     // Add artifact
     let artifact = Artifact::text("result-1", "Refactored code");
     manager.add_artifact(&task.id, artifact).await.ok();
-    
+
     // Get task
     let updated = manager.get_task(&task.id).await.unwrap();
     println!("Task state: {:?}", updated.state());
@@ -376,15 +381,15 @@ async fn main() {
     let agent_card = AgentCard::new("my-agent", "My AI Agent", "1.0.0");
     let task_manager = TaskManager::new();
     let server_state = A2aServerState::new(task_manager, agent_card);
-    
+
     // Create router
     let router = vtcode_core::a2a::server::create_router(server_state);
-    
+
     // Start listening
     let listener = tokio::net::TcpListener::bind("127.0.0.1:8080")
         .await
         .unwrap();
-    
+
     axum::serve(listener, router).await.unwrap();
 }
 ```
@@ -397,11 +402,11 @@ use vtcode_core::a2a::A2aClient;
 #[tokio::main]
 async fn main() {
     let client = A2aClient::new("https://agent.example.com");
-    
+
     // Discover agent
     let card = client.discover_agent().await.unwrap();
     println!("Agent: {} ({})", card.name, card.version);
-    
+
     // Send message
     use vtcode_core::a2a::{Message, MessageSendParams};
     let params = MessageSendParams::new(
@@ -433,8 +438,8 @@ cargo test --test a2a_integration_tests
 
 ## Implementation Status
 
-- ✅ **Phase 1**: Core types, task manager, server
-- ✅ **Phase 2**: Integration tests, streaming, webhooks
+- v **Phase 1**: Core types, task manager, server
+- v **Phase 2**: Integration tests, streaming, webhooks
 - 🚧 **Phase 3**: Advanced client features, authentication
 - 📋 **Phase 4**: Extended documentation, examples
 

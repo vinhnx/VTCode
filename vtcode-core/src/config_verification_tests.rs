@@ -27,7 +27,7 @@ mod config_verification {
         );
 
         println!(
-            "✅ Cache constants verified: TTL={}s, MaxCapacity={}",
+            "v Cache constants verified: TTL={}s, MaxCapacity={}",
             DEFAULT_CACHE_TTL.as_secs(),
             DEFAULT_MAX_CACHE_CAPACITY
         );
@@ -45,7 +45,7 @@ mod config_verification {
         );
 
         println!(
-            "✅ PTY config verified: max_scrollback={}MB",
+            "v PTY config verified: max_scrollback={}MB",
             config.pty.max_scrollback_bytes / 1_000_000
         );
     }
@@ -76,7 +76,7 @@ mod config_verification {
         );
 
         println!(
-            "✅ Default config reasonable: scrollback_lines={}, max_bytes={}",
+            "v Default config reasonable: scrollback_lines={}, max_bytes={}",
             config.pty.scrollback_lines, config.pty.max_scrollback_bytes
         );
     }
@@ -101,7 +101,7 @@ mod config_verification {
         );
 
         println!(
-            "✅ Config override capability verified: can set scrollback to {}MB - {}MB",
+            "v Config override capability verified: can set scrollback to {}MB - {}MB",
             decreased_scrollback / 1_000_000,
             increased_scrollback / 1_000_000
         );
@@ -127,7 +127,7 @@ mod config_verification {
         );
 
         println!(
-            "✅ Optimized defaults integrated: PTY{}x{}, scrollback={}MB",
+            "v Optimized defaults integrated: PTY{}x{}, scrollback={}MB",
             config.pty.default_rows,
             config.pty.default_cols,
             config.pty.max_scrollback_bytes / 1_000_000

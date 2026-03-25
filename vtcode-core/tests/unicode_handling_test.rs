@@ -221,9 +221,9 @@ mod tests {
         assert!(compiler_output.contains("🌍"));
 
         // Progress indicators
-        let progress = "Building... 🔄 Compiling... ✅ Done!";
-        assert!(progress.contains("🔄"));
-        assert!(progress.contains("✅"));
+        let progress = "Building... [wait] Compiling... v Done!";
+        assert!(progress.contains("[wait]"));
+        assert!(progress.contains("v"));
 
         // File paths with unicode (common in international projects)
         let unicode_path = "/projects/用户/документы/ファイル.txt";

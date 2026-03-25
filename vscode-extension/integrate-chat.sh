@@ -19,7 +19,7 @@ cp package.json package.json.backup
 
 # Add chat view configuration to package.json
 # This would normally be done with a JSON processor like jq
-echo "⚠️  Manual step required: Add the following to package.json contributes section:"
+echo "[!]  Manual step required: Add the following to package.json contributes section:"
 cat << 'EOF'
 
 {
@@ -123,7 +123,7 @@ EOF
 
 echo ""
 echo "📝 Updating extension.ts..."
-echo "⚠️  Manual step required: Add the following to your activate() function in src/extension.ts:"
+echo "[!]  Manual step required: Add the following to your activate() function in src/extension.ts:"
 cat << 'EOF'
 
 // Import chat components

@@ -421,7 +421,8 @@ impl Skill {
             || path_str.contains("\\skills\\.system\\")
         {
             SkillScope::System
-        } else if path_str.contains("/.agents/skills/") || path_str.contains("\\.agents\\skills\\") {
+        } else if path_str.contains("/.agents/skills/") || path_str.contains("\\.agents\\skills\\")
+        {
             SkillScope::Repo
         } else {
             SkillScope::User

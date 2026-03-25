@@ -53,7 +53,7 @@ async fn test_grep_dual_output_integration() {
             "Should show token savings for large outputs"
         );
 
-        println!("✅ Token Savings Achieved:");
+        println!("v Token Savings Achieved:");
         println!("   UI tokens: {}", counts.ui_tokens);
         println!("   LLM tokens: {}", counts.llm_tokens);
         println!(
@@ -112,7 +112,7 @@ async fn test_list_dual_output_integration() {
         result.llm_content
     );
 
-    println!("✅ List Dual Output:");
+    println!("v List Dual Output:");
     println!("   LLM: {}", result.llm_content);
     println!("   Savings: {}", result.savings_summary());
 }
@@ -159,12 +159,12 @@ async fn test_read_file_dual_output() {
             counts.savings_percent
         );
 
-        println!("✅ Read File Dual Output:");
+        println!("v Read File Dual Output:");
         println!("   UI tokens: {}", counts.ui_tokens);
         println!("   LLM tokens: {}", counts.llm_tokens);
         println!("   Savings: {:.1}%", counts.savings_percent);
     } else {
-        println!("✅ Read File Dual Output (small file):");
+        println!("v Read File Dual Output (small file):");
         println!("   File too small for significant savings");
     }
 }
@@ -213,12 +213,12 @@ async fn test_bash_dual_output() {
             counts.savings_percent
         );
 
-        println!("✅ Bash Dual Output:");
+        println!("v Bash Dual Output:");
         println!("   UI tokens: {}", counts.ui_tokens);
         println!("   LLM tokens: {}", counts.llm_tokens);
         println!("   Savings: {:.1}%", counts.savings_percent);
     } else {
-        println!("✅ Bash Dual Output (small output):");
+        println!("v Bash Dual Output (small output):");
         println!("   Command output too small for significant savings");
     }
 }
@@ -265,7 +265,7 @@ async fn test_edit_dual_output() {
         result.llm_content
     );
 
-    println!("✅ Edit/Write Dual Output:");
+    println!("v Edit/Write Dual Output:");
     println!("   Tool: {}", result.tool_name);
     println!("   LLM summary: {}", result.llm_content);
     println!("   Savings: {}", result.savings_summary());
@@ -300,7 +300,7 @@ async fn test_backward_compatibility() {
     assert!(!new_result.llm_content.is_empty());
     assert!(!new_result.ui_content.is_empty());
 
-    println!("✅ Backward Compatibility:");
+    println!("v Backward Compatibility:");
     println!("   Old API: Working");
     println!(
         "   New API: Working with {} savings",

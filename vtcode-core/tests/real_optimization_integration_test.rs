@@ -41,7 +41,7 @@ async fn test_real_tool_registry_optimizations() -> Result<()> {
     let test_string = memory_pool.get_string();
     memory_pool.return_string(test_string);
 
-    println!("✅ Real ToolRegistry optimizations are working!");
+    println!("v Real ToolRegistry optimizations are working!");
 
     Ok(())
 }
@@ -67,7 +67,7 @@ async fn test_tool_hot_cache_functionality() -> Result<()> {
     // Clear cache (should work without errors)
     registry.clear_hot_cache();
 
-    println!("✅ Hot cache functionality is working!");
+    println!("v Hot cache functionality is working!");
 
     Ok(())
 }
@@ -82,7 +82,7 @@ async fn test_optimization_config_integration() -> Result<()> {
     assert!(config.tool_registry.use_optimized_registry);
     assert!(config.memory_pool.enabled); // Default is enabled
 
-    println!("✅ Optimization config integration is working!");
+    println!("v Optimization config integration is working!");
 
     Ok(())
 }

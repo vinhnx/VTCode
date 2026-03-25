@@ -18,22 +18,24 @@ LM Studio exposes both a native v1 REST API and OpenAI-compatible HTTP server so
    supported open models (Meta Llama 3.1 8B, Meta Llama 3 8B, Qwen2.5 7B, Gemma 2
    2B/9B IT, Phi-3.1 Mini 4K, or any other compatible model hosted in the LM Studio
    catalog). Alternatively, use the CLI:
-   ```bash
-   lms get deepseek-r1  # Download by keyword
-   lms get <hugging-face-url>  # Download by URL
-   ```
+    ```bash
+    lms get deepseek-r1  # Download by keyword
+    lms get <hugging-face-url>  # Download by URL
+    ```
 3. **Start the Developer server**:
-   - **GUI**: From the "Developer" panel, enable the server and confirm the port (defaults to `1234`).
-   - **CLI**: Run `lms server start` to launch the server. Append `--host 0.0.0.0` to expose it to other machines on your network.
+    - **GUI**: From the "Developer" panel, enable the server and confirm the port (defaults to `1234`).
+    - **CLI**: Run `lms server start` to launch the server. Append `--host 0.0.0.0` to expose it to other machines on your network.
 4. **Verify the server**: Send a quick health check:
-   ```bash
-   # Native v1 API
-   curl http://localhost:1234/api/v1/models
-   
-   # OpenAI-compatible API (still supported)
-   curl http://localhost:1234/v1/models
-   ```
-   The response lists every model LM Studio currently exposes through the API.
+
+    ```bash
+    # Native v1 API
+    curl http://localhost:1234/api/v1/models
+
+    # OpenAI-compatible API (still supported)
+    curl http://localhost:1234/v1/models
+    ```
+
+    The response lists every model LM Studio currently exposes through the API.
 
 ## Configuration
 
@@ -116,17 +118,17 @@ LM Studio's API stack supports multiple inference endpoints with varying capabil
 
 ### Feature Comparison
 
-| Feature | `/api/v1/chat` | `/v1/responses` | `/v1/chat/completions` | `/v1/messages` |
-|---------|----------------|-----------------|------------------------|----------------|
-| Streaming | ✅ | ✅ | ✅ | ✅ |
-| Stateful chat | ✅ | ✅ | ❌ | ❌ |
-| Remote MCPs | ✅ | ✅ | ❌ | ❌ |
-| LM Studio MCPs | ✅ | ✅ | ❌ | ❌ |
-| Custom tools | ❌ | ✅ | ✅ | ✅ |
-| Assistant messages | ❌ | ✅ | ✅ | ✅ |
-| Model load events | ✅ | ❌ | ❌ | ❌ |
-| Prompt processing events | ✅ | ❌ | ❌ | ❌ |
-| Context length control | ✅ | ❌ | ❌ | ❌ |
+| Feature                  | `/api/v1/chat` | `/v1/responses` | `/v1/chat/completions` | `/v1/messages` |
+| ------------------------ | -------------- | --------------- | ---------------------- | -------------- |
+| Streaming                | v              | v               | v                      | v              |
+| Stateful chat            | v              | v               | x                      | x              |
+| Remote MCPs              | v              | v               | x                      | x              |
+| LM Studio MCPs           | v              | v               | x                      | x              |
+| Custom tools             | x              | v               | v                      | v              |
+| Assistant messages       | x              | v               | v                      | v              |
+| Model load events        | v              | x               | x                      | x              |
+| Prompt processing events | v              | x               | x                      | x              |
+| Context length control   | v              | x               | x                      | x              |
 
 VT Code forwards tool definitions, function-calling metadata, and JSON schema expectations so models can call tools or produce structured output. Streaming is enabled by default, and you will see incremental tokens in the TUI just as you would with remote OpenAI deployments.
 

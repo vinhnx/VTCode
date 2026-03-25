@@ -4,10 +4,10 @@ Comprehensive guide to the OpenAI Codex Ollama integration in VT Code.
 
 ## Quick Links
 
-| Document | Purpose | Audience |
-|----------|---------|----------|
-| [ollama-quick-reference.md](./ollama-quick-reference.md) | API reference and lookup | Developers |
-| [providers/ollama.md](./providers/ollama.md) | User-facing Ollama setup guide | End Users |
+| Document                                                 | Purpose                        | Audience   |
+| -------------------------------------------------------- | ------------------------------ | ---------- |
+| [ollama-quick-reference.md](./ollama-quick-reference.md) | API reference and lookup       | Developers |
+| [providers/ollama.md](./providers/ollama.md)             | User-facing Ollama setup guide | End Users  |
 
 ## Modules Overview
 
@@ -26,6 +26,7 @@ impl OllamaClient {
 ```
 
 **Key Features**:
+
 - Server health checking with 5s timeout
 - Connection error with setup instructions
 - Streaming model pulls
@@ -49,6 +50,7 @@ pub trait OllamaPullProgressReporter {
 ```
 
 **Implementations**:
+
 - `CliPullProgressReporter` - Terminal output with speed/percentage
 - `TuiPullProgressReporter` - TUI stub for future integration
 
@@ -61,6 +63,7 @@ pub fn pull_events_from_value(value: &JsonValue) -> Vec<OllamaPullEvent>
 ```
 
 **Handles**:
+
 - Status messages
 - Progress chunks
 - Success signals
@@ -76,6 +79,7 @@ pub fn base_url_to_host_root(base_url: &str) -> String
 ```
 
 **Features**:
+
 - Detects OpenAI-compatible endpoints (`/v1`)
 - Extracts host from URL
 - Handles trailing slashes
@@ -133,23 +137,27 @@ pub fn base_url_to_host_root(base_url: &str) -> String
 
 ## Integration Roadmap
 
-### Phase 1: Core Infrastructure (✅ Complete)
+### Phase 1: Core Infrastructure (v Complete)
+
 - [x] `OllamaClient` with health checks
 - [x] `OllamaPullEvent` and reporters
 - [x] Event parsing for JSON-lines
 - [x] URL utilities
 
-### Phase 2: Startup Integration (🔄 Ready)
+### Phase 2: Startup Integration ([wait] Ready)
+
 - [ ] Health check on startup
 - [ ] Warn if Ollama unavailable
 - [ ] Log available models
 
-### Phase 3: Model Selection (🔄 Ready)
+### Phase 3: Model Selection ([wait] Ready)
+
 - [ ] Show progress when selecting missing models
 - [ ] Auto-pull on demand
 - [ ] Progress window in TUI
 
-### Phase 4: Configuration (🔄 Ready)
+### Phase 4: Configuration ([wait] Ready)
+
 - [ ] Add `[ollama]` section to `vtcode.toml`
 - [ ] `auto_pull` option
 - [ ] Model whitelist
@@ -202,12 +210,14 @@ impl OllamaPullProgressReporter for MyReporter {
 ## Error Handling
 
 ### Connection Error
+
 ```
 No running Ollama server detected. Start it with: `ollama serve` (after installing)
 Install instructions: https://github.com/ollama/ollama?tab=readme-ov-file
 ```
 
 ### Model Not Found
+
 ```
 No remote models found. Ensure Ollama server is running or set OLLAMA_BASE_URL
 ```
@@ -249,17 +259,22 @@ vtcode/
 ## Key Concepts
 
 ### OllamaPullEvent
+
 Structured event emitted during model pulling:
+
 - **Status**: Human-readable update (e.g., "verifying")
 - **ChunkProgress**: Byte-level progress for a layer
 - **Success**: Pull completed
 - **Error**: Error occurred
 
 ### OllamaPullProgressReporter
+
 Trait for handling events. Allows multiple implementations (CLI, TUI, logging, etc.)
 
 ### URL Normalization
+
 Handles both:
+
 - Native Ollama: `http://localhost:11434`
 - OpenAI-compatible: `http://localhost:11434/v1`
 
@@ -301,11 +316,12 @@ OLLAMA_INDEX.md (this file)
 ## Questions?
 
 Refer to the appropriate document:
+
 - **"What's the API for...?"** → `ollama-quick-reference.md`
 - **"How do I use Ollama...?"** → `providers/ollama.md`
 
 ---
 
-**Last Updated**: December 31, 2025  
-**Status**: Production-ready  
+**Last Updated**: December 31, 2025
+**Status**: Production-ready
 **Quality**: Comprehensive documentation + tests

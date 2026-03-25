@@ -22,11 +22,11 @@ echo "timestamp_iso,turn_number,rss_mb,vsz_mb,cpu_percent,num_threads,cache_hits
 get_metrics() {
     local pid=$1
     local turn=$2
-    
+
     if ! kill -0 $pid 2>/dev/null; then
         return 1
     fi
-    
+
     # Get process stats (macOS and Linux compatible)
     if [[ "$OSTYPE" == "darwin"* ]]; then
         # macOS
@@ -43,13 +43,13 @@ get_metrics() {
         local cpu=$(ps -p $pid -o %cpu= | xargs)
         local threads=$(ps -p $pid -o nlwp= | xargs)
     fi
-    
+
     # Get timestamp
     local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-    
+
     # Write to CSV (placeholder values for cache stats - would need instrumentation)
     echo "$timestamp,$turn,$rss,$vsz,$cpu,$threads,0,0,0" >> "$OUTPUT_FILE"
-    
+
     echo "[$timestamp] Turn $turn | RSS: ${rss}MB | VSZ: ${vsz}MB | CPU: ${cpu}% | Threads: $threads"
 }
 
@@ -61,7 +61,7 @@ cleanup() {
         wait $VTCODE_PID 2>/dev/null || true
     fi
     echo ""
-    echo "✅ Monitoring complete. Results saved to: $OUTPUT_FILE"
+    echo "v Monitoring complete. Results saved to: $OUTPUT_FILE"
 }
 
 trap cleanup EXIT
@@ -102,14 +102,14 @@ TURN=0
 while kill -0 $VTCODE_PID 2>/dev/null; do
     TURN=$((TURN + 1))
     get_metrics $VTCODE_PID $TURN
-    
+
     if [[ $TURN -ge $NUM_TURNS ]]; then
         echo ""
         echo "Completed $NUM_TURNS turns. Stopping VT Code..."
         kill $VTCODE_PID 2>/dev/null || true
         break
     fi
-    
+
     sleep $INTERVAL
 done
 
@@ -139,7 +139,7 @@ if [[ -f "$OUTPUT_FILE" ]]; then
             printf "  Average Threads: %.0f\n", threads/n
         }
     }'
-    
+
     echo ""
     echo "Peak Memory Usage:"
     tail -n +2 "$OUTPUT_FILE" | awk -F',' '{
@@ -150,7 +150,7 @@ if [[ -f "$OUTPUT_FILE" ]]; then
         printf "  Peak RSS:        %.1f MB\n", max_rss
         printf "  Peak VSZ:        %.1f MB\n", max_vsz
     }'
-    
+
     echo ""
     echo "Data saved to: $OUTPUT_FILE"
     echo ""

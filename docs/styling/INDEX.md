@@ -4,20 +4,20 @@
 
 ### For Users
 
--   **[Quick Start](STYLING_QUICK_START.md)** - How to use styling in your code
--   **[Theme Configuration](PHASE2_QUICK_START.md#component-3-custom-theme-configuration)** - How to customize colors
+- **[Quick Start](STYLING_QUICK_START.md)** - How to use styling in your code
+- **[Theme Configuration](PHASE2_QUICK_START.md#component-3-custom-theme-configuration)** - How to customize colors
 
 ### For Developers Continuing Phase 2
 
--   **[Phase 2 Planning](PHASE2_PLAN.md)** - Complete project scope and timeline
--   **[Phase 2 Quick Start](PHASE2_QUICK_START.md)** - Step-by-step implementation guide
--   **[Session Summary Nov 9](SESSION_SUMMARY_NOV9.md)** - Latest status and recommendations
+- **[Phase 2 Planning](PHASE2_PLAN.md)** - Complete project scope and timeline
+- **[Phase 2 Quick Start](PHASE2_QUICK_START.md)** - Step-by-step implementation guide
+- **[Session Summary Nov 9](SESSION_SUMMARY_NOV9.md)** - Latest status and recommendations
 
 ### For Understanding the System
 
--   **[Executive Summary](EXECUTIVE_SUMMARY.md)** - High-level overview
--   **[Architecture](ARCHITECTURE.md)** - System design and components
--   **[Research](anstyle-crates-research.md)** - Technical deep-dive on crates
+- **[Executive Summary](EXECUTIVE_SUMMARY.md)** - High-level overview
+- **[Architecture](ARCHITECTURE.md)** - System design and components
+- **[Research](anstyle-crates-research.md)** - Technical deep-dive on crates
 
 ## Implementation Status
 
@@ -28,49 +28,49 @@
 
 Achievements:
 
--   Upgraded `anstyle-git` and `anstyle-ls` crates
--   Modernized `InlineTextStyle` with Effects support
--   Added background color support
--   Created `ThemeConfigParser` module
--   Updated all call sites (20+ locations)
--   Comprehensive test coverage (14+ tests)
+- Upgraded `anstyle-git` and `anstyle-ls` crates
+- Modernized `InlineTextStyle` with Effects support
+- Added background color support
+- Created `ThemeConfigParser` module
+- Updated all call sites (20+ locations)
+- Comprehensive test coverage (14+ tests)
 
 **Key Files**:
 
--   `vtcode-core/src/ui/tui/types.rs` - InlineTextStyle struct
--   `vtcode-core/src/ui/tui/style.rs` - Style conversion functions
--   `vtcode-core/src/ui/tui/theme_parser.rs` - Config parsing
--   `vtcode-core/src/utils/style_helpers.rs` - Style factories
--   `vtcode-core/src/utils/diff_styles.rs` - Diff color palettes
+- `vtcode-core/src/ui/tui/types.rs` - InlineTextStyle struct
+- `vtcode-core/src/ui/tui/style.rs` - Style conversion functions
+- `vtcode-core/src/ui/tui/theme_parser.rs` - Config parsing
+- `vtcode-core/src/utils/style_helpers.rs` - Style factories
+- `vtcode-core/src/utils/diff_styles.rs` - Diff color palettes
 
 **Documentation**:
 
--   [Styling Implementation Status](STYLING_IMPLEMENTATION_STATUS.md)
+- [Styling Implementation Status](STYLING_IMPLEMENTATION_STATUS.md)
 
-### Phase 2: Advanced Features ⏳ PLANNED
+### Phase 2: Advanced Features PLANNED
 
 **Timeline**: Estimated 6-9 hours
 **Status**: Ready to implement
 
 Components:
 
--   **Phase 2.1**: Git Config Color Parser (2-3 hours)
--   **Phase 2.2**: LS_COLORS File Coloring (1-2 hours)
--   **Phase 2.3**: Theme Configuration Files (2 hours)
+- **Phase 2.1**: Git Config Color Parser (2-3 hours)
+- **Phase 2.2**: LS_COLORS File Coloring (1-2 hours)
+- **Phase 2.3**: Theme Configuration Files (2 hours)
 
 **Documentation**:
 
--   [Phase 2 Plan](PHASE2_PLAN.md) - Detailed specification
--   [Phase 2 Quick Start](PHASE2_QUICK_START.md) - Implementation guide
+- [Phase 2 Plan](PHASE2_PLAN.md) - Detailed specification
+- [Phase 2 Quick Start](PHASE2_QUICK_START.md) - Implementation guide
 
 ### Phase 3: Advanced FUTURE
 
 Expected enhancements:
 
--   Multi-theme system (light/dark/high-contrast)
--   Terminal capability auto-detection
--   User color customization via config
--   Performance optimizations
+- Multi-theme system (light/dark/high-contrast)
+- Terminal capability auto-detection
+- User color customization via config
+- Performance optimizations
 
 ## Document Guide
 
@@ -194,49 +194,48 @@ When adding new styling features:
 
 ### Phase 1 Changes
 
--   `vtcode-core/Cargo.toml` - Added anstyle crates
--   `vtcode-core/src/ui/tui/types.rs` - InlineTextStyle struct
--   `vtcode-core/src/ui/tui/style.rs` - Style conversions
--   `vtcode-core/src/ui/tui/theme_parser.rs` - Theme parser (NEW)
--   `vtcode-core/src/utils/style_helpers.rs` - Color palette (NEW)
--   `vtcode-core/src/utils/diff_styles.rs` - Diff colors (NEW)
--   `vtcode-core/src/utils/ratatui_styles.rs` - Ratatui conversion
--   20+ call site updates
+- `vtcode-core/Cargo.toml` - Added anstyle crates
+- `vtcode-core/src/ui/tui/types.rs` - InlineTextStyle struct
+- `vtcode-core/src/ui/tui/style.rs` - Style conversions
+- `vtcode-core/src/ui/tui/theme_parser.rs` - Theme parser (NEW)
+- `vtcode-core/src/utils/style_helpers.rs` - Color palette (NEW)
+- `vtcode-core/src/utils/diff_styles.rs` - Diff colors (NEW)
+- `vtcode-core/src/utils/ratatui_styles.rs` - Ratatui conversion
+- 20+ call site updates
 
 ### Phase 2 Planned Changes
 
--   `vtcode-core/src/ui/git_config.rs` - Git config parser (NEW)
--   `vtcode-core/src/ui/file_colorizer.rs` - LS_COLORS support (NEW)
--   `vtcode-core/src/config/theme_config.rs` - Theme config (NEW)
--   Integration updates in diff_renderer.rs and file_palette.rs
+- `vtcode-core/src/ui/git_config.rs` - Git config parser (NEW)
+- `vtcode-core/src/ui/file_colorizer.rs` - LS_COLORS support (NEW)
+- `vtcode-core/src/config/theme_config.rs` - Theme config (NEW)
+- Integration updates in diff_renderer.rs and file_palette.rs
 
 ## Performance Impact
 
--   Phase 1: Zero impact (all Copy types, zero-cost abstractions)
--   Phase 2: Minimal impact (caching for parsed configs)
--   Overall: Negligible runtime overhead
+- Phase 1: Zero impact (all Copy types, zero-cost abstractions)
+- Phase 2: Minimal impact (caching for parsed configs)
+- Overall: Negligible runtime overhead
 
 ## Support & Questions
 
 For questions about:
 
--   **How to use**: See [STYLING_QUICK_START.md](STYLING_QUICK_START.md)
--   **Technical details**: See [anstyle-crates-research.md](anstyle-crates-research.md)
--   **Implementation**: See [PHASE2_QUICK_START.md](PHASE2_QUICK_START.md)
--   **Architecture**: See [ARCHITECTURE.md](ARCHITECTURE.md)
+- **How to use**: See [STYLING_QUICK_START.md](STYLING_QUICK_START.md)
+- **Technical details**: See [anstyle-crates-research.md](anstyle-crates-research.md)
+- **Implementation**: See [PHASE2_QUICK_START.md](PHASE2_QUICK_START.md)
+- **Architecture**: See [ARCHITECTURE.md](ARCHITECTURE.md)
 
 ## Changelog
 
 ### Latest Session (Nov 9, 2025)
 
--   Completed Phase 1 verification
--   Created Phase 2 planning document
--   Created Phase 2 quick-start guide
--   Created session summary
--   Committed all documentation
+- Completed Phase 1 verification
+- Created Phase 2 planning document
+- Created Phase 2 quick-start guide
+- Created session summary
+- Committed all documentation
 
 ### Previous Milestones
-
 
 ---
 

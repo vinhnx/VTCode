@@ -102,11 +102,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Layout, Runtime, Release Packaging, Local Debug Runs
   - **User Questions**: "What can you tell me about Ghostty VT Packaging?", "How does Layout work?", "How does Runtime work?"
 
-- **File**: `docs/development/GIT_CLIFF_QUICK_REF.md`
-  - **Content**: Git-cliff Quick Reference
-  - **Topics**: Common Commands, Release Workflow, Configuration, Commit Types, Troubleshooting
-  - **User Questions**: "What can you tell me about Git-cliff Quick Reference?", "How does Common Commands work?", "How does Release Workflow work?"
-
 - **File**: `docs/development/MODEL_ADDITION_CHECKLIST.md`
   - **Content**: Model Addition Checklist
   - **Topics**: Pre-Flight, Phase 1: Constants & Metadata (Database Layer), Phase 2: Model ID Resolution (Core Layer), Phase 3: Capabilities & Collections (Runtime Layer), Phase 4: Compilation & Verification
@@ -463,16 +458,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **User Questions**: "What can you tell me about vtcode_indexer.md?", "How does Core concepts work?", "How does Customizing persistence work?"
 
 ### Other
-
-- **File**: `docs/a2a/INDEX.md`
-  - **Content**: A2A Protocol Implementation - Documentation Index
-  - **Topics**: Quick Links, Document Guide, Implementation Status at a Glance, Key Files in Implementation, Documentation Map
-  - **User Questions**: "What can you tell me about A2A Protocol Implementation - Documentation Index?", "How does Quick Links work?", "How does Document Guide work?"
-
-- **File**: `docs/a2a/PROGRESS.md`
-  - **Content**: A2A Protocol Implementation Progress
-  - **Topics**: Completion Summary, What Was Completed, Test Results, Documentation Created, Files Created/Modified
-  - **User Questions**: "What can you tell me about A2A Protocol Implementation Progress?", "How does Completion Summary work?", "How does What Was Completed work?"
 
 - **File**: `docs/a2a/a2a-protocol.md`
   - **Content**: A2A Protocol Support for VT Code
