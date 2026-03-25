@@ -1308,6 +1308,11 @@ websocket_mode = false
 # Example: return encrypted reasoning state so VT Code can replay it on the next turn.
 # responses_include = ["reasoning.encrypted_content"]
 
+# Optional OpenAI service tier override.
+# Leave unset to inherit your OpenAI Project default service tier.
+# Options: "flex", "priority"
+# service_tier = "flex"
+
 
 [provider.anthropic]
 # DEPRECATED: Model name validation has been removed in v0.75.0+

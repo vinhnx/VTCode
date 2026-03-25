@@ -343,10 +343,37 @@ fn build_result_uses_selected_service_tier() {
         env_key: "OPENAI_API_KEY".to_string(),
     });
     picker.selected_reasoning = Some(ReasoningEffortLevel::Low);
-    picker.selected_service_tier = Some(true);
+    picker.selected_service_tier = Some(Some(OpenAIServiceTier::Priority));
 
     let result = picker.build_result().expect("result should build");
 
     assert_eq!(result.service_tier, Some(OpenAIServiceTier::Priority));
+    assert!(result.service_tier_changed);
+}
+
+#[test]
+fn build_result_uses_selected_flex_service_tier() {
+    let mut picker = base_picker_state("openai", "gpt-5.2");
+    picker.selection = Some(selection::SelectionDetail {
+        provider_key: "openai".to_string(),
+        provider_label: "OpenAI".to_string(),
+        provider_enum: Some(Provider::OpenAI),
+        model_id: "gpt-5.2".to_string(),
+        model_display: "GPT-5.2".to_string(),
+        known_model: true,
+        reasoning_supported: true,
+        reasoning_optional: false,
+        reasoning_off_model: None,
+        service_tier_supported: true,
+        requires_api_key: false,
+        uses_chatgpt_auth: false,
+        env_key: "OPENAI_API_KEY".to_string(),
+    });
+    picker.selected_reasoning = Some(ReasoningEffortLevel::Low);
+    picker.selected_service_tier = Some(Some(OpenAIServiceTier::Flex));
+
+    let result = picker.build_result().expect("result should build");
+
+    assert_eq!(result.service_tier, Some(OpenAIServiceTier::Flex));
     assert!(result.service_tier_changed);
 }

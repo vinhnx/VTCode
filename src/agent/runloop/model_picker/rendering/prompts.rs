@@ -4,7 +4,9 @@ use anyhow::Result;
 use vtcode_config::OpenAIServiceTier;
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::ReasoningEffortLevel;
-use vtcode_core::ui::{InlineListItem, InlineListSelection, to_tui_reasoning};
+use vtcode_core::ui::{
+    InlineListItem, InlineListSelection, OpenAIServiceTierChoice, to_tui_reasoning,
+};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::super::selection::{
@@ -231,14 +233,17 @@ pub(crate) fn render_service_tier_inline(
     selection: &SelectionDetail,
     current: Option<OpenAIServiceTier>,
 ) -> Result<()> {
-    let current_priority = current.is_some();
     let items = vec![
         InlineListItem {
             title: format!("Keep current ({})", service_tier_label(current)),
             subtitle: Some("Retain the existing service tier configuration.".to_string()),
             badge: Some(CURRENT_BADGE.to_string()),
             indent: 0,
-            selection: Some(InlineListSelection::OpenAIServiceTier(current_priority)),
+            selection: Some(InlineListSelection::OpenAIServiceTier(match current {
+                Some(OpenAIServiceTier::Flex) => OpenAIServiceTierChoice::Flex,
+                Some(OpenAIServiceTier::Priority) => OpenAIServiceTierChoice::Priority,
+                None => OpenAIServiceTierChoice::ProjectDefault,
+            })),
             search_value: None,
         },
         InlineListItem {
@@ -248,7 +253,21 @@ pub(crate) fn render_service_tier_inline(
             ),
             badge: None,
             indent: 0,
-            selection: Some(InlineListSelection::OpenAIServiceTier(false)),
+            selection: Some(InlineListSelection::OpenAIServiceTier(
+                OpenAIServiceTierChoice::ProjectDefault,
+            )),
+            search_value: None,
+        },
+        InlineListItem {
+            title: "Flex".to_string(),
+            subtitle: Some(
+                "Send service_tier=flex for lower-cost, lower-priority processing.".to_string(),
+            ),
+            badge: Some("OpenAI".to_string()),
+            indent: 0,
+            selection: Some(InlineListSelection::OpenAIServiceTier(
+                OpenAIServiceTierChoice::Flex,
+            )),
             search_value: None,
         },
         InlineListItem {
@@ -258,7 +277,9 @@ pub(crate) fn render_service_tier_inline(
             ),
             badge: Some("OpenAI".to_string()),
             indent: 0,
-            selection: Some(InlineListSelection::OpenAIServiceTier(true)),
+            selection: Some(InlineListSelection::OpenAIServiceTier(
+                OpenAIServiceTierChoice::Priority,
+            )),
             search_value: None,
         },
     ];
@@ -267,10 +288,14 @@ pub(crate) fn render_service_tier_inline(
         STEP_THREE_TITLE,
         vec![
             format!("Select a service tier for {}.", selection.model_display),
-            "Applies only to native OpenAI models that support priority processing.".to_string(),
+            "Applies only to native OpenAI models that support OpenAI service tiers.".to_string(),
         ],
         items,
-        Some(InlineListSelection::OpenAIServiceTier(current_priority)),
+        Some(InlineListSelection::OpenAIServiceTier(match current {
+            Some(OpenAIServiceTier::Flex) => OpenAIServiceTierChoice::Flex,
+            Some(OpenAIServiceTier::Priority) => OpenAIServiceTierChoice::Priority,
+            None => OpenAIServiceTierChoice::ProjectDefault,
+        })),
         None,
     );
     Ok(())
@@ -284,14 +309,14 @@ pub(crate) fn prompt_service_tier_plain(
     renderer.line(
         MessageStyle::Info,
         &format!(
-            "Service tier – choose 'priority' or 'default' for {}. Type 'skip' to keep {}.",
+            "Service tier – choose 'flex', 'priority', or 'default' for {}. Type 'skip' to keep {}.",
             selection.model_display,
             service_tier_label(current)
         ),
     )?;
     renderer.line(
         MessageStyle::Info,
-        "This applies only to native OpenAI models that support priority processing.",
+        "This applies only to native OpenAI models that support OpenAI service tiers.",
     )?;
     Ok(())
 }

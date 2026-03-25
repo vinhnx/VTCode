@@ -14,9 +14,9 @@ pub use crate::core_tui::types::{
     InlineHeaderHighlight, InlineHeaderStatusBadge, InlineHeaderStatusTone, InlineLinkRange,
     InlineLinkTarget, InlineListItem, InlineListSearchConfig, InlineListSelection,
     InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme, ListOverlayRequest,
-    ModalOverlayRequest, OverlayEvent, OverlayHotkey, OverlayHotkeyAction, OverlayHotkeyKey,
-    OverlayRequest, OverlaySelectionChange, OverlaySubmission, RewindAction, SecurePromptConfig,
-    WizardModalMode, WizardOverlayRequest, WizardStep,
+    ModalOverlayRequest, OpenAIServiceTierChoice, OverlayEvent, OverlayHotkey, OverlayHotkeyAction,
+    OverlayHotkeyKey, OverlayRequest, OverlaySelectionChange, OverlaySubmission, RewindAction,
+    SecurePromptConfig, WizardModalMode, WizardOverlayRequest, WizardStep,
 };
 pub use crate::options::{KeyboardProtocolSettings, SessionSurface};
 

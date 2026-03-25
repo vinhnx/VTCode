@@ -5,12 +5,14 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum OpenAIServiceTier {
+    Flex,
     Priority,
 }
 
 impl OpenAIServiceTier {
     pub const fn as_str(self) -> &'static str {
         match self {
+            Self::Flex => "flex",
             Self::Priority => "priority",
         }
     }
@@ -371,7 +373,7 @@ pub struct OpenAIConfig {
 
     /// Optional native OpenAI `service_tier` request parameter.
     /// Leave unset to inherit the Project-level default service tier.
-    /// Options: "priority"
+    /// Options: "flex", "priority"
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub service_tier: Option<OpenAIServiceTier>,
 
@@ -606,6 +608,13 @@ responses_include = ["reasoning.encrypted_content", "output_text.annotations"]
         let parsed: OpenAIConfig =
             toml::from_str(r#"service_tier = "priority""#).expect("config should parse");
         assert_eq!(parsed.service_tier, Some(OpenAIServiceTier::Priority));
+    }
+
+    #[test]
+    fn openai_config_parses_flex_service_tier() {
+        let parsed: OpenAIConfig =
+            toml::from_str(r#"service_tier = "flex""#).expect("config should parse");
+        assert_eq!(parsed.service_tier, Some(OpenAIServiceTier::Flex));
     }
 
     #[test]

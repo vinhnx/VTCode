@@ -105,11 +105,14 @@ impl ModelPickerState {
 
         match select_service_tier_with_ratatui(selection, self.current_service_tier) {
             Ok(Some(ServiceTierChoice::ProjectDefault)) => {
-                self.apply_service_tier_choice(renderer, false).map(Some)
+                self.apply_service_tier_choice(renderer, None).map(Some)
             }
-            Ok(Some(ServiceTierChoice::Priority)) => {
-                self.apply_service_tier_choice(renderer, true).map(Some)
-            }
+            Ok(Some(ServiceTierChoice::Flex)) => self
+                .apply_service_tier_choice(renderer, Some(OpenAIServiceTier::Flex))
+                .map(Some),
+            Ok(Some(ServiceTierChoice::Priority)) => self
+                .apply_service_tier_choice(renderer, Some(OpenAIServiceTier::Priority))
+                .map(Some),
             Ok(None) => {
                 prompt_service_tier_plain(renderer, selection, self.current_service_tier)?;
                 Ok(None)
@@ -264,11 +267,9 @@ impl ModelPickerState {
             .ok_or_else(|| anyhow!("Model selection missing"))?;
         let chosen_reasoning = self.selected_reasoning.unwrap_or(self.current_reasoning);
         let reasoning_changed = chosen_reasoning != self.current_reasoning;
-        let chosen_service_tier = match self.selected_service_tier {
-            Some(true) => Some(OpenAIServiceTier::Priority),
-            Some(false) => None,
-            None => self.current_service_tier,
-        };
+        let chosen_service_tier = self
+            .selected_service_tier
+            .unwrap_or(self.current_service_tier);
         let service_tier_changed = chosen_service_tier != self.current_service_tier;
 
         Ok(ModelSelectionResult {
@@ -394,13 +395,16 @@ impl ModelPickerState {
         };
 
         match input.to_ascii_lowercase().as_str() {
-            "priority" => self.apply_service_tier_choice(renderer, true),
-            "default" | "project" | "inherit" => self.apply_service_tier_choice(renderer, false),
-            "skip" => self.apply_service_tier_choice(renderer, self.current_service_tier.is_some()),
+            "flex" => self.apply_service_tier_choice(renderer, Some(OpenAIServiceTier::Flex)),
+            "priority" => {
+                self.apply_service_tier_choice(renderer, Some(OpenAIServiceTier::Priority))
+            }
+            "default" | "project" | "inherit" => self.apply_service_tier_choice(renderer, None),
+            "skip" => self.apply_service_tier_choice(renderer, self.current_service_tier),
             _ => {
                 renderer.line(
                     MessageStyle::Error,
-                    "Unknown service tier option. Use priority, default, or skip.",
+                    "Unknown service tier option. Use flex, priority, default, or skip.",
                 )?;
                 prompt_service_tier_plain(renderer, selection, self.current_service_tier)?;
                 Ok(ModelPickerProgress::InProgress)
@@ -411,13 +415,13 @@ impl ModelPickerState {
     pub(super) fn apply_service_tier_choice(
         &mut self,
         renderer: &mut AnsiRenderer,
-        priority: bool,
+        service_tier: Option<OpenAIServiceTier>,
     ) -> Result<ModelPickerProgress> {
         if self.selection.is_none() {
             return Err(anyhow!("Service tier requested before selecting a model"));
         }
 
-        self.selected_service_tier = Some(priority);
+        self.selected_service_tier = Some(service_tier);
         self.finish_after_service_tier(renderer)
     }
 

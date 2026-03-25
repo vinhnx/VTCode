@@ -19,5 +19,6 @@ pub use crate::core_tui::types::{
     ContentPart, EditingMode, FocusChangeCallback, InlineHeaderContext, InlineHeaderHighlight,
     InlineHeaderStatusBadge, InlineHeaderStatusTone, InlineLinkRange, InlineLinkTarget,
     InlineListItem, InlineListSearchConfig, InlineListSelection, InlineMessageKind, InlineSegment,
-    InlineTextStyle, InlineTheme, RewindAction, SecurePromptConfig, WizardModalMode, WizardStep,
+    InlineTextStyle, InlineTheme, OpenAIServiceTierChoice, RewindAction, SecurePromptConfig,
+    WizardModalMode, WizardStep,
 };

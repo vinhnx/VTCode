@@ -19,6 +19,16 @@ use crate::agent::runloop::welcome::SessionBootstrap;
 
 use crate::agent::runloop::ui::build_inline_header_context;
 
+fn service_tier_message_label(
+    service_tier: Option<vtcode_config::OpenAIServiceTier>,
+) -> &'static str {
+    match service_tier {
+        Some(vtcode_config::OpenAIServiceTier::Flex) => "flex",
+        Some(vtcode_config::OpenAIServiceTier::Priority) => "priority",
+        None => "project default",
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn finalize_model_selection(
     renderer: &mut AnsiRenderer,
@@ -159,14 +169,16 @@ pub(crate) async fn finalize_model_selection(
     }
 
     if selection.service_tier_supported {
-        let service_tier_label = match selection.service_tier {
-            Some(_) => "priority",
-            None => "project default",
-        };
         let message = if selection.service_tier_changed {
-            format!("Service tier updated to '{}'.", service_tier_label)
+            format!(
+                "Service tier updated to '{}'.",
+                service_tier_message_label(selection.service_tier)
+            )
         } else {
-            format!("Service tier remains '{}'.", service_tier_label)
+            format!(
+                "Service tier remains '{}'.",
+                service_tier_message_label(selection.service_tier)
+            )
         };
         renderer.line(MessageStyle::Info, &message)?;
     }

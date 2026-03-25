@@ -9,6 +9,13 @@ pub enum RewindAction {
     NeverMind,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OpenAIServiceTierChoice {
+    ProjectDefault,
+    Flex,
+    Priority,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum InlineListSelection {
     Model(usize),
@@ -17,7 +24,7 @@ pub enum InlineListSelection {
     RefreshDynamicModels,
     Reasoning(ReasoningEffortLevel),
     DisableReasoning,
-    OpenAIServiceTier(bool),
+    OpenAIServiceTier(OpenAIServiceTierChoice),
     CustomModel,
     Theme(String),
     Session(String),

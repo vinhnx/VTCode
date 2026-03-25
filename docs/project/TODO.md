@@ -44,6 +44,8 @@ build subagent (research deepwiki codex, pi-mono)
 
 auto-mode: this is the ideal permission UX. you don’t want claude to do dangerous stuff, and you don’t want to have to think about sandboxes and permissions every time you use a tool. auto-mode is a new permission mode that eliminates prompts by automatically granting the necessary permissions for each tool call based on the context and the user's preferences. This allows for a seamless and efficient user experience while maintaining safety and control.
 
+https://www.anthropic.com/engineering/claude-code-auto-mode
+
 https://code.claude.com/docs/en/permission-modes#eliminate-prompts-with-auto-mode
 
 https://claude.com/blog/auto-mode

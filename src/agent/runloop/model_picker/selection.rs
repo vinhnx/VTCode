@@ -37,6 +37,7 @@ pub(super) enum ReasoningChoice {
 #[derive(Clone, Copy)]
 pub(super) enum ServiceTierChoice {
     ProjectDefault,
+    Flex,
     Priority,
 }
 
@@ -272,6 +273,7 @@ pub(super) fn reasoning_level_description(level: ReasoningEffortLevel) -> &'stat
 
 pub(super) fn service_tier_label(service_tier: Option<OpenAIServiceTier>) -> &'static str {
     match service_tier {
+        Some(OpenAIServiceTier::Flex) => "Flex",
         Some(OpenAIServiceTier::Priority) => "Priority",
         None => "Project default",
     }

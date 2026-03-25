@@ -388,6 +388,32 @@ mod tests {
 
         assert_eq!(
             state.draft.provider.openai.service_tier,
+            Some(vtcode_config::OpenAIServiceTier::Flex)
+        );
+    }
+
+    #[test]
+    fn service_tier_cycle_advances_from_flex_to_priority() {
+        let mut state = SettingsPaletteState {
+            workspace: PathBuf::from("."),
+            source_path: PathBuf::from("vtcode.toml"),
+            source_label: "test".to_string(),
+            draft: VTCodeConfig::default(),
+            view_path: Some("provider.openai".to_string()),
+        };
+        state.draft.provider.openai.service_tier = Some(vtcode_config::OpenAIServiceTier::Flex);
+
+        mutate_draft(&mut state, |draft| {
+            apply_scalar_operation(
+                draft,
+                "provider.openai.service_tier",
+                ScalarOperation::CycleNext,
+            )
+        })
+        .expect("service tier should advance");
+
+        assert_eq!(
+            state.draft.provider.openai.service_tier,
             Some(vtcode_config::OpenAIServiceTier::Priority)
         );
     }

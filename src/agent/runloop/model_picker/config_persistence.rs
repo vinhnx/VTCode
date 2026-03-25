@@ -196,6 +196,18 @@ mod tests {
     }
 
     #[test]
+    fn synced_openai_service_tier_tracks_flex_selection() {
+        let mut selected = selection(Some(Provider::OpenAI), "openai", "gpt-5.4");
+        selected.service_tier_supported = true;
+        selected.service_tier = Some(OpenAIServiceTier::Flex);
+
+        assert_eq!(
+            synced_openai_service_tier(&selected),
+            Some(OpenAIServiceTier::Flex)
+        );
+    }
+
+    #[test]
     fn synced_openai_service_tier_clears_stale_values_outside_supported_openai() {
         let mut selected = selection(Some(Provider::Ollama), "ollama", "qwen3-coder");
         selected.service_tier_supported = true;

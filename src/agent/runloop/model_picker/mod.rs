@@ -5,7 +5,7 @@ use std::str::FromStr;
 use vtcode_config::{OpenAIServiceTier, VTCodeConfig};
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::ReasoningEffortLevel;
-use vtcode_core::ui::{InlineListSelection, from_tui_reasoning};
+use vtcode_core::ui::{InlineListSelection, OpenAIServiceTierChoice, from_tui_reasoning};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_tui::ui::interactive_list::SelectionInterrupted;
 
@@ -64,7 +64,7 @@ pub(crate) struct ModelPickerState {
     selection: Option<SelectionDetail>,
     custom_providers: Vec<SelectionDetail>,
     selected_reasoning: Option<ReasoningEffortLevel>,
-    selected_service_tier: Option<bool>,
+    selected_service_tier: Option<Option<OpenAIServiceTier>>,
     pending_api_key: Option<String>,
     workspace: Option<PathBuf>,
     dynamic_models: DynamicModelRegistry,
@@ -417,8 +417,13 @@ impl ModelPickerState {
                 _ => Ok(ModelPickerProgress::InProgress),
             },
             PickerStep::AwaitServiceTier => match choice {
-                InlineListSelection::OpenAIServiceTier(priority) => {
-                    self.apply_service_tier_choice(renderer, priority)
+                InlineListSelection::OpenAIServiceTier(choice) => {
+                    let service_tier = match choice {
+                        OpenAIServiceTierChoice::ProjectDefault => None,
+                        OpenAIServiceTierChoice::Flex => Some(OpenAIServiceTier::Flex),
+                        OpenAIServiceTierChoice::Priority => Some(OpenAIServiceTier::Priority),
+                    };
+                    self.apply_service_tier_choice(renderer, service_tier)
                 }
                 InlineListSelection::CustomModel
                 | InlineListSelection::Model(_)

@@ -277,6 +277,7 @@ pub(super) fn select_service_tier_with_ratatui(
     current: Option<OpenAIServiceTier>,
 ) -> Result<Option<ServiceTierChoice>> {
     let current_choice = match current {
+        Some(OpenAIServiceTier::Flex) => ServiceTierChoice::Flex,
         Some(OpenAIServiceTier::Priority) => ServiceTierChoice::Priority,
         None => ServiceTierChoice::ProjectDefault,
     };
@@ -291,6 +292,11 @@ pub(super) fn select_service_tier_with_ratatui(
             "Project default".to_string(),
             "Do not send service_tier; inherit the OpenAI Project setting.".to_string(),
             ServiceTierChoice::ProjectDefault,
+        ),
+        (
+            "Flex".to_string(),
+            "Send service_tier=flex for lower-cost, lower-priority processing.".to_string(),
+            ServiceTierChoice::Flex,
         ),
         (
             "Priority".to_string(),
