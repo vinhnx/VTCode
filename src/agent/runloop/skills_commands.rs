@@ -30,6 +30,10 @@ async fn regenerate_skills_index_best_effort(workspace: &std::path::Path) {
     }
 }
 
+fn workspace_skill_dir(workspace: &std::path::Path, name: &str) -> PathBuf {
+    workspace.join(".agents").join("skills").join(name)
+}
+
 /// Skill-related command actions
 #[derive(Clone, Debug)]
 pub(crate) enum SkillCommandAction {
@@ -134,7 +138,7 @@ Shortcuts:
         },
 
         SkillCommandAction::Validate { name } => {
-            let skill_dir = workspace.join("skills").join(&name);
+            let skill_dir = workspace_skill_dir(&workspace, &name);
             if !skill_dir.exists() {
                 return Ok(SkillCommandOutcome::Error {
                     message: format!("Skill directory not found: {}", skill_dir.display()),
@@ -152,7 +156,7 @@ Shortcuts:
         }
 
         SkillCommandAction::Package { name } => {
-            let skill_dir = workspace.join("skills").join(&name);
+            let skill_dir = workspace_skill_dir(&workspace, &name);
             if !skill_dir.exists() {
                 return Ok(SkillCommandOutcome::Error {
                     message: format!("Skill directory not found: {}", skill_dir.display()),
@@ -265,9 +269,11 @@ Shortcuts:
                         let mut output = String::new();
                         output.push_str(&format!("Skill: {}\n", skill.name()));
                         output.push_str(&format!("Description: {}\n", skill.description()));
-
-                        if let Some(version) = &skill.manifest.version {
-                            output.push_str(&format!("Version: {}\n", version));
+                        if let Some(license) = &skill.manifest.license {
+                            output.push_str(&format!("License: {}\n", license));
+                        }
+                        if let Some(compatibility) = &skill.manifest.compatibility {
+                            output.push_str(&format!("Compatibility: {}\n", compatibility));
                         }
 
                         output.push_str("\n--- Instructions ---\n");

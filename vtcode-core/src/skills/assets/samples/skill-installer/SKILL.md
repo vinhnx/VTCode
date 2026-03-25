@@ -1,6 +1,6 @@
 ---
 name: skill-installer
-description: Install VT Code skills into $VTCODE_HOME/skills from a curated list or a GitHub repo path. Use when a user asks to list installable skills, install a curated skill, or install a skill from another repo (including private repos).
+description: Install VT Code skills into ~/.agents/skills from a curated list or a GitHub repo path. Use when a user asks to list installable skills, install a curated skill, or install a skill from another repo, including private repos.
 metadata:
     short-description: Install curated skills from openai/skills or other repos
 ---
@@ -52,7 +52,7 @@ Install a skill by name from the curated list:
 scripts/install-skill-from-github.py <skill-name>
 ```
 
-The skill will be installed to `$VTCODE_HOME/skills/<skill-name>/`.
+The skill will be installed to `~/.agents/skills/<skill-name>/`.
 
 ### Install from Any GitHub Repo
 
@@ -74,7 +74,7 @@ scripts/install-skill-from-github.py owner/repo path/to/skill1 path/to/skill2
 
 ### Installation Location
 
-Skills are installed to `$VTCODE_HOME/skills/` by default. The `$VTCODE_HOME` environment variable defaults to `~/.vtcode`.
+Skills are installed to `~/.agents/skills/` by default.
 
 ### Private Repositories
 

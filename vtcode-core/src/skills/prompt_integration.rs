@@ -12,7 +12,7 @@ pub use vtcode_config::core::skills::PromptFormat;
 /// Rendering mode for skills section
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SkillsRenderMode {
-    /// Full metadata (version, author, vtcode-native flags)
+    /// Full metadata (currently same core fields as lean mode).
     Full,
     /// Lean mode: only name + description + file path (Codex-style, 40-60% token savings)
     #[default]
@@ -29,7 +29,7 @@ const SKILL_USAGE_RULES: &str = r#"
   2. Load referenced files (scripts/, references/) only if needed
   3. Prefer running existing scripts vs. retyping code
 - **Missing/blocked**: State issue briefly and continue with fallback approach
-- **Routing**: Check both "use when" and "avoid when" hints before activating a skill
+- **Routing**: Treat `description` as the primary trigger signal
 "#;
 
 /// Generate skills section for system prompt (full mode - backward compatible)
@@ -52,47 +52,14 @@ pub fn generate_skills_prompt_with_mode(
     }
 }
 
-/// Render skills in full mode (legacy format with all metadata)
+/// Render skills in full mode.
 fn render_skills_full(skills: &[SkillMetadata]) -> String {
-    let mut prompt = String::from("\n\n## Available Skills\n");
-    prompt.push_str("The following skills are loaded and available for use. Each skill provides specialized capabilities. Reference skills by name when they would be helpful.\n\n");
-
-    // Sort skills by name for stable ordering
-    let mut skill_list: Vec<_> = skills.iter().collect();
-    skill_list.sort_by_key(|skill| &skill.name);
-
-    // Show up to 10 skills (like tools)
-    let overflow = skill_list.len().saturating_sub(10);
-    if overflow > 0 {
-        skill_list.truncate(10);
-    }
-
-    for skill in skill_list {
-        let native_flag = skill
-            .manifest
-            .as_ref()
-            .and_then(|m| m.vtcode_native)
-            .unwrap_or(false);
-
-        let _ = writeln!(
-            prompt,
-            "- {}: {} (native: {})",
-            skill.name, skill.description, native_flag
-        );
-    }
-
-    if overflow > 0 {
-        let _ = write!(prompt, "\n(+{} more skills not shown)", overflow);
-    }
-
-    prompt
+    render_skills_lean(skills)
 }
 
 /// Render skills in lean mode (Codex-style: name + description + path only)
 ///
-/// This reduces token usage by 40-60% compared to full mode by omitting
-/// version, author, and native flags. Follows OpenAI Codex's pattern of
-/// showing only essential metadata in the system prompt.
+/// This keeps only the metadata required by the strict SKILL.md spec.
 fn render_skills_lean(skills: &[SkillMetadata]) -> String {
     let mut prompt = String::from("\n\n## Skills\n");
     prompt.push_str(
@@ -110,19 +77,7 @@ fn render_skills_lean(skills: &[SkillMetadata]) -> String {
     }
 
     for skill in skill_list {
-        let mode_flag = skill
-            .manifest
-            .as_ref()
-            .and_then(|m| m.mode)
-            .filter(|&m| m)
-            .map(|_| " [mode]")
-            .unwrap_or("");
-
-        let location = skill
-            .path
-            .file_name()
-            .and_then(|p| p.to_str())
-            .unwrap_or("skill");
+        let location = skill.path.display().to_string();
         let scope = match skill.scope {
             SkillScope::User => "user",
             SkillScope::Repo => "repo",
@@ -130,19 +85,7 @@ fn render_skills_lean(skills: &[SkillMetadata]) -> String {
             SkillScope::Admin => "admin",
         };
 
-        let mut line = format!(
-            "- {}{}: {} (dir: {}, scope: {})",
-            skill.name, mode_flag, skill.description, location, scope
-        );
-
-        if let Some(manifest) = &skill.manifest {
-            if let Some(ref when_to_use) = manifest.when_to_use {
-                line.push_str(&format!("; use: {}", when_to_use));
-            }
-            if let Some(ref when_not_to_use) = manifest.when_not_to_use {
-                line.push_str(&format!("; avoid: {}", when_not_to_use));
-            }
-        }
+        let line = format!("- {}: {} (file: {}, scope: {})", skill.name, skill.description, location, scope);
 
         let _ = writeln!(prompt, "{}", line);
     }
@@ -210,20 +153,6 @@ pub fn generate_skills_prompt_xml(skills: &[SkillMetadata]) -> String {
                 );
             }
 
-            if let Some(ref when_to_use) = manifest.when_to_use {
-                let _ = writeln!(
-                    xml,
-                    "    <when-to-use>{}</when-to-use>",
-                    xml_escape(when_to_use)
-                );
-            }
-            if let Some(ref when_not_to_use) = manifest.when_not_to_use {
-                let _ = writeln!(
-                    xml,
-                    "    <when-not-to-use>{}</when-not-to-use>",
-                    xml_escape(when_not_to_use)
-                );
-            }
         }
 
         xml.push_str("  </skill>\n");
@@ -265,13 +194,9 @@ pub fn test_skills_prompt_generation() {
 
     let mut skills = Vec::new();
 
-    // Add a test skill
     let manifest = SkillManifest {
         name: "pdf-analyzer".to_string(),
         description: "Analyze PDF documents".to_string(),
-        version: Some("1.0.0".to_string()),
-        author: Some("Test".to_string()),
-        vtcode_native: Some(true),
         ..Default::default()
     };
 
@@ -316,9 +241,6 @@ mod tests {
         let manifest = SkillManifest {
             name: "test-skill".to_string(),
             description: "Test skill description".to_string(),
-            version: Some("1.0.0".to_string()),
-            author: Some("Test Author".to_string()),
-            vtcode_native: Some(true),
             ..Default::default()
         };
 
@@ -335,18 +257,15 @@ mod tests {
 
         let lean_prompt = generate_skills_prompt_with_mode(&skills, SkillsRenderMode::Lean);
 
-        // Lean mode should include name, description, and directory name
+        // Lean mode should include name, description, and file path.
         assert!(lean_prompt.contains("test-skill"));
         assert!(lean_prompt.contains("Test skill description"));
-        assert!(lean_prompt.contains("(dir: test-skill"));
+        assert!(lean_prompt.contains("(file: /tmp/test-skill"));
 
         // Lean mode should include usage rules
         assert!(lean_prompt.contains("Usage Rules"));
         assert!(lean_prompt.contains("$SkillName"));
 
-        // Lean mode should NOT include version or author
-        assert!(!lean_prompt.contains("1.0.0"));
-        assert!(!lean_prompt.contains("Test Author"));
     }
 
     #[test]
@@ -354,14 +273,10 @@ mod tests {
         use crate::skills::types::SkillManifest;
         let mut skills = Vec::new();
 
-        // Create multiple skills to demonstrate savings (lean mode benefits from fewer per-skill tokens)
         for i in 0..5 {
             let manifest = SkillManifest {
                 name: format!("skill-{}", i),
                 description: format!("Example skill number {}", i),
-                version: Some("2.1.0".to_string()),
-                author: Some("Developer Name".to_string()),
-                vtcode_native: Some(true),
                 ..Default::default()
             };
 
@@ -380,17 +295,9 @@ mod tests {
         let full_prompt = generate_skills_prompt_with_mode(&skills, SkillsRenderMode::Full);
         let lean_prompt = generate_skills_prompt_with_mode(&skills, SkillsRenderMode::Lean);
 
-        // Test that lean mode omits version/author metadata (key difference)
-        assert!(!lean_prompt.contains("2.1.0"));
-        assert!(!lean_prompt.contains("Developer Name"));
-        assert!(!lean_prompt.contains("native:"));
-
-        // Full mode should include metadata
-        assert!(full_prompt.contains("native:"));
-
-        // Verify both modes include usage rules (lean) or preamble (full)
+        assert_eq!(full_prompt, lean_prompt);
         assert!(lean_prompt.contains("Usage Rules"));
-        assert!(full_prompt.contains("Available Skills"));
+        assert!(full_prompt.contains("Available skills"));
     }
 
     #[test]

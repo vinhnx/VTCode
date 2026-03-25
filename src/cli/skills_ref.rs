@@ -31,14 +31,11 @@ pub async fn handle_skills_ref_validate(path: &Path) -> Result<()> {
     println!("✓ Skill validation passed");
     println!("  Name: {}", manifest.name);
     println!("  Description: {}", manifest.description);
-    if let Some(version) = &manifest.version {
-        println!("  Version: {}", version);
-    }
-    if let Some(author) = &manifest.author {
-        println!("  Author: {}", author);
-    }
     if let Some(license) = &manifest.license {
         println!("  License: {}", license);
+    }
+    if let Some(compatibility) = &manifest.compatibility {
+        println!("  Compatibility: {}", compatibility);
     }
     if let Some(tools) = &manifest.tools {
         println!("  Tools: {}", tools.join(", "));
@@ -117,12 +114,6 @@ pub async fn handle_skills_ref_list(path: Option<&Path>) -> Result<()> {
         for skill_ctx in &result.skills {
             let manifest = skill_ctx.manifest();
             println!("  {} - {}", manifest.name, manifest.description);
-            if let Some(version) = &manifest.version {
-                println!("    version: {}", version);
-            }
-            if let Some(tools) = &manifest.tools {
-                println!("    tools: {}", tools.join(", "));
-            }
         }
         println!();
     }

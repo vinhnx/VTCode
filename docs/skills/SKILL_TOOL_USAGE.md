@@ -1,119 +1,37 @@
-# Skill Tool Usage Guide
+# Skill Tool Usage
 
-## Quick Start
+VT Code exposes skills through the skills subsystem and related tooling.
 
-The skills system provides three core tools for discovery, activation, and resource access:
+## Discovery Queries
 
-1. `list_skills`
-2. `load_skill`
-3. `load_skill_resource`
+Skill listing and filtering operate on:
 
-## Tool Workflow
+- `name`
+- `description`
 
-### 1. Discover Skills
+Legacy routing fields are not part of filtering.
 
-Use `list_skills` to discover available skills:
+## Prompt Integration
 
-```
-You: list_skills
+When VT Code surfaces skills to the model, it includes only:
 
-Agent: Found 15 skills:
-- explore (agent_skill): Fast read-only code exploration
-- code-reviewer (agent_skill): Review code quality and bugs
-- debugger (agent_skill): Debug issues in your code
-- [... more skills ...]
-```
+- name
+- description
+- file path
+- scope
 
-### 2. Filter Skills
+The full `SKILL.md` body stays on disk until the skill is selected.
 
-Filter by name, description, or routing hints:
+## Resource Loading
 
-```
-You: list_skills with query="theme"
+After a skill is selected:
 
-Agent: Found 2 matching skills:
-- theme-factory: Apply theme styling to documents
-- theme-core: Core theming utilities
-```
+1. Load `SKILL.md`
+2. Load `scripts/`, `references/`, or `assets/` only when needed
 
-### 3. Load Skill Instructions
+## Storage Locations
 
-Load a skill before using it:
-
-```
-You: load_skill "theme-factory"
-
-Agent:
-# Theme Factory Skill
-
-[Full SKILL.md contents]
-
-**Activation Status:** Associated tools activated and added to context.
-**Resources:** theme-factory/scripts/apply.py, theme-factory/references/color-palettes.json
-```
-
-### 4. Access Skill Resources
-
-Load specific files referenced by the skill:
-
-```
-You: load_skill_resource skill_name="theme-factory" resource_path="references/color-palettes.json"
-
-Agent:
-{
-  "skill_name": "theme-factory",
-  "resource_path": "references/color-palettes.json",
-  "content": "[color palette definitions]"
-}
-```
-
-## Tool Reference
-
-### list_skills
-
-List all available skills (agent skills and system utilities).
-
-**Parameters:**
-- `query` (optional): Filter by skill name, description, `when-to-use`, and `when-not-to-use` (case-insensitive)
-- `variety` (optional): Filter by type: `agent_skill`, `system_utility`, or `built_in`
-
-### load_skill
-
-Load skill instructions and activate its associated tools.
-
-**Parameters:**
-- `name` (required): Name of the skill to load
-
-### load_skill_resource
-
-Access specific resources from a loaded skill.
-
-**Parameters:**
-- `skill_name` (required): Name of the skill
-- `resource_path` (required): Relative path to resource (e.g., `scripts/helper.py`)
-
-## Best Practices
-
-1. Discover first (`list_skills`) before loading.
-2. Load only the skills needed for the current task.
-3. Use `load_skill_resource` for targeted files instead of loading everything.
-4. Verify resource paths from `load_skill` output.
-5. For deterministic workflows, say `Use the <skill> skill`.
-
-## Troubleshooting
-
-### Skill Not Found
-
-- Check spelling: `list_skills query="skill-name"`
-- Skills must be in `~/.vtcode/skills/` or project `.agents/skills/` (legacy `.vtcode/skills/` supported)
-
-### Resource Not Found
-
-- Verify resource path from `load_skill` output
-- Paths are relative to skill directory
-- Check file existence under `scripts/`, `references/`, or `assets/`
-
-### Tool Not Appearing
-
-- Load the skill first: `load_skill "skill-name"`
-- Skill tools remain dormant until loaded
+- repository: ancestor `.agents/skills`
+- user: `~/.agents/skills`
+- admin: `/etc/codex/skills`
+- system: bundled skills

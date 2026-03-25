@@ -1,7 +1,7 @@
 //! # Agent Skills Integration
 //!
-//! Enhanced skills system for VT Code with multi-level loading, CLI tool integration,
-//! and progressive context management inspired by pi-mono's minimalist approach.
+//! Enhanced skills system for VT Code with progressive loading, filesystem discovery,
+//! and strict `SKILL.md` validation.
 //!
 //! ## Features
 //!
@@ -9,7 +9,7 @@
 //! - **CLI Tool Bridge**: Integrate any command-line tool as a skill
 //! - **Dynamic Discovery**: Auto-discover skills and CLI tools from filesystem
 //! - **Context Management**: Memory-efficient loading with LRU eviction
-//! - **Anthropic Compatibility**: Full support for Anthropic's skill specification
+//! - **Spec Compliance**: Strict support for the core Agent Skills `SKILL.md` format
 //! - **Tool Integration**: Seamless integration with VT Code's tool registry
 //!
 //! ## Architecture
@@ -33,7 +33,7 @@
 //!
 //! ### Skill Types
 //!
-//! **Traditional Skills**: Directories with SKILL.md files following Anthropic spec
+//! **Traditional Skills**: Directories with `SKILL.md` files following the Agent Skills spec
 //! **CLI Tool Skills**: Executable tools with README.md documentation
 //! **Hybrid Skills**: Skills that combine instructions with external tool execution
 //!
@@ -65,11 +65,12 @@
 //! ```text
 //! my-skill/
 //! ├── SKILL.md              # Metadata (YAML) + Instructions (Markdown)
-//! ├── ADVANCED.md           # Optional: Advanced guide
 //! ├── scripts/
 //! │   └── helper.py         # Optional: Executable scripts
-//! └── templates/
-//!     └── example.json      # Optional: Reference materials
+//! ├── references/
+//! │   └── guide.md          # Optional: Reference materials
+//! └── assets/
+//!     └── example.json      # Optional: Static resources
 //! ```
 //!
 //! ### CLI Tool Skills
@@ -86,14 +87,12 @@
 //! ---
 //! name: my-skill
 //! description: What this skill does and when to use it
-//! version: 1.0.0
-//! author: Your Name
 //! ---
 //!
 //! # My Skill
 //!
 //! ## Instructions
-//! [Guidance for Claude]
+//! [Guidance for the agent]
 //!
 //! ## Examples
 //! - Example 1

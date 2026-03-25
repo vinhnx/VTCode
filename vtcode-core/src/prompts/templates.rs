@@ -63,7 +63,7 @@ impl PromptTemplates {
 
     /// Get skills available prompt (inspired by OpenAI Codex)
     pub fn skills_available_prompt() -> &'static str {
-        "## Skills\nSpecialized capabilities from .agents/skills/. Use list_skills to discover skills by name, description, and routing hints, load_skill to activate, and load_skill_resource for deeper assets. For deterministic workflows, explicitly say `Use the <skill> skill`."
+        "## Skills\nSpecialized capabilities from .agents/skills/. Use list_skills to discover skills by name and description, load_skill to activate, and load_skill_resource for deeper assets. For deterministic workflows, explicitly say `Use the <skill> skill`."
     }
 }
 
@@ -72,9 +72,9 @@ mod tests {
     use super::PromptTemplates;
 
     #[test]
-    fn skills_prompt_mentions_routing_hints() {
+    fn skills_prompt_mentions_description_routing() {
         let prompt = PromptTemplates::skills_available_prompt();
-        assert!(prompt.contains("routing hints"));
+        assert!(prompt.contains("name and description"));
         assert!(prompt.contains("Use the <skill> skill"));
     }
 

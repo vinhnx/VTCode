@@ -1,10 +1,6 @@
 ---
 name: {{skill_name}}
 description: {{description}}
-when-to-use: Use when the request matches a repeatable workflow with clear inputs and outputs.
-when-not-to-use: Do not use when a simpler edit, search, or one-line unified_exec command is enough.
-version: {{version}}
-author: {{author}}
 ---
 
 # {{skill_name}}
@@ -24,12 +20,9 @@ Summarize the workflow, expected inputs, and the artifact or outcome this skill 
 
 - `scripts/`: deterministic helpers for repeatable or fragile steps
 - `references/`: detailed docs loaded only when needed
-- `templates/` or `assets/`: reusable output skeletons, examples, or supporting files
+- `assets/`: reusable output skeletons, examples, or supporting files
 
 ## Example
-
-Use the {{skill_name}} skill when the user asks for [concrete trigger].
-Do not use it when [nearby case that should route elsewhere].
 
 **Input:** [Describe the request or files]
 **Output/Artifact:** [Describe the result this skill should produce]

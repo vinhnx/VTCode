@@ -41,8 +41,8 @@ pub async fn handle_skills_list(options: &SkillsCommandOptions) -> Result<()> {
 
         match temp_loader.get_skill(&manifest.name).await {
             Ok(EnhancedSkill::Traditional(skill)) => {
-                let analysis = temp_loader.check_container_requirements(&skill);
-                let status = match analysis.requirement {
+            let analysis = temp_loader.check_container_requirements(&skill);
+            let status = match analysis.requirement {
                     ContainerSkillsRequirement::Required => {
                         warnings.push(format!(
                             "❌ {} - Requires container skills (not compatible)",
@@ -59,16 +59,10 @@ pub async fn handle_skills_list(options: &SkillsCommandOptions) -> Result<()> {
                     }
                     _ => "✓",
                 };
-                let mode_suffix = if manifest.mode.unwrap_or(false) {
-                    " [mode]"
-                } else {
-                    ""
-                };
                 skill_rows.push(TraditionalSkillRow {
                     status,
                     name: manifest.name.clone(),
                     description: manifest.description.clone(),
-                    mode_suffix,
                 });
             }
             Ok(EnhancedSkill::CliTool(_)) | Ok(EnhancedSkill::NativePlugin(_)) => {}
@@ -81,7 +75,6 @@ pub async fn handle_skills_list(options: &SkillsCommandOptions) -> Result<()> {
                     status: "❌",
                     name: manifest.name.clone(),
                     description: manifest.description.clone(),
-                    mode_suffix: "",
                 });
             }
         }
@@ -135,38 +128,24 @@ pub async fn handle_skills_info(options: &SkillsCommandOptions, name: &str) -> R
         EnhancedSkill::Traditional(skill) => {
             println!("Skill: {}", skill.name());
             println!("Description: {}", skill.description());
-            if let Some(version) = &skill.manifest.version {
-                println!("Version: {}", version);
-            }
-            if let Some(author) = &skill.manifest.author {
-                println!("Author: {}", author);
-            }
             if let Some(license) = &skill.manifest.license {
                 println!("License: {}", license);
             }
-            if let Some(model) = &skill.manifest.model {
-                println!("Model: {}", model);
-            }
-            if let Some(mode) = skill.manifest.mode {
-                println!("Mode command: {}", mode);
-            }
-            if let Some(when_to_use) = &skill.manifest.when_to_use {
-                println!("When to use: {}", when_to_use);
+            if let Some(compatibility) = &skill.manifest.compatibility {
+                println!("Compatibility: {}", compatibility);
             }
             if let Some(allowed_tools) = &skill.manifest.allowed_tools
                 && !allowed_tools.is_empty()
             {
                 println!("Allowed tools: {}", allowed_tools);
             }
-            if let Some(disable) = skill.manifest.disable_model_invocation {
-                println!("Disable model invocation: {}", disable);
+            if let Some(metadata) = &skill.manifest.metadata
+                && !metadata.is_empty()
+            {
+                println!("Metadata keys: {}", metadata.len());
             }
-            if let Some(req) = skill.manifest.requires_container {
-                println!("Requires container: {}", req);
-            }
-            if let Some(disallow) = skill.manifest.disallow_container {
-                println!("Disallow container: {}", disallow);
-            }
+            println!("Scope: {:?}", skill.scope);
+            println!("Path: {}", skill.path.join("SKILL.md").display());
 
             let analysis = loader.check_container_requirements(&skill);
             println!("\n--- Compatibility ---");
@@ -288,11 +267,7 @@ fn print_loaded_skill_summary(skill: EnhancedSkill) -> String {
         EnhancedSkill::Traditional(skill) => {
             let name = skill.name().to_string();
             let summary = LoadedSkillSummary {
-                headline: format!(
-                    "Loaded skill: {} (v{})",
-                    name,
-                    skill.manifest.version.as_deref().unwrap_or("0.0.1")
-                ),
+                headline: format!("Loaded skill: {}", name),
                 details: vec![
                     format!("Description: {}", skill.description()),
                     format!("Resources: {} files", skill.list_resources().len()),

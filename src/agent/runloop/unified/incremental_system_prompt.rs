@@ -451,10 +451,12 @@ impl SystemPromptContext {
         self.prompt_cache_shaping_mode.hash(&mut hasher);
         self.editor_context_block.hash(&mut hasher);
         self.active_instruction_directory.hash(&mut hasher);
-        // We use skill names and versions for hashing
+        // Include the lean skill metadata that appears in the prompt.
         for skill in &self.discovered_skills {
             skill.name().hash(&mut hasher);
-            skill.manifest.version.hash(&mut hasher);
+            skill.description().hash(&mut hasher);
+            skill.path.hash(&mut hasher);
+            skill.scope.hash(&mut hasher);
         }
         hasher.finish()
     }

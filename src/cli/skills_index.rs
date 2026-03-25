@@ -88,15 +88,10 @@ pub async fn generate_comprehensive_skills_index(workspace: &Path) -> Result<std
             for skill_ctx in &discovery_result.skills {
                 let manifest = skill_ctx.manifest();
                 let desc = manifest.description.replace('|', "\\|");
-                let skill_type = if manifest.mode.unwrap_or(false) {
-                    "Mode"
-                } else {
-                    "Skill"
-                };
                 let _ = writeln!(
                     content,
                     "| `{}` | {} | {} |",
-                    manifest.name, desc, skill_type
+                    manifest.name, desc, "Skill"
                 );
             }
             content.push('\n');
@@ -129,12 +124,7 @@ pub async fn generate_comprehensive_skills_index(workspace: &Path) -> Result<std
             let _ = writeln!(content, "{}\n", manifest.description);
             let _ = writeln!(
                 content,
-                "- **Type**: {}\n- **Path**: `{}`\n",
-                if manifest.mode.unwrap_or(false) {
-                    "Mode"
-                } else {
-                    "Skill"
-                },
+                "- **Type**: Skill\n- **Path**: `{}`\n",
                 skill_md.display()
             );
         }

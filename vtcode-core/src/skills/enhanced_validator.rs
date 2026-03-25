@@ -193,87 +193,6 @@ impl ComprehensiveSkillValidator {
         manifest: &SkillManifest,
         report: &mut SkillValidationReport,
     ) {
-        // Check for conflicting container flags
-        if let (Some(true), Some(true)) = (manifest.requires_container, manifest.disallow_container)
-        {
-            report.add_error(
-                None,
-                "Skill manifest cannot set both requires-container and disallow-container"
-                    .to_string(),
-                Some(
-                    "Choose either requires-container or disallow-container, not both".to_string(),
-                ),
-            );
-        }
-
-        // Validate when-to-use field
-        if let Some(when_to_use) = &manifest.when_to_use
-            && when_to_use.len() > 512
-        {
-            report.add_error(
-                Some("when-to-use".to_string()),
-                format!(
-                    "when-to-use exceeds maximum length: {} characters (max 512)",
-                    when_to_use.len()
-                ),
-                Some("Shorten the when-to-use field to 512 characters or less".to_string()),
-            );
-        }
-
-        // Validate argument-hint field
-        if let Some(argument_hint) = &manifest.argument_hint
-            && argument_hint.len() > 128
-        {
-            report.add_error(
-                Some("argument-hint".to_string()),
-                format!(
-                    "argument-hint exceeds maximum length: {} characters (max 128)",
-                    argument_hint.len()
-                ),
-                Some("Shorten the argument-hint field to 128 characters or less".to_string()),
-            );
-        }
-
-        // Validate context field
-        if let Some(context) = &manifest.context {
-            if context.is_empty() {
-                report.add_error(
-                    Some("context".to_string()),
-                    "context must not be empty if specified".to_string(),
-                    Some("Remove the field or set it to a valid value like \"fork\"".to_string()),
-                );
-            } else if context.len() > 32 {
-                report.add_error(
-                    Some("context".to_string()),
-                    format!(
-                        "context exceeds maximum length: {} characters (max 32)",
-                        context.len()
-                    ),
-                    Some("Shorten the context field to 32 characters or less".to_string()),
-                );
-            }
-        }
-
-        // Validate agent field
-        if let Some(agent) = &manifest.agent {
-            if agent.is_empty() {
-                report.add_error(
-                    Some("agent".to_string()),
-                    "agent must not be empty if specified".to_string(),
-                    Some("Remove the field or set it to a valid agent name".to_string()),
-                );
-            } else if agent.len() > 64 {
-                report.add_error(
-                    Some("agent".to_string()),
-                    format!(
-                        "agent exceeds maximum length: {} characters (max 64)",
-                        agent.len()
-                    ),
-                    Some("Shorten the agent field to 64 characters or less".to_string()),
-                );
-            }
-        }
-
         // Validate allowed-tools field
         if let Some(allowed_tools) = &manifest.allowed_tools {
             let tools: Vec<&str> = allowed_tools.split_whitespace().collect();
@@ -312,20 +231,6 @@ impl ComprehensiveSkillValidator {
             );
         }
 
-        // Validate model field
-        if let Some(model) = &manifest.model
-            && model.len() > 128
-        {
-            report.add_error(
-                Some("model".to_string()),
-                format!(
-                    "model exceeds maximum length: {} characters (max 128)",
-                    model.len()
-                ),
-                Some("Shorten the model name".to_string()),
-            );
-        }
-
         // Validate compatibility field
         if let Some(compatibility) = &manifest.compatibility {
             if compatibility.is_empty() {
@@ -361,35 +266,6 @@ impl ComprehensiveSkillValidator {
                 Some("compatibility".to_string()),
                 "Consider adding a compatibility field if the skill has specific requirements"
                     .to_string(),
-            );
-        }
-
-        // Routing quality checks (warn by default, fail in strict mode)
-        if manifest
-            .when_to_use
-            .as_ref()
-            .map(|value| value.trim().is_empty())
-            .unwrap_or(true)
-        {
-            self.report_routing_quality_issue(
-                report,
-                "when-to-use",
-                "Missing when-to-use guidance reduces skill trigger precision",
-                "Add concrete use triggers (inputs, keywords, expected outputs).",
-            );
-        }
-
-        if manifest
-            .when_not_to_use
-            .as_ref()
-            .map(|value| value.trim().is_empty())
-            .unwrap_or(true)
-        {
-            self.report_routing_quality_issue(
-                report,
-                "when-not-to-use",
-                "Missing when-not-to-use guidance increases false-positive skill triggers",
-                "Add explicit avoid cases and edge conditions.",
             );
         }
 

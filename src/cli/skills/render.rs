@@ -5,7 +5,6 @@ pub(super) struct TraditionalSkillRow {
     pub(super) status: &'static str,
     pub(super) name: String,
     pub(super) description: String,
-    pub(super) mode_suffix: &'static str,
 }
 
 #[derive(Debug, Clone)]
@@ -30,11 +29,9 @@ pub(super) fn print_empty_list() {
     println!("\nCreate a traditional skill:");
     println!("  vtcode skills create ./my-skill");
     println!("\nOr install skills in standard locations:");
-    println!("  ~/.vtcode/skills/     (VT Code user skills)");
-    println!("  .agents/skills/       (Project skills)");
-    println!("  .vtcode/skills/       (Legacy project skills - deprecated)");
-    println!("  ~/.claude/skills/     (Legacy compatibility)");
-    println!("  ~/.codex/skills/      (Codex compatibility)");
+    println!("  .agents/skills/       (Repo skills, nearest directory first)");
+    println!("  ~/.agents/skills/     (User skills)");
+    println!("  /etc/codex/skills/    (Admin skills)");
 }
 
 pub(super) fn print_traditional_skills(rows: &[TraditionalSkillRow], warnings: &[String]) {
@@ -47,8 +44,8 @@ pub(super) fn print_traditional_skills(rows: &[TraditionalSkillRow], warnings: &
 
     for row in rows {
         println!(
-            "{} {}{}\n  {}\n",
-            row.status, row.name, row.mode_suffix, row.description
+            "{} {}\n  {}\n",
+            row.status, row.name, row.description
         );
     }
 
@@ -105,28 +102,19 @@ pub(super) fn print_skill_config(workspace: &Path) {
     println!("Skill Configuration\n");
     println!("Workspace: {}", workspace.display());
     println!("\nSkill Search Paths (by precedence):");
-    println!(
-        "  • .github/skills/       (Agent Skills spec recommended - highest project precedence)"
-    );
-    println!("  • .agents/skills/       (VT Code native project skills)");
-    println!("  • .vtcode/skills/       (Legacy VT Code project skills)");
-    println!("  • .claude/skills/       (Claude Code legacy compatibility)");
-    println!("  • .pi/skills/           (Pi framework project skills)");
-    println!("  • .codex/skills/        (Codex compatibility)");
-    println!("  • ./skills              (Generic project skills)");
-    println!("  • ~/.vtcode/skills/     (VT Code user skills)");
-    println!("  • ~/.copilot/skills/    (VS Code Copilot compatibility)");
-    println!("  • ~/.claude/skills/     (Claude Code user compatibility)");
-    println!("  • ~/.pi/agent/skills/   (Pi framework user skills)");
-    println!("  • ~/.codex/skills/      (Codex user compatibility - lowest precedence)");
+    println!("  • $CWD/.agents/skills/ ... repo-root/.agents/skills");
+    println!("  • ~/.agents/skills/");
+    println!("  • /etc/codex/skills/");
+    println!("  • $CODEX_HOME/skills/.system/");
 
     println!("\nSkill Directory Structure:");
     println!("  my-skill/");
     println!("    ├── SKILL.md          (required: metadata + instructions)");
-    println!("    ├── ADVANCED.md       (optional: additional guides)");
     println!("    ├── scripts/          (optional: executable scripts)");
-    println!("    └── templates/        (optional: reference materials)");
+    println!("    ├── references/       (optional: additional docs)");
+    println!("    └── assets/           (optional: static resources)");
 
     println!("\nEnvironment Variables:");
     println!("  • HOME - Used to locate user skill directories");
+    println!("  • CODEX_HOME - Used for bundled system skills cache");
 }

@@ -1,9 +1,7 @@
 //! Skill Authoring Tool for VT Code
 //!
-//! Implements Anthropic's Agent Skills specification for creating, validating,
+//! Implements the Agent Skills specification for creating, validating,
 //! and packaging skills that extend VT Code's capabilities.
-//!
-//! Based on: https://github.com/anthropics/skills/blob/main/spec/agent-skills-spec.md
 
 use anyhow::{Result, anyhow};
 use std::fs;
@@ -63,13 +61,13 @@ impl SkillAuthor {
 
     /// Create a new skill from template
     ///
-    /// Following Anthropic's init_skill.py pattern
     pub fn create_skill(&self, skill_name: &str, output_dir: Option<PathBuf>) -> Result<PathBuf> {
         // Validate skill name
         self.validate_skill_name(skill_name)?;
 
         // Determine output directory
-        let skills_dir = output_dir.unwrap_or_else(|| self.workspace_root.join("skills"));
+        let skills_dir =
+            output_dir.unwrap_or_else(|| self.workspace_root.join(".agents").join("skills"));
         let skill_dir = skills_dir.join(skill_name);
 
         // Check if exists
@@ -113,7 +111,7 @@ impl SkillAuthor {
         Ok(skill_dir)
     }
 
-    /// Validate a skill following Anthropic's specification
+    /// Validate a skill following the Agent Skills specification
     pub fn validate_skill(&self, skill_dir: &Path) -> Result<ValidationReport> {
         let mut report = ValidationReport::new(skill_dir.to_path_buf());
 
@@ -140,8 +138,15 @@ impl SkillAuthor {
         }
 
         // Parse YAML
-        let frontmatter: SkillFrontmatter = serde_yaml::from_str(parts[1].trim())
-            .map_err(|e| anyhow!("Invalid YAML frontmatter: {}", e))?;
+        let frontmatter: SkillFrontmatter = match serde_yaml::from_str(parts[1].trim()) {
+            Ok(frontmatter) => frontmatter,
+            Err(error) => {
+                report
+                    .errors
+                    .push(format!("Invalid YAML frontmatter: {}", error));
+                return Ok(report);
+            }
+        };
 
         // Validate frontmatter properties (only allowed: skill metadata fields)
         let raw_frontmatter: serde_yaml::Value =
@@ -162,97 +167,59 @@ impl SkillAuthor {
         }
 
         // Validate name
-        let inferred_name = frontmatter.name.clone().or_else(|| {
-            skill_dir
-                .file_name()
-                .and_then(|name| name.to_str())
-                .map(|name| name.to_string())
-        });
-
-        if frontmatter.name.is_none() {
+        let name = frontmatter.name.trim();
+        if name.is_empty() {
             report
-                .warnings
-                .push("Skill name missing; defaulting to directory name".to_string());
-        }
-
-        match inferred_name.as_deref() {
-            Some(name) => {
-                if name.is_empty() {
-                    report
-                        .errors
-                        .push("Skill name must not be empty".to_string());
-                } else if !self.is_valid_skill_name(name) {
-                    let mut reasons = Vec::new();
-                    if name.chars().any(|c| c.is_ascii_uppercase()) {
-                        reasons.push("must be lowercase");
-                    }
-                    if name.contains('_') {
-                        reasons.push("no underscores allowed");
-                    }
-                    if name.starts_with('-') || name.ends_with('-') {
-                        reasons.push("cannot start or end with hyphen");
-                    }
-                    if name.contains("--") {
-                        reasons.push("no consecutive hyphens");
-                    }
-                    if name.len() > 64 {
-                        reasons.push("max 64 characters");
-                    }
-                    if name.contains("anthropic")
-                        || name.contains("claude")
-                        || name.contains("vtcode")
-                    {
-                        reasons.push("reserved words not allowed");
-                    }
-                    report.errors.push(format!(
-                        "Invalid skill name '{}': {}",
-                        name,
-                        reasons.join(", ")
-                    ));
-                }
+                .errors
+                .push("Skill name must not be empty".to_string());
+        } else if !self.is_valid_skill_name(name) {
+            let mut reasons = Vec::new();
+            if name.chars().any(|c| c.is_ascii_uppercase()) {
+                reasons.push("must be lowercase");
             }
-            None => report.errors.push("Skill name is required".to_string()),
+            if name.contains('_') {
+                reasons.push("no underscores allowed");
+            }
+            if name.starts_with('-') || name.ends_with('-') {
+                reasons.push("cannot start or end with hyphen");
+            }
+            if name.contains("--") {
+                reasons.push("no consecutive hyphens");
+            }
+            if name.len() > 64 {
+                reasons.push("max 64 characters");
+            }
+            if name.contains("anthropic") || name.contains("claude") || name.contains("vtcode") {
+                reasons.push("reserved words not allowed");
+            }
+            report.errors.push(format!(
+                "Invalid skill name '{}': {}",
+                name,
+                reasons.join(", ")
+            ));
         }
 
         // Validate description
-        match frontmatter.description.as_deref() {
-            Some(description) => {
-                if description.is_empty() {
-                    report.errors.push("Description is required".to_string());
-                } else {
-                    if description.contains("[TODO") {
-                        report
-                            .warnings
-                            .push("Description contains TODO placeholder".to_string());
-                    }
-                    if description.contains('<') || description.contains('>') {
-                        report
-                            .errors
-                            .push("Description cannot contain angle brackets (< or >)".to_string());
-                    }
-                    if description.len() > 1024 {
-                        report.errors.push(format!(
-                            "Description is too long ({} characters). Maximum is 1024 characters.",
-                            description.len()
-                        ));
-                    }
-                }
+        let description = frontmatter.description.trim();
+        if description.is_empty() {
+            report.errors.push("Description is required".to_string());
+        } else {
+            if description.contains("[TODO") {
+                report
+                    .warnings
+                    .push("Description contains TODO placeholder".to_string());
             }
-            None => report
-                .warnings
-                .push("Description missing; add one for discoverability".to_string()),
-        }
-
-        if frontmatter.when_to_use.is_none() {
-            report
-                .warnings
-                .push("Add when-to-use guidance to improve routing".to_string());
-        }
-
-        if frontmatter.when_not_to_use.is_none() {
-            report
-                .warnings
-                .push("Add when-not-to-use guidance to reduce false-positive triggers".to_string());
+            if description.contains('<') || description.contains('>') {
+                report
+                    .errors
+                    .push("Description cannot contain angle brackets (< or >)".to_string());
+            }
+            if description.len() > 1024 {
+                report.errors.push(format!(
+                    "Description is too long ({} characters). Maximum is 1024 characters.",
+                    description.len()
+                ));
+            }
         }
 
         // Check body content
@@ -494,47 +461,30 @@ pub fn render_skills_lean(skills: &[crate::skills::types::Skill]) -> Option<Stri
 
     let mut lines = Vec::new();
     lines.push("## Skills".to_string());
-    lines.push("These skills are discovered at startup; each entry shows name, description, scope (user/repo), and file path. Content is not inlined to keep context lean - open the file when needed.".to_string());
+    lines.push("These skills are discovered at startup; each entry shows name, description, scope, and file path. Content is not inlined to keep context lean.".to_string());
 
-    // Group by scope for better organization
-    let user_skills: Vec<_> = skills
-        .iter()
-        .filter(|s| matches!(s.scope, crate::skills::types::SkillScope::User))
-        .collect();
-    let repo_skills: Vec<_> = skills
-        .iter()
-        .filter(|s| matches!(s.scope, crate::skills::types::SkillScope::Repo))
-        .collect();
+    let mut sorted_skills = skills.iter().collect::<Vec<_>>();
+    sorted_skills.sort_by(|left, right| left.name().cmp(right.name()));
 
-    if !user_skills.is_empty() {
-        lines.push("\n### User Skills".to_string());
-        for skill in user_skills {
-            let skill_md_path = skill.path.join("SKILL.md");
-            let path_str = skill_md_path.to_string_lossy().replace('\\', "/");
-            lines.push(format!(
-                "- {}: {} (file: {})",
-                skill.name(),
-                skill.description(),
-                path_str
-            ));
-        }
+    for skill in sorted_skills {
+        let skill_md_path = skill.path.join("SKILL.md");
+        let path_str = skill_md_path.to_string_lossy().replace('\\', "/");
+        let scope = match skill.scope {
+            crate::skills::types::SkillScope::User => "user",
+            crate::skills::types::SkillScope::Repo => "repo",
+            crate::skills::types::SkillScope::System => "system",
+            crate::skills::types::SkillScope::Admin => "admin",
+        };
+        lines.push(format!(
+            "- {}: {} (file: {}, scope: {})",
+            skill.name(),
+            skill.description(),
+            path_str,
+            scope
+        ));
     }
 
-    if !repo_skills.is_empty() {
-        lines.push("\n### Repository Skills".to_string());
-        for skill in repo_skills {
-            let skill_md_path = skill.path.join("SKILL.md");
-            let path_str = skill_md_path.to_string_lossy().replace('\\', "/");
-            lines.push(format!(
-                "- {}: {} (file: {})",
-                skill.name(),
-                skill.description(),
-                path_str
-            ));
-        }
-    }
-
-    lines.push(r###"- Discovery: Available skills are listed above (name + description + file path). These are the sources of truth; skill bodies live on disk at the listed paths.
+    lines.push(r###"- Discovery: Available skills are listed above (name + description + file path). Skill bodies live on disk at the listed paths.
 - Trigger rules: If the user names a skill (with `$SkillName` or plain text) OR the task clearly matches a skill's description, use that skill for that turn. Multiple mentions mean use them all. Do not carry skills across turns unless re-mentioned.
 - Missing/blocked: If a named skill isn't in the list or the path can't be read, say so briefly and continue with the best fallback.
 - How to use a skill (progressive disclosure):
@@ -542,11 +492,7 @@ pub fn render_skills_lean(skills: &[crate::skills::types::Skill]) -> Option<Stri
   2) If `SKILL.md` points to extra folders such as `references/`, load only the specific files needed for the request.
   3) If `scripts/` exist, prefer running them instead of retyping code.
   4) If `assets/` or templates exist, reuse them.
-- Package managers (IMPORTANT - use modern tools):
-  • Python: ALWAYS use `uv pip install` (NOT pip). If uv unavailable, use `pip install` as fallback.
-  • JavaScript: ALWAYS use `bun install` or `bun add` (NOT npm/pnpm). If bun unavailable, use npm as fallback.
-  • Examples: `uv pip install pandas`, `bun add axios`, `uv run python script.py`, `bun run script.js`
-- Routing hints: Treat YAML `description`, `when-to-use`, and `when-not-to-use` as the primary routing signals. If the user explicitly says `Use the <skill> skill`, treat that as deterministic routing.
+- Routing: Treat YAML `description` as the primary routing signal. If the user explicitly says `Use the <skill> skill`, treat that as deterministic routing.
 - Context hygiene: Keep context small - summarize long sections, only load extra files when needed, avoid deeply nested references."###.to_string());
 
     Some(lines.join("\n"))
@@ -636,15 +582,13 @@ mod tests {
         assert!(skill_md.starts_with("---"));
         assert!(skill_md.contains("name: test-skill"));
         assert!(skill_md.contains("# Test Skill"));
-        assert!(skill_md.contains("when-to-use:"));
-        assert!(skill_md.contains("when-not-to-use:"));
         assert!(skill_md.contains("Output/Artifact:"));
 
         Ok(())
     }
 
     #[test]
-    fn test_validate_skill_accepts_supported_frontmatter_aliases() {
+    fn test_validate_skill_rejects_non_spec_frontmatter_fields() {
         let tmp = TempDir::new().unwrap();
         let author = SkillAuthor::new(tmp.path().to_path_buf());
         let skill_dir = tmp.path().join("test-skill");
@@ -653,20 +597,8 @@ mod tests {
             skill_dir.join("SKILL.md"),
             r#"---
 name: test-skill
-description: A test skill with routing guidance
-when_to_use: Use when the workflow is repeatable.
-when_not_to_use: Do not use for one-line commands.
-default_version: "1.0.0"
-latest_version: "1.1.0"
-network_policy:
-  allowed_domains:
-    - api.example.com
-permission_profile:
-  file_system:
-    write:
-      - outputs
-tools:
-  - unified_exec
+description: A test skill with unsupported fields
+version: "1.0.0"
 ---
 
 # Test Skill
@@ -679,12 +611,12 @@ Use bundled resources when needed.
 
         let report = author.validate_skill(&skill_dir).unwrap();
 
-        assert!(report.valid, "{}", report.format());
+        assert!(!report.valid, "{}", report.format());
         assert!(
-            !report
+            report
                 .errors
                 .iter()
-                .any(|error| error.contains("Unexpected property")),
+                .any(|error| error.contains("Invalid YAML frontmatter")),
             "{}",
             report.format()
         );
@@ -770,16 +702,14 @@ Use bundled resources when needed.
         assert!(rendered.contains("pdf-analyzer: Extract text and tables from PDFs"));
         assert!(rendered.contains("spreadsheet-generator: Create Excel spreadsheets with charts"));
         assert!(rendered.contains("(file:"));
-        assert!(rendered.contains("SKILL.md)"));
+        assert!(rendered.contains("SKILL.md, scope:"));
+        assert!(rendered.contains("scope:"));
 
         // Verify usage rules present
         assert!(rendered.contains("Trigger rules:"));
         assert!(rendered.contains("$SkillName"));
         assert!(rendered.contains("progressive disclosure"));
-        assert!(rendered.contains("Package managers"));
-        assert!(rendered.contains("uv pip install"));
-        assert!(rendered.contains("bun install"));
-        assert!(rendered.contains("Routing hints:"));
+        assert!(rendered.contains("Routing:"));
         assert!(rendered.contains("Use the <skill> skill"));
         assert!(rendered.contains("Context hygiene"));
 

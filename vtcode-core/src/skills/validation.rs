@@ -421,11 +421,6 @@ impl SkillValidator {
                         "description".to_string(),
                         Value::String(manifest.description.clone()),
                     );
-                    details.insert(
-                        "version".to_string(),
-                        serde_json::to_value(&manifest.version)
-                            .unwrap_or_else(|_| Value::String("unknown".to_string())),
-                    );
                     return CheckResult {
                         name: "skill_file_valid".to_string(),
                         status: CheckStatus::Failed,
@@ -473,11 +468,6 @@ impl SkillValidator {
                     Value::String(manifest.description.clone()),
                 );
                 details.insert(
-                    "version".to_string(),
-                    serde_json::to_value(&manifest.version)
-                        .unwrap_or_else(|_| Value::String("unknown".to_string())),
-                );
-                details.insert(
                     "warnings".to_string(),
                     serde_json::to_value(&warnings).unwrap_or_else(|_| Value::Array(vec![])),
                 );
@@ -493,7 +483,7 @@ impl SkillValidator {
             Err(e) => CheckResult {
                 name: "skill_file_valid".to_string(),
                 status: CheckStatus::Failed,
-                message: format!("Failed to parse SKILL.md: {}", e),
+                message: format!("Failed to parse SKILL.md: {:#}", e),
                 details: None,
                 execution_time_ms: start_time.elapsed().as_millis() as u64,
             },

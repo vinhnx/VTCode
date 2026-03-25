@@ -3,17 +3,17 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 /// Skill scope indicating where the skill is defined
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum SkillScope {
-    /// User-level skill (~/.vtcode/skills)
+    /// User-level skill (`~/.agents/skills`)
     #[default]
     User,
-    /// Repository-level skill (.agents/skills, .vtcode/skills, or .codex/skills in project root)
+    /// Repository-level skill (`.agents/skills`)
     Repo,
-    /// System-level skill (embedded or system-wide)
+    /// System-level bundled skill
     System,
-    /// Admin-level skill (system administrator enforced)
+    /// Admin-level skill (`/etc/codex/skills`)
     Admin,
 }
 

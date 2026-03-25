@@ -180,45 +180,24 @@ impl TemplateEngine {
                     validation_pattern: None,
                     examples: vec!["Manages files and directories".to_string()],
                 },
-                TemplateVariable {
-                    name: "author".to_string(),
-                    description: "Skill author".to_string(),
-                    default_value: Some("VT Code User".to_string()),
-                    required: false,
-                    validation_pattern: None,
-                    examples: vec![],
-                },
-                TemplateVariable {
-                    name: "version".to_string(),
-                    description: "Skill version".to_string(),
-                    default_value: Some("1.0.0".to_string()),
-                    required: false,
-                    validation_pattern: Some(r"^\d+\.\d+\.\d+$".to_string()),
-                    examples: vec![],
-                },
             ],
             file_structure: FileStructure {
-                directories: vec!["scripts".to_string(), "templates".to_string()],
-                files: HashMap::from([
-                    (
-                        "SKILL.md".to_string(),
-                        include_str!("../../templates/traditional/SKILL.md.template").to_string(),
-                    ),
-                    (
-                        "README.md".to_string(),
-                        include_str!("../../templates/traditional/README.md.template").to_string(),
-                    ),
-                ]),
+                directories: vec![
+                    "scripts".to_string(),
+                    "references".to_string(),
+                    "assets".to_string(),
+                ],
+                files: HashMap::from([(
+                    "SKILL.md".to_string(),
+                    include_str!("../../templates/traditional/SKILL.md.template").to_string(),
+                )]),
                 executables: HashMap::from([(
                     "scripts/helper.py".to_string(),
                     include_str!("../../templates/traditional/scripts/helper.py.template")
                         .to_string(),
                 )]),
             },
-            default_metadata: HashMap::from([
-                ("category".to_string(), "utility".to_string()),
-                ("tags".to_string(), "general,purpose".to_string()),
-            ]),
+            default_metadata: HashMap::new(),
             instructions_template: include_str!(
                 "../../templates/traditional/instructions.md.template"
             )
@@ -645,13 +624,6 @@ impl TemplateEngine {
         // YAML frontmatter
         content.push_str("---\n");
 
-        // Add metadata from template
-        for (key, default_value) in &template.default_metadata {
-            let value = variables.get(key).unwrap_or(default_value);
-            content.push_str(&format!("{}: {}\n", key, value));
-        }
-
-        // Add required fields
         let skill_name = variables
             .get("skill_name")
             .or_else(|| variables.get("tool_name"))
@@ -668,15 +640,6 @@ impl TemplateEngine {
 
         content.push_str(&format!("name: {}\n", skill_name));
         content.push_str(&format!("description: {}\n", description));
-
-        // Add optional fields
-        if let Some(author) = variables.get("author") {
-            content.push_str(&format!("author: {}\n", author));
-        }
-
-        if let Some(version) = variables.get("version") {
-            content.push_str(&format!("version: {}\n", version));
-        }
 
         content.push_str("---\n\n");
 
@@ -932,17 +895,15 @@ mod tests {
             "description".to_string(),
             "Handles repeatable report generation".to_string(),
         );
-        variables.insert("author".to_string(), "VT Code User".to_string());
-        variables.insert("version".to_string(), "1.0.0".to_string());
 
         let skill_dir = engine
             .generate_skill("traditional", variables, temp_dir.path())
             .unwrap();
         let skill_md = std::fs::read_to_string(skill_dir.join("SKILL.md")).unwrap();
 
-        assert!(skill_md.contains("when-to-use:"));
-        assert!(skill_md.contains("when-not-to-use:"));
-        assert!(skill_md.contains("`templates/` or `assets/`"));
+        assert!(!skill_md.contains("when-to-use:"));
+        assert!(!skill_md.contains("when-not-to-use:"));
+        assert!(skill_md.contains("`assets/`:"));
         assert!(skill_md.contains("Output/Artifact:"));
     }
 }

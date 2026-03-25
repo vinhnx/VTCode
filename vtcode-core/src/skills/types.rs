@@ -1,6 +1,6 @@
 //! Agent Skills type definitions
 //!
-//! Defines core types for Anthropic Agent Skills integration, including
+//! Defines core types for Agent Skills integration, including
 //! skill metadata, manifest parsing, and resource management.
 
 use hashbrown::HashMap;
@@ -192,7 +192,7 @@ impl Default for SkillManifest {
 }
 
 impl SkillManifest {
-    /// Validate manifest against Anthropic spec
+    /// Validate manifest against the Agent Skills specification.
     pub fn validate(&self) -> anyhow::Result<()> {
         self.validate_name()?;
         self.validate_description()?;
@@ -276,62 +276,14 @@ impl SkillManifest {
         Ok(())
     }
 
-    /// Validate optional fields per Agent Skills spec
+    /// Validate optional fields per the strict SKILL.md spec supported by VT Code.
     fn validate_optional_fields(&self) -> anyhow::Result<()> {
-        // Check for conflicting container flags
-        if let (Some(true), Some(true)) = (self.requires_container, self.disallow_container) {
-            anyhow::bail!(
-                "Skill manifest cannot set both requires-container and disallow-container"
-            );
-        }
-
-        // Validate when-to-use field
-        if let Some(when_to_use) = &self.when_to_use
-            && when_to_use.len() > 512
-        {
-            anyhow::bail!(
-                "when-to-use exceeds maximum length: {} characters (max 512)",
-                when_to_use.len()
-            );
-        }
-
-        // Validate argument-hint field
-        if let Some(argument_hint) = &self.argument_hint
-            && argument_hint.len() > 128
-        {
-            anyhow::bail!(
-                "argument-hint exceeds maximum length: {} characters (max 128)",
-                argument_hint.len()
-            );
-        }
-
-        // Validate context field
-        if let Some(context) = &self.context
-            && (context.is_empty() || context.len() > 32)
-        {
-            anyhow::bail!(
-                "context must be between 1-32 characters if provided, got {} characters",
-                context.len()
-            );
-        }
-
-        // Validate agent field
-        if let Some(agent) = &self.agent
-            && (agent.is_empty() || agent.len() > 64)
-        {
-            anyhow::bail!(
-                "agent must be between 1-64 characters if provided, got {} characters",
-                agent.len()
-            );
-        }
-
         if self.hooks.is_some() {
-            anyhow::bail!("hooks are not supported in VT Code skills; remove hooks from SKILL.md");
+            anyhow::bail!("hooks are not supported in VT Code skills");
         }
 
         // Validate allowed-tools field
         if let Some(allowed_tools) = &self.allowed_tools {
-            // Parse space-delimited string per Agent Skills spec
             let tools: Vec<&str> = allowed_tools.split_whitespace().collect();
 
             if tools.len() > 16 {
@@ -356,16 +308,6 @@ impl SkillManifest {
             );
         }
 
-        // Validate model field
-        if let Some(model) = &self.model
-            && model.len() > 128
-        {
-            anyhow::bail!(
-                "model exceeds maximum length: {} characters (max 128)",
-                model.len()
-            );
-        }
-
         // Validate compatibility field
         if let Some(compatibility) = &self.compatibility
             && (compatibility.is_empty() || compatibility.len() > 500)
@@ -374,59 +316,6 @@ impl SkillManifest {
                 "compatibility must be between 1-500 characters if provided, got {} characters",
                 compatibility.len()
             );
-        }
-
-        // Validate when-not-to-use field
-        if let Some(when_not_to_use) = &self.when_not_to_use
-            && when_not_to_use.len() > 512
-        {
-            anyhow::bail!(
-                "when-not-to-use exceeds maximum length: {} characters (max 512)",
-                when_not_to_use.len()
-            );
-        }
-
-        // Validate default-version field
-        if let Some(default_version) = &self.default_version
-            && default_version.len() > 64
-        {
-            anyhow::bail!(
-                "default-version exceeds maximum length: {} characters (max 64)",
-                default_version.len()
-            );
-        }
-
-        // Validate latest-version field
-        if let Some(latest_version) = &self.latest_version
-            && latest_version.len() > 64
-        {
-            anyhow::bail!(
-                "latest-version exceeds maximum length: {} characters (max 64)",
-                latest_version.len()
-            );
-        }
-
-        // Validate network policy
-        if let Some(network_policy) = &self.network_policy {
-            if network_policy.allowed_domains.len() > 32 {
-                anyhow::bail!(
-                    "network allowed_domains exceeds maximum entries: {} (max 32)",
-                    network_policy.allowed_domains.len()
-                );
-            }
-            if network_policy.denied_domains.len() > 32 {
-                anyhow::bail!(
-                    "network denied_domains exceeds maximum entries: {} (max 32)",
-                    network_policy.denied_domains.len()
-                );
-            }
-        }
-
-        if let Some(permission_profile) = &self.permissions
-            && let Some(file_system) = &permission_profile.file_system
-        {
-            validate_permission_paths(&file_system.read, "permissions.file_system.read")?;
-            validate_permission_paths(&file_system.write, "permissions.file_system.write")?;
         }
 
         Ok(())
@@ -466,16 +355,6 @@ impl SkillManifest {
 
         Ok(())
     }
-}
-
-fn validate_permission_paths(paths: &[PathBuf], field: &str) -> anyhow::Result<()> {
-    for path in paths {
-        if path.as_os_str().is_empty() {
-            anyhow::bail!("{field} must not contain empty paths");
-        }
-    }
-
-    Ok(())
 }
 
 /// Resource types bundled with a skill
@@ -534,13 +413,15 @@ impl Skill {
         instructions: String,
     ) -> anyhow::Result<Self> {
         manifest.validate()?;
-        // Determine scope based on path
-        let scope = if path.to_string_lossy().contains(".agents/skills")
-            || path.to_string_lossy().contains(".vtcode/skills")
-            || path.to_string_lossy().contains(".claude/skills")
-            || path.to_string_lossy().contains(".codex/skills")
-            || path.to_string_lossy().contains(".pi/skills")
+        let path_str = path.to_string_lossy();
+        let scope = if path.starts_with(PathBuf::from("/etc/codex/skills")) {
+            SkillScope::Admin
+        } else if path_str.contains("/skills/.system/")
+            || path_str.ends_with("/skills/.system")
+            || path_str.contains("\\skills\\.system\\")
         {
+            SkillScope::System
+        } else if path_str.contains("/.agents/skills/") || path_str.contains("\\.agents\\skills\\") {
             SkillScope::Repo
         } else {
             SkillScope::User

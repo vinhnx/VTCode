@@ -40,22 +40,7 @@ pub struct DiscoveryConfig {
 impl Default for DiscoveryConfig {
     fn default() -> Self {
         Self {
-            skill_paths: vec![
-                // Project-level skills (highest priority)
-                PathBuf::from(".github/skills"), // Agent Skills spec recommended
-                PathBuf::from(".agents/skills"), // VT Code native
-                PathBuf::from(".vtcode/skills"), // Legacy VT Code
-                PathBuf::from(".claude/skills"), // Claude Code legacy
-                PathBuf::from(".pi/skills"),     // Pi compatibility
-                PathBuf::from(".codex/skills"),  // Codex compatibility
-                PathBuf::from("./skills"),       // Generic project skills
-                // User-level skills
-                PathBuf::from("~/.vtcode/skills"),
-                PathBuf::from("~/.claude/skills"),
-                PathBuf::from("~/.copilot/skills"), // VS Code Copilot compatibility
-                PathBuf::from("~/.pi/agent/skills"),
-                PathBuf::from("~/.codex/skills"),
-            ],
+            skill_paths: Vec::new(),
             tool_paths: vec![
                 PathBuf::from("./tools"),
                 PathBuf::from("./vendor/tools"),
@@ -175,8 +160,13 @@ impl SkillDiscovery {
         stats: &mut DiscoveryStats,
     ) -> Result<Vec<SkillContext>> {
         let mut skills = vec![];
+        let skill_paths = if self.config.skill_paths.is_empty() {
+            default_skill_paths(workspace_root)
+        } else {
+            self.config.skill_paths.clone()
+        };
 
-        for skill_path in &self.config.skill_paths {
+        for skill_path in &skill_paths {
             let full_path = self.expand_path(skill_path, workspace_root);
 
             if !full_path.exists() {
@@ -498,6 +488,50 @@ impl SkillDiscovery {
     }
 }
 
+fn default_codex_home() -> PathBuf {
+    std::env::var_os("CODEX_HOME")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| dirs::home_dir().map(|home| home.join(".codex")))
+        .unwrap_or_else(|| PathBuf::from(".codex"))
+}
+
+fn default_skill_paths(workspace_root: &Path) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    let stop = find_git_root(workspace_root).unwrap_or_else(|| workspace_root.to_path_buf());
+    let mut current = workspace_root.to_path_buf();
+
+    loop {
+        paths.push(current.join(".agents/skills"));
+        if current == stop {
+            break;
+        }
+        let Some(parent) = current.parent() else {
+            break;
+        };
+        current = parent.to_path_buf();
+    }
+
+    if let Some(home) = dirs::home_dir() {
+        paths.push(home.join(".agents/skills"));
+    }
+    #[cfg(unix)]
+    paths.push(PathBuf::from("/etc/codex/skills"));
+    paths.push(crate::skills::system::system_cache_root_dir(&default_codex_home()));
+    paths
+}
+
+fn find_git_root(path: &Path) -> Option<PathBuf> {
+    let mut current = Some(path);
+    while let Some(dir) = current {
+        if dir.join(".git").exists() {
+            return Some(dir.to_path_buf());
+        }
+        current = dir.parent();
+    }
+    None
+}
+
 /// Convert CLI tool configuration to SkillContext
 pub fn tool_config_to_skill_context(config: &CliToolConfig) -> Result<SkillContext> {
     let manifest = SkillManifest {
@@ -610,7 +644,7 @@ mod tests {
     #[tokio::test]
     async fn test_discovery_config_default() {
         let config = DiscoveryConfig::default();
-        assert!(!config.skill_paths.is_empty());
+        assert!(config.skill_paths.is_empty());
         assert!(!config.tool_paths.is_empty());
         assert!(!config.auto_discover_system_tools); // Disabled by default for security
     }

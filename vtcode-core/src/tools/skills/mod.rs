@@ -322,8 +322,6 @@ fn discovery_error_samples(errors: &[SkillErrorInfo]) -> Vec<String> {
 fn matches_skill_filters(
     name: &str,
     description: &str,
-    when_to_use: Option<&str>,
-    when_not_to_use: Option<&str>,
     variety: SkillVariety,
     query: Option<&str>,
     variety_filter: Option<&str>,
@@ -339,8 +337,6 @@ fn matches_skill_filters(
         let query = query.to_lowercase();
         if !name.to_lowercase().contains(query.as_str())
             && !description.to_lowercase().contains(query.as_str())
-            && !when_to_use.is_some_and(|value| value.to_lowercase().contains(query.as_str()))
-            && !when_not_to_use.is_some_and(|value| value.to_lowercase().contains(query.as_str()))
         {
             return false;
         }
@@ -610,8 +606,6 @@ impl Tool for ListSkillsTool {
             if !matches_skill_filters(
                 manifest.name.as_str(),
                 manifest.description.as_str(),
-                manifest.when_to_use.as_deref(),
-                manifest.when_not_to_use.as_deref(),
                 manifest.variety,
                 query.as_deref(),
                 variety_filter,
@@ -630,8 +624,6 @@ impl Tool for ListSkillsTool {
                 "description": manifest.description,
                 "path": skill_meta.path,
                 "scope": skill_meta.scope,
-                "when_to_use": manifest.when_to_use,
-                "when_not_to_use": manifest.when_not_to_use,
                 "variety": manifest.variety,
                 "status": status,
             }));
@@ -641,8 +633,6 @@ impl Tool for ListSkillsTool {
             if !matches_skill_filters(
                 tool.name.as_str(),
                 tool.description.as_str(),
-                None,
-                None,
                 SkillVariety::SystemUtility,
                 query.as_deref(),
                 variety_filter,
@@ -824,9 +814,6 @@ mod tests {
                 r#"---
 name: {name}
 description: Demo skill
-vtcode-native: true
-when-to-use: Use this when activated helper workflows are needed.
-when-not-to-use: Do not use this for shell access.
 ---
 Use the activated helper.
 
@@ -1220,18 +1207,10 @@ Use `/rust-skills`.
                 .contains(DEMO_SKILL_TOOL_NAME)
         );
         assert_eq!(entry["scope"].as_str(), Some("repo"));
-        assert_eq!(
-            entry["when_to_use"].as_str(),
-            Some("Use this when activated helper workflows are needed.")
-        );
-        assert_eq!(
-            entry["when_not_to_use"].as_str(),
-            Some("Do not use this for shell access.")
-        );
     }
 
     #[tokio::test]
-    async fn list_skills_query_matches_when_to_use_guidance() {
+    async fn list_skills_query_matches_description() {
         let temp_dir = TempDir::new().expect("temp dir");
         write_skill_fixture(temp_dir.path(), DEMO_SKILL_TOOL_NAME);
         let active_skills = Arc::new(RwLock::new(HashMap::new()));
@@ -1242,7 +1221,7 @@ Use `/rust-skills`.
         );
 
         let result = tool
-            .execute(json!({ "query": "helper workflows" }))
+            .execute(json!({ "query": "demo skill" }))
             .await
             .expect("list skills succeeds");
 

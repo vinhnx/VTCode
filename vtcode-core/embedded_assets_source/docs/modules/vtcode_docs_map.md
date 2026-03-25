@@ -521,13 +521,13 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/skills/SKILLS_GUIDE.md`
   - **Content**: Agent Skills Guide
-  - **Topics**: Overview, Skill Structure, Instructions, Examples, Guidelines
-  - **User Questions**: "What can you tell me about Agent Skills Guide?", "How does Overview work?", "How does Skill Structure work?"
+  - **Topics**: Discovery, Skill Structure, SKILL.md, Prompting Behavior, Commands
+  - **User Questions**: "What can you tell me about Agent Skills Guide?", "How does Discovery work?", "How does Skill Structure work?"
 
 - **File**: `docs/skills/AGENT_SKILLS_SPEC_IMPLEMENTATION.md`
-  - **Content**: Agent Skills Specification Implementation
-  - **Topics**: Overview, Key Improvements, Overview, When to Use This Skill, Instructions
-  - **User Questions**: "What can you tell me about Agent Skills Specification Implementation?", "How does Overview work?", "How does Key Improvements work?"
+  - **Content**: Agent Skills Spec Implementation
+  - **Topics**: Implemented Behavior, Supported `SKILL.md` Fields, Validation Rules, Discovery Precedence, Deliberate Non-Support
+  - **User Questions**: "What can you tell me about Agent Skills Spec Implementation?", "How does Implemented Behavior work?", "How does Supported `SKILL.md` Fields work?"
 
 - **File**: `docs/a2a/README.md`
   - **Content**: Agent2Agent (A2A) Protocol Support
@@ -675,9 +675,9 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **User Questions**: "What can you tell me about Shell Environment Snapshot?", "How does Problem work?", "How does Solution work?"
 
 - **File**: `docs/skills/SKILL_AUTHORING_GUIDE.md`
-  - **Content**: Skill Authoring Guide for VT Code
-  - **Topics**: Overview, Purpose, Workflow, Resources, Skill Structure
-  - **User Questions**: "What can you tell me about Skill Authoring Guide for VT Code?", "How does Overview work?", "How does Purpose work?"
+  - **Content**: Skill Authoring Guide
+  - **Topics**: Create a Skill, Write `SKILL.md`, Purpose, Workflow, Resources
+  - **User Questions**: "What can you tell me about Skill Authoring Guide?", "How does Create a Skill work?", "How does Write `SKILL.md` work?"
 
 - **File**: `docs/skills/CONTAINER_GUIDE.md`
   - **Content**: Skill Container API Guide
@@ -685,9 +685,9 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **User Questions**: "What can you tell me about Skill Container API Guide?", "How does Basic Usage work?", "How does Advanced Usage work?"
 
 - **File**: `docs/skills/SKILL_TOOL_USAGE.md`
-  - **Content**: Skill Tool Usage Guide
-  - **Topics**: Tool Workflow, Tool Reference, Best Practices, Troubleshooting
-  - **User Questions**: "What can you tell me about Skill Tool Usage Guide?", "How does Tool Workflow work?", "How does Tool Reference work?"
+  - **Content**: Skill Tool Usage
+  - **Topics**: Discovery Queries, Prompt Integration, Resource Loading, Storage Locations
+  - **User Questions**: "What can you tell me about Skill Tool Usage?", "How does Discovery Queries work?", "How does Prompt Integration work?"
 
 - **File**: `docs/styling/styling_integration.md`
   - **Content**: Styling Integration: anstyle-crossterm

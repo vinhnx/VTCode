@@ -798,8 +798,6 @@ impl SkillToolAdapter {
             "instructions": self.skill.instructions,
             "resources_available": self.skill.list_resources(),
             "user_input": user_input,
-            "version": self.skill.manifest.version.clone(),
-            "author": self.skill.manifest.author.clone(),
         }))
     }
 

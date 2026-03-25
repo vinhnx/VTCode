@@ -9,6 +9,7 @@ use crate::skills::types::{Skill, SkillContext, SkillManifest};
 use anyhow::{Context, Result};
 use dunce::canonicalize as normalize_path;
 use hashbrown::HashSet;
+use serde::Deserialize;
 use std::collections::VecDeque;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -31,14 +32,16 @@ pub struct SkillRoot {
 }
 
 pub fn load_skills(config: &SkillLoaderConfig) -> SkillLoadOutcome {
-    load_skills_with_home_dir(config, Some(&config.codex_home))
+    let home_dir = dirs::home_dir();
+    load_skills_with_home_dir(config, home_dir.as_deref())
 }
 
 /// Lightweight metadata discovery that avoids parsing SKILL.md files.
 /// Returns skill stubs with only name, description, and path (no manifest parsing).
 /// This is much faster for listing available skills.
 pub fn discover_skill_metadata_lightweight(config: &SkillLoaderConfig) -> SkillLoadOutcome {
-    discover_skill_metadata_lightweight_with_home_dir(config, Some(&config.codex_home))
+    let home_dir = dirs::home_dir();
+    discover_skill_metadata_lightweight_with_home_dir(config, home_dir.as_deref())
 }
 
 /// Internal helper that allows specifying an explicit home directory.
@@ -56,6 +59,7 @@ fn load_skills_with_home_dir(
 
     add_system_cli_tools(&mut outcome);
     dedup_and_sort(&mut outcome);
+    filter_disabled_skills(&mut outcome, home_dir);
     outcome
 }
 
@@ -74,6 +78,7 @@ fn discover_skill_metadata_lightweight_with_home_dir(
 
     add_system_cli_tools(&mut outcome);
     dedup_and_sort(&mut outcome);
+    filter_disabled_skills(&mut outcome, home_dir);
     outcome
 }
 
@@ -95,56 +100,85 @@ fn dedup_and_sort(outcome: &mut SkillLoadOutcome) {
     outcome.skills.sort_by(|a, b| a.name.cmp(&b.name));
 }
 
+#[derive(Debug, Default, Deserialize)]
+struct CodexConfig {
+    #[serde(default)]
+    skills: CodexSkillsConfig,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct CodexSkillsConfig {
+    #[serde(default)]
+    config: Vec<CodexSkillToggle>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CodexSkillToggle {
+    path: PathBuf,
+    #[serde(default = "default_skill_toggle_enabled")]
+    enabled: bool,
+}
+
+fn default_skill_toggle_enabled() -> bool {
+    true
+}
+
+fn filter_disabled_skills(outcome: &mut SkillLoadOutcome, home_dir: Option<&Path>) {
+    let disabled = disabled_skill_paths(home_dir);
+    if disabled.is_empty() {
+        return;
+    }
+
+    outcome.skills.retain(|skill| {
+        let canonical = normalize_path(&skill.path).unwrap_or_else(|_| skill.path.clone());
+        !disabled.contains(&canonical)
+    });
+}
+
+fn disabled_skill_paths(home_dir: Option<&Path>) -> HashSet<PathBuf> {
+    let Some(home_dir) = home_dir else {
+        return HashSet::new();
+    };
+
+    let config_path = home_dir.join(".codex").join("config.toml");
+    let Ok(content) = fs::read_to_string(&config_path) else {
+        return HashSet::new();
+    };
+    let Ok(config) = toml::from_str::<CodexConfig>(&content) else {
+        return HashSet::new();
+    };
+
+    config
+        .skills
+        .config
+        .into_iter()
+        .filter(|entry| !entry.enabled)
+        .map(|entry| normalize_path(&entry.path).unwrap_or(entry.path))
+        .collect()
+}
+
 fn skill_roots_with_home_dir(
     config: &SkillLoaderConfig,
     home_dir: Option<&Path>,
 ) -> Vec<SkillRoot> {
     let mut roots = Vec::new();
 
-    // 1. Repo/Project roots (highest priority)
-    // We check for .agents/skills, .codex/skills, .vtcode/skills, etc.
-    if let Some(project_root) = &config.project_root {
-        // Traditional skills
+    for repo_dir in repo_skill_search_dirs(config) {
         roots.push(SkillRoot {
-            path: project_root.join(".agents/skills"),
+            path: repo_dir.join(".agents/skills"),
             scope: SkillScope::Repo,
             is_tool_root: false,
             is_plugin_root: false,
         });
-        roots.push(SkillRoot {
-            path: project_root.join(".codex/skills"),
-            scope: SkillScope::Repo,
-            is_tool_root: false,
-            is_plugin_root: false,
-        });
-        roots.push(SkillRoot {
-            path: project_root.join(".vtcode/skills"),
-            scope: SkillScope::Repo,
-            is_tool_root: false,
-            is_plugin_root: false,
-        });
-        roots.push(SkillRoot {
-            path: project_root.join("skills"),
-            scope: SkillScope::Repo,
-            is_tool_root: false,
-            is_plugin_root: false,
-        });
+    }
 
-        // Plugin roots (native code plugins)
+    if let Some(project_root) = &config.project_root {
         roots.push(SkillRoot {
             path: project_root.join(".agents/plugins"),
             scope: SkillScope::Repo,
             is_tool_root: false,
             is_plugin_root: true,
         });
-        roots.push(SkillRoot {
-            path: project_root.join(".vtcode/plugins"),
-            scope: SkillScope::Repo,
-            is_tool_root: false,
-            is_plugin_root: true,
-        });
-
-        // Tool roots
         roots.push(SkillRoot {
             path: project_root.join("tools"),
             scope: SkillScope::Repo,
@@ -159,30 +193,23 @@ fn skill_roots_with_home_dir(
         });
     }
 
-    // 2. User roots (only if home_dir is provided)
     if let Some(home) = home_dir {
         roots.push(SkillRoot {
-            path: home.join("skills"),
+            path: home.join(".agents/skills"),
             scope: SkillScope::User,
             is_tool_root: false,
             is_plugin_root: false,
-        });
-        roots.push(SkillRoot {
-            path: home.join("tools"),
-            scope: SkillScope::User,
-            is_tool_root: true,
-            is_plugin_root: false,
-        });
-        // User plugins
-        roots.push(SkillRoot {
-            path: home.join(".vtcode/plugins"),
-            scope: SkillScope::User,
-            is_tool_root: false,
-            is_plugin_root: true,
         });
     }
 
-    // 3. System roots
+    #[cfg(unix)]
+    roots.push(SkillRoot {
+        path: PathBuf::from("/etc/codex/skills"),
+        scope: SkillScope::Admin,
+        is_tool_root: false,
+        is_plugin_root: false,
+    });
+
     if config.include_bundled_system_skills {
         roots.push(SkillRoot {
             path: system_cache_root_dir(&config.codex_home),
@@ -193,6 +220,39 @@ fn skill_roots_with_home_dir(
     }
 
     roots
+}
+
+fn repo_skill_search_dirs(config: &SkillLoaderConfig) -> Vec<PathBuf> {
+    let stop = config
+        .project_root
+        .clone()
+        .unwrap_or_else(|| config.cwd.clone());
+    let mut dirs = Vec::new();
+    let mut current = config.cwd.clone();
+
+    loop {
+        dirs.push(current.clone());
+        if current == stop {
+            break;
+        }
+        let Some(parent) = current.parent() else {
+            break;
+        };
+        current = parent.to_path_buf();
+    }
+
+    dirs
+}
+
+fn find_git_root(path: &Path) -> Option<PathBuf> {
+    let mut current = Some(path);
+    while let Some(dir) = current {
+        if dir.join(".git").exists() {
+            return Some(dir.to_path_buf());
+        }
+        current = dir.parent();
+    }
+    None
 }
 
 fn discover_skills_under_root(root: &SkillRoot, outcome: &mut SkillLoadOutcome) {
@@ -247,7 +307,10 @@ fn discover_skills_under_root(root: &SkillRoot, outcome: &mut SkillLoadOutcome) 
 
             // Check for traditional skill
             if file_name == "SKILL.md" {
-                match crate::skills::manifest::parse_skill_file(&path) {
+                let Some(skill_dir) = path.parent() else {
+                    continue;
+                };
+                match crate::skills::manifest::parse_skill_file(skill_dir) {
                     Ok((manifest, _)) => {
                         outcome.skills.push(SkillMetadata {
                             name: manifest.name.clone(),
@@ -325,19 +388,12 @@ fn discover_metadata_under_root(root: &SkillRoot, outcome: &mut SkillLoadOutcome
                     .with_context(|| format!("reading {}", path.display()))
                 {
                     Ok(contents) => {
-                        let default_name = path
-                            .parent()
-                            .and_then(|p| p.file_name())
-                            .and_then(|n| n.to_str());
-                        match crate::skills::manifest::parse_skill_content_with_defaults(
-                            &contents,
-                            default_name,
-                        ) {
+                        match crate::skills::manifest::parse_skill_content(&contents) {
                             Ok((manifest, _)) => {
                                 outcome.skills.push(SkillMetadata {
                                     name: manifest.name.clone(),
                                     description: manifest.description.clone(),
-                                    short_description: manifest.when_to_use.clone(),
+                                    short_description: None,
                                     path: path.clone(),
                                     scope: root.scope,
                                     manifest: Some(manifest),
@@ -609,14 +665,23 @@ fn plugin_loader_for_workspace(
     plugin_loader
 }
 
+fn default_codex_home() -> PathBuf {
+    std::env::var_os("CODEX_HOME")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| dirs::home_dir().map(|home| home.join(".codex")))
+        .unwrap_or_else(|| PathBuf::from(".codex"))
+}
+
 fn discovery_config_for_codex_home(workspace_root: &Path, codex_home: &Path) -> DiscoveryConfig {
+    let home_dir = dirs::home_dir();
     let loader_config = SkillLoaderConfig {
         codex_home: codex_home.to_path_buf(),
         cwd: workspace_root.to_path_buf(),
-        project_root: Some(workspace_root.to_path_buf()),
+        project_root: find_git_root(workspace_root),
         include_bundled_system_skills: true,
     };
-    let roots = skill_roots_with_home_dir(&loader_config, Some(codex_home));
+    let roots = skill_roots_with_home_dir(&loader_config, home_dir.as_deref());
 
     DiscoveryConfig {
         skill_paths: roots
@@ -636,10 +701,13 @@ fn discovery_config_for_codex_home(workspace_root: &Path, codex_home: &Path) -> 
 impl EnhancedSkillLoader {
     /// Create a new enhanced loader for workspace
     pub fn new(workspace_root: PathBuf) -> Self {
-        let plugin_loader = plugin_loader_for_workspace(&workspace_root, None);
+        let codex_home = default_codex_home();
+        let discovery =
+            SkillDiscovery::with_config(discovery_config_for_codex_home(&workspace_root, &codex_home));
+        let plugin_loader = plugin_loader_for_workspace(&workspace_root, Some(&codex_home));
         Self {
             workspace_root,
-            discovery: SkillDiscovery::new(),
+            discovery,
             plugin_loader,
         }
     }
@@ -672,7 +740,12 @@ impl EnhancedSkillLoader {
             if skill_ctx.manifest().name == name {
                 let path = skill_ctx.path();
                 let (manifest, instructions) = crate::skills::manifest::parse_skill_file(path)?;
-                let skill = Skill::new(manifest, path.clone(), instructions)?;
+                let skill = Skill::with_scope(
+                    manifest,
+                    path.clone(),
+                    infer_scope_from_skill_path(path, &self.workspace_root),
+                    instructions,
+                )?;
                 return Ok(EnhancedSkill::Traditional(Box::new(skill)));
             }
         }
@@ -748,8 +821,34 @@ impl EnhancedSkillLoader {
     fn load_full_skill_from_ctx(&self, ctx: &SkillContext) -> Result<Skill> {
         let path = ctx.path();
         let (manifest, instructions) = crate::skills::manifest::parse_skill_file(path)?;
-        Skill::new(manifest, path.clone(), instructions)
+        Skill::with_scope(
+            manifest,
+            path.clone(),
+            infer_scope_from_skill_path(path, &self.workspace_root),
+            instructions,
+        )
     }
+}
+
+fn infer_scope_from_skill_path(path: &Path, workspace_root: &Path) -> SkillScope {
+    if path.starts_with(Path::new("/etc/codex/skills")) {
+        return SkillScope::Admin;
+    }
+    if path.starts_with(system_cache_root_dir(&default_codex_home())) {
+        return SkillScope::System;
+    }
+    if let Some(home) = dirs::home_dir()
+        && path.starts_with(home.join(".agents/skills"))
+    {
+        return SkillScope::User;
+    }
+    if path.starts_with(workspace_root)
+        || path.to_string_lossy().contains("/.agents/skills/")
+        || path.to_string_lossy().contains("\\.agents\\skills\\")
+    {
+        return SkillScope::Repo;
+    }
+    SkillScope::User
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -782,8 +881,7 @@ pub fn detect_skill_mentions(user_input: &str, available_skills: &[SkillManifest
 ///
 /// Routing policy:
 /// - Explicit `$skill-name` mentions always win.
-/// - Description/when-to-use keywords provide positive signal.
-/// - when-not-to-use keywords provide negative signal and can veto weak matches.
+/// - Description keywords provide the only implicit signal.
 pub fn detect_skill_mentions_with_options(
     user_input: &str,
     available_skills: &[SkillManifest],
@@ -811,27 +909,8 @@ pub fn detect_skill_mentions_with_options(
         }
 
         let description_keywords = extract_keywords(&skill.description);
-        let when_to_use_keywords = skill
-            .when_to_use
-            .as_deref()
-            .map(extract_keywords)
-            .unwrap_or_default();
-        let when_not_to_use_keywords = skill
-            .when_not_to_use
-            .as_deref()
-            .map(extract_keywords)
-            .unwrap_or_default();
-
         let description_matches = overlap_count(&input_keywords, &description_keywords);
-        let use_matches = overlap_count(&input_keywords, &when_to_use_keywords);
-        let avoid_matches = overlap_count(&input_keywords, &when_not_to_use_keywords);
-        let positive_matches = description_matches + use_matches;
-
-        if avoid_matches > 0 && use_matches == 0 && description_matches <= avoid_matches {
-            continue;
-        }
-
-        if positive_matches >= min_matches {
+        if description_matches >= min_matches {
             mentions.push(skill.name.clone());
         }
     }
@@ -881,54 +960,48 @@ mod tests {
     fn manifest(
         name: &str,
         description: &str,
-        when_to_use: Option<&str>,
-        when_not_to_use: Option<&str>,
     ) -> SkillManifest {
         SkillManifest {
             name: name.to_string(),
             description: description.to_string(),
-            when_to_use: when_to_use.map(ToOwned::to_owned),
-            when_not_to_use: when_not_to_use.map(ToOwned::to_owned),
             ..Default::default()
         }
     }
 
     #[test]
     fn detects_explicit_skill_mentions() {
-        let skills = vec![manifest(
-            "pdf-analyzer",
-            "Analyze PDF files and extract tables",
-            None,
-            None,
-        )];
+        let skills = vec![manifest("pdf-analyzer", "Analyze PDF files and extract tables")];
         let mentions = detect_skill_mentions("Use $pdf-analyzer for this file", &skills);
         assert_eq!(mentions, vec!["pdf-analyzer".to_string()]);
     }
 
     #[test]
-    fn negative_signal_blocks_weak_keyword_match() {
+    fn description_keywords_drive_implicit_matches() {
         let skills = vec![manifest(
             "api-fetcher",
             "Fetch data from API endpoints and summarize responses",
-            Some("Use for batch API analytics and endpoint inventories"),
-            Some("Do not use for local file edits or static markdown updates"),
         )];
 
-        let mentions = detect_skill_mentions(
-            "Please update this local markdown file and fix headings",
-            &skills,
-        );
+        let mentions =
+            detect_skill_mentions("Fetch and summarize API responses for these endpoints", &skills);
+        assert_eq!(mentions, vec!["api-fetcher".to_string()]);
+    }
+
+    #[test]
+    fn unrelated_input_does_not_match_description() {
+        let skills = vec![manifest(
+            "api-fetcher",
+            "Fetch data from API endpoints and summarize responses",
+        )];
+
+        let mentions =
+            detect_skill_mentions("Please update this local markdown file and fix headings", &skills);
         assert!(mentions.is_empty());
     }
 
     #[test]
     fn auto_trigger_can_be_disabled() {
-        let skills = vec![manifest(
-            "sql-checker",
-            "Validate SQL migration scripts for safety",
-            None,
-            None,
-        )];
+        let skills = vec![manifest("sql-checker", "Validate SQL migration scripts for safety")];
         let options = SkillMentionDetectionOptions {
             enable_auto_trigger: false,
             ..Default::default()

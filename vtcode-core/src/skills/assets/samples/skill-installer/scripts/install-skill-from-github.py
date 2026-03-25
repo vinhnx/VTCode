@@ -26,7 +26,7 @@ from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
 
 # Default installation paths
-DEFAULT_SKILLS_PATH = Path.home() / ".vtcode" / "skills"
+DEFAULT_SKILLS_PATH = Path.home() / ".agents" / "skills"
 SKILL_FILENAME = "SKILL.md"
 
 

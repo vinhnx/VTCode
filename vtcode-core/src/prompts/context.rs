@@ -126,7 +126,7 @@ impl PromptContext {
     }
 
     pub fn load_available_skills(&mut self) {
-        let home_dir = default_vtcode_home_dir();
+        let home_dir = default_codex_home_dir();
         self.load_available_skills_with_home_dir(home_dir.as_deref());
     }
 
@@ -183,11 +183,11 @@ impl PromptContext {
     }
 }
 
-fn default_vtcode_home_dir() -> Option<PathBuf> {
-    std::env::var_os("VTCODE_HOME")
+fn default_codex_home_dir() -> Option<PathBuf> {
+    std::env::var_os("CODEX_HOME")
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)
-        .or_else(|| dirs::home_dir().map(|home| home.join(".vtcode")))
+        .or_else(|| dirs::home_dir().map(|home| home.join(".codex")))
 }
 
 #[cfg(test)]
@@ -201,9 +201,7 @@ mod tests {
         fs::create_dir_all(skill_dir).expect("create skill dir");
         fs::write(
             skill_dir.join("SKILL.md"),
-            format!(
-                "---\nname: {name}\ndescription: {description}\nwhen-to-use: Use this skill.\nwhen-not-to-use: Avoid this skill.\n---\n# {name}\n"
-            ),
+            format!("---\nname: {name}\ndescription: {description}\n---\n# {name}\n"),
         )
         .expect("write skill");
     }
@@ -242,7 +240,7 @@ mod tests {
         let workspace = TempDir::new().expect("workspace tempdir");
         fs::create_dir(workspace.path().join(".git")).expect("create git dir");
         write_skill(
-            &workspace.path().join(".vtcode/skills/repo-skill"),
+            &workspace.path().join(".agents/skills/repo-skill"),
             "repo-skill",
             "Repo-local skill",
         );
