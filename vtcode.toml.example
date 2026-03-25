@@ -1291,7 +1291,12 @@ post_tool_use = [
 
 # Provider-specific configuration
 [provider.openai]
-# Enable Responses API WebSocket transport for eligible OpenAI models.
+# Enable the native OpenAI Responses WebSocket transport for eligible non-streaming
+# OpenAI models. VT Code keeps this opt-in and only uses it against api.openai.com.
+# The WebSocket path sends incremental input when it can prove continuation safely,
+# may warm up brand-new chains with `generate = false`, reconnects after the
+# 60-minute connection limit, and restarts as a new chain if the server returns
+# `previous_response_not_found`.
 # Default: false
 websocket_mode = false
 

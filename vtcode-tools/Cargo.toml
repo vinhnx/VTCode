@@ -24,9 +24,9 @@ examples = []
 vtcode-commons = { path = "../vtcode-commons", version = "0.93.2" }
 vtcode-core = { path = "../vtcode-core", version = "0.93.2", default-features = false }
 vtcode-acp = { path = "../vtcode-acp", version = "0.93.2" }
+parking_lot = "0.12"
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-parking_lot = "0.12"
 hashbrown = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }

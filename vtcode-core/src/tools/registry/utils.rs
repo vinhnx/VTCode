@@ -15,8 +15,14 @@ pub(super) fn normalize_tool_output(mut val: Value) -> Value {
             .and_then(|value| value.as_str())
             .is_some_and(|value| value == "git_diff");
 
-        let out_trim = obj.get("output").and_then(|v| v.as_str()).map(str::trim_end);
-        let std_trim = obj.get("stdout").and_then(|v| v.as_str()).map(str::trim_end);
+        let out_trim = obj
+            .get("output")
+            .and_then(|v| v.as_str())
+            .map(str::trim_end);
+        let std_trim = obj
+            .get("stdout")
+            .and_then(|v| v.as_str())
+            .map(str::trim_end);
 
         let out_has_content = out_trim.is_some_and(|s| !s.is_empty());
         let same = out_trim.is_some() && out_trim == std_trim;

@@ -44,7 +44,7 @@ mod generation;
 mod streaming;
 mod websocket;
 
-use self::websocket::OpenAIResponsesWebSocketSession;
+use self::websocket::{OpenAIResponsesWebSocketContinuationCache, OpenAIResponsesWebSocketSession};
 use super::super::{
     common::{
         extract_prompt_cache_settings, override_base_url, parse_client_prompt_common, resolve_model,
@@ -88,6 +88,7 @@ pub struct OpenAIProvider {
     service_tier: Option<OpenAIServiceTier>,
     hosted_shell: OpenAIHostedShellConfig,
     websocket_session: AsyncMutex<Option<OpenAIResponsesWebSocketSession>>,
+    websocket_continuation_cache: Mutex<Option<OpenAIResponsesWebSocketContinuationCache>>,
 }
 
 impl OpenAIProvider {
@@ -192,6 +193,7 @@ impl OpenAIProvider {
             service_tier: None,
             hosted_shell: OpenAIHostedShellConfig::default(),
             websocket_session: AsyncMutex::new(None),
+            websocket_continuation_cache: Mutex::new(None),
         }
     }
 
@@ -340,6 +342,7 @@ impl OpenAIProvider {
             service_tier,
             hosted_shell,
             websocket_session: AsyncMutex::new(None),
+            websocket_continuation_cache: Mutex::new(None),
         }
     }
 

@@ -2514,7 +2514,6 @@ mod tests {
             )
             .await
             .expect("copilot VT Code tool call should succeed");
-        println!("DEBUG: test: response={:?}", response);
 
         match response {
             CopilotToolCallResponse::Success(success) => {
@@ -2526,7 +2525,11 @@ mod tests {
         let transcript_text = transcript::snapshot().join("\n");
         let stripped_text = vtcode_core::utils::ansi_parser::strip_ansi(&transcript_text);
         assert!(runtime_host.harness_state.tool_calls >= 1);
-        assert!(stripped_text.contains("hello from acp"), "STRIPPED TEXT: {:?}", stripped_text);
+        assert!(
+            stripped_text.contains("hello from acp"),
+            "STRIPPED TEXT: {:?}",
+            stripped_text
+        );
         assert!(
             stripped_text.contains("Ran printf") || stripped_text.contains("Run command"),
             "expected command preview in transcript, got: {stripped_text}"

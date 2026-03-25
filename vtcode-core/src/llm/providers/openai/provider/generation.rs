@@ -6,7 +6,6 @@ use super::super::headers;
 use super::super::responses_api::build_standard_responses_payload;
 use super::super::types::ResponsesApiState;
 use super::OpenAIProvider;
-use super::websocket::is_websocket_connection_limit_error;
 use crate::llm::error_display;
 use crate::llm::provider;
 use crate::llm::provider::LLMProvider;
@@ -199,17 +198,8 @@ impl OpenAIProvider {
         let attempt_responses = should_attempt_responses_api(responses_state);
         if attempt_responses {
             if self.websocket_mode_enabled(&request.model) {
-                match self.generate_via_responses_websocket(&request).await {
-                    Ok(response) => return Ok(response),
-                    Err(err) => {
-                        if is_websocket_connection_limit_error(&err) {
-                            match self.generate_via_responses_websocket(&request).await {
-                                Ok(response) => return Ok(response),
-                                Err(_retry_err) => {}
-                            }
-                        }
-                        let _ = err;
-                    }
+                if let Ok(response) = self.generate_via_responses_websocket(&request).await {
+                    return Ok(response);
                 }
             }
 

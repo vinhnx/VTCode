@@ -431,7 +431,7 @@ python3 scripts/generate_config_field_reference.py
 | `provider.openai.responses_include[]` | `string` | no | `-` | - |
 | `provider.openai.responses_store` | `boolean \| null` | no | `-` | Optional Responses API `store` flag. Set to `false` to avoid server-side storage when using Responses-compatible models. |
 | `provider.openai.service_tier` | `OpenAIServiceTier \| null` | no | `-` | Optional native OpenAI `service_tier` request parameter. Leave unset to inherit the Project-level default service tier. Options: "priority" |
-| `provider.openai.websocket_mode` | `boolean` | no | `false` | Enable Responses API WebSocket transport for non-streaming requests. This is an opt-in path designed for long-running, tool-heavy workflows. |
+| `provider.openai.websocket_mode` | `boolean` | no | `false` | Enable the native OpenAI Responses WebSocket transport for eligible non-streaming requests to `api.openai.com`. VT Code keeps this opt-in, sends incremental input only when it can prove continuation safely, may warm up brand-new chains with `generate=false`, reconnects after close/60-minute limits, and restarts as a new chain after `previous_response_not_found`. |
 | `pty.command_timeout_seconds` | `integer` | no | `300` | Command timeout in seconds (prevents hanging commands) |
 | `pty.default_cols` | `integer` | no | `80` | Default terminal columns for PTY sessions |
 | `pty.default_rows` | `integer` | no | `24` | Default terminal rows for PTY sessions |

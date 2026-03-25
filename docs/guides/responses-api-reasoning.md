@@ -71,6 +71,12 @@ VT Code's default OpenAI profile keeps `gpt-5.4` on a compact execution contract
 
 11. **Manual `/compact` uses the provider-native endpoint when possible**: VT Code's `/compact` command calls the Responses `/responses/compact` endpoint for compatible providers and keeps the returned canonical output structure as conversation history, including opaque `compaction` items. For providers without native support, VT Code falls back to local summarization.
 
+12. **OpenAI WebSocket mode stays opt-in and only applies to native non-streaming Responses turns**: When `[provider.openai].websocket_mode = true`, VT Code uses the `/v1/responses` WebSocket transport only for native `api.openai.com` non-streaming Responses requests. The transport keeps a reusable in-memory continuation cache per provider instance, sends only incremental `input` when the next turn is a verified prefix extension, and otherwise starts a new chain with the full input window.
+
+13. **Warmup is optional and VT Code only uses it for brand-new WebSocket chains**: VT Code no longer warms every fresh socket automatically. It sends `generate = false` only when a request is starting a brand-new WebSocket chain and there is no reusable continuation cache to chain from. The next generated turn then continues from that warmup response ID on the same socket.
+
+14. **WebSocket recovery follows the current Responses contract**: If the socket closes or the server returns `websocket_connection_limit_reached`, VT Code reconnects once and reuses the cached continuation state. If the server returns `previous_response_not_found`, VT Code clears the cached continuation, opens a new chain on WebSocket, and resends the full input window instead of silently attempting another stale continuation.
+
 ## Example workflow
 
 1. VT Code sends a Responses API request for an OpenAI reasoning model with tools serialized through the shared helper.
