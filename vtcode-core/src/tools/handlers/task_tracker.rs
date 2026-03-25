@@ -862,6 +862,32 @@ impl TaskTrackerTool {
 
         let new_status = TaskStatus::from_str(status_str)?;
 
+        if index == 0 {
+            if new_status != TaskStatus::Completed {
+                bail!(
+                    "index 0 is reserved for checklist-level completion; individual item indices are 1-indexed"
+                );
+            }
+
+            if let Some(outcome) = normalize_optional_text(args.outcome.as_deref()) {
+                let checklist_outcome = format!("Checklist outcome: {outcome}");
+                checklist.notes =
+                    append_notes(checklist.notes.take(), Some(checklist_outcome.as_str()));
+            }
+            checklist.notes = append_notes(checklist.notes.take(), args.notes.as_deref());
+
+            let snapshot = checklist.clone();
+            drop(guard);
+            let (summary, view) = self.persist_and_build_view(&snapshot).await?;
+
+            return Ok(json!({
+                "status": "updated",
+                "message": "Checklist-level completion acknowledged; checklist progress remains derived from item statuses.",
+                "checklist": summary,
+                "view": view
+            }));
+        }
+
         let item_count = checklist.items.len();
         let pos = checklist
             .items
@@ -1242,6 +1268,37 @@ mod tests {
         assert_eq!(result["status"], "updated");
         assert_eq!(result["checklist"]["completed"], 1);
         assert_eq!(result["checklist"]["progress_percent"], 50);
+    }
+
+    #[tokio::test]
+    async fn test_update_index_zero_allows_checklist_completion_note() {
+        let temp = TempDir::new().unwrap();
+        let (_state, tool) = setup_tool(&temp);
+
+        tool.execute(json!({
+            "action": "create",
+            "title": "Test",
+            "items": ["Step 1", "Step 2"]
+        }))
+        .await
+        .unwrap();
+
+        let result = tool
+            .execute(json!({
+                "action": "update",
+                "index": 0,
+                "status": "completed",
+                "outcome": "Reported summary to user"
+            }))
+            .await
+            .unwrap();
+
+        assert_eq!(result["status"], "updated");
+        assert_eq!(result["checklist"]["completed"], 0);
+        assert_eq!(
+            result["checklist"]["notes"],
+            "Checklist outcome: Reported summary to user"
+        );
     }
 
     #[tokio::test]

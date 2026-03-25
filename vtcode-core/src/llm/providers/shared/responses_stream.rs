@@ -1,7 +1,5 @@
 use crate::llm::error_display;
-use crate::llm::provider::{
-    LLMError, LLMNormalizedStream, LLMResponse, NormalizedStreamEvent,
-};
+use crate::llm::provider::{LLMError, LLMNormalizedStream, LLMResponse, NormalizedStreamEvent};
 use crate::llm::providers::shared::{extract_data_payload, find_sse_boundary};
 use async_stream::try_stream;
 use futures::StreamExt;
@@ -50,10 +48,7 @@ where
         self.done
     }
 
-    fn handle_payload(
-        &mut self,
-        payload: Value,
-    ) -> Result<Vec<NormalizedStreamEvent>, LLMError> {
+    fn handle_payload(&mut self, payload: Value) -> Result<Vec<NormalizedStreamEvent>, LLMError> {
         let mut events = Vec::new();
 
         if let Some(usage) = payload.get("usage").cloned()
@@ -208,14 +203,11 @@ where
             .and_then(Value::as_str)
             .or_else(|| item.get("call_id").and_then(Value::as_str))
             .filter(|value| !value.is_empty());
-        let name = item
-            .get("name")
-            .and_then(Value::as_str)
-            .or_else(|| {
-                item.get("function")
-                    .and_then(|function| function.get("name"))
-                    .and_then(Value::as_str)
-            });
+        let name = item.get("name").and_then(Value::as_str).or_else(|| {
+            item.get("function")
+                .and_then(|function| function.get("name"))
+                .and_then(Value::as_str)
+        });
         if let (Some(call_id), Some(name)) = (call_id, name) {
             self.tool_call_names
                 .entry(call_id.to_string())
@@ -324,7 +316,8 @@ where
 fn merge_streamed_response(response: &mut LLMResponse, streamed: LLMResponse) {
     if response.content.as_deref().unwrap_or_default().is_empty() {
         response.content = streamed.content;
-    } else if let (Some(content), Some(streamed_content)) = (&mut response.content, streamed.content)
+    } else if let (Some(content), Some(streamed_content)) =
+        (&mut response.content, streamed.content)
         && !streamed_content.is_empty()
         && !content.contains(&streamed_content)
     {
@@ -514,7 +507,10 @@ mod tests {
             [NormalizedStreamEvent::Done { response }] => response,
             _ => panic!("expected done event"),
         };
-        let tool_calls = response.tool_calls.as_ref().expect("tool call should be assembled");
+        let tool_calls = response
+            .tool_calls
+            .as_ref()
+            .expect("tool call should be assembled");
         assert_eq!(
             tool_calls,
             &vec![ToolCall::function(
@@ -598,6 +594,9 @@ mod tests {
         let error = processor
             .handle_payload(json!({"type": "response.output_text.delta"}))
             .expect_err("missing delta should fail");
-        assert_eq!(error.to_string(), provider_error("TestProvider", "missing delta").to_string());
+        assert_eq!(
+            error.to_string(),
+            provider_error("TestProvider", "missing delta").to_string()
+        );
     }
 }

@@ -13,8 +13,8 @@ use crate::llm::providers::common::{
     append_normalized_reasoning_detail_items, serialize_message_content_openai,
 };
 use crate::llm::providers::shared::{
-    ResponsesNormalizedStreamOptions, create_responses_normalized_stream,
-    collect_tool_references_from_tool_search_output, function_output_value_from_message_content,
+    ResponsesNormalizedStreamOptions, collect_tool_references_from_tool_search_output,
+    create_responses_normalized_stream, function_output_value_from_message_content,
     parse_compacted_output_messages,
 };
 use crate::llm::rig_adapter::RigProviderCapabilities;

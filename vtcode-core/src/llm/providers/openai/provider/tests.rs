@@ -3360,9 +3360,7 @@ async fn stream_normalized_falls_back_to_chat_completions_when_responses_api_is_
 
     Mock::given(method("POST"))
         .and(path("/responses"))
-        .respond_with(ResponseTemplate::new(400).set_body_string(
-            "invalid api parameter: stream",
-        ))
+        .respond_with(ResponseTemplate::new(400).set_body_string("invalid api parameter: stream"))
         .expect(1)
         .mount(&server)
         .await;

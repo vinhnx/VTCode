@@ -8,8 +8,8 @@ use super::super::stream_decoder;
 use super::super::types::ResponsesApiState;
 use super::OpenAIProvider;
 use crate::llm::error_display;
-use crate::llm::provider::{self, LLMNormalizedStream};
 use crate::llm::provider::LLMProvider;
+use crate::llm::provider::{self, LLMNormalizedStream};
 use crate::llm::providers::error_handling::{is_rate_limit_error, parse_api_error};
 use crate::llm::providers::shared::{
     ResponsesNormalizedStreamOptions, create_responses_normalized_stream,
@@ -75,11 +75,8 @@ impl OpenAIProvider {
                         emit_reasoning,
                     },
                     move |value| {
-                        let response = parse_responses_payload(
-                            value,
-                            parse_model.clone(),
-                            include_metrics,
-                        )?;
+                        let response =
+                            parse_responses_payload(value, parse_model.clone(), include_metrics)?;
                         Ok(Self::normalize_reasoning_output(&parse_model, response))
                     },
                 ));

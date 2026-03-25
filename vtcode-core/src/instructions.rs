@@ -4,12 +4,11 @@ use std::path::{Path, PathBuf};
 use tokio::fs::File;
 use tokio::io::{self, AsyncReadExt};
 
+use crate::utils::file_utils::canonicalize_with_context;
 use anyhow::{Context, Result, anyhow};
 use glob::glob;
 use serde::Serialize;
 use tracing::warn;
-
-use crate::utils::file_utils::canonicalize_with_context;
 
 const AGENTS_FILENAME: &str = "AGENTS.md";
 const AGENTS_OVERRIDE_FILENAME: &str = "AGENTS.override.md";
@@ -382,8 +381,8 @@ pub async fn read_instruction_bundle(
         if metadata.len() as usize > remaining {
             truncated = true;
             if !truncation_warning_emitted {
-                warn!(
-                    "Instruction file `{}` exceeds remaining budget ({} bytes) - truncating.",
+                tracing::debug!(
+                    "Instruction file `{}` exceeds remaining budget ({} bytes); indexing partial contents.",
                     source.path.display(),
                     remaining
                 );

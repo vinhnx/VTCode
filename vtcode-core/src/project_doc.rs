@@ -5,13 +5,15 @@ use serde::Serialize;
 
 use crate::instructions::{
     InstructionBundle, InstructionSegment, extract_instruction_highlights, format_instruction_path,
-    read_instruction_bundle,
+    read_instruction_bundle, render_instruction_summary_markdown,
 };
 use crate::skills::model::SkillMetadata;
 use crate::utils::file_utils::canonicalize_with_context;
 use vtcode_config::core::AgentConfig;
 
 pub const PROJECT_DOC_SEPARATOR: &str = "\n\n--- project-doc ---\n\n";
+const PROJECT_DOC_SUMMARY_TITLE: &str = "PROJECT DOCUMENTATION";
+const PROJECT_DOC_TRUNCATION_NOTE: &str = "Some instruction files exceeded the configured prompt budget and were indexed instead of fully inlined.";
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ProjectDocBundle {
@@ -131,27 +133,38 @@ pub fn render_instruction_appendix(
             section.push_str(PROJECT_DOC_SEPARATOR);
         }
 
-        let multiple_sources = bundle.segments.len() > 1;
-        for (index, segment) in bundle.segments.iter().enumerate() {
-            if index > 0 {
-                section.push_str("\n\n---\n\n");
-            }
-
-            if multiple_sources {
-                section.push('[');
-                section.push_str(&format_instruction_path(
-                    &segment.source.path,
+        if bundle.truncated {
+            section.push_str(
+                render_instruction_summary_markdown(
+                    PROJECT_DOC_SUMMARY_TITLE,
+                    &bundle.segments,
+                    true,
                     project_root,
                     home_dir,
-                ));
-                section.push_str("]\n");
+                    12,
+                    PROJECT_DOC_TRUNCATION_NOTE,
+                )
+                .trim_end(),
+            );
+        } else {
+            let multiple_sources = bundle.segments.len() > 1;
+            for (index, segment) in bundle.segments.iter().enumerate() {
+                if index > 0 {
+                    section.push_str("\n\n---\n\n");
+                }
+
+                if multiple_sources {
+                    section.push('[');
+                    section.push_str(&format_instruction_path(
+                        &segment.source.path,
+                        project_root,
+                        home_dir,
+                    ));
+                    section.push_str("]\n");
+                }
+
+                section.push_str(segment.contents.trim());
             }
-
-            section.push_str(segment.contents.trim());
-        }
-
-        if bundle.truncated {
-            section.push_str("\n\n[project-doc truncated]");
         }
     }
 
@@ -338,7 +351,11 @@ mod tests {
     async fn instruction_appendix_marks_truncation() {
         let repo = tempdir().expect("repo");
         std::fs::write(repo.path().join(".git"), "gitdir: /tmp/git").expect("write git");
-        write_doc(repo.path(), &"A".repeat(128)).expect("write doc");
+        write_doc(
+            repo.path(),
+            "- Root summary\n\nThis detail should stay out of the prompt appendix.\n",
+        )
+        .expect("write doc");
 
         let config = AgentConfig {
             instruction_max_bytes: 16,
@@ -349,7 +366,10 @@ mod tests {
             .await
             .expect("instruction appendix");
 
-        assert!(appendix.contains("[project-doc truncated]"));
+        assert!(appendix.contains("## PROJECT DOCUMENTATION"));
+        assert!(appendix.contains("### Instruction map"));
+        assert!(appendix.contains("### On-demand loading"));
+        assert!(appendix.contains("Some instruction files exceeded the configured prompt budget"));
     }
 
     #[tokio::test]

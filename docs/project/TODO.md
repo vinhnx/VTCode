@@ -51,3 +51,7 @@ https://code.claude.com/docs/en/permission-modes#eliminate-prompts-with-auto-mod
 https://claude.com/blog/auto-mode
 
 https://claude.com/product/claude-code#auto-mode
+
+--
+
+https://www.anthropic.com/engineering/harness-design-long-running-apps
