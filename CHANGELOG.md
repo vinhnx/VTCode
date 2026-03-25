@@ -2,6 +2,48 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.93.3 - 2026-03-25
+
+### Highlights
+#### Bug Fixes
+
+- Preserve compaction context in prompts and summaries (b38f1877) 
+#### Documentation
+
+- Docs: update installation instructions for Homebrew and add troubleshooting note (0cb1c08d) 
+- Update architecture and contributing guidelines; add extension boundaries document (d17e267c) 
+#### Features
+
+- Improve tool output handling by ensuring summary headers are always recorded and refining stdout removal logic for specific tool types. (83e59742) 
+### Other Changes
+#### Other
+
+- Update config (02384ca5) 
+- Add support for summarized session forks and update related logic (1ddfd7fd) 
+- Add inline prompt suggestion feature to chat composer (b813647f) 
+- Add agent loop contract documentation for VT Code lifecycle and events (f85428b6) 
+- Remove LiteLLM provider and related documentation (ca8889aa) 
+- Update TODO (f7b10332) 
+- Harden agent runner tool error handling (4671b804) 
+- Refactor error handling, optimize token usage, and enhance performance metrics (48af5696) 
+- Add streaming support OpenAI models with normalized event handling (ff76d3af) 
+- Add orchestration for plan-build-evaluate workflow with harness artifacts (6968408b) 
+#### Refactors
+
+- Remove outdated prompt suggestion details and add subagent build task (c869b499) 
+- Enhance error handling and retry logic in tool execution (89075d3d) 
+- Improve error handling and classification in tool execution (4990c7dd) 
+- Enhance error handling and retry logic in agent execution (9f626e1e) 
+- Replace try_recv with recv for steering message handling (17edd05a) 
+- Introduce idle wake delay in inline event loop and related components (4fdec1dc) 
+- Streamline tool policy checks and improve error handling (25c11664) 
+- Replace RwLock with parking_lot::RwLock for pattern detector (278238fd) 
+- Add compact aliases for session_id and path parameters across tools (82340a2e) 
+- Enhance WebSocket handling for OpenAI provider, improve error detection, and update configuration documentation (9ae3e202) 
+- Enhance WebSocket handling and documentation for OpenAI provider (8df581c1) 
+- Streamline code structure and improve readability across multiple files (22d1fa22) 
+### Contributors
+@vinhnx
 ## 0.93.2 - 2026-03-24
 
 ### Highlights
