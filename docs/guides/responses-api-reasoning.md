@@ -75,7 +75,7 @@ VT Code's default OpenAI profile keeps `gpt-5.4` on a compact execution contract
 
 13. **Warmup is optional and VT Code only uses it for brand-new WebSocket chains**: VT Code no longer warms every fresh socket automatically. It sends `generate = false` only when a request is starting a brand-new WebSocket chain and there is no reusable continuation cache to chain from. The next generated turn then continues from that warmup response ID on the same socket.
 
-14. **WebSocket recovery follows the current Responses contract**: If the socket closes or the server returns `websocket_connection_limit_reached`, VT Code reconnects once and reuses the cached continuation state. If the server returns `previous_response_not_found`, VT Code clears the cached continuation, opens a new chain on WebSocket, and resends the full input window instead of silently attempting another stale continuation.
+14. **WebSocket recovery follows the current Responses contract**: If the socket closes or the server returns `websocket_connection_limit_reached`, VT Code reconnects once and reuses cached continuation state only when that response can survive a socket replacement. Otherwise it starts a new WebSocket chain immediately. If the server returns `previous_response_not_found`, VT Code clears the cached continuation, opens a new chain on WebSocket, and resends the full input window instead of silently attempting another stale continuation.
 
 ## Example workflow
 

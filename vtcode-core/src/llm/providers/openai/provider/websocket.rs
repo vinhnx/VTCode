@@ -57,6 +57,7 @@ pub(crate) struct OpenAIResponsesWebSocketContinuationCache {
     model: String,
     instructions: Option<String>,
     tools: Option<Value>,
+    store: bool,
 }
 
 impl OpenAIResponsesWebSocketContinuationCache {
@@ -90,6 +91,11 @@ impl OpenAIResponsesWebSocketContinuationCache {
                     .map(str::to_owned)
             });
         let tools = prepared.event.get("tools").cloned();
+        let store = prepared
+            .event
+            .get("store")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
 
         Some(Self {
             response_id,
@@ -97,7 +103,12 @@ impl OpenAIResponsesWebSocketContinuationCache {
             model,
             instructions,
             tools,
+            store,
         })
+    }
+
+    fn can_resume_after_reconnect(&self) -> bool {
+        self.store
     }
 
     fn can_continue_from(&self, payload: &Value) -> bool {
@@ -216,6 +227,7 @@ impl OpenAIProvider {
                         continue;
                     }
                     if !retried_reconnect && is_websocket_reconnect_error(&err) {
+                        self.clear_nonpersistent_websocket_continuation();
                         retried_reconnect = true;
                         continue;
                     }
@@ -316,6 +328,19 @@ impl OpenAIProvider {
             .websocket_continuation_cache
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+    }
+
+    fn clear_nonpersistent_websocket_continuation(&self) {
+        let mut cache = self
+            .websocket_continuation_cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if cache
+            .as_ref()
+            .is_some_and(|continuation| !continuation.can_resume_after_reconnect())
+        {
+            *cache = None;
+        }
     }
 }
 
@@ -653,6 +678,7 @@ mod tests {
             model: "gpt-5.2".to_string(),
             instructions: None,
             tools: None,
+            store: true,
         };
         let payload = json!({
             "model": "gpt-5.2",
@@ -683,6 +709,7 @@ mod tests {
             model: "gpt-5.2".to_string(),
             instructions: None,
             tools: None,
+            store: true,
         };
         let payload = json!({
             "model": "gpt-5.2",
@@ -831,7 +858,12 @@ mod tests {
         }
     }
 
-    fn seed_continuation_cache(provider: &OpenAIProvider, request: &LLMRequest, response_id: &str) {
+    fn seed_continuation_cache(
+        provider: &OpenAIProvider,
+        request: &LLMRequest,
+        response_id: &str,
+        store: bool,
+    ) {
         let payload = provider
             .convert_to_openai_responses_format(request)
             .expect("payload should serialize");
@@ -840,12 +872,14 @@ mod tests {
             .and_then(Value::as_array)
             .cloned()
             .expect("full input");
+        let mut event = payload;
+        event["store"] = Value::Bool(store);
 
         provider.update_websocket_continuation(
             &json!({ "id": response_id }),
             request,
             &super::PreparedWebSocketEvent {
-                event: payload,
+                event,
                 full_input,
                 used_previous_response_id: false,
             },
@@ -868,7 +902,7 @@ mod tests {
         .await;
         let provider = websocket_test_provider(base_url);
         let request = websocket_test_request();
-        seed_continuation_cache(&provider, &request, "resp_cached");
+        seed_continuation_cache(&provider, &request, "resp_cached", true);
 
         let response = LLMProvider::generate(&provider, request)
             .await
@@ -915,7 +949,7 @@ mod tests {
         .await;
         let provider = websocket_test_provider(base_url);
         let request = websocket_test_request();
-        seed_continuation_cache(&provider, &request, "resp_cached");
+        seed_continuation_cache(&provider, &request, "resp_cached", true);
 
         let response = LLMProvider::generate(&provider, request)
             .await
@@ -960,7 +994,7 @@ mod tests {
         .await;
         let provider = websocket_test_provider(base_url);
         let request = websocket_test_request();
-        seed_continuation_cache(&provider, &request, "resp_cached");
+        seed_continuation_cache(&provider, &request, "resp_cached", true);
 
         let response = LLMProvider::generate(&provider, request)
             .await
@@ -975,6 +1009,57 @@ mod tests {
                     .get("previous_response_id")
                     .and_then(Value::as_str),
                 Some("resp_cached")
+            );
+        }
+        handle.await.expect("server task");
+    }
+
+    #[tokio::test]
+    async fn websocket_reconnect_drops_nonpersistent_continuation_before_retry() {
+        let (base_url, recorded, handle) = spawn_scripted_websocket_server(vec![
+            vec![ScriptedReply::Close {
+                reason: "network reset",
+            }],
+            vec![
+                ScriptedReply::Completed {
+                    response_id: "resp_warmup",
+                    text: "",
+                },
+                ScriptedReply::Completed {
+                    response_id: "resp_final",
+                    text: "restarted cleanly",
+                },
+            ],
+        ])
+        .await;
+        let provider = websocket_test_provider(base_url);
+        let request = websocket_test_request();
+        seed_continuation_cache(&provider, &request, "resp_cached", false);
+
+        let response = LLMProvider::generate(&provider, request)
+            .await
+            .expect("nonpersistent reconnect should restart the chain");
+
+        assert_eq!(response.content.as_deref(), Some("restarted cleanly"));
+        {
+            let recorded = recorded.lock().expect("recorded lock");
+            assert_eq!(recorded.len(), 3);
+            assert_eq!(
+                recorded[0]
+                    .get("previous_response_id")
+                    .and_then(Value::as_str),
+                Some("resp_cached")
+            );
+            assert!(recorded[1].get("previous_response_id").is_none());
+            assert_eq!(
+                recorded[1].get("generate").and_then(Value::as_bool),
+                Some(false)
+            );
+            assert_eq!(
+                recorded[2]
+                    .get("previous_response_id")
+                    .and_then(Value::as_str),
+                Some("resp_warmup")
             );
         }
         handle.await.expect("server task");
