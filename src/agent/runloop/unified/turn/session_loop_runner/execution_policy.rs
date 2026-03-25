@@ -31,28 +31,31 @@ pub(super) fn effective_max_tool_calls_for_turn(
     }
 }
 
+pub(super) fn should_attempt_requesting_timeout_recovery(
+    timed_out_phase: TurnPhase,
+    had_tool_activity: bool,
+    recovery_already_attempted: bool,
+) -> bool {
+    had_tool_activity
+        && matches!(timed_out_phase, TurnPhase::Requesting)
+        && !recovery_already_attempted
+}
+
 pub(super) fn build_partial_timeout_messages(
     timeout_secs: u64,
     timed_out_phase: TurnPhase,
     attempted_tool_calls: usize,
     active_pty_sessions_before_cancel: usize,
-    plan_mode_active: bool,
-    had_tool_activity: bool,
+    continuing_with_recovery: bool,
 ) -> (String, String) {
-    let timed_out_during_request = matches!(timed_out_phase, TurnPhase::Requesting);
-    let mut timeout_note = if timed_out_during_request {
+    let timeout_note = if continuing_with_recovery {
+        "Tool activity exists and timeout occurred during LLM requesting; continuing with a compacted tool-free recovery pass that reuses existing tool outputs.".to_string()
+    } else if matches!(timed_out_phase, TurnPhase::Requesting) {
         "Tool activity exists and timeout occurred during LLM requesting; retry is skipped to avoid re-running tools.".to_string()
     } else {
         "Tool activity was detected in this attempt; retry is skipped to avoid duplicate execution."
             .to_string()
     };
-
-    let include_autonomous_recovery_note =
-        plan_mode_active && had_tool_activity && timed_out_during_request;
-    if include_autonomous_recovery_note {
-        timeout_note
-            .push_str(" Autonomous recovery will retry with an adjusted strategy when possible.");
-    }
 
     let renderer_message = format!(
         "Turn timed out after {} seconds in phase {:?}. PTY sessions cancelled; {} (calls={}, active_pty_before_cancel={})",
@@ -67,9 +70,10 @@ pub(super) fn build_partial_timeout_messages(
         "Turn timed out after {} seconds in phase {:?} after partial tool execution (calls={}, active_pty_before_cancel={})",
         timeout_secs, timed_out_phase, attempted_tool_calls, active_pty_sessions_before_cancel
     );
-    if include_autonomous_recovery_note {
-        error_message
-            .push_str(" Autonomous recovery will retry with an adjusted strategy when possible.");
+    if continuing_with_recovery {
+        error_message.push_str(
+            " Continuing with a compacted tool-free recovery pass that reuses existing tool outputs.",
+        );
     }
 
     (renderer_message, error_message)

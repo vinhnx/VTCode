@@ -807,6 +807,26 @@ pub(crate) async fn compact_history_in_place_with_events(
     .await
 }
 
+pub(crate) async fn compact_history_for_recovery_in_place(
+    context: CompactionContext<'_>,
+    state: CompactionState<'_>,
+    preserve_from_index: usize,
+) -> Result<Option<CompactionOutcome>> {
+    compact_history_before_index_in_place(
+        context,
+        state,
+        preserve_from_index,
+        CompactionPlan {
+            trigger: vtcode_core::exec::events::CompactionTrigger::Recovery,
+            envelope_mode: CompactionEnvelopeMode {
+                persistence: MemoryEnvelopePersistence::PersistToDisk,
+                placement: MemoryEnvelopePlacement::Start,
+            },
+        },
+    )
+    .await
+}
+
 async fn compact_history_segment_in_place(
     context: CompactionContext<'_>,
     state: CompactionState<'_>,
@@ -928,6 +948,100 @@ async fn compact_history_segment_in_place(
         original_len,
         compacted_len,
         mode: compaction_mode,
+        history_artifact_path,
+    }))
+}
+
+async fn compact_history_before_index_in_place(
+    context: CompactionContext<'_>,
+    state: CompactionState<'_>,
+    preserve_from_index: usize,
+    plan: CompactionPlan,
+) -> Result<Option<CompactionOutcome>> {
+    let CompactionContext {
+        provider,
+        model,
+        session_id,
+        thread_id,
+        workspace_root,
+        vt_cfg,
+        lifecycle_hooks,
+        harness_emitter,
+    } = context;
+    let CompactionState {
+        history,
+        session_stats,
+        context_manager,
+    } = state;
+
+    if preserve_from_index == 0 {
+        return Ok(None);
+    }
+
+    if preserve_from_index >= history.len() {
+        return compact_history_segment_in_place(
+            CompactionContext {
+                provider,
+                model,
+                session_id,
+                thread_id,
+                workspace_root,
+                vt_cfg,
+                lifecycle_hooks,
+                harness_emitter,
+            },
+            CompactionState::new(history, session_stats, context_manager),
+            plan,
+        )
+        .await;
+    }
+
+    let original_len = history.len();
+    let mut prefix = history[..preserve_from_index].to_vec();
+    let suffix = history[preserve_from_index..].to_vec();
+    let Some(prefix_outcome) = compact_history_segment_in_place(
+        CompactionContext {
+            provider,
+            model,
+            session_id,
+            thread_id,
+            workspace_root,
+            vt_cfg,
+            lifecycle_hooks,
+            harness_emitter: None,
+        },
+        CompactionState::new(&mut prefix, session_stats, context_manager),
+        plan,
+    )
+    .await?
+    else {
+        return Ok(None);
+    };
+
+    history.clear();
+    history.extend(prefix);
+    history.extend(suffix);
+
+    let compacted_len = history.len();
+    let history_artifact_path = prefix_outcome.history_artifact_path.clone();
+    if let Some(harness_emitter) = harness_emitter {
+        let event = compact_boundary_event(
+            thread_id.to_string(),
+            plan.trigger,
+            prefix_outcome.mode,
+            original_len,
+            compacted_len,
+            history_artifact_path.clone(),
+        );
+        if let Err(err) = harness_emitter.emit(event) {
+            tracing::debug!(error = %err, "harness compact boundary event emission failed");
+        }
+    }
+
+    Ok(Some(CompactionOutcome {
+        original_len,
+        compacted_len,
+        mode: prefix_outcome.mode,
         history_artifact_path,
     }))
 }
@@ -1054,10 +1168,10 @@ mod tests {
     use super::{
         CompactionContext, CompactionState, GroundedFactRecord,
         build_server_compaction_context_management, build_summarized_fork_history,
-        compact_history_from_index_in_place, compact_history_in_place,
-        compact_history_in_place_with_events, inject_latest_memory_envelope,
-        latest_memory_envelope_path_for_session, maybe_auto_compact_history,
-        resolve_compaction_threshold,
+        compact_history_for_recovery_in_place, compact_history_from_index_in_place,
+        compact_history_in_place, compact_history_in_place_with_events,
+        inject_latest_memory_envelope, latest_memory_envelope_path_for_session,
+        maybe_auto_compact_history, resolve_compaction_threshold,
     };
     use crate::agent::runloop::unified::context_manager::ContextManager;
     use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
@@ -1416,6 +1530,104 @@ mod tests {
                 .contains("Previous conversation summary")
         );
         assert!(latest_memory_envelope_path_for_session(temp.path(), "session-alpha").is_none());
+    }
+
+    #[tokio::test]
+    async fn recovery_compaction_preserves_current_turn_suffix_and_emits_event() {
+        let temp = tempdir().expect("tempdir");
+        let provider = LocalCompactionProvider;
+        let harness_path = temp.path().join("recovery-harness.jsonl");
+        let harness_emitter = HarnessEventEmitter::new(harness_path.clone()).expect("emitter");
+        let mut history = test_history();
+        history.push(Message::system("Previous turn already completed tool execution. Reuse the latest tool outputs in history instead of rerunning the same exploration. If those tool outputs include `critical_note`, `next_action`, or `rerun_hint`, follow that guidance first.".to_string()));
+        history.push(Message::system("Model follow-up failed after tool activity. Tools are disabled on the next pass; provide a direct textual response from the current context and reuse the latest tool outputs already in history.".to_string()));
+        history.push(Message::user("current-turn".to_string()));
+        history.push(Message::assistant("".to_string()));
+        history.push(Message::tool_response(
+            "call-current".to_string(),
+            "{\"ok\":true}".to_string(),
+        ));
+        let preserved_suffix = history[12..].to_vec();
+        let mut session_stats = SessionStats::default();
+        let mut context_manager = test_context_manager();
+
+        let outcome = compact_history_for_recovery_in_place(
+            CompactionContext::new(
+                &provider,
+                "stub-model",
+                "session-alpha",
+                "thread-alpha",
+                temp.path(),
+                Some(&VTCodeConfig::default()),
+                None,
+                Some(&harness_emitter),
+            ),
+            CompactionState::new(&mut history, &mut session_stats, &mut context_manager),
+            12,
+        )
+        .await
+        .expect("recovery compaction succeeds")
+        .expect("history should compact");
+
+        assert_eq!(
+            history[history.len() - preserved_suffix.len()..],
+            preserved_suffix
+        );
+        assert!(outcome.compacted_len < outcome.original_len);
+
+        let content = fs::read_to_string(harness_path).expect("read harness log");
+        assert!(content.contains("\"type\":\"thread.compact_boundary\""));
+        assert!(content.contains("\"trigger\":\"recovery\""));
+        assert!(content.contains("\"mode\":\"local\""));
+    }
+
+    #[tokio::test]
+    async fn recovery_compaction_uses_provider_mode_when_supported() {
+        let temp = tempdir().expect("tempdir");
+        let provider = ProviderCompactionProvider;
+        let harness_path = temp.path().join("provider-recovery-harness.jsonl");
+        let harness_emitter = HarnessEventEmitter::new(harness_path.clone()).expect("emitter");
+        let mut history = test_history();
+        history.push(Message::user("current-turn".to_string()));
+        history.push(Message::assistant("".to_string()));
+        history.push(Message::tool_response(
+            "call-current".to_string(),
+            "{\"ok\":true}".to_string(),
+        ));
+        let preserved_suffix = history[12..].to_vec();
+        let mut session_stats = SessionStats::default();
+        let mut context_manager = test_context_manager();
+
+        let outcome = compact_history_for_recovery_in_place(
+            CompactionContext::new(
+                &provider,
+                "stub-model",
+                "session-alpha",
+                "thread-alpha",
+                temp.path(),
+                Some(&VTCodeConfig::default()),
+                None,
+                Some(&harness_emitter),
+            ),
+            CompactionState::new(&mut history, &mut session_stats, &mut context_manager),
+            12,
+        )
+        .await
+        .expect("provider recovery compaction succeeds")
+        .expect("history should compact");
+
+        assert_eq!(
+            outcome.mode,
+            vtcode_core::exec::events::CompactionMode::Provider
+        );
+        assert_eq!(
+            history[history.len() - preserved_suffix.len()..],
+            preserved_suffix
+        );
+
+        let content = fs::read_to_string(harness_path).expect("read harness log");
+        assert!(content.contains("\"trigger\":\"recovery\""));
+        assert!(content.contains("\"mode\":\"provider\""));
     }
 
     #[test]

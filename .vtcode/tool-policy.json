@@ -12,8 +12,7 @@
     "task_tracker",
     "unified_exec",
     "unified_file",
-    "unified_search",
-    "vtcode-check"
+    "unified_search"
   ],
   "policies": {
     "apply_patch": "allow",
@@ -28,7 +27,6 @@
     "list_skills": "allow",
     "load_skill_resource": "allow",
     "load_skill": "allow",
-    "vtcode-check": "prompt",
     "list_files": "allow",
     "read_file": "allow"
   },

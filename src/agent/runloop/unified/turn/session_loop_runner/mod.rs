@@ -11,7 +11,11 @@ use crate::agent::runloop::git::{
 use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
 use crate::agent::runloop::unified::plan_mode_state::render_plan_mode_next_step_hint;
 use crate::agent::runloop::unified::postamble::{ExitSummaryData, print_exit_summary};
+use crate::agent::runloop::unified::run_loop_context::RecoveryMode;
 use crate::agent::runloop::unified::turn::turn_loop::TurnLoopOutcome;
+use crate::agent::runloop::unified::turn::turn_loop::{
+    POST_TOOL_TIMEOUT_RECOVERY_REASON, prepare_post_tool_tool_free_recovery,
+};
 use crate::agent::runloop::welcome::SessionBootstrap;
 use crate::updater::{InlineUpdateOutcome, display_update_notice, run_inline_update_prompt};
 use std::sync::Arc;
@@ -34,7 +38,7 @@ use archive::{
 };
 use execution_policy::{
     build_partial_timeout_messages, effective_max_tool_calls_for_turn,
-    resolve_effective_turn_timeout_secs,
+    resolve_effective_turn_timeout_secs, should_attempt_requesting_timeout_recovery,
 };
 use metrics::{
     TurnExecutionMetrics, capture_code_change_snapshot, emit_turn_execution_metrics,
@@ -87,6 +91,26 @@ impl TurnHistoryCheckpoint {
             .unwrap_or_default()
             .hash(&mut hasher);
         hasher.finish()
+    }
+}
+
+#[derive(Clone)]
+struct PendingTimeoutRecovery {
+    reason: String,
+    mode: RecoveryMode,
+}
+
+fn remove_transient_system_notes(
+    history: &mut Vec<vtcode_core::llm::provider::Message>,
+    notes: &[String],
+) {
+    for note in notes.iter().rev() {
+        if let Some(index) = history.iter().rposition(|message| {
+            message.role == vtcode_core::llm::provider::MessageRole::System
+                && message.content.as_text() == note.as_str()
+        }) {
+            let _ = history.remove(index);
+        }
     }
 }
 
@@ -944,23 +968,21 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 }
                 let (session_state, runtime_steering) = runtime.split_mut();
                 let mut working_history = std::mem::take(&mut session_state.messages);
-                let mut transient_system_note_indices = Vec::with_capacity(2);
+                let mut transient_system_notes = Vec::with_capacity(2);
                 if let Some(note) = {
                     let stale_paths = tool_registry.edited_file_monitor().stale_tracked_paths();
                     build_tracked_file_freshness_note(config.workspace.as_path(), &stale_paths)
                 } {
-                    let index = working_history.len();
+                    transient_system_notes.push(note.clone());
                     working_history.push(vtcode_core::llm::provider::Message::system(note));
-                    transient_system_note_indices.push(index);
                 }
                 match build_unrelated_dirty_worktree_note(
                     config.workspace.as_path(),
                     &agent_touched_paths,
                 ) {
                     Ok(Some(note)) => {
-                        let index = working_history.len();
+                        transient_system_notes.push(note.clone());
                         working_history.push(vtcode_core::llm::provider::Message::system(note));
-                        transient_system_note_indices.push(index);
                     }
                     Ok(None) => {}
                     Err(err) => {
@@ -980,6 +1002,8 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 );
                 let turn_started_at = Instant::now();
                 let mut attempts: usize = 0;
+                let mut timeout_recovery_attempted = false;
+                let mut pending_timeout_recovery: Option<PendingTimeoutRecovery> = None;
                 let history_snapshot_bytes = estimate_history_bytes(&working_history);
                 let turn_history_checkpoint = TurnHistoryCheckpoint::capture(&working_history);
                 let mut turn_metadata_cache = None;
@@ -997,6 +1021,10 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         harness_config.max_tool_wall_clock_secs,
                         harness_config.max_tool_retries,
                     );
+                    let applying_timeout_recovery = pending_timeout_recovery.is_some();
+                    if let Some(recovery) = pending_timeout_recovery.take() {
+                        harness_state.activate_recovery_with_mode(recovery.reason, recovery.mode);
+                    }
                     harness_state.set_turn_timeout_secs(timeout_secs);
                     let execution_history_len_before_attempt =
                         tool_registry.execution_history_len();
@@ -1088,17 +1116,91 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                                 || attempted_tool_calls > 0;
                             attempts += 1;
                             if had_tool_activity {
+                                let continuing_with_recovery =
+                                    should_attempt_requesting_timeout_recovery(
+                                        timed_out_phase,
+                                        had_tool_activity,
+                                        timeout_recovery_attempted,
+                                    );
                                 let (timeout_message, timeout_error_message) =
                                     build_partial_timeout_messages(
                                         timeout_secs,
                                         timed_out_phase,
                                         attempted_tool_calls,
                                         active_pty_sessions_before_cancel,
-                                        session_stats.is_plan_mode(),
-                                        had_tool_activity,
+                                        continuing_with_recovery,
                                     );
                                 renderer.line(MessageStyle::Error, &timeout_message)?;
+                                if continuing_with_recovery {
+                                    match crate::agent::runloop::unified::turn::compaction::compact_history_for_recovery_in_place(
+                                        crate::agent::runloop::unified::turn::compaction::CompactionContext::new(
+                                            provider_client.as_ref(),
+                                            &config.model,
+                                            &turn_run_id.0,
+                                            &turn_run_id.0,
+                                            config.workspace.as_path(),
+                                            vt_cfg.as_ref(),
+                                            lifecycle_hooks.as_ref(),
+                                            harness_emitter.as_ref(),
+                                        ),
+                                        crate::agent::runloop::unified::turn::compaction::CompactionState::new(
+                                            &mut working_history,
+                                            &mut session_stats,
+                                            &mut context_manager,
+                                        ),
+                                        turn_history_checkpoint.baseline_len,
+                                    ).await {
+                                        Ok(Some(outcome)) => {
+                                            renderer.line(
+                                                MessageStyle::Info,
+                                                &format!(
+                                                    "Compacted earlier history before the recovery pass ({} -> {} messages).",
+                                                    outcome.original_len, outcome.compacted_len
+                                                ),
+                                            )?;
+                                        }
+                                        Ok(None) => {
+                                            renderer.line(
+                                                MessageStyle::Info,
+                                                "No earlier history was compacted before the recovery pass.",
+                                            )?;
+                                        }
+                                        Err(err) => {
+                                            tracing::warn!(
+                                                error = %err,
+                                                "Failed to compact earlier history before timeout recovery"
+                                            );
+                                            renderer.line(
+                                                MessageStyle::Info,
+                                                "Recovery compaction failed; continuing with the existing history for one final tool-free pass.",
+                                            )?;
+                                        }
+                                    }
+                                    prepare_post_tool_tool_free_recovery(
+                                        &mut working_history,
+                                        POST_TOOL_TIMEOUT_RECOVERY_REASON,
+                                    );
+                                    timeout_recovery_attempted = true;
+                                    pending_timeout_recovery = Some(PendingTimeoutRecovery {
+                                        reason: POST_TOOL_TIMEOUT_RECOVERY_REASON.to_string(),
+                                        mode: RecoveryMode::ToolFreeSynthesis,
+                                    });
+                                    continue;
+                                }
                                 break Err(anyhow::Error::msg(timeout_error_message));
+                            }
+                            if applying_timeout_recovery {
+                                renderer.line(
+                                    MessageStyle::Error,
+                                    &format!(
+                                        "Turn timed out after {} seconds during the compacted recovery pass. PTY sessions cancelled; stopping turn.",
+                                        timeout_secs
+                                    ),
+                                )?;
+                                break Err(anyhow::anyhow!(
+                                    "Turn timed out after {} seconds during the compacted recovery pass",
+                                    timeout_secs
+                                ));
                             }
                             if attempts >= 2 {
                                 renderer.line(
@@ -1136,11 +1238,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         }
                     }
                 };
-                while let Some(index) = transient_system_note_indices.pop() {
-                    if index < working_history.len() {
-                        let _ = working_history.remove(index);
-                    }
-                }
+                remove_transient_system_notes(&mut working_history, &transient_system_notes);
                 agent_touched_paths.extend(
                     outcome
                         .turn_modified_files
@@ -1460,7 +1558,8 @@ mod tests {
         build_partial_timeout_messages, build_tracked_file_freshness_note,
         build_unrelated_dirty_worktree_note, checkpoint_session_archive_start,
         effective_max_tool_calls_for_turn, latest_assistant_result_text,
-        prepare_resume_bootstrap_without_archive, resolve_effective_turn_timeout_secs,
+        prepare_resume_bootstrap_without_archive, remove_transient_system_notes,
+        resolve_effective_turn_timeout_secs, should_attempt_requesting_timeout_recovery,
     };
     use crate::agent::agents::ResumeSession;
     use crate::agent::runloop::git::normalize_workspace_path;
@@ -1544,19 +1643,24 @@ mod tests {
     }
 
     #[test]
-    fn plan_mode_requesting_partial_timeout_includes_autonomous_recovery_note() {
+    fn requesting_partial_timeout_recovery_message_mentions_continuation() {
         let (timeout_message, timeout_error_message) =
-            build_partial_timeout_messages(660, TurnPhase::Requesting, 25, 0, true, true);
-        assert!(timeout_message.contains("Autonomous recovery"));
-        assert!(timeout_error_message.contains("Autonomous recovery"));
+            build_partial_timeout_messages(660, TurnPhase::Requesting, 25, 0, true);
+        assert!(timeout_message.contains("continuing with a compacted tool-free recovery pass"));
+        assert!(
+            timeout_error_message.contains("Continuing with a compacted tool-free recovery pass")
+        );
     }
 
     #[test]
-    fn edit_mode_requesting_partial_timeout_omits_autonomous_recovery_note() {
+    fn requesting_partial_timeout_without_recovery_mentions_retry_skip() {
         let (timeout_message, timeout_error_message) =
-            build_partial_timeout_messages(660, TurnPhase::Requesting, 25, 0, false, true);
-        assert!(!timeout_message.contains("Autonomous recovery"));
-        assert!(!timeout_error_message.contains("Autonomous recovery"));
+            build_partial_timeout_messages(660, TurnPhase::Requesting, 25, 0, false);
+        assert!(timeout_message.contains("retry is skipped"));
+        assert!(!timeout_message.contains("continuing with a compacted tool-free recovery pass"));
+        assert!(
+            !timeout_error_message.contains("Continuing with a compacted tool-free recovery pass")
+        );
     }
 
     #[test]
@@ -1604,9 +1708,50 @@ mod tests {
     #[test]
     fn requesting_timeout_without_tool_activity_omits_autonomous_recovery_note() {
         let (timeout_message, timeout_error_message) =
-            build_partial_timeout_messages(660, TurnPhase::Requesting, 0, 0, true, false);
-        assert!(!timeout_message.contains("Autonomous recovery"));
-        assert!(!timeout_error_message.contains("Autonomous recovery"));
+            build_partial_timeout_messages(660, TurnPhase::Requesting, 0, 0, false);
+        assert!(!timeout_message.contains("continuing with a compacted tool-free recovery pass"));
+        assert!(
+            !timeout_error_message.contains("Continuing with a compacted tool-free recovery pass")
+        );
+    }
+
+    #[test]
+    fn requesting_timeout_recovery_only_runs_once() {
+        assert!(should_attempt_requesting_timeout_recovery(
+            TurnPhase::Requesting,
+            true,
+            false
+        ));
+        assert!(!should_attempt_requesting_timeout_recovery(
+            TurnPhase::Requesting,
+            true,
+            true
+        ));
+        assert!(!should_attempt_requesting_timeout_recovery(
+            TurnPhase::ExecutingTools,
+            true,
+            false
+        ));
+    }
+
+    #[test]
+    fn transient_system_note_cleanup_removes_by_content_from_latest_match() {
+        let note = "Freshness note: file changed".to_string();
+        let older = vtcode_core::llm::provider::Message::system(note.clone());
+        let transient = vtcode_core::llm::provider::Message::system(note.clone());
+        let mut history = vec![
+            older,
+            vtcode_core::llm::provider::Message::assistant("summary".to_string()),
+            transient,
+            vtcode_core::llm::provider::Message::user("preserved".to_string()),
+        ];
+
+        remove_transient_system_notes(&mut history, std::slice::from_ref(&note));
+
+        assert_eq!(history.len(), 3);
+        assert_eq!(history[0].content.as_text(), note);
+        assert_eq!(history[1].content.as_text(), "summary");
+        assert_eq!(history[2].content.as_text(), "preserved");
     }
 
     #[test]

@@ -18,7 +18,7 @@ pub mod zai;
 pub mod common;
 pub mod copilot;
 pub mod reasoning;
-mod shared;
+pub mod shared;
 pub use shared::TagStreamSanitizer;
 
 // Re-export commonly used constants

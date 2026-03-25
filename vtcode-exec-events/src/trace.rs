@@ -63,7 +63,11 @@ pub struct TraceRecord {
     pub version: String,
 
     /// Unique identifier for this trace record (UUID v4).
-    #[serde(with = "uuid_serde")]
+    #[serde(
+        serialize_with = "serialize_uuid",
+        deserialize_with = "deserialize_uuid"
+    )]
+    #[cfg_attr(feature = "schema-export", schemars(with = "String"))]
     pub id: uuid::Uuid,
 
     /// RFC 3339 timestamp when trace was recorded.
@@ -463,6 +467,7 @@ pub struct TraceMetadata {
 
     /// Additional vendor-specific data.
     #[serde(flatten)]
+    #[cfg_attr(feature = "schema-export", schemars(skip))]
     pub extra: HashMap<String, Value>,
 }
 
@@ -612,26 +617,21 @@ pub fn normalize_model_id(model: &str, provider: &str) -> String {
 // Serialization Helpers
 // ============================================================================
 
-/// Serde module for UUID serialization.
-#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
-mod uuid_serde {
-    use serde::{self, Deserialize, Deserializer, Serializer};
-    use uuid::Uuid;
+/// Serialize [`uuid::Uuid`] as a hyphenated string.
+fn serialize_uuid<S>(uuid: &uuid::Uuid, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    serializer.serialize_str(&uuid.to_string())
+}
 
-    pub fn serialize<S>(uuid: &Uuid, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(&uuid.to_string())
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Uuid, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        Uuid::parse_str(&s).map_err(serde::de::Error::custom)
-    }
+/// Deserialize [`uuid::Uuid`] from a hyphenated string.
+fn deserialize_uuid<'de, D>(deserializer: D) -> Result<uuid::Uuid, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    uuid::Uuid::parse_str(&s).map_err(serde::de::Error::custom)
 }
 
 // ============================================================================

@@ -218,18 +218,18 @@ pub use tracing_support::PublicTracingEmitter as TracingEmitter;
 
 #[cfg(feature = "schema-export")]
 pub mod schema {
-    use schemars::JsonSchema;
+    use schemars::{Schema, schema_for};
 
     use super::{ThreadEvent, VersionedThreadEvent};
 
     /// Generates a JSON Schema describing [`ThreadEvent`].
-    pub fn thread_event_schema() -> schemars::schema::Schema {
-        <ThreadEvent as JsonSchema>::schema_name().into()
+    pub fn thread_event_schema() -> Schema {
+        schema_for!(ThreadEvent)
     }
 
     /// Generates a JSON Schema describing [`VersionedThreadEvent`].
-    pub fn versioned_thread_event_schema() -> schemars::schema::Schema {
-        <VersionedThreadEvent as JsonSchema>::schema_name().into()
+    pub fn versioned_thread_event_schema() -> Schema {
+        schema_for!(VersionedThreadEvent)
     }
 }
 
@@ -313,6 +313,7 @@ impl ThreadCompletionSubtype {
 pub enum CompactionTrigger {
     Manual,
     Auto,
+    Recovery,
 }
 
 impl CompactionTrigger {
@@ -320,6 +321,7 @@ impl CompactionTrigger {
         match self {
             Self::Manual => "manual",
             Self::Auto => "auto",
+            Self::Recovery => "recovery",
         }
     }
 }
@@ -879,7 +881,7 @@ mod tests {
     fn compact_boundary_round_trip() -> Result<(), Box<dyn Error>> {
         let event = ThreadEvent::ThreadCompactBoundary(ThreadCompactBoundaryEvent {
             thread_id: "thread-1".to_string(),
-            trigger: CompactionTrigger::Auto,
+            trigger: CompactionTrigger::Recovery,
             mode: CompactionMode::Provider,
             original_message_count: 12,
             compacted_message_count: 5,

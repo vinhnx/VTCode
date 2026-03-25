@@ -43,7 +43,8 @@ use vtcode_core::config::types::AgentConfig;
 use vtcode_core::core::agent::error_recovery::ErrorType;
 
 const RECOVERY_SYNTHESIS_MAX_TOKENS: u32 = 320;
-const POST_TOOL_RECOVERY_REASON: &str = "Model follow-up failed after tool activity. Tools are disabled on the next pass; provide a direct textual response from the current context and reuse the latest tool outputs already in history.";
+pub(crate) const POST_TOOL_RECOVERY_REASON: &str = "Model follow-up failed after tool activity. Tools are disabled on the next pass; provide a direct textual response from the current context and reuse the latest tool outputs already in history.";
+pub(crate) const POST_TOOL_TIMEOUT_RECOVERY_REASON: &str = "The model follow-up timed out after tool activity. Tools are disabled on the next pass; provide a direct textual response from the current context and reuse the latest tool outputs already in history.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PostToolFailureRecovery {
@@ -333,7 +334,7 @@ fn estimate_session_cost_usd(provider: &str, model: &str, usage: &HarnessUsage) 
     ModelResolver::estimate_cost(pricing, &usage)
 }
 
-const POST_TOOL_RESUME_DIRECTIVE: &str = "Previous turn already completed tool execution. Reuse the latest tool outputs in history instead of rerunning the same exploration. If those tool outputs include `critical_note`, `next_action`, or `rerun_hint`, follow that guidance first.";
+pub(crate) const POST_TOOL_RESUME_DIRECTIVE: &str = "Previous turn already completed tool execution. Reuse the latest tool outputs in history instead of rerunning the same exploration. If those tool outputs include `critical_note`, `next_action`, or `rerun_hint`, follow that guidance first.";
 
 fn ensure_recent_system_message(working_history: &mut Vec<uni::Message>, content: &str) {
     let already_present = working_history.iter().rev().take(3).any(|message| {
@@ -346,8 +347,16 @@ fn ensure_recent_system_message(working_history: &mut Vec<uni::Message>, content
     working_history.push(uni::Message::system(content.to_string()));
 }
 
-fn ensure_post_tool_resume_directive(working_history: &mut Vec<uni::Message>) {
+pub(crate) fn ensure_post_tool_resume_directive(working_history: &mut Vec<uni::Message>) {
     ensure_recent_system_message(working_history, POST_TOOL_RESUME_DIRECTIVE);
+}
+
+pub(crate) fn prepare_post_tool_tool_free_recovery(
+    working_history: &mut Vec<uni::Message>,
+    reason: &str,
+) {
+    ensure_post_tool_resume_directive(working_history);
+    ensure_recent_system_message(working_history, reason);
 }
 
 fn maybe_recover_after_post_tool_llm_failure(
@@ -389,7 +398,7 @@ fn maybe_recover_after_post_tool_llm_failure(
     ensure_post_tool_resume_directive(working_history);
 
     let action = if err_cat.is_retryable() && allow_tool_free_retry {
-        ensure_recent_system_message(working_history, POST_TOOL_RECOVERY_REASON);
+        prepare_post_tool_tool_free_recovery(working_history, POST_TOOL_RECOVERY_REASON);
         renderer.line(
             MessageStyle::Info,
             "[!] Follow-up failed after tool execution; scheduling a final tool-free recovery pass.",
@@ -1075,8 +1084,9 @@ async fn maybe_run_external_turn_complete_notify(
 mod tests {
     use super::{
         HarnessUsage, POST_TOOL_RECOVERY_REASON, POST_TOOL_RESUME_DIRECTIVE,
-        PostToolFailureRecovery, accumulate_turn_usage, ensure_post_tool_resume_directive,
-        has_tool_response_since, has_turn_usage, maybe_recover_after_post_tool_llm_failure,
+        POST_TOOL_TIMEOUT_RECOVERY_REASON, PostToolFailureRecovery, accumulate_turn_usage,
+        ensure_post_tool_resume_directive, has_tool_response_since, has_turn_usage,
+        maybe_recover_after_post_tool_llm_failure, prepare_post_tool_tool_free_recovery,
         run_turn_loop,
     };
     use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
@@ -1136,6 +1146,35 @@ mod tests {
             })
             .count();
         assert_eq!(directive_count, 1);
+    }
+
+    #[test]
+    fn prepare_post_tool_tool_free_recovery_is_idempotent_near_history_tail() {
+        let mut history = vec![
+            uni::Message::user("summarize the existing tool outputs".to_string()),
+            uni::Message::tool_response("call_1".to_string(), "{\"ok\":true}".to_string()),
+        ];
+
+        prepare_post_tool_tool_free_recovery(&mut history, POST_TOOL_TIMEOUT_RECOVERY_REASON);
+        prepare_post_tool_tool_free_recovery(&mut history, POST_TOOL_TIMEOUT_RECOVERY_REASON);
+
+        let resume_directive_count = history
+            .iter()
+            .filter(|message| {
+                message.role == uni::MessageRole::System
+                    && message.content.as_text() == POST_TOOL_RESUME_DIRECTIVE
+            })
+            .count();
+        assert_eq!(resume_directive_count, 1);
+
+        let recovery_reason_count = history
+            .iter()
+            .filter(|message| {
+                message.role == uni::MessageRole::System
+                    && message.content.as_text() == POST_TOOL_TIMEOUT_RECOVERY_REASON
+            })
+            .count();
+        assert_eq!(recovery_reason_count, 1);
     }
 
     #[test]
