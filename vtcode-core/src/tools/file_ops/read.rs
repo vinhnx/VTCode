@@ -52,7 +52,7 @@ fn is_legacy_read_request(args: &Value, is_image: bool) -> bool {
 }
 
 fn is_new_read_request(args: &Value) -> bool {
-    let new_keys = ["mode", "indentation", "offset", "limit"];
+    let new_keys = ["mode", "indentation", "offset", "limit", "o", "l"];
     new_keys.iter().any(|key| args.get(*key).is_some())
 }
 
@@ -144,8 +144,14 @@ fn build_read_handler_args(args: &Value, canonical_path: &Path) -> Value {
         if !obj.contains_key("offset") && obj.contains_key("offset_lines") {
             obj.insert("offset".to_string(), obj["offset_lines"].clone());
         }
+        if !obj.contains_key("offset") && obj.contains_key("o") {
+            obj.insert("offset".to_string(), obj["o"].clone());
+        }
         if !obj.contains_key("limit") && obj.contains_key("page_size_lines") {
             obj.insert("limit".to_string(), obj["page_size_lines"].clone());
+        }
+        if !obj.contains_key("limit") && obj.contains_key("l") {
+            obj.insert("limit".to_string(), obj["l"].clone());
         }
 
         if obj.get("offset").and_then(parse_usize_value) == Some(0) {
@@ -167,13 +173,13 @@ fn parse_usize_value(value: &Value) -> Option<usize> {
 }
 
 fn has_explicit_limit(args: &Value) -> bool {
-    ["limit", "page_size_lines", "max_lines", "chunk_lines"]
+    ["limit", "l", "page_size_lines", "max_lines", "chunk_lines"]
         .iter()
         .any(|key| args.get(*key).is_some())
 }
 
 fn has_explicit_offset(args: &Value) -> bool {
-    ["offset", "offset_lines", "offset_bytes"]
+    ["offset", "o", "offset_lines", "offset_bytes"]
         .iter()
         .any(|key| args.get(*key).is_some())
 }
@@ -216,6 +222,7 @@ fn apply_spool_chunk_defaults(handler_args_json: &mut Value, raw_args: &Value) -
         let requested_limit = if has_explicit_limit(raw_args) {
             raw_args
                 .get("limit")
+                .or_else(|| raw_args.get("l"))
                 .or_else(|| raw_args.get("page_size_lines"))
                 .or_else(|| raw_args.get("max_lines"))
                 .or_else(|| raw_args.get("chunk_lines"))
@@ -288,12 +295,14 @@ fn build_history_cache_key(
         .unwrap_or("");
     let offset = args
         .get("offset")
+        .or_else(|| args.get("o"))
         .or_else(|| args.get("offset_lines"))
         .or_else(|| args.get("offset_bytes"))
         .and_then(Value::as_u64)
         .unwrap_or(0);
     let limit = args
         .get("limit")
+        .or_else(|| args.get("l"))
         .or_else(|| args.get("page_size_lines"))
         .or_else(|| args.get("page_size_bytes"))
         .and_then(Value::as_u64)
@@ -369,7 +378,7 @@ impl FileOpsTool {
                 "Error: Invalid 'read_file' arguments. Missing required path parameter.\n\
                 Received: {}\n\
                 Expected: {{\"path\": \"file/path\"}} or {{\"file_path\": \"file/path\"}}\n\
-                Accepted path parameters: path, file_path, filepath, target_path\n\
+                Accepted path parameters: path, file_path, filepath, target_path, p\n\
                 Optional params: offset_lines, limit, max_bytes, max_tokens",
                 received
             )
@@ -1141,5 +1150,51 @@ mod read_tests {
         assert!(result.get("chunk_limit").is_none());
         assert!(result.get("next_offset").is_none());
         assert!(result.get("preferred_next_action").is_none());
+    }
+
+    #[tokio::test]
+    async fn test_read_file_accepts_compact_spool_continuation_args() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_root = temp_dir.path().to_path_buf();
+        let spool_dir = workspace_root.join(".vtcode/context/tool_outputs");
+        fs::create_dir_all(&spool_dir).unwrap();
+        let spool_file = spool_dir.join("unified_exec_456.txt");
+        let spool_content = (1..=120)
+            .map(|i| format!("line{i}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        fs::write(&spool_file, spool_content).unwrap();
+
+        let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
+        let file_ops = FileOpsTool::new(workspace_root, grep_manager);
+
+        let result = file_ops
+            .read_file(json!({
+                "p": ".vtcode/context/tool_outputs/unified_exec_456.txt",
+                "o": 81,
+                "l": 40
+            }))
+            .await
+            .unwrap();
+
+        assert_eq!(result["success"], true);
+        assert_eq!(
+            result["path"],
+            ".vtcode/context/tool_outputs/unified_exec_456.txt"
+        );
+        assert_eq!(result["spool_chunked"], true);
+        assert_eq!(result["lines_returned"], 40);
+        assert_eq!(
+            result["content"].as_str().unwrap().lines().next(),
+            Some("line81")
+        );
+        assert_eq!(
+            result["next_read_args"],
+            json!({
+                "path": ".vtcode/context/tool_outputs/unified_exec_456.txt",
+                "offset": 121,
+                "limit": 40
+            })
+        );
     }
 }

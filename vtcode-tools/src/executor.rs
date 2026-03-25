@@ -6,13 +6,13 @@
 use crate::cache::LruCache;
 use crate::middleware::{MiddlewareChain, MiddlewareResult, ToolRequest, ToolResponse};
 use crate::patterns::{PatternDetector, ToolEvent};
+use parking_lot::RwLock;
 use serde_json::Value;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
-use tokio::sync::RwLock;
 use tokio::time::timeout;
 use vtcode_core::config::constants::execution;
 use vtcode_core::tools::{UnifiedErrorKind, UnifiedToolError};
@@ -102,7 +102,7 @@ pub struct CachedToolExecutor {
     /// Composable middleware chain
     middleware: MiddlewareChain,
     /// Pattern detector for workflow analysis
-    patterns: Arc<parking_lot::RwLock<PatternDetector>>,
+    patterns: Arc<RwLock<PatternDetector>>,
     /// Lock-free stats tracking
     stats: Arc<AtomicStats>,
 }
@@ -305,7 +305,7 @@ impl CachedToolExecutor {
 
     /// Record event in pattern detector
     async fn record_pattern(&self, tool_name: &str, success: bool, duration_ms: u64) {
-        let mut patterns = self.patterns.write().await;
+        let mut patterns = self.patterns.write();
         patterns.record_event(ToolEvent {
             tool_name: tool_name.to_string(),
             success,
@@ -317,7 +317,7 @@ impl CachedToolExecutor {
     /// Get current executor statistics.
     pub async fn stats(&self) -> ExecutorStats {
         let mut stats = self.stats.snapshot();
-        let patterns = self.patterns.read().await;
+        let patterns = self.patterns.read();
         stats.patterns_detected = patterns.patterns().len();
         stats
     }
@@ -329,13 +329,13 @@ impl CachedToolExecutor {
 
     /// Get detected workflow patterns.
     pub async fn patterns(&self) -> Vec<crate::patterns::DetectedPattern> {
-        let patterns = self.patterns.read().await;
-        patterns.patterns()
+        let patterns = self.patterns.read();
+        patterns.patterns().to_vec()
     }
 
     /// Get ML-ready feature vector from patterns.
     pub async fn feature_vector(&self) -> Vec<f64> {
-        let patterns = self.patterns.read().await;
+        let patterns = self.patterns.read();
         patterns.feature_vector()
     }
 
@@ -346,7 +346,7 @@ impl CachedToolExecutor {
 
     /// Clear patterns
     pub async fn clear_patterns(&self) {
-        let mut patterns = self.patterns.write().await;
+        let mut patterns = self.patterns.write();
         patterns.reset();
     }
 

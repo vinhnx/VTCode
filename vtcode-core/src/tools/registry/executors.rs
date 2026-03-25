@@ -2618,11 +2618,8 @@ impl ToolRegistry {
             DEFAULT_INSPECT_TAIL_LINES,
         );
 
-        let source_session_id = payload
-            .get("session_id")
-            .and_then(Value::as_str)
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty());
+        let source_session_id =
+            crate::tools::command_args::session_id_text(&args).map(str::to_string);
         let source_spool_path = payload
             .get("spool_path")
             .and_then(Value::as_str)

@@ -616,64 +616,64 @@ pub(crate) fn unified_exec_parameters() -> Value {
                     }
                 ]
             },
-            "input": {"type": "string", "description": "stdin content for write action."},
-            "session_id": {"type": "string", "description": "Session id for write/poll/continue/inspect/close."},
-            "spool_path": {"type": "string", "description": "Spool file path for inspect action."},
-            "query": {"type": "string", "description": "Optional line filter for inspect output or run output."},
-            "head_lines": {"type": "integer", "description": "Inspect head preview lines."},
-            "tail_lines": {"type": "integer", "description": "Inspect tail preview lines."},
-            "max_matches": {"type": "integer", "description": "Max filtered matches for inspect or run query.", "default": 200},
+            "input": {"type": "string", "description": "stdin for write or continue."},
+            "session_id": {"type": "string", "description": "Session id. Compact alias: `s`."},
+            "spool_path": {"type": "string", "description": "Spool path for inspect."},
+            "query": {"type": "string", "description": "Line filter for inspect or run output."},
+            "head_lines": {"type": "integer", "description": "Head preview lines."},
+            "tail_lines": {"type": "integer", "description": "Tail preview lines."},
+            "max_matches": {"type": "integer", "description": "Max filtered matches.", "default": 200},
             "literal": {"type": "boolean", "description": "Treat query as literal text.", "default": false},
-            "code": {"type": "string", "description": "Code to execute for code action."},
+            "code": {"type": "string", "description": "Code for `action=code`."},
             "language": {
                 "type": "string",
                 "enum": ["python3", "javascript"],
-                "description": "Language for code action.",
+                "description": "Language for `action=code`.",
                 "default": "python3"
             },
             "action": {
                 "type": "string",
                 "enum": ["run", "write", "poll", "continue", "inspect", "list", "close", "code"],
-                "description": "Action. Inferred from command/code/input/session_id/spool_path when omitted."
+                "description": "Optional; inferred from command/code/input/session_id/spool_path."
             },
-            "workdir": {"type": "string", "description": "Working directory for new sessions."},
+            "workdir": {"type": "string", "description": "Working directory."},
             "cwd": {"type": "string", "description": "Alias for workdir."},
-            "tty": {"type": "boolean", "description": "Run the command in a PTY instead of pipe mode.", "default": false},
+            "tty": {"type": "boolean", "description": "Use PTY mode.", "default": false},
             "shell": {"type": "string", "description": "Shell binary."},
-            "login": {"type": "boolean", "description": "Use login shell.", "default": false},
+            "login": {"type": "boolean", "description": "Use a login shell.", "default": false},
             "sandbox_permissions": {
                 "type": "string",
                 "enum": ["use_default", "with_additional_permissions", "require_escalated"],
-                "description": "Sandbox permissions for the command. Use `with_additional_permissions` to request extra sandboxed filesystem access, or `require_escalated` to run without sandbox restrictions."
+                "description": "Sandbox mode. Use `require_escalated` only when needed."
             },
             "additional_permissions": {
                 "type": "object",
-                "description": "Only used with `sandbox_permissions=with_additional_permissions`.",
+                "description": "Extra sandboxed filesystem access.",
                 "properties": {
                     "fs_read": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Additional filesystem paths to grant read access."
+                        "description": "Extra readable paths."
                     },
                     "fs_write": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Additional filesystem paths to grant write access."
+                        "description": "Extra writable paths."
                     }
                 },
                 "additionalProperties": false
             },
-            "justification": {"type": "string", "description": "Approval question shown to the user when requesting `require_escalated` execution. Required when `sandbox_permissions=require_escalated`."},
+            "justification": {"type": "string", "description": "Approval question for `require_escalated`."},
             "prefix_rule": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "Optional command prefix to persist when the user chooses permanent approval. Must be a prefix of `command`, and VT Code ignores it for compound shell commands."
+                "description": "Optional persisted approval prefix for `command`."
             },
-            "timeout_secs": {"type": "integer", "description": "Timeout in seconds.", "default": 180},
-            "yield_time_ms": {"type": "integer", "description": "Time to wait for output (ms).", "default": 1000},
+            "timeout_secs": {"type": "integer", "description": "Timeout seconds.", "default": 180},
+            "yield_time_ms": {"type": "integer", "description": "Wait before returning output (ms).", "default": 1000},
             "confirm": {"type": "boolean", "description": "Confirm destructive ops.", "default": false},
-            "max_output_tokens": {"type": "integer", "description": "Max output tokens."},
-            "track_files": {"type": "boolean", "description": "Track file changes during code execution.", "default": false}
+            "max_output_tokens": {"type": "integer", "description": "Output token cap."},
+            "track_files": {"type": "boolean", "description": "Track file changes.", "default": false}
         }
     })
 }
@@ -685,32 +685,32 @@ pub(crate) fn unified_file_parameters() -> Value {
             "action": {
                 "type": "string",
                 "enum": ["read", "write", "edit", "patch", "delete", "move", "copy"],
-                "description": "Action to perform. If not provided, inferred: 'edit' if old_str present, 'patch' if patch/input patch content present, 'write' if content present, 'move' if destination present, 'read' if a path key is present."
+                "description": "Optional; inferred from old_str/patch/content/destination/path."
             },
-            "path": {"type": "string", "description": "File path (relative to workspace root)."},
-            "content": {"type": "string", "description": "New content for 'write' action."},
-            "old_str": {"type": "string", "description": "EXACT text to replace for 'edit' action. Must match file content exactly including whitespace and newlines."},
-            "new_str": {"type": "string", "description": "Replacement text for 'edit' action."},
-            "patch": {"type": "string", "description": "Patch content for 'patch' action. Use '*** Update File: path' format with @@ hunks, NOT unified diff (---/+++ format)."},
-            "destination": {"type": "string", "description": "Target path for 'move' or 'copy' actions."},
-            "start_line": {"type": "integer", "description": "Start line for 'read' action (1-indexed)."},
-            "end_line": {"type": "integer", "description": "End line for 'read' action (inclusive)."},
-            "offset": {"type": "integer", "description": "Alias for start_line."},
-            "limit": {"type": "integer", "description": "Number of lines to read."},
-            "mode": {"type": "string", "description": "Mode for 'read' ('slice' or 'indentation') or 'write' (e.g., 'fail_if_exists').", "default": "slice"},
-            "condense": {"type": "boolean", "description": "Condense long outputs to head/tail (default: true).", "default": true},
+            "path": {"type": "string", "description": "File path. Compact alias: `p`."},
+            "content": {"type": "string", "description": "Content for write."},
+            "old_str": {"type": "string", "description": "Exact text to replace for edit."},
+            "new_str": {"type": "string", "description": "Replacement text for edit."},
+            "patch": {"type": "string", "description": "Patch text in `*** Update File:` format, not unified diff."},
+            "destination": {"type": "string", "description": "Destination for move or copy."},
+            "start_line": {"type": "integer", "description": "Read start line (1-indexed)."},
+            "end_line": {"type": "integer", "description": "Read end line (inclusive)."},
+            "offset": {"type": "integer", "description": "Read start line. Compact alias: `o`."},
+            "limit": {"type": "integer", "description": "Read line count. Compact alias: `l`."},
+            "mode": {"type": "string", "description": "Read mode or write mode.", "default": "slice"},
+            "condense": {"type": "boolean", "description": "Condense long output.", "default": true},
             "indentation": {
-                "description": "Indentation-aware read configuration. `true` enables indentation mode with defaults; omit when not using indentation mode.",
+                "description": "Indentation config. `true` uses defaults.",
                 "anyOf": [
                     {"type": "boolean"},
                     {
                         "type": "object",
                         "properties": {
-                            "anchor_line": {"type": "integer", "description": "Optional explicit anchor line; defaults to offset when omitted."},
-                            "max_levels": {"type": "integer", "description": "Maximum indentation depth to collect; 0 means unlimited."},
-                            "include_siblings": {"type": "boolean", "description": "Include sibling blocks at the same indentation level."},
-                            "include_header": {"type": "boolean", "description": "Include header lines above the anchor block."},
-                            "max_lines": {"type": "integer", "description": "Optional hard cap on returned lines; defaults to the global limit."}
+                            "anchor_line": {"type": "integer", "description": "Anchor line; defaults to offset."},
+                            "max_levels": {"type": "integer", "description": "Indent depth cap; 0 means unlimited."},
+                            "include_siblings": {"type": "boolean", "description": "Include sibling blocks."},
+                            "include_header": {"type": "boolean", "description": "Include header lines."},
+                            "max_lines": {"type": "integer", "description": "Optional line cap."}
                         },
                         "additionalProperties": false
                     }
@@ -724,10 +724,10 @@ pub(crate) fn read_file_parameters() -> Value {
     json!({
         "type": "object",
         "properties": {
-            "path": {"type": "string", "description": "File path (relative to workspace root). Accepts file_path/filepath/target_path aliases."},
-            "offset": {"type": "integer", "description": "1-indexed line offset for chunked reads.", "minimum": 1},
-            "limit": {"type": "integer", "description": "Maximum number of lines to return for the current chunk.", "minimum": 1},
-            "mode": {"type": "string", "enum": ["slice", "indentation"], "description": "Read mode. Use indentation for block-aware reads.", "default": "slice"},
+            "path": {"type": "string", "description": "File path. Accepts file_path/filepath/target_path/p."},
+            "offset": {"type": "integer", "description": "1-indexed line offset. Compact alias: `o`.", "minimum": 1},
+            "limit": {"type": "integer", "description": "Max lines for this chunk. Compact alias: `l`.", "minimum": 1},
+            "mode": {"type": "string", "enum": ["slice", "indentation"], "description": "Read mode.", "default": "slice"},
             "indentation": {
                 "description": "Indentation-aware block selection.",
                 "anyOf": [
@@ -735,11 +735,11 @@ pub(crate) fn read_file_parameters() -> Value {
                     {
                         "type": "object",
                         "properties": {
-                            "anchor_line": {"type": "integer", "description": "Optional explicit anchor line; defaults to offset when omitted."},
-                            "max_levels": {"type": "integer", "description": "Maximum indentation depth to collect; 0 means unlimited."},
-                            "include_siblings": {"type": "boolean", "description": "Include sibling blocks at the same indentation level."},
-                            "include_header": {"type": "boolean", "description": "Include header lines above the anchor block."},
-                            "max_lines": {"type": "integer", "description": "Optional hard cap on returned lines; defaults to the global limit."}
+                            "anchor_line": {"type": "integer", "description": "Anchor line; defaults to offset."},
+                            "max_levels": {"type": "integer", "description": "Indent depth cap; 0 means unlimited."},
+                            "include_siblings": {"type": "boolean", "description": "Include sibling blocks."},
+                            "include_header": {"type": "boolean", "description": "Include header lines."},
+                            "max_lines": {"type": "integer", "description": "Optional line cap."}
                         },
                         "additionalProperties": false
                     }

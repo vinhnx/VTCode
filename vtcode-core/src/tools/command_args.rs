@@ -139,6 +139,7 @@ pub fn interactive_input_text(args: &Value) -> Option<&str> {
 
 pub fn session_id_text(args: &Value) -> Option<&str> {
     args.get("session_id")
+        .or_else(|| args.get("s"))
         .and_then(Value::as_str)
         .map(str::trim)
         .filter(|value| !value.is_empty())
@@ -238,6 +239,12 @@ pub fn normalize_shell_args(args: &Value) -> Result<Value, &'static str> {
         } else if let Some(input) = payload.get("text").cloned() {
             payload.insert("input".to_string(), input);
         }
+    }
+
+    if payload.get("session_id").is_none()
+        && let Some(session_id) = payload.get("s").cloned()
+    {
+        payload.insert("session_id".to_string(), session_id);
     }
 
     if payload.get("max_tokens").is_none()
@@ -383,6 +390,11 @@ mod tests {
     }
 
     #[test]
+    fn session_id_text_accepts_compact_alias() {
+        assert_eq!(session_id_text(&json!({"s": " run-1 "})), Some("run-1"));
+    }
+
+    #[test]
     fn working_dir_text_accepts_aliases() {
         assert_eq!(working_dir_text(&json!({"workdir": " src "})), Some("src"));
         assert_eq!(working_dir_text(&json!({"cwd": "."})), Some("."));
@@ -410,6 +422,19 @@ mod tests {
         assert_eq!(
             normalized.get("input").and_then(Value::as_str),
             Some("status\n")
+        );
+    }
+
+    #[test]
+    fn normalize_shell_args_maps_compact_session_id() {
+        let normalized = normalize_shell_args(&json!({
+            "s": "run-1"
+        }))
+        .expect("valid shell args");
+
+        assert_eq!(
+            normalized.get("session_id").and_then(Value::as_str),
+            Some("run-1")
         );
     }
 

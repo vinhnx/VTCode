@@ -729,6 +729,65 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn unified_exec_accepts_compact_session_alias_for_poll() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        registry.allow_all_tools().await?;
+
+        let initial = registry
+            .execute_harness_unified_exec(long_running_exec_args(true, 10))
+            .await?;
+        let session_id = initial["session_id"]
+            .as_str()
+            .expect("partial run should expose session_id")
+            .to_string();
+
+        let response = registry
+            .execute_harness_unified_exec(json!({
+                "s": session_id,
+                "yield_time_ms": 10
+            }))
+            .await?;
+
+        assert!(response.get("output").is_some());
+        assert!(
+            response.get("exit_code").is_some() || response.get("next_continue_args").is_some()
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn unified_exec_inspect_accepts_compact_session_alias() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        registry.allow_all_tools().await?;
+
+        let initial = registry
+            .execute_harness_unified_exec(long_running_exec_args(true, 10))
+            .await?;
+        let session_id = initial["session_id"]
+            .as_str()
+            .expect("partial run should expose session_id")
+            .to_string();
+
+        let response = registry
+            .execute_harness_unified_exec(json!({
+                "action": "inspect",
+                "s": session_id,
+                "head_lines": 1,
+                "tail_lines": 0
+            }))
+            .await?;
+
+        assert_eq!(response["content_type"], "exec_inspect");
+        assert!(response["output"].is_string());
+        assert!(response.get("session_id").is_some());
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn mutating_tools_clear_recent_read_reuse_history() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;

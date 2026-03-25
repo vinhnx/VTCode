@@ -356,7 +356,8 @@ pub fn unified_file_action(args: &Value) -> Option<&str> {
         let has_read_path = args.get("path").is_some()
             || args.get("file_path").is_some()
             || args.get("filepath").is_some()
-            || args.get("target_path").is_some();
+            || args.get("target_path").is_some()
+            || args.get("p").is_some();
         let patch_in_input = args
             .get("input")
             .and_then(|v| v.as_str())
@@ -405,7 +406,7 @@ pub fn unified_exec_action(args: &Value) -> Option<&str> {
             || args.get("literal").is_some()
         {
             Some("inspect")
-        } else if args.get("session_id").is_some() {
+        } else if args.get("session_id").is_some() || args.get("s").is_some() {
             Some("poll")
         } else {
             None
@@ -835,6 +836,14 @@ mod tests {
     }
 
     #[test]
+    fn unified_exec_compact_session_alias_infers_poll() {
+        let intent = classify_tool_intent(tools::UNIFIED_EXEC, &json!({"s": "run-1"}));
+        assert!(!intent.mutating);
+        assert!(!intent.destructive);
+        assert!(intent.readonly_unified_action);
+    }
+
+    #[test]
     fn unified_file_input_patch_infers_patch() {
         let args = json!({
             "input": "*** Begin Patch\n*** End Patch\n"
@@ -857,6 +866,15 @@ mod tests {
         });
         let action = unified_file_action(&args);
         assert_eq!(action, None);
+    }
+
+    #[test]
+    fn unified_file_compact_path_alias_infers_read() {
+        let args = json!({
+            "p": "README.md"
+        });
+        let action = unified_file_action(&args);
+        assert_eq!(action, Some("read"));
     }
 
     #[test]

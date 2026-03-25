@@ -61,6 +61,12 @@ pub struct OperationStats {
 /// Input structures for various tools
 #[derive(Debug, Deserialize)]
 pub struct Input {
+    #[serde(
+        alias = "file_path",
+        alias = "filepath",
+        alias = "target_path",
+        alias = "p"
+    )]
     pub path: String,
     #[serde(default, deserialize_with = "deserialize_opt_maybe_quoted")]
     pub max_bytes: Option<usize>,
@@ -152,7 +158,12 @@ pub struct CopyInput {
 
 #[derive(Debug, Deserialize)]
 pub struct PathArgs {
-    #[serde(alias = "file_path", alias = "filepath", alias = "target_path")]
+    #[serde(
+        alias = "file_path",
+        alias = "filepath",
+        alias = "target_path",
+        alias = "p"
+    )]
     pub path: String,
 }
 

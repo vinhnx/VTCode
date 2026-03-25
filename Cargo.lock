@@ -6674,6 +6674,7 @@ dependencies = [
  "chrono",
  "criterion",
  "hashbrown 0.15.5",
+ "parking_lot",
  "serde_json",
  "tokio",
  "vtcode-acp",
