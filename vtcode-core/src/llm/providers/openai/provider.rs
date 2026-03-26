@@ -17,6 +17,7 @@ use crate::llm::error_display;
 use crate::llm::provider;
 use crate::llm::provider::LLMProvider;
 use crate::models_manager::model_family::find_family_for_model;
+use crate::utils::file_input::{MAX_INPUT_FILE_BYTES, decoded_base64_size};
 use hashbrown::{HashMap, HashSet};
 use reqwest::Client as HttpClient;
 use reqwest::StatusCode;
@@ -59,6 +60,8 @@ const CHATGPT_ORIGINATOR_HEADER: &str = "originator";
 const CHATGPT_ORIGINATOR_VALUE: &str = "codex_cli_rs";
 const CHATGPT_SESSION_HEADER: &str = "session_id";
 const CHATGPT_USER_AGENT: &str = "VT Code/1.0";
+const INLINE_FILE_LIMIT_ERROR_PREFIX: &str =
+    "Inline OpenAI input_file payload exceeds the 50 MB request limit";
 
 #[derive(Clone, Debug)]
 struct OpenAIRequestAuth {
@@ -572,6 +575,91 @@ impl OpenAIProvider {
         modes.insert(model.to_string(), state);
     }
 
+    fn validate_inline_file_inputs(
+        request: &provider::LLMRequest,
+    ) -> Result<(), provider::LLMError> {
+        Self::validate_inline_file_inputs_with_limit(request, MAX_INPUT_FILE_BYTES)
+    }
+
+    fn validate_inline_file_inputs_with_limit(
+        request: &provider::LLMRequest,
+        max_inline_file_bytes: u64,
+    ) -> Result<(), provider::LLMError> {
+        let mut total_inline_file_bytes = 0u64;
+
+        for message in &request.messages {
+            let provider::MessageContent::Parts(parts) = &message.content else {
+                continue;
+            };
+
+            for part in parts {
+                let provider::ContentPart::File {
+                    filename,
+                    file_data,
+                    ..
+                } = part
+                else {
+                    continue;
+                };
+                let Some(file_data) = file_data else {
+                    continue;
+                };
+
+                let inline_file_bytes = decoded_base64_size(file_data).map_err(|error| {
+                    let formatted = error_display::format_llm_error(
+                        "OpenAI",
+                        &format!("Invalid inline input_file payload: {error}"),
+                    );
+                    provider::LLMError::InvalidRequest {
+                        message: formatted,
+                        metadata: None,
+                    }
+                })?;
+
+                if inline_file_bytes > max_inline_file_bytes {
+                    let file_label = filename.as_deref().unwrap_or("attached file");
+                    let formatted = error_display::format_llm_error(
+                        "OpenAI",
+                        &format!(
+                            "{INLINE_FILE_LIMIT_ERROR_PREFIX}: '{file_label}' is {} bytes",
+                            inline_file_bytes
+                        ),
+                    );
+                    return Err(provider::LLMError::InvalidRequest {
+                        message: formatted,
+                        metadata: None,
+                    });
+                }
+
+                total_inline_file_bytes = total_inline_file_bytes
+                    .checked_add(inline_file_bytes)
+                    .ok_or_else(|| provider::LLMError::InvalidRequest {
+                        message: error_display::format_llm_error(
+                            "OpenAI",
+                            INLINE_FILE_LIMIT_ERROR_PREFIX,
+                        ),
+                        metadata: None,
+                    })?;
+            }
+        }
+
+        if total_inline_file_bytes > max_inline_file_bytes {
+            let formatted = error_display::format_llm_error(
+                "OpenAI",
+                &format!(
+                    "{INLINE_FILE_LIMIT_ERROR_PREFIX}: total inline file bytes = {}",
+                    total_inline_file_bytes
+                ),
+            );
+            return Err(provider::LLMError::InvalidRequest {
+                message: formatted,
+                metadata: None,
+            });
+        }
+
+        Ok(())
+    }
+
     fn convert_to_openai_format(
         &self,
         request: &provider::LLMRequest,
@@ -604,6 +692,8 @@ impl OpenAIProvider {
         &self,
         request: &provider::LLMRequest,
     ) -> Result<Value, provider::LLMError> {
+        Self::validate_inline_file_inputs(request)?;
+
         let is_native_openai = self.base_url.contains("api.openai.com");
         let prompt_cache_key = if is_native_openai {
             request.prompt_cache_key.as_deref()

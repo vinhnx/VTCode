@@ -873,6 +873,86 @@ fn responses_payload_serializes_user_input_file_by_id() {
 }
 
 #[test]
+fn responses_payload_serializes_user_input_file_data() {
+    let provider = OpenAIProvider::with_model(String::new(), models::openai::GPT_5.to_string());
+    let request = provider::LLMRequest {
+        messages: vec![provider::Message::user_with_parts(vec![
+            provider::ContentPart::text("Summarize this file".to_string()),
+            provider::ContentPart::file_from_data("report.pdf".to_string(), "aGVsbG8=".to_string()),
+        ])],
+        model: models::openai::GPT_5.to_string(),
+        ..Default::default()
+    };
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    let input = payload
+        .get("input")
+        .and_then(Value::as_array)
+        .expect("responses input should exist");
+    let content = input[0]
+        .get("content")
+        .and_then(Value::as_array)
+        .expect("user content should be an array");
+
+    assert!(
+        content.iter().any(|part| {
+            part.get("type").and_then(Value::as_str) == Some("input_file")
+                && part.get("filename").and_then(Value::as_str) == Some("report.pdf")
+                && part.get("file_data").and_then(Value::as_str) == Some("aGVsbG8=")
+        }),
+        "expected input_file part with inline file_data"
+    );
+}
+
+#[test]
+fn responses_validation_rejects_single_inline_file_over_limit() {
+    let request = provider::LLMRequest {
+        messages: vec![provider::Message::user_with_parts(vec![
+            provider::ContentPart::file_from_data("report.pdf".to_string(), "aGVsbG8=".to_string()),
+        ])],
+        model: models::openai::GPT_5.to_string(),
+        ..Default::default()
+    };
+
+    let error = OpenAIProvider::validate_inline_file_inputs_with_limit(&request, 4)
+        .expect_err("inline file should exceed limit");
+
+    match error {
+        provider::LLMError::InvalidRequest { message, .. } => {
+            assert!(message.contains("50 MB request limit"));
+            assert!(message.contains("report.pdf"));
+        }
+        other => panic!("unexpected error variant: {other:?}"),
+    }
+}
+
+#[test]
+fn responses_validation_rejects_combined_inline_files_over_limit() {
+    let request = provider::LLMRequest {
+        messages: vec![provider::Message::user_with_parts(vec![
+            provider::ContentPart::file_from_data("a.txt".to_string(), "YWJj".to_string()),
+            provider::ContentPart::file_from_data("b.txt".to_string(), "ZGVm".to_string()),
+        ])],
+        model: models::openai::GPT_5.to_string(),
+        ..Default::default()
+    };
+
+    let error = OpenAIProvider::validate_inline_file_inputs_with_limit(&request, 5)
+        .expect_err("combined inline files should exceed limit");
+
+    match error {
+        provider::LLMError::InvalidRequest { message, .. } => {
+            assert!(message.contains("50 MB request limit"));
+            assert!(message.contains("total inline file bytes = 6"));
+        }
+        other => panic!("unexpected error variant: {other:?}"),
+    }
+}
+
+#[test]
 fn chat_payload_rejects_file_url_content_parts() {
     let provider =
         OpenAIProvider::with_model(String::new(), models::openai::DEFAULT_MODEL.to_string());

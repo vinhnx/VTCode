@@ -89,6 +89,16 @@ impl ContentPart {
         }
     }
 
+    pub fn file_from_data(filename: String, file_data: String) -> Self {
+        ContentPart::File {
+            content_type: "input_file".to_owned(),
+            filename: Some(filename),
+            file_id: None,
+            file_data: Some(file_data),
+            file_url: None,
+        }
+    }
+
     pub fn as_text(&self) -> Option<&str> {
         match self {
             ContentPart::Text { text } => Some(text),

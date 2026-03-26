@@ -10,8 +10,15 @@ use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
 use crate::llm::provider::{ContentPart, MessageContent};
+use crate::utils::file_input::read_input_file_any_path;
 use crate::utils::image_processing::{read_image_file_any_path, read_image_from_url};
 use vtcode_commons::paths::is_safe_relative_path;
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct AtPatternOptions {
+    pub allow_local_non_image_file_inputs: bool,
+    pub allow_remote_non_image_file_inputs: bool,
+}
 
 /// Parse the @ pattern in text and replace image file paths/URLs with base64 content
 ///
@@ -28,6 +35,15 @@ use vtcode_commons::paths::is_safe_relative_path;
 /// * `MessageContent` - Either a single text string or multiple content parts
 ///   containing both text and base64-encoded images
 pub async fn parse_at_patterns(input: &str, base_dir: &Path) -> Result<MessageContent> {
+    parse_at_patterns_with_options(input, base_dir, AtPatternOptions::default()).await
+}
+
+/// Parse the @ pattern in text with provider-specific input options.
+pub async fn parse_at_patterns_with_options(
+    input: &str,
+    base_dir: &Path,
+    options: AtPatternOptions,
+) -> Result<MessageContent> {
     let at_matches = vtcode_commons::at_pattern::find_at_patterns(input);
     let protected_ranges: Vec<(usize, usize)> =
         at_matches.iter().map(|m| (m.start, m.end)).collect();
@@ -88,31 +104,53 @@ pub async fn parse_at_patterns(input: &str, base_dir: &Path) -> Result<MessageCo
             } => {
                 let is_url = path.starts_with("http://") || path.starts_with("https://");
                 if is_url {
-                    match read_image_from_url(&path).await {
-                        Ok(image_data) => {
-                            parts.push(ContentPart::Image {
-                                data: image_data.base64_data,
-                                mime_type: image_data.mime_type,
-                                content_type: "image".to_owned(),
-                            });
+                    if looks_like_image_url(&path) {
+                        match read_image_from_url(&path).await {
+                            Ok(image_data) => {
+                                parts.push(ContentPart::Image {
+                                    data: image_data.base64_data,
+                                    mime_type: image_data.mime_type,
+                                    content_type: "image".to_owned(),
+                                });
+                            }
+                            Err(e) => {
+                                tracing::warn!("Failed to load image from URL {}: {}", path, e);
+                                parts.push(ContentPart::text(full_match));
+                            }
                         }
-                        Err(e) => {
-                            tracing::warn!("Failed to load image from URL {}: {}", path, e);
-                            parts.push(ContentPart::text(full_match));
-                        }
+                    } else if options.allow_remote_non_image_file_inputs {
+                        parts.push(ContentPart::file_from_url(path));
+                    } else {
+                        parts.push(ContentPart::text(full_match));
                     }
-                } else if let Some(image_path) = resolve_image_path(&path, base_dir) {
-                    match read_image_file_any_path(&image_path).await {
-                        Ok(image_data) => {
-                            parts.push(ContentPart::Image {
-                                data: image_data.base64_data,
-                                mime_type: image_data.mime_type,
-                                content_type: "image".to_owned(),
-                            });
+                } else if let Some(file_path) = resolve_image_path(&path, base_dir) {
+                    if crate::utils::image_processing::has_supported_image_extension(&file_path) {
+                        match read_image_file_any_path(&file_path).await {
+                            Ok(image_data) => {
+                                parts.push(ContentPart::Image {
+                                    data: image_data.base64_data,
+                                    mime_type: image_data.mime_type,
+                                    content_type: "image".to_owned(),
+                                });
+                            }
+                            Err(_) => {
+                                parts.push(ContentPart::text(full_match));
+                            }
                         }
-                        Err(_) => {
-                            parts.push(ContentPart::text(full_match));
+                    } else if options.allow_local_non_image_file_inputs {
+                        match read_input_file_any_path(&file_path).await {
+                            Ok(file_data) => {
+                                parts.push(ContentPart::file_from_data(
+                                    file_data.filename,
+                                    file_data.base64_data,
+                                ));
+                            }
+                            Err(_) => {
+                                parts.push(ContentPart::text(full_match));
+                            }
                         }
+                    } else {
+                        parts.push(ContentPart::text(full_match));
                     }
                 } else {
                     parts.push(ContentPart::text(full_match));
@@ -158,16 +196,21 @@ pub async fn parse_at_patterns(input: &str, base_dir: &Path) -> Result<MessageCo
     }
 
     if parts.is_empty() {
-        Ok(MessageContent::text(input.to_string()))
-    } else if parts.len() == 1 && matches!(parts[0], ContentPart::Text { .. }) {
-        if let ContentPart::Text { text } = &parts[0] {
-            Ok(MessageContent::text(text.clone()))
-        } else {
-            Ok(MessageContent::parts(parts))
-        }
-    } else {
-        Ok(MessageContent::parts(parts))
+        return Ok(MessageContent::text(input.to_string()));
     }
+
+    if parts
+        .iter()
+        .all(|part| matches!(part, ContentPart::Text { .. }))
+    {
+        let text = parts
+            .iter()
+            .filter_map(ContentPart::as_text)
+            .collect::<String>();
+        return Ok(MessageContent::text(text));
+    }
+
+    Ok(MessageContent::parts(parts))
 }
 
 #[derive(Debug)]
@@ -515,6 +558,11 @@ fn parse_data_image_url(raw: &str) -> Option<(String, String)> {
     Some((mime_type.to_string(), data.to_string()))
 }
 
+fn looks_like_image_url(url: &str) -> bool {
+    let without_query = url.split(['?', '#']).next().map(str::trim).unwrap_or(url);
+    crate::utils::image_processing::has_supported_image_extension(Path::new(without_query))
+}
+
 fn resolve_image_path(token: &str, base_dir: &Path) -> Option<PathBuf> {
     let unescaped = unescape_whitespace(token.trim());
     if unescaped.is_empty() {
@@ -841,16 +889,11 @@ mod tests {
 
         let result = parse_at_patterns(input, temp_dir.path()).await.unwrap();
 
-        // When file doesn't exist, the text is split into parts:
-        // "Look at ", "@nonexistent.png", " which doesn't exist"
         match result {
-            MessageContent::Parts(parts) => {
-                assert_eq!(parts.len(), 3);
-                assert!(matches!(parts[0], ContentPart::Text { .. }));
-                assert!(matches!(parts[1], ContentPart::Text { .. }));
-                assert!(matches!(parts[2], ContentPart::Text { .. }));
+            MessageContent::Text(text) => {
+                assert_eq!(text, input);
             }
-            _ => panic!("Expected multi-part content"),
+            other => panic!("Expected single text content, got {other:?}"),
         }
     }
 
@@ -882,6 +925,149 @@ mod tests {
                 assert!(matches!(parts[1], ContentPart::Image { .. }));
             }
             _ => panic!("Expected multi-part content"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_parse_at_patterns_with_non_image_file_input_enabled() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("report.pdf");
+        std::fs::write(&file_path, b"%PDF-1.7\nhello").unwrap();
+
+        let input = format!(
+            "Summarize @{}",
+            file_path.file_name().unwrap().to_string_lossy()
+        );
+        let result = parse_at_patterns_with_options(
+            &input,
+            temp_dir.path(),
+            AtPatternOptions {
+                allow_local_non_image_file_inputs: true,
+                allow_remote_non_image_file_inputs: false,
+            },
+        )
+        .await
+        .unwrap();
+
+        match result {
+            MessageContent::Parts(parts) => {
+                assert_eq!(parts.len(), 2);
+                assert!(matches!(parts[0], ContentPart::Text { .. }));
+                match &parts[1] {
+                    ContentPart::File {
+                        filename,
+                        file_data,
+                        file_url,
+                        ..
+                    } => {
+                        assert_eq!(filename.as_deref(), Some("report.pdf"));
+                        assert!(file_data.as_ref().is_some_and(|value| !value.is_empty()));
+                        assert!(file_url.is_none());
+                    }
+                    other => panic!("Expected file content part, got {other:?}"),
+                }
+            }
+            other => panic!("Expected multi-part content, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_parse_at_patterns_with_non_image_url_input_enabled() {
+        let temp_dir = TempDir::new().unwrap();
+        let input = "Summarize @https://example.com/report.pdf";
+
+        let result = parse_at_patterns_with_options(
+            input,
+            temp_dir.path(),
+            AtPatternOptions {
+                allow_local_non_image_file_inputs: false,
+                allow_remote_non_image_file_inputs: true,
+            },
+        )
+        .await
+        .unwrap();
+
+        match result {
+            MessageContent::Parts(parts) => {
+                assert_eq!(parts.len(), 2);
+                assert!(matches!(parts[0], ContentPart::Text { .. }));
+                match &parts[1] {
+                    ContentPart::File {
+                        file_url,
+                        file_data,
+                        ..
+                    } => {
+                        assert_eq!(file_url.as_deref(), Some("https://example.com/report.pdf"));
+                        assert!(file_data.is_none());
+                    }
+                    other => panic!("Expected file content part, got {other:?}"),
+                }
+            }
+            other => panic!("Expected multi-part content, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_parse_at_patterns_keeps_remote_non_image_url_as_text_when_remote_disabled() {
+        let temp_dir = TempDir::new().unwrap();
+        let input = "Summarize @https://example.com/report.pdf";
+
+        let result = parse_at_patterns_with_options(
+            input,
+            temp_dir.path(),
+            AtPatternOptions {
+                allow_local_non_image_file_inputs: true,
+                allow_remote_non_image_file_inputs: false,
+            },
+        )
+        .await
+        .unwrap();
+
+        match result {
+            MessageContent::Text(text) => assert_eq!(text, input),
+            other => panic!("Expected plain text content, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_parse_at_patterns_keeps_non_image_file_as_text_when_disabled() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("report.pdf");
+        std::fs::write(&file_path, b"%PDF-1.7\nhello").unwrap();
+        let input = format!(
+            "Summarize @{}",
+            file_path.file_name().unwrap().to_string_lossy()
+        );
+
+        let result = parse_at_patterns(&input, temp_dir.path()).await.unwrap();
+
+        match result {
+            MessageContent::Text(text) => assert_eq!(text, input),
+            other => panic!("Expected plain text content, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_parse_at_patterns_never_auto_parses_raw_non_image_paths() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("notes.txt");
+        std::fs::write(&file_path, b"hello").unwrap();
+        let input = "Please read notes.txt";
+
+        let result = parse_at_patterns_with_options(
+            input,
+            temp_dir.path(),
+            AtPatternOptions {
+                allow_local_non_image_file_inputs: true,
+                allow_remote_non_image_file_inputs: false,
+            },
+        )
+        .await
+        .unwrap();
+
+        match result {
+            MessageContent::Text(text) => assert_eq!(text, input),
+            other => panic!("Expected plain text content, got {other:?}"),
         }
     }
 }

@@ -113,6 +113,7 @@ pub mod diff_styles;
 pub mod dot_config;
 pub mod error_log_collector;
 pub mod error_messages;
+pub mod file_input;
 pub mod file_utils;
 pub mod file_workflow;
 pub mod formatting;

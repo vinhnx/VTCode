@@ -201,6 +201,13 @@ fn append_file_reference_metadata(
     }
 }
 
+fn supports_openai_remote_file_inputs(
+    provider_name: &str,
+    model_supports_responses_compaction: bool,
+) -> bool {
+    provider_name.eq_ignore_ascii_case("openai") && model_supports_responses_compaction
+}
+
 async fn handle_inline_prompt_suggestion_request(
     ctx: &mut InteractionLoopContext<'_>,
     state: &mut InteractionState<'_>,
@@ -869,9 +876,21 @@ pub(super) async fn run_interaction_loop_impl(
         }
         let input = input_owned.as_str();
 
+        let allow_remote_non_image_file_inputs = supports_openai_remote_file_inputs(
+            &ctx.config.provider,
+            ctx.provider_client
+                .supports_responses_compaction(&ctx.config.model),
+        );
         let processed_content =
-            match vtcode_core::utils::at_pattern::parse_at_patterns(input, &ctx.config.workspace)
-                .await
+            match vtcode_core::utils::at_pattern::parse_at_patterns_with_options(
+                input,
+                &ctx.config.workspace,
+                vtcode_core::utils::at_pattern::AtPatternOptions {
+                    allow_local_non_image_file_inputs: true,
+                    allow_remote_non_image_file_inputs,
+                },
+            )
+            .await
             {
                 Ok(content) => content,
                 Err(e) => {
@@ -955,7 +974,7 @@ mod tests {
     use super::{
         append_file_reference_metadata, build_file_reference_metadata,
         extract_recent_follow_up_hint, fallback_args_preview, refresh_live_ide_context_update,
-        tool_names,
+        supports_openai_remote_file_inputs, tool_names,
     };
     use crate::agent::runloop::unified::context_manager::ContextManager;
     use crate::agent::runloop::unified::session_setup::{
@@ -1017,6 +1036,13 @@ mod tests {
         )];
 
         assert!(extract_recent_follow_up_hint(&history).is_none());
+    }
+
+    #[test]
+    fn supports_openai_remote_file_inputs_requires_openai_provider_and_responses_support() {
+        assert!(supports_openai_remote_file_inputs("openai", true));
+        assert!(!supports_openai_remote_file_inputs("openai", false));
+        assert!(!supports_openai_remote_file_inputs("anthropic", true));
     }
 
     #[test]

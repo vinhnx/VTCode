@@ -54,11 +54,13 @@ VT Code's default OpenAI profile keeps `gpt-5.4` on a compact execution contract
 
 7. **Function calling etiquette**: Ensure any VT Code tool definitions expose their JSON schema via the `function` payload. The Responses API requires each tool message to include a `tool_call_id`, and VT Code already handles this when serializing `ToolDefinition`s.
 
-8. **Assistant phase continuity**: VT Code preserves assistant phase metadata on official OpenAI Responses replays, including native `api.openai.com` requests and ChatGPT-backed manual history replays, when the target GPT model supports it. Interim preambles and progress updates are sent as `commentary`; completed answers are sent as `final_answer`. The field is omitted for Chat Completions, tool/user items, and non-native OpenAI-compatible endpoints.
+8. **OpenAI-only remote document URLs**: VT Code's harness parses local non-image file refs such as `@report.pdf` and `@"Quarterly Deck.pptx"` into file attachments before provider serialization. Remote external document URLs such as `@https://example.com/letter.pdf` are elevated to structured `file_url` inputs only for native OpenAI Responses sessions. OpenAI-compatible endpoints and non-Responses OpenAI models keep those remote URLs as plain text.
 
-9. **Reasoning visibility**: When troubleshooting, inspect `.vtcode/logs/trajectory.jsonl` for `reasoning` entries and correlate them with the configured `reasoning_effort`.
+9. **Assistant phase continuity**: VT Code preserves assistant phase metadata on official OpenAI Responses replays, including native `api.openai.com` requests and ChatGPT-backed manual history replays, when the target GPT model supports it. Interim preambles and progress updates are sent as `commentary`; completed answers are sent as `final_answer`. The field is omitted for Chat Completions, tool/user items, and non-native OpenAI-compatible endpoints.
 
-10. **Auto-compaction settings**: Auto compaction is disabled by default. Turn it on explicitly when you want long-session coherence via Responses `context_management`:
+10. **Reasoning visibility**: When troubleshooting, inspect `.vtcode/logs/trajectory.jsonl` for `reasoning` entries and correlate them with the configured `reasoning_effort`.
+
+11. **Auto-compaction settings**: Auto compaction is disabled by default. Turn it on explicitly when you want long-session coherence via Responses `context_management`:
 
     ```toml
     [agent.harness]
@@ -69,13 +71,13 @@ VT Code's default OpenAI profile keeps `gpt-5.4` on a compact execution contract
 
     VT Code applies provider-native server-side compaction on compatible Responses providers/endpoints. On providers without native compaction, the same threshold is reused for VT Code's local fallback summarization path.
 
-11. **Manual `/compact` uses the provider-native endpoint when possible**: VT Code's `/compact` command calls the Responses `/responses/compact` endpoint for compatible providers and keeps the returned canonical output structure as conversation history, including opaque `compaction` items. For providers without native support, VT Code falls back to local summarization.
+12. **Manual `/compact` uses the provider-native endpoint when possible**: VT Code's `/compact` command calls the Responses `/responses/compact` endpoint for compatible providers and keeps the returned canonical output structure as conversation history, including opaque `compaction` items. For providers without native support, VT Code falls back to local summarization.
 
-12. **OpenAI WebSocket mode stays opt-in and only applies to native non-streaming Responses turns**: When `[provider.openai].websocket_mode = true`, VT Code uses the `/v1/responses` WebSocket transport only for native `api.openai.com` non-streaming Responses requests. The transport keeps a reusable in-memory continuation cache per provider instance, sends only incremental `input` when the next turn is a verified prefix extension, and otherwise starts a new chain with the full input window.
+13. **OpenAI WebSocket mode stays opt-in and only applies to native non-streaming Responses turns**: When `[provider.openai].websocket_mode = true`, VT Code uses the `/v1/responses` WebSocket transport only for native `api.openai.com` non-streaming Responses requests. The transport keeps a reusable in-memory continuation cache per provider instance, sends only incremental `input` when the next turn is a verified prefix extension, and otherwise starts a new chain with the full input window.
 
-13. **Warmup is optional and VT Code only uses it for brand-new WebSocket chains**: VT Code no longer warms every fresh socket automatically. It sends `generate = false` only when a request is starting a brand-new WebSocket chain and there is no reusable continuation cache to chain from. The next generated turn then continues from that warmup response ID on the same socket.
+14. **Warmup is optional and VT Code only uses it for brand-new WebSocket chains**: VT Code no longer warms every fresh socket automatically. It sends `generate = false` only when a request is starting a brand-new WebSocket chain and there is no reusable continuation cache to chain from. The next generated turn then continues from that warmup response ID on the same socket.
 
-14. **WebSocket recovery follows the current Responses contract**: If the socket closes or the server returns `websocket_connection_limit_reached`, VT Code reconnects once and reuses cached continuation state only when that response can survive a socket replacement. Otherwise it starts a new WebSocket chain immediately. If the server returns `previous_response_not_found`, VT Code clears the cached continuation, opens a new chain on WebSocket, and resends the full input window instead of silently attempting another stale continuation.
+15. **WebSocket recovery follows the current Responses contract**: If the socket closes or the server returns `websocket_connection_limit_reached`, VT Code reconnects once and reuses cached continuation state only when that response can survive a socket replacement. Otherwise it starts a new WebSocket chain immediately. If the server returns `previous_response_not_found`, VT Code clears the cached continuation, opens a new chain on WebSocket, and resends the full input window instead of silently attempting another stale continuation.
 
 ## Example workflow
 

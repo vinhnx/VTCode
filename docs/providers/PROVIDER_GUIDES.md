@@ -17,9 +17,12 @@ This index collects provider-specific guides for configuring VT Code with differ
 -   GPT-5.2 reference: [Using GPT-5.2](./guides/gpt-5-2.md)
 -   VT Code's default OpenAI profile is `gpt-5.4` with `reasoning_effort = "none"` and `verbosity = "medium"`; raise reasoning only when the task shape justifies the extra latency.
 -   VT Code applies a compact GPT-5.4 prompt contract rather than a verbatim cookbook prompt: compact outputs, low-risk follow-through, dependency-aware tool use, completeness checks, verification, and conditional grounding/citation rules.
--   File inputs are supported for OpenAI Responses API through `input_file` parts.
+-   File inputs are supported for native OpenAI Responses API requests through `input_file` parts.
 -   Supported file input fields in VT Code message parts: `file_id`, `file_data`, `file_url`, `filename`.
 -   `file_url` is Responses API only; VT Code rejects `file_url` when a request uses Chat Completions.
+-   VT Code's harness parses local non-image file refs such as `@report.pdf` and `@"Quarterly Deck.pptx"` into inline file attachments before provider serialization.
+-   Remote external document URLs such as `@https://example.com/letter.pdf` are only elevated to structured `file_url` inputs for native OpenAI Responses sessions. OpenAI-compatible endpoints and non-Responses OpenAI models keep remote document URLs as plain text.
+-   Raw image paths still use the existing multimodal image path flow. Non-image files require explicit `@...` references.
 -   Official OpenAI Responses replays now preserve assistant phase metadata for replayed assistant history (`commentary` for preambles/progress updates, `final_answer` for completed answers) when the target GPT model supports it. VT Code does not send this field to Chat Completions, tool/user items, or non-native OpenAI-compatible endpoints.
 -   OpenAI Responses hosted tools currently map through `ToolDefinition` for `web_search`, `file_search`, hosted `tool_search`, and remote `mcp`, with hosted config passed through directly on each tool entry.
 -   OpenAI hosted shell mounts are configured through `provider.openai.hosted_shell` in `vtcode.toml`.
