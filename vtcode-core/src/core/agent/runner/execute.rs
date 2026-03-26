@@ -21,7 +21,9 @@ use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
 use crate::exec::events::HarnessEventKind;
 use crate::llm::model_resolver::ModelResolver;
-use crate::llm::provider::{FinishReason, LLMRequest, Message, ToolCall};
+use crate::llm::provider::{
+    FinishReason, LLMRequest, Message, ToolCall, prepare_openai_responses_request,
+};
 use crate::llm::providers::gemini::wire::Part;
 use crate::project_doc::build_instruction_appendix;
 use crate::prompts::PromptContext;
@@ -96,10 +98,48 @@ fn summarize_verification_output(result: &serde_json::Value) -> String {
         .unwrap_or_default()
 }
 
-fn supports_responses_chaining(provider_name: &str) -> bool {
-    provider_name.eq_ignore_ascii_case("openai")
+fn supports_responses_chaining(
+    provider_name: &str,
+    provider_supports_responses_compaction: bool,
+) -> bool {
+    provider_supports_responses_compaction
+        || provider_name.eq_ignore_ascii_case("openai")
         || provider_name.eq_ignore_ascii_case("openresponses")
         || provider_name.eq_ignore_ascii_case("gemini")
+}
+
+fn prepare_responses_request_messages(
+    session_state: &mut AgentSessionState,
+    provider_name: &str,
+    provider_supports_responses_compaction: bool,
+    model: &str,
+    messages: Vec<Message>,
+) -> (Vec<Message>, Option<String>) {
+    if !supports_responses_chaining(provider_name, provider_supports_responses_compaction) {
+        return (messages, None);
+    }
+
+    let uses_openai_incremental_history = provider_name.eq_ignore_ascii_case("openai")
+        || (provider_supports_responses_compaction
+            && !provider_name.eq_ignore_ascii_case("openresponses")
+            && !provider_name.eq_ignore_ascii_case("gemini"));
+
+    if !uses_openai_incremental_history {
+        return (
+            messages,
+            session_state.previous_response_id_for(provider_name, model),
+        );
+    }
+
+    let prepared = prepare_openai_responses_request(
+        messages,
+        session_state.previous_response_chain_for(provider_name, model),
+    );
+    if prepared.clear_stale_chain {
+        session_state.clear_previous_response_chain_for(provider_name, model);
+    }
+
+    (prepared.messages, prepared.previous_response_id)
 }
 
 fn stop_reason_from_finish_reason(finish_reason: &FinishReason) -> String {
@@ -540,8 +580,18 @@ impl AgentRunner {
                     Some(0.7)
                 };
 
+                let current_messages = runtime.state.messages.clone();
+                let (request_messages, previous_response_id) = prepare_responses_request_messages(
+                    &mut runtime.state,
+                    &provider_name,
+                    self.provider_client
+                        .supports_responses_compaction(&turn_model),
+                    &turn_model,
+                    current_messages,
+                );
+
                 let request = LLMRequest {
-                    messages: runtime.state.messages.clone(),
+                    messages: request_messages,
                     system_prompt: Some(Arc::clone(&system_instruction)),
                     tools: Some(Arc::clone(&tools)),
                     model: turn_model.clone(),
@@ -551,13 +601,7 @@ impl AgentRunner {
                     parallel_tool_config,
                     reasoning_effort,
                     verbosity: turn_verbosity,
-                    previous_response_id: if supports_responses_chaining(&provider_name) {
-                        runtime
-                            .state
-                            .previous_response_id_for(&provider_name, &turn_model)
-                    } else {
-                        None
-                    },
+                    previous_response_id,
                     prompt_cache_key: build_openai_prompt_cache_key(
                         provider_name.eq_ignore_ascii_case("openai")
                             && self.config().prompt_cache.enabled
@@ -573,6 +617,7 @@ impl AgentRunner {
                     ..Default::default()
                 };
                 let previous_response_chain_present = request.previous_response_id.is_some();
+                let sent_messages = request.messages.clone();
 
                 let turn_output = runtime
                     .run_turn_once(
@@ -585,11 +630,16 @@ impl AgentRunner {
                 let response = turn_output.response;
                 runtime.state.stop_reason =
                     Some(stop_reason_from_finish_reason(&response.finish_reason));
-                if supports_responses_chaining(&provider_name) {
+                if supports_responses_chaining(
+                    &provider_name,
+                    self.provider_client
+                        .supports_responses_compaction(&turn_model),
+                ) {
                     runtime.state.set_previous_response_chain(
                         &provider_name,
                         &turn_model,
                         response.request_id.as_deref(),
+                        &sent_messages,
                     );
                 }
                 match estimate_session_cost_usd(
@@ -1044,10 +1094,14 @@ impl AgentRunner {
 
 #[cfg(test)]
 mod tests {
-    use super::{record_terminal_turn_event, tool_loop_limit_reached};
+    use super::{
+        prepare_responses_request_messages, record_terminal_turn_event, tool_loop_limit_reached,
+    };
     use crate::core::agent::events::ExecEventRecorder;
+    use crate::core::agent::session::AgentSessionState;
     use crate::core::agent::task::TaskOutcome;
     use crate::exec::events::ThreadEvent;
+    use crate::llm::provider::Message;
 
     #[test]
     fn failed_outcome_emits_only_turn_failed() {
@@ -1107,5 +1161,82 @@ mod tests {
     fn disabled_tool_loop_limit_never_trips() {
         assert!(!tool_loop_limit_reached(1, 0));
         assert!(!tool_loop_limit_reached(32, 0));
+    }
+
+    #[test]
+    fn openai_prepare_responses_request_messages_uses_incremental_suffix() {
+        let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+        let prior_messages = vec![Message::user("hello".to_string())];
+        let current_messages = vec![
+            Message::user("hello".to_string()),
+            Message::user("continue".to_string()),
+        ];
+        state.set_previous_response_chain("openai", "gpt-5.4", Some("resp_123"), &prior_messages);
+
+        let (request_messages, previous_response_id) = prepare_responses_request_messages(
+            &mut state,
+            "openai",
+            false,
+            "gpt-5.4",
+            current_messages,
+        );
+
+        assert_eq!(previous_response_id.as_deref(), Some("resp_123"));
+        assert_eq!(
+            request_messages,
+            vec![Message::user("continue".to_string())]
+        );
+    }
+
+    #[test]
+    fn gemini_prepare_responses_request_messages_keeps_full_history() {
+        let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+        let prior_messages = vec![Message::user("hello".to_string())];
+        let current_messages = vec![
+            Message::user("hello".to_string()),
+            Message::user("continue".to_string()),
+        ];
+        state.set_previous_response_chain(
+            "gemini",
+            "gemini-2.5-pro",
+            Some("resp_123"),
+            &prior_messages,
+        );
+
+        let (request_messages, previous_response_id) = prepare_responses_request_messages(
+            &mut state,
+            "gemini",
+            false,
+            "gemini-2.5-pro",
+            current_messages.clone(),
+        );
+
+        assert_eq!(previous_response_id.as_deref(), Some("resp_123"));
+        assert_eq!(request_messages, current_messages);
+    }
+
+    #[test]
+    fn compatible_prepare_responses_request_messages_uses_incremental_suffix() {
+        let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+        let prior_messages = vec![Message::user("hello".to_string())];
+        let current_messages = vec![
+            Message::user("hello".to_string()),
+            Message::user("continue".to_string()),
+        ];
+        state.set_previous_response_chain("mycorp", "gpt-5.4", Some("resp_123"), &prior_messages);
+
+        let (request_messages, previous_response_id) = prepare_responses_request_messages(
+            &mut state,
+            "mycorp",
+            true,
+            "gpt-5.4",
+            current_messages,
+        );
+
+        assert_eq!(previous_response_id.as_deref(), Some("resp_123"));
+        assert_eq!(
+            request_messages,
+            vec![Message::user("continue".to_string())]
+        );
     }
 }

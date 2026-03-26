@@ -1321,7 +1321,7 @@ mod tests {
         let provider = LocalCompactionProvider;
         let mut history = test_history();
         let mut session_stats = SessionStats::default();
-        session_stats.set_previous_response_chain("stub", "stub-model", Some("resp_123"));
+        session_stats.set_previous_response_chain("stub", "stub-model", Some("resp_123"), &[]);
         let mut context_manager = test_context_manager();
         context_manager.update_token_usage(&Some(Usage {
             prompt_tokens: 900,
@@ -1439,7 +1439,7 @@ mod tests {
 
         let mut history = test_history();
         let mut session_stats = SessionStats::default();
-        session_stats.set_previous_response_chain("stub", "stub-model", Some("resp_123"));
+        session_stats.set_previous_response_chain("stub", "stub-model", Some("resp_123"), &[]);
         let mut context_manager = test_context_manager();
         context_manager.update_token_usage(&Some(Usage {
             prompt_tokens: 900,

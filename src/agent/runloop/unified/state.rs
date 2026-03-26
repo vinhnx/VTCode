@@ -6,6 +6,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use vtcode_core::config::WorkspaceTrustLevel;
 use vtcode_core::core::interfaces::session::PlanModeEntrySource;
 use vtcode_core::exec::events::Usage as HarnessUsage;
+use vtcode_core::llm::provider::{Message, ResponsesContinuationState, responses_continuation_key};
 use vtcode_tui::app::EditingMode;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -59,8 +60,8 @@ pub(crate) struct SessionStats {
     turn_stalled: bool,
     /// Reason associated with the last stalled turn, when available
     turn_stall_reason: Option<String>,
-    /// Responses-style continuation pointers keyed by normalized provider/model pairs.
-    previous_response_ids: HashMap<(String, String), String>,
+    /// Responses-style continuation state keyed by normalized provider/model pairs.
+    previous_response_chains: HashMap<(String, String), ResponsesContinuationState>,
     prompt_cache_lineage_id: Option<String>,
     last_prompt_cache_model: Option<String>,
     last_stable_prefix_hash: Option<u64>,
@@ -327,8 +328,17 @@ impl SessionStats {
     }
 
     pub(crate) fn previous_response_id_for(&self, provider: &str, model: &str) -> Option<String> {
-        previous_response_chain_key(provider, model)
-            .and_then(|key| self.previous_response_ids.get(&key).cloned())
+        self.previous_response_chain_for(provider, model)
+            .map(|chain| chain.response_id.clone())
+    }
+
+    pub(crate) fn previous_response_chain_for(
+        &self,
+        provider: &str,
+        model: &str,
+    ) -> Option<&ResponsesContinuationState> {
+        responses_continuation_key(provider, model)
+            .and_then(|key| self.previous_response_chains.get(&key))
     }
 
     pub(crate) fn set_prompt_cache_lineage_id(&mut self, lineage_id: Option<String>) {
@@ -371,27 +381,33 @@ impl SessionStats {
         provider: &str,
         model: &str,
         response_id: Option<&str>,
+        messages: &[Message],
     ) {
-        let Some(key) = previous_response_chain_key(provider, model) else {
+        let Some(key) = responses_continuation_key(provider, model) else {
             return;
         };
         let Some(response_id) = response_id.map(str::trim).filter(|value| !value.is_empty()) else {
-            self.previous_response_ids.remove(&key);
+            self.previous_response_chains.remove(&key);
             return;
         };
 
-        self.previous_response_ids
-            .insert(key, response_id.to_string());
+        self.previous_response_chains.insert(
+            key,
+            ResponsesContinuationState {
+                response_id: response_id.to_string(),
+                messages: messages.to_vec(),
+            },
+        );
     }
 
     pub(crate) fn clear_previous_response_chain_for(&mut self, provider: &str, model: &str) {
-        if let Some(key) = previous_response_chain_key(provider, model) {
-            self.previous_response_ids.remove(&key);
+        if let Some(key) = responses_continuation_key(provider, model) {
+            self.previous_response_chains.remove(&key);
         }
     }
 
     pub(crate) fn clear_previous_response_chain(&mut self) {
-        self.previous_response_ids.clear();
+        self.previous_response_chains.clear();
     }
 
     pub(crate) fn record_touched_files<I, S>(&mut self, files: I)
@@ -424,16 +440,6 @@ impl SessionStats {
     pub(crate) fn recent_touched_files(&self) -> Vec<String> {
         self.recent_touched_files.iter().cloned().collect()
     }
-}
-
-fn previous_response_chain_key(provider: &str, model: &str) -> Option<(String, String)> {
-    let provider = provider.trim().to_ascii_lowercase();
-    let model = model.trim();
-    if provider.is_empty() || model.is_empty() {
-        return None;
-    }
-
-    Some((provider, model.to_string()))
 }
 
 pub(crate) fn should_enforce_safe_mode_prompts(
@@ -779,15 +785,36 @@ mod tests {
     #[test]
     fn previous_response_chain_clears_only_matching_scope() {
         let mut stats = SessionStats::default();
-        stats.set_previous_response_chain("openai", "gpt-5.4", Some("resp_openai"));
-        stats.set_previous_response_chain("gemini", "gemini-2.5-pro", Some("resp_gemini"));
+        let openai_messages = vec![vtcode_core::llm::provider::Message::user(
+            "hello".to_string(),
+        )];
+        let gemini_messages = vec![vtcode_core::llm::provider::Message::user("hi".to_string())];
+        stats.set_previous_response_chain(
+            "openai",
+            "gpt-5.4",
+            Some("resp_openai"),
+            &openai_messages,
+        );
+        stats.set_previous_response_chain(
+            "gemini",
+            "gemini-2.5-pro",
+            Some("resp_gemini"),
+            &gemini_messages,
+        );
 
         stats.clear_previous_response_chain_for("openai", "gpt-5.4");
 
         assert_eq!(stats.previous_response_id_for("openai", "gpt-5.4"), None);
+        assert_eq!(stats.previous_response_chain_for("openai", "gpt-5.4"), None);
         assert_eq!(
             stats.previous_response_id_for("gemini", "gemini-2.5-pro"),
             Some("resp_gemini".to_string())
+        );
+        assert_eq!(
+            stats
+                .previous_response_chain_for("gemini", "gemini-2.5-pro")
+                .map(|chain| chain.messages.as_slice()),
+            Some(gemini_messages.as_slice())
         );
     }
 

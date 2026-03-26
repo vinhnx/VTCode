@@ -100,8 +100,12 @@ pub(crate) fn display_status(renderer: &mut AnsiRenderer, message: &str) -> Resu
 }
 
 /// Providers that support Responses-style server-side continuity chaining.
-pub(crate) fn supports_responses_chaining(provider_name: &str) -> bool {
-    provider_name.eq_ignore_ascii_case("openai")
+pub(crate) fn supports_responses_chaining(
+    provider_name: &str,
+    provider_supports_responses_compaction: bool,
+) -> bool {
+    provider_supports_responses_compaction
+        || provider_name.eq_ignore_ascii_case("openai")
         || provider_name.eq_ignore_ascii_case("openresponses")
         || provider_name.eq_ignore_ascii_case("gemini")
 }

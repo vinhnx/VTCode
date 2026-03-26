@@ -8,7 +8,9 @@ use vtcode_core::config::{
     OpenAIPromptCacheKeyMode, PromptCachingConfig, build_openai_prompt_cache_key,
 };
 use vtcode_core::core::agent::features::FeatureSet;
-use vtcode_core::llm::provider::{self as uni, ParallelToolConfig};
+use vtcode_core::llm::provider::{
+    self as uni, ParallelToolConfig, prepare_openai_responses_request,
+};
 use vtcode_core::prompts::upsert_harness_limits_section;
 
 use crate::agent::runloop::unified::incremental_system_prompt::PromptCacheShapingMode;
@@ -276,12 +278,53 @@ pub(super) fn interrupted_provider_error(provider_name: &str) -> anyhow::Error {
 pub(super) fn update_previous_response_chain_after_success(
     session_stats: &mut crate::agent::runloop::unified::state::SessionStats,
     provider_name: &str,
+    provider_supports_responses_compaction: bool,
     active_model: &str,
     response_request_id: Option<&str>,
+    messages: &[uni::Message],
 ) {
-    if supports_responses_chaining(provider_name) {
-        session_stats.set_previous_response_chain(provider_name, active_model, response_request_id);
+    if supports_responses_chaining(provider_name, provider_supports_responses_compaction) {
+        session_stats.set_previous_response_chain(
+            provider_name,
+            active_model,
+            response_request_id,
+            messages,
+        );
     }
+}
+
+fn prepare_responses_request_history(
+    session_stats: &mut crate::agent::runloop::unified::state::SessionStats,
+    provider_name: &str,
+    provider_supports_responses_compaction: bool,
+    active_model: &str,
+    messages: Vec<uni::Message>,
+) -> (Vec<uni::Message>, Option<String>) {
+    if !supports_responses_chaining(provider_name, provider_supports_responses_compaction) {
+        return (messages, None);
+    }
+
+    let uses_openai_incremental_history = provider_name.eq_ignore_ascii_case("openai")
+        || (provider_supports_responses_compaction
+            && !provider_name.eq_ignore_ascii_case("openresponses")
+            && !provider_name.eq_ignore_ascii_case("gemini"));
+
+    if !uses_openai_incremental_history {
+        return (
+            messages,
+            session_stats.previous_response_id_for(provider_name, active_model),
+        );
+    }
+
+    let prepared = prepare_openai_responses_request(
+        messages,
+        session_stats.previous_response_chain_for(provider_name, active_model),
+    );
+    if prepared.clear_stale_chain {
+        session_stats.clear_previous_response_chain_for(provider_name, active_model);
+    }
+
+    (prepared.messages, prepared.previous_response_id)
 }
 
 pub(super) async fn build_turn_request(
@@ -374,19 +417,20 @@ pub(super) async fn build_turn_request(
             prefix_change_reason,
         },
     );
-    let previous_response_id = if supports_responses_chaining(&turn_snapshot.provider_name) {
-        ctx.session_stats
-            .previous_response_id_for(&turn_snapshot.provider_name, active_model)
-    } else {
-        None
-    };
     let context_management = resolve_context_management(ctx, active_model);
     let normalized_messages = ctx
         .context_manager
         .normalize_history_for_request(ctx.working_history);
+    let (request_messages, previous_response_id) = prepare_responses_request_history(
+        ctx.session_stats,
+        &turn_snapshot.provider_name,
+        turn_snapshot.capabilities.responses_compaction,
+        active_model,
+        normalized_messages,
+    );
 
     let request = uni::LLMRequest {
-        messages: normalized_messages,
+        messages: request_messages,
         system_prompt: Some(Arc::new(prompt_output.system_prompt)),
         tools: if use_out_of_band_copilot_tools {
             None
@@ -556,6 +600,105 @@ mod tests {
             .as_str();
         assert!(system_prompt.contains("[GitHub Copilot Client Tools]"));
         assert!(system_prompt.contains("emit the actual client tool call"));
+    }
+
+    #[tokio::test]
+    async fn openai_responses_chain_uses_incremental_history_only() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let prior_messages = vec![uni::Message::user("hello".to_string())];
+        let mut ctx = backing.turn_processing_context();
+        ctx.working_history.extend(prior_messages.clone());
+        ctx.working_history
+            .push(uni::Message::user("continue".to_string()));
+        ctx.session_stats.set_previous_response_chain(
+            "openai",
+            "noop-model",
+            Some("resp_123"),
+            &prior_messages,
+        );
+
+        let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
+        let built =
+            build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
+                .await
+                .expect("openai request should build");
+
+        assert_eq!(
+            built.request.previous_response_id.as_deref(),
+            Some("resp_123")
+        );
+        assert_eq!(
+            built.request.messages,
+            vec![uni::Message::user("continue".to_string())]
+        );
+    }
+
+    #[tokio::test]
+    async fn compatible_provider_responses_chain_uses_incremental_history_only() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let prior_messages = vec![uni::Message::user("hello".to_string())];
+        let mut ctx = backing.turn_processing_context();
+        ctx.working_history.extend(prior_messages.clone());
+        ctx.working_history
+            .push(uni::Message::user("continue".to_string()));
+        ctx.session_stats.set_previous_response_chain(
+            "mycorp",
+            "noop-model",
+            Some("resp_123"),
+            &prior_messages,
+        );
+
+        let mut snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
+        snapshot.provider_name = "mycorp".to_string();
+        snapshot.capabilities.responses_compaction = true;
+        let built =
+            build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
+                .await
+                .expect("compatible provider request should build");
+
+        assert_eq!(
+            built.request.previous_response_id.as_deref(),
+            Some("resp_123")
+        );
+        assert_eq!(
+            built.request.messages,
+            vec![uni::Message::user("continue".to_string())]
+        );
+    }
+
+    #[tokio::test]
+    async fn non_openai_responses_chain_keeps_full_history() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let prior_messages = vec![uni::Message::user("hello".to_string())];
+        let mut ctx = backing.turn_processing_context();
+        ctx.working_history.extend(prior_messages.clone());
+        ctx.working_history
+            .push(uni::Message::user("continue".to_string()));
+        ctx.session_stats.set_previous_response_chain(
+            "gemini",
+            "noop-model",
+            Some("resp_123"),
+            &prior_messages,
+        );
+
+        let mut snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
+        snapshot.provider_name = "gemini".to_string();
+        let built =
+            build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
+                .await
+                .expect("gemini request should build");
+
+        assert_eq!(
+            built.request.previous_response_id.as_deref(),
+            Some("resp_123")
+        );
+        assert_eq!(
+            built.request.messages,
+            vec![
+                uni::Message::user("hello".to_string()),
+                uni::Message::user("continue".to_string())
+            ]
+        );
     }
 
     #[test]

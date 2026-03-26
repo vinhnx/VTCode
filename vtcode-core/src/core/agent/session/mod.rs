@@ -3,7 +3,7 @@
 use crate::core::agent::error_recovery::ErrorRecoveryState;
 use crate::core::agent::task::{TaskOutcome, TaskResults};
 use crate::exec::events::Usage;
-use crate::llm::provider::Message;
+use crate::llm::provider::{Message, ResponsesContinuationState, responses_continuation_key};
 use crate::llm::providers::gemini::wire::{Content, FunctionResponse, Part};
 use hashbrown::HashMap;
 use parking_lot::Mutex;
@@ -54,8 +54,8 @@ pub struct AgentSessionState {
     pub consecutive_tool_loops: usize,
     pub tool_loop_limit_hit: bool,
     pub last_processed_message_idx: usize,
-    /// Responses-style continuation pointers keyed by normalized provider/model pairs.
-    pub previous_response_ids: HashMap<(String, String), String>,
+    /// Responses-style continuation state keyed by normalized provider/model pairs.
+    pub previous_response_chains: HashMap<(String, String), ResponsesContinuationState>,
     /// Agent-local recent error diagnostics for interrupted or repeated tool failures.
     pub error_recovery: Arc<Mutex<ErrorRecoveryState>>,
 
@@ -143,7 +143,7 @@ impl AgentSessionState {
             consecutive_tool_loops: 0,
             tool_loop_limit_hit: false,
             last_processed_message_idx: 0,
-            previous_response_ids: HashMap::new(),
+            previous_response_chains: HashMap::new(),
             error_recovery: Arc::new(Mutex::new(ErrorRecoveryState::default())),
             consecutive_idle_turns: 0,
             max_tool_loop_streak: 0,
@@ -201,8 +201,17 @@ impl AgentSessionState {
     }
 
     pub fn previous_response_id_for(&self, provider: &str, model: &str) -> Option<String> {
-        previous_response_chain_key(provider, model)
-            .and_then(|key| self.previous_response_ids.get(&key).cloned())
+        self.previous_response_chain_for(provider, model)
+            .map(|chain| chain.response_id.clone())
+    }
+
+    pub fn previous_response_chain_for(
+        &self,
+        provider: &str,
+        model: &str,
+    ) -> Option<&ResponsesContinuationState> {
+        responses_continuation_key(provider, model)
+            .and_then(|key| self.previous_response_chains.get(&key))
     }
 
     pub fn set_previous_response_chain(
@@ -210,27 +219,33 @@ impl AgentSessionState {
         provider: &str,
         model: &str,
         response_id: Option<&str>,
+        messages: &[Message],
     ) {
-        let Some(key) = previous_response_chain_key(provider, model) else {
+        let Some(key) = responses_continuation_key(provider, model) else {
             return;
         };
         let Some(response_id) = response_id.map(str::trim).filter(|value| !value.is_empty()) else {
-            self.previous_response_ids.remove(&key);
+            self.previous_response_chains.remove(&key);
             return;
         };
 
-        self.previous_response_ids
-            .insert(key, response_id.to_string());
+        self.previous_response_chains.insert(
+            key,
+            ResponsesContinuationState {
+                response_id: response_id.to_string(),
+                messages: messages.to_vec(),
+            },
+        );
     }
 
     pub fn clear_previous_response_chain_for(&mut self, provider: &str, model: &str) {
-        if let Some(key) = previous_response_chain_key(provider, model) {
-            self.previous_response_ids.remove(&key);
+        if let Some(key) = responses_continuation_key(provider, model) {
+            self.previous_response_chains.remove(&key);
         }
     }
 
     pub fn clear_previous_response_chain(&mut self) {
-        self.previous_response_ids.clear();
+        self.previous_response_chains.clear();
     }
 
     pub fn mark_tool_loop_limit_hit(&mut self) {
@@ -395,26 +410,19 @@ impl AgentSessionState {
     }
 }
 
-fn previous_response_chain_key(provider: &str, model: &str) -> Option<(String, String)> {
-    let provider = provider.trim().to_ascii_lowercase();
-    let model = model.trim();
-    if provider.is_empty() || model.is_empty() {
-        return None;
-    }
-
-    Some((provider, model.to_string()))
-}
-
 #[cfg(test)]
 mod tests {
     use super::AgentSessionState;
+    use crate::llm::provider::Message;
 
     #[test]
     fn previous_response_chain_is_scoped_to_provider_and_model() {
         let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+        let messages_52 = vec![Message::user("hello".to_string())];
+        let messages_54 = vec![Message::user("continue".to_string())];
 
-        state.set_previous_response_chain("openai", "gpt-5.2", Some("resp_123"));
-        state.set_previous_response_chain("openai", "gpt-5.4", Some("resp_456"));
+        state.set_previous_response_chain("openai", "gpt-5.2", Some("resp_123"), &messages_52);
+        state.set_previous_response_chain("openai", "gpt-5.4", Some("resp_456"), &messages_54);
 
         assert_eq!(
             state.previous_response_id_for("openai", "gpt-5.2"),
@@ -429,13 +437,21 @@ mod tests {
         state.clear_previous_response_chain_for("openai", "gpt-5.2");
 
         assert_eq!(state.previous_response_id_for("openai", "gpt-5.2"), None);
+        assert_eq!(state.previous_response_chain_for("openai", "gpt-5.2"), None);
         assert_eq!(
             state.previous_response_id_for("openai", "gpt-5.4"),
             Some("resp_456".to_string())
         );
+        assert_eq!(
+            state
+                .previous_response_chain_for("openai", "gpt-5.4")
+                .map(|chain| chain.messages.as_slice()),
+            Some(messages_54.as_slice())
+        );
 
         state.clear_previous_response_chain();
         assert_eq!(state.previous_response_id_for("openai", "gpt-5.4"), None);
+        assert_eq!(state.previous_response_chain_for("openai", "gpt-5.4"), None);
     }
 }
 

@@ -285,7 +285,6 @@ impl OpenAIProvider {
 
         let mut responses_api_modes = HashMap::new();
         let default_state = Self::default_responses_state(&model);
-        let is_native_openai = resolved_base_url.contains("api.openai.com");
         let is_chatgpt_backend = using_chatgpt_auth && resolved_base_url.contains("chatgpt.com");
         let is_xai = resolved_base_url.contains("api.x.ai");
         let websocket_mode = openai
@@ -317,8 +316,6 @@ impl OpenAIProvider {
                 ResponsesApiState::Disabled => ResponsesApiState::Allowed,
                 state => state,
             }
-        } else if !is_native_openai {
-            ResponsesApiState::Disabled
         } else {
             default_state
         };
@@ -706,6 +703,11 @@ impl OpenAIProvider {
             None
         };
         let is_chatgpt_backend = self.is_chatgpt_backend();
+        let supports_responses_continuation = !is_chatgpt_backend
+            && !matches!(
+                self.responses_api_state(&request.model),
+                ResponsesApiState::Disabled
+            );
         let ctx = request_builder::ResponsesRequestContext {
             supports_tools: self.supports_tools(&request.model),
             supports_parallel_tool_config: self.supports_parallel_tool_config(&request.model),
@@ -714,7 +716,7 @@ impl OpenAIProvider {
             supports_reasoning: self.supports_reasoning(&request.model),
             is_responses_api_model: Self::is_responses_api_model(&request.model),
             include_max_output_tokens: is_native_openai,
-            include_previous_response_id: is_native_openai,
+            include_previous_response_id: supports_responses_continuation,
             include_output_types: !self.is_chatgpt_backend(),
             include_sampling_parameters: !self.is_chatgpt_backend(),
             force_response_store_false: self.uses_chatgpt_auth()

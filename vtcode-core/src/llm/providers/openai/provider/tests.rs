@@ -824,6 +824,19 @@ fn supports_responses_compaction_tracks_responses_api_availability() {
     let openai = OpenAIProvider::with_model(String::new(), models::openai::GPT_5.to_string());
     assert!(openai.supports_responses_compaction(models::openai::GPT_5));
 
+    let compatible = OpenAIProvider::from_config(
+        Some(String::new()),
+        None,
+        Some(models::openai::GPT_5.to_string()),
+        Some("https://compat.example/v1".to_string()),
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+    assert!(compatible.supports_responses_compaction(models::openai::GPT_5));
+
     let xai = OpenAIProvider::from_config(
         Some(String::new()),
         None,
@@ -836,6 +849,32 @@ fn supports_responses_compaction_tracks_responses_api_availability() {
         None,
     );
     assert!(!xai.supports_responses_compaction(models::openai::GPT_5));
+}
+
+#[test]
+fn compatible_responses_payload_includes_previous_response_id() {
+    let provider = OpenAIProvider::from_config(
+        Some(String::new()),
+        None,
+        Some(models::openai::GPT_5.to_string()),
+        Some("https://compat.example/v1".to_string()),
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+    let mut request = sample_request(models::openai::GPT_5);
+    request.previous_response_id = Some("resp_previous_123".to_string());
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    assert_eq!(
+        payload.get("previous_response_id").and_then(Value::as_str),
+        Some("resp_previous_123")
+    );
 }
 
 #[test]

@@ -238,8 +238,10 @@ pub(crate) async fn execute_llm_request(
 
         request.stream = use_streaming;
         let has_post_tool_context = has_recent_tool_responses(&request.messages);
-        let preserve_structured_post_tool_context =
-            supports_responses_chaining(&turn_snapshot.provider_name);
+        let preserve_structured_post_tool_context = supports_responses_chaining(
+            &turn_snapshot.provider_name,
+            turn_snapshot.capabilities.responses_compaction,
+        );
 
         let step_result = if use_streaming {
             let mut stream_bridge = HarnessStreamingBridge::new(
@@ -437,8 +439,10 @@ pub(crate) async fn execute_llm_request(
                 update_previous_response_chain_after_success(
                     ctx.session_stats,
                     &turn_snapshot.provider_name,
+                    turn_snapshot.capabilities.responses_compaction,
                     active_model,
                     response.request_id.as_deref(),
+                    &request.messages,
                 );
                 llm_result = Ok((response, response_streamed));
                 _spinner.finish();

@@ -52,6 +52,7 @@ mod message;
 mod provider_trait;
 mod request;
 mod response;
+mod responses_continuation;
 #[cfg(test)]
 mod tests;
 mod tool;
@@ -68,6 +69,10 @@ pub use request::{
 pub use response::{
     BorrowedLLMStream, FinishReason, LLMNormalizedStream, LLMResponse, LLMStream, LLMStreamEvent,
     NormalizedStreamEvent, Usage,
+};
+pub use responses_continuation::{
+    PreparedResponsesRequest, ResponsesContinuationState, prepare_openai_responses_request,
+    responses_continuation_key,
 };
 pub use tool::{
     FunctionDefinition, GrammarDefinition, ShellToolDefinition, ToolDefinition, ToolSearchAlgorithm,

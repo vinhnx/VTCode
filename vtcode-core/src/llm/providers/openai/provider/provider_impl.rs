@@ -71,7 +71,7 @@ impl provider::LLMProvider for OpenAIProvider {
     }
 
     fn supports_responses_compaction(&self, model: &str) -> bool {
-        if !self.base_url.contains("api.openai.com") {
+        if self.is_chatgpt_backend() {
             return false;
         }
         let requested = if model.trim().is_empty() {

@@ -22,9 +22,9 @@ VT Code's default OpenAI profile keeps `gpt-5.4` on a compact execution contract
 
 2. **Surface reasoning summaries**: VT Code automatically requests `reasoning.summary = "auto"` for OpenAI reasoning models. Returned summary text is folded into the agent’s normal reasoning output and logs, so no extra toggle is required.
 
-3. **Preserve reasoning items across API calls**: VT Code keeps continuity in two ways. It stores `previous_response_id` for OpenAI/OpenResponses sessions, and it also preserves structured reasoning items in assistant `reasoning_details` so tool loops can replay them when the next request is built. That matches OpenAI’s guidance to pass `previous_response_id` or reinsert reasoning items explicitly.
+3. **Preserve reasoning items across API calls**: VT Code keeps continuity in two ways. It stores `previous_response_id` for OpenAI, OpenAI-compatible Responses sessions, and OpenResponses sessions, and it also preserves structured reasoning items in assistant `reasoning_details` so tool loops can replay them when the next request is built. That matches OpenAI’s guidance to pass `previous_response_id` or reinsert reasoning items explicitly.
 
-4. **Use hybrid continuity + server-side compaction**: VT Code keeps Responses-style continuity (`previous_response_id`) for OpenAI/OpenResponses providers and enables compaction via `context_management` on `/responses` requests when `agent.harness.auto_compaction_enabled = true`. This matches OpenAI's recommended stateful path: when you are already chaining with `previous_response_id`, let the API manage context compaction instead of manually pruning request input.
+4. **Use hybrid continuity + server-side compaction**: VT Code keeps Responses-style continuity (`previous_response_id`) for OpenAI, OpenAI-compatible Responses providers, and OpenResponses providers, and enables compaction via `context_management` on `/responses` requests when `agent.harness.auto_compaction_enabled = true`. This matches OpenAI's recommended stateful path: when you are already chaining with `previous_response_id`, let the API manage context compaction instead of manually pruning request input.
 
 5. **Use encrypted reasoning for ZDR-style compliance**: If you are restricted from storing model state, enable the Responses API flags directly in `vtcode.toml`:
 
