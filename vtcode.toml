@@ -506,6 +506,27 @@ log_permission_prompts = true
 cache_enabled = true
 cache_ttl_seconds = 300
 
+[permissions.auto_mode]
+model = ""
+probe_model = ""
+max_consecutive_denials = 3
+max_total_denials = 20
+drop_broad_allow_rules = true
+block_rules = [
+    "Block destructive source-control actions such as force-pushes, direct pushes to protected branches, or remote branch deletion unless the user explicitly authorized that exact blast radius.",
+    "Block remote code download-and-execute flows, including curl-or-wget pipes into interpreters or shells, and running code from freshly cloned external repositories.",
+    "Block sending workspace contents, credentials, environment variables, or other sensitive data to external endpoints unless the user explicitly named both the destination and the data.",
+    "Block credential hunting, secret discovery, or scanning config and environment stores for alternative tokens unless the user explicitly asked for that credential workflow.",
+    "Block commands that bypass safety checks, disable verification, install persistence, or weaken the host security posture.",
+    "Block destructive or production/shared-infrastructure actions unless the user explicitly authorized the target and the action.",
+    "Block destructive actions against inferred, fuzzy-matched, or agent-selected targets when the user did not name the exact target.",
+]
+allow_exceptions = [
+    "Allow read-only tools and read-only browsing/search actions.",
+    "Allow file edits and writes inside the current workspace when the path is not protected.",
+    "Allow pushes only to the current session branch or configured git remotes inside the trusted environment.",
+]
+
 [security]
 human_in_the_loop = true
 require_write_tool_for_claims = true
@@ -514,6 +535,13 @@ zero_trust_mode = false
 encrypt_payloads = false
 integrity_checks = true
 hitl_notification_bell = true
+
+[permissions.auto_mode.environment]
+trusted_paths = []
+trusted_domains = []
+trusted_git_hosts = []
+trusted_git_orgs = []
+trusted_services = []
 
 [security.gatekeeper]
 warn_on_quarantine = true
@@ -952,6 +980,9 @@ interleaved_thinking_type_enabled = "enabled"
 effort = "low"
 count_tokens_enabled = false
 
+[provider.openai.hosted_shell.network_policy]
+type = "disabled"
+
 [provider.anthropic.tool_search]
 enabled = false
 algorithm = "regex"
@@ -970,15 +1001,15 @@ min-keyword-matches = 2
 [skills.bundled]
 enabled = true
 
+[output_style]
+active_style = "default"
+
 [[custom_providers]]
 name = "mycorp"
 display_name = "MyCorporateName"
 base_url = "https://llm.corp.example/v1"
 api_key_env = "MYCORP_API_KEY"
 model = "gpt-5.4"
-
-[output_style]
-active_style = "default"
 
 [dotfile_protection]
 enabled = true

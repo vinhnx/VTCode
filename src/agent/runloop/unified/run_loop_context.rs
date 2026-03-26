@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use vtcode_core::acp::ToolPermissionCache;
+use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::llm::provider as uni;
@@ -380,6 +381,13 @@ pub(crate) struct RunLoopContext<'a> {
     pub traj: &'a TrajectoryLogger,
     pub harness_state: &'a mut HarnessTurnState,
     pub harness_emitter: Option<&'a HarnessEventEmitter>,
+    pub auto_mode: Option<AutoModeRuntimeContext<'a>>,
+}
+
+pub(crate) struct AutoModeRuntimeContext<'a> {
+    pub config: &'a CoreAgentConfig,
+    pub provider_client: &'a mut dyn uni::LLMProvider,
+    pub working_history: &'a [uni::Message],
 }
 
 impl<'a> RunLoopContext<'a> {
@@ -401,6 +409,45 @@ impl<'a> RunLoopContext<'a> {
         harness_state: &'a mut HarnessTurnState,
         harness_emitter: Option<&'a HarnessEventEmitter>,
     ) -> Self {
+        Self::new_with_auto_mode_context(
+            renderer,
+            handle,
+            tool_registry,
+            _tools,
+            tool_result_cache,
+            tool_permission_cache,
+            decision_ledger,
+            session_stats,
+            mcp_panel_state,
+            approval_recorder,
+            session,
+            safety_validator,
+            traj,
+            harness_state,
+            harness_emitter,
+            None,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn new_with_auto_mode_context(
+        renderer: &'a mut AnsiRenderer,
+        handle: &'a InlineHandle,
+        tool_registry: &'a mut ToolRegistry,
+        _tools: &'a Arc<RwLock<Vec<uni::ToolDefinition>>>,
+        tool_result_cache: &'a Arc<RwLock<ToolResultCache>>,
+        tool_permission_cache: &'a Arc<RwLock<ToolPermissionCache>>,
+        decision_ledger: &'a Arc<RwLock<DecisionTracker>>,
+        session_stats: &'a mut SessionStats,
+        mcp_panel_state: &'a mut McpPanelState,
+        approval_recorder: &'a ApprovalRecorder,
+        session: &'a mut InlineSession,
+        safety_validator: Option<&'a Arc<RwLock<ToolCallSafetyValidator>>>,
+        traj: &'a TrajectoryLogger,
+        harness_state: &'a mut HarnessTurnState,
+        harness_emitter: Option<&'a HarnessEventEmitter>,
+        auto_mode: Option<AutoModeRuntimeContext<'a>>,
+    ) -> Self {
         Self {
             renderer,
             handle,
@@ -416,6 +463,7 @@ impl<'a> RunLoopContext<'a> {
             traj,
             harness_state,
             harness_emitter,
+            auto_mode,
         }
     }
 }

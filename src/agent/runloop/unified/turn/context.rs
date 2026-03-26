@@ -462,7 +462,15 @@ impl<'a> TurnProcessingContext<'a> {
             state,
         } = self.parts_mut();
 
-        crate::agent::runloop::unified::run_loop_context::RunLoopContext::new(
+        let auto_mode = Some(
+            crate::agent::runloop::unified::run_loop_context::AutoModeRuntimeContext {
+                config: llm_ctx.config,
+                provider_client: llm_ctx.provider_client.as_mut(),
+                working_history: state.working_history.as_slice(),
+            },
+        );
+
+        crate::agent::runloop::unified::run_loop_context::RunLoopContext::new_with_auto_mode_context(
             ui_ctx.renderer,
             ui_ctx.handle,
             tool_ctx.tool_registry,
@@ -478,6 +486,7 @@ impl<'a> TurnProcessingContext<'a> {
             llm_ctx.traj,
             state.harness_state,
             state.harness_emitter,
+            auto_mode,
         )
     }
 

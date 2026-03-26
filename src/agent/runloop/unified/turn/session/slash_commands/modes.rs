@@ -1,4 +1,5 @@
 use anyhow::Result;
+use vtcode_core::config::PermissionMode;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::EditingMode as ConfigEditingMode;
 use vtcode_core::core::interfaces::session::PlanModeEntrySource;
@@ -101,7 +102,7 @@ pub(crate) async fn handle_toggle_plan_mode(
         } else {
             ConfigEditingMode::Edit
         },
-        Some(false),
+        Some(PermissionMode::Default),
         "plan mode preference",
     )?;
 
@@ -110,8 +111,8 @@ pub(crate) async fn handle_toggle_plan_mode(
 
 pub(crate) async fn handle_cycle_mode(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     let new_mode = match ctx.session_stats.current_mode() {
-        SessionMode::Edit => SessionMode::TrustedAuto,
-        SessionMode::TrustedAuto => SessionMode::Plan,
+        SessionMode::Edit => SessionMode::Auto,
+        SessionMode::Auto => SessionMode::Plan,
         SessionMode::Plan => SessionMode::Edit,
     };
     apply_session_mode(ctx, new_mode).await
@@ -123,7 +124,7 @@ pub(crate) async fn handle_set_mode(
 ) -> Result<SlashCommandControl> {
     let requested = match mode {
         SessionModeCommand::Edit => SessionMode::Edit,
-        SessionModeCommand::TrustedAuto => SessionMode::TrustedAuto,
+        SessionModeCommand::Auto => SessionMode::Auto,
         SessionModeCommand::Plan => SessionMode::Plan,
     };
 
@@ -162,11 +163,11 @@ pub(crate) async fn handle_start_mode_selection(
             current_mode == SessionMode::Edit,
         ),
         mode_item(
-            "Trusted Auto Mode",
-            "Auto-approve trusted low-risk tools; higher-risk actions still prompt",
+            "Auto Mode",
+            "Classifier-backed approvals with deny-and-continue recovery",
             "mode:auto",
-            "mode trusted auto autonomous low risk approvals",
-            current_mode == SessionMode::TrustedAuto,
+            "mode auto classifier approvals autonomous",
+            current_mode == SessionMode::Auto,
         ),
         mode_item(
             "Plan Mode",
@@ -181,7 +182,7 @@ pub(crate) async fn handle_start_mode_selection(
         "Session mode".to_string(),
         vec![
             "Choose how VT Code should run this session.".to_string(),
-            "Edit uses normal confirmations, Trusted Auto reduces HITL for low-risk actions, and Plan is read-only.".to_string(),
+            "Edit uses normal confirmations, Auto uses background classifier checks, and Plan is read-only.".to_string(),
         ],
         items,
         Some(mode_selection_for(current_mode)),
@@ -196,9 +197,7 @@ pub(crate) async fn handle_start_mode_selection(
 
     let requested = match selection {
         InlineListSelection::ConfigAction(action) if action == "mode:edit" => SessionMode::Edit,
-        InlineListSelection::ConfigAction(action) if action == "mode:auto" => {
-            SessionMode::TrustedAuto
-        }
+        InlineListSelection::ConfigAction(action) if action == "mode:auto" => SessionMode::Auto,
         InlineListSelection::ConfigAction(action) if action == "mode:plan" => SessionMode::Plan,
         _ => {
             ctx.renderer.line(
@@ -223,10 +222,11 @@ fn persist_mode_preference(
     workspace: &std::path::Path,
     vt_cfg: &mut Option<VTCodeConfig>,
     mode: ConfigEditingMode,
-    autonomous_mode: Option<bool>,
+    permission_mode: Option<PermissionMode>,
     preference_label: &str,
 ) -> Result<()> {
-    if let Err(err) = super::persist_mode_settings(workspace, vt_cfg, Some(mode), autonomous_mode) {
+    if let Err(err) = super::persist_mode_settings(workspace, vt_cfg, Some(mode), permission_mode)
+    {
         renderer.line(
             MessageStyle::Error,
             &format!("Failed to persist {preference_label}: {}", err),
@@ -252,17 +252,17 @@ async fn apply_session_mode(
             )
             .await;
         }
-        SessionMode::Edit | SessionMode::TrustedAuto => {
+        SessionMode::Edit | SessionMode::Auto => {
             ctx.tool_registry.disable_plan_mode();
             let plan_state = ctx.tool_registry.plan_mode_state();
             plan_state.disable();
             plan_state.set_plan_file(None).await;
             ctx.session_stats.set_plan_mode(false);
             ctx.session_stats
-                .set_autonomous_mode(matches!(new_mode, SessionMode::TrustedAuto));
+                .set_autonomous_mode(matches!(new_mode, SessionMode::Auto));
             ctx.handle.set_editing_mode(EditingMode::Edit);
             ctx.handle
-                .set_autonomous_mode(matches!(new_mode, SessionMode::TrustedAuto));
+                .set_autonomous_mode(matches!(new_mode, SessionMode::Auto));
         }
     }
 
@@ -277,12 +277,11 @@ async fn apply_session_mode(
                 "  Full tool access with standard confirmation prompts.",
             )?;
         }
-        SessionMode::TrustedAuto => {
-            ctx.renderer
-                .line(MessageStyle::Info, "Switched to Trusted Auto Mode")?;
+        SessionMode::Auto => {
+            ctx.renderer.line(MessageStyle::Info, "Switched to Auto Mode")?;
             ctx.renderer.line(
                 MessageStyle::Output,
-                "  Auto-approves trusted low-risk tools; higher-risk actions still prompt.",
+                "  Classifier-backed permission checks run in the background; blocked actions should retry with a safer path.",
             )?;
         }
         SessionMode::Plan => {
@@ -304,11 +303,11 @@ async fn apply_session_mode(
         ctx.vt_cfg,
         match new_mode {
             SessionMode::Plan => ConfigEditingMode::Plan,
-            SessionMode::Edit | SessionMode::TrustedAuto => ConfigEditingMode::Edit,
+            SessionMode::Edit | SessionMode::Auto => ConfigEditingMode::Edit,
         },
         match new_mode {
-            SessionMode::TrustedAuto => Some(true),
-            SessionMode::Edit | SessionMode::Plan => Some(false),
+            SessionMode::Auto => Some(PermissionMode::Auto),
+            SessionMode::Edit | SessionMode::Plan => Some(PermissionMode::Default),
         },
         "editing mode preference",
     )?;
@@ -326,7 +325,7 @@ async fn sync_workspace_trust_prompt_policy(
     };
     let enforce_safe_mode_prompts = should_enforce_safe_mode_prompts(
         ctx.full_auto,
-        matches!(mode, SessionMode::TrustedAuto),
+        matches!(mode, SessionMode::Auto),
         workspace_trust_level,
     );
     ctx.tool_registry
@@ -355,7 +354,7 @@ fn mode_item(
 fn mode_selection_for(mode: SessionMode) -> InlineListSelection {
     match mode {
         SessionMode::Edit => InlineListSelection::ConfigAction("mode:edit".to_string()),
-        SessionMode::TrustedAuto => InlineListSelection::ConfigAction("mode:auto".to_string()),
+        SessionMode::Auto => InlineListSelection::ConfigAction("mode:auto".to_string()),
         SessionMode::Plan => InlineListSelection::ConfigAction("mode:plan".to_string()),
     }
 }
@@ -363,7 +362,7 @@ fn mode_selection_for(mode: SessionMode) -> InlineListSelection {
 fn already_active_message(mode: SessionMode) -> &'static str {
     match mode {
         SessionMode::Edit => "Edit Mode is already active.",
-        SessionMode::TrustedAuto => "Trusted Auto Mode is already active.",
+        SessionMode::Auto => "Auto Mode is already active.",
         SessionMode::Plan => "Plan Mode is already active.",
     }
 }

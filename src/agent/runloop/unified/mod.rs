@@ -1,4 +1,5 @@
 pub(crate) mod async_mcp_manager;
+pub(crate) mod auto_mode;
 
 mod config_section_headings;
 pub(crate) mod context_manager;

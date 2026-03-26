@@ -20,7 +20,7 @@ python3 scripts/generate_config_field_reference.py
 | `acp.zed.transport` | `string` | no | `"stdio"` | Transport used to communicate with the Zed client |
 | `acp.zed.workspace_trust` | `string` | no | `"full_auto"` | Desired workspace trust level when running under ACP |
 | `agent.api_key_env` | `string` | no | `"OPENAI_API_KEY"` | Environment variable that stores the API key for the active provider |
-| `agent.autonomous_mode` | `boolean` | no | `false` | Enable autonomous mode - auto-approve safe tools with reduced HITL prompts When true, the agent operates with fewer confirmation prompts for safe tools. |
+| `agent.autonomous_mode` | `boolean` | no | `false` | Deprecated compatibility flag. When `true` and `permissions.default_mode` is unset, VT Code maps it to `permissions.default_mode = "auto"`. |
 | `agent.checkpointing.enabled` | `boolean` | no | `true` | Enable automatic checkpoints after each successful turn |
 | `agent.checkpointing.max_age_days` | `integer \| null` | no | `30` | Maximum age in days before checkpoints are removed automatically (None disables) |
 | `agent.checkpointing.max_snapshots` | `integer` | no | `50` | Maximum number of checkpoints to retain on disk |
@@ -362,7 +362,26 @@ python3 scripts/generate_config_field_reference.py
 | `permissions.audit_enabled` | `boolean` | no | `true` | Enable audit logging of all permission decisions |
 | `permissions.cache_enabled` | `boolean` | no | `true` | Enable permission decision caching to avoid redundant evaluations |
 | `permissions.cache_ttl_seconds` | `integer` | no | `300` | Cache time-to-live in seconds (how long to cache decisions) Default: 300 seconds (5 minutes) |
-| `permissions.default_mode` | `string` | no | `"default"` | Default unified permission mode. Options: `"default"`, `"accept_edits"`, `"plan"`, `"dont_ask"`, `"bypass_permissions"` plus legacy aliases `"ask"`, `"suggest"`, `"auto-approved"`, `"full-auto"` |
+| `permissions.default_mode` | `string` | no | `"default"` | Default unified permission mode. Options: `"default"`, `"accept_edits"`, `"auto"`, `"plan"`, `"dont_ask"`, `"bypass_permissions"` plus legacy aliases `"ask"`, `"suggest"`, `"auto-approved"`, `"full-auto"`, and `"trusted_auto"` |
+| `permissions.auto_mode.allow_exceptions` | `array` | no | built-in defaults | Narrow allow exceptions applied after auto-mode block rules |
+| `permissions.auto_mode.allow_exceptions[]` | `string` | no | `-` | Auto-mode allow exception entry |
+| `permissions.auto_mode.block_rules` | `array` | no | built-in defaults | Background-classifier block rules for `permissions.default_mode = "auto"` |
+| `permissions.auto_mode.block_rules[]` | `string` | no | `-` | Auto-mode block rule entry |
+| `permissions.auto_mode.drop_broad_allow_rules` | `boolean` | no | `true` | Ignore broad shell/interpreter allow rules while auto mode is active so risky commands still reach the classifier |
+| `permissions.auto_mode.environment.trusted_domains` | `array` | no | `[]` | Extra trusted domains for auto mode |
+| `permissions.auto_mode.environment.trusted_domains[]` | `string` | no | `-` | Trusted domain entry |
+| `permissions.auto_mode.environment.trusted_git_hosts` | `array` | no | `[]` | Extra trusted Git hosts for auto mode |
+| `permissions.auto_mode.environment.trusted_git_hosts[]` | `string` | no | `-` | Trusted Git host entry |
+| `permissions.auto_mode.environment.trusted_git_orgs` | `array` | no | `[]` | Extra trusted Git orgs for auto mode |
+| `permissions.auto_mode.environment.trusted_git_orgs[]` | `string` | no | `-` | Trusted Git org entry |
+| `permissions.auto_mode.environment.trusted_paths` | `array` | no | `[]` | Extra trusted filesystem roots for auto mode |
+| `permissions.auto_mode.environment.trusted_paths[]` | `string` | no | `-` | Trusted path entry |
+| `permissions.auto_mode.environment.trusted_services` | `array` | no | `[]` | Extra trusted service identifiers for auto mode |
+| `permissions.auto_mode.environment.trusted_services[]` | `string` | no | `-` | Trusted service entry |
+| `permissions.auto_mode.max_consecutive_denials` | `integer` | no | `3` | Consecutive classifier denials before auto mode falls back to manual prompts |
+| `permissions.auto_mode.max_total_denials` | `integer` | no | `20` | Total classifier denials before auto mode falls back to manual prompts |
+| `permissions.auto_mode.model` | `string` | no | `""` | Optional reviewer-model override for auto mode. Leave empty to auto-pick a lightweight model from the active provider |
+| `permissions.auto_mode.probe_model` | `string` | no | `""` | Optional prompt-injection-probe model override for auto mode |
 | `permissions.deny` | `array` | no | `[]` | Rules that deny matching tool calls |
 | `permissions.deny[]` | `string` | no | `-` | Permission rule entry such as `Edit(/.git/**)` or `Bash(git push *)` |
 | `permissions.enabled` | `boolean` | no | `true` | Enable the enhanced permission system (resolver + audit logger + cache) |

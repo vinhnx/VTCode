@@ -575,7 +575,7 @@ fn prompt_suggestion_provider_name(config: &CoreAgentConfig) -> String {
         .unwrap_or_else(|| "gemini".to_string())
 }
 
-fn auto_small_model(provider_name: &str, active_model: &str) -> String {
+pub(crate) fn auto_small_model(provider_name: &str, active_model: &str) -> String {
     if let Ok(model_id) = active_model.parse::<ModelId>()
         && model_id.is_efficient_variant()
     {

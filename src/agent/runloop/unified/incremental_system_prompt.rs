@@ -7,6 +7,15 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+fn append_auto_mode_notice(prompt: &mut String) {
+    if prompt.contains("## Auto Mode Active") {
+        return;
+    }
+    prompt.push('\n');
+    prompt.push_str(crate::agent::runloop::unified::auto_mode::system_prompt_addendum());
+    prompt.push('\n');
+}
+
 fn append_temporal_context_runtime(prompt: &mut String, use_utc: bool) {
     use std::fmt::Write;
 
@@ -241,7 +250,12 @@ impl IncrementalSystemPrompt {
                 || context.tool_usage_count > 0
                 || context.token_usage_ratio > 0.0;
             let has_editor_context = context.editor_context_block.is_some();
-            if has_runtime_context || context.full_auto || context.plan_mode || has_editor_context {
+            if has_runtime_context
+                || context.full_auto
+                || context.auto_mode
+                || context.plan_mode
+                || has_editor_context
+            {
                 let _ = writeln!(runtime_tail, "\n[Runtime Context]");
                 if let Some(editor_context_block) = context.editor_context_block.as_deref() {
                     let _ = writeln!(runtime_tail, "{}", editor_context_block);
@@ -276,6 +290,9 @@ impl IncrementalSystemPrompt {
                 if context.full_auto {
                     append_full_auto_notice(&mut runtime_tail, context.plan_mode);
                 }
+                if context.auto_mode && !context.plan_mode {
+                    append_auto_mode_notice(&mut runtime_tail);
+                }
                 if context.plan_mode {
                     append_plan_mode_notice(&mut runtime_tail);
                 }
@@ -308,6 +325,7 @@ impl IncrementalSystemPrompt {
                 || context.error_count > 0
                 || context.token_usage_ratio > 0.0
                 || context.full_auto
+                || context.auto_mode
                 || context.plan_mode;
 
             if has_context {
@@ -316,6 +334,10 @@ impl IncrementalSystemPrompt {
 
                 if context.full_auto {
                     append_full_auto_notice(&mut runtime_tail, context.plan_mode);
+                }
+
+                if context.auto_mode && !context.plan_mode {
+                    append_auto_mode_notice(&mut runtime_tail);
                 }
 
                 if context.plan_mode {
@@ -412,6 +434,7 @@ pub(crate) struct SystemPromptContext {
     pub(crate) error_count: usize,
     pub(crate) token_usage_ratio: f64,
     pub(crate) full_auto: bool,
+    pub(crate) auto_mode: bool,
     /// Plan mode: read-only mode for exploration and planning.
     pub(crate) plan_mode: bool,
     /// Discovered skills for immediate awareness
@@ -443,6 +466,7 @@ impl SystemPromptContext {
         self.error_count.hash(&mut hasher);
         ((self.token_usage_ratio * 1000.0) as usize).hash(&mut hasher);
         self.full_auto.hash(&mut hasher);
+        self.auto_mode.hash(&mut hasher);
         self.plan_mode.hash(&mut hasher);
         self.context_window_size.hash(&mut hasher);
         self.current_token_usage.hash(&mut hasher);

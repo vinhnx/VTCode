@@ -376,7 +376,7 @@ pub enum ModelSelectionSource {
 ///
 /// Controls the initial mode when a session starts. This is a **configuration**
 /// enum for `default_editing_mode` in vtcode.toml. At runtime, VT Code combines
-/// this with `agent.autonomous_mode` to cycle Edit → Trusted Auto → Plan.
+/// this with `permissions.default_mode` to cycle Edit → Auto → Plan.
 ///
 /// Inspired by OpenAI Codex's emphasis on structured planning before execution,
 /// but provider-agnostic (works with Gemini, Anthropic, OpenAI, xAI, DeepSeek, etc.)

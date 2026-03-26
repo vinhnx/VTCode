@@ -403,10 +403,11 @@ impl<'a> CopilotRuntimeHost<'a> {
                 decision_ledger: Some(self.decision_ledger),
                 tool_permission_cache: Some(self.tool_permission_cache),
                 hitl_notification_bell: self.hitl_notification_bell,
-                autonomous_mode: self.session_stats.is_autonomous_mode(),
                 approval_policy: self.approval_policy,
                 skip_confirmations: self.skip_confirmations,
                 permissions_config: self.vt_cfg.map(|cfg| &cfg.permissions),
+                auto_mode_runtime: None,
+                session_stats: Some(self.session_stats),
             },
             tool_name,
             Some(arguments),
@@ -419,6 +420,9 @@ impl<'a> CopilotRuntimeHost<'a> {
                     tool_name,
                     "denied by user or policy",
                 )));
+            }
+            ToolPermissionFlow::Blocked { reason } => {
+                return Ok(Some(denied_tool_execution_response(tool_name, &reason)));
             }
             ToolPermissionFlow::Exit | ToolPermissionFlow::Interrupted => {
                 return Ok(Some(denied_tool_execution_response(

@@ -3,6 +3,11 @@
 Full-auto mode lets VT Code run without pausing for human approval. Use this capability only when
 you fully trust the workspace configuration and have reviewed the safeguards below.
 
+`--full-auto` is intentionally separate from permission `auto` mode:
+
+- `--permission-mode auto` keeps the normal interactive/session runtime and routes risky actions through the background classifier.
+- `--full-auto` uses the explicit `[automation.full_auto]` allow-list and skips the classifier entirely.
+
 ## Activation Checklist
 
 1. **Update `vtcode.toml`**

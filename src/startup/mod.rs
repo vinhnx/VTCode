@@ -27,6 +27,7 @@ use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+use vtcode_core::config::PermissionMode;
 use vtcode_core::config::validator::{
     check_openai_hosted_shell_compat, check_prompt_cache_retention_compat,
 };
@@ -75,6 +76,9 @@ impl StartupContext {
             validate_full_auto_configuration(&loaded.config, &loaded.workspace)?;
         }
 
+        let mut config = loaded.config;
+        apply_autonomous_mode_compat(&mut config, args.permission_mode.as_deref());
+
         // Determine plan mode: CLI flag takes precedence, then config default_editing_mode
         let plan_mode_from_cli = args
             .permission_mode
@@ -83,7 +87,7 @@ impl StartupContext {
 
         // Check config for default_editing_mode = "plan" if not explicitly set via CLI
         let plan_mode_from_config =
-            !plan_mode_from_cli && loaded.config.agent.default_editing_mode.is_read_only();
+            !plan_mode_from_cli && config.agent.default_editing_mode.is_read_only();
 
         let plan_mode_entry_source = if plan_mode_from_cli {
             PlanModeEntrySource::CliFlag
@@ -93,7 +97,6 @@ impl StartupContext {
             PlanModeEntrySource::None
         };
 
-        let mut config = loaded.config;
         if let Some(ref permission_mode) = args.permission_mode {
             apply_permission_mode_override(&mut config, permission_mode)?;
         }
@@ -207,6 +210,19 @@ impl StartupContext {
             summarize_fork: args.summarize,
             plan_mode_entry_source,
         })
+    }
+}
+
+fn apply_autonomous_mode_compat(config: &mut VTCodeConfig, cli_permission_mode: Option<&str>) {
+    if cli_permission_mode.is_some() {
+        return;
+    }
+
+    if config.permissions.default_mode == PermissionMode::Default && config.agent.autonomous_mode {
+        tracing::warn!(
+            "config field [agent].autonomous_mode is deprecated; use [permissions].default_mode = \"auto\" instead"
+        );
+        config.permissions.default_mode = PermissionMode::Auto;
     }
 }
 

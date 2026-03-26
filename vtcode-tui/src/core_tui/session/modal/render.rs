@@ -1117,12 +1117,12 @@ mod tests {
     fn config_list_summary_uses_navigation_hint_instead_of_density() {
         let list = ModalListState::new(
             vec![InlineListItem {
-                title: "Autonomous mode".to_string(),
-                subtitle: Some("agent.autonomous_mode = on".to_string()),
+                title: "Permission mode".to_string(),
+                subtitle: Some("permissions.default_mode = auto".to_string()),
                 badge: Some("Toggle".to_string()),
                 indent: 0,
                 selection: Some(InlineListSelection::ConfigAction(
-                    "agent.autonomous_mode:toggle".to_string(),
+                    "permissions.default_mode:cycle".to_string(),
                 )),
                 search_value: None,
             }],

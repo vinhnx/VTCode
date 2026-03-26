@@ -3536,7 +3536,7 @@ fn header_shows_full_auto_trust_badge_for_full_auto_trust() {
 }
 
 #[test]
-fn header_shows_trusted_auto_badge() {
+fn header_shows_auto_badge() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.header_context.autonomous_mode = true;
     session.header_context.workspace_trust = format!("{}tools policy", ui::HEADER_TRUST_PREFIX);
@@ -3553,7 +3553,7 @@ fn header_shows_trusted_auto_badge() {
         .iter()
         .map(|span| span.content.clone().into_owned())
         .collect();
-    assert!(line_text.contains("Trusted auto"));
+    assert!(line_text.contains("Auto"));
     assert!(line_text.contains("[SAFE]"));
 }
 

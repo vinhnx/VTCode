@@ -216,8 +216,9 @@ pub struct AgentConfig {
     #[serde(default = "default_require_plan_confirmation")]
     pub require_plan_confirmation: bool,
 
-    /// Enable autonomous mode - auto-approve safe tools with reduced HITL prompts
-    /// When true, the agent operates with fewer confirmation prompts for safe tools.
+    /// Deprecated compatibility flag for pre-classifier autonomous mode settings.
+    /// When true and `[permissions].default_mode` is not explicitly set, VT Code maps
+    /// the session to `permissions.default_mode = "auto"`.
     #[serde(default = "default_autonomous_mode")]
     pub autonomous_mode: bool,
 

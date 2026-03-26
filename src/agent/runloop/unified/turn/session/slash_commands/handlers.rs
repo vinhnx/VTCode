@@ -4,6 +4,7 @@ use vtcode_core::llm::provider::MessageRole;
 
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::types::EditingMode as ConfigEditingMode;
+use vtcode_core::config::PermissionMode;
 use vtcode_core::core::agent::snapshots::{
     CheckpointRestore, RevertScope, SnapshotManager, SnapshotMetadata,
 };
@@ -80,9 +81,9 @@ pub(super) fn persist_mode_settings(
     workspace: &std::path::Path,
     vt_cfg: &mut Option<VTCodeConfig>,
     editing_mode: Option<ConfigEditingMode>,
-    autonomous_mode: Option<bool>,
+    permission_mode: Option<PermissionMode>,
 ) -> Result<()> {
-    if editing_mode.is_none() && autonomous_mode.is_none() {
+    if editing_mode.is_none() && permission_mode.is_none() {
         return Ok(());
     }
 
@@ -98,8 +99,8 @@ pub(super) fn persist_mode_settings(
         config.agent.default_editing_mode = mode;
     }
 
-    if let Some(enabled) = autonomous_mode {
-        config.agent.autonomous_mode = enabled;
+    if let Some(mode) = permission_mode {
+        config.permissions.default_mode = mode;
     }
 
     manager
@@ -110,8 +111,8 @@ pub(super) fn persist_mode_settings(
         if let Some(mode) = editing_mode {
             cfg.agent.default_editing_mode = mode;
         }
-        if let Some(enabled) = autonomous_mode {
-            cfg.agent.autonomous_mode = enabled;
+        if let Some(mode) = permission_mode {
+            cfg.permissions.default_mode = mode;
         }
     }
 
@@ -851,7 +852,10 @@ pub(super) async fn handle_exit(ctx: SlashCommandContext<'_>) -> Result<SlashCom
 
 #[cfg(test)]
 mod tests {
-    use super::{resolve_prompt_boundary_in_history, rewind_partial_arg};
+    use super::{persist_mode_settings, resolve_prompt_boundary_in_history, rewind_partial_arg};
+    use tempfile::TempDir;
+    use vtcode_core::config::PermissionMode;
+    use vtcode_core::config::loader::VTCodeConfig;
     use vtcode_core::core::agent::snapshots::{RevertScope, SnapshotMetadata};
 
     #[test]
@@ -909,6 +913,31 @@ mod tests {
         assert_eq!(
             resolve_prompt_boundary_in_history(&metadata, &history),
             Some(2)
+        );
+    }
+
+    #[test]
+    fn persist_mode_settings_updates_only_permissions_default_mode() {
+        let temp = TempDir::new().expect("temp dir");
+        let workspace = temp.path();
+        let initial = VTCodeConfig::default();
+        std::fs::write(
+            workspace.join("vtcode.toml"),
+            toml::to_string(&initial).expect("serialize config"),
+        )
+        .expect("write config");
+
+        let mut vt_cfg = Some(initial.clone());
+        persist_mode_settings(workspace, &mut vt_cfg, None, Some(PermissionMode::Auto))
+            .expect("persist mode settings");
+
+        let persisted = std::fs::read_to_string(workspace.join("vtcode.toml")).expect("config");
+        assert!(persisted.contains("default_mode = \"auto\""));
+        assert!(!persisted.contains("autonomous_mode = true"));
+        assert!(
+            vt_cfg.is_some_and(|cfg| {
+                cfg.permissions.default_mode == PermissionMode::Auto && !cfg.agent.autonomous_mode
+            })
         );
     }
 }

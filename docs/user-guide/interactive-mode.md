@@ -28,7 +28,7 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 | `Enter` | Queue the current input. | Plain input box only. |
 | `Tab` | Accept the visible inline suggestion, otherwise queue the current input. | Plain input box only; list and slash UIs keep their existing tab behavior. |
 | `Ctrl+Enter` | Process now or steer now. | Idle: runs the current draft, or the newest queued message if the draft is empty. Active: steers the current turn with the current draft. |
-| `Shift+Tab` or `Alt+M` | Cycle permission modes. | Switches Auto-Accept Mode, Plan Mode, and normal mode. |
+| `Shift+Tab` or `Alt+M` | Cycle permission modes. | Switches Edit, Auto, and Plan modes. |
 
 ### Multiline Input
 

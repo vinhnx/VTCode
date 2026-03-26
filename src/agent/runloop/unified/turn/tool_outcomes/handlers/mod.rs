@@ -194,7 +194,6 @@ fn build_tool_permissions_context<'ctx, 'a>(
             .vt_cfg
             .map(|cfg| cfg.security.hitl_notification_bell)
             .unwrap_or(true),
-        autonomous_mode: ctx.session_stats.is_autonomous_mode(),
         approval_policy: ctx
             .vt_cfg
             .map(|cfg| cfg.security.human_in_the_loop)
@@ -202,6 +201,14 @@ fn build_tool_permissions_context<'ctx, 'a>(
             .unwrap_or(AskForApproval::OnRequest),
         skip_confirmations: ctx.skip_confirmations,
         permissions_config: ctx.vt_cfg.map(|cfg| &cfg.permissions),
+        auto_mode_runtime: Some(
+            crate::agent::runloop::unified::run_loop_context::AutoModeRuntimeContext {
+                config: ctx.config,
+                provider_client: ctx.provider_client.as_mut(),
+                working_history: ctx.working_history.as_slice(),
+            },
+        ),
+        session_stats: Some(ctx.session_stats),
     }
 }
 
@@ -490,20 +497,36 @@ pub(crate) async fn validate_tool_call<'a>(
             }))
         }
         Ok(ToolPermissionFlow::Denied) => {
-            let denial = ToolExecutionError::policy_violation(
-                canonical_tool_name,
-                format!(
-                    "Tool '{}' execution denied by policy",
-                    preflight.normalized_tool_name
-                ),
-            )
-            .to_json_value();
+            let denial = if let Some(denial) = ctx.session_stats.last_auto_mode_denial() {
+                serde_json::json!({
+                    "error": format!("Auto mode blocked tool '{}': {}", preflight.normalized_tool_name, denial.reason),
+                    "reason": denial.reason,
+                    "matched_rule": denial.matched_rule,
+                    "matched_exception": denial.matched_exception,
+                    "review_stage": denial.stage,
+                    "next_action": "Choose a safer tool or narrower action that stays within the user's explicit request."
+                })
+            } else {
+                ToolExecutionError::policy_violation(
+                    canonical_tool_name,
+                    format!(
+                        "Tool '{}' execution denied by policy",
+                        preflight.normalized_tool_name
+                    ),
+                )
+                .to_json_value()
+            };
             ctx.push_tool_response(
                 tool_call_id,
                 serde_json::to_string(&denial).unwrap_or_else(|_| "{}".to_string()),
             );
             Ok(ValidationResult::Blocked)
         }
+        Ok(ToolPermissionFlow::Blocked { reason }) => Ok(ValidationResult::Outcome(
+            TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
+                reason: Some(reason),
+            }),
+        )),
         Ok(ToolPermissionFlow::Exit) => Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(
             TurnLoopResult::Exit,
         ))),

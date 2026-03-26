@@ -57,18 +57,18 @@ pub use acp::{
 pub use api_keys::ApiKeySources;
 pub use context::{ContextFeaturesConfig, DynamicContextConfig, LedgerConfig};
 pub use core::{
-    AgentConfig, AgentOnboardingConfig, AgentPromptSuggestionsConfig, AuthConfig, AutomationConfig,
-    BundledSkillsConfig, CommandsConfig, CopilotAuthConfig, DockerSandboxConfig, EditorToolConfig,
-    ExternalSandboxConfig, ExternalSandboxType, FullAutoConfig, GatekeeperConfig,
-    MicroVMSandboxConfig, ModelConfig, NetworkAllowlistEntryConfig, NetworkConfig,
-    OpenAIAuthConfig, OpenAIConfig, OpenAIHostedShellConfig, OpenAIHostedShellDomainSecret,
-    OpenAIHostedShellEnvironment, OpenAIHostedShellNetworkPolicy,
-    OpenAIHostedShellNetworkPolicyType, OpenAIHostedSkill, OpenAIPreferredMethod,
-    OpenAIServiceTier, OpenResponsesConfig, OpenRouterAuthConfig, PermissionMode,
-    PluginRuntimeConfig, PluginTrustLevel, PromptCachingConfig, ProviderPromptCachingConfig,
-    ResourceLimitsConfig, ResourceLimitsPreset, SandboxConfig, SandboxMode, SeccompConfig,
-    SeccompProfilePreset, SecurityConfig, SensitivePathsConfig, SkillsConfig, SkillsRenderMode,
-    ToolPolicy, ToolsConfig, WebFetchConfig,
+    AgentConfig, AgentOnboardingConfig, AgentPromptSuggestionsConfig, AuthConfig, AutoModeConfig,
+    AutoModeEnvironmentConfig, AutomationConfig, BundledSkillsConfig, CommandsConfig,
+    CopilotAuthConfig, DockerSandboxConfig, EditorToolConfig, ExternalSandboxConfig,
+    ExternalSandboxType, FullAutoConfig, GatekeeperConfig, MicroVMSandboxConfig, ModelConfig,
+    NetworkAllowlistEntryConfig, NetworkConfig, OpenAIAuthConfig, OpenAIConfig,
+    OpenAIHostedShellConfig, OpenAIHostedShellDomainSecret, OpenAIHostedShellEnvironment,
+    OpenAIHostedShellNetworkPolicy, OpenAIHostedShellNetworkPolicyType, OpenAIHostedSkill,
+    OpenAIPreferredMethod, OpenAIServiceTier, OpenResponsesConfig, OpenRouterAuthConfig,
+    PermissionMode, PluginRuntimeConfig, PluginTrustLevel, PromptCachingConfig,
+    ProviderPromptCachingConfig, ResourceLimitsConfig, ResourceLimitsPreset, SandboxConfig,
+    SandboxMode, SeccompConfig, SeccompProfilePreset, SecurityConfig, SensitivePathsConfig,
+    SkillsConfig, SkillsRenderMode, ToolPolicy, ToolsConfig, WebFetchConfig,
 };
 pub use debug::{DebugConfig, TraceLevel};
 pub use defaults::{

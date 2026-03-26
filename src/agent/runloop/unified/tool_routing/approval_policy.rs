@@ -72,34 +72,6 @@ pub(super) fn build_tool_risk_context(
     risk_context
 }
 
-pub(super) fn trusted_auto_allows_immediate_approval(
-    hook_requires_prompt: bool,
-    shell_approval_reason: Option<&str>,
-    risk_context: &ToolRiskContext,
-    risk_level: vtcode_core::tools::RiskLevel,
-) -> bool {
-    !hook_requires_prompt
-        && shell_approval_reason.is_none()
-        && !risk_context.is_write
-        && !risk_context.is_destructive
-        && !risk_context.accesses_network
-        && risk_level == vtcode_core::tools::RiskLevel::Low
-}
-
-pub(super) fn trusted_auto_allows_history_based_approval(
-    hook_requires_prompt: bool,
-    shell_approval_reason: Option<&str>,
-    risk_context: &ToolRiskContext,
-    risk_level: vtcode_core::tools::RiskLevel,
-) -> bool {
-    !hook_requires_prompt
-        && shell_approval_reason.is_none()
-        && !risk_context.is_write
-        && !risk_context.is_destructive
-        && !risk_context.accesses_network
-        && risk_level == vtcode_core::tools::RiskLevel::Medium
-}
-
 pub(super) fn approval_policy_rejects_prompt(
     approval_policy: AskForApproval,
     requires_rule_prompt: bool,

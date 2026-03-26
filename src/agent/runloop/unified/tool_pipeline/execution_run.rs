@@ -417,6 +417,14 @@ async fn check_tool_permission(
     skip_confirmations: bool,
     vt_cfg: Option<&VTCodeConfig>,
 ) -> Option<ToolExecutionStatus> {
+    let auto_mode_runtime = ctx.auto_mode.as_mut().map(|auto_mode| {
+        crate::agent::runloop::unified::run_loop_context::AutoModeRuntimeContext {
+            config: auto_mode.config,
+            provider_client: &mut *auto_mode.provider_client,
+            working_history: auto_mode.working_history,
+        }
+    });
+
     match ensure_tool_permission(
         crate::agent::runloop::unified::tool_routing::ToolPermissionsContext {
             tool_registry: ctx.tool_registry,
@@ -434,13 +442,14 @@ async fn check_tool_permission(
             hitl_notification_bell: vt_cfg
                 .map(|cfg| cfg.security.hitl_notification_bell)
                 .unwrap_or(true),
-            autonomous_mode: ctx.session_stats.is_autonomous_mode(),
             approval_policy: vt_cfg
                 .map(|cfg| cfg.security.human_in_the_loop)
                 .map(approval_policy_from_human_in_the_loop)
                 .unwrap_or(vtcode_core::exec_policy::AskForApproval::OnRequest),
             skip_confirmations,
             permissions_config: vt_cfg.map(|cfg| &cfg.permissions),
+            auto_mode_runtime,
+            session_stats: Some(ctx.session_stats),
         },
         name,
         Some(args_val),
@@ -451,6 +460,9 @@ async fn check_tool_permission(
         Ok(ToolPermissionFlow::Denied) => Some(ToolExecutionStatus::Failure {
             error: anyhow!("Tool permission denied"),
         }),
+        Ok(ToolPermissionFlow::Blocked { reason }) => {
+            Some(ToolExecutionStatus::Failure { error: anyhow!(reason) })
+        }
         Ok(ToolPermissionFlow::Interrupted | ToolPermissionFlow::Exit) => {
             Some(ToolExecutionStatus::Cancelled)
         }

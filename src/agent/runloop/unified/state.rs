@@ -18,8 +18,16 @@ pub(crate) enum ModelPickerTarget {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SessionMode {
     Edit,
-    TrustedAuto,
+    Auto,
     Plan,
+}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct AutoModeDenial {
+    pub stage: &'static str,
+    pub reason: String,
+    pub matched_rule: Option<String>,
+    pub matched_exception: Option<String>,
 }
 
 #[derive(Default)]
@@ -42,6 +50,14 @@ pub(crate) struct SessionStats {
     plan_mode_entry_source: Option<PlanModeEntrySource>,
     /// Autonomous mode - auto-approve safe tools with reduced HITL prompts
     pub autonomous_mode: bool,
+    /// Auto-mode classifier consecutive denial count.
+    auto_mode_consecutive_denials: u32,
+    /// Auto-mode classifier total denial count.
+    auto_mode_total_denials: u32,
+    /// Auto mode has fallen back to manual prompts for the rest of the session.
+    auto_mode_prompt_fallback: bool,
+    /// Most recent auto-mode classifier denial.
+    last_auto_mode_denial: Option<AutoModeDenial>,
     /// Whether Vim-style prompt editing is enabled for this session.
     pub vim_mode_enabled: bool,
     // Phase 4 Integration: Resilient execution components
@@ -170,13 +186,16 @@ impl SessionStats {
     pub(crate) fn current_mode(&self) -> SessionMode {
         match (self.editing_mode, self.autonomous_mode) {
             (EditingMode::Plan, _) => SessionMode::Plan,
-            (EditingMode::Edit, true) => SessionMode::TrustedAuto,
+            (EditingMode::Edit, true) => SessionMode::Auto,
             (EditingMode::Edit, false) => SessionMode::Edit,
         }
     }
 
     pub(crate) fn set_autonomous_mode(&mut self, enabled: bool) {
         self.autonomous_mode = enabled && !self.is_plan_mode();
+        if !self.autonomous_mode {
+            self.reset_auto_mode_review_state();
+        }
     }
 
     /// Set plan mode.
@@ -187,6 +206,7 @@ impl SessionStats {
             EditingMode::Edit
         };
         self.autonomous_mode = false;
+        self.reset_auto_mode_review_state();
         if enabled {
             self.plan_mode_interview_shown = false;
             self.plan_mode_interview_pending = false;
@@ -205,16 +225,16 @@ impl SessionStats {
         self.plan_mode_entry_source = Some(source);
     }
 
-    /// Cycle to the next mode: Edit -> Trusted Auto -> Plan -> Edit
+    /// Cycle to the next mode: Edit -> Auto -> Plan -> Edit
     #[cfg(test)]
     pub(crate) fn cycle_mode(&mut self) -> SessionMode {
         match self.current_mode() {
             SessionMode::Edit => {
                 self.editing_mode = EditingMode::Edit;
                 self.autonomous_mode = true;
-                SessionMode::TrustedAuto
+                SessionMode::Auto
             }
-            SessionMode::TrustedAuto => {
+            SessionMode::Auto => {
                 self.set_plan_mode(true);
                 SessionMode::Plan
             }
@@ -440,6 +460,41 @@ impl SessionStats {
     pub(crate) fn recent_touched_files(&self) -> Vec<String> {
         self.recent_touched_files.iter().cloned().collect()
     }
+
+    pub(crate) fn auto_mode_prompt_fallback_active(&self) -> bool {
+        self.auto_mode_prompt_fallback
+    }
+
+    pub(crate) fn last_auto_mode_denial(&self) -> Option<&AutoModeDenial> {
+        self.last_auto_mode_denial.as_ref()
+    }
+
+    pub(crate) fn reset_auto_mode_review_state(&mut self) {
+        self.auto_mode_consecutive_denials = 0;
+        self.auto_mode_total_denials = 0;
+        self.auto_mode_prompt_fallback = false;
+        self.last_auto_mode_denial = None;
+    }
+
+    pub(crate) fn record_auto_mode_allow(&mut self) {
+        self.auto_mode_consecutive_denials = 0;
+        self.last_auto_mode_denial = None;
+    }
+
+    pub(crate) fn record_auto_mode_denial(
+        &mut self,
+        denial: AutoModeDenial,
+        max_consecutive_denials: u32,
+        max_total_denials: u32,
+    ) -> bool {
+        self.auto_mode_consecutive_denials = self.auto_mode_consecutive_denials.saturating_add(1);
+        self.auto_mode_total_denials = self.auto_mode_total_denials.saturating_add(1);
+        self.last_auto_mode_denial = Some(denial);
+        self.auto_mode_prompt_fallback = self.auto_mode_consecutive_denials
+            >= max_consecutive_denials.max(1)
+            || self.auto_mode_total_denials >= max_total_denials.max(1);
+        self.auto_mode_prompt_fallback
+    }
 }
 
 pub(crate) fn should_enforce_safe_mode_prompts(
@@ -613,8 +668,8 @@ mod tests {
     use std::time::Duration;
 
     use super::{
-        CtrlCSignal, CtrlCState, SessionMode, SessionStats, is_follow_up_prompt_like,
-        should_enforce_safe_mode_prompts,
+        AutoModeDenial, CtrlCSignal, CtrlCState, SessionMode, SessionStats,
+        is_follow_up_prompt_like, should_enforce_safe_mode_prompts,
     };
     use vtcode_core::config::WorkspaceTrustLevel;
     use vtcode_core::config::constants::tools;
@@ -726,11 +781,11 @@ mod tests {
     }
 
     #[test]
-    fn cycle_mode_rotates_edit_trusted_auto_plan() {
+    fn cycle_mode_rotates_edit_auto_plan() {
         let mut stats = SessionStats::default();
 
         assert_eq!(stats.current_mode(), SessionMode::Edit);
-        assert_eq!(stats.cycle_mode(), SessionMode::TrustedAuto);
+        assert_eq!(stats.cycle_mode(), SessionMode::Auto);
         assert!(stats.is_autonomous_mode());
         assert_eq!(stats.editing_mode, EditingMode::Edit);
 
@@ -744,12 +799,54 @@ mod tests {
     }
 
     #[test]
-    fn safe_mode_prompts_are_disabled_for_trusted_auto() {
+    fn safe_mode_prompts_are_disabled_for_auto_mode() {
         assert!(!should_enforce_safe_mode_prompts(
             false,
             true,
             Some(WorkspaceTrustLevel::ToolsPolicy),
         ));
+    }
+
+    #[test]
+    fn auto_mode_denials_trigger_prompt_fallback_after_threshold() {
+        let mut stats = SessionStats::default();
+        stats.set_autonomous_mode(true);
+
+        assert!(!stats.record_auto_mode_denial(
+            AutoModeDenial {
+                stage: "stage2",
+                reason: "blocked".to_string(),
+                matched_rule: Some("rule".to_string()),
+                matched_exception: None,
+            },
+            3,
+            20,
+        ));
+        assert!(!stats.auto_mode_prompt_fallback_active());
+
+        assert!(!stats.record_auto_mode_denial(
+            AutoModeDenial {
+                stage: "stage2",
+                reason: "blocked".to_string(),
+                matched_rule: Some("rule".to_string()),
+                matched_exception: None,
+            },
+            3,
+            20,
+        ));
+        assert!(!stats.auto_mode_prompt_fallback_active());
+
+        assert!(stats.record_auto_mode_denial(
+            AutoModeDenial {
+                stage: "stage2",
+                reason: "blocked".to_string(),
+                matched_rule: Some("rule".to_string()),
+                matched_exception: None,
+            },
+            3,
+            20,
+        ));
+        assert!(stats.auto_mode_prompt_fallback_active());
     }
 
     #[test]

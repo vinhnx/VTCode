@@ -116,7 +116,7 @@ pub enum InlineEvent {
     LaunchEditor,
     ForceCancelPtySession,
     RequestInlinePromptSuggestion(String),
-    /// Toggle editing mode (Shift+Tab cycles through Edit -> Trusted Auto -> Plan -> Edit).
+    /// Toggle editing mode (Shift+Tab cycles through Edit -> Auto -> Plan -> Edit).
     ToggleMode,
     HistoryPrevious,
     HistoryNext,

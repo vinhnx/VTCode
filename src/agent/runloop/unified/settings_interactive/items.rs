@@ -15,6 +15,8 @@ use super::{
 };
 use crate::agent::runloop::unified::config_section_headings::humanize_identifier;
 
+const HIDDEN_SETTINGS_PATHS: &[&str] = &["agent.autonomous_mode"];
+
 pub(super) fn build_settings_items(
     state: &SettingsPaletteState,
     draft: &TomlValue,
@@ -96,6 +98,9 @@ fn append_table_items(
         let path = parent_path
             .map(|parent| format!("{parent}.{key}"))
             .unwrap_or_else(|| key.clone());
+        if HIDDEN_SETTINGS_PATHS.contains(&path.as_str()) {
+            continue;
+        }
         let entry = item_for_value(key, &path, value);
         if matches!(value, TomlValue::Table(_)) {
             section_items.push(entry);

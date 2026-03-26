@@ -186,7 +186,15 @@ impl<'a> TurnLoopContext<'a> {
     pub(crate) fn as_run_loop_context(
         &mut self,
     ) -> crate::agent::runloop::unified::run_loop_context::RunLoopContext<'_> {
-        crate::agent::runloop::unified::run_loop_context::RunLoopContext::new(
+        let auto_mode = Some(
+            crate::agent::runloop::unified::run_loop_context::AutoModeRuntimeContext {
+                config: self.config,
+                provider_client: self.provider_client.as_mut(),
+                working_history: &[],
+            },
+        );
+
+        crate::agent::runloop::unified::run_loop_context::RunLoopContext::new_with_auto_mode_context(
             self.renderer,
             self.handle,
             self.tool_registry,
@@ -202,6 +210,7 @@ impl<'a> TurnLoopContext<'a> {
             self.traj,
             self.harness_state,
             self.harness_emitter,
+            auto_mode,
         )
     }
 

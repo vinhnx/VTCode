@@ -300,7 +300,7 @@ pub(super) fn handle_mode_command(
             mode: SessionModeCommand::Edit,
         }),
         "auto" | "trusted" | "trusted-auto" | "trusted_auto" => Ok(SlashCommandOutcome::SetMode {
-            mode: SessionModeCommand::TrustedAuto,
+            mode: SessionModeCommand::Auto,
         }),
         "plan" => Ok(SlashCommandOutcome::SetMode {
             mode: SessionModeCommand::Plan,
@@ -318,7 +318,7 @@ pub(super) fn handle_mode_command(
             )?;
             renderer.line(
                 MessageStyle::Info,
-                "  /mode auto   - Trusted Auto mode with low-risk auto-approval",
+                "  /mode auto   - Auto mode with classifier-backed permission checks",
             )?;
             renderer.line(
                 MessageStyle::Info,
@@ -326,7 +326,7 @@ pub(super) fn handle_mode_command(
             )?;
             renderer.line(
                 MessageStyle::Info,
-                "  /mode cycle  - Cycle Edit -> Trusted Auto -> Plan",
+                "  /mode cycle  - Cycle Edit -> Auto -> Plan",
             )?;
             Ok(SlashCommandOutcome::Handled)
         }

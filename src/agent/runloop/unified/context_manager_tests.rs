@@ -139,6 +139,7 @@ async fn build_system_prompt_with_empty_base_prompt_fails() {
 
     let params = SystemPromptParams {
         full_auto: false,
+        auto_mode: false,
         plan_mode: false,
         supports_context_awareness: false,
         context_window_size: None,
@@ -199,6 +200,7 @@ async fn build_system_prompt_includes_active_editor_context_block() {
             0,
             SystemPromptParams {
                 full_auto: false,
+                auto_mode: false,
                 plan_mode: false,
                 supports_context_awareness: false,
                 context_window_size: None,
@@ -250,6 +252,7 @@ async fn build_system_prompt_skips_disallowed_provider_family() {
             0,
             SystemPromptParams {
                 full_auto: false,
+                auto_mode: false,
                 plan_mode: false,
                 supports_context_awareness: false,
                 context_window_size: None,
@@ -296,6 +299,7 @@ async fn build_system_prompt_respects_session_local_ide_toggle() {
             0,
             SystemPromptParams {
                 full_auto: false,
+                auto_mode: false,
                 plan_mode: false,
                 supports_context_awareness: false,
                 context_window_size: None,
@@ -313,6 +317,7 @@ async fn build_system_prompt_respects_session_local_ide_toggle() {
             0,
             SystemPromptParams {
                 full_auto: false,
+                auto_mode: false,
                 plan_mode: false,
                 supports_context_awareness: false,
                 context_window_size: None,
@@ -330,6 +335,7 @@ async fn build_system_prompt_respects_session_local_ide_toggle() {
             0,
             SystemPromptParams {
                 full_auto: false,
+                auto_mode: false,
                 plan_mode: false,
                 supports_context_awareness: false,
                 context_window_size: None,

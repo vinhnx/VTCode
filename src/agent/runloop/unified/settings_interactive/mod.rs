@@ -135,6 +135,7 @@ fn format_permission_summary(config: &VTCodeConfig) -> String {
     let mode = match config.permissions.default_mode {
         vtcode_core::config::PermissionMode::Default => "default",
         vtcode_core::config::PermissionMode::AcceptEdits => "accept_edits",
+        vtcode_core::config::PermissionMode::Auto => "auto",
         vtcode_core::config::PermissionMode::Plan => "plan",
         vtcode_core::config::PermissionMode::DontAsk => "dont_ask",
         vtcode_core::config::PermissionMode::BypassPermissions => "bypass_permissions",
@@ -341,6 +342,22 @@ mod tests {
         let items = build_settings_items(&state, &draft).expect("settings items");
         assert!(items.iter().any(|item| item.title == "Default Model"));
         assert!(items.iter().any(|item| item.title == "Circuit Breaker"));
+    }
+
+    #[test]
+    fn agent_view_hides_deprecated_autonomous_mode_field() {
+        let state = SettingsPaletteState {
+            workspace: PathBuf::from("."),
+            source_path: PathBuf::from("vtcode.toml"),
+            source_label: "test".to_string(),
+            draft: VTCodeConfig::default(),
+            view_path: Some("agent".to_string()),
+        };
+        let draft =
+            TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
+
+        let items = build_settings_items(&state, &draft).expect("settings items");
+        assert!(!items.iter().any(|item| item.title == "Autonomous Mode"));
     }
 
     #[test]

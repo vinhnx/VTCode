@@ -760,8 +760,9 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             }
         }
         if !session_stats.is_plan_mode() {
-            session_stats
-                .set_autonomous_mode(vt_cfg.as_ref().is_some_and(|cfg| cfg.agent.autonomous_mode));
+            session_stats.set_autonomous_mode(vt_cfg.as_ref().is_some_and(|cfg| {
+                cfg.permissions.default_mode == vtcode_core::config::PermissionMode::Auto
+            }));
         }
         header_context.autonomous_mode = session_stats.is_autonomous_mode();
         handle.set_autonomous_mode(session_stats.is_autonomous_mode());
@@ -1351,6 +1352,13 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                                 )
                             }),
                         );
+                        if !renderer.supports_inline_ui()
+                            && session_stats.auto_mode_prompt_fallback_active()
+                            && session_stats.last_auto_mode_denial().is_some()
+                        {
+                            session_end_reason = SessionEndReason::Error;
+                            break;
+                        }
                     }
                     _ => {
                         session_stats.mark_turn_stalled(false, None);
@@ -1545,6 +1553,14 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             header_context,
             resume_identifier,
         });
+        if matches!(session_end_reason, SessionEndReason::Error) {
+            return Err(anyhow::anyhow!(
+                "{}",
+                session_stats
+                    .turn_stall_reason()
+                    .unwrap_or("Session ended with an execution error.")
+            ));
+        }
         break;
     }
     Ok(())

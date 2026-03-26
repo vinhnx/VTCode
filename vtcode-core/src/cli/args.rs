@@ -176,7 +176,6 @@ pub struct Cli {
     /// Enable full-auto mode (no interaction) or run a headless task
     #[arg(
         long = "full-auto",
-        visible_alias = "auto",
         global = true,
         value_name = "PROMPT",
         num_args = 0..=1,
@@ -251,7 +250,7 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub ide: bool,
 
-    /// Begin in a specified permission mode (default, accept_edits, dont_ask, bypass_permissions, plus legacy ask/suggest/auto-approved/full-auto/plan)
+    /// Begin in a specified permission mode (default, accept_edits, auto, dont_ask, bypass_permissions, plus legacy ask/suggest/auto-approved/full-auto/trusted_auto/plan)
     #[arg(long, global = true, value_name = "MODE")]
     pub permission_mode: Option<String>,
 

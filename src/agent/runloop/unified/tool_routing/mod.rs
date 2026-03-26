@@ -18,19 +18,24 @@ use vtcode_core::command_safety::parse_bash_lc_commands;
 use vtcode_core::config::{PermissionMode, PermissionsConfig};
 use vtcode_core::core::interfaces::ui::UiSession;
 use vtcode_core::exec_policy::AskForApproval;
-use vtcode_core::permissions::{build_permission_request, evaluate_permissions};
+use vtcode_core::permissions::{
+    PermissionRequest, PermissionRequestKind, build_permission_request, evaluate_permissions,
+};
 use vtcode_core::tool_policy::ToolPolicy;
 use vtcode_core::tools::registry::{ToolPermissionDecision, ToolRegistry};
 use vtcode_core::tools::{JustificationExtractor, ToolRiskScorer};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_tui::app::InlineHandle;
 
+use crate::agent::runloop::unified::auto_mode::{AutoModeReviewDecision, review_tool_call};
+use crate::agent::runloop::unified::run_loop_context::AutoModeRuntimeContext;
+use crate::agent::runloop::unified::state::SessionStats;
+
 use super::state::CtrlCState;
 use approval_cache::{cache_key, spawn_approval_record_task};
 use approval_persistence::{persist_shell_approval_prefix_rule, persisted_shell_approval};
 use approval_policy::{
     approval_policy_rejects_prompt, build_tool_risk_context,
-    trusted_auto_allows_history_based_approval, trusted_auto_allows_immediate_approval,
 };
 use hook_messages::render_hook_messages;
 use permission_prompt::{
@@ -54,12 +59,20 @@ pub(crate) enum HitlDecision {
     Interrupt,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ToolPermissionFlow {
     Approved,
     Denied,
+    Blocked { reason: String },
     Exit,
     Interrupted,
+}
+
+enum AutoModePermissionOutcome {
+    Allow,
+    Block,
+    PromptFallback,
+    AbortHeadless { reason: String },
 }
 
 async fn persisted_approval_hit_key(
@@ -114,16 +127,213 @@ pub(crate) struct ToolPermissionsContext<'a, S: UiSession + ?Sized> {
         Option<&'a Arc<RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>>,
     pub tool_permission_cache: Option<&'a Arc<RwLock<ToolPermissionCache>>>,
     pub hitl_notification_bell: bool,
-    pub autonomous_mode: bool,
     pub approval_policy: AskForApproval,
     pub skip_confirmations: bool,
     pub permissions_config: Option<&'a PermissionsConfig>,
+    pub auto_mode_runtime: Option<AutoModeRuntimeContext<'a>>,
+    pub session_stats: Option<&'a mut SessionStats>,
 }
 
 fn current_permission_mode(config: Option<&PermissionsConfig>) -> PermissionMode {
     config
         .map(|config| config.default_mode)
         .unwrap_or(PermissionMode::Default)
+}
+
+fn effective_permissions_config(
+    config: Option<&PermissionsConfig>,
+    permission_mode: PermissionMode,
+) -> Option<PermissionsConfig> {
+    let mut effective = config?.clone();
+    if permission_mode != PermissionMode::Auto || !effective.auto_mode.drop_broad_allow_rules {
+        return Some(effective);
+    }
+
+    let initial_rule_count = effective.allow.len() + effective.allowed_tools.len();
+    effective.allow.retain(|rule| !is_broad_auto_mode_allow_rule(rule));
+    effective
+        .allowed_tools
+        .retain(|tool| !is_broad_auto_mode_allow_rule(tool));
+    let dropped = initial_rule_count.saturating_sub(effective.allow.len() + effective.allowed_tools.len());
+    if dropped > 0 {
+        tracing::trace!(dropped_broad_allow_rules = dropped, "auto mode filtered broad allow rules");
+    }
+    Some(effective)
+}
+
+fn is_broad_auto_mode_allow_rule(rule: &str) -> bool {
+    let normalized = rule.trim().to_ascii_lowercase();
+    if normalized.is_empty() {
+        return false;
+    }
+
+    if matches!(
+        normalized.as_str(),
+        "bash" | "bash(*)" | "unified_exec" | "run_pty_cmd" | "agent"
+    ) {
+        return true;
+    }
+
+    let interpreter_prefixes = [
+        "bash(python",
+        "bash(python3",
+        "bash(node",
+        "bash(ruby",
+        "bash(bash",
+        "bash(sh",
+        "bash(zsh",
+        "bash(fish",
+        "bash(pwsh",
+        "bash(powershell",
+    ];
+    if interpreter_prefixes
+        .iter()
+        .any(|prefix| normalized.starts_with(prefix))
+    {
+        return true;
+    }
+
+    [
+        "bash(npm run",
+        "bash(pnpm run",
+        "bash(yarn run",
+        "bash(cargo run",
+        "bash(uv run",
+    ]
+    .iter()
+    .any(|prefix| normalized.starts_with(prefix))
+}
+
+fn auto_mode_safe_builtin_allow(
+    workspace_root: &std::path::Path,
+    request: &PermissionRequest,
+) -> bool {
+    match &request.kind {
+        PermissionRequestKind::Read { .. } => true,
+        PermissionRequestKind::Edit { paths } | PermissionRequestKind::Write { paths } => {
+            request.builtin_file_mutation
+                && request.protected_write_paths.is_empty()
+                && !paths.is_empty()
+                && paths
+                    .iter()
+                    .all(|path| path.strip_prefix(workspace_root).is_ok())
+        }
+        PermissionRequestKind::Bash { .. }
+        | PermissionRequestKind::WebFetch { .. }
+        | PermissionRequestKind::Mcp { .. }
+        | PermissionRequestKind::Other => false,
+    }
+}
+
+fn headless_auto_mode_fallback_reason(
+    tool_name: &str,
+    denial: Option<&crate::agent::runloop::unified::state::AutoModeDenial>,
+) -> String {
+    let Some(denial) = denial else {
+        return format!(
+            "Auto mode cannot fall back to manual prompts for `{tool_name}` in non-interactive mode."
+        );
+    };
+
+    let mut reason = format!(
+        "Auto mode blocked `{tool_name}` and reached its denial threshold in non-interactive mode: {}",
+        denial.reason
+    );
+    if let Some(rule) = denial.matched_rule.as_deref() {
+        reason.push_str(&format!(" (matched rule: {rule})"));
+    }
+    if let Some(exception) = denial.matched_exception.as_deref() {
+        reason.push_str(&format!(" (matched exception: {exception})"));
+    }
+    reason
+}
+
+async fn resolve_auto_mode_permission(
+    renderer: &mut AnsiRenderer,
+    tool_registry: &ToolRegistry,
+    tool_name: &str,
+    tool_args: Option<&Value>,
+    permission_request: &PermissionRequest,
+    permissions: &PermissionsConfig,
+    auto_mode_runtime: Option<AutoModeRuntimeContext<'_>>,
+    session_stats: Option<&mut SessionStats>,
+) -> Result<AutoModePermissionOutcome> {
+    let Some(stats) = session_stats else {
+        tracing::warn!(tool = %tool_name, "auto mode reviewer missing session stats");
+        return Ok(AutoModePermissionOutcome::PromptFallback);
+    };
+
+    if stats.auto_mode_prompt_fallback_active() {
+        tracing::trace!(tool = %tool_name, "auto mode prompt fallback active");
+        if !renderer.supports_inline_ui() {
+            return Ok(AutoModePermissionOutcome::AbortHeadless {
+                reason: headless_auto_mode_fallback_reason(tool_name, stats.last_auto_mode_denial()),
+            });
+        }
+        return Ok(AutoModePermissionOutcome::PromptFallback);
+    }
+
+    let Some(auto_mode_runtime) = auto_mode_runtime else {
+        tracing::warn!(tool = %tool_name, "auto mode reviewer missing runtime context");
+        return Ok(AutoModePermissionOutcome::PromptFallback);
+    };
+
+    match review_tool_call(
+        auto_mode_runtime.provider_client,
+        auto_mode_runtime.config,
+        permissions,
+        tool_registry.workspace_root(),
+        auto_mode_runtime.working_history,
+        tool_name,
+        tool_args,
+        permission_request,
+    )
+    .await
+    {
+        Ok(AutoModeReviewDecision::Allow { stage }) => {
+            tool_registry.mark_tool_preapproved(tool_name).await;
+            stats.record_auto_mode_allow();
+            tracing::trace!(tool = %tool_name, stage, "auto mode approved tool");
+            Ok(AutoModePermissionOutcome::Allow)
+        }
+        Ok(AutoModeReviewDecision::Block(denial)) => {
+            let fallback_was_active = stats.auto_mode_prompt_fallback_active();
+            let fallback = stats.record_auto_mode_denial(
+                denial.clone(),
+                permissions.auto_mode.max_consecutive_denials,
+                permissions.auto_mode.max_total_denials,
+            );
+            tracing::trace!(
+                tool = %tool_name,
+                stage = denial.stage,
+                matched_rule = denial.matched_rule.as_deref().unwrap_or(""),
+                matched_exception = denial.matched_exception.as_deref().unwrap_or(""),
+                fallback,
+                "auto mode blocked tool"
+            );
+
+            if fallback && !fallback_was_active {
+                if !renderer.supports_inline_ui() {
+                    return Ok(AutoModePermissionOutcome::AbortHeadless {
+                        reason: headless_auto_mode_fallback_reason(
+                            tool_name,
+                            stats.last_auto_mode_denial(),
+                        ),
+                    });
+                }
+                renderer.line(
+                    MessageStyle::Info,
+                    "Auto mode fell back to manual prompts after repeated classifier denials.",
+                )?;
+            }
+
+            Ok(AutoModePermissionOutcome::Block)
+        }
+        Err(err) => {
+            tracing::warn!(tool = %tool_name, error = %err, "auto mode reviewer failed");
+            Ok(AutoModePermissionOutcome::PromptFallback)
+        }
+    }
 }
 
 fn segmented_shell_approval_keys(
@@ -209,10 +419,11 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         decision_ledger,
         tool_permission_cache,
         hitl_notification_bell,
-        autonomous_mode,
         approval_policy,
         skip_confirmations,
         permissions_config,
+        auto_mode_runtime,
+        session_stats,
     } = ctx;
 
     // Generate cache key - use command text for shell tools to enable granular session approval
@@ -262,13 +473,15 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
     let current_dir =
         std::env::current_dir().unwrap_or_else(|_| tool_registry.workspace_root().clone());
     let permission_mode = current_permission_mode(permissions_config);
+    let effective_permissions = effective_permissions_config(permissions_config, permission_mode);
     let permission_request = build_permission_request(
         tool_registry.workspace_root(),
         &current_dir,
         &normalized_tool_name,
         tool_args,
     );
-    let permission_matches = permissions_config
+    let permission_matches = effective_permissions
+        .as_ref()
         .map(|config| {
             evaluate_permissions(
                 config,
@@ -285,6 +498,10 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
     let requires_protected_write_prompt = permission_request.requires_protected_write_prompt();
     let requires_rule_prompt =
         hook_requires_prompt || permission_matches.ask || requires_protected_write_prompt;
+    let auto_mode_classifier_review =
+        permission_mode == PermissionMode::Auto
+            && !requires_rule_prompt
+            && !auto_mode_safe_builtin_allow(tool_registry.workspace_root(), &permission_request);
     let policy_decision = tool_registry.evaluate_tool_policy(tool_name).await?;
     if policy_decision == ToolPermissionDecision::Deny {
         return Ok(ToolPermissionFlow::Denied);
@@ -324,8 +541,8 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         &display_labels.learning_label,
     );
 
-    let requires_sandbox_prompt = shell_approval_reason.is_some();
-    let can_reuse_saved_approval = !requires_rule_prompt;
+    let requires_sandbox_prompt = shell_approval_reason.is_some() && !auto_mode_classifier_review;
+    let can_reuse_saved_approval = !requires_rule_prompt && !auto_mode_classifier_review;
 
     if can_reuse_saved_approval
         && let Some(approval_key) =
@@ -378,6 +595,16 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
     }
 
     if !requires_rule_prompt && !requires_sandbox_prompt {
+        if permission_matches.allow {
+            return Ok(ToolPermissionFlow::Approved);
+        }
+
+        if permission_mode == PermissionMode::Auto
+            && auto_mode_safe_builtin_allow(tool_registry.workspace_root(), &permission_request)
+        {
+            return Ok(ToolPermissionFlow::Approved);
+        }
+
         if permission_mode == PermissionMode::AcceptEdits
             && permission_request.builtin_file_mutation
         {
@@ -388,9 +615,6 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
             return Ok(ToolPermissionFlow::Approved);
         }
 
-        if permission_matches.allow {
-            return Ok(ToolPermissionFlow::Approved);
-        }
     }
 
     if permission_mode == PermissionMode::DontAsk {
@@ -400,6 +624,7 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
     if policy_decision == ToolPermissionDecision::Allow
         && !requires_rule_prompt
         && !requires_sandbox_prompt
+        && !auto_mode_classifier_review
     {
         return Ok(ToolPermissionFlow::Approved);
     }
@@ -408,16 +633,42 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         return Ok(ToolPermissionFlow::Approved);
     }
 
+    let mut requires_auto_fallback_prompt = false;
+    if auto_mode_classifier_review && let Some(permissions) = permissions_config {
+        match resolve_auto_mode_permission(
+            renderer,
+            tool_registry,
+            &normalized_tool_name,
+            tool_args,
+            &permission_request,
+            permissions,
+            auto_mode_runtime,
+            session_stats,
+        )
+        .await?
+        {
+            AutoModePermissionOutcome::Allow => return Ok(ToolPermissionFlow::Approved),
+            AutoModePermissionOutcome::Block => return Ok(ToolPermissionFlow::Denied),
+            AutoModePermissionOutcome::PromptFallback => {
+                requires_auto_fallback_prompt = true;
+            }
+            AutoModePermissionOutcome::AbortHeadless { reason } => {
+                return Ok(ToolPermissionFlow::Blocked { reason });
+            }
+        }
+    }
+
     let should_prompt = requires_rule_prompt
         || requires_sandbox_prompt
-        || policy_decision == ToolPermissionDecision::Prompt;
+        || requires_auto_fallback_prompt
+        || (policy_decision == ToolPermissionDecision::Prompt && !auto_mode_classifier_review);
     if !should_prompt {
         return Ok(ToolPermissionFlow::Approved);
     }
 
     if approval_policy_rejects_prompt(
         approval_policy,
-        requires_rule_prompt || policy_decision == ToolPermissionDecision::Prompt,
+        requires_rule_prompt || requires_auto_fallback_prompt || policy_decision == ToolPermissionDecision::Prompt,
         requires_sandbox_prompt,
     ) {
         return Ok(ToolPermissionFlow::Denied);
@@ -431,44 +682,6 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
             .await as usize;
     }
     let risk_level = ToolRiskScorer::calculate_risk(&risk_context);
-
-    if autonomous_mode
-        && trusted_auto_allows_immediate_approval(
-            hook_requires_prompt,
-            shell_approval_reason.as_deref(),
-            &risk_context,
-            risk_level,
-        )
-    {
-        tool_registry.mark_tool_preapproved(tool_name).await;
-        tracing::debug!(
-            tool = %tool_name,
-            risk = %risk_level,
-            "Trusted Auto approved low-risk tool"
-        );
-        return Ok(ToolPermissionFlow::Approved);
-    }
-
-    if autonomous_mode
-        && trusted_auto_allows_history_based_approval(
-            hook_requires_prompt,
-            shell_approval_reason.as_deref(),
-            &risk_context,
-            risk_level,
-        )
-        && let Some(recorder) = approval_recorder
-        && recorder
-            .supports_trusted_auto_approval(&approval_learning_target.approval_key)
-            .await
-    {
-        tool_registry.mark_tool_preapproved(tool_name).await;
-        tracing::debug!(
-            approval_key = %approval_learning_target.approval_key,
-            risk = %risk_level,
-            "Trusted Auto approved tool from strong approval history"
-        );
-        return Ok(ToolPermissionFlow::Approved);
-    }
 
     // Extract justification from decision ledger if not provided
     let extracted_justification = if justification.is_none() {
@@ -719,23 +932,33 @@ pub(crate) async fn prompt_tool_loop_limit_increase<S: UiSession + ?Sized>(
 #[cfg(test)]
 mod tests {
     use super::{
-        ToolPermissionFlow, ToolPermissionsContext, approval_learning_target,
+        AutoModeRuntimeContext, SessionStats, ToolPermissionFlow, ToolPermissionsContext,
+        approval_learning_target,
         approval_persistence::shell_command_has_persisted_approval_prefix,
-        approval_policy_rejects_prompt, build_tool_risk_context, ensure_tool_permission,
-        persist_segment_approval_cache_keys, persist_shell_approval_prefix_rule,
-        tool_display_labels, trusted_auto_allows_history_based_approval,
-        trusted_auto_allows_immediate_approval,
+        approval_policy_rejects_prompt, ensure_tool_permission,
+        persist_segment_approval_cache_keys,
+        persist_shell_approval_prefix_rule, tool_display_labels,
     };
+    use async_trait::async_trait;
     use serde_json::json;
+    use std::collections::BTreeMap;
     use std::sync::Arc;
     use tokio::sync::{Notify, RwLock};
+    use vtcode_config::core::PromptCachingConfig;
     use vtcode_core::acp::{PermissionGrant, ToolPermissionCache};
     use vtcode_core::config::constants::tools;
     use vtcode_core::config::loader::ConfigManager;
+    use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+    use vtcode_core::config::types::{
+        ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
+    };
     use vtcode_core::config::{PermissionMode, PermissionsConfig};
+    use vtcode_core::core::agent::snapshots::{
+        DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
+    };
     use vtcode_core::exec_policy::{AskForApproval, RejectConfig};
+    use vtcode_core::llm::provider as uni;
     use vtcode_core::tool_policy::ToolPolicy;
-    use vtcode_core::tools::RiskLevel;
     use vtcode_core::tools::registry::ToolRegistry;
     use vtcode_core::utils::ansi::AnsiRenderer;
     use vtcode_tui::app::{InlineHandle, InlineSession};
@@ -749,57 +972,106 @@ mod tests {
         }
     }
 
-    #[test]
-    fn trusted_auto_rejects_explicit_shell_escalation() {
-        let risk_context = build_tool_risk_context("read_file", None);
-        assert!(!trusted_auto_allows_immediate_approval(
-            false,
-            Some("Command requested execution without sandbox restrictions."),
-            &risk_context,
-            RiskLevel::Low,
-        ));
+    fn create_session_with_receiver(
+    ) -> (
+        InlineSession,
+        tokio::sync::mpsc::UnboundedReceiver<vtcode_tui::app::InlineCommand>,
+    ) {
+        let (command_tx, command_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (_event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
+        (
+            InlineSession {
+                handle: InlineHandle::new_for_tests(command_tx),
+                events: event_rx,
+            },
+            command_rx,
+        )
     }
 
-    #[test]
-    fn trusted_auto_rejects_high_risk_commands() {
-        let tool_args = json!({
-            "action": "run",
-            "command": "rm -rf /tmp/demo",
-        });
-        let risk_context = build_tool_risk_context("unified_exec", Some(&tool_args));
-        assert!(!trusted_auto_allows_immediate_approval(
-            false,
-            None,
-            &risk_context,
-            RiskLevel::High,
-        ));
+    fn drain_appended_lines(
+        receiver: &mut tokio::sync::mpsc::UnboundedReceiver<vtcode_tui::app::InlineCommand>,
+    ) -> Vec<String> {
+        let mut lines = Vec::new();
+        while let Ok(command) = receiver.try_recv() {
+            if let vtcode_tui::app::InlineCommand::AppendLine { segments, .. } = command {
+                let line = segments
+                    .into_iter()
+                    .map(|segment| segment.text)
+                    .collect::<String>();
+                if !line.trim().is_empty() {
+                    lines.push(line);
+                }
+            }
+        }
+        lines
     }
 
-    #[test]
-    fn trusted_auto_allows_low_risk_read_only_tools() {
-        let risk_context = build_tool_risk_context("read_file", None);
-        assert!(trusted_auto_allows_immediate_approval(
-            false,
-            None,
-            &risk_context,
-            RiskLevel::Low,
-        ));
+    fn runtime_config() -> CoreAgentConfig {
+        CoreAgentConfig {
+            model: vtcode_core::config::constants::models::google::GEMINI_3_FLASH_PREVIEW
+                .to_string(),
+            api_key: "test-key".to_string(),
+            provider: "gemini".to_string(),
+            api_key_env: "GEMINI_API_KEY".to_string(),
+            workspace: std::env::current_dir().expect("current_dir"),
+            verbose: false,
+            quiet: false,
+            theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
+            reasoning_effort: ReasoningEffortLevel::default(),
+            ui_surface: UiSurfacePreference::default(),
+            prompt_cache: PromptCachingConfig::default(),
+            model_source: ModelSelectionSource::WorkspaceConfig,
+            custom_api_keys: BTreeMap::new(),
+            checkpointing_enabled: DEFAULT_CHECKPOINTS_ENABLED,
+            checkpointing_storage_dir: None,
+            checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
+            checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
+            max_conversation_turns: 1000,
+            model_behavior: None,
+            openai_chatgpt_auth: None,
+        }
     }
 
-    #[test]
-    fn trusted_auto_allows_medium_risk_history_reuse_only_for_safe_tools() {
-        let tool_args = json!({
-            "action": "grep",
-            "pattern": "tool_policy",
-            "path": ".",
-        });
-        let risk_context = build_tool_risk_context("unified_search", Some(&tool_args));
-        assert!(trusted_auto_allows_history_based_approval(
-            false,
-            None,
-            &risk_context,
-            RiskLevel::Medium,
-        ));
+    struct StaticProvider {
+        responses: std::sync::Mutex<Vec<String>>,
+    }
+
+    #[async_trait]
+    impl uni::LLMProvider for StaticProvider {
+        fn name(&self) -> &str {
+            "test"
+        }
+
+        async fn generate(
+            &self,
+            _request: uni::LLMRequest,
+        ) -> Result<uni::LLMResponse, uni::LLMError> {
+            let response = self
+                .responses
+                .lock()
+                .expect("responses lock")
+                .remove(0);
+            Ok(uni::LLMResponse {
+                content: Some(response),
+                model: "test-model".to_string(),
+                tool_calls: None,
+                usage: None,
+                finish_reason: uni::FinishReason::Stop,
+                reasoning: None,
+                reasoning_details: None,
+                organization_id: None,
+                request_id: None,
+                tool_references: Vec::new(),
+            })
+        }
+
+        fn supported_models(&self) -> Vec<String> {
+            vec!["test-model".to_string()]
+        }
+
+        fn validate_request(&self, _request: &uni::LLMRequest) -> Result<(), uni::LLMError> {
+            Ok(())
+        }
     }
 
     #[test]
@@ -1044,10 +1316,11 @@ mod tests {
                 decision_ledger: None,
                 tool_permission_cache: Some(&permission_cache),
                 hitl_notification_bell: false,
-                autonomous_mode: false,
                 approval_policy: AskForApproval::OnRequest,
                 skip_confirmations: true,
                 permissions_config: None,
+                auto_mode_runtime: None,
+                session_stats: None,
             },
             tools::READ_FILE,
             None,
@@ -1093,10 +1366,11 @@ mod tests {
                 decision_ledger: None,
                 tool_permission_cache: Some(&permission_cache),
                 hitl_notification_bell: false,
-                autonomous_mode: false,
                 approval_policy: AskForApproval::OnRequest,
                 skip_confirmations: false,
                 permissions_config: None,
+                auto_mode_runtime: None,
+                session_stats: None,
             },
             tools::READ_FILE,
             Some(&json!({"path": "README.md"})),
@@ -1136,10 +1410,11 @@ mod tests {
                 decision_ledger: None,
                 tool_permission_cache: None,
                 hitl_notification_bell: false,
-                autonomous_mode: false,
                 approval_policy: AskForApproval::OnRequest,
                 skip_confirmations: false,
                 permissions_config: Some(&permissions),
+                auto_mode_runtime: None,
+                session_stats: None,
             },
             tools::READ_FILE,
             Some(&json!({"path": "README.md"})),
@@ -1180,10 +1455,11 @@ mod tests {
                 decision_ledger: None,
                 tool_permission_cache: None,
                 hitl_notification_bell: false,
-                autonomous_mode: false,
                 approval_policy: AskForApproval::OnRequest,
                 skip_confirmations: false,
                 permissions_config: Some(&permissions),
+                auto_mode_runtime: None,
+                session_stats: None,
             },
             tools::READ_FILE,
             Some(&json!({"path": "README.md"})),
@@ -1223,7 +1499,6 @@ mod tests {
                 decision_ledger: None,
                 tool_permission_cache: None,
                 hitl_notification_bell: false,
-                autonomous_mode: false,
                 approval_policy: AskForApproval::Reject(RejectConfig {
                     sandbox_approval: true,
                     rules: true,
@@ -1232,6 +1507,8 @@ mod tests {
                 }),
                 skip_confirmations: false,
                 permissions_config: Some(&permissions),
+                auto_mode_runtime: None,
+                session_stats: None,
             },
             tools::UNIFIED_FILE,
             Some(&json!({"action": "write", "path": "notes.md", "content": "hello"})),
@@ -1271,7 +1548,6 @@ mod tests {
                 decision_ledger: None,
                 tool_permission_cache: None,
                 hitl_notification_bell: false,
-                autonomous_mode: false,
                 approval_policy: AskForApproval::Reject(RejectConfig {
                     sandbox_approval: true,
                     rules: true,
@@ -1280,6 +1556,8 @@ mod tests {
                 }),
                 skip_confirmations: false,
                 permissions_config: Some(&permissions),
+                auto_mode_runtime: None,
+                session_stats: None,
             },
             tools::UNIFIED_FILE,
             Some(&json!({"action": "write", "path": ".vtcode/settings.toml", "content": "hello"})),
@@ -1319,7 +1597,6 @@ mod tests {
                 decision_ledger: None,
                 tool_permission_cache: None,
                 hitl_notification_bell: false,
-                autonomous_mode: false,
                 approval_policy: AskForApproval::Reject(RejectConfig {
                     sandbox_approval: true,
                     rules: true,
@@ -1328,6 +1605,8 @@ mod tests {
                 }),
                 skip_confirmations: false,
                 permissions_config: Some(&permissions),
+                auto_mode_runtime: None,
+                session_stats: None,
             },
             tools::UNIFIED_FILE,
             Some(&json!({"action": "write", "path": ".vtcode/settings.toml", "content": "hello"})),
@@ -1368,7 +1647,6 @@ mod tests {
                 decision_ledger: None,
                 tool_permission_cache: None,
                 hitl_notification_bell: false,
-                autonomous_mode: false,
                 approval_policy: AskForApproval::Reject(RejectConfig {
                     sandbox_approval: true,
                     rules: true,
@@ -1377,6 +1655,8 @@ mod tests {
                 }),
                 skip_confirmations: false,
                 permissions_config: Some(&permissions),
+                auto_mode_runtime: None,
+                session_stats: None,
             },
             tools::UNIFIED_FILE,
             Some(&json!({"action": "write", "path": "docs/guide.md", "content": "hello"})),
@@ -1417,10 +1697,11 @@ mod tests {
                 decision_ledger: None,
                 tool_permission_cache: None,
                 hitl_notification_bell: false,
-                autonomous_mode: false,
                 approval_policy: AskForApproval::OnRequest,
                 skip_confirmations: false,
                 permissions_config: Some(&permissions),
+                auto_mode_runtime: None,
+                session_stats: None,
             },
             tools::UNIFIED_EXEC,
             Some(&json!({"action": "run", "command": "echo hi"})),
@@ -1457,5 +1738,187 @@ mod tests {
                 )
                 .await
         );
+    }
+
+    #[tokio::test]
+    async fn auto_mode_headless_fallback_returns_blocked_summary() {
+        let temp_dir = tempfile::TempDir::new().expect("temp dir");
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        let mut session = create_headless_session();
+        let handle = session.clone_inline_handle();
+        let mut renderer = AnsiRenderer::stdout();
+        let ctrl_c_state = Arc::new(crate::agent::runloop::unified::state::CtrlCState::new());
+        let ctrl_c_notify = Arc::new(Notify::new());
+        let mut provider = StaticProvider {
+            responses: std::sync::Mutex::new(vec![
+                "BLOCK".to_string(),
+                r#"{"decision":"block","reason":"force push is destructive","matched_rule":"Destroy or exfiltrate","matched_exception":null}"#.to_string(),
+            ]),
+        };
+        let config = runtime_config();
+        let permissions = PermissionsConfig {
+            default_mode: PermissionMode::Auto,
+            auto_mode: vtcode_core::config::AutoModeConfig {
+                max_consecutive_denials: 1,
+                max_total_denials: 20,
+                ..Default::default()
+            },
+            ..PermissionsConfig::default()
+        };
+        let history = vec![uni::Message::user("clean up the PR".to_string())];
+        let mut session_stats = SessionStats::default();
+        session_stats.set_autonomous_mode(true);
+
+        let flow = ensure_tool_permission(
+            ToolPermissionsContext {
+                tool_registry: &registry,
+                renderer: &mut renderer,
+                handle: &handle,
+                session: &mut session,
+                default_placeholder: None,
+                ctrl_c_state: &ctrl_c_state,
+                ctrl_c_notify: &ctrl_c_notify,
+                hooks: None,
+                justification: None,
+                approval_recorder: None,
+                decision_ledger: None,
+                tool_permission_cache: None,
+                hitl_notification_bell: false,
+                approval_policy: AskForApproval::OnRequest,
+                skip_confirmations: false,
+                permissions_config: Some(&permissions),
+                auto_mode_runtime: Some(AutoModeRuntimeContext {
+                    config: &config,
+                    provider_client: &mut provider,
+                    working_history: &history,
+                }),
+                session_stats: Some(&mut session_stats),
+            },
+            tools::UNIFIED_EXEC,
+            Some(&json!({"action": "run", "command": "git push --force"})),
+        )
+        .await
+        .expect("permission flow");
+
+        match flow {
+            ToolPermissionFlow::Blocked { reason } => {
+                assert!(reason.contains("non-interactive mode"));
+                assert!(reason.contains("force push is destructive"));
+                assert!(reason.contains("Destroy or exfiltrate"));
+            }
+            other => panic!("expected blocked flow, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn auto_mode_interactive_fallback_notice_is_emitted_once() {
+        let temp_dir = tempfile::TempDir::new().expect("temp dir");
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        let (mut session, mut receiver) = create_session_with_receiver();
+        let handle = session.clone_inline_handle();
+        let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
+        let ctrl_c_state = Arc::new(crate::agent::runloop::unified::state::CtrlCState::new());
+        let ctrl_c_notify = Arc::new(Notify::new());
+        let mut provider = StaticProvider {
+            responses: std::sync::Mutex::new(vec![
+                "BLOCK".to_string(),
+                r#"{"decision":"block","reason":"force push is destructive","matched_rule":"Destroy or exfiltrate","matched_exception":null}"#.to_string(),
+            ]),
+        };
+        let config = runtime_config();
+        let permissions = PermissionsConfig {
+            default_mode: PermissionMode::Auto,
+            auto_mode: vtcode_core::config::AutoModeConfig {
+                max_consecutive_denials: 1,
+                max_total_denials: 20,
+                ..Default::default()
+            },
+            ..PermissionsConfig::default()
+        };
+        let history = vec![uni::Message::user("clean up the PR".to_string())];
+        let mut session_stats = SessionStats::default();
+        session_stats.set_autonomous_mode(true);
+
+        let first_flow = ensure_tool_permission(
+            ToolPermissionsContext {
+                tool_registry: &registry,
+                renderer: &mut renderer,
+                handle: &handle,
+                session: &mut session,
+                default_placeholder: None,
+                ctrl_c_state: &ctrl_c_state,
+                ctrl_c_notify: &ctrl_c_notify,
+                hooks: None,
+                justification: None,
+                approval_recorder: None,
+                decision_ledger: None,
+                tool_permission_cache: None,
+                hitl_notification_bell: false,
+                approval_policy: AskForApproval::Reject(RejectConfig {
+                    sandbox_approval: true,
+                    rules: true,
+                    request_permissions: true,
+                    mcp_elicitations: true,
+                }),
+                skip_confirmations: false,
+                permissions_config: Some(&permissions),
+                auto_mode_runtime: Some(AutoModeRuntimeContext {
+                    config: &config,
+                    provider_client: &mut provider,
+                    working_history: &history,
+                }),
+                session_stats: Some(&mut session_stats),
+            },
+            tools::UNIFIED_EXEC,
+            Some(&json!({"action": "run", "command": "git push --force"})),
+        )
+        .await
+        .expect("first permission flow");
+
+        assert_eq!(first_flow, ToolPermissionFlow::Denied);
+
+        let first_lines = drain_appended_lines(&mut receiver);
+        assert!(first_lines.iter().any(|line| {
+            line.contains("Auto mode fell back to manual prompts after repeated classifier denials.")
+        }));
+
+        let second_flow = ensure_tool_permission(
+            ToolPermissionsContext {
+                tool_registry: &registry,
+                renderer: &mut renderer,
+                handle: &handle,
+                session: &mut session,
+                default_placeholder: None,
+                ctrl_c_state: &ctrl_c_state,
+                ctrl_c_notify: &ctrl_c_notify,
+                hooks: None,
+                justification: None,
+                approval_recorder: None,
+                decision_ledger: None,
+                tool_permission_cache: None,
+                hitl_notification_bell: false,
+                approval_policy: AskForApproval::Reject(RejectConfig {
+                    sandbox_approval: true,
+                    rules: true,
+                    request_permissions: true,
+                    mcp_elicitations: true,
+                }),
+                skip_confirmations: false,
+                permissions_config: Some(&permissions),
+                auto_mode_runtime: Some(AutoModeRuntimeContext {
+                    config: &config,
+                    provider_client: &mut provider,
+                    working_history: &history,
+                }),
+                session_stats: Some(&mut session_stats),
+            },
+            tools::UNIFIED_EXEC,
+            Some(&json!({"action": "run", "command": "git push --force"})),
+        )
+        .await
+        .expect("second permission flow");
+
+        assert_eq!(second_flow, ToolPermissionFlow::Denied);
+        assert!(drain_appended_lines(&mut receiver).is_empty());
     }
 }

@@ -18,6 +18,9 @@ pub(super) fn apply_permission_mode_override(config: &mut VTCodeConfig, mode: &s
         "accept_edits" | "accept-edits" | "acceptedits" => {
             config.permissions.default_mode = PermissionMode::AcceptEdits;
         }
+        "auto" | "trusted_auto" | "trusted-auto" => {
+            config.permissions.default_mode = PermissionMode::Auto;
+        }
         "dont_ask" | "dont-ask" | "dontask" => {
             config.permissions.default_mode = PermissionMode::DontAsk;
         }
@@ -60,7 +63,7 @@ pub(super) fn apply_permission_mode_override(config: &mut VTCodeConfig, mode: &s
         }
         _ => {
             bail!(
-                "Invalid permission mode '{}'. Valid options: default, accept_edits, dont_ask, bypass_permissions, ask, suggest, auto-approved, full-auto, plan",
+                "Invalid permission mode '{}'. Valid options: default, accept_edits, auto, dont_ask, bypass_permissions, ask, suggest, auto-approved, full-auto, trusted_auto, plan",
                 mode
             );
         }

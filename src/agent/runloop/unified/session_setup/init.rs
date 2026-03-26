@@ -216,7 +216,8 @@ pub(crate) async fn initialize_session(
             .await
             .context("Failed to determine workspace trust level for tool policy")?,
     };
-    let autonomous_mode = full_auto || vt_cfg.is_some_and(|cfg| cfg.agent.autonomous_mode);
+    let autonomous_mode = full_auto
+        || vt_cfg.is_some_and(|cfg| cfg.permissions.default_mode == vtcode_core::config::PermissionMode::Auto);
     apply_workspace_trust_prompt_policy(&mut tool_registry, autonomous_mode, workspace_trust_level)
         .await;
 

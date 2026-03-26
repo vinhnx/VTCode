@@ -19,6 +19,7 @@ use crate::agent::runloop::unified::incremental_system_prompt::{
 #[derive(Clone)]
 pub(crate) struct SystemPromptParams {
     pub full_auto: bool,
+    pub auto_mode: bool,
     pub plan_mode: bool,
     pub supports_context_awareness: bool,
     pub context_window_size: Option<usize>,
@@ -323,6 +324,7 @@ impl ContextManager {
             error_count: self.cached_stats.error_count,
             token_usage_ratio,
             full_auto: params.full_auto,
+            auto_mode: params.auto_mode,
             plan_mode: params.plan_mode,
             discovered_skills: self.loaded_skills.read().await.values().cloned().collect(),
             context_window_size: params.context_window_size,

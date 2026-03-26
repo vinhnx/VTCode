@@ -9,6 +9,7 @@ use vtcode_core::tools::registry::labels::tool_action_label;
 use vtcode_core::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::mcp_events;
+use crate::agent::runloop::unified::auto_mode::probe_tool_output;
 use crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_from_turn_ctx;
 use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
 
@@ -739,6 +740,68 @@ fn should_keep_recoverable_failure_next_action(
     is_recoverable_failure_payload(obj) && has_non_empty_string_field(obj, "next_action")
 }
 
+async fn auto_mode_probe_warning(
+    ctx: &mut TurnProcessingContext<'_>,
+    tool_name: &str,
+    content_for_model: &str,
+) -> Option<crate::agent::runloop::unified::auto_mode::ProbeWarning> {
+    if !ctx
+        .vt_cfg
+        .is_some_and(|cfg| cfg.permissions.default_mode == vtcode_core::config::PermissionMode::Auto)
+        || !ctx.session_stats.is_autonomous_mode()
+    {
+        return None;
+    }
+
+    let permissions = ctx.vt_cfg.map(|cfg| cfg.permissions.clone())?;
+    let working_history = ctx.working_history.clone();
+    match probe_tool_output(
+        ctx.provider_client.as_mut(),
+        ctx.config,
+        &permissions,
+        &working_history,
+        content_for_model,
+    )
+    .await
+    {
+        Ok(warning) => warning,
+        Err(err) => {
+            tracing::warn!(tool = %tool_name, error = %err, "auto mode prompt probe failed");
+            None
+        }
+    }
+}
+
+fn append_probe_warning(
+    ctx: &mut TurnProcessingContext<'_>,
+    tool_name: &str,
+    probe_warning: crate::agent::runloop::unified::auto_mode::ProbeWarning,
+) -> Result<()> {
+    tracing::trace!(tool = %tool_name, probe_hit = true, "auto mode prompt probe flagged tool output");
+    ctx.working_history.push(vtcode_core::llm::provider::Message::system(
+        probe_warning.warning.clone(),
+    ));
+    ctx.renderer.line(
+        MessageStyle::Warning,
+        "Auto mode flagged the latest tool output as suspicious prompt injection.",
+    )?;
+    Ok(())
+}
+
+async fn push_tool_response_with_auto_mode_probe(
+    t_ctx: &mut super::handlers::ToolOutcomeContext<'_, '_>,
+    tool_call_id: String,
+    tool_name: &str,
+    content_for_model: String,
+) -> Result<()> {
+    let probe_warning = auto_mode_probe_warning(t_ctx.ctx, tool_name, &content_for_model).await;
+    t_ctx.ctx.push_tool_response(tool_call_id, content_for_model);
+    if let Some(probe_warning) = probe_warning {
+        append_probe_warning(t_ctx.ctx, tool_name, probe_warning)?;
+    }
+    Ok(())
+}
+
 async fn handle_success<'a>(
     t_ctx: &mut super::handlers::ToolOutcomeContext<'a, '_>,
     tool_call_id: String,
@@ -758,9 +821,8 @@ async fn handle_success<'a>(
     // Update blocked-streak and record tool response in grouped context form.
     t_ctx.ctx.reset_blocked_tool_call_streak();
     let content_for_model = maybe_inline_spooled(tool_name, output);
-    t_ctx
-        .ctx
-        .push_tool_response(tool_call_id, content_for_model);
+    push_tool_response_with_auto_mode_probe(t_ctx, tool_call_id, tool_name, content_for_model)
+        .await?;
     if !vtcode_core::tools::tool_intent::classify_tool_intent(tool_name, args_val).mutating {
         let signature = signature_key_for(tool_name, args_val);
         t_ctx
@@ -940,9 +1002,12 @@ async fn push_tool_error_response(
         };
     let error_content =
         build_error_content(error_msg, fallback_tool, fallback_tool_args, failure_kind);
-    t_ctx
-        .ctx
-        .push_tool_response(tool_call_id, error_content.to_string());
+    let serialized = error_content.to_string();
+    if let Err(err) =
+        push_tool_response_with_auto_mode_probe(t_ctx, tool_call_id, tool_name, serialized).await
+    {
+        tracing::warn!(tool = %tool_name, error = %err, "failed to push probed tool error response");
+    }
 }
 
 async fn handle_cancelled(
@@ -956,9 +1021,8 @@ async fn handle_cancelled(
     t_ctx.ctx.renderer.line(MessageStyle::Info, &error_msg)?;
 
     let error_content = serde_json::json!({"error": error_msg});
-    t_ctx
-        .ctx
-        .push_tool_response(tool_call_id, error_content.to_string());
+    push_tool_response_with_auto_mode_probe(t_ctx, tool_call_id, tool_name, error_content.to_string())
+        .await?;
 
     record_request_user_input_interview_result(t_ctx.ctx, tool_name, None);
 

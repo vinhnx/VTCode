@@ -44,7 +44,7 @@ pub(crate) enum StatuslineTargetMode {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum SessionModeCommand {
     Edit,
-    TrustedAuto,
+    Auto,
     Plan,
 }
 
@@ -150,7 +150,7 @@ pub(crate) enum SlashCommandOutcome {
     SetMode {
         mode: SessionModeCommand,
     },
-    /// /mode cycle - cycle through Edit → Trusted Auto → Plan → Edit
+    /// /mode cycle - cycle through Edit → Auto → Plan → Edit
     CycleMode,
     /// /login command - OAuth login for a provider
     OAuthLogin {
@@ -796,13 +796,13 @@ mod tests {
             .expect("mode should parse");
         assert!(matches!(mode, SlashCommandOutcome::StartModeSelection));
 
-        let trusted_auto = handle_slash_command("mode auto", &mut renderer, &workspace)
+        let auto_mode = handle_slash_command("mode auto", &mut renderer, &workspace)
             .await
             .expect("mode auto should parse");
         assert!(matches!(
-            trusted_auto,
+            auto_mode,
             SlashCommandOutcome::SetMode {
-                mode: SessionModeCommand::TrustedAuto
+                mode: SessionModeCommand::Auto
             }
         ));
 
