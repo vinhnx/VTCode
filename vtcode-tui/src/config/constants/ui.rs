@@ -95,7 +95,8 @@ pub const HEADER_MCP_PREFIX: &str = "MCP: ";
 pub const HEADER_GIT_PREFIX: &str = "git: ";
 pub const HEADER_GIT_CLEAN_SUFFIX: &str = "✓";
 pub const HEADER_GIT_DIRTY_SUFFIX: &str = "*";
-pub const HEADER_UNKNOWN_PLACEHOLDER: &str = vtcode_config::constants::ui::HEADER_UNKNOWN_PLACEHOLDER;
+pub const HEADER_UNKNOWN_PLACEHOLDER: &str =
+    vtcode_config::constants::ui::HEADER_UNKNOWN_PLACEHOLDER;
 pub const HEADER_STATUS_LABEL: &str = "Status";
 pub const HEADER_STATUS_ACTIVE: &str = "Active";
 pub const HEADER_STATUS_PAUSED: &str = "Paused";

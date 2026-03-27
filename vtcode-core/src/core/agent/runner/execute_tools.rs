@@ -2,7 +2,6 @@ use super::AgentRunner;
 use crate::core::agent::events::ExecEventRecorder;
 use crate::core::agent::runtime::AgentRuntime;
 use crate::llm::provider::ToolCall;
-use crate::tools::tool_intent;
 use anyhow::Result;
 
 impl AgentRunner {
@@ -15,44 +14,14 @@ impl AgentRunner {
         is_gemini: bool,
         previous_response_chain_present: bool,
     ) -> Result<()> {
-        let can_parallelize = tool_calls.len() > 1
-            && tool_calls.iter().all(|call| {
-                call.function.as_ref().is_some_and(|func| {
-                    call.parsed_arguments()
-                        .ok()
-                        .as_ref()
-                        .is_some_and(|args| tool_intent::is_parallel_safe_call(&func.name, args))
-                })
-            });
-
-        self.emit_tool_batch(
-            &self.get_selected_model(),
-            runtime.state.stats.turns_executed,
-            tool_calls.len(),
-            can_parallelize,
+        self.execute_tool_call_batches(
+            tool_calls,
+            runtime,
+            event_recorder,
+            agent_prefix,
+            is_gemini,
             previous_response_chain_present,
-        );
-
-        if can_parallelize {
-            self.execute_parallel_tool_calls(
-                tool_calls,
-                runtime,
-                event_recorder,
-                agent_prefix,
-                is_gemini,
-            )
-            .await?;
-        } else {
-            self.execute_sequential_tool_calls(
-                tool_calls,
-                runtime,
-                event_recorder,
-                agent_prefix,
-                is_gemini,
-            )
-            .await?;
-        }
-
-        Ok(())
+        )
+        .await
     }
 }

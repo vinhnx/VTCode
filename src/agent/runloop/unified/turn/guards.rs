@@ -70,8 +70,7 @@ pub(crate) fn validate_tool_args_security(
     }
 
     if let Some(registry) = tool_registry {
-        let preflight = registry.preflight_validate_call(name, args);
-        match preflight {
+        match registry.admit_public_tool_call(name, args) {
             Ok(_) => {
                 if let Some(hash) = args_hash
                     && let Some(cache) = validation_cache

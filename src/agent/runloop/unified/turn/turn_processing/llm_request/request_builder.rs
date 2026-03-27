@@ -1,13 +1,15 @@
 use anyhow::Result;
-use std::collections::hash_map::DefaultHasher;
 use std::fmt::Write as _;
-use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use vtcode_core::config::{
     OpenAIPromptCacheKeyMode, PromptCachingConfig, build_openai_prompt_cache_key,
 };
 use vtcode_core::core::agent::features::FeatureSet;
+use vtcode_core::core::agent::harness_kernel::{
+    HarnessRequestPlanInput, SessionToolCatalogSnapshot, build_harness_request_plan,
+    stable_system_prefix_hash,
+};
 use vtcode_core::llm::provider::{
     self as uni, ParallelToolConfig, prepare_openai_responses_request,
 };
@@ -51,32 +53,6 @@ pub(super) fn resolve_prompt_cache_shaping_mode(
     }
 }
 
-fn hash_value<T: Hash>(value: &T) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    value.hash(&mut hasher);
-    hasher.finish()
-}
-
-fn stable_system_prefix_hash(system_prompt: &str) -> u64 {
-    let stable_prefix = system_prompt
-        .split("\n[Runtime Context]\n")
-        .next()
-        .unwrap_or(system_prompt)
-        .split("\n[Context]\n")
-        .next()
-        .unwrap_or(system_prompt)
-        .trim_end();
-    hash_value(&stable_prefix)
-}
-
-fn tool_catalog_hash(current_tools: Option<&Arc<Vec<uni::ToolDefinition>>>) -> Option<u64> {
-    current_tools.and_then(|defs| {
-        serde_json::to_string(defs)
-            .ok()
-            .map(|text| hash_value(&text))
-    })
-}
-
 pub(super) struct TurnRequestSnapshot {
     pub provider_name: String,
     pub plan_mode: bool,
@@ -101,9 +77,7 @@ struct PromptAssemblyInput<'a> {
 
 struct PromptAssemblyOutput {
     system_prompt: String,
-    current_tools: Option<Arc<Vec<uni::ToolDefinition>>>,
-    has_tools: bool,
-    tool_catalog_cache_hit: bool,
+    tool_snapshot: SessionToolCatalogSnapshot,
 }
 
 pub(super) struct TurnRequestBuildResult {
@@ -199,7 +173,7 @@ async fn assemble_prompt(
         input.turn.execution.max_tool_retries,
     );
 
-    let (current_tools, has_tools, tool_catalog_cache_hit) = if input.turn.tool_free_recovery {
+    let tool_snapshot = if input.turn.tool_free_recovery {
         let _ = writeln!(
             system_prompt,
             "\n[Recovery Mode]\n- tools_disabled: true\n- answer_mode: summarize only from evidence already collected in this turn\n- if evidence is incomplete, say so explicitly\n- do_not_request_more_tools: true\n- keep_response_brief: true"
@@ -207,44 +181,52 @@ async fn assemble_prompt(
         if let Some(reason) = input.turn.recovery_reason.as_deref() {
             let _ = writeln!(system_prompt, "- recovery_reason: {}", reason);
         }
-        (None, false, true)
+        SessionToolCatalogSnapshot::new(
+            ctx.tool_catalog.current_version(),
+            ctx.tool_catalog.current_epoch(),
+            input.turn.plan_mode,
+            input.turn.request_user_input_enabled,
+            None,
+            false,
+        )
     } else if !input.turn.capabilities.tools {
-        (None, false, true)
+        SessionToolCatalogSnapshot::new(
+            ctx.tool_catalog.current_version(),
+            ctx.tool_catalog.current_epoch(),
+            input.turn.plan_mode,
+            input.turn.request_user_input_enabled,
+            None,
+            false,
+        )
     } else {
-        let tool_snapshot = ctx
-            .tool_catalog
+        ctx.tool_catalog
             .filtered_snapshot_with_stats(
                 ctx.tools,
                 input.turn.plan_mode,
                 input.turn.request_user_input_enabled,
             )
-            .await;
-        let current_tools = tool_snapshot.snapshot;
-        let has_tools = current_tools.is_some();
-        (current_tools, has_tools, tool_snapshot.cache_hit)
+            .await
     };
 
-    if let Some(defs) = current_tools.as_ref()
+    if tool_snapshot.snapshot.as_ref().is_some()
         && !input.turn.prompt_cache_shaping_mode.is_enabled()
     {
         let _ = writeln!(
             system_prompt,
             "\n[Runtime Tool Catalog]\n- version: {}\n- epoch: {}\n- available_tools: {}",
-            ctx.tool_catalog.current_version(),
-            ctx.tool_catalog.current_epoch(),
-            defs.len()
+            tool_snapshot.version,
+            tool_snapshot.epoch,
+            tool_snapshot.available_tools()
         );
     }
 
-    if has_tools && uses_out_of_band_copilot_tools(&input.turn.provider_name) {
+    if tool_snapshot.has_tools() && uses_out_of_band_copilot_tools(&input.turn.provider_name) {
         append_copilot_runtime_guidance(&mut system_prompt);
     }
 
     Ok(PromptAssemblyOutput {
         system_prompt,
-        current_tools,
-        has_tools,
-        tool_catalog_cache_hit,
+        tool_snapshot,
     })
 }
 
@@ -365,7 +347,7 @@ pub(super) async fn build_turn_request(
     } else {
         Some(0.7)
     };
-    let parallel_config = if prompt_output.has_tools
+    let parallel_config = if prompt_output.tool_snapshot.has_tools()
         && !turn_snapshot.tool_free_recovery
         && turn_snapshot.capabilities.parallel_tool_config
     {
@@ -379,7 +361,7 @@ pub(super) async fn build_turn_request(
         Some(uni::ToolChoice::none())
     } else if use_out_of_band_copilot_tools {
         None
-    } else if prompt_output.has_tools {
+    } else if prompt_output.tool_snapshot.has_tools() {
         Some(uni::ToolChoice::auto())
     } else {
         None
@@ -398,7 +380,7 @@ pub(super) async fn build_turn_request(
         ctx.session_stats.prompt_cache_lineage_id(),
     );
     let stable_prefix_hash = stable_system_prefix_hash(&prompt_output.system_prompt);
-    let tool_catalog_hash = tool_catalog_hash(prompt_output.current_tools.as_ref());
+    let tool_catalog_hash = prompt_output.tool_snapshot.tool_catalog_hash;
     let prefix_change_reason = ctx.session_stats.record_prompt_cache_fingerprint(
         active_model,
         stable_prefix_hash,
@@ -409,13 +391,10 @@ pub(super) async fn build_turn_request(
         ToolCatalogCacheMetrics {
             step_count,
             model: active_model,
-            cache_hit: prompt_output.tool_catalog_cache_hit,
+            cache_hit: prompt_output.tool_snapshot.cache_hit,
             plan_mode: turn_snapshot.plan_mode,
             request_user_input_enabled: turn_snapshot.request_user_input_enabled,
-            available_tools: prompt_output
-                .current_tools
-                .as_ref()
-                .map_or(0, |defs| defs.len()),
+            available_tools: prompt_output.tool_snapshot.available_tools(),
             stable_prefix_hash,
             tool_catalog_hash,
             prefix_change_reason,
@@ -432,14 +411,13 @@ pub(super) async fn build_turn_request(
         active_model,
         normalized_messages,
     );
-
-    let request = uni::LLMRequest {
+    let request_plan = build_harness_request_plan(HarnessRequestPlanInput {
         messages: request_messages,
-        system_prompt: Some(Arc::new(prompt_output.system_prompt)),
+        system_prompt: prompt_output.system_prompt,
         tools: if use_out_of_band_copilot_tools {
             None
         } else {
-            prompt_output.current_tools.clone()
+            prompt_output.tool_snapshot.snapshot.clone()
         },
         model: active_model.to_string(),
         max_tokens: max_tokens_opt,
@@ -448,17 +426,18 @@ pub(super) async fn build_turn_request(
         tool_choice,
         parallel_tool_config: parallel_config,
         reasoning_effort,
+        verbosity: None,
         metadata,
         context_management,
         previous_response_id,
         prompt_cache_key,
-        ..Default::default()
-    };
+        tool_catalog_hash,
+    });
 
     Ok(TurnRequestBuildResult {
-        request,
-        has_tools: prompt_output.has_tools,
-        runtime_tools: prompt_output.current_tools,
+        request: request_plan.request,
+        has_tools: request_plan.has_tools,
+        runtime_tools: prompt_output.tool_snapshot.snapshot,
     })
 }
 

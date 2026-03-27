@@ -1,8 +1,8 @@
 use std::collections::VecDeque;
 
 use vtcode_commons::preview::{
-    format_hidden_lines_summary as shared_hidden_lines_summary,
-    split_head_tail_preview_with_limit, summary_window as shared_summary_window,
+    format_hidden_lines_summary as shared_hidden_lines_summary, split_head_tail_preview_with_limit,
+    summary_window as shared_summary_window,
 };
 use vtcode_core::config::PtyConfig;
 use vtcode_core::tools::pty::PtyPreviewRenderer;

@@ -16,14 +16,13 @@ use crate::core::agent::conversation::{
 };
 use crate::core::agent::events::ExecEventRecorder;
 use crate::core::agent::harness_artifacts::existing_harness_artifact_paths;
+use crate::core::agent::harness_kernel::{HarnessRequestPlanInput, build_harness_request_plan};
 use crate::core::agent::runtime::{AgentRuntime, RuntimeControl};
 use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
 use crate::exec::events::HarnessEventKind;
 use crate::llm::model_resolver::ModelResolver;
-use crate::llm::provider::{
-    FinishReason, LLMRequest, Message, ToolCall, prepare_openai_responses_request,
-};
+use crate::llm::provider::{FinishReason, Message, ToolCall, prepare_openai_responses_request};
 use crate::llm::providers::gemini::wire::Part;
 use crate::project_doc::build_instruction_appendix;
 use crate::prompts::PromptContext;
@@ -311,7 +310,11 @@ impl AgentRunner {
 
             let run_started_at = std::time::Instant::now();
             let is_simple_task = Self::is_simple_task(task, contexts);
-            let tools = Arc::new(self.build_universal_tools().await?);
+            let tool_snapshot = self.build_universal_tool_snapshot().await?;
+            let request_tools = tool_snapshot.snapshot.clone();
+            let prompt_tools = request_tools
+                .clone()
+                .unwrap_or_else(|| Arc::new(Vec::new()));
 
             let system_prompt = if is_simple_task {
                 // One-time clone for simple tasks to override prompt mode (not per-turn)
@@ -319,7 +322,9 @@ impl AgentRunner {
                 config.agent.system_prompt_mode = SystemPromptMode::Minimal;
                 let mut prompt_context = PromptContext::from_workspace_tools(
                     self._workspace.as_path(),
-                    tools.iter().map(|tool| tool.function_name().to_string()),
+                    prompt_tools
+                        .iter()
+                        .map(|tool| tool.function_name().to_string()),
                 );
                 prompt_context.load_available_skills();
                 let mut prompt = compose_system_instruction_text(
@@ -410,7 +415,8 @@ impl AgentRunner {
                 event_recorder,
                 run_started_at,
                 is_simple_task,
-                tools,
+                request_tools,
+                tool_snapshot.tool_catalog_hash,
                 system_instruction,
                 preserve_recent_turns,
                 max_tool_loops,
@@ -427,7 +433,8 @@ impl AgentRunner {
             mut event_recorder,
             run_started_at,
             is_simple_task,
-            tools,
+            request_tools,
+            tool_catalog_hash,
             system_instruction,
             preserve_recent_turns,
             max_tool_loops,
@@ -590,17 +597,20 @@ impl AgentRunner {
                     current_messages,
                 );
 
-                let request = LLMRequest {
+                let request = build_harness_request_plan(HarnessRequestPlanInput {
                     messages: request_messages,
-                    system_prompt: Some(Arc::clone(&system_instruction)),
-                    tools: Some(Arc::clone(&tools)),
+                    system_prompt: system_instruction.as_ref().clone(),
+                    tools: request_tools.clone(),
                     model: turn_model.clone(),
                     max_tokens,
                     temperature,
                     stream: self.provider_client.supports_streaming(),
+                    tool_choice: None,
                     parallel_tool_config,
                     reasoning_effort,
                     verbosity: turn_verbosity,
+                    metadata: None,
+                    context_management: None,
                     previous_response_id,
                     prompt_cache_key: build_openai_prompt_cache_key(
                         provider_name.eq_ignore_ascii_case("openai")
@@ -614,8 +624,9 @@ impl AgentRunner {
                             .prompt_cache_key_mode,
                         Some(&self.session_id),
                     ),
-                    ..Default::default()
-                };
+                    tool_catalog_hash,
+                })
+                .request;
                 let previous_response_chain_present = request.previous_response_id.is_some();
                 let sent_messages = request.messages.clone();
 

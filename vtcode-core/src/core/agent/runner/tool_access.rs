@@ -1,5 +1,7 @@
 use super::AgentRunner;
 use crate::config::constants::tools;
+use crate::core::agent::harness_kernel::PreparedToolCall;
+use crate::core::agent::session::AgentSessionState;
 use crate::retry::RetryPolicy;
 use crate::tools::registry::{ToolErrorType, ToolExecutionError};
 use crate::tools::{command_args, tool_intent};
@@ -53,6 +55,7 @@ impl AgentRunner {
             .then_some(canonical_name)
     }
 
+    #[allow(dead_code)]
     pub(super) fn validate_and_normalize_tool_name(
         &self,
         tool_name: &str,
@@ -63,6 +66,19 @@ impl AgentRunner {
         self.tool_registry
             .preflight_validate_call(requested_name, args)
             .map(|outcome| outcome.normalized_tool_name)
+    }
+
+    pub(super) fn admit_tool_call(
+        &self,
+        tool_name: &str,
+        args: &Value,
+        session_state: &mut AgentSessionState,
+    ) -> Result<PreparedToolCall> {
+        let normalized_args = self.normalize_tool_args(tool_name, args, session_state);
+        self.tool_registry.admit_public_tool_call(
+            Self::canonical_exec_request_name(tool_name),
+            &normalized_args,
+        )
     }
 
     /// Check if a tool is allowed for this agent
@@ -96,7 +112,10 @@ impl AgentRunner {
     /// validation, prefer `execute_tool_internal`.
     #[allow(dead_code)]
     pub(super) async fn execute_tool(&self, tool_name: &str, args: &Value) -> Result<Value> {
-        let canonical_name = self.validate_and_normalize_tool_name(tool_name, args)?;
+        let prepared = self
+            .tool_registry
+            .admit_public_tool_call(Self::canonical_exec_request_name(tool_name), args)?;
+        let canonical_name = prepared.canonical_name.clone();
 
         // Fail fast if tool is denied or missing to avoid tight retry loops
         if self
@@ -106,20 +125,19 @@ impl AgentRunner {
         {
             return Err(anyhow!("{}: {}", ERR_TOOL_DENIED, canonical_name));
         }
-        self.execute_tool_internal(&canonical_name, args)
+        self.tool_registry
+            .execute_prepared_public_tool_ref_with_exec_mode(&prepared, false)
             .await
-            .map_err(|error| anyhow!(error.user_message()))
+            .map_err(|error| anyhow!(error.to_string()))
     }
 
-    /// Internal tool execution, skipping validation.
-    /// Use when `is_valid_tool` has already been called by the caller.
-    pub(super) async fn execute_tool_internal(
+    pub(super) async fn execute_prepared_tool_internal(
         &self,
-        tool_name: &str,
-        args: &Value,
+        prepared: &PreparedToolCall,
     ) -> std::result::Result<Value, ToolExecutionError> {
-        let resolved_tool_name = Self::canonical_exec_request_name(tool_name);
-        let shell_command = if tool_intent::is_command_run_tool_call(tool_name, args)
+        let resolved_tool_name = prepared.canonical_name.as_str();
+        let args = &prepared.effective_args;
+        let shell_command = if tool_intent::is_command_run_tool_call(resolved_tool_name, args)
             || (resolved_tool_name == tools::UNIFIED_EXEC
                 && tool_intent::unified_exec_action(args).is_none())
         {
@@ -222,7 +240,7 @@ impl AgentRunner {
             }
 
             match registry
-                .execute_public_tool_ref(resolved_tool_name, args)
+                .execute_prepared_public_tool_ref_with_exec_mode(prepared, false)
                 .await
             {
                 Ok(result) => {
@@ -333,6 +351,31 @@ impl AgentRunner {
             .with_tool_call_context(resolved_tool_name, args)
             .with_surface("agent_runner")
         }))
+    }
+
+    /// Internal tool execution, skipping validation.
+    /// Use when `is_valid_tool` has already been called by the caller.
+    #[allow(dead_code)]
+    pub(super) async fn execute_tool_internal(
+        &self,
+        tool_name: &str,
+        args: &Value,
+    ) -> std::result::Result<Value, ToolExecutionError> {
+        let prepared = self
+            .tool_registry
+            .admit_public_tool_call(Self::canonical_exec_request_name(tool_name), args)
+            .map_err(|error| {
+                ToolExecutionError::from_anyhow(
+                    Self::canonical_exec_request_name(tool_name),
+                    &error,
+                    0,
+                    false,
+                    false,
+                    Some("agent_runner"),
+                )
+                .with_tool_call_context(tool_name, args)
+            })?;
+        self.execute_prepared_tool_internal(&prepared).await
     }
 }
 

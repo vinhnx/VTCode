@@ -2,14 +2,17 @@ use super::AgentRunner;
 use super::constants::{LOOP_THROTTLE_BASE_MS, LOOP_THROTTLE_MAX_MS};
 use super::tool_execution_guard::ToolExecutionGuard;
 use super::types::ToolFailureContext;
-use crate::config::constants::tools;
 use crate::core::agent::events::{
     ExecEventRecorder, tool_invocation_completed_event, tool_output_payload_from_value,
+};
+use crate::core::agent::harness_kernel::{
+    PreparedToolBatch, PreparedToolBatchKind, PreparedToolCall,
 };
 use crate::core::agent::runtime::{AgentRuntime, RuntimeControl};
 use crate::exec::events::{ItemCompletedEvent, ThreadEvent, ThreadItemDetails, ToolCallStatus};
 use crate::llm::provider::ToolCall;
 use anyhow::Result;
+use std::collections::VecDeque;
 use tokio::time::Duration;
 use tracing::{error, info, warn};
 use vtcode_commons::ErrorCategory;
@@ -17,6 +20,23 @@ use vtcode_commons::ErrorCategory;
 struct ToolCallItemRef {
     call_item_id: String,
     synthetic_invocation: bool,
+}
+
+#[derive(Clone)]
+struct PreparedRunnerToolCall {
+    tool_call_id: String,
+    prepared: PreparedToolCall,
+}
+
+struct PreparedRunnerToolBatch {
+    kind: PreparedToolBatchKind,
+    calls: Vec<PreparedRunnerToolCall>,
+}
+
+enum RunnerCallAdmission {
+    Prepared(Box<PreparedRunnerToolCall>),
+    Rejected,
+    StopTurn,
 }
 
 fn snapshot_circuit_diagnostics(
@@ -161,119 +181,181 @@ fn finish_successful_tool_output(
     );
 }
 
+fn apply_tool_failure_halt_policy(
+    session_state: &mut crate::core::agent::session::AgentSessionState,
+    category: ErrorCategory,
+) -> bool {
+    if matches!(category, ErrorCategory::RateLimit) {
+        session_state
+            .warnings
+            .push("Tool was rate limited; halting further tool calls this turn.".into());
+        session_state.mark_tool_loop_limit_hit();
+        return true;
+    }
+
+    if matches!(
+        category,
+        ErrorCategory::PolicyViolation | ErrorCategory::PlanModeViolation
+    ) {
+        session_state
+            .warnings
+            .push("Tool denied by policy; halting further tool calls this turn.".into());
+        return true;
+    }
+
+    false
+}
+
+fn align_prepared_batches(
+    calls: Vec<PreparedRunnerToolCall>,
+    allow_parallel: bool,
+) -> Vec<PreparedRunnerToolBatch> {
+    let planned = PreparedToolBatch::plan_layout(
+        calls.iter().map(|call| call.prepared.can_parallelize()),
+        allow_parallel,
+    );
+    let mut calls = calls.into_iter();
+    planned
+        .into_iter()
+        .map(|(kind, len)| PreparedRunnerToolBatch {
+            kind,
+            calls: calls.by_ref().take(len).collect(),
+        })
+        .collect()
+}
+
 impl AgentRunner {
-    /// Execute multiple tool calls in parallel. Only safe for read-only operations.
-    pub(super) async fn execute_parallel_tool_calls(
+    async fn admit_runner_tool_call(
         &self,
-        tool_calls: Vec<ToolCall>,
+        call: ToolCall,
         runtime: &mut AgentRuntime,
         event_recorder: &mut ExecEventRecorder,
         agent_prefix: &str,
         is_gemini: bool,
-    ) -> Result<()> {
-        use futures::future::join_all;
-
-        let mut prepared_calls = Vec::with_capacity(tool_calls.len());
-        for call in tool_calls {
-            let Some(func) = call.function.as_ref() else {
-                continue;
-            };
-            let requested_name = func.name.clone();
-            let args = match call.parsed_arguments() {
-                Ok(args) => args,
-                Err(err) => {
-                    let error_msg =
-                        format!("Invalid arguments for tool '{}': {}", requested_name, err);
-                    error!(agent = %agent_prefix, tool = %requested_name, error = %err, "Invalid tool arguments");
-                    reject_tool_call(
-                        runtime,
-                        event_recorder,
-                        &requested_name,
-                        None,
-                        call.id.as_str(),
-                        &error_msg,
-                    );
-                    runtime.state.push_tool_error(
-                        call.id.clone(),
-                        &requested_name,
-                        error_msg,
-                        is_gemini,
-                    );
-                    continue;
-                }
-            };
-            let args = self.normalize_tool_args(&requested_name, &args, &mut runtime.state);
-            let name = match self.validate_and_normalize_tool_name(&requested_name, &args) {
-                Ok(name) => name,
-                Err(err) => {
-                    let error_msg =
-                        format!("Invalid arguments for tool '{}': {}", requested_name, err);
-                    error!(agent = %agent_prefix, tool = %requested_name, error = %err, "Tool admission failed");
-                    reject_tool_call(
-                        runtime,
-                        event_recorder,
-                        &requested_name,
-                        Some(&args),
-                        call.id.as_str(),
-                        &error_msg,
-                    );
-                    runtime.state.push_tool_error(
-                        call.id.clone(),
-                        &requested_name,
-                        error_msg,
-                        is_gemini,
-                    );
-                    continue;
-                }
-            };
-            if self.check_for_loop(&name, &args, &mut runtime.state) {
-                return Ok(());
+    ) -> Result<RunnerCallAdmission> {
+        let requested_name = match call.function.as_ref() {
+            Some(func) => func.name.clone(),
+            None => return Ok(RunnerCallAdmission::Rejected),
+        };
+        let args = match call.parsed_arguments() {
+            Ok(args) => args,
+            Err(err) => {
+                let error_msg = format!("Invalid arguments for tool '{}': {}", requested_name, err);
+                error!(agent = %agent_prefix, tool = %requested_name, error = %err, "Invalid tool arguments");
+                reject_tool_call(
+                    runtime,
+                    event_recorder,
+                    &requested_name,
+                    None,
+                    call.id.as_str(),
+                    &error_msg,
+                );
+                runtime.state.push_tool_error(
+                    call.id.clone(),
+                    &requested_name,
+                    error_msg,
+                    is_gemini,
+                );
+                return Ok(RunnerCallAdmission::Rejected);
             }
-            prepared_calls.push((call, name, args));
+        };
+        let prepared = match self.admit_tool_call(&requested_name, &args, &mut runtime.state) {
+            Ok(prepared) => prepared,
+            Err(err) => {
+                let error_msg = format!("Invalid arguments for tool '{}': {}", requested_name, err);
+                error!(agent = %agent_prefix, tool = %requested_name, error = %err, "Tool admission failed");
+                reject_tool_call(
+                    runtime,
+                    event_recorder,
+                    &requested_name,
+                    Some(&args),
+                    call.id.as_str(),
+                    &error_msg,
+                );
+                runtime.state.push_tool_error(
+                    call.id.clone(),
+                    &requested_name,
+                    error_msg,
+                    is_gemini,
+                );
+                return Ok(RunnerCallAdmission::Rejected);
+            }
+        };
+
+        if self.check_for_loop(
+            &prepared.canonical_name,
+            &prepared.effective_args,
+            &mut runtime.state,
+        ) {
+            return Ok(RunnerCallAdmission::StopTurn);
         }
 
-        let total_calls = prepared_calls.len();
+        if !self.is_valid_tool(&prepared.canonical_name).await {
+            let detail = format!("Tool execution denied: {}", prepared.canonical_name);
+            if !self.quiet {
+                warn!(
+                    agent = %agent_prefix,
+                    tool = %prepared.canonical_name,
+                    message = %detail
+                );
+            }
+            runtime.state.warnings.push(detail.clone());
+            runtime.state.push_tool_error(
+                call.id.clone(),
+                &prepared.canonical_name,
+                detail.clone(),
+                is_gemini,
+            );
+            reject_tool_call(
+                runtime,
+                event_recorder,
+                &prepared.canonical_name,
+                Some(&prepared.effective_args),
+                &call.id,
+                &detail,
+            );
+            return Ok(RunnerCallAdmission::Rejected);
+        }
+
+        Ok(RunnerCallAdmission::Prepared(Box::new(
+            PreparedRunnerToolCall {
+                tool_call_id: call.id,
+                prepared,
+            },
+        )))
+    }
+
+    async fn execute_prepared_parallel_tool_calls(
+        &self,
+        prepared_calls: Vec<PreparedRunnerToolCall>,
+        runtime: &mut AgentRuntime,
+        event_recorder: &mut ExecEventRecorder,
+        agent_prefix: &str,
+        is_gemini: bool,
+    ) -> Result<bool> {
+        use futures::future::join_all;
+
         info!(
             agent = %self.agent_type,
-            count = total_calls,
+            count = prepared_calls.len(),
             "Executing parallel tool calls"
         );
 
         let mut futures = Vec::with_capacity(prepared_calls.len());
-        for (call, name, args) in prepared_calls {
-            let call_id = call.id.clone();
-
-            if !self.is_valid_tool(&name).await {
-                let detail = format!("Tool execution denied: {name}");
-                if !self.quiet {
-                    warn!(agent = %agent_prefix, tool = %name, message = %detail);
-                }
-                runtime.state.warnings.push(detail.clone());
-                runtime
-                    .state
-                    .push_tool_error(call_id.clone(), &name, detail.clone(), is_gemini);
-                reject_tool_call(
-                    runtime,
-                    event_recorder,
-                    &name,
-                    Some(&args),
-                    &call_id,
-                    &detail,
-                );
-                continue;
-            }
-
+        for call in prepared_calls {
+            let name = call.prepared.canonical_name.clone();
+            let args = call.prepared.effective_args.clone();
             let tool_call_item =
-                resolve_tool_call_item(runtime, event_recorder, &name, &args, &call_id);
+                resolve_tool_call_item(runtime, event_recorder, &name, &args, &call.tool_call_id);
             let runner = self;
-            let args_clone = args.clone();
+            let prepared = call.prepared.clone();
             let circuit_before = snapshot_circuit_diagnostics(runner, &name);
             futures.push(async move {
-                let result = runner.execute_tool_internal(&name, &args_clone).await;
+                let result = runner.execute_prepared_tool_internal(&prepared).await;
                 (
                     name,
-                    call_id,
-                    args_clone,
+                    call.tool_call_id,
+                    args,
                     tool_call_item,
                     result,
                     circuit_before,
@@ -291,7 +373,7 @@ impl AgentRunner {
                         info!(agent = %agent_prefix, tool = %name, "Tool executed successfully");
                     }
 
-                    let optimized_result = self.optimize_tool_result(&name, result).await;
+                    let optimized_result = self.optimize_tool_result(&name, result);
                     let tool_result = serde_json::to_string(&optimized_result)?;
 
                     self.update_last_paths_from_args(&name, &args, &mut runtime.state);
@@ -329,21 +411,7 @@ impl AgentRunner {
                         partial_state_possible = e.partial_state_possible,
                         "Tool execution failed"
                     );
-                    if matches!(category, ErrorCategory::RateLimit) {
-                        runtime.state.warnings.push(
-                            "Tool was rate limited; halting further tool calls this turn.".into(),
-                        );
-                        runtime.state.mark_tool_loop_limit_hit();
-                        halt_turn = true;
-                    } else if matches!(
-                        category,
-                        ErrorCategory::PolicyViolation | ErrorCategory::PlanModeViolation
-                    ) {
-                        runtime.state.warnings.push(
-                            "Tool denied by policy; halting further tool calls this turn.".into(),
-                        );
-                        halt_turn = true;
-                    }
+                    halt_turn = apply_tool_failure_halt_policy(&mut runtime.state, category);
                     runtime.state.push_tool_error(
                         call_id.clone(),
                         &name,
@@ -375,13 +443,281 @@ impl AgentRunner {
                 }
             }
         }
-        if halt_turn {
-            return Ok(());
+
+        Ok(halt_turn)
+    }
+
+    async fn execute_prepared_sequential_tool_call(
+        &mut self,
+        call: PreparedRunnerToolCall,
+        runtime: &mut AgentRuntime,
+        event_recorder: &mut ExecEventRecorder,
+        agent_prefix: &str,
+        is_gemini: bool,
+    ) -> Result<bool> {
+        let name = call.prepared.canonical_name.clone();
+        let args = call.prepared.effective_args.clone();
+
+        if !self.quiet {
+            info!(agent = %self.agent_type, tool = %name, "Calling tool");
         }
+
+        let tool_call_item =
+            resolve_tool_call_item(runtime, event_recorder, &name, &args, &call.tool_call_id);
+        event_recorder.tool_output_started(&tool_call_item.call_item_id, Some(&call.tool_call_id));
+        let circuit_before = snapshot_circuit_diagnostics(self, &name);
+
+        let repeat_count = self.loop_detector.lock().get_call_count(&name);
+        if repeat_count > 1 {
+            let delay_ms = (LOOP_THROTTLE_BASE_MS * repeat_count as u64).min(LOOP_THROTTLE_MAX_MS);
+            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+        }
+
+        let mut guard = ToolExecutionGuard::new(
+            &name,
+            &call.tool_call_id,
+            runtime.state.error_recovery.clone(),
+        );
+        match self.execute_prepared_tool_internal(&call.prepared).await {
+            Ok(result) => {
+                guard.mark_completed();
+                record_circuit_transition(
+                    self,
+                    &runtime.state.error_recovery,
+                    &name,
+                    circuit_before,
+                );
+                if !self.quiet {
+                    info!(agent = %agent_prefix, tool = %name, "Tool executed successfully");
+                }
+
+                let optimized_result = self.optimize_tool_result(&name, result);
+                let tool_result = serde_json::to_string(&optimized_result)?;
+
+                self.update_last_paths_from_args(&name, &args, &mut runtime.state);
+
+                runtime.state.push_tool_result(
+                    call.tool_call_id.clone(),
+                    &name,
+                    tool_result,
+                    is_gemini,
+                );
+                complete_tool_invocation(
+                    runtime,
+                    event_recorder,
+                    &call.tool_call_id,
+                    &name,
+                    &args,
+                    &tool_call_item,
+                    ToolCallStatus::Completed,
+                );
+                finish_successful_tool_output(
+                    event_recorder,
+                    &tool_call_item.call_item_id,
+                    &call.tool_call_id,
+                    &optimized_result,
+                );
+                Ok(false)
+            }
+            Err(e) => {
+                record_circuit_transition(
+                    self,
+                    &runtime.state.error_recovery,
+                    &name,
+                    circuit_before,
+                );
+                let category = e.category;
+                let should_halt = apply_tool_failure_halt_policy(&mut runtime.state, category);
+
+                complete_tool_invocation(
+                    runtime,
+                    event_recorder,
+                    &call.tool_call_id,
+                    &name,
+                    &args,
+                    &tool_call_item,
+                    ToolCallStatus::Failed,
+                );
+                let mut failure_ctx = ToolFailureContext {
+                    agent_prefix,
+                    session_state: &mut runtime.state,
+                    event_recorder,
+                    tool_call_id: &call.tool_call_id,
+                    call_item_id: Some(tool_call_item.call_item_id.as_str()),
+                    is_gemini,
+                };
+                self.record_tool_failure(
+                    &mut failure_ctx,
+                    &name,
+                    &e,
+                    Some(call.tool_call_id.as_str()),
+                );
+
+                Ok(should_halt)
+            }
+        }
+    }
+
+    pub(super) async fn execute_tool_call_batches(
+        &mut self,
+        tool_calls: Vec<ToolCall>,
+        runtime: &mut AgentRuntime,
+        event_recorder: &mut ExecEventRecorder,
+        agent_prefix: &str,
+        is_gemini: bool,
+        previous_response_chain_present: bool,
+    ) -> Result<()> {
+        let mut pending: VecDeque<ToolCall> = tool_calls.into();
+        let mut deferred: Option<PreparedRunnerToolCall> = None;
+
+        while deferred.is_some() || !pending.is_empty() {
+            if matches!(
+                runtime.poll_tool_control().await,
+                RuntimeControl::StopRequested
+            ) {
+                runtime.complete_open_tool_calls(ToolCallStatus::Failed);
+                let lifecycle_events = runtime.take_emitted_events();
+                event_recorder.record_thread_events(lifecycle_events.clone());
+                emit_failed_tool_outputs_for_completed_invocations(
+                    event_recorder,
+                    &lifecycle_events,
+                    "Tool execution interrupted by steering signal.",
+                );
+                warn!(agent = %agent_prefix, "Stopped by steering signal");
+                return Ok(());
+            }
+
+            let first_call = if let Some(call) = deferred.take() {
+                call
+            } else {
+                let Some(call) = pending.pop_front() else {
+                    break;
+                };
+                match self
+                    .admit_runner_tool_call(call, runtime, event_recorder, agent_prefix, is_gemini)
+                    .await?
+                {
+                    RunnerCallAdmission::Prepared(call) => *call,
+                    RunnerCallAdmission::Rejected => continue,
+                    RunnerCallAdmission::StopTurn => return Ok(()),
+                }
+            };
+
+            let mut batch_calls = vec![first_call];
+            let allow_parallel = batch_calls[0].prepared.can_parallelize();
+
+            if allow_parallel {
+                while let Some(next_call) = pending.pop_front() {
+                    match self
+                        .admit_runner_tool_call(
+                            next_call,
+                            runtime,
+                            event_recorder,
+                            agent_prefix,
+                            is_gemini,
+                        )
+                        .await?
+                    {
+                        RunnerCallAdmission::Prepared(call) if call.prepared.can_parallelize() => {
+                            batch_calls.push(*call);
+                        }
+                        RunnerCallAdmission::Prepared(call) => {
+                            deferred = Some(*call);
+                            break;
+                        }
+                        RunnerCallAdmission::Rejected => {}
+                        RunnerCallAdmission::StopTurn => return Ok(()),
+                    }
+                }
+            }
+
+            let allow_parallel_batch = allow_parallel && batch_calls.len() > 1;
+            let planned_batches = align_prepared_batches(batch_calls, allow_parallel_batch);
+            for batch in planned_batches {
+                self.emit_tool_batch(
+                    &self.get_selected_model(),
+                    runtime.state.stats.turns_executed,
+                    batch.calls.len(),
+                    matches!(batch.kind, PreparedToolBatchKind::ParallelReadonly),
+                    previous_response_chain_present,
+                );
+
+                let halted = match batch.kind {
+                    PreparedToolBatchKind::ParallelReadonly => {
+                        self.execute_prepared_parallel_tool_calls(
+                            batch.calls,
+                            runtime,
+                            event_recorder,
+                            agent_prefix,
+                            is_gemini,
+                        )
+                        .await?
+                    }
+                    PreparedToolBatchKind::Sequential => {
+                        let mut halted = false;
+                        for call in batch.calls {
+                            if self
+                                .execute_prepared_sequential_tool_call(
+                                    call,
+                                    runtime,
+                                    event_recorder,
+                                    agent_prefix,
+                                    is_gemini,
+                                )
+                                .await?
+                            {
+                                halted = true;
+                                break;
+                            }
+                        }
+                        halted
+                    }
+                };
+                if halted {
+                    return Ok(());
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Execute multiple tool calls in parallel. Only safe for read-only operations.
+    #[allow(dead_code)]
+    pub(super) async fn execute_parallel_tool_calls(
+        &self,
+        tool_calls: Vec<ToolCall>,
+        runtime: &mut AgentRuntime,
+        event_recorder: &mut ExecEventRecorder,
+        agent_prefix: &str,
+        is_gemini: bool,
+    ) -> Result<()> {
+        let mut prepared_calls = Vec::with_capacity(tool_calls.len());
+        for call in tool_calls {
+            match self
+                .admit_runner_tool_call(call, runtime, event_recorder, agent_prefix, is_gemini)
+                .await?
+            {
+                RunnerCallAdmission::Prepared(call) => prepared_calls.push(*call),
+                RunnerCallAdmission::Rejected => {}
+                RunnerCallAdmission::StopTurn => return Ok(()),
+            }
+        }
+
+        let _ = self
+            .execute_prepared_parallel_tool_calls(
+                prepared_calls,
+                runtime,
+                event_recorder,
+                agent_prefix,
+                is_gemini,
+            )
+            .await?;
         Ok(())
     }
 
     /// Execute multiple tool calls sequentially.
+    #[allow(dead_code)]
     pub(super) async fn execute_sequential_tool_calls(
         &mut self,
         tool_calls: Vec<ToolCall>,
@@ -407,206 +743,30 @@ impl AgentRunner {
                 return Ok(());
             }
 
-            let requested_name = match call.function.as_ref() {
-                Some(func) => func.name.clone(),
-                None => continue,
-            };
-            let args = match call.parsed_arguments() {
-                Ok(args) => args,
-                Err(err) => {
-                    let error_msg =
-                        format!("Invalid arguments for tool '{}': {}", requested_name, err);
-                    error!(agent = %agent_prefix, tool = %requested_name, error = %err, "Invalid tool arguments");
-                    reject_tool_call(
-                        runtime,
-                        event_recorder,
-                        &requested_name,
-                        None,
-                        call.id.as_str(),
-                        &error_msg,
-                    );
-                    runtime.state.push_tool_error(
-                        call.id.clone(),
-                        &requested_name,
-                        error_msg,
-                        is_gemini,
-                    );
-                    continue;
+            let admitted = self
+                .admit_runner_tool_call(call, runtime, event_recorder, agent_prefix, is_gemini)
+                .await?;
+            let RunnerCallAdmission::Prepared(call) = admitted else {
+                if matches!(admitted, RunnerCallAdmission::StopTurn) {
+                    break;
                 }
-            };
-            let args = self.normalize_tool_args(&requested_name, &args, &mut runtime.state);
-            let name = match self.validate_and_normalize_tool_name(&requested_name, &args) {
-                Ok(name) => name,
-                Err(err) => {
-                    let error_msg =
-                        format!("Invalid arguments for tool '{}': {}", requested_name, err);
-                    error!(agent = %agent_prefix, tool = %requested_name, error = %err, "Tool admission failed");
-                    reject_tool_call(
-                        runtime,
-                        event_recorder,
-                        &requested_name,
-                        Some(&args),
-                        call.id.as_str(),
-                        &error_msg,
-                    );
-                    runtime.state.push_tool_error(
-                        call.id.clone(),
-                        &requested_name,
-                        error_msg,
-                        is_gemini,
-                    );
-                    continue;
-                }
+                continue;
             };
 
-            if self.check_for_loop(&name, &args, &mut runtime.state) {
-                break;
-            }
-
-            if !self.quiet {
-                info!(
-                    agent = %self.agent_type,
-                    tool = %name,
-                    "Calling tool"
-                );
-            }
-
-            if !self.is_valid_tool(&name).await {
-                let detail = format!("Tool execution denied: {name}");
-                if !self.quiet {
-                    warn!(agent = %agent_prefix, tool = %name, message = %detail);
-                }
-                runtime.state.warnings.push(detail.clone());
-                runtime
-                    .state
-                    .push_tool_error(call.id.clone(), &name, detail.clone(), is_gemini);
-                reject_tool_call(
+            if self
+                .execute_prepared_sequential_tool_call(
+                    *call,
                     runtime,
                     event_recorder,
-                    &name,
-                    Some(&args),
-                    &call.id,
-                    &detail,
-                );
-                continue;
-            }
-
-            let tool_call_item =
-                resolve_tool_call_item(runtime, event_recorder, &name, &args, &call.id);
-            event_recorder.tool_output_started(&tool_call_item.call_item_id, Some(&call.id));
-            let circuit_before = snapshot_circuit_diagnostics(self, &name);
-
-            let repeat_count = self.loop_detector.lock().get_call_count(&name);
-            if repeat_count > 1 {
-                let delay_ms =
-                    (LOOP_THROTTLE_BASE_MS * repeat_count as u64).min(LOOP_THROTTLE_MAX_MS);
-                tokio::time::sleep(Duration::from_millis(delay_ms)).await;
-            }
-
-            // Use internal execution since is_valid_tool was already called above
-            let mut guard =
-                ToolExecutionGuard::new(&name, &call.id, runtime.state.error_recovery.clone());
-            match self.execute_tool_internal(&name, &args).await {
-                Ok(result) => {
-                    guard.mark_completed();
-                    record_circuit_transition(
-                        self,
-                        &runtime.state.error_recovery,
-                        &name,
-                        circuit_before,
-                    );
-                    if !self.quiet {
-                        info!(agent = %agent_prefix, tool = %name, "Tool executed successfully");
-                    }
-
-                    let optimized_result = self.optimize_tool_result(&name, result).await;
-                    let tool_result = serde_json::to_string(&optimized_result)?;
-
-                    self.update_last_paths_from_args(&name, &args, &mut runtime.state);
-
-                    runtime
-                        .state
-                        .push_tool_result(call.id.clone(), &name, tool_result, is_gemini);
-                    complete_tool_invocation(
-                        runtime,
-                        event_recorder,
-                        &call.id,
-                        &name,
-                        &args,
-                        &tool_call_item,
-                        ToolCallStatus::Completed,
-                    );
-                    finish_successful_tool_output(
-                        event_recorder,
-                        &tool_call_item.call_item_id,
-                        &call.id,
-                        &optimized_result,
-                    );
-
-                    if name == tools::WRITE_FILE
-                        && let Some(filepath) = args.get("path").and_then(|p| p.as_str())
-                    {
-                        runtime.state.modified_files.push(filepath.to_owned());
-                        event_recorder.file_change_completed(filepath);
-                    }
-                }
-                Err(e) => {
-                    guard.mark_completed();
-                    record_circuit_transition(
-                        self,
-                        &runtime.state.error_recovery,
-                        &name,
-                        circuit_before,
-                    );
-                    let category = e.category;
-
-                    // Determine halt behavior based on error category
-                    let should_halt = matches!(
-                        category,
-                        ErrorCategory::RateLimit
-                            | ErrorCategory::PolicyViolation
-                            | ErrorCategory::PlanModeViolation
-                    );
-
-                    if matches!(category, ErrorCategory::RateLimit) {
-                        runtime.state.warnings.push(
-                            "Tool was rate limited; halting further tool calls this turn.".into(),
-                        );
-                        runtime.state.mark_tool_loop_limit_hit();
-                    } else if matches!(
-                        category,
-                        ErrorCategory::PolicyViolation | ErrorCategory::PlanModeViolation
-                    ) {
-                        runtime.state.warnings.push(
-                            "Tool denied by policy; halting further tool calls this turn.".into(),
-                        );
-                    }
-
-                    complete_tool_invocation(
-                        runtime,
-                        event_recorder,
-                        &call.id,
-                        &name,
-                        &args,
-                        &tool_call_item,
-                        ToolCallStatus::Failed,
-                    );
-                    let mut failure_ctx = ToolFailureContext {
-                        agent_prefix,
-                        session_state: &mut runtime.state,
-                        event_recorder,
-                        tool_call_id: &call.id,
-                        call_item_id: Some(tool_call_item.call_item_id.as_str()),
-                        is_gemini,
-                    };
-                    self.record_tool_failure(&mut failure_ctx, &name, &e, Some(call.id.as_str()));
-
-                    if should_halt {
-                        break;
-                    }
-                }
+                    agent_prefix,
+                    is_gemini,
+                )
+                .await?
+            {
+                break;
             }
         }
+
         Ok(())
     }
 }

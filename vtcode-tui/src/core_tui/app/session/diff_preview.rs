@@ -10,9 +10,7 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
 };
 use vtcode_commons::diff_paths::language_hint_from_path;
-use vtcode_commons::diff_preview::{
-    DiffDisplayKind, count_diff_changes, display_lines_from_hunks,
-};
+use vtcode_commons::diff_preview::{DiffDisplayKind, count_diff_changes, display_lines_from_hunks};
 
 use super::Session;
 use crate::core_tui::app::types::{DiffPreviewMode, DiffPreviewState, TrustMode};

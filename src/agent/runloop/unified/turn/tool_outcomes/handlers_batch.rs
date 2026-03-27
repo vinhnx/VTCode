@@ -509,6 +509,8 @@ mod tests {
                 readonly_classification,
                 parallel_safe_after_preflight,
                 effective_args: effective_args.clone(),
+                fallback_recommendation: None,
+                already_preflighted: true,
             },
         }
     }
@@ -634,6 +636,8 @@ mod tests {
                 readonly_classification: true,
                 parallel_safe_after_preflight: false,
                 effective_args: serde_json::json!({"action":"run","command":"git status"}),
+                fallback_recommendation: None,
+                already_preflighted: true,
             },
         };
 

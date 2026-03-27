@@ -1,5 +1,3 @@
-use serde_json::Value;
-
 use crate::agent::runloop::unified::turn::context::{TurnHandlerOutcome, TurnProcessingContext};
 
 /// Result of a tool call validation phase.
@@ -15,12 +13,7 @@ pub(crate) enum ValidationResult {
 }
 
 /// Canonicalized validation data reused across the execution path.
-pub(crate) struct PreparedToolCall {
-    pub canonical_name: String,
-    pub readonly_classification: bool,
-    pub parallel_safe_after_preflight: bool,
-    pub effective_args: Value,
-}
+pub(crate) type PreparedToolCall = vtcode_core::core::agent::harness_kernel::PreparedToolCall;
 
 /// Consolidated state for tool outcomes to reduce signature bloat and keep handlers DRY.
 pub(crate) struct ToolOutcomeContext<'a, 'b> {

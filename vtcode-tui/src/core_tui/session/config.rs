@@ -324,8 +324,9 @@ impl SessionConfig {
     /// Loads configuration from a file
     #[allow(dead_code)]
     pub fn load_from_file(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let content = read_file_with_context_sync(Path::new(path), "session config file")
-            .map_err(|err| -> Box<dyn std::error::Error> { Box::new(std::io::Error::other(err)) })?;
+        let content = read_file_with_context_sync(Path::new(path), "session config file").map_err(
+            |err| -> Box<dyn std::error::Error> { Box::new(std::io::Error::other(err)) },
+        )?;
         let config: SessionConfig = toml::from_str(&content)?;
         Ok(config)
     }
@@ -334,8 +335,9 @@ impl SessionConfig {
     #[allow(dead_code)]
     pub fn save_to_file(&self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
         let content = toml::to_string_pretty(self)?;
-        write_file_with_context_sync(Path::new(path), &content, "session config file")
-            .map_err(|err| -> Box<dyn std::error::Error> { Box::new(std::io::Error::other(err)) })?;
+        write_file_with_context_sync(Path::new(path), &content, "session config file").map_err(
+            |err| -> Box<dyn std::error::Error> { Box::new(std::io::Error::other(err)) },
+        )?;
         Ok(())
     }
 

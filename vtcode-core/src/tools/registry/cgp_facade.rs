@@ -481,6 +481,8 @@ impl ToolRegistry {
 
         if wrapped_count > 0 {
             self.rebuild_tool_assembly().await;
+            self.tool_catalog_state
+                .note_explicit_refresh("cgp_pipeline_enable");
             self.invalidate_hot_cache();
             tracing::info!(
                 count = wrapped_count,

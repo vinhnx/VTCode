@@ -55,6 +55,7 @@ mod telemetry;
 mod timeout;
 mod timeout_category;
 mod timeout_facade;
+mod tool_catalog_facade;
 mod tool_executor_impl;
 mod unified_actions;
 mod utils;
@@ -83,6 +84,7 @@ pub use telemetry::ToolTelemetryEvent;
 pub use timeout::{
     AdaptiveTimeoutTuning, ToolLatencyStats, ToolTimeoutCategory, ToolTimeoutPolicy,
 };
+pub use tool_catalog_facade::SessionToolCatalogState;
 
 use assembly::ToolAssembly;
 use inventory::ToolInventory;
@@ -175,6 +177,8 @@ pub struct ToolRegistry {
     cgp_runtime_mode: Arc<RwLock<Option<CgpRuntimeMode>>>,
     /// Canonical manifest-driven tool assembly used by routing, catalog projections, and policy sync.
     tool_assembly: Arc<RwLock<ToolAssembly>>,
+    /// Registry-owned tool catalog snapshot cache shared by harnesses.
+    tool_catalog_state: Arc<SessionToolCatalogState>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
