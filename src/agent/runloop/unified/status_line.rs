@@ -33,6 +33,7 @@ pub(crate) struct InputStatusState {
     pub(crate) ide_context_source: Option<String>,
     // Dynamic context discovery status
     pub(crate) spooled_files_count: Option<usize>,
+    pub(crate) thread_context: Option<String>,
 }
 
 const GIT_STATUS_REFRESH_INTERVAL: Duration = Duration::from_secs(2);
@@ -154,6 +155,7 @@ pub(crate) async fn update_input_status_if_changed(
         }
         StatusLineMode::Auto => {
             let right = build_model_status_with_context_and_spooled(
+                state.thread_context.as_deref(),
                 state.ide_context_source.as_deref(),
                 trimmed_model,
                 trimmed_reasoning,
@@ -210,6 +212,7 @@ pub(crate) async fn update_input_status_if_changed(
                 } else {
                     state.command_value = None;
                     let right = build_model_status_with_context_and_spooled(
+                        state.thread_context.as_deref(),
                         state.ide_context_source.as_deref(),
                         trimmed_model,
                         trimmed_reasoning,
@@ -223,6 +226,7 @@ pub(crate) async fn update_input_status_if_changed(
             } else {
                 state.command_value = None;
                 let right = build_model_status_with_context_and_spooled(
+                    state.thread_context.as_deref(),
                     state.ide_context_source.as_deref(),
                     trimmed_model,
                     trimmed_reasoning,
@@ -252,6 +256,7 @@ pub(crate) async fn update_input_status_if_changed(
 /// Build model status with all context indicators including spooled files
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn build_model_status_with_context_and_spooled(
+    thread_context: Option<&str>,
     ide_context_source: Option<&str>,
     model: &str,
     reasoning: &str,
@@ -264,6 +269,13 @@ pub(crate) fn build_model_status_with_context_and_spooled(
 
     if is_cancelling {
         parts.push("CANCELLING...".to_string());
+    }
+
+    if let Some(thread_context) = thread_context
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        parts.push(thread_context.to_string());
     }
 
     if let Some(source) = ide_context_source
@@ -302,6 +314,29 @@ pub(crate) fn update_ide_context_source(state: &mut InputStatusState, source: Op
     state.ide_context_source = source;
 }
 
+pub(crate) fn update_thread_context(
+    state: &mut InputStatusState,
+    thread_label: &str,
+    active_subagents: usize,
+    total_subagents: usize,
+) {
+    let mut value = thread_label.trim().to_string();
+    if total_subagents > 0 {
+        let suffix = if active_subagents > 0 {
+            format!("{active_subagents}/{total_subagents} agents")
+        } else {
+            format!("{total_subagents} agents")
+        };
+        if value.is_empty() {
+            value = suffix;
+        } else {
+            value.push_str(" | ");
+            value.push_str(&suffix);
+        }
+    }
+    state.thread_context = (!value.trim().is_empty()).then_some(value);
+}
+
 #[cfg(test)]
 mod tests {
     use super::build_model_status_with_context_and_spooled;
@@ -309,6 +344,7 @@ mod tests {
     #[test]
     fn status_line_shows_context_left_percent() {
         let status = build_model_status_with_context_and_spooled(
+            None,
             None,
             "gemini-3-flash-preview",
             "low",
@@ -328,6 +364,7 @@ mod tests {
     fn status_line_clamps_context_left_percent() {
         let high = build_model_status_with_context_and_spooled(
             None,
+            None,
             "model",
             "",
             Some(150.0),
@@ -336,6 +373,7 @@ mod tests {
             None,
         );
         let low = build_model_status_with_context_and_spooled(
+            None,
             None,
             "model",
             "",
@@ -352,6 +390,7 @@ mod tests {
     #[test]
     fn status_line_includes_compact_ide_context_source() {
         let status = build_model_status_with_context_and_spooled(
+            None,
             Some("IDE Context (VS Code): vtcode-config/src/core/agent.rs"),
             "model",
             "",

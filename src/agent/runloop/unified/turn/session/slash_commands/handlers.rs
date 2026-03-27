@@ -27,6 +27,8 @@ use crate::agent::runloop::unified::state::CtrlCSignal;
 use crate::agent::runloop::unified::stop_requests::request_local_stop;
 #[path = "activation.rs"]
 mod activation;
+#[path = "agents.rs"]
+mod agents;
 #[path = "apps.rs"]
 mod apps;
 #[path = "diagnostics.rs"]
@@ -49,6 +51,7 @@ mod ui;
 mod update;
 #[path = "workspace.rs"]
 mod workspace;
+pub(super) use agents::handle_manage_agents;
 pub(super) use apps::{
     handle_launch_editor, handle_launch_git, handle_new_session, handle_open_docs,
 };

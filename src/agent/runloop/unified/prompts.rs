@@ -20,6 +20,7 @@ pub(crate) async fn read_system_prompt(
     workspace: &Path,
     session_addendum: Option<&str>,
     available_tools: &[String],
+    available_subagents: &[(String, String, bool)],
 ) -> String {
     let mut prompt_context =
         PromptContext::from_workspace_tools(workspace, available_tools.iter().cloned());
@@ -46,6 +47,26 @@ pub(crate) async fn read_system_prompt(
             prompt.push_str("\n\n");
             prompt.push_str(trimmed);
         }
+    }
+
+    if !available_subagents.is_empty() {
+        let mut section = String::from("## Subagents\n");
+        section.push_str(
+            "Delegated child agents available in this session. Read-only agents may be used proactively when their description matches; write-capable agents require explicit delegation.\n",
+        );
+        section.push_str(
+            "Users can explicitly target one with natural language or an `@agent-<name>` mention.\n",
+        );
+        for (name, description, read_only) in available_subagents {
+            let suffix = if *read_only {
+                " Read-only."
+            } else {
+                " Explicit delegation only."
+            };
+            section.push_str(&format!("- {name}: {description}{suffix}\n"));
+        }
+        prompt.push_str("\n\n");
+        prompt.push_str(section.trim_end());
     }
 
     prompt

@@ -486,6 +486,24 @@ pub(super) async fn run_interaction_loop_impl(
                 state.input_status_state,
                 spooled_count,
             );
+            let (active_subagents, total_subagents) =
+                if let Some(controller) = ctx.tool_registry.subagent_controller() {
+                    let entries = controller.status_entries().await;
+                    let total = entries.len();
+                    let active = entries
+                        .iter()
+                        .filter(|entry| !entry.status.is_terminal())
+                        .count();
+                    (active, total)
+                } else {
+                    (0, 0)
+                };
+            crate::agent::runloop::unified::status_line::update_thread_context(
+                state.input_status_state,
+                "main",
+                active_subagents,
+                total_subagents,
+            );
             let context_limit_tokens = ctx
                 .provider_client
                 .effective_context_size(&ctx.config.model);

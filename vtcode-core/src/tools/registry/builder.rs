@@ -156,6 +156,7 @@ impl ToolRegistry {
             cgp_runtime_mode: Arc::new(RwLock::new(None)),
             tool_assembly: Arc::new(RwLock::new(ToolAssembly::empty())),
             tool_catalog_state: Arc::new(super::tool_catalog_facade::SessionToolCatalogState::new()),
+            subagent_controller: Arc::new(RwLock::new(None)),
         };
 
         registry.rebuild_tool_assembly().await;

@@ -51,6 +51,7 @@ mod search_runtime_facade;
 mod shell_policy;
 mod shell_policy_facade;
 mod spooler_facade;
+mod subagent_facade;
 mod telemetry;
 mod timeout;
 mod timeout_category;
@@ -103,6 +104,7 @@ use std::sync::Arc;
 const LOOP_THROTTLE_MAX_MS: u64 = 500;
 
 use crate::mcp::McpClient;
+use crate::subagents::SubagentController;
 use crate::tools::edited_file_monitor::EditedFileMonitor;
 use std::sync::RwLock;
 
@@ -179,6 +181,8 @@ pub struct ToolRegistry {
     tool_assembly: Arc<RwLock<ToolAssembly>>,
     /// Registry-owned tool catalog snapshot cache shared by harnesses.
     tool_catalog_state: Arc<SessionToolCatalogState>,
+    /// Shared subagent controller when the session enables delegated child agents.
+    subagent_controller: Arc<RwLock<Option<Arc<SubagentController>>>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

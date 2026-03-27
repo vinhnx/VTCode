@@ -96,6 +96,14 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             name: "skills",
             description: "Open interactive skills manager (usage: /skills, /skills manager)",
         },
+        SlashCommandInfo {
+            name: "agents",
+            description: "Manage subagents and delegated child threads (usage: /agents [list|create|edit|delete|threads])",
+        },
+        SlashCommandInfo {
+            name: "agent",
+            description: "Show delegated child threads for the current session",
+        },
         // Status and diagnostics
         SlashCommandInfo {
             name: "status",

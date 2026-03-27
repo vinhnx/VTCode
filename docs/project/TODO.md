@@ -26,15 +26,4 @@ https://deepwiki.com/search/tell-me-more-about-subagent-ar_30cc4805-dbe7-492c-b8
 
 ---
 
-handle file conflict when updating file
-
-reference
-
-```
-⏺ Update(/Users/vinhnguyenxuan/.claude/agents/ios-code-review-expert.md)
-⎿  Error: File has been modified since read, either by the user or by a linter. Read it again before attempting to write it.
-```
-
----
-
 https://code.claude.com/docs/en/headless

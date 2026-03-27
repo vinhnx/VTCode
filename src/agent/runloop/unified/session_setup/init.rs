@@ -33,6 +33,7 @@ use vtcode_core::llm::{
 };
 
 use vtcode_core::models::ModelId;
+use vtcode_core::subagents::{SubagentController, SubagentControllerConfig};
 use vtcode_core::tools::handlers::{
     DeferredToolPolicy, SessionSurface, SessionToolsConfig, ToolModelCapabilities,
     deferred_tool_policy_for_runtime,
@@ -137,6 +138,7 @@ pub(crate) async fn initialize_session(
     vt_cfg: Option<&VTCodeConfig>,
     full_auto: bool,
     resume: Option<&ResumeSession>,
+    parent_session_id: &str,
 ) -> Result<SessionState> {
     if let Some(cfg) = vt_cfg {
         if let Err(err) = apply_global_notification_config_from_vtcode(cfg) {
@@ -182,6 +184,7 @@ pub(crate) async fn initialize_session(
 
     let mut tool_registry = ToolRegistry::new(config.workspace.clone()).await;
     tool_registry.initialize_async().await?;
+    tool_registry.set_harness_session(parent_session_id.to_string());
     if let Some(cfg) = vt_cfg {
         if let Err(err) = tool_registry
             .apply_session_runtime_config(
@@ -222,6 +225,37 @@ pub(crate) async fn initialize_session(
         });
     apply_workspace_trust_prompt_policy(&mut tool_registry, autonomous_mode, workspace_trust_level)
         .await;
+
+    let subagent_controller = if let Some(cfg) = vt_cfg
+        && cfg.subagents.enabled
+    {
+        match SubagentController::new(SubagentControllerConfig {
+            workspace_root: config.workspace.clone(),
+            parent_session_id: parent_session_id.to_string(),
+            parent_model: config.model.clone(),
+            parent_provider: config.provider.clone(),
+            parent_reasoning_effort: config.reasoning_effort,
+            api_key: config.api_key.clone(),
+            vt_cfg: cfg.clone(),
+            openai_chatgpt_auth: config.openai_chatgpt_auth.clone(),
+            depth: 0,
+        })
+        .await
+        {
+            Ok(controller) => {
+                controller.set_parent_messages(&conversation_history).await;
+                let controller = Arc::new(controller);
+                tool_registry.set_subagent_controller(controller.clone());
+                Some(controller)
+            }
+            Err(err) => {
+                warn!("Failed to initialize subagent controller: {}", err);
+                None
+            }
+        }
+    } else {
+        None
+    };
 
     // CGP Phase 5: Wrap registered tools through the CGP approval → sandbox → middleware pipeline.
     let cgp_mode = if full_auto {
@@ -272,10 +306,24 @@ pub(crate) async fn initialize_session(
         let tool_defs = tools.read().await;
         prompt_visible_tool_names(provider_client.name(), vt_cfg, tool_defs.as_slice())
     };
+    let available_subagents = if let Some(controller) = subagent_controller.as_ref() {
+        controller
+            .effective_specs()
+            .await
+            .into_iter()
+            .map(|spec| {
+                let read_only = spec.is_read_only();
+                (spec.name, spec.description, read_only)
+            })
+            .collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
     let base_system_prompt = read_system_prompt(
         &config.workspace,
         session_bootstrap.prompt_addendum.as_deref(),
         &available_tools,
+        &available_subagents,
     )
     .await;
 

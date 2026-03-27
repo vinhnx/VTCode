@@ -150,6 +150,9 @@ pub(crate) async fn handle_outcome(
         SlashCommandOutcome::ManageSkills { action } => {
             handlers::handle_manage_skills(ctx, action).await
         }
+        SlashCommandOutcome::ManageAgents { action } => {
+            handlers::handle_manage_agents(ctx, action).await
+        }
         SlashCommandOutcome::OpenRewindPicker => handlers::handle_open_rewind_picker(ctx).await,
         SlashCommandOutcome::RewindToTurn { turn, scope } => {
             handlers::handle_rewind_to_turn(ctx, turn, scope).await

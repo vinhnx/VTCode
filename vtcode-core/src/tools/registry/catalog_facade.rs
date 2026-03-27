@@ -4,6 +4,7 @@ use crate::config::ToolDocumentationMode;
 use crate::config::types::CapabilityLevel;
 use crate::llm::provider::ToolDefinition;
 use crate::llm::providers::gemini::wire::FunctionDeclaration;
+use crate::subagents::is_subagent_tool;
 use crate::tools::handlers::{
     SessionSurface, SessionToolsConfig, ToolCallError, ToolModelCapabilities, ToolSchemaEntry,
 };
@@ -29,14 +30,18 @@ impl ToolRegistry {
             .tool_assembly
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        assembly
+        let mut names = assembly
             .catalog()
             .public_tool_names(SessionToolsConfig::full_public(
                 surface,
                 capability_level,
                 ToolDocumentationMode::Full,
                 ToolModelCapabilities::default(),
-            ))
+            ));
+        if !self.has_subagent_controller() {
+            names.retain(|name| !is_subagent_tool(name));
+        }
+        names
     }
 
     pub async fn schema_entries(&self, config: SessionToolsConfig) -> Vec<ToolSchemaEntry> {
@@ -44,7 +49,11 @@ impl ToolRegistry {
             .tool_assembly
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        assembly.catalog().schema_entries(config)
+        let mut entries = assembly.catalog().schema_entries(config);
+        if !self.has_subagent_controller() {
+            entries.retain(|entry| !is_subagent_tool(entry.name.as_str()));
+        }
+        entries
     }
 
     pub async fn function_declarations(
@@ -55,7 +64,11 @@ impl ToolRegistry {
             .tool_assembly
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        assembly.catalog().function_declarations(config)
+        let mut declarations = assembly.catalog().function_declarations(config);
+        if !self.has_subagent_controller() {
+            declarations.retain(|entry| !is_subagent_tool(entry.name.as_str()));
+        }
+        declarations
     }
 
     pub async fn model_tools(&self, config: SessionToolsConfig) -> Vec<ToolDefinition> {
@@ -63,7 +76,11 @@ impl ToolRegistry {
             .tool_assembly
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        assembly.catalog().model_tools(config)
+        let mut tools = assembly.catalog().model_tools(config);
+        if !self.has_subagent_controller() {
+            tools.retain(|entry| !is_subagent_tool(entry.function_name()));
+        }
+        tools
     }
 
     pub async fn schema_for_public_name(
@@ -75,6 +92,9 @@ impl ToolRegistry {
             .tool_assembly
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !self.has_subagent_controller() && is_subagent_tool(name) {
+            return None;
+        }
         assembly.catalog().schema_for_name(name, config)
     }
 

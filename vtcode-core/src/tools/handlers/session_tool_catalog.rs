@@ -557,6 +557,11 @@ fn is_core_tool_entry(entry: &ToolCatalogEntry, config: &SessionToolsConfig) -> 
         | tools::PLAN_TASK_TRACKER
         | tools::ENTER_PLAN_MODE
         | tools::EXIT_PLAN_MODE
+        | tools::SPAWN_AGENT
+        | tools::SEND_INPUT
+        | tools::WAIT_AGENT
+        | tools::RESUME_AGENT
+        | tools::CLOSE_AGENT
         | tools::LIST_SKILLS
         | tools::LOAD_SKILL
         | tools::LOAD_SKILL_RESOURCE => true,
@@ -578,6 +583,98 @@ fn surface_allows_tool(surface: SessionSurface, tool_name: &str) -> bool {
             tools::UNIFIED_SEARCH | tools::UNIFIED_FILE | tools::UNIFIED_EXEC
         ),
     }
+}
+
+pub(crate) fn spawn_agent_parameters() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "agent_type": {"type": "string", "description": "Subagent type or name to run."},
+            "message": {"type": "string", "description": "Task prompt for the child agent."},
+            "items": {
+                "type": "array",
+                "description": "Structured context items for the child agent.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "type": {"type": "string"},
+                        "text": {"type": "string"},
+                        "path": {"type": "string"},
+                        "name": {"type": "string"},
+                        "image_url": {"type": "string"}
+                    },
+                    "additionalProperties": false
+                }
+            },
+            "fork_context": {"type": "boolean", "description": "Seed the child with the current thread history.", "default": false},
+            "model": {"type": "string", "description": "Optional subagent model override."},
+            "reasoning_effort": {"type": "string", "description": "Optional subagent reasoning effort override."},
+            "background": {"type": "boolean", "description": "Run the child as a background task.", "default": false},
+            "max_turns": {"type": "integer", "description": "Optional turn limit for this child."}
+        }
+    })
+}
+
+pub(crate) fn send_input_parameters() -> Value {
+    json!({
+        "type": "object",
+        "required": ["target"],
+        "properties": {
+            "target": {"type": "string", "description": "Delegated child agent id."},
+            "message": {"type": "string", "description": "Follow-up prompt for the child."},
+            "items": {
+                "type": "array",
+                "description": "Structured follow-up items.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "type": {"type": "string"},
+                        "text": {"type": "string"},
+                        "path": {"type": "string"},
+                        "name": {"type": "string"},
+                        "image_url": {"type": "string"}
+                    },
+                    "additionalProperties": false
+                }
+            },
+            "interrupt": {"type": "boolean", "description": "Abort current child work and restart with this message.", "default": false}
+        }
+    })
+}
+
+pub(crate) fn wait_agent_parameters() -> Value {
+    json!({
+        "type": "object",
+        "required": ["targets"],
+        "properties": {
+            "targets": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Child agent ids to wait for."
+            },
+            "timeout_ms": {"type": "integer", "description": "Optional wait timeout in milliseconds."}
+        }
+    })
+}
+
+pub(crate) fn resume_agent_parameters() -> Value {
+    json!({
+        "type": "object",
+        "required": ["id"],
+        "properties": {
+            "id": {"type": "string", "description": "Child agent id to resume."}
+        }
+    })
+}
+
+pub(crate) fn close_agent_parameters() -> Value {
+    json!({
+        "type": "object",
+        "required": ["target"],
+        "properties": {
+            "target": {"type": "string", "description": "Child agent id to close."}
+        }
+    })
 }
 
 fn registration_catalog_kind(registration: &ToolRegistration) -> CatalogToolKind {

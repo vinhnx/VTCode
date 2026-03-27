@@ -1550,6 +1550,80 @@ impl ToolRegistry {
         Box::pin(async move { self.execute_unified_search(args).await })
     }
 
+    pub(super) fn spawn_agent_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move {
+            let controller = self
+                .subagent_controller()
+                .ok_or_else(|| anyhow!("Subagent controller is not active in this session"))?;
+            let request = serde_json::from_value::<crate::subagents::SpawnAgentRequest>(args)
+                .context("Invalid spawn_agent arguments")?;
+            let entry = controller.spawn(request).await?;
+            Ok(json!(entry))
+        })
+    }
+
+    pub(super) fn send_input_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move {
+            let controller = self
+                .subagent_controller()
+                .ok_or_else(|| anyhow!("Subagent controller is not active in this session"))?;
+            let request = serde_json::from_value::<crate::subagents::SendInputRequest>(args)
+                .context("Invalid send_input arguments")?;
+            let entry = controller.send_input(request).await?;
+            Ok(json!(entry))
+        })
+    }
+
+    pub(super) fn wait_agent_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move {
+            let controller = self
+                .subagent_controller()
+                .ok_or_else(|| anyhow!("Subagent controller is not active in this session"))?;
+            let targets = args
+                .get("targets")
+                .and_then(Value::as_array)
+                .ok_or_else(|| anyhow!("wait_agent requires a targets array"))?
+                .iter()
+                .filter_map(Value::as_str)
+                .map(ToOwned::to_owned)
+                .collect::<Vec<_>>();
+            let timeout_ms = args.get("timeout_ms").and_then(Value::as_u64);
+            let entry = controller.wait(&targets, timeout_ms).await?;
+            Ok(json!({
+                "completed": entry.is_some(),
+                "entry": entry,
+            }))
+        })
+    }
+
+    pub(super) fn resume_agent_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move {
+            let controller = self
+                .subagent_controller()
+                .ok_or_else(|| anyhow!("Subagent controller is not active in this session"))?;
+            let target = args
+                .get("id")
+                .and_then(Value::as_str)
+                .ok_or_else(|| anyhow!("resume_agent requires id"))?;
+            let entry = controller.resume(target).await?;
+            Ok(json!(entry))
+        })
+    }
+
+    pub(super) fn close_agent_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move {
+            let controller = self
+                .subagent_controller()
+                .ok_or_else(|| anyhow!("Subagent controller is not active in this session"))?;
+            let target = args
+                .get("target")
+                .and_then(Value::as_str)
+                .ok_or_else(|| anyhow!("close_agent requires target"))?;
+            let entry = controller.close(target).await?;
+            Ok(json!(entry))
+        })
+    }
+
     pub(super) async fn execute_unified_exec(&self, args: Value) -> Result<Value> {
         self.execute_unified_exec_internal(args, false).await
     }

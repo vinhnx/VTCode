@@ -61,6 +61,28 @@ pub(crate) enum SessionLogExportFormat {
     Markdown,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum AgentDefinitionScope {
+    Project,
+    User,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum AgentManagerAction {
+    List,
+    Threads,
+    Create {
+        scope: AgentDefinitionScope,
+        name: String,
+    },
+    Edit {
+        name: String,
+    },
+    Delete {
+        name: String,
+    },
+}
+
 pub(crate) enum SlashCommandOutcome {
     Handled,
     ThemeChanged(String),
@@ -124,6 +146,9 @@ pub(crate) enum SlashCommandOutcome {
     LaunchGit,
     ManageSkills {
         action: crate::agent::runloop::SkillCommandAction,
+    },
+    ManageAgents {
+        action: AgentManagerAction,
     },
     ReplaceInput {
         content: String,
@@ -511,6 +536,22 @@ pub(crate) async fn handle_slash_command(
                 }
             }
         }
+        "agents" => match parse_agents_command(args) {
+            Ok(action) => Ok(SlashCommandOutcome::ManageAgents { action }),
+            Err(message) => {
+                renderer.line(MessageStyle::Error, &message)?;
+                Ok(SlashCommandOutcome::Handled)
+            }
+        },
+        "agent" => {
+            if !args.is_empty() {
+                renderer.line(MessageStyle::Error, "Usage: /agent")?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+            Ok(SlashCommandOutcome::ManageAgents {
+                action: AgentManagerAction::Threads,
+            })
+        }
         "plan" => handle_plan_command(args, renderer),
         "mode" => handle_mode_command(args, renderer),
         "login" => handle_login_command(args, renderer),
@@ -553,6 +594,37 @@ pub(crate) async fn handle_slash_command(
                 prompt: format!("/{}", input.trim()),
             })
         }
+    }
+}
+
+fn parse_agents_command(args: &str) -> std::result::Result<AgentManagerAction, String> {
+    let trimmed = args.trim();
+    if trimmed.is_empty() || matches!(trimmed, "list" | "manager") {
+        return Ok(AgentManagerAction::List);
+    }
+    if matches!(trimmed, "threads" | "active") {
+        return Ok(AgentManagerAction::Threads);
+    }
+
+    let parts = trimmed.split_whitespace().collect::<Vec<_>>();
+    match parts.as_slice() {
+        ["edit", name] => Ok(AgentManagerAction::Edit {
+            name: (*name).to_string(),
+        }),
+        ["delete", name] => Ok(AgentManagerAction::Delete {
+            name: (*name).to_string(),
+        }),
+        ["create", "project", name] => Ok(AgentManagerAction::Create {
+            scope: AgentDefinitionScope::Project,
+            name: (*name).to_string(),
+        }),
+        ["create", "user", name] => Ok(AgentManagerAction::Create {
+            scope: AgentDefinitionScope::User,
+            name: (*name).to_string(),
+        }),
+        _ => Err(
+            "Usage: /agents [list|threads|create project <name>|create user <name>|edit <name>|delete <name>]".to_string(),
+        ),
     }
 }
 

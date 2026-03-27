@@ -19,6 +19,7 @@ use crate::mcp::McpClientConfig;
 use crate::optimization::OptimizationConfig;
 use crate::output_styles::OutputStyleConfig;
 use crate::root::{ChatConfig, PtyConfig, UiConfig};
+use crate::subagents::SubagentRuntimeLimits;
 use crate::telemetry::TelemetryConfig;
 use crate::timeouts::TimeoutsConfig;
 
@@ -132,6 +133,10 @@ pub struct VTCodeConfig {
     /// Automation configuration
     #[serde(default)]
     pub automation: AutomationConfig,
+
+    /// Subagent runtime configuration
+    #[serde(default)]
+    pub subagents: SubagentRuntimeLimits,
 
     /// Prompt cache configuration (local + provider integration)
     #[serde(default)]

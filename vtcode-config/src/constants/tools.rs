@@ -88,5 +88,19 @@ pub const TASK_TRACKER: &str = "task_tracker";
 /// Plan-mode scoped task tracker persisted under `.vtcode/plans/`.
 pub const PLAN_TASK_TRACKER: &str = "plan_task_tracker";
 
+// ============================================================
+// SUBAGENT COLLABORATION
+// ============================================================
+/// Spawn a delegated child agent.
+pub const SPAWN_AGENT: &str = "spawn_agent";
+/// Send follow-up input to a delegated child agent.
+pub const SEND_INPUT: &str = "send_input";
+/// Wait for one or more delegated child agents to finish.
+pub const WAIT_AGENT: &str = "wait_agent";
+/// Resume a delegated child agent without sending a message.
+pub const RESUME_AGENT: &str = "resume_agent";
+/// Close a delegated child agent.
+pub const CLOSE_AGENT: &str = "close_agent";
+
 // Special wildcard for full access
 pub const WILDCARD_ALL: &str = "*";

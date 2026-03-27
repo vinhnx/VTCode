@@ -176,6 +176,7 @@ pub mod security;
 pub mod session;
 pub mod shutdown;
 pub mod skills;
+pub mod subagents;
 pub mod telemetry;
 pub mod terminal_setup;
 pub mod tool_policy;
@@ -223,6 +224,11 @@ pub use core::threads::{
 pub use ide_context::{
     EditorContextSnapshot, EditorFileContext, EditorLineRange, EditorSelectionContext,
     EditorSelectionRange,
+};
+pub use subagents::{
+    SendInputRequest as SubagentSendInputRequest, SpawnAgentRequest as SubagentSpawnRequest,
+    SubagentController, SubagentControllerConfig, SubagentInputItem, SubagentStatus,
+    SubagentStatusEntry,
 };
 pub use vtcode_bash_runner::BashRunner;
 

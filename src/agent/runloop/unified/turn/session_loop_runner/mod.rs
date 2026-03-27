@@ -583,8 +583,14 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         } else {
             SessionStartTrigger::Startup
         };
-        let mut session_state =
-            initialize_session(&config, vt_cfg.as_ref(), full_auto, resume_ref).await?;
+        let mut session_state = initialize_session(
+            &config,
+            vt_cfg.as_ref(),
+            full_auto,
+            resume_ref,
+            thread_handle.thread_id().as_str(),
+        )
+        .await?;
         let harness_config = vt_cfg
             .as_ref()
             .map(|cfg| cfg.agent.harness.clone())
@@ -821,6 +827,12 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         if !startup_update_requested_restart {
             loop {
                 use crate::agent::runloop::unified::turn::session::interaction_loop::InteractionOutcome;
+
+                if let Some(controller) = tool_registry.subagent_controller() {
+                    controller
+                        .set_parent_messages(&runtime.state.messages)
+                        .await;
+                }
 
                 let interaction_outcome = if let Some(input) = runtime.run_until_idle() {
                     InteractionOutcome::Continue {

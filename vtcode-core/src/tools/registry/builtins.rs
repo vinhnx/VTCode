@@ -4,8 +4,10 @@ use crate::config::constants::tools;
 use crate::config::types::CapabilityLevel;
 use crate::tool_policy::ToolPolicy;
 use crate::tools::handlers::session_tool_catalog::{
-    apply_patch_parameters, list_files_parameters, read_file_parameters, unified_exec_parameters,
-    unified_file_parameters, unified_search_parameters,
+    apply_patch_parameters, close_agent_parameters, list_files_parameters, read_file_parameters,
+    resume_agent_parameters, send_input_parameters, spawn_agent_parameters,
+    unified_exec_parameters, unified_file_parameters, unified_search_parameters,
+    wait_agent_parameters,
 };
 use crate::tools::handlers::{
     EnterPlanModeTool, ExitPlanModeTool, PlanModeState, PlanTaskTrackerTool, TaskTrackerTool,
@@ -122,6 +124,59 @@ pub(super) fn builtin_tool_registrations(
             PlanTaskTrackerTool::new(plan_task_tracker_state.clone())
         }))
         .with_aliases(["plan_checklist", "plan_tasks"]),
+        ToolRegistration::new(
+            tools::SPAWN_AGENT,
+            CapabilityLevel::Basic,
+            false,
+            ToolRegistry::spawn_agent_executor,
+        )
+        .with_description(
+            "Spawn a delegated child agent with isolated context and return its id plus status.",
+        )
+        .with_parameter_schema(spawn_agent_parameters())
+        .with_aliases(["agent", "delegate", "subagent"]),
+        ToolRegistration::new(
+            tools::SEND_INPUT,
+            CapabilityLevel::Basic,
+            false,
+            ToolRegistry::send_input_executor,
+        )
+        .with_description(
+            "Send follow-up instructions to an existing child agent and optionally interrupt current work.",
+        )
+        .with_parameter_schema(send_input_parameters())
+        .with_aliases(["message_agent", "continue_agent"]),
+        ToolRegistration::new(
+            tools::WAIT_AGENT,
+            CapabilityLevel::Basic,
+            false,
+            ToolRegistry::wait_agent_executor,
+        )
+        .with_description(
+            "Wait for one or more child agents to reach a terminal state and return the first result.",
+        )
+        .with_parameter_schema(wait_agent_parameters())
+        .with_aliases(["wait_subagent"]),
+        ToolRegistration::new(
+            tools::RESUME_AGENT,
+            CapabilityLevel::Basic,
+            false,
+            ToolRegistry::resume_agent_executor,
+        )
+        .with_description("Resume a previously completed child agent from its saved context.")
+        .with_parameter_schema(resume_agent_parameters())
+        .with_aliases(["resume_subagent"]),
+        ToolRegistration::new(
+            tools::CLOSE_AGENT,
+            CapabilityLevel::Basic,
+            false,
+            ToolRegistry::close_agent_executor,
+        )
+        .with_description(
+            "Close a child agent, cancelling any active work and marking the thread closed.",
+        )
+        .with_parameter_schema(close_agent_parameters())
+        .with_aliases(["close_subagent"]),
         // ============================================================
         // SEARCH & DISCOVERY (1 tool - unified)
         // ============================================================
