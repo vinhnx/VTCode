@@ -42,10 +42,9 @@ use retry::is_retryable_llm_error;
 use retry::{DEFAULT_LLM_RETRY_ATTEMPTS, MAX_LLM_RETRY_ATTEMPTS};
 use retry::{
     PostToolRetryAction, classify_llm_error, compact_error_message,
-    compact_tool_messages_for_retry, has_recent_tool_responses,
-    is_previous_response_chain_error, is_stream_timeout_error, llm_retry_attempts,
-    next_post_tool_retry_action, supports_streaming_timeout_fallback,
-    switch_to_non_streaming_retry_mode,
+    compact_tool_messages_for_retry, has_recent_tool_responses, is_previous_response_chain_error,
+    is_stream_timeout_error, llm_retry_attempts, next_post_tool_retry_action,
+    supports_streaming_timeout_fallback, switch_to_non_streaming_retry_mode,
 };
 use streaming::HarnessStreamingBridge;
 #[cfg(test)]

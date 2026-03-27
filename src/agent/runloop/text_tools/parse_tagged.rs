@@ -224,10 +224,6 @@ fn parse_minimax_tool_call(text: &str) -> Option<(String, Value)> {
         rest = &rest[value_end + PARAMETER_CLOSE.len()..];
     }
 
-    if object.is_empty() && indexed_values.is_empty() {
-        return None;
-    }
-
     for (base, entries) in indexed_values {
         let offset = if entries.contains_key(&0) {
             0usize
