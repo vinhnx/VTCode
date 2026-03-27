@@ -162,7 +162,7 @@ fn is_low_signal_outcome(outcome: &ToolPipelineOutcome, canonical_tool_name: &st
                 || (canonical_tool_name == vtcode_core::config::constants::tools::UNIFIED_EXEC
                     && output_is_grep_style_miss(output, *command_success))
         }
-        ToolExecutionStatus::Failure { error } => error_is_missing_resource(&error.to_string()),
+        ToolExecutionStatus::Failure { error } => error_is_missing_resource(&error.message),
         ToolExecutionStatus::Timeout { .. } | ToolExecutionStatus::Cancelled => false,
     }
 }
@@ -440,7 +440,11 @@ mod tests {
     fn repetition_tracker_counts_failures() {
         let mut tracker = LoopTracker::new();
         let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Failure {
-            error: anyhow::anyhow!("boom"),
+            error: vtcode_core::tools::registry::ToolExecutionError::new(
+                "edit_file".to_string(),
+                vtcode_core::tools::registry::ToolErrorType::ExecutionError,
+                "boom".to_string(),
+            ),
         });
 
         update_repetition_tracker(
@@ -733,7 +737,11 @@ mod tests {
     fn low_signal_tracker_counts_missing_read_failures() {
         let mut tracker = LoopTracker::new();
         let miss = ToolPipelineOutcome::from_status(ToolExecutionStatus::Failure {
-            error: anyhow::anyhow!("Resource not found: vtcode-tui/src/main.rs"),
+            error: vtcode_core::tools::registry::ToolExecutionError::new(
+                vtcode_core::config::constants::tools::UNIFIED_FILE.to_string(),
+                vtcode_core::tools::registry::ToolErrorType::ResourceNotFound,
+                "Resource not found: vtcode-tui/src/main.rs".to_string(),
+            ),
         });
 
         update_repetition_tracker(

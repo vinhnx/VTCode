@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use crate::config::constants::tools;
 use crate::error::{ErrorCategory, VtCodeError};
+use crate::tools::registry::ToolExecutionError;
 use crate::tools::tool_intent;
 use crate::tools::unified_error::UnifiedToolError;
 use vtcode_commons::llm::{LLMError, LLMErrorMetadata};
@@ -161,6 +162,34 @@ impl RetryPolicy {
             .map(|ctx| ctx.tool_name.as_str())
             .filter(|tool_name| !tool_name.is_empty());
         self.decision_for_category_with_tool(error.category(), attempt_index, None, tool_name)
+    }
+
+    pub fn decision_for_tool_execution_error(
+        &self,
+        error: &ToolExecutionError,
+        attempt_index: u32,
+    ) -> RetryDecision {
+        self.decision_for_category_with_tool(
+            error.category,
+            attempt_index,
+            error.retry_after(),
+            Some(error.tool_name.as_str()),
+        )
+    }
+
+    pub fn apply_to_tool_execution_error(
+        &self,
+        error: ToolExecutionError,
+        attempt_index: u32,
+        tool_name: Option<&str>,
+    ) -> ToolExecutionError {
+        let decision = self.decision_for_category_with_tool(
+            error.category,
+            attempt_index,
+            error.retry_after(),
+            tool_name.or(Some(error.tool_name.as_str())),
+        );
+        error.with_retry_decision(decision)
     }
 
     fn decision_for_category_with_tool(

@@ -9,7 +9,7 @@ use crate::core::agent::events::{
 use crate::core::agent::runtime::{AgentRuntime, RuntimeControl};
 use crate::exec::events::{ItemCompletedEvent, ThreadEvent, ThreadItemDetails, ToolCallStatus};
 use crate::llm::provider::ToolCall;
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use tokio::time::Duration;
 use tracing::{error, info, warn};
 use vtcode_commons::ErrorCategory;
@@ -17,6 +17,38 @@ use vtcode_commons::ErrorCategory;
 struct ToolCallItemRef {
     call_item_id: String,
     synthetic_invocation: bool,
+}
+
+fn snapshot_circuit_diagnostics(
+    runner: &AgentRunner,
+    tool_name: &str,
+) -> Option<crate::tools::circuit_breaker::ToolCircuitDiagnostics> {
+    runner
+        .tool_registry
+        .shared_circuit_breaker()
+        .map(|breaker| breaker.get_diagnostics(tool_name))
+}
+
+fn record_circuit_transition(
+    runner: &AgentRunner,
+    error_recovery: &std::sync::Arc<
+        parking_lot::Mutex<crate::core::agent::error_recovery::ErrorRecoveryState>,
+    >,
+    tool_name: &str,
+    before: Option<crate::tools::circuit_breaker::ToolCircuitDiagnostics>,
+) {
+    let Some(before) = before else {
+        return;
+    };
+    let Some(breaker) = runner.tool_registry.shared_circuit_breaker() else {
+        return;
+    };
+    let after = breaker.get_diagnostics(tool_name);
+    if before.status != after.status || after.denied_requests > before.denied_requests {
+        error_recovery
+            .lock()
+            .record_circuit_transition(&before, &after);
+    }
 }
 
 fn resolve_tool_call_item(
@@ -235,18 +267,24 @@ impl AgentRunner {
                 resolve_tool_call_item(runtime, event_recorder, &name, &args, &call_id);
             let runner = self;
             let args_clone = args.clone();
+            let circuit_before = snapshot_circuit_diagnostics(runner, &name);
             futures.push(async move {
-                let result = runner
-                    .execute_tool_internal(&name, &args_clone)
-                    .await
-                    .map_err(|e| anyhow!("Tool '{}' failed: {}", name, e));
-                (name, call_id, args_clone, tool_call_item, result)
+                let result = runner.execute_tool_internal(&name, &args_clone).await;
+                (
+                    name,
+                    call_id,
+                    args_clone,
+                    tool_call_item,
+                    result,
+                    circuit_before,
+                )
             });
         }
 
         let results = join_all(futures).await;
         let mut halt_turn = false;
-        for (name, call_id, args, tool_call_item, result) in results {
+        for (name, call_id, args, tool_call_item, result, circuit_before) in results {
+            record_circuit_transition(self, &runtime.state.error_recovery, &name, circuit_before);
             match result {
                 Ok(result) => {
                     if !self.quiet {
@@ -280,9 +318,17 @@ impl AgentRunner {
                     );
                 }
                 Err(e) => {
-                    let category = vtcode_commons::classify_anyhow_error(&e);
+                    let category = e.category;
                     let failure_text = self.user_facing_tool_error_message(&name, &e);
-                    error!(agent = %agent_prefix, tool = %name, error = %e, category = ?category, "Tool execution failed");
+                    error!(
+                        agent = %agent_prefix,
+                        tool = %name,
+                        error = %e.message,
+                        category = ?category,
+                        retryable = e.retryable,
+                        partial_state_possible = e.partial_state_possible,
+                        "Tool execution failed"
+                    );
                     if matches!(category, ErrorCategory::RateLimit) {
                         runtime.state.warnings.push(
                             "Tool was rate limited; halting further tool calls this turn.".into(),
@@ -301,7 +347,7 @@ impl AgentRunner {
                     runtime.state.push_tool_error(
                         call_id.clone(),
                         &name,
-                        failure_text.clone(),
+                        e.to_json_value().to_string(),
                         is_gemini,
                     );
                     complete_tool_invocation(
@@ -448,6 +494,7 @@ impl AgentRunner {
             let tool_call_item =
                 resolve_tool_call_item(runtime, event_recorder, &name, &args, &call.id);
             event_recorder.tool_output_started(&tool_call_item.call_item_id, Some(&call.id));
+            let circuit_before = snapshot_circuit_diagnostics(self, &name);
 
             let repeat_count = self.loop_detector.lock().get_call_count(&name);
             if repeat_count > 1 {
@@ -462,6 +509,12 @@ impl AgentRunner {
             match self.execute_tool_internal(&name, &args).await {
                 Ok(result) => {
                     guard.mark_completed();
+                    record_circuit_transition(
+                        self,
+                        &runtime.state.error_recovery,
+                        &name,
+                        circuit_before,
+                    );
                     if !self.quiet {
                         info!(agent = %agent_prefix, tool = %name, "Tool executed successfully");
                     }
@@ -499,7 +552,13 @@ impl AgentRunner {
                 }
                 Err(e) => {
                     guard.mark_completed();
-                    let category = vtcode_commons::classify_anyhow_error(&e);
+                    record_circuit_transition(
+                        self,
+                        &runtime.state.error_recovery,
+                        &name,
+                        circuit_before,
+                    );
+                    let category = e.category;
 
                     // Determine halt behavior based on error category
                     let should_halt = matches!(

@@ -83,7 +83,7 @@ pub(super) fn emit_tool_completion_for_status(
             ToolCallStatus::Failed,
             None,
             ToolOutputPayload {
-                aggregated_output: error.to_string(),
+                aggregated_output: error.user_message(),
                 spool_path: None,
             },
         ),
@@ -91,7 +91,7 @@ pub(super) fn emit_tool_completion_for_status(
             ToolCallStatus::Failed,
             None,
             ToolOutputPayload {
-                aggregated_output: error.message.clone(),
+                aggregated_output: error.user_message(),
                 spool_path: None,
             },
         ),

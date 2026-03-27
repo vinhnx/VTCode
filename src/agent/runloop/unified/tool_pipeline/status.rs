@@ -1,4 +1,3 @@
-use anyhow::Error;
 use serde_json::Value;
 use vtcode_core::tools::registry::ToolExecutionError;
 
@@ -19,7 +18,7 @@ pub(crate) enum ToolExecutionStatus {
     /// Tool execution failed
     Failure {
         /// Error that occurred
-        error: Error,
+        error: ToolExecutionError,
     },
     /// Tool execution timed out
     Timeout {
@@ -29,6 +28,17 @@ pub(crate) enum ToolExecutionStatus {
     /// Tool execution was cancelled
     Cancelled,
     // TODO: Progress variant planned for streaming tool progress updates
+}
+
+impl ToolExecutionStatus {
+    pub(crate) fn error(&self) -> Option<&ToolExecutionError> {
+        match self {
+            ToolExecutionStatus::Failure { error } | ToolExecutionStatus::Timeout { error } => {
+                Some(error)
+            }
+            ToolExecutionStatus::Success { .. } | ToolExecutionStatus::Cancelled => None,
+        }
+    }
 }
 
 /// Outcome produced by a tool pipeline run - returns a success/failure wrapper along with stdout and modified files
@@ -237,7 +247,11 @@ mod tests {
             command_success: true,
         };
         let failure = ToolExecutionStatus::Failure {
-            error: anyhow::anyhow!("permission denied"),
+            error: ToolExecutionError::new(
+                "tool".to_string(),
+                vtcode_core::tools::registry::ToolErrorType::PermissionDenied,
+                "permission denied".to_string(),
+            ),
         };
         batch.record(&success);
         batch.record(&failure);
@@ -254,7 +268,11 @@ mod tests {
     fn all_failure_not_partial_success() {
         let mut batch = ToolBatchOutcome::new();
         let failure = ToolExecutionStatus::Failure {
-            error: anyhow::anyhow!("boom"),
+            error: ToolExecutionError::new(
+                "tool".to_string(),
+                vtcode_core::tools::registry::ToolErrorType::ExecutionError,
+                "boom".to_string(),
+            ),
         };
         batch.record(&failure);
         assert!(!batch.is_partial_success());

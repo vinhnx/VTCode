@@ -2,6 +2,7 @@ use anyhow::anyhow;
 use serde_json::Value;
 use vtcode_core::config::constants::tools;
 use vtcode_core::tools::error_messages::agent_execution;
+use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError};
 use vtcode_core::tools::tool_intent;
 
 use super::status::ToolExecutionStatus;
@@ -16,7 +17,7 @@ pub(super) fn is_loop_detection_status(status: &ToolExecutionStatus) -> bool {
             .get("loop_detected")
             .and_then(|value| value.as_bool())
             .unwrap_or(false),
-        ToolExecutionStatus::Failure { error } => error.to_string().contains("LOOP DETECTION"),
+        ToolExecutionStatus::Failure { error } => error.message.contains("LOOP DETECTION"),
         _ => false,
     }
 }
@@ -61,7 +62,15 @@ pub(crate) fn process_llm_tool_output(output: Value) -> ToolExecutionStatus {
             Some(base_error_msg),
         );
         return ToolExecutionStatus::Failure {
-            error: anyhow!(clear_error_msg),
+            error: ToolExecutionError::policy_violation(tool_name.to_string(), clear_error_msg),
+        };
+    }
+
+    if let Some(error) = ToolExecutionError::from_tool_output(&output) {
+        return if matches!(error.error_type, ToolErrorType::Timeout) {
+            ToolExecutionStatus::Timeout { error }
+        } else {
+            ToolExecutionStatus::Failure { error }
         };
     }
 
@@ -74,7 +83,14 @@ pub(crate) fn process_llm_tool_output(output: Value) -> ToolExecutionStatus {
             "Unknown tool execution error".to_string()
         };
         return ToolExecutionStatus::Failure {
-            error: anyhow!(error_msg),
+            error: ToolExecutionError::from_anyhow(
+                "tool",
+                &anyhow!(error_msg),
+                0,
+                false,
+                false,
+                Some("unified_runloop"),
+            ),
         };
     }
 

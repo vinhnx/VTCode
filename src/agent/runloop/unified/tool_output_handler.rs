@@ -327,10 +327,10 @@ fn handle_non_success_common(
 ) -> Result<()> {
     match status {
         ToolExecutionStatus::Failure { error } => {
-            render_error_common(ctx.renderer, name, &error.to_string(), "failure")?;
+            render_error_common(ctx.renderer, name, &error.user_message(), "failure")?;
         }
         ToolExecutionStatus::Timeout { error } => {
-            render_error_common(ctx.renderer, name, &error.message, "timed out")?;
+            render_error_common(ctx.renderer, name, &error.user_message(), "timed out")?;
         }
         ToolExecutionStatus::Cancelled => {
             ctx.renderer

@@ -6,8 +6,9 @@ use serde_json::Value;
 use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
+use vtcode_core::retry::RetryPolicy;
 use vtcode_core::tools::registry::ToolTimeoutCategory;
-use vtcode_core::tools::registry::{ToolErrorType, ToolRegistry, classify_error};
+use vtcode_core::tools::registry::{ToolExecutionError, ToolRegistry};
 
 use crate::agent::runloop::unified::progress::ProgressReporter;
 use crate::agent::runloop::unified::state::CtrlCState;
@@ -112,6 +113,13 @@ async fn execute_tool_with_timeout_ref_mode(
         .ceiling_for(timeout_category)
         .unwrap_or(DEFAULT_TOOL_TIMEOUT);
     let retry_allowed = is_retry_safe_tool(registry, name, args);
+    let mut retry_policy = RetryPolicy::from_retries(
+        max_tool_retries as u32,
+        RETRY_BACKOFF_BASE,
+        MAX_RETRY_BACKOFF,
+        2.0,
+    );
+    retry_policy.jitter = 0.15;
 
     if !retry_allowed && max_tool_retries > 0 {
         debug!(
@@ -131,7 +139,7 @@ async fn execute_tool_with_timeout_ref_mode(
         timeout_ceiling,
         timeout_category,
         retry_allowed,
-        max_tool_retries,
+        &retry_policy,
         prevalidated,
         settle_noninteractive_exec,
     )
@@ -153,7 +161,7 @@ async fn execute_tool_with_progress(
     tool_timeout: Duration,
     timeout_category: ToolTimeoutCategory,
     retry_allowed: bool,
-    max_tool_retries: usize,
+    retry_policy: &RetryPolicy,
     prevalidated: bool,
     settle_noninteractive_exec: bool,
 ) -> ToolExecutionStatus {
@@ -171,19 +179,18 @@ async fn execute_tool_with_progress(
         settle_noninteractive_exec,
         attempt,
         None,
+        retry_policy,
     )
     .await;
 
-    while let Some(delay) =
-        retry_delay_for_status(&status, attempt, max_tool_retries, retry_allowed)
-    {
+    while let Some(delay) = retry_delay_for_status(&status, attempt, retry_allowed, retry_policy) {
         attempt += 1;
         progress_reporter
             .set_message(format!(
                 "Retrying {} (attempt {}/{}) after {}ms...",
                 name,
                 attempt + 1,
-                max_tool_retries + 1,
+                retry_policy.max_attempts,
                 delay.as_millis()
             ))
             .await;
@@ -210,11 +217,18 @@ async fn execute_tool_with_progress(
             settle_noninteractive_exec,
             attempt,
             Some(delay),
+            retry_policy,
         )
         .await;
     }
 
-    emit_tool_retry_outcome_metric(name, &status, attempt, max_tool_retries, retry_allowed);
+    emit_tool_retry_outcome_metric(
+        name,
+        &status,
+        attempt,
+        retry_policy.max_attempts.saturating_sub(1) as usize,
+        retry_allowed,
+    );
     status
 }
 
@@ -230,20 +244,27 @@ async fn run_attempt_with_logging(
     settle_noninteractive_exec: bool,
     attempt: usize,
     retry_delay: Option<Duration>,
+    retry_policy: &RetryPolicy,
 ) -> ToolExecutionStatus {
     let attempt_start = Instant::now();
-    let status = run_single_tool_attempt(
-        registry,
+    let status = apply_retry_context(
+        run_single_tool_attempt(
+            registry,
+            name,
+            args,
+            ctrl_c_state,
+            ctrl_c_notify,
+            progress_reporter,
+            timeout,
+            prevalidated,
+            settle_noninteractive_exec,
+        )
+        .await,
         name,
         args,
-        ctrl_c_state,
-        ctrl_c_notify,
-        progress_reporter,
-        timeout,
-        prevalidated,
-        settle_noninteractive_exec,
-    )
-    .await;
+        attempt as u32,
+        retry_policy,
+    );
 
     debug!(
         target: "vtcode.tool.exec",
@@ -252,9 +273,43 @@ async fn run_attempt_with_logging(
         status = status_label(&status),
         elapsed_ms = attempt_start.elapsed().as_millis(),
         retry_delay_ms = retry_delay.map(|d| d.as_millis()),
+        category = status.error().map(|error| error.category.user_label()),
+        retryable = status.error().map(|error| error.retryable),
         "tool attempt finished"
     );
     status
+}
+
+fn apply_retry_context(
+    status: ToolExecutionStatus,
+    name: &str,
+    args: &Value,
+    attempt_index: u32,
+    retry_policy: &RetryPolicy,
+) -> ToolExecutionStatus {
+    match status {
+        ToolExecutionStatus::Failure { error } => ToolExecutionStatus::Failure {
+            error: retry_policy.apply_to_tool_execution_error(
+                error
+                    .with_tool_call_context(name, args)
+                    .with_attempt(attempt_index + 1)
+                    .with_surface("unified_runloop"),
+                attempt_index,
+                Some(name),
+            ),
+        },
+        ToolExecutionStatus::Timeout { error } => ToolExecutionStatus::Timeout {
+            error: retry_policy.apply_to_tool_execution_error(
+                error
+                    .with_tool_call_context(name, args)
+                    .with_attempt(attempt_index + 1)
+                    .with_surface("unified_runloop"),
+                attempt_index,
+                Some(name),
+            ),
+        },
+        ToolExecutionStatus::Success { .. } | ToolExecutionStatus::Cancelled => status,
+    }
 }
 
 async fn run_single_tool_attempt(
@@ -417,7 +472,17 @@ async fn run_single_tool_attempt(
                         progress_reporter
                             .set_message(format!("{} failed", name))
                             .await;
-                        ToolExecutionStatus::Failure { error }
+                        ToolExecutionStatus::Failure {
+                            error: ToolExecutionError::from_anyhow(
+                                name,
+                                &error,
+                                0,
+                                false,
+                                false,
+                                Some("unified_runloop"),
+                            )
+                            .with_tool_call_context(name, args),
+                        }
                     }
                 };
             }
@@ -456,48 +521,21 @@ fn is_retry_safe_tool(registry: &ToolRegistry, name: &str, args: &Value) -> bool
 fn retry_delay_for_status(
     status: &ToolExecutionStatus,
     attempt: usize,
-    max_tool_retries: usize,
     retry_allowed: bool,
+    retry_policy: &RetryPolicy,
 ) -> Option<Duration> {
-    if !retry_allowed || attempt >= max_tool_retries {
+    if !retry_allowed {
         return None;
     }
 
     match status {
-        ToolExecutionStatus::Timeout { error } => {
-            if error.is_recoverable {
-                Some(backoff_for_attempt(attempt))
-            } else {
-                None
-            }
-        }
-        ToolExecutionStatus::Failure { error } => {
-            let error_type = classify_error(error);
-            if should_retry_error_type(error_type) {
-                Some(backoff_for_attempt(attempt))
-            } else {
-                None
-            }
+        ToolExecutionStatus::Timeout { error } | ToolExecutionStatus::Failure { error } => {
+            retry_policy
+                .decision_for_tool_execution_error(error, attempt as u32)
+                .delay
         }
         _ => None,
     }
-}
-
-fn should_retry_error_type(error_type: ToolErrorType) -> bool {
-    matches!(
-        error_type,
-        ToolErrorType::Timeout | ToolErrorType::NetworkError
-    )
-}
-
-fn backoff_for_attempt(attempt: usize) -> Duration {
-    let retry_number = attempt.saturating_add(1);
-    let exp = 2_u64.saturating_pow(retry_number.saturating_sub(1).min(4) as u32);
-    let jitter = Duration::from_millis(((retry_number as u64 * 53) % 150) + 75);
-    let backoff = RETRY_BACKOFF_BASE
-        .saturating_mul(exp as u32)
-        .saturating_add(jitter);
-    std::cmp::max(backoff, Duration::from_millis(350)).min(MAX_RETRY_BACKOFF)
 }
 
 fn status_label(status: &ToolExecutionStatus) -> &'static str {
@@ -549,7 +587,8 @@ mod tests {
 
     #[test]
     fn first_retry_backoff_is_non_zero_and_meaningful() {
-        let delay = backoff_for_attempt(0);
+        let delay = RetryPolicy::from_retries(2, RETRY_BACKOFF_BASE, MAX_RETRY_BACKOFF, 2.0)
+            .delay_for_attempt(0);
         assert!(delay >= Duration::from_millis(350));
         assert!(delay <= MAX_RETRY_BACKOFF);
     }
@@ -561,31 +600,66 @@ mod tests {
             ToolTimeoutCategory::Default,
             Some(Duration::from_secs(1)),
         );
+        let policy = RetryPolicy::from_retries(2, RETRY_BACKOFF_BASE, MAX_RETRY_BACKOFF, 2.0);
 
-        assert!(retry_delay_for_status(&timeout_status, 0, 2, true).is_some());
-        assert!(retry_delay_for_status(&timeout_status, 0, 2, false).is_none());
+        assert!(retry_delay_for_status(&timeout_status, 0, true, &policy).is_some());
+        assert!(retry_delay_for_status(&timeout_status, 0, false, &policy).is_none());
     }
 
     #[test]
     fn retry_delay_skips_policy_and_validation_failures() {
         let denied = ToolExecutionStatus::Failure {
-            error: anyhow!("tool denied by policy"),
+            error: ToolExecutionError::from_anyhow(
+                "tool",
+                &anyhow!("tool denied by policy"),
+                0,
+                false,
+                false,
+                Some("test"),
+            ),
         };
         let invalid = ToolExecutionStatus::Failure {
-            error: anyhow!("invalid arguments: missing field"),
+            error: ToolExecutionError::from_anyhow(
+                "tool",
+                &anyhow!("invalid arguments: missing field"),
+                0,
+                false,
+                false,
+                Some("test"),
+            ),
         };
+        let policy = RetryPolicy::from_retries(2, RETRY_BACKOFF_BASE, MAX_RETRY_BACKOFF, 2.0);
 
-        assert!(retry_delay_for_status(&denied, 0, 2, true).is_none());
-        assert!(retry_delay_for_status(&invalid, 0, 2, true).is_none());
+        assert!(retry_delay_for_status(&denied, 0, true, &policy).is_none());
+        assert!(retry_delay_for_status(&invalid, 0, true, &policy).is_none());
     }
 
     #[test]
-    fn retry_delay_allows_network_failures() {
+    fn retry_delay_allows_network_and_rate_limit_failures() {
         let network = ToolExecutionStatus::Failure {
-            error: anyhow!("network connection reset"),
+            error: ToolExecutionError::from_anyhow(
+                "tool",
+                &anyhow!("network connection reset"),
+                0,
+                false,
+                false,
+                Some("test"),
+            ),
         };
+        let rate_limit = ToolExecutionStatus::Failure {
+            error: ToolExecutionError::from_anyhow(
+                "tool",
+                &anyhow!("429 Too Many Requests"),
+                0,
+                false,
+                false,
+                Some("test"),
+            ),
+        };
+        let policy = RetryPolicy::from_retries(2, RETRY_BACKOFF_BASE, MAX_RETRY_BACKOFF, 2.0);
 
-        assert!(retry_delay_for_status(&network, 0, 2, true).is_some());
+        assert!(retry_delay_for_status(&network, 0, true, &policy).is_some());
+        assert!(retry_delay_for_status(&rate_limit, 0, true, &policy).is_some());
     }
 
     #[tokio::test]

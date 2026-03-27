@@ -1392,11 +1392,15 @@ async fn denied_sequential_tool_halt_returns_promptly() {
 }
 
 #[tokio::test]
-async fn execute_tool_internal_blocks_open_circuit_breaker() {
+async fn execute_tool_internal_retries_open_circuit_breaker() {
     let temp = TempDir::new().expect("tempdir");
+    fs::write(temp.path().join("note.txt"), "hello\n").expect("workspace file");
     let runner = make_runner(&temp, VTCodeConfig::default(), "thread-open-circuit").await;
     let breaker = Arc::new(CircuitBreaker::new(CircuitBreakerConfig {
         failure_threshold: 1,
+        min_backoff: Duration::from_millis(10),
+        max_backoff: Duration::from_millis(10),
+        reset_timeout: Duration::from_millis(10),
         ..CircuitBreakerConfig::default()
     }));
     runner
@@ -1407,14 +1411,16 @@ async fn execute_tool_internal_blocks_open_circuit_breaker() {
         vtcode_commons::ErrorCategory::ExecutionError,
     );
 
-    let err = runner
+    let start = Instant::now();
+    let result = runner
         .execute_tool_internal(tools::READ_FILE, &json!({"path": "note.txt"}))
         .await
-        .expect_err("open circuit should deny execution");
+        .expect("circuit-open retry should recover");
 
-    assert!(
-        err.to_string()
-            .contains("temporarily disabled by circuit breaker")
+    assert!(start.elapsed() >= Duration::from_millis(10));
+    assert_eq!(
+        result.get("content").and_then(|value| value.as_str()),
+        Some("hello")
     );
 }
 

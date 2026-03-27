@@ -1,6 +1,8 @@
 use std::collections::VecDeque;
 use std::time::Instant;
 
+use crate::tools::circuit_breaker::{CircuitState, ToolCircuitDiagnostics};
+
 pub const DEFAULT_MAX_RECENT_ERRORS: usize = 10;
 pub const DEFAULT_MAX_OPEN_CIRCUITS: usize = 3;
 
@@ -121,6 +123,39 @@ impl ErrorRecoveryState {
 
         if self.circuit_events.len() > DEFAULT_MAX_RECENT_ERRORS {
             self.circuit_events.remove(0);
+        }
+    }
+
+    pub fn record_circuit_transition(
+        &mut self,
+        before: &ToolCircuitDiagnostics,
+        after: &ToolCircuitDiagnostics,
+    ) {
+        debug_assert_eq!(before.tool_name, after.tool_name);
+
+        let backoff_duration = after.remaining_backoff.unwrap_or(after.current_backoff);
+
+        if before.status != after.status {
+            let state = match after.status {
+                CircuitState::Open => "open",
+                CircuitState::HalfOpen => "half_open",
+                CircuitState::Closed => "reset",
+            };
+            self.record_circuit_event(
+                &after.tool_name,
+                state,
+                after.failure_count,
+                backoff_duration,
+            );
+        }
+
+        if after.denied_requests > before.denied_requests {
+            self.record_circuit_event(
+                &after.tool_name,
+                "blocked_call",
+                after.failure_count,
+                backoff_duration,
+            );
         }
     }
 
@@ -246,6 +281,43 @@ mod tests {
         }
 
         assert_eq!(state.recent_errors.len(), DEFAULT_MAX_RECENT_ERRORS);
+    }
+
+    #[test]
+    fn record_circuit_transition_tracks_open_and_blocked_calls() {
+        let mut state = ErrorRecoveryState::new();
+        let before = ToolCircuitDiagnostics {
+            tool_name: "read_file".to_string(),
+            status: CircuitState::Closed,
+            failure_count: 0,
+            current_backoff: std::time::Duration::ZERO,
+            remaining_backoff: None,
+            opened_at: None,
+            open_count: 0,
+            is_open: false,
+            denied_requests: 0,
+            last_denied_at: None,
+            last_error_category: None,
+        };
+        let after = ToolCircuitDiagnostics {
+            tool_name: "read_file".to_string(),
+            status: CircuitState::Open,
+            failure_count: 3,
+            current_backoff: std::time::Duration::from_secs(5),
+            remaining_backoff: Some(std::time::Duration::from_secs(4)),
+            opened_at: None,
+            open_count: 1,
+            is_open: true,
+            denied_requests: 2,
+            last_denied_at: None,
+            last_error_category: Some(vtcode_commons::ErrorCategory::Timeout),
+        };
+
+        state.record_circuit_transition(&before, &after);
+
+        assert_eq!(state.circuit_events.len(), 2);
+        assert_eq!(state.circuit_events[0].state, "open");
+        assert_eq!(state.circuit_events[1].state, "blocked_call");
     }
 
     #[test]

@@ -138,29 +138,6 @@ pub(crate) fn sanitize_error_for_display(raw: &str) -> String {
     first_line.to_string()
 }
 
-/// Format a tool error with category label and optional recovery hint.
-///
-/// Returns a tuple of (primary_message, optional_hint).
-pub(crate) fn format_tool_error_for_user(
-    tool_name: &str,
-    error_message: &str,
-) -> (String, Option<String>) {
-    let category = vtcode_commons::classify_error_message(error_message);
-    let label = category.user_label();
-    let sanitized = sanitize_error_for_display(error_message);
-
-    let primary = format!("Tool '{}' failed ({}): {}", tool_name, label, sanitized);
-
-    let suggestions = category.recovery_suggestions();
-    let hint = if suggestions.is_empty() {
-        None
-    } else {
-        Some(format!("Hint: {}", suggestions.join("; ")))
-    };
-
-    (primary, hint)
-}
-
 /// Exponential backoff calculation
 pub(crate) fn calculate_backoff(attempt: usize, base_ms: u64, max_ms: u64) -> Duration {
     let exp = 2_u64.saturating_pow(attempt.min(4) as u32);
@@ -201,24 +178,6 @@ mod tests {
         );
         let result = sanitize_error_for_display(&raw);
         assert_eq!(result, raw);
-    }
-
-    #[test]
-    fn format_tool_error_includes_category() {
-        let (msg, hint) = format_tool_error_for_user("read_file", "connection timed out");
-        assert!(msg.contains("read_file"));
-        assert!(msg.contains("timed out")); // sanitized message
-        // Category label should be present (timeout or network)
-        assert!(msg.contains('(') && msg.contains(')'));
-        // Timeout/network errors should have a hint
-        assert!(hint.is_some());
-    }
-
-    #[test]
-    fn format_tool_error_no_hint_for_generic() {
-        let (msg, _hint) = format_tool_error_for_user("my_tool", "something went wrong");
-        assert!(msg.contains("my_tool"));
-        assert!(msg.contains("something went wrong"));
     }
 
     #[test]

@@ -70,7 +70,8 @@ pub(crate) fn create_timeout_error(
     };
 
     ToolExecutionStatus::Timeout {
-        error: ToolExecutionError::new(name.to_string(), ToolErrorType::Timeout, message),
+        error: ToolExecutionError::new(name.to_string(), ToolErrorType::Timeout, message)
+            .with_surface("unified_runloop"),
     }
 }
 

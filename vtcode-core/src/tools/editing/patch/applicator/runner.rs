@@ -29,7 +29,9 @@ pub(super) async fn execute_plan(
             Err(err) => {
                 let rollback_result = journal.rollback_all().await;
                 return Err(match rollback_result {
-                    Ok(()) => err,
+                    Ok(()) => PatchError::RolledBack {
+                        original: Box::new(err),
+                    },
                     Err(rollback_err) => PatchError::Recovery {
                         original: Box::new(err),
                         rollback: Box::new(rollback_err),

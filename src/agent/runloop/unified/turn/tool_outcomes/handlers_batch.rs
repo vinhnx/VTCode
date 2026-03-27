@@ -22,6 +22,35 @@ struct ValidatedToolCall<'a> {
     prepared: PreparedToolCall,
 }
 
+fn snapshot_circuit_diagnostics(
+    registry: &vtcode_core::tools::registry::ToolRegistry,
+    tool_name: &str,
+) -> Option<vtcode_core::tools::circuit_breaker::ToolCircuitDiagnostics> {
+    registry
+        .shared_circuit_breaker()
+        .map(|breaker| breaker.get_diagnostics(tool_name))
+}
+
+async fn record_circuit_transition(
+    ctx: &TurnProcessingContext<'_>,
+    tool_name: &str,
+    before: Option<vtcode_core::tools::circuit_breaker::ToolCircuitDiagnostics>,
+) {
+    let Some(before) = before else {
+        return;
+    };
+    let Some(breaker) = ctx.tool_registry.shared_circuit_breaker() else {
+        return;
+    };
+    let after = breaker.get_diagnostics(tool_name);
+    if before.status != after.status || after.denied_requests > before.denied_requests {
+        ctx.error_recovery
+            .write()
+            .await
+            .record_circuit_transition(&before, &after);
+    }
+}
+
 impl ValidatedToolCall<'_> {
     fn call_id(&self) -> &str {
         self.tool_call.call_id()
@@ -147,6 +176,7 @@ async fn execute_parallel_group<'a, 'b>(
         let fut = async move {
             let start_time = std::time::Instant::now();
             let max_retries = resolve_max_tool_retries(&name, vt_cfg);
+            let circuit_before = snapshot_circuit_diagnostics(&registry, &name);
             let status =
                 crate::agent::runloop::unified::tool_pipeline::execute_tool_with_timeout_ref_prevalidated(
                     &registry,
@@ -159,7 +189,7 @@ async fn execute_parallel_group<'a, 'b>(
                     should_settle_noninteractive_unified_exec(true, &name, &args),
                 )
                 .await;
-            (call_id, name, args, status, start_time)
+            (call_id, name, args, status, start_time, circuit_before)
         };
         execution_futures.push(fut);
     }
@@ -189,11 +219,12 @@ async fn execute_parallel_group<'a, 'b>(
             result = execution_futures.next() => result,
         };
 
-        let Some((call_id, name, args, status, start_time)) = next_result else {
+        let Some((call_id, name, args, status, start_time, circuit_before)) = next_result else {
             break;
         };
 
         batch_tracker.record(&status);
+        record_circuit_transition(t_ctx.ctx, &name, circuit_before).await;
 
         let outcome =
             crate::agent::runloop::unified::tool_pipeline::ToolPipelineOutcome::from_status(status);
@@ -391,6 +422,7 @@ async fn execute_and_handle_tool_call_inner<'a>(
         )?;
     }
     let tool_execution_start = std::time::Instant::now();
+    let circuit_before = snapshot_circuit_diagnostics(ctx.tool_registry, tool_name);
     let pipeline_outcome = {
         let ctrl_c_state = ctx.ctrl_c_state;
         let ctrl_c_notify = ctx.ctrl_c_notify;
@@ -415,6 +447,7 @@ async fn execute_and_handle_tool_call_inner<'a>(
         )
         .await?
     };
+    record_circuit_transition(ctx, tool_name, circuit_before).await;
 
     update_repetition_tracker(
         repeated_tool_attempts,

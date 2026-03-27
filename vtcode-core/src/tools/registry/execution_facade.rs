@@ -1288,17 +1288,19 @@ impl ToolRegistry {
                 Ok(normalized_value)
             }
             Err(err) => {
-                let error_type = super::classify_error(&err);
-                let error_category = ErrorCategory::from(error_type);
+                let error = ToolExecutionError::from_anyhow(
+                    tool_name_owned.clone(),
+                    &err,
+                    0,
+                    false,
+                    false,
+                    Some("tool_registry"),
+                )
+                .with_tool_call_context(&tool_name_owned, &args_for_recording);
+                let error_category = error.category;
                 if let Some(breaker) = shared_circuit_breaker.as_ref() {
                     breaker.record_failure_category_for_tool(&tool_name_owned, error_category);
                 }
-                let error = ToolExecutionError::with_original_error(
-                    tool_name_owned.clone(),
-                    error_type,
-                    format!("Tool execution failed: {}", err),
-                    err.to_string(),
-                );
 
                 let tripped = if error_category.should_trip_circuit_breaker() {
                     let tripped = self.record_tool_failure(timeout_category);

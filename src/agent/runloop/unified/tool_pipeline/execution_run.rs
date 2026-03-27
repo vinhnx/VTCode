@@ -11,6 +11,7 @@ use vtcode_core::hooks::LifecycleHookEngine;
 use vtcode_core::tools::ToolInvocationId;
 use vtcode_core::tools::command_args;
 use vtcode_core::tools::handlers::plan_mode::PlanLifecyclePhase;
+use vtcode_core::tools::registry::ToolExecutionError;
 use vtcode_core::tools::tool_intent;
 
 use crate::agent::runloop::git::confirm_changes_with_git_diff;
@@ -43,6 +44,25 @@ fn resolve_harness_item_identity(tool_item_id: &str) -> (ToolInvocationId, Strin
     }
 }
 
+fn structured_failure_from_message(
+    tool_name: &str,
+    message: impl Into<String>,
+) -> ToolExecutionError {
+    let message = message.into();
+    ToolExecutionError::from_anyhow(
+        tool_name,
+        &anyhow!(message),
+        0,
+        false,
+        false,
+        Some("unified_runloop"),
+    )
+}
+
+fn structured_failure(tool_name: &str, error: &anyhow::Error) -> ToolExecutionError {
+    ToolExecutionError::from_anyhow(tool_name, error, 0, false, false, Some("unified_runloop"))
+}
+
 pub(crate) async fn run_tool_call(
     ctx: &mut RunLoopContext<'_>,
     call: &vtcode_core::llm::provider::ToolCall,
@@ -60,7 +80,7 @@ pub(crate) async fn run_tool_call(
         None => {
             return Ok(ToolPipelineOutcome::from_status(
                 ToolExecutionStatus::Failure {
-                    error: anyhow!("Tool call missing function"),
+                    error: structured_failure_from_message("tool", "Tool call missing function"),
                 },
             ));
         }
@@ -72,7 +92,7 @@ pub(crate) async fn run_tool_call(
         Err(err) => {
             return Ok(ToolPipelineOutcome::from_status(
                 ToolExecutionStatus::Failure {
-                    error: anyhow!(err),
+                    error: structured_failure("tool", &anyhow!(err)),
                 },
             ));
         }
@@ -118,9 +138,12 @@ pub(crate) async fn run_tool_call_with_args(
         if let Some(max_tool_calls) = ctx.harness_state.exhausted_tool_call_limit() {
             return Ok(ToolPipelineOutcome::from_status(
                 ToolExecutionStatus::Failure {
-                    error: anyhow::anyhow!(
-                        "Policy violation: exceeded max tool calls per turn ({})",
-                        max_tool_calls
+                    error: structured_failure(
+                        requested_name,
+                        &anyhow::anyhow!(
+                            "Policy violation: exceeded max tool calls per turn ({})",
+                            max_tool_calls
+                        ),
                     ),
                 },
             ));
@@ -134,7 +157,10 @@ pub(crate) async fn run_tool_call_with_args(
             Err(err) => {
                 return Ok(ToolPipelineOutcome::from_status(
                     ToolExecutionStatus::Failure {
-                        error: anyhow!("Tool argument validation failed: {}", err),
+                        error: structured_failure(
+                            requested_name,
+                            &anyhow!("Tool argument validation failed: {}", err),
+                        ),
                     },
                 ));
             }
@@ -154,7 +180,10 @@ pub(crate) async fn run_tool_call_with_args(
             if let Err(err) = validation {
                 return Ok(ToolPipelineOutcome::from_status(
                     ToolExecutionStatus::Failure {
-                        error: anyhow!("Safety validation failed: {}", err),
+                        error: structured_failure(
+                            &canonical_name,
+                            &anyhow!("Safety validation failed: {}", err),
+                        ),
                     },
                 ));
             }
@@ -198,8 +227,11 @@ pub(crate) async fn run_tool_call_with_args(
     if !ctx.session_stats.is_plan_mode() && name == tools::PLAN_TASK_TRACKER {
         return Ok(finish_with_status(
             ToolExecutionStatus::Failure {
-                error: anyhow!(
-                    "plan_task_tracker is a Plan Mode compatibility alias. Use task_tracker in Edit mode, or switch to Plan Mode."
+                error: structured_failure(
+                    name,
+                    &anyhow!(
+                        "plan_task_tracker is a Plan Mode compatibility alias. Use task_tracker in Edit mode, or switch to Plan Mode."
+                    ),
                 ),
             },
             false,
@@ -268,7 +300,9 @@ pub(crate) async fn run_tool_call_with_args(
                 modified_files: vec![],
                 command_success: true,
             },
-            Err(error) => ToolExecutionStatus::Failure { error },
+            Err(error) => ToolExecutionStatus::Failure {
+                error: structured_failure(name, &error),
+            },
         };
         return Ok(finish_with_status(status, true));
     }
@@ -458,15 +492,17 @@ async fn check_tool_permission(
     {
         Ok(ToolPermissionFlow::Approved) => None,
         Ok(ToolPermissionFlow::Denied) => Some(ToolExecutionStatus::Failure {
-            error: anyhow!("Tool permission denied"),
+            error: structured_failure_from_message(name, "Tool permission denied"),
         }),
         Ok(ToolPermissionFlow::Blocked { reason }) => Some(ToolExecutionStatus::Failure {
-            error: anyhow!(reason),
+            error: structured_failure_from_message(name, reason),
         }),
         Ok(ToolPermissionFlow::Interrupted | ToolPermissionFlow::Exit) => {
             Some(ToolExecutionStatus::Cancelled)
         }
-        Err(error) => Some(ToolExecutionStatus::Failure { error }),
+        Err(error) => Some(ToolExecutionStatus::Failure {
+            error: structured_failure(name, &error),
+        }),
     }
 }
 

@@ -101,10 +101,12 @@ pub(crate) async fn handle_tool_execution_result(
         }
         ToolExecutionStatus::Failure { error } => {
             // Add error result to history — use sanitized, categorised message
-            let (primary_msg, hint) = super::turn_helpers::format_tool_error_for_user(
-                tool_name,
-                &error.to_string(),
-            );
+            let primary_msg = error.user_message();
+            let hint = if error.recovery_suggestions.is_empty() {
+                None
+            } else {
+                Some(format!("Hint: {}", error.recovery_suggestions.join("; ")))
+            };
             ctx.renderer.line(MessageStyle::Error, &primary_msg)?;
             if let Some(h) = &hint {
                 ctx.renderer.line(MessageStyle::Info, h)?;
@@ -121,13 +123,14 @@ pub(crate) async fn handle_tool_execution_result(
         }
         ToolExecutionStatus::Timeout { error } => {
             // Add timeout result to history with sanitized message
-            let sanitized = super::turn_helpers::sanitize_error_for_display(&error.message);
-            let error_msg = format!("Tool '{}' timed out: {}", tool_name, sanitized);
+            let error_msg = error.user_message();
             ctx.renderer.line(MessageStyle::Error, &error_msg)?;
-            ctx.renderer.line(
-                MessageStyle::Info,
-                "Hint: The operation exceeded its time limit. Try a smaller scope or increase the timeout.",
-            )?;
+            if !error.recovery_suggestions.is_empty() {
+                ctx.renderer.line(
+                    MessageStyle::Info,
+                    &format!("Hint: {}", error.recovery_suggestions.join("; ")),
+                )?;
+            }
 
             let error_content = serde_json::json!({"error": error_msg});
             let limited_content = truncate_message_content(&error_content.to_string());

@@ -79,4 +79,10 @@ pub enum PatchError {
         #[source]
         rollback: Box<PatchError>,
     },
+
+    #[error("{original}")]
+    RolledBack {
+        #[source]
+        original: Box<PatchError>,
+    },
 }

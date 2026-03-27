@@ -353,7 +353,7 @@ impl<'a> CopilotRuntimeHost<'a> {
                     text_result_for_llm: format!(
                         "VT Code failed to execute the tool `{canonical_tool_name}`."
                     ),
-                    error: format!("tool '{canonical_tool_name}' failed: {error}"),
+                    error: format!("tool '{canonical_tool_name}' failed: {}", error.message),
                 }))
             }
             ToolExecutionStatus::Timeout { error } => {

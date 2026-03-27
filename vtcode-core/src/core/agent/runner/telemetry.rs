@@ -5,6 +5,7 @@ use crate::core::agent::events::ExecEventRecorder;
 use crate::core::agent::session::AgentSessionState;
 use crate::exec::events::ToolCallStatus;
 use crate::llm::providers::gemini::wire::{Content, Part};
+use crate::tools::registry::ToolExecutionError;
 use crate::utils::colors::style;
 use serde::Serialize;
 
@@ -24,22 +25,9 @@ impl AgentRunner {
     pub(super) fn user_facing_tool_error_message(
         &self,
         _tool_name: &str,
-        error: &anyhow::Error,
+        error: &ToolExecutionError,
     ) -> String {
-        let category = vtcode_commons::classify_anyhow_error(error);
-        let raw_message = error.to_string();
-        let normalized_message = raw_message
-            .strip_prefix('[')
-            .and_then(|rest| rest.split_once("] ").map(|(_, message)| message))
-            .unwrap_or(raw_message.as_str());
-
-        let mut message = format!("[{}] {}", category.user_label(), normalized_message);
-        if let Some(suggestion) = category.recovery_suggestions().into_iter().next() {
-            message.push_str(" Hint: ");
-            message.push_str(suggestion.as_ref());
-        }
-
-        message
+        error.user_message()
     }
 
     pub(super) fn observability_fields(
@@ -120,7 +108,7 @@ impl AgentRunner {
         &self,
         failure_ctx: &mut ToolFailureContext<'_>,
         tool_name: &str,
-        error: &anyhow::Error,
+        error: &ToolExecutionError,
         tool_response_id: Option<&str>,
     ) {
         let failure_text = self.user_facing_tool_error_message(tool_name, error);
@@ -153,7 +141,7 @@ impl AgentRunner {
             failure_ctx.session_state.push_tool_error(
                 call_id.to_string(),
                 tool_name,
-                failure_text,
+                error.to_json_value().to_string(),
                 failure_ctx.is_gemini,
             );
         } else {

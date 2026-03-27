@@ -389,16 +389,18 @@ impl AgentSessionState {
         &mut self,
         call_id: String,
         tool_name: &str,
-        error_msg: String,
+        error_payload: String,
         is_gemini: bool,
     ) {
         if is_gemini {
+            let response_value = serde_json::from_str(&error_payload)
+                .unwrap_or_else(|_| serde_json::json!({ "error": error_payload }));
             self.conversation.push(Content {
                 role: "function".to_string(),
                 parts: vec![Part::FunctionResponse {
                     function_response: FunctionResponse {
                         name: tool_name.to_string(),
-                        response: serde_json::json!({ "error": error_msg }),
+                        response: response_value,
                         id: Some(call_id.clone()),
                     },
                     thought_signature: None,
@@ -406,7 +408,7 @@ impl AgentSessionState {
             });
         }
         self.messages
-            .push(Message::tool_response(call_id, error_msg));
+            .push(Message::tool_response(call_id, error_payload));
     }
 }
 
@@ -414,6 +416,7 @@ impl AgentSessionState {
 mod tests {
     use super::AgentSessionState;
     use crate::llm::provider::Message;
+    use crate::llm::providers::gemini::wire::Part;
 
     #[test]
     fn previous_response_chain_is_scoped_to_provider_and_model() {
@@ -452,6 +455,37 @@ mod tests {
         state.clear_previous_response_chain();
         assert_eq!(state.previous_response_id_for("openai", "gpt-5.4"), None);
         assert_eq!(state.previous_response_chain_for("openai", "gpt-5.4"), None);
+    }
+
+    #[test]
+    fn push_tool_error_preserves_structured_json_for_gemini() {
+        let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
+        let payload = serde_json::json!({
+            "error": {
+                "tool_name": "read_file",
+                "message": "missing file",
+                "category": "ResourceNotFound"
+            }
+        })
+        .to_string();
+
+        state.push_tool_error("call_1".to_string(), "read_file", payload.clone(), true);
+
+        match &state.conversation[0].parts[0] {
+            Part::FunctionResponse {
+                function_response, ..
+            } => {
+                assert_eq!(
+                    function_response.response["error"]["message"],
+                    "missing file"
+                );
+            }
+            other => panic!("expected function response, got {other:?}"),
+        }
+        assert_eq!(
+            state.messages[0],
+            Message::tool_response("call_1".to_string(), payload)
+        );
     }
 }
 

@@ -1,10 +1,12 @@
 //! Tool execution result handling for turn flow.
 
 use anyhow::Result;
+use vtcode_commons::ErrorCategory;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::notifications::{notify_tool_failure, notify_tool_success};
 use vtcode_core::tools::continuation::{PtyContinuationArgs, ReadChunkContinuationArgs};
 use vtcode_core::tools::error_messages::agent_execution;
+use vtcode_core::tools::registry::ToolExecutionError;
 use vtcode_core::tools::registry::labels::tool_action_label;
 use vtcode_core::utils::ansi::MessageStyle;
 
@@ -247,6 +249,107 @@ fn failure_guidance(
     )
 }
 
+fn structured_failure_guidance(
+    error: &ToolExecutionError,
+    failure_kind: &'static str,
+) -> (&'static str, bool, &'static str) {
+    if failure_kind == "timeout" || matches!(error.category, ErrorCategory::Timeout) {
+        return (
+            "timeout",
+            true,
+            "Retry with smaller scope or a higher timeout.",
+        );
+    }
+
+    if matches!(error.category, ErrorCategory::InvalidParameters)
+        || check_is_argument_error(&error.message)
+    {
+        return (
+            "invalid_arguments",
+            true,
+            "Fix the tool arguments to match the schema.",
+        );
+    }
+
+    if matches!(error.category, ErrorCategory::Authentication) {
+        return (
+            "authentication_failed",
+            false,
+            "Verify your credentials or choose a different provider.",
+        );
+    }
+
+    if matches!(
+        error.category,
+        ErrorCategory::PermissionDenied
+            | ErrorCategory::PolicyViolation
+            | ErrorCategory::PlanModeViolation
+    ) || is_blocked_or_denied_failure(&error.message)
+    {
+        return (
+            "policy_blocked",
+            false,
+            "Switch to an allowed tool or mode.",
+        );
+    }
+
+    if matches!(error.category, ErrorCategory::CircuitOpen) {
+        return (
+            "service_temporarily_unavailable",
+            true,
+            "Wait briefly, then retry or use a different tool.",
+        );
+    }
+
+    (
+        "execution_failure",
+        error.is_recoverable,
+        "Try an alternative tool or narrower scope.",
+    )
+}
+
+fn format_structured_tool_error_for_user(
+    tool_name: &str,
+    error: &ToolExecutionError,
+) -> (String, Option<String>) {
+    let sanitized = crate::agent::runloop::unified::turn::turn_helpers::sanitize_error_for_display(
+        &error.message,
+    );
+    let mut primary = format!(
+        "Tool '{}' failed ({}): {}",
+        tool_name,
+        error.category.user_label(),
+        sanitized
+    );
+
+    if error.rollback_performed {
+        primary.push_str(" Any partial changes were rolled back.");
+    } else if error.partial_state_possible {
+        primary.push_str(" Partial changes may still exist.");
+    }
+
+    if let Some(retry_summary) = error.retry_summary() {
+        primary.push(' ');
+        primary.push_str(&retry_summary);
+    }
+
+    let hint = if error.recovery_suggestions.is_empty() {
+        None
+    } else {
+        Some(format!(
+            "Hint: {}",
+            error
+                .recovery_suggestions
+                .iter()
+                .map(|suggestion| suggestion.as_ref())
+                .collect::<Vec<_>>()
+                .join("; ")
+        ))
+    };
+
+    (primary, hint)
+}
+
 /// Build standardized error content for tool failures.
 ///
 /// This is the canonical error content builder used across all tool execution paths.
@@ -291,6 +394,121 @@ pub(crate) fn build_error_content(
         push_error_truncation_flag(&mut payload, error_truncated);
         compact_model_tool_payload(payload)
     }
+}
+
+fn build_structured_error_content(
+    error: &ToolExecutionError,
+    fallback_tool: Option<String>,
+    fallback_tool_args: Option<serde_json::Value>,
+    failure_kind: &'static str,
+) -> serde_json::Value {
+    let (error_summary, error_truncated) =
+        truncate_text_for_model(&error.user_message(), MAX_ERROR_MESSAGE_CHARS);
+    let (error_class, is_recoverable, default_next_action) =
+        structured_failure_guidance(error, failure_kind);
+    let (args_preview, inline_full_args) = fallback_args_preview_and_inline(&fallback_tool_args);
+    let retry_summary = error.retry_summary();
+    let next_action = error
+        .recovery_suggestions
+        .first()
+        .map(|suggestion| suggestion.as_ref())
+        .unwrap_or(default_next_action);
+    let mut payload = error.to_json_value();
+
+    if let Some(obj) = payload.as_object_mut() {
+        obj.insert(
+            "error_summary".to_string(),
+            serde_json::Value::String(error_summary),
+        );
+        obj.insert(
+            "failure_kind".to_string(),
+            serde_json::Value::String(failure_kind.to_string()),
+        );
+        obj.insert(
+            "error_class".to_string(),
+            serde_json::Value::String(error_class.to_string()),
+        );
+        obj.insert("category".to_string(), serde_json::json!(error.category));
+        obj.insert(
+            "is_recoverable".to_string(),
+            serde_json::Value::Bool(is_recoverable),
+        );
+        obj.insert(
+            "retryable".to_string(),
+            serde_json::Value::Bool(error.retryable),
+        );
+        obj.insert(
+            "partial_state_possible".to_string(),
+            serde_json::Value::Bool(error.partial_state_possible),
+        );
+        obj.insert(
+            "rollback_performed".to_string(),
+            serde_json::Value::Bool(error.rollback_performed),
+        );
+        obj.insert(
+            "circuit_breaker_impact".to_string(),
+            serde_json::Value::Bool(error.circuit_breaker_impact),
+        );
+        if is_recoverable {
+            obj.insert(
+                "next_action".to_string(),
+                serde_json::Value::String(next_action.to_string()),
+            );
+        }
+        if !error.recovery_suggestions.is_empty() {
+            obj.insert(
+                "recovery_suggestions".to_string(),
+                serde_json::json!(
+                    error
+                        .recovery_suggestions
+                        .iter()
+                        .map(|suggestion| suggestion.as_ref())
+                        .collect::<Vec<_>>()
+                ),
+            );
+        }
+        if let Some(summary) = retry_summary {
+            obj.insert(
+                "retry_summary".to_string(),
+                serde_json::Value::String(summary),
+            );
+        }
+        if let Some(retry_delay_ms) = error.retry_delay_ms {
+            obj.insert(
+                "retry_delay_ms".to_string(),
+                serde_json::Value::Number(retry_delay_ms.into()),
+            );
+        }
+        if let Some(retry_after_ms) = error.retry_after_ms {
+            obj.insert(
+                "retry_after_ms".to_string(),
+                serde_json::Value::Number(retry_after_ms.into()),
+            );
+        }
+        if let Some(debug_context) = &error.debug_context {
+            obj.insert(
+                "debug_context".to_string(),
+                serde_json::to_value(debug_context).unwrap_or(serde_json::Value::Null),
+            );
+        }
+    }
+
+    if let Some(tool) = fallback_tool {
+        if let Some(obj) = payload.as_object_mut() {
+            obj.insert("fallback_tool".to_string(), serde_json::Value::String(tool));
+        }
+        if let Some(args) = fallback_tool_args {
+            push_fallback_args(
+                &mut payload,
+                args,
+                args_preview.as_deref().unwrap_or("<invalid-json>"),
+                inline_full_args,
+            );
+        }
+    }
+
+    push_error_truncation_flag(&mut payload, error_truncated);
+    compact_model_tool_payload(payload)
 }
 
 fn is_valid_pty_session_id(session_id: &str) -> bool {
@@ -428,7 +646,7 @@ pub(crate) async fn handle_tool_execution_result<'a>(
     let is_success = matches!(pipeline_outcome.status, ToolExecutionStatus::Success { .. });
     let is_argument_error = if let ToolExecutionStatus::Failure { error } = &pipeline_outcome.status
     {
-        check_is_argument_error(&error.to_string())
+        check_is_argument_error(&error.message)
     } else {
         false
     };
@@ -708,8 +926,19 @@ fn has_non_empty_string_field(obj: &serde_json::Map<String, serde_json::Value>, 
         .is_some_and(|value| !value.trim().is_empty())
 }
 
+fn has_error_payload(obj: &serde_json::Map<String, serde_json::Value>) -> bool {
+    match obj.get("error") {
+        Some(serde_json::Value::String(message)) => !message.trim().is_empty(),
+        Some(serde_json::Value::Object(error)) => error
+            .get("message")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|message| !message.trim().is_empty()),
+        _ => false,
+    }
+}
+
 fn is_recoverable_failure_payload(obj: &serde_json::Map<String, serde_json::Value>) -> bool {
-    has_non_empty_string_field(obj, "error")
+    has_error_payload(obj)
         && obj
             .get("is_recoverable")
             .and_then(serde_json::Value::as_bool)
@@ -720,18 +949,14 @@ fn should_keep_exec_success_critical_note(
     obj: &serde_json::Map<String, serde_json::Value>,
     is_exec_like: bool,
 ) -> bool {
-    is_exec_like
-        && !has_non_empty_string_field(obj, "error")
-        && has_non_empty_string_field(obj, "critical_note")
+    is_exec_like && !has_error_payload(obj) && has_non_empty_string_field(obj, "critical_note")
 }
 
 fn should_keep_exec_success_next_action(
     obj: &serde_json::Map<String, serde_json::Value>,
     is_exec_like: bool,
 ) -> bool {
-    is_exec_like
-        && !has_non_empty_string_field(obj, "error")
-        && has_non_empty_string_field(obj, "next_action")
+    is_exec_like && !has_error_payload(obj) && has_non_empty_string_field(obj, "next_action")
 }
 
 fn should_keep_recoverable_failure_next_action(
@@ -868,10 +1093,11 @@ async fn handle_failure<'a>(
     tool_call_id: String,
     tool_name: &str,
     args_val: &serde_json::Value,
-    error: &anyhow::Error,
+    error: &ToolExecutionError,
 ) -> Result<Option<TurnHandlerOutcome>> {
-    let error_str = error.to_string();
-    if let Err(err) = notify_tool_failure(tool_name, &error_str, None).await {
+    let error_str = error.message.as_str();
+    let (user_msg, hint) = format_structured_tool_error_for_user(tool_name, error);
+    if let Err(err) = notify_tool_failure(tool_name, &user_msg, None).await {
         tracing::debug!(
             tool = %tool_name,
             error = %err,
@@ -879,19 +1105,36 @@ async fn handle_failure<'a>(
         );
     }
 
-    let is_plan_mode_denial = agent_execution::is_plan_mode_denial(&error_str);
-    let blocked_or_denied_failure = is_blocked_or_denied_failure(&error_str);
-    let (user_msg, hint) =
-        crate::agent::runloop::unified::turn::turn_helpers::format_tool_error_for_user(
-            tool_name, &error_str,
-        );
+    let is_plan_mode_denial = matches!(error.category, ErrorCategory::PlanModeViolation)
+        || agent_execution::is_plan_mode_denial(error_str);
+    let blocked_or_denied_failure = matches!(
+        error.category,
+        ErrorCategory::InvalidParameters
+            | ErrorCategory::PermissionDenied
+            | ErrorCategory::PolicyViolation
+            | ErrorCategory::PlanModeViolation
+    ) || is_blocked_or_denied_failure(error_str);
     if let Some(h) = &hint {
         // Append the recovery hint as the first line the LLM will see.
-        tracing::debug!(tool = %tool_name, error = %error, hint = %h, "Tool execution failed");
+        tracing::debug!(
+            tool = %tool_name,
+            category = ?error.category,
+            retryable = error.retryable,
+            partial_state_possible = error.partial_state_possible,
+            hint = %h,
+            error = %error.message,
+            "Tool execution failed"
+        );
     } else {
-        tracing::debug!(tool = %tool_name, error = %error, "Tool execution failed");
+        tracing::debug!(
+            tool = %tool_name,
+            category = ?error.category,
+            retryable = error.retryable,
+            partial_state_possible = error.partial_state_possible,
+            error = %error.message,
+            "Tool execution failed"
+        );
     }
-    let error_msg = user_msg;
     if is_plan_mode_denial {
         let consecutive_blocked_tool_calls = t_ctx.ctx.harness_state.consecutive_blocked_tool_calls;
         emit_turn_metric_log(
@@ -907,7 +1150,7 @@ async fn handle_failure<'a>(
     if !is_plan_mode_denial && !blocked_or_denied_failure {
         t_ctx
             .ctx
-            .record_recovery_error(
+            .record_recovery_tool_error(
                 tool_name,
                 error,
                 vtcode_core::core::agent::error_recovery::ErrorType::ToolExecution,
@@ -915,7 +1158,15 @@ async fn handle_failure<'a>(
             .await;
     }
 
-    push_tool_error_response(t_ctx, tool_call_id, tool_name, error_msg, "execution").await;
+    push_tool_error_response(
+        t_ctx,
+        tool_call_id,
+        tool_name,
+        error.message.clone(),
+        "execution",
+        Some(error),
+    )
+    .await;
 
     record_request_user_input_interview_result(t_ctx.ctx, tool_name, None);
 
@@ -952,7 +1203,8 @@ async fn handle_timeout(
     tool_name: &str,
     error: &vtcode_core::tools::registry::ToolExecutionError,
 ) -> Result<()> {
-    if let Err(err) = notify_tool_failure(tool_name, &error.message, Some("timeout")).await {
+    let (user_msg, _) = format_structured_tool_error_for_user(tool_name, error);
+    if let Err(err) = notify_tool_failure(tool_name, &user_msg, Some("timeout")).await {
         tracing::debug!(
             tool = %tool_name,
             error = %err,
@@ -960,24 +1212,33 @@ async fn handle_timeout(
         );
     }
 
-    let sanitized = crate::agent::runloop::unified::turn::turn_helpers::sanitize_error_for_display(
-        &error.message,
+    tracing::debug!(
+        tool = %tool_name,
+        retryable = error.retryable,
+        partial_state_possible = error.partial_state_possible,
+        error = %error.message,
+        "Tool timed out"
     );
-    let error_msg = format!("Tool '{}' timed out: {}", tool_name, sanitized);
-    tracing::debug!(tool = %tool_name, error = %error.message, "Tool timed out");
 
     // Record the timeout for recovery diagnostics
-    let timeout_error = anyhow::Error::msg(error.message.clone());
     t_ctx
         .ctx
-        .record_recovery_error(
+        .record_recovery_tool_error(
             tool_name,
-            &timeout_error,
+            error,
             vtcode_core::core::agent::error_recovery::ErrorType::Timeout,
         )
         .await;
 
-    push_tool_error_response(t_ctx, tool_call_id, tool_name, error_msg, "timeout").await;
+    push_tool_error_response(
+        t_ctx,
+        tool_call_id,
+        tool_name,
+        error.message.clone(),
+        "timeout",
+        Some(error),
+    )
+    .await;
 
     record_request_user_input_interview_result(t_ctx.ctx, tool_name, None);
 
@@ -990,6 +1251,7 @@ async fn push_tool_error_response(
     tool_name: &str,
     error_msg: String,
     failure_kind: &'static str,
+    structured_error: Option<&ToolExecutionError>,
 ) {
     let (fallback_tool, fallback_tool_args) =
         if let Some((tool, args)) = fallback_from_error(tool_name, &error_msg) {
@@ -1002,8 +1264,12 @@ async fn push_tool_error_response(
                 .await;
             (fallback, None)
         };
-    let error_content =
-        build_error_content(error_msg, fallback_tool, fallback_tool_args, failure_kind);
+    let error_content = match structured_error {
+        Some(error) => {
+            build_structured_error_content(error, fallback_tool, fallback_tool_args, failure_kind)
+        }
+        None => build_error_content(error_msg, fallback_tool, fallback_tool_args, failure_kind),
+    };
     let serialized = error_content.to_string();
     if let Err(err) =
         push_tool_response_with_auto_mode_probe(t_ctx, tool_call_id, tool_name, serialized).await
@@ -1092,11 +1358,8 @@ pub(super) fn record_mcp_event_to_panel(
 ) {
     let data_preview = match status {
         ToolExecutionStatus::Success { output, .. } => Some(serialize_output(output)),
-        ToolExecutionStatus::Failure { error } => {
-            Some(serde_json::json!({"error": error.to_string()}).to_string())
-        }
-        ToolExecutionStatus::Timeout { error } => {
-            Some(serde_json::json!({"error": error.message}).to_string())
+        ToolExecutionStatus::Failure { error } | ToolExecutionStatus::Timeout { error } => {
+            Some(error.to_json_value().to_string())
         }
         ToolExecutionStatus::Cancelled => {
             Some(serde_json::json!({"error": "Cancelled"}).to_string())
@@ -1111,10 +1374,10 @@ pub(super) fn record_mcp_event_to_panel(
             mcp_event.success(None);
         }
         ToolExecutionStatus::Failure { error } => {
-            mcp_event.failure(Some(error.to_string()));
+            mcp_event.failure(Some(error.user_message()));
         }
         ToolExecutionStatus::Timeout { error } => {
-            mcp_event.failure(Some(error.message.clone()));
+            mcp_event.failure(Some(error.user_message()));
         }
         ToolExecutionStatus::Cancelled => {
             mcp_event.failure(Some("Cancelled".to_string()));
@@ -1127,6 +1390,8 @@ pub(super) fn record_mcp_event_to_panel(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::borrow::Cow;
+    use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError};
 
     #[test]
     fn fallback_from_error_extracts_unified_exec_poll() {
@@ -1303,6 +1568,80 @@ mod tests {
             payload.get("next_action").and_then(|v| v.as_str()),
             Some("Try an alternative tool or narrower scope.")
         );
+    }
+
+    #[test]
+    fn build_structured_error_content_preserves_retry_and_partial_state_fields() {
+        let mut error = ToolExecutionError::new(
+            tool_names::WRITE_FILE.to_string(),
+            ToolErrorType::ExecutionError,
+            "write failed".to_string(),
+        )
+        .with_partial_state(true, false)
+        .with_surface("unified_runloop")
+        .with_attempt(2);
+        error.is_recoverable = true;
+        error.retryable = true;
+        error.retry_delay_ms = Some(750);
+        error.recovery_suggestions = vec![Cow::Borrowed("Retry with smaller scope.")];
+
+        let payload = build_structured_error_content(&error, None, None, "execution");
+
+        assert_eq!(
+            payload
+                .get("partial_state_possible")
+                .and_then(|value| value.as_bool()),
+            Some(true)
+        );
+        assert_eq!(
+            payload
+                .get("retry_delay_ms")
+                .and_then(|value| value.as_u64()),
+            Some(750)
+        );
+        assert_eq!(
+            payload.get("next_action").and_then(|value| value.as_str()),
+            Some("Retry with smaller scope.")
+        );
+        assert_eq!(
+            payload
+                .get("error")
+                .and_then(|value| value.get("partial_state_possible"))
+                .and_then(|value| value.as_bool()),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn structured_retry_summary_ignores_initial_attempt() {
+        let error = ToolExecutionError::new(
+            tool_names::READ_FILE.to_string(),
+            ToolErrorType::ExecutionError,
+            "read failed".to_string(),
+        )
+        .with_attempt(1);
+
+        assert_eq!(error.retry_summary(), None);
+    }
+
+    #[test]
+    fn build_structured_error_content_round_trips_tool_error() {
+        let mut error = ToolExecutionError::new(
+            tool_names::WRITE_FILE.to_string(),
+            ToolErrorType::ExecutionError,
+            "write failed".to_string(),
+        )
+        .with_partial_state(true, false)
+        .with_surface("unified_runloop")
+        .with_attempt(2);
+        error.retry_delay_ms = Some(750);
+
+        let payload = build_structured_error_content(&error, None, None, "execution");
+        let parsed = ToolExecutionError::from_tool_output(&payload).expect("structured error");
+
+        assert_eq!(parsed.tool_name, tool_names::WRITE_FILE);
+        assert!(parsed.partial_state_possible);
+        assert_eq!(parsed.retry_delay_ms, Some(750));
     }
 
     #[test]

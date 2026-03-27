@@ -481,16 +481,18 @@ impl TaskRunState {
         &mut self,
         call_id: String,
         tool_name: &str,
-        error_msg: String,
+        error_payload: String,
         is_gemini: bool,
     ) {
         if is_gemini {
+            let response_value = serde_json::from_str(&error_payload)
+                .unwrap_or_else(|_| serde_json::json!({ "error": error_payload }));
             self.conversation.push(Content {
                 role: "function".to_string(),
                 parts: vec![Part::FunctionResponse {
                     function_response: FunctionResponse {
                         name: tool_name.to_string(),
-                        response: serde_json::json!({ "error": error_msg }),
+                        response: response_value,
                         id: Some(call_id.clone()),
                     },
                     thought_signature: None,
@@ -498,7 +500,7 @@ impl TaskRunState {
             });
         }
         self.conversation_messages
-            .push(Message::tool_response(call_id, error_msg));
+            .push(Message::tool_response(call_id, error_payload));
     }
 
     // ========================================================================

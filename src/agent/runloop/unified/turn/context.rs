@@ -19,6 +19,7 @@ use vtcode_core::hooks::{LifecycleHookEngine, SessionEndReason};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::llm::providers::ReasoningSegment;
 use vtcode_core::tools::handlers::plan_mode::{PlanLifecyclePhase, persist_plan_draft};
+use vtcode_core::tools::registry::ToolExecutionError;
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_tui::app::InlineHandle;
 
@@ -705,6 +706,21 @@ impl<'a> TurnProcessingContext<'a> {
     ) {
         let mut recovery = self.error_recovery.write().await;
         recovery.record_error(scope, format!("{:#}", error), error_type);
+    }
+
+    pub(crate) async fn record_recovery_tool_error(
+        &self,
+        scope: &str,
+        error: &ToolExecutionError,
+        error_type: vtcode_core::core::agent::error_recovery::ErrorType,
+    ) {
+        let mut recovery = self.error_recovery.write().await;
+        recovery.record_error_with_category(
+            scope,
+            error.message.clone(),
+            error_type,
+            Some(error.category),
+        );
     }
 
     pub(crate) async fn turn_metadata(&mut self) -> anyhow::Result<Option<serde_json::Value>> {
