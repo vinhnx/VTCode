@@ -8,9 +8,9 @@ persistence = "file"
 [tui]
 
 [agent]
-provider = "minimax"
-api_key_env = "MINIMAX_API_KEY"
-default_model = "MiniMax-M2.7"
+provider = "ollama"
+api_key_env = "OLLAMA_API_KEY"
+default_model = "gpt-oss:120b-cloud"
 theme = "spacegray"
 system_prompt_mode = "default"
 tool_documentation_mode = "minimal"

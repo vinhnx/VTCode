@@ -150,7 +150,6 @@ pub(crate) async fn execute_llm_request(
     let mut stream_fallback_used = false;
     let mut compacted_tool_retry_used = false;
     let mut dropped_previous_response_id_for_retry = false;
-    let mut skip_retry_backoff_once = false;
     let mut last_error_retryable: Option<bool> = None;
     let mut last_error_preview: Option<String> = None;
     let mut last_error_category: Option<vtcode_commons::ErrorCategory> = None;
@@ -162,42 +161,38 @@ pub(crate) async fn execute_llm_request(
     while attempt < max_retries {
         attempts_made = attempt + 1;
         if attempt > 0 {
-            if skip_retry_backoff_once {
-                skip_retry_backoff_once = false;
-            } else {
-                use crate::agent::runloop::unified::turn::turn_helpers::calculate_backoff;
-                // Use category-aware backoff: rate limits get longer base delays,
-                // timeouts get moderate delays, network errors use standard exponential.
-                let (base_ms, max_ms) = match last_error_category {
-                    Some(vtcode_commons::ErrorCategory::RateLimit) => (1000, 30_000),
-                    Some(vtcode_commons::ErrorCategory::Timeout) => (1000, 15_000),
-                    _ => (500, 10_000),
-                };
-                let delay = calculate_backoff(attempt - 1, base_ms, max_ms);
-                let delay_secs = delay.as_secs_f64();
-                let reason_hint = last_error_category
-                    .as_ref()
-                    .map(|cat| cat.user_label())
-                    .unwrap_or("unknown error");
-                crate::agent::runloop::unified::turn::turn_helpers::display_status(
-                    ctx.renderer,
-                    &format!(
-                        "LLM request failed ({}), retrying in {:.1}s... (attempt {}/{})",
-                        reason_hint,
-                        delay_secs,
-                        attempt + 1,
-                        max_retries
-                    ),
-                )?;
-                let cancel_notifier = ctx.ctrl_c_notify.notified();
-                tokio::pin!(cancel_notifier);
-                tokio::select! {
-                    _ = tokio::time::sleep(delay) => {}
-                    _ = &mut cancel_notifier => {
-                        if ctx.ctrl_c_state.is_cancel_requested() || ctx.ctrl_c_state.is_exit_requested() {
-                            llm_result = Err(interrupted_provider_error(&turn_snapshot.provider_name));
-                            break;
-                        }
+            use crate::agent::runloop::unified::turn::turn_helpers::calculate_backoff;
+            // Use category-aware backoff: rate limits get longer base delays,
+            // timeouts get moderate delays, network errors use standard exponential.
+            let (base_ms, max_ms) = match last_error_category {
+                Some(vtcode_commons::ErrorCategory::RateLimit) => (1000, 30_000),
+                Some(vtcode_commons::ErrorCategory::Timeout) => (1000, 15_000),
+                _ => (500, 10_000),
+            };
+            let delay = calculate_backoff(attempt - 1, base_ms, max_ms);
+            let delay_secs = delay.as_secs_f64();
+            let reason_hint = last_error_category
+                .as_ref()
+                .map(|cat| cat.user_label())
+                .unwrap_or("unknown error");
+            crate::agent::runloop::unified::turn::turn_helpers::display_status(
+                ctx.renderer,
+                &format!(
+                    "LLM request failed ({}), retrying in {:.1}s... (attempt {}/{})",
+                    reason_hint,
+                    delay_secs,
+                    attempt + 1,
+                    max_retries
+                ),
+            )?;
+            let cancel_notifier = ctx.ctrl_c_notify.notified();
+            tokio::pin!(cancel_notifier);
+            tokio::select! {
+                _ = tokio::time::sleep(delay) => {}
+                _ = &mut cancel_notifier => {
+                    if ctx.ctrl_c_state.is_cancel_requested() || ctx.ctrl_c_state.is_exit_requested() {
+                        llm_result = Err(interrupted_provider_error(&turn_snapshot.provider_name));
+                        break;
                     }
                 }
             }
@@ -478,13 +473,15 @@ pub(crate) async fn execute_llm_request(
                 {
                     request.previous_response_id = None;
                     dropped_previous_response_id_for_retry = true;
-                    skip_retry_backoff_once = true;
                     last_error_retryable = Some(true);
                     last_error_category = None;
                     ctx.session_stats.clear_previous_response_chain_for(
                         &turn_snapshot.provider_name,
                         &request.model,
                     );
+                    // Retry immediately on the same logical attempt. A stale
+                    // continuation chain is bookkeeping drift, not a provider
+                    // availability failure that should consume retry budget.
                     crate::agent::runloop::unified::turn::turn_helpers::display_status(
                         ctx.renderer,
                         "Previous response chain expired; retrying with a fresh provider chain.",
@@ -674,8 +671,93 @@ pub(crate) async fn execute_llm_request(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
+    use std::collections::VecDeque;
+    use std::sync::{Arc, Mutex};
     use tempfile::TempDir;
     use vtcode_core::prompts::upsert_harness_limits_section;
+
+    struct ScriptedProvider {
+        recorded_previous_response_ids: Arc<Mutex<Vec<Option<String>>>>,
+        outcomes: Mutex<VecDeque<ScriptedProviderOutcome>>,
+    }
+
+    enum ScriptedProviderOutcome {
+        Success {
+            content: Option<&'static str>,
+            request_id: Option<&'static str>,
+        },
+        Error(uni::LLMError),
+    }
+
+    impl ScriptedProvider {
+        fn new(
+            recorded_previous_response_ids: Arc<Mutex<Vec<Option<String>>>>,
+            outcomes: Vec<ScriptedProviderOutcome>,
+        ) -> Self {
+            Self {
+                recorded_previous_response_ids,
+                outcomes: Mutex::new(VecDeque::from(outcomes)),
+            }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl uni::LLMProvider for ScriptedProvider {
+        fn name(&self) -> &str {
+            "openai"
+        }
+
+        fn supports_streaming(&self) -> bool {
+            false
+        }
+
+        async fn generate(
+            &self,
+            request: uni::LLMRequest,
+        ) -> std::result::Result<uni::LLMResponse, uni::LLMError> {
+            self.recorded_previous_response_ids
+                .lock()
+                .expect("previous_response_id recorder")
+                .push(request.previous_response_id.clone());
+
+            match self
+                .outcomes
+                .lock()
+                .expect("provider script")
+                .pop_front()
+                .expect("provider script should have enough outcomes")
+            {
+                ScriptedProviderOutcome::Success {
+                    content,
+                    request_id,
+                } => Ok(uni::LLMResponse {
+                    content: content.map(str::to_string),
+                    model: "noop-model".to_string(),
+                    tool_calls: None,
+                    usage: None,
+                    finish_reason: uni::FinishReason::Stop,
+                    reasoning: None,
+                    reasoning_details: None,
+                    organization_id: None,
+                    request_id: request_id.map(str::to_string),
+                    tool_references: Vec::new(),
+                }),
+                ScriptedProviderOutcome::Error(error) => Err(error),
+            }
+        }
+
+        fn supported_models(&self) -> Vec<String> {
+            vec!["noop-model".to_string()]
+        }
+
+        fn validate_request(
+            &self,
+            _request: &uni::LLMRequest,
+        ) -> std::result::Result<(), uni::LLMError> {
+            Ok(())
+        }
+    }
 
     #[test]
     fn retryable_llm_error_includes_internal_server_error_message() {
@@ -687,6 +769,86 @@ mod tests {
     #[test]
     fn retryable_llm_error_excludes_non_transient_messages() {
         assert!(!is_retryable_llm_error("Provider error: Invalid API key"));
+    }
+
+    #[tokio::test]
+    async fn previous_response_chain_retry_keeps_real_retry_backoff() {
+        use vtcode_core::utils::transcript;
+
+        transcript::clear();
+
+        let recorded_previous_response_ids = Arc::new(Mutex::new(Vec::new()));
+        let provider = ScriptedProvider::new(
+            Arc::clone(&recorded_previous_response_ids),
+            vec![
+                ScriptedProviderOutcome::Error(uni::LLMError::Provider {
+                    message: "OpenAI error: previous_response_not_found: previous response missing"
+                        .to_string(),
+                    metadata: None,
+                }),
+                ScriptedProviderOutcome::Error(uni::LLMError::Provider {
+                    message: "Provider error: 503 Service Unavailable".to_string(),
+                    metadata: None,
+                }),
+                ScriptedProviderOutcome::Success {
+                    content: Some("done"),
+                    request_id: Some("resp_456"),
+                },
+            ],
+        );
+
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let prior_messages = vec![uni::Message::user("hello".to_string())];
+        let mut ctx = backing.turn_processing_context();
+        *ctx.provider_client = Box::new(provider);
+        ctx.working_history.extend(prior_messages.clone());
+        ctx.working_history
+            .push(uni::Message::user("continue".to_string()));
+        ctx.session_stats.set_previous_response_chain(
+            "openai",
+            "noop-model",
+            Some("resp_123"),
+            &prior_messages,
+        );
+
+        let (response, streamed) =
+            execute_llm_request(&mut ctx, 1, "noop-model", Some(320), false, None)
+                .await
+                .expect("request should recover from stale response chain");
+
+        assert!(!streamed);
+        assert_eq!(response.content.as_deref(), Some("done"));
+        assert_eq!(
+            recorded_previous_response_ids
+                .lock()
+                .expect("recorded previous_response_ids")
+                .as_slice(),
+            &[Some("resp_123".to_string()), None, None]
+        );
+
+        let retry_label =
+            vtcode_commons::classify_error_message("Provider error: 503 Service Unavailable")
+                .user_label()
+                .to_string();
+        let transcript_text = transcript::snapshot().join("\n");
+
+        assert_eq!(
+            transcript_text
+                .matches("Previous response chain expired; retrying with a fresh provider chain.")
+                .count(),
+            1
+        );
+        assert_eq!(
+            transcript_text
+                .matches(&format!(
+                    "LLM request failed ({}), retrying in 0.5s... (attempt 2/3)",
+                    retry_label
+                ))
+                .count(),
+            1
+        );
+
+        transcript::clear();
     }
 
     #[test]
