@@ -42,8 +42,9 @@ use retry::is_retryable_llm_error;
 use retry::{DEFAULT_LLM_RETRY_ATTEMPTS, MAX_LLM_RETRY_ATTEMPTS};
 use retry::{
     PostToolRetryAction, classify_llm_error, compact_error_message,
-    compact_tool_messages_for_retry, has_recent_tool_responses, is_stream_timeout_error,
-    llm_retry_attempts, next_post_tool_retry_action, supports_streaming_timeout_fallback,
+    compact_tool_messages_for_retry, has_recent_tool_responses,
+    is_previous_response_chain_error, is_stream_timeout_error, llm_retry_attempts,
+    next_post_tool_retry_action, supports_streaming_timeout_fallback,
     switch_to_non_streaming_retry_mode,
 };
 use streaming::HarnessStreamingBridge;
@@ -150,6 +151,7 @@ pub(crate) async fn execute_llm_request(
     let mut stream_fallback_used = false;
     let mut compacted_tool_retry_used = false;
     let mut dropped_previous_response_id_for_retry = false;
+    let mut skip_retry_backoff_once = false;
     let mut last_error_retryable: Option<bool> = None;
     let mut last_error_preview: Option<String> = None;
     let mut last_error_category: Option<vtcode_commons::ErrorCategory> = None;
@@ -157,41 +159,46 @@ pub(crate) async fn execute_llm_request(
     #[cfg(debug_assertions)]
     let mut request_timer = Instant::now();
 
-    for attempt in 0..max_retries {
+    let mut attempt = 0usize;
+    while attempt < max_retries {
         attempts_made = attempt + 1;
         if attempt > 0 {
-            use crate::agent::runloop::unified::turn::turn_helpers::calculate_backoff;
-            // Use category-aware backoff: rate limits get longer base delays,
-            // timeouts get moderate delays, network errors use standard exponential.
-            let (base_ms, max_ms) = match last_error_category {
-                Some(vtcode_commons::ErrorCategory::RateLimit) => (1000, 30_000),
-                Some(vtcode_commons::ErrorCategory::Timeout) => (1000, 15_000),
-                _ => (500, 10_000),
-            };
-            let delay = calculate_backoff(attempt - 1, base_ms, max_ms);
-            let delay_secs = delay.as_secs_f64();
-            let reason_hint = last_error_category
-                .as_ref()
-                .map(|cat| cat.user_label())
-                .unwrap_or("unknown error");
-            crate::agent::runloop::unified::turn::turn_helpers::display_status(
-                ctx.renderer,
-                &format!(
-                    "LLM request failed ({}), retrying in {:.1}s... (attempt {}/{})",
-                    reason_hint,
-                    delay_secs,
-                    attempt + 1,
-                    max_retries
-                ),
-            )?;
-            let cancel_notifier = ctx.ctrl_c_notify.notified();
-            tokio::pin!(cancel_notifier);
-            tokio::select! {
-                _ = tokio::time::sleep(delay) => {}
-                _ = &mut cancel_notifier => {
-                    if ctx.ctrl_c_state.is_cancel_requested() || ctx.ctrl_c_state.is_exit_requested() {
-                        llm_result = Err(interrupted_provider_error(&turn_snapshot.provider_name));
-                        break;
+            if skip_retry_backoff_once {
+                skip_retry_backoff_once = false;
+            } else {
+                use crate::agent::runloop::unified::turn::turn_helpers::calculate_backoff;
+                // Use category-aware backoff: rate limits get longer base delays,
+                // timeouts get moderate delays, network errors use standard exponential.
+                let (base_ms, max_ms) = match last_error_category {
+                    Some(vtcode_commons::ErrorCategory::RateLimit) => (1000, 30_000),
+                    Some(vtcode_commons::ErrorCategory::Timeout) => (1000, 15_000),
+                    _ => (500, 10_000),
+                };
+                let delay = calculate_backoff(attempt - 1, base_ms, max_ms);
+                let delay_secs = delay.as_secs_f64();
+                let reason_hint = last_error_category
+                    .as_ref()
+                    .map(|cat| cat.user_label())
+                    .unwrap_or("unknown error");
+                crate::agent::runloop::unified::turn::turn_helpers::display_status(
+                    ctx.renderer,
+                    &format!(
+                        "LLM request failed ({}), retrying in {:.1}s... (attempt {}/{})",
+                        reason_hint,
+                        delay_secs,
+                        attempt + 1,
+                        max_retries
+                    ),
+                )?;
+                let cancel_notifier = ctx.ctrl_c_notify.notified();
+                tokio::pin!(cancel_notifier);
+                tokio::select! {
+                    _ = tokio::time::sleep(delay) => {}
+                    _ = &mut cancel_notifier => {
+                        if ctx.ctrl_c_state.is_cancel_requested() || ctx.ctrl_c_state.is_exit_requested() {
+                            llm_result = Err(interrupted_provider_error(&turn_snapshot.provider_name));
+                            break;
+                        }
                     }
                 }
             }
@@ -466,6 +473,27 @@ pub(crate) async fn execute_llm_request(
                     "LLM request attempt failed"
                 );
 
+                if request.previous_response_id.is_some()
+                    && !dropped_previous_response_id_for_retry
+                    && is_previous_response_chain_error(&msg)
+                {
+                    request.previous_response_id = None;
+                    dropped_previous_response_id_for_retry = true;
+                    skip_retry_backoff_once = true;
+                    last_error_retryable = Some(true);
+                    last_error_category = None;
+                    ctx.session_stats.clear_previous_response_chain_for(
+                        &turn_snapshot.provider_name,
+                        &request.model,
+                    );
+                    crate::agent::runloop::unified::turn::turn_helpers::display_status(
+                        ctx.renderer,
+                        "Previous response chain expired; retrying with a fresh provider chain.",
+                    )?;
+                    _spinner.finish();
+                    continue;
+                }
+
                 if !crate::agent::runloop::unified::turn::turn_helpers::should_continue_operation(
                     ctx.ctrl_c_state,
                 ) {
@@ -488,20 +516,6 @@ pub(crate) async fn execute_llm_request(
                 }
 
                 if is_retryable && attempt < max_retries - 1 {
-                    if request.previous_response_id.is_some()
-                        && !dropped_previous_response_id_for_retry
-                    {
-                        request.previous_response_id = None;
-                        dropped_previous_response_id_for_retry = true;
-                        ctx.session_stats.clear_previous_response_chain_for(
-                            &turn_snapshot.provider_name,
-                            &request.model,
-                        );
-                        crate::agent::runloop::unified::turn::turn_helpers::display_status(
-                            ctx.renderer,
-                            "Retrying without previous response chain after provider error.",
-                        )?;
-                    }
                     if use_streaming
                         && supports_streaming_timeout_fallback(&turn_snapshot.provider_name)
                         && is_stream_timeout_error(&msg)
@@ -516,6 +530,7 @@ pub(crate) async fn execute_llm_request(
                         )?;
                     }
                     _spinner.finish();
+                    attempt += 1;
                     continue;
                 }
 
@@ -542,6 +557,7 @@ pub(crate) async fn execute_llm_request(
                                 ),
                             )?;
                             _spinner.finish();
+                            attempt += 1;
                             continue;
                         }
                         Some(PostToolRetryAction::CompactToolContext) => {
@@ -564,6 +580,7 @@ pub(crate) async fn execute_llm_request(
                                 &status,
                             )?;
                             _spinner.finish();
+                            attempt += 1;
                             continue;
                         }
                         None => {}
@@ -694,6 +711,27 @@ mod tests {
         ));
         assert!(is_retryable_llm_error(
             "Provider error: 504 Gateway Timeout"
+        ));
+    }
+
+    #[test]
+    fn previous_response_chain_error_detects_provider_code() {
+        assert!(is_previous_response_chain_error(
+            "OpenAI error: previous_response_not_found: previous response missing"
+        ));
+    }
+
+    #[test]
+    fn previous_response_chain_error_detects_human_readable_message() {
+        assert!(is_previous_response_chain_error(
+            "Previous response with id 'resp_cached' not found."
+        ));
+    }
+
+    #[test]
+    fn previous_response_chain_error_ignores_service_unavailable() {
+        assert!(!is_previous_response_chain_error(
+            "Provider error: 503 Service Unavailable"
         ));
     }
 

@@ -38,6 +38,16 @@ pub(super) fn is_stream_timeout_error(message: &str) -> bool {
         || msg.contains("llm request timed out after")
 }
 
+pub(super) fn is_previous_response_chain_error(message: &str) -> bool {
+    let msg = message.to_ascii_lowercase();
+    msg.contains("previous_response_not_found")
+        || msg.contains("previous response missing")
+        || msg.contains("invalid previous_response_id")
+        || msg.contains("invalid previous response id")
+        || (msg.contains("previous response with id") && msg.contains("not found"))
+        || (msg.contains("previous_response_id") && msg.contains("not found"))
+}
+
 pub(super) fn has_recent_tool_responses(messages: &[uni::Message]) -> bool {
     messages
         .iter()
