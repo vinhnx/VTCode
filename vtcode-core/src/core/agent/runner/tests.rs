@@ -1532,9 +1532,24 @@ async fn sequential_tool_failures_record_categorized_user_message() {
         .last()
         .map(|message| message.content.as_text().into_owned())
         .expect("tool error recorded");
-    assert!(tool_error.contains("[Blocked by policy]"), "{tool_error}");
+    let tool_error: serde_json::Value =
+        serde_json::from_str(&tool_error).expect("structured tool error");
+    assert_eq!(
+        tool_error["error"]["category"].as_str(),
+        Some("PolicyViolation"),
+        "{tool_error}"
+    );
     assert!(
-        tool_error.contains("Hint: Review workspace policies and restrictions"),
+        tool_error["error"]["recovery_suggestions"]
+            .as_array()
+            .is_some_and(|suggestions| suggestions.iter().any(|value| {
+                value.as_str() == Some("Review workspace policies and restrictions")
+            })),
+        "{tool_error}"
+    );
+    assert_eq!(
+        tool_error["error"]["partial_state_possible"].as_bool(),
+        Some(false),
         "{tool_error}"
     );
 }

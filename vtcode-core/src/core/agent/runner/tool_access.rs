@@ -160,7 +160,6 @@ impl AgentRunner {
                         resolved_tool_name.to_string(),
                         format!("tool denied by policy: {err}"),
                     )
-                    .with_tool_call_context(resolved_tool_name, args)
                     .with_surface("agent_runner")
                 })?;
 
@@ -189,7 +188,6 @@ impl AgentRunner {
                         resolved_tool_name,
                         breaker.remaining_backoff(resolved_tool_name),
                     )
-                    .with_tool_call_context(resolved_tool_name, args)
                     .with_attempt(attempt + 1)
                     .with_surface("agent_runner"),
                     attempt,
