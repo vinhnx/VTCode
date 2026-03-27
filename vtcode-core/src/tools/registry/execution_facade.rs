@@ -12,6 +12,7 @@ use tracing::{trace, warn};
 use vtcode_commons::ErrorCategory;
 
 use crate::config::constants::tools;
+use crate::core::agent::harness_kernel::PreparedToolCall;
 use crate::core::memory_pool::SizeRecommendation;
 use crate::mcp::McpToolExecutor;
 use crate::tool_policy::ToolExecutionDecision;
@@ -228,6 +229,16 @@ impl ToolRegistry {
         execution_kernel::preflight_validate_call(self, name, args)
     }
 
+    pub fn admit_public_tool_call(&self, name: &str, args: &Value) -> Result<PreparedToolCall> {
+        let preflight = self.preflight_validate_call(name, args)?;
+        Ok(PreparedToolCall::new(
+            preflight.normalized_tool_name,
+            preflight.readonly_classification,
+            preflight.parallel_safe_after_preflight,
+            preflight.effective_args,
+        ))
+    }
+
     pub async fn execute_tool(&self, name: &str, args: Value) -> Result<Value> {
         self.execute_tool_ref(name, &args).await
     }
@@ -275,6 +286,20 @@ impl ToolRegistry {
             name,
             args,
             true,
+            settle_noninteractive_exec,
+        )
+        .await
+    }
+
+    pub async fn execute_prepared_public_tool_ref_with_exec_mode(
+        &self,
+        prepared: &PreparedToolCall,
+        settle_noninteractive_exec: bool,
+    ) -> Result<Value> {
+        self.execute_public_tool_ref_internal_with_exec_mode(
+            prepared.canonical_name.as_str(),
+            &prepared.effective_args,
+            prepared.already_preflighted,
             settle_noninteractive_exec,
         )
         .await

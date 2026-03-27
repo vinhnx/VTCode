@@ -20,7 +20,6 @@ pub struct RunnerSettings {
 }
 
 use crate::core::agent::types::AgentType;
-use crate::core::context_optimizer::ContextOptimizer;
 use crate::core::loop_detector::LoopDetector;
 use crate::exec::events::ThreadEvent;
 use crate::llm::AnyClient;
@@ -105,8 +104,6 @@ pub struct AgentRunner {
     loop_detector: Mutex<LoopDetector>,
     /// Cached shell policy patterns to avoid recompilation
 
-    /// Context optimizer for token budget management
-    context_optimizer: tokio::sync::Mutex<ContextOptimizer>,
     /// Receiver for steering messages (e.g., stop, pause)
     steering_receiver: Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>>,
     /// Optional restricted tool definitions used instead of the default registry projection.
@@ -466,7 +463,6 @@ impl AgentRunner {
             thread_handle,
             max_turns,
             loop_detector: Mutex::new(loop_detector),
-            context_optimizer: tokio::sync::Mutex::new(ContextOptimizer::new()),
             steering_receiver: Mutex::new(steering_receiver),
             tool_definitions_override: RwLock::new(None),
             tool_arg_transform: None,

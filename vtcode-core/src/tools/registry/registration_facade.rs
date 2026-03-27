@@ -30,6 +30,8 @@ impl ToolRegistry {
             *cache = None;
         }
         self.rebuild_tool_assembly().await;
+        self.tool_catalog_state
+            .note_explicit_refresh("tool_registration");
         self.sync_policy_catalog().await;
         Ok(())
     }
@@ -42,6 +44,8 @@ impl ToolRegistry {
                 *cache = None;
             }
             self.rebuild_tool_assembly().await;
+            self.tool_catalog_state
+                .note_explicit_refresh("tool_unregistration");
             self.sync_policy_catalog().await;
         }
         Ok(removed)

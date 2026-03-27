@@ -42,7 +42,9 @@ pub(crate) async fn apply_turn_outcome(
                 "Interrupted current task. Press Esc, Ctrl+C, or /stop again to exit.",
             )?;
             ctx.handle.clear_input();
-            ctx.handle.set_placeholder(ctx.default_placeholder.clone());
+            ctx.handle.set_placeholder(Some(
+                vtcode_config::constants::ui::CHAT_INPUT_PLACEHOLDER_INTERRUPTED.to_owned(),
+            ));
             ctx.ctrl_c_state.mark_cancel_handled();
             *ctx.session_end_reason = vtcode_core::hooks::SessionEndReason::Cancelled;
             Ok(())

@@ -32,8 +32,7 @@ mod types;
 use budget::{build_tool_budget_exhausted_reason, record_tool_call_budget_usage};
 use fallbacks::{
     build_validation_error_content_with_fallback, preflight_validation_fallback,
-    recovery_fallback_for_tool, remap_unified_file_command_args_to_unified_exec,
-    try_recover_preflight_with_fallback,
+    recovery_fallback_for_tool, try_recover_preflight_with_fallback,
 };
 pub(crate) use guards::max_consecutive_blocked_tool_calls_per_turn;
 use guards::{
@@ -329,21 +328,21 @@ pub(crate) async fn validate_tool_call<'a>(
         return Ok(ValidationResult::Blocked);
     }
 
-    let (mut preflight, mut preflight_args) = match ctx
+    let mut prepared = match ctx
         .tool_registry
-        .preflight_validate_call(tool_name, args_val)
+        .admit_public_tool_call(tool_name, args_val)
     {
-        Ok(preflight) => (preflight, args_val.clone()),
+        Ok(prepared) => prepared,
         Err(err) => {
-            if let Some((recovered_tool_name, recovered_preflight, recovered_args)) =
+            if let Some(recovered_prepared) =
                 try_recover_preflight_with_fallback(ctx, tool_name, args_val, &err)
             {
                 tracing::info!(
                     tool = tool_name,
-                    recovered_tool = %recovered_tool_name,
+                    recovered_tool = %recovered_prepared.canonical_name,
                     "Recovered tool preflight by applying fallback arguments"
                 );
-                (recovered_preflight, recovered_args)
+                recovered_prepared
             } else {
                 let fallback = preflight_validation_fallback(tool_name, args_val, &err);
                 let (fallback_tool, fallback_tool_args) = fallback
@@ -363,43 +362,34 @@ pub(crate) async fn validate_tool_call<'a>(
         }
     };
 
-    if preflight.normalized_tool_name == tool_names::UNIFIED_FILE
-        && let Some(remapped_args) =
-            remap_unified_file_command_args_to_unified_exec(&preflight_args)
-    {
-        let remapped_preflight = ctx
-            .tool_registry
-            .preflight_validate_call(tool_names::UNIFIED_EXEC, &remapped_args);
-        if let Ok(mapped) = remapped_preflight {
-            tracing::info!(
-                original_tool = tool_name,
-                remapped_tool = tool_names::UNIFIED_EXEC,
-                "Remapped unified_file command payload to unified_exec run action"
-            );
-            preflight = mapped;
-            preflight_args = remapped_args;
-        }
-    }
-
-    let canonical_tool_name = preflight.normalized_tool_name.clone();
-    let effective_args = maybe_apply_spool_read_offset_hint(
+    let canonical_tool_name = prepared.canonical_name.clone();
+    prepared.effective_args = maybe_apply_spool_read_offset_hint(
         ctx.tool_registry,
         &canonical_tool_name,
-        &preflight_args,
+        &prepared.effective_args,
     );
-    if !preflight.readonly_classification {
+    if !prepared.readonly_classification {
         ctx.harness_state.reset_file_read_family_streak();
     }
-    let parallel_safe_after_preflight = vtcode_core::tools::tool_intent::is_parallel_safe_call(
+    prepared.parallel_safe_after_preflight = vtcode_core::tools::tool_intent::is_parallel_safe_call(
         &canonical_tool_name,
-        &effective_args,
+        &prepared.effective_args,
     );
+    let fallback_recommendation = recovery_fallback_for_tool(
+        &canonical_tool_name,
+        &prepared.effective_args,
+    )
+    .map(|(tool_name, args)| {
+        vtcode_core::core::agent::harness_kernel::FallbackRecommendation { tool_name, args }
+    });
+    prepared = prepared.with_fallback_recommendation(fallback_recommendation);
+    let effective_args = &prepared.effective_args;
 
     if let Some(outcome) = enforce_duplicate_task_tracker_create_guard(
         ctx,
         tool_call_id,
         &canonical_tool_name,
-        &effective_args,
+        effective_args,
     ) {
         return Ok(outcome);
     }
@@ -408,20 +398,20 @@ pub(crate) async fn validate_tool_call<'a>(
         ctx,
         tool_call_id,
         &canonical_tool_name,
-        &effective_args,
-        preflight.readonly_classification,
+        effective_args,
+        prepared.readonly_classification,
     ) {
         return Ok(outcome);
     }
 
     if let Some(outcome) =
-        enforce_repeated_shell_run_guard(ctx, tool_call_id, &canonical_tool_name, &effective_args)
+        enforce_repeated_shell_run_guard(ctx, tool_call_id, &canonical_tool_name, effective_args)
     {
         return Ok(outcome);
     }
 
     if let Some(outcome) =
-        enforce_spool_chunk_read_guard(ctx, tool_call_id, &canonical_tool_name, &effective_args)
+        enforce_spool_chunk_read_guard(ctx, tool_call_id, &canonical_tool_name, effective_args)
     {
         return Ok(outcome);
     }
@@ -432,10 +422,16 @@ pub(crate) async fn validate_tool_call<'a>(
         .allow_request_for_tool(&canonical_tool_name);
     if circuit_breaker_blocked {
         let display_tool = tool_action_label(&canonical_tool_name, args_val);
-        let (fallback_tool, fallback_tool_args) =
-            recovery_fallback_for_tool(&canonical_tool_name, &effective_args)
-                .map(|(tool, args)| (Some(tool), Some(args)))
-                .unwrap_or((None, None));
+        let (fallback_tool, fallback_tool_args) = prepared
+            .fallback_recommendation
+            .as_ref()
+            .map(|fallback| {
+                (
+                    Some(fallback.tool_name.clone()),
+                    Some(fallback.args.clone()),
+                )
+            })
+            .unwrap_or((None, None));
         let block_reason = format!(
             "Circuit breaker blocked '{}' due to high failure rate. Switching to autonomous fallback strategy.",
             display_tool
@@ -469,7 +465,7 @@ pub(crate) async fn validate_tool_call<'a>(
     // non-unified autonomous execution paths only.
 
     if let Some(outcome) =
-        run_safety_validation_loop(ctx, tool_call_id, &canonical_tool_name, &effective_args).await?
+        run_safety_validation_loop(ctx, tool_call_id, &canonical_tool_name, effective_args).await?
     {
         return Ok(outcome);
     }
@@ -478,7 +474,7 @@ pub(crate) async fn validate_tool_call<'a>(
     let permission_result = ensure_tool_permission(
         build_tool_permissions_context(ctx),
         &canonical_tool_name,
-        Some(&effective_args),
+        Some(effective_args),
     )
     .await;
 
@@ -489,17 +485,12 @@ pub(crate) async fn validate_tool_call<'a>(
             }
             // Count budget only for calls that pass all validation/permission gates.
             record_tool_call_budget_usage(ctx);
-            Ok(ValidationResult::Proceed(PreparedToolCall {
-                canonical_name: canonical_tool_name,
-                readonly_classification: preflight.readonly_classification,
-                parallel_safe_after_preflight,
-                effective_args,
-            }))
+            Ok(ValidationResult::Proceed(prepared))
         }
         Ok(ToolPermissionFlow::Denied) => {
             let denial = if let Some(denial) = ctx.session_stats.last_auto_mode_denial() {
                 serde_json::json!({
-                    "error": format!("Auto mode blocked tool '{}': {}", preflight.normalized_tool_name, denial.reason),
+                    "error": format!("Auto mode blocked tool '{}': {}", prepared.canonical_name, denial.reason),
                     "reason": denial.reason,
                     "matched_rule": denial.matched_rule,
                     "matched_exception": denial.matched_exception,
@@ -511,7 +502,7 @@ pub(crate) async fn validate_tool_call<'a>(
                     canonical_tool_name,
                     format!(
                         "Tool '{}' execution denied by policy",
-                        preflight.normalized_tool_name
+                        prepared.canonical_name
                     ),
                 )
                 .to_json_value()

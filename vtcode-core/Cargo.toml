@@ -209,5 +209,9 @@ serial_test = { workspace = true }
 name = "tool_pipeline"
 harness = false
 
+[[bench]]
+name = "agent_harness"
+harness = false
+
 [lints]
 workspace = true

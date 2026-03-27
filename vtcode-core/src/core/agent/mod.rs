@@ -5,6 +5,7 @@ pub mod bootstrap;
 pub mod chat;
 pub mod completion;
 pub mod harness_artifacts;
+pub mod harness_kernel;
 
 pub mod config;
 pub mod conversation;

@@ -28,12 +28,12 @@ impl<'a> InlineInterruptCoordinator<'a> {
         notice_displayed: &mut bool,
         renderer: &mut AnsiRenderer,
         handle: &InlineHandle,
-        default_placeholder: &Option<String>,
+        _default_placeholder: &Option<String>,
         queue: &mut InlineQueueState<'_>,
     ) -> Result<bool> {
         if self.state.is_cancel_requested() {
             if !*notice_displayed {
-                self.display_notice(renderer, handle, default_placeholder, queue)?;
+                self.display_notice(renderer, handle, queue)?;
                 *notice_displayed = true;
                 return Ok(true);
             }
@@ -56,7 +56,6 @@ impl<'a> InlineInterruptCoordinator<'a> {
         self,
         renderer: &mut AnsiRenderer,
         handle: &InlineHandle,
-        default_placeholder: &Option<String>,
         queue: &mut InlineQueueState<'_>,
     ) -> Result<()> {
         renderer.line_if_not_empty(MessageStyle::Output)?;
@@ -65,7 +64,9 @@ impl<'a> InlineInterruptCoordinator<'a> {
             "Interrupt received. Stopping task... (Press Esc, Ctrl+C, or /stop again within 2s to exit)",
         )?;
         handle.clear_input();
-        handle.set_placeholder(default_placeholder.clone());
+        handle.set_placeholder(Some(
+            vtcode_config::constants::ui::CHAT_INPUT_PLACEHOLDER_INTERRUPTED.to_owned(),
+        ));
         queue.clear();
         Ok(())
     }

@@ -231,7 +231,7 @@ pub(crate) async fn initialize_session(
     };
     tool_registry.enable_cgp_pipeline(cgp_mode).await;
 
-    let tool_catalog = Arc::new(ToolCatalogState::new());
+    let tool_catalog = tool_registry.tool_catalog_state();
 
     let tools = Arc::new(RwLock::new(
         tool_registry

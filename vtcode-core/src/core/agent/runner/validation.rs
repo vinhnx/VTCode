@@ -1,12 +1,13 @@
 use super::AgentRunner;
 use crate::config::types::CapabilityLevel;
+use crate::core::agent::harness_kernel::SessionToolCatalogSnapshot;
 use crate::llm::provider::{LLMRequest, ToolDefinition};
 use crate::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities};
 use anyhow::{Result, anyhow};
 use hashbrown::HashSet;
 
 impl AgentRunner {
-    pub(super) async fn build_exposed_tool_definitions(&self) -> Result<Vec<ToolDefinition>> {
+    pub(super) async fn build_exposed_tool_snapshot(&self) -> Result<SessionToolCatalogSnapshot> {
         let config = SessionToolsConfig {
             surface: SessionSurface::AgentRunner,
             capability_level: CapabilityLevel::CodeSearch,
@@ -33,7 +34,20 @@ impl AgentRunner {
             }
         }
 
-        Ok(exposed)
+        Ok(self.tool_registry.tool_catalog_state().snapshot_for_defs(
+            exposed,
+            self.tool_registry.is_plan_mode(),
+            false,
+        ))
+    }
+
+    pub(super) async fn build_exposed_tool_definitions(&self) -> Result<Vec<ToolDefinition>> {
+        let snapshot = self.build_exposed_tool_snapshot().await?;
+        Ok(snapshot
+            .snapshot
+            .as_ref()
+            .map(|defs| defs.as_ref().clone())
+            .unwrap_or_default())
     }
 
     /// Build universal ToolDefinitions for the current agent.
@@ -42,6 +56,17 @@ impl AgentRunner {
             return Ok(definitions);
         }
         self.build_exposed_tool_definitions().await
+    }
+
+    pub(crate) async fn build_universal_tool_snapshot(&self) -> Result<SessionToolCatalogSnapshot> {
+        if let Some(definitions) = self.tool_definitions_override.read().clone() {
+            return Ok(self.tool_registry.tool_catalog_state().snapshot_for_defs(
+                definitions,
+                self.tool_registry.is_plan_mode(),
+                false,
+            ));
+        }
+        self.build_exposed_tool_snapshot().await
     }
 
     /// Validate LLM request before sending to provider.

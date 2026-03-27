@@ -1,49 +1,13 @@
-//! Context optimization for efficient context usage
+//! Context optimization for efficient context usage.
 //!
-//! Implements context engineering principles from AGENTS.md:
-//! - Per-tool output curation (max 5 grep results, summarize 50+ files)
-//! - Semantic context over volume
+//! This keeps the legacy checkpoint API while delegating tool-result reduction
+//! to the shared harness kernel used by both harnesses.
 
-use crate::config::constants::tools;
-use crate::tools::tool_intent;
+use crate::core::agent::harness_kernel::reduce_tool_result;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
-use std::collections::VecDeque;
 use std::path::Path;
 use tokio::fs;
-
-/// Maximum results to show per tool
-const MAX_GREP_RESULTS: usize = 5;
-const MAX_LIST_FILES: usize = 50;
-const MAX_FILE_LINES: usize = 2000;
-
-fn truncate_with_total_lines(text: &str, max_lines: usize) -> Option<(String, usize)> {
-    if max_lines == 0 {
-        let total = text.lines().count();
-        return Some((String::new(), total));
-    }
-
-    let mut out = String::new();
-    let mut lines = text.lines();
-    let mut total = 0usize;
-
-    while let Some(line) = lines.next() {
-        total += 1;
-        if total <= max_lines {
-            if total > 1 {
-                out.push('\n');
-            }
-            out.push_str(line);
-            continue;
-        }
-
-        total += lines.count();
-        return Some((out, total));
-    }
-
-    None
-}
 
 /// Checkpoint state for context reset
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,23 +21,12 @@ pub struct CheckpointState {
 }
 
 /// Context optimization manager
-pub struct ContextOptimizer {
-    history: VecDeque<ContextEntry>,
-}
-
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
-struct ContextEntry {
-    tool_name: String,
-    result: Value,
-}
+pub struct ContextOptimizer;
 
 impl ContextOptimizer {
     /// Create a new context optimizer
     pub fn new() -> Self {
-        Self {
-            history: VecDeque::new(),
-        }
+        Self
     }
 
     /// Get current budget utilization (0.0 to 1.0)
@@ -86,187 +39,9 @@ impl ContextOptimizer {
         self.utilization() >= 0.85
     }
 
-    /// Optimize tool result based on tool type and budget
-    pub async fn optimize_result(&mut self, tool_name: &str, result: Value) -> Value {
-        let canonical_tool_name =
-            tool_intent::canonical_unified_exec_tool_name(tool_name).unwrap_or(tool_name);
-        let optimized = match canonical_tool_name {
-            tools::UNIFIED_SEARCH => {
-                if result.get("matches").is_some() {
-                    self.optimize_grep_result(result)
-                } else if result.get("files").is_some() || result.get("items").is_some() {
-                    self.optimize_list_files_result(result)
-                } else {
-                    result
-                }
-            }
-            tools::READ_FILE => self.optimize_read_file_result(result),
-            tools::UNIFIED_EXEC => self.optimize_command_result(result),
-            _ => result,
-        };
-
-        // Estimate tokens (rough: 1 token ≈ 4 chars)
-        self.history.push_back(ContextEntry {
-            tool_name: canonical_tool_name.to_string(),
-            result: optimized.clone(),
-        });
-
-        optimized
-    }
-
-    /// Optimize grep results - dedupe, cap to top matches, and mark overflow
-    fn optimize_grep_result(&self, result: Value) -> Value {
-        if let Some(obj) = result.as_object()
-            && let Some(matches) = obj.get("matches").and_then(|v| v.as_array())
-        {
-            // Deduplicate by path + line to reduce noisy repeats
-            let mut seen = hashbrown::HashSet::new();
-            let mut deduped = Vec::with_capacity(matches.len());
-            for m in matches {
-                let path = m
-                    .get("path")
-                    .or_else(|| m.get("file"))
-                    .and_then(|p| p.as_str().map(str::to_owned));
-                let line = m
-                    .get("line")
-                    .or_else(|| m.get("line_number"))
-                    .and_then(|l| l.as_i64());
-                let key = (path.clone(), line);
-
-                // Only dedupe when we have a stable anchor (path or line). Otherwise keep all.
-                if path.is_some() || line.is_some() {
-                    if seen.insert(key) {
-                        deduped.push(m.clone());
-                    }
-                } else {
-                    deduped.push(m.clone());
-                }
-            }
-
-            let total = deduped.len();
-
-            if total > MAX_GREP_RESULTS {
-                let truncated: Vec<_> = deduped.iter().take(MAX_GREP_RESULTS).cloned().collect();
-                let overflow = total - MAX_GREP_RESULTS;
-                return serde_json::json!({
-                    "matches": truncated,
-                    "overflow": format!("[+{} more matches]", overflow),
-                    "total": total,
-                    "note": "Showing top 5 unique matches (by path/line)"
-                });
-            }
-
-            // Keep deduped result even when under the limit to avoid repeats
-            if total != matches.len() {
-                return serde_json::json!({
-                    "matches": deduped,
-                    "total": total,
-                    "note": "unique grep matches (collapsed by path/line)"
-                });
-            }
-
-            return serde_json::json!({
-                "matches": deduped,
-                "total": total,
-                "note": "grep results normalized"
-            });
-        }
-        result
-    }
-
-    /// Optimize list_files - summarize if 50+ items
-    fn optimize_list_files_result(&self, result: Value) -> Value {
-        if let Some(obj) = result.as_object()
-            && let Some(files) = obj.get("files").and_then(|v| v.as_array())
-            && files.len() > MAX_LIST_FILES
-        {
-            let sample: Vec<_> = files.iter().take(5).cloned().collect();
-            return serde_json::json!({
-                "total_files": files.len(),
-                "sample": sample,
-                "note": format!("Showing 5 of {} files. Use grep_file for specific patterns.", files.len())
-            });
-        }
-        result
-    }
-
-    /// Optimize read_file - basic size limiting without token counting
-    fn optimize_read_file_result(&self, result: Value) -> Value {
-        if let Some(obj) = result.as_object()
-            && let Some(content) = obj.get("content").and_then(|v| v.as_str())
-        {
-            let (final_content, is_truncated) = if let Some((truncated, _total_lines)) =
-                truncate_with_total_lines(content, MAX_FILE_LINES)
-            {
-                (truncated, true)
-            } else {
-                (content.to_string(), false)
-            };
-
-            // Reconstruct the object to ensure consistent field ordering and presence
-            let mut standardized_obj = serde_json::Map::new();
-            standardized_obj.insert("success".to_string(), json!(true));
-
-            if let Some(status) = obj.get("status") {
-                standardized_obj.insert("status".to_string(), status.clone());
-            } else {
-                standardized_obj.insert("status".to_string(), json!("success"));
-            }
-
-            if let Some(message) = obj.get("message") {
-                standardized_obj.insert("message".to_string(), message.clone());
-            }
-
-            // Always put content
-            standardized_obj.insert("content".to_string(), json!(final_content));
-
-            if let Some(path) = obj.get("path").or_else(|| obj.get("file")) {
-                standardized_obj.insert("path".to_string(), path.clone());
-            }
-
-            if let Some(metadata) = obj.get("metadata") {
-                standardized_obj.insert("metadata".to_string(), metadata.clone());
-            }
-
-            if is_truncated {
-                standardized_obj.insert("is_truncated".to_string(), json!(true));
-            }
-
-            return Value::Object(standardized_obj);
-        }
-
-        result
-    }
-
-    /// Optimize command output - extract errors only
-    /// Optimize command output - extract errors only
-    fn optimize_command_result(&self, result: Value) -> Value {
-        if let Some(obj) = result.as_object() {
-            let stream_key = if obj.get("stdout").and_then(|v| v.as_str()).is_some() {
-                "stdout"
-            } else {
-                "output"
-            };
-            if let Some(stdout) = obj.get(stream_key).and_then(|v| v.as_str())
-                && let Some((truncated, lines_count)) =
-                    truncate_with_total_lines(stdout, MAX_FILE_LINES)
-            {
-                // Clone the original object to preserve exit_code, stderr, etc.
-                let mut new_obj = obj.clone();
-                new_obj.insert(stream_key.to_string(), json!(truncated));
-                new_obj.insert("is_truncated".to_string(), json!(true));
-                new_obj.insert("original_lines".to_string(), json!(lines_count));
-                new_obj.insert(
-                    "note".to_string(),
-                    json!(
-                        "Output truncated. Use 'grep_file' or specific commands to search content."
-                    ),
-                );
-
-                return Value::Object(new_obj);
-            }
-        }
-        result
+    /// Optimize tool result with the shared reducer used by both harnesses.
+    pub fn optimize_result(&self, tool_name: &str, result: serde_json::Value) -> serde_json::Value {
+        reduce_tool_result(tool_name, result)
     }
 
     /// Create checkpoint state for context reset
@@ -323,29 +98,28 @@ impl Default for ContextOptimizer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::constants::tools;
     use serde_json::json;
 
     #[tokio::test]
     async fn test_grep_optimization() {
-        let mut optimizer = ContextOptimizer::new();
+        let optimizer = ContextOptimizer::new();
 
         let matches: Vec<_> = (0..20)
             .map(|i| json!({"line": i, "path": "src/main.rs", "text": "match"}))
             .collect();
         let result = json!({"matches": matches});
 
-        let optimized = optimizer
-            .optimize_result(tools::UNIFIED_SEARCH, result)
-            .await;
+        let optimized = optimizer.optimize_result(tools::UNIFIED_SEARCH, result);
 
         let opt_matches = optimized["matches"].as_array().unwrap();
-        assert_eq!(opt_matches.len(), MAX_GREP_RESULTS);
+        assert_eq!(opt_matches.len(), 5);
         assert!(optimized["overflow"].is_string());
     }
 
     #[tokio::test]
     async fn test_grep_deduplicates_by_path_and_line() {
-        let mut optimizer = ContextOptimizer::new();
+        let optimizer = ContextOptimizer::new();
         let matches = vec![
             json!({"line": 10, "path": "src/lib.rs", "text": "hit A"}),
             json!({"line": 10, "path": "src/lib.rs", "text": "hit A duplicate"}),
@@ -353,9 +127,7 @@ mod tests {
         ];
         let result = json!({"matches": matches});
 
-        let optimized = optimizer
-            .optimize_result(tools::UNIFIED_SEARCH, result)
-            .await;
+        let optimized = optimizer.optimize_result(tools::UNIFIED_SEARCH, result);
         let opt_matches = optimized["matches"].as_array().unwrap();
         assert_eq!(opt_matches.len(), 2);
         assert_eq!(optimized["total"], 2);
@@ -364,14 +136,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_files_optimization() {
-        let mut optimizer = ContextOptimizer::new();
+        let optimizer = ContextOptimizer::new();
 
         let files: Vec<_> = (0..100).map(|i| json!(format!("file{}.rs", i))).collect();
         let result = json!({"files": files});
 
-        let optimized = optimizer
-            .optimize_result(tools::UNIFIED_SEARCH, result)
-            .await;
+        let optimized = optimizer.optimize_result(tools::UNIFIED_SEARCH, result);
 
         assert_eq!(optimized["total_files"], 100);
         assert!(optimized["sample"].is_array());
@@ -404,13 +174,12 @@ mod tests {
         assert_eq!(loaded.completed_steps, checkpoint.completed_steps);
         assert_eq!(loaded.current_work, checkpoint.current_work);
 
-        // Cleanup
         let _ = std::fs::remove_file(&temp_path);
     }
 
     #[tokio::test]
     async fn test_unified_exec_output_optimization_with_output_field() {
-        let mut optimizer = ContextOptimizer::new();
+        let optimizer = ContextOptimizer::new();
         let long_output = (0..2505)
             .map(|i| format!("line-{i}"))
             .collect::<Vec<_>>()
@@ -422,8 +191,8 @@ mod tests {
             "is_exited": true
         });
 
-        let optimized = optimizer.optimize_result(tools::UNIFIED_EXEC, result).await;
+        let optimized = optimizer.optimize_result(tools::UNIFIED_EXEC, result);
         assert_eq!(optimized["is_truncated"], true);
-        assert!(optimized["output"].as_str().unwrap().lines().count() <= MAX_FILE_LINES);
+        assert!(optimized["output"].as_str().unwrap().lines().count() <= 2000);
     }
 }

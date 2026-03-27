@@ -1,11 +1,11 @@
 use anyhow::Error;
 use serde_json::{Value, json};
 use vtcode_core::config::constants::tools as tool_names;
-use vtcode_core::tools::registry::ToolPreflightOutcome;
 use vtcode_core::tools::tool_intent;
 
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
 use crate::agent::runloop::unified::turn::tool_outcomes::execution_result::compact_model_tool_payload;
+use crate::agent::runloop::unified::turn::tool_outcomes::handlers::PreparedToolCall;
 
 pub(super) fn recovery_fallback_for_tool(tool_name: &str, args: &Value) -> Option<(String, Value)> {
     match tool_name {
@@ -500,14 +500,14 @@ pub(super) fn try_recover_preflight_with_fallback(
     tool_name: &str,
     args_val: &Value,
     error: &Error,
-) -> Option<(String, ToolPreflightOutcome, Value)> {
+) -> Option<PreparedToolCall> {
     let (recovered_tool_name, recovered_args) =
         preflight_validation_fallback(tool_name, args_val, error)?;
-    let preflight_result = ctx
+    match ctx
         .tool_registry
-        .preflight_validate_call(&recovered_tool_name, &recovered_args);
-    match preflight_result {
-        Ok(preflight) => Some((recovered_tool_name, preflight, recovered_args)),
+        .admit_public_tool_call(&recovered_tool_name, &recovered_args)
+    {
+        Ok(prepared) => Some(prepared),
         Err(recovery_err) => {
             tracing::debug!(
                 tool = tool_name,
