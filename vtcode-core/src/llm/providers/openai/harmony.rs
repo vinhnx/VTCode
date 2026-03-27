@@ -52,24 +52,63 @@ pub(super) fn parse_harmony_tool_name(recipient: &str) -> String {
 }
 
 pub(super) fn parse_harmony_tool_call_from_text(text: &str) -> Option<(String, Value)> {
-    // Look for harmony format: to=tool_name followed by JSON
-    if let Some(to_pos) = text.find("to=") {
-        let after_to = &text[to_pos + 3..];
-        if let Some(space_pos) = after_to.find(' ') {
-            let tool_ref = &after_to[..space_pos];
-            let tool_name = parse_harmony_tool_name(tool_ref);
-
-            // Look for JSON in the remaining text
-            let remaining = &after_to[space_pos..];
-            if let Some(json_start) = remaining.find('{')
-                && let Some(json_end) = remaining.rfind('}')
-            {
-                let json_text = &remaining[json_start..=json_end];
-                if let Ok(args) = serde_json::from_str(json_text) {
-                    return Some((tool_name, args));
-                }
-            }
+    let mut found_segment = false;
+    for segment in text.split("<|start|>") {
+        if segment.trim().is_empty() {
+            continue;
+        }
+        found_segment = true;
+        if let Some(parsed) = parse_harmony_tool_call_segment(segment) {
+            return Some(parsed);
         }
     }
+
+    if !found_segment {
+        return parse_harmony_tool_call_segment(text);
+    }
+
     None
+}
+
+fn parse_harmony_tool_call_segment(text: &str) -> Option<(String, Value)> {
+    let to_pos = text.find("to=")?;
+    let after_to = &text[to_pos + 3..];
+    let tool_ref = after_to
+        .split(|c: char| c.is_whitespace() || c == '<')
+        .next()
+        .unwrap_or("");
+    let tool_name = parse_harmony_tool_name(tool_ref);
+    if tool_name.is_empty() {
+        return None;
+    }
+
+    let content = if let Some(message_pos) = text.find("<|message|>") {
+        let after_message = &text[message_pos + "<|message|>".len()..];
+        let stop_idx = after_message
+            .find("<|call|>")
+            .or_else(|| after_message.find("<|end|>"))
+            .or_else(|| after_message.find("<|return|>"))
+            .unwrap_or(after_message.len());
+        after_message[..stop_idx].trim()
+    } else {
+        after_to[tool_ref.len()..].trim()
+    };
+
+    let args = parse_harmony_arguments(content)?;
+    Some((tool_name, args))
+}
+
+fn parse_harmony_arguments(raw: &str) -> Option<Value> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Some(Value::Object(serde_json::Map::new()));
+    }
+
+    serde_json::from_str(trimmed).ok().or_else(|| {
+        if trimmed.contains('\'') {
+            serde_json::from_str::<Value>(&trimmed.replace('\'', "\"")).ok()
+        } else {
+            None
+        }
+    })
 }

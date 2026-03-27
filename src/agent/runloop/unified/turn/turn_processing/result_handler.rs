@@ -241,6 +241,19 @@ pub(crate) async fn handle_turn_processing_result<'a>(
             reasoning_details,
             proposed_plan,
         } => {
+            if params.ctx.is_recovery_active()
+                && params.ctx.recovery_pass_used()
+                && params.ctx.recovery_is_tool_free()
+                && crate::agent::runloop::text_tools::detect_textual_tool_call(&text).is_some()
+            {
+                return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
+                    reason: Some(
+                        "Recovery mode requested a final tool-free synthesis pass, but the model attempted more tool calls."
+                            .to_string(),
+                    ),
+                }));
+            }
+
             params
                 .ctx
                 .handle_text_response(
@@ -447,6 +460,49 @@ mod tests {
             outcome,
             TurnHandlerOutcome::Break(TurnLoopResult::Blocked { reason: Some(reason) })
             if reason.contains("returned no answer")
+        ));
+    }
+
+    #[tokio::test]
+    async fn recovery_textual_tool_markup_breaks_turn_as_blocked() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut ctx = backing.turn_processing_context();
+        ctx.activate_recovery("loop detector");
+        assert!(ctx.consume_recovery_pass());
+
+        let mut repeated_tool_attempts = LoopTracker::new();
+        let mut turn_modified_files = BTreeSet::new();
+
+        let outcome = handle_turn_processing_result(HandleTurnProcessingResultParams {
+            ctx: &mut ctx,
+            processing_result: TurnProcessingResult::TextResponse {
+                text: r#"
+<minimax:tool_call>
+<invoke name="unified_file">
+<parameter name="action">read</parameter>
+<parameter name="path">vtcode-core/src/core/agent/runtime/mod.rs</parameter>
+</invoke>
+</minimax:tool_call>
+"#
+                .to_string(),
+                reasoning: Vec::new(),
+                reasoning_details: None,
+                proposed_plan: None,
+            },
+            response_streamed: false,
+            step_count: 1,
+            repeated_tool_attempts: &mut repeated_tool_attempts,
+            turn_modified_files: &mut turn_modified_files,
+            max_tool_loops: 4,
+            tool_repeat_limit: 4,
+        })
+        .await
+        .expect("recovery textual tool markup should be handled");
+
+        assert!(matches!(
+            outcome,
+            TurnHandlerOutcome::Break(TurnLoopResult::Blocked { reason: Some(reason) })
+            if reason.contains("tool-free synthesis pass")
         ));
     }
 

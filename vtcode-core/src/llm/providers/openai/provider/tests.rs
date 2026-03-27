@@ -2803,6 +2803,28 @@ fn test_parse_harmony_tool_call_from_text_container_exec() {
 }
 
 #[test]
+fn test_parse_harmony_tool_call_from_tagged_text() {
+    let text = r#"<|start|>assistant to=functions.lookup_weather<|channel|>commentary <|constrain|>json<|message|>{"location":"San Francisco"}<|call|>"#;
+    let result = OpenAIProvider::parse_harmony_tool_call_from_text(text);
+    assert!(result.is_some());
+
+    let (tool_name, args) = result.unwrap();
+    assert_eq!(tool_name, "lookup_weather");
+    assert_eq!(args["location"], serde_json::json!("San Francisco"));
+}
+
+#[test]
+fn test_parse_harmony_tool_call_from_tagged_text_tolerates_single_quotes() {
+    let text = r#"<|start|>assistant to=functions.lookup_weather<|channel|>commentary <|constrain|>json<|message|>{'location':'San Francisco'}<|call|>"#;
+    let result = OpenAIProvider::parse_harmony_tool_call_from_text(text);
+    assert!(result.is_some());
+
+    let (tool_name, args) = result.unwrap();
+    assert_eq!(tool_name, "lookup_weather");
+    assert_eq!(args["location"], serde_json::json!("San Francisco"));
+}
+
+#[test]
 fn chat_completions_uses_max_completion_tokens_field() {
     let provider = OpenAIProvider::from_config(
         Some(String::new()),

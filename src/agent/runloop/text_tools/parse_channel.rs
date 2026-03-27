@@ -4,10 +4,11 @@ use vtcode_core::config::constants::tools;
 use crate::agent::runloop::text_tools::canonical::{
     apply_unified_exec_defaults, unified_exec_defaults_for_name,
 };
+use crate::agent::runloop::text_tools::parse_args::parse_textual_arguments;
 
 pub(super) fn parse_channel_tool_call(text: &str) -> Option<(String, Value)> {
     // Harmony format: <|start|>{header}<|message|>{content}<|end|>
-    // We look for a message that is a tool call (ends with <|call|> or has commentary channel)
+    // Tool calls are expected to include a recipient via `to=...` in the header.
 
     for segment in text.split("<|start|>") {
         let trimmed_segment = segment.trim();
@@ -22,41 +23,32 @@ pub(super) fn parse_channel_tool_call(text: &str) -> Option<(String, Value)> {
             && m_idx > c_idx
         {
             let header = &segment[..m_idx];
+            let Some(to_pos) = header.find("to=") else {
+                continue;
+            };
 
-            // Check if this is a commentary channel or has a recipient
-            if header.contains("commentary") || header.contains("to=") {
-                let stop_idx = segment
-                    .find("<|call|>")
-                    .or_else(|| segment.find("<|end|>"))
-                    .or_else(|| segment.find("<|return|>"))
-                    .unwrap_or(segment.len());
+            let stop_idx = segment
+                .find("<|call|>")
+                .or_else(|| segment.find("<|end|>"))
+                .or_else(|| segment.find("<|return|>"))
+                .unwrap_or(segment.len());
 
-                let content_raw = segment[m_idx + "<|message|>".len()..stop_idx].trim();
+            let content_raw = segment[m_idx + "<|message|>".len()..stop_idx].trim();
 
-                // Parse tool name from header
-                let tool_name = if let Some(to_pos) = header.find("to=") {
-                    let after_to = &header[to_pos + 3..];
-                    let tool_ref = after_to
-                        .split(|c: char| c.is_whitespace() || c == '<')
-                        .next()
-                        .unwrap_or("");
-                    parse_tool_name_from_reference(tool_ref)
-                } else if header.contains("container.exec") || header.contains("exec") {
-                    "unified_exec"
-                } else if header.contains("read") || header.contains("file") {
-                    "read_file"
-                } else {
-                    // Default to command execution if it's a commentary channel but no recipient
-                    "unified_exec"
-                };
+            let after_to = &header[to_pos + 3..];
+            let tool_ref = after_to
+                .split(|c: char| c.is_whitespace() || c == '<')
+                .next()
+                .unwrap_or("");
+            let tool_name = parse_tool_name_from_reference(tool_ref);
+            if tool_name.is_empty() {
+                continue;
+            }
 
-                // Parse JSON from content
-                if let Ok(parsed) = serde_json::from_str::<Value>(content_raw) {
-                    // Convert to expected format
-                    if let Ok(args) = convert_harmony_args_to_tool_format(tool_name, parsed) {
-                        return Some((tool_name.to_string(), args));
-                    }
-                }
+            if let Some(parsed) = parse_textual_arguments(content_raw)
+                && let Ok(args) = convert_harmony_args_to_tool_format(tool_name, parsed)
+            {
+                return Some((tool_name.to_string(), args));
             }
         }
     }

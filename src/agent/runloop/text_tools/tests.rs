@@ -182,6 +182,31 @@ fn test_detect_tagged_tool_call_handles_one_based_indexes() {
 }
 
 #[test]
+fn test_detect_tagged_tool_call_parses_minimax_xml_invocation() {
+    let message = r#"
+<minimax:tool_call>
+<invoke name="unified_file">
+<parameter name="action">read</parameter>
+<parameter name="path">vtcode-core/src/core/agent/runtime/mod.rs</parameter>
+<parameter name="offset">1</parameter>
+<parameter name="limit">400</parameter>
+</invoke>
+</minimax:tool_call>
+"#;
+    let (name, args) = detect_textual_tool_call(message).expect("should parse");
+    assert_eq!(name, tools::UNIFIED_FILE);
+    assert_eq!(
+        args,
+        serde_json::json!({
+            "action": "read",
+            "path": "vtcode-core/src/core/agent/runtime/mod.rs",
+            "offset": 1,
+            "limit": 400
+        })
+    );
+}
+
+#[test]
 fn test_detect_rust_struct_tool_call_parses_command_block() {
     let message = "Here you go:\n```rust\nrun_pty_cmd {\n    command: \"ls -a\",\n    workdir: \"/tmp\",\n    timeout: 5.0\n}\n```";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
@@ -363,6 +388,33 @@ fn test_parse_harmony_channel_tool_call_with_string_cmd() {
     let (name, args) = detect_textual_tool_call(message).expect("should parse harmony format");
     assert_eq!(name, "unified_exec");
     assert_eq!(args["command"], serde_json::json!("pwd"));
+}
+
+#[test]
+fn test_parse_harmony_channel_tool_call_with_recipient_before_channel() {
+    let message = "<|start|>assistant to=functions.unified_search<|channel|>commentary <|constrain|>json<|message|>{\"action\":\"list\",\"path\":\"src\"}<|call|>";
+    let (name, args) = detect_textual_tool_call(message).expect("should parse harmony format");
+    assert_eq!(name, "unified_search");
+    assert_eq!(args["action"], serde_json::json!("list"));
+    assert_eq!(args["path"], serde_json::json!("src"));
+}
+
+#[test]
+fn test_parse_harmony_channel_tool_call_tolerates_single_quoted_payload() {
+    let message = "<|start|>assistant to=functions.unified_search<|channel|>commentary <|constrain|>json<|message|>{'action':'list','path':'src'}<|call|>";
+    let (name, args) = detect_textual_tool_call(message).expect("should parse harmony format");
+    assert_eq!(name, "unified_search");
+    assert_eq!(args["action"], serde_json::json!("list"));
+    assert_eq!(args["path"], serde_json::json!("src"));
+}
+
+#[test]
+fn test_parse_harmony_channel_requires_explicit_recipient() {
+    let message = "<|start|>assistant<|channel|>commentary<|message|>{\"cmd\":\"pwd\"}<|call|>";
+    assert!(
+        parse_channel::parse_channel_tool_call(message).is_none(),
+        "harmony tool calls should require an explicit recipient"
+    );
 }
 
 #[test]

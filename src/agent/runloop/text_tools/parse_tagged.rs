@@ -8,6 +8,10 @@ use crate::agent::runloop::text_tools::parse_args::{
 };
 
 pub(super) fn parse_tagged_tool_call(text: &str) -> Option<(String, Value)> {
+    parse_standard_tagged_tool_call(text).or_else(|| parse_minimax_tool_call(text))
+}
+
+fn parse_standard_tagged_tool_call(text: &str) -> Option<(String, Value)> {
     const TOOL_TAG: &str = "<tool_call>";
     const TOOL_TAG_CLOSE: &str = "</tool_call>";
     const ARG_KEY_TAG: &str = "<arg_key>";
@@ -156,6 +160,104 @@ pub(super) fn parse_tagged_tool_call(text: &str) -> Option<(String, Value)> {
     }
 
     canonicalize_tool_result(name.to_string(), Value::Object(object))
+}
+
+fn parse_minimax_tool_call(text: &str) -> Option<(String, Value)> {
+    const INVOKE_TAG: &str = "<invoke name=\"";
+    const INVOKE_CLOSE: &str = "</invoke>";
+    const PARAMETER_TAG: &str = "<parameter name=\"";
+    const PARAMETER_CLOSE: &str = "</parameter>";
+
+    let invoke_start = text.find(INVOKE_TAG)?;
+    let invoke_rest = &text[invoke_start + INVOKE_TAG.len()..];
+    let name_end = invoke_rest.find('"')?;
+    let name = invoke_rest[..name_end].trim().to_string();
+    if name.is_empty() {
+        return None;
+    }
+
+    let after_name = &invoke_rest[name_end + 1..];
+    let body_start = after_name.find('>')?;
+    let after_invoke_tag = &after_name[body_start + 1..];
+    let invoke_body_end = after_invoke_tag
+        .find(INVOKE_CLOSE)
+        .unwrap_or(after_invoke_tag.len());
+    let mut rest = &after_invoke_tag[..invoke_body_end];
+
+    let mut object = Map::new();
+    let mut indexed_values: BTreeMap<String, BTreeMap<usize, Value>> = BTreeMap::new();
+
+    while let Some(parameter_start) = rest.find(PARAMETER_TAG) {
+        rest = &rest[parameter_start + PARAMETER_TAG.len()..];
+
+        let parameter_name_end = match rest.find('"') {
+            Some(index) => index,
+            None => break,
+        };
+        let parameter_name = rest[..parameter_name_end].trim();
+        if parameter_name.is_empty() {
+            break;
+        }
+
+        let after_parameter_name = &rest[parameter_name_end + 1..];
+        let value_start = match after_parameter_name.find('>') {
+            Some(index) => index,
+            None => break,
+        };
+        rest = &after_parameter_name[value_start + 1..];
+
+        let value_end = rest.find(PARAMETER_CLOSE).unwrap_or(rest.len());
+        let value = parse_scalar_value(rest[..value_end].trim());
+
+        if let Some((base, index)) = split_indexed_key(parameter_name) {
+            indexed_values
+                .entry(base.to_string())
+                .or_default()
+                .insert(index, value);
+        } else {
+            object.insert(parameter_name.to_string(), value);
+        }
+
+        if value_end >= rest.len() {
+            break;
+        }
+        rest = &rest[value_end + PARAMETER_CLOSE.len()..];
+    }
+
+    if object.is_empty() && indexed_values.is_empty() {
+        return None;
+    }
+
+    for (base, entries) in indexed_values {
+        let offset = if entries.contains_key(&0) {
+            0usize
+        } else {
+            entries.keys().next().cloned().unwrap_or(0)
+        };
+
+        let mut ordered: Vec<Value> = Vec::new();
+        for (index, value) in entries {
+            let normalized = index.saturating_sub(offset);
+            if normalized >= ordered.len() {
+                ordered.resize(normalized + 1, Value::Null);
+            }
+            ordered[normalized] = value;
+        }
+
+        while matches!(ordered.last(), Some(Value::Null)) {
+            ordered.pop();
+        }
+
+        object.insert(base, Value::Array(ordered));
+    }
+
+    if let Some(Value::String(command)) = object.get("command").cloned()
+        && let Some(array) = normalize_command_string(&command)
+    {
+        object.insert("command".to_string(), Value::Array(array));
+    }
+
+    canonicalize_tool_result(name, Value::Object(object))
 }
 
 fn read_tag_text(input: &str) -> (String, &str) {

@@ -11,9 +11,123 @@ use openai_harmony::chat::{
     Message as HarmonyMessage, ReasoningEffort, Role as HarmonyRole, SystemContent,
     ToolDescription,
 };
-use openai_harmony::{HarmonyEncodingName, load_harmony_encoding};
+use openai_harmony::{HarmonyEncodingName, ParseOptions, load_harmony_encoding};
 use serde_json::{Value, json};
 use tokio::task::spawn_blocking;
+
+fn extract_text_content(parts: &[HarmonyContent]) -> Option<String> {
+    let text = parts
+        .iter()
+        .filter_map(|part| match part {
+            HarmonyContent::Text(text_part) => Some(text_part.text.clone()),
+            _ => None,
+        })
+        .collect::<String>();
+
+    if text.is_empty() { None } else { Some(text) }
+}
+
+fn normalize_json_arguments(raw: String) -> String {
+    match serde_json::from_str::<Value>(&raw) {
+        Ok(parsed) => parsed.to_string(),
+        Err(_) => raw,
+    }
+}
+
+fn parse_harmony_completion_messages_with_recovery(
+    encoding: &openai_harmony::HarmonyEncoding,
+    completion_tokens: &[u32],
+) -> Result<Vec<HarmonyMessage>, provider::LLMError> {
+    match encoding.parse_messages_from_completion_tokens(
+        completion_tokens.iter().copied(),
+        Some(HarmonyRole::Assistant),
+    ) {
+        Ok(messages) => Ok(messages),
+        Err(strict_error) => {
+            tracing::warn!(
+                error = %strict_error,
+                "Strict harmony completion parse failed; retrying with non-strict mode"
+            );
+            encoding
+                .parse_messages_from_completion_tokens_with_options(
+                    completion_tokens.iter().copied(),
+                    Some(HarmonyRole::Assistant),
+                    ParseOptions { strict: false },
+                )
+                .map_err(|recovery_error| {
+                    let formatted_error = error_display::format_llm_error(
+                        "OpenAI",
+                        &format!(
+                            "Failed to parse completion tokens: {}. Non-strict recovery also failed: {}",
+                            strict_error, recovery_error
+                        ),
+                    );
+                    provider::LLMError::Provider {
+                        message: formatted_error,
+                        metadata: None,
+                    }
+                })
+        }
+    }
+}
+
+fn harmony_tool_call_from_message(
+    message: &HarmonyMessage,
+    index: usize,
+) -> Option<provider::ToolCall> {
+    if message.author.role != HarmonyRole::Assistant {
+        return None;
+    }
+
+    if let Some(recipient) = &message.recipient
+        && !recipient.is_empty()
+        && recipient != "assistant"
+    {
+        let tool_name = OpenAIProvider::parse_harmony_tool_name(recipient);
+        if !tool_name.is_empty() {
+            let arguments = extract_text_content(&message.content)
+                .map(normalize_json_arguments)
+                .unwrap_or_else(|| "{}".to_string());
+            return Some(provider::ToolCall::function(
+                format!("call_{index}"),
+                tool_name,
+                arguments,
+            ));
+        }
+    }
+
+    let text_content = extract_text_content(&message.content)?;
+    let (tool_name, args) = OpenAIProvider::parse_harmony_tool_call_from_text(&text_content)?;
+    let arguments = serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
+    Some(provider::ToolCall::function(
+        format!("call_{index}"),
+        tool_name,
+        arguments,
+    ))
+}
+
+fn extract_harmony_completion_parts(
+    parsed_messages: &[HarmonyMessage],
+) -> (Option<String>, Vec<provider::ToolCall>) {
+    let mut content = None;
+    let mut tool_calls = Vec::with_capacity(8);
+
+    for message in parsed_messages {
+        if let Some(tool_call) = harmony_tool_call_from_message(message, tool_calls.len()) {
+            tool_calls.push(tool_call);
+            continue;
+        }
+
+        if message.author.role == HarmonyRole::Assistant
+            && message.channel.as_deref() == Some("final")
+            && let Some(text_content) = extract_text_content(&message.content)
+        {
+            content = Some(text_content);
+        }
+    }
+
+    (content, tool_calls)
+}
 
 impl OpenAIProvider {
     fn convert_to_harmony_conversation(
@@ -216,117 +330,9 @@ impl OpenAIProvider {
             .await?;
 
         // Parse completion tokens back into messages
-        let parsed_messages = encoding
-            .parse_messages_from_completion_tokens(
-                completion_tokens.clone(),
-                Some(HarmonyRole::Assistant),
-            )
-            .map_err(|e| {
-                let formatted_error = error_display::format_llm_error(
-                    "OpenAI",
-                    &format!("Failed to parse completion tokens: {}", e),
-                );
-                provider::LLMError::Provider {
-                    message: formatted_error,
-                    metadata: None,
-                }
-            })?;
-
-        // Extract content from parsed messages
-        let mut content = None;
-        let mut tool_calls = Vec::with_capacity(8); // Typical tool call count in harmony responses
-
-        let extract_text_content = |parts: &[HarmonyContent]| -> Option<String> {
-            let text = parts
-                .iter()
-                .filter_map(|part| match part {
-                    HarmonyContent::Text(text_part) => Some(text_part.text.clone()),
-                    _ => None,
-                })
-                .collect::<String>();
-
-            if text.is_empty() { None } else { Some(text) }
-        };
-
-        let normalize_json_arguments = |raw: String| -> String {
-            match serde_json::from_str::<Value>(&raw) {
-                Ok(parsed) => parsed.to_string(),
-                Err(_) => raw,
-            }
-        };
-
-        for message in parsed_messages {
-            match message.author.role {
-                HarmonyRole::Assistant => {
-                    if let Some(channel) = &message.channel {
-                        match channel.as_str() {
-                            "final" => {
-                                // This is the final response content
-                                // Extract text from content Vec<Content>
-                                if let Some(text_content) = extract_text_content(&message.content) {
-                                    content = Some(text_content);
-                                }
-                            }
-                            "commentary" => {
-                                // Check if this is a tool call
-                                if let Some(recipient) = &message.recipient {
-                                    if recipient.starts_with("functions.") {
-                                        // This is a tool call with functions. prefix
-                                        let function_name = recipient
-                                            .strip_prefix("functions.")
-                                            .unwrap_or(recipient);
-                                        let arguments = extract_text_content(&message.content)
-                                            .map(normalize_json_arguments)
-                                            .unwrap_or_else(|| "{}".to_owned());
-
-                                        tool_calls.push(provider::ToolCall::function(
-                                            format!("call_{}", tool_calls.len()),
-                                            function_name.to_string(),
-                                            arguments,
-                                        ));
-                                    } else {
-                                        // Check if this is a harmony format tool call (to=tool_name)
-                                        // The recipient might be the tool name directly
-                                        let tool_name = Self::parse_harmony_tool_name(recipient);
-                                        if !tool_name.is_empty() {
-                                            let arguments = extract_text_content(&message.content)
-                                                .map(normalize_json_arguments)
-                                                .unwrap_or_else(|| "{}".to_string());
-
-                                            tool_calls.push(provider::ToolCall::function(
-                                                format!("call_{}", tool_calls.len()),
-                                                tool_name,
-                                                arguments,
-                                            ));
-                                        }
-                                    }
-                                } else {
-                                    // Check if the content itself contains harmony tool call format
-                                    if let Some(text_content) =
-                                        extract_text_content(&message.content)
-                                    {
-                                        if let Some((tool_name, args)) =
-                                            Self::parse_harmony_tool_call_from_text(&text_content)
-                                        {
-                                            let arguments = serde_json::to_string(&args)
-                                                .unwrap_or_else(|_| "{}".to_string());
-
-                                            tool_calls.push(provider::ToolCall::function(
-                                                format!("call_{}", tool_calls.len()),
-                                                tool_name,
-                                                arguments,
-                                            ));
-                                        }
-                                    }
-                                }
-                            }
-                            _ => {} // Other channels like "analysis" are for reasoning
-                        }
-                    }
-                }
-                _ => {} // Skip other message types for now
-            }
-        }
+        let parsed_messages =
+            parse_harmony_completion_messages_with_recovery(&encoding, &completion_tokens)?;
+        let (content, tool_calls) = extract_harmony_completion_parts(&parsed_messages);
 
         let tool_calls = if tool_calls.is_empty() {
             None
@@ -551,6 +557,7 @@ mod tests {
     use super::*;
     use crate::llm::provider::{LLMRequest, Message};
     use openai_harmony::chat::Content as HarmonyContent;
+    use openai_harmony::{HarmonyEncodingName, load_harmony_encoding};
 
     fn test_provider() -> OpenAIProvider {
         OpenAIProvider::new("test-key".to_string())
@@ -615,5 +622,63 @@ mod tests {
             HarmonyContent::Text(text) => assert_eq!(text.text, "Reuse prior tool outputs."),
             other => panic!("expected text history system content, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn parse_harmony_completion_messages_retries_non_strict_mode() {
+        let encoding = load_harmony_encoding(HarmonyEncodingName::HarmonyGptOss)
+            .expect("encoding should load");
+        let malformed = "<|channel|>commentary Hello<|end|>";
+        let tokens = encoding.tokenizer().encode_with_special_tokens(malformed);
+
+        let parsed = parse_harmony_completion_messages_with_recovery(&encoding, &tokens)
+            .expect("non-strict recovery should succeed");
+
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].author.role, HarmonyRole::Assistant);
+        assert_eq!(parsed[0].channel.as_deref(), Some("commentary"));
+        assert_eq!(
+            extract_text_content(&parsed[0].content).as_deref(),
+            Some("Hello")
+        );
+    }
+
+    #[test]
+    fn extract_harmony_completion_parts_treats_analysis_recipient_as_tool_call() {
+        let parsed = vec![
+            HarmonyMessage::from_role_and_content(
+                HarmonyRole::Assistant,
+                "We need to call lookup_weather.",
+            )
+            .with_channel("analysis"),
+            HarmonyMessage::from_role_and_content(
+                HarmonyRole::Assistant,
+                r#"{"location":"Tokyo"}"#,
+            )
+            .with_channel("analysis")
+            .with_recipient("lookup_weather")
+            .with_content_type("code"),
+            HarmonyMessage::from_role_and_content(HarmonyRole::Assistant, "Sunny.")
+                .with_channel("final"),
+        ];
+
+        let (content, tool_calls) = extract_harmony_completion_parts(&parsed);
+
+        assert_eq!(content.as_deref(), Some("Sunny."));
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(
+            tool_calls[0]
+                .function
+                .as_ref()
+                .map(|function| function.name.as_str()),
+            Some("lookup_weather")
+        );
+        assert_eq!(
+            tool_calls[0]
+                .function
+                .as_ref()
+                .map(|function| function.arguments.as_str()),
+            Some(r#"{"location":"Tokyo"}"#)
+        );
     }
 }

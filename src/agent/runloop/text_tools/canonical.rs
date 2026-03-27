@@ -50,7 +50,9 @@ pub(super) fn is_known_textual_tool(name: &str) -> bool {
         tools::WRITE_FILE
             | tools::EDIT_FILE
             | tools::READ_FILE
+            | tools::UNIFIED_FILE
             | tools::UNIFIED_EXEC
+            | tools::UNIFIED_SEARCH
             | "grep_file"
             | "list_files"
             | tools::APPLY_PATCH
