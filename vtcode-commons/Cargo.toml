@@ -44,6 +44,7 @@ ratatui = { workspace = true }
 left-right = "0.11.7"
 memchr = { workspace = true }
 send_wrapper = "0.6.0"
+unicode-width = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["fs", "io-util", "macros", "rt"] }

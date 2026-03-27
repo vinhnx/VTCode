@@ -47,15 +47,16 @@ use smallvec::SmallVec;
 use vtcode_commons::diff_paths::{
     language_hint_from_path, parse_diff_git_path, parse_diff_marker_path,
 };
+use vtcode_commons::preview::{
+    display_width, format_hidden_lines_summary as shared_hidden_lines_summary,
+    split_head_tail_preview, truncate_with_ellipsis,
+};
 use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::ui::markdown;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
-use super::files::{
-    colorize_diff_summary_line, display_width, format_diff_content_lines_with_numbers,
-    truncate_text_safe,
-};
+use super::files::{colorize_diff_summary_line, format_diff_content_lines_with_numbers};
 use super::styles::{GitStyles, LsStyles, select_line_style};
 #[path = "streams_helpers.rs"]
 mod streams_helpers;
@@ -98,14 +99,6 @@ fn calculate_preview_lines(content_size: usize) -> usize {
     }
 }
 
-fn format_hidden_lines_summary(hidden: usize) -> String {
-    if hidden == 1 {
-        "… +1 line".to_string()
-    } else {
-        format!("… +{} lines", hidden)
-    }
-}
-
 enum HiddenLinesNoticeKind {
     CommandPreview,
     Generic,
@@ -115,7 +108,7 @@ enum HiddenLinesNoticeKind {
 fn hidden_lines_notice(hidden: usize, kind: HiddenLinesNoticeKind) -> String {
     match kind {
         HiddenLinesNoticeKind::CommandPreview => {
-            format!("    {}", format_hidden_lines_summary(hidden))
+            format!("    {}", shared_hidden_lines_summary(hidden))
         }
         HiddenLinesNoticeKind::Generic => format!(
             "[... {} line{} truncated ...]",
@@ -142,8 +135,7 @@ fn render_preview_line(
     }
 
     let truncated_line = if truncate_line && display_width(display_line) > MAX_LINE_LENGTH {
-        let truncated = truncate_text_safe(display_line, MAX_LINE_LENGTH);
-        Cow::Owned(format!("{truncated}..."))
+        Cow::Owned(truncate_with_ellipsis(display_line, MAX_LINE_LENGTH, "..."))
     } else {
         Cow::Borrowed(display_line)
     };
@@ -303,19 +295,27 @@ fn format_diff_line_with_gutter_and_syntax(
 
 fn collect_run_command_preview(content: &str) -> (SmallVec<[&str; 32]>, usize, usize) {
     let lines: SmallVec<[&str; 32]> = content.lines().collect();
-    let total = lines.len();
-    let preview_size = RUN_COMMAND_HEAD_PREVIEW_LINES + RUN_COMMAND_TAIL_PREVIEW_LINES;
-
-    if total <= preview_size {
+    let (total, hidden_count, head_len, tail_len) = {
+        let preview = split_head_tail_preview(
+            lines.as_slice(),
+            RUN_COMMAND_HEAD_PREVIEW_LINES,
+            RUN_COMMAND_TAIL_PREVIEW_LINES,
+        );
+        (
+            preview.total,
+            preview.hidden_count,
+            preview.head.len(),
+            preview.tail.len(),
+        )
+    };
+    if hidden_count == 0 {
         return (lines, total, 0);
     }
 
-    let mut preview: SmallVec<[&str; 32]> = SmallVec::with_capacity(preview_size);
-    preview.extend_from_slice(&lines[..RUN_COMMAND_HEAD_PREVIEW_LINES]);
-    preview.extend_from_slice(&lines[total - RUN_COMMAND_TAIL_PREVIEW_LINES..]);
-    let hidden = total.saturating_sub(preview.len());
-
-    (preview, total, hidden)
+    let mut collected: SmallVec<[&str; 32]> = SmallVec::with_capacity(head_len + tail_len);
+    collected.extend_from_slice(&lines[..head_len]);
+    collected.extend_from_slice(&lines[total - tail_len..]);
+    (collected, total, hidden_count)
 }
 
 async fn render_run_command_preview(
@@ -417,9 +417,7 @@ pub(crate) fn render_diff_content_block(
         }
         display_buffer.clear();
         if display_width(line) > MAX_LINE_LENGTH {
-            let truncated = truncate_text_safe(line, MAX_LINE_LENGTH);
-            display_buffer.push_str(truncated);
-            display_buffer.push_str("...");
+            display_buffer.push_str(&truncate_with_ellipsis(line, MAX_LINE_LENGTH, "..."));
         } else {
             display_buffer.push_str(line);
         }
@@ -590,8 +588,7 @@ pub(crate) async fn render_stream_section(
         } else {
             for line in &tail {
                 let display_line = if display_width(line) > MAX_LINE_LENGTH {
-                    let truncated = truncate_text_safe(line, MAX_LINE_LENGTH);
-                    Cow::Owned(format!("{truncated}..."))
+                    Cow::Owned(truncate_with_ellipsis(line, MAX_LINE_LENGTH, "..."))
                 } else {
                     Cow::Borrowed(*line)
                 };

@@ -327,7 +327,13 @@ fn test_markdown_diff_code_block_strips_backgrounds() {
 
     let added_line = lines
         .iter()
-        .find(|line| line.segments.iter().any(|seg| seg.text.contains("+ new")))
+        .find(|line| {
+            line.segments
+                .iter()
+                .map(|seg| seg.text.as_str())
+                .collect::<String>()
+                .contains("+ new")
+        })
         .expect("added line exists");
     assert!(
         added_line
@@ -338,7 +344,13 @@ fn test_markdown_diff_code_block_strips_backgrounds() {
 
     let removed_line = lines
         .iter()
-        .find(|line| line.segments.iter().any(|seg| seg.text.contains("- old")))
+        .find(|line| {
+            line.segments
+                .iter()
+                .map(|seg| seg.text.as_str())
+                .collect::<String>()
+                .contains("- old")
+        })
         .expect("removed line exists");
     assert!(
         removed_line
@@ -352,7 +364,9 @@ fn test_markdown_diff_code_block_strips_backgrounds() {
         .find(|line| {
             line.segments
                 .iter()
-                .any(|seg| seg.text.contains(" context"))
+                .map(|seg| seg.text.as_str())
+                .collect::<String>()
+                .contains(" context")
         })
         .expect("context line exists");
     assert!(
@@ -370,14 +384,20 @@ fn test_markdown_unlabeled_diff_code_block_detects_diff() {
     let expected_added_fg = DiffColorPalette::default().added_style().get_fg_color();
     let added_line = lines
         .iter()
-        .find(|line| line.segments.iter().any(|seg| seg.text.contains("+ new")))
+        .find(|line| {
+            line.segments
+                .iter()
+                .map(|seg| seg.text.as_str())
+                .collect::<String>()
+                .contains("+ new")
+        })
         .expect("added line exists");
-    let added_segment = added_line
-        .segments
-        .iter()
-        .find(|seg| seg.text.contains("+ new"))
-        .expect("added segment exists");
-    assert_eq!(added_segment.style.get_fg_color(), expected_added_fg);
+    assert!(
+        added_line
+            .segments
+            .iter()
+            .any(|seg| seg.style.get_fg_color() == expected_added_fg)
+    );
     assert!(
         added_line
             .segments
@@ -404,22 +424,36 @@ fn test_markdown_unlabeled_minimal_hunk_detects_diff() {
 
     let removed_segment = lines
         .iter()
-        .flat_map(|line| line.segments.iter())
-        .find(|seg| seg.text.contains("-    old();"))
-        .expect("removed segment exists");
-    assert_eq!(
-        removed_segment.style.get_fg_color(),
-        palette.removed_style().get_fg_color()
+        .find(|line| {
+            line.segments
+                .iter()
+                .map(|seg| seg.text.as_str())
+                .collect::<String>()
+                .contains("-    old();")
+        })
+        .expect("removed line exists");
+    assert!(
+        removed_segment
+            .segments
+            .iter()
+            .any(|seg| seg.style.get_fg_color() == palette.removed_style().get_fg_color())
     );
 
     let added_segment = lines
         .iter()
-        .flat_map(|line| line.segments.iter())
-        .find(|seg| seg.text.contains("+    new();"))
-        .expect("added segment exists");
-    assert_eq!(
-        added_segment.style.get_fg_color(),
-        palette.added_style().get_fg_color()
+        .find(|line| {
+            line.segments
+                .iter()
+                .map(|seg| seg.text.as_str())
+                .collect::<String>()
+                .contains("+    new();")
+        })
+        .expect("added line exists");
+    assert!(
+        added_segment
+            .segments
+            .iter()
+            .any(|seg| seg.style.get_fg_color() == palette.added_style().get_fg_color())
     );
 }
 

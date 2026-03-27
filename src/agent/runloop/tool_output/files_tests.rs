@@ -77,7 +77,7 @@ fn shorten_path_truncates_long() {
 
 #[test]
 fn pad_to_display_width_handles_wide_chars() {
-    let padded = pad_to_display_width("表", 4);
+    let padded = preview::pad_to_display_width("表", 4, ' ');
     assert_eq!(UnicodeWidthStr::width(padded.as_str()), 4);
     assert!(padded.starts_with("表"));
 }
@@ -85,7 +85,7 @@ fn pad_to_display_width_handles_wide_chars() {
 #[test]
 fn truncate_text_safe_respects_display_width() {
     let value = "表表表"; // width = 6
-    let truncated = truncate_text_safe(value, 5);
+    let truncated = preview::truncate_to_display_width(value, 5);
     assert_eq!(UnicodeWidthStr::width(truncated), 4);
     assert_eq!(truncated, "表表");
 }

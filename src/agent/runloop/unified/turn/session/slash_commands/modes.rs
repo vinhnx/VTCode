@@ -225,8 +225,7 @@ fn persist_mode_preference(
     permission_mode: Option<PermissionMode>,
     preference_label: &str,
 ) -> Result<()> {
-    if let Err(err) = super::persist_mode_settings(workspace, vt_cfg, Some(mode), permission_mode)
-    {
+    if let Err(err) = super::persist_mode_settings(workspace, vt_cfg, Some(mode), permission_mode) {
         renderer.line(
             MessageStyle::Error,
             &format!("Failed to persist {preference_label}: {}", err),
@@ -278,7 +277,8 @@ async fn apply_session_mode(
             )?;
         }
         SessionMode::Auto => {
-            ctx.renderer.line(MessageStyle::Info, "Switched to Auto Mode")?;
+            ctx.renderer
+                .line(MessageStyle::Info, "Switched to Auto Mode")?;
             ctx.renderer.line(
                 MessageStyle::Output,
                 "  Classifier-backed permission checks run in the background; blocked actions should retry with a safer path.",

@@ -1,5 +1,9 @@
 use std::collections::VecDeque;
 
+use vtcode_commons::preview::{
+    format_hidden_lines_summary as shared_hidden_lines_summary, split_head_tail_preview,
+    summary_window as shared_summary_window,
+};
 use vtcode_core::config::PtyConfig;
 use vtcode_core::tools::pty::PtyPreviewRenderer;
 use vtcode_core::utils::ansi_parser::strip_ansi;
@@ -129,13 +133,6 @@ impl LegacyPtyStreamState {
         let (head_count, tail_count) = summary_window(limit);
         let head_count = head_count.min(self.head_lines.len());
 
-        let mut rendered = Vec::new();
-        let mut first_output_line = true;
-        for line in self.head_lines.iter().take(head_count) {
-            rendered.push(prefix_stream_line(line, first_output_line));
-            first_output_line = false;
-        }
-
         let mut tail_preview = self.tail_lines.iter().cloned().collect::<Vec<_>>();
         if has_current {
             tail_preview.push(self.current_line.clone());
@@ -146,17 +143,13 @@ impl LegacyPtyStreamState {
         }
 
         let hidden_lines = total.saturating_sub(head_count + tail_preview.len());
-        if hidden_lines > 0 {
-            rendered.push(format_hidden_lines_summary(hidden_lines));
-        }
-
-        for line in tail_preview {
-            rendered.push(prefix_stream_line(&line, first_output_line));
-            first_output_line = false;
-        }
 
         RenderedPtyOutput {
-            lines: rendered,
+            lines: render_head_tail_lines(
+                &self.head_lines[..head_count],
+                hidden_lines,
+                &tail_preview,
+            ),
             last_line,
         }
     }
@@ -297,35 +290,12 @@ fn render_visible_output_lines(lines: &[String], limit: usize) -> Vec<String> {
     }
 
     let (head_count, tail_count) = summary_window(limit);
-    let mut rendered = Vec::with_capacity(limit);
-    let mut first_output_line = true;
-
-    for line in lines.iter().take(head_count) {
-        rendered.push(prefix_stream_line(line, first_output_line));
-        first_output_line = false;
-    }
-
-    let hidden_lines = lines.len().saturating_sub(head_count + tail_count);
-    if hidden_lines > 0 {
-        rendered.push(format_hidden_lines_summary(hidden_lines));
-    }
-
-    for line in lines.iter().skip(lines.len() - tail_count) {
-        rendered.push(prefix_stream_line(line, first_output_line));
-        first_output_line = false;
-    }
-
-    rendered
+    let preview = split_head_tail_preview(lines, head_count, tail_count);
+    render_head_tail_lines(preview.head, preview.hidden_count, preview.tail)
 }
 
 fn summary_window(limit: usize) -> (usize, usize) {
-    if limit <= 2 {
-        return (0, limit);
-    }
-
-    let head = LIVE_PREVIEW_HEAD_LINES.min((limit - 1) / 2).max(1);
-    let tail = limit.saturating_sub(head + 1).max(1);
-    (head, tail)
+    shared_summary_window(limit, LIVE_PREVIEW_HEAD_LINES)
 }
 
 fn prefix_all_lines(lines: &[String]) -> Vec<String> {
@@ -334,6 +304,27 @@ fn prefix_all_lines(lines: &[String]) -> Vec<String> {
         .enumerate()
         .map(|(index, line)| prefix_stream_line(line, index == 0))
         .collect()
+}
+
+fn render_head_tail_lines(head: &[String], hidden_lines: usize, tail: &[String]) -> Vec<String> {
+    let mut rendered = Vec::with_capacity(head.len() + tail.len() + usize::from(hidden_lines > 0));
+    let mut first_output_line = true;
+
+    for line in head {
+        rendered.push(prefix_stream_line(line, first_output_line));
+        first_output_line = false;
+    }
+
+    if hidden_lines > 0 {
+        rendered.push(format_hidden_lines_summary(hidden_lines));
+    }
+
+    for line in tail {
+        rendered.push(prefix_stream_line(line, first_output_line));
+        first_output_line = false;
+    }
+
+    rendered
 }
 
 fn last_non_empty_line(lines: &[String]) -> Option<String> {
@@ -345,11 +336,7 @@ fn last_non_empty_line(lines: &[String]) -> Option<String> {
 }
 
 fn format_hidden_lines_summary(hidden: usize) -> String {
-    if hidden == 1 {
-        "    … +1 line".to_string()
-    } else {
-        format!("    … +{} lines", hidden)
-    }
+    format!("    {}", shared_hidden_lines_summary(hidden))
 }
 
 fn normalize_command_prompt(command_prompt: Option<String>) -> Option<String> {

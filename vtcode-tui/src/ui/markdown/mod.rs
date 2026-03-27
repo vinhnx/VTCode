@@ -19,6 +19,7 @@ use pulldown_cmark::{Event, Options, Parser};
 use tables::TableBuffer;
 use unicode_width::UnicodeWidthStr;
 
+pub(crate) use code_blocks::render_diff_content_segments;
 pub use code_blocks::{
     HighlightedSegment, highlight_code_to_ansi, highlight_code_to_segments, highlight_line_for_diff,
 };

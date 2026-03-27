@@ -9,8 +9,8 @@ use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 use syntect::util::LinesWithEndings;
 use vtcode_commons::diff_paths::{
     format_start_only_hunk_header, is_diff_addition_line, is_diff_deletion_line,
-    is_diff_header_line, is_diff_new_file_marker_line, looks_like_diff_content,
-    parse_diff_git_path, parse_diff_marker_path,
+    is_diff_header_line, is_diff_new_file_marker_line, language_hint_from_path,
+    looks_like_diff_content, parse_diff_git_path, parse_diff_marker_path,
 };
 
 const DIFF_SUMMARY_PREFIX: &str = "• Diff ";
@@ -343,10 +343,16 @@ fn render_diff_code_block(
     let header_style = palette.header_style();
     let added_style = palette.added_style();
     let removed_style = palette.removed_style();
+    let mut current_language_hint: Option<String> = None;
 
     for line in normalize_diff_lines(code) {
         let trimmed = line.trim_end_matches('\n');
         let trimmed_start = trimmed.trim_start();
+        if let Some(path) =
+            parse_diff_git_path(trimmed_start).or_else(|| parse_diff_marker_path(trimmed_start))
+        {
+            current_language_hint = language_hint_from_path(&path);
+        }
         if let Some((path, additions, deletions)) = parse_diff_summary_line(trimmed_start) {
             let leading_len = trimmed.len().saturating_sub(trimmed_start.len());
             let leading = &trimmed[..leading_len];
@@ -376,7 +382,22 @@ fn render_diff_code_block(
 
         let mut line = prefixed_line(prefix_segments);
         if !trimmed.is_empty() {
-            line.push_segment(style, trimmed);
+            if is_diff_header_line(trimmed_start) {
+                line.push_segment(style, trimmed);
+            } else {
+                let marker_len = trimmed
+                    .chars()
+                    .next()
+                    .map(|ch| ch.len_utf8())
+                    .unwrap_or_default();
+                let (marker, content) = trimmed.split_at(marker_len);
+                line.push_segment(style, marker);
+                for segment in
+                    render_diff_content_segments(content, current_language_hint.as_deref(), style)
+                {
+                    line.push_segment(segment.style, &segment.text);
+                }
+            }
         }
         lines.push(line);
     }
@@ -688,6 +709,28 @@ pub fn highlight_line_for_diff(line: &str, language: Option<&str>) -> Option<Vec
             })
             .collect()
     })
+}
+
+pub(crate) fn render_diff_content_segments(
+    content: &str,
+    language: Option<&str>,
+    fallback_style: Style,
+) -> Vec<MarkdownSegment> {
+    let text = content.trim_end_matches('\n');
+    if text.is_empty() {
+        return Vec::new();
+    }
+
+    if let Some(segments) = highlight_line_for_diff(text, language)
+        && !segments.is_empty()
+    {
+        return segments
+            .into_iter()
+            .map(|(style, text)| MarkdownSegment::new(style, text))
+            .collect();
+    }
+
+    vec![MarkdownSegment::new(fallback_style, text)]
 }
 
 fn try_highlight(

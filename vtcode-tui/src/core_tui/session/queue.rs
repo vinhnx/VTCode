@@ -1,6 +1,7 @@
 use super::{Session, message::TranscriptLine};
 use ratatui::prelude::*;
-use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+use unicode_width::UnicodeWidthStr;
+use vtcode_commons::preview;
 
 pub(crate) struct QueueOverlay {
     pub(crate) width: u16,
@@ -129,33 +130,5 @@ impl Session {
 }
 
 fn truncate_to_width(text: &str, max_width: usize) -> String {
-    const ELLIPSIS: &str = "…";
-    const ELLIPSIS_WIDTH: usize = 1; // Unicode ellipsis is 1 character wide
-
-    if max_width == 0 {
-        return String::new();
-    }
-
-    let text_width = UnicodeWidthStr::width(text);
-    if text_width <= max_width {
-        return text.to_string();
-    }
-
-    let target = max_width.saturating_sub(ELLIPSIS_WIDTH);
-    let mut out = String::new();
-    let mut width = 0;
-    for ch in text.chars() {
-        let ch_width = UnicodeWidthChar::width(ch).unwrap_or(0);
-        if width + ch_width > target {
-            break;
-        }
-        out.push(ch);
-        width += ch_width;
-    }
-
-    if width + ELLIPSIS_WIDTH <= max_width {
-        out.push_str(ELLIPSIS);
-    }
-
-    out
+    preview::truncate_with_ellipsis(text, max_width, "…")
 }

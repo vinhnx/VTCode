@@ -34,9 +34,7 @@ use crate::agent::runloop::unified::state::SessionStats;
 use super::state::CtrlCState;
 use approval_cache::{cache_key, spawn_approval_record_task};
 use approval_persistence::{persist_shell_approval_prefix_rule, persisted_shell_approval};
-use approval_policy::{
-    approval_policy_rejects_prompt, build_tool_risk_context,
-};
+use approval_policy::{approval_policy_rejects_prompt, build_tool_risk_context};
 use hook_messages::render_hook_messages;
 use permission_prompt::{
     extract_shell_approval_command_words, extract_shell_permission_scope_signature,
@@ -150,13 +148,19 @@ fn effective_permissions_config(
     }
 
     let initial_rule_count = effective.allow.len() + effective.allowed_tools.len();
-    effective.allow.retain(|rule| !is_broad_auto_mode_allow_rule(rule));
+    effective
+        .allow
+        .retain(|rule| !is_broad_auto_mode_allow_rule(rule));
     effective
         .allowed_tools
         .retain(|tool| !is_broad_auto_mode_allow_rule(tool));
-    let dropped = initial_rule_count.saturating_sub(effective.allow.len() + effective.allowed_tools.len());
+    let dropped =
+        initial_rule_count.saturating_sub(effective.allow.len() + effective.allowed_tools.len());
     if dropped > 0 {
-        tracing::trace!(dropped_broad_allow_rules = dropped, "auto mode filtered broad allow rules");
+        tracing::trace!(
+            dropped_broad_allow_rules = dropped,
+            "auto mode filtered broad allow rules"
+        );
     }
     Some(effective)
 }
@@ -267,7 +271,10 @@ async fn resolve_auto_mode_permission(
         tracing::trace!(tool = %tool_name, "auto mode prompt fallback active");
         if !renderer.supports_inline_ui() {
             return Ok(AutoModePermissionOutcome::AbortHeadless {
-                reason: headless_auto_mode_fallback_reason(tool_name, stats.last_auto_mode_denial()),
+                reason: headless_auto_mode_fallback_reason(
+                    tool_name,
+                    stats.last_auto_mode_denial(),
+                ),
             });
         }
         return Ok(AutoModePermissionOutcome::PromptFallback);
@@ -498,10 +505,9 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
     let requires_protected_write_prompt = permission_request.requires_protected_write_prompt();
     let requires_rule_prompt =
         hook_requires_prompt || permission_matches.ask || requires_protected_write_prompt;
-    let auto_mode_classifier_review =
-        permission_mode == PermissionMode::Auto
-            && !requires_rule_prompt
-            && !auto_mode_safe_builtin_allow(tool_registry.workspace_root(), &permission_request);
+    let auto_mode_classifier_review = permission_mode == PermissionMode::Auto
+        && !requires_rule_prompt
+        && !auto_mode_safe_builtin_allow(tool_registry.workspace_root(), &permission_request);
     let policy_decision = tool_registry.evaluate_tool_policy(tool_name).await?;
     if policy_decision == ToolPermissionDecision::Deny {
         return Ok(ToolPermissionFlow::Denied);
@@ -614,7 +620,6 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         if permission_mode == PermissionMode::BypassPermissions {
             return Ok(ToolPermissionFlow::Approved);
         }
-
     }
 
     if permission_mode == PermissionMode::DontAsk {
@@ -668,7 +673,9 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
 
     if approval_policy_rejects_prompt(
         approval_policy,
-        requires_rule_prompt || requires_auto_fallback_prompt || policy_decision == ToolPermissionDecision::Prompt,
+        requires_rule_prompt
+            || requires_auto_fallback_prompt
+            || policy_decision == ToolPermissionDecision::Prompt,
         requires_sandbox_prompt,
     ) {
         return Ok(ToolPermissionFlow::Denied);
@@ -936,8 +943,8 @@ mod tests {
         approval_learning_target,
         approval_persistence::shell_command_has_persisted_approval_prefix,
         approval_policy_rejects_prompt, ensure_tool_permission,
-        persist_segment_approval_cache_keys,
-        persist_shell_approval_prefix_rule, tool_display_labels,
+        persist_segment_approval_cache_keys, persist_shell_approval_prefix_rule,
+        tool_display_labels,
     };
     use async_trait::async_trait;
     use serde_json::json;
@@ -972,8 +979,7 @@ mod tests {
         }
     }
 
-    fn create_session_with_receiver(
-    ) -> (
+    fn create_session_with_receiver() -> (
         InlineSession,
         tokio::sync::mpsc::UnboundedReceiver<vtcode_tui::app::InlineCommand>,
     ) {
@@ -1046,11 +1052,7 @@ mod tests {
             &self,
             _request: uni::LLMRequest,
         ) -> Result<uni::LLMResponse, uni::LLMError> {
-            let response = self
-                .responses
-                .lock()
-                .expect("responses lock")
-                .remove(0);
+            let response = self.responses.lock().expect("responses lock").remove(0);
             Ok(uni::LLMResponse {
                 content: Some(response),
                 model: "test-model".to_string(),
@@ -1879,7 +1881,9 @@ mod tests {
 
         let first_lines = drain_appended_lines(&mut receiver);
         assert!(first_lines.iter().any(|line| {
-            line.contains("Auto mode fell back to manual prompts after repeated classifier denials.")
+            line.contains(
+                "Auto mode fell back to manual prompts after repeated classifier denials.",
+            )
         }));
 
         let second_flow = ensure_tool_permission(

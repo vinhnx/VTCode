@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use smallvec::SmallVec;
 pub(super) use vtcode_commons::diff_paths::looks_like_diff_content;
+use vtcode_commons::preview::{display_width, truncate_with_ellipsis};
 use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::constants::defaults;
 use vtcode_core::config::loader::VTCodeConfig;
@@ -12,7 +13,6 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::ansi_codes::ESC_CHAR;
 use vtcode_core::utils::file_utils::ensure_dir_exists_sync;
 
-use super::super::files::{display_width, truncate_text_safe};
 use super::super::large_output::{LargeOutputConfig, spool_large_output};
 use crate::agent::runloop::text_tools::CodeFenceBlock;
 
@@ -71,8 +71,7 @@ pub(crate) fn build_markdown_code_block(
     markdown.push('\n');
     for line in lines {
         let display_line = if truncate_long_lines && display_width(line) > super::MAX_LINE_LENGTH {
-            let truncated = truncate_text_safe(line, super::MAX_LINE_LENGTH);
-            Cow::Owned(format!("{}...", truncated))
+            Cow::Owned(truncate_with_ellipsis(line, super::MAX_LINE_LENGTH, "..."))
         } else {
             Cow::Borrowed(*line)
         };

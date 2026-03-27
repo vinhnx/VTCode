@@ -2,9 +2,9 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Local, Utc};
 use vtcode_core::llm::provider::MessageRole;
 
+use vtcode_core::config::PermissionMode;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::types::EditingMode as ConfigEditingMode;
-use vtcode_core::config::PermissionMode;
 use vtcode_core::core::agent::snapshots::{
     CheckpointRestore, RevertScope, SnapshotManager, SnapshotMetadata,
 };
@@ -934,10 +934,8 @@ mod tests {
         let persisted = std::fs::read_to_string(workspace.join("vtcode.toml")).expect("config");
         assert!(persisted.contains("default_mode = \"auto\""));
         assert!(!persisted.contains("autonomous_mode = true"));
-        assert!(
-            vt_cfg.is_some_and(|cfg| {
-                cfg.permissions.default_mode == PermissionMode::Auto && !cfg.agent.autonomous_mode
-            })
-        );
+        assert!(vt_cfg.is_some_and(|cfg| {
+            cfg.permissions.default_mode == PermissionMode::Auto && !cfg.agent.autonomous_mode
+        }));
     }
 }

@@ -460,9 +460,9 @@ async fn check_tool_permission(
         Ok(ToolPermissionFlow::Denied) => Some(ToolExecutionStatus::Failure {
             error: anyhow!("Tool permission denied"),
         }),
-        Ok(ToolPermissionFlow::Blocked { reason }) => {
-            Some(ToolExecutionStatus::Failure { error: anyhow!(reason) })
-        }
+        Ok(ToolPermissionFlow::Blocked { reason }) => Some(ToolExecutionStatus::Failure {
+            error: anyhow!(reason),
+        }),
         Ok(ToolPermissionFlow::Interrupted | ToolPermissionFlow::Exit) => {
             Some(ToolExecutionStatus::Cancelled)
         }

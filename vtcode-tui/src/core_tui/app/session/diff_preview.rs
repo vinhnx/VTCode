@@ -9,15 +9,17 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
 };
+use vtcode_commons::diff_paths::language_hint_from_path;
+use vtcode_commons::diff_preview::count_diff_changes;
 
 use super::Session;
 use crate::core_tui::app::types::{DiffPreviewMode, DiffPreviewState, TrustMode};
 use crate::core_tui::style::{ratatui_color_from_ansi, ratatui_style_from_ansi};
-use crate::ui::markdown::highlight_line_for_diff;
+use crate::ui::markdown::render_diff_content_segments;
 use crate::utils::diff::{DiffBundle, DiffLineKind, DiffOptions, compute_diff_with_theme};
 use crate::utils::diff_styles::{
-    DiffColorPalette, DiffLineType, content_background, current_diff_render_style_context,
-    style_gutter, style_line_bg, style_sign,
+    DiffColorPalette, DiffLineType, current_diff_render_style_context, style_content, style_gutter,
+    style_line_bg, style_sign,
 };
 
 pub fn render_diff_preview(session: &Session, frame: &mut Frame<'_>, area: Rect) {
@@ -36,7 +38,7 @@ pub fn render_diff_preview(session: &Session, frame: &mut Frame<'_>, area: Rect)
             missing_newline_hint: false,
         },
     );
-    let (additions, deletions) = count_diff_changes(&diff_bundle);
+    let counts = count_diff_changes(&diff_bundle.hunks);
 
     let chunks = Layout::vertical([
         Constraint::Length(2),
@@ -45,7 +47,14 @@ pub fn render_diff_preview(session: &Session, frame: &mut Frame<'_>, area: Rect)
     ])
     .split(area);
 
-    render_file_header(frame, chunks[0], preview, &palette, additions, deletions);
+    render_file_header(
+        frame,
+        chunks[0],
+        preview,
+        &palette,
+        counts.additions,
+        counts.deletions,
+    );
     render_diff_content(frame, chunks[1], preview, &diff_bundle);
     render_controls(frame, chunks[2], preview);
 }
@@ -77,82 +86,13 @@ fn render_file_header(
     frame.render_widget(Paragraph::new(header), area);
 }
 
-fn detect_language(file_path: &str) -> Option<&'static str> {
-    let ext = file_path.rsplit('.').next()?;
-    match ext.to_lowercase().as_str() {
-        "rs" => Some("rust"),
-        "py" => Some("python"),
-        "js" => Some("javascript"),
-        "ts" | "tsx" => Some("typescript"),
-        "go" => Some("go"),
-        "java" => Some("java"),
-        "sh" | "bash" => Some("bash"),
-        "swift" => Some("swift"),
-        "c" | "h" => Some("c"),
-        "cpp" | "cc" | "cxx" | "hpp" => Some("cpp"),
-        "json" => Some("json"),
-        "yaml" | "yml" => Some("yaml"),
-        "toml" => Some("toml"),
-        "md" => Some("markdown"),
-        "html" | "htm" => Some("html"),
-        "css" | "scss" => Some("css"),
-        _ => None,
-    }
-}
-
-fn highlight_line_with_bg(
-    line: &str,
-    language: Option<&str>,
-    bg: Option<Color>,
-) -> Vec<Span<'static>> {
-    let text = line.trim_end_matches('\n');
-    if let Some(segments) = highlight_line_for_diff(text, language) {
-        segments
-            .into_iter()
-            .map(|(anstyle, t)| {
-                let style = apply_diff_bg_if_missing(ratatui_style_from_ansi(anstyle), bg);
-                Span::styled(t, style)
-            })
-            .collect()
-    } else {
-        let style = apply_diff_bg_if_missing(Style::default(), bg);
-        vec![Span::styled(text.to_string(), style)]
-    }
-}
-
-fn apply_diff_bg_if_missing(mut style: Style, bg: Option<Color>) -> Style {
-    if style.bg.is_none()
-        && let Some(bg_color) = bg
-    {
-        style = style.bg(bg_color);
-    }
-    style
-}
-
-fn count_diff_changes(diff_bundle: &DiffBundle) -> (usize, usize) {
-    let mut additions = 0usize;
-    let mut deletions = 0usize;
-
-    for hunk in &diff_bundle.hunks {
-        for line in &hunk.lines {
-            match line.kind {
-                DiffLineKind::Addition => additions += 1,
-                DiffLineKind::Deletion => deletions += 1,
-                DiffLineKind::Context => {}
-            }
-        }
-    }
-
-    (additions, deletions)
-}
-
 fn render_diff_content(
     frame: &mut Frame<'_>,
     area: Rect,
     preview: &DiffPreviewState,
     diff_bundle: &DiffBundle,
 ) {
-    let language = detect_language(&preview.file_path);
+    let language = language_hint_from_path(&preview.file_path);
     let style_context = current_diff_render_style_context();
 
     let mut lines: Vec<Line> = Vec::new();
@@ -190,7 +130,7 @@ fn render_diff_content(
             let gutter_style = style_gutter(line_type);
             let sign_style = style_sign(line_type);
             let line_bg = style_line_bg(line_type, style_context);
-            let content_bg = content_background(line_type, style_context);
+            let content_style = style_content(line_type, style_context);
 
             let prefix = match line_type {
                 DiffLineType::Insert => "+",
@@ -203,9 +143,12 @@ fn render_diff_content(
                 Span::styled(line_num_str, gutter_style),
             ];
 
-            // For changed lines with syntax highlighting, apply bg tint
-            let highlighted = highlight_line_with_bg(text, language, content_bg);
-            spans.extend(highlighted);
+            for segment in
+                render_diff_content_segments(text, language.as_deref(), anstyle::Style::new())
+            {
+                let style = content_style.patch(ratatui_style_from_ansi(segment.style));
+                spans.push(Span::styled(segment.text, style));
+            }
 
             lines.push(Line::from(spans).style(line_bg));
         }
@@ -343,22 +286,8 @@ fn control_lines(preview: &DiffPreviewState) -> Vec<Line<'static>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{apply_diff_bg_if_missing, control_lines, header_action_label};
+    use super::{control_lines, header_action_label};
     use crate::core_tui::app::types::{DiffPreviewMode, DiffPreviewState};
-    use ratatui::style::{Color, Style};
-
-    #[test]
-    fn apply_diff_bg_if_missing_adds_bg_when_none() {
-        let styled = apply_diff_bg_if_missing(Style::default(), Some(Color::Green));
-        assert_eq!(styled.bg, Some(Color::Green));
-    }
-
-    #[test]
-    fn apply_diff_bg_if_missing_preserves_existing_bg() {
-        let base = Style::default().bg(Color::Blue);
-        let styled = apply_diff_bg_if_missing(base, Some(Color::Green));
-        assert_eq!(styled.bg, Some(Color::Blue));
-    }
 
     #[test]
     fn conflict_controls_show_proceed_reload_abort_copy() {

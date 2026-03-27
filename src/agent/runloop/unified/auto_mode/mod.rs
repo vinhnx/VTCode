@@ -34,9 +34,7 @@ const MAX_TOOL_OUTPUT_CHARS: usize = 2400;
 
 #[derive(Debug, Clone)]
 pub(crate) enum AutoModeReviewDecision {
-    Allow {
-        stage: &'static str,
-    },
+    Allow { stage: &'static str },
     Block(AutoModeDenial),
 }
 
@@ -327,10 +325,9 @@ fn build_classifier_transcript(workspace_root: &Path, history: &[uni::Message]) 
                         .as_ref()
                         .map(|function| function.name.as_str())
                         .unwrap_or(tool_call.call_type.as_str());
-                    let args = tool_call
-                        .function
-                        .as_ref()
-                        .and_then(|function| serde_json::from_str::<Value>(&function.arguments).ok());
+                    let args = tool_call.function.as_ref().and_then(|function| {
+                        serde_json::from_str::<Value>(&function.arguments).ok()
+                    });
                     let payload = normalized_tool_payload(workspace_root, tool_name, args.as_ref());
                     entries.push(format!(
                         "ACTION: {}",
@@ -348,7 +345,11 @@ fn build_classifier_transcript(workspace_root: &Path, history: &[uni::Message]) 
     entries
 }
 
-fn normalized_tool_payload(workspace_root: &Path, tool_name: &str, tool_args: Option<&Value>) -> String {
+fn normalized_tool_payload(
+    workspace_root: &Path,
+    tool_name: &str,
+    tool_args: Option<&Value>,
+) -> String {
     let current_dir = workspace_root;
     let permission_request =
         build_permission_request(workspace_root, current_dir, tool_name, tool_args);
@@ -421,7 +422,8 @@ fn render_paths(paths: &[PathBuf]) -> String {
     if paths.is_empty() {
         return "<none>".to_string();
     }
-    paths.iter()
+    paths
+        .iter()
         .map(|path| path.display().to_string())
         .collect::<Vec<_>>()
         .join(", ")
@@ -576,7 +578,10 @@ async fn raw_completion(
         stream: false,
         ..Default::default()
     };
-    let response = provider.generate(request).await.map_err(|err| anyhow!(err))?;
+    let response = provider
+        .generate(request)
+        .await
+        .map_err(|err| anyhow!(err))?;
     Ok(response.content_text().trim().to_string())
 }
 
@@ -585,8 +590,12 @@ fn parse_stage_two_decision(raw: &str) -> Result<StageTwoDecision> {
         return Ok(parsed);
     }
 
-    let start = raw.find('{').ok_or_else(|| anyhow!("missing JSON object"))?;
-    let end = raw.rfind('}').ok_or_else(|| anyhow!("missing JSON object"))?;
+    let start = raw
+        .find('{')
+        .ok_or_else(|| anyhow!("missing JSON object"))?;
+    let end = raw
+        .rfind('}')
+        .ok_or_else(|| anyhow!("missing JSON object"))?;
     serde_json::from_str(&raw[start..=end]).context("parse auto mode stage-2 JSON")
 }
 
@@ -603,7 +612,8 @@ fn numbered_lines(lines: &[String]) -> String {
         return "1. <none>".to_string();
     }
 
-    lines.iter()
+    lines
+        .iter()
         .enumerate()
         .map(|(index, line)| format!("{}. {}", index + 1, line))
         .collect::<Vec<_>>()
@@ -622,7 +632,8 @@ fn truncate_text(value: &str, max_chars: usize) -> String {
 }
 
 fn first_upper_token(value: &str) -> String {
-    value.split_whitespace()
+    value
+        .split_whitespace()
         .next()
         .unwrap_or("BLOCK")
         .trim_matches(|c: char| !c.is_ascii_alphabetic())
@@ -659,14 +670,14 @@ mod tests {
     use serde_json::json;
     use std::collections::BTreeMap;
     use vtcode_config::core::PromptCachingConfig;
-    use vtcode_core::core::agent::snapshots::{
-        DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
-    };
-    use vtcode_core::llm::provider::{FinishReason, LLMError, LLMRequest, LLMResponse};
     use vtcode_core::config::constants::models;
     use vtcode_core::config::types::{
         ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
     };
+    use vtcode_core::core::agent::snapshots::{
+        DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
+    };
+    use vtcode_core::llm::provider::{FinishReason, LLMError, LLMRequest, LLMResponse};
 
     fn runtime_config() -> CoreAgentConfig {
         CoreAgentConfig {
@@ -746,10 +757,22 @@ mod tests {
         ];
 
         let transcript = build_classifier_transcript(Path::new("."), &history);
-        assert!(transcript.iter().any(|entry| entry.contains("USER: clean up old branches")));
-        assert!(transcript.iter().any(|entry| entry.contains("git push --force")));
+        assert!(
+            transcript
+                .iter()
+                .any(|entry| entry.contains("USER: clean up old branches"))
+        );
+        assert!(
+            transcript
+                .iter()
+                .any(|entry| entry.contains("git push --force"))
+        );
         assert!(!transcript.iter().any(|entry| entry.contains("thinking")));
-        assert!(!transcript.iter().any(|entry| entry.contains("{\"ok\":true}")));
+        assert!(
+            !transcript
+                .iter()
+                .any(|entry| entry.contains("{\"ok\":true}"))
+        );
     }
 
     #[tokio::test]
@@ -794,8 +817,9 @@ mod tests {
         let permission_request =
             build_permission_request(workspace_root, workspace_root, "unified_exec", Some(&args));
 
-        let context = prior_script_context(workspace_root, &history, &permission_request, Some(&args))
-            .expect("script context");
+        let context =
+            prior_script_context(workspace_root, &history, &permission_request, Some(&args))
+                .expect("script context");
 
         assert!(context.contains("scripts/cleanup.sh"));
         assert!(context.contains("rm -rf /tmp/demo"));

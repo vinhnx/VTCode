@@ -1,72 +1,17 @@
 use anyhow::Result;
 use serde_json::Value;
-use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 use vtcode_commons::diff_paths::{language_hint_from_path, looks_like_diff_content};
+use vtcode_commons::preview;
 use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::constants::tools;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::streams::{build_markdown_code_block, render_diff_content_block};
 use super::styles::{GitStyles, LsStyles};
-#[path = "files_diff.rs"]
-mod files_diff;
-pub(crate) use files_diff::format_diff_content_lines_with_numbers;
+pub(crate) use vtcode_commons::diff_preview::format_numbered_unified_diff as format_diff_content_lines_with_numbers;
 
 /// Constants for line and content limits (compact display)
 const MAX_DISPLAYED_FILES: usize = 100; // Limit displayed files to reduce clutter
-
-/// Safely truncate text to a maximum terminal display width.
-pub(super) fn truncate_text_safe(text: &str, max_width: usize) -> &str {
-    if max_width == 0 {
-        return "";
-    }
-    if display_width(text) <= max_width {
-        return text;
-    }
-    let mut consumed_width = 0usize;
-    for (idx, ch) in text.char_indices() {
-        let char_width = UnicodeWidthChar::width(ch).unwrap_or(0);
-        if consumed_width + char_width > max_width {
-            return &text[..idx];
-        }
-        consumed_width += char_width;
-    }
-    text
-}
-
-pub(super) fn display_width(text: &str) -> usize {
-    UnicodeWidthStr::width(text)
-}
-
-fn pad_to_display_width(text: &str, width: usize) -> String {
-    let current = display_width(text);
-    if current >= width {
-        return text.to_string();
-    }
-    format!("{}{}", text, " ".repeat(width - current))
-}
-
-fn suffix_for_display_width(value: &str, max_width: usize) -> &str {
-    if display_width(value) <= max_width {
-        return value;
-    }
-    if max_width == 0 {
-        return "";
-    }
-
-    let mut consumed_width = 0usize;
-    let mut start_idx = value.len();
-    for (idx, ch) in value.char_indices().rev() {
-        let char_width = UnicodeWidthChar::width(ch).unwrap_or(0);
-        if consumed_width + char_width > max_width {
-            break;
-        }
-        consumed_width += char_width;
-        start_idx = idx;
-    }
-
-    &value[start_idx..]
-}
 
 /// Helper to extract optional string from JSON value
 fn get_string<'a>(val: &'a Value, key: &str) -> Option<&'a str> {
@@ -248,14 +193,14 @@ pub(crate) fn render_list_dir_output(
             let max_name_width = if !directories.is_empty() || !files.is_empty() {
                 let dir_max_width = directories
                     .iter()
-                    .map(|(name, _)| display_width(name) + 1) // +1 for trailing /
+                    .map(|(name, _)| preview::display_width(name) + 1) // +1 for trailing /
                     .max()
                     .unwrap_or(10)
                     .min(40);
 
                 let file_max_width = files
                     .iter()
-                    .map(|(name, _)| display_width(name))
+                    .map(|(name, _)| preview::display_width(name))
                     .max()
                     .unwrap_or(10)
                     .min(40);
@@ -270,7 +215,8 @@ pub(crate) fn render_list_dir_output(
                 renderer.line(MessageStyle::ToolDetail, "[Directories]")?;
                 for (name, _size) in &directories {
                     let name_with_slash = format!("{}/", name);
-                    let display = pad_to_display_width(&name_with_slash, max_name_width);
+                    let display =
+                        preview::pad_to_display_width(&name_with_slash, max_name_width, ' ');
                     renderer.line(MessageStyle::ToolDetail, &display)?;
                 }
 
@@ -285,7 +231,7 @@ pub(crate) fn render_list_dir_output(
                 renderer.line(MessageStyle::ToolDetail, "[Files]")?;
                 for (name, _size) in &files {
                     // Simple file name display without size or emoji
-                    let display = pad_to_display_width(name, max_name_width);
+                    let display = preview::pad_to_display_width(name, max_name_width, ' ');
                     renderer.line(MessageStyle::ToolDetail, &display)?;
                 }
             }
@@ -387,23 +333,23 @@ const MAX_PREVIEW_LINES: usize = 12;
 const MAX_FULL_RENDER_LINES: usize = 80;
 
 fn shorten_path(path: &str, max_len: usize) -> String {
-    if display_width(path) <= max_len {
+    if preview::display_width(path) <= max_len {
         return path.to_string();
     }
     if let Some(name) = std::path::Path::new(path).file_name() {
         let name_str = name.to_string_lossy();
         if let Some(parent) = std::path::Path::new(path).parent() {
             let parent_str = parent.to_string_lossy();
-            let reserved = display_width(name_str.as_ref()) + 2; // ellipsis + slash
+            let reserved = preview::display_width(name_str.as_ref()) + 2; // ellipsis + slash
             let budget = max_len.saturating_sub(reserved);
-            if budget > 0 && display_width(parent_str.as_ref()) > budget {
-                let parent_tail = suffix_for_display_width(parent_str.as_ref(), budget);
+            if budget > 0 && preview::display_width(parent_str.as_ref()) > budget {
+                let parent_tail = preview::suffix_for_display_width(parent_str.as_ref(), budget);
                 return format!("…{}/{}", parent_tail, name_str);
             }
         }
         return name_str.to_string();
     }
-    truncate_text_safe(path, max_len).to_string()
+    preview::truncate_to_display_width(path, max_len).to_string()
 }
 
 fn strip_line_number(line: &str) -> &str {

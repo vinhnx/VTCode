@@ -4,6 +4,7 @@ use crate::config::constants::diff;
 use crate::utils::diff::{DiffOptions, compute_diff_with_theme};
 use serde_json::{Value, json};
 use std::time::Instant;
+use vtcode_commons::diff_preview::count_diff_changes;
 
 /// Create a diff preview response when content exceeds the size limit.
 pub fn diff_preview_size_skip() -> Value {
@@ -87,18 +88,10 @@ pub fn build_diff_preview(path: &str, before: Option<&str>, after: &str) -> Valu
     }
 
     let line_count = diff_bundle.formatted.lines().count();
-    let (additions, deletions) =
-        diff_bundle
-            .formatted
-            .lines()
-            .fold((0usize, 0usize), |(add, del), line| {
-                match line.chars().next() {
-                    Some('+') => (add + 1, del),
-                    Some('-') => (add, del + 1),
-                    _ => (add, del),
-                }
-            });
-    let total_changes = additions + deletions;
+    let counts = count_diff_changes(&diff_bundle.hunks);
+    let additions = counts.additions;
+    let deletions = counts.deletions;
+    let total_changes = counts.total();
 
     if total_changes > diff::MAX_SINGLE_FILE_CHANGES {
         tracing::debug!(

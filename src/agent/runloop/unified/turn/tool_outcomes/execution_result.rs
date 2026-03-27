@@ -745,10 +745,9 @@ async fn auto_mode_probe_warning(
     tool_name: &str,
     content_for_model: &str,
 ) -> Option<crate::agent::runloop::unified::auto_mode::ProbeWarning> {
-    if !ctx
-        .vt_cfg
-        .is_some_and(|cfg| cfg.permissions.default_mode == vtcode_core::config::PermissionMode::Auto)
-        || !ctx.session_stats.is_autonomous_mode()
+    if !ctx.vt_cfg.is_some_and(|cfg| {
+        cfg.permissions.default_mode == vtcode_core::config::PermissionMode::Auto
+    }) || !ctx.session_stats.is_autonomous_mode()
     {
         return None;
     }
@@ -778,9 +777,10 @@ fn append_probe_warning(
     probe_warning: crate::agent::runloop::unified::auto_mode::ProbeWarning,
 ) -> Result<()> {
     tracing::trace!(tool = %tool_name, probe_hit = true, "auto mode prompt probe flagged tool output");
-    ctx.working_history.push(vtcode_core::llm::provider::Message::system(
-        probe_warning.warning.clone(),
-    ));
+    ctx.working_history
+        .push(vtcode_core::llm::provider::Message::system(
+            probe_warning.warning.clone(),
+        ));
     ctx.renderer.line(
         MessageStyle::Warning,
         "Auto mode flagged the latest tool output as suspicious prompt injection.",
@@ -795,7 +795,9 @@ async fn push_tool_response_with_auto_mode_probe(
     content_for_model: String,
 ) -> Result<()> {
     let probe_warning = auto_mode_probe_warning(t_ctx.ctx, tool_name, &content_for_model).await;
-    t_ctx.ctx.push_tool_response(tool_call_id, content_for_model);
+    t_ctx
+        .ctx
+        .push_tool_response(tool_call_id, content_for_model);
     if let Some(probe_warning) = probe_warning {
         append_probe_warning(t_ctx.ctx, tool_name, probe_warning)?;
     }
@@ -1021,8 +1023,13 @@ async fn handle_cancelled(
     t_ctx.ctx.renderer.line(MessageStyle::Info, &error_msg)?;
 
     let error_content = serde_json::json!({"error": error_msg});
-    push_tool_response_with_auto_mode_probe(t_ctx, tool_call_id, tool_name, error_content.to_string())
-        .await?;
+    push_tool_response_with_auto_mode_probe(
+        t_ctx,
+        tool_call_id,
+        tool_name,
+        error_content.to_string(),
+    )
+    .await?;
 
     record_request_user_input_interview_result(t_ctx.ctx, tool_name, None);
 

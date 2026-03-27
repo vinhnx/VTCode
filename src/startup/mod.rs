@@ -23,11 +23,11 @@ use validation::{
 };
 use vtcode_config::auth::{OpenAIChatGptAuthHandle, resolve_openai_auth};
 use vtcode_core::cli::args::{Cli, Commands};
+use vtcode_core::config::PermissionMode;
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
-use vtcode_core::config::PermissionMode;
 use vtcode_core::config::validator::{
     check_openai_hosted_shell_compat, check_prompt_cache_retention_compat,
 };
