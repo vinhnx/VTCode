@@ -30,6 +30,7 @@ use std::{
     time::{Duration, Instant, SystemTime},
 };
 use tokio::fs;
+use vtcode_commons::preview::excerpt_text_lines;
 use vtcode_config::{
     ResourceLimitsPreset, SandboxMode as RuntimeSandboxMode, SeccompProfilePreset,
 };
@@ -1419,31 +1420,20 @@ fn clamp_max_matches(value: Option<u64>) -> usize {
 }
 
 fn build_head_tail_preview(content: &str, head_lines: usize, tail_lines: usize) -> (String, bool) {
-    let lines: Vec<&str> = content.lines().collect();
-    if lines.is_empty() {
+    let preview = excerpt_text_lines(content, head_lines.max(1), tail_lines.max(1));
+    if preview.total == 0 {
         return (String::new(), false);
     }
 
-    let head = head_lines.max(1);
-    let tail = tail_lines.max(1);
-    if lines.len() <= head + tail {
-        return (lines.join("\n"), false);
+    if preview.hidden_count == 0 {
+        return (preview.head.join("\n"), false);
     }
 
-    let omitted = lines.len().saturating_sub(head + tail);
-    let mut preview = Vec::with_capacity(head + tail + 1);
-    preview.extend(lines.iter().take(head).copied().map(String::from));
-    preview.push(format!("[... omitted {} lines ...]", omitted));
-    preview.extend(
-        lines
-            .iter()
-            .rev()
-            .take(tail)
-            .rev()
-            .copied()
-            .map(String::from),
-    );
-    (preview.join("\n"), true)
+    let mut lines = Vec::with_capacity(preview.head.len() + preview.tail.len() + 1);
+    lines.extend(preview.head.into_iter().map(String::from));
+    lines.push(format!("[... omitted {} lines ...]", preview.hidden_count));
+    lines.extend(preview.tail.into_iter().map(String::from));
+    (lines.join("\n"), true)
 }
 
 fn filter_lines(

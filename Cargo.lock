@@ -6662,6 +6662,7 @@ dependencies = [
  "unicode-segmentation",
  "unicode-width 0.2.2",
  "vtcode-commons",
+ "vtcode-config",
  "vtcode-vim",
 ]
 

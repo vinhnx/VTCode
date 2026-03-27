@@ -57,6 +57,7 @@ tui-widget-list = "0.15"
 unicode-segmentation = "1.11"
 unicode-width = { workspace = true }
 vtcode-commons = { path = "../vtcode-commons", version = "0.93.3" }
+vtcode-config = { path = "../vtcode-config", version = "0.93.3" }
 vtcode-vim = { path = "../vtcode-vim", version = "0.93.3" }
 
 [dev-dependencies]

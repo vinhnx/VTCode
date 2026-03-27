@@ -22,8 +22,6 @@ pub mod env_vars;
 pub mod execution;
 /// HTTP header constants for provider integrations
 pub mod headers;
-/// Instruction constants
-pub mod instructions;
 /// LLM generation parameters
 pub mod llm_generation;
 /// MCP constants
@@ -40,8 +38,8 @@ pub mod models;
 pub mod optimization;
 /// Output limits to prevent unbounded memory growth.
 pub mod output_limits;
-/// Project doc constants
-pub mod project_doc;
+/// Prompt budget defaults shared across instruction and project-doc loading.
+pub mod prompt_budget;
 /// Prompt caching defaults shared across features and providers
 pub mod prompt_cache;
 /// Prompt path constants to avoid hardcoding throughout the codebase

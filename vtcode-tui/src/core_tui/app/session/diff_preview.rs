@@ -10,13 +10,15 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
 };
 use vtcode_commons::diff_paths::language_hint_from_path;
-use vtcode_commons::diff_preview::count_diff_changes;
+use vtcode_commons::diff_preview::{
+    DiffDisplayKind, count_diff_changes, display_lines_from_hunks,
+};
 
 use super::Session;
 use crate::core_tui::app::types::{DiffPreviewMode, DiffPreviewState, TrustMode};
 use crate::core_tui::style::{ratatui_color_from_ansi, ratatui_style_from_ansi};
 use crate::ui::markdown::render_diff_content_segments;
-use crate::utils::diff::{DiffBundle, DiffLineKind, DiffOptions, compute_diff_with_theme};
+use crate::utils::diff::{DiffBundle, DiffOptions, compute_diff_with_theme};
 use crate::utils::diff_styles::{
     DiffColorPalette, DiffLineType, current_diff_render_style_context, style_content, style_gutter,
     style_line_bg, style_sign,
@@ -97,60 +99,62 @@ fn render_diff_content(
 
     let mut lines: Vec<Line> = Vec::new();
     let max_display = area.height.saturating_sub(1) as usize;
+    let display_lines = display_lines_from_hunks(&diff_bundle.hunks);
 
-    for hunk in &diff_bundle.hunks {
+    for display_line in display_lines {
         if lines.len() >= max_display {
             break;
         }
 
-        lines.push(Line::from(Span::styled(
-            format!("@@ -{} +{} @@", hunk.old_start, hunk.new_start),
-            Style::default().fg(Color::Cyan),
-        )));
-
-        for diff_line in &hunk.lines {
-            if lines.len() >= max_display {
-                break;
+        match display_line.kind {
+            DiffDisplayKind::HunkHeader => {
+                lines.push(Line::from(Span::styled(
+                    display_line.text,
+                    Style::default().fg(Color::Cyan),
+                )));
             }
-
-            let line_num = match diff_line.kind {
-                DiffLineKind::Context => diff_line.new_line.unwrap_or(0),
-                DiffLineKind::Addition => diff_line.new_line.unwrap_or(0),
-                DiffLineKind::Deletion => diff_line.old_line.unwrap_or(0),
-            };
-            let line_num_str = format!("{:>4} ", line_num);
-            let text = diff_line.text.trim_end_matches('\n');
-
-            let line_type = match diff_line.kind {
-                DiffLineKind::Context => DiffLineType::Context,
-                DiffLineKind::Addition => DiffLineType::Insert,
-                DiffLineKind::Deletion => DiffLineType::Delete,
-            };
-
-            let gutter_style = style_gutter(line_type);
-            let sign_style = style_sign(line_type);
-            let line_bg = style_line_bg(line_type, style_context);
-            let content_style = style_content(line_type, style_context);
-
-            let prefix = match line_type {
-                DiffLineType::Insert => "+",
-                DiffLineType::Delete => "-",
-                DiffLineType::Context => " ",
-            };
-
-            let mut spans = vec![
-                Span::styled(prefix.to_string(), sign_style),
-                Span::styled(line_num_str, gutter_style),
-            ];
-
-            for segment in
-                render_diff_content_segments(text, language.as_deref(), anstyle::Style::new())
-            {
-                let style = content_style.patch(ratatui_style_from_ansi(segment.style));
-                spans.push(Span::styled(segment.text, style));
+            DiffDisplayKind::Metadata => {
+                lines.push(Line::from(Span::styled(
+                    display_line.text,
+                    Style::default().fg(Color::DarkGray),
+                )));
             }
+            DiffDisplayKind::Context | DiffDisplayKind::Addition | DiffDisplayKind::Deletion => {
+                let line_num_str = format!("{:>4} ", display_line.line_number.unwrap_or(0));
+                let line_type = match display_line.kind {
+                    DiffDisplayKind::Context => DiffLineType::Context,
+                    DiffDisplayKind::Addition => DiffLineType::Insert,
+                    DiffDisplayKind::Deletion => DiffLineType::Delete,
+                    DiffDisplayKind::Metadata | DiffDisplayKind::HunkHeader => unreachable!(),
+                };
 
-            lines.push(Line::from(spans).style(line_bg));
+                let gutter_style = style_gutter(line_type);
+                let sign_style = style_sign(line_type);
+                let line_bg = style_line_bg(line_type, style_context);
+                let content_style = style_content(line_type, style_context);
+
+                let prefix = match line_type {
+                    DiffLineType::Insert => "+",
+                    DiffLineType::Delete => "-",
+                    DiffLineType::Context => " ",
+                };
+
+                let mut spans = vec![
+                    Span::styled(prefix.to_string(), sign_style),
+                    Span::styled(line_num_str, gutter_style),
+                ];
+
+                for segment in render_diff_content_segments(
+                    &display_line.text,
+                    language.as_deref(),
+                    anstyle::Style::new(),
+                ) {
+                    let style = content_style.patch(ratatui_style_from_ansi(segment.style));
+                    spans.push(Span::styled(segment.text, style));
+                }
+
+                lines.push(Line::from(spans).style(line_bg));
+            }
         }
     }
 

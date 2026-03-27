@@ -21,6 +21,7 @@ use std::sync::Arc;
 use tokio::fs;
 use tokio::sync::RwLock;
 use tracing::{debug, info};
+use vtcode_commons::preview::{condense_text_bytes, tail_preview_text};
 
 /// Default threshold for spooling tool output to files (200KB)
 /// Matches the byte fuse in output_processing.rs and avoids unnecessary spooling
@@ -36,84 +37,12 @@ fn is_command_session_tool_name(tool_name: &str) -> bool {
     crate::tools::tool_intent::canonical_unified_exec_tool_name(tool_name).is_some()
 }
 
-fn floor_char_boundary(s: &str, index: usize) -> usize {
-    if index >= s.len() {
-        return s.len();
-    }
-    let mut i = index;
-    while i > 0 && !s.is_char_boundary(i) {
-        i -= 1;
-    }
-    i
-}
-
-fn ceil_char_boundary(s: &str, index: usize) -> usize {
-    if index >= s.len() {
-        return s.len();
-    }
-    let mut i = index;
-    while i < s.len() && !s.is_char_boundary(i) {
-        i += 1;
-    }
-    i
-}
-
-fn condense_content_with_limits(content: &str, head_bytes: usize, tail_bytes: usize) -> String {
-    let byte_len = content.len();
-    let max_inline = head_bytes + tail_bytes;
-    if byte_len <= max_inline {
-        return content.to_string();
-    }
-
-    let head_end = floor_char_boundary(content, head_bytes);
-    let tail_start_raw = byte_len.saturating_sub(tail_bytes);
-    let tail_start = ceil_char_boundary(content, tail_start_raw);
-
-    let omitted = byte_len
-        .saturating_sub(head_end)
-        .saturating_sub(byte_len - tail_start);
-
-    format!(
-        "{}\n\n… [{} bytes omitted] …\n\n{}",
-        &content[..head_end],
-        omitted,
-        &content[tail_start..]
-    )
-}
-
 fn condense_content(content: &str) -> String {
-    condense_content_with_limits(content, CONDENSE_HEAD_BYTES, CONDENSE_TAIL_BYTES)
+    condense_text_bytes(content, CONDENSE_HEAD_BYTES, CONDENSE_TAIL_BYTES)
 }
 
 fn tail_preview_content(content: &str, tail_bytes: usize, max_lines: usize) -> String {
-    if content.is_empty() {
-        return String::new();
-    }
-
-    let tail_start = ceil_char_boundary(content, content.len().saturating_sub(tail_bytes));
-    let tail_slice = &content[tail_start..];
-
-    let mut line_start = 0usize;
-    if max_lines > 0 {
-        let mut seen = 0usize;
-        for (idx, b) in tail_slice.as_bytes().iter().enumerate().rev() {
-            if *b == b'\n' {
-                seen += 1;
-                if seen >= max_lines {
-                    line_start = idx.saturating_add(1);
-                    break;
-                }
-            }
-        }
-    }
-
-    let preview = &tail_slice[line_start..];
-    let omitted = tail_start.saturating_add(line_start);
-    if omitted == 0 {
-        return preview.to_string();
-    }
-
-    format!("… [{} bytes omitted] …\n{}", omitted, preview)
+    tail_preview_text(content, tail_bytes, max_lines)
 }
 
 /// Configuration for the output spooler

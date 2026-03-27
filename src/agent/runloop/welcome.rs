@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use tracing::warn;
 use vtcode_core::config::AgentClientProtocolZedWorkspaceTrustMode;
 use vtcode_core::config::constants::{
-    instructions as instruction_constants, project_doc as project_doc_constants, ui as ui_constants,
+    prompt_budget as prompt_budget_constants, ui as ui_constants,
 };
 use vtcode_core::config::core::AgentOnboardingConfig;
 use vtcode_core::config::loader::VTCodeConfig;
@@ -44,10 +44,10 @@ pub(crate) async fn prepare_session_bootstrap(
         .unwrap_or_default();
     let instruction_budget = vt_cfg
         .map(|cfg| cfg.agent.instruction_max_bytes)
-        .unwrap_or(instruction_constants::DEFAULT_MAX_BYTES);
+        .unwrap_or(prompt_budget_constants::DEFAULT_MAX_BYTES);
     let project_doc_budget = vt_cfg
         .map(|cfg| cfg.agent.project_doc_max_bytes)
-        .unwrap_or(project_doc_constants::DEFAULT_MAX_BYTES);
+        .unwrap_or(prompt_budget_constants::DEFAULT_MAX_BYTES);
     let effective_budget = instruction_budget.min(project_doc_budget);
 
     let guideline_highlights = if onboarding_cfg.include_guideline_highlights {

@@ -1,4 +1,4 @@
-use crate::constants::{defaults, instructions, llm_generation, project_doc};
+use crate::constants::{defaults, llm_generation, prompt_budget};
 use crate::types::{
     EditingMode, ReasoningEffortLevel, SystemPromptMode, ToolDocumentationMode,
     UiSurfacePreference, VerbosityLevel,
@@ -641,12 +641,12 @@ const fn default_refine_max_passes() -> usize {
 
 #[inline]
 const fn default_project_doc_max_bytes() -> usize {
-    project_doc::DEFAULT_MAX_BYTES
+    prompt_budget::DEFAULT_MAX_BYTES
 }
 
 #[inline]
 const fn default_instruction_max_bytes() -> usize {
-    instructions::DEFAULT_MAX_BYTES
+    prompt_budget::DEFAULT_MAX_BYTES
 }
 
 #[inline]

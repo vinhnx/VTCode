@@ -7,7 +7,7 @@ use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
+use vtcode_commons::utils::current_timestamp;
 
 /// Maximum number of conversation turns to remember
 const MAX_MEMORY_TURNS: usize = 50;
@@ -39,7 +39,7 @@ pub struct MentionHistory {
 impl MentionHistory {
     /// Create new mention history
     pub fn new(entity: String) -> Self {
-        let now = Self::current_timestamp();
+        let now = current_timestamp();
         Self {
             entity,
             first_mention: now,
@@ -51,16 +51,8 @@ impl MentionHistory {
 
     /// Record a mention
     pub fn record_mention(&mut self, _turn: usize) {
-        self.last_mention = Self::current_timestamp();
+        self.last_mention = current_timestamp();
         self.mention_count += 1;
-    }
-
-    /// Get current Unix timestamp
-    fn current_timestamp() -> u64 {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0)
     }
 }
 

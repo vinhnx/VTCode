@@ -1,8 +1,8 @@
 use std::collections::VecDeque;
 
 use vtcode_commons::preview::{
-    format_hidden_lines_summary as shared_hidden_lines_summary, split_head_tail_preview,
-    summary_window as shared_summary_window,
+    format_hidden_lines_summary as shared_hidden_lines_summary,
+    split_head_tail_preview_with_limit, summary_window as shared_summary_window,
 };
 use vtcode_core::config::PtyConfig;
 use vtcode_core::tools::pty::PtyPreviewRenderer;
@@ -115,28 +115,12 @@ impl LegacyPtyStreamState {
             };
         }
 
-        if limit <= 2 {
-            let mut tail_preview = self.tail_lines.iter().cloned().collect::<Vec<_>>();
-            if has_current {
-                tail_preview.push(self.current_line.clone());
-            }
-            if tail_preview.len() > limit {
-                let drop = tail_preview.len() - limit;
-                tail_preview.drain(..drop);
-            }
-            return RenderedPtyOutput {
-                lines: prefix_all_lines(&tail_preview),
-                last_line,
-            };
-        }
-
-        let (head_count, tail_count) = summary_window(limit);
-        let head_count = head_count.min(self.head_lines.len());
-
         let mut tail_preview = self.tail_lines.iter().cloned().collect::<Vec<_>>();
         if has_current {
             tail_preview.push(self.current_line.clone());
         }
+        let (head_count, tail_count) = shared_summary_window(limit, LIVE_PREVIEW_HEAD_LINES);
+        let head_count = head_count.min(self.head_lines.len());
         if tail_preview.len() > tail_count {
             let drop = tail_preview.len() - tail_count;
             tail_preview.drain(..drop);
@@ -285,17 +269,8 @@ fn render_visible_output_lines(lines: &[String], limit: usize) -> Vec<String> {
         return prefix_all_lines(lines);
     }
 
-    if limit <= 2 {
-        return prefix_all_lines(&lines[lines.len() - limit..]);
-    }
-
-    let (head_count, tail_count) = summary_window(limit);
-    let preview = split_head_tail_preview(lines, head_count, tail_count);
+    let preview = split_head_tail_preview_with_limit(lines, limit, LIVE_PREVIEW_HEAD_LINES);
     render_head_tail_lines(preview.head, preview.hidden_count, preview.tail)
-}
-
-fn summary_window(limit: usize) -> (usize, usize) {
-    shared_summary_window(limit, LIVE_PREVIEW_HEAD_LINES)
 }
 
 fn prefix_all_lines(lines: &[String]) -> Vec<String> {

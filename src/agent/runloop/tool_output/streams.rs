@@ -47,16 +47,20 @@ use smallvec::SmallVec;
 use vtcode_commons::diff_paths::{
     language_hint_from_path, parse_diff_git_path, parse_diff_marker_path,
 };
+use vtcode_commons::diff_preview::{
+    DiffDisplayKind, DiffDisplayLine, diff_display_line_number_width,
+    display_lines_from_unified_diff,
+};
 use vtcode_commons::preview::{
-    display_width, format_hidden_lines_summary as shared_hidden_lines_summary,
-    split_head_tail_preview, truncate_with_ellipsis,
+    display_width, excerpt_text_lines, format_hidden_lines_summary as shared_hidden_lines_summary,
+    truncate_with_ellipsis,
 };
 use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::ui::markdown;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
-use super::files::{colorize_diff_summary_line, format_diff_content_lines_with_numbers};
+use super::files::colorize_diff_summary_line;
 use super::styles::{GitStyles, LsStyles, select_line_style};
 #[path = "streams_helpers.rs"]
 mod streams_helpers;
@@ -157,40 +161,6 @@ fn render_preview_line(
     )
 }
 
-fn split_numbered_diff_line(line: &str) -> Option<(char, &str, &str)> {
-    let mut chars = line.char_indices();
-    let (_, marker) = chars.next()?;
-    if !matches!(marker, '+' | '-' | ' ') {
-        return None;
-    }
-
-    let rest = line.get(1..)?;
-    let first_digit = rest.find(|c: char| c.is_ascii_digit())?;
-    if first_digit == 0 || !rest[..first_digit].chars().all(|c| c == ' ') {
-        return None;
-    }
-
-    let digits = &rest[first_digit..];
-    let digits_len = digits.chars().take_while(|c| c.is_ascii_digit()).count();
-    if digits_len == 0 {
-        return None;
-    }
-
-    let after_digits = first_digit + digits_len;
-    let separator = rest[after_digits..].chars().next()?;
-    if separator != ' ' {
-        return None;
-    }
-
-    let split_at = 1 + after_digits + separator.len_utf8();
-    let line_no = rest[..after_digits].trim();
-    if line_no.is_empty() {
-        return None;
-    }
-    let content = line.get(split_at..)?;
-    Some((marker, line_no, content))
-}
-
 fn highlight_diff_content(
     content: &str,
     language_hint: Option<&str>,
@@ -227,23 +197,19 @@ fn highlight_diff_content(
     if out.is_empty() { None } else { Some(out) }
 }
 
-fn numbered_diff_line_width(lines: &[String]) -> usize {
-    let max_digits = lines
-        .iter()
-        .filter_map(|line| split_numbered_diff_line(line).map(|(_, line_no, _)| line_no.len()))
-        .max()
-        .unwrap_or(4);
-    max_digits.clamp(4, 6)
-}
-
 fn format_diff_line_with_gutter_and_syntax(
-    line: &str,
+    line: &DiffDisplayLine,
     base_style: Option<AnsiStyle>,
     language_hint: Option<&str>,
     line_number_width: usize,
 ) -> String {
-    let Some((marker, line_no, content)) = split_numbered_diff_line(line) else {
-        return line.to_string();
+    let (marker, content) = match line.kind {
+        DiffDisplayKind::Addition => ('+', line.text.as_str()),
+        DiffDisplayKind::Deletion => ('-', line.text.as_str()),
+        DiffDisplayKind::Context => (' ', line.text.as_str()),
+        DiffDisplayKind::Metadata | DiffDisplayKind::HunkHeader => {
+            return line.numbered_text(line_number_width);
+        }
     };
 
     let marker_text = match marker {
@@ -251,6 +217,7 @@ fn format_diff_line_with_gutter_and_syntax(
         '-' => "-",
         _ => " ",
     };
+    let line_no = line.line_number.unwrap_or_default();
     let bg = base_style.and_then(|style| style.get_bg_color());
     let marker_style = match marker {
         '+' => AnsiStyle::new()
@@ -275,7 +242,8 @@ fn format_diff_line_with_gutter_and_syntax(
             .effects(Effects::DIMMED),
     };
     let reset = anstyle::Reset;
-    let mut out = String::with_capacity(line.len() + 32);
+    let raw_line = line.numbered_text(line_number_width);
+    let mut out = String::with_capacity(raw_line.len() + 32);
     out.push_str(&marker_style.render().to_string());
     out.push_str(marker_text);
     out.push(' ');
@@ -294,28 +262,16 @@ fn format_diff_line_with_gutter_and_syntax(
 }
 
 fn collect_run_command_preview(content: &str) -> (SmallVec<[&str; 32]>, usize, usize) {
-    let lines: SmallVec<[&str; 32]> = content.lines().collect();
-    let (total, hidden_count, head_len, tail_len) = {
-        let preview = split_head_tail_preview(
-            lines.as_slice(),
-            RUN_COMMAND_HEAD_PREVIEW_LINES,
-            RUN_COMMAND_TAIL_PREVIEW_LINES,
-        );
-        (
-            preview.total,
-            preview.hidden_count,
-            preview.head.len(),
-            preview.tail.len(),
-        )
-    };
-    if hidden_count == 0 {
-        return (lines, total, 0);
-    }
-
-    let mut collected: SmallVec<[&str; 32]> = SmallVec::with_capacity(head_len + tail_len);
-    collected.extend_from_slice(&lines[..head_len]);
-    collected.extend_from_slice(&lines[total - tail_len..]);
-    (collected, total, hidden_count)
+    let preview = excerpt_text_lines(
+        content,
+        RUN_COMMAND_HEAD_PREVIEW_LINES,
+        RUN_COMMAND_TAIL_PREVIEW_LINES,
+    );
+    let mut collected: SmallVec<[&str; 32]> =
+        SmallVec::with_capacity(preview.head.len() + preview.tail.len());
+    collected.extend(preview.head.iter().copied());
+    collected.extend(preview.tail.iter().copied());
+    (collected, preview.total, preview.hidden_count)
 }
 
 async fn render_run_command_preview(
@@ -379,7 +335,7 @@ pub(crate) fn render_diff_content_block(
     mode: ToolOutputMode,
     tail_limit: usize,
 ) -> Result<()> {
-    let diff_lines = format_diff_content_lines_with_numbers(diff_content);
+    let diff_lines = display_lines_from_unified_diff(diff_content);
     let total = diff_lines.len();
     let effective_limit =
         if renderer.prefers_untruncated_output() || matches!(mode, ToolOutputMode::Full) {
@@ -406,20 +362,24 @@ pub(crate) fn render_diff_content_block(
 
     let mut display_buffer = String::with_capacity(256);
     let mut current_language_hint: Option<String> = None;
-    let line_number_width = numbered_diff_line_width(lines_slice);
+    let line_number_width = diff_display_line_number_width(lines_slice);
     let color_enabled = renderer.capabilities().supports_color();
     for line in lines_slice {
-        if line.is_empty() {
+        let raw_line = line.numbered_text(line_number_width);
+        if raw_line.is_empty() {
             continue;
         }
-        if let Some(path) = parse_diff_git_path(line).or_else(|| parse_diff_marker_path(line)) {
+        if let Some(path) =
+            parse_diff_git_path(&line.text).or_else(|| parse_diff_marker_path(&line.text))
+        {
             current_language_hint = language_hint_from_path(&path);
         }
         display_buffer.clear();
-        if display_width(line) > MAX_LINE_LENGTH {
-            display_buffer.push_str(&truncate_with_ellipsis(line, MAX_LINE_LENGTH, "..."));
+        let was_truncated = display_width(&raw_line) > MAX_LINE_LENGTH;
+        if was_truncated {
+            display_buffer.push_str(&truncate_with_ellipsis(&raw_line, MAX_LINE_LENGTH, "..."));
         } else {
-            display_buffer.push_str(line);
+            display_buffer.push_str(&raw_line);
         }
 
         if let Some(summary_line) =
@@ -438,9 +398,9 @@ pub(crate) fn render_diff_content_block(
         }
 
         let line_style = select_line_style(tool_name, &display_buffer, git_styles, ls_styles);
-        let rendered = if color_enabled {
+        let rendered = if color_enabled && !was_truncated {
             format_diff_line_with_gutter_and_syntax(
-                &display_buffer,
+                line,
                 line_style,
                 current_language_hint.as_deref(),
                 line_number_width,
@@ -717,11 +677,12 @@ mod tests {
     use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
     use anstyle::AnsiColor;
+    use vtcode_commons::diff_preview::{DiffDisplayKind, DiffDisplayLine};
 
     use super::{
         HiddenLinesNoticeKind, MAX_LINE_LENGTH, collect_run_command_preview,
         format_diff_line_with_gutter_and_syntax, hidden_lines_notice, language_hint_from_path,
-        numbered_diff_line_width, render_preview_line, split_numbered_diff_line, strip_ansi_codes,
+        render_preview_line, strip_ansi_codes,
     };
 
     fn collect_inline_output(receiver: &mut UnboundedReceiver<InlineCommand>) -> String {
@@ -812,26 +773,18 @@ mod tests {
     }
 
     #[test]
-    fn split_numbered_diff_line_parses_gutter() {
-        let (marker, line_no, content) =
-            split_numbered_diff_line("+  1377 syntax_highlight::foo").expect("expected gutter");
-        assert_eq!(marker, '+');
-        assert_eq!(line_no, "1377");
-        assert_eq!(content, "syntax_highlight::foo");
-    }
-
-    #[test]
-    fn split_numbered_diff_line_preserves_code_indentation() {
-        let (_, _, content) =
-            split_numbered_diff_line("+  1384     line,").expect("expected gutter");
-        assert_eq!(content, "    line,");
-    }
-
-    #[test]
     fn format_diff_line_styles_gutter_for_additions() {
         let style = anstyle::Style::new().fg_color(Some(anstyle::Color::Ansi(AnsiColor::Green)));
-        let rendered =
-            format_diff_line_with_gutter_and_syntax("+  1377 let x = 1;", Some(style), None, 5);
+        let rendered = format_diff_line_with_gutter_and_syntax(
+            &DiffDisplayLine {
+                kind: DiffDisplayKind::Addition,
+                line_number: Some(1377),
+                text: "let x = 1;".to_string(),
+            },
+            Some(style),
+            None,
+            5,
+        );
         assert!(rendered.contains("\u{1b}["));
         let stripped = strip_ansi_codes(&rendered);
         assert!(stripped.contains("+  1377 "));
@@ -839,12 +792,19 @@ mod tests {
     }
 
     #[test]
-    fn numbered_diff_line_width_uses_max_digits() {
-        let lines = vec![
-            "+    99 let a = 1;".to_string(),
-            "  10420 let b = 2;".to_string(),
-        ];
-        assert_eq!(numbered_diff_line_width(&lines), 5);
+    fn format_diff_line_preserves_code_indentation() {
+        let rendered = format_diff_line_with_gutter_and_syntax(
+            &DiffDisplayLine {
+                kind: DiffDisplayKind::Addition,
+                line_number: Some(1384),
+                text: "    line,".to_string(),
+            },
+            None,
+            None,
+            5,
+        );
+        let stripped = strip_ansi_codes(&rendered);
+        assert!(stripped.contains("+  1384     line,"));
     }
 
     #[test]

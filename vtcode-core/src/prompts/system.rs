@@ -4,9 +4,7 @@
 //! compact runtime addenda. Richer behavior comes from AGENTS.md, dynamic tool
 //! guidance, skill metadata, and runtime notices.
 
-use crate::config::constants::{
-    instructions as instruction_constants, project_doc as project_doc_constants,
-};
+use crate::config::constants::prompt_budget as prompt_budget_constants;
 use crate::config::types::SystemPromptMode;
 use crate::llm::providers::gemini::wire::Content;
 use crate::project_doc::read_project_doc;
@@ -205,8 +203,7 @@ pub async fn generate_system_instruction(_config: &SystemPromptConfig) -> Conten
 
 /// Read AGENTS.md file if present and extract agent guidelines
 pub async fn read_agent_guidelines(project_root: &Path) -> Option<String> {
-    let max_bytes =
-        project_doc_constants::DEFAULT_MAX_BYTES.min(instruction_constants::DEFAULT_MAX_BYTES);
+    let max_bytes = prompt_budget_constants::DEFAULT_MAX_BYTES;
     match read_project_doc(project_root, max_bytes).await {
         Ok(Some(bundle)) => Some(bundle.contents),
         Ok(None) => None,

@@ -8,7 +8,7 @@
 
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
+use vtcode_commons::utils::current_timestamp;
 
 pub use self::pressure::MemoryPressure;
 
@@ -132,7 +132,7 @@ impl MemoryMonitor {
         // Update last known RSS
         if let Ok(mut state) = self.state.lock() {
             state.last_rss_bytes = rss;
-            state.last_check_timestamp = current_timestamp_secs();
+            state.last_check_timestamp = current_timestamp();
         }
 
         Ok(pressure)
@@ -152,7 +152,7 @@ impl MemoryMonitor {
         }
 
         let checkpoint = MemoryCheckpoint {
-            timestamp: current_timestamp_secs(),
+            timestamp: current_timestamp(),
             rss_bytes: rss,
             label,
         };
@@ -235,14 +235,6 @@ impl Default for MemoryMonitor {
     fn default() -> Self {
         Self::new()
     }
-}
-
-/// Get current Unix timestamp in seconds
-fn current_timestamp_secs() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0)
 }
 
 #[cfg(test)]

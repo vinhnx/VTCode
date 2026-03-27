@@ -549,6 +549,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: 1. Humans Steer, Agents Execute, 2. Repository as System of Record, 3. Progressive Disclosure, 4. Agent Legibility Over Human Aesthetics, 5. Enforce Invariants, Not Implementations
   - **User Questions**: "What can you tell me about Core Beliefs?", "How does 1. Humans Steer, Agents Execute work?", "How does 2. Repository as System of Record work?"
 
+- **File**: `docs/analysis/DRY_DUPLICATION_AUDIT.md`
+  - **Content**: DRY/KISS Duplication Audit
+  - **Topics**: Scope, Implemented Refactors, Duplication Intentionally Left Alone, Expected Benefits, Verification
+  - **User Questions**: "What can you tell me about DRY/KISS Duplication Audit?", "How does Scope work?", "How does Implemented Refactors work?"
+
 - **File**: `docs/harness/EXEC_PLANS.md`
   - **Content**: Execution Plans
   - **Topics**: Why Exec Plans?, Exec Plans vs Plan Mode, Directory Structure, Mandatory Sections, Template

@@ -1,7 +1,7 @@
-pub const TOOL_OUTPUT_MODE_COMPACT: &str = "compact";
-pub const TOOL_OUTPUT_MODE_FULL: &str = "full";
+pub const TOOL_OUTPUT_MODE_COMPACT: &str = vtcode_config::constants::ui::TOOL_OUTPUT_MODE_COMPACT;
+pub const TOOL_OUTPUT_MODE_FULL: &str = vtcode_config::constants::ui::TOOL_OUTPUT_MODE_FULL;
+pub const DEFAULT_REASONING_VISIBLE: bool = vtcode_config::constants::ui::DEFAULT_REASONING_VISIBLE;
 pub const DEFAULT_INLINE_VIEWPORT_ROWS: u16 = 16;
-pub const DEFAULT_REASONING_VISIBLE: bool = true;
 pub const SLASH_SUGGESTION_LIMIT: usize = 50; // All commands are scrollable
 pub const SLASH_PALETTE_MIN_WIDTH: u16 = 40;
 pub const SLASH_PALETTE_MIN_HEIGHT: u16 = 9;
@@ -62,7 +62,7 @@ pub const INLINE_PTY_HEADER_LABEL: &str = "Terminal";
 pub const INLINE_PTY_RUNNING_LABEL: &str = "running";
 pub const INLINE_PTY_STATUS_LIVE: &str = "LIVE";
 pub const INLINE_PTY_STATUS_DONE: &str = "DONE";
-pub const INLINE_PTY_PLACEHOLDER: &str = "Terminal output";
+pub const INLINE_PTY_PLACEHOLDER: &str = vtcode_config::constants::ui::INLINE_PTY_PLACEHOLDER;
 pub const MODAL_LIST_HIGHLIGHT_SYMBOL: &str = "✦";
 pub const MODAL_LIST_HIGHLIGHT_FULL: &str = "✦ ";
 pub const INLINE_LIST_PANEL_MIN_HEIGHT: u16 = 8;
@@ -95,7 +95,7 @@ pub const HEADER_MCP_PREFIX: &str = "MCP: ";
 pub const HEADER_GIT_PREFIX: &str = "git: ";
 pub const HEADER_GIT_CLEAN_SUFFIX: &str = "✓";
 pub const HEADER_GIT_DIRTY_SUFFIX: &str = "*";
-pub const HEADER_UNKNOWN_PLACEHOLDER: &str = "unavailable";
+pub const HEADER_UNKNOWN_PLACEHOLDER: &str = vtcode_config::constants::ui::HEADER_UNKNOWN_PLACEHOLDER;
 pub const HEADER_STATUS_LABEL: &str = "Status";
 pub const HEADER_STATUS_ACTIVE: &str = "Active";
 pub const HEADER_STATUS_PAUSED: &str = "Paused";
@@ -108,16 +108,24 @@ pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str = "Type your message, or @files
 pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str = "Continue, or @files, /commands, Alt+P: suggest, Shift+Tab: choose Edit/Auto/Plan, Enter: queue, Tab: accept/queue, Ctrl+Enter: run/steer now, /stop: stop task";
 pub const HEADER_SHORTCUT_HINT: &str = "Shortcuts: Alt+P suggest • Enter queue • Tab accept/queue • Ctrl+Enter run/steer • Shift+Enter newline • Esc cancel • Ctrl+C interrupt";
 pub const HEADER_META_SEPARATOR: &str = "   ";
-pub const WELCOME_TEXT_WIDTH: usize = 80;
-pub const WELCOME_SHORTCUT_SECTION_TITLE: &str = "Keyboard Shortcuts";
-pub const WELCOME_SHORTCUT_HINT_PREFIX: &str = "Shortcuts:";
-pub const WELCOME_SHORTCUT_SEPARATOR: &str = "•";
-pub const WELCOME_SHORTCUT_INDENT: &str = "  ";
-pub const WELCOME_SLASH_COMMAND_SECTION_TITLE: &str = "Slash Commands";
-pub const WELCOME_SLASH_COMMAND_LIMIT: usize = 6;
-pub const WELCOME_SLASH_COMMAND_PREFIX: &str = "/";
-pub const WELCOME_SLASH_COMMAND_INTRO: &str = "";
-pub const WELCOME_SLASH_COMMAND_INDENT: &str = "  ";
+pub const WELCOME_TEXT_WIDTH: usize = vtcode_config::constants::ui::WELCOME_TEXT_WIDTH;
+pub const WELCOME_SHORTCUT_SECTION_TITLE: &str =
+    vtcode_config::constants::ui::WELCOME_SHORTCUT_SECTION_TITLE;
+pub const WELCOME_SHORTCUT_HINT_PREFIX: &str =
+    vtcode_config::constants::ui::WELCOME_SHORTCUT_HINT_PREFIX;
+pub const WELCOME_SHORTCUT_SEPARATOR: &str =
+    vtcode_config::constants::ui::WELCOME_SHORTCUT_SEPARATOR;
+pub const WELCOME_SHORTCUT_INDENT: &str = vtcode_config::constants::ui::WELCOME_SHORTCUT_INDENT;
+pub const WELCOME_SLASH_COMMAND_SECTION_TITLE: &str =
+    vtcode_config::constants::ui::WELCOME_SLASH_COMMAND_SECTION_TITLE;
+pub const WELCOME_SLASH_COMMAND_LIMIT: usize =
+    vtcode_config::constants::ui::WELCOME_SLASH_COMMAND_LIMIT;
+pub const WELCOME_SLASH_COMMAND_PREFIX: &str =
+    vtcode_config::constants::ui::WELCOME_SLASH_COMMAND_PREFIX;
+pub const WELCOME_SLASH_COMMAND_INTRO: &str =
+    vtcode_config::constants::ui::WELCOME_SLASH_COMMAND_INTRO;
+pub const WELCOME_SLASH_COMMAND_INDENT: &str =
+    vtcode_config::constants::ui::WELCOME_SLASH_COMMAND_INDENT;
 pub const NAVIGATION_BLOCK_TITLE: &str = "Timeline";
 pub const NAVIGATION_BLOCK_SHORTCUT_NOTE: &str = "Ctrl+T";
 pub const NAVIGATION_EMPTY_LABEL: &str = "Waiting for activity";

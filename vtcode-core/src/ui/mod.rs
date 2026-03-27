@@ -4,7 +4,6 @@
 //! markdown rendering, and terminal utilities.
 
 pub mod diff_renderer;
-pub mod file_colorizer;
 pub mod git_config;
 pub mod markdown;
 pub mod search;
@@ -22,7 +21,6 @@ pub mod tui_compat;
 pub mod tui_mode;
 pub mod user_confirmation;
 
-pub use file_colorizer::FileColorizer;
 pub use git_config::GitColorConfig;
 pub use markdown::*;
 pub use search::*;
@@ -35,6 +33,7 @@ pub use theme_manager::ThemeManager;
 pub use tui::*;
 pub use tui_compat::*;
 pub use tui_mode::*;
+pub use vtcode_tui::ui::FileColorizer;
 
 #[cfg(test)]
 mod tests {

@@ -119,3 +119,23 @@ pub fn read_json_file_sync<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<
     serde_json::from_str(&content)
         .with_context(|| format!("Failed to parse JSON from {}", path.display()))
 }
+
+/// Check whether a path looks like an image file based on extension.
+pub fn is_image_path(path: &Path) -> bool {
+    let Some(extension) = path.extension().and_then(|ext| ext.to_str()) else {
+        return false;
+    };
+
+    matches!(
+        extension,
+        _ if extension.eq_ignore_ascii_case("png")
+            || extension.eq_ignore_ascii_case("jpg")
+            || extension.eq_ignore_ascii_case("jpeg")
+            || extension.eq_ignore_ascii_case("gif")
+            || extension.eq_ignore_ascii_case("bmp")
+            || extension.eq_ignore_ascii_case("webp")
+            || extension.eq_ignore_ascii_case("tiff")
+            || extension.eq_ignore_ascii_case("tif")
+            || extension.eq_ignore_ascii_case("svg")
+    )
+}

@@ -1,7 +1,6 @@
 use super::{PLACEHOLDER_COLOR, Session, measure_text_width, ratatui_style_from_inline};
 use crate::config::constants::ui;
 use crate::ui::tui::types::InlineTextStyle;
-use crate::utils::file_utils::is_image_path;
 use anstyle::{Color as AnsiColorEnum, Effects};
 use ratatui::{
     buffer::Buffer,
@@ -13,6 +12,7 @@ use std::path::Path;
 use std::sync::LazyLock;
 use tui_shimmer::shimmer_spans_with_style_at_phase;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+use vtcode_commons::fs::is_image_path;
 
 use super::utils::line_truncation::truncate_line_with_ellipsis_if_overflow;
 

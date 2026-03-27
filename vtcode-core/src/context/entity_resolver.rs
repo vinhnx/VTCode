@@ -8,8 +8,8 @@ use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
 use vtcode_commons::fs::{read_file_with_context, write_file_with_context};
+use vtcode_commons::utils::current_timestamp;
 
 /// Maximum number of entity matches to return
 const MAX_ENTITY_MATCHES: usize = 5;
@@ -99,24 +99,16 @@ impl Default for EntityIndex {
             config_keys: HashMap::new(),
             recent_edits: VecDeque::with_capacity(MAX_RECENT_EDITS),
             last_mentioned: HashMap::new(),
-            last_updated: Self::current_timestamp(),
+            last_updated: current_timestamp(),
         }
     }
 }
 
 impl EntityIndex {
-    /// Get current Unix timestamp
-    fn current_timestamp() -> u64 {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0)
-    }
-
     /// Record an entity mention for recency tracking
     pub fn record_mention(&mut self, entity: &str) {
         self.last_mentioned
-            .insert(entity.to_lowercase(), Self::current_timestamp());
+            .insert(entity.to_lowercase(), current_timestamp());
     }
 
     /// Record a recent edit
@@ -124,7 +116,7 @@ impl EntityIndex {
         let reference = EntityReference {
             entity,
             file,
-            timestamp: Self::current_timestamp(),
+            timestamp: current_timestamp(),
         };
 
         self.recent_edits.push_back(reference);
@@ -137,7 +129,7 @@ impl EntityIndex {
 
     /// Check if file was recently edited
     pub fn was_recently_edited(&self, file: &Path, within_seconds: u64) -> bool {
-        let cutoff = Self::current_timestamp().saturating_sub(within_seconds);
+        let cutoff = current_timestamp().saturating_sub(within_seconds);
         self.recent_edits
             .iter()
             .any(|r| r.file == file && r.timestamp >= cutoff)
@@ -304,7 +296,7 @@ impl EntityResolver {
 
     /// Calculate recency score based on recent edits
     fn calculate_recency_score(&self, entity: &str) -> f32 {
-        let now = EntityIndex::current_timestamp();
+        let now = current_timestamp();
 
         // Check if entity was recently edited (within 5 minutes)
         if let Some(edit) = self
@@ -327,7 +319,7 @@ impl EntityResolver {
     /// Calculate mention score based on conversation history
     fn calculate_mention_score(&self, entity: &str) -> f32 {
         if let Some(&timestamp) = self.index.last_mentioned.get(entity) {
-            let now = EntityIndex::current_timestamp();
+            let now = current_timestamp();
             let age_seconds = now.saturating_sub(timestamp);
 
             // Score decays over 10 minutes

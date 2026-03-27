@@ -32,9 +32,11 @@ use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
-use vtcode_core::utils::file_utils::ensure_dir_exists_sync;
+use vtcode_commons::fs::ensure_dir_exists_sync;
 #[cfg(test)]
-use vtcode_core::utils::file_utils::read_file_with_context_sync;
+use vtcode_commons::fs::read_file_with_context_sync;
+#[cfg(test)]
+use vtcode_commons::preview::excerpt_text_lines;
 
 /// Configuration for large output spooling
 #[derive(Debug, Clone)]
@@ -155,50 +157,17 @@ impl SpoolResult {
     /// with clear markers showing what was truncated.
     pub fn get_preview(&self) -> Result<String> {
         let content = self.read_full_content()?;
-        // Avoid allocating all lines; stream to collect only head and a bounded tail buffer.
-        use std::collections::VecDeque;
-
-        let mut total = 0usize;
-        let mut head_lines: Vec<&str> = Vec::with_capacity(PREVIEW_HEAD_LINES);
-
-        let mut tail_buf: VecDeque<(&str, usize)> = VecDeque::with_capacity(PREVIEW_TAIL_LINES);
-        let _tail_tokens_acc = 0usize; // reserved for future token-aware logic
-
-        for line in content.lines() {
-            // head capture
-            if head_lines.len() < PREVIEW_HEAD_LINES {
-                head_lines.push(line);
-            }
-
-            // tail rolling buffer
-            // store (line, estimated_len) so we can pop_front efficiently
-            tail_buf.push_back((line, line.len()));
-            if tail_buf.len() > PREVIEW_TAIL_LINES {
-                tail_buf.pop_front();
-            }
-
-            total += 1;
-        }
-
-        if total <= PREVIEW_HEAD_LINES + PREVIEW_TAIL_LINES {
+        let preview = excerpt_text_lines(&content, PREVIEW_HEAD_LINES, PREVIEW_TAIL_LINES);
+        if preview.hidden_count == 0 {
             return Ok(content);
         }
 
-        let hidden = total - PREVIEW_HEAD_LINES - PREVIEW_TAIL_LINES;
-
-        let head_join = head_lines.join("\n");
-        let tail_join = tail_buf
-            .iter()
-            .map(|(l, _)| *l)
-            .collect::<Vec<&str>>()
-            .join("\n");
-
         Ok(format!(
             "{}\n\n[... {} lines omitted - full output in: {} ...]\n\n{}",
-            head_join,
-            hidden,
+            preview.head.join("\n"),
+            preview.hidden_count,
             self.file_path.display(),
-            tail_join
+            preview.tail.join("\n")
         ))
     }
 

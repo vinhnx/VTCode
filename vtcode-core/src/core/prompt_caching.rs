@@ -5,8 +5,8 @@ use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::fs;
+use vtcode_commons::utils::current_timestamp;
 
 use crate::utils::tokens::estimate_tokens;
 
@@ -111,7 +111,7 @@ impl PromptCache {
             return None;
         }
         self.cache.get_mut(prompt_hash).map(|entry| {
-            entry.last_used = Self::current_timestamp();
+            entry.last_used = current_timestamp();
             entry.usage_count += 1;
             self.dirty = true;
             entry.clone()
@@ -242,7 +242,7 @@ impl PromptCache {
         if !self.config.enabled {
             return Ok(());
         }
-        let now = Self::current_timestamp();
+        let now = current_timestamp();
         let max_age_seconds = self.config.max_age_days * 24 * 60 * 60;
 
         self.cache
@@ -275,14 +275,6 @@ impl PromptCache {
         self.dirty = true;
 
         Ok(())
-    }
-
-    /// Get current timestamp
-    fn current_timestamp() -> u64 {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs()
     }
 }
 
@@ -378,8 +370,8 @@ impl PromptOptimizer {
             model_used: target_model.to_string(),
             tokens_saved: Some(tokens_saved.try_into().unwrap_or(u32::MAX)),
             quality_score: Some(0.8), // Placeholder quality score
-            created_at: PromptCache::current_timestamp(),
-            last_used: PromptCache::current_timestamp(),
+            created_at: current_timestamp(),
+            last_used: current_timestamp(),
             usage_count: 1,
         };
 
