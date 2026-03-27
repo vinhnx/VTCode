@@ -70,6 +70,11 @@ pub(super) fn parse_harmony_tool_call_from_text(text: &str) -> Option<(String, V
     None
 }
 
+pub(super) fn normalize_harmony_tool_arguments(raw: &str) -> Option<String> {
+    let arguments = parse_harmony_arguments(raw)?;
+    serde_json::to_string(&arguments).ok()
+}
+
 fn parse_harmony_tool_call_segment(text: &str) -> Option<(String, Value)> {
     let to_pos = text.find("to=")?;
     let after_to = &text[to_pos + 3..];

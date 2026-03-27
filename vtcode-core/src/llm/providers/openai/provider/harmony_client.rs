@@ -27,13 +27,6 @@ fn extract_text_content(parts: &[HarmonyContent]) -> Option<String> {
     if text.is_empty() { None } else { Some(text) }
 }
 
-fn normalize_json_arguments(raw: String) -> String {
-    match serde_json::from_str::<Value>(&raw) {
-        Ok(parsed) => parsed.to_string(),
-        Err(_) => raw,
-    }
-}
-
 fn parse_harmony_completion_messages_with_recovery(
     encoding: &openai_harmony::HarmonyEncoding,
     completion_tokens: &[u32],
@@ -75,7 +68,8 @@ fn harmony_tool_call_from_message(
     message: &HarmonyMessage,
     index: usize,
 ) -> Option<provider::ToolCall> {
-    if message.author.role != HarmonyRole::Assistant {
+    if message.author.role != HarmonyRole::Assistant || message.channel.as_deref() == Some("final")
+    {
         return None;
     }
 
@@ -85,8 +79,11 @@ fn harmony_tool_call_from_message(
     {
         let tool_name = OpenAIProvider::parse_harmony_tool_name(recipient);
         if !tool_name.is_empty() {
-            let arguments = extract_text_content(&message.content)
-                .map(normalize_json_arguments)
+            let raw_arguments = extract_text_content(&message.content);
+            let arguments = raw_arguments
+                .as_deref()
+                .and_then(harmony::normalize_harmony_tool_arguments)
+                .or(raw_arguments.filter(|text| !text.trim().is_empty()))
                 .unwrap_or_else(|| "{}".to_string());
             return Some(provider::ToolCall::function(
                 format!("call_{index}"),
@@ -680,5 +677,46 @@ mod tests {
                 .map(|function| function.arguments.as_str()),
             Some(r#"{"location":"Tokyo"}"#)
         );
+    }
+
+    #[test]
+    fn extract_harmony_completion_parts_normalizes_single_quoted_recipient_arguments() {
+        let parsed = vec![
+            HarmonyMessage::from_role_and_content(HarmonyRole::Assistant, "{'location':'Tokyo'}")
+                .with_channel("analysis")
+                .with_recipient("lookup_weather")
+                .with_content_type("code"),
+        ];
+
+        let (content, tool_calls) = extract_harmony_completion_parts(&parsed);
+
+        assert!(content.is_none());
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(
+            tool_calls[0]
+                .function
+                .as_ref()
+                .map(|function| function.arguments.as_str()),
+            Some(r#"{"location":"Tokyo"}"#)
+        );
+    }
+
+    #[test]
+    fn extract_harmony_completion_parts_keeps_final_tool_example_as_text() {
+        let parsed = vec![
+            HarmonyMessage::from_role_and_content(
+                HarmonyRole::Assistant,
+                r#"Example: to=functions.lookup_weather {"location":"Tokyo"}"#,
+            )
+            .with_channel("final"),
+        ];
+
+        let (content, tool_calls) = extract_harmony_completion_parts(&parsed);
+
+        assert_eq!(
+            content.as_deref(),
+            Some(r#"Example: to=functions.lookup_weather {"location":"Tokyo"}"#)
+        );
+        assert!(tool_calls.is_empty());
     }
 }

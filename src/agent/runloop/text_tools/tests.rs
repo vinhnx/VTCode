@@ -207,6 +207,19 @@ fn test_detect_tagged_tool_call_parses_minimax_xml_invocation() {
 }
 
 #[test]
+fn test_detect_tagged_tool_call_parses_minimax_xml_invocation_without_parameters() {
+    let message = r#"
+<minimax:tool_call>
+<invoke name="list_pty_sessions">
+</invoke>
+</minimax:tool_call>
+"#;
+    let (name, args) = detect_textual_tool_call(message).expect("should parse");
+    assert_eq!(name, tools::UNIFIED_EXEC);
+    assert_eq!(args, serde_json::json!({ "action": "list" }));
+}
+
+#[test]
 fn test_detect_rust_struct_tool_call_parses_command_block() {
     let message = "Here you go:\n```rust\nrun_pty_cmd {\n    command: \"ls -a\",\n    workdir: \"/tmp\",\n    timeout: 5.0\n}\n```";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
