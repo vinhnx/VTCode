@@ -1319,6 +1319,41 @@
           "generation": "GLM-5",
           "doc_comment": "GLM-5 - Z.AI flagship GLM-5 model"
         }
+      },
+      "glm-5.1": {
+        "id": "glm-5.1",
+        "name": "GLM-5.1",
+        "description": "Z.ai next-gen GLM-5.1 foundation model with improved reasoning, enhanced agent capabilities, and stronger agentic coding performance.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 200000,
+        "max_output_tokens": 128000,
+        "capabilities": {
+          "thinking": true,
+          "streaming": true,
+          "function_calling": true,
+          "context_caching": true,
+          "structured_output": true,
+          "tool_streaming": true
+        },
+        "vtcode": {
+          "variant": "ZaiGlm51",
+          "constant": "Z_AI_GLM_5_1",
+          "display": "GLM-5.1",
+          "description": "Z.AI next-gen GLM-5.1 foundation model with improved reasoning.",
+          "efficient": false,
+          "top_tier": true,
+          "generation": "GLM-5.1",
+          "doc_comment": "GLM-5.1 - Z.AI next-gen GLM-5.1 model"
+        }
       }
     }
   },

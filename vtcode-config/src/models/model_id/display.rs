@@ -43,6 +43,7 @@ impl ModelId {
             ModelId::DeepSeekReasoner => "DeepSeek V3.2 Reasoner",
             // Z.AI models
             ModelId::ZaiGlm5 => "GLM 5",
+            ModelId::ZaiGlm51 => "GLM 5.1",
             // Ollama models
             ModelId::OllamaGptOss20b => "GPT-OSS 20B (local)",
             ModelId::OllamaGptOss20bCloud => "GPT-OSS 20B (cloud)",

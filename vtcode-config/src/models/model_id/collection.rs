@@ -48,6 +48,7 @@ impl ModelId {
             ModelId::DeepSeekReasoner,
             // Z.AI models
             ModelId::ZaiGlm5,
+            ModelId::ZaiGlm51,
             // Moonshot models
             ModelId::MoonshotKimiK25,
             // Ollama models

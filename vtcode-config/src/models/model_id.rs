@@ -112,6 +112,8 @@ pub enum ModelId {
 
     /// GLM-5 - Flagship Z.ai foundation model for complex systems
     ZaiGlm5,
+    /// GLM-5.1 - Next-gen Z.ai foundation model with improved reasoning
+    ZaiGlm51,
 
     // Moonshot models
     /// Kimi K2.5 - Moonshot.ai's flagship reasoning model

@@ -48,7 +48,7 @@ impl ModelId {
             | ModelId::HuggingFaceQwen3CoderNextNovita
             | ModelId::HuggingFaceQwen35397BA17BTogether
             | ModelId::HuggingFaceStep35Flash => Provider::HuggingFace,
-            ModelId::ZaiGlm5 => Provider::ZAI,
+            ModelId::ZaiGlm5 | ModelId::ZaiGlm51 => Provider::ZAI,
             ModelId::MoonshotKimiK25 => Provider::Moonshot,
             ModelId::OllamaGptOss20b
             | ModelId::OllamaGptOss20bCloud

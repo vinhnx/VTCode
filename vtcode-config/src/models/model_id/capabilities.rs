@@ -213,7 +213,7 @@ impl ModelId {
             | ModelId::GPT5 => Some(ModelId::GPT5Mini),
             ModelId::CopilotGPT52Codex | ModelId::CopilotGPT54 => Some(ModelId::CopilotGPT54Mini),
             ModelId::DeepSeekReasoner => Some(ModelId::DeepSeekChat),
-            ModelId::ZaiGlm5 => Some(ModelId::OllamaGlm5Cloud),
+            ModelId::ZaiGlm5 | ModelId::ZaiGlm51 => Some(ModelId::OllamaGlm5Cloud),
             ModelId::ClaudeOpus46 | ModelId::ClaudeSonnet46 => Some(ModelId::ClaudeSonnet46),
             ModelId::MinimaxM27 | ModelId::MinimaxM25 => None,
             _ => None,
@@ -265,6 +265,7 @@ impl ModelId {
                 | ModelId::ClaudeSonnet46
                 | ModelId::DeepSeekReasoner
                 | ModelId::ZaiGlm5
+                | ModelId::ZaiGlm51
                 | ModelId::OpenRouterStepfunStep35FlashFree
                 | ModelId::OpenRouterNvidiaNemotron3Super120bA12bFree
                 | ModelId::MinimaxM27
@@ -320,6 +321,7 @@ impl ModelId {
                 | ModelId::ClaudeSonnet46
                 | ModelId::DeepSeekReasoner
                 | ModelId::ZaiGlm5
+                | ModelId::ZaiGlm51
                 | ModelId::OpenRouterStepfunStep35FlashFree
                 | ModelId::HuggingFaceQwen3CoderNextNovita
                 | ModelId::HuggingFaceQwen35397BA17BTogether
@@ -380,6 +382,7 @@ impl ModelId {
             ModelId::DeepSeekChat | ModelId::DeepSeekReasoner => "V3.2-Exp",
             // Z.AI generations
             ModelId::ZaiGlm5 => "5",
+            ModelId::ZaiGlm51 => "5.1",
             ModelId::OllamaGptOss20b => "oss",
             ModelId::OllamaGptOss20bCloud => "oss-cloud",
             ModelId::OllamaGptOss120bCloud => "oss-cloud",

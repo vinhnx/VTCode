@@ -14,6 +14,9 @@ impl FromStr for ModelId {
         if s == models::zai::GLM_5 || s == models::zai::GLM_5_LEGACY {
             return Ok(ModelId::ZaiGlm5);
         }
+        if s == models::zai::GLM_5_1 {
+            return Ok(ModelId::ZaiGlm51);
+        }
 
         if let Some(model) = Self::parse_openrouter_model(s) {
             return Ok(model);
@@ -62,6 +65,7 @@ impl FromStr for ModelId {
             s if s == models::DEEPSEEK_REASONER => Ok(ModelId::DeepSeekReasoner),
             // Z.AI models
             s if s == models::zai::GLM_5 || s == models::zai::GLM_5_LEGACY => Ok(ModelId::ZaiGlm5),
+            s if s == models::zai::GLM_5_1 => Ok(ModelId::ZaiGlm51),
             // Moonshot models
             s if s == models::moonshot::KIMI_K2_5 => Ok(ModelId::MoonshotKimiK25),
             s if s == models::ollama::GPT_OSS_20B => Ok(ModelId::OllamaGptOss20b),

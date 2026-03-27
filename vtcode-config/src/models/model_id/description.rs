@@ -99,6 +99,9 @@ impl ModelId {
             ModelId::ZaiGlm5 => {
                 "Z.ai flagship GLM-5 foundation model engineered for complex systems design and long-horizon agent workflows"
             }
+            ModelId::ZaiGlm51 => {
+                "Z.ai next-gen GLM-5.1 foundation model with improved reasoning and agent capabilities"
+            }
             // Ollama models
             ModelId::OllamaGptOss20b => {
                 "Local GPT-OSS 20B deployment served via Ollama with no external API dependency"
