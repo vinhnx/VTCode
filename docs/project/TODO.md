@@ -38,8 +38,6 @@ https://code.claude.com/docs/en/headless
 
 --
 
-fix theme switching now doesn't work, regression. when selecting a theme from the theme picker, presss enter. the theme is not applied.
-
 ---
 
 improve /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/logs and /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/trajectory with ttl and cleanup old logs/trajectories

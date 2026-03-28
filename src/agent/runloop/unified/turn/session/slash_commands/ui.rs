@@ -8,7 +8,9 @@ use vtcode_tui::app::{InlineListItem, InlineListSelection, TransientSubmission};
 
 use crate::agent::runloop::model_picker::{ModelPickerStart, ModelPickerState};
 use crate::agent::runloop::slash_commands::{SessionPaletteMode, StatuslineTargetMode};
-use crate::agent::runloop::unified::display::persist_theme_preference;
+use crate::agent::runloop::unified::display::{
+    persist_theme_preference, sync_runtime_theme_selection,
+};
 use crate::agent::runloop::unified::model_selection::finalize_model_selection;
 use crate::agent::runloop::unified::overlay_prompt::{
     OverlayWaitOutcome, wait_for_overlay_submission,
@@ -81,6 +83,7 @@ pub(crate) async fn handle_theme_changed(
     ctx: SlashCommandContext<'_>,
     theme_id: String,
 ) -> Result<SlashCommandControl> {
+    sync_runtime_theme_selection(ctx.config, ctx.vt_cfg.as_mut(), &theme_id);
     persist_theme_preference(ctx.renderer, &ctx.config.workspace, &theme_id).await?;
     let styles = theme::active_styles();
     ctx.handle.set_theme(inline_theme_from_core_styles(&styles));

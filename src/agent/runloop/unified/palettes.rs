@@ -18,7 +18,7 @@ use crate::agent::runloop::unified::settings_interactive::{
 };
 use crate::agent::runloop::welcome::SessionBootstrap;
 
-use super::display::persist_theme_preference;
+use super::display::{persist_theme_preference, sync_runtime_theme_selection};
 
 const THEME_PALETTE_TITLE: &str = "Theme";
 const THEME_ACTIVE_BADGE: &str = "Active";
@@ -385,6 +385,7 @@ pub(crate) async fn handle_palette_selection(
                                 MessageStyle::Info,
                                 &format!("Theme switched to {}", label),
                             )?;
+                            sync_runtime_theme_selection(config, vt_cfg.as_mut(), &theme_id);
                             persist_theme_preference(renderer, &config.workspace, &theme_id)
                                 .await?;
                             let styles = theme::active_styles();

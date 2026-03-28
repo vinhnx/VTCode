@@ -5,7 +5,8 @@ use anstyle::{AnsiColor, Color as AnsiColorEnum, Effects, Reset, Style as AnsiSt
 use anyhow::{Context, Result};
 use std::path::Path;
 use vtcode_core::command_safety::shell_parser::parse_shell_commands_tree_sitter;
-use vtcode_core::config::loader::ConfigManager;
+use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
+use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::dot_config::update_theme_preference;
 
@@ -27,6 +28,17 @@ pub(crate) async fn persist_theme_preference(
         )?;
     }
     Ok(())
+}
+
+pub(crate) fn sync_runtime_theme_selection(
+    config: &mut CoreAgentConfig,
+    vt_cfg: Option<&mut VTCodeConfig>,
+    theme_id: &str,
+) {
+    config.theme = theme_id.to_string();
+    if let Some(vt_cfg) = vt_cfg {
+        vt_cfg.agent.theme = theme_id.to_string();
+    }
 }
 
 fn persist_theme_config(workspace: &Path, theme_id: &str) -> Result<()> {
@@ -252,6 +264,57 @@ fn highlight_shell_user_input(message: &str) -> Option<String> {
     }
 
     None
+}
+
+#[cfg(test)]
+mod theme_sync_tests {
+    use super::sync_runtime_theme_selection;
+    use std::collections::BTreeMap;
+    use vtcode_core::config::core::PromptCachingConfig;
+    use vtcode_core::config::loader::VTCodeConfig;
+    use vtcode_core::config::types::{
+        AgentConfig as CoreAgentConfig, ModelSelectionSource, UiSurfacePreference,
+    };
+    use vtcode_core::core::agent::snapshots::{
+        DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
+    };
+
+    fn runtime_config(theme: &str) -> CoreAgentConfig {
+        CoreAgentConfig {
+            model: "gpt-5.4".to_string(),
+            api_key: String::new(),
+            provider: "openai".to_string(),
+            api_key_env: "OPENAI_API_KEY".to_string(),
+            workspace: std::env::temp_dir(),
+            verbose: false,
+            quiet: false,
+            theme: theme.to_string(),
+            reasoning_effort: Default::default(),
+            ui_surface: UiSurfacePreference::default(),
+            prompt_cache: PromptCachingConfig::default(),
+            model_source: ModelSelectionSource::WorkspaceConfig,
+            custom_api_keys: BTreeMap::new(),
+            checkpointing_enabled: DEFAULT_CHECKPOINTS_ENABLED,
+            checkpointing_storage_dir: None,
+            checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
+            checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
+            max_conversation_turns: 1000,
+            model_behavior: None,
+            openai_chatgpt_auth: None,
+        }
+    }
+
+    #[test]
+    fn sync_runtime_theme_selection_updates_runtime_and_loaded_config() {
+        let mut runtime = runtime_config("ansi");
+        let mut vt_cfg = VTCodeConfig::default();
+        vt_cfg.agent.theme = "ansi".to_string();
+
+        sync_runtime_theme_selection(&mut runtime, Some(&mut vt_cfg), "vitesse-light");
+
+        assert_eq!(runtime.theme, "vitesse-light");
+        assert_eq!(vt_cfg.agent.theme, "vitesse-light");
+    }
 }
 
 fn highlight_shell_command_preserve_text(command: &str) -> String {
