@@ -27,3 +27,17 @@ https://deepwiki.com/search/tell-me-more-about-subagent-ar_30cc4805-dbe7-492c-b8
 ---
 
 https://code.claude.com/docs/en/headless
+
+---
+
+Build codemod package and contribute to open source
+
+```
+npx codemod init
+```
+
+https://codemod.notion.site/Codemod-s-Open-source-Contribution-Program-319531003a148087a314d9e356b1f619
+
+https://docs.codemod.com/oss
+
+https://github.com/codemod/useful-codemods
