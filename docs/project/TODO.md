@@ -40,10 +40,6 @@ https://code.claude.com/docs/en/headless
 
 ---
 
-improve /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/logs and /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/trajectory with ttl and cleanup old logs/trajectories
-
-====
-
 hooks
 
 https://developers.openai.com/codex/hooks
@@ -54,4 +50,4 @@ https://code.claude.com/docs/en/hooks
 
 --
 
-refactor /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-tui/src/ui/theme.rs
+

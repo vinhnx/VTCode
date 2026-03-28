@@ -6503,6 +6503,7 @@ dependencies = [
  "vtcode-ghostty-vt-sys",
  "vtcode-indexer",
  "vtcode-markdown-store",
+ "vtcode-theme",
  "vtcode-tui",
  "walkdir",
  "which",
@@ -6604,6 +6605,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "vtcode-theme"
+version = "0.94.0"
+dependencies = [
+ "anstyle",
+ "anyhow",
+ "catppuccin",
+ "hashbrown 0.15.5",
+ "once_cell",
+ "parking_lot",
+ "vtcode-commons",
+ "vtcode-config",
+]
+
+[[package]]
 name = "vtcode-tools"
 version = "0.94.0"
 dependencies = [
@@ -6663,6 +6678,7 @@ dependencies = [
  "unicode-width 0.2.2",
  "vtcode-commons",
  "vtcode-config",
+ "vtcode-theme",
  "vtcode-vim",
 ]
 

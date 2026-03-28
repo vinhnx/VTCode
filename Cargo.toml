@@ -101,6 +101,7 @@ members = [
     "vtcode-acp",
     "vtcode-core",
     "vtcode-ghostty-vt-sys",
+    "vtcode-theme",
     "vtcode-tui",
     "vtcode-vim",
     "vtcode-commons",

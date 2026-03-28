@@ -119,6 +119,7 @@ vtcode-commons = { path = "../vtcode-commons", version = "0.94.0" }
 vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.94.0" }
 vtcode-auth = { path = "../vtcode-auth", version = "0.94.0" }
 vtcode-config = { path = "../vtcode-config", version = "0.94.0" }
+vtcode-theme = { path = "../vtcode-theme", version = "0.94.0" }
 vtcode-tui = { path = "../vtcode-tui", version = "0.94.0" }
 vtcode-markdown-store = { path = "../vtcode-markdown-store", version = "0.94.0" }
 vtcode-indexer = { path = "../vtcode-indexer", version = "0.94.0" }

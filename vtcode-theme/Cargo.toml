@@ -1,0 +1,27 @@
+[package]
+name = "vtcode-theme"
+version.workspace = true
+edition.workspace = true
+rust-version = "1.88"
+authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
+description = "Shared theme registry and runtime state for VT Code UI crates"
+license.workspace = true
+readme = "README.md"
+homepage = "https://github.com/vinhnx/vtcode"
+repository = "https://github.com/vinhnx/vtcode"
+documentation = "https://docs.rs/vtcode-theme"
+keywords = ["theme", "terminal", "ui", "vtcode"]
+categories = ["development-tools", "command-line-interface"]
+
+[dependencies]
+anstyle = { workspace = true }
+anyhow = { workspace = true }
+catppuccin = { version = "2.5", default-features = false }
+hashbrown = { workspace = true }
+once_cell = { workspace = true }
+parking_lot = "0.12"
+vtcode-commons = { path = "../vtcode-commons", version = "0.94.0" }
+vtcode-config = { path = "../vtcode-config", version = "0.94.0" }
+
+[lints]
+workspace = true

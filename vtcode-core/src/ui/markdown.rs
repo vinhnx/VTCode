@@ -7,14 +7,15 @@
 use crate::config::loader::SyntaxHighlightingConfig;
 use crate::ui::theme::{self, ThemeStyles};
 use anstyle::Style;
+use vtcode_tui::ui::theme::ThemeStyles as TuiThemeStyles;
 
 pub use vtcode_tui::ui::markdown::{
     HighlightedSegment, MarkdownLine, MarkdownSegment, RenderMarkdownOptions,
     highlight_code_to_ansi, highlight_code_to_segments, highlight_line_for_diff,
 };
 
-fn to_tui_theme_styles(styles: &ThemeStyles) -> vtcode_tui::ui::theme::ThemeStyles {
-    vtcode_tui::ui::theme::ThemeStyles {
+fn to_tui_theme_styles(styles: &ThemeStyles) -> TuiThemeStyles {
+    TuiThemeStyles {
         info: styles.info,
         error: styles.error,
         output: styles.output,
