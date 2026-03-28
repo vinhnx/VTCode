@@ -816,3 +816,4 @@ GEMINI.md
 vtcode.toml
 
 plans/
+.vtcode/tool-policy.json

@@ -309,3 +309,14 @@ Files to update: openai.rs, models.json, model_id.rs, as_str.rs, display.rs, des
 **Rules**: Separate what changes from what doesn't. Data over objects. Values over mutation. No temporal coupling. Decomplect first.
 
 **Test**: Can you reason about this without loading the whole system? If no — it's complected.
+
+<!-- codemod-skill-discovery:begin -->
+## Codemod Skill Discovery
+This section is managed by `codemod` CLI.
+
+- Core skill: `.agents/skills/codemod/SKILL.md`
+- Package skills: `.agents/skills/<package-skill>/SKILL.md`
+- Codemod MCP: use it for JSSG authoring guidance, CLI/workflow guidance, import-helper guidance, and semantic-analysis-aware codemod work.
+- List installed Codemod skills: `npx codemod ai list --harness codex --format json`
+
+<!-- codemod-skill-discovery:end -->
