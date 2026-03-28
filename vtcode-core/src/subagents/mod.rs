@@ -44,6 +44,7 @@ const SUBAGENT_TRANSCRIPT_LINE_LIMIT: usize = 200;
 const SUBAGENT_MEMORY_BYTES_LIMIT: usize = 25 * 1024;
 const SUBAGENT_MEMORY_LINE_LIMIT: usize = 200;
 const SUBAGENT_HARD_CONCURRENCY_LIMIT: usize = 3;
+const SUBAGENT_MIN_MAX_TURNS: usize = 2;
 const VAGUE_SUBAGENT_PROMPTS: &[&str] = &[
     "analyze",
     "analyse",
@@ -1353,7 +1354,7 @@ impl SubagentController {
                     spec.name
                 )
             });
-        let max_turns = previous_max_turns.or(spec.max_turns);
+        let max_turns = normalize_child_max_turns(previous_max_turns.or(spec.max_turns));
         let model_override = previous_model_override.or_else(|| spec.model.clone());
         let reasoning_override =
             previous_reasoning_override.or_else(|| spec.reasoning_effort.clone());
@@ -1561,7 +1562,7 @@ impl SubagentController {
                 effective_max_concurrent
             );
         }
-        let child_max_turns = max_turns.or(spec.max_turns);
+        let child_max_turns = normalize_child_max_turns(max_turns.or(spec.max_turns));
         let (_, _, effective_config) = prepare_child_runtime_config(
             &self.config.vt_cfg,
             &spec,
@@ -1996,8 +1997,8 @@ fn build_child_config(
         child.permissions.default_mode =
             clamp_permission_mode(parent.permissions.default_mode, mode);
     }
-    if let Some(max_turns) = max_turns {
-        child.automation.full_auto.max_turns = max_turns.max(1);
+    if let Some(max_turns) = normalize_child_max_turns(max_turns) {
+        child.automation.full_auto.max_turns = max_turns;
     }
 
     let mut allowed_tools = spec.tools.clone().unwrap_or_default();
@@ -2018,6 +2019,10 @@ fn build_child_config(
     merge_child_hooks(&mut child, spec.hooks.as_ref());
     merge_child_mcp_servers(&mut child, spec.mcp_servers.as_slice());
     child
+}
+
+fn normalize_child_max_turns(max_turns: Option<usize>) -> Option<usize> {
+    max_turns.map(|value| value.max(SUBAGENT_MIN_MAX_TURNS))
 }
 
 fn prepare_child_runtime_config(
@@ -2933,9 +2938,9 @@ pub fn is_subagent_tool(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        SUBAGENT_HARD_CONCURRENCY_LIMIT, SpawnAgentRequest, SubagentController,
-        SubagentControllerConfig, SubagentInputItem, SubagentStatus, background_record_id,
-        build_background_subagent_command, build_child_config,
+        SUBAGENT_HARD_CONCURRENCY_LIMIT, SUBAGENT_MIN_MAX_TURNS, SpawnAgentRequest,
+        SubagentController, SubagentControllerConfig, SubagentInputItem, SubagentStatus,
+        background_record_id, build_background_subagent_command, build_child_config,
         contains_explicit_delegation_request, contains_explicit_model_request,
         delegated_task_requires_clarification, extract_explicit_agent_mentions, filter_child_tools,
         normalize_requested_model_override, request_prompt, resolve_effective_subagent_model,
@@ -3338,6 +3343,19 @@ mod tests {
                 .disallowed_tools
                 .contains(&tools::SPAWN_AGENT.to_string())
         );
+    }
+
+    #[test]
+    fn build_child_config_promotes_single_turn_budget_to_recovery_budget() {
+        let parent = VTCodeConfig::default();
+        let spec = vtcode_config::builtin_subagents()
+            .into_iter()
+            .find(|spec| spec.name == "worker")
+            .expect("worker");
+
+        let child = build_child_config(&parent, &spec, models::openai::GPT_5_4, Some(1));
+
+        assert_eq!(child.automation.full_auto.max_turns, SUBAGENT_MIN_MAX_TURNS);
     }
 
     #[test]

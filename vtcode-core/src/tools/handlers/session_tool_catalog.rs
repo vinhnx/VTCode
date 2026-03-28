@@ -617,7 +617,10 @@ pub(crate) fn spawn_agent_parameters() -> Value {
                 "description": "Run the child as a background task. Prefer this for long-lived helper work instead of blocking the current foreground turn with `wait_agent`.",
                 "default": false
             },
-            "max_turns": {"type": "integer", "description": "Optional turn limit for this child."}
+            "max_turns": {
+                "type": "integer",
+                "description": "Optional turn limit for this child. Values below 2 are promoted to 2 so the child can recover from an initial blocked or denied tool call."
+            }
         }
     })
 }
