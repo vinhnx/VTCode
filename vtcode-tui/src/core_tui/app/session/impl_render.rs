@@ -30,6 +30,9 @@ impl Session {
         self.core.render_input(frame, input_area);
         if let Some(panel_area) = bottom_panel_area {
             match panel.kind {
+                BottomPanelKind::AgentPalette => {
+                    render::render_agent_palette(self, frame, panel_area);
+                }
                 BottomPanelKind::FilePalette => {
                     render::render_file_palette(self, frame, panel_area);
                 }
@@ -41,6 +44,9 @@ impl Session {
                 }
                 BottomPanelKind::TaskPanel => {
                     render_task_panel(self, frame, panel_area);
+                }
+                BottomPanelKind::LocalAgents => {
+                    render::render_local_agents(self, frame, panel_area);
                 }
                 BottomPanelKind::None => {
                     frame.render_widget(Clear, panel_area);

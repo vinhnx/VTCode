@@ -24,6 +24,7 @@ use super::{
     },
 };
 use crate::config::constants::ui;
+use crate::core_tui::types::LocalAgentEntry;
 use crate::ui::tui::widgets::SessionWidget;
 
 mod frame_layout;
@@ -248,6 +249,10 @@ pub struct Session {
     /// Avoids expensive clone on cache hits
     pub(crate) visible_lines_cache: Option<(usize, u16, Arc<Vec<TranscriptLine>>)>,
     pub(crate) queued_inputs: Vec<String>,
+    pub(crate) local_agents: Vec<LocalAgentEntry>,
+    pub(crate) local_agents_drawer_visible: bool,
+    pub(crate) subprocess_entries: Vec<String>,
+    pub(crate) subagent_preview: Option<String>,
     queue_overlay_cache: Option<QueueOverlay>,
     queue_overlay_version: u64,
     active_overlay: Option<ActiveOverlay>,
@@ -288,6 +293,7 @@ pub struct Session {
     pub(crate) header_lines_cache: Option<Vec<Line<'static>>>,
     pub(crate) header_height_cache: hashbrown::HashMap<u16, u16>,
     pub(crate) queued_inputs_preview_cache: Option<Vec<String>>,
+    pub(crate) subprocess_entries_preview_cache: Option<Vec<String>>,
 
     // --- Terminal Title ---
     /// Product/app name used in terminal title branding

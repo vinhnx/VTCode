@@ -220,9 +220,11 @@ fn prepare_resume_bootstrap_without_archive(
         });
     }
 
-    let mut bootstrap =
-        vtcode_core::core::threads::ThreadBootstrap::from_listing(resume.listing().clone());
+    let mut bootstrap = resume.bootstrap().clone();
     bootstrap.metadata = Some(metadata);
+    if resume.is_fork() {
+        bootstrap.archive_listing = None;
+    }
 
     let thread_id = match resume.intent() {
         vtcode_core::core::threads::ArchivedSessionIntent::ResumeInPlace => resume.identifier(),
@@ -351,6 +353,7 @@ fn build_exit_header_context_fast(
             ui::HEADER_UNKNOWN_PLACEHOLDER
         ),
         highlights: Vec::new(),
+        subagent_badges: Vec::new(),
         editing_mode: display.editing_mode,
         autonomous_mode: display.autonomous_mode,
     }
@@ -458,6 +461,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         let start_code_changes = capture_code_change_snapshot(&config.workspace, "start").await;
         let resume_request = resume_state.take();
         let resume_ref = resume_request.as_ref();
+        let active_thread_label = resume_ref.map_or("main", ResumeSession::thread_label);
         let thread_manager = vtcode_core::core::threads::ThreadManager::new();
         let archive_metadata = vtcode_core::core::threads::build_thread_archive_metadata(
             &config.workspace,
@@ -666,6 +670,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         let mut next_checkpoint_turn = ui_setup.next_checkpoint_turn;
         let mut session_end_reason = ui_setup.session_end_reason;
         let _file_palette_task_guard = ui_setup.file_palette_task_guard;
+        let _background_subprocess_task_guard = ui_setup.background_subprocess_task_guard;
         let _startup_update_task_guard = ui_setup.startup_update_task_guard;
         let startup_update_cached_notice = ui_setup.startup_update_cached_notice;
         let mut startup_update_notice_rx = ui_setup.startup_update_notice_rx;
@@ -844,6 +849,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     let (session_state, runtime_steering) = runtime.split_mut();
                     let mut interaction_ctx = crate::agent::runloop::unified::turn::session::interaction_loop::InteractionLoopContext {
                     thread_id: &turn_run_id.0,
+                    active_thread_label,
                     renderer: &mut renderer,
                     session: &mut session,
                     handle: &handle,

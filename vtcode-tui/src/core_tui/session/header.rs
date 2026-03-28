@@ -10,10 +10,11 @@ use unicode_segmentation::UnicodeSegmentation;
 use crate::config::constants::ui;
 
 use super::super::types::{
-    InlineHeaderContext, InlineHeaderHighlight, InlineHeaderStatusBadge, InlineHeaderStatusTone,
+    InlineHeaderBadge, InlineHeaderContext, InlineHeaderHighlight, InlineHeaderStatusBadge,
+    InlineHeaderStatusTone,
 };
 use super::terminal_capabilities;
-use super::{Session, ratatui_color_from_ansi};
+use super::{Session, ratatui_color_from_ansi, ratatui_style_from_inline};
 
 fn clean_reasoning_text(text: &str) -> String {
     text.lines()
@@ -72,6 +73,14 @@ fn header_status_badge_style(badge: &InlineHeaderStatusBadge, fallback: Style) -
         InlineHeaderStatusTone::Error => Color::Red,
     };
     fallback.fg(color).add_modifier(Modifier::BOLD)
+}
+
+fn header_context_badge_style(badge: &InlineHeaderBadge) -> Style {
+    let mut style = ratatui_style_from_inline(&badge.style, None);
+    if badge.full_background {
+        style = style.add_modifier(Modifier::BOLD);
+    }
+    style
 }
 
 impl Session {
@@ -492,6 +501,27 @@ impl Session {
             first_section = false;
         }
 
+        for badge in self
+            .header_context
+            .subagent_badges
+            .iter()
+            .filter(|badge| !badge.text.trim().is_empty())
+        {
+            if !first_section {
+                spans.push(Span::styled(
+                    ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
+                    self.header_secondary_style(),
+                ));
+            }
+            let text = if badge.full_background {
+                format!(" {} ", badge.text)
+            } else {
+                badge.text.clone()
+            };
+            spans.push(Span::styled(text, header_context_badge_style(badge)));
+            first_section = false;
+        }
+
         for value in self.header_chain_values() {
             if !first_section {
                 spans.push(Span::styled(
@@ -623,8 +653,8 @@ impl Session {
     }
 
     /// Generate header line with slash command and keyboard shortcut suggestions
-    fn header_suggestions_line(&self) -> Option<Line<'static>> {
-        let spans = vec![
+    pub(crate) fn header_suggestions_line(&self) -> Option<Line<'static>> {
+        let mut spans = vec![
             Span::styled(
                 "/help",
                 self.header_primary_style().add_modifier(Modifier::BOLD),
@@ -652,6 +682,24 @@ impl Session {
             ),
             Span::styled(" Complete", self.header_secondary_style()),
         ];
+
+        if self.has_delegated_local_agents() {
+            spans.push(Span::styled(
+                "  |  ",
+                self.header_secondary_style().add_modifier(Modifier::DIM),
+            ));
+            spans.push(Span::styled(
+                "Alt+S",
+                self.header_primary_style().add_modifier(Modifier::BOLD),
+            ));
+            spans.push(Span::styled(" Agents", self.header_secondary_style()));
+            spans.push(Span::styled(" · ", self.header_secondary_style()));
+            spans.push(Span::styled(
+                "Ctrl+B",
+                self.header_primary_style().add_modifier(Modifier::BOLD),
+            ));
+            spans.push(Span::styled(" Background", self.header_secondary_style()));
+        }
 
         Some(Line::from(spans))
     }

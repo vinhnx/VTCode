@@ -8,6 +8,7 @@ use tui_widget_list::{ListBuilder, ListState as WidgetListState, ListView};
 
 use super::layout_mode::LayoutMode;
 use super::panel::{Panel, PanelStyles};
+use crate::core_tui::types::LocalAgentEntry;
 use crate::ui::tui::session::styling::SessionStyles;
 
 /// Ellipsis character used to indicate truncated text (consistent with line_truncation module).
@@ -45,6 +46,7 @@ fn render_static_list(lines: Vec<Line<'static>>, area: Rect, buf: &mut Buffer) {
 /// Sidebar section types for organizing content
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SidebarSection {
+    LocalAgents,
     Queue,
     Context,
     Tools,
@@ -70,6 +72,7 @@ pub enum SidebarSection {
 pub struct SidebarWidget<'a> {
     styles: &'a SessionStyles,
     queue_items: Vec<String>,
+    local_agents: Vec<LocalAgentEntry>,
     context_info: Option<&'a str>,
     recent_tools: Vec<String>,
     active_section: Option<SidebarSection>,
@@ -82,6 +85,7 @@ impl<'a> SidebarWidget<'a> {
         Self {
             styles,
             queue_items: Vec::new(),
+            local_agents: Vec::new(),
             context_info: None,
             recent_tools: Vec::new(),
             active_section: None,
@@ -93,6 +97,12 @@ impl<'a> SidebarWidget<'a> {
     #[must_use]
     pub fn queue_items(mut self, items: Vec<String>) -> Self {
         self.queue_items = items;
+        self
+    }
+
+    #[must_use]
+    pub fn local_agents(mut self, entries: Vec<LocalAgentEntry>) -> Self {
+        self.local_agents = entries;
         self
     }
 
@@ -155,6 +165,54 @@ impl<'a> SidebarWidget<'a> {
                     ])
                 })
                 .collect();
+
+            render_static_list(lines, inner, buf);
+        }
+    }
+
+    fn render_local_agents_section(&self, area: Rect, buf: &mut Buffer) {
+        let is_active = self.active_section == Some(SidebarSection::LocalAgents);
+        let inner = Panel::new(self.styles)
+            .title("Local Agents")
+            .active(is_active)
+            .mode(self.mode)
+            .render_and_get_inner(area, buf);
+
+        if inner.height == 0 || inner.width == 0 {
+            return;
+        }
+
+        if self.local_agents.is_empty() {
+            let empty_text = Paragraph::new("No local agents").style(self.styles.muted_style());
+            empty_text.render(inner, buf);
+        } else {
+            let mut lines = self
+                .local_agents
+                .iter()
+                .take(4)
+                .map(|entry| {
+                    Line::from(Span::styled(
+                        truncate_string(
+                            &format!(
+                                "{} · {} · {}",
+                                entry.display_label,
+                                entry.kind.as_str(),
+                                entry.status
+                            ),
+                            inner.width.saturating_sub(2) as usize,
+                        ),
+                        self.styles.default_style(),
+                    ))
+                })
+                .collect::<Vec<_>>();
+
+            if let Some(entry) = self.local_agents.first() {
+                lines.push(Line::from(String::new()));
+                lines.push(Line::from(Span::styled(
+                    truncate_string(&entry.preview, inner.width.saturating_sub(2) as usize),
+                    self.styles.muted_style(),
+                )));
+            }
 
             render_static_list(lines, inner, buf);
         }
@@ -227,37 +285,41 @@ impl Widget for SidebarWidget<'_> {
         Clear.render(area, buf);
 
         // Split sidebar into sections
+        let has_local_agents = !self.local_agents.is_empty();
         let has_queue = !self.queue_items.is_empty();
         let has_tools = !self.recent_tools.is_empty();
 
-        let constraints = match (has_queue, has_tools) {
-            (true, true) => vec![
-                Constraint::Percentage(40),
-                Constraint::Percentage(30),
-                Constraint::Percentage(30),
-            ],
-            (true, false) | (false, true) => {
-                vec![Constraint::Percentage(50), Constraint::Percentage(50)]
-            }
-            (false, false) => vec![Constraint::Percentage(100)],
-        };
+        let mut sections = Vec::<(SidebarSection, u32)>::new();
+        if has_local_agents {
+            sections.push((SidebarSection::LocalAgents, 7));
+        }
+        if has_queue {
+            sections.push((SidebarSection::Queue, 3));
+        }
+        sections.push((SidebarSection::Context, 2));
+        if has_tools {
+            sections.push((SidebarSection::Tools, 2));
+        }
 
+        let total_weight = sections
+            .iter()
+            .map(|(_, weight)| *weight)
+            .sum::<u32>()
+            .max(1);
+        let constraints = sections
+            .iter()
+            .map(|(_, weight)| Constraint::Ratio(*weight, total_weight))
+            .collect::<Vec<_>>();
         let chunks = Layout::vertical(constraints).split(area);
 
-        let mut chunk_idx = 0;
-
-        if has_queue && chunk_idx < chunks.len() {
-            self.render_queue_section(chunks[chunk_idx], buf);
-            chunk_idx += 1;
-        }
-
-        if chunk_idx < chunks.len() {
-            self.render_context_section(chunks[chunk_idx], buf);
-            chunk_idx += 1;
-        }
-
-        if has_tools && chunk_idx < chunks.len() {
-            self.render_tools_section(chunks[chunk_idx], buf);
+        for ((section, _), chunk) in sections.into_iter().zip(chunks.iter()) {
+            match section {
+                SidebarSection::LocalAgents => self.render_local_agents_section(*chunk, buf),
+                SidebarSection::Queue => self.render_queue_section(*chunk, buf),
+                SidebarSection::Context => self.render_context_section(*chunk, buf),
+                SidebarSection::Tools => self.render_tools_section(*chunk, buf),
+                SidebarSection::Info => {}
+            }
         }
     }
 }
@@ -276,5 +338,98 @@ fn truncate_string(s: &str, max_width: usize) -> String {
             .rfind(|&i| i <= target)
             .unwrap_or(0);
         format!("{}{}", &s[..end], ELLIPSIS)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SidebarWidget;
+    use crate::core_tui::session::styling::SessionStyles;
+    use crate::ui::tui::types::InlineTheme;
+    use ratatui::buffer::Buffer;
+    use ratatui::layout::Rect;
+    use ratatui::widgets::Widget;
+
+    #[test]
+    fn sidebar_renders_local_agent_entries() {
+        let styles = SessionStyles::new(InlineTheme::default());
+        let area = Rect::new(0, 0, 60, 16);
+        let mut buf = Buffer::empty(area);
+
+        SidebarWidget::new(&styles)
+            .local_agents(vec![
+                crate::core_tui::types::LocalAgentEntry {
+                    id: "thread-1".to_string(),
+                    display_label: "rust-engineer".to_string(),
+                    agent_name: "rust-engineer".to_string(),
+                    color: Some("cyan".to_string()),
+                    kind: crate::core_tui::types::LocalAgentKind::Delegated,
+                    status: "running".to_string(),
+                    summary: None,
+                    preview: "assistant: reviewing the workspace".to_string(),
+                    transcript_path: None,
+                },
+                crate::core_tui::types::LocalAgentEntry {
+                    id: "bg-1".to_string(),
+                    display_label: "reviewer".to_string(),
+                    agent_name: "reviewer".to_string(),
+                    color: None,
+                    kind: crate::core_tui::types::LocalAgentKind::Background,
+                    status: "starting".to_string(),
+                    summary: None,
+                    preview: "waiting for output".to_string(),
+                    transcript_path: None,
+                },
+            ])
+            .context_info("Ready")
+            .render(area, &mut buf);
+
+        let rendered = (0..area.height)
+            .map(|row| {
+                (0..area.width)
+                    .map(|col| buf[(col, row)].symbol())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(rendered.contains("Local Agents"));
+        assert!(rendered.contains("rust-engineer"));
+        assert!(rendered.contains("reviewer"));
+    }
+
+    #[test]
+    fn sidebar_renders_local_agent_preview() {
+        let styles = SessionStyles::new(InlineTheme::default());
+        let area = Rect::new(0, 0, 60, 16);
+        let mut buf = Buffer::empty(area);
+
+        SidebarWidget::new(&styles)
+            .local_agents(vec![crate::core_tui::types::LocalAgentEntry {
+                id: "thread-1".to_string(),
+                display_label: "rust-engineer".to_string(),
+                agent_name: "rust-engineer".to_string(),
+                color: Some("cyan".to_string()),
+                kind: crate::core_tui::types::LocalAgentKind::Delegated,
+                status: "running".to_string(),
+                summary: None,
+                preview: "thinking: Inspecting the diff carefully".to_string(),
+                transcript_path: None,
+            }])
+            .context_info("Ready")
+            .render(area, &mut buf);
+
+        let rendered = (0..area.height)
+            .map(|row| {
+                (0..area.width)
+                    .map(|col| buf[(col, row)].symbol())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(rendered.contains("Local Agents"));
+        assert!(rendered.contains("rust-engineer"));
+        assert!(rendered.contains("Inspecting the diff carefully"));
     }
 }

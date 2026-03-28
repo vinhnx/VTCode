@@ -273,6 +273,7 @@ impl TestContextBacking {
             renderer: &mut self.renderer,
             handle: &self.handle,
             session: &mut self.session,
+            active_thread_label: "main",
             ctrl_c_state: &self.ctrl_c_state,
             ctrl_c_notify: &self.ctrl_c_notify,
             lifecycle_hooks: None,

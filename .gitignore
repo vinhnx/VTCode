@@ -817,3 +817,6 @@ vtcode.toml
 
 plans/
 .vtcode/tool-policy.json
+.vtcode/state/
+.vtcode/tasks/
+.vtcode/tasks/current_task.md

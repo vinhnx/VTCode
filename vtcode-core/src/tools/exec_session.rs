@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use anyhow::{Context, Result, anyhow};
+use chrono::Utc;
 use hashbrown::HashMap;
 use portable_pty::PtySize;
 use tokio::sync::{Mutex, RwLock, watch};
@@ -98,6 +99,10 @@ impl PipeSessionManager {
             working_dir: Some(self.format_working_dir(&working_dir)),
             rows: None,
             cols: None,
+            child_pid: None,
+            started_at: Some(Utc::now()),
+            lifecycle_state: Some(crate::tools::types::VTCodeSessionLifecycleState::Running),
+            exit_code: None,
         };
 
         let output = Arc::new(Mutex::new(String::new()));
@@ -357,11 +362,26 @@ impl ExecSessionManager {
     pub(crate) async fn snapshot_session(&self, session_id: &str) -> Result<VTCodeExecSession> {
         let record = self.session_record(session_id).await?;
         match record.backend {
-            ExecSessionBackend::Pipe => self
-                .pipe_sessions
-                .session_record(session_id)
-                .await
-                .map(|r| r.metadata.clone()),
+            ExecSessionBackend::Pipe => {
+                self.pipe_sessions
+                    .session_record(session_id)
+                    .await
+                    .map(|r| {
+                        let mut metadata = r.metadata.clone();
+                        let exit_code = if r.handle.has_exited() {
+                            r.handle.exit_code()
+                        } else {
+                            None
+                        };
+                        metadata.exit_code = exit_code;
+                        metadata.lifecycle_state = Some(if exit_code.is_some() {
+                            crate::tools::types::VTCodeSessionLifecycleState::Exited
+                        } else {
+                            crate::tools::types::VTCodeSessionLifecycleState::Running
+                        });
+                        metadata
+                    })
+            }
             ExecSessionBackend::Pty => self
                 .pty_sessions
                 .manager()

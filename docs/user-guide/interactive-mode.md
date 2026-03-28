@@ -50,6 +50,7 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 | `/` at start of input | Issue a slash command. | Run `/help` or `/slash-commands` in a session to list everything available. |
 | `!` at start of input | Enter Bash mode. | Runs shell commands directly and streams their output. |
 | `@` within input | Open file picker. | Triggers file path autocomplete and picker to quickly reference files in your message. |
+| `@agent-<name>` within input | Open subagent picker and insert an explicit agent mention. | Use `@agent-<plugin>:<name>` for plugin-provided agents. |
 | `Alt+P` / `Option+P` | Generate an inline prompt suggestion. | Shows a ghost-text completion in the composer; `Tab` accepts it. |
 
 ### Session Context Commands
@@ -59,6 +60,9 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 - For local fallback compaction, VT Code rebuilds history around one structured summary plus retained recent user messages, then injects the session memory envelope.
 - `/fork` opens the archived-session picker. After selecting a session, VT Code now asks whether the new session should start from the full copied transcript or from a summarized fork.
 - A summarized fork starts from the same compacted handoff shape VT Code uses for local compaction: structured summary, retained user prompts, and the memory envelope.
+- `/agents` opens the subagent manager for creating, inspecting, editing, deleting, and browsing active delegated agents. New scaffolds use VT Code tool ids in frontmatter.
+- `/agent` opens the active-agent inspector. Selecting a child agent opens a modal over the current session instead of switching threads.
+- `/subprocesses` opens the Local Agents drawer for delegated agents and managed background subprocesses.
 
 ## Vim Mode
 
@@ -94,7 +98,10 @@ When a task is already running, VT Code keeps the active turn alive and lets you
 - `/stop` still cancels the active run immediately.
 - `/compact` still works only while the session is idle; it rewrites the stored conversation context for the next turn instead of interrupting the active run.
 - `/fork` is available while idle and creates a new archived session, leaving the current session unchanged.
-- `Ctrl+B` still backgrounds the current shell run.
+- `Ctrl+B` starts or stops the configured default background subagent when background mode is enabled and `default_agent` is set. Otherwise it opens the Local Agents drawer and shows setup guidance.
+- `Alt+S` opens or focuses the Local Agents drawer.
+- When the composer is empty and local agents exist, `Down` opens the Local Agents drawer. `Up` and `Down` keep normal history navigation once history traversal is active.
+- In the active-agent and subprocess inspectors, `Esc` closes the overlay, `Ctrl+R` reloads it, `Ctrl+K` requests a graceful stop, and `Ctrl+X` force-cancels the selected subprocess.
 - Foreground `!` commands keep their status in the input/status area, and `Esc` collapses verbose output without killing the job.
 
 ## PR Review Status

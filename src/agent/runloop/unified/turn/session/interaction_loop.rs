@@ -29,6 +29,7 @@ use std::path::PathBuf;
 #[allow(clippy::too_many_arguments)]
 pub(crate) struct InteractionLoopContext<'a> {
     pub thread_id: &'a str,
+    pub active_thread_label: &'a str,
     pub renderer: &'a mut AnsiRenderer,
     pub session: &'a mut vtcode_tui::app::InlineSession,
     pub handle: &'a InlineHandle,
@@ -121,6 +122,7 @@ impl<'a> InteractionLoopContext<'a> {
             renderer: self.renderer,
             handle: self.handle,
             session: self.session,
+            active_thread_label: self.active_thread_label,
             ctrl_c_state: self.ctrl_c_state,
             ctrl_c_notify: self.ctrl_c_notify,
             lifecycle_hooks: self.lifecycle_hooks,

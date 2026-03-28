@@ -99,6 +99,7 @@ pub(crate) struct SessionUISetup {
     pub follow_up_placeholder: Option<String>,
     pub next_checkpoint_turn: usize,
     pub file_palette_task_guard: BackgroundTaskGuard,
+    pub background_subprocess_task_guard: Option<BackgroundTaskGuard>,
     pub startup_update_cached_notice: Option<StartupUpdateNotice>,
     pub startup_update_notice_rx: Option<tokio::sync::mpsc::UnboundedReceiver<StartupUpdateNotice>>,
     pub startup_update_task_guard: Option<BackgroundTaskGuard>,

@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::constants::tools;
 use crate::core::PermissionMode;
 use crate::hooks::{HookCommandConfig, HookCommandKind, HookGroupConfig, HooksConfig};
 
@@ -111,6 +112,8 @@ pub struct SubagentSpec {
     #[serde(default)]
     pub model: Option<String>,
     #[serde(default)]
+    pub color: Option<String>,
+    #[serde(default)]
     pub reasoning_effort: Option<String>,
     #[serde(default)]
     pub permission_mode: Option<PermissionMode>,
@@ -159,24 +162,14 @@ impl SubagentSpec {
             .map(|tool| tool.to_ascii_lowercase())
             .collect::<Vec<_>>();
 
-        let denies_writes = lower_denied.iter().any(|tool| {
-            tool == "edit"
-                || tool == "write"
-                || tool == "unified_file"
-                || tool == "apply_patch"
-                || tool == "create_file"
-                || tool == "delete_file"
-        });
+        let denies_writes = lower_denied
+            .iter()
+            .any(|tool| is_mutating_tool_name(tool.as_str()));
 
         if self.tools.is_some() {
-            let exposes_mutation = lower_tools.iter().any(|tool| {
-                tool == "edit"
-                    || tool == "write"
-                    || tool == "unified_file"
-                    || tool == "apply_patch"
-                    || tool == "create_file"
-                    || tool == "delete_file"
-            });
+            let exposes_mutation = lower_tools
+                .iter()
+                .any(|tool| is_mutating_tool_name(tool.as_str()));
             !exposes_mutation
         } else {
             denies_writes
@@ -195,6 +188,33 @@ impl SubagentSpec {
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct BackgroundSubagentConfig {
+    #[serde(default = "default_background_subagents_enabled")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub default_agent: Option<String>,
+    #[serde(default = "default_background_refresh_interval_ms")]
+    pub refresh_interval_ms: u64,
+    #[serde(default = "default_background_auto_restore")]
+    pub auto_restore: bool,
+    #[serde(default = "default_background_toggle_shortcut")]
+    pub toggle_shortcut: String,
+}
+
+impl Default for BackgroundSubagentConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_background_subagents_enabled(),
+            default_agent: None,
+            refresh_interval_ms: default_background_refresh_interval_ms(),
+            auto_restore: default_background_auto_restore(),
+            toggle_shortcut: default_background_toggle_shortcut(),
+        }
+    }
+}
+
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct SubagentRuntimeLimits {
     #[serde(default = "default_subagents_enabled")]
     pub enabled: bool,
@@ -206,6 +226,8 @@ pub struct SubagentRuntimeLimits {
     pub default_timeout_seconds: u64,
     #[serde(default = "default_subagents_auto_delegate_read_only")]
     pub auto_delegate_read_only: bool,
+    #[serde(default)]
+    pub background: BackgroundSubagentConfig,
 }
 
 impl Default for SubagentRuntimeLimits {
@@ -216,6 +238,7 @@ impl Default for SubagentRuntimeLimits {
             max_depth: default_subagents_max_depth(),
             default_timeout_seconds: default_subagents_default_timeout_seconds(),
             auto_delegate_read_only: default_subagents_auto_delegate_read_only(),
+            background: BackgroundSubagentConfig::default(),
         }
     }
 }
@@ -322,6 +345,7 @@ pub fn builtin_subagents() -> Vec<SubagentSpec> {
             tools: None,
             disallowed_tools: Vec::new(),
             model: Some("inherit".to_string()),
+            color: Some("blue".to_string()),
             reasoning_effort: None,
             permission_mode: None,
             skills: Vec::new(),
@@ -342,13 +366,10 @@ pub fn builtin_subagents() -> Vec<SubagentSpec> {
             name: "explorer".to_string(),
             description: "Read-only exploration specialist. Use proactively for code search, file discovery, and repository understanding.".to_string(),
             prompt: BUILTIN_EXPLORER_AGENT.to_string(),
-            tools: Some(vec![
-                "unified_search".to_string(),
-                "unified_file".to_string(),
-                "unified_exec".to_string(),
-            ]),
-            disallowed_tools: vec!["unified_file".to_string()],
+            tools: Some(builtin_readonly_tool_ids()),
+            disallowed_tools: builtin_readonly_disallowed_tool_ids(),
             model: Some("small".to_string()),
+            color: Some("cyan".to_string()),
             reasoning_effort: Some("low".to_string()),
             permission_mode: Some(PermissionMode::Plan),
             skills: Vec::new(),
@@ -369,13 +390,10 @@ pub fn builtin_subagents() -> Vec<SubagentSpec> {
             name: "plan".to_string(),
             description: "Read-only planning researcher. Use proactively while gathering context for implementation plans.".to_string(),
             prompt: BUILTIN_PLAN_AGENT.to_string(),
-            tools: Some(vec![
-                "unified_search".to_string(),
-                "unified_file".to_string(),
-                "unified_exec".to_string(),
-            ]),
-            disallowed_tools: vec!["unified_file".to_string()],
+            tools: Some(builtin_readonly_tool_ids()),
+            disallowed_tools: builtin_readonly_disallowed_tool_ids(),
             model: Some("inherit".to_string()),
+            color: Some("yellow".to_string()),
             reasoning_effort: Some("medium".to_string()),
             permission_mode: Some(PermissionMode::Plan),
             skills: Vec::new(),
@@ -399,6 +417,7 @@ pub fn builtin_subagents() -> Vec<SubagentSpec> {
             tools: None,
             disallowed_tools: Vec::new(),
             model: Some("inherit".to_string()),
+            color: Some("magenta".to_string()),
             reasoning_effort: None,
             permission_mode: None,
             skills: Vec::new(),
@@ -416,6 +435,18 @@ pub fn builtin_subagents() -> Vec<SubagentSpec> {
             warnings: Vec::new(),
         },
     ]
+}
+
+fn builtin_readonly_tool_ids() -> Vec<String> {
+    vec![
+        tools::UNIFIED_SEARCH.to_string(),
+        tools::UNIFIED_FILE.to_string(),
+        tools::UNIFIED_EXEC.to_string(),
+    ]
+}
+
+fn builtin_readonly_disallowed_tool_ids() -> Vec<String> {
+    vec![tools::UNIFIED_FILE.to_string()]
 }
 
 fn should_replace(existing: &SubagentSpec, candidate: &SubagentSpec) -> bool {
@@ -492,6 +523,12 @@ fn load_cli_agents(value: &JsonValue) -> Result<Vec<SubagentSpec>> {
             .get("model")
             .and_then(JsonValue::as_str)
             .map(ToString::to_string);
+        let color = config
+            .get("color")
+            .or_else(|| config.get("badgeColor"))
+            .or_else(|| config.get("badge_color"))
+            .and_then(JsonValue::as_str)
+            .map(ToString::to_string);
         let reasoning_effort = config
             .get("reasoning_effort")
             .or_else(|| config.get("model_reasoning_effort"))
@@ -544,6 +581,7 @@ fn load_cli_agents(value: &JsonValue) -> Result<Vec<SubagentSpec>> {
             tools,
             disallowed_tools,
             model,
+            color,
             reasoning_effort,
             permission_mode,
             skills,
@@ -618,21 +656,29 @@ fn subagent_spec_from_json_map(
 ) -> Result<SubagentSpec> {
     let name = required_string(object, "name")?;
     let description = required_string(object, "description")?;
-    let tools = optional_string_list(
+    let tools = normalize_subagent_tool_list(optional_string_list(
         object
             .get("tools")
             .or_else(|| object.get("allowed_tools"))
             .or_else(|| object.get("enabled_tools")),
-    )?;
-    let disallowed_tools = optional_string_list(
-        object
-            .get("disallowedTools")
-            .or_else(|| object.get("disallowed_tools"))
-            .or_else(|| object.get("disabled_tools")),
-    )?
-    .unwrap_or_default();
+    )?);
+    let disallowed_tools = normalize_subagent_tools(
+        optional_string_list(
+            object
+                .get("disallowedTools")
+                .or_else(|| object.get("disallowed_tools"))
+                .or_else(|| object.get("disabled_tools")),
+        )?
+        .unwrap_or_default(),
+    );
     let model = object
         .get("model")
+        .and_then(JsonValue::as_str)
+        .map(ToString::to_string);
+    let color = object
+        .get("color")
+        .or_else(|| object.get("badgeColor"))
+        .or_else(|| object.get("badge_color"))
         .and_then(JsonValue::as_str)
         .map(ToString::to_string);
     let reasoning_effort = object
@@ -687,6 +733,7 @@ fn subagent_spec_from_json_map(
         tools,
         disallowed_tools,
         model,
+        color,
         reasoning_effort,
         permission_mode,
         skills,
@@ -703,6 +750,67 @@ fn subagent_spec_from_json_map(
         file_path: None,
         warnings: Vec::new(),
     })
+}
+
+fn normalize_subagent_tool_list(tools: Option<Vec<String>>) -> Option<Vec<String>> {
+    tools.map(normalize_subagent_tools)
+}
+
+fn normalize_subagent_tools(tools: Vec<String>) -> Vec<String> {
+    let mut normalized: Vec<String> = Vec::new();
+    for tool in tools {
+        let trimmed = tool.trim();
+        let mapped_names = normalize_subagent_tool_name(trimmed);
+        if mapped_names.is_empty() {
+            if !trimmed.is_empty()
+                && !normalized
+                    .iter()
+                    .any(|existing| existing.eq_ignore_ascii_case(trimmed))
+            {
+                normalized.push(trimmed.to_string());
+            }
+            continue;
+        }
+
+        for mapped in mapped_names {
+            if !normalized.iter().any(|existing| existing == mapped) {
+                normalized.push(mapped.to_string());
+            }
+        }
+    }
+    normalized
+}
+
+fn normalize_subagent_tool_name(tool: &str) -> &'static [&'static str] {
+    match tool.trim().to_ascii_lowercase().as_str() {
+        "read" => &[tools::READ_FILE],
+        "write" => &[tools::WRITE_FILE],
+        "edit" | "multiedit" | "multi_edit" | "multi-edit" => &[tools::EDIT_FILE],
+        "grep" | "grep_file" | "grepfile" => &[tools::UNIFIED_SEARCH],
+        "glob" | "list" | "list_files" | "listfiles" => &[tools::LIST_FILES],
+        "bash" | "shell" | "command" => &[tools::UNIFIED_EXEC],
+        "patch" | "applypatch" | "apply_patch" => &[tools::APPLY_PATCH],
+        "agent" | "task" => &[tools::SPAWN_AGENT],
+        "askuserquestion" | "ask_user_question" | "requestuserinput" | "request_user_input" => {
+            &[tools::REQUEST_USER_INPUT]
+        }
+        _ => &[],
+    }
+}
+
+fn is_mutating_tool_name(tool: &str) -> bool {
+    tool == "edit"
+        || tool == "write"
+        || tool == tools::UNIFIED_EXEC
+        || tool == tools::EDIT_FILE
+        || tool == tools::WRITE_FILE
+        || tool == tools::UNIFIED_FILE
+        || tool == tools::APPLY_PATCH
+        || tool == tools::CREATE_FILE
+        || tool == tools::DELETE_FILE
+        || tool == tools::MOVE_FILE
+        || tool == tools::COPY_FILE
+        || tool == tools::SEARCH_REPLACE
 }
 
 fn apply_plugin_restrictions(spec: &mut SubagentSpec) {
@@ -825,8 +933,8 @@ fn optional_hooks(value: Option<&JsonValue>) -> Result<Option<HooksConfig>> {
             "PreToolUse" | "pre_tool_use" => &mut config.lifecycle.pre_tool_use,
             "PostToolUse" | "post_tool_use" => &mut config.lifecycle.post_tool_use,
             "Stop" | "stop" => &mut config.lifecycle.task_completed,
-            "SubagentStart" | "subagent_start" => &mut config.lifecycle.session_start,
-            "SubagentStop" | "subagent_stop" => &mut config.lifecycle.session_end,
+            "SubagentStart" | "subagent_start" => &mut config.lifecycle.subagent_start,
+            "SubagentStop" | "subagent_stop" => &mut config.lifecycle.subagent_stop,
             _ => continue,
         };
         target.extend(parse_hook_groups(raw_groups)?);
@@ -915,7 +1023,7 @@ const fn default_subagents_enabled() -> bool {
 }
 
 const fn default_subagents_max_concurrent() -> usize {
-    4
+    3
 }
 
 const fn default_subagents_max_depth() -> usize {
@@ -930,12 +1038,29 @@ const fn default_subagents_auto_delegate_read_only() -> bool {
     true
 }
 
+const fn default_background_subagents_enabled() -> bool {
+    false
+}
+
+const fn default_background_refresh_interval_ms() -> u64 {
+    2_000
+}
+
+const fn default_background_auto_restore() -> bool {
+    false
+}
+
+fn default_background_toggle_shortcut() -> String {
+    "ctrl+b".to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        SubagentDiscoveryInput, SubagentSource, builtin_subagents, discover_subagents,
-        load_subagent_from_file,
+        BackgroundSubagentConfig, SubagentDiscoveryInput, SubagentRuntimeLimits, SubagentSource,
+        builtin_subagents, discover_subagents, load_subagent_from_file,
     };
+    use crate::constants::tools;
     use anyhow::Result;
     use std::fs;
     use tempfile::TempDir;
@@ -952,6 +1077,7 @@ description: Review code
 tools: [Read, Grep, Glob]
 disallowedTools: [Write]
 model: sonnet
+color: blue
 permissionMode: plan
 skills: [rust]
 memory: project
@@ -967,11 +1093,71 @@ Review the target changes."#,
         assert_eq!(spec.name, "reviewer");
         assert_eq!(spec.description, "Review code");
         assert_eq!(spec.model.as_deref(), Some("sonnet"));
-        assert_eq!(spec.tools.as_ref().map(Vec::len), Some(3));
-        assert_eq!(spec.disallowed_tools, vec!["Write".to_string()]);
+        assert_eq!(spec.color.as_deref(), Some("blue"));
+        assert_eq!(
+            spec.tools,
+            Some(vec![
+                tools::READ_FILE.to_string(),
+                tools::UNIFIED_SEARCH.to_string(),
+                tools::LIST_FILES.to_string(),
+            ])
+        );
+        assert_eq!(spec.disallowed_tools, vec![tools::WRITE_FILE.to_string()]);
         assert!(spec.background);
         assert_eq!(spec.max_turns, Some(7));
         assert_eq!(spec.prompt, "Review the target changes.");
+        Ok(())
+    }
+
+    #[test]
+    fn normalizes_claude_tool_aliases_to_vtcode_tools() -> Result<()> {
+        let temp = TempDir::new()?;
+        let path = temp.path().join("debugger.md");
+        fs::write(
+            &path,
+            r#"---
+name: debugger
+description: Debug agent
+tools: [Read, Bash, Edit, Write, Glob, Grep]
+disallowedTools: [Task]
+---
+Debug the issue."#,
+        )?;
+
+        let spec = load_subagent_from_file(&path, SubagentSource::ProjectClaude)?;
+        assert_eq!(
+            spec.tools,
+            Some(vec![
+                tools::READ_FILE.to_string(),
+                tools::UNIFIED_EXEC.to_string(),
+                tools::EDIT_FILE.to_string(),
+                tools::WRITE_FILE.to_string(),
+                tools::LIST_FILES.to_string(),
+                tools::UNIFIED_SEARCH.to_string(),
+            ])
+        );
+        assert_eq!(spec.disallowed_tools, vec![tools::SPAWN_AGENT.to_string()]);
+        assert!(!spec.is_read_only());
+        Ok(())
+    }
+
+    #[test]
+    fn shell_only_agents_are_not_read_only() -> Result<()> {
+        let temp = TempDir::new()?;
+        let path = temp.path().join("shell.md");
+        fs::write(
+            &path,
+            r#"---
+name: shell
+description: Shell-capable agent
+tools: [Bash]
+---
+Run shell commands."#,
+        )?;
+
+        let spec = load_subagent_from_file(&path, SubagentSource::ProjectClaude)?;
+        assert_eq!(spec.tools, Some(vec![tools::UNIFIED_EXEC.to_string()]));
+        assert!(!spec.is_read_only());
         Ok(())
     }
 
@@ -981,13 +1167,14 @@ Review the target changes."#,
         let path = temp.path().join("worker.toml");
         fs::write(
             &path,
-            r#"name = "worker"
+            r##"name = "worker"
 description = "Write-capable implementation agent"
 developer_instructions = "Implement the assigned change."
 model = "gpt-5.4"
+color = "#4f8fd8"
 model_reasoning_effort = "high"
 nickname_candidates = ["builder"]
-"#,
+"##,
         )?;
 
         let spec = load_subagent_from_file(&path, SubagentSource::ProjectCodex)?;
@@ -995,6 +1182,7 @@ nickname_candidates = ["builder"]
         assert_eq!(spec.description, "Write-capable implementation agent");
         assert_eq!(spec.prompt, "Implement the assigned change.");
         assert_eq!(spec.model.as_deref(), Some("gpt-5.4"));
+        assert_eq!(spec.color.as_deref(), Some("#4f8fd8"));
         assert_eq!(spec.reasoning_effort.as_deref(), Some("high"));
         assert_eq!(spec.nickname_candidates, vec!["builder".to_string()]);
         Ok(())
@@ -1079,6 +1267,40 @@ Plugin prompt"#,
     }
 
     #[test]
+    fn parses_subagent_lifecycle_hooks_from_frontmatter() -> Result<()> {
+        let temp = TempDir::new()?;
+        let path = temp.path().join("hooks.md");
+        fs::write(
+            &path,
+            r#"---
+name: hook-agent
+description: Hooked agent
+hooks:
+  SubagentStart:
+    - matcher: worker
+      hooks:
+        - type: command
+          command: echo start
+  SubagentStop:
+    - hooks:
+        - type: command
+          command: echo stop
+---
+Hook prompt"#,
+        )?;
+
+        let spec = load_subagent_from_file(&path, SubagentSource::ProjectClaude)?;
+        let hooks = spec.hooks.expect("hooks");
+        assert_eq!(hooks.lifecycle.subagent_start.len(), 1);
+        assert_eq!(hooks.lifecycle.subagent_stop.len(), 1);
+        assert_eq!(
+            hooks.lifecycle.subagent_start[0].matcher.as_deref(),
+            Some("worker")
+        );
+        Ok(())
+    }
+
+    #[test]
     fn builtin_aliases_cover_compat_names() {
         let builtins = builtin_subagents();
         let explorer = builtins
@@ -1092,5 +1314,43 @@ Plugin prompt"#,
         assert!(explorer.matches_name("explore"));
         assert!(worker.matches_name("general"));
         assert!(worker.matches_name("general-purpose"));
+    }
+
+    #[test]
+    fn background_subagent_runtime_defaults_match_documented_shortcuts() {
+        let config = BackgroundSubagentConfig::default();
+        assert!(!config.enabled);
+        assert_eq!(config.default_agent, None);
+        assert_eq!(config.refresh_interval_ms, 2_000);
+        assert!(!config.auto_restore);
+        assert_eq!(config.toggle_shortcut, "ctrl+b");
+    }
+
+    #[test]
+    fn subagent_runtime_limits_embed_background_defaults() {
+        let limits = SubagentRuntimeLimits::default();
+        assert_eq!(limits.max_concurrent, 3);
+        assert_eq!(limits.background.default_agent, None);
+        assert_eq!(limits.background.toggle_shortcut, "ctrl+b");
+    }
+
+    #[test]
+    fn background_subagent_runtime_deserializes_explicit_default_agent() {
+        let config: BackgroundSubagentConfig = toml::from_str(
+            r#"
+enabled = true
+default_agent = "rust-engineer"
+refresh_interval_ms = 1500
+auto_restore = true
+toggle_shortcut = "ctrl+b"
+"#,
+        )
+        .expect("background config");
+
+        assert!(config.enabled);
+        assert_eq!(config.default_agent.as_deref(), Some("rust-engineer"));
+        assert_eq!(config.refresh_interval_ms, 1_500);
+        assert!(config.auto_restore);
+        assert_eq!(config.toggle_shortcut, "ctrl+b");
     }
 }

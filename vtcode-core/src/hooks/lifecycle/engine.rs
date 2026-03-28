@@ -142,6 +142,120 @@ impl LifecycleHookEngine {
         Ok(messages)
     }
 
+    #[allow(clippy::too_many_arguments)]
+    pub async fn run_subagent_start(
+        &self,
+        parent_session_id: &str,
+        child_thread_id: &str,
+        agent_name: &str,
+        display_label: &str,
+        background: bool,
+        status: &str,
+        transcript_path: Option<&std::path::Path>,
+    ) -> Result<Vec<HookMessage>> {
+        let mut messages = Vec::new();
+
+        if self.inner.hooks.subagent_start.is_empty() {
+            return Ok(messages);
+        }
+
+        let payload = self
+            .build_subagent_start_payload(
+                parent_session_id,
+                child_thread_id,
+                agent_name,
+                display_label,
+                background,
+                status,
+                transcript_path,
+            )
+            .await?;
+        let matcher_value = agent_name.to_owned();
+
+        for group in &self.inner.hooks.subagent_start {
+            if !group.matcher.matches(&matcher_value) {
+                continue;
+            }
+
+            for command in &group.commands {
+                match self
+                    .execute_command("SubagentStart", command, &payload)
+                    .await
+                {
+                    Ok(result) => interpret_session_end(
+                        command,
+                        &result,
+                        &mut messages,
+                        self.inner.hooks.quiet_success_output,
+                    ),
+                    Err(err) => messages.push(HookMessage::error(format!(
+                        "SubagentStart hook `{}` failed: {err}",
+                        command.command
+                    ))),
+                }
+            }
+        }
+
+        Ok(messages)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn run_subagent_stop(
+        &self,
+        parent_session_id: &str,
+        child_thread_id: &str,
+        agent_name: &str,
+        display_label: &str,
+        background: bool,
+        status: &str,
+        transcript_path: Option<&std::path::Path>,
+    ) -> Result<Vec<HookMessage>> {
+        let mut messages = Vec::new();
+
+        if self.inner.hooks.subagent_stop.is_empty() {
+            return Ok(messages);
+        }
+
+        let payload = self
+            .build_subagent_stop_payload(
+                parent_session_id,
+                child_thread_id,
+                agent_name,
+                display_label,
+                background,
+                status,
+                transcript_path,
+            )
+            .await?;
+        let matcher_value = agent_name.to_owned();
+
+        for group in &self.inner.hooks.subagent_stop {
+            if !group.matcher.matches(&matcher_value) {
+                continue;
+            }
+
+            for command in &group.commands {
+                match self
+                    .execute_command("SubagentStop", command, &payload)
+                    .await
+                {
+                    Ok(result) => interpret_session_end(
+                        command,
+                        &result,
+                        &mut messages,
+                        self.inner.hooks.quiet_success_output,
+                    ),
+                    Err(err) => messages.push(HookMessage::error(format!(
+                        "SubagentStop hook `{}` failed: {err}",
+                        command.command
+                    ))),
+                }
+            }
+        }
+
+        Ok(messages)
+    }
+
     pub async fn run_user_prompt_submit(&self, prompt: &str) -> Result<UserPromptHookOutcome> {
         let mut outcome = UserPromptHookOutcome::default();
 

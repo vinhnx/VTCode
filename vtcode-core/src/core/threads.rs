@@ -99,6 +99,15 @@ impl ThreadBootstrap {
         }
     }
 
+    pub fn from_snapshot(snapshot: ThreadSnapshot) -> Self {
+        Self {
+            metadata: snapshot.metadata,
+            archive_listing: snapshot.archive_listing,
+            messages: snapshot.messages,
+            loaded_skills: snapshot.loaded_skills,
+        }
+    }
+
     pub fn with_messages(mut self, messages: Vec<Message>) -> Self {
         self.messages = messages;
         self

@@ -36,3 +36,12 @@ pub const DEFAULT_SESSION_PROGRESS_MIN_TURN_DELTA: usize = 1;
 
 /// Async trajectory log channel capacity (lines)
 pub const DEFAULT_TRAJECTORY_LOG_CHANNEL_CAPACITY: usize = 1024;
+
+/// Maximum number of rotated trajectory log files to keep
+pub const DEFAULT_TRAJECTORY_MAX_FILES: usize = 50;
+
+/// Maximum age in days for rotated trajectory log files
+pub const DEFAULT_TRAJECTORY_MAX_AGE_DAYS: u64 = 14;
+
+/// Maximum total size in MB for all trajectory log files in a workspace
+pub const DEFAULT_TRAJECTORY_MAX_SIZE_MB: u64 = 50;

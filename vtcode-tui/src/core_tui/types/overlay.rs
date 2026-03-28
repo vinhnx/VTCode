@@ -46,11 +46,16 @@ pub struct OverlayHotkey {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum OverlayHotkeyKey {
     CtrlChar(char),
+    Char(char),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum OverlayHotkeyAction {
     LaunchEditor,
+    OpenSourceThread,
+    ReloadSubagentInspector,
+    GracefulStopSubagent,
+    ForceCancelSubagent,
     FocusJobOutput,
     InterruptJob,
     PreviewJobSnapshot,

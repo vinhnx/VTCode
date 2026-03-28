@@ -49,6 +49,7 @@ impl InputLineBuffer {
 enum InputTokenKind {
     Normal,
     SlashCommand,
+    AgentReference,
     FileReference,
     InlineCode,
 }
@@ -97,7 +98,29 @@ fn tokenize_input(content: &str) -> Vec<InputToken> {
         }
     }
 
-    // 2. @file references: `@` at word boundary followed by non-whitespace.
+    // 2. @agent references: canonical `@agent-...` mentions.
+    {
+        let mut i = 0;
+        while i < len {
+            if chars[i] == '@'
+                && (i == 0 || chars[i - 1].is_whitespace())
+                && chars[i..].starts_with(&['@', 'a', 'g', 'e', 'n', 't', '-'])
+            {
+                let start = i;
+                i += 1;
+                while i < len && !chars[i].is_whitespace() {
+                    i += 1;
+                }
+                for kind in &mut kinds[start..i] {
+                    *kind = InputTokenKind::AgentReference;
+                }
+                continue;
+            }
+            i += 1;
+        }
+    }
+
+    // 3. @file references: `@` at word boundary followed by non-whitespace.
     {
         let mut i = 0;
         while i < len {
@@ -111,8 +134,13 @@ fn tokenize_input(content: &str) -> Vec<InputToken> {
                 while i < len && !chars[i].is_whitespace() {
                     i += 1;
                 }
-                for kind in &mut kinds[start..i] {
-                    *kind = InputTokenKind::FileReference;
+                if kinds[start..i]
+                    .iter()
+                    .all(|kind| *kind == InputTokenKind::Normal)
+                {
+                    for kind in &mut kinds[start..i] {
+                        *kind = InputTokenKind::FileReference;
+                    }
                 }
                 continue;
             }
@@ -120,7 +148,7 @@ fn tokenize_input(content: &str) -> Vec<InputToken> {
         }
     }
 
-    // 3. Inline code: backtick-delimited spans (single or triple).
+    // 4. Inline code: backtick-delimited spans (single or triple).
     {
         let mut i = 0;
         while i < len {
@@ -215,7 +243,9 @@ impl Session {
 
         let background_style = self.styles.input_background_style();
         let shell_mode_title = self.shell_mode_border_title();
-        let mut block = if shell_mode_title.is_some() {
+        let active_subagent_title = self.active_subagent_input_title();
+        let active_subagent_border_style = self.active_subagent_input_border_style();
+        let mut block = if shell_mode_title.is_some() || active_subagent_title.is_some() {
             Block::bordered()
         } else {
             Block::new()
@@ -223,11 +253,19 @@ impl Session {
         block = block
             .style(background_style)
             .padding(self.input_block_padding());
-        if let Some(title) = shell_mode_title {
+        if shell_mode_title.is_some() || active_subagent_title.is_some() {
             block = block
-                .title(title)
                 .border_type(super::terminal_capabilities::get_border_type())
-                .border_style(self.styles.accent_style().add_modifier(Modifier::BOLD));
+                .border_style(
+                    active_subagent_border_style
+                        .unwrap_or_else(|| self.styles.accent_style().add_modifier(Modifier::BOLD)),
+                );
+        }
+        if let Some(title) = shell_mode_title {
+            block = block.title_top(Line::from(title).left_aligned());
+        }
+        if let Some(title) = active_subagent_title {
+            block = block.title_top(title);
         }
         let inner = block.inner(input_area);
         self.set_input_area(Some(inner));
@@ -304,6 +342,14 @@ impl Session {
         lines
             .max(1)
             .saturating_add(ui::INLINE_INPUT_PADDING_VERTICAL.saturating_mul(2))
+    }
+
+    pub(crate) fn input_block_extra_height(&self) -> u16 {
+        if self.active_subagent_input_title().is_some() && !self.input_uses_shell_prefix() {
+            2
+        } else {
+            0
+        }
     }
 
     fn input_layout(&self, width: u16, prompt_display_width: u16) -> InputLayout {
@@ -531,7 +577,9 @@ impl Session {
                     let text: String = buf_chars[seg_start..seg_end].iter().collect();
                     let style = match token.kind {
                         InputTokenKind::SlashCommand => slash_style,
-                        InputTokenKind::FileReference => file_ref_style,
+                        InputTokenKind::AgentReference | InputTokenKind::FileReference => {
+                            file_ref_style
+                        }
                         InputTokenKind::InlineCode => code_style,
                         InputTokenKind::Normal => accent_style,
                     };
@@ -728,7 +776,7 @@ impl Session {
         inline_prompt_suggestion_suffix(self.input_manager.content(), suggestion)
     }
 
-    fn render_input_status_line(&self, width: u16) -> Option<Line<'static>> {
+    pub(crate) fn render_input_status_line(&self, width: u16) -> Option<Line<'static>> {
         if width == 0 {
             return None;
         }
@@ -748,6 +796,12 @@ impl Session {
             left = Some(match left {
                 Some(existing) => format!("{existing} · {shell_hint}"),
                 None => shell_hint.to_string(),
+            });
+        }
+        if let Some(local_agents_hint) = self.local_agents_input_status_hint() {
+            left = Some(match left {
+                Some(existing) => format!("{existing} · {local_agents_hint}"),
+                None => local_agents_hint,
             });
         }
 
@@ -846,9 +900,59 @@ impl Session {
             .then_some(SHELL_MODE_BORDER_TITLE)
     }
 
+    pub(crate) fn active_subagent_input_title(&self) -> Option<Line<'static>> {
+        let badge = self.header_context.subagent_badges.first()?;
+        let hidden = self.header_context.subagent_badges.len().saturating_sub(1);
+        let label = if hidden == 0 {
+            badge.text.clone()
+        } else {
+            format!("{} +{}", badge.text, hidden)
+        };
+
+        let mut style = ratatui_style_from_inline(&badge.style, self.theme.foreground);
+        if badge.full_background {
+            style = style.add_modifier(Modifier::BOLD);
+        }
+
+        Some(Line::from(Span::styled(format!(" {label} "), style)).right_aligned())
+    }
+
+    fn active_subagent_input_border_style(&self) -> Option<Style> {
+        let badge = self.header_context.subagent_badges.first()?;
+        let mut title_style = ratatui_style_from_inline(&badge.style, self.theme.foreground);
+        if badge.full_background {
+            title_style = title_style.add_modifier(Modifier::BOLD);
+        }
+
+        let color = if badge.full_background {
+            title_style.bg.or(title_style.fg)
+        } else {
+            title_style.fg.or(title_style.bg)
+        }?;
+
+        Some(
+            self.styles
+                .accent_style()
+                .fg(color)
+                .add_modifier(Modifier::BOLD),
+        )
+    }
+
     fn shell_mode_status_hint(&self) -> Option<&'static str> {
         self.input_uses_shell_prefix()
             .then_some(SHELL_MODE_STATUS_HINT)
+    }
+
+    fn local_agents_input_status_hint(&self) -> Option<String> {
+        if self.input_uses_shell_prefix() || !self.input_manager.content().trim().is_empty() {
+            return None;
+        }
+
+        if !self.has_delegated_local_agents() {
+            return None;
+        }
+
+        Some("↓ or Alt+S local agents · Ctrl+B background".to_string())
     }
 
     /// Build scroll indicator string with percentage
@@ -1249,5 +1353,19 @@ mod input_highlight_tests {
         assert_eq!(tokens[0].0, InputTokenKind::SlashCommand);
         assert_eq!(tokens[2].0, InputTokenKind::FileReference);
         assert_eq!(tokens[4].0, InputTokenKind::InlineCode);
+    }
+
+    #[test]
+    fn agent_reference_has_dedicated_token_kind() {
+        let tokens = kinds("use @agent-explorer for this");
+        assert_eq!(tokens[1].0, InputTokenKind::AgentReference);
+        assert_eq!(tokens[1].1, "@agent-explorer");
+    }
+
+    #[test]
+    fn plugin_agent_reference_has_dedicated_token_kind() {
+        let tokens = kinds("use @agent-github:reviewer for this");
+        assert_eq!(tokens[1].0, InputTokenKind::AgentReference);
+        assert_eq!(tokens[1].1, "@agent-github:reviewer");
     }
 }

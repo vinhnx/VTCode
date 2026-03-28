@@ -104,6 +104,10 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             name: "agent",
             description: "Show delegated child threads for the current session",
         },
+        SlashCommandInfo {
+            name: "subprocess",
+            description: "Open local agents or manage background subprocesses (usage: /subprocess[es] [list|toggle|refresh|inspect <id>|stop <id>|cancel <id>])",
+        },
         // Status and diagnostics
         SlashCommandInfo {
             name: "status",

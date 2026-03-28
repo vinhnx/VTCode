@@ -3,10 +3,11 @@ use crate::config::constants::ui;
 use crate::core_tui::app::session::AppSession;
 use crate::core_tui::app::types as app_types;
 use crate::core_tui::types::{
-    InlineHeaderStatusBadge, InlineHeaderStatusTone, InlineLinkTarget, InlineListItem,
-    InlineListSearchConfig, InlineListSelection, InlineSegment, InlineTextStyle, InlineTheme,
-    ListOverlayRequest, OverlayEvent, OverlayHotkey, OverlayHotkeyAction, OverlayHotkeyKey,
-    OverlayRequest, OverlaySubmission, WizardModalMode, WizardOverlayRequest, WizardStep,
+    InlineHeaderBadge, InlineHeaderStatusBadge, InlineHeaderStatusTone, InlineLinkTarget,
+    InlineListItem, InlineListSearchConfig, InlineListSelection, InlineSegment, InlineTextStyle,
+    InlineTheme, ListOverlayRequest, LocalAgentEntry, OverlayEvent, OverlayHotkey,
+    OverlayHotkeyAction, OverlayHotkeyKey, OverlayRequest, OverlaySubmission, WizardModalMode,
+    WizardOverlayRequest, WizardStep,
 };
 use crate::ui::tui::session::message::RenderedTranscriptLink;
 use crate::ui::tui::session::transcript_links::TranscriptLinkTarget;
@@ -68,6 +69,20 @@ fn app_session_with_input(input: &str, cursor: usize) -> AppSession {
     session.core.set_input(input.to_string());
     session.core.set_cursor(cursor);
     session
+}
+
+fn sample_local_agent_entry(kind: app_types::LocalAgentKind) -> LocalAgentEntry {
+    LocalAgentEntry {
+        id: "agent-1".to_string(),
+        display_label: "rust-engineer".to_string(),
+        agent_name: "rust-engineer".to_string(),
+        color: Some("cyan".to_string()),
+        kind,
+        status: "running".to_string(),
+        summary: Some("Reviewing the workspace".to_string()),
+        preview: "assistant: reviewing the workspace".to_string(),
+        transcript_path: None,
+    }
 }
 
 fn load_app_file_palette(session: &mut AppSession, files: Vec<String>, workspace: PathBuf) {
@@ -1381,6 +1396,202 @@ fn arrow_keys_navigate_input_history() {
 }
 
 #[test]
+fn down_opens_local_agents_drawer_when_input_is_empty() {
+    let mut session = app_session_with_input("", 0);
+    session.handle_command(app_types::InlineCommand::SetLocalAgents {
+        entries: vec![sample_local_agent_entry(
+            app_types::LocalAgentKind::Delegated,
+        )],
+    });
+    session.close_transient();
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+
+    assert!(event.is_none());
+    assert!(session.local_agents_visible());
+}
+
+#[test]
+fn new_local_agent_auto_opens_drawer() {
+    let mut session = app_session_with_input("", 0);
+
+    session.handle_command(app_types::InlineCommand::SetLocalAgents {
+        entries: vec![sample_local_agent_entry(
+            app_types::LocalAgentKind::Delegated,
+        )],
+    });
+
+    assert!(session.local_agents_visible());
+}
+
+#[test]
+fn new_background_local_agent_does_not_auto_open_drawer() {
+    let mut session = app_session_with_input("", 0);
+
+    session.handle_command(app_types::InlineCommand::SetLocalAgents {
+        entries: vec![sample_local_agent_entry(
+            app_types::LocalAgentKind::Background,
+        )],
+    });
+
+    assert!(!session.local_agents_visible());
+}
+
+#[test]
+fn down_keeps_history_navigation_when_history_is_active() {
+    let mut session = app_session_with_input("", 0);
+    session.handle_command(app_types::InlineCommand::SetLocalAgents {
+        entries: vec![sample_local_agent_entry(
+            app_types::LocalAgentKind::Delegated,
+        )],
+    });
+    session.close_transient();
+
+    session.core.set_input("first".to_string());
+    let first = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(matches!(first, Some(app_types::InlineEvent::Submit(value)) if value == "first"));
+
+    session.core.set_input("second".to_string());
+    let second = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(matches!(second, Some(app_types::InlineEvent::Submit(value)) if value == "second"));
+
+    let up = session.process_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    assert!(matches!(up, Some(app_types::InlineEvent::HistoryPrevious)));
+
+    let down = session.process_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    assert!(matches!(down, Some(app_types::InlineEvent::HistoryNext)));
+    assert!(!session.local_agents_visible());
+}
+
+#[test]
+fn alt_s_remains_subprocesses_entrypoint() {
+    let mut session = app_session_with_input("", 0);
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::ALT));
+
+    assert!(matches!(
+        event,
+        Some(app_types::InlineEvent::Submit(value)) if value == "/subprocesses"
+    ));
+}
+
+#[test]
+fn header_suggestions_include_subagent_shortcuts() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.local_agents = vec![sample_local_agent_entry(
+        app_types::LocalAgentKind::Delegated,
+    )];
+
+    let line = session
+        .header_suggestions_line()
+        .expect("header suggestions line");
+    let rendered = line
+        .spans
+        .iter()
+        .map(|span| span.content.as_ref())
+        .collect::<String>();
+
+    assert!(rendered.contains("Alt+S"));
+    assert!(rendered.contains("Ctrl+B"));
+}
+
+#[test]
+fn header_suggestions_hide_subagent_shortcuts_without_agents() {
+    let session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+
+    let line = session
+        .header_suggestions_line()
+        .expect("header suggestions line");
+    let rendered = line
+        .spans
+        .iter()
+        .map(|span| span.content.as_ref())
+        .collect::<String>();
+
+    assert!(!rendered.contains("Alt+S"));
+    assert!(!rendered.contains("Ctrl+B"));
+}
+
+#[test]
+fn header_suggestions_hide_subagent_shortcuts_with_background_only() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.local_agents = vec![sample_local_agent_entry(
+        app_types::LocalAgentKind::Background,
+    )];
+
+    let line = session
+        .header_suggestions_line()
+        .expect("header suggestions line");
+    let rendered = line
+        .spans
+        .iter()
+        .map(|span| span.content.as_ref())
+        .collect::<String>();
+
+    assert!(!rendered.contains("Alt+S"));
+    assert!(!rendered.contains("Ctrl+B"));
+}
+
+#[test]
+fn empty_input_status_shows_subagent_shortcuts() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.local_agents = vec![sample_local_agent_entry(
+        app_types::LocalAgentKind::Delegated,
+    )];
+
+    let line = session
+        .render_input_status_line(VIEW_WIDTH)
+        .expect("input status line");
+    let rendered = line
+        .spans
+        .iter()
+        .map(|span| span.content.as_ref())
+        .collect::<String>();
+
+    assert!(rendered.contains("Alt+S"));
+    assert!(rendered.contains("Ctrl+B"));
+}
+
+#[test]
+fn empty_input_status_hides_subagent_shortcuts_without_agents() {
+    let session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+
+    let rendered = session
+        .render_input_status_line(VIEW_WIDTH)
+        .map(|line| {
+            line.spans
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect::<String>()
+        })
+        .unwrap_or_default();
+
+    assert!(!rendered.contains("Alt+S"));
+    assert!(!rendered.contains("Ctrl+B"));
+}
+
+#[test]
+fn empty_input_status_hides_subagent_shortcuts_with_background_only() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.local_agents = vec![sample_local_agent_entry(
+        app_types::LocalAgentKind::Background,
+    )];
+
+    let rendered = session
+        .render_input_status_line(VIEW_WIDTH)
+        .map(|line| {
+            line.spans
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect::<String>()
+        })
+        .unwrap_or_default();
+
+    assert!(!rendered.contains("Alt+S"));
+    assert!(!rendered.contains("Ctrl+B"));
+}
+
+#[test]
 fn cursor_visible_while_scrolling() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     let initial = session.build_input_widget_data(VIEW_WIDTH, 1);
@@ -1644,6 +1855,22 @@ fn non_bang_input_has_no_shell_mode_border_title() {
     session.set_input("run ls -la".to_string());
 
     assert_eq!(session.shell_mode_border_title(), None);
+}
+
+#[test]
+fn active_subagent_input_border_adds_extra_height() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.header_context.subagent_badges = vec![InlineHeaderBadge {
+        text: "rust-engineer".to_string(),
+        style: InlineTextStyle {
+            color: Some(AnsiColorEnum::Rgb(RgbColor(0xFF, 0xFF, 0xFF))),
+            bg_color: Some(AnsiColorEnum::Rgb(RgbColor(0x4F, 0x8F, 0xD8))),
+            ..InlineTextStyle::default()
+        },
+        full_background: true,
+    }];
+
+    assert_eq!(session.input_block_extra_height(), 2);
 }
 
 #[test]
@@ -3597,6 +3824,58 @@ fn header_shows_pr_review_status_badge() {
 
     assert_eq!(badge_span.style.fg, Some(Color::Yellow));
     assert!(badge_span.style.add_modifier.contains(Modifier::BOLD));
+}
+
+#[test]
+fn header_shows_active_subagent_badge_with_full_background() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.header_context.subagent_badges = vec![InlineHeaderBadge {
+        text: "rust-engineer".to_string(),
+        style: InlineTextStyle {
+            color: Some(AnsiColorEnum::Rgb(RgbColor(0xFF, 0xFF, 0xFF))),
+            bg_color: Some(AnsiColorEnum::Rgb(RgbColor(0x4F, 0x8F, 0xD8))),
+            ..InlineTextStyle::default()
+        },
+        full_background: true,
+    }];
+
+    let line = session.header_meta_line();
+    let badge_span = line
+        .spans
+        .iter()
+        .find(|span| span.content.as_ref() == " rust-engineer ")
+        .expect("subagent badge span");
+
+    assert_eq!(badge_span.style.fg, Some(Color::Rgb(0xFF, 0xFF, 0xFF)));
+    assert_eq!(badge_span.style.bg, Some(Color::Rgb(0x4F, 0x8F, 0xD8)));
+    assert!(badge_span.style.add_modifier.contains(Modifier::BOLD));
+}
+
+#[test]
+fn input_block_shows_active_subagent_title_with_badge_style() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.set_input("review current code".to_string());
+    session.header_context.subagent_badges = vec![InlineHeaderBadge {
+        text: "rust-engineer".to_string(),
+        style: InlineTextStyle {
+            color: Some(AnsiColorEnum::Rgb(RgbColor(0xFF, 0xFF, 0xFF))),
+            bg_color: Some(AnsiColorEnum::Rgb(RgbColor(0x4F, 0x8F, 0xD8))),
+            ..InlineTextStyle::default()
+        },
+        full_background: true,
+    }];
+
+    let title = session
+        .active_subagent_input_title()
+        .expect("active subagent input title");
+    let span = title.spans.first().expect("title span");
+    assert_eq!(span.content.as_ref(), " rust-engineer ");
+    assert_eq!(span.style.fg, Some(Color::Rgb(0xFF, 0xFF, 0xFF)));
+    assert_eq!(span.style.bg, Some(Color::Rgb(0x4F, 0x8F, 0xD8)));
+    assert!(span.style.add_modifier.contains(Modifier::BOLD));
+
+    let lines = rendered_session_lines(&mut session, VIEW_ROWS);
+    assert!(lines.iter().any(|line| line.contains("rust-engineer")));
 }
 
 #[test]

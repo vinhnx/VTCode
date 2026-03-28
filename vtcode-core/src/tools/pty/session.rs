@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
+use chrono::Utc;
 use parking_lot::Mutex;
 use portable_pty::{Child, MasterPty, PtySize};
 use tracing::warn;
@@ -274,6 +275,24 @@ impl PtySessionHandle {
         });
         metadata.rows = size.rows;
         metadata.cols = size.cols;
+        metadata.child_pid = self.child_pid;
+        if metadata.started_at.is_none() {
+            metadata.started_at = Some(Utc::now());
+        }
+        let exit_code = {
+            let mut child = self.child.lock();
+            child
+                .try_wait()
+                .ok()
+                .flatten()
+                .map(crate::tools::pty::manager_utils::exit_status_code)
+        };
+        metadata.exit_code = exit_code;
+        metadata.lifecycle_state = Some(if exit_code.is_some() {
+            crate::tools::types::VTCodeSessionLifecycleState::Exited
+        } else {
+            crate::tools::types::VTCodeSessionLifecycleState::Running
+        });
 
         let raw_vt_stream = {
             let raw_vt_buffer = self.raw_vt_buffer.lock();

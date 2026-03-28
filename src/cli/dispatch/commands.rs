@@ -81,6 +81,10 @@ pub(crate) async fn dispatch_command(
             };
             exec::handle_exec_command(core_cfg, cfg, options).await?;
         }
+        Commands::BackgroundSubagent(args) => {
+            crate::cli::background_subagent::handle_background_subagent_command(startup, args)
+                .await?;
+        }
         Commands::Review(review) => {
             let files = review
                 .files

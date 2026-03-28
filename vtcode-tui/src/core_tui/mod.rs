@@ -20,13 +20,13 @@ pub use style::{convert_style, theme_from_styles};
 pub use theme_parser::ThemeConfigParser;
 pub use types::{
     ContentPart, EditingMode, FocusChangeCallback, InlineCommand, InlineEvent, InlineEventCallback,
-    InlineHandle, InlineHeaderContext, InlineHeaderHighlight, InlineHeaderStatusBadge,
-    InlineHeaderStatusTone, InlineLinkRange, InlineLinkTarget, InlineListItem,
-    InlineListSearchConfig, InlineListSelection, InlineMessageKind, InlineSegment, InlineSession,
-    InlineTextStyle, InlineTheme, ListOverlayRequest, ModalOverlayRequest, OverlayEvent,
-    OverlayHotkey, OverlayHotkeyAction, OverlayHotkeyKey, OverlayRequest, OverlaySelectionChange,
-    OverlaySubmission, RewindAction, SecurePromptConfig, WizardModalMode, WizardOverlayRequest,
-    WizardStep,
+    InlineHandle, InlineHeaderBadge, InlineHeaderContext, InlineHeaderHighlight,
+    InlineHeaderStatusBadge, InlineHeaderStatusTone, InlineLinkRange, InlineLinkTarget,
+    InlineListItem, InlineListSearchConfig, InlineListSelection, InlineMessageKind, InlineSegment,
+    InlineSession, InlineTextStyle, InlineTheme, ListOverlayRequest, ModalOverlayRequest,
+    OverlayEvent, OverlayHotkey, OverlayHotkeyAction, OverlayHotkeyKey, OverlayRequest,
+    OverlaySelectionChange, OverlaySubmission, RewindAction, SecurePromptConfig, WizardModalMode,
+    WizardOverlayRequest, WizardStep,
 };
 
 use runner::{TuiOptions, run_tui};

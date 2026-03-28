@@ -64,6 +64,8 @@ mod tests {
         assert!(detect_explicit_run_command("run this script").is_none());
         assert!(detect_explicit_run_command("run a quick check").is_none());
         assert!(detect_explicit_run_command("eun the tests").is_none());
+        assert!(detect_explicit_run_command("run rust-engineer subagent").is_none());
+        assert!(detect_explicit_run_command("run the rust-engineer subagent").is_none());
     }
 
     #[test]

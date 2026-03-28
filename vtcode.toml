@@ -8,10 +8,10 @@ persistence = "file"
 [tui]
 
 [agent]
-provider = "ollama"
-api_key_env = "OLLAMA_API_KEY"
-default_model = "gpt-oss:120b-cloud"
-theme = "spacegray"
+provider = "minimax"
+api_key_env = "MINIMAX_API_KEY"
+default_model = "MiniMax-M2.7"
+theme = "ciapre-blue"
 system_prompt_mode = "default"
 tool_documentation_mode = "minimal"
 enable_split_tool_results = true
@@ -227,6 +227,10 @@ web_fetch = "allow"
 write_file = "allow"
 vtcode-clippy = "prompt"
 vtcode-check = "prompt"
+spawn_agent = "allow"
+wait_agent = "allow"
+send_input = "allow"
+resume_agent = "allow"
 
 [tools.web_fetch]
 mode = "restricted"
@@ -700,6 +704,9 @@ sample_interval_ms = 1000
 retention_days = 14
 bottleneck_tracing = true
 perf_events = true
+trajectory_max_files = 50
+trajectory_max_age_days = 14
+trajectory_max_size_mb = 50
 
 [optimization.memory_pool]
 enabled = true
@@ -820,6 +827,20 @@ max_age_days = 30
 enable_auto_cleanup = true
 min_quality_threshold = 0.7
 cache_friendly_prompt_shaping = false
+
+[subagents]
+enabled = true
+max_concurrent = 4
+max_depth = 1
+default_timeout_seconds = 300
+auto_delegate_read_only = true
+
+[subagents.background]
+enabled = true
+default_agent = "default"
+refresh_interval_ms = 2000
+auto_restore = true
+toggle_shortcut = "ctrl+b"
 
 [prompt_cache.providers.openai]
 enabled = true
@@ -953,6 +974,8 @@ pre_compact = []
 task_completion = []
 task_completed = []
 notification = []
+subagent_start = []
+subagent_stop = []
 
 [model]
 skip_loop_detection = false
@@ -1001,15 +1024,15 @@ min-keyword-matches = 2
 [skills.bundled]
 enabled = true
 
-[output_style]
-active_style = "default"
-
 [[custom_providers]]
 name = "mycorp"
 display_name = "MyCorporateName"
 base_url = "https://llm.corp.example/v1"
 api_key_env = "MYCORP_API_KEY"
 model = "gpt-5.4"
+
+[output_style]
+active_style = "default"
 
 [dotfile_protection]
 enabled = true

@@ -8,6 +8,8 @@ pub(super) struct CompiledLifecycleHooks {
     pub(super) quiet_success_output: bool,
     pub(super) session_start: Vec<CompiledHookGroup>,
     pub(super) session_end: Vec<CompiledHookGroup>,
+    pub(super) subagent_start: Vec<CompiledHookGroup>,
+    pub(super) subagent_stop: Vec<CompiledHookGroup>,
     pub(super) user_prompt_submit: Vec<CompiledHookGroup>,
     pub(super) pre_tool_use: Vec<CompiledHookGroup>,
     pub(super) post_tool_use: Vec<CompiledHookGroup>,
@@ -21,6 +23,8 @@ impl CompiledLifecycleHooks {
             quiet_success_output: config.quiet_success_output,
             session_start: compile_groups(&config.session_start)?,
             session_end: compile_groups(&config.session_end)?,
+            subagent_start: compile_groups(&config.subagent_start)?,
+            subagent_stop: compile_groups(&config.subagent_stop)?,
             user_prompt_submit: compile_groups(&config.user_prompt_submit)?,
             pre_tool_use: compile_groups(&config.pre_tool_use)?,
             post_tool_use: compile_groups(&config.post_tool_use)?,
@@ -32,6 +36,8 @@ impl CompiledLifecycleHooks {
     pub(super) fn is_empty(&self) -> bool {
         self.session_start.is_empty()
             && self.session_end.is_empty()
+            && self.subagent_start.is_empty()
+            && self.subagent_stop.is_empty()
             && self.user_prompt_submit.is_empty()
             && self.pre_tool_use.is_empty()
             && self.post_tool_use.is_empty()

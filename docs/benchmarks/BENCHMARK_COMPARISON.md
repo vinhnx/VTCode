@@ -224,7 +224,7 @@ MBPP          HumanEval          SWE-bench
 |--------|-----------|------|-----------|
 | **Runtime** | 2-3 min | 5-10 min | 30-120 min |
 | **Cost (free tier)** | $0.00 | $0.00 | $0.00 |
-| **Cost (GPT-4o)** | $0.50-0.80 | $0.15-0.25 | $19-44 |
+| **Cost (GPT-5-mini)** | $0.50-0.80 | $0.15-0.25 | $19-44 |
 | **Dataset Size** | 164 | 974 | 2,294 |
 | **Industry Adoption** |  |  |  |
 | **Ease of Setup** |  |  |  |

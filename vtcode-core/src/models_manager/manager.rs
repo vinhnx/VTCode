@@ -277,7 +277,7 @@ impl ModelsManager {
                 crate::config::constants::models::copilot::DEFAULT_MODEL.to_string()
             }
             Provider::DeepSeek => "deepseek-reasoner".to_string(),
-            Provider::ZAI => "glm-5".to_string(),
+            Provider::ZAI => "glm-5.1".to_string(),
             Provider::Minimax => "MiniMax-M2.5".to_string(),
             Provider::OpenRouter => "deepseek/deepseek-chat".to_string(),
             Provider::Ollama => "gpt-oss:20b".to_string(),

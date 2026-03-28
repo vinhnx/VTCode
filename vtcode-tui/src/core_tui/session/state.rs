@@ -15,8 +15,8 @@ use ratatui::layout::Rect;
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::super::types::{
-    InlineEvent, InlineListSelection, ListOverlayRequest, ModalOverlayRequest, OverlayRequest,
-    WizardOverlayRequest,
+    InlineEvent, InlineListSelection, ListOverlayRequest, LocalAgentEntry, LocalAgentKind,
+    ModalOverlayRequest, OverlayRequest, WizardOverlayRequest,
 };
 use super::status_requires_shimmer;
 use super::{
@@ -75,6 +75,7 @@ impl Session {
         self.needs_redraw = true;
         self.header_lines_cache = None;
         self.queued_inputs_preview_cache = None;
+        self.subprocess_entries_preview_cache = None;
     }
 
     /// Invalidate only the header cache (e.g. when provider/model changes)
@@ -87,7 +88,28 @@ impl Session {
     /// Invalidate only the sidebar cache (e.g. when queue changes)
     pub fn invalidate_sidebar_cache(&mut self) {
         self.queued_inputs_preview_cache = None;
+        self.subprocess_entries_preview_cache = None;
         self.mark_dirty();
+    }
+
+    pub(crate) fn set_local_agents(&mut self, entries: Vec<LocalAgentEntry>) {
+        if self.local_agents != entries {
+            self.local_agents = entries;
+            self.invalidate_sidebar_cache();
+        }
+    }
+
+    pub(crate) fn has_delegated_local_agents(&self) -> bool {
+        self.local_agents
+            .iter()
+            .any(|entry| entry.kind == LocalAgentKind::Delegated)
+    }
+
+    pub(crate) fn set_local_agents_drawer_visible(&mut self, visible: bool) {
+        if self.local_agents_drawer_visible != visible {
+            self.local_agents_drawer_visible = visible;
+            self.mark_dirty();
+        }
     }
 
     pub(crate) fn set_transcript_area(&mut self, area: Option<Rect>) {

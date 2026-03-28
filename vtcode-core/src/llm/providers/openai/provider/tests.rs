@@ -3180,7 +3180,7 @@ mod caching_tests {
             None,
         );
 
-        // Standard GPT-4o model (Chat Completions API)
+        // Standard GPT-5 model (Chat Completions API)
         let request = provider::LLMRequest {
             messages: vec![provider::Message::user("Hello".to_string())],
             model: "gpt-5".to_string(),

@@ -8,7 +8,10 @@ use vtcode_core::core::interfaces::ui::UiSession;
 use vtcode_core::notifications::{NotificationEvent, send_global_notification};
 use vtcode_core::sandboxing::SandboxPermissions as CoreSandboxPermissions;
 use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_tui::app::{InlineHandle, ListOverlayRequest, TransientRequest, TransientSubmission};
+use vtcode_tui::app::{
+    InlineHandle, ListOverlayRequest, TransientHotkey, TransientHotkeyAction, TransientHotkeyKey,
+    TransientRequest, TransientSubmission,
+};
 
 use crate::agent::runloop::tool_output::format_unified_diff_lines;
 use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
@@ -495,7 +498,7 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     tool_args: Option<&Value>,
     approval_learning_key: &str,
     approval_learning_label: &str,
-    _renderer: &mut AnsiRenderer,
+    renderer: &mut AnsiRenderer,
     handle: &InlineHandle,
     session: &mut S,
     ctrl_c_state: &Arc<CtrlCState>,
@@ -506,12 +509,17 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     persistent_approval_target: Option<&PersistentApprovalTarget>,
     approval_recorder: Option<&vtcode_core::tools::ApprovalRecorder>,
     hitl_notification_bell: bool,
+    source_thread_label: Option<&str>,
 ) -> Result<HitlDecision> {
     let prompt_kind = tool_permission_prompt_kind(tool_name);
     let mut description_lines = vec![
         format!("Tool: {}", tool_name),
         format!("Action: {}", display_name),
     ];
+
+    if let Some(source_label) = source_thread_label {
+        description_lines.push(format!("Source: {}", source_label));
+    }
 
     if let Some(args) = tool_args
         && let Some(obj) = args.as_object()
@@ -560,13 +568,25 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
 
     description_lines.push(String::new());
     description_lines.push("Choose how to handle this tool execution:".to_string());
-    description_lines.push(if prompt_kind == ToolPermissionPromptKind::Mcp {
+    let mut navigation_hint = if prompt_kind == ToolPermissionPromptKind::Mcp {
         "Use ↑↓ or Tab to navigate • Enter to select • Esc to cancel".to_string()
     } else {
         "Use ↑↓ or Tab to navigate • Enter to select • Esc to deny".to_string()
-    });
+    };
+    if source_thread_label.is_some() {
+        navigation_hint.push_str(" • o inspect source thread");
+    }
+    description_lines.push(navigation_hint);
 
     let options = build_tool_permission_options(prompt_kind, persistent_approval_target);
+    let hotkeys = source_thread_label
+        .map(|_| {
+            vec![TransientHotkey {
+                key: TransientHotkeyKey::Char('o'),
+                action: TransientHotkeyAction::OpenSourceThread,
+            }]
+        })
+        .unwrap_or_default();
 
     use vtcode_tui::app::InlineListSelection;
     let default_selection = InlineListSelection::ToolApproval(true);
@@ -590,11 +610,19 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
             items: options,
             selected: Some(default_selection),
             search: None,
-            hotkeys: Vec::new(),
+            hotkeys,
         }),
         ctrl_c_state,
         ctrl_c_notify,
         |submission| match submission {
+            TransientSubmission::Hotkey(TransientHotkeyAction::OpenSourceThread) => {
+                handle.set_input("/agent".to_string());
+                let _ = renderer.line(
+                    vtcode_core::utils::ansi::MessageStyle::Info,
+                    "Switched focus to thread selector command. Run /agent to inspect the source thread, then retry the tool action.",
+                );
+                Some(HitlDecision::DeniedOnce)
+            }
             TransientSubmission::Selection(InlineListSelection::ToolApproval(true)) => {
                 Some(HitlDecision::Approved)
             }

@@ -369,6 +369,24 @@ pub struct ReviewArgs {
     pub files: Vec<PathBuf>,
 }
 
+#[derive(Args, Debug, Clone)]
+pub struct BackgroundSubagentArgs {
+    #[arg(long = "agent-name", value_name = "NAME")]
+    pub agent_name: String,
+    #[arg(long = "parent-session-id", value_name = "SESSION_ID")]
+    pub parent_session_id: String,
+    #[arg(long = "session-id", value_name = "SESSION_ID")]
+    pub session_id: String,
+    #[arg(long = "prompt", value_name = "PROMPT")]
+    pub prompt: String,
+    #[arg(long = "max-turns", value_name = "COUNT")]
+    pub max_turns: Option<usize>,
+    #[arg(long = "model-override", value_name = "MODEL")]
+    pub model_override: Option<String>,
+    #[arg(long = "reasoning-override", value_name = "LEVEL")]
+    pub reasoning_override: Option<String>,
+}
+
 /// Available commands
 #[derive(Subcommand, Debug, Clone)]
 pub enum Commands {
@@ -413,6 +431,10 @@ pub enum Commands {
         #[arg(value_name = "PROMPT")]
         prompt: Option<String>,
     },
+
+    /// Internal VT Code background subagent runner
+    #[command(name = "background-subagent", hide = true)]
+    BackgroundSubagent(BackgroundSubagentArgs),
 
     /// Headless code review for the current diff, selected files, or a custom git target
     #[command(

@@ -390,11 +390,11 @@ mod validation_tests {
                 display_name: "MyCorporateName".to_string(),
                 base_url: "https://llm.example/v1".to_string(),
                 api_key_env: "MYCORP_API_KEY".to_string(),
-                model: "gpt-4o-mini".to_string(),
+                model: "gpt-5-mini".to_string(),
             });
 
         let selection = RuntimeModelSelection {
-            model: "gpt-4o-mini".to_string(),
+            model: "gpt-5-mini".to_string(),
             provider: "mycorp".to_string(),
             model_source: vtcode_core::config::types::ModelSelectionSource::WorkspaceConfig,
         };

@@ -97,6 +97,7 @@ fn test_header_context_rendering() {
         tools: "enabled".to_string(),
         mcp: "available".to_string(),
         highlights: vec![],
+        subagent_badges: vec![],
         editor_context: None,
         editing_mode: EditingMode::default(),
         autonomous_mode: false,

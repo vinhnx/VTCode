@@ -30,7 +30,7 @@ pub struct CommandResolver {
     /// Cache hit count for metrics
     cache_hits: usize,
 
-    /// Cache miss count for metrics  
+    /// Cache miss count for metrics
     cache_misses: usize,
 }
 

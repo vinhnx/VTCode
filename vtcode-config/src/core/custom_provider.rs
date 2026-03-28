@@ -25,7 +25,7 @@ pub struct CustomProviderConfig {
     #[serde(default)]
     pub api_key_env: String,
 
-    /// Default model to use with this endpoint (e.g., "gpt-4o-mini").
+    /// Default model to use with this endpoint (e.g., "gpt-5-mini").
     #[serde(default)]
     pub model: String,
 }
@@ -138,7 +138,7 @@ mod tests {
             display_name: "MyCorp".to_string(),
             base_url: "https://llm.example/v1".to_string(),
             api_key_env: String::new(),
-            model: "gpt-4o-mini".to_string(),
+            model: "gpt-5-mini".to_string(),
         };
 
         assert!(config.validate().is_ok());
@@ -152,7 +152,7 @@ mod tests {
             display_name: "My Corp".to_string(),
             base_url: "https://llm.example/v1".to_string(),
             api_key_env: String::new(),
-            model: "gpt-4o-mini".to_string(),
+            model: "gpt-5-mini".to_string(),
         };
 
         let err = config.validate().expect_err("invalid name should fail");

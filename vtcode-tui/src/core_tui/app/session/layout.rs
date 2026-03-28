@@ -9,10 +9,12 @@ use crate::core_tui::session::list_panel;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum BottomPanelKind {
     None,
+    AgentPalette,
     FilePalette,
     HistoryPicker,
     SlashPalette,
     TaskPanel,
+    LocalAgents,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -46,6 +48,12 @@ pub(super) fn resolve_bottom_panel_spec(
 
     let visible_surface = session.visible_bottom_docked_surface();
     let panel = match visible_surface {
+        Some(TransientSurface::AgentPalette) => panel_from_split(
+            session,
+            split_context,
+            BottomPanelKind::AgentPalette,
+            render::split_inline_agent_palette_area,
+        ),
         Some(TransientSurface::FilePalette) => panel_from_split(
             session,
             split_context,
@@ -69,6 +77,12 @@ pub(super) fn resolve_bottom_panel_spec(
             split_context,
             BottomPanelKind::TaskPanel,
             split_inline_task_panel_area,
+        ),
+        Some(TransientSurface::LocalAgents) => panel_from_split(
+            session,
+            split_context,
+            BottomPanelKind::LocalAgents,
+            render::split_inline_local_agents_area,
         ),
         Some(TransientSurface::FloatingOverlay | TransientSurface::DiffPreview) | None => None,
     };

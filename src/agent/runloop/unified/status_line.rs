@@ -317,16 +317,15 @@ pub(crate) fn update_ide_context_source(state: &mut InputStatusState, source: Op
 pub(crate) fn update_thread_context(
     state: &mut InputStatusState,
     thread_label: &str,
-    active_subagents: usize,
-    total_subagents: usize,
+    local_agent_count: usize,
 ) {
     let mut value = thread_label.trim().to_string();
-    if total_subagents > 0 {
-        let suffix = if active_subagents > 0 {
-            format!("{active_subagents}/{total_subagents} agents")
-        } else {
-            format!("{total_subagents} agents")
-        };
+    if local_agent_count > 0 {
+        let suffix = format!(
+            "{} local agent{} | ↓ explore",
+            local_agent_count,
+            if local_agent_count == 1 { "" } else { "s" }
+        );
         if value.is_empty() {
             value = suffix;
         } else {
@@ -339,7 +338,9 @@ pub(crate) fn update_thread_context(
 
 #[cfg(test)]
 mod tests {
-    use super::build_model_status_with_context_and_spooled;
+    use super::{
+        InputStatusState, build_model_status_with_context_and_spooled, update_thread_context,
+    };
 
     #[test]
     fn status_line_shows_context_left_percent() {
@@ -403,6 +404,25 @@ mod tests {
         assert_eq!(
             status.as_deref(),
             Some("IDE Context (VS Code): vtcode-config/src/core/agent.rs | model")
+        );
+    }
+
+    #[test]
+    fn thread_context_keeps_zero_active_subagent_count_visible() {
+        let mut state = InputStatusState::default();
+        update_thread_context(&mut state, "main", 0);
+
+        assert_eq!(state.thread_context.as_deref(), Some("main"));
+    }
+
+    #[test]
+    fn thread_context_shows_local_agent_badge_when_present() {
+        let mut state = InputStatusState::default();
+        update_thread_context(&mut state, "main", 2);
+
+        assert_eq!(
+            state.thread_context.as_deref(),
+            Some("main | 2 local agents | ↓ explore")
         );
     }
 }

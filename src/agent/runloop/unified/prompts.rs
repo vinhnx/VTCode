@@ -57,6 +57,9 @@ pub(crate) async fn read_system_prompt(
         section.push_str(
             "Users can explicitly target one with natural language or an `@agent-<name>` mention.\n",
         );
+        section.push_str(
+            "If the user explicitly selects a subagent for the task, delegate with `spawn_agent` to that subagent instead of handling the task on the main thread.\n",
+        );
         for (name, description, read_only) in available_subagents {
             let suffix = if *read_only {
                 " Read-only."

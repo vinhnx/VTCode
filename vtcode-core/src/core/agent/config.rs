@@ -270,7 +270,7 @@ mod tests {
                 display_name: "MyCorporateName".to_string(),
                 base_url: "https://llm.example/v1".to_string(),
                 api_key_env: "MYCORP_API_KEY".to_string(),
-                model: "gpt-4o-mini".to_string(),
+                model: "gpt-5-mini".to_string(),
             });
 
         assert_eq!(provider_label("mycorp", Some(&config)), "MyCorporateName");

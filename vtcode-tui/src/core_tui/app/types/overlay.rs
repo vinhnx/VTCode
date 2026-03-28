@@ -50,9 +50,26 @@ pub struct FilePaletteTransientRequest {
     pub visible: Option<bool>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AgentPaletteItem {
+    pub name: String,
+    pub description: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct AgentPaletteTransientRequest {
+    pub agents: Vec<AgentPaletteItem>,
+    pub visible: Option<bool>,
+}
+
 #[derive(Clone, Debug)]
 pub struct TaskPanelTransientRequest {
     pub lines: Vec<String>,
+    pub visible: Option<bool>,
+}
+
+#[derive(Clone, Debug)]
+pub struct LocalAgentsTransientRequest {
     pub visible: Option<bool>,
 }
 
@@ -63,9 +80,11 @@ pub enum TransientRequest {
     Wizard(WizardOverlayRequest),
     Diff(DiffOverlayRequest),
     FilePalette(FilePaletteTransientRequest),
+    AgentPalette(AgentPaletteTransientRequest),
     HistoryPicker,
     SlashPalette,
     TaskPanel(TaskPanelTransientRequest),
+    LocalAgents(LocalAgentsTransientRequest),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -77,11 +96,16 @@ pub struct TransientHotkey {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TransientHotkeyKey {
     CtrlChar(char),
+    Char(char),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TransientHotkeyAction {
     LaunchEditor,
+    OpenSourceThread,
+    ReloadSubagentInspector,
+    GracefulStopSubagent,
+    ForceCancelSubagent,
     FocusJobOutput,
     InterruptJob,
     PreviewJobSnapshot,
@@ -130,6 +154,7 @@ impl From<TransientHotkeyKey> for crate::core_tui::types::OverlayHotkeyKey {
     fn from(value: TransientHotkeyKey) -> Self {
         match value {
             TransientHotkeyKey::CtrlChar(ch) => Self::CtrlChar(ch),
+            TransientHotkeyKey::Char(ch) => Self::Char(ch),
         }
     }
 }
@@ -138,6 +163,10 @@ impl From<TransientHotkeyAction> for crate::core_tui::types::OverlayHotkeyAction
     fn from(value: TransientHotkeyAction) -> Self {
         match value {
             TransientHotkeyAction::LaunchEditor => Self::LaunchEditor,
+            TransientHotkeyAction::OpenSourceThread => Self::OpenSourceThread,
+            TransientHotkeyAction::ReloadSubagentInspector => Self::ReloadSubagentInspector,
+            TransientHotkeyAction::GracefulStopSubagent => Self::GracefulStopSubagent,
+            TransientHotkeyAction::ForceCancelSubagent => Self::ForceCancelSubagent,
             TransientHotkeyAction::FocusJobOutput => Self::FocusJobOutput,
             TransientHotkeyAction::InterruptJob => Self::InterruptJob,
             TransientHotkeyAction::PreviewJobSnapshot => Self::PreviewJobSnapshot,
@@ -149,6 +178,16 @@ impl From<crate::core_tui::types::OverlayHotkeyAction> for TransientHotkeyAction
     fn from(value: crate::core_tui::types::OverlayHotkeyAction) -> Self {
         match value {
             crate::core_tui::types::OverlayHotkeyAction::LaunchEditor => Self::LaunchEditor,
+            crate::core_tui::types::OverlayHotkeyAction::OpenSourceThread => Self::OpenSourceThread,
+            crate::core_tui::types::OverlayHotkeyAction::ReloadSubagentInspector => {
+                Self::ReloadSubagentInspector
+            }
+            crate::core_tui::types::OverlayHotkeyAction::GracefulStopSubagent => {
+                Self::GracefulStopSubagent
+            }
+            crate::core_tui::types::OverlayHotkeyAction::ForceCancelSubagent => {
+                Self::ForceCancelSubagent
+            }
             crate::core_tui::types::OverlayHotkeyAction::FocusJobOutput => Self::FocusJobOutput,
             crate::core_tui::types::OverlayHotkeyAction::InterruptJob => Self::InterruptJob,
             crate::core_tui::types::OverlayHotkeyAction::PreviewJobSnapshot => {

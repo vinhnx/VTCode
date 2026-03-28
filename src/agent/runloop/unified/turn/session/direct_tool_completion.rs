@@ -212,6 +212,18 @@ impl DirectToolCompletion<'_> {
 
         let args = serde_json::from_str::<Value>(&function.arguments).ok();
         match function.name.as_str() {
+            tool_names::SPAWN_AGENT => self
+                .payload
+                .as_ref()
+                .and_then(|value| value.get("agent_name"))
+                .and_then(Value::as_str)
+                .or_else(|| {
+                    args.as_ref()
+                        .and_then(|value| value.get("agent_type"))
+                        .and_then(Value::as_str)
+                })
+                .map(|agent| format!("{agent} subagent"))
+                .unwrap_or_else(|| function.name.clone()),
             tool_names::UNIFIED_EXEC => args
                 .as_ref()
                 .and_then(|args| {
@@ -242,12 +254,26 @@ impl DirectToolCompletion<'_> {
             .and_then(Value::as_i64)
     }
 
+    fn error_message(&self) -> Option<String> {
+        let error = self.payload.as_ref()?.get("error")?;
+        match error {
+            Value::String(text) => {
+                let trimmed = text.trim();
+                (!trimmed.is_empty()).then(|| trimmed.to_string())
+            }
+            Value::Object(object) => ["message", "error_summary", "original_error"]
+                .iter()
+                .filter_map(|key| object.get(*key))
+                .find_map(Value::as_str)
+                .map(str::trim)
+                .filter(|text| !text.is_empty())
+                .map(str::to_string),
+            _ => None,
+        }
+    }
+
     fn has_error(&self) -> bool {
-        self.payload
-            .as_ref()
-            .and_then(|value| value.get("error"))
-            .and_then(Value::as_str)
-            .is_some_and(|error| !error.trim().is_empty())
+        self.error_message().is_some()
     }
 
     fn has_pending_follow_up(&self) -> bool {
@@ -258,13 +284,40 @@ impl DirectToolCompletion<'_> {
 
     fn status_text(&self, reply_kind: ReplyKind) -> String {
         let label = self.label();
+        let is_spawn_agent = self
+            .tool_call
+            .function
+            .as_ref()
+            .is_some_and(|function| function.name == tool_names::SPAWN_AGENT);
+        let is_background_subagent = self
+            .payload
+            .as_ref()
+            .and_then(|value| value.get("background"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         if self.has_error() {
+            if is_spawn_agent {
+                return match reply_kind {
+                    ReplyKind::Immediate => format!("`{label}` failed to start."),
+                    ReplyKind::FollowUp => format!("`{label}` already failed to start."),
+                };
+            }
             return match reply_kind {
                 ReplyKind::Immediate => format!("`{label}` completed with an error."),
                 ReplyKind::FollowUp => format!("`{label}` already completed with an error."),
             };
         }
-
+        if is_spawn_agent {
+            let started = if is_background_subagent {
+                "started in the background"
+            } else {
+                "started"
+            };
+            return match reply_kind {
+                ReplyKind::Immediate => format!("`{label}` {started}."),
+                ReplyKind::FollowUp => format!("`{label}` is already {started}."),
+            };
+        }
         match self.exit_code() {
             Some(0) => match reply_kind {
                 ReplyKind::Immediate => format!("`{label}` completed successfully (exit code 0)."),
@@ -288,9 +341,34 @@ impl DirectToolCompletion<'_> {
     fn output_observation(&self) -> Option<String> {
         let payload = self.payload.as_ref()?;
         if self.has_error() {
+            if self
+                .tool_call
+                .function
+                .as_ref()
+                .is_some_and(|function| function.name == tool_names::SPAWN_AGENT)
+            {
+                return Some(
+                    "The subagent did not start. Failure details are shown above.".to_string(),
+                );
+            }
             return Some("Failure details are shown above.".to_string());
         }
-
+        if self
+            .tool_call
+            .function
+            .as_ref()
+            .is_some_and(|function| function.name == tool_names::SPAWN_AGENT)
+        {
+            let background = payload
+                .get("background")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            return Some(if background {
+                "The subagent is running without blocking this turn. Use `/agent` to inspect or continue it.".to_string()
+            } else {
+                "The subagent was started. Use `/agent` to inspect or continue it.".to_string()
+            });
+        }
         let has_output = ["output", "stdout", "content"]
             .iter()
             .filter_map(|key| payload.get(*key))
@@ -311,6 +389,9 @@ impl DirectToolCompletion<'_> {
     }
 
     fn output_snippet(&self) -> Option<String> {
+        if let Some(error_message) = self.error_message() {
+            return Some(error_message);
+        }
         let payload = self.payload.as_ref()?;
         for key in ["output", "stdout", "content", "stderr"] {
             if let Some(text) = payload.get(key).and_then(Value::as_str) {
@@ -375,6 +456,19 @@ impl DirectToolCompletion<'_> {
                         "Ask me to inspect or act on the output above.".to_string(),
                     ],
                     None => Vec::new(),
+                }
+            }
+            tool_names::SPAWN_AGENT => {
+                if self.has_error() {
+                    vec![
+                        "Retry the subagent with a supported model or provider configuration.".to_string(),
+                        "Ask me to inspect the spawn error and patch the underlying model handling.".to_string(),
+                    ]
+                } else {
+                    vec![
+                        "Use `/agent` to inspect or continue the delegated run.".to_string(),
+                        "Ask me to review its output or queue follow-up work.".to_string(),
+                    ]
                 }
             }
             tool_names::UNIFIED_FILE => {
@@ -477,6 +571,77 @@ mod tests {
         let text = completion_reply_text(&history, ReplyKind::FollowUp).expect("follow-up text");
         assert!(text.contains("`read docs/project/TODO.md` already completed with an error."));
         assert!(text.contains("Failure details are shown above."));
+    }
+
+    #[test]
+    fn completion_reply_text_reports_started_background_subagent() {
+        let history = vec![
+            uni::Message::assistant_with_tools(
+                String::new(),
+                vec![uni::ToolCall::function(
+                    "direct_spawn_agent_1".to_string(),
+                    tool_names::SPAWN_AGENT.to_string(),
+                    serde_json::json!({
+                        "agent_type":"rust-engineer",
+                        "message":"review code",
+                        "background": true
+                    })
+                    .to_string(),
+                )],
+            ),
+            uni::Message::tool_response(
+                "direct_spawn_agent_1".to_string(),
+                serde_json::json!({
+                    "agent_name":"rust-engineer",
+                    "background": true,
+                    "status":"queued"
+                })
+                .to_string(),
+            ),
+        ];
+
+        let text =
+            completion_reply_text(&history, ReplyKind::Immediate).expect("direct completion reply");
+        assert!(text.contains("`rust-engineer subagent` started in the background."));
+        assert!(text.contains("Use `/agent` to inspect or continue it."));
+    }
+
+    #[test]
+    fn completion_reply_text_reports_failed_spawn_agent() {
+        let history = vec![
+            uni::Message::assistant_with_tools(
+                String::new(),
+                vec![uni::ToolCall::function(
+                    "direct_spawn_agent_1".to_string(),
+                    tool_names::SPAWN_AGENT.to_string(),
+                    serde_json::json!({
+                        "agent_type":"rust-engineer",
+                        "message":"review code changes",
+                        "background": false
+                    })
+                    .to_string(),
+                )],
+            ),
+            uni::Message::tool_response(
+                "direct_spawn_agent_1".to_string(),
+                serde_json::json!({
+                    "error": {
+                        "message": "Failed to resolve model 'claude-haiku-4.5' for subagent rust-engineer",
+                        "error_summary": "[Execution failed] Failed to resolve model 'claude-haiku-4.5' for subagent rust-engineer"
+                    }
+                })
+                .to_string(),
+            ),
+        ];
+
+        let text =
+            completion_reply_text(&history, ReplyKind::Immediate).expect("direct completion reply");
+        assert!(text.contains("`rust-engineer subagent` failed to start."));
+        assert!(text.contains("The subagent did not start. Failure details are shown above."));
+        assert!(!text.contains("Use `/agent` to inspect or continue it."));
+        assert!(
+            text.contains("Retry the subagent with a supported model or provider configuration.")
+        );
     }
 
     #[test]

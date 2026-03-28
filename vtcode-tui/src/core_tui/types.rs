@@ -1,10 +1,12 @@
 mod content;
+mod local_agents;
 mod overlay;
 mod protocol;
 mod selection;
 mod style;
 
 pub use content::ContentPart;
+pub use local_agents::{LocalAgentEntry, LocalAgentKind};
 pub use overlay::{
     ListOverlayRequest, ModalOverlayRequest, OverlayEvent, OverlayHotkey, OverlayHotkeyAction,
     OverlayHotkeyKey, OverlayRequest, OverlaySelectionChange, OverlaySubmission,
@@ -19,7 +21,7 @@ pub use selection::{
     RewindAction, SecurePromptConfig, WizardModalMode, WizardStep,
 };
 pub use style::{
-    EditingMode, InlineHeaderContext, InlineHeaderHighlight, InlineHeaderStatusBadge,
-    InlineHeaderStatusTone, InlineLinkRange, InlineLinkTarget, InlineSegment, InlineTextStyle,
-    InlineTheme,
+    EditingMode, InlineHeaderBadge, InlineHeaderContext, InlineHeaderHighlight,
+    InlineHeaderStatusBadge, InlineHeaderStatusTone, InlineLinkRange, InlineLinkTarget,
+    InlineSegment, InlineTextStyle, InlineTheme,
 };

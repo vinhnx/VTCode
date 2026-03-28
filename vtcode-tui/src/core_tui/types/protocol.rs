@@ -72,6 +72,12 @@ pub enum InlineCommand {
     SetQueuedInputs {
         entries: Vec<String>,
     },
+    SetSubprocessEntries {
+        entries: Vec<String>,
+    },
+    SetSubagentPreview {
+        text: Option<String>,
+    },
     SetCursorVisible(bool),
     SetInputEnabled(bool),
     SetInput(String),
@@ -249,6 +255,14 @@ impl InlineHandle {
 
     pub fn set_queued_inputs(&self, entries: Vec<String>) {
         self.send_command(InlineCommand::SetQueuedInputs { entries });
+    }
+
+    pub fn set_subprocess_entries(&self, entries: Vec<String>) {
+        self.send_command(InlineCommand::SetSubprocessEntries { entries });
+    }
+
+    pub fn set_subagent_preview(&self, text: Option<String>) {
+        self.send_command(InlineCommand::SetSubagentPreview { text });
     }
 
     pub fn set_cursor_visible(&self, visible: bool) {

@@ -8,12 +8,13 @@ pub(super) use ratatui::widgets::Clear;
 pub(super) use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::core_tui::app::types::{
-    DiffOverlayRequest, DiffPreviewState, InlineCommand, InlineEvent, SlashCommandItem,
-    TaskPanelTransientRequest, TransientRequest,
+    DiffOverlayRequest, DiffPreviewState, InlineCommand, InlineEvent, LocalAgentsTransientRequest,
+    SlashCommandItem, TaskPanelTransientRequest, TransientRequest,
 };
 use crate::core_tui::runner::TuiSessionDriver;
 use crate::core_tui::session::Session as CoreSessionState;
 
+mod agent_palette;
 pub mod diff_preview;
 mod events;
 pub mod file_palette;
@@ -21,6 +22,7 @@ pub mod history_picker;
 mod impl_events;
 mod impl_render;
 mod layout;
+mod local_agents;
 mod palette;
 pub mod render;
 pub mod slash;
@@ -30,19 +32,24 @@ pub mod trust;
 
 use self::file_palette::FilePalette;
 use self::history_picker::HistoryPickerState;
+use self::local_agents::LocalAgentsState;
 use self::slash_palette::SlashPalette;
 use self::transient::{
     TransientFocusPolicy, TransientHost, TransientSurface, TransientVisibilityChange,
 };
+use agent_palette::AgentPalette;
 
 /// App-level session that layers VT Code features on top of the core session.
 pub struct AppSession {
     pub(crate) core: CoreSessionState,
+    pub(crate) agent_palette: Option<AgentPalette>,
+    pub(crate) agent_palette_active: bool,
     pub(crate) file_palette: Option<FilePalette>,
     pub(crate) file_palette_active: bool,
     pub(crate) inline_lists_visible: bool,
     pub(crate) slash_palette: SlashPalette,
     pub(crate) history_picker_state: HistoryPickerState,
+    local_agents_state: LocalAgentsState,
     pub(crate) show_task_panel: bool,
     pub(crate) task_panel_lines: Vec<String>,
     pub(crate) diff_preview_state: Option<DiffPreviewState>,
@@ -73,11 +80,14 @@ impl AppSession {
 
         Self {
             core,
+            agent_palette: None,
+            agent_palette_active: false,
             file_palette: None,
             file_palette_active: false,
             inline_lists_visible: true,
             slash_palette: SlashPalette::with_commands(slash_commands),
             history_picker_state: HistoryPickerState::new(),
+            local_agents_state: LocalAgentsState::default(),
             show_task_panel: false,
             task_panel_lines: Vec::new(),
             diff_preview_state: None,
@@ -131,6 +141,7 @@ impl AppSession {
             return;
         }
 
+        self.check_agent_reference_trigger();
         self.check_file_reference_trigger();
         slash::update_slash_suggestions(self);
     }
@@ -189,11 +200,23 @@ impl AppSession {
                 .is_visible(TransientSurface::HistoryPicker)
     }
 
+    pub(crate) fn local_agents_visible(&self) -> bool {
+        self.transient_host
+            .is_visible(TransientSurface::LocalAgents)
+    }
+
     pub(crate) fn file_palette_visible(&self) -> bool {
         self.file_palette_active
             && self
                 .transient_host
                 .is_visible(TransientSurface::FilePalette)
+    }
+
+    pub(crate) fn agent_palette_visible(&self) -> bool {
+        self.agent_palette_active
+            && self
+                .transient_host
+                .is_visible(TransientSurface::AgentPalette)
     }
 
     pub(crate) fn slash_palette_visible(&self) -> bool {
@@ -352,6 +375,20 @@ impl AppSession {
                     None => {}
                 }
             }
+            TransientRequest::AgentPalette(request) => {
+                self.load_agent_palette(request.agents);
+                match request.visible {
+                    Some(true) => {
+                        self.ensure_inline_lists_visible_for_trigger();
+                        self.agent_palette_active = true;
+                        self.show_transient_surface(TransientSurface::AgentPalette);
+                    }
+                    Some(false) => {
+                        self.close_agent_palette();
+                    }
+                    None => {}
+                }
+            }
             TransientRequest::HistoryPicker => {
                 events::open_history_picker(self);
             }
@@ -369,8 +406,31 @@ impl AppSession {
                     self.core.mark_dirty();
                 }
             }
+            TransientRequest::LocalAgents(LocalAgentsTransientRequest { visible }) => {
+                if let Some(visible) = visible {
+                    if visible {
+                        self.ensure_inline_lists_visible_for_trigger();
+                        self.show_transient_surface(TransientSurface::LocalAgents);
+                    } else {
+                        self.close_transient_surface(TransientSurface::LocalAgents);
+                    }
+                } else {
+                    self.core.mark_dirty();
+                }
+            }
         }
         self.core.mark_dirty();
+    }
+
+    fn should_auto_open_local_agents(&self) -> bool {
+        if self.has_active_overlay() {
+            return false;
+        }
+
+        matches!(
+            self.visible_transient_surface(),
+            None | Some(TransientSurface::TaskPanel | TransientSurface::LocalAgents)
+        )
     }
 
     pub(crate) fn close_transient(&mut self) {
@@ -378,9 +438,13 @@ impl AppSession {
             Some(TransientSurface::FloatingOverlay) => self.close_overlay(),
             Some(TransientSurface::DiffPreview) => self.close_diff_overlay(),
             Some(TransientSurface::HistoryPicker) => self.close_history_picker(),
+            Some(TransientSurface::AgentPalette) => self.close_agent_palette(),
             Some(TransientSurface::FilePalette) => self.close_file_palette(),
             Some(TransientSurface::SlashPalette) => slash::clear_slash_suggestions(self),
             Some(TransientSurface::TaskPanel) => self.set_task_panel_visible(false),
+            Some(TransientSurface::LocalAgents) => {
+                self.close_transient_surface(TransientSurface::LocalAgents);
+            }
             None => {}
         }
     }
@@ -405,16 +469,31 @@ impl AppSession {
     }
 
     fn apply_transient_visibility_change(&mut self, change: TransientVisibilityChange) {
-        if change.previous_visible == Some(TransientSurface::FilePalette)
-            || change.current_visible == Some(TransientSurface::FilePalette)
-        {
+        if matches!(
+            change.previous_visible,
+            Some(TransientSurface::FilePalette | TransientSurface::AgentPalette)
+        ) || matches!(
+            change.current_visible,
+            Some(TransientSurface::FilePalette | TransientSurface::AgentPalette)
+        ) {
             self.core.needs_full_clear = true;
         }
+        self.core.set_local_agents_drawer_visible(
+            change.current_visible == Some(TransientSurface::LocalAgents),
+        );
         self.sync_transient_focus();
     }
 
     pub fn handle_command(&mut self, command: InlineCommand) {
         match command {
+            InlineCommand::SetLocalAgents { entries } => {
+                let update = self.local_agents_state.set_entries(entries.clone());
+                self.core.set_local_agents(entries);
+                if update.has_new_delegated_entries && self.should_auto_open_local_agents() {
+                    self.ensure_inline_lists_visible_for_trigger();
+                    self.show_transient_surface(TransientSurface::LocalAgents);
+                }
+            }
             InlineCommand::SetInput(value) => {
                 self.core
                     .handle_command(crate::core_tui::types::InlineCommand::SetInput(value));
@@ -535,6 +614,13 @@ fn to_core_command(command: &InlineCommand) -> Option<crate::core_tui::types::In
         InlineCommand::SetQueuedInputs { entries } => CoreCommand::SetQueuedInputs {
             entries: entries.clone(),
         },
+        InlineCommand::SetSubprocessEntries { entries } => CoreCommand::SetSubprocessEntries {
+            entries: entries.clone(),
+        },
+        InlineCommand::SetSubagentPreview { text } => {
+            CoreCommand::SetSubagentPreview { text: text.clone() }
+        }
+        InlineCommand::SetLocalAgents { .. } => return None,
         InlineCommand::SetCursorVisible(value) => CoreCommand::SetCursorVisible(*value),
         InlineCommand::SetInputEnabled(value) => CoreCommand::SetInputEnabled(*value),
         InlineCommand::SetInput(value) => CoreCommand::SetInput(value.clone()),

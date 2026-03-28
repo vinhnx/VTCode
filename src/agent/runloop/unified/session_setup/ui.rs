@@ -28,6 +28,7 @@ use vtcode_core::notifications::{
     set_global_notification_hook_engine, set_global_terminal_focused,
 };
 use vtcode_core::prompts::discover_prompt_templates;
+use vtcode_core::subagents::{SubagentStatusEntry, SubagentThreadSnapshot};
 use vtcode_core::ui::slash::visible_commands;
 use vtcode_core::ui::theme;
 use vtcode_core::ui::{
@@ -37,9 +38,11 @@ use vtcode_core::ui::{
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::SessionArchive;
 use vtcode_core::utils::transcript;
+use vtcode_core::{CommandExecutionStatus, ThreadEvent, ThreadItemDetails, ToolCallStatus};
 use vtcode_tui::app::{
-    FocusChangeCallback, InlineEvent, InlineEventCallback, InlineHandle, InlineHeaderContext,
-    SessionOptions, SlashCommandItem, spawn_session_with_options,
+    AgentPaletteItem, FocusChangeCallback, InlineEvent, InlineEventCallback, InlineHandle,
+    InlineHeaderContext, LocalAgentEntry, LocalAgentKind, SessionOptions, SlashCommandItem,
+    spawn_session_with_options,
 };
 
 pub(crate) async fn initialize_session_ui(
@@ -214,6 +217,62 @@ pub(crate) async fn initialize_session_ui(
             }
         }
     }));
+    let mut background_subprocess_task_guard = None;
+    if let Some(controller) = session_state.tool_registry.subagent_controller() {
+        let handle_for_agents = handle.clone();
+        let controller_for_agents = controller.clone();
+        tokio::spawn(async move {
+            let specs = controller_for_agents.effective_specs().await;
+            if specs.is_empty() {
+                return;
+            }
+
+            handle_for_agents.configure_agent_palette(
+                specs
+                    .into_iter()
+                    .map(|spec| AgentPaletteItem {
+                        name: spec.name,
+                        description: Some(spec.description),
+                    })
+                    .collect(),
+            );
+        });
+
+        let handle_for_subprocesses = handle.clone();
+        let controller_for_subprocesses = controller.clone();
+        let refresh_interval_ms = vt_cfg
+            .map(|cfg| cfg.subagents.background.refresh_interval_ms)
+            .unwrap_or(2_000)
+            .max(250);
+        background_subprocess_task_guard =
+            Some(BackgroundTaskGuard::new(tokio::spawn(async move {
+                let mut interval =
+                    tokio::time::interval(std::time::Duration::from_millis(refresh_interval_ms));
+                interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+                loop {
+                    interval.tick().await;
+                    let background_entries = match controller_for_subprocesses
+                        .refresh_background_processes()
+                        .await
+                    {
+                        Ok(entries) => entries,
+                        Err(err) => {
+                            tracing::warn!("Failed to refresh background subprocesses: {}", err);
+                            Vec::new()
+                        }
+                    };
+                    let delegated_entries = controller_for_subprocesses.status_entries().await;
+                    let local_agents = build_local_agent_entries(
+                        &controller_for_subprocesses,
+                        delegated_entries,
+                        background_entries,
+                    )
+                    .await;
+                    handle_for_subprocesses.set_local_agents(local_agents);
+                }
+            })));
+    }
 
     transcript::clear();
     render_resume_state_if_present(&mut renderer, resume_state, supports_reasoning)?;
@@ -395,10 +454,378 @@ pub(crate) async fn initialize_session_ui(
         follow_up_placeholder,
         next_checkpoint_turn,
         file_palette_task_guard,
+        background_subprocess_task_guard,
         startup_update_cached_notice: session_state.startup_update_check.cached_notice.clone(),
         startup_update_notice_rx,
         startup_update_task_guard,
     })
+}
+
+async fn build_local_agent_entries(
+    controller: &Arc<vtcode_core::subagents::SubagentController>,
+    delegated_entries: Vec<SubagentStatusEntry>,
+    background_entries: Vec<vtcode_core::subagents::BackgroundSubprocessEntry>,
+) -> Vec<LocalAgentEntry> {
+    let mut entries = Vec::new();
+
+    for entry in visible_delegated_local_agents(delegated_entries) {
+        let snapshot = match controller.snapshot_for_thread(&entry.id).await {
+            Ok(snapshot) => Some(snapshot),
+            Err(err) => {
+                tracing::debug!(
+                    subagent_id = entry.id.as_str(),
+                    "Failed to snapshot delegated agent for local-agents UI: {}",
+                    err
+                );
+                None
+            }
+        };
+        let preview = snapshot
+            .as_ref()
+            .map(|snapshot| delegated_local_agent_preview(&entry, snapshot))
+            .unwrap_or_else(|| delegated_local_agent_preview_placeholder(&entry));
+        let summary = snapshot
+            .as_ref()
+            .map(|snapshot| delegated_local_agent_summary(&entry, snapshot));
+        entries.push((
+            entry.updated_at,
+            LocalAgentEntry {
+                id: entry.id.clone(),
+                display_label: entry.display_label.clone(),
+                agent_name: entry.agent_name.clone(),
+                color: entry.color.clone(),
+                kind: LocalAgentKind::Delegated,
+                status: entry.status.as_str().to_string(),
+                summary,
+                preview,
+                transcript_path: entry.transcript_path.clone(),
+            },
+        ));
+    }
+
+    for entry in visible_background_local_agents(background_entries) {
+        let snapshot = match controller.background_snapshot(&entry.id).await {
+            Ok(snapshot) => Some(snapshot),
+            Err(err) => {
+                tracing::debug!(
+                    subprocess_id = entry.id.as_str(),
+                    "Failed to snapshot background subprocess for local-agents UI: {}",
+                    err
+                );
+                None
+            }
+        };
+        let preview = snapshot
+            .as_ref()
+            .map(background_local_agent_preview)
+            .unwrap_or_else(|| background_local_agent_preview_placeholder(&entry));
+        entries.push((
+            entry.updated_at,
+            LocalAgentEntry {
+                id: entry.id.clone(),
+                display_label: entry.display_label.clone(),
+                agent_name: entry.agent_name.clone(),
+                color: entry.color.clone(),
+                kind: LocalAgentKind::Background,
+                status: entry.status.as_str().to_string(),
+                summary: Some(background_local_agent_summary(&entry)),
+                preview,
+                transcript_path: entry.transcript_path.clone().or(entry.archive_path.clone()),
+            },
+        ));
+    }
+
+    entries.sort_by(|left, right| right.0.cmp(&left.0));
+    entries.into_iter().map(|(_, entry)| entry).collect()
+}
+
+fn visible_delegated_local_agents(entries: Vec<SubagentStatusEntry>) -> Vec<SubagentStatusEntry> {
+    let mut entries = entries
+        .into_iter()
+        .filter(|entry| {
+            !matches!(
+                entry.status,
+                vtcode_core::subagents::SubagentStatus::Completed
+                    | vtcode_core::subagents::SubagentStatus::Closed
+            )
+        })
+        .collect::<Vec<_>>();
+    entries.sort_by(|left, right| right.updated_at.cmp(&left.updated_at));
+    entries
+}
+
+fn visible_background_local_agents(
+    entries: Vec<vtcode_core::subagents::BackgroundSubprocessEntry>,
+) -> Vec<vtcode_core::subagents::BackgroundSubprocessEntry> {
+    let mut entries = entries
+        .into_iter()
+        .filter(|entry| {
+            matches!(
+                entry.status,
+                vtcode_core::subagents::BackgroundSubprocessStatus::Starting
+                    | vtcode_core::subagents::BackgroundSubprocessStatus::Running
+            ) || (entry.desired_enabled
+                && matches!(
+                    entry.status,
+                    vtcode_core::subagents::BackgroundSubprocessStatus::Error
+                ))
+        })
+        .collect::<Vec<_>>();
+    entries.sort_by(|left, right| right.updated_at.cmp(&left.updated_at));
+    entries
+}
+
+fn delegated_local_agent_summary(
+    entry: &SubagentStatusEntry,
+    snapshot: &SubagentThreadSnapshot,
+) -> String {
+    entry
+        .summary
+        .as_deref()
+        .map(str::trim)
+        .filter(|summary| !summary.is_empty())
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| {
+            if snapshot.snapshot.turn_in_flight {
+                "Turn in flight; streaming live updates.".to_string()
+            } else if matches!(entry.status, vtcode_core::subagents::SubagentStatus::Failed) {
+                entry
+                    .error
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|error| !error.is_empty())
+                    .map(ToOwned::to_owned)
+                    .unwrap_or_else(|| {
+                        "Delegated agent failed before producing a summary.".to_string()
+                    })
+            } else if matches!(entry.status, vtcode_core::subagents::SubagentStatus::Queued) {
+                "Queued and waiting to start.".to_string()
+            } else {
+                "Running without a final summary yet.".to_string()
+            }
+        })
+}
+
+fn delegated_local_agent_preview(
+    entry: &SubagentStatusEntry,
+    snapshot: &SubagentThreadSnapshot,
+) -> String {
+    let preview = summarize_subagent_sidebar_preview(snapshot);
+    if preview.trim().is_empty() {
+        delegated_local_agent_preview_placeholder(entry)
+    } else {
+        preview
+    }
+}
+
+fn delegated_local_agent_preview_placeholder(entry: &SubagentStatusEntry) -> String {
+    if matches!(entry.status, vtcode_core::subagents::SubagentStatus::Queued) {
+        "Agent is queued and has not emitted transcript output yet.".to_string()
+    } else if matches!(entry.status, vtcode_core::subagents::SubagentStatus::Failed) {
+        entry
+            .error
+            .as_deref()
+            .map(str::trim)
+            .filter(|error| !error.is_empty())
+            .map(ToOwned::to_owned)
+            .unwrap_or_else(|| "Agent failed before emitting more transcript output.".to_string())
+    } else {
+        "Waiting for the next delegated transcript update.".to_string()
+    }
+}
+
+fn background_local_agent_summary(
+    entry: &vtcode_core::subagents::BackgroundSubprocessEntry,
+) -> String {
+    entry
+        .summary
+        .as_deref()
+        .map(str::trim)
+        .filter(|summary| !summary.is_empty())
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| match entry.status {
+            vtcode_core::subagents::BackgroundSubprocessStatus::Starting => {
+                "Starting; waiting for subprocess output.".to_string()
+            }
+            vtcode_core::subagents::BackgroundSubprocessStatus::Running => {
+                "Running; waiting for transcript output.".to_string()
+            }
+            vtcode_core::subagents::BackgroundSubprocessStatus::Stopped => "Stopped.".to_string(),
+            vtcode_core::subagents::BackgroundSubprocessStatus::Error => {
+                "Exited with an error.".to_string()
+            }
+        })
+}
+
+fn background_local_agent_preview(
+    snapshot: &vtcode_core::subagents::BackgroundSubprocessSnapshot,
+) -> String {
+    if snapshot.preview.trim().is_empty() {
+        background_local_agent_preview_placeholder(&snapshot.entry)
+    } else {
+        snapshot.preview.clone()
+    }
+}
+
+fn background_local_agent_preview_placeholder(
+    entry: &vtcode_core::subagents::BackgroundSubprocessEntry,
+) -> String {
+    match entry.status {
+        vtcode_core::subagents::BackgroundSubprocessStatus::Starting => {
+            "Waiting for the subprocess to emit output...".to_string()
+        }
+        vtcode_core::subagents::BackgroundSubprocessStatus::Running => {
+            "Subprocess is running; waiting for the next transcript update.".to_string()
+        }
+        vtcode_core::subagents::BackgroundSubprocessStatus::Stopped => {
+            "Subprocess stopped.".to_string()
+        }
+        vtcode_core::subagents::BackgroundSubprocessStatus::Error => {
+            "Subprocess ended with an error.".to_string()
+        }
+    }
+}
+
+fn summarize_subagent_sidebar_preview(snapshot: &SubagentThreadSnapshot) -> String {
+    let live_preview = summarize_thread_event_preview(&snapshot.recent_events);
+    if !live_preview.is_empty() {
+        return live_preview;
+    }
+
+    snapshot
+        .snapshot
+        .messages
+        .iter()
+        .rev()
+        .filter_map(|message| {
+            let text = message.content.as_text();
+            let preview = summarize_preview_text(text.as_ref())?;
+            Some(format!("{:?}: {}", message.role, preview))
+        })
+        .take(16)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn summarize_thread_event_preview(events: &[ThreadEvent]) -> String {
+    let mut items = Vec::<(String, String)>::new();
+    for event in events {
+        let Some((item_id, line)) = thread_event_preview_line(event) else {
+            continue;
+        };
+        if let Some((_, current)) = items.iter_mut().find(|(id, _)| id == &item_id) {
+            *current = line;
+        } else {
+            items.push((item_id, line));
+        }
+    }
+
+    items
+        .into_iter()
+        .map(|(_, line)| line)
+        .rev()
+        .take(16)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn thread_event_preview_line(event: &ThreadEvent) -> Option<(String, String)> {
+    let item = match event {
+        ThreadEvent::ItemStarted(event) => &event.item,
+        ThreadEvent::ItemUpdated(event) => &event.item,
+        ThreadEvent::ItemCompleted(event) => &event.item,
+        _ => return None,
+    };
+
+    let line = match &item.details {
+        ThreadItemDetails::AgentMessage(message) => {
+            format!("assistant: {}", summarize_preview_text(&message.text)?)
+        }
+        ThreadItemDetails::Reasoning(reasoning) => {
+            format!("thinking: {}", summarize_preview_text(&reasoning.text)?)
+        }
+        ThreadItemDetails::ToolInvocation(tool) => {
+            format!(
+                "tool {}: {}",
+                tool.tool_name,
+                tool_status_label(tool.status.clone())
+            )
+        }
+        ThreadItemDetails::ToolOutput(output) => summarize_preview_text(&output.output)
+            .map(|text| format!("tool output: {}", text))
+            .unwrap_or_else(|| {
+                format!("tool output: {}", tool_status_label(output.status.clone()))
+            }),
+        ThreadItemDetails::CommandExecution(command) => {
+            summarize_preview_text(&command.aggregated_output)
+                .map(|text| format!("command {}: {}", command.command, text))
+                .unwrap_or_else(|| {
+                    format!(
+                        "command {}: {}",
+                        command.command,
+                        command_status_label(command.status.clone())
+                    )
+                })
+        }
+        _ => return None,
+    };
+
+    Some((item.id.clone(), line))
+}
+
+fn tool_status_label(status: ToolCallStatus) -> &'static str {
+    match status {
+        ToolCallStatus::Completed => "completed",
+        ToolCallStatus::Failed => "failed",
+        ToolCallStatus::InProgress => "running",
+    }
+}
+
+fn command_status_label(status: CommandExecutionStatus) -> &'static str {
+    match status {
+        CommandExecutionStatus::Completed => "completed",
+        CommandExecutionStatus::Failed => "failed",
+        CommandExecutionStatus::InProgress => "running",
+    }
+}
+
+fn summarize_preview_text(text: &str) -> Option<String> {
+    let preview = text
+        .lines()
+        .rev()
+        .find_map(|line| {
+            let collapsed = collapse_preview_whitespace(line);
+            (!collapsed.is_empty()).then_some(collapsed)
+        })
+        .or_else(|| {
+            let collapsed = collapse_preview_whitespace(text);
+            (!collapsed.is_empty()).then_some(collapsed)
+        })?;
+
+    Some(truncate_preview_text(preview, 180))
+}
+
+fn collapse_preview_whitespace(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn truncate_preview_text(text: String, max_chars: usize) -> String {
+    if text.chars().count() <= max_chars {
+        return text;
+    }
+
+    let mut truncated = text
+        .chars()
+        .take(max_chars.saturating_sub(1))
+        .collect::<String>();
+    truncated.push_str("...");
+    truncated
 }
 
 fn maybe_render_openai_priority_notice(
@@ -881,6 +1308,148 @@ mod tests {
             !lines
                 .iter()
                 .any(|line| line.style == MessageStyle::Reasoning)
+        );
+    }
+
+    #[test]
+    fn background_local_agent_visibility_hides_stopped_entries() {
+        let entry = vtcode_core::subagents::BackgroundSubprocessEntry {
+            id: "background-default".to_string(),
+            session_id: "session-456".to_string(),
+            exec_session_id: String::new(),
+            agent_name: "default".to_string(),
+            display_label: "default".to_string(),
+            description: "Default agent".to_string(),
+            source: "builtin".to_string(),
+            color: None,
+            status: vtcode_core::subagents::BackgroundSubprocessStatus::Stopped,
+            desired_enabled: false,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            started_at: None,
+            ended_at: None,
+            pid: None,
+            summary: None,
+            error: None,
+            archive_path: None,
+            transcript_path: None,
+        };
+
+        assert!(visible_background_local_agents(vec![entry]).is_empty());
+    }
+
+    #[test]
+    fn delegated_local_agent_preview_uses_queue_placeholder() {
+        let entry = SubagentStatusEntry {
+            id: "thread-1".to_string(),
+            session_id: "session-123".to_string(),
+            parent_thread_id: "main".to_string(),
+            agent_name: "rust-engineer".to_string(),
+            display_label: "rust-engineer".to_string(),
+            description: "Review Rust changes".to_string(),
+            source: "project".to_string(),
+            color: None,
+            status: vtcode_core::subagents::SubagentStatus::Queued,
+            background: false,
+            depth: 1,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            completed_at: None,
+            summary: None,
+            error: None,
+            transcript_path: None,
+            nickname: None,
+        };
+
+        assert_eq!(
+            delegated_local_agent_preview_placeholder(&entry),
+            "Agent is queued and has not emitted transcript output yet."
+        );
+    }
+
+    #[test]
+    fn delegated_local_agent_visibility_keeps_failed_entries() {
+        let entry = SubagentStatusEntry {
+            id: "thread-1".to_string(),
+            session_id: "session-123".to_string(),
+            parent_thread_id: "main".to_string(),
+            agent_name: "rust-engineer".to_string(),
+            display_label: "rust-engineer".to_string(),
+            description: "Review Rust changes".to_string(),
+            source: "project".to_string(),
+            color: None,
+            status: vtcode_core::subagents::SubagentStatus::Failed,
+            background: false,
+            depth: 1,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            completed_at: Some(chrono::Utc::now()),
+            summary: None,
+            error: Some("subagent failed".to_string()),
+            transcript_path: None,
+            nickname: None,
+        };
+
+        let visible = visible_delegated_local_agents(vec![entry]);
+        assert_eq!(visible.len(), 1);
+    }
+
+    #[test]
+    fn delegated_local_agent_preview_uses_failure_message() {
+        let entry = SubagentStatusEntry {
+            id: "thread-1".to_string(),
+            session_id: "session-123".to_string(),
+            parent_thread_id: "main".to_string(),
+            agent_name: "rust-engineer".to_string(),
+            display_label: "rust-engineer".to_string(),
+            description: "Review Rust changes".to_string(),
+            source: "project".to_string(),
+            color: None,
+            status: vtcode_core::subagents::SubagentStatus::Failed,
+            background: false,
+            depth: 1,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            completed_at: Some(chrono::Utc::now()),
+            summary: None,
+            error: Some("subagent failed".to_string()),
+            transcript_path: None,
+            nickname: None,
+        };
+
+        assert_eq!(
+            delegated_local_agent_preview_placeholder(&entry),
+            "subagent failed"
+        );
+    }
+
+    #[test]
+    fn background_local_agent_preview_uses_status_placeholder() {
+        let entry = vtcode_core::subagents::BackgroundSubprocessEntry {
+            id: "background-default".to_string(),
+            session_id: "session-456".to_string(),
+            exec_session_id: String::new(),
+            agent_name: "default".to_string(),
+            display_label: "default".to_string(),
+            description: "Default agent".to_string(),
+            source: "builtin".to_string(),
+            color: None,
+            status: vtcode_core::subagents::BackgroundSubprocessStatus::Starting,
+            desired_enabled: true,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            started_at: None,
+            ended_at: None,
+            pid: None,
+            summary: None,
+            error: None,
+            archive_path: None,
+            transcript_path: None,
+        };
+
+        assert_eq!(
+            background_local_agent_preview_placeholder(&entry),
+            "Waiting for the subprocess to emit output..."
         );
     }
 

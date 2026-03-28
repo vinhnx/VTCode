@@ -37,6 +37,7 @@ pub(crate) enum SlashCommandControl {
 
 pub(crate) struct SlashCommandContext<'a> {
     pub(crate) thread_id: &'a str,
+    pub(crate) active_thread_label: &'a str,
     pub(crate) renderer: &'a mut AnsiRenderer,
     pub(crate) handle: &'a InlineHandle,
     pub(crate) session: &'a mut InlineSession,
@@ -152,6 +153,9 @@ pub(crate) async fn handle_outcome(
         }
         SlashCommandOutcome::ManageAgents { action } => {
             handlers::handle_manage_agents(ctx, action).await
+        }
+        SlashCommandOutcome::ManageSubprocesses { action } => {
+            handlers::handle_manage_subprocesses(ctx, action).await
         }
         SlashCommandOutcome::OpenRewindPicker => handlers::handle_open_rewind_picker(ctx).await,
         SlashCommandOutcome::RewindToTurn { turn, scope } => {

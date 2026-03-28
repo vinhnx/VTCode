@@ -199,6 +199,7 @@ impl<'a> CopilotRuntimeHost<'a> {
             summary.reason.as_deref(),
             Some(self.approval_recorder),
             self.hitl_notification_bell,
+            None,
         )
         .await?;
 
@@ -394,6 +395,7 @@ impl<'a> CopilotRuntimeHost<'a> {
                 renderer,
                 handle: self.handle,
                 session: self.session,
+                active_thread_label: None,
                 default_placeholder: self.default_placeholder.clone(),
                 ctrl_c_state: self.ctrl_c_state,
                 ctrl_c_notify: self.ctrl_c_notify,

@@ -24,6 +24,9 @@ pub(crate) fn detect_explicit_run_command(input: &str) -> Option<(String, serde_
     if !is_explicit_run_prefix(prefix, command_part) {
         return None;
     }
+    if looks_like_subagent_shortcut(command_part) {
+        return None;
+    }
 
     let normalized_command = normalize_for_shell_detection(command_part);
     if looks_like_natural_language_request(&normalized_command) {
@@ -42,6 +45,21 @@ pub(crate) fn detect_explicit_run_command(input: &str) -> Option<(String, serde_
             "command": normalized_command
         }),
     ))
+}
+
+fn looks_like_subagent_shortcut(command_part: &str) -> bool {
+    let Ok(tokens) = shell_words::split(command_part) else {
+        return false;
+    };
+
+    match tokens.as_slice() {
+        [_, kind] => kind.eq_ignore_ascii_case("agent") || kind.eq_ignore_ascii_case("subagent"),
+        [article, _, kind] => {
+            article.eq_ignore_ascii_case("the")
+                && (kind.eq_ignore_ascii_case("agent") || kind.eq_ignore_ascii_case("subagent"))
+        }
+        _ => false,
+    }
 }
 
 fn split_prefix_and_command(input: &str) -> Option<(&str, &str)> {

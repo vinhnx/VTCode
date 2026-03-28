@@ -465,6 +465,7 @@ async fn check_tool_permission(
             renderer: ctx.renderer,
             handle: ctx.handle,
             session: ctx.session,
+            active_thread_label: None,
             default_placeholder,
             ctrl_c_state,
             ctrl_c_notify,

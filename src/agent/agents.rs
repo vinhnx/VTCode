@@ -5,7 +5,8 @@ use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, ModelSelectionS
 use vtcode_core::core::interfaces::session::PlanModeEntrySource;
 use vtcode_core::core::interfaces::{SessionRuntime, SessionRuntimeParams};
 use vtcode_core::core::threads::{
-    ArchivedSessionIntent, loaded_skills_from_session_listing, messages_from_session_listing,
+    ArchivedSessionIntent, ThreadBootstrap, loaded_skills_from_session_listing,
+    messages_from_session_listing,
 };
 use vtcode_core::llm::provider::Message as ProviderMessage;
 use vtcode_core::utils::session_archive::{SessionListing, SessionSnapshot};
@@ -13,9 +14,13 @@ use vtcode_core::utils::session_archive::{SessionListing, SessionSnapshot};
 #[derive(Clone, Debug)]
 pub(crate) struct SessionContinuation {
     listing: SessionListing,
+    bootstrap: ThreadBootstrap,
     history: Vec<ProviderMessage>,
     loaded_skills: Vec<String>,
     intent: ArchivedSessionIntent,
+    thread_label: String,
+    root_thread: bool,
+    vt_cfg_override: Option<VTCodeConfig>,
 }
 
 impl SessionContinuation {
@@ -41,6 +46,10 @@ impl SessionContinuation {
 
     pub(crate) fn intent(&self) -> &ArchivedSessionIntent {
         &self.intent
+    }
+
+    pub(crate) fn bootstrap(&self) -> &ThreadBootstrap {
+        &self.bootstrap
     }
 
     pub(crate) fn custom_suffix(&self) -> Option<&str> {
@@ -69,12 +78,27 @@ impl SessionContinuation {
         self.history.len()
     }
 
+    pub(crate) fn thread_label(&self) -> &str {
+        &self.thread_label
+    }
+
+    pub(crate) fn is_root_thread(&self) -> bool {
+        self.root_thread
+    }
+
+    pub(crate) fn vt_cfg_override(&self) -> Option<&VTCodeConfig> {
+        self.vt_cfg_override.as_ref()
+    }
     pub(crate) fn from_listing(listing: &SessionListing, intent: ArchivedSessionIntent) -> Self {
         Self {
             listing: listing.clone(),
+            bootstrap: ThreadBootstrap::from_listing(listing.clone()),
             history: messages_from_session_listing(listing),
             loaded_skills: loaded_skills_from_session_listing(listing),
             intent,
+            thread_label: "main".to_string(),
+            root_thread: true,
+            vt_cfg_override: None,
         }
     }
 }
@@ -101,12 +125,16 @@ pub(crate) async fn run_single_agent_loop(
     plan_mode_entry_source: PlanModeEntrySource,
     resume: Option<SessionContinuation>,
 ) -> Result<()> {
-    let vt_cfg = prepare_session_vt_config(initial_vt_cfg, config);
+    let mut runtime_cfg = config.clone();
+    if let Some(resume_session) = resume.as_ref() {
+        apply_resume_runtime_overrides(&mut runtime_cfg, resume_session);
+    }
+    let vt_cfg = prepare_session_vt_config(initial_vt_cfg, &runtime_cfg, resume.as_ref());
 
     let runtime = crate::agent::runloop::unified::UnifiedSessionRuntime;
     let mut steering_receiver = None;
     let params = SessionRuntimeParams::new(
-        config,
+        &runtime_cfg,
         vt_cfg,
         skip_confirmations,
         full_auto,
@@ -120,15 +148,30 @@ pub(crate) async fn run_single_agent_loop(
 fn prepare_session_vt_config(
     initial_vt_cfg: Option<VTCodeConfig>,
     runtime_cfg: &CoreAgentConfig,
+    resume: Option<&SessionContinuation>,
 ) -> Option<VTCodeConfig> {
-    let mut vt_cfg = initial_vt_cfg.or_else(|| {
-        ConfigManager::load_from_workspace(&runtime_cfg.workspace)
-            .ok()
-            .map(|manager| manager.config().clone())
-    });
+    let mut vt_cfg = resume
+        .and_then(|session| session.vt_cfg_override().cloned())
+        .or(initial_vt_cfg)
+        .or_else(|| {
+            ConfigManager::load_from_workspace(&runtime_cfg.workspace)
+                .ok()
+                .map(|manager| manager.config().clone())
+        });
 
     apply_runtime_overrides(vt_cfg.as_mut(), runtime_cfg);
     vt_cfg
+}
+
+fn apply_resume_runtime_overrides(runtime_cfg: &mut CoreAgentConfig, resume: &SessionContinuation) {
+    let Some(vt_cfg) = resume.vt_cfg_override() else {
+        return;
+    };
+
+    runtime_cfg.provider = vt_cfg.agent.provider.clone();
+    runtime_cfg.model = vt_cfg.agent.default_model.clone();
+    runtime_cfg.reasoning_effort = vt_cfg.agent.reasoning_effort;
+    runtime_cfg.theme = vt_cfg.agent.theme.clone();
 }
 
 pub(crate) fn apply_runtime_overrides(
@@ -137,6 +180,8 @@ pub(crate) fn apply_runtime_overrides(
 ) {
     if let Some(cfg) = vt_cfg {
         cfg.agent.provider = runtime_cfg.provider.clone();
+        cfg.agent.reasoning_effort = runtime_cfg.reasoning_effort;
+        cfg.agent.theme = runtime_cfg.theme.clone();
 
         if matches!(runtime_cfg.model_source, ModelSelectionSource::CliOverride) {
             cfg.agent.default_model = runtime_cfg.model.clone();
@@ -259,7 +304,7 @@ mod tests {
             openai_chatgpt_auth: None,
         };
 
-        let prepared = prepare_session_vt_config(Some(initial_vt_cfg), &runtime_cfg)
+        let prepared = prepare_session_vt_config(Some(initial_vt_cfg), &runtime_cfg, None)
             .expect("startup config should be preserved");
 
         assert_eq!(prepared.agent.default_model, "startup-model");

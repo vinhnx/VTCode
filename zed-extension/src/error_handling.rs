@@ -532,8 +532,6 @@ mod tests {
         assert!(recovery.name.contains("Limit"));
     }
 
-
-
     #[test]
     fn test_recovery_strategy_format() {
         let recovery = RecoveryStrategy::new(

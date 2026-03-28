@@ -28,6 +28,14 @@ pub struct LifecycleHooksConfig {
     #[serde(default)]
     pub session_end: Vec<HookGroupConfig>,
 
+    /// Commands to run when a delegated subagent starts
+    #[serde(default)]
+    pub subagent_start: Vec<HookGroupConfig>,
+
+    /// Commands to run when a delegated subagent stops
+    #[serde(default)]
+    pub subagent_stop: Vec<HookGroupConfig>,
+
     /// Commands to run when the user submits a prompt (pre-processing)
     #[serde(default)]
     pub user_prompt_submit: Vec<HookGroupConfig>,
@@ -61,6 +69,8 @@ impl LifecycleHooksConfig {
     pub fn is_empty(&self) -> bool {
         self.session_start.is_empty()
             && self.session_end.is_empty()
+            && self.subagent_start.is_empty()
+            && self.subagent_stop.is_empty()
             && self.user_prompt_submit.is_empty()
             && self.pre_tool_use.is_empty()
             && self.post_tool_use.is_empty()
@@ -124,6 +134,8 @@ impl LifecycleHooksConfig {
     pub fn validate(&self) -> Result<()> {
         validate_groups(&self.session_start, "session_start")?;
         validate_groups(&self.session_end, "session_end")?;
+        validate_groups(&self.subagent_start, "subagent_start")?;
+        validate_groups(&self.subagent_stop, "subagent_stop")?;
         validate_groups(&self.user_prompt_submit, "user_prompt_submit")?;
         validate_groups(&self.pre_tool_use, "pre_tool_use")?;
         validate_groups(&self.post_tool_use, "post_tool_use")?;

@@ -71,6 +71,12 @@ pub(crate) enum AgentDefinitionScope {
 pub(crate) enum AgentManagerAction {
     List,
     Threads,
+    Inspect {
+        id: String,
+    },
+    Close {
+        id: String,
+    },
     Create {
         scope: AgentDefinitionScope,
         name: String,
@@ -81,6 +87,16 @@ pub(crate) enum AgentManagerAction {
     Delete {
         name: String,
     },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum SubprocessManagerAction {
+    List,
+    ToggleDefault,
+    Refresh,
+    Inspect { id: String },
+    Stop { id: String },
+    Cancel { id: String },
 }
 
 pub(crate) enum SlashCommandOutcome {
@@ -149,6 +165,9 @@ pub(crate) enum SlashCommandOutcome {
     },
     ManageAgents {
         action: AgentManagerAction,
+    },
+    ManageSubprocesses {
+        action: SubprocessManagerAction,
     },
     ReplaceInput {
         content: String,
@@ -543,15 +562,25 @@ pub(crate) async fn handle_slash_command(
                 Ok(SlashCommandOutcome::Handled)
             }
         },
-        "agent" => {
-            if !args.is_empty() {
-                renderer.line(MessageStyle::Error, "Usage: /agent")?;
-                return Ok(SlashCommandOutcome::Handled);
-            }
-            Ok(SlashCommandOutcome::ManageAgents {
+        "agent" => match args.trim() {
+            "" => Ok(SlashCommandOutcome::ManageAgents {
                 action: AgentManagerAction::Threads,
-            })
-        }
+            }),
+            args => match parse_agents_command(args) {
+                Ok(action) => Ok(SlashCommandOutcome::ManageAgents { action }),
+                Err(message) => {
+                    renderer.line(MessageStyle::Error, &message)?;
+                    Ok(SlashCommandOutcome::Handled)
+                }
+            },
+        },
+        "subprocesses" | "subprocess" => match parse_subprocesses_command(args) {
+            Ok(action) => Ok(SlashCommandOutcome::ManageSubprocesses { action }),
+            Err(message) => {
+                renderer.line(MessageStyle::Error, &message)?;
+                Ok(SlashCommandOutcome::Handled)
+            }
+        },
         "plan" => handle_plan_command(args, renderer),
         "mode" => handle_mode_command(args, renderer),
         "login" => handle_login_command(args, renderer),
@@ -608,6 +637,12 @@ fn parse_agents_command(args: &str) -> std::result::Result<AgentManagerAction, S
 
     let parts = trimmed.split_whitespace().collect::<Vec<_>>();
     match parts.as_slice() {
+        ["inspect", id] => Ok(AgentManagerAction::Inspect {
+            id: (*id).to_string(),
+        }),
+        ["close", id] => Ok(AgentManagerAction::Close {
+            id: (*id).to_string(),
+        }),
         ["edit", name] => Ok(AgentManagerAction::Edit {
             name: (*name).to_string(),
         }),
@@ -623,7 +658,28 @@ fn parse_agents_command(args: &str) -> std::result::Result<AgentManagerAction, S
             name: (*name).to_string(),
         }),
         _ => Err(
-            "Usage: /agents [list|threads|create project <name>|create user <name>|edit <name>|delete <name>]".to_string(),
+            "Usage: /agents [list|threads|inspect <id>|close <id>|create project <name>|create user <name>|edit <name>|delete <name>]".to_string(),
+        ),
+    }
+}
+
+fn parse_subprocesses_command(args: &str) -> std::result::Result<SubprocessManagerAction, String> {
+    match args.split_whitespace().collect::<Vec<_>>().as_slice() {
+        [] | ["list"] | ["panel"] => Ok(SubprocessManagerAction::List),
+        ["toggle"] => Ok(SubprocessManagerAction::ToggleDefault),
+        ["refresh"] => Ok(SubprocessManagerAction::Refresh),
+        ["inspect", id] => Ok(SubprocessManagerAction::Inspect {
+            id: (*id).to_string(),
+        }),
+        ["stop", id] => Ok(SubprocessManagerAction::Stop {
+            id: (*id).to_string(),
+        }),
+        ["cancel", id] => Ok(SubprocessManagerAction::Cancel {
+            id: (*id).to_string(),
+        }),
+        _ => Err(
+            "Usage: /subprocesses [list|toggle|refresh|inspect <id>|stop <id>|cancel <id>]"
+                .to_string(),
         ),
     }
 }
@@ -695,8 +751,8 @@ fn parse_doctor_args(
 #[cfg(test)]
 mod tests {
     use super::{
-        DoctorCommand, SessionModeCommand, SlashCommandOutcome, handle_slash_command,
-        parse_doctor_args, parse_update_args,
+        AgentManagerAction, DoctorCommand, SessionModeCommand, SlashCommandOutcome,
+        SubprocessManagerAction, handle_slash_command, parse_doctor_args, parse_update_args,
     };
     use vtcode_core::utils::ansi::AnsiRenderer;
     use vtcode_tui::app::InlineHandle;
@@ -767,6 +823,23 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn subprocess_alias_matches_plural_command() {
+        let workspace = std::env::current_dir().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let outcome = handle_slash_command("subprocess inspect child-1", &mut renderer, &workspace)
+            .await
+            .expect("subprocess alias should parse");
+
+        assert!(matches!(
+            outcome,
+            SlashCommandOutcome::ManageSubprocesses {
+                action: SubprocessManagerAction::Inspect { ref id }
+            } if id == "child-1"
+        ));
+    }
+
+    #[tokio::test]
     async fn ide_command_returns_toggle_outcome() {
         let workspace = std::env::current_dir().expect("workspace");
         let mut renderer = renderer_for_tests();
@@ -819,6 +892,111 @@ mod tests {
             SlashCommandOutcome::ToggleVimMode {
                 enable: Some(false)
             }
+        ));
+    }
+
+    #[tokio::test]
+    async fn agent_command_opens_active_agents_inspector() {
+        let workspace = std::env::current_dir().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let outcome = handle_slash_command("agent", &mut renderer, &workspace)
+            .await
+            .expect("agent command should parse");
+
+        assert!(matches!(
+            outcome,
+            SlashCommandOutcome::ManageAgents {
+                action: AgentManagerAction::Threads
+            }
+        ));
+    }
+
+    #[tokio::test]
+    async fn agent_command_supports_direct_inspect_and_close() {
+        let workspace = std::env::current_dir().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let inspect = handle_slash_command("agent inspect thread-1", &mut renderer, &workspace)
+            .await
+            .expect("agent inspect should parse");
+        assert!(matches!(
+            inspect,
+            SlashCommandOutcome::ManageAgents {
+                action: AgentManagerAction::Inspect { ref id }
+            } if id == "thread-1"
+        ));
+
+        let close = handle_slash_command("agent close thread-1", &mut renderer, &workspace)
+            .await
+            .expect("agent close should parse");
+        assert!(matches!(
+            close,
+            SlashCommandOutcome::ManageAgents {
+                action: AgentManagerAction::Close { ref id }
+            } if id == "thread-1"
+        ));
+    }
+
+    #[tokio::test]
+    async fn subprocesses_command_supports_toggle_and_refresh() {
+        let workspace = std::env::current_dir().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let toggle = handle_slash_command("subprocesses toggle", &mut renderer, &workspace)
+            .await
+            .expect("toggle command should parse");
+        assert!(matches!(
+            toggle,
+            SlashCommandOutcome::ManageSubprocesses {
+                action: SubprocessManagerAction::ToggleDefault
+            }
+        ));
+
+        let refresh = handle_slash_command("subprocesses refresh", &mut renderer, &workspace)
+            .await
+            .expect("refresh command should parse");
+        assert!(matches!(
+            refresh,
+            SlashCommandOutcome::ManageSubprocesses {
+                action: SubprocessManagerAction::Refresh
+            }
+        ));
+    }
+
+    #[tokio::test]
+    async fn subprocesses_command_supports_direct_actions() {
+        let workspace = std::env::current_dir().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let inspect = handle_slash_command("subprocesses inspect bg-1", &mut renderer, &workspace)
+            .await
+            .expect("inspect command should parse");
+        assert!(matches!(
+            inspect,
+            SlashCommandOutcome::ManageSubprocesses {
+                action: SubprocessManagerAction::Inspect { ref id }
+            } if id == "bg-1"
+        ));
+
+        let stop = handle_slash_command("subprocesses stop bg-1", &mut renderer, &workspace)
+            .await
+            .expect("stop command should parse");
+        assert!(matches!(
+            stop,
+            SlashCommandOutcome::ManageSubprocesses {
+                action: SubprocessManagerAction::Stop { ref id }
+            } if id == "bg-1"
+        ));
+
+        let cancel = handle_slash_command("subprocesses cancel bg-1", &mut renderer, &workspace)
+            .await
+            .expect("cancel command should parse");
+        assert!(matches!(
+            cancel,
+            SlashCommandOutcome::ManageSubprocesses {
+                action: SubprocessManagerAction::Cancel { ref id }
+            } if id == "bg-1"
         ));
     }
 

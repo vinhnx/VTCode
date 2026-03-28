@@ -51,7 +51,7 @@ mod ui;
 mod update;
 #[path = "workspace.rs"]
 mod workspace;
-pub(super) use agents::handle_manage_agents;
+pub(super) use agents::{handle_manage_agents, handle_manage_subprocesses};
 pub(super) use apps::{
     handle_launch_editor, handle_launch_git, handle_new_session, handle_open_docs,
 };

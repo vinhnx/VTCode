@@ -111,10 +111,10 @@ fn parse_model_selection_uses_custom_provider_display_and_env_key() {
         display_name: "MyCorporateName".to_string(),
         base_url: "https://llm.corp.example/v1".to_string(),
         api_key_env: "MYCORP_API_KEY".to_string(),
-        model: "gpt-4o-mini".to_string(),
+        model: "gpt-5-mini".to_string(),
     });
 
-    let detail = selection::parse_model_selection(&MODEL_OPTIONS, "mycorp gpt-4o-mini", Some(&cfg))
+    let detail = selection::parse_model_selection(&MODEL_OPTIONS, "mycorp gpt-5-mini", Some(&cfg))
         .expect("custom provider should parse");
 
     assert_eq!(detail.provider_key, "mycorp");
@@ -232,13 +232,13 @@ fn preferred_model_selection_returns_none_for_unknown_model() {
 
 #[test]
 fn preferred_model_selection_matches_current_custom_provider() {
-    let mut picker = base_picker_state("mycorp", "gpt-4o-mini");
+    let mut picker = base_picker_state("mycorp", "gpt-5-mini");
     let config = CustomProviderConfig {
         name: "mycorp".to_string(),
         display_name: "MyCorporateName".to_string(),
         base_url: "https://llm.corp.example/v1".to_string(),
         api_key_env: "MYCORP_API_KEY".to_string(),
-        model: "gpt-4o-mini".to_string(),
+        model: "gpt-5-mini".to_string(),
     };
     picker.custom_providers = vec![selection::selection_from_custom_provider(&config)];
 
@@ -253,7 +253,7 @@ fn preferred_model_selection_matches_current_custom_provider() {
         .expect("selected custom provider should be valid");
     assert_eq!(detail.provider_key, "mycorp");
     assert_eq!(detail.provider_label, "MyCorporateName");
-    assert_eq!(detail.model_id, "gpt-4o-mini");
+    assert_eq!(detail.model_id, "gpt-5-mini");
 }
 
 #[test]

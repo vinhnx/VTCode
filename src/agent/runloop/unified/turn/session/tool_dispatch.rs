@@ -17,10 +17,12 @@ use crate::agent::runloop::unified::turn::session::interaction_loop::{
 use crate::agent::runloop::unified::turn::tool_outcomes::handlers::{
     ToolOutcomeContext, handle_single_tool_call,
 };
+use vtcode_config::SubagentSpec;
 use vtcode_core::command_safety::shell_parser::parse_shell_commands_tree_sitter;
 use vtcode_core::config::constants::tools;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::session::SessionId;
+use vtcode_core::subagents::delegated_task_requires_clarification;
 
 pub(crate) struct DirectToolContext<'a, 'b> {
     pub interaction_ctx: &'b mut InteractionLoopContext<'a>,
@@ -45,6 +47,9 @@ pub(crate) async fn handle_direct_tool_execution(
 ) -> Result<Option<InteractionOutcome>> {
     let normalized_input =
         normalize_direct_tool_mentions(input, &ctx.interaction_ctx.config.workspace);
+    if let Some(args) = detect_direct_subagent_spawn_input(&normalized_input, ctx).await? {
+        return execute_direct_tool_call(input, tools::SPAWN_AGENT, args, false, ctx).await;
+    }
     let Some(parsed) = parse_direct_tool_input(&normalized_input) else {
         return Ok(None);
     };
@@ -117,6 +122,11 @@ pub(crate) async fn execute_direct_tool_call(
                 "Shell mode (!): executing command directly.",
             )?;
         }
+        if tool_name == tools::SPAWN_AGENT
+            && let Some(controller) = t_ctx.ctx.tool_registry.subagent_controller()
+        {
+            controller.set_turn_delegation_hints_from_input(input).await;
+        }
         display_user_message(t_ctx.ctx.renderer, input)?;
         t_ctx
             .ctx
@@ -187,6 +197,17 @@ pub(crate) async fn execute_direct_tool_call(
     Ok(Some(InteractionOutcome::DirectToolHandled))
 }
 
+async fn detect_direct_subagent_spawn_input(
+    input: &str,
+    ctx: &DirectToolContext<'_, '_>,
+) -> Result<Option<serde_json::Value>> {
+    let Some(controller) = ctx.interaction_ctx.tool_registry.subagent_controller() else {
+        return Ok(None);
+    };
+    let specs = controller.effective_specs().await;
+    Ok(direct_subagent_spawn_args(input, &specs))
+}
+
 fn parse_direct_tool_input(input: &str) -> Option<DirectToolInput> {
     if let Some(args) = detect_direct_unified_file_read(input) {
         return Some(DirectToolInput::Execute {
@@ -254,6 +275,112 @@ fn detect_direct_unified_file_read(input: &str) -> Option<serde_json::Value> {
     }))
 }
 
+fn direct_subagent_spawn_args(input: &str, specs: &[SubagentSpec]) -> Option<serde_json::Value> {
+    let trimmed = input.trim();
+    for spec in specs {
+        for candidate in
+            std::iter::once(spec.name.as_str()).chain(spec.aliases.iter().map(String::as_str))
+        {
+            let Some(task) = parse_direct_subagent_task(trimmed, candidate) else {
+                continue;
+            };
+            let message = match task.message {
+                Some(message) => {
+                    if delegated_task_requires_clarification(message) {
+                        continue;
+                    }
+                    message.to_string()
+                }
+                None => spec.initial_prompt.clone()?,
+            };
+            return Some(serde_json::json!({
+                "agent_type": spec.name.as_str(),
+                "message": message,
+                "background": task.background
+            }));
+        }
+    }
+    None
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct DirectSubagentTask<'a> {
+    message: Option<&'a str>,
+    background: bool,
+}
+
+fn parse_direct_subagent_task<'a>(
+    input: &'a str,
+    candidate: &str,
+) -> Option<DirectSubagentTask<'a>> {
+    for prefix in ["run", "use", "spawn"] {
+        let Some(rest) = strip_bounded_prefix_case_insensitive(input.trim(), prefix) else {
+            continue;
+        };
+        let rest = strip_optional_word_prefix_case_insensitive(rest, "the");
+        let Some(rest) = strip_bounded_prefix_case_insensitive(rest, candidate) else {
+            continue;
+        };
+        let rest = if let Some(value) = strip_bounded_prefix_case_insensitive(rest, "subagent") {
+            value
+        } else {
+            let Some(value) = strip_bounded_prefix_case_insensitive(rest, "agent") else {
+                continue;
+            };
+            value
+        };
+        return parse_direct_subagent_task_suffix(rest);
+    }
+    None
+}
+
+fn parse_direct_subagent_task_suffix(input: &str) -> Option<DirectSubagentTask<'_>> {
+    let (trimmed, background) = strip_background_directive(input.trim());
+    if trimmed.is_empty() {
+        return Some(DirectSubagentTask {
+            message: None,
+            background,
+        });
+    }
+
+    for prefix in ["and", "to", "for"] {
+        if let Some(rest) = strip_bounded_prefix_case_insensitive(trimmed, prefix) {
+            let task = trim_wrapping_quotes_and_punctuation(rest).trim();
+            return (!task.is_empty()).then_some(DirectSubagentTask {
+                message: Some(task),
+                background,
+            });
+        }
+    }
+
+    if let Some(rest) = trimmed
+        .strip_prefix(':')
+        .or_else(|| trimmed.strip_prefix('-'))
+    {
+        let task = trim_wrapping_quotes_and_punctuation(rest).trim();
+        return (!task.is_empty()).then_some(DirectSubagentTask {
+            message: Some(task),
+            background,
+        });
+    }
+
+    None
+}
+
+fn strip_background_directive(input: &str) -> (&str, bool) {
+    let trimmed = input.trim();
+    if let Some(rest) = strip_bounded_prefix_case_insensitive(trimmed, "in") {
+        let rest = strip_optional_word_prefix_case_insensitive(rest, "the");
+        if let Some(rest) = strip_bounded_prefix_case_insensitive(rest, "background") {
+            return (rest.trim(), true);
+        }
+    }
+    if let Some(rest) = strip_bounded_prefix_case_insensitive(trimmed, "background") {
+        return (rest.trim(), true);
+    }
+    (trimmed, false)
+}
+
 fn split_path_and_suffix(input: &str) -> (&str, &str) {
     let lower = input.to_ascii_lowercase();
     if let Some(idx) = lower.find(" with ") {
@@ -276,6 +403,30 @@ fn strip_prefix_case_insensitive<'a>(input: &'a str, prefix: &str) -> Option<&'a
     } else {
         None
     }
+}
+
+fn strip_bounded_prefix_case_insensitive<'a>(input: &'a str, prefix: &str) -> Option<&'a str> {
+    let prefix_len = prefix.len();
+    if input.len() < prefix_len {
+        return None;
+    }
+    let head = &input[..prefix_len];
+    if !head.eq_ignore_ascii_case(prefix) {
+        return None;
+    }
+    let remainder = &input[prefix_len..];
+    if remainder
+        .chars()
+        .next()
+        .is_some_and(|ch| !ch.is_whitespace() && ch != ':' && ch != '-')
+    {
+        return None;
+    }
+    Some(remainder.trim_start())
+}
+
+fn strip_optional_word_prefix_case_insensitive<'a>(input: &'a str, prefix: &str) -> &'a str {
+    strip_bounded_prefix_case_insensitive(input, prefix).unwrap_or(input)
 }
 
 fn normalize_unified_file_path(input: &str) -> String {
@@ -413,8 +564,37 @@ mod tests {
     use std::fs;
 
     use super::normalize_direct_tool_mentions;
-    use super::{DirectToolInput, parse_direct_tool_input};
+    use super::{DirectToolInput, direct_subagent_spawn_args, parse_direct_tool_input};
     use tempfile::TempDir;
+    use vtcode_config::SubagentSource;
+    use vtcode_config::SubagentSpec;
+
+    fn test_subagent_spec(name: &str) -> SubagentSpec {
+        SubagentSpec {
+            name: name.to_string(),
+            description: "test".to_string(),
+            prompt: String::new(),
+            tools: Some(vec!["read_file".to_string()]),
+            disallowed_tools: Vec::new(),
+            model: None,
+            color: None,
+            reasoning_effort: None,
+            permission_mode: None,
+            skills: Vec::new(),
+            mcp_servers: Vec::new(),
+            hooks: None,
+            background: false,
+            max_turns: None,
+            nickname_candidates: Vec::new(),
+            initial_prompt: None,
+            memory: None,
+            isolation: None,
+            aliases: Vec::new(),
+            source: SubagentSource::Builtin,
+            file_path: None,
+            warnings: Vec::new(),
+        }
+    }
 
     #[test]
     fn parses_bang_prefix_with_leading_whitespace() {
@@ -574,5 +754,64 @@ mod tests {
                 panic!("expected unified_file read to parse");
             }
         }
+    }
+
+    #[test]
+    fn direct_subagent_spawn_args_defers_vague_shortcut_to_main_agent() {
+        assert!(
+            direct_subagent_spawn_args(
+                "run rust-engineer subagent",
+                &[test_subagent_spec("rust-engineer")],
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn direct_subagent_spawn_args_defers_single_word_follow_up_task() {
+        assert!(
+            direct_subagent_spawn_args(
+                "run rust-engineer subagent and report",
+                &[test_subagent_spec("rust-engineer")],
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn direct_subagent_spawn_args_extracts_follow_up_task() {
+        let args = direct_subagent_spawn_args(
+            "use rust-engineer subagent and review code",
+            &[test_subagent_spec("rust-engineer")],
+        )
+        .expect("direct subagent spawn");
+        assert_eq!(args["agent_type"], "rust-engineer");
+        assert_eq!(args["background"], false);
+        assert_eq!(args["message"], "review code");
+    }
+
+    #[test]
+    fn direct_subagent_spawn_args_requires_explicit_background_request() {
+        let args = direct_subagent_spawn_args(
+            "spawn rust-engineer subagent in the background and review code",
+            &[test_subagent_spec("rust-engineer")],
+        )
+        .expect("direct subagent spawn");
+        assert_eq!(args["agent_type"], "rust-engineer");
+        assert_eq!(args["background"], true);
+        assert_eq!(args["message"], "review code");
+    }
+
+    #[test]
+    fn direct_subagent_spawn_args_uses_agent_initial_prompt_when_available() {
+        let mut spec = test_subagent_spec("background-demo");
+        spec.initial_prompt = Some("Run the demo subprocess and report readiness.".to_string());
+        let args = direct_subagent_spawn_args("run background-demo subagent", &[spec])
+            .expect("direct subagent spawn");
+        assert_eq!(args["agent_type"], "background-demo");
+        assert_eq!(
+            args["message"],
+            "Run the demo subprocess and report readiness."
+        );
     }
 }

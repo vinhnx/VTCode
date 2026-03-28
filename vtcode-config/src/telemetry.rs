@@ -25,6 +25,18 @@ pub struct TelemetryConfig {
     /// Emit performance events for file I/O, spawns, and UI latency
     #[serde(default = "default_true")]
     pub perf_events: bool,
+
+    /// Maximum number of rotated trajectory log files to keep per workspace
+    #[serde(default = "default_trajectory_max_files")]
+    pub trajectory_max_files: usize,
+
+    /// Maximum age in days for rotated trajectory log files
+    #[serde(default = "default_trajectory_max_age_days")]
+    pub trajectory_max_age_days: u64,
+
+    /// Maximum total size in MB for all trajectory log files in a workspace
+    #[serde(default = "default_trajectory_max_size_mb")]
+    pub trajectory_max_size_mb: u64,
 }
 
 impl Default for TelemetryConfig {
@@ -36,6 +48,9 @@ impl Default for TelemetryConfig {
             retention_days: default_retention_days(),
             bottleneck_tracing: true,
             perf_events: true,
+            trajectory_max_files: default_trajectory_max_files(),
+            trajectory_max_age_days: default_trajectory_max_age_days(),
+            trajectory_max_size_mb: default_trajectory_max_size_mb(),
         }
     }
 }
@@ -50,4 +65,16 @@ fn default_interval() -> u64 {
 
 fn default_retention_days() -> u32 {
     14
+}
+
+fn default_trajectory_max_files() -> usize {
+    crate::constants::defaults::DEFAULT_TRAJECTORY_MAX_FILES
+}
+
+fn default_trajectory_max_age_days() -> u64 {
+    crate::constants::defaults::DEFAULT_TRAJECTORY_MAX_AGE_DAYS
+}
+
+fn default_trajectory_max_size_mb() -> u64 {
+    crate::constants::defaults::DEFAULT_TRAJECTORY_MAX_SIZE_MB
 }

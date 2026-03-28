@@ -103,7 +103,7 @@ mod tests {
         let session_err = SessionError::input(io_err);
         assert!(format!("{}", session_err).contains("Input error"));
     }
-    
+
     #[test]
     fn test_error_variants() {
         let render_err = SessionError::render("Render failed");
@@ -114,7 +114,7 @@ mod tests {
         let cache_err = SessionError::cache("Cache failed");
         let resource_err = SessionError::resource_exhausted("memory");
         let config_err = SessionError::config("Config failed");
-        
+
         assert!(format!("{}", render_err).contains("Render error"));
         assert!(format!("{}", input_err).contains("Input error"));
         assert!(format!("{}", state_err).contains("State error"));
@@ -124,12 +124,12 @@ mod tests {
         assert!(format!("{}", resource_err).contains("Resource exhausted"));
         assert!(format!("{}", config_err).contains("Configuration error"));
     }
-    
+
     #[test]
     fn test_error_sources() {
         let io_err = std::io::Error::new(std::io::ErrorKind::Other, "IO error");
         let session_err = SessionError::input(io_err);
-        
+
         // Test that the source is properly chained
         if let Some(source) = session_err.source() {
             assert_eq!(format!("{}", source), "IO error");
@@ -137,12 +137,12 @@ mod tests {
             panic!("Expected source error");
         }
     }
-    
+
     #[test]
     fn test_result_type() {
         let result: SessionResult<()> = Err(SessionError::render("Test"));
         assert!(result.is_err());
-        
+
         let result: SessionResult<()> = Ok(());
         assert!(result.is_ok());
     }

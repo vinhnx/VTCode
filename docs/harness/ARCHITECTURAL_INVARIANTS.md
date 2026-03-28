@@ -117,7 +117,7 @@ Model identifiers change frequently. All model references must come from `docs/m
 use vtcode_core::config::constants::DEFAULT_MODEL_ID;
 
 // Incorrect
-let model = "gpt-4o-mini";
+let model = "gpt-5-mini";
 ```
 
 **Violation**: string literal matching a known model ID pattern (e.g., `"gpt-"`, `"claude-"`, `"gemini-"`) in non-test code.

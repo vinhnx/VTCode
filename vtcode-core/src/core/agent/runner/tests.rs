@@ -1352,6 +1352,79 @@ async fn denied_parallel_tool_halt_returns_promptly() {
 }
 
 #[tokio::test]
+async fn duplicate_parallel_tool_names_are_split_into_safe_batches() {
+    let temp = TempDir::new().expect("tempdir");
+    fs::write(temp.path().join("note-a.txt"), "hello\n").expect("workspace file");
+    fs::write(temp.path().join("note-b.txt"), "world\n").expect("workspace file");
+
+    let mut runner = make_runner(&temp, VTCodeConfig::default(), "thread-duplicate-parallel").await;
+    runner
+        .enable_full_auto(&[tools::READ_FILE.to_string()])
+        .await;
+
+    let tool_calls = vec![
+        ToolCall::function(
+            "call-read-a".to_string(),
+            tools::READ_FILE.to_string(),
+            json!({
+                "path": "note-a.txt",
+            })
+            .to_string(),
+        ),
+        ToolCall::function(
+            "call-read-b".to_string(),
+            tools::READ_FILE.to_string(),
+            json!({
+                "path": "note-b.txt",
+            })
+            .to_string(),
+        ),
+    ];
+
+    let mut runtime = AgentRuntime::new(
+        AgentSessionState::new("session-duplicate-parallel".to_string(), 16, 4, 128_000),
+        None,
+        None,
+    );
+    let mut recorder = ExecEventRecorder::new("thread-duplicate-parallel", None, None);
+
+    runner
+        .execute_tool_call_batches(
+            tool_calls,
+            &mut runtime,
+            &mut recorder,
+            "[batch]",
+            false,
+            false,
+        )
+        .await
+        .expect("tool execution should finish");
+
+    let tool_outputs = runtime
+        .state
+        .messages
+        .iter()
+        .filter_map(|message| {
+            let id = message.tool_call_id.as_ref()?;
+            let output =
+                serde_json::from_str::<serde_json::Value>(&message.content.as_text()).ok()?;
+            Some((id.as_str(), output))
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(tool_outputs.len(), 2);
+    assert!(tool_outputs.iter().any(|(id, output)| {
+        *id == "call-read-a"
+            && output["success"].as_bool() == Some(true)
+            && output["path"].as_str() == Some("note-a.txt")
+    }));
+    assert!(tool_outputs.iter().any(|(id, output)| {
+        *id == "call-read-b"
+            && output["success"].as_bool() == Some(true)
+            && output["path"].as_str() == Some("note-b.txt")
+    }));
+}
+
+#[tokio::test]
 async fn denied_sequential_tool_halt_returns_promptly() {
     let temp = TempDir::new().expect("tempdir");
     let mut runner = make_runner(&temp, VTCodeConfig::default(), "thread-denied-sequential").await;
@@ -1551,6 +1624,44 @@ async fn sequential_tool_failures_record_categorized_user_message() {
         tool_error["error"]["partial_state_possible"].as_bool(),
         Some(false),
         "{tool_error}"
+    );
+}
+
+#[tokio::test]
+async fn sequential_tool_failures_do_not_record_interruption_guards() {
+    let temp = TempDir::new().expect("tempdir");
+    let mut vt_cfg = VTCodeConfig::default();
+    vt_cfg.commands.deny_regex = vec!["^blocked-cmd$".to_string()];
+    let mut runner = make_runner(&temp, vt_cfg, "thread-policy-guard").await;
+    runner
+        .enable_full_auto(&[tools::UNIFIED_EXEC.to_string()])
+        .await;
+
+    let tool_calls = vec![ToolCall::function(
+        "call-blocked".to_string(),
+        tools::UNIFIED_EXEC.to_string(),
+        json!({
+            "action": "run",
+            "command": "blocked-cmd",
+        })
+        .to_string(),
+    )];
+
+    let mut runtime = AgentRuntime::new(
+        AgentSessionState::new("session-policy-guard".to_string(), 16, 4, 128_000),
+        None,
+        None,
+    );
+    let mut recorder = ExecEventRecorder::new("thread-policy-guard", None, None);
+
+    runner
+        .execute_sequential_tool_calls(tool_calls, &mut runtime, &mut recorder, "[single]", false)
+        .await
+        .expect("tool execution should finish");
+
+    assert!(
+        runtime.state.error_recovery.lock().recent_errors.is_empty(),
+        "handled tool failures should not be recorded as interrupted executions"
     );
 }
 

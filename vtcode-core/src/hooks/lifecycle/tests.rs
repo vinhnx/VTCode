@@ -296,6 +296,151 @@ async fn test_pre_compact_hook_execution_uses_trigger_matcher() {
 }
 
 #[tokio::test]
+async fn test_subagent_start_payload_includes_thread_context() {
+    let temp_dir = create_test_workspace();
+    let workspace = temp_dir.path();
+
+    let config = HooksConfig {
+        lifecycle: LifecycleHooksConfig {
+            subagent_start: vec![HookGroupConfig {
+                matcher: None,
+                hooks: vec![HookCommandConfig {
+                    kind: Default::default(),
+                    command: "echo payload".into(),
+                    timeout_seconds: None,
+                }],
+            }],
+            ..Default::default()
+        },
+    };
+    let engine = LifecycleHookEngine::new(
+        workspace.to_path_buf(),
+        &config,
+        SessionStartTrigger::Startup,
+    )
+    .expect("Failed to create hook engine")
+    .expect("engine");
+
+    let transcript_path = workspace.join("subagents/agent-1.jsonl");
+    let payload = engine
+        .build_subagent_start_payload(
+            "parent-session",
+            "child-thread",
+            "worker",
+            "@worker",
+            true,
+            "running",
+            Some(transcript_path.as_path()),
+        )
+        .await
+        .expect("payload");
+
+    assert_eq!(payload["parent_session_id"], "parent-session");
+    assert_eq!(payload["child_thread_id"], "child-thread");
+    assert_eq!(payload["agent_name"], "worker");
+    assert_eq!(payload["display_label"], "@worker");
+    assert_eq!(payload["background"], true);
+    assert_eq!(payload["status"], "running");
+    assert_eq!(payload["hook_event_name"], "SubagentStart");
+    assert_eq!(
+        payload["transcript_path"],
+        transcript_path.to_string_lossy().into_owned()
+    );
+}
+
+#[tokio::test]
+async fn test_subagent_start_hook_execution_uses_agent_name_matcher() {
+    let temp_dir = create_test_workspace();
+    let workspace = temp_dir.path();
+
+    let hooks_config = LifecycleHooksConfig {
+        subagent_start: vec![HookGroupConfig {
+            matcher: Some("worker".into()),
+            hooks: vec![HookCommandConfig {
+                kind: Default::default(),
+                command: "echo 'Subagent start matched'".into(),
+                timeout_seconds: None,
+            }],
+        }],
+        ..Default::default()
+    };
+
+    let config = HooksConfig {
+        lifecycle: hooks_config,
+    };
+
+    let engine = LifecycleHookEngine::new(
+        workspace.to_path_buf(),
+        &config,
+        SessionStartTrigger::Startup,
+    )
+    .expect("Failed to create hook engine")
+    .expect("engine");
+
+    let messages = engine
+        .run_subagent_start(
+            "parent-session",
+            "child-thread",
+            "worker",
+            "@worker",
+            false,
+            "running",
+            None,
+        )
+        .await
+        .expect("run subagent start hook");
+
+    assert_eq!(messages.len(), 1);
+    assert!(messages[0].text.contains("Subagent start matched"));
+}
+
+#[tokio::test]
+async fn test_subagent_stop_hook_execution_uses_agent_name_matcher() {
+    let temp_dir = create_test_workspace();
+    let workspace = temp_dir.path();
+
+    let hooks_config = LifecycleHooksConfig {
+        subagent_stop: vec![HookGroupConfig {
+            matcher: Some("worker".into()),
+            hooks: vec![HookCommandConfig {
+                kind: Default::default(),
+                command: "echo 'Subagent stop matched'".into(),
+                timeout_seconds: None,
+            }],
+        }],
+        ..Default::default()
+    };
+
+    let config = HooksConfig {
+        lifecycle: hooks_config,
+    };
+
+    let engine = LifecycleHookEngine::new(
+        workspace.to_path_buf(),
+        &config,
+        SessionStartTrigger::Startup,
+    )
+    .expect("Failed to create hook engine")
+    .expect("engine");
+
+    let messages = engine
+        .run_subagent_stop(
+            "parent-session",
+            "child-thread",
+            "worker",
+            "@worker",
+            true,
+            "completed",
+            None,
+        )
+        .await
+        .expect("run subagent stop hook");
+
+    assert_eq!(messages.len(), 1);
+    assert!(messages[0].text.contains("Subagent stop matched"));
+}
+
+#[tokio::test]
 #[cfg_attr(
     not(target_os = "macos"),
     ignore = "Lifecycle hooks are for local development only"

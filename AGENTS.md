@@ -207,6 +207,17 @@ cargo clippy --workspace --all-targets -- -D warnings && cargo fmt --check && ca
 - `vtcode update --pin <version>` pins a release; `vtcode update --unpin` clears the pin.
 - `vtcode update --channel <stable|beta|nightly>` switches release channels.
 
+**Exec Mode Automation**: See `docs/user-guide/exec-mode.md` for the full workflow.
+
+- `vtcode exec --json` streams JSONL events; `vtcode exec --events <path>` writes JSONL to a file/dir.
+- `vtcode exec --last-message-file <path>` saves the final summary message.
+- `vtcode exec resume <SESSION_ID> <PROMPT>` or `vtcode exec resume --last <PROMPT>` continues a run.
+
+**Exec Plans vs Plan Mode**: See `docs/harness/EXEC_PLANS.md` for the full workflow.
+
+- Exec plans live in `docs/harness/exec-plans/active/NNN-description.md` and move to `docs/harness/exec-plans/completed/` when done.
+- Plan Mode session plans live in `.vtcode/plans/` and exit via the `exit_plan_mode` tool.
+
 ## Agent-First CLI Invariants
 
 - Prefer machine-readable output for automation (`vtcode ask --output-format json`, `vtcode exec --json`).

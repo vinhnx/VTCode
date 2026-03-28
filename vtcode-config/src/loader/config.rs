@@ -353,7 +353,7 @@ custom_providers = []
 # display_name = "MyCorporateName"
 # base_url = "https://llm.corp.example/v1"
 # api_key_env = "MYCORP_API_KEY"
-# model = "gpt-4o-mini"
+# model = "gpt-5-mini"
 
 [history]
 # Persist local session transcripts to disk

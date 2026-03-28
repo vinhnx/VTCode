@@ -368,8 +368,11 @@ impl ContextManager {
             return Vec::new();
         }
 
-        let mut normalized = Vec::with_capacity(history.len());
-        for message in history {
+        let mut normalized_history = history.to_vec();
+        vtcode_core::core::agent::state::normalize_history(&mut normalized_history);
+
+        let mut normalized = Vec::with_capacity(normalized_history.len());
+        for message in &normalized_history {
             if is_empty_context_message(message) {
                 continue;
             }
@@ -385,7 +388,7 @@ impl ContextManager {
         }
 
         if normalized.is_empty() {
-            history.to_vec()
+            normalized_history
         } else {
             normalized
         }

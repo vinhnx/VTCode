@@ -166,6 +166,14 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         }
     }
 
+    if let Some(event) = session.handle_local_agents_key(&key) {
+        return Some(event);
+    }
+
+    if session.inline_lists_visible() && session.handle_agent_palette_key(&key) {
+        return None;
+    }
+
     if session.inline_lists_visible() && session.handle_file_palette_key(&key) {
         return None;
     }
@@ -275,6 +283,10 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             // Ctrl+B - Background current operation or move to background
             session.mark_dirty();
             Some(InlineEvent::BackgroundOperation)
+        }
+        KeyCode::Char('s') | KeyCode::Char('S') if has_alt && !has_control && !has_command => {
+            session.mark_dirty();
+            Some(InlineEvent::Submit("/subprocesses".to_string()))
         }
         KeyCode::Char('a') | KeyCode::Char('A') if has_control && !has_command && !has_alt => {
             if session.core.input_enabled() {
@@ -401,6 +413,11 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             }
         }
         KeyCode::Down => {
+            if session.should_open_local_agents_with_down(&key, has_control, has_alt, has_command) {
+                session.show_transient_surface(TransientSurface::LocalAgents);
+                session.mark_dirty();
+                return None;
+            }
             if session.navigate_history_next() {
                 session.clear_inline_prompt_suggestion();
                 session.mark_dirty();

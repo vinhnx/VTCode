@@ -5,14 +5,12 @@ use super::types::ToolFailureContext;
 use crate::core::agent::events::{
     ExecEventRecorder, tool_invocation_completed_event, tool_output_payload_from_value,
 };
-use crate::core::agent::harness_kernel::{
-    PreparedToolBatch, PreparedToolBatchKind, PreparedToolCall,
-};
+use crate::core::agent::harness_kernel::{PreparedToolBatchKind, PreparedToolCall};
 use crate::core::agent::runtime::{AgentRuntime, RuntimeControl};
 use crate::exec::events::{ItemCompletedEvent, ThreadEvent, ThreadItemDetails, ToolCallStatus};
 use crate::llm::provider::ToolCall;
 use anyhow::Result;
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use tokio::time::Duration;
 use tracing::{error, info, warn};
 use vtcode_commons::ErrorCategory;
@@ -210,18 +208,78 @@ fn align_prepared_batches(
     calls: Vec<PreparedRunnerToolCall>,
     allow_parallel: bool,
 ) -> Vec<PreparedRunnerToolBatch> {
-    let planned = PreparedToolBatch::plan_layout(
-        calls.iter().map(|call| call.prepared.can_parallelize()),
-        allow_parallel,
+    if !allow_parallel {
+        return calls
+            .into_iter()
+            .map(|call| PreparedRunnerToolBatch {
+                kind: PreparedToolBatchKind::Sequential,
+                calls: vec![call],
+            })
+            .collect();
+    }
+
+    let mut batches = Vec::new();
+    let mut parallel_calls = Vec::new();
+    let mut parallel_tool_names = HashSet::new();
+
+    for call in calls {
+        if !call.prepared.can_parallelize() {
+            push_prepared_batch(
+                &mut batches,
+                &mut parallel_calls,
+                PreparedToolBatchKind::ParallelReadonly,
+            );
+            parallel_tool_names.clear();
+            batches.push(PreparedRunnerToolBatch {
+                kind: PreparedToolBatchKind::Sequential,
+                calls: vec![call],
+            });
+            continue;
+        }
+
+        if !parallel_calls.is_empty()
+            && parallel_tool_names.contains(call.prepared.canonical_name.as_str())
+        {
+            push_prepared_batch(
+                &mut batches,
+                &mut parallel_calls,
+                PreparedToolBatchKind::ParallelReadonly,
+            );
+            parallel_tool_names.clear();
+        }
+
+        parallel_tool_names.insert(call.prepared.canonical_name.clone());
+        parallel_calls.push(call);
+    }
+
+    push_prepared_batch(
+        &mut batches,
+        &mut parallel_calls,
+        PreparedToolBatchKind::ParallelReadonly,
     );
-    let mut calls = calls.into_iter();
-    planned
-        .into_iter()
-        .map(|(kind, len)| PreparedRunnerToolBatch {
-            kind,
-            calls: calls.by_ref().take(len).collect(),
-        })
-        .collect()
+    batches
+}
+
+fn push_prepared_batch(
+    batches: &mut Vec<PreparedRunnerToolBatch>,
+    calls: &mut Vec<PreparedRunnerToolCall>,
+    kind: PreparedToolBatchKind,
+) {
+    if calls.is_empty() {
+        return;
+    }
+
+    let batch_kind = if matches!(kind, PreparedToolBatchKind::ParallelReadonly) && calls.len() == 1
+    {
+        PreparedToolBatchKind::Sequential
+    } else {
+        kind
+    };
+
+    batches.push(PreparedRunnerToolBatch {
+        kind: batch_kind,
+        calls: std::mem::take(calls),
+    });
 }
 
 impl AgentRunner {
@@ -259,6 +317,36 @@ impl AgentRunner {
                 return Ok(RunnerCallAdmission::Rejected);
             }
         };
+        if self
+            .resolve_executable_tool_name(&requested_name)
+            .await
+            .is_none()
+        {
+            let detail = format!("Tool execution denied: {}", requested_name);
+            if !self.quiet {
+                warn!(
+                    agent = %agent_prefix,
+                    tool = %requested_name,
+                    message = %detail
+                );
+            }
+            runtime.state.warnings.push(detail.clone());
+            runtime.state.push_tool_error(
+                call.id.clone(),
+                &requested_name,
+                detail.clone(),
+                is_gemini,
+            );
+            reject_tool_call(
+                runtime,
+                event_recorder,
+                &requested_name,
+                Some(&args),
+                &call.id,
+                &detail,
+            );
+            return Ok(RunnerCallAdmission::Rejected);
+        }
         let prepared = match self.admit_tool_call(&requested_name, &args, &mut runtime.state) {
             Ok(prepared) => prepared,
             Err(err) => {
@@ -520,6 +608,7 @@ impl AgentRunner {
                 Ok(false)
             }
             Err(e) => {
+                guard.mark_completed();
                 record_circuit_transition(
                     self,
                     &runtime.state.error_recovery,
@@ -685,7 +774,7 @@ impl AgentRunner {
     /// Execute multiple tool calls in parallel. Only safe for read-only operations.
     #[allow(dead_code)]
     pub(super) async fn execute_parallel_tool_calls(
-        &self,
+        &mut self,
         tool_calls: Vec<ToolCall>,
         runtime: &mut AgentRuntime,
         event_recorder: &mut ExecEventRecorder,
@@ -704,15 +793,34 @@ impl AgentRunner {
             }
         }
 
-        let _ = self
-            .execute_prepared_parallel_tool_calls(
-                prepared_calls,
-                runtime,
-                event_recorder,
-                agent_prefix,
-                is_gemini,
-            )
-            .await?;
+        for batch in align_prepared_batches(prepared_calls, true) {
+            match batch.kind {
+                PreparedToolBatchKind::ParallelReadonly => {
+                    let _ = self
+                        .execute_prepared_parallel_tool_calls(
+                            batch.calls,
+                            runtime,
+                            event_recorder,
+                            agent_prefix,
+                            is_gemini,
+                        )
+                        .await?;
+                }
+                PreparedToolBatchKind::Sequential => {
+                    for call in batch.calls {
+                        let _ = self
+                            .execute_prepared_sequential_tool_call(
+                                call,
+                                runtime,
+                                event_recorder,
+                                agent_prefix,
+                                is_gemini,
+                            )
+                            .await?;
+                    }
+                }
+            }
+        }
         Ok(())
     }
 

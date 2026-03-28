@@ -196,6 +196,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Reporting a Vulnerability, Security Best Practices for Users, Supported Versions, Security Features, Security Architecture
   - **User Questions**: "What can you tell me about Security Policy?", "How does Reporting a Vulnerability work?", "How does Security Best Practices for Users work?"
 
+- **File**: `docs/user-guide/subagents.md`
+  - **Content**: Subagents
+  - **Topics**: Built-in subagents, Quickstart, Discovery And Precedence, File Formats, Supported Fields
+  - **User Questions**: "What can you tell me about Subagents?", "How does Built-in subagents work?", "How does Quickstart work?"
+
 - **File**: `docs/user-guide/tree-sitter-integration.md`
   - **Content**: Tree-sitter Integration
   - **Topics**: Overview, Shell Safety Parsing, Architecture, Technical Details, Configuration
@@ -539,6 +544,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Overview, Binary Size Summary, Release-fast Binary Analysis (32 MiB), Debug Binary Analysis (84 MiB), Recommendations
   - **User Questions**: "What can you tell me about Bloaty Analysis Report for vtcode?", "How does Overview work?", "How does Binary Size Summary work?"
 
+- **File**: `docs/project/TODO.md`
+  - **Content**: Codemod’s Open-source Contribution Program
+  - **Topics**: How We Donate for Contributions, Appendix
+  - **User Questions**: "What can you tell me about Codemod’s Open-source Contribution Program?", "How does How We Donate for Contributions work?", "How does Appendix work?"
+
 - **File**: `docs/context/context_engineering.md`
   - **Content**: Context Engineering in VT Code
   - **Topics**: Overview, Context Engineering vs Prompt Engineering, Accuracy Optimization Loop, Core Principles, Context Strategy
@@ -674,10 +684,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: For CLI Output, For TUI Widgets, Unified Theme, Color Reference, Common Patterns
   - **User Questions**: "What can you tell me about Styling Quick Start Guide?", "How does For CLI Output work?", "How does For TUI Widgets work?"
 
-- **File**: `docs/project/TODO.md`
-  - **Content**: TODO.md
-  - **User Questions**: "What can you tell me about TODO.md?"
-
 - **File**: `docs/harness/TECH_DEBT_TRACKER.md`
   - **Content**: Tech Debt Tracker
   - **Topics**: Priority Levels, Status Values, Debt Items, How to Add a New Item, How to Resolve an Item
@@ -752,6 +758,10 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Content**: anstyle-parse Integration Guide
   - **Topics**: Step 1: Add Dependency, Step 2: Create Parser Wrapper Module, Step 3: Update Module Exports, Step 4: Replace Manual Parser in PTY, Step 5: Update ANSI Stripping
   - **User Questions**: "What can you tell me about anstyle-parse Integration Guide?", "How does Step 1: Add Dependency work?", "How does Step 2: Create Parser Wrapper Module work?"
+
+- **File**: `docs/examples/background-subagent-demo.md`
+  - **Content**: background-subagent-demo.md
+  - **User Questions**: "What can you tell me about background-subagent-demo.md?"
 
 - **File**: `docs/project/ROADMAP.md`
   - **Content**: vtcode Development Roadmap

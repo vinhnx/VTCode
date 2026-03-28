@@ -1,5 +1,6 @@
 use anyhow::Result;
 use serde_json::{Value, json};
+use std::path::Path;
 
 use crate::exec::events::{CompactionMode, CompactionTrigger};
 use crate::hooks::lifecycle::types::{NotificationHookType, SessionEndReason};
@@ -31,6 +32,56 @@ impl LifecycleHookEngine {
             "hook_event_name": "SessionEnd",
             "reason": reason.as_str(),
             "transcript_path": transcript_path,
+        }))
+    }
+
+    pub(crate) async fn build_subagent_start_payload(
+        &self,
+        parent_session_id: &str,
+        child_thread_id: &str,
+        agent_name: &str,
+        display_label: &str,
+        background: bool,
+        status: &str,
+        transcript_path: Option<&Path>,
+    ) -> Result<Value> {
+        let cwd = self.inner.workspace.to_string_lossy().into_owned();
+        Ok(json!({
+            "session_id": self.inner.session_id,
+            "parent_session_id": parent_session_id,
+            "child_thread_id": child_thread_id,
+            "agent_name": agent_name,
+            "display_label": display_label,
+            "background": background,
+            "status": status,
+            "cwd": cwd,
+            "hook_event_name": "SubagentStart",
+            "transcript_path": transcript_path.map(|path| path.to_string_lossy().into_owned()),
+        }))
+    }
+
+    pub(crate) async fn build_subagent_stop_payload(
+        &self,
+        parent_session_id: &str,
+        child_thread_id: &str,
+        agent_name: &str,
+        display_label: &str,
+        background: bool,
+        status: &str,
+        transcript_path: Option<&Path>,
+    ) -> Result<Value> {
+        let cwd = self.inner.workspace.to_string_lossy().into_owned();
+        Ok(json!({
+            "session_id": self.inner.session_id,
+            "parent_session_id": parent_session_id,
+            "child_thread_id": child_thread_id,
+            "agent_name": agent_name,
+            "display_label": display_label,
+            "background": background,
+            "status": status,
+            "cwd": cwd,
+            "hook_event_name": "SubagentStop",
+            "transcript_path": transcript_path.map(|path| path.to_string_lossy().into_owned()),
         }))
     }
 

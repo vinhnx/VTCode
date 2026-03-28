@@ -209,6 +209,19 @@ impl Session {
             return false;
         }
 
+        if self.agent_palette_visible() {
+            let Some(palette) = self.agent_palette.as_mut() else {
+                return true;
+            };
+            if down {
+                palette.move_selection_down();
+            } else {
+                palette.move_selection_up();
+            }
+            self.mark_dirty();
+            return true;
+        }
+
         if self.file_palette_visible() {
             let Some(palette) = self.file_palette.as_mut() else {
                 return true;
@@ -232,6 +245,18 @@ impl Session {
             return true;
         }
 
+        if self.local_agents_visible() {
+            let changed = if down {
+                self.local_agents_state.move_selection_down()
+            } else {
+                self.local_agents_state.move_selection_up()
+            };
+            if changed {
+                self.mark_dirty();
+            }
+            return true;
+        }
+
         if slash::slash_navigation_available(self) {
             if down {
                 slash::move_slash_selection_down(self);
@@ -249,6 +274,42 @@ impl Session {
         let row = mouse_event.row;
         if !self.bottom_panel_contains(column, row) {
             return false;
+        }
+
+        if self.agent_palette_visible() {
+            let Some(layout) = render::agent_palette_panel_layout(self) else {
+                return true;
+            };
+            let bottom_area = self.core.bottom_panel_area();
+            let Some(palette) = self.agent_palette.as_mut() else {
+                return true;
+            };
+            let local_index = bottom_area.and_then(|area| layout.row_index(area, column, row));
+            let mut apply_name = None;
+            let mut should_mark_dirty = false;
+            if !palette.has_agents() {
+                return true;
+            }
+
+            let page_items = palette.current_page_items();
+            if let Some(local_index) = local_index
+                && let Some((global_index, entry, selected)) = page_items.get(local_index)
+            {
+                if *selected {
+                    apply_name = Some(entry.name.clone());
+                } else if palette.select_index(*global_index) {
+                    should_mark_dirty = true;
+                }
+            }
+
+            if let Some(name) = apply_name {
+                self.insert_agent_reference(&name);
+                self.close_agent_palette();
+                self.mark_dirty();
+            } else if should_mark_dirty {
+                self.mark_dirty();
+            }
+            return true;
         }
 
         if self.file_palette_visible() {
@@ -305,6 +366,22 @@ impl Session {
                     self.finish_history_picker_interaction(was_active);
                     self.mark_dirty();
                 } else if self.history_picker_state.select_index(actual_index) {
+                    self.mark_dirty();
+                }
+            }
+            return true;
+        }
+
+        if self.local_agents_visible() {
+            let Some(layout) = render::local_agents_panel_layout(self) else {
+                return true;
+            };
+            if let Some(local_index) = self.panel_row_index(&layout, column, row) {
+                let actual_index = self
+                    .local_agents_state
+                    .scroll_offset()
+                    .saturating_add(local_index);
+                if self.local_agents_state.select_index(actual_index) {
                     self.mark_dirty();
                 }
             }

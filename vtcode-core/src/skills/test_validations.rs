@@ -133,9 +133,9 @@ mod validation_tests {
         let temp_dir = TempDir::new().unwrap();
         let skill_dir = temp_dir.path().join("test-skill");
         fs::create_dir(&skill_dir).unwrap();
-        
+
         let skill_md = skill_dir.join("SKILL.md");
-        
+
         let m = SkillManifest {
             name: "test-skill".to_string(),
             description: "Test description".to_string(),
@@ -159,7 +159,7 @@ mod validation_tests {
             metadata: None,
             tools: None,
         };
-        
+
         let result = m.validate_directory_name_match(&skill_md);
         assert!(result.is_ok());
     }
@@ -169,9 +169,9 @@ mod validation_tests {
         let temp_dir = TempDir::new().unwrap();
         let skill_dir = temp_dir.path().join("different-name");
         fs::create_dir(&skill_dir).unwrap();
-        
+
         let skill_md = skill_dir.join("SKILL.md");
-        
+
         let m = SkillManifest {
             name: "test-skill".to_string(),
             description: "Test description".to_string(),
@@ -195,7 +195,7 @@ mod validation_tests {
             metadata: None,
             tools: None,
         };
-        
+
         let result = m.validate_directory_name_match(&skill_md);
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
@@ -207,12 +207,12 @@ mod validation_tests {
         let temp_dir = TempDir::new().unwrap();
         let tool_dir = temp_dir.path().join("my-tool");
         fs::create_dir(&tool_dir).unwrap();
-        
+
         // Create a tool.json to indicate this is a CLI tool
         fs::write(tool_dir.join("tool.json"), r#"{"name": "test-tool"}"#).unwrap();
-        
+
         let skill_md = tool_dir.join("SKILL.md");
-        
+
         let m = SkillManifest {
             name: "test-tool".to_string(),
             description: "Test tool description".to_string(),
@@ -236,7 +236,7 @@ mod validation_tests {
             metadata: None,
             tools: None,
         };
-        
+
         // CLI tools should skip directory name validation
         let result = m.validate_directory_name_match(&skill_md);
         assert!(result.is_ok());

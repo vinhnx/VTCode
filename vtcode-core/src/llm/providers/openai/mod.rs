@@ -1,7 +1,7 @@
 //! OpenAI Provider Implementation
 //!
 //! This module provides the OpenAI API integration, supporting:
-//! - Chat Completions API (GPT-4o, GPT-4, etc.)
+//! - Chat Completions API (GPT-5, GPT-5-mini, etc.)
 //! - Responses API (GPT-5, GPT-5.1 Codex, etc.)
 //! - Harmony encoding for GPT-OSS models
 //! - Streaming and non-streaming responses

@@ -3,14 +3,15 @@ use std::sync::Arc;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use super::overlay::{
-    FilePaletteTransientRequest, ListOverlayRequest, ModalOverlayRequest,
+    AgentPaletteItem, AgentPaletteTransientRequest, FilePaletteTransientRequest,
+    ListOverlayRequest, LocalAgentsTransientRequest, ModalOverlayRequest,
     TaskPanelTransientRequest, TransientEvent, TransientRequest,
 };
 use crate::core_tui::session::config::AppearanceConfig;
 use crate::core_tui::types::{
     EditingMode, InlineHeaderContext, InlineLinkRange, InlineListItem, InlineListSearchConfig,
     InlineListSelection, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
-    SecurePromptConfig,
+    LocalAgentEntry, SecurePromptConfig,
 };
 
 pub enum InlineCommand {
@@ -61,6 +62,15 @@ pub enum InlineCommand {
     SetVimModeEnabled(bool),
     SetQueuedInputs {
         entries: Vec<String>,
+    },
+    SetSubprocessEntries {
+        entries: Vec<String>,
+    },
+    SetSubagentPreview {
+        text: Option<String>,
+    },
+    SetLocalAgents {
+        entries: Vec<LocalAgentEntry>,
     },
     SetCursorVisible(bool),
     SetInputEnabled(bool),
@@ -277,6 +287,18 @@ impl InlineHandle {
         self.send_command(InlineCommand::SetQueuedInputs { entries });
     }
 
+    pub fn set_subprocess_entries(&self, entries: Vec<String>) {
+        self.send_command(InlineCommand::SetSubprocessEntries { entries });
+    }
+
+    pub fn set_subagent_preview(&self, text: Option<String>) {
+        self.send_command(InlineCommand::SetSubagentPreview { text });
+    }
+
+    pub fn set_local_agents(&self, entries: Vec<LocalAgentEntry>) {
+        self.send_command(InlineCommand::SetLocalAgents { entries });
+    }
+
     pub fn set_cursor_visible(&self, visible: bool) {
         self.send_command(InlineCommand::SetCursorVisible(visible));
     }
@@ -372,6 +394,15 @@ impl InlineHandle {
         }));
     }
 
+    pub fn configure_agent_palette(&self, agents: Vec<AgentPaletteItem>) {
+        self.show_transient(TransientRequest::AgentPalette(
+            AgentPaletteTransientRequest {
+                agents,
+                visible: None,
+            },
+        ));
+    }
+
     pub fn show_history_picker(&self) {
         self.show_transient(TransientRequest::HistoryPicker);
     }
@@ -380,6 +411,18 @@ impl InlineHandle {
         self.show_transient(TransientRequest::TaskPanel(TaskPanelTransientRequest {
             lines: Vec::new(),
             visible: Some(true),
+        }));
+    }
+
+    pub fn show_local_agents(&self) {
+        self.show_transient(TransientRequest::LocalAgents(LocalAgentsTransientRequest {
+            visible: Some(true),
+        }));
+    }
+
+    pub fn hide_local_agents(&self) {
+        self.show_transient(TransientRequest::LocalAgents(LocalAgentsTransientRequest {
+            visible: Some(false),
         }));
     }
 

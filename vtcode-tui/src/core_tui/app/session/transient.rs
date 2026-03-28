@@ -18,17 +18,22 @@ pub(crate) enum TransientSurface {
     DiffPreview,
     SlashPalette,
     HistoryPicker,
+    AgentPalette,
     FilePalette,
     TaskPanel,
+    LocalAgents,
 }
 
 impl TransientSurface {
     pub(crate) fn placement(self) -> TransientPlacement {
         match self {
             Self::FloatingOverlay | Self::DiffPreview => TransientPlacement::FloatingModal,
-            Self::SlashPalette | Self::HistoryPicker | Self::FilePalette | Self::TaskPanel => {
-                TransientPlacement::BottomDocked
-            }
+            Self::SlashPalette
+            | Self::HistoryPicker
+            | Self::AgentPalette
+            | Self::FilePalette
+            | Self::TaskPanel
+            | Self::LocalAgents => TransientPlacement::BottomDocked,
         }
     }
 
@@ -36,7 +41,9 @@ impl TransientSurface {
         match self {
             Self::FloatingOverlay | Self::DiffPreview => TransientFocusPolicy::Modal,
             Self::HistoryPicker => TransientFocusPolicy::CapturedInput,
-            Self::SlashPalette | Self::FilePalette => TransientFocusPolicy::SharedInput,
+            Self::SlashPalette | Self::AgentPalette | Self::FilePalette | Self::LocalAgents => {
+                TransientFocusPolicy::SharedInput
+            }
             Self::TaskPanel => TransientFocusPolicy::Passive,
         }
     }

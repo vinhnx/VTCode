@@ -94,6 +94,47 @@ fn normalize_history_for_request_keeps_tool_sequences_intact() {
 }
 
 #[test]
+fn normalize_history_for_request_inserts_synthetic_outputs_for_missing_calls() {
+    let manager = ContextManager::new(
+        "sys".into(),
+        (),
+        Arc::new(RwLock::new(HashMap::new())),
+        None,
+    );
+    let history = vec![uni::Message::assistant_with_tools(
+        String::new(),
+        vec![uni::ToolCall::function(
+            "call_1".to_string(),
+            "read_file".to_string(),
+            "{}".to_string(),
+        )],
+    )];
+
+    let normalized = manager.normalize_history_for_request(&history);
+    assert_eq!(normalized.len(), 2);
+    assert!(normalized[0].tool_calls.is_some());
+    assert_eq!(normalized[1].tool_call_id.as_deref(), Some("call_1"));
+    assert!(normalized[1].content.as_text().contains("canceled"));
+}
+
+#[test]
+fn normalize_history_for_request_removes_orphan_outputs() {
+    let manager = ContextManager::new(
+        "sys".into(),
+        (),
+        Arc::new(RwLock::new(HashMap::new())),
+        None,
+    );
+    let history = vec![uni::Message::tool_response(
+        "orphan_call".to_string(),
+        "{\"ok\":true}".to_string(),
+    )];
+
+    let normalized = manager.normalize_history_for_request(&history);
+    assert!(normalized.is_empty());
+}
+
+#[test]
 fn test_token_budget_status_thresholds() {
     let manager = ContextManager::new(
         "sys".into(),

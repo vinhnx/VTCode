@@ -480,7 +480,7 @@ mod tests {
             display_name: "MyCorporateName".to_string(),
             base_url: "https://llm.corp.example/v1".to_string(),
             api_key_env: "MYCORP_API_KEY".to_string(),
-            model: "gpt-4o-mini".to_string(),
+            model: "gpt-5-mini".to_string(),
         }]);
 
         let provider = create_provider_with_config(
@@ -490,7 +490,7 @@ mod tests {
                 openai_chatgpt_auth: None,
                 copilot_auth: None,
                 base_url: None,
-                model: Some("gpt-4o-mini".to_string()),
+                model: Some("gpt-5-mini".to_string()),
                 prompt_cache: None,
                 timeouts: None,
                 openai: Some(OpenAIConfig::default()),
@@ -502,7 +502,7 @@ mod tests {
         .expect("custom provider should register");
 
         assert_eq!(provider.name(), "mycorp");
-        assert_eq!(provider.supported_models(), vec!["gpt-4o-mini".to_string()]);
+        assert_eq!(provider.supported_models(), vec!["gpt-5-mini".to_string()]);
 
         if let Ok(mut factory) = get_factory().lock() {
             factory.remove_provider("mycorp");

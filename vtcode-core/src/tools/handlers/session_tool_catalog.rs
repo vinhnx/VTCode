@@ -607,9 +607,16 @@ pub(crate) fn spawn_agent_parameters() -> Value {
                 }
             },
             "fork_context": {"type": "boolean", "description": "Seed the child with the current thread history.", "default": false},
-            "model": {"type": "string", "description": "Optional subagent model override."},
+            "model": {
+                "type": "string",
+                "description": "Optional subagent model override. Omit this field to reuse the parent session model. VT Code only honors this override when the current user turn explicitly asks for that model."
+            },
             "reasoning_effort": {"type": "string", "description": "Optional subagent reasoning effort override."},
-            "background": {"type": "boolean", "description": "Run the child as a background task.", "default": false},
+            "background": {
+                "type": "boolean",
+                "description": "Run the child as a background task. Prefer this for long-lived helper work instead of blocking the current foreground turn with `wait_agent`.",
+                "default": false
+            },
             "max_turns": {"type": "integer", "description": "Optional turn limit for this child."}
         }
     })
@@ -650,9 +657,12 @@ pub(crate) fn wait_agent_parameters() -> Value {
             "targets": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "Child agent ids to wait for."
+                "description": "Child agent ids to wait for. This blocks the current foreground turn until completion or timeout."
             },
-            "timeout_ms": {"type": "integer", "description": "Optional wait timeout in milliseconds."}
+            "timeout_ms": {
+                "type": "integer",
+                "description": "Optional wait timeout in milliseconds. Prefer short waits in interactive sessions; managed background subprocesses are controlled through `/subprocesses`, not `wait_agent`."
+            }
         }
     })
 }

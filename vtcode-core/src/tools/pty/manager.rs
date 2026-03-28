@@ -7,6 +7,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow};
+use chrono::Utc;
 use parking_lot::Mutex;
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use shell_words::join;
@@ -703,6 +704,10 @@ info!("PTY session '{}' processed {} unicode characters across {} sessions with 
             working_dir: Some(self.format_working_dir(&working_dir)),
             rows: size.rows,
             cols: size.cols,
+            child_pid,
+            started_at: Some(Utc::now()),
+            lifecycle_state: Some(crate::tools::types::VTCodeSessionLifecycleState::Running),
+            exit_code: None,
             screen_contents: None,
             scrollback: None,
         };

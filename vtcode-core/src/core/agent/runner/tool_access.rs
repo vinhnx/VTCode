@@ -42,7 +42,7 @@ impl AgentRunner {
         tool_intent::canonical_unified_exec_tool_name(tool_name).unwrap_or(tool_name)
     }
 
-    async fn resolve_executable_tool_name(&self, tool_name: &str) -> Option<String> {
+    pub(super) async fn resolve_executable_tool_name(&self, tool_name: &str) -> Option<String> {
         let requested_name = Self::canonical_exec_request_name(tool_name);
         let canonical_name = self
             .tool_registry

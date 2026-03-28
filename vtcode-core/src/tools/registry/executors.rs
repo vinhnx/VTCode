@@ -1497,6 +1497,38 @@ fn resolve_workspace_scoped_path(workspace_root: &Path, raw_path: &str) -> Resul
     Ok(normalized)
 }
 
+fn path_is_tool_accessible_from_workspace(workspace_root: &Path, raw_path: &str) -> bool {
+    let path = Path::new(raw_path.trim());
+    if path.as_os_str().is_empty() {
+        return false;
+    }
+
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        workspace_root.join(path)
+    };
+    let normalized = crate::utils::path::normalize_path(&absolute);
+    let normalized_workspace = crate::utils::path::normalize_path(workspace_root);
+    normalized.starts_with(&normalized_workspace)
+}
+
+fn sanitize_subagent_tool_output_paths(workspace_root: &Path, value: &mut Value) {
+    let Some(object) = value.as_object_mut() else {
+        return;
+    };
+
+    if let Some(raw_path) = object.get("transcript_path").and_then(Value::as_str)
+        && !path_is_tool_accessible_from_workspace(workspace_root, raw_path)
+    {
+        object.remove("transcript_path");
+    }
+
+    if let Some(entry) = object.get_mut("entry") {
+        sanitize_subagent_tool_output_paths(workspace_root, entry);
+    }
+}
+
 enum PlannedPatchWrite {
     Text { path: PathBuf, content: String },
     Removal { path: PathBuf },
@@ -1558,7 +1590,9 @@ impl ToolRegistry {
             let request = serde_json::from_value::<crate::subagents::SpawnAgentRequest>(args)
                 .context("Invalid spawn_agent arguments")?;
             let entry = controller.spawn(request).await?;
-            Ok(json!(entry))
+            let mut value = json!(entry);
+            sanitize_subagent_tool_output_paths(self.workspace_root(), &mut value);
+            Ok(value)
         })
     }
 
@@ -1570,7 +1604,9 @@ impl ToolRegistry {
             let request = serde_json::from_value::<crate::subagents::SendInputRequest>(args)
                 .context("Invalid send_input arguments")?;
             let entry = controller.send_input(request).await?;
-            Ok(json!(entry))
+            let mut value = json!(entry);
+            sanitize_subagent_tool_output_paths(self.workspace_root(), &mut value);
+            Ok(value)
         })
     }
 
@@ -1589,10 +1625,12 @@ impl ToolRegistry {
                 .collect::<Vec<_>>();
             let timeout_ms = args.get("timeout_ms").and_then(Value::as_u64);
             let entry = controller.wait(&targets, timeout_ms).await?;
-            Ok(json!({
+            let mut value = json!({
                 "completed": entry.is_some(),
                 "entry": entry,
-            }))
+            });
+            sanitize_subagent_tool_output_paths(self.workspace_root(), &mut value);
+            Ok(value)
         })
     }
 
@@ -1606,7 +1644,9 @@ impl ToolRegistry {
                 .and_then(Value::as_str)
                 .ok_or_else(|| anyhow!("resume_agent requires id"))?;
             let entry = controller.resume(target).await?;
-            Ok(json!(entry))
+            let mut value = json!(entry);
+            sanitize_subagent_tool_output_paths(self.workspace_root(), &mut value);
+            Ok(value)
         })
     }
 
@@ -1620,7 +1660,9 @@ impl ToolRegistry {
                 .and_then(Value::as_str)
                 .ok_or_else(|| anyhow!("close_agent requires target"))?;
             let entry = controller.close(target).await?;
-            Ok(json!(entry))
+            let mut value = json!(entry);
+            sanitize_subagent_tool_output_paths(self.workspace_root(), &mut value);
+            Ok(value)
         })
     }
 
@@ -3586,6 +3628,43 @@ fn build_shell_command_string(raw: Option<&str>, parts: &[String], _shell: &str)
 }
 
 #[cfg(test)]
+mod subagent_tool_output_tests {
+    use super::sanitize_subagent_tool_output_paths;
+    use serde_json::json;
+    use tempfile::TempDir;
+
+    #[test]
+    fn strips_transcript_paths_outside_workspace() {
+        let temp = TempDir::new().expect("tempdir");
+        let mut value = json!({
+            "completed": true,
+            "entry": {
+                "id": "agent-1",
+                "transcript_path": "/Users/example/.vtcode/sessions/agent-1.json",
+            }
+        });
+
+        sanitize_subagent_tool_output_paths(temp.path(), &mut value);
+
+        assert!(value["entry"].get("transcript_path").is_none());
+    }
+
+    #[test]
+    fn keeps_transcript_paths_inside_workspace() {
+        let temp = TempDir::new().expect("tempdir");
+        let transcript_path = temp.path().join(".vtcode/context/subagents/agent-1.json");
+        let mut value = json!({
+            "id": "agent-1",
+            "transcript_path": transcript_path,
+        });
+
+        sanitize_subagent_tool_output_paths(temp.path(), &mut value);
+
+        assert_eq!(value["transcript_path"].as_str(), transcript_path.to_str());
+    }
+}
+
+#[cfg(test)]
 mod shell_preference_tests {
     use super::{resolve_shell_preference, resolve_shell_preference_with_zsh_fork};
     use crate::config::PtyConfig;
@@ -3878,6 +3957,10 @@ mod pty_context_tests {
             working_dir: Some(".".to_string()),
             rows: Some(24),
             cols: Some(80),
+            child_pid: None,
+            started_at: None,
+            lifecycle_state: None,
+            exit_code: None,
         };
 
         assert_eq!(build_exec_session_command_display(&session), "cargo check");
@@ -3898,6 +3981,10 @@ mod pty_context_tests {
             working_dir: Some(".".to_string()),
             rows: Some(30),
             cols: Some(120),
+            child_pid: None,
+            started_at: None,
+            lifecycle_state: None,
+            exit_code: None,
         };
 
         attach_exec_response_context(&mut response, &session, "cargo check", false);
@@ -3948,6 +4035,10 @@ mod pty_context_tests {
             working_dir: Some(".".to_string()),
             rows: None,
             cols: None,
+            child_pid: None,
+            started_at: None,
+            lifecycle_state: None,
+            exit_code: None,
         };
         let capture = PtyEphemeralCapture {
             output: "first\nsecond\n".to_string(),
@@ -4161,6 +4252,10 @@ mod unified_action_error_tests {
             working_dir: Some(".".to_string()),
             rows: None,
             cols: None,
+            child_pid: None,
+            started_at: None,
+            lifecycle_state: None,
+            exit_code: None,
         };
         let capture = PtyEphemeralCapture {
             output: String::new(),
@@ -4288,6 +4383,10 @@ mod unified_action_error_tests {
             working_dir: Some(".".to_string()),
             rows: None,
             cols: None,
+            child_pid: None,
+            started_at: None,
+            lifecycle_state: None,
+            exit_code: None,
         };
         let raw_output = r#"
         FAIL [   0.216s] ( 363/2669) vtcode-core core::agent::runner::tests::exec_only_policy_skips_when_full_auto_is_disabled

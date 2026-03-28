@@ -49,6 +49,7 @@ pub struct InlineHeaderContext {
     pub tools: String,
     pub mcp: String,
     pub highlights: Vec<InlineHeaderHighlight>,
+    pub subagent_badges: Vec<InlineHeaderBadge>,
     /// Current editing mode for display in header
     pub editing_mode: EditingMode,
     /// Current autonomous mode status
@@ -109,10 +110,18 @@ impl Default for InlineHeaderContext {
             tools,
             mcp,
             highlights: Vec::new(),
+            subagent_badges: Vec::new(),
             editing_mode: EditingMode::default(),
             autonomous_mode: false,
         }
     }
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct InlineHeaderBadge {
+    pub text: String,
+    pub style: InlineTextStyle,
+    pub full_background: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

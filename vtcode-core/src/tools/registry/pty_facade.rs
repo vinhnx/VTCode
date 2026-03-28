@@ -5,6 +5,7 @@ use std::sync::Arc;
 use anyhow::Result;
 
 use crate::config::PtyConfig;
+use crate::tools::exec_session::ExecSessionManager;
 use crate::tools::pty::PtyManager;
 
 use super::ToolRegistry;
@@ -45,6 +46,10 @@ impl ToolRegistry {
 
     pub async fn terminate_all_exec_sessions_async(&self) -> Result<()> {
         self.exec_sessions.terminate_all_sessions_async().await
+    }
+
+    pub fn exec_session_manager(&self) -> ExecSessionManager {
+        self.exec_sessions.clone()
     }
 
     /// Set the active PTY sessions counter for tracking

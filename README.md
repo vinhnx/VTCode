@@ -82,6 +82,27 @@ VT Code includes comprehensive support for Skills, following the [open Agent Ski
 
 For more information about skills implementation in VT Code, see [Agent Skills Guide](./docs/skills/SKILLS_GUIDE.md).
 
+### Subagents And Background Helpers
+
+VT Code can delegate bounded work to foreground subagents and also run an explicitly configured background subagent as a managed subprocess.
+
+- `/agent` and `/agents active` inspect delegated agents in place without switching the main session
+- background subprocesses are opt-in; VT Code no longer ships with a preconfigured default background agent
+- `Ctrl+B` starts or stops the configured default background subagent only after `[subagents.background]` is enabled and `default_agent` is set
+- `/subprocesses` or `Alt+S` opens the Local Agents drawer
+- the wide-mode sidebar shows a unified Local Agents section for delegated agents and background subprocesses
+
+The background runtime is configured under `[subagents.background]`:
+
+```toml
+[subagents.background]
+enabled = true
+default_agent = "rust-engineer"
+refresh_interval_ms = 2000
+auto_restore = true
+toggle_shortcut = "ctrl+b"
+```
+
 ### Supported Providers
 
 VT Code works with GitHub Copilot, OpenAI, Anthropic, Google Gemini, DeepSeek, OpenRouter, Z.AI, Moonshot AI, MiniMax, HuggingFace Inference Providers, Ollama (local & cloud), and LM Studio (local).
@@ -238,6 +259,7 @@ See [Security Model](./docs/security/SECURITY_MODEL.md) and [Sandbox Deep Dive](
 - [**Getting started**](./docs/user-guide/getting-started.md)
     - [Interactive mode](./docs/user-guide/interactive-mode.md)
     - [Command line interface](./docs/user-guide/commands.md)
+    - [Subagents](./docs/user-guide/subagents.md)
 - [**OAuth Authentication**](./docs/guides/oauth-authentication.md) - Secure OAuth 2.0 flows with PKCE, token storage, and automatic refresh
 - [Configuration](./docs/config/CONFIGURATION_PRECEDENCE.md)
 - [**Update System**](./docs/guides/UPDATE_SYSTEM.md) - Release channels, version pinning, and update management

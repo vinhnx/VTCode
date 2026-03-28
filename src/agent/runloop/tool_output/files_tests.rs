@@ -109,7 +109,7 @@ index 0000000..1111111 100644
 @@ -172,7 +172,7 @@
          blocks
      }
- 
+
 -    fn select_best_code_block<'a>(blocks: &'a [CodeFenceBlock]) -> Option<&'a CodeFenceBlock> {
 +    fn select_best_code_block(blocks: &[CodeFenceBlock]) -> Option<&CodeFenceBlock> {
          let mut best = None;
@@ -135,7 +135,7 @@ index 0000000..1111111 100644
  # Suppress notifications while terminal is focused
 -suppress_when_focused = false
 +suppress_when_focused = true
- 
+
 @@ -545,4 +545,4 @@
  # Success notifications for tool call results
 -tool_success = true

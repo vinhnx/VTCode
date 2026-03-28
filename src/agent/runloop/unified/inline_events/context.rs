@@ -124,7 +124,11 @@ impl<'a> InlineEventContext<'a> {
                         TransientHotkeyAction::LaunchEditor => {
                             self.input_processor().submit("/edit".to_string())
                         }
-                        TransientHotkeyAction::FocusJobOutput
+                        TransientHotkeyAction::ReloadSubagentInspector
+                        | TransientHotkeyAction::GracefulStopSubagent
+                        | TransientHotkeyAction::ForceCancelSubagent
+                        | TransientHotkeyAction::OpenSourceThread
+                        | TransientHotkeyAction::FocusJobOutput
                         | TransientHotkeyAction::InterruptJob
                         | TransientHotkeyAction::PreviewJobSnapshot => {
                             self.input_processor().passive()
@@ -142,10 +146,9 @@ impl<'a> InlineEventContext<'a> {
             }
             InlineEvent::Exit => self.control_processor().exit()?,
             InlineEvent::Interrupt => self.handle_interrupt(),
-            InlineEvent::BackgroundOperation => {
-                // Ctrl+B pressed: handle background operation
-                self.input_processor().passive()
-            }
+            InlineEvent::BackgroundOperation => self
+                .input_processor()
+                .submit("/subprocesses toggle".to_string()),
             InlineEvent::LaunchEditor => {
                 // Ctrl+E pressed: submit /edit command
                 self.input_processor().submit("/edit".to_string())

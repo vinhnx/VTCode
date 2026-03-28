@@ -340,6 +340,7 @@ impl<'a> SessionWidget<'a> {
             .unwrap_or("Ready");
 
         SidebarWidget::new(&self.session.styles)
+            .local_agents(self.session.local_agents.clone())
             .queue_items(queue_items)
             .context_info(context_info)
             .mode(mode)

@@ -93,7 +93,7 @@ impl Session {
             }
             InlineCommand::SetHeaderContext { context } => {
                 self.header_context = *context;
-                self.needs_redraw = true;
+                self.invalidate_header_cache();
             }
             InlineCommand::SetInputStatus { left, right } => {
                 self.input_status_left = left;
@@ -123,6 +123,14 @@ impl Session {
             InlineCommand::SetQueuedInputs { entries } => {
                 self.set_queued_inputs_entries(entries);
                 self.mark_dirty();
+            }
+            InlineCommand::SetSubprocessEntries { entries } => {
+                self.subprocess_entries = entries;
+                self.invalidate_sidebar_cache();
+            }
+            InlineCommand::SetSubagentPreview { text } => {
+                self.subagent_preview = text.filter(|value| !value.trim().is_empty());
+                self.invalidate_sidebar_cache();
             }
             InlineCommand::SetCursorVisible(value) => {
                 self.cursor_visible = value;

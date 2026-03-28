@@ -1,6 +1,7 @@
 //! Common types used across the tool system
 
 use crate::utils::serde_helpers::{deserialize_maybe_quoted, deserialize_opt_maybe_quoted};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 
@@ -246,6 +247,14 @@ pub struct EnhancedTerminalInput {
 }
 
 /// PTY Session structure for managing interactive terminal sessions
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum VTCodeSessionLifecycleState {
+    Running,
+    Exited,
+}
+
+/// PTY Session structure for managing interactive terminal sessions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VTCodePtySession {
     pub id: String,
@@ -254,6 +263,14 @@ pub struct VTCodePtySession {
     pub working_dir: Option<String>,
     pub rows: u16,
     pub cols: u16,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub child_pid: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub started_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lifecycle_state: Option<VTCodeSessionLifecycleState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exit_code: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub screen_contents: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -272,6 +289,14 @@ pub struct VTCodeExecSession {
     pub rows: Option<u16>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cols: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub child_pid: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub started_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lifecycle_state: Option<VTCodeSessionLifecycleState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exit_code: Option<i32>,
 }
 
 impl From<VTCodePtySession> for VTCodeExecSession {
@@ -284,6 +309,10 @@ impl From<VTCodePtySession> for VTCodeExecSession {
             working_dir: session.working_dir,
             rows: Some(session.rows),
             cols: Some(session.cols),
+            child_pid: session.child_pid,
+            started_at: session.started_at,
+            lifecycle_state: session.lifecycle_state,
+            exit_code: session.exit_code,
         }
     }
 }

@@ -201,6 +201,28 @@ fn append_file_reference_metadata(
     }
 }
 
+fn append_agent_reference_metadata(
+    content: uni::MessageContent,
+    selected_agents: &[String],
+) -> uni::MessageContent {
+    if selected_agents.is_empty() {
+        return content;
+    }
+
+    let mut metadata = String::from("\n\n[agent_reference_metadata]\n");
+    for mention in selected_agents {
+        metadata.push_str(&format!("selected=@agent-{mention}\n"));
+    }
+
+    match content {
+        uni::MessageContent::Text(text) => uni::MessageContent::text(format!("{text}{metadata}")),
+        uni::MessageContent::Parts(mut parts) => {
+            parts.push(uni::ContentPart::text(metadata));
+            uni::MessageContent::parts(parts)
+        }
+    }
+}
+
 fn supports_openai_remote_file_inputs(
     provider_name: &str,
     model_supports_responses_compaction: bool,
@@ -486,23 +508,47 @@ pub(super) async fn run_interaction_loop_impl(
                 state.input_status_state,
                 spooled_count,
             );
-            let (active_subagents, total_subagents) =
+            let local_agent_count =
                 if let Some(controller) = ctx.tool_registry.subagent_controller() {
                     let entries = controller.status_entries().await;
-                    let total = entries.len();
-                    let active = entries
+                    crate::agent::runloop::ui::sync_active_subagent_badges(
+                        ctx.header_context,
+                        ctx.handle,
+                        &entries,
+                    );
+                    let delegated_count = entries
                         .iter()
                         .filter(|entry| !entry.status.is_terminal())
                         .count();
-                    (active, total)
+                    let background_count = controller
+                        .background_status_entries()
+                        .await
+                        .into_iter()
+                        .filter(|entry| {
+                            matches!(
+                                entry.status,
+                                vtcode_core::subagents::BackgroundSubprocessStatus::Starting
+                                    | vtcode_core::subagents::BackgroundSubprocessStatus::Running
+                            ) || (entry.desired_enabled
+                                && matches!(
+                                    entry.status,
+                                    vtcode_core::subagents::BackgroundSubprocessStatus::Error
+                                ))
+                        })
+                        .count();
+                    delegated_count + background_count
                 } else {
-                    (0, 0)
+                    crate::agent::runloop::ui::sync_active_subagent_badges(
+                        ctx.header_context,
+                        ctx.handle,
+                        &[],
+                    );
+                    0
                 };
             crate::agent::runloop::unified::status_line::update_thread_context(
                 state.input_status_state,
-                "main",
-                active_subagents,
-                total_subagents,
+                ctx.active_thread_label,
+                local_agent_count,
             );
             let context_limit_tokens = ctx
                 .provider_client
@@ -939,8 +985,15 @@ pub(super) async fn run_interaction_loop_impl(
                 uni::MessageContent::parts(refined_parts)
             }
         };
+        let selected_agents = if let Some(controller) = ctx.tool_registry.subagent_controller() {
+            controller.set_turn_delegation_hints_from_input(input).await
+        } else {
+            Vec::new()
+        };
         let refined_content =
             append_file_reference_metadata(refined_content, input, &ctx.config.workspace);
+        let refined_content =
+            append_agent_reference_metadata(refined_content, selected_agents.as_slice());
 
         let latest_editor_snapshot = if let Some(bridge) = ctx.ide_context_bridge.as_mut() {
             match bridge.refresh() {
@@ -990,9 +1043,9 @@ pub(super) async fn run_interaction_loop_impl(
 #[cfg(test)]
 mod tests {
     use super::{
-        append_file_reference_metadata, build_file_reference_metadata,
-        extract_recent_follow_up_hint, fallback_args_preview, refresh_live_ide_context_update,
-        supports_openai_remote_file_inputs, tool_names,
+        append_agent_reference_metadata, append_file_reference_metadata,
+        build_file_reference_metadata, extract_recent_follow_up_hint, fallback_args_preview,
+        refresh_live_ide_context_update, supports_openai_remote_file_inputs, tool_names,
     };
     use crate::agent::runloop::unified::context_manager::ContextManager;
     use crate::agent::runloop::unified::session_setup::{
@@ -1273,6 +1326,21 @@ mod tests {
                 assert!(text.contains("[file_reference_metadata]"));
                 assert!(text.contains("@README.md="));
                 assert!(text.contains("README.md"));
+            }
+            uni::MessageContent::Parts(_) => panic!("expected text content"),
+        }
+    }
+
+    #[test]
+    fn append_agent_reference_metadata_adds_selected_agent_hint() {
+        let content = uni::MessageContent::text("use rust-engineer agent".to_string());
+        let augmented = append_agent_reference_metadata(content, &[String::from("rust-engineer")]);
+
+        match augmented {
+            uni::MessageContent::Text(text) => {
+                assert!(text.contains("use rust-engineer agent"));
+                assert!(text.contains("[agent_reference_metadata]"));
+                assert!(text.contains("selected=@agent-rust-engineer"));
             }
             uni::MessageContent::Parts(_) => panic!("expected text content"),
         }

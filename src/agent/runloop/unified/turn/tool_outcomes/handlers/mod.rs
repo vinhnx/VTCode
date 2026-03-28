@@ -181,6 +181,7 @@ fn build_tool_permissions_context<'ctx, 'a>(
         renderer: ctx.renderer,
         handle: ctx.handle,
         session: ctx.session,
+        active_thread_label: Some(ctx.active_thread_label),
         default_placeholder: ctx.default_placeholder.clone(),
         ctrl_c_state: ctx.ctrl_c_state,
         ctrl_c_notify: ctx.ctrl_c_notify,

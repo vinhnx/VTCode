@@ -171,6 +171,15 @@ impl ModalState {
             {
                 Some(hotkey.action.clone())
             }
+            OverlayHotkeyKey::Char(ch)
+                if !modifiers.control
+                    && !modifiers.alt
+                    && !modifiers.command
+                    && matches!(key.code, KeyCode::Char(key_ch) if key_ch.eq_ignore_ascii_case(&ch))
+            =>
+            {
+                Some(hotkey.action.clone())
+            }
             _ => None,
         })
     }

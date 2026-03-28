@@ -226,7 +226,8 @@ pub(crate) async fn initialize_session(
     apply_workspace_trust_prompt_policy(&mut tool_registry, autonomous_mode, workspace_trust_level)
         .await;
 
-    let subagent_controller = if let Some(cfg) = vt_cfg
+    let subagent_controller = if resume.is_none_or(ResumeSession::is_root_thread)
+        && let Some(cfg) = vt_cfg
         && cfg.subagents.enabled
     {
         match SubagentController::new(SubagentControllerConfig {
@@ -239,6 +240,8 @@ pub(crate) async fn initialize_session(
             vt_cfg: cfg.clone(),
             openai_chatgpt_auth: config.openai_chatgpt_auth.clone(),
             depth: 0,
+            exec_sessions: tool_registry.exec_session_manager(),
+            pty_manager: tool_registry.pty_manager().clone(),
         })
         .await
         {
@@ -246,6 +249,11 @@ pub(crate) async fn initialize_session(
                 controller.set_parent_messages(&conversation_history).await;
                 let controller = Arc::new(controller);
                 tool_registry.set_subagent_controller(controller.clone());
+                if cfg.subagents.background.auto_restore
+                    && let Err(err) = controller.restore_background_subagents().await
+                {
+                    warn!("Failed to restore background subagents: {}", err);
+                }
                 Some(controller)
             }
             Err(err) => {

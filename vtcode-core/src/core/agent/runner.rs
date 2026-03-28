@@ -479,6 +479,11 @@ impl AgentRunner {
         self.thread_handle.messages()
     }
 
+    /// Clone the underlying thread handle so callers can capture snapshots.
+    pub fn thread_handle(&self) -> ThreadRuntimeHandle {
+        self.thread_handle.clone()
+    }
+
     /// Enable read-only plan mode for the underlying tool registry.
     pub fn enable_plan_mode(&self) {
         self.tool_registry.enable_plan_mode();

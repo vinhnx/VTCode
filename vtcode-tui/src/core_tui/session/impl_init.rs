@@ -134,6 +134,10 @@ impl Session {
             transcript_cache: None,
             visible_lines_cache: None,
             queued_inputs: Vec::with_capacity(4),
+            local_agents: Vec::new(),
+            local_agents_drawer_visible: false,
+            subprocess_entries: Vec::new(),
+            subagent_preview: None,
             queue_overlay_cache: None,
             queue_overlay_version: 0,
             active_overlay: None,
@@ -173,6 +177,7 @@ impl Session {
             header_lines_cache: None,
             header_height_cache: hashbrown::HashMap::new(),
             queued_inputs_preview_cache: None,
+            subprocess_entries_preview_cache: None,
 
             // --- Terminal Title ---
             app_name,
