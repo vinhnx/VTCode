@@ -3,6 +3,7 @@ use super::layout::{
 };
 use super::*;
 use crate::config::constants::ui;
+use crate::core_tui::app::session::transient::TransientSurface;
 use crate::core_tui::session::render as core_render;
 use crate::core_tui::session::{inline_list, list_panel, message_renderer};
 
@@ -11,20 +12,44 @@ impl Session {
         let Some(viewport) = self.core.begin_frame(frame) else {
             return;
         };
-        let metrics = self.core.measure_frame(viewport);
+        let mut metrics = self.core.measure_frame(viewport);
+        let local_agents_captures_input = self.inline_lists_visible()
+            && matches!(
+                self.visible_bottom_docked_surface(),
+                Some(TransientSurface::LocalAgents)
+            );
         let panel = resolve_bottom_panel_spec(
             self,
             viewport,
             metrics.header_height,
-            metrics.input_core_height,
+            if local_agents_captures_input {
+                0
+            } else {
+                metrics.input_core_height
+            },
         );
+        if local_agents_captures_input {
+            metrics.input_core_height = 0;
+        }
         let layout = self
             .core
             .build_frame_layout(viewport, metrics, panel.height);
         self.core.set_modal_list_area(None);
         let transcript_area = layout.main_area;
-        let (input_area, bottom_panel_area) =
-            split_input_and_bottom_panel_area(layout.input_area, panel.height);
+        let (input_area, bottom_panel_area) = if matches!(panel.kind, BottomPanelKind::LocalAgents)
+        {
+            (
+                Rect::new(
+                    layout.input_area.x,
+                    layout.input_area.y,
+                    layout.input_area.width,
+                    0,
+                ),
+                Some(layout.input_area),
+            )
+        } else {
+            split_input_and_bottom_panel_area(layout.input_area, panel.height)
+        };
         self.core.set_bottom_panel_area(bottom_panel_area);
         self.core.render_base_frame(frame, &layout, transcript_area);
         self.core.render_input(frame, input_area);

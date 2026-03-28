@@ -40,8 +40,8 @@ impl TransientSurface {
     pub(crate) fn focus_policy(self) -> TransientFocusPolicy {
         match self {
             Self::FloatingOverlay | Self::DiffPreview => TransientFocusPolicy::Modal,
-            Self::HistoryPicker => TransientFocusPolicy::CapturedInput,
-            Self::SlashPalette | Self::AgentPalette | Self::FilePalette | Self::LocalAgents => {
+            Self::HistoryPicker | Self::LocalAgents => TransientFocusPolicy::CapturedInput,
+            Self::SlashPalette | Self::AgentPalette | Self::FilePalette => {
                 TransientFocusPolicy::SharedInput
             }
             Self::TaskPanel => TransientFocusPolicy::Passive,

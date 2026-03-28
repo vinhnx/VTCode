@@ -17,6 +17,12 @@ pub(super) struct LocalAgentsUpdate {
     pub(super) has_new_delegated_entries: bool,
 }
 
+pub(super) enum LocalAgentsKeyResult {
+    NotHandled,
+    Handled,
+    Emit(InlineEvent),
+}
+
 impl LocalAgentsState {
     pub(super) fn set_entries(&mut self, entries: Vec<LocalAgentEntry>) -> LocalAgentsUpdate {
         let previous_id = self.selected_entry().map(|entry| entry.id.clone());
@@ -124,67 +130,71 @@ impl AppSession {
             && self.local_agents_state.has_entries()
     }
 
-    pub(super) fn handle_local_agents_key(&mut self, key: &KeyEvent) -> Option<InlineEvent> {
+    pub(super) fn handle_local_agents_key(&mut self, key: &KeyEvent) -> LocalAgentsKeyResult {
         if !self.local_agents_visible() {
-            return None;
+            return LocalAgentsKeyResult::NotHandled;
         }
 
-        let input_empty = self.core.input_manager.content().trim().is_empty();
         match key.code {
-            KeyCode::Up if input_empty => {
+            KeyCode::Up => {
                 self.local_agents_state.move_selection_up();
                 self.mark_dirty();
-                None
+                LocalAgentsKeyResult::Handled
             }
-            KeyCode::Down if input_empty => {
+            KeyCode::Down => {
                 self.local_agents_state.move_selection_down();
                 self.mark_dirty();
-                None
+                LocalAgentsKeyResult::Handled
             }
-            KeyCode::PageUp if input_empty => {
+            KeyCode::PageUp => {
                 let step = self.local_agents_state.visible_rows().max(1);
                 self.local_agents_state.page_up(step);
                 self.mark_dirty();
-                None
+                LocalAgentsKeyResult::Handled
             }
-            KeyCode::PageDown if input_empty => {
+            KeyCode::PageDown => {
                 let step = self.local_agents_state.visible_rows().max(1);
                 self.local_agents_state.page_down(step);
                 self.mark_dirty();
-                None
+                LocalAgentsKeyResult::Handled
             }
-            KeyCode::Char('n') if input_empty && key.modifiers.contains(KeyModifiers::CONTROL) => {
+            KeyCode::Char('n') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.local_agents_state.move_selection_down();
                 self.mark_dirty();
-                None
+                LocalAgentsKeyResult::Handled
             }
-            KeyCode::Char('p') if input_empty && key.modifiers.contains(KeyModifiers::CONTROL) => {
+            KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.local_agents_state.move_selection_up();
                 self.mark_dirty();
-                None
+                LocalAgentsKeyResult::Handled
             }
             KeyCode::Char('o') | KeyCode::Char('O')
                 if key.modifiers.contains(KeyModifiers::CONTROL) =>
             {
                 self.selected_local_agent_transcript_event()
+                    .map_or(LocalAgentsKeyResult::Handled, LocalAgentsKeyResult::Emit)
             }
             KeyCode::Char('k') | KeyCode::Char('K')
                 if key.modifiers.contains(KeyModifiers::CONTROL) =>
             {
                 self.selected_local_agent_stop_event()
+                    .map_or(LocalAgentsKeyResult::Handled, LocalAgentsKeyResult::Emit)
             }
             KeyCode::Char('x') | KeyCode::Char('X')
                 if key.modifiers.contains(KeyModifiers::CONTROL) =>
             {
                 self.selected_local_agent_force_cancel_event()
+                    .map_or(LocalAgentsKeyResult::Handled, LocalAgentsKeyResult::Emit)
             }
-            KeyCode::Enter if input_empty => self.selected_local_agent_inspect_event(),
+            KeyCode::Enter => self
+                .selected_local_agent_inspect_event()
+                .map_or(LocalAgentsKeyResult::Handled, LocalAgentsKeyResult::Emit),
             KeyCode::Esc => {
                 self.close_transient_surface(TransientSurface::LocalAgents);
                 self.mark_dirty();
-                None
+                LocalAgentsKeyResult::Handled
             }
-            _ => None,
+            _ => LocalAgentsKeyResult::NotHandled,
         }
     }
 

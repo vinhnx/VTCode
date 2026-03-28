@@ -166,8 +166,10 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         }
     }
 
-    if let Some(event) = session.handle_local_agents_key(&key) {
-        return Some(event);
+    match session.handle_local_agents_key(&key) {
+        local_agents::LocalAgentsKeyResult::Emit(event) => return Some(event),
+        local_agents::LocalAgentsKeyResult::Handled => return None,
+        local_agents::LocalAgentsKeyResult::NotHandled => {}
     }
 
     if session.inline_lists_visible() && session.handle_agent_palette_key(&key) {

@@ -72,10 +72,18 @@ fn app_session_with_input(input: &str, cursor: usize) -> AppSession {
 }
 
 fn sample_local_agent_entry(kind: app_types::LocalAgentKind) -> LocalAgentEntry {
+    sample_local_agent_entry_with_id("agent-1", "rust-engineer", kind)
+}
+
+fn sample_local_agent_entry_with_id(
+    id: &str,
+    display_label: &str,
+    kind: app_types::LocalAgentKind,
+) -> LocalAgentEntry {
     LocalAgentEntry {
-        id: "agent-1".to_string(),
-        display_label: "rust-engineer".to_string(),
-        agent_name: "rust-engineer".to_string(),
+        id: id.to_string(),
+        display_label: display_label.to_string(),
+        agent_name: display_label.to_string(),
         color: Some("cyan".to_string()),
         kind,
         status: "running".to_string(),
@@ -1425,6 +1433,100 @@ fn new_local_agent_auto_opens_drawer() {
 }
 
 #[test]
+fn local_agents_drawer_hides_input_while_open() {
+    let mut session = app_session_with_input("draft command", "draft command".len());
+
+    session.handle_command(app_types::InlineCommand::SetLocalAgents {
+        entries: vec![sample_local_agent_entry(
+            app_types::LocalAgentKind::Delegated,
+        )],
+    });
+
+    assert!(session.local_agents_visible());
+    assert!(!session.core.input_enabled());
+    assert!(
+        !session
+            .core
+            .build_input_widget_data(VIEW_WIDTH, 1)
+            .cursor_should_be_visible
+    );
+
+    let lines = rendered_app_session_lines(&mut session, 20);
+    assert!(session.core.input_area().is_none());
+    assert!(session.core.bottom_panel_area().is_some());
+    assert!(
+        lines.iter().any(|line| line.contains("Local Agents")),
+        "drawer should still render"
+    );
+    assert!(
+        !lines.iter().any(|line| line.contains("draft command")),
+        "hidden composer should not render draft text"
+    );
+}
+
+#[test]
+fn closing_local_agents_drawer_restores_input_and_draft() {
+    let mut session = app_session_with_input("draft command", "draft command".len());
+
+    session.handle_command(app_types::InlineCommand::SetLocalAgents {
+        entries: vec![sample_local_agent_entry(
+            app_types::LocalAgentKind::Delegated,
+        )],
+    });
+    let _ = rendered_app_session_lines(&mut session, 20);
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+
+    assert!(event.is_none());
+    assert!(!session.local_agents_visible());
+    assert!(session.core.input_enabled());
+    assert!(
+        session
+            .core
+            .build_input_widget_data(VIEW_WIDTH, 1)
+            .cursor_should_be_visible
+    );
+    assert_eq!(session.core.input_manager.content(), "draft command");
+
+    let lines = rendered_app_session_lines(&mut session, 20);
+    assert!(session.core.input_area().is_some());
+    assert!(
+        lines.iter().any(|line| line.contains("draft command")),
+        "composer should re-render its preserved draft"
+    );
+}
+
+#[test]
+fn local_agents_drawer_navigation_works_with_existing_draft() {
+    let mut session = app_session_with_input("draft command", "draft command".len());
+
+    session.handle_command(app_types::InlineCommand::SetLocalAgents {
+        entries: vec![
+            sample_local_agent_entry_with_id(
+                "agent-1",
+                "rust-engineer",
+                app_types::LocalAgentKind::Delegated,
+            ),
+            sample_local_agent_entry_with_id(
+                "agent-2",
+                "qa-reviewer",
+                app_types::LocalAgentKind::Delegated,
+            ),
+        ],
+    });
+
+    let down = session.process_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    assert!(down.is_none());
+
+    let enter = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(matches!(
+        enter,
+        Some(app_types::InlineEvent::Submit(value)) if value == "/agent inspect agent-2"
+    ));
+    assert_eq!(session.core.input_manager.content(), "draft command");
+}
+
+#[test]
 fn new_background_local_agent_does_not_auto_open_drawer() {
     let mut session = app_session_with_input("", 0);
 
@@ -1461,6 +1563,28 @@ fn down_keeps_history_navigation_when_history_is_active() {
     let down = session.process_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     assert!(matches!(down, Some(app_types::InlineEvent::HistoryNext)));
     assert!(!session.local_agents_visible());
+}
+
+#[test]
+fn empty_local_agents_drawer_stays_open_after_last_entry_is_removed() {
+    let mut session = app_session_with_input("", 0);
+    session.handle_command(app_types::InlineCommand::SetLocalAgents {
+        entries: vec![sample_local_agent_entry(
+            app_types::LocalAgentKind::Delegated,
+        )],
+    });
+
+    session.handle_command(app_types::InlineCommand::SetLocalAgents { entries: vec![] });
+
+    assert!(session.local_agents_visible());
+
+    let lines = rendered_app_session_lines(&mut session, 20);
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.contains("No local agents yet")),
+        "drawer should remain visible and show the empty state"
+    );
 }
 
 #[test]

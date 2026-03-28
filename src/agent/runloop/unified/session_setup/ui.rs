@@ -252,24 +252,12 @@ pub(crate) async fn initialize_session_ui(
 
                 loop {
                     interval.tick().await;
-                    let background_entries = match controller_for_subprocesses
-                        .refresh_background_processes()
-                        .await
+                    if let Err(err) =
+                        refresh_local_agents(&handle_for_subprocesses, &controller_for_subprocesses)
+                            .await
                     {
-                        Ok(entries) => entries,
-                        Err(err) => {
-                            tracing::warn!("Failed to refresh background subprocesses: {}", err);
-                            Vec::new()
-                        }
-                    };
-                    let delegated_entries = controller_for_subprocesses.status_entries().await;
-                    let local_agents = build_local_agent_entries(
-                        &controller_for_subprocesses,
-                        delegated_entries,
-                        background_entries,
-                    )
-                    .await;
-                    handle_for_subprocesses.set_local_agents(local_agents);
+                        tracing::warn!("Failed to refresh background subprocesses: {}", err);
+                    }
                 }
             })));
     }
@@ -459,6 +447,18 @@ pub(crate) async fn initialize_session_ui(
         startup_update_notice_rx,
         startup_update_task_guard,
     })
+}
+
+pub(crate) async fn refresh_local_agents(
+    handle: &InlineHandle,
+    controller: &Arc<vtcode_core::subagents::SubagentController>,
+) -> Result<()> {
+    let background_entries = controller.refresh_background_processes().await?;
+    let delegated_entries = controller.status_entries().await;
+    let local_agents =
+        build_local_agent_entries(controller, delegated_entries, background_entries).await;
+    handle.set_local_agents(local_agents);
+    Ok(())
 }
 
 async fn build_local_agent_entries(
