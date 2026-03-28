@@ -2,6 +2,44 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.94.0 - 2026-03-28
+
+### Highlights
+#### Features
+
+- Add hosted shell network policy support (def96551) 
+- Add support for OpenAI service tier "flex" and update related configurations (275f88c8) 
+- Add support for inline file inputs in OpenAI provider and enhance file handling (c07e0ac4) 
+### Other Changes
+#### Other
+
+- Refactor skills system: update documentation, remove version and author fields, streamline validation, and enhance template structure. (e6821250) 
+- Add vtcode-check tool and update related configurations and tests (ae563671) 
+- Remove outdated documentation and improve error messaging format (3f940788) 
+- Remove outdated documentation files and finalize release notes for v0.3.0 (2c2f01d8) 
+- Remove unused dependencies and improve session ID handling in executors (b89fc354) 
+- Refactor recovery handling and improve timeout messaging in execution policy (f0d3f512) 
+- Enhance Responses API support with continuation state management and incremental history handling (0f030292) 
+- Refactor auto mode features and update related configurations (b9843702) 
+- Add diff preview functionality and related utilities (f98e7b7c) 
+- Refactor LLM request retry logic and add previous response chain error handling (0c18e268) 
+- Add support for minimax tool calls and enhance harmony tool parsing (d71bfeb7) 
+- Refactor minimax tool call parsing and add test for invocation without parameters (d50a6bae) 
+- Refactor LLM request retry logic and update provider configuration (b5e47b42) 
+- Refactor tool error handling and retry logic with structured ToolExecutionError (83e1fc97) 
+- Refactor tool error handling to use structured error context (5414b932) 
+- Refactor and consolidate code to reduce duplication across modules (deef3505) 
+- Add subagent controller management to ToolRegistry (c866f9b9) 
+- Add GLM-5.1 model with enhanced capabilities and update references (8b8882f7) 
+- Update .gitignore to include plans directory and tool-policy.json; add Codemod Skill Discovery section to AGENTS.md (67ba167f) 
+- Update TODO (1350cfe5) 
+- Add support for agent references, local agents management, and enhance sidebar rendering (cd51b91d) 
+- Refactor local agents handling and improve UI integration (f3bd979f) 
+#### Refactors
+
+- Unify and streamline agent harness execution (cfcf3b05) 
+### Contributors
+@vinhnx
 ## 0.93.3 - 2026-03-25
 
 ### Highlights
