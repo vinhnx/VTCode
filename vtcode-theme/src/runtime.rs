@@ -7,8 +7,7 @@ use vtcode_config::constants::ui;
 use crate::color_math::{contrast_ratio, ensure_contrast, lighten};
 use crate::registry::theme_definition;
 use crate::types::{
-    ColorAccessibilityConfig, DEFAULT_THEME_ID, ThemeDefinition, ThemeStyles,
-    ThemeValidationResult,
+    ColorAccessibilityConfig, DEFAULT_THEME_ID, ThemeDefinition, ThemeStyles, ThemeValidationResult,
 };
 
 #[derive(Clone, Debug)]
@@ -26,53 +25,66 @@ fn current_color_config() -> ColorAccessibilityConfig {
 
 static ACTIVE: Lazy<RwLock<ActiveTheme>> = Lazy::new(|| {
     let default = theme_definition(DEFAULT_THEME_ID).expect("default theme must exist");
-    let styles = default.palette.build_styles_with_accessibility(&current_color_config());
+    let styles = default
+        .palette
+        .build_styles_with_accessibility(&current_color_config());
     RwLock::new(ActiveTheme {
         definition: default,
         styles,
     })
 });
 
+/// Update the runtime color accessibility configuration.
 pub fn set_color_accessibility_config(config: ColorAccessibilityConfig) {
     *COLOR_CONFIG.write() = config;
 }
 
+/// Return the currently configured minimum contrast ratio.
 pub fn get_minimum_contrast() -> f64 {
     COLOR_CONFIG.read().minimum_contrast
 }
 
+/// Report whether bold text should avoid terminal bright-color behavior.
 pub fn is_bold_bright_mode() -> bool {
     COLOR_CONFIG.read().bold_is_bright
 }
 
+/// Report whether the UI should restrict itself to safe ANSI colors.
 pub fn is_safe_colors_only() -> bool {
     COLOR_CONFIG.read().safe_colors_only
 }
 
+/// Activate a built-in theme by identifier.
 pub fn set_active_theme(theme_id: &str) -> Result<()> {
     let id_lc = theme_id.trim().to_lowercase();
     let theme =
         theme_definition(id_lc.as_str()).ok_or_else(|| anyhow!("Unknown theme '{theme_id}'"))?;
 
-    let styles = theme.palette.build_styles_with_accessibility(&current_color_config());
+    let styles = theme
+        .palette
+        .build_styles_with_accessibility(&current_color_config());
     let mut guard = ACTIVE.write();
     guard.definition = theme;
     guard.styles = styles;
     Ok(())
 }
 
+/// Return the active theme identifier.
 pub fn active_theme_id() -> String {
     ACTIVE.read().definition.id.to_string()
 }
 
+/// Return the active theme label.
 pub fn active_theme_label() -> String {
     ACTIVE.read().definition.label.to_string()
 }
 
+/// Return a clone of the active style set.
 pub fn active_styles() -> ThemeStyles {
     ACTIVE.read().styles.clone()
 }
 
+/// Return a readable accent color for banner-like copy.
 pub fn banner_color() -> RgbColor {
     let guard = ACTIVE.read();
     let accent = guard.definition.palette.logo_accent;
@@ -97,15 +109,18 @@ pub fn banner_color() -> RgbColor {
     )
 }
 
+/// Return a bold banner style derived from the active theme.
 pub fn banner_style() -> Style {
     let accent = banner_color();
     Style::new().fg_color(Some(Color::Rgb(accent))).bold()
 }
 
+/// Return the raw logo accent color from the active theme.
 pub fn logo_accent_color() -> RgbColor {
     ACTIVE.read().definition.palette.logo_accent
 }
 
+/// Resolve a requested theme to a valid built-in identifier or the default.
 pub fn resolve_theme(preferred: Option<String>) -> String {
     preferred
         .and_then(|candidate| {
@@ -121,12 +136,14 @@ pub fn resolve_theme(preferred: Option<String>) -> String {
         .unwrap_or_else(|| DEFAULT_THEME_ID.to_string())
 }
 
+/// Validate that a theme exists and return its label.
 pub fn ensure_theme(theme_id: &str) -> Result<&'static str> {
     theme_definition(theme_id)
         .map(|definition| definition.label)
         .context("Theme not found")
 }
 
+/// Rebuild the active styles after accessibility settings change.
 pub fn rebuild_active_styles() {
     let mut guard = ACTIVE.write();
     guard.styles = guard
@@ -135,6 +152,7 @@ pub fn rebuild_active_styles() {
         .build_styles_with_accessibility(&current_color_config());
 }
 
+/// Validate a theme's base palette contrast ratios.
 pub fn validate_theme_contrast(theme_id: &str) -> ThemeValidationResult {
     let mut result = ThemeValidationResult {
         is_valid: true,

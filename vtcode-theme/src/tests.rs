@@ -60,9 +60,12 @@ fn test_theme_suite_resolution() {
 
 #[test]
 fn test_all_themes_have_readable_foreground_and_accents() {
-    let min_contrast = get_minimum_contrast();
+    let accessibility = ColorAccessibilityConfig::default();
+    let min_contrast = accessibility.minimum_contrast;
     for definition in all_theme_definitions().values() {
-        let styles = definition.palette.build_styles_with_contrast(min_contrast);
+        let styles = definition
+            .palette
+            .build_styles_with_accessibility(&accessibility);
         let bg = definition.palette.background;
 
         for (name, color) in [

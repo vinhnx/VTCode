@@ -890,12 +890,14 @@ pub(crate) fn all_theme_definitions() -> &'static HashMap<&'static str, ThemeDef
     &REGISTRY
 }
 
+/// Return the list of built-in theme identifiers in sorted order.
 pub fn available_themes() -> Vec<&'static str> {
     let mut keys: Vec<_> = REGISTRY.keys().copied().collect();
     keys.sort();
     keys
 }
 
+/// Return the display label for a built-in theme.
 pub fn theme_label(theme_id: &str) -> Option<&'static str> {
     theme_definition(theme_id).map(|definition| definition.label)
 }
@@ -924,14 +926,17 @@ fn suite_label(suite_id: &str) -> Option<&'static str> {
     }
 }
 
+/// Return the logical theme suite identifier for a built-in theme.
 pub fn theme_suite_id(theme_id: &str) -> Option<&'static str> {
     suite_id_for_theme(theme_id)
 }
 
+/// Return the logical theme suite label for a built-in theme.
 pub fn theme_suite_label(theme_id: &str) -> Option<&'static str> {
     suite_id_for_theme(theme_id).and_then(suite_label)
 }
 
+/// Return the built-in theme suites and their member theme identifiers.
 pub fn available_theme_suites() -> Vec<ThemeSuite> {
     const ORDER: &[&str] = &["ciapre", "vitesse", "catppuccin", "mono"];
 

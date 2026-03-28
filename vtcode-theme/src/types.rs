@@ -130,8 +130,8 @@ impl ThemePalette {
             &[lighten(text_color, 0.15), text_color, fallback_light],
         );
         let reasoning_color = balance_text_luminance(reasoning_color, background, min_contrast);
-        let reasoning_style =
-            Self::style_from(reasoning_color, false).effects(Effects::DIMMED | Effects::ITALIC);
+        let reasoning_style = Self::style_from(reasoning_color, false, bold_is_bright)
+            .effects(Effects::DIMMED | Effects::ITALIC);
 
         let user_color = ensure_contrast(
             lighten(secondary, ui::THEME_USER_COLOR_LIGHTEN_RATIO),
