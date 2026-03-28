@@ -2,20 +2,22 @@
   "version": 1,
   "available_tools": [
     "apply_patch",
+    "close_agent",
     "enter_plan_mode",
     "exit_plan_mode",
+    "list_skills",
+    "load_skill",
+    "load_skill_resource",
     "plan_task_tracker",
     "request_user_input",
+    "resume_agent",
+    "send_input",
+    "spawn_agent",
     "task_tracker",
     "unified_exec",
     "unified_file",
     "unified_search",
-    "read_file",
-    "cargo_check",
-    "cargo_test",
-    "git_status",
-    "git_diff",
-    "git_log"
+    "wait_agent"
   ],
   "policies": {
     "apply_patch": "allow",
@@ -27,13 +29,16 @@
     "task_tracker": "allow",
     "unified_exec": "allow",
     "unified_file": "allow",
+    "close_agent": "prompt",
+    "list_skills": "allow",
+    "resume_agent": "prompt",
+    "send_input": "prompt",
+    "spawn_agent": "prompt",
+    "wait_agent": "prompt",
+    "load_skill_resource": "allow",
+    "load_skill": "allow",
     "list_files": "allow",
-    "read_file": "allow",
-    "cargo_check": "allow",
-    "cargo_test": "allow",
-    "git_status": "allow",
-    "git_diff": "allow",
-    "git_log": "allow"
+    "read_file": "allow"
   },
   "constraints": {
     "curl": {

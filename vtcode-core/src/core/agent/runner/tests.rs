@@ -1425,6 +1425,124 @@ async fn duplicate_parallel_tool_names_are_split_into_safe_batches() {
 }
 
 #[tokio::test]
+async fn list_files_and_unified_search_parallel_batch_avoids_reentrancy() {
+    let temp = TempDir::new().expect("tempdir");
+    fs::create_dir_all(temp.path().join("notes")).expect("notes directory");
+    fs::write(temp.path().join("notes/a.txt"), "hello from vt code\n").expect("workspace file");
+    fs::write(temp.path().join("notes/b.txt"), "another line\n").expect("workspace file");
+
+    let mut runner = make_runner(
+        &temp,
+        VTCodeConfig::default(),
+        "thread-list-search-parallel",
+    )
+    .await;
+    runner
+        .enable_full_auto(&[
+            tools::LIST_FILES.to_string(),
+            tools::UNIFIED_SEARCH.to_string(),
+        ])
+        .await;
+
+    let tool_calls = vec![
+        ToolCall::function(
+            "call-list".to_string(),
+            tools::LIST_FILES.to_string(),
+            json!({
+                "path": "notes",
+            })
+            .to_string(),
+        ),
+        ToolCall::function(
+            "call-search".to_string(),
+            tools::UNIFIED_SEARCH.to_string(),
+            json!({
+                "action": "grep",
+                "path": "notes",
+                "pattern": "hello",
+            })
+            .to_string(),
+        ),
+    ];
+
+    let mut runtime = AgentRuntime::new(
+        AgentSessionState::new("session-list-search-parallel".to_string(), 16, 4, 128_000),
+        None,
+        None,
+    );
+    let mut recorder = ExecEventRecorder::new("thread-list-search-parallel", None, None);
+
+    runner
+        .execute_tool_call_batches(
+            tool_calls,
+            &mut runtime,
+            &mut recorder,
+            "[batch]",
+            false,
+            false,
+        )
+        .await
+        .expect("tool execution should finish");
+
+    let tool_outputs = runtime
+        .state
+        .messages
+        .iter()
+        .filter_map(|message| {
+            let id = message.tool_call_id.as_ref()?;
+            let output =
+                serde_json::from_str::<serde_json::Value>(&message.content.as_text()).ok()?;
+            Some((id.as_str(), output))
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(tool_outputs.len(), 2);
+
+    let list_output = tool_outputs
+        .iter()
+        .find_map(|(id, output)| (*id == "call-list").then_some(output))
+        .expect("list_files output");
+    assert_ne!(
+        list_output
+            .pointer("/error/error_type")
+            .and_then(serde_json::Value::as_str),
+        Some("PolicyViolation")
+    );
+    assert_eq!(
+        list_output
+            .get("reentrant_call_blocked")
+            .and_then(serde_json::Value::as_bool),
+        None
+    );
+    assert!(
+        list_output["items"]
+            .as_array()
+            .is_some_and(|items| !items.is_empty())
+    );
+
+    let search_output = tool_outputs
+        .iter()
+        .find_map(|(id, output)| (*id == "call-search").then_some(output))
+        .expect("unified_search output");
+    assert_ne!(
+        search_output
+            .pointer("/error/error_type")
+            .and_then(serde_json::Value::as_str),
+        Some("PolicyViolation")
+    );
+    assert_eq!(
+        search_output
+            .get("reentrant_call_blocked")
+            .and_then(serde_json::Value::as_bool),
+        None
+    );
+    assert!(
+        search_output["matches"]
+            .as_array()
+            .is_some_and(|matches| !matches.is_empty())
+    );
+}
+
+#[tokio::test]
 async fn denied_sequential_tool_halt_returns_promptly() {
     let temp = TempDir::new().expect("tempdir");
     let mut runner = make_runner(&temp, VTCodeConfig::default(), "thread-denied-sequential").await;

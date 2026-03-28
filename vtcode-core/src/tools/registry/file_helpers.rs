@@ -14,6 +14,7 @@ use crate::utils::path::resolve_workspace_path;
 use crate::config::constants::tools;
 use crate::tools::edited_file_monitor::{FILE_CONFLICT_OVERRIDE_ARG, conflict_override_snapshot};
 use crate::tools::grep_file::GrepSearchResult;
+use crate::tools::traits::Tool;
 use crate::tools::types::EditInput;
 
 use super::ToolRegistry;
@@ -312,11 +313,9 @@ impl ToolRegistry {
     }
 
     pub async fn list_files(&self, args: Value) -> Result<Value> {
-        let mut payload = args;
-        if let Some(obj) = payload.as_object_mut() {
-            obj.entry("action".to_string())
-                .or_insert_with(|| json!("list"));
-        }
-        self.execute_tool(tools::UNIFIED_SEARCH, payload).await
+        // Dispatch directly to the underlying list implementation so a top-level
+        // `list_files` call can safely run alongside `unified_search` in the same batch.
+        let tool = self.inventory.file_ops_tool().clone();
+        tool.execute(args).await
     }
 }
