@@ -27,7 +27,7 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/config/config.md`
   - **Content**: VT Code Configuration
-  - **Topics**: Quick navigation, Feature flags, Model selection, Execution environment, Context compaction and session history
+  - **Topics**: Quick navigation, Feature flags, Model selection, Instruction Guidance and Persistent Memory, Execution environment
   - **User Questions**: "What can you tell me about VT Code Configuration?", "How does Quick navigation work?", "How does Feature flags work?"
 
 ### Development & Testing
@@ -225,7 +225,7 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/guides/INIT_COMMAND_GUIDE.md`
   - **Content**: Agent Initialization Guide
-  - **Topics**: Overview, Key Features, Usage, Generated Content Structure, Example Output
+  - **Topics**: Overview, Key Features, Usage, Generated Content Structure, Relationship to Rules and Memory
   - **User Questions**: "What can you tell me about Agent Initialization Guide?", "How does Overview work?", "How does Key Features work?"
 
 - **File**: `docs/guides/agent-loop-contract.md`
@@ -248,15 +248,15 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Activation Checklist, Runtime Behaviour, Customising the Allow-List, Profile File Recommendations
   - **User Questions**: "What can you tell me about Full-Auto Mode?", "How does Activation Checklist work?", "How does Runtime Behaviour work?"
 
+- **File**: `docs/guides/memory-management.md`
+  - **Content**: Guidance and Persistent Memory for VT Code
+  - **Topics**: Authored Guidance, Persistent Memory, Interactive Controls, `/init` and Scaffolding, Recommended Practices
+  - **User Questions**: "What can you tell me about Guidance and Persistent Memory for VT Code?", "How does Authored Guidance work?", "How does Persistent Memory work?"
+
 - **File**: `docs/guides/inline-ui.md`
   - **Content**: Inline UI session architecture
   - **Topics**: Core components, Rendering pipeline, Status line customization
   - **User Questions**: "What can you tell me about Inline UI session architecture?", "How does Core components work?", "How does Rendering pipeline work?"
-
-- **File**: `docs/guides/memory-management.md`
-  - **Content**: Instruction Memory Management for VT Code
-  - **Topics**: Instruction Sources and Precedence, Discovery Algorithm, Maintaining Effective AGENTS.md Files
-  - **User Questions**: "What can you tell me about Instruction Memory Management for VT Code?", "How does Instruction Sources and Precedence work?", "How does Discovery Algorithm work?"
 
 - **File**: `docs/guides/lifecycle-hooks.md`
   - **Content**: Lifecycle Hooks
@@ -684,10 +684,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: For CLI Output, For TUI Widgets, Unified Theme, Color Reference, Common Patterns
   - **User Questions**: "What can you tell me about Styling Quick Start Guide?", "How does For CLI Output work?", "How does For TUI Widgets work?"
 
-- **File**: `docs/project/TODO.md`
-  - **Content**: TODO.md
-  - **User Questions**: "What can you tell me about TODO.md?"
-
 - **File**: `docs/harness/TECH_DEBT_TRACKER.md`
   - **Content**: Tech Debt Tracker
   - **Topics**: Priority Levels, Status Values, Debt Items, How to Add a New Item, How to Resolve an Item
@@ -712,6 +708,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Content**: VT Code Integration of Ratatui FAQ Best Practices
   - **Topics**: Overview, FAQ Topics Applied, New Documentation, Code Comments, Testing Improvements
   - **User Questions**: "What can you tell me about VT Code Integration of Ratatui FAQ Best Practices?", "How does Overview work?", "How does FAQ Topics Applied work?"
+
+- **File**: `docs/project/TODO.md`
+  - **Content**: VT Code Persistent Guidance and Memory
+  - **Topics**: Summary, Key Changes, Public Interfaces, Test Plan, Assumptions
+  - **User Questions**: "What can you tell me about VT Code Persistent Guidance and Memory?", "How does Summary work?", "How does Key Changes work?"
 
 - **File**: `docs/project/project_analysis.md`
   - **Content**: VT Code Project Analysis

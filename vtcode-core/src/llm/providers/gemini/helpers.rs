@@ -960,8 +960,7 @@ fn build_message_parts(message: &Message, model: &str) -> Vec<Part> {
         let is_gemini3 = model.contains("gemini-3");
         for tool_call in tool_calls {
             if let Some(ref func) = tool_call.function {
-                let parsed_args =
-                    serde_json::from_str(&func.arguments).unwrap_or_else(|_| json!({}));
+                let parsed_args = tool_call.parsed_arguments().unwrap_or_else(|_| json!({}));
 
                 let thought_signature = if is_gemini3 && tool_call.thought_signature.is_none() {
                     tracing::trace!(
@@ -1306,7 +1305,7 @@ fn build_interaction_turns(
                     content.push(InteractionContent::FunctionCall {
                         id: tool_call.id.clone(),
                         name: func.name.clone(),
-                        arguments: serde_json::from_str(&func.arguments).unwrap_or(Value::Null),
+                        arguments: tool_call.parsed_arguments().unwrap_or(Value::Null),
                         signature: tool_call.thought_signature.clone(),
                     });
                 }

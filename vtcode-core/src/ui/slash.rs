@@ -37,11 +37,15 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
         // Configuration and settings
         SlashCommandInfo {
             name: "config",
-            description: "Browse settings sections in vtcode.toml",
+            description: "Browse settings sections or focused memory controls (usage: /config [path|memory])",
         },
         SlashCommandInfo {
             name: "permissions",
             description: "Open the permissions settings section and effective summary",
+        },
+        SlashCommandInfo {
+            name: "memory",
+            description: "Show memory status, loaded AGENTS/rules, and quick memory actions",
         },
         SlashCommandInfo {
             name: "vim",

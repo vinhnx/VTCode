@@ -1,4 +1,6 @@
 use anyhow::Result;
+use vtcode_core::commands::init::generate_agents_file;
+use vtcode_core::persistent_memory::scaffold_persistent_memory;
 use vtcode_core::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::slash_commands::WorkspaceDirectoryCommand;
@@ -51,6 +53,43 @@ pub(crate) async fn handle_initialize_workspace(
             ),
         )?;
     }
+
+    match generate_agents_file(ctx.tool_registry, workspace_path.as_path(), force).await {
+        Ok(report) => {
+            ctx.renderer.line(
+                MessageStyle::Info,
+                &format!("AGENTS.md: {}", report.path.display()),
+            )?;
+        }
+        Err(err) => {
+            ctx.renderer.line(
+                MessageStyle::Error,
+                &format!("Failed to scaffold AGENTS.md: {}", err),
+            )?;
+        }
+    }
+
+    let persistent_memory_config = ctx
+        .vt_cfg
+        .as_ref()
+        .map(|cfg| cfg.agent.persistent_memory.clone())
+        .unwrap_or_default();
+    match scaffold_persistent_memory(&persistent_memory_config, workspace_path.as_path()).await {
+        Ok(Some(status)) => {
+            ctx.renderer.line(
+                MessageStyle::Info,
+                &format!("Persistent memory: {}", status.directory.display()),
+            )?;
+        }
+        Ok(None) => {}
+        Err(err) => {
+            ctx.renderer.line(
+                MessageStyle::Error,
+                &format!("Failed to scaffold persistent memory: {}", err),
+            )?;
+        }
+    }
+
     ctx.renderer.line(
         MessageStyle::Info,
         "Indexing workspace context (this may take a moment)...",

@@ -53,9 +53,8 @@ const STRUCTURAL_FORBIDDEN_KEYS: &[&str] = &[
 static AST_GREP_METAVARIABLE_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"\$\$?[A-Za-z_][A-Za-z0-9_]*").expect("ast-grep metavariable regex must compile")
 });
-static ANSI_ESCAPE_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"\x1b\[[0-9;?]*[ -/]*[@-~]").expect("ansi escape regex must compile")
-});
+static ANSI_ESCAPE_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"\x1b\[[0-9;?]*[ -/]*[@-~]").expect("ansi escape regex must compile"));
 static AST_GREP_TEST_RESULT_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"test result:\s*(ok|failed)\.\s*(\d+)\s+passed;\s*(\d+)\s+failed;")
         .expect("ast-grep test summary regex must compile")
@@ -397,9 +396,15 @@ pub async fn execute_structural_search(workspace_root: &Path, args: Value) -> Re
         )
     })?;
     match request.workflow {
-        StructuralWorkflow::Query => execute_structural_query(workspace_root, &request, &ast_grep).await,
-        StructuralWorkflow::Scan => execute_structural_scan(workspace_root, &request, &ast_grep).await,
-        StructuralWorkflow::Test => execute_structural_test(workspace_root, &request, &ast_grep).await,
+        StructuralWorkflow::Query => {
+            execute_structural_query(workspace_root, &request, &ast_grep).await
+        }
+        StructuralWorkflow::Scan => {
+            execute_structural_scan(workspace_root, &request, &ast_grep).await
+        }
+        StructuralWorkflow::Test => {
+            execute_structural_test(workspace_root, &request, &ast_grep).await
+        }
     }
 }
 
@@ -410,7 +415,11 @@ async fn execute_structural_query(
 ) -> Result<Value> {
     let search_path = resolve_search_path(workspace_root, request.requested_path())?;
     if let Some(hint) = preflight_parseable_pattern(request)? {
-        return Ok(build_fragment_result(request, &search_path.display_path, hint));
+        return Ok(build_fragment_result(
+            request,
+            &search_path.display_path,
+            hint,
+        ));
     }
     let command_path = search_path.command_arg.clone();
 
@@ -523,7 +532,11 @@ async fn execute_structural_query(
     } else {
         parse_compact_matches(&output.stdout)?
     };
-    Ok(build_query_result(request, &search_path.display_path, matches))
+    Ok(build_query_result(
+        request,
+        &search_path.display_path,
+        matches,
+    ))
 }
 
 async fn execute_structural_scan(
@@ -634,9 +647,8 @@ fn preflight_parseable_pattern(request: &StructuralSearchRequest) -> Result<Opti
         return Ok(None);
     };
 
-    let (sanitized_pattern, contains_metavariables) = sanitize_pattern_for_tree_sitter(
-        request.pattern().expect("query pattern validated"),
-    );
+    let (sanitized_pattern, contains_metavariables) =
+        sanitize_pattern_for_tree_sitter(request.pattern().expect("query pattern validated"));
     let tree = match parse_source(language, &sanitized_pattern) {
         Ok(tree) => tree,
         Err(_) if contains_metavariables => {
@@ -867,18 +879,10 @@ fn build_scan_summary(findings: &[AstGrepScanFinding], returned: usize, truncate
     let mut by_rule = BTreeMap::new();
 
     for finding in findings {
-        let severity = finding
-            .severity
-            .as_deref()
-            .unwrap_or("unknown")
-            .to_string();
+        let severity = finding.severity.as_deref().unwrap_or("unknown").to_string();
         *by_severity.entry(severity).or_insert(0usize) += 1;
 
-        let rule = finding
-            .rule_id
-            .as_deref()
-            .unwrap_or("unknown")
-            .to_string();
+        let rule = finding.rule_id.as_deref().unwrap_or("unknown").to_string();
         *by_rule.entry(rule).or_insert(0usize) += 1;
     }
 
@@ -1019,7 +1023,10 @@ fn resolve_search_path(workspace_root: &Path, requested_path: &str) -> Result<Re
     })
 }
 
-async fn resolve_config_path(workspace_root: &Path, requested_path: &str) -> Result<ResolvedSearchPath> {
+async fn resolve_config_path(
+    workspace_root: &Path,
+    requested_path: &str,
+) -> Result<ResolvedSearchPath> {
     let candidate = if Path::new(requested_path).is_absolute() {
         PathBuf::from(requested_path)
     } else {
@@ -1096,9 +1103,9 @@ fn summarize_test_output(stdout: &str, passed: bool) -> Value {
 #[cfg(test)]
 mod tests {
     use super::{
-        StructuralSearchRequest, StructuralWorkflow, build_query_result,
-        execute_structural_search, format_ast_grep_failure, normalize_match,
-        preflight_parseable_pattern, sanitize_pattern_for_tree_sitter,
+        StructuralSearchRequest, StructuralWorkflow, build_query_result, execute_structural_search,
+        format_ast_grep_failure, normalize_match, preflight_parseable_pattern,
+        sanitize_pattern_for_tree_sitter,
     };
     use crate::tools::ast_grep_binary::AST_GREP_INSTALL_COMMAND;
     use crate::tools::editing::patch::set_ast_grep_binary_override_for_tests;
@@ -2064,11 +2071,7 @@ mod tests {
     async fn structural_test_returns_stdout_stderr_and_summary() {
         let temp = TempDir::new().expect("workspace tempdir");
         fs::create_dir_all(temp.path().join("config")).expect("create config dir");
-        fs::write(
-            temp.path().join("config/sgconfig.yml"),
-            "ruleDirs: []\n",
-        )
-        .expect("write config");
+        fs::write(temp.path().join("config/sgconfig.yml"), "ruleDirs: []\n").expect("write config");
         let args_path = temp.path().join("sg_args.txt");
         let script = format!(
             "#!/bin/sh\nprintf '%s\n' \"$@\" > \"{}\"\nprintf '\\033[32mRunning 2 tests\\033[0m\nPASS rust/no-iterator-for-each\nFAIL rust/for-each-snapshot\ntest result: failed. 1 passed; 1 failed;\n'\nprintf 'snapshot mismatch\n' >&2\nexit 1\n",
@@ -2094,14 +2097,18 @@ mod tests {
         assert_eq!(result["workflow"], "test");
         assert_eq!(result["config_path"], "config/sgconfig.yml");
         assert_eq!(result["passed"], false);
-        assert!(result["stdout"]
-            .as_str()
-            .expect("stdout")
-            .contains("Running 2 tests"));
-        assert!(result["stderr"]
-            .as_str()
-            .expect("stderr")
-            .contains("snapshot mismatch"));
+        assert!(
+            result["stdout"]
+                .as_str()
+                .expect("stdout")
+                .contains("Running 2 tests")
+        );
+        assert!(
+            result["stderr"]
+                .as_str()
+                .expect("stderr")
+                .contains("snapshot mismatch")
+        );
         assert_eq!(result["summary"]["status"], "failed");
         assert_eq!(result["summary"]["passed_cases"], 1);
         assert_eq!(result["summary"]["failed_cases"], 1);

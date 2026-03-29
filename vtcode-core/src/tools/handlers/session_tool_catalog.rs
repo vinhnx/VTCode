@@ -1341,13 +1341,11 @@ mod tests {
             "schema should keep search refinement inside unified_search"
         );
         assert_eq!(
-            params["properties"]["workflow"]["enum"][1],
-            "scan",
+            params["properties"]["workflow"]["enum"][1], "scan",
             "schema should expose structural scan workflow"
         );
         assert_eq!(
-            params["properties"]["workflow"]["enum"][2],
-            "test",
+            params["properties"]["workflow"]["enum"][2], "test",
             "schema should expose structural test workflow"
         );
         assert!(

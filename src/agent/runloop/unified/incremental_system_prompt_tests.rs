@@ -20,6 +20,7 @@ async fn test_incremental_prompt_caching() {
         prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
         editor_context_block: None,
         active_instruction_directory: None,
+        instruction_context_paths: Vec::new(),
     };
 
     // First call - should build from scratch (includes context section)
@@ -61,6 +62,7 @@ async fn test_incremental_prompt_rebuild() {
         prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
         editor_context_block: None,
         active_instruction_directory: None,
+        instruction_context_paths: Vec::new(),
     };
     // Build initial prompt
     let _ = prompt_builder
@@ -110,6 +112,7 @@ async fn test_cache_friendly_mode_moves_volatile_context_to_runtime_section() {
         prompt_cache_shaping_mode: PromptCacheShapingMode::TrailingRuntimeContext,
         editor_context_block: None,
         active_instruction_directory: None,
+        instruction_context_paths: Vec::new(),
     };
     let context_b = SystemPromptContext {
         conversation_length: 14,
@@ -127,6 +130,7 @@ async fn test_cache_friendly_mode_moves_volatile_context_to_runtime_section() {
         prompt_cache_shaping_mode: PromptCacheShapingMode::TrailingRuntimeContext,
         editor_context_block: None,
         active_instruction_directory: None,
+        instruction_context_paths: Vec::new(),
     };
 
     let prompt_a = prompt_builder
@@ -193,6 +197,7 @@ async fn test_instruction_appendix_uses_explicit_directory_and_precedes_runtime_
         prompt_cache_shaping_mode: PromptCacheShapingMode::TrailingRuntimeContext,
         editor_context_block: None,
         active_instruction_directory: Some(nested.clone()),
+        instruction_context_paths: vec![nested.join("file.rs")],
     };
 
     let prompt = prompt_builder
@@ -236,6 +241,7 @@ async fn test_context_awareness_token_budget_warning() {
         prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
         editor_context_block: None,
         active_instruction_directory: None,
+        instruction_context_paths: Vec::new(),
     };
 
     let prompt = prompt_builder
@@ -267,6 +273,7 @@ async fn test_context_awareness_token_budget_high() {
         prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
         editor_context_block: None,
         active_instruction_directory: None,
+        instruction_context_paths: Vec::new(),
     };
 
     let prompt = prompt_builder
@@ -298,6 +305,7 @@ async fn test_context_awareness_token_budget_critical() {
         prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
         editor_context_block: None,
         active_instruction_directory: None,
+        instruction_context_paths: Vec::new(),
     };
 
     let prompt = prompt_builder
@@ -329,6 +337,7 @@ async fn test_context_awareness_normal_no_guidance() {
         prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
         editor_context_block: None,
         active_instruction_directory: None,
+        instruction_context_paths: Vec::new(),
     };
 
     let prompt = prompt_builder
@@ -362,6 +371,7 @@ async fn test_non_context_aware_model_no_budget_tags() {
         prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
         editor_context_block: None,
         active_instruction_directory: None,
+        instruction_context_paths: Vec::new(),
     };
 
     let prompt = prompt_builder
@@ -392,6 +402,7 @@ async fn test_non_context_aware_model_with_context_window_no_budget_tags() {
         prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
         editor_context_block: None,
         active_instruction_directory: None,
+        instruction_context_paths: Vec::new(),
     };
 
     let prompt = prompt_builder
@@ -423,6 +434,7 @@ async fn test_plan_mode_notice_appended() {
         prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
         editor_context_block: None,
         active_instruction_directory: None,
+        instruction_context_paths: Vec::new(),
     };
 
     let prompt = prompt_builder
@@ -459,6 +471,7 @@ async fn test_full_auto_is_constrained_in_plan_mode() {
         prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
         editor_context_block: None,
         active_instruction_directory: None,
+        instruction_context_paths: Vec::new(),
     };
 
     let prompt = prompt_builder
@@ -492,6 +505,7 @@ async fn test_editor_context_block_is_appended() {
             "## Active Editor Context\n- Active file: src/main.rs\n- Language: Rust".to_string(),
         ),
         active_instruction_directory: None,
+        instruction_context_paths: Vec::new(),
     };
 
     let prompt = prompt_builder
@@ -522,6 +536,7 @@ async fn test_editor_context_changes_invalidate_cached_prompt() {
         prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
         editor_context_block: None,
         active_instruction_directory: None,
+        instruction_context_paths: Vec::new(),
     };
     let context_with_editor = SystemPromptContext {
         editor_context_block: Some(
@@ -578,6 +593,7 @@ async fn test_cache_friendly_editor_context_moves_to_runtime_tail() {
             "## Active Editor Context\n- Active file: src/main.rs\n- Language: Rust".to_string(),
         ),
         active_instruction_directory: None,
+        instruction_context_paths: Vec::new(),
     };
     let context_b = SystemPromptContext {
         editor_context_block: Some(

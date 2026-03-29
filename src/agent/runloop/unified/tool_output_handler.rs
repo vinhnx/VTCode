@@ -1,6 +1,9 @@
+use crate::agent::runloop::git::normalize_workspace_path;
 use crate::agent::runloop::mcp_events::McpPanelState;
 use crate::agent::runloop::unified::state::SessionStats;
 use anyhow::Result;
+use std::collections::BTreeSet;
+use std::path::Path;
 use std::path::PathBuf;
 use vtcode_core::config::constants::tools;
 use vtcode_core::config::loader::VTCodeConfig;
@@ -29,6 +32,84 @@ fn record_mcp_success_event(
 
 fn collect_modified_files(modified_files: &[String]) -> Vec<PathBuf> {
     modified_files.iter().map(PathBuf::from).collect()
+}
+
+fn collect_instruction_activity_paths(
+    workspace_root: &Path,
+    args_val: &serde_json::Value,
+    output: &serde_json::Value,
+    modified_files: &[String],
+) -> Vec<PathBuf> {
+    let mut paths = BTreeSet::new();
+    for modified in modified_files {
+        push_activity_path(workspace_root, modified, &mut paths);
+    }
+    collect_paths_from_value(workspace_root, Some("args"), args_val, &mut paths);
+    collect_paths_from_value(workspace_root, Some("output"), output, &mut paths);
+    paths.into_iter().collect()
+}
+
+fn collect_paths_from_value(
+    workspace_root: &Path,
+    key: Option<&str>,
+    value: &serde_json::Value,
+    paths: &mut BTreeSet<PathBuf>,
+) {
+    match value {
+        serde_json::Value::String(text) => {
+            if key.is_some_and(path_like_key) {
+                push_activity_path(workspace_root, text, paths);
+            }
+        }
+        serde_json::Value::Array(values) => {
+            for value in values {
+                collect_paths_from_value(workspace_root, key, value, paths);
+            }
+        }
+        serde_json::Value::Object(map) => {
+            for (child_key, child_value) in map {
+                collect_paths_from_value(
+                    workspace_root,
+                    Some(child_key.as_str()),
+                    child_value,
+                    paths,
+                );
+            }
+        }
+        serde_json::Value::Null | serde_json::Value::Bool(_) | serde_json::Value::Number(_) => {}
+    }
+}
+
+fn path_like_key(key: &str) -> bool {
+    matches!(
+        key,
+        "path"
+            | "paths"
+            | "file"
+            | "files"
+            | "file_path"
+            | "file_paths"
+            | "cwd"
+            | "workdir"
+            | "directory"
+            | "directories"
+            | "root"
+            | "workspace"
+    )
+}
+
+fn push_activity_path(workspace_root: &Path, raw: &str, paths: &mut BTreeSet<PathBuf>) {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() || trimmed.contains("://") || trimmed.starts_with("untitled:") {
+        return;
+    }
+
+    let normalized = normalize_workspace_path(workspace_root, Path::new(trimmed));
+    let canonical_workspace =
+        std::fs::canonicalize(workspace_root).unwrap_or_else(|_| workspace_root.to_path_buf());
+    if normalized.starts_with(&canonical_workspace) || normalized.starts_with(workspace_root) {
+        paths.insert(normalized);
+    }
 }
 
 fn is_run_pty_tool(name: &str, args_val: &serde_json::Value) -> bool {
@@ -406,7 +487,28 @@ pub(crate) async fn handle_pipeline_output_from_turn_ctx(
     vt_config: Option<&VTCodeConfig>,
 ) -> Result<(Vec<PathBuf>, Option<String>)> {
     let mut run_ctx = ctx.as_run_loop_context();
-    handle_pipeline_output(&mut run_ctx, name, args_val, outcome, vt_config).await
+    let (modified_files, last_stdout) =
+        handle_pipeline_output(&mut run_ctx, name, args_val, outcome, vt_config).await?;
+
+    if let ToolExecutionStatus::Success {
+        output,
+        modified_files,
+        ..
+    } = &outcome.status
+    {
+        let activity_paths = collect_instruction_activity_paths(
+            ctx.config.workspace.as_path(),
+            args_val,
+            output,
+            modified_files,
+        );
+        if !activity_paths.is_empty() {
+            ctx.context_manager
+                .record_instruction_activity_paths(activity_paths);
+        }
+    }
+
+    Ok((modified_files, last_stdout))
 }
 
 #[cfg(test)]

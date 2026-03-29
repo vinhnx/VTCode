@@ -111,7 +111,12 @@ pub(crate) async fn handle_outcome(
             handlers::handle_initialize_workspace(ctx, force).await
         }
         SlashCommandOutcome::ShowSettings => handlers::handle_show_settings(ctx).await,
+        SlashCommandOutcome::ShowSettingsAtPath { path } => {
+            handlers::handle_show_settings_at_path(ctx, Some(&path)).await
+        }
+        SlashCommandOutcome::ShowMemoryConfig => handlers::handle_show_memory_config(ctx).await,
         SlashCommandOutcome::ShowPermissions => handlers::handle_show_permissions(ctx).await,
+        SlashCommandOutcome::ShowMemory => handlers::handle_show_memory(ctx).await,
         SlashCommandOutcome::ClearScreen => handlers::handle_clear_screen(ctx).await,
         SlashCommandOutcome::ClearConversation => handlers::handle_clear_conversation(ctx).await,
         SlashCommandOutcome::CompactConversation => {

@@ -296,6 +296,9 @@ async fn extract_guideline_highlights(
         home_dir: home_dir.as_deref(),
         extra_instruction_files,
         fallback_filenames,
+        exclude_patterns: &[],
+        match_paths: &[],
+        import_max_depth: 5,
         max_bytes,
     })
     .await

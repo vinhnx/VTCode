@@ -141,6 +141,18 @@ pub struct AgentConfig {
     #[serde(default, alias = "instruction_paths", alias = "instructions")]
     pub instruction_files: Vec<String>,
 
+    /// Instruction files or globs to exclude from AGENTS.md and rules discovery
+    #[serde(default)]
+    pub instruction_excludes: Vec<String>,
+
+    /// Maximum recursive `@path` import depth for instruction and rule files
+    #[serde(default = "default_instruction_import_max_depth")]
+    pub instruction_import_max_depth: usize,
+
+    /// Durable per-repository memory for main sessions
+    #[serde(default)]
+    pub persistent_memory: PersistentMemoryConfig,
+
     /// Provider-specific API keys captured from interactive configuration flows
     ///
     /// Note: Actual API keys are stored securely in the OS keyring.
@@ -513,6 +525,9 @@ impl Default for AgentConfig {
             project_doc_fallback_filenames: Vec::new(),
             instruction_max_bytes: default_instruction_max_bytes(),
             instruction_files: Vec::new(),
+            instruction_excludes: Vec::new(),
+            instruction_import_max_depth: default_instruction_import_max_depth(),
+            persistent_memory: PersistentMemoryConfig::default(),
             custom_api_keys: BTreeMap::new(),
             credential_storage_mode: crate::auth::AuthCredentialsStoreMode::default(),
             checkpointing: AgentCheckpointingConfig::default(),
@@ -558,6 +573,12 @@ impl AgentConfig {
                 self.refine_temperature
             ));
         }
+
+        if self.instruction_import_max_depth == 0 {
+            return Err("instruction_import_max_depth must be greater than 0".to_string());
+        }
+
+        self.persistent_memory.validate()?;
 
         Ok(())
     }
@@ -647,6 +668,11 @@ const fn default_project_doc_max_bytes() -> usize {
 #[inline]
 const fn default_instruction_max_bytes() -> usize {
     prompt_budget::DEFAULT_MAX_BYTES
+}
+
+#[inline]
+const fn default_instruction_import_max_depth() -> usize {
+    5
 }
 
 #[inline]
@@ -768,6 +794,76 @@ const fn default_checkpointing_max_snapshots() -> usize {
 #[inline]
 const fn default_checkpointing_max_age_days() -> Option<u64> {
     Some(DEFAULT_MAX_AGE_DAYS)
+}
+
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PersistentMemoryConfig {
+    /// Toggle main-session persistent memory for this repository
+    #[serde(default = "default_persistent_memory_enabled")]
+    pub enabled: bool,
+
+    /// Write durable memory after completed turns and session finalization
+    #[serde(default = "default_persistent_memory_auto_write")]
+    pub auto_write: bool,
+
+    /// Optional user-local directory override for persistent memory storage
+    #[serde(default)]
+    pub directory_override: Option<String>,
+
+    /// Startup line budget loaded from memory_summary.md
+    #[serde(default = "default_persistent_memory_startup_line_limit")]
+    pub startup_line_limit: usize,
+
+    /// Startup byte budget loaded from memory_summary.md
+    #[serde(default = "default_persistent_memory_startup_byte_limit")]
+    pub startup_byte_limit: usize,
+}
+
+impl Default for PersistentMemoryConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_persistent_memory_enabled(),
+            auto_write: default_persistent_memory_auto_write(),
+            directory_override: None,
+            startup_line_limit: default_persistent_memory_startup_line_limit(),
+            startup_byte_limit: default_persistent_memory_startup_byte_limit(),
+        }
+    }
+}
+
+impl PersistentMemoryConfig {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.startup_line_limit == 0 {
+            return Err("persistent_memory.startup_line_limit must be greater than 0".to_string());
+        }
+
+        if self.startup_byte_limit == 0 {
+            return Err("persistent_memory.startup_byte_limit must be greater than 0".to_string());
+        }
+
+        Ok(())
+    }
+}
+
+#[inline]
+const fn default_persistent_memory_enabled() -> bool {
+    false
+}
+
+#[inline]
+const fn default_persistent_memory_auto_write() -> bool {
+    true
+}
+
+#[inline]
+const fn default_persistent_memory_startup_line_limit() -> usize {
+    200
+}
+
+#[inline]
+const fn default_persistent_memory_startup_byte_limit() -> usize {
+    25 * 1024
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -937,6 +1033,10 @@ pub struct AgentSmallModelConfig {
     /// Enable small model for git history processing
     #[serde(default = "default_small_model_for_git_history")]
     pub use_for_git_history: bool,
+
+    /// Enable small model for persistent memory classification and summary refresh
+    #[serde(default = "default_small_model_for_memory")]
+    pub use_for_memory: bool,
 }
 
 impl Default for AgentSmallModelConfig {
@@ -948,6 +1048,7 @@ impl Default for AgentSmallModelConfig {
             use_for_large_reads: default_small_model_for_large_reads(),
             use_for_web_summary: default_small_model_for_web_summary(),
             use_for_git_history: default_small_model_for_git_history(),
+            use_for_memory: default_small_model_for_memory(),
         }
     }
 }
@@ -974,6 +1075,11 @@ const fn default_small_model_for_web_summary() -> bool {
 
 #[inline]
 const fn default_small_model_for_git_history() -> bool {
+    true
+}
+
+#[inline]
+const fn default_small_model_for_memory() -> bool {
     true
 }
 
@@ -1290,6 +1396,13 @@ mod tests {
         assert_eq!(config.default_editing_mode, EditingMode::Edit);
         assert!(config.require_plan_confirmation);
         assert!(!config.autonomous_mode);
+    }
+
+    #[test]
+    fn test_persistent_memory_is_disabled_by_default() {
+        let config = AgentConfig::default();
+        assert!(!config.persistent_memory.enabled);
+        assert!(config.persistent_memory.auto_write);
     }
 
     #[test]

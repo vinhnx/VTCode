@@ -3951,6 +3951,25 @@ fn header_shows_pr_review_status_badge() {
 }
 
 #[test]
+fn header_shows_persistent_memory_status_badge() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.header_context.persistent_memory = Some(InlineHeaderStatusBadge {
+        text: "Memory: cleanup".to_string(),
+        tone: InlineHeaderStatusTone::Warning,
+    });
+
+    let line = session.header_meta_line();
+    let badge_span = line
+        .spans
+        .iter()
+        .find(|span| span.content.as_ref() == "Memory: cleanup")
+        .expect("persistent memory badge span");
+
+    assert_eq!(badge_span.style.fg, Some(Color::Yellow));
+    assert!(badge_span.style.add_modifier.contains(Modifier::BOLD));
+}
+
+#[test]
 fn header_shows_active_subagent_badge_with_full_background() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.header_context.subagent_badges = vec![InlineHeaderBadge {
@@ -4133,6 +4152,23 @@ fn header_highlight_summary_hides_truncated_command_segments() {
     assert!(summary.contains("(+3 more)"));
     assert!(!summary.contains("Escape"));
     assert!(!summary.contains(ui::INLINE_PREVIEW_ELLIPSIS));
+}
+
+#[test]
+fn header_suggestions_show_memory_shortcut_when_enabled() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.header_context.persistent_memory = Some(InlineHeaderStatusBadge {
+        text: "Memory: auto".to_string(),
+        tone: InlineHeaderStatusTone::Ready,
+    });
+
+    let line = session
+        .header_suggestions_line()
+        .expect("header suggestions line");
+    let summary = line_text(&line);
+
+    assert!(summary.contains("/memory"));
+    assert!(summary.contains("Memory"));
 }
 
 #[test]

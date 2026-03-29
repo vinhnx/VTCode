@@ -61,7 +61,7 @@ impl<'a> InlineInterruptCoordinator<'a> {
         renderer.line_if_not_empty(MessageStyle::Output)?;
         renderer.line(
             MessageStyle::Info,
-            "Interrupt received. Stopping task... (Press Esc, Ctrl+C, or /stop again within 2s to exit)",
+            "Interrupt received. Stopping task... (Press Esc, Ctrl+C, or /stop again within 1s to exit)",
         )?;
         handle.clear_input();
         handle.set_placeholder(Some(

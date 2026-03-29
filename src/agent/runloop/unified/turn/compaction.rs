@@ -13,6 +13,9 @@ use vtcode_core::core::agent::harness_artifacts::{
 };
 use vtcode_core::hooks::LifecycleHookEngine;
 use vtcode_core::llm::provider::{LLMProvider, Message, MessageRole};
+use vtcode_core::persistent_memory::{
+    GroundedFactRecord, dedup_latest_facts, normalize_whitespace, truncate_for_fact,
+};
 
 use crate::agent::runloop::unified::context_manager::ContextManager;
 use crate::agent::runloop::unified::inline_events::harness::{
@@ -109,12 +112,6 @@ impl<'a> CompactionState<'a> {
 struct CompactionPlan {
     trigger: vtcode_core::exec::events::CompactionTrigger,
     envelope_mode: CompactionEnvelopeMode,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub(crate) struct GroundedFactRecord {
-    pub fact: String,
-    pub source: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -295,10 +292,6 @@ fn extract_compaction_summary(compacted: &[Message], original_history: &[Message
     }
 }
 
-fn normalize_whitespace(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
 fn sanitize_session_id(session_id: &str) -> String {
     session_id
         .chars()
@@ -318,118 +311,6 @@ fn memory_envelope_file_matches_session(name: &str, session_id: &str) -> bool {
     name == format!("{session_prefix}{MEMORY_ENVELOPE_SUFFIX}")
         || (name.starts_with(&format!("{session_prefix}_"))
             && name.ends_with(MEMORY_ENVELOPE_SUFFIX))
-}
-
-fn truncate_for_fact(text: &str, max_chars: usize) -> String {
-    let trimmed = text.trim();
-    if trimmed.chars().count() <= max_chars {
-        return trimmed.to_string();
-    }
-
-    let truncated = trimmed
-        .chars()
-        .take(max_chars.saturating_sub(3))
-        .collect::<String>();
-    format!("{truncated}...")
-}
-
-fn maybe_extract_tool_fact(message: &Message) -> Option<GroundedFactRecord> {
-    if message.role != MessageRole::Tool {
-        return None;
-    }
-
-    let tool_name = message.origin_tool.as_deref().unwrap_or("tool");
-    let text = message.content.as_text();
-    let raw = text.trim();
-    if raw.is_empty() {
-        return None;
-    }
-
-    let candidate = serde_json::from_str::<Value>(raw)
-        .ok()
-        .and_then(|value| {
-            if value.get("error").is_some() || value.get("success") == Some(&Value::Bool(false)) {
-                return None;
-            }
-
-            for key in ["summary", "message", "result", "output", "stdout"] {
-                if let Some(value) = value.get(key) {
-                    if let Some(text) = value.as_str() {
-                        let normalized = normalize_whitespace(text);
-                        if !normalized.is_empty() {
-                            return Some(normalized);
-                        }
-                    } else if !value.is_null() {
-                        let normalized = normalize_whitespace(&value.to_string());
-                        if !normalized.is_empty() {
-                            return Some(normalized);
-                        }
-                    }
-                }
-            }
-
-            let compact = normalize_whitespace(&value.to_string());
-            (!compact.is_empty()).then_some(compact)
-        })
-        .or_else(|| {
-            let lowered = raw.to_ascii_lowercase();
-            if lowered.contains("error")
-                || lowered.contains("failed")
-                || lowered.contains("denied")
-                || lowered.contains("timeout")
-            {
-                return None;
-            }
-            Some(normalize_whitespace(raw))
-        })?;
-
-    Some(GroundedFactRecord {
-        fact: truncate_for_fact(&candidate, 180),
-        source: format!("tool:{tool_name}"),
-    })
-}
-
-fn maybe_extract_user_fact(message: &Message) -> Option<GroundedFactRecord> {
-    if message.role != MessageRole::User {
-        return None;
-    }
-
-    let text = normalize_whitespace(message.content.as_text().as_ref());
-    if text.is_empty() {
-        return None;
-    }
-
-    let lowered = text.to_ascii_lowercase();
-    let looks_explicit = lowered.contains("remember")
-        || lowered.contains("note that")
-        || lowered.starts_with("important:")
-        || lowered.starts_with("i am ")
-        || lowered.starts_with("i'm ")
-        || lowered.starts_with("my ");
-    looks_explicit.then(|| GroundedFactRecord {
-        fact: truncate_for_fact(&text, 180),
-        source: "user_assertion".to_string(),
-    })
-}
-
-fn dedup_latest_facts(history: &[Message]) -> Vec<GroundedFactRecord> {
-    let mut facts = Vec::new();
-    for message in history {
-        if let Some(fact) =
-            maybe_extract_tool_fact(message).or_else(|| maybe_extract_user_fact(message))
-        {
-            let normalized = normalize_whitespace(&fact.fact).to_ascii_lowercase();
-            if let Some(existing_idx) = facts.iter().position(|entry: &GroundedFactRecord| {
-                normalize_whitespace(&entry.fact).to_ascii_lowercase() == normalized
-            }) {
-                facts.remove(existing_idx);
-            }
-            facts.push(fact);
-        }
-    }
-
-    let keep_from = facts.len().saturating_sub(5);
-    facts.into_iter().skip(keep_from).collect()
 }
 
 fn read_task_summary(workspace_root: &Path) -> Option<String> {
@@ -597,7 +478,7 @@ fn merge_grounded_facts(
         .map(|envelope| envelope.grounded_facts.clone())
         .unwrap_or_default();
 
-    for fact in dedup_latest_facts(original_history) {
+    for fact in dedup_latest_facts(original_history, 5) {
         let normalized = normalize_whitespace(&fact.fact).to_ascii_lowercase();
         if let Some(existing_idx) = merged
             .iter()
@@ -1980,7 +1861,7 @@ mod tests {
             Message::user("Remember I prefer concise answers.".to_string()),
         ];
 
-        let facts = super::dedup_latest_facts(&history);
+        let facts = super::dedup_latest_facts(&history, 5);
         assert_eq!(facts.len(), 2);
         assert!(facts.iter().any(|fact| fact.source == "tool:read_file"));
         assert!(facts.iter().any(|fact| fact.source == "user_assertion"));

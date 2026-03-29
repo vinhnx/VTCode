@@ -1024,6 +1024,21 @@ impl AgentRunner {
                 ));
             }
 
+            let runtime_agent_config = self.core_agent_config();
+            if let Err(err) = crate::persistent_memory::finalize_persistent_memory(
+                &runtime_agent_config,
+                Some(self.config()),
+                &runtime.state.messages,
+            )
+            .await
+            {
+                warn!(
+                    error = %err,
+                    session_id = %self.session_id,
+                    "Failed to update persistent memory"
+                );
+            }
+
             if runtime.state.outcome.is_hard_block() || should_write_blocked_handoff {
                 let relevant_paths = existing_harness_artifact_paths(&self._workspace);
                 match write_blocked_handoff(

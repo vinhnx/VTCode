@@ -486,6 +486,23 @@ impl Session {
 
         if let Some(badge) = self
             .header_context
+            .persistent_memory
+            .as_ref()
+            .filter(|badge| !badge.text.trim().is_empty())
+        {
+            if !first_section {
+                spans.push(Span::styled(
+                    ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
+                    self.header_secondary_style(),
+                ));
+            }
+            let style = header_status_badge_style(badge, self.header_primary_style());
+            spans.push(Span::styled(badge.text.clone(), style));
+            first_section = false;
+        }
+
+        if let Some(badge) = self
+            .header_context
             .pr_review
             .as_ref()
             .filter(|badge| !badge.text.trim().is_empty())
@@ -699,6 +716,18 @@ impl Session {
                 self.header_primary_style().add_modifier(Modifier::BOLD),
             ));
             spans.push(Span::styled(" Background", self.header_secondary_style()));
+        }
+
+        if self.header_context.persistent_memory.is_some() {
+            spans.push(Span::styled(
+                "  |  ",
+                self.header_secondary_style().add_modifier(Modifier::DIM),
+            ));
+            spans.push(Span::styled(
+                "/memory",
+                self.header_primary_style().add_modifier(Modifier::BOLD),
+            ));
+            spans.push(Span::styled(" Memory", self.header_secondary_style()));
         }
 
         Some(Line::from(spans))

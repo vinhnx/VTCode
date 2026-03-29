@@ -39,7 +39,7 @@ use crate::agent::runloop::unified::turn::session::direct_tool_completion::{
     ReplyKind, generate_completion_reply_with_suggestions,
 };
 use crate::agent::runloop::unified::turn::session::{
-    mcp_lifecycle, slash_command_handler, tool_dispatch,
+    mcp_lifecycle, memory_prompt, slash_command_handler, tool_dispatch,
 };
 use vtcode_config::loader::SimpleConfigWatcher;
 
@@ -1016,6 +1016,12 @@ pub(super) async fn run_interaction_loop_impl(
             {
                 return Ok(outcome);
             }
+        }
+
+        if let Some(outcome) =
+            memory_prompt::handle_memory_prompt(input_owned.as_str(), ctx, state).await?
+        {
+            return Ok(outcome);
         }
 
         if ctx

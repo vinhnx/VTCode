@@ -46,6 +46,14 @@ pub(crate) async fn handle_launch_editor(
     ctx: SlashCommandContext<'_>,
     file: Option<String>,
 ) -> Result<SlashCommandControl> {
+    let mut ctx = ctx;
+    launch_editor_from_context(&mut ctx, file).await
+}
+
+pub(crate) async fn launch_editor_from_context(
+    ctx: &mut SlashCommandContext<'_>,
+    file: Option<String>,
+) -> Result<SlashCommandControl> {
     use std::path::PathBuf;
     use vtcode_core::tools::terminal_app::{EditorLaunchConfig, TerminalAppLauncher};
 

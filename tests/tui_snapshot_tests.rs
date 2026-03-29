@@ -52,6 +52,7 @@ fn test_header_context_snapshot() {
         subagent_badges: vec![],
         version: "0.37.1".to_string(),
         search_tools: None,
+        persistent_memory: None,
         pr_review: None,
         editor_context: None,
         editing_mode: EditingMode::default(),

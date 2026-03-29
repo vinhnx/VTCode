@@ -88,6 +88,7 @@ fn test_header_context_rendering() {
         context_window_size: None,
         version: "0.37.1".to_string(),
         search_tools: None,
+        persistent_memory: None,
         pr_review: None,
         git: "main branch".to_string(),
         mode: "interactive".to_string(),

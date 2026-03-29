@@ -217,6 +217,11 @@ impl VTCodeConfig {
             .validate()
             .context("Invalid prompt_cache configuration")?;
 
+        self.agent
+            .validate_llm_params()
+            .map_err(anyhow::Error::msg)
+            .context("Invalid agent configuration")?;
+
         self.ui
             .keyboard_protocol
             .validate()
@@ -294,9 +299,11 @@ impl VTCodeConfig {
             &config_file_name,
             defaults_provider,
         )?;
+        let rules_readme_path = workspace.join(".vtcode").join("rules").join("README.md");
 
         crate::loader::bootstrap::ensure_parent_dir(&config_path)?;
         crate::loader::bootstrap::ensure_parent_dir(&gitignore_path)?;
+        crate::loader::bootstrap::ensure_parent_dir(&rules_readme_path)?;
 
         let mut created_files = Vec::new();
 
@@ -324,6 +331,17 @@ impl VTCodeConfig {
             if let Some(file_name) = gitignore_path.file_name().and_then(|name| name.to_str()) {
                 created_files.push(file_name.to_string());
             }
+        }
+
+        if !rules_readme_path.exists() || force {
+            let rules_readme = Self::default_rules_readme_template();
+            fs::write(&rules_readme_path, rules_readme).with_context(|| {
+                format!(
+                    "Failed to write rules README: {}",
+                    rules_readme_path.display()
+                )
+            })?;
+            created_files.push(".vtcode/rules/README.md".to_string());
         }
 
         Ok(created_files)
@@ -432,6 +450,30 @@ instruction_max_bytes = 16384
 
 # List of additional instruction files to include in context
 instruction_files = []
+
+# Instruction files or globs to exclude from AGENTS/rules discovery
+instruction_excludes = []
+
+# Maximum recursive @import depth for instruction and rule files
+instruction_import_max_depth = 5
+
+# Durable per-repository memory for main sessions
+[agent.persistent_memory]
+enabled = false
+auto_write = true
+# directory_override = "/absolute/user-local/path"
+startup_line_limit = 200
+startup_byte_limit = 25600
+
+# Lightweight model helpers for lower-cost side tasks
+[agent.small_model]
+enabled = true
+model = ""
+temperature = 0.3
+use_for_large_reads = true
+use_for_web_summary = true
+use_for_git_history = true
+use_for_memory = true
 
 # Default editing mode on startup: "edit" or "plan"
 # "edit" - Full tool access for file modifications and command execution (default)
@@ -951,6 +993,11 @@ target/, build/, dist/, node_modules/, vendor/
     }
 
     #[cfg(feature = "bootstrap")]
+    fn default_rules_readme_template() -> &'static str {
+        "# VT Code Rules\n\nPlace shared VT Code instruction files here.\n\n- Add always-on rules as `*.md` files anywhere under `.vtcode/rules/`.\n- Add path-scoped rules with YAML frontmatter, for example:\n\n```md\n---\npaths:\n  - \"src/**/*.rs\"\n---\n\n# Rust Rules\n- Keep changes surgical.\n```\n"
+    }
+
+    #[cfg(feature = "bootstrap")]
     /// Create sample configuration file
     pub fn create_sample_config<P: AsRef<Path>>(output: P) -> Result<()> {
         let output = output.as_ref();
@@ -960,5 +1007,28 @@ target/, build/, dist/, node_modules/, vendor/
             .with_context(|| format!("Failed to write config file: {}", output.display()))?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::VTCodeConfig;
+    use tempfile::tempdir;
+
+    #[cfg(feature = "bootstrap")]
+    #[test]
+    fn bootstrap_project_creates_rules_readme() {
+        let workspace = tempdir().expect("workspace");
+        let created = VTCodeConfig::bootstrap_project(workspace.path(), false)
+            .expect("bootstrap project should succeed");
+
+        assert!(
+            created
+                .iter()
+                .any(|entry| entry == ".vtcode/rules/README.md"),
+            "created files: {:?}",
+            created
+        );
+        assert!(workspace.path().join(".vtcode/rules/README.md").exists());
     }
 }

@@ -293,7 +293,7 @@ pub(crate) fn show_fork_mode_palette(
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn refresh_runtime_config_from_manager(
+pub(crate) async fn refresh_runtime_config_from_manager(
     renderer: &mut AnsiRenderer,
     handle: &InlineHandle,
     config: &mut vtcode_core::config::types::AgentConfig,

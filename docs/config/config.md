@@ -8,6 +8,7 @@ VT Code uses a configuration file named `vtcode.toml` that can be placed at the 
 
 - [Feature flags](#feature-flags)
 - [Model selection](#model-selection)
+- [Instruction guidance and memory](#instruction-guidance-and-persistent-memory)
 - [Execution environment](#execution-environment)
 - [MCP integration](#mcp-integration)
 - [Security and approvals](#security-and-approvals)
@@ -142,6 +143,69 @@ max_output_tokens = 4096   # Maximum tokens for model output
 temperature = 0.7          # Model temperature (0.0-2.0)
 top_p = 0.9                # Top-P sampling parameter
 ```
+
+## Instruction Guidance and Persistent Memory
+
+VT Code separates authored guidance from learned persistent memory.
+
+- Authored guidance comes from `AGENTS.md`, `.vtcode/rules/`, and any extra instruction files you configure.
+- Persistent memory is a per-repository memory store injected after authored guidance at startup.
+
+### Instruction discovery controls
+
+Use these fields to control how VT Code discovers and expands guidance files:
+
+```toml
+[agent]
+instruction_files = ["docs/runbooks/**/*.md"]
+instruction_excludes = ["**/other-team/.vtcode/rules/**"]
+instruction_import_max_depth = 5
+```
+
+- `instruction_files` adds explicit files or globs to the authored-guidance bundle.
+- `instruction_excludes` removes matching `AGENTS.md` or `.vtcode/rules/` files from discovery.
+- `instruction_import_max_depth` limits recursive `@path` imports inside guidance files.
+
+Workspace rules live under `.vtcode/rules/`. Rules without frontmatter are always loaded. Rules with YAML `paths` frontmatter are loaded only when the current instruction context matches those paths.
+
+### Persistent memory controls
+
+Persistent memory uses `memory_summary.md` for startup injection and stores the durable registry under the repository memory directory.
+
+By default, that directory is `~/.vtcode/projects/<project>/memory/`. VT Code also migrates older per-repository memory directories from the legacy config root into `~/.vtcode` when it resolves repository memory.
+
+```toml
+[agent.persistent_memory]
+enabled = false
+auto_write = true
+startup_line_limit = 200
+startup_byte_limit = 25600
+
+[agent.small_model]
+use_for_memory = true
+```
+
+- `agent.persistent_memory.enabled` turns per-repository persistent memory on or off. It defaults to `false`.
+- `agent.persistent_memory.auto_write` controls whether VT Code stages and consolidates rollout summaries at session finalization.
+- `startup_line_limit` and `startup_byte_limit` cap the excerpt loaded from `memory_summary.md`.
+- `agent.small_model.use_for_memory` enables small-model routing for memory planning, classification, cleanup, and summary refresh.
+
+Memory mutation is LLM-assisted only:
+
+- natural-language `remember` / `forget` requests require a valid structured planner response
+- session-finalization memory writes use the same LLM-assisted normalization path
+- VT Code blocks the mutation instead of falling back to a plain or heuristic-only write when the memory LLM route is unavailable
+
+`agent.persistent_memory.directory_override` is supported, but it may only be set from system, user, or project-profile config layers. A workspace-root `vtcode.toml` cannot redirect memory storage.
+
+### Interactive controls
+
+You can manage this feature without editing TOML directly:
+
+- `/memory` shows loaded `AGENTS.md` sources, matched rules, memory files, pending rollout summaries, and quick actions.
+- `/memory` also reports whether one-time legacy cleanup is required and can run that cleanup explicitly.
+- `/config memory` jumps directly to the `agent.persistent_memory` settings section.
+- `/config agent.persistent_memory` reaches the same section with the full path.
 
 ### OpenAI hosted shell skills
 

@@ -289,6 +289,11 @@ fn parse_tool_arguments(raw_arguments: &str) -> Result<serde_json::Value, serde_
             {
                 return Ok(parsed);
             }
+            if let Some(candidate) = repair_tag_polluted_json(trimmed)
+                && let Ok(parsed) = serde_json::from_str(&candidate)
+            {
+                return Ok(parsed);
+            }
             Err(primary_error)
         }
     }
@@ -338,6 +343,89 @@ fn extract_balanced_json(input: &str) -> Option<&str> {
     }
 
     None
+}
+
+fn repair_tag_polluted_json(input: &str) -> Option<String> {
+    let start = input.find(['{', '['])?;
+    let candidate = input.get(start..)?;
+    let boundary = find_provider_markup_boundary(candidate)?;
+    if boundary == 0 {
+        return None;
+    }
+
+    close_incomplete_json_prefix(candidate[..boundary].trim_end())
+}
+
+fn find_provider_markup_boundary(input: &str) -> Option<usize> {
+    const PROVIDER_MARKERS: &[&str] = &[
+        "<</",
+        "</parameter>",
+        "</invoke>",
+        "</minimax:tool_call>",
+        "<minimax:tool_call>",
+        "<parameter name=\"",
+        "<invoke name=\"",
+        "<tool_call>",
+        "</tool_call>",
+    ];
+
+    input.char_indices().find_map(|(offset, _)| {
+        let rest = input.get(offset..)?;
+        PROVIDER_MARKERS
+            .iter()
+            .any(|marker| rest.starts_with(marker))
+            .then_some(offset)
+    })
+}
+
+fn close_incomplete_json_prefix(prefix: &str) -> Option<String> {
+    if prefix.is_empty() {
+        return None;
+    }
+
+    let mut repaired = String::with_capacity(prefix.len() + 8);
+    let mut expected_closers = Vec::new();
+    let mut in_string = false;
+    let mut escaped = false;
+
+    for ch in prefix.chars() {
+        repaired.push(ch);
+
+        if in_string {
+            if escaped {
+                escaped = false;
+                continue;
+            }
+
+            match ch {
+                '\\' => escaped = true,
+                '"' => in_string = false,
+                _ => {}
+            }
+            continue;
+        }
+
+        match ch {
+            '"' => in_string = true,
+            '{' => expected_closers.push('}'),
+            '[' => expected_closers.push(']'),
+            '}' | ']' => {
+                if expected_closers.pop() != Some(ch) {
+                    return None;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if in_string {
+        repaired.push('"');
+    }
+    while let Some(closer) = expected_closers.pop() {
+        repaired.push(closer);
+    }
+
+    Some(repaired)
 }
 
 /// Universal LLM response structure
@@ -507,6 +595,27 @@ mod tests {
         );
 
         assert!(call.parsed_arguments().is_err());
+    }
+
+    #[test]
+    fn parsed_arguments_recovers_truncated_minimax_markup() {
+        let call = ToolCall::function(
+            "call_search".to_string(),
+            "unified_search".to_string(),
+            "{\"action\": \"grep\", \"pattern\": \"persistent_memory\", \"path\": \"vtcode-core/src</parameter>\n<</invoke>\n</minimax:tool_call>".to_string(),
+        );
+
+        let parsed = call
+            .parsed_arguments()
+            .expect("minimax markup spillover should recover");
+        assert_eq!(
+            parsed,
+            json!({
+                "action": "grep",
+                "pattern": "persistent_memory",
+                "path": "vtcode-core/src"
+            })
+        );
     }
 
     #[test]

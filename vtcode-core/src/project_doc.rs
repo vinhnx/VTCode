@@ -4,16 +4,21 @@ use anyhow::{Context, Result};
 use serde::Serialize;
 
 use crate::instructions::{
-    InstructionBundle, InstructionSegment, extract_instruction_highlights, format_instruction_path,
-    read_instruction_bundle, render_instruction_summary_markdown,
+    InstructionBundle, InstructionDiscoveryOptions, InstructionSegment,
+    extract_instruction_highlights, format_instruction_path, read_instruction_bundle,
+    render_instruction_summary_markdown,
 };
+use crate::persistent_memory::{PersistentMemoryExcerpt, read_persistent_memory_excerpt};
 use crate::skills::model::SkillMetadata;
 use crate::utils::file_utils::canonicalize_with_context;
 use vtcode_config::core::AgentConfig;
 
 pub const PROJECT_DOC_SEPARATOR: &str = "\n\n--- project-doc ---\n\n";
+pub const PERSISTENT_MEMORY_SEPARATOR: &str = "\n\n--- persistent-memory ---\n\n";
 const PROJECT_DOC_SUMMARY_TITLE: &str = "PROJECT DOCUMENTATION";
 const PROJECT_DOC_TRUNCATION_NOTE: &str = "Some instruction files exceeded the configured prompt budget and were indexed instead of fully inlined.";
+const PERSISTENT_MEMORY_TRUNCATION_NOTE: &str =
+    "Persistent memory was truncated to the configured startup excerpt budget.";
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ProjectDocBundle {
@@ -36,7 +41,19 @@ pub struct ProjectDocOptions<'a> {
     pub home_dir: Option<&'a Path>,
     pub extra_instruction_files: &'a [String],
     pub fallback_filenames: &'a [String],
+    pub exclude_patterns: &'a [String],
+    pub match_paths: &'a [PathBuf],
+    pub import_max_depth: usize,
     pub max_bytes: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct InstructionAppendixBundle {
+    pub contents: String,
+    pub project_doc: Option<ProjectDocBundle>,
+    pub persistent_memory: Option<PersistentMemoryExcerpt>,
+    pub project_root: PathBuf,
+    pub home_dir: Option<PathBuf>,
 }
 
 pub async fn read_project_doc_with_options(
@@ -47,11 +64,16 @@ pub async fn read_project_doc_with_options(
     }
 
     match read_instruction_bundle(
-        options.current_dir,
-        options.project_root,
-        options.home_dir,
-        options.extra_instruction_files,
-        options.fallback_filenames,
+        &InstructionDiscoveryOptions {
+            current_dir: options.current_dir,
+            project_root: options.project_root,
+            home_dir: options.home_dir,
+            extra_patterns: options.extra_instruction_files,
+            fallback_filenames: options.fallback_filenames,
+            exclude_patterns: options.exclude_patterns,
+            match_paths: options.match_paths,
+            import_max_depth: options.import_max_depth,
+        },
         options.max_bytes,
     )
     .await?
@@ -75,6 +97,9 @@ pub async fn read_project_doc(cwd: &Path, max_bytes: usize) -> Result<Option<Pro
         home_dir: home_dir.as_deref(),
         extra_instruction_files: &[],
         fallback_filenames: &[],
+        exclude_patterns: &[],
+        match_paths: &[],
+        import_max_depth: 5,
         max_bytes,
     })
     .await
@@ -89,6 +114,24 @@ pub async fn get_user_instructions(
 }
 
 pub async fn build_instruction_appendix(config: &AgentConfig, active_dir: &Path) -> Option<String> {
+    build_instruction_appendix_with_context(config, active_dir, &[]).await
+}
+
+pub async fn build_instruction_appendix_with_context(
+    config: &AgentConfig,
+    active_dir: &Path,
+    match_paths: &[PathBuf],
+) -> Option<String> {
+    load_instruction_appendix(config, active_dir, match_paths)
+        .await
+        .map(|bundle| bundle.contents)
+}
+
+pub async fn load_instruction_appendix(
+    config: &AgentConfig,
+    active_dir: &Path,
+    match_paths: &[PathBuf],
+) -> Option<InstructionAppendixBundle> {
     let project_root =
         resolve_project_root(active_dir).unwrap_or_else(|_| active_dir.to_path_buf());
     let home_dir = dirs::home_dir();
@@ -98,23 +141,41 @@ pub async fn build_instruction_appendix(config: &AgentConfig, active_dir: &Path)
         home_dir: home_dir.as_deref(),
         extra_instruction_files: &config.instruction_files,
         fallback_filenames: &config.project_doc_fallback_filenames,
+        exclude_patterns: &config.instruction_excludes,
+        match_paths,
+        import_max_depth: config.instruction_import_max_depth,
         max_bytes: config.instruction_max_bytes,
     })
     .await
     .ok()
     .flatten();
+    let persistent_memory =
+        read_persistent_memory_excerpt(&config.persistent_memory, &project_root)
+            .await
+            .ok()
+            .flatten();
 
-    render_instruction_appendix(
+    let contents = render_instruction_appendix(
         config.user_instructions.as_deref(),
         bundle.as_ref(),
+        persistent_memory.as_ref(),
         &project_root,
         home_dir.as_deref(),
-    )
+    )?;
+
+    Some(InstructionAppendixBundle {
+        contents,
+        project_doc: bundle,
+        persistent_memory,
+        project_root,
+        home_dir,
+    })
 }
 
 pub fn render_instruction_appendix(
     user_instructions: Option<&str>,
     bundle: Option<&ProjectDocBundle>,
+    persistent_memory: Option<&PersistentMemoryExcerpt>,
     project_root: &Path,
     home_dir: Option<&Path>,
 ) -> Option<String> {
@@ -165,6 +226,22 @@ pub fn render_instruction_appendix(
 
                 section.push_str(segment.contents.trim());
             }
+        }
+    }
+
+    if let Some(memory) = persistent_memory
+        && !memory.contents.trim().is_empty()
+    {
+        if !section.is_empty() {
+            section.push_str(PERSISTENT_MEMORY_SEPARATOR);
+        }
+
+        section.push_str("## PERSISTENT MEMORY\n\n");
+        section.push_str(memory.contents.trim());
+        if memory.truncated {
+            section.push_str("\n\n_");
+            section.push_str(PERSISTENT_MEMORY_TRUNCATION_NOTE);
+            section.push('_');
         }
     }
 
@@ -234,7 +311,7 @@ fn resolve_project_root(cwd: &Path) -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::instructions::{InstructionScope, InstructionSource};
+    use crate::instructions::{InstructionScope, InstructionSource, InstructionSourceKind};
     use tempfile::tempdir;
 
     fn write_doc(dir: &Path, content: &str) -> Result<()> {
@@ -294,6 +371,9 @@ mod tests {
             home_dir: None,
             extra_instruction_files: &[],
             fallback_filenames: &[],
+            exclude_patterns: &[],
+            match_paths: &[],
+            import_max_depth: 5,
             max_bytes: 4096,
         })
         .await
@@ -326,9 +406,13 @@ mod tests {
             ..Default::default()
         };
 
-        let appendix = build_instruction_appendix(&config, &nested)
-            .await
-            .expect("instruction appendix");
+        let appendix = build_instruction_appendix_with_context(
+            &config,
+            &nested,
+            &[repo.path().join("nested/sub/file.rs")],
+        )
+        .await
+        .expect("instruction appendix");
 
         assert!(appendix.starts_with("user note"));
         assert!(appendix.contains("--- project-doc ---"));
@@ -387,6 +471,9 @@ mod tests {
             home_dir: None,
             extra_instruction_files: &["docs/*.md".to_owned()],
             fallback_filenames: &[],
+            exclude_patterns: &[],
+            match_paths: &[],
+            import_max_depth: 5,
             max_bytes: 4096,
         })
         .await
@@ -407,6 +494,8 @@ mod tests {
                 source: InstructionSource {
                     path: PathBuf::from("AGENTS.md"),
                     scope: InstructionScope::Workspace,
+                    kind: InstructionSourceKind::Agents,
+                    matched: false,
                 },
                 contents: "- First\n- Second\n".to_owned(),
             }],
@@ -446,5 +535,40 @@ mod tests {
         assert!(!instructions.contains("### Instruction map"));
         assert!(!instructions.contains("### Key points"));
         assert!(!instructions.contains("--- project-doc ---"));
+    }
+
+    #[tokio::test]
+    async fn instruction_appendix_includes_persistent_memory_after_authored_guidance() {
+        let repo = tempdir().expect("repo");
+        std::fs::write(repo.path().join(".git"), "gitdir: /tmp/git").expect("git marker");
+        std::fs::write(repo.path().join(".vtcode-project"), "repo").expect("project name");
+        write_doc(repo.path(), "root doc").expect("write root doc");
+
+        let memory_dir = repo.path().join(".memory-root");
+        let config = AgentConfig {
+            persistent_memory: vtcode_config::core::PersistentMemoryConfig {
+                enabled: true,
+                directory_override: Some(memory_dir.display().to_string()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let project_memory_dir = memory_dir.join("projects").join("repo").join("memory");
+        std::fs::create_dir_all(&project_memory_dir).expect("memory dir");
+        std::fs::write(
+            project_memory_dir.join("memory_summary.md"),
+            "# VT Code Memory Summary\n\n- remembered detail\n",
+        )
+        .expect("write memory summary");
+
+        let appendix = build_instruction_appendix(&config, repo.path())
+            .await
+            .expect("instruction appendix");
+
+        let project_doc_idx = appendix.find("root doc").expect("project doc");
+        let memory_idx = appendix.find("remembered detail").expect("memory detail");
+        assert!(project_doc_idx < memory_idx);
+        assert!(appendix.contains("--- persistent-memory ---"));
     }
 }

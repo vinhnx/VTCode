@@ -399,7 +399,8 @@ pub fn convert_llm_to_anthropic_response(response: LLMResponse) -> AnthropicMess
     if let Some(tool_calls) = response.tool_calls.as_ref() {
         for call in tool_calls {
             if let Some(func) = &call.function {
-                let input = serde_json::from_str(&func.arguments)
+                let input = call
+                    .parsed_arguments()
                     .unwrap_or_else(|_| Value::String(func.arguments.clone()));
                 content_blocks.push(AnthropicContentBlock::ToolUse {
                     id: call.id.clone(),

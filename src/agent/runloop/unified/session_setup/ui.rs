@@ -27,6 +27,7 @@ use vtcode_core::llm::provider as uni;
 use vtcode_core::notifications::{
     set_global_notification_hook_engine, set_global_terminal_focused,
 };
+use vtcode_core::persistent_memory::{PersistentMemoryStatus, persistent_memory_status};
 use vtcode_core::prompts::discover_prompt_templates;
 use vtcode_core::subagents::{SubagentStatusEntry, SubagentThreadSnapshot};
 use vtcode_core::ui::slash::visible_commands;
@@ -41,8 +42,8 @@ use vtcode_core::utils::transcript;
 use vtcode_core::{CommandExecutionStatus, ThreadEvent, ThreadItemDetails, ToolCallStatus};
 use vtcode_tui::app::{
     AgentPaletteItem, FocusChangeCallback, InlineEvent, InlineEventCallback, InlineHandle,
-    InlineHeaderContext, LocalAgentEntry, LocalAgentKind, SessionOptions, SlashCommandItem,
-    spawn_session_with_options,
+    InlineHeaderContext, InlineHeaderHighlight, InlineHeaderStatusBadge, InlineHeaderStatusTone,
+    LocalAgentEntry, LocalAgentKind, SessionOptions, SlashCommandItem, spawn_session_with_options,
 };
 
 pub(crate) async fn initialize_session_ui(
@@ -334,6 +335,20 @@ pub(crate) async fn initialize_session_ui(
         }
     }
 
+    let persistent_memory_status = load_persistent_memory_status(config, vt_cfg);
+    if let Err(err) = persistent_memory_status.as_ref() {
+        warn!(
+            workspace = %config.workspace.display(),
+            error = ?err,
+            "Failed to load persistent memory status for TUI guide"
+        );
+        renderer.line(
+            MessageStyle::Warning,
+            "Persistent memory is enabled, but VT Code couldn't load the TUI memory guide.",
+        )?;
+    }
+    let persistent_memory_status = persistent_memory_status.ok().flatten();
+
     if let Some(notice) = session_state.session_bootstrap.search_tools_notice.as_ref() {
         notice.render(&mut renderer)?;
     }
@@ -367,6 +382,9 @@ pub(crate) async fn initialize_session_ui(
         reasoning_label.clone(),
     )
     .await?;
+    if let Some(memory_status) = persistent_memory_status.as_ref() {
+        apply_persistent_memory_header_guide(&mut header_context, memory_status);
+    }
 
     let initial_editor_snapshot = if let Some(bridge) = ide_context_bridge.as_mut() {
         match bridge.refresh() {
@@ -860,6 +878,85 @@ fn maybe_render_openai_priority_notice(
     Ok(())
 }
 
+fn persistent_memory_guide_lines(memory_status: &PersistentMemoryStatus) -> Vec<String> {
+    let mut lines = Vec::with_capacity(3);
+    if memory_status.cleanup_status.needed {
+        lines.push(
+            "Run `/memory` to inspect status and finish one-time cleanup before memory updates."
+                .to_string(),
+        );
+    } else {
+        lines.push("Use `/memory` to inspect notes, status, and quick actions.".to_string());
+    }
+    lines.push("Use `remember ...` to save a note or `forget ...` to remove one.".to_string());
+    lines.push(if memory_status.auto_write {
+        "Auto-write is on: VT Code may consolidate durable notes after a session.".to_string()
+    } else {
+        "Auto-write is off: VT Code will only change memory through explicit actions.".to_string()
+    });
+    lines
+}
+
+fn load_persistent_memory_status(
+    config: &CoreAgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
+) -> Result<Option<PersistentMemoryStatus>> {
+    let Some(vt_cfg) = vt_cfg else {
+        return Ok(None);
+    };
+    let memory_config = &vt_cfg.agent.persistent_memory;
+    if !memory_config.enabled {
+        return Ok(None);
+    }
+
+    persistent_memory_status(memory_config, &config.workspace).map(Some)
+}
+
+fn persistent_memory_header_badge(
+    memory_status: &PersistentMemoryStatus,
+) -> InlineHeaderStatusBadge {
+    if memory_status.cleanup_status.needed {
+        return InlineHeaderStatusBadge {
+            text: "Memory: cleanup".to_string(),
+            tone: InlineHeaderStatusTone::Warning,
+        };
+    }
+
+    let text = if memory_status.pending_rollout_summaries > 0 {
+        format!(
+            "Memory: {} pending",
+            memory_status.pending_rollout_summaries
+        )
+    } else if memory_status.auto_write {
+        "Memory: auto".to_string()
+    } else {
+        "Memory: manual".to_string()
+    };
+    InlineHeaderStatusBadge {
+        text,
+        tone: InlineHeaderStatusTone::Ready,
+    }
+}
+
+fn persistent_memory_header_highlight(
+    memory_status: &PersistentMemoryStatus,
+) -> InlineHeaderHighlight {
+    InlineHeaderHighlight {
+        title: "Memory".to_string(),
+        lines: persistent_memory_guide_lines(memory_status),
+    }
+}
+
+fn apply_persistent_memory_header_guide(
+    header_context: &mut InlineHeaderContext,
+    memory_status: &PersistentMemoryStatus,
+) {
+    header_context.persistent_memory = Some(persistent_memory_header_badge(memory_status));
+    header_context
+        .highlights
+        .push(persistent_memory_header_highlight(memory_status));
+}
+
 pub(crate) fn apply_ide_context_snapshot(
     context_manager: &mut crate::agent::runloop::unified::context_manager::ContextManager,
     header_context: &mut InlineHeaderContext,
@@ -1226,7 +1323,29 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::Arc;
     use tokio::sync::RwLock;
+    use vtcode_core::persistent_memory::MemoryCleanupStatus;
     use vtcode_core::{EditorContextSnapshot, EditorFileContext};
+
+    fn sample_memory_status() -> PersistentMemoryStatus {
+        PersistentMemoryStatus {
+            enabled: true,
+            auto_write: true,
+            directory: PathBuf::from("/tmp/memory"),
+            summary_file: PathBuf::from("/tmp/memory/memory_summary.md"),
+            memory_file: PathBuf::from("/tmp/memory/MEMORY.md"),
+            preferences_file: PathBuf::from("/tmp/memory/preferences.md"),
+            repository_facts_file: PathBuf::from("/tmp/memory/repository-facts.md"),
+            rollout_summaries_dir: PathBuf::from("/tmp/memory/rollout_summaries"),
+            summary_exists: true,
+            registry_exists: true,
+            pending_rollout_summaries: 0,
+            cleanup_status: MemoryCleanupStatus {
+                needed: false,
+                suspicious_facts: 0,
+                suspicious_summary_lines: 0,
+            },
+        }
+    }
 
     #[test]
     fn structured_resume_lines_preserve_tool_context() {
@@ -1308,6 +1427,65 @@ mod tests {
             !lines
                 .iter()
                 .any(|line| line.style == MessageStyle::Reasoning)
+        );
+    }
+
+    #[test]
+    fn persistent_memory_guide_lines_show_standard_actions() {
+        let lines = persistent_memory_guide_lines(&sample_memory_status());
+        assert_eq!(lines.len(), 3);
+        assert!(lines[0].contains("/memory"));
+        assert!(lines[1].contains("remember"));
+        assert!(lines[2].contains("Auto-write is on"));
+    }
+
+    #[test]
+    fn persistent_memory_guide_lines_call_out_cleanup_when_needed() {
+        let mut status = sample_memory_status();
+        status.auto_write = false;
+        status.cleanup_status.needed = true;
+
+        let lines = persistent_memory_guide_lines(&status);
+        assert_eq!(lines.len(), 3);
+        assert!(lines[0].contains("one-time cleanup"));
+        assert!(lines[2].contains("Auto-write is off"));
+    }
+
+    #[test]
+    fn persistent_memory_header_badge_reflects_memory_mode() {
+        let badge = persistent_memory_header_badge(&sample_memory_status());
+        assert_eq!(badge.text, "Memory: auto");
+        assert_eq!(badge.tone, InlineHeaderStatusTone::Ready);
+    }
+
+    #[test]
+    fn persistent_memory_header_badge_warns_on_cleanup() {
+        let mut status = sample_memory_status();
+        status.cleanup_status.needed = true;
+
+        let badge = persistent_memory_header_badge(&status);
+        assert_eq!(badge.text, "Memory: cleanup");
+        assert_eq!(badge.tone, InlineHeaderStatusTone::Warning);
+    }
+
+    #[test]
+    fn apply_persistent_memory_header_guide_sets_badge_and_highlight() {
+        let mut header_context = InlineHeaderContext::default();
+
+        apply_persistent_memory_header_guide(&mut header_context, &sample_memory_status());
+
+        assert_eq!(
+            header_context
+                .persistent_memory
+                .as_ref()
+                .map(|badge| badge.text.as_str()),
+            Some("Memory: auto")
+        );
+        assert!(
+            header_context
+                .highlights
+                .iter()
+                .any(|highlight| highlight.title == "Memory")
         );
     }
 

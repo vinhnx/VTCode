@@ -1,6 +1,8 @@
+use super::status_line::InputStatusState;
 use super::ui_interaction::{
-    PlaceholderSpinner, StreamProgressEvent, StreamSpinnerOptions, stream_and_render_response,
-    stream_and_render_response_with_options, stream_and_render_response_with_options_and_progress,
+    PlaceholderSpinner, StreamProgressEvent, StreamSpinnerOptions, start_loading_status,
+    stream_and_render_response, stream_and_render_response_with_options,
+    stream_and_render_response_with_options_and_progress,
 };
 use futures::stream;
 use std::sync::Arc;
@@ -344,6 +346,43 @@ async fn placeholder_spinner_restores_previous_input_status() {
         }
     }
 
+    assert_eq!(
+        last_status,
+        Some((Some("provider".to_string()), Some("model".to_string())))
+    );
+}
+
+#[tokio::test]
+async fn start_loading_status_uses_current_input_status_for_restore() {
+    let (tx, mut rx) = mpsc::unbounded_channel::<InlineCommand>();
+    let handle = InlineHandle::new_for_tests(tx);
+    let state = InputStatusState {
+        left: Some("provider".to_string()),
+        right: Some("model".to_string()),
+        ..Default::default()
+    };
+
+    {
+        let spinner = start_loading_status(&handle, &state, "Saving memory note...");
+        spinner.finish();
+    }
+
+    let mut saw_loading = false;
+    let mut last_status: Option<(Option<String>, Option<String>)> = None;
+    while let Ok(command) = rx.try_recv() {
+        if let InlineCommand::SetInputStatus { left, right } = command {
+            if left
+                .as_deref()
+                .map(|text| text.contains("Saving memory note"))
+                .unwrap_or(false)
+            {
+                saw_loading = true;
+            }
+            last_status = Some((left, right));
+        }
+    }
+
+    assert!(saw_loading);
     assert_eq!(
         last_status,
         Some((Some("provider".to_string()), Some("model".to_string())))

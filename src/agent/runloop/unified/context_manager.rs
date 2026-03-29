@@ -1,4 +1,5 @@
 use hashbrown::HashMap;
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -67,6 +68,8 @@ pub(crate) struct ContextManager {
     ide_context_config: IdeContextConfig,
     /// Session-local override for IDE context enablement.
     session_ide_context_enabled_override: Option<bool>,
+    /// Files observed through editor context or tool activity for instruction matching.
+    instruction_activity_paths: BTreeSet<PathBuf>,
 }
 
 impl ContextManager {
@@ -86,6 +89,7 @@ impl ContextManager {
             editor_context_snapshot: None,
             ide_context_config: IdeContextConfig::default(),
             session_ide_context_enabled_override: None,
+            instruction_activity_paths: BTreeSet::new(),
         }
     }
 
@@ -130,6 +134,25 @@ impl ContextManager {
         let enabled = !self.effective_ide_context_config().enabled;
         self.session_ide_context_enabled_override = Some(enabled);
         enabled
+    }
+
+    pub(crate) fn record_instruction_activity_paths<I>(&mut self, paths: I)
+    where
+        I: IntoIterator<Item = PathBuf>,
+    {
+        self.instruction_activity_paths.extend(paths);
+    }
+
+    pub(crate) fn tracked_instruction_activity_paths(&self) -> Vec<PathBuf> {
+        self.instruction_activity_paths.iter().cloned().collect()
+    }
+
+    pub(crate) fn instruction_context_paths_snapshot(&self) -> Vec<PathBuf> {
+        self.instruction_context_paths()
+    }
+
+    pub(crate) fn active_instruction_directory_snapshot(&self) -> Option<PathBuf> {
+        self.active_instruction_directory()
     }
 
     fn update_stats(&mut self, history: &[uni::Message]) {
@@ -337,7 +360,8 @@ impl ContextManager {
             token_budget_guidance,
             prompt_cache_shaping_mode: params.prompt_cache_shaping_mode,
             editor_context_block: self.editor_context_prompt_block(),
-            active_instruction_directory: self.workspace_root.clone(),
+            active_instruction_directory: self.active_instruction_directory(),
+            instruction_context_paths: self.instruction_context_paths(),
         };
 
         // Use incremental builder to avoid redundant cloning and processing
@@ -407,6 +431,67 @@ impl ContextManager {
             .and_then(|snapshot| {
                 snapshot.prompt_block(workspace, ide_context_config.include_selection_text)
             })
+    }
+
+    fn active_instruction_directory(&self) -> Option<PathBuf> {
+        let workspace = self.workspace_root.as_ref()?;
+        if let Some(snapshot) = self.editor_context_snapshot.as_ref()
+            && let Some(active_file) = snapshot.active_file.as_ref()
+            && let Some(path) = self.resolve_editor_context_path(active_file.path.as_str())
+            && path.starts_with(workspace)
+        {
+            return path
+                .parent()
+                .map(Path::to_path_buf)
+                .or_else(|| Some(workspace.clone()));
+        }
+
+        self.instruction_activity_paths
+            .iter()
+            .find(|path| path.starts_with(workspace))
+            .and_then(|path| path.parent().map(Path::to_path_buf))
+            .or_else(|| Some(workspace.clone()))
+    }
+
+    fn instruction_context_paths(&self) -> Vec<PathBuf> {
+        let mut paths = BTreeSet::new();
+
+        if let Some(snapshot) = self.editor_context_snapshot.as_ref() {
+            if let Some(active_file) = snapshot.active_file.as_ref()
+                && let Some(path) = self.resolve_editor_context_path(active_file.path.as_str())
+            {
+                paths.insert(path);
+            }
+
+            for editor in &snapshot.visible_editors {
+                if let Some(path) = self.resolve_editor_context_path(editor.path.as_str()) {
+                    paths.insert(path);
+                }
+            }
+        }
+
+        if let Some(active_dir) = self.active_instruction_directory() {
+            paths.insert(active_dir);
+        }
+
+        paths.extend(self.instruction_activity_paths.iter().cloned());
+        paths.into_iter().collect()
+    }
+
+    fn resolve_editor_context_path(&self, raw: &str) -> Option<PathBuf> {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() || trimmed.contains("://") || trimmed.starts_with("untitled:") {
+            return None;
+        }
+
+        let candidate = Path::new(trimmed);
+        let path = if candidate.is_absolute() {
+            candidate.to_path_buf()
+        } else {
+            self.workspace_root.as_ref()?.join(candidate)
+        };
+
+        std::fs::canonicalize(&path).ok().or(Some(path))
     }
 }
 

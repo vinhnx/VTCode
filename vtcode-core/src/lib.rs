@@ -164,6 +164,7 @@ pub mod notifications;
 pub mod open_responses; // Open Responses specification conformance layer
 pub mod orchestrator;
 pub mod permissions;
+pub mod persistent_memory;
 pub mod plugins;
 pub mod pods;
 pub mod project_doc;

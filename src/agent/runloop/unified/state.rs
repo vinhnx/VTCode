@@ -575,7 +575,7 @@ pub(crate) struct CtrlCState {
     last_signal_time: AtomicU64,
 }
 
-const DOUBLE_CTRL_C_WINDOW: Duration = Duration::from_secs(2);
+const DOUBLE_CTRL_C_WINDOW: Duration = Duration::from_millis(1000);
 
 impl CtrlCState {
     pub(crate) fn new() -> Self {

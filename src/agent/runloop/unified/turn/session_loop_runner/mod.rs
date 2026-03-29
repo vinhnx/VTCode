@@ -335,6 +335,7 @@ fn build_exit_header_context_fast(
         search_tools: Some(crate::agent::runloop::ui::build_search_tools_badge(
             &config.workspace,
         )),
+        persistent_memory: None,
         pr_review: None,
         editor_context: None,
         git: format!(
@@ -782,6 +783,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         let mut palette_state: Option<ActivePalette> = None;
         let mut last_forced_redraw = Instant::now();
         let mut input_status_state = InputStatusState::default();
+        let mut dismissed_memory_cleanup_fingerprint: Option<(usize, usize)> = None;
         let mut prefer_latest_queued_input_once = false;
         crate::agent::runloop::unified::status_line::update_ide_context_source(
             &mut input_status_state,
@@ -901,6 +903,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     let mut interaction_state =
                     crate::agent::runloop::unified::turn::session::interaction_loop::InteractionState {
                         input_status_state: &mut input_status_state,
+                        dismissed_memory_cleanup_fingerprint: &mut dismissed_memory_cleanup_fingerprint,
                         queued_inputs: &mut queued_inputs,
                         prefer_latest_queued_input_once: &mut prefer_latest_queued_input_once,
                         model_picker_state: &mut model_picker_state,
@@ -1264,6 +1267,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         .iter()
                         .map(|path| normalize_workspace_path(config.workspace.as_path(), path)),
                 );
+                agent_touched_paths.extend(context_manager.tracked_instruction_activity_paths());
                 runtime.state.messages = working_history;
                 let outcome_result = outcome.result.clone();
                 let turn_elapsed = turn_started_at.elapsed();
@@ -1422,6 +1426,20 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         if let Some(emitter) = harness_emitter.as_ref() {
             emitter.finish_open_responses();
         }
+        agent_touched_paths.extend(context_manager.tracked_instruction_activity_paths());
+        if let Err(err) = vtcode_core::persistent_memory::finalize_persistent_memory(
+            &config,
+            vt_cfg.as_ref(),
+            &runtime.state.messages,
+        )
+        .await
+        {
+            tracing::warn!(
+                "Failed to update persistent memory at session finalization: {}",
+                err
+            );
+        }
+
         let finalization_output = match finalize_session(
             &mut renderer,
             lifecycle_hooks.as_ref(),

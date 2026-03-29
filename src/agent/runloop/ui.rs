@@ -313,6 +313,7 @@ pub(crate) async fn build_inline_header_context(
         context_window_size: Some(context_window_size),
         version,
         search_tools: Some(build_search_tools_badge(&config.workspace)),
+        persistent_memory: None,
         pr_review: None,
         editor_context: None,
         git: git_value,

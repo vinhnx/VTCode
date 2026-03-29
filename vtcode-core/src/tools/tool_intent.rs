@@ -604,8 +604,7 @@ pub fn normalize_unified_search_args(args: &Value) -> Value {
             "debug_query"
         } else if key.eq_ignore_ascii_case("workflow") {
             "workflow"
-        } else if key.eq_ignore_ascii_case("config_path")
-            || key.eq_ignore_ascii_case("config-path")
+        } else if key.eq_ignore_ascii_case("config_path") || key.eq_ignore_ascii_case("config-path")
         {
             "config_path"
         } else if key.eq_ignore_ascii_case("filter") {

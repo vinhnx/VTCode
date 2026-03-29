@@ -1,10 +1,7 @@
 use super::AgentRunner;
 use crate::config::VTCodeConfig;
-#[cfg(test)]
 use crate::config::api_keys::resolve_api_key_env;
-#[cfg(test)]
 use crate::config::types::{AgentConfig as CoreAgentConfig, ModelSelectionSource};
-#[cfg(test)]
 use crate::core::agent::config::resolve_checkpointing_storage_dir;
 use crate::core::agent::task::ContextItem;
 use crate::core::agent::task::Task;
@@ -38,7 +35,6 @@ impl AgentRunner {
         self.session_config.effective()
     }
 
-    #[cfg(test)]
     pub(super) fn core_agent_config(&self) -> CoreAgentConfig {
         let cfg = self.config();
 

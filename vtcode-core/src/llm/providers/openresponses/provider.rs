@@ -398,7 +398,7 @@ impl OpenResponsesProvider {
                         input.push(Self::output_item_to_value(OutputItem::function_call(
                             format!("fc_{i}_{j}"),
                             &f.name,
-                            serde_json::from_str(&f.arguments).unwrap_or(Value::Null),
+                            tc.parsed_arguments().unwrap_or(Value::Null),
                         ))?);
                     }
                 }

@@ -7,7 +7,7 @@ use crate::auth::migrate_custom_api_keys_to_keyring;
 use crate::defaults::{self};
 use crate::loader::config::VTCodeConfig;
 use crate::loader::layers::{
-    ConfigLayerEntry, ConfigLayerSource, ConfigLayerStack, LayerDisabledReason,
+    ConfigLayerEntry, ConfigLayerMetadata, ConfigLayerSource, ConfigLayerStack, LayerDisabledReason,
 };
 
 /// Configuration manager for loading and validating configurations
@@ -123,11 +123,12 @@ impl ConfigManager {
             );
         }
 
-        let effective_toml = layer_stack.effective_config_without_origins();
+        let (effective_toml, origins) = layer_stack.effective_config_with_origins();
         let mut config: VTCodeConfig = effective_toml
             .try_into()
             .context("Failed to deserialize effective configuration")?;
         config.apply_compat_defaults();
+        Self::validate_restricted_agent_fields(&layer_stack, &origins)?;
 
         config
             .validate()
@@ -257,7 +258,7 @@ impl ConfigManager {
             );
         }
 
-        let effective_toml = layer_stack.effective_config_without_origins();
+        let (effective_toml, origins) = layer_stack.effective_config_with_origins();
         let mut config: VTCodeConfig = effective_toml.try_into().with_context(|| {
             format!(
                 "Failed to parse effective config with file: {}",
@@ -265,6 +266,7 @@ impl ConfigManager {
             )
         })?;
         config.apply_compat_defaults();
+        Self::validate_restricted_agent_fields(&layer_stack, &origins)?;
 
         config.validate().with_context(|| {
             format!(
@@ -419,6 +421,31 @@ impl ConfigManager {
     /// Resolve the current project name used for project-level config overlays.
     pub fn current_project_name(workspace_root: &Path) -> Option<String> {
         Self::identify_current_project(workspace_root)
+    }
+
+    fn validate_restricted_agent_fields(
+        layer_stack: &ConfigLayerStack,
+        origins: &hashbrown::HashMap<String, ConfigLayerMetadata>,
+    ) -> Result<()> {
+        if let Some(origin) = origins.get("agent.persistent_memory.directory_override")
+            && let Some(layer) = layer_stack
+                .layers()
+                .iter()
+                .find(|layer| layer.metadata == *origin)
+        {
+            match layer.source {
+                ConfigLayerSource::System { .. }
+                | ConfigLayerSource::User { .. }
+                | ConfigLayerSource::Project { .. } => {}
+                ConfigLayerSource::Workspace { .. } | ConfigLayerSource::Runtime => {
+                    bail!(
+                        "agent.persistent_memory.directory_override may only be set in system, user, or project-profile configuration layers"
+                    );
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Persist configuration to the manager's associated path or workspace

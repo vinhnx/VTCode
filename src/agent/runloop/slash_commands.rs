@@ -120,7 +120,12 @@ pub(crate) enum SlashCommandOutcome {
     },
 
     ShowSettings,
+    ShowSettingsAtPath {
+        path: String,
+    },
+    ShowMemoryConfig,
     ShowPermissions,
+    ShowMemory,
     Exit,
     NewSession,
     OpenDocs,
@@ -367,8 +372,23 @@ pub(crate) async fn handle_slash_command(
                 prompt: prompt_text.to_string(),
             })
         }
-        "config" | "settings" | "setttings" => Ok(SlashCommandOutcome::ShowSettings),
+        "config" | "settings" | "setttings" => {
+            if args.is_empty() {
+                Ok(SlashCommandOutcome::ShowSettings)
+            } else {
+                match args.to_ascii_lowercase().as_str() {
+                    "memory" | "agent.persistent_memory" => {
+                        Ok(SlashCommandOutcome::ShowMemoryConfig)
+                    }
+                    "permissions" => Ok(SlashCommandOutcome::ShowPermissions),
+                    _ => Ok(SlashCommandOutcome::ShowSettingsAtPath {
+                        path: args.to_string(),
+                    }),
+                }
+            }
+        }
         "permissions" => Ok(SlashCommandOutcome::ShowPermissions),
+        "memory" => Ok(SlashCommandOutcome::ShowMemory),
         "vim" => {
             let enable = match args {
                 "" | "toggle" => None,
@@ -870,6 +890,30 @@ mod tests {
             .expect("ide command should parse");
 
         assert!(matches!(outcome, SlashCommandOutcome::ToggleIdeContext));
+    }
+
+    #[tokio::test]
+    async fn memory_command_returns_memory_outcome() {
+        let workspace = std::env::current_dir().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let outcome = handle_slash_command("memory", &mut renderer, &workspace)
+            .await
+            .expect("memory command should parse");
+
+        assert!(matches!(outcome, SlashCommandOutcome::ShowMemory));
+    }
+
+    #[tokio::test]
+    async fn config_memory_opens_memory_controls() {
+        let workspace = std::env::current_dir().expect("workspace");
+        let mut renderer = renderer_for_tests();
+
+        let outcome = handle_slash_command("config memory", &mut renderer, &workspace)
+            .await
+            .expect("config memory command should parse");
+
+        assert!(matches!(outcome, SlashCommandOutcome::ShowMemoryConfig));
     }
 
     #[tokio::test]

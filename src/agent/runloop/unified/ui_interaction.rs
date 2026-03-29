@@ -27,6 +27,7 @@ use vtcode_tui::app::InlineHandle;
 
 use super::async_mcp_manager::{AsyncMcpManager, McpInitStatus};
 use super::state::{CtrlCState, SessionStats};
+use super::status_line::InputStatusState;
 
 type LoadedSkillsMap = hashbrown::HashMap<String, vtcode_core::skills::types::Skill>;
 
@@ -715,6 +716,19 @@ impl Drop for PlaceholderSpinner {
         self.finish();
         self.task.abort();
     }
+}
+
+pub(crate) fn start_loading_status(
+    handle: &InlineHandle,
+    input_status_state: &InputStatusState,
+    message: impl Into<String>,
+) -> PlaceholderSpinner {
+    PlaceholderSpinner::new(
+        handle,
+        input_status_state.left.clone(),
+        input_status_state.right.clone(),
+        message,
+    )
 }
 
 #[derive(Default, Clone, Copy)]

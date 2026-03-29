@@ -709,7 +709,7 @@ impl MessageRole {
 
 #[cfg(test)]
 mod tests {
-    use super::{AssistantPhase, ContentPart, Message, MessageContent, MessageRole};
+    use super::{AssistantPhase, ContentPart, Message, MessageContent, MessageRole, ToolCall};
 
     #[test]
     fn message_content_parts_concatenate_without_extra_spaces() {
@@ -748,5 +748,19 @@ mod tests {
         assert!(user.phase.is_none());
         assert_eq!(tool.role, MessageRole::Tool);
         assert!(tool.phase.is_none());
+    }
+
+    #[test]
+    fn validate_for_provider_accepts_recovered_tool_arguments() {
+        let message = Message::assistant_with_tools(
+            String::new(),
+            vec![ToolCall::function(
+                "call_search".to_string(),
+                "unified_search".to_string(),
+                "{\"action\": \"grep\", \"pattern\": \"persistent_memory\", \"path\": \"vtcode-core/src</parameter>\n<</invoke>\n</minimax:tool_call>".to_string(),
+            )],
+        );
+
+        assert!(message.validate_for_provider("anthropic").is_ok());
     }
 }

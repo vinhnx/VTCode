@@ -75,6 +75,11 @@ python3 scripts/generate_config_field_reference.py
 | `agent.prompt_suggestions.model` | `string` | no | `""` | Lightweight model to use for prompt suggestions. Leave empty to auto-select an efficient sibling of the main model. |
 | `agent.prompt_suggestions.show_cost_notice` | `boolean` | no | `true` | Show a one-time reminder that LLM-backed prompt suggestions can consume tokens. |
 | `agent.prompt_suggestions.temperature` | `number` | no | `0.30000001192092896` | Temperature for inline prompt suggestion generation. Lower values keep suggestions stable and completion-like. |
+| `agent.persistent_memory.auto_write` | `boolean` | no | `true` | Write one rollout summary at session finalization, then consolidate it into the per-repository memory files. |
+| `agent.persistent_memory.directory_override` | `null \| string` | no | `null` | Optional user-local directory override for persistent memory storage. This may only be set from system, user, or project-profile config layers. |
+| `agent.persistent_memory.enabled` | `boolean` | no | `false` | Enable VT Code's per-repository persistent memory files and startup memory summary injection. |
+| `agent.persistent_memory.startup_byte_limit` | `integer` | no | `25600` | Maximum bytes loaded from `memory_summary.md` at session startup. |
+| `agent.persistent_memory.startup_line_limit` | `integer` | no | `200` | Maximum lines loaded from `memory_summary.md` at session startup. |
 | `agent.project_doc_max_bytes` | `integer` | no | `16384` | Maximum bytes of AGENTS.md content to load from project hierarchy |
 | `agent.provider` | `string` | no | `"openai"` | AI provider for single agent mode (gemini, openai, anthropic, openrouter, zai) |
 | `agent.reasoning_effort` | `string` | no | `"none"` | Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh) Applies to: Claude, GPT-5 family, Gemini, Qwen3, DeepSeek with reasoning capability |
@@ -83,11 +88,14 @@ python3 scripts/generate_config_field_reference.py
 | `agent.refine_prompts_model` | `string` | no | `""` | Optional model override for the refiner (empty = auto pick efficient sibling) |
 | `agent.refine_temperature` | `number` | no | `0.30000001192092896` | Temperature for prompt refinement (0.0-1.0, default: 0.3) Lower values ensure prompt refinement is more deterministic/consistent Keep lower than main temperature for stable prompt improvement |
 | `agent.require_plan_confirmation` | `boolean` | no | `true` | Require user confirmation before executing a plan generated in plan mode When true, exiting plan mode shows the implementation blueprint and requires explicit user approval before enabling edit tools. |
+| `agent.instruction_excludes` | `array[string]` | no | `[]` | Instruction files or glob patterns to exclude from AGENTS.md and `.vtcode/rules/` discovery. |
+| `agent.instruction_import_max_depth` | `integer` | no | `5` | Maximum recursive `@path` import depth for AGENTS.md and rule files. |
 | `agent.small_model.enabled` | `boolean` | no | `true` | Enable small model tier for efficient operations |
 | `agent.small_model.model` | `string` | no | `""` | Small model to use (e.g., claude-4-5-haiku, "gpt-4-mini", "gemini-2.0-flash") Leave empty to auto-select a lightweight sibling of the main model |
 | `agent.small_model.temperature` | `number` | no | `0.30000001192092896` | Temperature for small model responses |
 | `agent.small_model.use_for_git_history` | `boolean` | no | `true` | Enable small model for git history processing |
 | `agent.small_model.use_for_large_reads` | `boolean` | no | `true` | Enable small model for large file reads (>50KB) |
+| `agent.small_model.use_for_memory` | `boolean` | no | `true` | Enable small model for persistent memory classification and startup summary refresh. |
 | `agent.small_model.use_for_web_summary` | `boolean` | no | `true` | Enable small model for web content summarization |
 | `agent.system_prompt_mode` | `string` | no | `"default"` | System prompt mode controlling verbosity and token overhead Options: minimal (~500-800 tokens), lightweight (~1-2k), default (~6-7k), specialized (~7-8k) Inspired by pi-coding-agent: modern models often perform well with minimal prompts |
 | `agent.temperature` | `number` | no | `0.699999988079071` | Temperature for main LLM responses (0.0-1.0) Lower values = more deterministic, higher values = more creative Recommended: 0.7 for balanced creativity and consistency Range: 0.0 (deterministic) to 1.0 (maximum randomness) |

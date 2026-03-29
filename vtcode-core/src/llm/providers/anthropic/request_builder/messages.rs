@@ -301,8 +301,7 @@ fn build_tool_use_blocks(msg: &Message) -> Vec<AnthropicContentBlock> {
     if let Some(tool_calls) = &msg.tool_calls {
         for call in tool_calls {
             if let Some(ref func) = call.function {
-                let args: Value =
-                    serde_json::from_str(&func.arguments).unwrap_or_else(|_| json!({}));
+                let args: Value = call.parsed_arguments().unwrap_or_else(|_| json!({}));
                 blocks.push(AnthropicContentBlock::ToolUse(Box::new(
                     AnthropicToolUseBlock {
                         id: call.id.clone(),

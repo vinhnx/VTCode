@@ -2,6 +2,7 @@ mod direct_tool_completion;
 pub(crate) mod interaction_loop;
 mod interaction_loop_runner;
 pub(crate) mod mcp_lifecycle;
+mod memory_prompt;
 pub(crate) mod slash_command_handler;
 pub(crate) mod slash_commands;
 pub(crate) mod tool_dispatch;

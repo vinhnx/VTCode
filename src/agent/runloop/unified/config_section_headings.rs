@@ -68,6 +68,11 @@ static SECTION_HEADINGS: &[(&str, &str, &str)] = &[
         "Inline composer suggestions and lightweight model routing.",
     ),
     (
+        "agent.persistent_memory",
+        "Persistent Memory",
+        "Per-repository memory summary, rollout staging, and learned durable notes.",
+    ),
+    (
         "agent.small_model",
         "Small Model Helpers",
         "Low-cost model settings for lightweight side tasks.",

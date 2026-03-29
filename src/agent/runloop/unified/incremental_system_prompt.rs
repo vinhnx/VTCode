@@ -225,7 +225,7 @@ impl IncrementalSystemPrompt {
         agent_config: Option<&vtcode_config::core::AgentConfig>,
     ) -> String {
         use std::fmt::Write;
-        use vtcode_core::project_doc::build_instruction_appendix;
+        use vtcode_core::project_doc::build_instruction_appendix_with_context;
 
         let mut prompt = String::with_capacity(base_system_prompt.len() + 1024);
         prompt.push_str(base_system_prompt);
@@ -348,7 +348,12 @@ impl IncrementalSystemPrompt {
 
         if let Some(cfg) = agent_config {
             if let Some(active_dir) = context.active_instruction_directory.as_deref()
-                && let Some(unified) = build_instruction_appendix(cfg, active_dir).await
+                && let Some(unified) = build_instruction_appendix_with_context(
+                    cfg,
+                    active_dir,
+                    &context.instruction_context_paths,
+                )
+                .await
             {
                 let _ = writeln!(prompt, "\n# INSTRUCTIONS\n{}", unified);
             }
@@ -453,6 +458,8 @@ pub(crate) struct SystemPromptContext {
     pub(crate) editor_context_block: Option<String>,
     /// Explicit scope root for AGENTS.md and instruction discovery.
     pub(crate) active_instruction_directory: Option<PathBuf>,
+    /// Files and directories used to activate path-scoped instruction rules.
+    pub(crate) instruction_context_paths: Vec<PathBuf>,
 }
 
 impl SystemPromptContext {
@@ -475,6 +482,9 @@ impl SystemPromptContext {
         self.prompt_cache_shaping_mode.hash(&mut hasher);
         self.editor_context_block.hash(&mut hasher);
         self.active_instruction_directory.hash(&mut hasher);
+        for path in &self.instruction_context_paths {
+            path.hash(&mut hasher);
+        }
         // Include the lean skill metadata that appears in the prompt.
         for skill in &self.discovered_skills {
             skill.name().hash(&mut hasher);

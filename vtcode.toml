@@ -211,7 +211,7 @@ temporal_context_use_utc = false
 # UI theme identifier controlling ANSI styling
 # Default: "ciapre"
 # Type: `string`
-theme = "ciapre"
+theme = "mono"
 
 # Enable TODO planning helper mode for structured task management
 # Default: true
@@ -238,6 +238,8 @@ ui_surface = "auto"
 # Default: "medium"
 # Type: `string`
 verbosity = "medium"
+instruction_excludes = []
+instruction_import_max_depth = 5
 
 # Checkpoints
 # Automatic turn snapshots and retention limits.
@@ -286,6 +288,12 @@ pause_on_open = true
 # Default: 60
 # Type: `integer`
 recovery_cooldown = 60
+
+[agent.persistent_memory]
+enabled = true
+auto_write = true
+startup_line_limit = 200
+startup_byte_limit = 25600
 
 
 # Harness Limits
@@ -489,6 +497,7 @@ use_for_large_reads = true
 # Default: true
 # Type: `boolean`
 use_for_web_summary = true
+use_for_memory = true
 
 
 # Vibe Coding
@@ -2758,13 +2767,6 @@ streaming_ceiling_seconds = 600
 # Type: `integer`
 warning_threshold_percent = 80
 
-[[custom_providers]]
-name = "mycorp"
-display_name = "MyCorporateName"
-base_url = "https://llm.corp.example/v1"
-api_key_env = "MYCORP_API_KEY"
-model = "gpt-5.4"
-
 
 # Tool Defaults
 # Loop limits and default tool behavior.
@@ -2798,6 +2800,13 @@ max_sequential_spool_chunk_reads = 6
 # Default: 0
 # Type: `integer`
 max_tool_loops = 0
+
+[[custom_providers]]
+name = "mycorp"
+display_name = "MyCorporateName"
+base_url = "https://llm.corp.example/v1"
+api_key_env = "MYCORP_API_KEY"
+model = "gpt-5.4"
 
 # External Editor
 # Editor launch command and editor fallback.

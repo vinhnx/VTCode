@@ -83,7 +83,7 @@ Contributing to VT Code? Understand the architecture and development processes:
 - **[Development Guide](./development/README.md)** - Development environment setup
 - **[Tool Reference](./tools/TOOL_SPECS.md)** - Technical reference for built-in tools
 - **[Code Standards](../.github/copilot-instructions.md)** - Coding guidelines and best practices
-- **[Memory Management](./guides/memory-management.md)** - Tune VT Code's AGENTS.md hierarchy for reliable prompts
+- **[Memory Management](./guides/memory-management.md)** - Configure authored guidance, `.vtcode/rules/`, and per-repository persistent memory
 
 ### For Organizations
 
