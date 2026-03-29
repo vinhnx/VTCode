@@ -1,6 +1,6 @@
 ---
 name: ast-grep
-description: "Use for ast-grep: `ast-grep run`, `sg scan`, `sg test`, `sg new`, `sg new rule`, `sgconfig.yml`, `scan --rule`, `scan --inline-rules`, `--stdin`, `--json`, optional chaining, rule catalog, meta variables, pattern objects, `nthChild stopBy`, `range field`, `metadata url`, `caseInsensitive glob`, `severity off`, `include metadata`, FAQ `rule order`, `kind pattern`, `positive rule`, `kind esquery`, `debug-query`, `static analysis`, tree-sitter parser, pattern yaml api, search rewrite lint analyze, `textual structural`, `ast cst`, `named unnamed`, `kind field`, `ambiguous pattern`, `effective selector`, `meta variable detection`, `lazy multi`, `strictness smart ast relaxed signature cst`, `string fix`, `fix config`, `expandEnd`, `replace substring`, `toCase separatedBy`, rewriter, `rewrite joinBy`, `find patch`, `barrel import`, `custom language`, `TREE_SITTER_LIBDIR`, `language injection`, `styled components`, `language alias`, languageGlobs, expandoChar, napi parse, python api, programmatic API."
+description: "Use for ast-grep: ast-grep run, sg scan, sg test, sg new, new rule, sgconfig.yml, inline-rules, stdin, json, optional chaining, rule catalog, meta variables, pattern objects, nthChild stopBy, range field, metadata url, caseInsensitive glob, severity off, include metadata, rule order, kind pattern, positive rule, kind esquery, debug-query, static analysis, tree-sitter parser, pattern yaml api, search rewrite lint analyze, textual structural, ast cst, named unnamed, kind field, ambiguous pattern, effective selector, meta variable detection, lazy multi, strictness smart, relaxed signature, string fix, fix config, expandEnd, replace substring, toCase separatedBy, rewriter, rewrite joinBy, find patch, barrel import, ruleDirs testConfigs, libraryPath languageSymbol, dynamic injected, custom language, TREE_SITTER_LIBDIR, language injection, styled components, language alias, languageGlobs, expandoChar, napi parse, python api, programmatic API."
 metadata:
     short-description: Ast-grep project workflows
 ---
@@ -57,6 +57,18 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 - If the repository already has `sgconfig.yml` and `rules/`, prefer working with the existing layout instead of recreating scaffolding.
 - Use `ast-grep new` when the repository does not have ast-grep scaffolding yet.
 - Use `ast-grep new rule` when the scaffold exists and the task is creating a new rule plus optional test case.
+
+## sgconfig.yml
+
+- `sgconfig.yml` is the project-level ast-grep config file, not a rule file. Treat it like the repository root for rule discovery, tests, parser overrides, and embedded-language behavior.
+- `ruleDirs` is required and is resolved relative to the directory containing `sgconfig.yml`.
+- `testConfigs` is optional and configures ast-grep test discovery. Each entry needs `testDir`; `snapshotDir` is optional and otherwise defaults to `__snapshots__` under that `testDir`.
+- `utilDirs` declares directories for global utility rules shared across multiple rule files.
+- `languageGlobs` remaps files to parsers and takes precedence over ast-grep’s default extension mapping, which is useful for similar-language reuse like TS -> TSX or C -> Cpp.
+- `customLanguages` registers project-local parsers. `libraryPath` can be one relative library path or a target-triple map, `extensions` is required, `expandoChar` is optional, and `languageSymbol` defaults to `tree_sitter_{name}`.
+- `languageInjections` is experimental. Each entry needs `hostLanguage`, `rule`, and `injected`.
+- Use dynamic `injected` candidates when the rule captures `$LANG` and the embedded language must be chosen from a list such as `css`, `scss`, or `less`.
+- Keep `sgconfig.yml` authoring on the skill path. VT Code’s public structural tool can consume an existing config through `config_path`, but it does not expose these top-level schema fields directly.
 
 ## Rule Catalog
 
