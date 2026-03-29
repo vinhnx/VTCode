@@ -29,6 +29,17 @@ Use the public structural tool first for read-only project checks:
 - `ast-grep test` runs rule tests.
 - `ast-grep lsp` starts the language server for editor integration.
 
+## Built-In Languages
+
+- ast-grep has a large built-in language list.
+  - common aliases include `bash`, `c`, `cc` / `cpp`, `cs`, `css`, `ex`, `go` / `golang`, `html`, `java`, `js` / `javascript` / `jsx`, `json`, `kt`, `lua`, `php`, `py` / `python`, `rb`, `rs` / `rust`, `swift`, `ts` / `typescript`, `tsx`, and `yml`
+  - file discovery uses the built-in extension mapping unless the project overrides it
+- `--lang <alias>` and YAML `language: <alias>` both use those aliases.
+- In VT Code, public structural `lang` passes through to ast-grep, but VT Code only normalizes and infers the subset it can pre-parse locally.
+  - current local inference subset: Rust, Python, JavaScript, TypeScript, TSX, Go, and Java
+  - current alias/extension normalization examples: `golang`, `jsx`, `cjs`, `mjs`, `cts`, `mts`, `py3`, `pyi`
+- Use `languageGlobs` when the repo wants different extension-to-language mapping from ast-grep’s defaults.
+
 ## How Ast-Grep Works
 
 - ast-grep accepts multiple query formats.
@@ -76,6 +87,7 @@ Use the public structural tool first for read-only project checks:
 
 - A minimal rule file starts with `id`, `language`, and root `rule`.
 - The root `rule` matches one target node per result. Meta variables come from that matched node and its substructure.
+- A root rule object needs at least one positive anchor. In practice, start with `pattern` or `kind`; do not expect `regex` alone to define the target node shape.
 - Rule objects are conjunctive: a node must satisfy every field that appears.
 - Rule objects are effectively unordered. If `has` or `inside` behavior becomes order-sensitive, move the logic into explicit `all` clauses so evaluation order is obvious.
 - Rule object categories:
@@ -88,18 +100,24 @@ Use the public structural tool first for read-only project checks:
 
 - Atomic rules are the narrowest checks on one target node.
   - Use `pattern` for syntax shape, `kind` for AST node type, and `regex` for node text.
+  - `pattern` can be an object with `context`, `selector`, and optional `strictness`.
+  - `kind` also accepts limited ESQuery-style syntax in newer ast-grep versions.
+  - `regex` matches the whole node text.
   - Use `nthChild` when the target is defined by its named-sibling position.
+  - `nthChild` accepts a number, an `An+B` formula string, or an object with `position`, `reverse`, and `ofRule`.
   - Use `range` when the match must stay inside a specific source span.
 - Relational rules describe where the target sits relative to other nodes.
   - Use `inside` and `has` for ancestor or descendant requirements.
-  - Use relational `field` when the semantic role matters, such as matching only a `body`.
+  - Use relational `field` when the semantic role matters, such as matching only a `body`. `field` is only available on `inside` and `has`.
   - Use `stopBy` when traversal should continue past the nearest boundary instead of stopping at the default scope edge.
+  - `stopBy: neighbor` is the default. `end` searches to the edge, and a rule-object stop is inclusive.
   - Use `follows` and `precedes` when relative order matters.
 - Composite rules combine multiple checks on the same target node.
   - `all` means every sub-rule must match.
   - `any` means at least one sub-rule must match.
   - `not` excludes a sub-rule.
   - `matches` reuses a named utility rule.
+  - `all` / `any` combine rules for one node, not multiple target nodes.
 - Utility rules are reusable rule definitions.
   - Use local `utils` in the current config file for nearby reuse.
   - Use global utility-rule files when several rules across the project need the same logic.
@@ -112,9 +130,12 @@ Use the public structural tool first for read-only project checks:
   - `language` selects the parser target.
   - `url` links to the rule’s docs or policy page.
   - `metadata` stores arbitrary project-specific data that rides along with the rule.
+- One YAML file can contain multiple rule documents separated by `---`.
 - Finding keys define what the rule matches.
   - `rule` is the main matcher.
   - `constraints` filters meta-variable captures after the core match succeeds.
+  - `constraints` only applies to single meta variables, not `$$$ARGS`-style multi captures.
+  - constrained meta variables are usually a poor fit inside `not`.
   - `utils` stores reusable helper rules that other parts of the config can reach through `matches`.
 - Patching keys define automatic fixes.
   - `transform` derives replacement variables before `fix`.
@@ -122,8 +143,16 @@ Use the public structural tool first for read-only project checks:
   - `rewriters` are for more complex reusable rewrite building blocks.
 - Linting keys define how the rule reports findings.
   - `severity`, `message`, `note`, and `labels` shape the diagnostic output.
+  - `severity: off` disables the rule in scan results.
+  - `note` supports Markdown but does not interpolate meta variables.
+  - `labels` must reference meta variables defined by the rule or `constraints`.
   - `files` scopes the included files and `ignores` scopes the excluded files.
   - `files` also supports object syntax when a glob needs flags such as `caseInsensitive`.
+  - `ignores` is checked before `files`.
+  - both `files` and `ignores` are relative to the directory containing `sgconfig.yml`
+  - do not prefix these globs with `./`
+  - YAML `ignores` is different from CLI `--no-ignore`
+- Rule `metadata` only appears in ast-grep JSON output when metadata inclusion is enabled, for example with `--include-metadata`.
 - Keep this YAML-config work on the skill path. VT Code’s public structural tool can run read-only scans and tests against these configs, but it does not surface the config schema as tool-call arguments.
 
 ## Pattern Syntax
@@ -258,6 +287,7 @@ Use the public structural tool first for read-only project checks:
 - Add YAML `fix` to rules when the rewrite should be versioned with the rule.
 - You can keep related rewrite rules in one file with YAML document separators `---`.
 - Meta variables used in `pattern` can be reused in `fix`.
+- String `fix` is plain replacement text, not a parsed Tree-Sitter pattern, so meta variables can appear anywhere in the replacement.
 - Unmatched meta variables become empty strings in `fix`.
 - `fix` is indentation-sensitive. Multiline templates preserve their authored indentation relative to the matched source position.
 - If `$VARName` would be parsed as a larger meta variable, use a transform instead of concatenating uppercase suffixes directly.
@@ -267,7 +297,7 @@ Use the public structural tool first for read-only project checks:
   - `template` is the replacement text
   - `expandStart` expands the rewritten range backward while its rule keeps matching
   - `expandEnd` expands the rewritten range forward while its rule keeps matching
-- `expandStart` / `expandEnd` are the right tool for deleting adjacent commas or other surrounding syntax that is not part of the target node itself.
+- `expandStart` / `expandEnd` are the right tool for deleting adjacent commas or other surrounding syntax that is not part of the target node itself, especially list items or object pairs.
 - Keep `transform` and `rewriters` in the same skill-driven rewrite workflow.
 
 ## CLI Modes
@@ -297,9 +327,21 @@ Use the public structural tool first for read-only project checks:
   - count matching nodes or use their order in later decisions
   - compute replacement strings programmatically
 - Binding guidance:
-  - JavaScript: most mature and reliable binding
+  - Node.js NAPI: main experimental API surface today
   - Python: good for programmatic syntax-tree workflows
   - Rust `ast_grep_core`: most efficient and lowest-level option
+- NAPI reference points:
+  - use `parse(Lang.<X>, src)` to get `SgRoot`
+  - use `kind(...)` and `pattern(...)` for kind lookup and compiled matcher helpers
+  - `SgRoot.root()` returns `SgNode`
+  - `SgNode` carries traversal, matcher checks, meta-variable access, and edit APIs such as `find`, `findAll`, `field`, `matches`, `inside`, `has`, `replace`, and `commitEdits`
+  - `NapiConfig` is the programmatic config shape for `find` / `findAll`
+- Python reference points:
+  - `SgRoot(src, language)` is the entry point
+  - `SgNode` mirrors the main inspection, refinement, traversal, search, and edit flows
+- Deprecated API note:
+  - language-specific JS objects like `js.parse(...)` are deprecated
+  - prefer unified NAPI functions such as `parse(Lang.JavaScript, src)`
 - JS/Python support for applying ast-grep `fix` directly is still experimental, so prefer explicit patch generation when you need dependable automation.
 - If a task crosses this boundary, stop trying to encode it as more YAML and switch to a proper programmatic implementation.
 

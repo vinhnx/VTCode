@@ -16,10 +16,10 @@ impl AstGrepLanguage {
         match value.trim().to_ascii_lowercase().as_str() {
             "rs" | "rust" => Some(Self::Rust),
             "py" | "python" | "python3" => Some(Self::Python),
-            "js" | "javascript" => Some(Self::JavaScript),
+            "js" | "javascript" | "jsx" => Some(Self::JavaScript),
             "ts" | "typescript" => Some(Self::TypeScript),
             "tsx" => Some(Self::Tsx),
-            "go" => Some(Self::Go),
+            "go" | "golang" => Some(Self::Go),
             "java" => Some(Self::Java),
             _ => None,
         }
@@ -28,9 +28,9 @@ impl AstGrepLanguage {
     pub(crate) fn from_extension(extension: &str) -> Option<Self> {
         match extension.trim().to_ascii_lowercase().as_str() {
             "rs" => Some(Self::Rust),
-            "py" => Some(Self::Python),
-            "js" => Some(Self::JavaScript),
-            "ts" => Some(Self::TypeScript),
+            "py" | "py3" | "pyi" => Some(Self::Python),
+            "js" | "jsx" | "cjs" | "mjs" => Some(Self::JavaScript),
+            "ts" | "cts" | "mts" => Some(Self::TypeScript),
             "tsx" => Some(Self::Tsx),
             "go" => Some(Self::Go),
             "java" => Some(Self::Java),
@@ -148,6 +148,10 @@ mod tests {
             Some(AstGrepLanguage::JavaScript)
         );
         assert_eq!(
+            AstGrepLanguage::from_user_value("jsx"),
+            Some(AstGrepLanguage::JavaScript)
+        );
+        assert_eq!(
             AstGrepLanguage::from_user_value("ts"),
             Some(AstGrepLanguage::TypeScript)
         );
@@ -156,7 +160,7 @@ mod tests {
             Some(AstGrepLanguage::Tsx)
         );
         assert_eq!(
-            AstGrepLanguage::from_user_value("go"),
+            AstGrepLanguage::from_user_value("golang"),
             Some(AstGrepLanguage::Go)
         );
         assert_eq!(
@@ -176,11 +180,27 @@ mod tests {
             Some(AstGrepLanguage::Python)
         );
         assert_eq!(
+            AstGrepLanguage::from_path(Path::new("tools/types.pyi")),
+            Some(AstGrepLanguage::Python)
+        );
+        assert_eq!(
             AstGrepLanguage::from_path(Path::new("web/app.js")),
             Some(AstGrepLanguage::JavaScript)
         );
         assert_eq!(
+            AstGrepLanguage::from_path(Path::new("web/app.jsx")),
+            Some(AstGrepLanguage::JavaScript)
+        );
+        assert_eq!(
+            AstGrepLanguage::from_path(Path::new("web/app.mjs")),
+            Some(AstGrepLanguage::JavaScript)
+        );
+        assert_eq!(
             AstGrepLanguage::from_path(Path::new("web/app.ts")),
+            Some(AstGrepLanguage::TypeScript)
+        );
+        assert_eq!(
+            AstGrepLanguage::from_path(Path::new("web/app.cts")),
             Some(AstGrepLanguage::TypeScript)
         );
         assert_eq!(
@@ -206,6 +226,10 @@ mod tests {
         assert_eq!(
             AstGrepLanguage::infer_from_positive_globs(["**/*.ts"]),
             Some(AstGrepLanguage::TypeScript)
+        );
+        assert_eq!(
+            AstGrepLanguage::infer_from_positive_globs(["src/**/*.mjs"]),
+            Some(AstGrepLanguage::JavaScript)
         );
         assert_eq!(
             AstGrepLanguage::infer_from_positive_globs(["src/**/*.go"]),
