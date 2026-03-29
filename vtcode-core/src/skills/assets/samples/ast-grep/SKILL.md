@@ -1,6 +1,6 @@
 ---
 name: ast-grep
-description: Use when the task involves ast-grep quick start, rule catalog examples, and project workflows such as installing ast-grep, `ast-grep run`, `sg scan`, `sg test`, `sg new`, `sg new rule`, `ast-grep lsp`, optional chaining refactors, project scaffolding with `sgconfig.yml`, `rules/`, `rule-tests/`, or `utils/`, pattern syntax, meta variables, multi meta variables like `$$$ARGS`, non-capturing `$_`, unnamed-node `$$VAR`, object-style patterns, rule cheat sheets, advanced hints like `nthChild stopBy` and `range field`, `constraints`, `labels`, local/global utility rules, `utils`, `transform`, `rewriters`, `customLanguages`, `languageGlobs`, `languageInjections`, `scan --rule`, `scan --inline-rules`, `--rewrite`, YAML `fix`, `expandStart`, `expandEnd`, `template`, `--interactive`, `--update-all`, `--stdin`, `--json`, `scan -r`, shell `completions`, GitHub Action setup, ast-grep JS/Python/Rust programmatic API usage, `ast_grep_core`, `matches` utility rules, or ast-grep rule authoring, rewriting, and debugging.
+description: "Use for ast-grep setup and authoring: install help, `ast-grep run`, `sg scan`, `sg test`, `sg new`, `sg new rule`, `ast-grep lsp`, scaffolding with `sgconfig.yml`, `rules/`, `rule-tests/`, or `utils/`, `scan --rule`, `scan --inline-rules`, `--stdin`, `--json`, optional chaining, rule catalog, meta variables, object-style patterns, rule cheat sheets, `nthChild stopBy`, `range field`, config hints like `metadata url` and `caseInsensitive glob`, `constraints`, `labels`, `files`, `ignores`, local/global utility rules, `transform`, `rewriters`, `expandEnd`, `customLanguages`, `languageGlobs`, `languageInjections`, programmatic API, `ast_grep_core`, and ast-grep rule authoring/debugging."
 metadata:
     short-description: Ast-grep project workflows
 ---
@@ -72,6 +72,15 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 - Composite rules combine checks for the same target node. Use `all` for explicit conjunction, `any` for alternatives, `not` for exclusions, and `matches` to delegate to a utility rule.
 - Utility rules keep repeated logic out of the main rule body. Use file-local `utils` for one config file and global utility-rule files when multiple rules in the project need the same building block.
 - Switch from a single `pattern` to a rule object when you need positional constraints, role-sensitive matching, reusable sub-rules, or several structural conditions on one node.
+
+## Config Cheat Sheet
+
+- Basic info keys define the rule itself. Use `id` for the unique rule name, `language` for the parser target, `url` for rule documentation, and `metadata` for custom project data that VT Code should preserve with the rule.
+- Finding keys define what gets matched. `rule` is the core matcher, `constraints` narrows meta-variable captures, and `utils` holds reusable helper rules that you call through `matches`.
+- Patching keys define reusable fixes. Use `transform` to derive new meta-variables before replacement, `fix` for either a string replacement or a `template` object with `expandStart` / `expandEnd`, and `rewriters` when the transformation is too complex for one inline `fix`.
+- Linting keys define what scan results report. Use `severity`, `message`, `note`, and `labels` for diagnostics, then `files` and `ignores` to scope where the rule applies.
+- `files` supports either plain globs or object entries. Use object syntax when you need options like `caseInsensitive` glob matching.
+- Keep config authoring on the ast-grep skill path. VT Code’s public structural tool runs read-only query/scan/test workflows; it does not expose rule-YAML authoring fields directly.
 
 ## Pattern Syntax
 

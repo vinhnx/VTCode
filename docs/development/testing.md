@@ -53,12 +53,12 @@ ast-grep scan --config sgconfig.yml
 If `ast-grep` is not installed yet, run `vtcode dependencies install ast-grep`.
 If a user asks for ast-grep installation or first-use help, route them to the bundled `ast-grep` skill before falling back to external package-manager instructions.
 
-For ast-grep rule authoring guidance, use the bundled `ast-grep` skill. It now covers the atomic / relational / composite / utility rule cheat sheet plus CLI iteration with `scan --rule` and `scan --inline-rules`.
+For ast-grep rule authoring guidance, use the bundled `ast-grep` skill. It now covers the atomic / relational / composite / utility rule cheat sheet, the YAML config cheat sheet, and CLI iteration with `scan --rule` and `scan --inline-rules`.
 That skill also covers project bootstrapping with `ast-grep new` / `ast-grep new rule`, though this repository already includes the required scaffold.
 Rewrite workflows such as `ast-grep run --rewrite`, YAML `fix`, and `expandStart` / `expandEnd` are also intentionally routed through that skill instead of the public structural tool surface.
 CLI-only topics such as `--stdin`, raw `--json`, `scan -r`, `lsp`, shell completions, and GitHub Action setup are also documented there.
 When ast-grep rule syntax is not expressive enough, that skill now also documents when to switch to ast-grep’s JavaScript/Python/Rust API instead of piling more complexity into YAML.
-It also covers ast-grep pattern syntax itself, including `$VAR`, `$$$ARGS`, `$_`, `$$VAR`, object-style patterns when fragments are ambiguous, and rule-object features such as `nthChild`, `range`, relational `field`, `stopBy`, and local/global utility rules.
+It also covers ast-grep pattern syntax itself, including `$VAR`, `$$$ARGS`, `$_`, `$$VAR`, object-style patterns when fragments are ambiguous, rule-object features such as `nthChild`, `range`, relational `field`, `stopBy`, and local/global utility rules, plus config keys such as `url`, `metadata`, `constraints`, `severity`, `message`, `note`, `labels`, `files`, `ignores`, `transform`, `fix`, `rewriters`, and `caseInsensitive` glob objects.
 Quick-start guidance there also covers shell quoting for metavariables, Linux `ast-grep` vs `sg`, and the optional-chaining rewrite example.
 Catalog-style example discovery and adaptation are also routed there, especially when examples depend on `constraints`, `utils`, `transform`, `rewriters`, or built-in fixes.
 

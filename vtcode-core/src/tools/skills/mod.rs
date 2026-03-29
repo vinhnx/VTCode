@@ -1319,6 +1319,50 @@ Use `/rust-skills`.
     }
 
     #[tokio::test]
+    async fn list_skills_discovers_bundled_ast_grep_by_metadata_url_query() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let active_skills = Arc::new(RwLock::new(HashMap::new()));
+        let tool = ListSkillsTool::with_codex_home(
+            temp_dir.path().to_path_buf(),
+            active_skills,
+            Some(temp_codex_home(temp_dir.path())),
+        );
+
+        let result = tool
+            .execute(json!({ "query": "metadata url" }))
+            .await
+            .expect("list skills succeeds");
+
+        assert_eq!(result["count"].as_u64(), Some(1));
+        let groups = result["groups"]["agent_skill"]
+            .as_array()
+            .expect("agent skill group");
+        assert_eq!(groups[0]["name"].as_str(), Some("ast-grep"));
+    }
+
+    #[tokio::test]
+    async fn list_skills_discovers_bundled_ast_grep_by_case_insensitive_glob_query() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let active_skills = Arc::new(RwLock::new(HashMap::new()));
+        let tool = ListSkillsTool::with_codex_home(
+            temp_dir.path().to_path_buf(),
+            active_skills,
+            Some(temp_codex_home(temp_dir.path())),
+        );
+
+        let result = tool
+            .execute(json!({ "query": "caseInsensitive glob" }))
+            .await
+            .expect("list skills succeeds");
+
+        assert_eq!(result["count"].as_u64(), Some(1));
+        let groups = result["groups"]["agent_skill"]
+            .as_array()
+            .expect("agent skill group");
+        assert_eq!(groups[0]["name"].as_str(), Some("ast-grep"));
+    }
+
+    #[tokio::test]
     async fn list_skills_discovers_bundled_ast_grep_by_stdin_query() {
         let temp_dir = TempDir::new().expect("temp dir");
         let active_skills = Arc::new(RwLock::new(HashMap::new()));

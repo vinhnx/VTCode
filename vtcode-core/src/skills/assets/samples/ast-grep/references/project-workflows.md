@@ -90,6 +90,27 @@ Use the public structural tool first for read-only project checks:
   - Use global utility-rule files when several rules across the project need the same logic.
 - Move from a simple `pattern` to a full rule object when the task needs positional constraints, semantic roles, reusable sub-rules, or several structural conditions on the same node.
 
+## Config Cheat Sheet
+
+- Basic information keys identify the rule and carry project metadata.
+  - `id` is the unique rule identifier.
+  - `language` selects the parser target.
+  - `url` links to the rule’s docs or policy page.
+  - `metadata` stores arbitrary project-specific data that rides along with the rule.
+- Finding keys define what the rule matches.
+  - `rule` is the main matcher.
+  - `constraints` filters meta-variable captures after the core match succeeds.
+  - `utils` stores reusable helper rules that other parts of the config can reach through `matches`.
+- Patching keys define automatic fixes.
+  - `transform` derives replacement variables before `fix`.
+  - `fix` can be a plain replacement string or a `FixConfig` object using `template`, `expandStart`, and `expandEnd`.
+  - `rewriters` are for more complex reusable rewrite building blocks.
+- Linting keys define how the rule reports findings.
+  - `severity`, `message`, `note`, and `labels` shape the diagnostic output.
+  - `files` scopes the included files and `ignores` scopes the excluded files.
+  - `files` also supports object syntax when a glob needs flags such as `caseInsensitive`.
+- Keep this YAML-config work on the skill path. VT Code’s public structural tool can run read-only scans and tests against these configs, but it does not surface the config schema as tool-call arguments.
+
 ## Pattern Syntax
 
 - Pattern text must be valid parseable code for the target language.
@@ -179,4 +200,5 @@ Switch to direct CLI work through `unified_exec` when the task needs:
 - `rewriters`
 - Custom `sgconfig.yml` authoring across `customLanguages`, `languageGlobs`, `languageInjections`, or `expandoChar`
 - Advanced rule-object authoring with `nthChild`, `range`, relational `field`, `stopBy`, or local/global utility rules
+- Rule-config authoring with `url`, `metadata`, `constraints`, `labels`, `files`, `ignores`, `transform`, `fix`, `rewriters`, or `caseInsensitive` glob objects
 - Iterative rule debugging that depends on unsupported ast-grep flags or output formats
