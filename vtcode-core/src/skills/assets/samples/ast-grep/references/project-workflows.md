@@ -115,6 +115,219 @@ Use the public structural tool first for read-only project checks:
 - Prefer adapting catalog ideas to the current repository over copying them verbatim.
 - If a catalog rule relies on features like `transform`, `rewriters`, or utility rules, keep that work in the skill-driven workflow instead of trying to squeeze it into the public read-only structural tool.
 
+### Rust Catalog Examples
+
+- Avoid duplicated exports:
+  - useful when a Rust crate exposes both `pub mod foo;` and `pub use foo::Foo;`
+  - model it as a scan rule for API-surface review, not an automatic rewrite
+- `chars().enumerate()` vs `char_indices()`:
+  - good rewrite example when the code really needs byte offsets
+  - do not apply blindly if the caller intentionally wants character positions
+- `to_string().chars().count()` vs `checked_ilog10()`:
+  - good Rust-specific performance rewrite when the expression is truly counting digits of an integer
+  - do not over-apply if the expression is part of a more general formatting pipeline
+- Unsafe function without unsafe block:
+  - good scan rule for Rust review workflows
+  - the catalog form uses `kind: function_item`, checks `function_modifiers` with `regex: "^unsafe"`, and rejects bodies containing `unsafe_block`
+  - keep this as a diagnostic rule unless the repository already has a codemod-safe policy for removing `unsafe`
+- `indoc!` rewrite:
+  - useful as a formatting-sensitive rewrite example
+  - keep this on the CLI skill path because the replacement should be reviewed for whitespace and raw-string fidelity
+- When adapting Rust catalog rules in VT Code, preserve repository-specific API conventions, lint policy, and safe-by-default coding rules instead of importing the example verbatim.
+
+### TypeScript Catalog Examples
+
+- TypeScript vs TSX:
+  - do not assume one parser fits both
+  - use `languageGlobs` only when the repository intentionally wants `.ts` parsed as TSX
+- Imports without file extensions:
+  - good scan rule for ESM repositories that require explicit local file extensions
+  - skip it in toolchains that intentionally resolve extensionless imports
+- XState v4 to v5 migration:
+  - strong example of multi-rule YAML with `utils`, `transform`, and multi-document config
+  - keep it on the CLI skill path and review the migration diff carefully
+- No `await` in `Promise.all([...])`:
+  - good narrow rewrite when the `await` is directly inside the inline array
+  - do not over-generalize it to logic that is intentionally sequential
+- No console except allowed cases:
+  - good scan rule for browser or client-facing TypeScript
+  - adapt exceptions to repository policy before enabling it broadly
+- Import usage and import identifier discovery:
+  - useful for dependency analysis, cleanup, and codemod prep
+  - often better as search/report rules than automatic rewrites
+- Chai `should` to `expect`:
+  - useful testing migration example
+  - apply it only where the repository actually uses Chai and the target assertion style is settled
+- Barrel-import splitting:
+  - strong `rewriters` example for converting one import into many direct imports
+  - keep it on the CLI skill path because export shape and path conventions vary
+- Missing Angular `@Component()` decorator:
+  - good labels example for framework-aware diagnostics
+  - only use it in repositories that actually contain Angular lifecycle hooks
+- Logical assignment operators:
+  - useful concise rewrite when the project target and lint policy allow ES2021 operators
+  - avoid it in compatibility-sensitive codebases
+- When adapting TypeScript catalog rules in VT Code, preserve repository-specific module resolution, framework usage, transpilation target, and lint policy instead of importing the example verbatim.
+
+### TSX Catalog Examples
+
+- TSX vs TypeScript:
+  - JSX-bearing rules should stay on the TSX parser
+  - use `languageGlobs` only when the repository intentionally wants `.ts` parsed as TSX
+- Unnecessary `useState<T>` primitives:
+  - good cleanup rewrite for primitive generic arguments when inference already works
+  - do not apply it when the generic is carrying real information that inference would lose
+- `&&` short-circuit in JSX:
+  - useful React-oriented rewrite from `{cond && <Node />}` to `{cond ? <Node /> : null}`
+  - especially valuable when the left side can be `0` or another renderable falsy value
+- MobX `observer` component style rewrite:
+  - useful migration example for making hook linting more visible to tooling
+  - keep it on the CLI skill path because the rewrite changes component shape and naming
+- Unnecessary React hook:
+  - good diagnostic rule for `use*` functions that do not actually call hooks
+  - treat it as API-sensitive cleanup, not a blind rewrite
+- Reverse React Compiler:
+  - intentionally opinionated de-memoization rewrite
+  - only use it when the user explicitly wants that behavior
+- Nested links:
+  - good JSX correctness and accessibility scan rule
+  - especially useful in React or router-heavy component trees
+- SVG attribute renaming:
+  - good JSX compatibility rewrite for hyphenated SVG props such as `stroke-linecap`
+  - keep it reviewable because generated markup and formatting may need cleanup
+- When adapting TSX catalog rules in VT Code, preserve repository-specific React conventions, JSX runtime, lint rules, and browser-support policy instead of importing the example verbatim.
+
+### YAML Catalog Examples
+
+- Host/port message rule:
+  - good example of a simple configuration scan rule that emits a message when matching `host` or `port` entries
+  - treat hard-coded values like `8000` as repository policy, not as generally correct defaults
+- YAML config checks:
+  - useful for enforcing deployment, service, or environment conventions
+  - if the policy depends on a key/value relationship rather than either field alone, strengthen the rule instead of relying on separate loose matches
+- When adapting YAML catalog rules in VT Code, preserve repository-specific config policy and avoid baking arbitrary environment assumptions into the rule text.
+
+### Ruby Catalog Examples
+
+- Rails `before_filter` / `after_filter` / `around_filter` migration:
+  - useful Rails upgrade rewrite from deprecated `*_filter` names to `*_action`
+  - keep it on the CLI skill path and review the diff because framework version and controller conventions vary
+- Symbol over proc:
+  - good Ruby cleanup rewrite for enumerable calls like `map`, `select`, or `each`
+  - apply it only when the shorthand stays idiomatic and readable in the target codebase
+- Path traversal detection:
+  - good security-oriented scan rule for Rails path construction and `send_file`
+  - treat matches as review candidates, not conclusive vulnerabilities, because sanitization or allowlisting may happen elsewhere
+- When adapting Ruby catalog rules in VT Code, preserve repository-specific Rails versioning, Ruby style conventions, and security policy instead of importing the example verbatim.
+
+### Python Catalog Examples
+
+- OpenAI SDK migration:
+  - good multi-rule migration example for updating legacy `openai` imports, client initialization, and completion calls
+  - keep it on the CLI skill path because API migrations often require response-shape, auth, and application-flow review beyond a blind rewrite
+- Generator-expression rewrites:
+  - good example of restricting a rewrite to iterator-accepting contexts such as `any`, `all`, or `sum`
+  - do not expand it to every list comprehension unless the surrounding use site is proven generator-safe
+- Walrus-operator rewrite:
+  - useful paired-rule example that rewrites the `if` and removes the preceding temporary assignment
+  - only apply it where the repository requires Python 3.8+ and accepts assignment-expression style
+- Remove async function:
+  - strong `rewriters` example for transforming nested `await` sites inside a matched async function body
+  - treat it as a semantics-changing migration and review all callers before using it broadly
+- Pytest fixture refactors:
+  - useful `utils`-driven example for renaming fixtures or adding fixture type hints without touching similarly named non-test code
+  - keep it scoped to real pytest contexts so ordinary production functions are not swept in
+- PEP 604 typing rewrites:
+  - useful modernization examples for `Optional[T]` and nested `Union[...]` rewrites
+  - only use them when the repository’s Python version floor and typing policy explicitly support `T | None` and `|`
+- SQLAlchemy annotated mapping rewrite:
+  - useful ORM migration example for moving `mapped_column(String, nullable=True)` toward `Mapped[str | None]`
+  - keep it reviewable because SQLAlchemy version, declarative style, and column semantics vary across repositories
+- When adapting Python catalog rules in VT Code, preserve repository-specific Python version support, framework conventions, typing standards, async behavior, and migration boundaries instead of importing the example verbatim.
+
+### Kotlin Catalog Examples
+
+- Clean-architecture import rule:
+  - good example of enforcing architecture boundaries by combining import matching with `files`-scoped targeting
+  - treat it as repository-policy enforcement and adapt both the package regexes and file globs to the real module layout
+- Kotlin architectural scans:
+  - best suited for diagnostic use, not blind rewrites
+  - route violations through review because imports across layers often reflect design decisions that need context
+- When adapting Kotlin catalog rules in VT Code, preserve repository-specific package names, architecture boundaries, Android layering, and ownership of lint policy instead of importing the example verbatim.
+
+### Java Catalog Examples
+
+- Unused local variable rule:
+  - useful educational example of ordered `all` constraints with `has` and `precedes`
+  - do not treat it as a replacement for compiler or IDE diagnostics because it intentionally simplifies Java variable-declaration coverage
+- Find `String` field declarations:
+  - good structural scan example for matching `field_declaration` nodes by their typed child instead of relying on fragile surface syntax
+  - especially useful when modifiers or annotations make naive patterns fail to parse
+- Java catalog usage in VT Code:
+  - keep these rules review-oriented unless the repository explicitly wants ast-grep-based cleanup
+  - preserve repository-specific annotation style, package structure, and static-analysis tooling
+
+### HTML Catalog Examples
+
+- HTML parser for framework templates:
+  - useful for Vue, Svelte, Astro, and similar template files when the syntax is mostly HTML
+  - do not assume it covers framework-specific frontmatter or control-flow syntax; switch to a custom language when parser gaps matter
+- Ant Design Vue attribute migration:
+  - good enclosing-tag rewrite example for renaming `:visible` to `:open` only on the intended popup components
+  - keep it on the CLI skill path because framework version and component-library conventions need confirmation first
+- i18n extraction:
+  - good template rewrite example for static text while skipping mustache expressions
+  - keep it reviewable because real i18n flows usually need key naming, dictionary generation, and whitespace cleanup around the rewrite
+- When adapting HTML catalog rules in VT Code, preserve repository-specific template framework conventions, parser limitations, i18n workflow, and component-library versions instead of importing the example verbatim.
+
+### Go Catalog Examples
+
+- Problematic `defer` statements:
+  - good Go-specific correctness scan for deferred calls whose nested arguments run immediately instead of at function exit
+  - treat matches as review candidates and prefer closure-based rewrites only after checking local test and style conventions
+- Function-name pattern scans:
+  - good example of combining `kind`, `has`, and `regex` to find declarations such as `Test.*`
+  - useful for test discovery, migration targeting, or repository audits where meta-variable patterns are too limited
+- Contextual function-call matching:
+  - good example of using `context` plus `selector: call_expression` to avoid Go parser ambiguity between calls and type conversions
+  - use this pattern whenever a plain call-expression pattern under-matches or parses unexpectedly
+- Package-import scans:
+  - useful for dependency auditing, banned-import enforcement, or migration prep
+  - adapt the import regex to the repository’s real package policy instead of copying the sample package name
+- JSON tag `-,` detection:
+  - high-signal security scan for Go struct tags that look omitted but still allow unmarshaling through the `-` key
+  - treat these matches as actionable security review items rather than optional style cleanup
+- When adapting Go catalog rules in VT Code, preserve repository-specific Go version support, test conventions, package structure, security policy, and existing linter coverage instead of importing the example verbatim.
+
+### Cpp Catalog Examples
+
+- Format-string vulnerability rewrite:
+  - good security-focused rewrite example for `fprintf` or `sprintf` calls that pass attacker-controlled or variable text as the format argument
+  - keep it reviewable because some repositories should migrate to safer APIs or broader hardening patterns instead of applying only a local `"%s"` rewrite
+- Struct inheritance matching:
+  - good example of why C++ AST-based patterns often need the full syntactic shape instead of a shortened surface snippet
+  - use the full `struct ... : ... { ... }` pattern or switch to a YAML rule when a smaller pattern parses as `ERROR`
+- Reusing Cpp rules with C:
+  - only do this when the repository intentionally parses `.c` as Cpp via `languageGlobs`
+  - preserve repository-specific parser expectations in mixed-language trees because C and C++ syntax compatibility is not free
+- When adapting Cpp catalog rules in VT Code, preserve repository-specific parser choice, security policy, libc conventions, and style/tooling expectations instead of importing the example verbatim.
+
+### C Catalog Examples
+
+- Match function-call patterns:
+  - good example of using `context` plus `selector: call_expression` to work around tree-sitter-c fragment ambiguity
+  - prefer this form whenever a plain `foo($A)` pattern parses incorrectly as a macro-related node instead of a call
+- Method-style to function-call rewrites:
+  - useful migration example for C codebases that simulate methods on structs
+  - keep it on the CLI skill path because rewriting `$R.$METHOD(...)` to `$METHOD(&$R, ...)` changes the call shape and should be reviewed with local pointer and API conventions in mind
+- Yoda-condition rewrite:
+  - clearly style-oriented example for `if` comparisons with numeric literals
+  - only use it when the repository explicitly prefers that comparison style, not as a default cleanup
+- Parsing C as Cpp:
+  - acceptable when the repository intentionally uses `languageGlobs` to share rule definitions
+  - preserve parser expectations carefully in mixed C/C++ trees because upstream parse behavior differs
+- When adapting C catalog rules in VT Code, preserve repository-specific parser choice, macro behavior, pointer conventions, and coding-style policy instead of importing the example verbatim.
+
 ## Rule Essentials
 
 - A minimal rule file starts with `id`, `language`, and root `rule`.
