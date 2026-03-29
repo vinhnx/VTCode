@@ -280,6 +280,27 @@ fn test_model_variants() {
 }
 
 #[test]
+fn test_preferred_lightweight_variant() {
+    assert_eq!(
+        ModelId::GPT54.preferred_lightweight_variant(),
+        Some(ModelId::GPT54Mini)
+    );
+    assert_eq!(
+        ModelId::ClaudeSonnet46.preferred_lightweight_variant(),
+        Some(ModelId::ClaudeHaiku45)
+    );
+    assert_eq!(
+        ModelId::Gemini31ProPreview.preferred_lightweight_variant(),
+        Some(ModelId::Gemini31FlashLitePreview)
+    );
+    assert_eq!(
+        ModelId::ZaiGlm51.preferred_lightweight_variant(),
+        Some(ModelId::ZaiGlm5)
+    );
+    assert_eq!(ModelId::GPT54Mini.preferred_lightweight_variant(), None);
+}
+
+#[test]
 fn test_model_generation() {
     // Gemini generations
     assert_eq!(ModelId::Gemini3FlashPreview.generation(), "3");

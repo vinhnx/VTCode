@@ -59,7 +59,7 @@ read_file = true
 # Environment variable that stores the API key for the active provider
 # Default: "OPENAI_API_KEY"
 # Type: `string`
-api_key_env = ""
+api_key_env = "OPENAI_API_KEY"
 
 # Deprecated compatibility flag. When `true` and `permissions.default_mode` is unset, VT Code maps it
 # to `permissions.default_mode = "auto"`.
@@ -86,7 +86,7 @@ default_editing_mode = "edit"
 # Default model to use
 # Default: "gpt-5.3-codex"
 # Type: `string`
-default_model = "gpt-5.4-mini"
+default_model = "gpt-5.1-codex"
 
 # Enable an extra self-review pass to refine final responses
 # Default: false
@@ -150,7 +150,7 @@ project_doc_max_bytes = 16384
 # Possible values: anthropic, gemini, openai, openrouter, zai
 # Default: "openai"
 # Type: `string`
-provider = "copilot"
+provider = "openai"
 
 # Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh) Applies
 # to: Claude, GPT-5 family, Gemini, Qwen3, DeepSeek with reasoning capability
@@ -469,14 +469,14 @@ temperature = 0.3
 # Enable small model tier for efficient operations
 # Default: true
 # Type: `boolean`
-enabled = false
+enabled = true
 
 # Small model to use (e.g., claude-4-5-haiku, "gpt-4-mini", "gemini-2.0-flash") Leave empty to
 # auto-select a lightweight sibling of the main model
 # Possible values: claude-4-5-haiku, e.g., gemini-2.0-flash, gpt-4-mini
 # Default: ""
 # Type: `string`
-model = ""
+model = "gpt-5.4-mini"
 
 # Temperature for small model responses
 # Default: 0.30000001192092896
@@ -3340,4 +3340,3 @@ mode = "Auto"
 # Default: 1000
 # Type: `integer`
 refresh_interval_ms = 1000
-

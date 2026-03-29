@@ -87,3 +87,58 @@ use https://github.com/Uzaaft/libghostty-rs/ replace existing libghostty-vt impl
 ---
 
 handle model picker for /subagent create/edit/udpate interactively instead of requiring manual YAML editing. This is a common source of friction for users creating new subagents, and the current YAML editing approach is error-prone and not user-friendly.
+
+---
+
+make
+
+```
+
+# Small Model Helpers
+# Low-cost model settings for lightweight side tasks.
+[agent.small_model]
+# Enable small model tier for efficient operations
+# Default: true
+# Type: `boolean`
+enabled = true
+
+# Small model to use (e.g., claude-4-5-haiku, "gpt-4-mini", "gemini-2.0-flash") Leave empty to
+# auto-select a lightweight sibling of the main model
+# Possible values: claude-4-5-haiku, e.g., gemini-2.0-flash, gpt-4-mini
+# Default: ""
+# Type: `string`
+model = "gpt-5.4-mini"
+
+# Temperature for small model responses
+# Default: 0.30000001192092896
+# Type: `number`
+temperature = 0.3
+
+# Enable small model for git history processing
+# Default: true
+# Type: `boolean`
+use_for_git_history = true
+
+# Enable small model for large file reads (>50KB)
+# Default: true
+# Type: `boolean`
+use_for_large_reads = true
+
+# Enable small model for web content summarization
+# Default: true
+# Type: `boolean`
+use_for_web_summary = true
+use_for_memory = true
+```
+
+1. make theese interactive config in /config
+2. add 2 category tree /model config for main model and small model. level 1 is main model. level 2 is default model
+
+---
+
+auto select light model based on main model's but maybe weaker and lighter version for example (gpt-5.4 -> gpt-5.4-mini) (claude sonnet 4.6 -> claude haiku 4.6) of use lower version pari number (glm-5.1 - glm-5)
+
+---
+
+OpenAI has a standalone compaction endpoint that's incredibly customizable and is disconnected from their responses API.
+https://developers.openai.com/api/reference/resources/responses/methods/compact

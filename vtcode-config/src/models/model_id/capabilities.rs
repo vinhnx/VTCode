@@ -161,6 +161,32 @@ impl ModelId {
         generated_catalog_entry(capability_provider_key(self.provider()), self.as_str())
     }
 
+    /// Preferred built-in lightweight sibling or lower-tier fallback for this model.
+    pub fn preferred_lightweight_variant(&self) -> Option<Self> {
+        match self {
+            ModelId::Gemini31ProPreview | ModelId::Gemini31ProPreviewCustomTools => {
+                Some(ModelId::Gemini31FlashLitePreview)
+            }
+            ModelId::GPT54 | ModelId::GPT54Pro => Some(ModelId::GPT54Mini),
+            ModelId::GPT52
+            | ModelId::GPT52Codex
+            | ModelId::GPT53Codex
+            | ModelId::GPT51Codex
+            | ModelId::GPT51CodexMax
+            | ModelId::GPT5
+            | ModelId::GPT5Codex => Some(ModelId::GPT5Mini),
+            ModelId::ClaudeOpus46 | ModelId::ClaudeSonnet46 => Some(ModelId::ClaudeHaiku45),
+            ModelId::CopilotGPT54 => Some(ModelId::CopilotGPT54Mini),
+            ModelId::CopilotGPT52Codex | ModelId::CopilotGPT51CodexMax => {
+                Some(ModelId::CopilotGPT54Mini)
+            }
+            ModelId::DeepSeekReasoner => Some(ModelId::DeepSeekChat),
+            ModelId::ZaiGlm51 => Some(ModelId::ZaiGlm5),
+            ModelId::MinimaxM27 => Some(ModelId::MinimaxM25),
+            _ => None,
+        }
+    }
+
     /// Attempt to find a non-reasoning variant for this model.
     pub fn non_reasoning_variant(&self) -> Option<Self> {
         if let Some(meta) = self.openrouter_metadata() {
