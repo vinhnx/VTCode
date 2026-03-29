@@ -377,7 +377,8 @@ fn tool_args_diff_preview(tool_name: &str, tool_args: Option<&Value>) -> Option<
         return Some(vec!["(no changes)".to_string()]);
     }
 
-    let lines = format_unified_diff_lines(content);
+    let plain = vtcode_commons::ansi::strip_ansi(content);
+    let lines = format_unified_diff_lines(&plain);
     if lines.len() <= 80 {
         return Some(lines);
     }

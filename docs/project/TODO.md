@@ -219,12 +219,3 @@ Fix policy permission ansi code broken on diff preview
 check screenshot
 
 '/Users/vinhnguyenxuan/Documents/vtcode-resources/bugs/Screenshot 2026-03-29 at 9.29.43 PM.png'
-
----
-
-fix control+c too long to exit and quitting the program is too slow
-
-╭─ Info ────────────────────────────────────────────────────────────────────────────╮
-│ Interrupt received. Stopping task... (Press Esc, Ctrl+C, or /stop again within 2s │
-│ to exit) │
-╰──────────────

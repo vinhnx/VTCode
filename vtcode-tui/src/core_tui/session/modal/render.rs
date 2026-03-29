@@ -18,6 +18,7 @@ use unicode_width::UnicodeWidthStr;
 use super::layout::{ModalBodyContext, ModalRenderStyles, ModalSection};
 use super::state::{ModalListState, ModalSearchState, WizardModalState, WizardStepState};
 use crate::ui::tui::session::wrapping;
+use ratatui::style::Color as RatatuiColor;
 use std::mem;
 
 fn modal_text_area_aligned_with_list(area: Rect) -> Rect {
@@ -563,6 +564,33 @@ pub fn render_modal_body(
     None
 }
 
+enum DiffLineKind {
+    Addition,
+    Deletion,
+    HunkHeader,
+}
+
+fn classify_diff_line(line: &str) -> Option<DiffLineKind> {
+    let trimmed = line.trim();
+    if trimmed.starts_with("@@ ") {
+        Some(DiffLineKind::HunkHeader)
+    } else if trimmed.starts_with('+') {
+        Some(DiffLineKind::Addition)
+    } else if trimmed.starts_with('-') {
+        Some(DiffLineKind::Deletion)
+    } else {
+        None
+    }
+}
+
+fn diff_line_style(kind: &DiffLineKind) -> Style {
+    match kind {
+        DiffLineKind::Addition => Style::default().fg(RatatuiColor::LightGreen),
+        DiffLineKind::Deletion => Style::default().fg(RatatuiColor::LightRed),
+        DiffLineKind::HunkHeader => Style::default().add_modifier(Modifier::DIM),
+    }
+}
+
 fn render_modal_instructions(
     frame: &mut Frame<'_>,
     area: Rect,
@@ -642,7 +670,14 @@ fn render_modal_instructions(
             continue;
         }
 
-        if !first_content_rendered {
+        if let Some(diff_kind) = classify_diff_line(trimmed) {
+            first_content_rendered = true;
+            let style = diff_line_style(&diff_kind);
+            items.push(vec![Line::from(vec![
+                Span::styled(bullet_indent.clone(), Style::default()),
+                Span::styled(display_text, style),
+            ])]);
+        } else if !first_content_rendered {
             let mut lines = Vec::new();
             for (index, segment) in wrapped.into_iter().enumerate() {
                 let style = if is_highlighted {

@@ -1427,17 +1427,32 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             emitter.finish_open_responses();
         }
         agent_touched_paths.extend(context_manager.tracked_instruction_activity_paths());
-        if let Err(err) = vtcode_core::persistent_memory::finalize_persistent_memory(
-            &config,
-            vt_cfg.as_ref(),
-            &runtime.state.messages,
-        )
-        .await
-        {
-            tracing::warn!(
-                "Failed to update persistent memory at session finalization: {}",
-                err
-            );
+        // Skip persistent memory on interrupt-exits (it makes LLM API calls which
+        // delay shutdown significantly). For normal exits, cap it with a timeout.
+        if !matches!(session_end_reason, SessionEndReason::Exit) {
+            match tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                vtcode_core::persistent_memory::finalize_persistent_memory(
+                    &config,
+                    vt_cfg.as_ref(),
+                    &runtime.state.messages,
+                ),
+            )
+            .await
+            {
+                Ok(Err(err)) => {
+                    tracing::warn!(
+                        "Failed to update persistent memory at session finalization: {}",
+                        err
+                    );
+                }
+                Err(_elapsed) => {
+                    tracing::warn!(
+                        "Persistent memory finalization timed out, skipping"
+                    );
+                }
+                Ok(Ok(_)) => {}
+            }
         }
 
         let finalization_output = match finalize_session(

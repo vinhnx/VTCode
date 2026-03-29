@@ -56,23 +56,23 @@ pub(crate) fn spawn_signal_handler(
 
                     // Cancel path: attempt MCP shutdown with a timeout so the
                     // signal handler stays responsive to a second Ctrl+C.
-                    if let Some(mcp_manager) = &async_mcp_manager {
-                        if let Err(e) = tokio::time::timeout(
+                    if let Some(mcp_manager) = &async_mcp_manager
+                        && let Err(e) = tokio::time::timeout(
                             std::time::Duration::from_secs(2),
                             mcp_manager.shutdown(),
-                        ).await.unwrap_or(Ok(())) {
-                            let error_msg = e.to_string();
-                            if error_msg.contains("EPIPE")
-                                || error_msg.contains("Broken pipe")
-                                || error_msg.contains("write EPIPE")
-                            {
-                                tracing::debug!(
-                                    "MCP client shutdown encountered pipe errors during interrupt (normal): {}",
-                                    e
-                                );
-                            } else {
-                                tracing::warn!("Failed to shutdown MCP client on interrupt: {}", e);
-                            }
+                        ).await.unwrap_or(Ok(()))
+                    {
+                        let error_msg = e.to_string();
+                        if error_msg.contains("EPIPE")
+                            || error_msg.contains("Broken pipe")
+                            || error_msg.contains("write EPIPE")
+                        {
+                            tracing::debug!(
+                                "MCP client shutdown encountered pipe errors during interrupt (normal): {}",
+                                e
+                            );
+                        } else {
+                            tracing::warn!("Failed to shutdown MCP client on interrupt: {}", e);
                         }
                     }
                 }

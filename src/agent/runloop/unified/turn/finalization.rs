@@ -92,33 +92,52 @@ pub(super) async fn finalize_session(
     }
 
     if let Some(hooks) = lifecycle_hooks {
-        match hooks.run_session_end(session_end_reason).await {
-            Ok(messages) => {
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(3),
+            hooks.run_session_end(session_end_reason),
+        )
+        .await
+        {
+            Ok(Ok(messages)) => {
                 render_hook_messages(renderer, &messages)?;
             }
-            Err(err) => {
+            Ok(Err(err)) => {
                 renderer.line(
                     MessageStyle::Error,
                     &format!("Failed to run session end hooks: {}", err),
                 )?;
             }
+            Err(_elapsed) => {
+                tracing::warn!("Session end hooks timed out, skipping");
+            }
         }
     }
 
-    if let Some(mcp_manager) = async_mcp_manager
-        && let Err(e) = mcp_manager.shutdown().await
-    {
-        let error_msg = e.to_string();
-        if error_msg.contains("EPIPE")
-            || error_msg.contains("Broken pipe")
-            || error_msg.contains("write EPIPE")
+    if let Some(mcp_manager) = async_mcp_manager {
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            mcp_manager.shutdown(),
+        )
+        .await
         {
-            tracing::debug!(
-                "MCP client shutdown encountered pipe errors (normal): {}",
-                e
-            );
-        } else {
-            tracing::warn!("Failed to shutdown MCP client cleanly: {}", e);
+            Ok(Err(e)) => {
+                let error_msg = e.to_string();
+                if error_msg.contains("EPIPE")
+                    || error_msg.contains("Broken pipe")
+                    || error_msg.contains("write EPIPE")
+                {
+                    tracing::debug!(
+                        "MCP client shutdown encountered pipe errors (normal): {}",
+                        e
+                    );
+                } else {
+                    tracing::warn!("Failed to shutdown MCP client cleanly: {}", e);
+                }
+            }
+            Err(_elapsed) => {
+                tracing::warn!("MCP client shutdown timed out during finalization");
+            }
+            Ok(Ok(())) => {}
         }
     }
 
@@ -128,7 +147,7 @@ pub(super) async fn finalize_session(
 
     // Give the TUI a brief moment to shut down cleanly before we forcefully restore
     // The TUI runs in a background task and may need a moment to clean up
-    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
 
     // Ensure terminal is properly restored in case TUI didn't exit cleanly
     // This is critical because the TUI task may still be holding terminal state
