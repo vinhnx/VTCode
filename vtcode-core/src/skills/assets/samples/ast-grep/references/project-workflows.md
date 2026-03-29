@@ -189,6 +189,26 @@ Use the public structural tool first for read-only project checks:
   - text differences can stop mattering under `signature`
 - VT Code exposes `strictness` publicly on read-only structural queries. Use the bundled skill when the task is about picking the right strictness, or when the user needs CLI `--strictness` or YAML pattern-object `strictness`.
 
+## Custom Languages
+
+- Use this path when the language has a tree-sitter grammar but is not built into ast-grep.
+- Setup flow:
+  - install `tree-sitter` CLI and fetch or author the grammar
+  - compile the parser as a dynamic library
+  - register it in workspace `sgconfig.yml` `customLanguages`
+- Preferred compiler path:
+  - `tree-sitter build --output <lib>`
+  - if that subcommand is unavailable, use `TREE_SITTER_LIBDIR=<dir> tree-sitter test`
+- Existing dynamic libraries can be reused, including parser builds produced by Neovim, if the grammar is the right one.
+- Register:
+  - `libraryPath` for the compiled library
+  - `extensions` for file detection
+  - optional `expandoChar` when `$VAR` is not valid syntax in the target language
+- Use `tree-sitter parse <file>` to inspect parser output when the grammar or extension mapping is in doubt.
+- VT Code boundary:
+  - public structural queries can consume the configured custom language
+  - parser compilation and `sgconfig.yml` authoring remain skill-driven work
+
 ## FAQ Highlights
 
 - If a fragment pattern does not match, provide a larger valid `context` snippet and use `selector` to focus the real node you care about.

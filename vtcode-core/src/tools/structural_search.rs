@@ -17,7 +17,7 @@ const DEFAULT_MAX_RESULTS: usize = 100;
 const MAX_ALLOWED_RESULTS: usize = 10_000;
 const DEFAULT_AST_GREP_CONFIG_PATH: &str = "sgconfig.yml";
 const AST_GREP_FAQ_HINT: &str = "Hints: patterns must be valid parseable code for the selected language; ast-grep matches CST structure, not raw text; if the target is only a fragment, retry with a larger parseable pattern and use `selector` when the real match is a subnode inside that pattern; invalid snippets may appear to work only through tree-sitter recovery, so prefer valid `context` plus `selector` instead of relying on recovery; do not try to force a different node kind by combining separate `kind` and `pattern` rules; use one pattern object with `context` plus `selector` instead; operators and keywords usually are not valid meta-variable positions, so switch to parseable code plus `kind`, `regex`, `has`, or another rule object; `$VAR` matches named nodes by default, `$$VAR` includes unnamed nodes, and `$$$ARGS` matches zero or more nodes lazily; meta variables are only detected when the whole AST node text matches meta-variable syntax, so mixed text or lowercase names will not work; repeat captured names only when the syntax must match exactly, and prefix with `_` to disable capture when equality is not required; if a name must match by prefix or suffix, capture the whole node and narrow it with `constraints.regex` instead of mixing text into the meta variable; if node role matters, make it explicit in the parseable pattern instead of guessing; `selector` can also override the default effective node when statement-level matching matters more than the inner expression; if matches are too broad or too narrow, tune `strictness` (`smart` default; `cst`, `ast`, `relaxed`, and `signature` control what matching may skip); use `debug_query` to inspect parse output when matching is surprising; structural search is syntax-aware, not scope/type/data-flow analysis.";
-const AST_GREP_PROJECT_CONFIG_HINT: &str = "If the target language is not built into ast-grep, register it in workspace-local `sgconfig.yml` under `customLanguages` with a compiled tree-sitter dynamic library. If the parser exists but the extension is unusual, map it with `languageGlobs`. If the target syntax is embedded inside another host language, configure `languageInjections`. If `$VAR` is not valid syntax for that language, use its configured `expandoChar` instead. ast-grep rules are single-language, so shared JS/TS-style coverage usually means parsing both through the superset via `languageGlobs` or maintaining separate rules.";
+const AST_GREP_PROJECT_CONFIG_HINT: &str = "If the target language is not built into ast-grep, register it in workspace-local `sgconfig.yml` under `customLanguages` with a compiled tree-sitter dynamic library. Prefer `tree-sitter build --output <lib>` to compile it, or use `TREE_SITTER_LIBDIR` with `tree-sitter test` on older tree-sitter versions. Reusing a compatible parser library from Neovim is also valid. If the parser exists but the extension is unusual, map it with `languageGlobs`. If the target syntax is embedded inside another host language, configure `languageInjections`. If `$VAR` is not valid syntax for that language, use its configured `expandoChar` instead. Use `tree-sitter parse <file>` to inspect parser output when the grammar or file association is unclear. ast-grep rules are single-language, so shared JS/TS-style coverage usually means parsing both through the superset via `languageGlobs` or maintaining separate rules.";
 const DEBUG_QUERY_LANG_HINT: &str = "action='structural' requires an effective `lang` when `debug_query` is set. Inference only works for unambiguous file paths or single-language positive globs; narrow `path`, add a single-language glob, or set `lang` explicitly";
 const STRUCTURAL_FORBIDDEN_KEYS: &[&str] = &[
     "rewrite",
@@ -1690,9 +1690,13 @@ mod tests {
 
         assert!(text.contains("customLanguages"));
         assert!(text.contains("tree-sitter dynamic library"));
+        assert!(text.contains("tree-sitter build"));
+        assert!(text.contains("TREE_SITTER_LIBDIR"));
+        assert!(text.contains("Neovim"));
         assert!(text.contains("languageGlobs"));
         assert!(text.contains("languageInjections"));
         assert!(text.contains("expandoChar"));
+        assert!(text.contains("tree-sitter parse"));
         assert!(text.contains("single-language"));
         assert!(text.contains("Retry `unified_search`"));
         assert!(text.contains("bundled `ast-grep` skill"));
@@ -1748,9 +1752,13 @@ mod tests {
 
         let text = err.to_string();
         assert!(text.contains("customLanguages"), "{text}");
+        assert!(text.contains("tree-sitter build"), "{text}");
+        assert!(text.contains("TREE_SITTER_LIBDIR"), "{text}");
+        assert!(text.contains("Neovim"), "{text}");
         assert!(text.contains("languageGlobs"), "{text}");
         assert!(text.contains("languageInjections"), "{text}");
         assert!(text.contains("expandoChar"), "{text}");
+        assert!(text.contains("tree-sitter parse"), "{text}");
         assert!(text.contains("Retry `unified_search`"), "{text}");
         assert!(text.contains("`unified_exec`"), "{text}");
     }

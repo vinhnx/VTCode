@@ -1,6 +1,6 @@
 ---
 name: ast-grep
-description: "Use for ast-grep setup and authoring: install, `ast-grep run`, `sg scan`, `sg test`, `sg new`, `sg new rule`, `ast-grep lsp`, scaffolding with `sgconfig.yml`, `rules/`, `rule-tests/`, `utils/`, `scan --rule`, `scan --inline-rules`, `--stdin`, `--json`, optional chaining, rule catalog, meta variables, object-style patterns, cheat sheets, `nthChild stopBy`, `range field`, config hints `metadata url` and `caseInsensitive glob`, FAQ `rule order`, `kind pattern`, `debug-query`, `static analysis`, tree-sitter parser, pattern yaml api, search rewrite lint analyze, core concepts `textual structural`, `ast cst`, `named unnamed`, `kind field`, `significant trivial`, deep dive `ambiguous pattern`, `effective selector`, `meta variable detection`, `lazy multi`, strictness `strictness smart ast relaxed signature cst`, `constraints`, `expandEnd`, `transform`, `rewriters`, `rewrite joinBy`, `find patch`, `barrel import`, `languageGlobs`, `expandoChar`, programmatic API."
+description: "Use for ast-grep setup and authoring: install, `ast-grep run`, `sg scan`, `sg test`, `sg new`, `sg new rule`, `ast-grep lsp`, scaffolding with `sgconfig.yml`, `rules/`, `rule-tests/`, `utils/`, `scan --rule`, `scan --inline-rules`, `--stdin`, `--json`, optional chaining, rule catalog, meta variables, object-style patterns, cheat sheets, `nthChild stopBy`, `range field`, config hints `metadata url` and `caseInsensitive glob`, FAQ `rule order`, `kind pattern`, `debug-query`, `static analysis`, tree-sitter parser, pattern yaml api, search rewrite lint analyze, core concepts `textual structural`, `ast cst`, `named unnamed`, `kind field`, `significant trivial`, deep dive `ambiguous pattern`, `effective selector`, `meta variable detection`, `lazy multi`, strictness `strictness smart ast relaxed signature cst`, `constraints`, `expandEnd`, `transform`, `rewriters`, `rewrite joinBy`, `find patch`, `barrel import`, `custom language`, `TREE_SITTER_LIBDIR`, `languageGlobs`, `expandoChar`, programmatic API."
 metadata:
     short-description: Ast-grep project workflows
 ---
@@ -131,6 +131,19 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
   - `signature`: ignore text and compare mostly named-node kinds
 - This explains why quote differences can disappear under `ast`, comments can disappear under `relaxed`, and even different callee text can match under `signature`.
 - In VT Code, read-only structural queries already expose `strictness`. Use the bundled skill when the task is choosing between levels, or when the user needs raw CLI `--strictness` or YAML pattern-object `strictness`.
+
+## Custom Languages
+
+- Use custom language support when the parser exists in tree-sitter form but ast-grep does not ship it as a built-in language.
+- The basic workflow is:
+  - install `tree-sitter` CLI and obtain the grammar
+  - compile the parser as a shared library
+  - register it in workspace `sgconfig.yml` under `customLanguages`
+- Prefer `tree-sitter build --output <lib>` to compile the dynamic library. If the installed tree-sitter is too old for `build`, use `TREE_SITTER_LIBDIR` with `tree-sitter test` as the fallback path.
+- Reusing a parser library built by Neovim is valid when it already matches the grammar/version you need.
+- Register `libraryPath`, `extensions`, and optional `expandoChar` in `sgconfig.yml`. `expandoChar` matters when `$VAR` is not valid syntax in the target language and must be rewritten to a parser-friendly prefix.
+- Use `tree-sitter parse <file>` to inspect parser output when the custom grammar or file association is unclear.
+- VT Code’s public structural queries can use a custom language only after the local ast-grep project config is in place. The setup, compilation, and debugging work stays on the bundled ast-grep skill path.
 
 ## FAQ Highlights
 
