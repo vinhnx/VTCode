@@ -1,6 +1,6 @@
 ---
 name: ast-grep
-description: "Use for ast-grep: `ast-grep run`, `sg scan`, `sg test`, `sg new`, `sg new rule`, `sgconfig.yml`, `scan --rule`, `scan --inline-rules`, `--stdin`, `--json`, optional chaining, rule catalog, meta variables, pattern objects, `nthChild stopBy`, `range field`, `metadata url`, `caseInsensitive glob`, `severity off`, `include metadata`, FAQ `rule order`, `kind pattern`, `positive rule`, `kind esquery`, `debug-query`, `static analysis`, tree-sitter parser, pattern yaml api, search rewrite lint analyze, `textual structural`, `ast cst`, `named unnamed`, `kind field`, `ambiguous pattern`, `effective selector`, `meta variable detection`, `lazy multi`, `strictness smart ast relaxed signature cst`, `string fix`, `fix config`, `expandEnd`, `rewriters`, `rewrite joinBy`, `find patch`, `barrel import`, `custom language`, `TREE_SITTER_LIBDIR`, `language injection`, `styled components`, `language alias`, `languageGlobs`, `expandoChar`, `napi parse`, `python api`, programmatic API."
+description: "Use for ast-grep: `ast-grep run`, `sg scan`, `sg test`, `sg new`, `sg new rule`, `sgconfig.yml`, `scan --rule`, `scan --inline-rules`, `--stdin`, `--json`, optional chaining, rule catalog, meta variables, pattern objects, `nthChild stopBy`, `range field`, `metadata url`, `caseInsensitive glob`, `severity off`, `include metadata`, FAQ `rule order`, `kind pattern`, `positive rule`, `kind esquery`, `debug-query`, `static analysis`, tree-sitter parser, pattern yaml api, search rewrite lint analyze, `textual structural`, `ast cst`, `named unnamed`, `kind field`, `ambiguous pattern`, `effective selector`, `meta variable detection`, `lazy multi`, `strictness smart ast relaxed signature cst`, `string fix`, `fix config`, `expandEnd`, `replace substring`, `toCase separatedBy`, rewriter, `rewrite joinBy`, `find patch`, `barrel import`, `custom language`, `TREE_SITTER_LIBDIR`, `language injection`, `styled components`, `language alias`, languageGlobs, expandoChar, napi parse, python api, programmatic API."
 metadata:
     short-description: Ast-grep project workflows
 ---
@@ -111,6 +111,26 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 - JSON output only includes rule `metadata` when the ast-grep run enabled metadata output, for example via `--include-metadata`.
 - Keep config authoring on the ast-grep skill path. VT Code’s public structural tool runs read-only query/scan/test workflows; it does not expose rule-YAML authoring fields directly.
 
+## Transformation Objects
+
+- `transform` builds new strings from captured meta variables before `fix` runs.
+- `replace` uses a Rust regex over one meta variable. `source` must be `$VAR` style, `replace` is the regex, `by` is the replacement text, and regex capture groups can be reused in `by`.
+- `substring` slices a meta variable by character index with inclusive `startChar` and exclusive `endChar`. Negative indexes count from the end, and slicing is based on Unicode characters rather than raw bytes.
+- `substring` behaves like Python string slicing, so omit either bound when the slice should stay open-ended.
+- `convert` changes identifier-style casing through `toCase`. Common outputs are `lowerCase`, `upperCase`, `capitalize`, `camelCase`, `snakeCase`, `kebabCase`, and `pascalCase`.
+- Use `separatedBy` to control how `convert` splits words before rebuilding the target case. Supported separators include dash, dot, space, slash, underscore, and `CaseChange`.
+- `CaseChange` splits at transitions such as `astGrep`, `ASTGrep`, or `XMLHttpRequest`, which matters when converting mixed acronym identifiers.
+- String-form transforms such as `replace(...)`, `substring(...)`, `convert(...)`, and `rewrite(...)` are valid shorthand in newer ast-grep versions, but keep examples explicit when debugging.
+
+## Rewriters
+
+- `rewriters` is an experimental feature for advanced multi-node rewrites. Prefer ast-grep’s API instead when the YAML starts carrying too much control flow or state.
+- A rewriter is a smaller rule object with only `id`, `rule`, `constraints`, `transform`, `utils`, and `fix`. `id`, `rule`, and `fix` are required.
+- Rewriters are only usable through the `rewrite` transformation. They are not standalone scan/report rules.
+- Meta variables captured inside one rewriter do not leak to sibling rewriters or the outer rule.
+- Rewriter-local `transform` variables and `utils` are also scoped to that one rewriter.
+- A rewriter transform can call other rewriters from the same `rewriters` list when the rewrite pipeline needs multiple internal passes.
+
 ## Pattern Syntax
 
 - Pattern code must be valid code that tree-sitter can parse.
@@ -191,7 +211,8 @@ Use this skill for ast-grep project setup, rule authoring, rule debugging, and C
 - ast-grep rewrites are still find first, patch second. `rule` plus optional `constraints` finds the target, `transform` derives replacement strings, and `fix` patches the final text.
 - The simple workflow rewrites one matched node at a time. When one node must expand into multiple outputs, use `rewriters` plus `transform.rewrite` instead of forcing everything into one inline `fix`.
 - `transform.rewrite` lets you run sub-rules over a matched meta-variable, generate one fix per sub-node, and join the results with `joinBy`.
-- This is the right model for list-style rewrites such as exploding a barrel import into multiple single imports.
+- `transform.rewrite` is still experimental. It rewrites descendants of the captured source, prevents overlapping rewriter matches, prefers higher-level AST matches first, and for one node only applies the first matching rewriter in the declared order.
+- This is the right model for list-style rewrites such as exploding a barrel import into multiple single imports, and it is the canonical example for rewriter usage.
 - Keep this declarative workflow on the ast-grep skill path. VT Code’s public structural surface stays read-only and does not expose rewrite/apply behavior.
 
 ## Rewrite Essentials

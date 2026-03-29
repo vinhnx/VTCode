@@ -90,7 +90,7 @@ This document describes the canonical public tool surface exposed to VT Code mod
   - Built-in embedded-language behavior is limited to what ast-grep already knows, such as HTML `<script>` / `<style>` extraction; other nested-language cases depend on local `languageInjections`
   - Non-standard extensions and embedded languages should be handled through local ast-grep config such as `languageGlobs` and `languageInjections`, not by guessing a different file language in the tool call
   - Public project support stops at read-only `sg scan` and `sg test`
-  - Use the bundled `ast-grep` skill for `sg new`, rewrite/apply flows, interactive flags, `transform`, `rewrite`, `joinBy`, `rewriters`, custom parser compilation, or non-trivial `sgconfig.yml` authoring/debugging
+  - Use the bundled `ast-grep` skill for `sg new`, rewrite/apply flows, interactive flags, `transform`, `replace`, `substring`, `convert`, `toCase`, `separatedBy`, `rewrite`, `joinBy`, `rewriters`, custom parser compilation, or non-trivial `sgconfig.yml` authoring/debugging
 - Use when: you need syntax-aware search, read-only project rule scans, or read-only ast-grep rule tests
 - Avoid when: plain text grep is simpler, the search target is not syntax-sensitive, or the task depends on semantic/static-analysis facts
 
@@ -131,6 +131,8 @@ This document describes the canonical public tool surface exposed to VT Code mod
 - Prefer `load_skill` with the bundled `ast-grep` skill when the task needs rule-config YAML keys such as `url`, `metadata`, `constraints`, `severity`, `message`, `note`, `labels`, `files`, `ignores`, `caseInsensitive` glob objects, `severity: off`, `--include-metadata`, or YAML multi-document rule files.
 - Prefer `load_skill` with the bundled `ast-grep` skill when the task depends on config semantics like single-meta `constraints`, `constraints` after `rule`, `note` without meta interpolation, label-variable scoping, `files` / `ignores` precedence, relative glob roots, the `./` path gotcha, or the difference between YAML `ignores` and CLI `--no-ignore`.
 - Prefer `load_skill` with the bundled `ast-grep` skill when the task needs `--rewrite`, YAML string `fix`, `FixConfig`, `template`, `expandStart`, `expandEnd`, meta variables anywhere in replacement text, comma/list-item cleanup, `--interactive`, `--update-all`, or indentation-sensitive rewrite behavior.
+- Prefer `load_skill` with the bundled `ast-grep` skill when the task needs transformation-object details such as `replace`, `substring`, `convert`, `toCase`, `separatedBy`, `CaseChange`, string-form transforms, or experimental `transform.rewrite` ordering semantics.
+- Prefer `load_skill` with the bundled `ast-grep` skill when the task needs rewriter-specific semantics such as required rewriter fields, rewriter-local captures / utils / transforms, nested rewriter calls, or the barrel-import rewrite pattern.
 - Prefer `load_skill` with the bundled `ast-grep` skill when the task needs raw ast-grep CLI behavior such as `--stdin`, `--json`, `scan -r`, `lsp`, shell completions, GitHub Action setup, or direct `--color never` control.
 - Prefer `load_skill` with the bundled `ast-grep` skill when the task is really about pattern syntax design, meta-variable capture rules, `$$$ARGS`, `$_`, `$$VAR`, or object-style patterns.
 - Prefer `load_skill` with the bundled `ast-grep` skill when the task is troubleshooting incomplete fragments, interpreting `debug_query`, comparing Playground vs CLI results, or using pattern-object `context` plus `selector`.

@@ -155,6 +155,42 @@ Use the public structural tool first for read-only project checks:
 - Rule `metadata` only appears in ast-grep JSON output when metadata inclusion is enabled, for example with `--include-metadata`.
 - Keep this YAML-config work on the skill path. VT Code’s public structural tool can run read-only scans and tests against these configs, but it does not surface the config schema as tool-call arguments.
 
+## Transformation Objects
+
+- `transform` derives strings from captured meta variables before `fix` applies.
+- `replace` is regex-based text replacement over one captured meta variable.
+  - `source` must be `$VAR` style
+  - `replace` is the Rust regex
+  - `by` is the replacement string
+  - capture groups from the regex can be reused in `by`
+- `substring` is Python-style slicing over Unicode characters.
+  - `startChar` is inclusive
+  - `endChar` is exclusive
+  - negative indexes count backward from the end of the string
+- `convert` changes identifier casing through `toCase`.
+  - common targets: `camelCase`, `snakeCase`, `kebabCase`, `pascalCase`, `lowerCase`, `upperCase`, `capitalize`
+  - `separatedBy` controls how the source string is split into words before conversion
+- `CaseChange` is the separator for transitions like `astGrep`, `ASTGrep`, or `XMLHttpRequest`
+- Ast-grep also accepts string-form transforms such as `replace(...)`, `substring(...)`, `convert(...)`, and `rewrite(...)`.
+
+## Rewriters
+
+- `rewriters` is an experimental feature and should be treated as advanced YAML, not the default way to structure rewrites.
+- A rewriter only accepts:
+  - `id`
+  - `rule`
+  - `constraints`
+  - `transform`
+  - `utils`
+  - `fix`
+- `id`, `rule`, and `fix` are required.
+- Rewriters are only reachable through `transform.rewrite`.
+- Captured meta variables do not cross rewriter boundaries.
+  - one rewriter cannot read another rewriter’s captures
+  - the outer rule cannot read captures local to a rewriter
+- Rewriter-local `transform` variables and `utils` stay local the same way.
+- A rewriter can still call other rewriters from the same list inside its own `transform` section.
+
 ## Pattern Syntax
 
 - Pattern text must be valid parseable code for the target language.
@@ -293,6 +329,16 @@ Use the public structural tool first for read-only project checks:
 - If `$VARName` would be parsed as a larger meta variable, use a transform instead of concatenating uppercase suffixes directly.
 - Use `transform.rewrite` when rewriting the outer node depends on rewriting a list of child nodes first.
 - Use `joinBy` to stitch rewritten child results together before the outer `fix`.
+- `transform.rewrite` is still experimental.
+  - it rewrites descendants under the captured source
+  - overlapping matches are not allowed
+  - higher-level AST matches win before nested ones
+  - for one node, the first matching rewriter in declaration order is the only one applied
+- Rewriter example to keep in mind:
+  - capture a barrel import once
+  - use a rewriter over the identifier descendants
+  - optional `convert` inside the rewriter can derive lowercase import paths
+  - `joinBy: "\n"` stitches the generated import statements together
 - Use advanced `FixConfig` when replacing the target node is not enough:
   - `template` is the replacement text
   - `expandStart` expands the rewritten range backward while its rule keeps matching

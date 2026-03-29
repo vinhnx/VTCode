@@ -65,6 +65,8 @@ It also covers pattern core concepts such as textual vs structural matching, CST
 It also covers pattern parsing details such as invalid / incomplete / ambiguous snippets, effective-node selection via `selector`, meta-variable detection rules, unnamed-node capture, lazy `$$$ARGS`, and when `expandoChar` matters.
 It also covers the match algorithm and strictness levels, while VT Code’s public structural query surface already exposes read-only `strictness` for `cst`, `smart`, `ast`, `relaxed`, and `signature`.
 It also covers Find & Patch style rewrites such as `rewriters`, `transform.rewrite`, `joinBy`, and one-to-many rewrites like splitting barrel imports.
+It also covers transformation-object details such as `replace`, `substring`, `convert`, `toCase`, `separatedBy`, `CaseChange`, string-form transforms, and the experimental matching-order behavior of `transform.rewrite`.
+It also covers rewriter-specific rules such as required `id` / `rule` / `fix`, rewriter-local capture scope, rewriter-local `utils` / `transform`, and using sibling rewriters from the same list.
 It also covers custom language setup, including `customLanguages`, parser compilation with `tree-sitter build`, the `TREE_SITTER_LIBDIR` fallback, `expandoChar`, and parser inspection with `tree-sitter parse`.
 It also covers multi-language documents and language injection, including built-in HTML `<script>` / `<style>` extraction, `languageInjections`, `hostLanguage`, `injected`, `$CONTENT` captures, styled-components CSS, and GraphQL template literals.
 It also covers ast-grep’s built-in language catalog, alias selection for `--lang` / YAML `language`, built-in extension mapping, and when VT Code’s local inference subset differs from ast-grep’s full built-in list.
