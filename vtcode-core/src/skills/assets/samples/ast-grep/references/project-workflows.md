@@ -72,6 +72,33 @@ Use the public structural tool first for read-only project checks:
 - `ast-grep new rule` creates a rule file directly and can optionally create its paired test file.
 - If the repo already has `sgconfig.yml` and `rules/`, extend the existing scaffold instead of creating a second one.
 
+## sgconfig.yml
+
+- `sgconfig.yml` is the project config file, not a single-rule YAML. Use it to define discovery, tests, parser overrides, and embedded-language behavior for the whole repo.
+- Top-level keys to keep straight:
+  - `ruleDirs`: required rule discovery paths, relative to `sgconfig.yml`
+  - `testConfigs`: optional test discovery objects
+  - `utilDirs`: optional global utility-rule directories
+  - `languageGlobs`: parser remapping that overrides default extension detection
+  - `customLanguages`: project-local parser registration
+  - `languageInjections`: experimental embedded-language config
+- `testConfigs` details:
+  - each entry requires `testDir`
+  - `snapshotDir` is optional
+  - default snapshots live in `__snapshots__` under the `testDir`
+- `languageGlobs` takes precedence over the built-in parser mapping, which is why it can be used for similar-language reuse or full parser reassignment.
+- `customLanguages` details:
+  - `libraryPath` can be a single relative path or a target-triple map
+  - `extensions` is required
+  - `expandoChar` is optional
+  - `languageSymbol` defaults to `tree_sitter_{name}`
+- `languageInjections` details:
+  - `hostLanguage`, `rule`, and `injected` are required
+  - `injected` can be one fixed language or dynamic injected candidates chosen through `$LANG`
+- VT Code boundary:
+  - public structural query / scan / test can use an existing `config_path`
+  - detailed `sgconfig.yml` authoring or debugging remains skill-driven work
+
 ## Rule Catalog
 
 - The catalog is best used as an example bank for rule design and rewrite inspiration.
