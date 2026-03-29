@@ -1447,9 +1447,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     );
                 }
                 Err(_elapsed) => {
-                    tracing::warn!(
-                        "Persistent memory finalization timed out, skipping"
-                    );
+                    tracing::warn!("Persistent memory finalization timed out, skipping");
                 }
                 Ok(Ok(_)) => {}
             }

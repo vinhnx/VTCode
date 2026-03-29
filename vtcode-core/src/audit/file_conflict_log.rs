@@ -22,7 +22,7 @@ pub struct FileConflictAuditEvent {
 
 /// JSONL audit logger for file-conflict events.
 pub struct FileConflictAuditLog {
-    writer: BufWriter<std::fs::File>,
+    writer: Option<BufWriter<std::fs::File>>,
     log_path: PathBuf,
 }
 
@@ -33,14 +33,8 @@ impl FileConflictAuditLog {
 
         let date = Local::now().format("%Y-%m-%d");
         let log_path = audit_dir.join(format!("file-conflicts-{}.log", date));
-        let file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&log_path)
-            .with_context(|| format!("Failed to open file conflict audit log at {:?}", log_path))?;
-
         Ok(Self {
-            writer: BufWriter::new(file),
+            writer: None,
             log_path,
         })
     }
@@ -50,8 +44,9 @@ impl FileConflictAuditLog {
 
         let json = serde_json::to_string(event)
             .context("Failed to serialize file conflict audit event")?;
-        writeln!(self.writer, "{json}").context("Failed to write file conflict audit event")?;
-        self.writer
+        let writer = self.writer_mut()?;
+        writeln!(writer, "{json}").context("Failed to write file conflict audit event")?;
+        writer
             .flush()
             .context("Failed to flush file conflict audit log")?;
         Ok(())
@@ -59,6 +54,26 @@ impl FileConflictAuditLog {
 
     pub fn log_path(&self) -> &Path {
         &self.log_path
+    }
+
+    fn writer_mut(&mut self) -> Result<&mut BufWriter<std::fs::File>> {
+        if self.writer.is_none() {
+            let file = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&self.log_path)
+                .with_context(|| {
+                    format!(
+                        "Failed to open file conflict audit log at {:?}",
+                        self.log_path
+                    )
+                })?;
+            self.writer = Some(BufWriter::new(file));
+        }
+
+        self.writer
+            .as_mut()
+            .context("file conflict audit log writer was not initialized")
     }
 }
 
@@ -68,10 +83,10 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
-    fn creates_file_conflict_audit_log() -> Result<()> {
+    fn defers_file_conflict_audit_log_creation_until_first_record() -> Result<()> {
         let dir = TempDir::new()?;
         let log = FileConflictAuditLog::new(dir.path().to_path_buf())?;
-        assert!(log.log_path().exists());
+        assert!(!log.log_path().exists());
         Ok(())
     }
 }

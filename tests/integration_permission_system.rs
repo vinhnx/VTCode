@@ -75,6 +75,7 @@ mod integration_tests {
         let mut log = PermissionAuditLog::new(dir.path().to_path_buf())?;
 
         assert_eq!(log.event_count(), 0);
+        assert!(!log.log_path().exists());
 
         // Log a decision
         log.log_command_decision(
@@ -197,6 +198,7 @@ mod integration_tests {
         let audit_log = PermissionAuditLog::new(dir.path().to_path_buf())?;
 
         let log_path = audit_log.log_path();
+        assert!(!log_path.exists());
         assert!(log_path.to_string_lossy().contains("permissions-"));
         assert!(log_path.to_string_lossy().contains(".log"));
 

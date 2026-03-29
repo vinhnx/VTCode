@@ -203,7 +203,7 @@ pub fn get_api_key(provider: &str, sources: &ApiKeySources) -> Result<String> {
     }
 
     // Try secure storage (keyring) for custom API keys
-    if let Ok(Some(key)) = get_custom_api_key_from_keyring(&normalized_provider) {
+    if let Ok(Some(key)) = get_custom_api_key_from_secure_storage(&normalized_provider) {
         return Ok(key);
     }
 
@@ -227,21 +227,22 @@ pub fn get_api_key(provider: &str, sources: &ApiKeySources) -> Result<String> {
     }
 }
 
-/// Get custom API key from secure storage (keyring).
+/// Get a custom API key from secure storage.
 ///
 /// This function retrieves API keys that were stored securely via the model picker
-/// or interactive configuration flows.
+/// or interactive configuration flows. When the OS keyring is unavailable, the
+/// auth layer falls back to encrypted file storage automatically.
 ///
 /// # Arguments
 /// * `provider` - The provider name
 ///
 /// # Returns
-/// * `Ok(Some(String))` - The API key if found in keyring
+/// * `Ok(Some(String))` - The API key if found in secure storage
 /// * `Ok(None)` - If no key is stored for this provider
-/// * `Err` - If there was an error accessing the keyring
-fn get_custom_api_key_from_keyring(provider: &str) -> Result<Option<String>> {
+/// * `Err` - If there was an error accessing secure storage
+fn get_custom_api_key_from_secure_storage(provider: &str) -> Result<Option<String>> {
     let storage = CustomApiKeyStorage::new(provider);
-    // Use default storage mode (keyring)
+    // The auth layer handles keyring-to-file fallback internally.
     let mode = crate::auth::AuthCredentialsStoreMode::default();
     storage.load(mode)
 }

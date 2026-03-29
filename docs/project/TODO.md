@@ -203,19 +203,3 @@ make this feature interactive configurable in both /config settings and /memory 
 update /config with light model config (as additional to main model) for memory triage and summarization, with a fallback to the main model if not set or if the light model fails for any reason. this allows users to choose a smaller, cheaper model for the auto-memory write pipeline while still having the robustness of the main model as a backup. also update /memory command to show the configured memory triage model and allow quick editing of that setting.
 
 also update first time wizard to prompt for a memory triage model choice, with an explanation of the trade-offs between using a smaller model for cost savings versus using the main model for potentially better accuracy in memory extraction. provide some recommended models for memory triage based on typical use cases and budgets.
-
----
-
-CRITICAL: fix auth.json saving API key in plain text. /Users/vinhnguyenxuan/.vtcode/auth.json
-
----
-
-prevent empty zero file write /Users/vinhnguyenxuan/.vtcode/audit
-
----
-
-Fix policy permission ansi code broken on diff preview
-
-check screenshot
-
-'/Users/vinhnguyenxuan/Documents/vtcode-resources/bugs/Screenshot 2026-03-29 at 9.29.43 PM.png'

@@ -114,11 +114,7 @@ pub(super) async fn finalize_session(
     }
 
     if let Some(mcp_manager) = async_mcp_manager {
-        match tokio::time::timeout(
-            std::time::Duration::from_secs(2),
-            mcp_manager.shutdown(),
-        )
-        .await
+        match tokio::time::timeout(std::time::Duration::from_secs(2), mcp_manager.shutdown()).await
         {
             Ok(Err(e)) => {
                 let error_msg = e.to_string();

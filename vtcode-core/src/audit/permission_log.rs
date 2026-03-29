@@ -70,7 +70,7 @@ pub struct PermissionAuditLog {
     log_path: PathBuf,
 
     /// Writer for the log file
-    writer: BufWriter<std::fs::File>,
+    writer: Option<BufWriter<std::fs::File>>,
 
     /// Count of events logged this session
     event_count: usize,
@@ -86,20 +86,11 @@ impl PermissionAuditLog {
         let date = Local::now().format("%Y-%m-%d");
         let log_path = audit_dir.join(format!("permissions-{}.log", date));
 
-        // Open file in append mode
-        let file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&log_path)
-            .with_context(|| format!("Failed to open audit log at {:?}", log_path))?;
-
-        let writer = BufWriter::new(file);
-
         info!(?log_path, "Audit log initialized");
 
         Ok(Self {
             log_path,
-            writer,
+            writer: None,
             event_count: 0,
         })
     }
@@ -110,9 +101,10 @@ impl PermissionAuditLog {
 
         let json = serde_json::to_string(&event).context("Failed to serialize permission event")?;
 
-        writeln!(self.writer, "{}", json).context("Failed to write to audit log")?;
+        let writer = self.writer_mut()?;
+        writeln!(writer, "{}", json).context("Failed to write to audit log")?;
 
-        self.writer.flush().context("Failed to flush audit log")?;
+        writer.flush().context("Failed to flush audit log")?;
 
         self.event_count += 1;
 
@@ -155,6 +147,21 @@ impl PermissionAuditLog {
 
         self.record(event)
     }
+
+    fn writer_mut(&mut self) -> Result<&mut BufWriter<std::fs::File>> {
+        if self.writer.is_none() {
+            let file = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&self.log_path)
+                .with_context(|| format!("Failed to open audit log at {:?}", self.log_path))?;
+            self.writer = Some(BufWriter::new(file));
+        }
+
+        self.writer
+            .as_mut()
+            .context("audit log writer was not initialized")
+    }
 }
 
 /// Generate a human-readable summary of permission decisions
@@ -183,8 +190,9 @@ mod tests {
     #[test]
     fn test_audit_log_creation() -> Result<()> {
         let dir = TempDir::new()?;
-        let _log = PermissionAuditLog::new(dir.path().to_path_buf())?;
+        let log = PermissionAuditLog::new(dir.path().to_path_buf())?;
         assert!(dir.path().exists());
+        assert!(!log.log_path().exists());
         Ok(())
     }
 
@@ -201,6 +209,7 @@ mod tests {
         )?;
 
         assert_eq!(log.event_count(), 1);
+        assert!(log.log_path().exists());
         Ok(())
     }
 }

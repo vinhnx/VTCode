@@ -59,7 +59,7 @@ read_file = true
 # Environment variable that stores the API key for the active provider
 # Default: "OPENAI_API_KEY"
 # Type: `string`
-api_key_env = "MINIMAX_API_KEY"
+api_key_env = ""
 
 # Deprecated compatibility flag. When `true` and `permissions.default_mode` is unset, VT Code maps it
 # to `permissions.default_mode = "auto"`.
@@ -86,7 +86,7 @@ default_editing_mode = "edit"
 # Default model to use
 # Default: "gpt-5.3-codex"
 # Type: `string`
-default_model = "MiniMax-M2.7"
+default_model = "gpt-5.4-mini"
 
 # Enable an extra self-review pass to refine final responses
 # Default: false
@@ -150,7 +150,7 @@ project_doc_max_bytes = 16384
 # Possible values: anthropic, gemini, openai, openrouter, zai
 # Default: "openai"
 # Type: `string`
-provider = "minimax"
+provider = "copilot"
 
 # Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh) Applies
 # to: Claude, GPT-5 family, Gemini, Qwen3, DeepSeek with reasoning capability
